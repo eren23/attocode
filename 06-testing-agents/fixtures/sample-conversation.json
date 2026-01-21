@@ -1,0 +1,28 @@
+[
+  {
+    "input": {
+      "messages": [
+        { "role": "system", "content": "You are a helpful coding assistant." },
+        { "role": "user", "content": "Create a hello world TypeScript file" }
+      ]
+    },
+    "output": {
+      "content": "I'll create a hello world TypeScript file for you.\n\n```json\n{\"tool\": \"write_file\", \"input\": {\"path\": \"hello.ts\", \"content\": \"console.log('Hello, World!');\"}}\n```",
+      "stopReason": "tool_use"
+    }
+  },
+  {
+    "input": {
+      "messages": [
+        { "role": "system", "content": "You are a helpful coding assistant." },
+        { "role": "user", "content": "Create a hello world TypeScript file" },
+        { "role": "assistant", "content": "I'll create a hello world TypeScript file for you.\n\n```json\n{\"tool\": \"write_file\", \"input\": {\"path\": \"hello.ts\", \"content\": \"console.log('Hello, World!');\"}}\n```" },
+        { "role": "user", "content": "Tool result: Wrote 29 bytes to hello.ts" }
+      ]
+    },
+    "output": {
+      "content": "I've created `hello.ts` with a simple Hello World program. You can run it with:\n\n```bash\nnpx tsx hello.ts\n```\n\nThis will output: Hello, World!",
+      "stopReason": "end_turn"
+    }
+  }
+]

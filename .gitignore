@@ -1,0 +1,8 @@
+dist/
+node_modules
+.env
+.claude/
+.agent/
+.traces/
+.production-agent-sessions/
+.test-sandbox/

@@ -1,0 +1,162 @@
+/**
+ * Lesson 3: Bash Tool
+ * 
+ * Tool for executing shell commands with safety checks.
+ */
+
+import { z } from 'zod';
+import { spawn } from 'node:child_process';
+import { defineTool } from '../registry.js';
+import { classifyCommand } from '../permission.js';
+import type { ToolResult, DangerLevel } from '../types.js';
+
+// =============================================================================
+// BASH COMMAND TOOL
+// =============================================================================
+
+const bashSchema = z.object({
+  command: z.string().describe('The bash command to execute'),
+  cwd: z.string().optional().describe('Working directory (default: current directory)'),
+  timeout: z.number().optional().default(30000).describe('Timeout in milliseconds'),
+});
+
+/**
+ * Execute a bash command.
+ * 
+ * Key safety features:
+ * 1. Danger classification for permission checking
+ * 2. Timeout to prevent hanging
+ * 3. Output capture with size limits
+ * 4. Non-interactive execution
+ */
+export const bashTool = defineTool(
+  'bash',
+  'Execute a bash command and return the output',
+  bashSchema,
+  async (input): Promise<ToolResult> => {
+    // Classify the command's danger level
+    const { level, reasons } = classifyCommand(input.command);
+    
+    // Add warning to output for dangerous commands
+    let warning = '';
+    if (reasons.length > 0) {
+      warning = `⚠️  Detected: ${reasons.join(', ')}\n\n`;
+    }
+
+    return new Promise((resolve) => {
+      const proc = spawn('bash', ['-c', input.command], {
+        cwd: input.cwd || process.cwd(),
+        env: { ...process.env, TERM: 'dumb' }, // Disable colors/formatting
+        stdio: ['ignore', 'pipe', 'pipe'], // No stdin, capture stdout/stderr
+      });
+
+      let stdout = '';
+      let stderr = '';
+      let killed = false;
+      const maxOutput = 100000; // 100KB limit
+
+      // Set timeout
+      const timer = setTimeout(() => {
+        killed = true;
+        proc.kill('SIGTERM');
+        setTimeout(() => proc.kill('SIGKILL'), 1000);
+      }, input.timeout);
+
+      // Capture stdout
+      proc.stdout?.on('data', (data: Buffer) => {
+        if (stdout.length < maxOutput) {
+          stdout += data.toString();
+        }
+      });
+
+      // Capture stderr
+      proc.stderr?.on('data', (data: Buffer) => {
+        if (stderr.length < maxOutput) {
+          stderr += data.toString();
+        }
+      });
+
+      // Handle completion
+      proc.on('close', (code) => {
+        clearTimeout(timer);
+
+        if (killed) {
+          resolve({
+            success: false,
+            output: `${warning}Command timed out after ${input.timeout}ms`,
+            metadata: { timedOut: true, dangerLevel: level },
+          });
+          return;
+        }
+
+        const output = stdout + (stderr ? `\n--- stderr ---\n${stderr}` : '');
+        const truncated = output.length > maxOutput;
+        const finalOutput = truncated 
+          ? output.slice(0, maxOutput) + '\n... (output truncated)'
+          : output;
+
+        resolve({
+          success: code === 0,
+          output: warning + (finalOutput || '(no output)'),
+          metadata: { 
+            exitCode: code, 
+            dangerLevel: level,
+            truncated,
+          },
+        });
+      });
+
+      // Handle errors
+      proc.on('error', (error) => {
+        clearTimeout(timer);
+        resolve({
+          success: false,
+          output: `${warning}Failed to execute command: ${error.message}`,
+          metadata: { dangerLevel: level },
+        });
+      });
+    });
+  },
+  // Danger level is determined dynamically, but default to moderate
+  'moderate' as DangerLevel
+);
+
+// =============================================================================
+// SPECIALIZED BASH COMMANDS
+// =============================================================================
+
+const grepSchema = z.object({
+  pattern: z.string().describe('Regex pattern to search for'),
+  path: z.string().describe('File or directory to search in'),
+  recursive: z.boolean().optional().default(false).describe('Search recursively'),
+});
+
+export const grepTool = defineTool(
+  'grep',
+  'Search for a pattern in files',
+  grepSchema,
+  async (input): Promise<ToolResult> => {
+    const flags = input.recursive ? '-rn' : '-n';
+    const command = `grep ${flags} "${input.pattern}" "${input.path}" || true`;
+    
+    return bashTool.execute({ command, timeout: 10000 });
+  },
+  'safe'
+);
+
+const globSchema = z.object({
+  pattern: z.string().describe('Glob pattern to match files'),
+  path: z.string().optional().default('.').describe('Directory to search in'),
+});
+
+export const globTool = defineTool(
+  'glob',
+  'Find files matching a glob pattern',
+  globSchema,
+  async (input): Promise<ToolResult> => {
+    const command = `find "${input.path}" -name "${input.pattern}" 2>/dev/null | head -100`;
+    
+    return bashTool.execute({ command, timeout: 10000 });
+  },
+  'safe'
+);

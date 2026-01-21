@@ -1,0 +1,440 @@
+/**
+ * Lesson 25: Default Configurations
+ *
+ * Sensible defaults for all features. Everything is enabled by default
+ * for educational purposes, but can be disabled for production use.
+ */
+
+import type {
+  HooksConfig,
+  PluginsConfig,
+  RulesConfig,
+  MemoryConfig,
+  PlanningConfig,
+  ReflectionConfig,
+  ObservabilityConfig,
+  RoutingConfig,
+  SandboxConfig,
+  HumanInLoopConfig,
+  MultiAgentConfig,
+  ReActPatternConfig,
+  ExecutionPolicyConfig,
+  ThreadsConfig,
+  CancellationConfig,
+  ResourceConfig,
+  LSPAgentConfig,
+  SemanticCacheAgentConfig,
+  SkillsAgentConfig,
+  ProductionAgentConfig,
+} from './types.js';
+
+// =============================================================================
+// FEATURE DEFAULTS
+// =============================================================================
+
+/**
+ * Default hooks configuration.
+ */
+export const DEFAULT_HOOKS_CONFIG: HooksConfig = {
+  enabled: true,
+  builtIn: {
+    logging: true,
+    metrics: true,
+    timing: true,
+  },
+  custom: [],
+};
+
+/**
+ * Default plugins configuration.
+ */
+export const DEFAULT_PLUGINS_CONFIG: PluginsConfig = {
+  enabled: true,
+  plugins: [],
+  discoveryPaths: [],
+};
+
+/**
+ * Default rules configuration.
+ */
+export const DEFAULT_RULES_CONFIG: RulesConfig = {
+  enabled: true,
+  sources: [
+    { type: 'file', path: 'CLAUDE.md', priority: 1 },
+    { type: 'file', path: '.agent/rules.md', priority: 2 },
+  ],
+  watch: false,
+};
+
+/**
+ * Default memory configuration.
+ */
+export const DEFAULT_MEMORY_CONFIG: MemoryConfig = {
+  enabled: true,
+  types: {
+    episodic: true,
+    semantic: true,
+    working: true,
+  },
+  retrievalStrategy: 'hybrid',
+  retrievalLimit: 10,
+  persistPath: undefined, // In-memory by default
+};
+
+/**
+ * Default planning configuration.
+ */
+export const DEFAULT_PLANNING_CONFIG: PlanningConfig = {
+  enabled: true,
+  autoplan: true,
+  complexityThreshold: 5,
+  maxDepth: 3,
+  allowReplan: true,
+};
+
+/**
+ * Default reflection configuration.
+ */
+export const DEFAULT_REFLECTION_CONFIG: ReflectionConfig = {
+  enabled: true,
+  autoReflect: false, // Manual reflection by default
+  maxAttempts: 3,
+  confidenceThreshold: 0.8,
+};
+
+/**
+ * Default observability configuration.
+ */
+export const DEFAULT_OBSERVABILITY_CONFIG: ObservabilityConfig = {
+  enabled: true,
+  tracing: {
+    enabled: true,
+    serviceName: 'production-agent',
+    exporter: 'console',
+  },
+  metrics: {
+    enabled: true,
+    collectTokens: true,
+    collectCosts: true,
+    collectLatencies: true,
+  },
+  logging: {
+    enabled: true,
+    level: 'info',
+    structured: true,
+  },
+};
+
+/**
+ * Default routing configuration.
+ */
+export const DEFAULT_ROUTING_CONFIG: RoutingConfig = {
+  enabled: false, // Disabled by default (requires multiple providers)
+  models: [],
+  strategy: 'balanced',
+  rules: [],
+  fallbackChain: [],
+  circuitBreaker: true,
+};
+
+/**
+ * Default sandbox configuration.
+ */
+export const DEFAULT_SANDBOX_CONFIG: SandboxConfig = {
+  enabled: true,
+  isolation: 'process',
+  mode: 'auto', // Auto-detect best sandbox (seatbelt on macOS, docker on Linux, basic fallback)
+  allowedCommands: [
+    'node', 'npm', 'npx', 'yarn', 'pnpm', 'bun',
+    'git', 'ls', 'cat', 'head', 'tail', 'grep', 'find', 'wc',
+    'echo', 'pwd', 'which', 'env', 'mkdir', 'cp', 'mv', 'touch',
+    'tsc', 'eslint', 'prettier', 'jest', 'vitest', 'mocha',
+  ],
+  blockedCommands: [
+    'rm -rf /',
+    'rm -rf ~',
+    'sudo',
+    'chmod 777',
+    'curl | sh',
+    'curl | bash',
+    'wget | sh',
+    'wget | bash',
+  ],
+  resourceLimits: {
+    maxCpuSeconds: 30,
+    maxMemoryMB: 512,
+    maxOutputBytes: 1024 * 1024, // 1MB
+    timeout: 60000, // 1 minute
+  },
+  allowedPaths: ['.', process.cwd()],
+  readablePaths: ['/'],
+  networkAllowed: false, // Network disabled by default for security
+  dockerImage: 'node:20-slim', // Default Docker image
+};
+
+/**
+ * Default human-in-the-loop configuration.
+ */
+export const DEFAULT_HUMAN_IN_LOOP_CONFIG: HumanInLoopConfig = {
+  enabled: true,
+  riskThreshold: 'high', // Only require approval for high-risk actions
+  alwaysApprove: [
+    'delete_file',
+    'rm',
+    'drop_table',
+    'truncate',
+  ],
+  neverApprove: [
+    'read_file',
+    'list_directory',
+    'search',
+  ],
+  approvalTimeout: 300000, // 5 minutes
+  approvalHandler: undefined, // Will use default console prompt
+  auditLog: true,
+};
+
+/**
+ * Default multi-agent configuration.
+ */
+export const DEFAULT_MULTI_AGENT_CONFIG: MultiAgentConfig = {
+  enabled: false, // Disabled by default (requires explicit role setup)
+  roles: [],
+  consensusStrategy: 'voting',
+  communicationMode: 'broadcast',
+  coordinatorRole: undefined,
+};
+
+/**
+ * Default ReAct pattern configuration.
+ */
+export const DEFAULT_REACT_CONFIG: ReActPatternConfig = {
+  enabled: false, // Disabled by default (use runWithReAct() explicitly)
+  maxSteps: 15,
+  stopOnAnswer: true,
+  includeReasoning: true,
+};
+
+/**
+ * Default execution policy configuration.
+ */
+export const DEFAULT_EXECUTION_POLICY_CONFIG: ExecutionPolicyConfig = {
+  enabled: true, // Enabled by default for safety
+  defaultPolicy: 'prompt',
+  toolPolicies: {
+    read_file: { policy: 'allow' },
+    list_directory: { policy: 'allow' },
+    search: { policy: 'allow' },
+  },
+  intentAware: true,
+  intentConfidenceThreshold: 0.7,
+  preset: 'balanced',
+};
+
+/**
+ * Default threads configuration.
+ */
+export const DEFAULT_THREADS_CONFIG: ThreadsConfig = {
+  enabled: true, // Enabled by default for safety and recovery
+  autoCheckpoint: true,
+  checkpointFrequency: 5, // Every 5 iterations
+  maxCheckpoints: 10,
+  enableRollback: true,
+  enableForking: true,
+};
+
+/**
+ * Default cancellation configuration.
+ */
+export const DEFAULT_CANCELLATION_CONFIG: CancellationConfig = {
+  enabled: true, // Enabled by default for graceful interruption
+  defaultTimeout: 0, // No timeout by default (controlled by maxIterations)
+  gracePeriod: 5000, // 5 seconds for cleanup after cancellation
+};
+
+/**
+ * Default resource monitoring configuration.
+ */
+export const DEFAULT_RESOURCE_CONFIG: ResourceConfig = {
+  enabled: true, // Enabled by default for resource protection
+  maxMemoryMB: 512, // 512MB default memory limit
+  maxCpuTimeSec: 900, // 15 minutes default CPU time limit (was 5 min - too strict for complex tasks)
+  maxConcurrentOps: 10, // Max 10 concurrent operations
+  warnThreshold: 0.7, // Warn at 70% usage
+  criticalThreshold: 0.9, // Critical at 90% usage
+};
+
+/**
+ * Default LSP (Language Server Protocol) configuration.
+ */
+export const DEFAULT_LSP_CONFIG: LSPAgentConfig = {
+  enabled: false, // Disabled by default (requires language servers to be installed)
+  autoDetect: true, // Auto-detect languages when enabled
+  servers: undefined, // Use built-in server configs
+  timeout: 30000, // 30 second timeout for LSP requests
+};
+
+/**
+ * Default semantic cache configuration.
+ */
+export const DEFAULT_SEMANTIC_CACHE_CONFIG: SemanticCacheAgentConfig = {
+  enabled: false, // Disabled by default (optimization, not critical)
+  threshold: 0.95, // High similarity threshold for cache hits
+  maxSize: 1000, // Max 1000 cached entries
+  ttl: 0, // No expiry by default
+};
+
+/**
+ * Default skills configuration.
+ */
+export const DEFAULT_SKILLS_CONFIG: SkillsAgentConfig = {
+  enabled: true, // Enabled by default for discoverable capabilities
+  directories: undefined, // Uses getDefaultSkillDirectories() from skills.ts
+  loadBuiltIn: true, // Load built-in skills
+  autoActivate: false, // Manual activation by default
+};
+
+// =============================================================================
+// MERGE HELPERS
+// =============================================================================
+
+/**
+ * Merge user config with defaults.
+ * User values override defaults; false disables the feature.
+ */
+export function mergeConfig<T extends object>(
+  defaults: T,
+  userConfig: Partial<T> | false | undefined
+): T | false {
+  if (userConfig === false) {
+    return false;
+  }
+
+  if (userConfig === undefined) {
+    return defaults;
+  }
+
+  return {
+    ...defaults,
+    ...userConfig,
+    // Deep merge nested objects
+    ...Object.fromEntries(
+      Object.entries(userConfig).map(([key, value]) => {
+        const defaultValue = defaults[key as keyof T];
+        if (
+          typeof value === 'object' &&
+          value !== null &&
+          !Array.isArray(value) &&
+          typeof defaultValue === 'object' &&
+          defaultValue !== null &&
+          !Array.isArray(defaultValue)
+        ) {
+          return [key, { ...defaultValue, ...value }];
+        }
+        return [key, value];
+      })
+    ),
+  } as T;
+}
+
+/**
+ * Build complete configuration from partial user config.
+ */
+export function buildConfig(
+  userConfig: Partial<ProductionAgentConfig>
+): Required<Omit<ProductionAgentConfig, 'provider' | 'tools' | 'toolResolver' | 'mcpToolSummaries'>> & Pick<ProductionAgentConfig, 'provider' | 'tools' | 'toolResolver' | 'mcpToolSummaries'> {
+  return {
+    provider: userConfig.provider!,
+    tools: userConfig.tools || [],
+    systemPrompt: userConfig.systemPrompt || DEFAULT_SYSTEM_PROMPT,
+    model: userConfig.model || 'default',
+    hooks: mergeConfig(DEFAULT_HOOKS_CONFIG, userConfig.hooks),
+    plugins: mergeConfig(DEFAULT_PLUGINS_CONFIG, userConfig.plugins),
+    rules: mergeConfig(DEFAULT_RULES_CONFIG, userConfig.rules),
+    memory: mergeConfig(DEFAULT_MEMORY_CONFIG, userConfig.memory),
+    planning: mergeConfig(DEFAULT_PLANNING_CONFIG, userConfig.planning),
+    reflection: mergeConfig(DEFAULT_REFLECTION_CONFIG, userConfig.reflection),
+    observability: mergeConfig(DEFAULT_OBSERVABILITY_CONFIG, userConfig.observability),
+    routing: mergeConfig(DEFAULT_ROUTING_CONFIG, userConfig.routing),
+    sandbox: mergeConfig(DEFAULT_SANDBOX_CONFIG, userConfig.sandbox),
+    humanInLoop: mergeConfig(DEFAULT_HUMAN_IN_LOOP_CONFIG, userConfig.humanInLoop),
+    multiAgent: mergeConfig(DEFAULT_MULTI_AGENT_CONFIG, userConfig.multiAgent),
+    react: mergeConfig(DEFAULT_REACT_CONFIG, userConfig.react),
+    executionPolicy: mergeConfig(DEFAULT_EXECUTION_POLICY_CONFIG, userConfig.executionPolicy),
+    threads: mergeConfig(DEFAULT_THREADS_CONFIG, userConfig.threads),
+    cancellation: mergeConfig(DEFAULT_CANCELLATION_CONFIG, userConfig.cancellation),
+    resources: mergeConfig(DEFAULT_RESOURCE_CONFIG, userConfig.resources),
+    lsp: mergeConfig(DEFAULT_LSP_CONFIG, userConfig.lsp),
+    semanticCache: mergeConfig(DEFAULT_SEMANTIC_CACHE_CONFIG, userConfig.semanticCache),
+    skills: mergeConfig(DEFAULT_SKILLS_CONFIG, userConfig.skills),
+    maxIterations: userConfig.maxIterations ?? 50,
+    timeout: userConfig.timeout ?? 300000, // 5 minutes
+    toolResolver: userConfig.toolResolver, // Optional: for lazy-loading MCP tools
+    mcpToolSummaries: userConfig.mcpToolSummaries, // Optional: MCP tool summaries for system prompt
+  };
+}
+
+// =============================================================================
+// DEFAULT SYSTEM PROMPT
+// =============================================================================
+
+export const DEFAULT_SYSTEM_PROMPT = `You are a helpful AI assistant with access to various tools.
+
+Guidelines:
+- Think step by step before taking action
+- Use tools when they would help accomplish the task
+- Be concise but thorough in your responses
+- Ask for clarification if the task is ambiguous
+- Report any errors or issues you encounter
+
+When using tools:
+- **BATCH CALLS**: Call multiple tools in parallel when possible. Don't make 5 sequential calls - make 1 call with 5 tools.
+  Example: To explore a repo, call get_file_contents for README.md, package.json, and src/ in ONE response, not three separate responses.
+- Validate inputs before passing them to tools
+- Handle errors gracefully
+- Explain what you're doing and why`;
+
+// =============================================================================
+// FEATURE DETECTION
+// =============================================================================
+
+/**
+ * Check if a feature is enabled in config.
+ */
+export function isFeatureEnabled<T extends { enabled?: boolean }>(
+  config: T | false | undefined
+): config is T {
+  if (config === false || config === undefined) {
+    return false;
+  }
+  return config.enabled !== false;
+}
+
+/**
+ * Get enabled features from config.
+ */
+export function getEnabledFeatures(config: ReturnType<typeof buildConfig>): string[] {
+  const features: string[] = [];
+
+  if (isFeatureEnabled(config.hooks)) features.push('hooks');
+  if (isFeatureEnabled(config.plugins)) features.push('plugins');
+  if (isFeatureEnabled(config.rules)) features.push('rules');
+  if (isFeatureEnabled(config.memory)) features.push('memory');
+  if (isFeatureEnabled(config.planning)) features.push('planning');
+  if (isFeatureEnabled(config.reflection)) features.push('reflection');
+  if (isFeatureEnabled(config.observability)) features.push('observability');
+  if (isFeatureEnabled(config.routing)) features.push('routing');
+  if (isFeatureEnabled(config.sandbox)) features.push('sandbox');
+  if (isFeatureEnabled(config.humanInLoop)) features.push('humanInLoop');
+  if (isFeatureEnabled(config.multiAgent)) features.push('multiAgent');
+  if (isFeatureEnabled(config.react)) features.push('react');
+  if (isFeatureEnabled(config.executionPolicy)) features.push('executionPolicy');
+  if (isFeatureEnabled(config.threads)) features.push('threads');
+  if (isFeatureEnabled(config.cancellation)) features.push('cancellation');
+  if (isFeatureEnabled(config.resources)) features.push('resources');
+  if (isFeatureEnabled(config.lsp)) features.push('lsp');
+  if (isFeatureEnabled(config.semanticCache)) features.push('semanticCache');
+  if (isFeatureEnabled(config.skills)) features.push('skills');
+
+  return features;
+}
