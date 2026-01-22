@@ -4,6 +4,26 @@ A comprehensive course that teaches you to build production-ready AI coding agen
 
 > **26 lessons** covering foundations through production deployment, with hands-on exercises and a complete working agent at the end of each major section.
 
+## Inspiration
+
+This course was heavily inspired by the article **["You Could've Invented Claude Code"](https://erikschluntz.com/software/2025/05/09/you-couldve-invented-claude-code.html)** by Erik Schluntz.
+
+That article demonstrates a powerful insight: the core of Claude Code is just a loop that lets an AI read files, run commands, and iterate until a task is done. Starting from a 50-line bash script, it builds up to a ~150-line Python agent that captures the essence of how AI coding agents work.
+
+**Attocode takes this first-principles approach and expands it into a full curriculum:**
+
+| "You Could've Invented Claude Code" | Attocode |
+|-------------------------------------|----------|
+| Single tutorial | 26 progressive lessons |
+| Python + bash | TypeScript throughout |
+| ~150 lines of code | Production-ready patterns |
+| Core concepts only | Memory, planning, reflection, multi-agent |
+| Read and run | Hands-on exercises with tests |
+| One provider | Multi-provider abstraction |
+| Basic safety | Sandboxing, human-in-loop, observability |
+
+If you haven't read the original article, we highly recommend it as a conceptual primer before diving into this course. It will give you the mental model; Attocode will give you the depth.
+
 ## Quick Start
 
 ```bash
@@ -770,3 +790,48 @@ After completing this course, you can:
 - [Zod Documentation](https://zod.dev)
 - [ReAct Paper](https://arxiv.org/abs/2210.03629)
 - [OpenTelemetry](https://opentelemetry.io)
+
+## Contributing
+
+Attocode is an open educational project, and contributions are welcome! Here's how you can help:
+
+### Ways to Contribute
+
+| Contribution Type | Description | Good For |
+|-------------------|-------------|----------|
+| **Report Issues** | Found a bug, typo, or unclear explanation? Open an issue | Everyone |
+| **Fix Existing Lessons** | Improve explanations, fix code errors, add edge cases | Beginners |
+| **Add Exercises** | Create new practice problems for existing lessons | Intermediate |
+| **New Lessons** | Propose and implement entirely new topics | Advanced |
+| **Improve Documentation** | Better guides, diagrams, or examples | Writers |
+| **Add Providers** | Implement support for additional LLM providers | Contributors familiar with LLM APIs |
+
+### Current Priorities
+
+Based on the project roadmap:
+- More LLM providers (Google, Cohere, local models)
+- Additional lessons covering emerging patterns
+- Integrating remaining tricks into the production agent (Lesson 25)
+- Completing Lesson 26 (Tracing & Evaluation)
+
+### How to Contribute
+
+1. **Fork** the repository
+2. **Create a branch** for your changes (`git checkout -b add-new-lesson`)
+3. **Follow the existing patterns** - each lesson has:
+   - `README.md` with explanation and pseudocode
+   - `types.ts` for type definitions
+   - `main.ts` as the runnable entry point
+   - `exercises/` directory with practice problems
+   - `exercises.test.ts` for automated verification
+4. **Run tests** to ensure nothing breaks: `npm test`
+5. **Submit a PR** with a clear description of your changes
+
+### Code Style
+
+- TypeScript with strict types
+- Zod for runtime validation
+- Tests for all exercises (Vitest)
+- Clear, educational comments in code
+- Pseudocode in READMEs before implementation
+

@@ -3,6 +3,11 @@
  *
  * Breaks down complex tasks into smaller subtasks.
  * Supports different decomposition strategies.
+ *
+ * Enhanced with SmartDecomposer integration for:
+ * - LLM-assisted semantic decomposition
+ * - Codebase-aware task breakdown
+ * - Resource conflict detection
  */
 
 import type {
@@ -11,6 +16,41 @@ import type {
   DecompositionResult,
   DecompositionStrategy,
 } from './types.js';
+
+// =============================================================================
+// SMART DECOMPOSER INTEGRATION
+// =============================================================================
+
+/**
+ * Configuration for smart decomposition.
+ */
+export interface SmartDecomposerOptions {
+  /** Enable LLM-assisted decomposition */
+  useLLM?: boolean;
+  /** LLM decomposition function */
+  llmProvider?: (task: string, context: any) => Promise<any>;
+  /** Enable codebase-aware decomposition */
+  codebaseAware?: boolean;
+  /** Repo map for codebase context */
+  repoMap?: any;
+}
+
+/**
+ * Result from smart decomposition.
+ */
+export interface SmartDecompositionResult extends DecompositionResult {
+  /** Resource conflicts detected */
+  conflicts?: Array<{
+    resource: string;
+    taskIds: string[];
+    type: string;
+    suggestion: string;
+  }>;
+  /** Parallel execution groups */
+  parallelGroups?: string[][];
+  /** Whether LLM was used */
+  llmAssisted?: boolean;
+}
 
 // =============================================================================
 // DEFAULT OPTIONS
@@ -29,12 +69,26 @@ const DEFAULT_OPTIONS: DecompositionOptions = {
 
 /**
  * Breaks down tasks into smaller subtasks.
+ *
+ * Supports both fast heuristic decomposition and LLM-assisted smart decomposition.
  */
 export class TaskDecomposer {
   private options: DecompositionOptions;
+  private smartOptions: SmartDecomposerOptions;
 
-  constructor(options: Partial<DecompositionOptions> = {}) {
+  constructor(
+    options: Partial<DecompositionOptions> = {},
+    smartOptions: SmartDecomposerOptions = {}
+  ) {
     this.options = { ...DEFAULT_OPTIONS, ...options };
+    this.smartOptions = smartOptions;
+  }
+
+  /**
+   * Configure smart decomposition options.
+   */
+  configureSmartDecomposition(options: SmartDecomposerOptions): void {
+    this.smartOptions = { ...this.smartOptions, ...options };
   }
 
   // =============================================================================
@@ -43,6 +97,8 @@ export class TaskDecomposer {
 
   /**
    * Decompose a task into subtasks.
+   * Uses fast heuristic decomposition by default.
+   * Call decomposeSmart for LLM-assisted decomposition.
    */
   decompose(task: Task): DecompositionResult {
     // Skip if already has subtasks
@@ -92,6 +148,199 @@ export class TaskDecomposer {
       strategy,
       dependencies: this.buildDependencyMap(subtasks),
     };
+  }
+
+  /**
+   * Smart decomposition with LLM assistance (async).
+   * Falls back to heuristic decomposition if LLM is unavailable.
+   */
+  async decomposeSmart(task: Task): Promise<SmartDecompositionResult> {
+    // If LLM is not configured, fall back to heuristic
+    if (!this.smartOptions.useLLM || !this.smartOptions.llmProvider) {
+      const result = this.decompose(task);
+      return {
+        ...result,
+        llmAssisted: false,
+      };
+    }
+
+    try {
+      // Build context for LLM
+      const context = {
+        repoMap: this.smartOptions.repoMap,
+        hints: [],
+      };
+
+      // Call LLM for decomposition
+      const llmResult = await this.smartOptions.llmProvider(task.description, context);
+
+      // Convert LLM result to Task[] format
+      const subtasks = this.convertLLMResultToTasks(task.id, llmResult);
+
+      // Detect conflicts if codebase-aware
+      let conflicts: SmartDecompositionResult['conflicts'];
+      if (this.smartOptions.codebaseAware) {
+        conflicts = this.detectResourceConflicts(subtasks);
+      }
+
+      // Calculate parallel groups
+      const parallelGroups = this.calculateParallelGroups(subtasks);
+
+      return {
+        original: task,
+        subtasks,
+        strategy: llmResult.strategy || 'adaptive',
+        dependencies: this.buildDependencyMap(subtasks),
+        conflicts,
+        parallelGroups,
+        llmAssisted: true,
+      };
+    } catch (error) {
+      // Fall back to heuristic on LLM error
+      console.warn('[TaskDecomposer] LLM decomposition failed, using heuristic:', error);
+      const result = this.decompose(task);
+      return {
+        ...result,
+        llmAssisted: false,
+      };
+    }
+  }
+
+  /**
+   * Convert LLM result to Task array.
+   */
+  private convertLLMResultToTasks(parentId: string, llmResult: any): Task[] {
+    const subtasks: Task[] = [];
+    const idMap = new Map<number, string>();
+
+    // First pass: create tasks with IDs
+    (llmResult.subtasks || []).forEach((s: any, index: number) => {
+      const id = `${parentId}-smart-${index + 1}`;
+      idMap.set(index, id);
+
+      subtasks.push({
+        id,
+        description: s.description,
+        status: 'pending',
+        dependencies: [], // Will be resolved in second pass
+        complexity: s.complexity || 3,
+      });
+    });
+
+    // Second pass: resolve dependencies
+    (llmResult.subtasks || []).forEach((s: any, index: number) => {
+      const deps: string[] = [];
+      for (const dep of s.dependencies || []) {
+        if (typeof dep === 'number' && idMap.has(dep)) {
+          deps.push(idMap.get(dep)!);
+        } else if (typeof dep === 'string') {
+          // Try to find by description
+          const match = subtasks.find((t) => t.description.includes(dep));
+          if (match) deps.push(match.id);
+        }
+      }
+      subtasks[index].dependencies = deps;
+      subtasks[index].status = deps.length > 0 ? 'blocked' : 'ready';
+    });
+
+    return subtasks;
+  }
+
+  /**
+   * Detect resource conflicts between subtasks.
+   */
+  private detectResourceConflicts(subtasks: Task[]): SmartDecompositionResult['conflicts'] {
+    const conflicts: SmartDecompositionResult['conflicts'] = [];
+    const filePatterns = new Map<string, string[]>(); // file pattern -> task ids
+
+    for (const task of subtasks) {
+      // Extract file patterns from task description
+      const patterns = this.extractFilePatterns(task.description);
+      for (const pattern of patterns) {
+        if (!filePatterns.has(pattern)) {
+          filePatterns.set(pattern, []);
+        }
+        filePatterns.get(pattern)!.push(task.id);
+      }
+    }
+
+    // Check for conflicts (multiple tasks modifying same file)
+    for (const [pattern, taskIds] of filePatterns) {
+      if (taskIds.length > 1) {
+        // Check if tasks have dependencies between them
+        const hasDependency = taskIds.some((id) => {
+          const task = subtasks.find((t) => t.id === id);
+          return task?.dependencies.some((dep) => taskIds.includes(dep));
+        });
+
+        if (!hasDependency) {
+          conflicts.push({
+            resource: pattern,
+            taskIds,
+            type: 'write-write',
+            suggestion: `Tasks ${taskIds.join(', ')} may modify ${pattern}. Add dependencies or coordinate.`,
+          });
+        }
+      }
+    }
+
+    return conflicts;
+  }
+
+  /**
+   * Extract file patterns from task description.
+   */
+  private extractFilePatterns(description: string): string[] {
+    const patterns: string[] = [];
+
+    // Match common file references
+    const fileRegexes = [
+      /\b(\w+\.(ts|tsx|js|jsx|py|go|rs))\b/gi,  // filename.ext
+      /\b(src\/[\w/]+)\b/gi,                      // src/path
+      /\b(lib\/[\w/]+)\b/gi,                      // lib/path
+    ];
+
+    for (const regex of fileRegexes) {
+      let match;
+      while ((match = regex.exec(description)) !== null) {
+        patterns.push(match[1]);
+      }
+    }
+
+    return patterns;
+  }
+
+  /**
+   * Calculate groups of tasks that can run in parallel.
+   */
+  private calculateParallelGroups(subtasks: Task[]): string[][] {
+    const groups: string[][] = [];
+    const completed = new Set<string>();
+    const remaining = new Set(subtasks.map((t) => t.id));
+
+    while (remaining.size > 0) {
+      const group: string[] = [];
+
+      for (const id of remaining) {
+        const task = subtasks.find((t) => t.id === id);
+        if (!task) continue;
+
+        const allDepsCompleted = task.dependencies.every((dep) => completed.has(dep));
+        if (allDepsCompleted) {
+          group.push(id);
+        }
+      }
+
+      if (group.length === 0) break; // No progress - cycle detected
+
+      groups.push(group);
+      for (const id of group) {
+        completed.add(id);
+        remaining.delete(id);
+      }
+    }
+
+    return groups;
   }
 
   /**
@@ -353,3 +602,13 @@ export class TaskDecomposer {
 // =============================================================================
 
 export const defaultDecomposer = new TaskDecomposer();
+
+/**
+ * Create a decomposer with smart decomposition support.
+ */
+export function createSmartTaskDecomposer(
+  options: Partial<DecompositionOptions> = {},
+  smartOptions: SmartDecomposerOptions = {}
+): TaskDecomposer {
+  return new TaskDecomposer(options, smartOptions);
+}

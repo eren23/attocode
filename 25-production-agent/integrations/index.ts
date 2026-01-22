@@ -364,3 +364,82 @@ export {
   type ContextEngineeringEvent,
   type ContextEngineeringEventListener,
 } from './context-engineering.js';
+
+// Codebase Context (intelligent code selection)
+export {
+  CodebaseContextManager,
+  createCodebaseContext,
+  buildContextFromChunks,
+  summarizeRepoStructure,
+  type CodeChunk,
+  type CodeChunkType,
+  type RepoMap,
+  type CodebaseContextConfig,
+  type SelectionOptions,
+  type SelectionStrategy,
+  type SelectionResult,
+  type CodebaseContextEvent,
+  type CodebaseContextEventListener,
+} from './codebase-context.js';
+
+// Shared Blackboard (subagent coordination)
+export {
+  SharedBlackboard,
+  createSharedBlackboard,
+  createFindingFromOutput,
+  extractFindings,
+  type Finding,
+  type FindingType,
+  type ResourceClaim,
+  type ClaimType,
+  type Subscription,
+  type FindingFilter,
+  type BlackboardConfig,
+  type BlackboardEvent,
+  type BlackboardEventListener,
+  type BlackboardStats,
+} from './shared-blackboard.js';
+
+// Smart Decomposer (semantic task decomposition)
+export {
+  SmartDecomposer,
+  createSmartDecomposer,
+  createDecompositionPrompt,
+  parseDecompositionResponse,
+  type SmartSubtask,
+  type SubtaskStatus,
+  type SubtaskType,
+  type DependencyGraph,
+  type ResourceConflict,
+  type SmartDecompositionResult,
+  type DecompositionStrategy,
+  type SmartDecomposerConfig,
+  type LLMDecomposeFunction,
+  type DecomposeContext,
+  type LLMDecomposeResult,
+  type SmartDecomposerEvent,
+  type SmartDecomposerEventListener,
+} from './smart-decomposer.js';
+
+// Result Synthesizer (structured result merging)
+export {
+  ResultSynthesizer,
+  createResultSynthesizer,
+  createSynthesisPrompt,
+  type AgentOutput,
+  type OutputType,
+  type FileChange,
+  type Hunk,
+  type ResultConflict,
+  type ConflictType,
+  type ConflictResolution,
+  type ResolutionStrategy,
+  type SynthesisResult,
+  type SynthesisStats,
+  type SynthesisMethod,
+  type ResultSynthesizerConfig,
+  type LLMSynthesizeFunction,
+  type LLMSynthesisResult,
+  type ResultSynthesizerEvent,
+  type ResultSynthesizerEventListener,
+} from './result-synthesizer.js';

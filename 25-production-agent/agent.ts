@@ -90,6 +90,9 @@ import {
   ContextEngineeringManager,
   createContextEngineering,
   stableStringify,
+  CodebaseContextManager,
+  createCodebaseContext,
+  buildContextFromChunks,
   type ExecutionBudget,
   type AgentRole,
   type TeamTask,
@@ -102,6 +105,8 @@ import {
   type CancellationTokenType,
   type Skill,
   type ContextEngineeringConfig,
+  type CodebaseContextConfig,
+  type SelectionOptions,
 } from './integrations/index.js';
 
 // Lesson 26: Tracing & Evaluation integration
@@ -139,6 +144,7 @@ export class ProductionAgent {
   private semanticCache: SemanticCacheManager | null = null;
   private skillManager: SkillManager | null = null;
   private contextEngineering: ContextEngineeringManager | null = null;
+  private codebaseContext: CodebaseContextManager | null = null;
   private traceCollector: TraceCollector | null = null;
   private modeManager: ModeManager;
   private toolResolver: ((toolName: string) => ToolDefinition | null) | null = null;
@@ -383,6 +389,24 @@ export class ProductionAgent {
       maxFailures: 30,
       maxReferences: 50,
     });
+
+    // Codebase Context - intelligent code selection for context management
+    // Analyzes repo structure and selects relevant code within token budgets
+    if (this.config.codebaseContext !== false) {
+      const codebaseConfig = typeof this.config.codebaseContext === 'object'
+        ? this.config.codebaseContext
+        : {};
+      this.codebaseContext = createCodebaseContext({
+        root: codebaseConfig.root ?? process.cwd(),
+        includePatterns: codebaseConfig.includePatterns,
+        excludePatterns: codebaseConfig.excludePatterns,
+        maxFileSize: codebaseConfig.maxFileSize ?? 100 * 1024, // 100KB
+        tokensPerChar: 0.25,
+        analyzeDependencies: true,
+        cacheResults: true,
+        cacheTTL: 5 * 60 * 1000, // 5 minutes
+      });
+    }
 
     // Forward context engineering events
     this.contextEngineering.on(event => {
@@ -885,6 +909,33 @@ export class ProductionAgent {
     const skillsPrompt = this.skillManager?.getActiveSkillsPrompt() ?? '';
     const memoryContext = this.memory?.getContextStrings(task) ?? [];
 
+    // Budget-aware codebase context selection
+    let codebaseContextStr = '';
+    if (this.codebaseContext) {
+      // Calculate available budget for codebase context
+      // Reserve tokens for: rules (~2000), tools (~2500), memory (~1000), conversation (~5000)
+      const reservedTokens = 10500;
+      const maxContextTokens = (this.config.maxContextTokens ?? 80000) - reservedTokens;
+      const codebaseBudget = Math.min(maxContextTokens * 0.3, 15000); // Up to 30% or 15K tokens
+
+      try {
+        // Use synchronous cache if available, otherwise skip
+        const repoMap = this.codebaseContext.getRepoMap();
+        if (repoMap) {
+          const selection = this.selectRelevantCodeSync(task, codebaseBudget);
+          if (selection.chunks.length > 0) {
+            codebaseContextStr = buildContextFromChunks(selection.chunks, {
+              includeFilePaths: true,
+              includeSeparators: true,
+              maxTotalTokens: codebaseBudget,
+            });
+          }
+        }
+      } catch {
+        // Codebase analysis not ready yet - skip for this call
+      }
+    }
+
     // Build tool descriptions
     let toolDescriptions = '';
     if (this.tools.size > 0) {
@@ -910,13 +961,19 @@ export class ProductionAgent {
     // Build system prompt using cache-aware builder if available (Trick P)
     let systemPrompt: string;
 
+    // Combine memory and codebase context
+    const combinedContext = [
+      ...(memoryContext.length > 0 ? memoryContext : []),
+      ...(codebaseContextStr ? [`\n## Relevant Code\n${codebaseContextStr}`] : []),
+    ].join('\n');
+
     if (this.contextEngineering) {
       // Use cache-optimized prompt builder - orders sections for KV-cache reuse:
-      // static prefix -> rules -> tools -> memory -> dynamic
+      // static prefix -> rules -> tools -> memory/codebase -> dynamic
       systemPrompt = this.contextEngineering.buildSystemPrompt({
         rules: rulesContent + (skillsPrompt ? '\n\n' + skillsPrompt : ''),
         tools: toolDescriptions,
-        memory: memoryContext.length > 0 ? memoryContext.join('\n') : undefined,
+        memory: combinedContext.length > 0 ? combinedContext : undefined,
         dynamic: {
           mode: this.modeManager?.getMode() ?? 'default',
         },
@@ -926,8 +983,8 @@ export class ProductionAgent {
       systemPrompt = this.config.systemPrompt;
       if (rulesContent) systemPrompt += '\n\n' + rulesContent;
       if (skillsPrompt) systemPrompt += skillsPrompt;
-      if (memoryContext.length > 0) {
-        systemPrompt += '\n\nRelevant context from memory:\n' + memoryContext.join('\n');
+      if (combinedContext.length > 0) {
+        systemPrompt += '\n\nRelevant context:\n' + combinedContext;
       }
       if (toolDescriptions) {
         systemPrompt += '\n\nAvailable tools:\n' + toolDescriptions;
@@ -1284,6 +1341,85 @@ export class ProductionAgent {
     }
 
     return results;
+  }
+
+  /**
+   * Select relevant code synchronously using cached repo analysis.
+   * Returns empty result if analysis hasn't been run yet.
+   */
+  private selectRelevantCodeSync(task: string, maxTokens: number): {
+    chunks: Array<{ filePath: string; content: string; tokenCount: number; importance: number }>;
+    totalTokens: number;
+  } {
+    if (!this.codebaseContext) {
+      return { chunks: [], totalTokens: 0 };
+    }
+
+    const repoMap = this.codebaseContext.getRepoMap();
+    if (!repoMap) {
+      return { chunks: [], totalTokens: 0 };
+    }
+
+    // Get all chunks and score by relevance
+    const allChunks = Array.from(repoMap.chunks.values());
+    const taskLower = task.toLowerCase();
+    const taskWords = taskLower.split(/\s+/).filter((w) => w.length > 2);
+
+    // Score chunks by task relevance
+    const scored = allChunks.map((chunk) => {
+      let relevance = 0;
+
+      // Check file path
+      const pathLower = chunk.filePath.toLowerCase();
+      for (const word of taskWords) {
+        if (pathLower.includes(word)) relevance += 0.3;
+      }
+
+      // Check symbols
+      for (const symbol of chunk.symbols) {
+        const symbolLower = symbol.toLowerCase();
+        for (const word of taskWords) {
+          if (symbolLower.includes(word) || word.includes(symbolLower)) {
+            relevance += 0.2;
+          }
+        }
+      }
+
+      // Combine with base importance
+      const combinedScore = chunk.importance * 0.4 + Math.min(relevance, 1) * 0.6;
+
+      return { chunk, score: combinedScore };
+    });
+
+    // Sort by score and select within budget
+    scored.sort((a, b) => b.score - a.score);
+
+    const selected: Array<{ filePath: string; content: string; tokenCount: number; importance: number }> = [];
+    let totalTokens = 0;
+
+    for (const { chunk, score } of scored) {
+      if (score < 0.1) continue; // Skip very low relevance
+      if (totalTokens + chunk.tokenCount > maxTokens) continue;
+
+      selected.push({
+        filePath: chunk.filePath,
+        content: chunk.content,
+        tokenCount: chunk.tokenCount,
+        importance: score,
+      });
+      totalTokens += chunk.tokenCount;
+    }
+
+    return { chunks: selected, totalTokens };
+  }
+
+  /**
+   * Analyze the codebase (async). Call this once at startup for optimal performance.
+   */
+  async analyzeCodebase(root?: string): Promise<void> {
+    if (this.codebaseContext) {
+      await this.codebaseContext.analyze(root);
+    }
   }
 
   /**

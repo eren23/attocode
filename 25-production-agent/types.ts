@@ -164,6 +164,12 @@ export interface ProductionAgentConfig {
   /** Skills system configuration */
   skills?: SkillsAgentConfig | false;
 
+  /** Codebase context configuration (intelligent code selection) */
+  codebaseContext?: CodebaseContextAgentConfig | false;
+
+  /** Maximum context tokens before compaction */
+  maxContextTokens?: number;
+
   /** Maximum iterations for agent loop */
   maxIterations?: number;
 
@@ -714,6 +720,33 @@ export interface SkillsAgentConfig {
 
   /** Auto-activate skills based on triggers */
   autoActivate?: boolean;
+}
+
+/**
+ * Codebase context configuration.
+ * Intelligent code selection for context management within token budgets.
+ */
+export interface CodebaseContextAgentConfig {
+  /** Enable/disable codebase context */
+  enabled?: boolean;
+
+  /** Root directory to analyze (defaults to cwd) */
+  root?: string;
+
+  /** File patterns to include (glob) */
+  includePatterns?: string[];
+
+  /** File patterns to exclude (glob) */
+  excludePatterns?: string[];
+
+  /** Maximum file size in bytes (default: 100KB) */
+  maxFileSize?: number;
+
+  /** Maximum tokens to allocate for codebase context */
+  maxTokens?: number;
+
+  /** Selection strategy: importance_first, relevance_first, breadth_first, depth_first */
+  strategy?: 'importance_first' | 'relevance_first' | 'breadth_first' | 'depth_first';
 }
 
 // =============================================================================

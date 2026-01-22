@@ -3,9 +3,65 @@
  *
  * Spawns isolated agent instances for parallel task execution.
  * Each subagent has its own context and can run independently.
+ *
+ * Enhanced with SharedBlackboard support for real-time coordination:
+ * - Subagents can post findings for other agents to see
+ * - Subagents can subscribe to relevant findings
+ * - Resource claiming prevents file edit conflicts
  */
 
 import { Session } from './session.js';
+
+// =============================================================================
+// BLACKBOARD TYPES (inline to avoid circular dependencies)
+// =============================================================================
+
+/**
+ * A finding posted to the blackboard by an agent.
+ */
+export interface Finding {
+  id: string;
+  agentId: string;
+  topic: string;
+  content: string;
+  confidence: number;
+  type: FindingType;
+  relatedFiles?: string[];
+  relatedSymbols?: string[];
+  tags?: string[];
+  timestamp: Date;
+  supersedesId?: string;
+  metadata?: Record<string, unknown>;
+}
+
+export type FindingType =
+  | 'discovery'
+  | 'analysis'
+  | 'solution'
+  | 'problem'
+  | 'question'
+  | 'answer'
+  | 'progress'
+  | 'blocker'
+  | 'resource';
+
+/**
+ * Interface for shared blackboard (minimal subset needed by subagents).
+ */
+export interface SharedBlackboardInterface {
+  post(agentId: string, input: Omit<Finding, 'id' | 'agentId' | 'timestamp'>): Finding;
+  query(filter?: { topic?: string; agentId?: string; types?: FindingType[] }): Finding[];
+  subscribe(options: {
+    agentId: string;
+    topicPattern?: string;
+    types?: FindingType[];
+    callback: (finding: Finding) => void;
+  }): string;
+  unsubscribe(subscriptionId: string): boolean;
+  claim(resource: string, agentId: string, type: 'read' | 'write' | 'exclusive'): boolean;
+  release(resource: string, agentId: string): boolean;
+  isClaimed(resource: string): boolean;
+}
 
 // =============================================================================
 // TYPES
@@ -27,6 +83,12 @@ export interface SubagentConfig {
   enabledTools?: string[];
   /** Timeout in milliseconds */
   timeout?: number;
+  /** Shared blackboard for coordination with other subagents */
+  blackboard?: SharedBlackboardInterface;
+  /** Topic to subscribe to on the blackboard */
+  subscribeTopics?: string[];
+  /** Whether to auto-post progress updates to blackboard */
+  autoPostProgress?: boolean;
 }
 
 /**
@@ -51,6 +113,10 @@ export interface SubagentResult {
   executionTime: number;
   /** Error if failed */
   error?: Error;
+  /** Findings posted to the blackboard */
+  findings?: Finding[];
+  /** Files modified by this subagent */
+  filesModified?: string[];
 }
 
 /**
@@ -59,6 +125,40 @@ export interface SubagentResult {
 export interface ParallelTask {
   id: string;
   config: SubagentConfig;
+}
+
+// =============================================================================
+// HELPER FUNCTIONS
+// =============================================================================
+
+/**
+ * Check if a tool is a file write operation.
+ */
+function isFileWriteTool(toolName: string): boolean {
+  const writeTools = [
+    'write_file', 'writeFile', 'write',
+    'edit_file', 'editFile', 'edit',
+    'create_file', 'createFile', 'create',
+    'patch_file', 'patchFile', 'patch',
+    'delete_file', 'deleteFile', 'delete',
+    'move_file', 'moveFile', 'move',
+    'rename_file', 'renameFile', 'rename',
+  ];
+  return writeTools.some((t) => toolName.toLowerCase().includes(t.toLowerCase()));
+}
+
+/**
+ * Check if a tool produces discovery/research findings.
+ */
+function isDiscoveryTool(toolName: string): boolean {
+  const discoveryTools = [
+    'read_file', 'readFile', 'read',
+    'search', 'grep', 'find',
+    'list_files', 'listFiles', 'ls',
+    'get_', 'fetch_',
+    'analyze', 'inspect',
+  ];
+  return discoveryTools.some((t) => toolName.toLowerCase().includes(t.toLowerCase()));
 }
 
 // =============================================================================
@@ -161,6 +261,40 @@ export class SubagentSpawner {
 
     this.activeSubagents.set(subagent.id, subagent);
 
+    // Track findings posted by this subagent
+    const postedFindings: Finding[] = [];
+    let subscriptionId: string | undefined;
+
+    // Set up blackboard integration
+    if (config.blackboard) {
+      // Subscribe to relevant topics
+      if (config.subscribeTopics && config.subscribeTopics.length > 0) {
+        for (const topic of config.subscribeTopics) {
+          subscriptionId = config.blackboard.subscribe({
+            agentId: subagent.id,
+            topicPattern: topic,
+            callback: (finding) => {
+              // Inject finding into subagent context
+              subagent.contextManager.addSystemMessage(
+                `[Blackboard Update] ${finding.agentId} found: ${finding.content}`
+              );
+            },
+          });
+        }
+      }
+
+      // Post initial progress
+      if (config.autoPostProgress) {
+        const progressFinding = config.blackboard.post(subagent.id, {
+          topic: 'progress',
+          content: `Started task: ${config.task}`,
+          type: 'progress',
+          confidence: 1,
+        });
+        postedFindings.push(progressFinding);
+      }
+    }
+
     try {
       await subagent.initialize();
 
@@ -169,15 +303,40 @@ export class SubagentSpawner {
         subagent.contextManager.addSystemMessage(config.systemPrompt);
       }
 
+      // Add blackboard context to system prompt
+      if (config.blackboard) {
+        const existingFindings = config.blackboard.query({ types: ['discovery', 'analysis'] });
+        if (existingFindings.length > 0) {
+          const contextSummary = existingFindings
+            .slice(0, 5)
+            .map((f) => `- [${f.agentId}] ${f.content}`)
+            .join('\n');
+          subagent.contextManager.addSystemMessage(
+            `[Blackboard Context] Relevant findings from other agents:\n${contextSummary}`
+          );
+        }
+      }
+
       // Add the task
       subagent.addUserMessage(config.task);
       subagent.setState('running');
 
       // Run with timeout
       const result = await Promise.race([
-        this.executeSubagent(subagent, config),
+        this.executeSubagent(subagent, config, postedFindings),
         this.timeoutPromise(timeout, subagent.id),
       ]);
+
+      // Post completion to blackboard
+      if (config.blackboard && config.autoPostProgress) {
+        const completionFinding = config.blackboard.post(subagent.id, {
+          topic: 'progress',
+          content: `Completed task: ${result.success ? 'SUCCESS' : 'FAILED'} - ${result.message.slice(0, 200)}`,
+          type: result.success ? 'progress' : 'blocker',
+          confidence: 1,
+        });
+        postedFindings.push(completionFinding);
+      }
 
       const executionTime = Date.now() - startTime;
       const stats = subagent.getStats();
@@ -193,8 +352,20 @@ export class SubagentSpawner {
           cachedTokens: stats.totalCachedTokens,
         },
         executionTime,
+        findings: postedFindings.length > 0 ? postedFindings : undefined,
+        filesModified: result.filesModified,
       };
     } catch (error) {
+      // Post error to blackboard
+      if (config.blackboard && config.autoPostProgress) {
+        config.blackboard.post(subagent.id, {
+          topic: 'progress',
+          content: `Error: ${(error as Error).message}`,
+          type: 'blocker',
+          confidence: 1,
+        });
+      }
+
       const executionTime = Date.now() - startTime;
       return {
         success: false,
@@ -204,8 +375,14 @@ export class SubagentSpawner {
         usage: { inputTokens: 0, outputTokens: 0, cachedTokens: 0 },
         executionTime,
         error: error as Error,
+        findings: postedFindings.length > 0 ? postedFindings : undefined,
       };
     } finally {
+      // Cleanup blackboard subscriptions
+      if (config.blackboard && subscriptionId) {
+        config.blackboard.unsubscribe(subscriptionId);
+      }
+
       this.activeSubagents.delete(subagent.id);
       await subagent.cleanup();
       this.semaphore.release();
@@ -254,12 +431,14 @@ export class SubagentSpawner {
    */
   private async executeSubagent(
     subagent: Session,
-    config: SubagentConfig
-  ): Promise<{ success: boolean; message: string; iterations: number }> {
+    config: SubagentConfig,
+    postedFindings: Finding[] = []
+  ): Promise<{ success: boolean; message: string; iterations: number; filesModified?: string[] }> {
     // This is a simplified execution - in practice, you'd use the full agent loop
     // For now, we'll do a simple request-response
 
     const messages = subagent.getMessages();
+    const filesModified: string[] = [];
 
     let iterations = 0;
     const maxIterations = config.maxIterations ?? subagent.maxIterations;
@@ -286,10 +465,52 @@ export class SubagentSpawner {
         // Execute tools and continue loop
         for (const toolCall of response.toolCalls) {
           const args = JSON.parse(toolCall.function.arguments);
-          const result = await subagent.toolRegistry.execute(
-            toolCall.function.name,
-            args
-          );
+          const toolName = toolCall.function.name;
+
+          // Claim resource if this is a file write operation
+          if (config.blackboard && isFileWriteTool(toolName)) {
+            const filePath = args.path || args.file_path || args.filePath;
+            if (filePath) {
+              const claimed = config.blackboard.claim(filePath, subagent.id, 'write');
+              if (!claimed) {
+                // Another agent is modifying this file - skip or wait
+                messages.push({
+                  role: 'tool',
+                  content: `✗ Resource conflict: ${filePath} is being modified by another agent`,
+                  tool_call_id: toolCall.id,
+                  name: toolName,
+                } as any);
+                continue;
+              }
+            }
+          }
+
+          const result = await subagent.toolRegistry.execute(toolName, args);
+
+          // Track file modifications
+          if (result.success && isFileWriteTool(toolName)) {
+            const filePath = args.path || args.file_path || args.filePath;
+            if (filePath && !filesModified.includes(filePath)) {
+              filesModified.push(filePath);
+
+              // Release the claim
+              if (config.blackboard) {
+                config.blackboard.release(filePath, subagent.id);
+              }
+            }
+          }
+
+          // Post significant findings to blackboard
+          if (config.blackboard && result.success && isDiscoveryTool(toolName)) {
+            const finding = config.blackboard.post(subagent.id, {
+              topic: 'discovery',
+              content: `Found via ${toolName}: ${String(result.output).slice(0, 500)}`,
+              type: 'discovery',
+              confidence: 0.8,
+              relatedFiles: args.path ? [args.path] : undefined,
+            });
+            postedFindings.push(finding);
+          }
 
           // Add to conversation
           messages.push({
@@ -304,7 +525,7 @@ export class SubagentSpawner {
               ? `✓ Success\n\n${result.output}`
               : `✗ Failed\n\n${result.output}`,
             tool_call_id: toolCall.id,
-            name: toolCall.function.name, // Required for Gemini
+            name: toolName,
           } as any);
 
           subagent.updateStats({ inputTokens: 0, outputTokens: 0 }, 1);
@@ -316,6 +537,7 @@ export class SubagentSpawner {
           success: true,
           message: response.content,
           iterations,
+          filesModified: filesModified.length > 0 ? filesModified : undefined,
         };
       }
     }
@@ -326,6 +548,7 @@ export class SubagentSpawner {
       success: false,
       message: `Task incomplete: reached maximum iterations (${maxIterations})`,
       iterations,
+      filesModified: filesModified.length > 0 ? filesModified : undefined,
     };
   }
 

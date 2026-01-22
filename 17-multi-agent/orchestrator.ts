@@ -3,6 +3,11 @@
  *
  * Coordinates multiple agents to complete tasks.
  * Handles task assignment, execution, and result aggregation.
+ *
+ * Enhanced with ResultSynthesizer integration for:
+ * - Intelligent code merging from multiple agents
+ * - Finding deduplication and synthesis
+ * - Conflict detection and resolution
  */
 
 import type {
@@ -30,18 +35,73 @@ import {
 import { canPerform, getHighestAuthorityRole } from './agent-roles.js';
 
 // =============================================================================
+// RESULT SYNTHESIZER TYPES (inline to avoid circular dependencies)
+// =============================================================================
+
+/**
+ * A result from an agent that can be synthesized.
+ */
+export interface SynthesizerInput {
+  agentId: string;
+  content: string;
+  type: 'code' | 'research' | 'analysis' | 'review' | 'plan' | 'documentation' | 'mixed';
+  confidence: number;
+  authority?: number;
+  filesModified?: Array<{ path: string; type: string; newContent: string }>;
+  findings?: string[];
+  errors?: string[];
+}
+
+/**
+ * Configuration for orchestrator synthesis.
+ */
+export interface OrchestratorSynthesisConfig {
+  /** Enable structured synthesis instead of simple consensus */
+  enableSynthesis?: boolean;
+  /** Conflict resolution strategy */
+  conflictResolution?: 'highest_confidence' | 'highest_authority' | 'merge_both' | 'voting';
+  /** Deduplication threshold (0-1) */
+  deduplicationThreshold?: number;
+  /** Enable LLM-assisted synthesis */
+  useLLM?: boolean;
+  /** LLM synthesis function */
+  llmSynthesizer?: (inputs: SynthesizerInput[], conflicts: any[]) => Promise<any>;
+}
+
+// =============================================================================
 // TEAM ORCHESTRATOR
 // =============================================================================
 
 /**
  * Coordinates team activities to complete tasks.
+ *
+ * Enhanced with ResultSynthesizer integration for intelligent
+ * merging of multi-agent outputs.
  */
 export class TeamOrchestrator implements Orchestrator {
   private consensus: ConsensusEngine;
   private listeners: Set<CoordinationEventListener> = new Set();
+  private synthesisConfig: OrchestratorSynthesisConfig;
 
-  constructor(consensusStrategy: 'authority' | 'voting' | 'unanimous' | 'debate' | 'weighted' = 'authority') {
+  constructor(
+    consensusStrategy: 'authority' | 'voting' | 'unanimous' | 'debate' | 'weighted' = 'authority',
+    synthesisConfig: OrchestratorSynthesisConfig = {}
+  ) {
     this.consensus = new ConsensusEngine(consensusStrategy);
+    this.synthesisConfig = {
+      enableSynthesis: false,
+      conflictResolution: 'highest_confidence',
+      deduplicationThreshold: 0.8,
+      useLLM: false,
+      ...synthesisConfig,
+    };
+  }
+
+  /**
+   * Configure synthesis options.
+   */
+  configureSynthesis(config: Partial<OrchestratorSynthesisConfig>): void {
+    this.synthesisConfig = { ...this.synthesisConfig, ...config };
   }
 
   // ===========================================================================
@@ -187,17 +247,30 @@ export class TeamOrchestrator implements Orchestrator {
       }
     }
 
-    // If multiple results, reach consensus on final output
+    // If multiple results, use synthesis or consensus
     let consensus: Decision | undefined;
     let finalOutput: string;
+    let synthesisResult: any | undefined;
 
     if (results.length > 1) {
-      const opinions = results.map((r) =>
-        createOpinion(r.agentId, r.output, 'Based on task execution', r.confidence)
-      );
+      if (this.synthesisConfig.enableSynthesis) {
+        // Use structured synthesis for intelligent merging
+        synthesisResult = await this.synthesizeResults(results, team);
+        finalOutput = synthesisResult.mergedOutput || synthesisResult.output;
 
-      consensus = await this.consensus.decide(opinions, team.agents);
-      finalOutput = consensus.decision;
+        // If synthesis detected conflicts, emit event
+        if (synthesisResult.conflicts?.length > 0) {
+          this.emit({ type: 'conflict.detected', opinions: synthesisResult.conflicts });
+        }
+      } else {
+        // Fall back to consensus-based approach
+        const opinions = results.map((r) =>
+          createOpinion(r.agentId, r.output, 'Based on task execution', r.confidence)
+        );
+
+        consensus = await this.consensus.decide(opinions, team.agents);
+        finalOutput = consensus.decision;
+      }
     } else if (results.length === 1) {
       finalOutput = results[0].output;
     } else {
@@ -338,6 +411,302 @@ export class TeamOrchestrator implements Orchestrator {
     this.emit({ type: 'conflict.resolved', decision });
 
     return decision;
+  }
+
+  // ===========================================================================
+  // RESULT SYNTHESIS
+  // ===========================================================================
+
+  /**
+   * Synthesize results from multiple agents using structured merging.
+   */
+  private async synthesizeResults(
+    results: AgentResult[],
+    team: AgentTeam
+  ): Promise<{
+    output: string;
+    mergedOutput?: string;
+    conflicts?: Array<{ type: string; description: string; resolution: string }>;
+    deduplicatedFindings?: string[];
+  }> {
+    // Convert AgentResults to SynthesizerInput format
+    const inputs: SynthesizerInput[] = results.map((r) => {
+      const agent = team.agents.find((a) => a.id === r.agentId);
+      return {
+        agentId: r.agentId,
+        content: r.output,
+        type: this.inferOutputType(r.output),
+        confidence: r.confidence,
+        authority: agent?.role.authority,
+        findings: this.extractFindings(r.output),
+        errors: r.errors,
+      };
+    });
+
+    // Detect conflicts between results
+    const conflicts = this.detectResultConflicts(inputs);
+
+    // If LLM synthesis is enabled and configured, use it
+    if (this.synthesisConfig.useLLM && this.synthesisConfig.llmSynthesizer) {
+      try {
+        const llmResult = await this.synthesisConfig.llmSynthesizer(inputs, conflicts);
+        return {
+          output: llmResult.output,
+          mergedOutput: llmResult.mergedOutput,
+          conflicts: llmResult.conflicts,
+          deduplicatedFindings: llmResult.findings,
+        };
+      } catch (error) {
+        console.warn('[Orchestrator] LLM synthesis failed, using heuristic:', error);
+      }
+    }
+
+    // Heuristic synthesis
+    return this.heuristicSynthesis(inputs, conflicts);
+  }
+
+  /**
+   * Infer the output type from content.
+   */
+  private inferOutputType(output: string): SynthesizerInput['type'] {
+    const lower = output.toLowerCase();
+
+    if (
+      output.includes('function ') ||
+      output.includes('class ') ||
+      output.includes('const ') ||
+      output.includes('import ') ||
+      /^\s*(\/\/|\/\*|\*|#)/.test(output)
+    ) {
+      return 'code';
+    }
+
+    if (lower.includes('review') || lower.includes('suggestion')) {
+      return 'review';
+    }
+
+    if (lower.includes('analysis') || lower.includes('finding')) {
+      return 'analysis';
+    }
+
+    if (lower.includes('plan') || lower.includes('step 1')) {
+      return 'plan';
+    }
+
+    if (lower.includes('research') || lower.includes('discovered')) {
+      return 'research';
+    }
+
+    return 'mixed';
+  }
+
+  /**
+   * Extract findings from output text.
+   */
+  private extractFindings(output: string): string[] {
+    const findings: string[] = [];
+    const bulletRegex = /^[\s]*[-*]\s+(.+)$/gm;
+    let match;
+    while ((match = bulletRegex.exec(output)) !== null) {
+      findings.push(match[1].trim());
+    }
+    return findings;
+  }
+
+  /**
+   * Detect conflicts between synthesizer inputs.
+   */
+  private detectResultConflicts(
+    inputs: SynthesizerInput[]
+  ): Array<{ type: string; description: string; inputIds: string[] }> {
+    const conflicts: Array<{ type: string; description: string; inputIds: string[] }> = [];
+
+    const codeInputs = inputs.filter((i) => i.type === 'code');
+    if (codeInputs.length > 1) {
+      const signatures = codeInputs.map((i) => {
+        const funcMatch = i.content.match(/function\s+(\w+)\s*\([^)]*\)/);
+        return funcMatch ? funcMatch[0] : null;
+      });
+
+      const uniqueSignatures = new Set(signatures.filter(Boolean));
+      if (uniqueSignatures.size > 1) {
+        conflicts.push({
+          type: 'approach_mismatch',
+          description: 'Multiple agents produced code with different function signatures',
+          inputIds: codeInputs.map((i) => i.agentId),
+        });
+      }
+    }
+
+    return conflicts;
+  }
+
+  /**
+   * Heuristic-based synthesis when LLM is not available.
+   */
+  private heuristicSynthesis(
+    inputs: SynthesizerInput[],
+    conflicts: Array<{ type: string; description: string; inputIds: string[] }>
+  ): {
+    output: string;
+    mergedOutput?: string;
+    conflicts?: Array<{ type: string; description: string; resolution: string }>;
+    deduplicatedFindings?: string[];
+  } {
+    const resolvedConflicts = conflicts.map((c) => ({
+      ...c,
+      resolution: this.resolveConflictByStrategy(c, inputs),
+    }));
+
+    const allFindings = inputs.flatMap((i) => i.findings || []);
+    const deduplicatedFindings = this.deduplicateFindings(allFindings);
+
+    let mergedOutput: string;
+    const primaryType = this.determinePrimaryType(inputs);
+
+    switch (primaryType) {
+      case 'code':
+        mergedOutput = this.mergeCodeOutputs(inputs, resolvedConflicts);
+        break;
+      case 'research':
+      case 'analysis':
+        mergedOutput = this.mergeResearchOutputs(inputs, deduplicatedFindings);
+        break;
+      default:
+        mergedOutput = this.selectByConfidence(inputs);
+    }
+
+    return {
+      output: mergedOutput,
+      mergedOutput,
+      conflicts: resolvedConflicts,
+      deduplicatedFindings,
+    };
+  }
+
+  /**
+   * Resolve a conflict using the configured strategy.
+   */
+  private resolveConflictByStrategy(
+    conflict: { type: string; inputIds: string[] },
+    inputs: SynthesizerInput[]
+  ): string {
+    const conflictingInputs = inputs.filter((i) => conflict.inputIds.includes(i.agentId));
+
+    switch (this.synthesisConfig.conflictResolution) {
+      case 'highest_confidence': {
+        const best = conflictingInputs.reduce((a, b) => (a.confidence > b.confidence ? a : b));
+        return `Resolved by highest confidence (${best.agentId})`;
+      }
+      case 'highest_authority': {
+        const best = conflictingInputs.reduce((a, b) =>
+          (a.authority ?? 0) > (b.authority ?? 0) ? a : b
+        );
+        return `Resolved by highest authority (${best.agentId})`;
+      }
+      case 'voting':
+        return 'Resolved by voting';
+      case 'merge_both':
+      default:
+        return 'Resolved by merging both approaches';
+    }
+  }
+
+  /**
+   * Deduplicate findings using similarity threshold.
+   */
+  private deduplicateFindings(findings: string[]): string[] {
+    const threshold = this.synthesisConfig.deduplicationThreshold ?? 0.8;
+    const unique: string[] = [];
+
+    for (const finding of findings) {
+      const isDuplicate = unique.some((u) => this.similarity(u, finding) >= threshold);
+      if (!isDuplicate) {
+        unique.push(finding);
+      }
+    }
+
+    return unique;
+  }
+
+  /**
+   * Calculate Jaccard similarity between two strings.
+   */
+  private similarity(a: string, b: string): number {
+    const aWords = new Set(a.toLowerCase().split(/\s+/));
+    const bWords = new Set(b.toLowerCase().split(/\s+/));
+    const intersection = [...aWords].filter((w) => bWords.has(w)).length;
+    const union = new Set([...aWords, ...bWords]).size;
+    return union > 0 ? intersection / union : 0;
+  }
+
+  /**
+   * Determine the primary output type from inputs.
+   */
+  private determinePrimaryType(inputs: SynthesizerInput[]): SynthesizerInput['type'] {
+    const typeCounts = new Map<SynthesizerInput['type'], number>();
+    for (const input of inputs) {
+      typeCounts.set(input.type, (typeCounts.get(input.type) ?? 0) + 1);
+    }
+
+    let maxType: SynthesizerInput['type'] = 'mixed';
+    let maxCount = 0;
+    for (const [type, count] of typeCounts) {
+      if (count > maxCount) {
+        maxCount = count;
+        maxType = type;
+      }
+    }
+    return maxType;
+  }
+
+  /**
+   * Merge code outputs intelligently.
+   */
+  private mergeCodeOutputs(
+    inputs: SynthesizerInput[],
+    conflicts: Array<{ type: string; resolution: string }>
+  ): string {
+    const codeInputs = inputs.filter((i) => i.type === 'code');
+    if (codeInputs.length === 0) return this.selectByConfidence(inputs);
+
+    if (conflicts.length === 0 || this.synthesisConfig.conflictResolution === 'merge_both') {
+      return codeInputs
+        .map((i) => `// From ${i.agentId} (confidence: ${i.confidence.toFixed(2)})\n${i.content}`)
+        .join('\n\n');
+    }
+
+    let best: SynthesizerInput;
+    if (this.synthesisConfig.conflictResolution === 'highest_authority') {
+      best = codeInputs.reduce((a, b) => ((a.authority ?? 0) > (b.authority ?? 0) ? a : b));
+    } else {
+      best = codeInputs.reduce((a, b) => (a.confidence > b.confidence ? a : b));
+    }
+    return best.content;
+  }
+
+  /**
+   * Merge research/analysis outputs.
+   */
+  private mergeResearchOutputs(inputs: SynthesizerInput[], deduplicatedFindings: string[]): string {
+    const sections: string[] = [];
+    const best = inputs.reduce((a, b) => (a.confidence > b.confidence ? a : b));
+    sections.push(`## Summary\n${best.content.split('\n').slice(0, 5).join('\n')}`);
+
+    if (deduplicatedFindings.length > 0) {
+      sections.push(`## Key Findings\n${deduplicatedFindings.map((f) => `- ${f}`).join('\n')}`);
+    }
+
+    return sections.join('\n\n');
+  }
+
+  /**
+   * Select output by highest confidence.
+   */
+  private selectByConfidence(inputs: SynthesizerInput[]): string {
+    if (inputs.length === 0) return 'No results to synthesize';
+    const best = inputs.reduce((a, b) => (a.confidence > b.confidence ? a : b));
+    return best.content;
   }
 
   // ===========================================================================
@@ -522,9 +891,10 @@ export function createTeamTask(
 // =============================================================================
 
 export function createOrchestrator(
-  strategy: import('./types.js').ConsensusStrategy = 'authority'
+  strategy: import('./types.js').ConsensusStrategy = 'authority',
+  synthesisConfig?: OrchestratorSynthesisConfig
 ): TeamOrchestrator {
-  return new TeamOrchestrator(strategy);
+  return new TeamOrchestrator(strategy, synthesisConfig);
 }
 
 export function createTeamBuilder(): TeamBuilder {
