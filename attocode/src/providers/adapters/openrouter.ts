@@ -1,0 +1,360 @@
+/**
+ * OpenRouter Provider Adapter
+ *
+ * Adapts the OpenRouter API (OpenAI-compatible) to our LLMProvider interface.
+ * OpenRouter provides access to 100+ models from various providers through
+ * a single API key.
+ */
+
+import type {
+  LLMProvider,
+  LLMProviderWithTools,
+  Message,
+  MessageWithContent,
+  ChatOptions,
+  ChatOptionsWithTools,
+  ChatResponse,
+  ChatResponseWithTools,
+  ToolCallResponse,
+  OpenRouterConfig
+} from '../types.js';
+import { ProviderError } from '../types.js';
+import { registerProvider, hasEnv, requireEnv } from '../provider.js';
+
+// =============================================================================
+// DEFAULT MODEL SELECTION
+// =============================================================================
+
+/**
+ * TODO: Choose your default model for OpenRouter.
+ *
+ * This is a meaningful design choice based on your priorities:
+ *
+ * Cost-optimized options:
+ *   - 'meta-llama/llama-3.1-8b-instruct' - Very cheap, good for simple tasks
+ *   - 'mistralai/mistral-7b-instruct' - Budget-friendly, solid performance
+ *
+ * Balanced options:
+ *   - 'anthropic/claude-sonnet-4' - Good balance of quality and cost
+ *   - 'openai/gpt-4o-mini' - Fast, cheap, capable
+ *
+ * Quality-optimized options:
+ *   - 'anthropic/claude-opus-4' - Highest Claude quality
+ *   - 'openai/gpt-4-turbo' - High quality, good for complex tasks
+ *
+ * Consider: What's your primary use case? Development/testing (use cheaper),
+ * production (use quality), or experimentation (use balanced)?
+ */
+function getDefaultModel(): string {
+  // Using Gemini Flash - fast, cheap, and good tool use support
+  // Change to 'anthropic/claude-sonnet-4' for higher quality
+  return 'google/gemini-2.0-flash-001';
+}
+
+// =============================================================================
+// OPENROUTER PROVIDER
+// =============================================================================
+
+export class OpenRouterProvider implements LLMProvider, LLMProviderWithTools {
+  readonly name = 'openrouter';
+  readonly defaultModel: string;
+
+  private apiKey: string;
+  private model: string;
+  private baseUrl = 'https://openrouter.ai/api/v1';
+  private siteUrl?: string;
+  private siteName?: string;
+
+  constructor(config?: OpenRouterConfig) {
+    this.apiKey = config?.apiKey ?? requireEnv('OPENROUTER_API_KEY');
+    this.defaultModel = getDefaultModel();
+    this.model = config?.model ?? process.env.OPENROUTER_MODEL ?? this.defaultModel;
+    this.siteUrl = config?.siteUrl ?? process.env.OPENROUTER_SITE_URL;
+    this.siteName = config?.siteName ?? process.env.OPENROUTER_SITE_NAME;
+  }
+
+  isConfigured(): boolean {
+    return hasEnv('OPENROUTER_API_KEY');
+  }
+
+  async chat(messages: Message[], options?: ChatOptions): Promise<ChatResponse> {
+    const model = options?.model ?? this.model;
+
+    // OpenRouter uses OpenAI-compatible message format
+    const openRouterMessages = messages.map(m => ({
+      role: m.role,
+      content: m.content,
+    }));
+
+    // Build request body (OpenAI-compatible)
+    const body = {
+      model,
+      messages: openRouterMessages,
+      max_tokens: options?.maxTokens ?? 4096,
+      temperature: options?.temperature ?? 0.7,
+      ...(options?.stopSequences && { stop: options.stopSequences }),
+    };
+
+    // OpenRouter requires specific headers for analytics
+    const headers: Record<string, string> = {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${this.apiKey}`,
+    };
+
+    // Optional headers for OpenRouter analytics/rate limits
+    if (this.siteUrl) {
+      headers['HTTP-Referer'] = this.siteUrl;
+    }
+    if (this.siteName) {
+      headers['X-Title'] = this.siteName;
+    }
+
+    try {
+      const response = await fetch(`${this.baseUrl}/chat/completions`, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify(body),
+      });
+
+      if (!response.ok) {
+        const error = await response.text();
+        throw this.handleError(response.status, error);
+      }
+
+      const data = await response.json() as {
+        choices: Array<{
+          message: { content: string };
+          finish_reason: string;
+        }>;
+        usage: {
+          prompt_tokens: number;
+          completion_tokens: number;
+        };
+      };
+
+      const choice = data.choices[0];
+
+      return {
+        content: choice.message.content,
+        stopReason: this.mapStopReason(choice.finish_reason),
+        usage: {
+          inputTokens: data.usage.prompt_tokens,
+          outputTokens: data.usage.completion_tokens,
+        },
+      };
+    } catch (error) {
+      if (error instanceof ProviderError) throw error;
+      throw new ProviderError(
+        `OpenRouter request failed: ${(error as Error).message}`,
+        this.name,
+        'NETWORK_ERROR',
+        error as Error
+      );
+    }
+  }
+
+  /**
+   * ═══════════════════════════════════════════════════════════════════════════
+   * NATIVE TOOL USE: Why This Matters
+   * ═══════════════════════════════════════════════════════════════════════════
+   *
+   * Before (Lesson 1): Parse JSON from text response
+   *   LLM returns: "I'll use the read_file tool:\n```json\n{\"path\": \"x.ts\"}\n```"
+   *   We parse: Extract JSON with regex → JSON.parse → Hope it's valid
+   *   Problems: Hallucinated formats, partial JSON, extra text
+   *
+   * After (Native tool use):
+   *   LLM returns: { tool_calls: [{ function: { name: "read_file", arguments: "{\"path\":\"x.ts\"}" }}] }
+   *   We use: Structured response → Always valid JSON → Type-safe
+   *   Benefits: No parsing errors, proper function calling semantics
+   *
+   * This method enables native tool use through OpenRouter's OpenAI-compatible API.
+   * ═══════════════════════════════════════════════════════════════════════════
+   */
+  async chatWithTools(
+    messages: (Message | MessageWithContent)[],
+    options?: ChatOptionsWithTools
+  ): Promise<ChatResponseWithTools> {
+    const model = options?.model ?? this.model;
+
+    // Convert messages to OpenRouter format
+    // This handles both simple string content and structured content with cache_control
+    const openRouterMessages = messages.map(m => {
+      // Handle tool role messages (results from tool execution)
+      if ('tool_call_id' in m && m.role === 'tool') {
+        const toolMsg: Record<string, unknown> = {
+          role: 'tool' as const,
+          content: typeof m.content === 'string' ? m.content : m.content.map(c => c.text).join(''),
+          tool_call_id: m.tool_call_id,
+        };
+        // Include name if present (required for Gemini)
+        if ('name' in m && m.name) {
+          toolMsg.name = m.name;
+        }
+        return toolMsg;
+      }
+
+      // Handle assistant messages with tool calls
+      if ('tool_calls' in m && m.tool_calls) {
+        return {
+          role: 'assistant' as const,
+          content: typeof m.content === 'string' ? m.content : (m.content.length > 0 ? m.content.map(c => c.text).join('') : null),
+          tool_calls: m.tool_calls,
+        };
+      }
+
+      // Handle structured content (with potential cache_control)
+      if (typeof m.content !== 'string') {
+        return {
+          role: m.role,
+          content: m.content, // Pass through structured content for caching
+        };
+      }
+
+      // Simple string content
+      return {
+        role: m.role,
+        content: m.content,
+      };
+    });
+
+    // Build request body with tool definitions
+    const body: Record<string, unknown> = {
+      model,
+      messages: openRouterMessages,
+      max_tokens: options?.maxTokens ?? 4096,
+      temperature: options?.temperature ?? 0.7,
+      ...(options?.stopSequences && { stop: options.stopSequences }),
+      // Enable usage accounting to get cached_tokens in response
+      usage: { include: true },
+    };
+
+    // Add tool definitions if provided
+    if (options?.tools && options.tools.length > 0) {
+      body.tools = options.tools;
+      body.tool_choice = options?.tool_choice ?? 'auto';
+    }
+
+    const headers: Record<string, string> = {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${this.apiKey}`,
+    };
+
+    if (this.siteUrl) {
+      headers['HTTP-Referer'] = this.siteUrl;
+    }
+    if (this.siteName) {
+      headers['X-Title'] = this.siteName;
+    }
+
+    try {
+      const response = await fetch(`${this.baseUrl}/chat/completions`, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify(body),
+      });
+
+      if (!response.ok) {
+        const error = await response.text();
+        throw this.handleError(response.status, error);
+      }
+
+      const data = await response.json() as {
+        choices: Array<{
+          message: {
+            content: string | null;
+            tool_calls?: Array<{
+              id: string;
+              type: 'function';
+              function: {
+                name: string;
+                arguments: string;
+              };
+            }>;
+          };
+          finish_reason: string;
+        }>;
+        usage: {
+          prompt_tokens: number;
+          completion_tokens: number;
+          // Cache info (when using Anthropic models via OpenRouter)
+          prompt_tokens_details?: {
+            cached_tokens?: number;
+          };
+        };
+      };
+
+      const choice = data.choices[0];
+
+      // Extract tool calls if present
+      const toolCalls: ToolCallResponse[] | undefined = choice.message.tool_calls?.map(tc => ({
+        id: tc.id,
+        type: tc.type,
+        function: {
+          name: tc.function.name,
+          arguments: tc.function.arguments,
+        },
+      }));
+
+      return {
+        content: choice.message.content ?? '',
+        stopReason: this.mapStopReason(choice.finish_reason),
+        usage: {
+          inputTokens: data.usage.prompt_tokens,
+          outputTokens: data.usage.completion_tokens,
+          cachedTokens: data.usage.prompt_tokens_details?.cached_tokens,
+        },
+        toolCalls,
+      };
+    } catch (error) {
+      if (error instanceof ProviderError) throw error;
+      throw new ProviderError(
+        `OpenRouter request failed: ${(error as Error).message}`,
+        this.name,
+        'NETWORK_ERROR',
+        error as Error
+      );
+    }
+  }
+
+  private handleError(status: number, body: string): ProviderError {
+    let code: ProviderError['code'] = 'UNKNOWN';
+
+    if (status === 401) code = 'AUTHENTICATION_FAILED';
+    else if (status === 429) code = 'RATE_LIMITED';
+    else if (status === 400) {
+      if (body.includes('context_length')) {
+        code = 'CONTEXT_LENGTH_EXCEEDED';
+      } else {
+        code = 'INVALID_REQUEST';
+      }
+    }
+    else if (status >= 500) code = 'SERVER_ERROR';
+
+    return new ProviderError(
+      `OpenRouter API error (${status}): ${body}`,
+      this.name,
+      code
+    );
+  }
+
+  private mapStopReason(reason: string): ChatResponse['stopReason'] {
+    switch (reason) {
+      case 'stop': return 'end_turn';
+      case 'length': return 'max_tokens';
+      case 'stop_sequence': return 'stop_sequence';
+      case 'tool_calls': return 'end_turn'; // Tool calls are a form of completion
+      default: return 'end_turn';
+    }
+  }
+}
+
+// =============================================================================
+// REGISTRATION
+// =============================================================================
+
+registerProvider('openrouter', {
+  priority: 0, // Highest priority - becomes default when configured
+  detect: () => hasEnv('OPENROUTER_API_KEY'),
+  create: async () => new OpenRouterProvider(),
+});
