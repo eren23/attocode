@@ -324,54 +324,6 @@ export interface ExporterConfig {
 }
 
 // =============================================================================
-// MODEL PRICING
-// =============================================================================
-
-/**
- * Pricing for different models.
- */
-export interface ModelPricing {
-  /** Cost per 1K input tokens */
-  inputPer1k: number;
-
-  /** Cost per 1K output tokens */
-  outputPer1k: number;
-
-  /** Cost per 1K cached tokens (if applicable) */
-  cachedPer1k?: number;
-}
-
-/**
- * Known model pricing (USD).
- */
-export const MODEL_PRICING: Record<string, ModelPricing> = {
-  'gpt-4': {
-    inputPer1k: 0.03,
-    outputPer1k: 0.06,
-  },
-  'gpt-4-turbo': {
-    inputPer1k: 0.01,
-    outputPer1k: 0.03,
-  },
-  'gpt-3.5-turbo': {
-    inputPer1k: 0.0005,
-    outputPer1k: 0.0015,
-  },
-  'claude-3-opus': {
-    inputPer1k: 0.015,
-    outputPer1k: 0.075,
-  },
-  'claude-3-sonnet': {
-    inputPer1k: 0.003,
-    outputPer1k: 0.015,
-  },
-  'claude-3-haiku': {
-    inputPer1k: 0.00025,
-    outputPer1k: 0.00125,
-  },
-};
-
-// =============================================================================
 // CONFIGURATION
 // =============================================================================
 

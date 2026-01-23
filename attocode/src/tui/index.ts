@@ -282,7 +282,7 @@ export class SimpleTextRenderer implements TUIRenderer {
       `Mode: ${status.mode}`,
       `Iter: ${status.iteration}`,
       `Tokens: ${status.tokens.toLocaleString()}`,
-      `Cost: $${status.cost.toFixed(4)}`,
+      // TODO: Cost display disabled - OpenRouter cost retrieval needs fixing
       `Time: ${(status.elapsed / 1000).toFixed(1)}s`,
     ].join(' | ');
 
@@ -420,3 +420,94 @@ export async function checkTUICapabilities(): Promise<{
 
 export { SimpleTextRenderer as FallbackRenderer };
 export { formatAssistantContent, highlightCode };
+
+// Types - export specific types to avoid conflicts
+export type {
+  TUIConfig as TUIConfigFull,
+  TUIState,
+  TUIEventHandlers,
+  MessageDisplay as MessageDisplayFull,
+  ToolCallDisplay as ToolCallDisplayFull,
+  StatusDisplay as StatusDisplayFull,
+  SessionDisplay,
+  DialogType,
+  DialogConfig,
+  DialogOption,
+  PermissionDialogConfig,
+  CommandPaletteItem,
+  KeyBinding,
+  PanelConfig,
+  LayoutConfig,
+  ThemeName,
+  DEFAULT_TUI_STATE,
+} from './types.js';
+
+// Theme system
+export {
+  getTheme,
+  registerTheme,
+  getThemeNames,
+  detectSystemTheme,
+  darkTheme,
+  lightTheme,
+  highContrastTheme,
+  hexToAnsi,
+  getAnsiColor,
+  type Theme,
+  type ThemeColors,
+} from './theme/index.js';
+
+// Layout components
+export { Header, Footer, Sidebar } from './layout/index.js';
+export type { HeaderProps, FooterProps, SidebarProps } from './layout/index.js';
+
+// Core UI components
+export { MessageList, CodeBlock, ToolCall, ToolCallList } from './components/index.js';
+export type {
+  MessageListProps,
+  CodeBlockProps,
+  ToolCallProps,
+  ToolCallListProps,
+} from './components/index.js';
+
+// Input components
+export { Editor, CommandPalette } from './input/index.js';
+export type { EditorProps, CommandPaletteProps } from './input/index.js';
+
+// Dialog components
+export {
+  BaseDialog,
+  ConfirmDialog,
+  PromptDialog,
+  SelectDialog,
+  PermissionDialog,
+  SessionDialog,
+  ModelDialog,
+  defaultModels,
+} from './dialogs/index.js';
+export type {
+  DialogProps,
+  BaseDialogProps,
+  ConfirmDialogProps,
+  PromptDialogProps,
+  SelectDialogProps,
+  PermissionDialogProps,
+  SessionDialogProps,
+  ModelDialogProps,
+  ModelInfo,
+} from './dialogs/index.js';
+
+// Command system
+export {
+  CommandRegistry,
+  commandRegistry,
+  commands,
+} from './commands.js';
+export type {
+  CommandDefinition,
+  CommandArgument,
+  CommandCategory,
+  CommandAction,
+  CommandContext,
+  CommandResult,
+} from './commands.js';

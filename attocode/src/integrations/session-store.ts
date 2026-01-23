@@ -202,9 +202,12 @@ export class SessionStore {
       meta.lastActiveAt = fullEntry.timestamp;
       if (entry.type === 'message') {
         meta.messageCount++;
-      } else if (entry.type === 'checkpoint' && entry.data?.messages) {
+      } else if (entry.type === 'checkpoint') {
         // Update message count from checkpoint data
-        meta.messageCount = entry.data.messages.length;
+        const checkpointData = entry.data as { messages?: unknown[] } | undefined;
+        if (checkpointData?.messages) {
+          meta.messageCount = checkpointData.messages.length;
+        }
       }
       if (this.config.autoSave) {
         await this.saveIndex();
@@ -242,6 +245,30 @@ export class SessionStore {
     await this.appendEntry({
       type: 'compaction',
       data: { summary, compactedCount, compactedAt: new Date().toISOString() },
+    });
+  }
+
+  /**
+   * Append a checkpoint for session restoration.
+   * Checkpoints store the full conversation state at a point in time.
+   */
+  async appendCheckpoint(checkpoint: {
+    id: string;
+    label?: string;
+    messages: Message[];
+    iteration: number;
+    metrics?: unknown;
+  }): Promise<void> {
+    await this.appendEntry({
+      type: 'checkpoint',
+      data: {
+        id: checkpoint.id,
+        label: checkpoint.label,
+        messages: checkpoint.messages,
+        iteration: checkpoint.iteration,
+        metrics: checkpoint.metrics,
+        createdAt: new Date().toISOString(),
+      },
     });
   }
 

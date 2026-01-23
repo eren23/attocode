@@ -4,6 +4,8 @@
     "module": "ESNext",
     "moduleResolution": "bundler",
     "lib": ["ES2022"],
+    "jsx": "react-jsx",
+    "jsxImportSource": "react",
     "outDir": "./dist",
     "rootDir": ".",
     "strict": true,
@@ -24,6 +26,7 @@
   },
   "include": [
     "src/**/*.ts",
+    "src/**/*.tsx",
     "tests/**/*.ts"
   ],
   "exclude": [

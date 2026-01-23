@@ -206,6 +206,9 @@ export interface LLMRequestTrace {
   /** Cache efficiency */
   cache: CacheBreakdown;
 
+  /** Actual cost from provider (e.g., OpenRouter returns this directly) */
+  actualCost?: number;
+
   /** Error if request failed */
   error?: {
     code: string;

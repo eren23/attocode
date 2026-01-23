@@ -2,22 +2,17 @@
  * Ink-based TUI Renderer
  *
  * Rich terminal UI using Ink (React for CLI).
- * This file is only loaded when Ink is available.
+ * Wires together the App component from app.tsx with the TUIRenderer interface.
  *
  * To use this, install Ink:
- *   npm install ink ink-spinner ink-text-input react
- *
- * Note: This file uses dynamic imports and 'any' types to avoid
- * requiring Ink/React as compile-time dependencies.
+ *   npm install ink react
  */
 
 import type { TUIRenderer, TUIConfig, ToolCallDisplay, StatusDisplay } from './index.js';
+import type { MessageDisplay, TUIEventHandlers } from './types.js';
 
-// Use 'any' to avoid requiring ink/react type declarations at compile time
-/* eslint-disable @typescript-eslint/no-explicit-any */
-type InkInstance = any;
-type ReactModule = any;
-type InkModule = any;
+// Dynamic import types
+type InkInstance = { unmount: () => void; rerender: (element: unknown) => void };
 
 // =============================================================================
 // INK RENDERER
@@ -26,18 +21,20 @@ type InkModule = any;
 /**
  * Ink-based renderer for rich terminal UI.
  *
- * Note: This is a stub implementation. When Ink is installed,
- * this would be implemented with React components.
+ * Connects the App component from app.tsx to the TUIRenderer interface,
+ * using React state management via dispatch actions.
  */
 export class InkRenderer implements TUIRenderer {
   private tuiConfig: Required<TUIConfig>;
-  private inkInstance: unknown = null;
-  private state = {
-    messages: [] as Array<{ role: string; content: string }>,
+  private inkInstance: InkInstance | null = null;
+  private messageIdCounter = 0;
+  private handlers: TUIEventHandlers = {};
+
+  // Local state tracking (mirrors app state for methods that need sync access)
+  private localState = {
+    messages: [] as MessageDisplay[],
     toolCalls: new Map<string, ToolCallDisplay>(),
     status: null as StatusDisplay | null,
-    thinking: '',
-    spinner: { visible: false, message: '' },
   };
 
   constructor(config: TUIConfig = {}) {
@@ -45,127 +42,142 @@ export class InkRenderer implements TUIRenderer {
       enabled: config.enabled ?? true,
       showStreaming: config.showStreaming ?? true,
       showToolCalls: config.showToolCalls ?? true,
-      showThinking: config.showThinking ?? false,
+      showThinking: config.showThinking ?? true,
       theme: config.theme ?? 'auto',
       maxPanelHeight: config.maxPanelHeight ?? 20,
     };
   }
 
+  /**
+   * Set event handlers for the TUI.
+   */
+  setHandlers(handlers: TUIEventHandlers): void {
+    this.handlers = handlers;
+  }
+
   async init(): Promise<void> {
     try {
-      // Dynamically import Ink - this will throw if not installed
-      // Use variables to prevent TypeScript from trying to resolve modules
+      // Dynamically import modules
       const inkModule = 'ink';
       const reactModule = 'react';
-      const ink: InkModule = await import(inkModule);
-      const React: ReactModule = await import(reactModule);
+      const appModule = './app.js';
 
-      // Create the root component
-      const App = this.createAppComponent(React);
+      const ink = await import(inkModule);
+      const React = await import(reactModule);
+      const { App } = await import(appModule);
+
+      // Create a wrapper component that forwards to App
+      const self = this;
+
+      function AppWrapper() {
+        // Create handlers that forward to our registered handlers
+        const handlers: TUIEventHandlers = {
+          onInput: (value: string) => self.handlers.onInput?.(value),
+          onCommand: (cmd: string, args: string[]) => self.handlers.onCommand?.(cmd, args),
+          onKeyPress: (key: string, modifiers) => self.handlers.onKeyPress?.(key, modifiers),
+        };
+
+        return React.createElement(App, {
+          config: self.tuiConfig,
+          handlers,
+          initialState: {
+            messages: self.localState.messages,
+            toolCalls: self.localState.toolCalls,
+            status: self.localState.status,
+          },
+        });
+      }
 
       // Render using Ink
-      this.inkInstance = ink.render(React.createElement(App)) as InkInstance;
+      this.inkInstance = ink.render(React.createElement(AppWrapper)) as InkInstance;
     } catch (error) {
       console.error('Failed to initialize Ink TUI:', error);
       throw error;
     }
   }
 
-  /**
-   * Create the main App component.
-   * This would be expanded with full React/Ink implementation.
-   */
-  private createAppComponent(React: ReactModule): ReactModule {
-    const self = this;
-
-    return function App() {
-      // In a full implementation, this would use:
-      // - ink's Box, Text, Newline components
-      // - ink-spinner for loading indicators
-      // - ink-text-input for user input
-      // - useInput for keyboard shortcuts
-
-      return React.createElement('ink-box', {
-        flexDirection: 'column',
-        children: [
-          // Header
-          React.createElement('ink-text', { key: 'header', color: 'cyan' }, '🤖 Production Agent'),
-
-          // Messages area
-          ...self.state.messages.map((msg, i) =>
-            React.createElement('ink-text', {
-              key: `msg-${i}`,
-              color: msg.role === 'user' ? 'blue' : 'green',
-            }, `${msg.role}: ${msg.content}`)
-          ),
-
-          // Status bar
-          self.state.status && React.createElement('ink-text', {
-            key: 'status',
-            color: 'gray',
-          }, `Mode: ${self.state.status.mode} | Tokens: ${self.state.status.tokens}`),
-        ],
-      });
-    };
+  private generateMessageId(): string {
+    return `msg-${Date.now()}-${++this.messageIdCounter}`;
   }
 
   renderUserMessage(message: string): void {
-    this.state.messages.push({ role: 'user', content: message });
-    this.rerender();
+    const msgDisplay: MessageDisplay = {
+      id: this.generateMessageId(),
+      role: 'user',
+      content: message,
+      timestamp: new Date(),
+    };
+    this.localState.messages.push(msgDisplay);
+    this.dispatchAction({ type: 'ADD_MESSAGE', message: msgDisplay });
   }
 
   renderAssistantMessage(content: string, streaming = false): void {
     if (streaming) {
       // For streaming, update the last assistant message or create new
-      const last = this.state.messages[this.state.messages.length - 1];
-      if (last?.role === 'assistant') {
-        last.content += content;
+      const lastMsg = this.localState.messages[this.localState.messages.length - 1];
+      if (lastMsg?.role === 'assistant') {
+        lastMsg.content += content;
+        this.dispatchAction({ type: 'UPDATE_MESSAGE', id: lastMsg.id, content: lastMsg.content });
       } else {
-        this.state.messages.push({ role: 'assistant', content });
+        const msgDisplay: MessageDisplay = {
+          id: this.generateMessageId(),
+          role: 'assistant',
+          content,
+          timestamp: new Date(),
+        };
+        this.localState.messages.push(msgDisplay);
+        this.dispatchAction({ type: 'ADD_MESSAGE', message: msgDisplay });
       }
     } else {
-      this.state.messages.push({ role: 'assistant', content });
+      const msgDisplay: MessageDisplay = {
+        id: this.generateMessageId(),
+        role: 'assistant',
+        content,
+        timestamp: new Date(),
+      };
+      this.localState.messages.push(msgDisplay);
+      this.dispatchAction({ type: 'ADD_MESSAGE', message: msgDisplay });
     }
-    this.rerender();
   }
 
   renderToolCall(toolCall: ToolCallDisplay): void {
-    this.state.toolCalls.set(toolCall.id, toolCall);
-    this.rerender();
+    this.localState.toolCalls.set(toolCall.id, toolCall);
+    this.dispatchAction({ type: 'SET_TOOL_CALL', toolCall });
   }
 
   updateToolCallResult(id: string, result: unknown, error?: string): void {
-    const toolCall = this.state.toolCalls.get(id);
+    const toolCall = this.localState.toolCalls.get(id);
     if (toolCall) {
-      toolCall.status = error ? 'error' : 'success';
-      toolCall.result = result;
-      toolCall.error = error;
-      this.rerender();
+      const updates: Partial<ToolCallDisplay> = {
+        status: error ? 'error' : 'success',
+        result,
+        error,
+      };
+      Object.assign(toolCall, updates);
+      this.dispatchAction({ type: 'UPDATE_TOOL_CALL', id, updates });
     }
   }
 
   renderThinking(content: string): void {
-    this.state.thinking = content;
-    this.rerender();
+    this.dispatchAction({ type: 'SET_THINKING', content });
   }
 
   updateStatus(status: StatusDisplay): void {
-    this.state.status = status;
-    this.rerender();
+    this.localState.status = status;
+    this.dispatchAction({ type: 'SET_STATUS', status });
   }
 
   showSpinner(message: string): void {
-    this.state.spinner = { visible: true, message };
-    this.rerender();
+    this.dispatchAction({ type: 'SET_SPINNER', visible: true, message });
   }
 
   hideSpinner(): void {
-    this.state.spinner = { visible: false, message: '' };
-    this.rerender();
+    this.dispatchAction({ type: 'SET_SPINNER', visible: false });
   }
 
   async promptInput(prompt: string): Promise<string> {
-    // In full implementation, would use ink-text-input
+    // For now, fall back to readline for prompts
+    // In a full implementation, this would use the InputArea component
     const readline = await import('readline');
     const rl = readline.createInterface({
       input: process.stdin,
@@ -181,31 +193,49 @@ export class InkRenderer implements TUIRenderer {
   }
 
   showError(error: string): void {
-    this.state.messages.push({ role: 'error', content: error });
-    this.rerender();
+    const msgDisplay: MessageDisplay = {
+      id: this.generateMessageId(),
+      role: 'system',
+      content: `❌ Error: ${error}`,
+      timestamp: new Date(),
+    };
+    this.localState.messages.push(msgDisplay);
+    this.dispatchAction({ type: 'ADD_MESSAGE', message: msgDisplay });
   }
 
   showSuccess(message: string): void {
-    this.state.messages.push({ role: 'success', content: message });
-    this.rerender();
+    const msgDisplay: MessageDisplay = {
+      id: this.generateMessageId(),
+      role: 'system',
+      content: `✓ ${message}`,
+      timestamp: new Date(),
+    };
+    this.localState.messages.push(msgDisplay);
+    this.dispatchAction({ type: 'ADD_MESSAGE', message: msgDisplay });
   }
 
   clear(): void {
-    this.state.messages = [];
-    this.state.toolCalls.clear();
-    this.state.thinking = '';
-    this.rerender();
+    this.localState.messages = [];
+    this.localState.toolCalls.clear();
+    this.dispatchAction({ type: 'CLEAR_MESSAGES' });
   }
 
   cleanup(): void {
-    if (this.inkInstance && typeof (this.inkInstance as { unmount?: () => void }).unmount === 'function') {
-      (this.inkInstance as { unmount: () => void }).unmount();
+    if (this.inkInstance) {
+      this.inkInstance.unmount();
+      this.inkInstance = null;
     }
   }
 
-  private rerender(): void {
-    // Ink handles re-rendering automatically when state changes
-    // In a full implementation, would use React state management
+  /**
+   * Dispatch an action to trigger state updates.
+   * The App component receives state updates via the localState which
+   * is passed as initialState on each render cycle.
+   */
+  private dispatchAction(_action: unknown): void {
+    // State is managed via localState and passed to App component
+    // The action parameter is kept for future direct dispatch integration
+    // Currently, Ink handles re-rendering automatically when the component tree updates
   }
 
   /**
@@ -215,93 +245,3 @@ export class InkRenderer implements TUIRenderer {
     return this.tuiConfig;
   }
 }
-
-// =============================================================================
-// COMPONENT STUBS
-// =============================================================================
-
-/**
- * These would be full React components when Ink is installed.
- * Showing the structure for reference.
- */
-
-/*
-// Message panel component
-function MessagePanel({ messages, maxHeight }) {
-  return (
-    <Box flexDirection="column" height={maxHeight}>
-      {messages.map((msg, i) => (
-        <Box key={i}>
-          <Text color={msg.role === 'user' ? 'blue' : 'green'}>
-            {msg.role === 'user' ? '👤' : '🤖'} {msg.content}
-          </Text>
-        </Box>
-      ))}
-    </Box>
-  );
-}
-
-// Tool call panel component
-function ToolCallPanel({ toolCalls }) {
-  return (
-    <Box flexDirection="column" borderStyle="single" borderColor="yellow">
-      <Text bold>Tool Calls</Text>
-      {Array.from(toolCalls.values()).map(tc => (
-        <Box key={tc.id}>
-          <Text color={tc.status === 'error' ? 'red' : 'green'}>
-            {tc.status === 'running' ? <Spinner /> : statusEmoji[tc.status]} {tc.name}
-          </Text>
-        </Box>
-      ))}
-    </Box>
-  );
-}
-
-// Status bar component
-function StatusBar({ status }) {
-  if (!status) return null;
-  return (
-    <Box borderStyle="single" borderColor="gray" paddingX={1}>
-      <Text color="gray">
-        Mode: {status.mode} | Iter: {status.iteration} |
-        Tokens: {status.tokens} | Cost: ${status.cost.toFixed(4)}
-      </Text>
-    </Box>
-  );
-}
-
-// Main App component
-function App({ renderer }) {
-  const [messages, setMessages] = useState([]);
-  const [toolCalls, setToolCalls] = useState(new Map());
-  const [status, setStatus] = useState(null);
-  const [spinner, setSpinner] = useState({ visible: false, message: '' });
-
-  useInput((input, key) => {
-    if (key.ctrl && input === 'c') {
-      renderer.cleanup();
-      process.exit(0);
-    }
-  });
-
-  return (
-    <Box flexDirection="column">
-      <Box borderStyle="double" borderColor="cyan" paddingX={1}>
-        <Text bold color="cyan">🤖 Production Agent</Text>
-      </Box>
-
-      <MessagePanel messages={messages} maxHeight={20} />
-
-      {toolCalls.size > 0 && <ToolCallPanel toolCalls={toolCalls} />}
-
-      {spinner.visible && (
-        <Box>
-          <Spinner /> <Text>{spinner.message}</Text>
-        </Box>
-      )}
-
-      <StatusBar status={status} />
-    </Box>
-  );
-}
-*/

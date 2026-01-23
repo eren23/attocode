@@ -50,6 +50,8 @@ export interface ChatResponse {
     outputTokens: number;
     /** Tokens read from cache (for providers that support caching) */
     cachedTokens?: number;
+    /** Actual cost from provider (when available, e.g., OpenRouter) */
+    cost?: number;
   };
 }
 

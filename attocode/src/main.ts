@@ -45,6 +45,8 @@ import type { AgentEvent, AgentResult } from './types.js';
 
 // New integrations
 import {
+  SQLiteStore,
+  createSQLiteStore,
   SessionStore,
   createSessionStore,
   formatSessionList,
@@ -57,6 +59,51 @@ import {
   getContextUsage,
   createMCPMetaTools,
 } from './integrations/index.js';
+
+// Session store type that works with both SQLite and JSONL
+type AnySessionStore = SQLiteStore | SessionStore;
+
+/**
+ * Save checkpoint to session store (works with both SQLite and JSONL).
+ */
+function saveCheckpointToStore(
+  store: AnySessionStore,
+  checkpoint: { id: string; label?: string; messages: unknown[]; iteration: number; metrics?: unknown }
+): void {
+  if ('saveCheckpoint' in store && typeof store.saveCheckpoint === 'function') {
+    // SQLite store
+    store.saveCheckpoint(
+      {
+        id: checkpoint.id,
+        label: checkpoint.label,
+        messages: checkpoint.messages,
+        iteration: checkpoint.iteration,
+        metrics: checkpoint.metrics,
+      },
+      checkpoint.label || `auto-checkpoint-${checkpoint.id}`
+    );
+  } else if ('appendEntry' in store && typeof store.appendEntry === 'function') {
+    // JSONL store - use appendEntry with checkpoint type
+    store.appendEntry({
+      type: 'checkpoint',
+      data: {
+        id: checkpoint.id,
+        label: checkpoint.label,
+        messages: checkpoint.messages,
+        iteration: checkpoint.iteration,
+        metrics: checkpoint.metrics,
+        createdAt: new Date().toISOString(),
+      },
+    });
+  }
+}
+
+// LSP integration
+import { createLSPManager, type LSPManager } from './integrations/lsp.js';
+import { createLSPFileTools } from './agent-tools/lsp-file-tools.js';
+
+// Pricing
+import { initPricingCache } from './integrations/openrouter-pricing.js';
 
 // TUI for colored output
 import { createTUIRenderer } from './tui/index.js';
@@ -412,8 +459,14 @@ async function startProductionREPL(
   // Subscribe to events
   agent.subscribe(createEventDisplay());
 
-  // Initialize new integrations
-  const sessionStore = await createSessionStore({ baseDir: '.agent/sessions' });
+  // Initialize session storage (try SQLite, fall back to JSONL if native module fails)
+  let sessionStore: AnySessionStore;
+  try {
+    sessionStore = await createSQLiteStore({ baseDir: '.agent/sessions' });
+  } catch (sqliteError) {
+    console.log(c('⚠️  SQLite unavailable, using JSONL fallback', 'yellow'));
+    sessionStore = await createSessionStore({ baseDir: '.agent/sessions' });
+  }
   // mcpClient was created earlier for toolResolver
   const compactor = createCompactor(adaptedProvider, {
     tokenThreshold: 80000,
@@ -526,18 +579,23 @@ ${c('╚════════════════════════
         const metrics = result.metrics;
         console.log(c(`\n📊 Tokens: ${metrics.inputTokens} in / ${metrics.outputTokens} out | Tools: ${metrics.toolCalls} | Duration: ${metrics.duration}ms`, 'dim'));
 
-        // Auto-save session after each exchange
-        try {
-          const state = agent.getState();
-          await sessionStore.appendEntry(sessionId, {
-            type: 'checkpoint',
-            data: {
-              messages: state.messages,
-              metadata: agent.getMetrics(),
-            },
-          });
-        } catch {
-          // Silently ignore save errors in auto-save
+        // Auto-checkpoint after Q&A cycle (force=true for every Q&A)
+        const checkpoint = agent.autoCheckpoint(true);
+        if (checkpoint) {
+          console.log(c(`💾 Auto-checkpoint: ${checkpoint.id}`, 'dim'));
+
+          // Persist checkpoint to session store for cross-session recovery
+          try {
+            saveCheckpointToStore(sessionStore, {
+              id: checkpoint.id,
+              label: checkpoint.label,
+              messages: checkpoint.state.messages,
+              iteration: checkpoint.state.iteration,
+              metrics: checkpoint.state.metrics,
+            });
+          } catch {
+            // Silently ignore persistence errors
+          }
         }
 
       } catch (error) {
@@ -566,7 +624,7 @@ async function handleCommand(
   sessionId: string,
   rl: readline.Interface,
   integrations: {
-    sessionStore: SessionStore;
+    sessionStore: AnySessionStore;
     mcpClient: MCPClient;
     compactor: Compactor;
   }
@@ -581,83 +639,110 @@ async function handleCommand(
     case '/help':
     case '/h':
       console.log(`
-${c('Commands:', 'bold')}
-  ${c('/help', 'cyan')}           - Show this help
-  ${c('/status', 'cyan')}         - Show session stats & metrics
-  ${c('/clear', 'cyan')}          - Clear screen
-  ${c('/reset', 'cyan')}          - Reset agent state
-  ${c('/quit', 'cyan')}           - Exit
+${c('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━', 'dim')}
+${c('                           ATTOCODE HELP', 'bold')}
+${c('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━', 'dim')}
 
-${c('Sessions & Context:', 'bold')}
-  ${c('/save', 'cyan')}           - Save current session
-  ${c('/load <id>', 'cyan')}      - Load a previous session
-  ${c('/sessions', 'cyan')}       - List all saved sessions
-  ${c('/context', 'cyan')}        - Show context window usage
-  ${c('/context breakdown', 'cyan')} - Detailed token breakdown by category
-  ${c('/compact', 'cyan')}        - Summarize & compress context
-  ${c('/compact status', 'cyan')} - Check if compaction is needed
+${c('GENERAL', 'bold')}
+  ${c('/help', 'cyan')}              Show this help (alias: /h, /?)
+  ${c('/status', 'cyan')}            Show session stats, metrics & token usage
+  ${c('/clear', 'cyan')}             Clear the screen
+  ${c('/reset', 'cyan')}             Reset agent state (clears conversation)
+  ${c('/quit', 'cyan')}              Exit attocode (alias: /exit, /q)
 
-${c('MCP Integration:', 'bold')}
-  ${c('/mcp', 'cyan')}            - List MCP servers
-  ${c('/mcp connect <name>', 'cyan')} - Connect to server
-  ${c('/mcp disconnect <name>', 'cyan')} - Disconnect
-  ${c('/mcp tools', 'cyan')}      - List MCP tools
-  ${c('/mcp search <query>', 'cyan')} - Search & load tools (lazy loading)
-  ${c('/mcp stats', 'cyan')}      - Show MCP context usage stats
+${c('SESSIONS & PERSISTENCE', 'bold')}
+  ${c('/save', 'cyan')}              Save current session to disk
+  ${c('/load <id>', 'cyan')}         Load a previous session by ID
+  ${c('/sessions', 'cyan')}          List all saved sessions with timestamps
+  ${c('/resume', 'cyan')}            Resume most recent session (auto-loads last checkpoint)
 
-${c('Advanced Features:', 'bold')}
-  ${c('/react <task>', 'cyan')}   - Run task with ReAct reasoning pattern
-  ${c('/team <task>', 'cyan')}    - Run task with multi-agent team
-  ${c('/checkpoint', 'cyan')}     - Create a checkpoint
-  ${c('/checkpoints', 'cyan')}    - List checkpoints
-  ${c('/restore <id>', 'cyan')}   - Restore a checkpoint
-  ${c('/rollback <n>', 'cyan')}   - Rollback n steps
-  ${c('/fork <name>', 'cyan')}    - Fork conversation
-  ${c('/threads', 'cyan')}        - List threads
-  ${c('/switch <id>', 'cyan')}    - Switch to thread
-  ${c('/grants', 'cyan')}         - Show active permission grants
-  ${c('/audit', 'cyan')}          - Show audit log
+  ${c('Note:', 'dim')} Sessions auto-save after each Q&A with checkpoints for recovery.
 
-${c('Subagents:', 'bold')}
-  ${c('/agents', 'cyan')}         - List available agents
-  ${c('/spawn <agent> <task>', 'cyan')} - Spawn agent to do task
-  ${c('/find <query>', 'cyan')}   - Find agents for a task (keyword)
-  ${c('/suggest <task>', 'cyan')} - AI-powered agent suggestion
-  ${c('/auto <task>', 'cyan')}    - Run with automatic agent routing
+${c('CONTEXT MANAGEMENT', 'bold')}
+  ${c('/context', 'cyan')}           Show context window usage (tokens used/available)
+  ${c('/context breakdown', 'cyan')} Detailed token breakdown by category
+  ${c('/compact', 'cyan')}           Summarize & compress context to free tokens
+  ${c('/compact status', 'cyan')}    Check if compaction is recommended
 
-${c('Budget & Economics:', 'bold')}
-  ${c('/budget', 'cyan')}         - Show token/cost budget usage
-  ${c('/extend <type> <n>', 'cyan')} - Extend budget (tokens/cost/time)
+${c('CHECKPOINTS & THREADS', 'bold')}
+  ${c('/checkpoint [label]', 'cyan')} Create a named checkpoint (alias: /cp)
+  ${c('/checkpoints', 'cyan')}       List all checkpoints (alias: /cps)
+  ${c('/restore <id>', 'cyan')}      Restore conversation to a checkpoint
+  ${c('/rollback [n]', 'cyan')}      Rollback n steps (default: 1) (alias: /rb)
+  ${c('/fork <name>', 'cyan')}       Fork conversation into a new thread
+  ${c('/threads', 'cyan')}           List all conversation threads
+  ${c('/switch <id>', 'cyan')}       Switch to a different thread
 
-${c('Feature Testing:', 'bold')}
-  ${c('/skills', 'cyan')}          - List loaded skills
-  ${c('/sandbox', 'cyan')}         - Show sandbox modes
-  ${c('/sandbox test', 'cyan')}    - Test sandbox execution
-  ${c('/shell', 'cyan')}           - Show PTY shell info
-  ${c('/shell test', 'cyan')}      - Test persistent shell
-  ${c('/lsp', 'cyan')}             - Show LSP integration status
-  ${c('/tui', 'cyan')}             - Show TUI features
+  ${c('Note:', 'dim')} Auto-checkpoint runs after every Q&A for recovery.
 
-${c('Features Enabled:', 'bold')}
-  ✓ Memory System      - Remembers interactions
-  ✓ Planning           - Auto-plans complex tasks
-  ✓ Reflection         - Self-critique capability
-  ✓ Multi-Agent        - Team coordination (/team)
-  ✓ ReAct              - Explicit reasoning (/react)
-  ✓ Observability      - Tracks tokens & costs
-  ✓ Sandboxing         - Safe execution (/sandbox)
-  ✓ Human-in-Loop      - Approval workflow
-  ✓ Execution Policies - Intent-aware access
-  ✓ Threads            - Fork/rollback (/fork, /rollback)
-  ✓ Token Budget       - Smart execution limits (/budget)
-  ✓ Subagents          - Spawn specialized agents (/agents, /spawn)
-  ✓ MCP Integration    - External tools via MCP (/mcp)
-  ✓ MCP Lazy Loading   - Load tool schemas on-demand (/mcp search)
-  ✓ Session Persistence - Save/load sessions (/save, /load)
-  ✓ Context Compaction - Auto-summarize long contexts (/compact)
-  ✓ Skills System      - Reusable prompts (/skills)
-  ✓ PTY Shell          - Persistent shell state (/shell)
-  ✓ TUI                - Syntax highlighted output (/tui)
+${c('REASONING MODES', 'bold')}
+  ${c('/react <task>', 'cyan')}      Run with ReAct (Reason + Act) pattern
+                       Explicit think → act → observe loop
+  ${c('/team <task>', 'cyan')}       Run with multi-agent team coordination
+                       Spawns specialized agents for subtasks
+
+${c('SUBAGENTS', 'bold')}
+  ${c('/agents', 'cyan')}            List all available agents with descriptions
+  ${c('/spawn <agent> <task>', 'cyan')} Spawn a specific agent to handle task
+  ${c('/find <query>', 'cyan')}      Find agents by keyword search
+  ${c('/suggest <task>', 'cyan')}    AI-powered agent suggestion for task
+  ${c('/auto <task>', 'cyan')}       Auto-route task to best agent
+
+${c('MCP INTEGRATION', 'bold')}
+  ${c('/mcp', 'cyan')}               List MCP servers and connection status
+  ${c('/mcp connect <name>', 'cyan')} Connect to an MCP server
+  ${c('/mcp disconnect <name>', 'cyan')} Disconnect from server
+  ${c('/mcp tools', 'cyan')}         List all available MCP tools
+  ${c('/mcp search <query>', 'cyan')} Search & lazy-load MCP tools
+  ${c('/mcp stats', 'cyan')}         Show MCP context usage statistics
+
+${c('BUDGET & ECONOMICS', 'bold')}
+  ${c('/budget', 'cyan')}            Show token/cost budget and usage
+  ${c('/extend <type> <n>', 'cyan')} Extend budget limit
+                       Types: tokens, cost, time
+                       Example: /extend tokens 50000
+
+${c('PERMISSIONS & SECURITY', 'bold')}
+  ${c('/grants', 'cyan')}            Show active permission grants
+  ${c('/audit', 'cyan')}             Show security audit log
+
+${c('DEBUGGING & TESTING', 'bold')}
+  ${c('/skills', 'cyan')}            List loaded skills
+  ${c('/sandbox', 'cyan')}           Show sandbox modes available
+  ${c('/sandbox test', 'cyan')}      Test sandbox execution
+  ${c('/shell', 'cyan')}             Show PTY shell integration info
+  ${c('/shell test', 'cyan')}        Test persistent shell
+  ${c('/lsp', 'cyan')}               Show LSP integration status
+  ${c('/tui', 'cyan')}               Show TUI features & capabilities
+
+${c('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━', 'dim')}
+${c('FEATURES ENABLED', 'bold')}
+${c('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━', 'dim')}
+  ${c('✓', 'green')} Auto-Checkpoint   After every Q&A, persisted to session files
+  ${c('✓', 'green')} Memory System     Remembers past interactions across sessions
+  ${c('✓', 'green')} Planning          Auto-plans complex multi-step tasks
+  ${c('✓', 'green')} Reflection        Self-critique and improvement
+  ${c('✓', 'green')} Multi-Agent       Team coordination via /team
+  ${c('✓', 'green')} ReAct             Explicit reasoning via /react
+  ${c('✓', 'green')} Observability     Token/cost tracking & tracing
+  ${c('✓', 'green')} Sandboxing        Safe code execution
+  ${c('✓', 'green')} Human-in-Loop     Permission approval workflow
+  ${c('✓', 'green')} Execution Policy  Intent-aware access control
+  ${c('✓', 'green')} Thread Management Fork/rollback conversations
+  ${c('✓', 'green')} Token Budget      Smart execution limits
+  ${c('✓', 'green')} Subagents         Specialized agent spawning
+  ${c('✓', 'green')} MCP Integration   External tools via Model Context Protocol
+  ${c('✓', 'green')} Lazy Loading      On-demand MCP tool schema loading
+  ${c('✓', 'green')} Session Persist   Auto-save/load with JSONL format
+  ${c('✓', 'green')} Context Compact   Auto-summarize long contexts
+  ${c('✓', 'green')} Skills System     Reusable prompts & workflows
+  ${c('✓', 'green')} PTY Shell         Persistent shell state
+  ${c('✓', 'green')} TUI               Syntax highlighted output
+
+${c('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━', 'dim')}
+${c('SHORTCUTS', 'bold')}
+  ${c('Ctrl+C', 'yellow')}  Exit          ${c('Ctrl+L', 'yellow')}  Clear screen
+${c('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━', 'dim')}
 `);
       break;
 
@@ -1158,7 +1243,7 @@ ${c('Tip:', 'dim')} Use /mcp search <query> to load specific tools on-demand.
     case '/save':
       try {
         const state = agent.getState();
-        await sessionStore.appendEntry(sessionId, {
+        await sessionStore.appendEntry({
           type: 'checkpoint',
           data: {
             messages: state.messages,
@@ -1184,9 +1269,10 @@ ${c('Tip:', 'dim')} Use /mcp search <query> to load specific tools on-demand.
           } else {
             // Find the last checkpoint
             const checkpoint = [...entries].reverse().find(e => e.type === 'checkpoint');
-            if (checkpoint?.data?.messages) {
-              agent.loadMessages(checkpoint.data.messages);
-              console.log(c(`✓ Loaded ${checkpoint.data.messages.length} messages from ${loadId}`, 'green'));
+            const checkpointData = checkpoint?.data as { messages?: unknown[] } | undefined;
+            if (checkpointData?.messages) {
+              agent.loadMessages(checkpointData.messages as any);
+              console.log(c(`✓ Loaded ${checkpointData.messages.length} messages from ${loadId}`, 'green'));
             } else {
               console.log(c('No checkpoint found in session', 'yellow'));
             }
@@ -1194,6 +1280,44 @@ ${c('Tip:', 'dim')} Use /mcp search <query> to load specific tools on-demand.
         } catch (error) {
           console.log(c(`Error loading session: ${(error as Error).message}`, 'red'));
         }
+      }
+      break;
+
+    case '/resume':
+      try {
+        const recentSession = sessionStore.getRecentSession();
+        if (!recentSession) {
+          console.log(c('No previous sessions found', 'yellow'));
+        } else {
+          console.log(c(`📂 Found recent session: ${recentSession.id}`, 'dim'));
+          console.log(c(`   Created: ${new Date(recentSession.createdAt).toLocaleString()}`, 'dim'));
+          console.log(c(`   Messages: ${recentSession.messageCount}`, 'dim'));
+
+          // loadSession may be sync (SQLite) or async (JSONL)
+          const entriesResult = sessionStore.loadSession(recentSession.id);
+          const entries = Array.isArray(entriesResult) ? entriesResult : await entriesResult;
+
+          // Find the last checkpoint
+          const checkpoint = [...entries].reverse().find(e => e.type === 'checkpoint');
+          const checkpointData = checkpoint?.data as { messages?: unknown[] } | undefined;
+          if (checkpointData?.messages) {
+            agent.loadMessages(checkpointData.messages as any);
+            console.log(c(`✓ Resumed ${checkpointData.messages.length} messages from last session`, 'green'));
+          } else {
+            // No checkpoint, try to load messages directly from entries
+            const messages = entries
+              .filter((e: { type: string }) => e.type === 'message')
+              .map((e: { data: unknown }) => e.data);
+            if (messages.length > 0) {
+              agent.loadMessages(messages as any);
+              console.log(c(`✓ Resumed ${messages.length} messages from last session`, 'green'));
+            } else {
+              console.log(c('No messages found in last session', 'yellow'));
+            }
+          }
+        }
+      } catch (error) {
+        console.log(c(`Error resuming session: ${(error as Error).message}`, 'red'));
       }
       break;
 
@@ -1576,6 +1700,9 @@ interface CLIArgs {
   task?: string;
   maxIterations: number;
   trace: boolean;
+  tui: boolean | 'auto';
+  theme?: 'dark' | 'light' | 'auto';
+  version: boolean;
 }
 
 function parseArgs(): CLIArgs {
@@ -1585,14 +1712,24 @@ function parseArgs(): CLIArgs {
     permission: 'interactive',
     maxIterations: 50,
     trace: false,
+    tui: 'auto',
+    version: false,
   };
 
   for (let i = 0; i < args.length; i++) {
     const arg = args[i];
     if (arg === '--help' || arg === '-h') {
       result.help = true;
+    } else if (arg === '--version' || arg === '-v') {
+      result.version = true;
     } else if (arg === '--trace') {
       result.trace = true;
+    } else if (arg === '--tui') {
+      result.tui = true;
+    } else if (arg === '--legacy' || arg === '--no-tui') {
+      result.tui = false;
+    } else if (arg === '--theme') {
+      result.theme = args[++i] as 'dark' | 'light' | 'auto';
     } else if (arg === '--model' || arg === '-m') {
       result.model = args[++i];
     } else if (arg === '--permission' || arg === '-p') {
@@ -1613,50 +1750,1186 @@ function parseArgs(): CLIArgs {
 
 function showHelp(): void {
   console.log(`
-${c('ATTOCODE - PRODUCTION CODING AGENT', 'bold')}
+${c('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━', 'dim')}
+${c('                    ATTOCODE - PRODUCTION CODING AGENT', 'bold')}
+${c('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━', 'dim')}
 
-The culmination of all lessons - a fully-featured coding agent:
-• Memory, Planning, Reflection (Lessons 14-16)
-• Multi-Agent Coordination, ReAct (Lessons 17-18)
-• Observability, Sandbox, Human-in-Loop (Lessons 19-21)
-• Model Routing, Execution Policies (Lessons 22-23)
-• Thread Management & Checkpoints (Lesson 24)
+A fully-featured AI coding agent with:
+  • Memory, Planning, Reflection     • Multi-Agent Coordination
+  • ReAct Reasoning                  • Sandboxed Execution
+  • Thread Management & Checkpoints  • Session Persistence
+  • MCP Integration                  • Context Compaction
 
 ${c('USAGE:', 'bold')}
   npx tsx src/main.ts [OPTIONS] [TASK]
 
 ${c('OPTIONS:', 'bold')}
-  -h, --help              Show help
+  -h, --help              Show this help
+  -v, --version           Show version (${VERSION})
   -m, --model MODEL       Model to use (e.g., anthropic/claude-sonnet-4)
-  -p, --permission MODE   strict, interactive, auto-safe, yolo
-  -i, --max-iterations N  Max iterations (default: 50)
-  -t, --task TASK         Run single task (non-interactive)
+  -p, --permission MODE   Permission mode:
+                            strict      - Ask for everything
+                            interactive - Ask for dangerous ops (default)
+                            auto-safe   - Auto-approve safe ops
+                            yolo        - Auto-approve everything
+  -i, --max-iterations N  Max agent iterations (default: 50)
+  -t, --task TASK         Run single task non-interactively
+
+${c('INTERFACE OPTIONS:', 'bold')}
+  --tui                   Force TUI mode (rich Ink-based interface)
+  --legacy, --no-tui      Force legacy readline mode
+  --theme THEME           Color theme: dark, light, auto (default: auto)
   --trace                 Enable JSONL trace capture (saved to .traces/)
 
 ${c('EXAMPLES:', 'bold')}
-  # Interactive mode
+  ${c('# Interactive mode (auto-detects TUI)', 'dim')}
   npx tsx src/main.ts
 
-  # Single task
+  ${c('# Single task execution', 'dim')}
   npx tsx src/main.ts "List all TypeScript files"
 
-  # With specific model
+  ${c('# With specific model', 'dim')}
   npx tsx src/main.ts -m anthropic/claude-sonnet-4 "Explain this code"
 
-${c('REPL COMMANDS:', 'bold')}
-  /help       - Show all commands
-  /react      - Run with ReAct reasoning
-  /team       - Run with multi-agent team
-  /checkpoint - Create checkpoint
-  /rollback   - Rollback conversation
-  /fork       - Fork conversation
-  /status     - Show metrics
+  ${c('# Force legacy mode with tracing', 'dim')}
+  npx tsx src/main.ts --legacy --trace
 
-${c('ENVIRONMENT:', 'bold')}
-  OPENROUTER_API_KEY - OpenRouter (recommended)
-  ANTHROPIC_API_KEY  - Anthropic direct
-  OPENAI_API_KEY     - OpenAI direct
+${c('KEY REPL COMMANDS:', 'bold')}
+  /help        Show all commands         /status      Show metrics
+  /checkpoint  Create checkpoint         /restore     Restore checkpoint
+  /react       ReAct reasoning mode      /team        Multi-agent mode
+  /agents      List subagents            /spawn       Spawn subagent
+  /mcp         MCP server management     /compact     Compress context
+  /sessions    List saved sessions       /resume      Resume last session
+
+  ${c('Run /help in REPL for complete command list', 'dim')}
+
+${c('ENVIRONMENT VARIABLES:', 'bold')}
+  OPENROUTER_API_KEY    OpenRouter API key (recommended - multi-model)
+  ANTHROPIC_API_KEY     Anthropic direct API key
+  OPENAI_API_KEY        OpenAI direct API key
+
+${c('FILES & DIRECTORIES:', 'bold')}
+  .agent/sessions/      Session data (JSONL + SQLite)
+  .traces/              Trace files (when --trace enabled)
+  .mcp.json             MCP server configuration
+
+${c('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━', 'dim')}
 `);
+}
+
+// =============================================================================
+// TUI MODE
+// =============================================================================
+
+const VERSION = '1.0.0';
+
+function shouldUseTUI(args: CLIArgs): boolean {
+  if (args.tui === true) return true;
+  if (args.tui === false) return false;
+  // Auto-detect: use TUI when TTY and interactive
+  return process.stdin.isTTY && process.stdout.isTTY && !args.task;
+}
+
+async function startTUIMode(
+  provider: LLMProviderWithTools,
+  options: {
+    permissionMode?: PermissionMode;
+    maxIterations?: number;
+    model?: string;
+    trace?: boolean;
+    theme?: 'dark' | 'light' | 'auto';
+  } = {}
+): Promise<void> {
+  const {
+    permissionMode = 'interactive',
+    maxIterations = 50,
+    model,
+    trace = false,
+    theme = 'auto',
+  } = options;
+
+  try {
+    // Check Ink availability
+    const { checkTUICapabilities } = await import('./tui/index.js');
+    const capabilities = await checkTUICapabilities();
+
+    if (!capabilities.inkAvailable) {
+      console.log('⚠️  TUI not available. Falling back to legacy mode.');
+      return startProductionREPL(provider, options);
+    }
+
+    // Dynamic imports - using our modular TUI components
+    const { render, Box, Text, useApp, useInput } = await import('ink');
+    const React = await import('react');
+    const { useState, useCallback } = React;
+    const { getTheme, getThemeNames } = await import('./tui/theme/index.js');
+    const { ToolCallList } = await import('./tui/components/ToolCall.js');
+    const { Header } = await import('./tui/layout/Header.js');
+    const { Footer } = await import('./tui/layout/Footer.js');
+    type ToolCallDisplay = import('./tui/types.js').ToolCallDisplay;
+
+    // Initialize pricing cache from OpenRouter
+    await initPricingCache();
+
+    // Setup agent (same as legacy)
+    const registry = createStandardRegistry(permissionMode);
+    const tools = convertToolsFromRegistry(registry);
+    const adaptedProvider = new ProviderAdapter(provider, model);
+
+    const mcpClient = await createMCPClient({
+      configPath: join(__dirname, '.mcp.json'),
+      lazyLoading: true,
+      alwaysLoadTools: [],
+      summaryDescriptionLimit: 100,
+      maxToolsPerSearch: 5,
+    });
+
+    const mcpSummaries = mcpClient.getAllToolSummaries().map(s => ({
+      name: s.name,
+      description: s.description,
+    }));
+
+    // Initialize LSP manager for code intelligence
+    const lspManager = createLSPManager({ autoDetect: true });
+    let lspServers: string[] = [];
+    try {
+      lspServers = await lspManager.autoStart(process.cwd());
+      if (lspServers.length > 0) {
+        console.log(`🔍 LSP: Started ${lspServers.join(', ')} language server(s)`);
+      } else {
+        console.log(`💡 LSP: No language servers found (optional)`);
+        console.log(`   For inline diagnostics: npm i -g typescript-language-server typescript`);
+      }
+    } catch (err) {
+      console.log(`⚠️  LSP: Could not start language servers (${(err as Error).message})`);
+    }
+
+    // Create LSP-enhanced file tools (replaces standard edit_file/write_file)
+    const lspFileTools = createLSPFileTools({ lspManager, diagnosticDelay: 500 });
+
+    // Replace standard edit_file/write_file with LSP-enhanced versions
+    const standardToolsWithoutFileOps = tools.filter(t => !['edit_file', 'write_file'].includes(t.name));
+    const allTools = [...standardToolsWithoutFileOps, ...lspFileTools];
+
+    const agent = createProductionAgent({
+      toolResolver: (toolName: string) => toolName.startsWith('mcp_') ? mcpClient.getFullToolDefinition(toolName) : null,
+      mcpToolSummaries: mcpSummaries,
+      provider: adaptedProvider,
+      tools: allTools,
+      model,
+      maxIterations,
+      memory: { enabled: true, types: { episodic: true, semantic: true, working: true } },
+      planning: { enabled: true, autoplan: true, complexityThreshold: 6 },
+      humanInLoop: permissionMode === 'interactive' ? { enabled: true, alwaysApprove: ['dangerous'] } : false,
+      observability: trace ? { enabled: true, traceCapture: { enabled: true, outputDir: '.traces' } } : undefined,
+    });
+
+    // Initialize session storage (try SQLite, fall back to JSONL if native module fails)
+    let sessionStore: AnySessionStore;
+    try {
+      sessionStore = await createSQLiteStore({ baseDir: '.agent/sessions' });
+    } catch {
+      console.log('⚠️  SQLite unavailable, using JSONL fallback');
+      sessionStore = await createSessionStore({ baseDir: '.agent/sessions' });
+    }
+    const compactor = createCompactor(adaptedProvider, {
+      tokenThreshold: 80000,
+      preserveRecentCount: 10,
+    });
+    const currentSessionId = await sessionStore.createSession();
+
+    // Initial theme (will be stateful inside component)
+    const initialTheme = getTheme(theme);
+
+    // TUI Component
+    const TUIApp = () => {
+      const { exit } = useApp();
+      const [messages, setMessages] = useState<Array<{ id: string; role: string; content: string; ts: Date }>>([]);
+      const [inputValue, setInputValue] = useState('');
+      const [isProcessing, setIsProcessing] = useState(false);
+      const [status, setStatus] = useState({ iter: 0, tokens: 0, cost: 0, mode: 'ready' });
+      const [toolCalls, setToolCalls] = useState<ToolCallDisplay[]>([]);
+      const [currentThemeName, setCurrentThemeName] = useState<string>(theme);
+
+      // Derive theme and colors from state
+      const selectedTheme = getTheme(currentThemeName);
+      const colors = selectedTheme.colors;
+
+      const addMessage = useCallback((role: string, content: string) => {
+        setMessages(prev => [...prev, { id: `${role}-${Date.now()}`, role, content, ts: new Date() }]);
+      }, []);
+
+      const handleCommand = useCallback(async (cmd: string, args: string[]) => {
+        // General commands
+        switch (cmd) {
+          case 'quit':
+          case 'exit':
+          case 'q':
+            await agent.cleanup();
+            await mcpClient.cleanup();
+            await lspManager.cleanup();
+            exit();
+            return;
+
+          case 'clear':
+          case 'cls':
+            setMessages([]);
+            setToolCalls([]);
+            return;
+
+          case 'status':
+          case 'stats': {
+            const metrics = agent.getMetrics();
+            const agentState = agent.getState();
+            addMessage('system', [
+              `Session Status:`,
+              `  Status: ${agentState.status} | Iteration: ${agentState.iteration}`,
+              `  Messages: ${agentState.messages.length}`,
+              `  Tokens: ${metrics.totalTokens.toLocaleString()} (${metrics.inputTokens} in / ${metrics.outputTokens} out)`,
+              `  LLM Calls: ${metrics.llmCalls} | Tool Calls: ${metrics.toolCalls}`,
+              `  Duration: ${metrics.duration}ms | Cost: $${metrics.estimatedCost.toFixed(4)}`,
+            ].join('\n'));
+            return;
+          }
+
+          case 'help':
+          case 'h':
+            addMessage('system', [
+              'Available Commands:',
+              '',
+              'General: /quit /clear /status /reset /help /model /theme /tools',
+              'Sessions: /save /load <id> /sessions /resume',
+              'Context: /context /compact',
+              'MCP: /mcp /mcp tools /mcp search <query> /mcp stats',
+              'Advanced: /react <task> /team <task> /checkpoint /rollback /fork /threads /switch',
+              'Subagents: /agents /spawn <agent> <task> /find <query> /suggest <task> /auto <task>',
+              'Budget: /budget /extend <type> <amount>',
+              'Testing: /skills /sandbox /shell /lsp /tui',
+              '',
+              'Shortcuts: Ctrl+C (quit) | Ctrl+L (clear)',
+            ].join('\n'));
+            return;
+
+          case 'reset':
+            agent.reset();
+            setMessages([]);
+            setToolCalls([]);
+            addMessage('system', 'Agent state reset');
+            return;
+
+          // Sessions
+          case 'save':
+            try {
+              const agentState = agent.getState();
+              await sessionStore.appendEntry({
+                type: 'checkpoint',
+                data: { messages: agentState.messages, metadata: agent.getMetrics() },
+              });
+              addMessage('system', `Session saved: ${currentSessionId}`);
+            } catch (e) {
+              addMessage('error', (e as Error).message);
+            }
+            return;
+
+          case 'load':
+            if (!args[0]) {
+              addMessage('system', 'Usage: /load <session-id>');
+              return;
+            }
+            try {
+              const loadResult = sessionStore.loadSession(args[0]);
+              const loadEntries = Array.isArray(loadResult) ? loadResult : await loadResult;
+              const checkpoint = [...loadEntries].reverse().find((e: any) => e.type === 'checkpoint');
+              const checkpointData = checkpoint?.data as { messages?: unknown[] } | undefined;
+              if (checkpointData?.messages) {
+                agent.loadMessages(checkpointData.messages as any);
+                // Sync TUI with loaded messages
+                const loadedMsgs = agent.getState().messages;
+                const syncedLoaded = loadedMsgs.map((m, i) => ({
+                  id: `msg-${i}`,
+                  role: m.role,
+                  content: typeof m.content === 'string' ? m.content : JSON.stringify(m.content),
+                  ts: new Date(),
+                }));
+                setMessages(syncedLoaded);
+                addMessage('system', `Loaded ${checkpointData.messages.length} messages from ${args[0]}`);
+              } else {
+                addMessage('system', 'No checkpoint found in session');
+              }
+            } catch (e) {
+              addMessage('error', (e as Error).message);
+            }
+            return;
+
+          case 'resume':
+            try {
+              const recentSess = sessionStore.getRecentSession();
+              if (!recentSess) {
+                addMessage('system', 'No previous sessions found');
+                return;
+              }
+              addMessage('system', `📂 Found: ${recentSess.id} (${recentSess.messageCount} messages)`);
+
+              const resumeResult = sessionStore.loadSession(recentSess.id);
+              const resumeEntries = Array.isArray(resumeResult) ? resumeResult : await resumeResult;
+              const resumeCheckpoint = [...resumeEntries].reverse().find((e: any) => e.type === 'checkpoint');
+              const resumeData = resumeCheckpoint?.data as { messages?: unknown[] } | undefined;
+
+              if (resumeData?.messages) {
+                agent.loadMessages(resumeData.messages as any);
+              } else {
+                const msgs = resumeEntries
+                  .filter((e: any) => e.type === 'message')
+                  .map((e: any) => e.data);
+                if (msgs.length > 0) {
+                  agent.loadMessages(msgs as any);
+                }
+              }
+
+              // Sync TUI with loaded messages
+              const resumedMsgs = agent.getState().messages;
+              if (resumedMsgs.length > 0) {
+                const syncedResumed = resumedMsgs.map((m, i) => ({
+                  id: `msg-${i}`,
+                  role: m.role,
+                  content: typeof m.content === 'string' ? m.content : JSON.stringify(m.content),
+                  ts: new Date(),
+                }));
+                setMessages(syncedResumed);
+                addMessage('system', `✓ Resumed ${resumedMsgs.length} messages`);
+              } else {
+                addMessage('system', 'No messages found in last session');
+              }
+            } catch (e) {
+              addMessage('error', (e as Error).message);
+            }
+            return;
+
+          case 'sessions':
+            try {
+              const sessions = await sessionStore.listSessions();
+              if (sessions.length === 0) {
+                addMessage('system', 'No saved sessions.');
+              } else {
+                addMessage('system', `Sessions (${sessions.length}):\n${sessions.slice(0, 10).map((s: any) => `  ${s.id} - ${new Date(s.created).toLocaleString()}`).join('\n')}`);
+              }
+            } catch (e) {
+              addMessage('error', (e as Error).message);
+            }
+            return;
+
+          // Context
+          case 'context':
+          case 'ctx': {
+            const agentState = agent.getState();
+            const mcpStats = mcpClient.getContextStats();
+
+            // Token estimation
+            const estimateTokens = (str: string) => Math.ceil(str.length / 3.2);
+
+            // System prompt tokens
+            const systemPrompt = agent.getSystemPromptWithMode ? agent.getSystemPromptWithMode() : '';
+            const systemTokens = estimateTokens(systemPrompt);
+
+            // MCP tokens (lazy loading aware)
+            const mcpTokens = mcpStats.summaryTokens + mcpStats.definitionTokens;
+
+            // Agent tools (non-MCP)
+            const agentTools = agent.getTools().filter(t => !t.name.startsWith('mcp_'));
+            const agentToolTokens = agentTools.length * 150;
+
+            // Conversation tokens
+            const convTokens = agentState.messages
+              .filter(m => m.role !== 'system')
+              .reduce((sum, m) => sum + estimateTokens(typeof m.content === 'string' ? m.content : JSON.stringify(m.content)), 0);
+
+            const totalTokens = systemTokens + mcpTokens + agentToolTokens + convTokens;
+            const contextLimit = 80000;
+            const percent = Math.round((totalTokens / contextLimit) * 100);
+            const bar = '█'.repeat(Math.min(20, Math.round(percent / 5))) + '░'.repeat(Math.max(0, 20 - Math.round(percent / 5)));
+
+            // Calculate lazy loading savings
+            const fullLoadEstimate = mcpStats.totalTools * 200;
+            const savingsPercent = fullLoadEstimate > 0 ? Math.round((1 - mcpTokens / fullLoadEstimate) * 100) : 0;
+
+            addMessage('system', [
+              `Context Token Breakdown (Total: ~${totalTokens.toLocaleString()} / ${(contextLimit / 1000)}k)`,
+              `  [${bar}] ${percent}%`,
+              ``,
+              `  System prompt:   ~${systemTokens.toLocaleString().padStart(6)} tokens`,
+              `  Agent tools:     ~${agentToolTokens.toLocaleString().padStart(6)} tokens  (${agentTools.length} tools)`,
+              `  MCP tools:       ~${mcpTokens.toLocaleString().padStart(6)} tokens  (${mcpStats.loadedCount}/${mcpStats.totalTools} loaded)`,
+              `  Conversation:    ~${convTokens.toLocaleString().padStart(6)} tokens  (${agentState.messages.length} messages)`,
+              ``,
+              `  MCP Lazy Loading: ${savingsPercent}% saved vs full load`,
+              `  ${percent >= 80 ? '⚠️ Consider /compact' : '✓ Healthy'}`,
+            ].join('\n'));
+            return;
+          }
+
+          case 'compact':
+            try {
+              const agentState = agent.getState();
+              if (agentState.messages.length < 5) {
+                addMessage('system', 'Not enough messages to compact.');
+                return;
+              }
+              setIsProcessing(true);
+              setStatus(s => ({ ...s, mode: 'compacting' }));
+              const result = await compactor.compact(agentState.messages);
+              agent.loadMessages(result.preservedMessages);
+              const savedTokens = result.tokensBefore - result.tokensAfter;
+              addMessage('system', `Compacted: ${result.compactedCount + result.preservedMessages.length} → ${result.preservedMessages.length} messages (saved ~${savedTokens} tokens)`);
+            } catch (e) {
+              addMessage('error', (e as Error).message);
+            }
+            setIsProcessing(false);
+            setStatus(s => ({ ...s, mode: 'ready' }));
+            return;
+
+          // MCP
+          case 'mcp': {
+            if (args[0] === 'connect' && args[1]) {
+              try {
+                await mcpClient.connectServer(args[1]);
+                const tools = mcpClient.getAllTools();
+                for (const tool of tools) agent.addTool(tool);
+                addMessage('system', `Connected to ${args[1]} (${tools.length} tools)`);
+              } catch (e) {
+                addMessage('error', (e as Error).message);
+              }
+              return;
+            }
+            if (args[0] === 'disconnect' && args[1]) {
+              await mcpClient.disconnectServer(args[1]);
+              addMessage('system', `Disconnected from ${args[1]}`);
+              return;
+            }
+            if (args[0] === 'tools') {
+              const tools = mcpClient.getAllTools();
+              if (tools.length === 0) {
+                addMessage('system', 'No MCP tools available.');
+              } else {
+                const stats = mcpClient.getContextStats();
+                addMessage('system', `MCP Tools (${stats.loadedCount}/${stats.totalTools} loaded):\n${tools.slice(0, 15).map(t => `  ${mcpClient.isToolLoaded(t.name) ? '✓' : '○'} ${t.name}`).join('\n')}`);
+              }
+              return;
+            }
+            if (args[0] === 'search' && args.slice(1).length > 0) {
+              const query = args.slice(1).join(' ');
+              const results = mcpClient.searchTools(query, { limit: 10 });
+              if (results.length === 0) {
+                addMessage('system', `No tools found for: "${query}"`);
+              } else {
+                const loaded = mcpClient.loadTools(results.map(r => r.name));
+                for (const tool of loaded) agent.addTool(tool);
+                addMessage('system', `Found & loaded ${loaded.length} tool(s):\n${results.map(r => `  ${r.name} - ${r.description?.slice(0, 50)}`).join('\n')}`);
+              }
+              return;
+            }
+            if (args[0] === 'stats') {
+              const stats = mcpClient.getContextStats();
+              const fullLoadEstimate = stats.totalTools * 200;
+              const currentTokens = stats.summaryTokens + stats.definitionTokens;
+              const savingsPercent = fullLoadEstimate > 0 ? Math.round((1 - currentTokens / fullLoadEstimate) * 100) : 0;
+
+              addMessage('system', [
+                `MCP Context Usage:`,
+                `  Tool summaries:   ${stats.summaryCount.toString().padStart(3)} tools  (~${stats.summaryTokens.toLocaleString()} tokens)`,
+                `  Full definitions: ${stats.loadedCount.toString().padStart(3)} tools  (~${stats.definitionTokens.toLocaleString()} tokens)`,
+                `  ─────────────────────────────────────`,
+                `  Total:            ${stats.totalTools.toString().padStart(3)} tools  (~${currentTokens.toLocaleString()} tokens)`,
+                ``,
+                `  Context savings:  ${savingsPercent}% vs loading all full schemas`,
+                `  If all loaded:    ~${fullLoadEstimate.toLocaleString()} tokens`,
+                `  ${savingsPercent > 50 ? '✓ Lazy loading saving context' : '⚠ Consider using lazy loading more'}`,
+                ``,
+                `  Tip: Use /mcp search <query> to load specific tools on-demand`,
+              ].join('\n'));
+              return;
+            }
+            // Default: list servers with stats
+            const servers = mcpClient.listServers();
+            const stats = mcpClient.getContextStats();
+            if (servers.length === 0) {
+              addMessage('system', 'No MCP servers configured. Add servers to src/.mcp.json');
+            } else {
+              const fullLoadEstimate = stats.totalTools * 200;
+              const currentTokens = stats.summaryTokens + stats.definitionTokens;
+              const savingsPercent = fullLoadEstimate > 0 ? Math.round((1 - currentTokens / fullLoadEstimate) * 100) : 0;
+
+              addMessage('system', [
+                `MCP Servers:`,
+                ...servers.map(s => `  ${s.status === 'connected' ? '✓' : '○'} ${s.name} (${s.status}) - ${s.toolCount || 0} tools`),
+                ``,
+                `Lazy Loading: ${stats.loadedCount}/${stats.totalTools} tools loaded (${savingsPercent}% context saved)`,
+                `Current usage: ~${currentTokens.toLocaleString()} tokens`,
+                ``,
+                `Commands: /mcp tools | /mcp search <query> | /mcp stats`,
+              ].join('\n'));
+            }
+            return;
+          }
+
+          // Advanced - ReAct
+          case 'react':
+            if (!args.length) {
+              addMessage('system', 'Usage: /react <task>');
+              return;
+            }
+            setIsProcessing(true);
+            setStatus(s => ({ ...s, mode: 'react' }));
+            try {
+              const trace = await agent.runWithReAct(args.join(' '));
+              addMessage('assistant', agent.formatReActTrace(trace));
+            } catch (e) {
+              addMessage('error', (e as Error).message);
+            }
+            setIsProcessing(false);
+            setStatus(s => ({ ...s, mode: 'ready' }));
+            return;
+
+          // Advanced - Team
+          case 'team':
+            if (!args.length) {
+              addMessage('system', 'Usage: /team <task>');
+              return;
+            }
+            setIsProcessing(true);
+            setStatus(s => ({ ...s, mode: 'team' }));
+            try {
+              const { CODER_ROLE, REVIEWER_ROLE, RESEARCHER_ROLE } = await import('./integrations/multi-agent.js');
+              const result = await agent.runWithTeam(
+                { id: `team-${Date.now()}`, goal: args.join(' '), context: '' },
+                [RESEARCHER_ROLE, CODER_ROLE, REVIEWER_ROLE]
+              );
+              addMessage('assistant', `Team result: ${result.success ? 'Success' : 'Failed'}\n${result.consensus?.result || ''}`);
+            } catch (e) {
+              addMessage('error', (e as Error).message);
+            }
+            setIsProcessing(false);
+            setStatus(s => ({ ...s, mode: 'ready' }));
+            return;
+
+          // Checkpoints
+          case 'checkpoint':
+          case 'cp':
+            try {
+              const cp = agent.createCheckpoint(args.join(' ') || undefined);
+              addMessage('system', `Checkpoint created: ${cp.id}${cp.label ? ` (${cp.label})` : ''}`);
+            } catch (e) {
+              addMessage('error', (e as Error).message);
+            }
+            return;
+
+          case 'checkpoints':
+          case 'cps':
+            try {
+              const cps = agent.getCheckpoints();
+              if (cps.length === 0) {
+                addMessage('system', 'No checkpoints.');
+              } else {
+                addMessage('system', `Checkpoints:\n${cps.map(cp => `  ${cp.id}${cp.label ? ` - ${cp.label}` : ''}`).join('\n')}`);
+              }
+            } catch (e) {
+              addMessage('error', (e as Error).message);
+            }
+            return;
+
+          case 'restore':
+            if (!args[0]) {
+              addMessage('system', 'Usage: /restore <checkpoint-id>');
+              return;
+            }
+            const restoreOk = agent.restoreCheckpoint(args[0]);
+            if (restoreOk) {
+              // Sync TUI messages with agent state after restore
+              const restoredMessages = agent.getState().messages;
+              const syncedRestored = restoredMessages.map((m, i) => ({
+                id: `msg-${i}`,
+                role: m.role,
+                content: typeof m.content === 'string' ? m.content : JSON.stringify(m.content),
+                ts: new Date(),
+              }));
+              setMessages(syncedRestored);
+              addMessage('system', `Restored: ${args[0]} - ${restoredMessages.length} messages`);
+            } else {
+              addMessage('system', `Not found: ${args[0]}`);
+            }
+            return;
+
+          case 'rollback':
+          case 'rb': {
+            const rbSteps = parseInt(args[0], 10) || 1;
+            const rbSuccess = agent.rollback(rbSteps);
+            if (rbSuccess) {
+              // Sync TUI messages with agent state after rollback
+              const agentMessages = agent.getState().messages;
+              const syncedMessages = agentMessages.map((m, i) => ({
+                id: `msg-${i}`,
+                role: m.role,
+                content: typeof m.content === 'string' ? m.content : JSON.stringify(m.content),
+                ts: new Date(),
+              }));
+              setMessages(syncedMessages);
+              addMessage('system', `Rolled back ${rbSteps} step(s) - ${agentMessages.length} messages remaining`);
+            } else {
+              addMessage('system', 'Rollback failed - not enough messages');
+            }
+            return;
+          }
+
+          // Threads
+          case 'fork':
+            if (!args.length) {
+              addMessage('system', 'Usage: /fork <name>');
+              return;
+            }
+            try {
+              const threadId = agent.fork(args.join(' '));
+              addMessage('system', `Forked: ${threadId}`);
+            } catch (e) {
+              addMessage('error', (e as Error).message);
+            }
+            return;
+
+          case 'threads':
+            try {
+              const threads = agent.getAllThreads();
+              if (threads.length === 0) {
+                addMessage('system', 'No threads.');
+              } else {
+                addMessage('system', `Threads:\n${threads.map((t: any) => `  ${t.id}${t.name ? ` - ${t.name}` : ''} (${t.messages?.length || 0} msgs)`).join('\n')}`);
+              }
+            } catch (e) {
+              addMessage('error', (e as Error).message);
+            }
+            return;
+
+          case 'switch':
+            if (!args[0]) {
+              addMessage('system', 'Usage: /switch <thread-id>');
+              return;
+            }
+            const switchOk = agent.switchThread(args[0]);
+            addMessage('system', switchOk ? `Switched to: ${args[0]}` : `Not found: ${args[0]}`);
+            return;
+
+          // Permissions
+          case 'grants':
+            try {
+              const grants = agent.getActiveGrants();
+              if (grants.length === 0) {
+                addMessage('system', 'No active permission grants.');
+              } else {
+                addMessage('system', `Active Grants:\n${grants.map((g: any) => `  ${g.id} - ${g.toolName}`).join('\n')}`);
+              }
+            } catch (e) {
+              addMessage('error', (e as Error).message);
+            }
+            return;
+
+          case 'audit':
+            try {
+              const log = agent.getAuditLog();
+              if (log.length === 0) {
+                addMessage('system', 'No audit entries.');
+              } else {
+                addMessage('system', `Audit Log (last 10):\n${log.slice(-10).map((e: any) => `  ${e.approved ? '✓' : '✗'} ${e.action} - ${e.tool || 'n/a'}`).join('\n')}`);
+              }
+            } catch (e) {
+              addMessage('error', (e as Error).message);
+            }
+            return;
+
+          // Budget
+          case 'budget': {
+            try {
+              const usage = agent.getBudgetUsage();
+              const limits = agent.getBudgetLimits();
+              if (!usage || !limits) {
+                addMessage('system', 'Budget info not available.');
+              } else {
+                addMessage('system', [
+                  `Budget Usage:`,
+                  `  Tokens: ${usage.tokens.toLocaleString()} / ${limits.maxTokens.toLocaleString()} (${usage.percentUsed.toFixed(1)}%)`,
+                  `  Cost: $${usage.cost.toFixed(4)} / $${limits.maxCost.toFixed(2)}`,
+                  `  Duration: ${Math.round(usage.duration / 1000)}s / ${Math.round(limits.maxDuration / 1000)}s`,
+                ].join('\n'));
+              }
+            } catch (e) {
+              const m = agent.getMetrics();
+              addMessage('system', `Budget: ${m.totalTokens} tokens | $${m.estimatedCost.toFixed(4)} cost`);
+            }
+            return;
+          }
+
+          case 'extend':
+            if (args.length < 2) {
+              addMessage('system', 'Usage: /extend <tokens|cost|time> <amount>');
+              return;
+            }
+            try {
+              const [what, amount] = args;
+              const value = parseFloat(amount);
+              if (isNaN(value)) {
+                addMessage('error', 'Invalid amount');
+                return;
+              }
+              const limits = agent.getBudgetLimits();
+              if (!limits) {
+                addMessage('system', 'Budget not available');
+                return;
+              }
+              if (what === 'tokens') {
+                agent.extendBudget({ maxTokens: limits.maxTokens + value });
+                addMessage('system', `Token budget extended to ${(limits.maxTokens + value).toLocaleString()}`);
+              } else if (what === 'cost') {
+                agent.extendBudget({ maxCost: limits.maxCost + value });
+                addMessage('system', `Cost budget extended to $${(limits.maxCost + value).toFixed(2)}`);
+              } else if (what === 'time') {
+                agent.extendBudget({ maxDuration: limits.maxDuration + value * 1000 });
+                addMessage('system', `Time budget extended to ${Math.round((limits.maxDuration + value * 1000) / 1000)}s`);
+              } else {
+                addMessage('system', 'Unknown budget type. Use: tokens, cost, or time');
+              }
+            } catch (e) {
+              addMessage('error', (e as Error).message);
+            }
+            return;
+
+          // Tools
+          case 'tools': {
+            const allTools = agent.getTools();
+            const builtInTools = allTools.filter(t => !t.name.startsWith('mcp_'));
+            const mcpTools = allTools.filter(t => t.name.startsWith('mcp_'));
+            const mcpStats = mcpClient.getContextStats();
+
+            addMessage('system', [
+              `Agent Tools (${allTools.length} total):`,
+              ``,
+              `Built-in (${builtInTools.length}):`,
+              ...builtInTools.map(t => `  • ${t.name} - ${t.description?.slice(0, 50) || 'No description'}...`),
+              ``,
+              `MCP Loaded (${mcpTools.length}/${mcpStats.totalTools}):`,
+              ...(mcpTools.length > 0
+                ? mcpTools.slice(0, 10).map(t => `  • ${t.name}`)
+                : ['  (none loaded - use /mcp search <query> to load)']),
+              mcpTools.length > 10 ? `  ... and ${mcpTools.length - 10} more` : '',
+            ].filter(Boolean).join('\n'));
+            return;
+          }
+
+          // Subagents
+          case 'agents':
+            try {
+              const agentList = agent.formatAgentList();
+              addMessage('system', `Available Agents:\n${agentList}`);
+            } catch (e) {
+              addMessage('error', (e as Error).message);
+            }
+            return;
+
+          case 'spawn':
+            if (args.length < 2) {
+              addMessage('system', 'Usage: /spawn <agent-name> <task>');
+              return;
+            }
+            setIsProcessing(true);
+            setStatus(s => ({ ...s, mode: 'spawning' }));
+            try {
+              const [agentName, ...taskParts] = args;
+              const task = taskParts.join(' ');
+              const result = await agent.spawnAgent(agentName, task);
+              addMessage('assistant', `Agent ${agentName}: ${result.success ? 'Success' : 'Failed'}\n${result.output}`);
+            } catch (e) {
+              addMessage('error', (e as Error).message);
+            }
+            setIsProcessing(false);
+            setStatus(s => ({ ...s, mode: 'ready' }));
+            return;
+
+          case 'find':
+            if (!args.length) {
+              addMessage('system', 'Usage: /find <query>');
+              return;
+            }
+            try {
+              const matches = agent.findAgentsForTask(args.join(' '));
+              if (matches.length === 0) {
+                addMessage('system', 'No matching agents found.');
+              } else {
+                addMessage('system', `Matching Agents:\n${matches.map((a, i) => `  ${i + 1}. ${a.name} - ${a.description?.split('.')[0] || ''}`).join('\n')}`);
+              }
+            } catch (e) {
+              addMessage('error', (e as Error).message);
+            }
+            return;
+
+          case 'suggest':
+            if (!args.length) {
+              addMessage('system', 'Usage: /suggest <task>');
+              return;
+            }
+            setIsProcessing(true);
+            setStatus(s => ({ ...s, mode: 'suggesting' }));
+            try {
+              const { suggestions, shouldDelegate, delegateAgent } = await agent.suggestAgentForTask(args.join(' '));
+              if (suggestions.length === 0) {
+                addMessage('system', 'No specialized agent recommended. Main agent should handle this.');
+              } else {
+                addMessage('system', [
+                  `Agent Suggestions:`,
+                  ...suggestions.map((s, i) => `  ${i + 1}. ${s.agent.name} (${(s.confidence * 100).toFixed(0)}%) - ${s.reason}`),
+                  shouldDelegate && delegateAgent ? `\n💡 Recommended: /spawn ${delegateAgent} ${args.join(' ')}` : '',
+                ].join('\n'));
+              }
+            } catch (e) {
+              addMessage('error', (e as Error).message);
+            }
+            setIsProcessing(false);
+            setStatus(s => ({ ...s, mode: 'ready' }));
+            return;
+
+          case 'auto':
+            if (!args.length) {
+              addMessage('system', 'Usage: /auto <task>');
+              return;
+            }
+            setIsProcessing(true);
+            setStatus(s => ({ ...s, mode: 'auto-routing' }));
+            try {
+              const result = await agent.runWithAutoRouting(args.join(' '), {
+                confidenceThreshold: 0.75,
+                confirmDelegate: async () => true, // Auto-confirm in TUI mode
+              });
+              if ('output' in result) {
+                addMessage('assistant', `Subagent: ${result.output}`);
+              } else {
+                addMessage('assistant', result.response || 'No response');
+              }
+            } catch (e) {
+              addMessage('error', (e as Error).message);
+            }
+            setIsProcessing(false);
+            setStatus(s => ({ ...s, mode: 'ready' }));
+            return;
+
+          // Testing
+          case 'skills':
+            try {
+              const skills = agent.getSkills();
+              if (skills.length === 0) {
+                addMessage('system', 'No skills loaded. Add .md files to .skills/ directory.');
+              } else {
+                addMessage('system', `Skills:\n${skills.map((s: any) => `  ${s.active ? '✓' : '○'} ${s.name} - ${s.description || 'No description'}`).join('\n')}`);
+              }
+            } catch (e) {
+              addMessage('system', 'Skills not available');
+            }
+            return;
+
+          case 'sandbox':
+            addMessage('system', [
+              'Sandbox Modes:',
+              '  ✓ auto     - Auto-detect best available',
+              '  ○ seatbelt - macOS sandbox-exec',
+              '  ○ landlock - Linux Landlock LSM',
+              '  ○ docker   - Docker container',
+              '  ✓ basic    - Allowlist validation',
+              '',
+              'Use /sandbox test to verify.',
+            ].join('\n'));
+            return;
+
+          case 'shell':
+            addMessage('system', [
+              'PTY Shell:',
+              '  Persistent shell maintains state across commands:',
+              '  • Working directory persists',
+              '  • Environment variables retained',
+              '  • Command history tracked',
+            ].join('\n'));
+            return;
+
+          case 'lsp': {
+            const activeServers = lspManager.getActiveServers();
+            const serverStatus = activeServers.length > 0
+              ? activeServers.map(s => `  ✅ ${s}`).join('\n')
+              : '  ⚠️  No language servers running';
+
+            const supportedLangs = [
+              '  • TypeScript/JavaScript (typescript-language-server)',
+              '  • Python (pyright-langserver)',
+              '  • Rust (rust-analyzer)',
+              '  • Go (gopls)',
+            ];
+
+            addMessage('system', [
+              '🔍 LSP Integration Status',
+              '',
+              'Active Servers:',
+              serverStatus,
+              '',
+              'Supported Languages:',
+              ...supportedLangs,
+              '',
+              'How it works:',
+              '  edit_file and write_file now return LSP diagnostics',
+              '  (errors, warnings) after each change.',
+              '',
+              activeServers.length === 0
+                ? 'To enable: npm install -g typescript-language-server typescript'
+                : '✅ LSP diagnostics active for supported files',
+            ].join('\n'));
+            return;
+          }
+
+          case 'tui':
+            addMessage('system', [
+              'TUI Status: Active (Ink)',
+              '',
+              'Features:',
+              '  • Syntax highlighting',
+              '  • Tool call display',
+              '  • Progress indicators',
+              '  • Keyboard shortcuts',
+            ].join('\n'));
+            return;
+
+          case 'model': {
+            const currentModel = model || process.env.OPENROUTER_MODEL || 'auto (provider default)';
+            const popularModels = [
+              'anthropic/claude-sonnet-4',
+              'anthropic/claude-3.5-sonnet',
+              'openai/gpt-4o',
+              'google/gemini-2.0-flash-exp',
+              'deepseek/deepseek-chat',
+            ];
+            addMessage('system', [
+              `🤖 Current model: ${currentModel}`,
+              '',
+              'Popular models:',
+              ...popularModels.map(m => `  • ${m}`),
+              '',
+              '⚠️  Model switching requires restart:',
+              `  npx tsx src/main.ts --model <model-name>`,
+              '',
+              'Or set OPENROUTER_MODEL in .env',
+            ].join('\n'));
+            return;
+          }
+
+          case 'theme': {
+            const availableThemes = getThemeNames();
+            if (!args[0]) {
+              addMessage('system', [
+                `Current theme: ${currentThemeName}`,
+                `Available: ${availableThemes.join(', ')}`,
+                '',
+                'Usage: /theme <name>',
+              ].join('\n'));
+              return;
+            }
+            const newTheme = args[0].toLowerCase();
+            if (availableThemes.includes(newTheme) || newTheme === 'auto') {
+              setCurrentThemeName(newTheme);
+              addMessage('system', `✅ Theme changed to: ${newTheme}`);
+            } else {
+              addMessage('system', `❌ Unknown theme: ${newTheme}\nAvailable: ${availableThemes.join(', ')}`);
+            }
+            return;
+          }
+
+          default:
+            addMessage('system', `Unknown command: /${cmd}. Try /help`);
+        }
+      }, [addMessage, exit, agent, mcpClient, sessionStore, compactor, model, currentThemeName]);
+
+      const handleSubmit = useCallback(async (input: string) => {
+        const trimmed = input.trim();
+        if (!trimmed) return;
+
+        addMessage('user', trimmed);
+
+        if (trimmed.startsWith('/')) {
+          const parts = trimmed.slice(1).split(/\s+/);
+          await handleCommand(parts[0], parts.slice(1));
+          return;
+        }
+
+        setIsProcessing(true);
+        setStatus(s => ({ ...s, mode: 'running' }));
+
+        // Subscribe to events
+        const unsub = agent.subscribe((event) => {
+          if (event.type === 'tool.start') {
+            const now = new Date();
+            setToolCalls(prev => [...prev.slice(-4), {
+              id: `${event.tool}-${Date.now()}`,
+              name: event.tool,
+              args: (event as any).args || {},
+              status: 'running' as const,
+              startTime: now,
+            }]);
+          } else if (event.type === 'tool.complete') {
+            setToolCalls(prev => prev.map(t => t.name === event.tool ? {
+              ...t,
+              status: 'success' as const,
+              result: (event as any).result,
+              duration: t.startTime ? Date.now() - t.startTime.getTime() : undefined,
+            } : t));
+          } else if (event.type === 'tool.blocked') {
+            setToolCalls(prev => prev.map(t => t.name === event.tool ? {
+              ...t,
+              status: 'error' as const,
+              error: (event as any).reason || 'Blocked',
+            } : t));
+          }
+        });
+
+        try {
+          const result = await agent.run(trimmed);
+          const metrics = agent.getMetrics();
+          setStatus({ iter: metrics.llmCalls, tokens: metrics.totalTokens, cost: metrics.estimatedCost, mode: 'ready' });
+
+          // Show response with metrics
+          const response = result.response || result.error || 'No response';
+          const totalTokens = metrics.inputTokens + metrics.outputTokens;
+          const durationSec = (metrics.duration / 1000).toFixed(1);
+          const metricsLine = [
+            '',
+            '───────────────────────────────────────',
+            `📊 ${metrics.inputTokens.toLocaleString()} in │ ${metrics.outputTokens.toLocaleString()} out │ 🔧 ${metrics.toolCalls} tools │ ⏱️ ${durationSec}s`,
+          ].join('\n');
+          addMessage('assistant', response + metricsLine);
+
+          // Auto-checkpoint after Q&A cycle (force=true for every Q&A)
+          const checkpoint = agent.autoCheckpoint(true);
+          if (checkpoint) {
+            addMessage('system', `💾 Auto-checkpoint: ${checkpoint.id}`);
+
+            // Persist checkpoint to session store for cross-session recovery
+            try {
+              saveCheckpointToStore(sessionStore, {
+                id: checkpoint.id,
+                label: checkpoint.label,
+                messages: checkpoint.state.messages,
+                iteration: checkpoint.state.iteration,
+                metrics: checkpoint.state.metrics,
+              });
+            } catch {
+              // Silently ignore persistence errors
+            }
+          }
+        } catch (e) {
+          addMessage('error', (e as Error).message);
+        } finally {
+          unsub();
+          setIsProcessing(false);
+          setToolCalls([]);
+        }
+      }, [addMessage, handleCommand]);
+
+      useInput((input, key) => {
+        if (key.ctrl && input === 'c') {
+          agent.cleanup().then(() => mcpClient.cleanup()).then(() => lspManager.cleanup()).then(() => exit());
+          return;
+        }
+        if (isProcessing) return;
+
+        if (key.return && inputValue.trim()) {
+          handleSubmit(inputValue);
+          setInputValue('');
+        } else if (key.backspace || key.delete) {
+          setInputValue(v => v.slice(0, -1));
+        } else if (input && !key.ctrl && !key.meta) {
+          setInputValue(v => v + input);
+        }
+      });
+
+      const visibleMessages = messages.slice(-12);
+
+      // Build StatusDisplay for Header component
+      const statusDisplay = {
+        mode: status.mode,
+        iteration: status.iter,
+        tokens: status.tokens,
+        maxTokens: 128000, // Approximate context window
+        cost: status.cost,
+        elapsed: agent.getMetrics().duration,
+        model: model || 'auto',
+      };
+
+      return React.createElement(Box, { flexDirection: 'column', padding: 1 },
+        // Header - using our Header component
+        React.createElement(Header, {
+          theme: selectedTheme,
+          title: 'Attocode',
+          status: statusDisplay,
+          showMetrics: true,
+        }),
+
+        // Spacer after header
+        React.createElement(Box, { marginBottom: 1 }),
+
+        // Messages
+        React.createElement(Box, { flexDirection: 'column', flexGrow: 1, marginBottom: 1 },
+          visibleMessages.length === 0
+            ? React.createElement(Text, { color: colors.textMuted }, 'Type a message or /help for commands')
+            : visibleMessages.map(m => React.createElement(Box, { key: m.id, marginBottom: 1, flexDirection: 'column' },
+                React.createElement(Text, { color: m.role === 'user' ? colors.userMessage : m.role === 'assistant' ? colors.assistantMessage : m.role === 'error' ? colors.error : colors.systemMessage, bold: m.role === 'user' },
+                  `[${m.role === 'user' ? 'You' : m.role === 'assistant' ? 'AI' : m.role === 'error' ? '!' : 'Sys'}] `
+                ),
+                React.createElement(Box, { marginLeft: 2 },
+                  React.createElement(Text, { wrap: 'wrap' }, m.content.length > 800 ? m.content.slice(0, 800) + '...' : m.content)
+                )
+              ))
+        ),
+
+        // Tool calls (if any) - using ToolCallList component
+        toolCalls.length > 0 && React.createElement(ToolCallList, {
+          theme: selectedTheme,
+          toolCalls: toolCalls,
+          maxVisible: 5,
+          title: '🔧 Tools',
+        }),
+
+        // Processing indicator
+        isProcessing && React.createElement(Box, { marginBottom: 1 },
+          React.createElement(Text, { color: colors.info }, `🔄 ${status.mode}...`)
+        ),
+
+        // Input
+        React.createElement(Box, { borderStyle: 'round', borderColor: isProcessing ? colors.textMuted : colors.borderFocus, paddingX: 1 },
+          React.createElement(Text, { color: colors.primary }, '> '),
+          React.createElement(Text, {}, inputValue),
+          !isProcessing && React.createElement(Text, { backgroundColor: colors.primary, color: colors.textInverse }, ' ')
+        ),
+
+        // Footer - using our Footer component
+        React.createElement(Footer, {
+          theme: selectedTheme,
+          mode: status.mode,
+          showShortcuts: true,
+        })
+      );
+    };
+
+    // Render TUI
+    console.clear();
+    const instance = render(React.createElement(TUIApp));
+    await instance.waitUntilExit();
+    await agent.cleanup();
+    await mcpClient.cleanup();
+    await lspManager.cleanup();
+
+  } catch (error) {
+    console.error('⚠️  TUI failed:', (error as Error).message);
+    console.log('   Falling back to legacy mode.');
+    return startProductionREPL(provider, options);
+  }
 }
 
 // =============================================================================
@@ -1666,10 +2939,17 @@ ${c('ENVIRONMENT:', 'bold')}
 async function main(): Promise<void> {
   const args = parseArgs();
 
+  if (args.version) {
+    console.log(`attocode v${VERSION}`);
+    return;
+  }
+
   if (args.help) {
     showHelp();
     return;
   }
+
+  const useTUI = shouldUseTUI(args);
 
   console.log('🔌 Detecting LLM provider...');
 
@@ -1741,13 +3021,24 @@ async function main(): Promise<void> {
     await agent.cleanup();
     process.exit(result.success ? 0 : 1);
   } else {
-    // Interactive REPL mode
-    await startProductionREPL(provider, {
-      permissionMode: args.permission,
-      maxIterations: args.maxIterations,
-      model: resolvedModel,
-      trace: args.trace,
-    });
+    // Interactive mode
+    if (useTUI) {
+      console.log('🖥️  Starting TUI mode (use --legacy for readline)');
+      await startTUIMode(provider, {
+        permissionMode: args.permission,
+        maxIterations: args.maxIterations,
+        model: resolvedModel,
+        trace: args.trace,
+        theme: args.theme,
+      });
+    } else {
+      await startProductionREPL(provider, {
+        permissionMode: args.permission,
+        maxIterations: args.maxIterations,
+        model: resolvedModel,
+        trace: args.trace,
+      });
+    }
   }
 }
 
