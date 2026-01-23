@@ -93,6 +93,8 @@ export class OpenRouterProvider implements LLMProvider, LLMProviderWithTools {
       max_tokens: options?.maxTokens ?? 4096,
       temperature: options?.temperature ?? 0.7,
       ...(options?.stopSequences && { stop: options.stopSequences }),
+      // Enable usage accounting to get actual cost from OpenRouter
+      usage: { include: true },
     };
 
     // OpenRouter requires specific headers for analytics
@@ -122,6 +124,7 @@ export class OpenRouterProvider implements LLMProvider, LLMProviderWithTools {
       }
 
       const data = await response.json() as {
+        id: string;
         choices: Array<{
           message: { content: string };
           finish_reason: string;
@@ -129,10 +132,17 @@ export class OpenRouterProvider implements LLMProvider, LLMProviderWithTools {
         usage: {
           prompt_tokens: number;
           completion_tokens: number;
+          cost?: number;
         };
       };
 
       const choice = data.choices[0];
+
+      // Get cost: try inline first, then query generation endpoint
+      let cost = data.usage.cost;
+      if (cost === undefined && data.id) {
+        cost = await this.queryGenerationCost(data.id);
+      }
 
       return {
         content: choice.message.content,
@@ -140,6 +150,7 @@ export class OpenRouterProvider implements LLMProvider, LLMProviderWithTools {
         usage: {
           inputTokens: data.usage.prompt_tokens,
           outputTokens: data.usage.completion_tokens,
+          cost,
         },
       };
     } catch (error) {
@@ -260,6 +271,7 @@ export class OpenRouterProvider implements LLMProvider, LLMProviderWithTools {
       }
 
       const data = await response.json() as {
+        id: string;  // Generation ID for querying cost
         choices: Array<{
           message: {
             content: string | null;
@@ -277,6 +289,8 @@ export class OpenRouterProvider implements LLMProvider, LLMProviderWithTools {
         usage: {
           prompt_tokens: number;
           completion_tokens: number;
+          // Actual cost from OpenRouter (when usage.include is true)
+          cost?: number;
           // Cache info (when using Anthropic models via OpenRouter)
           prompt_tokens_details?: {
             cached_tokens?: number;
@@ -285,6 +299,18 @@ export class OpenRouterProvider implements LLMProvider, LLMProviderWithTools {
       };
 
       const choice = data.choices[0];
+
+      // Get cost: try inline first, then query generation endpoint
+      let cost = data.usage.cost;
+      if (cost === undefined && data.id) {
+        cost = await this.queryGenerationCost(data.id);
+      }
+
+      if (process.env.DEBUG_COST) {
+        console.log('[OpenRouter] Response ID:', data.id);
+        console.log('[OpenRouter] Usage:', JSON.stringify(data.usage));
+        console.log('[OpenRouter] Final cost:', cost);
+      }
 
       // Extract tool calls if present
       const toolCalls: ToolCallResponse[] | undefined = choice.message.tool_calls?.map(tc => ({
@@ -303,6 +329,8 @@ export class OpenRouterProvider implements LLMProvider, LLMProviderWithTools {
           inputTokens: data.usage.prompt_tokens,
           outputTokens: data.usage.completion_tokens,
           cachedTokens: data.usage.prompt_tokens_details?.cached_tokens,
+          // Use actual cost from OpenRouter
+          cost,
         },
         toolCalls,
       };
@@ -315,6 +343,71 @@ export class OpenRouterProvider implements LLMProvider, LLMProviderWithTools {
         error as Error
       );
     }
+  }
+
+  /**
+   * Query the generation endpoint to get actual cost with retry.
+   * OpenRouter's generation data may not be immediately available after completion,
+   * so we retry with exponential backoff.
+   */
+  private async queryGenerationCost(generationId: string): Promise<number | undefined> {
+    const maxRetries = 3;
+    const delays = [100, 300, 600]; // ms - exponential backoff
+
+    for (let attempt = 0; attempt < maxRetries; attempt++) {
+      try {
+        // Wait before querying (generation data needs time to propagate)
+        await new Promise(resolve => setTimeout(resolve, delays[attempt]));
+
+        const response = await fetch(`${this.baseUrl}/generation?id=${generationId}`, {
+          method: 'GET',
+          headers: {
+            'Authorization': `Bearer ${this.apiKey}`,
+          },
+        });
+
+        if (!response.ok) {
+          if (process.env.DEBUG_COST) {
+            console.log(`[OpenRouter] Generation query attempt ${attempt + 1} failed:`, response.status);
+          }
+          continue; // Retry on non-OK response
+        }
+
+        const data = await response.json() as {
+          data?: {
+            total_cost?: number;
+            usage?: number;
+          };
+        };
+
+        // OpenRouter returns cost in data.total_cost or data.usage
+        const cost = data.data?.total_cost ?? data.data?.usage;
+
+        if (process.env.DEBUG_COST) {
+          console.log(`[OpenRouter] Generation attempt ${attempt + 1}:`, JSON.stringify(data.data));
+          console.log('[OpenRouter] Cost from generation:', cost);
+        }
+
+        // If we got a valid cost, return it
+        if (cost !== undefined && cost > 0) {
+          return cost;
+        }
+
+        // Cost not ready yet, continue to retry
+        if (process.env.DEBUG_COST) {
+          console.log(`[OpenRouter] Cost not ready, attempt ${attempt + 1}/${maxRetries}`);
+        }
+      } catch (err) {
+        if (process.env.DEBUG_COST) {
+          console.log(`[OpenRouter] Generation query error attempt ${attempt + 1}:`, err);
+        }
+      }
+    }
+
+    if (process.env.DEBUG_COST) {
+      console.log('[OpenRouter] Failed to get cost after all retries');
+    }
+    return undefined;
   }
 
   private handleError(status: number, body: string): ProviderError {

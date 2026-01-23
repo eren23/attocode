@@ -142,6 +142,13 @@ export {
   type SessionEventListener,
 } from './session-store.js';
 
+// SQLite session persistence (preferred for production)
+export {
+  SQLiteStore,
+  createSQLiteStore,
+  type SQLiteStoreConfig,
+} from './sqlite-store.js';
+
 // Streaming responses
 export {
   StreamHandler,

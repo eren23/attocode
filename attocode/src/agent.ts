@@ -754,7 +754,8 @@ export class ProductionAgent {
           this.economics.recordLLMUsage(
             response.usage.inputTokens,
             response.usage.outputTokens,
-            this.config.model
+            this.config.model,
+            response.usage.cost  // Use actual cost from provider when available
           );
         }
 
@@ -1114,6 +1115,7 @@ export class ProductionAgent {
             outputTokens: response.usage?.outputTokens || 0,
             cacheReadTokens: response.usage?.cacheReadTokens,
             cacheWriteTokens: response.usage?.cacheWriteTokens,
+            cost: response.usage?.cost,  // Actual cost from provider (e.g., OpenRouter)
           },
           durationMs: duration,
         },
@@ -1124,7 +1126,8 @@ export class ProductionAgent {
         response.usage?.inputTokens || 0,
         response.usage?.outputTokens || 0,
         duration,
-        actualModel
+        actualModel,
+        response.usage?.cost  // Actual cost from provider (e.g., OpenRouter)
       );
 
       this.state.metrics.llmCalls++;
@@ -1507,6 +1510,13 @@ export class ProductionAgent {
    */
   loadMessages(messages: Message[]): void {
     this.state.messages = [...messages];
+
+    // Sync to threadManager if enabled
+    if (this.threadManager) {
+      const thread = this.threadManager.getActiveThread();
+      thread.messages = [...messages];
+    }
+
     this.observability?.logger?.info('Messages loaded', { count: messages.length });
   }
 
@@ -1874,9 +1884,13 @@ export class ProductionAgent {
       throw new Error('Thread management not enabled');
     }
 
+    // Sync state.messages to threadManager before rollback (messages may have been added directly)
+    const thread = this.threadManager.getActiveThread();
+    thread.messages = [...this.state.messages];
+
     const success = this.threadManager.rollback(steps);
     if (success) {
-      // Sync state
+      // Sync back to state
       this.state.messages = this.threadManager.getMessages();
       this.emit({ type: 'rollback', steps });
       this.observability?.logger?.info('Rolled back', { steps });
@@ -1938,6 +1952,37 @@ export class ProductionAgent {
       return [];
     }
     return this.threadManager.getThreadCheckpoints();
+  }
+
+  /**
+   * Automatically create checkpoint if enabled in config.
+   * Safe to call after each Q&A cycle - handles all checks internally.
+   * @param force - If true, bypasses frequency check and always creates checkpoint
+   * @returns The created checkpoint, or null if conditions not met
+   */
+  autoCheckpoint(force = false): Checkpoint | null {
+    // Check if thread management is enabled
+    if (!this.threadManager) {
+      return null;
+    }
+
+    // Check if auto-checkpoint is enabled
+    const threadsConfig = this.config.threads;
+    if (!threadsConfig || typeof threadsConfig === 'boolean' || !threadsConfig.autoCheckpoint) {
+      return null;
+    }
+
+    // Check frequency (every N iterations, default 5) - unless forced
+    if (!force) {
+      const frequency = threadsConfig.checkpointFrequency || 5;
+      if (this.state.iteration % frequency !== 0) {
+        return null;
+      }
+    }
+
+    // Create the checkpoint
+    const label = `auto-iter-${this.state.iteration}`;
+    return this.createCheckpoint(label);
   }
 
   // =========================================================================

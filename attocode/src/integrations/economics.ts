@@ -10,6 +10,7 @@
  */
 
 import { stableStringify } from './context-engineering.js';
+import { getModelPricing, calculateCost } from './openrouter-pricing.js';
 
 // =============================================================================
 // TYPES
@@ -163,18 +164,24 @@ export class ExecutionEconomicsManager {
 
   /**
    * Record token usage from an LLM call.
+   * @param inputTokens - Number of input tokens
+   * @param outputTokens - Number of output tokens
+   * @param model - Model name (for fallback pricing calculation)
+   * @param actualCost - Actual cost from provider (e.g., OpenRouter returns this directly)
    */
-  recordLLMUsage(inputTokens: number, outputTokens: number, model?: string): void {
+  recordLLMUsage(inputTokens: number, outputTokens: number, model?: string, actualCost?: number): void {
     this.usage.inputTokens += inputTokens;
     this.usage.outputTokens += outputTokens;
     this.usage.tokens += inputTokens + outputTokens;
     this.usage.llmCalls++;
 
-    // Estimate cost based on model (rough estimates)
-    const costPer1kInput = this.getInputCost(model);
-    const costPer1kOutput = this.getOutputCost(model);
-    this.usage.cost += (inputTokens / 1000) * costPer1kInput;
-    this.usage.cost += (outputTokens / 1000) * costPer1kOutput;
+    // Use actual cost from provider if available, otherwise calculate
+    if (actualCost !== undefined && actualCost !== null) {
+      this.usage.cost += actualCost;
+    } else {
+      // Fallback: Calculate cost using model pricing (less accurate for unknown models)
+      this.usage.cost += calculateCost(model || '', inputTokens, outputTokens);
+    }
 
     // Update duration
     this.usage.duration = Date.now() - this.startTime;
@@ -495,32 +502,6 @@ export class ExecutionEconomicsManager {
     }
 
     return false;
-  }
-
-  private getInputCost(model?: string): number {
-    // Rough cost estimates per 1k input tokens
-    if (!model) return 0.001;
-    if (model.includes('gpt-4')) return 0.03;
-    if (model.includes('gpt-3.5')) return 0.0005;
-    if (model.includes('claude-3-opus')) return 0.015;
-    if (model.includes('claude-3-sonnet')) return 0.003;
-    if (model.includes('claude-3-haiku')) return 0.00025;
-    if (model.includes('claude-sonnet-4')) return 0.003;
-    if (model.includes('claude-opus-4')) return 0.015;
-    return 0.001; // Default
-  }
-
-  private getOutputCost(model?: string): number {
-    // Rough cost estimates per 1k output tokens
-    if (!model) return 0.002;
-    if (model.includes('gpt-4')) return 0.06;
-    if (model.includes('gpt-3.5')) return 0.0015;
-    if (model.includes('claude-3-opus')) return 0.075;
-    if (model.includes('claude-3-sonnet')) return 0.015;
-    if (model.includes('claude-3-haiku')) return 0.00125;
-    if (model.includes('claude-sonnet-4')) return 0.015;
-    if (model.includes('claude-opus-4')) return 0.075;
-    return 0.002; // Default
   }
 }
 

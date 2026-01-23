@@ -111,6 +111,8 @@ export interface LLMResponseData {
     outputTokens: number;
     cacheReadTokens?: number;
     cacheWriteTokens?: number;
+    /** Actual cost from provider (e.g., OpenRouter returns this directly) */
+    cost?: number;
   };
   durationMs: number;
 }
@@ -469,6 +471,8 @@ export class TraceCollector {
       },
       tokens,
       cache: cacheBreakdown,
+      // Store actual cost from provider (e.g., OpenRouter) when available
+      actualCost: data.usage.cost,
     };
 
     // Store in current iteration
@@ -658,16 +662,20 @@ export class TraceCollector {
 
     // Calculate iteration metrics
     const llmRequest = this.currentIterationTrace.llmRequest;
+    // Use actual cost from provider if available, otherwise calculate
+    const actualCost = llmRequest?.actualCost;
+    const calculatedCost = this.calculateCost(
+      llmRequest?.tokens.input ?? 0,
+      llmRequest?.tokens.output ?? 0,
+      llmRequest?.cache.cacheReadTokens ?? 0
+    );
+
     const metrics = {
       inputTokens: llmRequest?.tokens.input ?? 0,
       outputTokens: llmRequest?.tokens.output ?? 0,
       cacheHitRate: llmRequest?.cache.hitRate ?? 0,
       toolCallCount: this.currentIterationTrace.toolExecutions?.length ?? 0,
-      totalCost: this.calculateCost(
-        llmRequest?.tokens.input ?? 0,
-        llmRequest?.tokens.output ?? 0,
-        llmRequest?.cache.cacheReadTokens ?? 0
-      ),
+      totalCost: actualCost ?? calculatedCost,
     };
 
     // Complete iteration trace

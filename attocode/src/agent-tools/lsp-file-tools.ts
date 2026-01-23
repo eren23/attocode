@@ -72,9 +72,13 @@ async function waitForDiagnostics(
   filePath: string,
   delay: number
 ): Promise<LSPDiagnostic[]> {
-  // Notify LSP that file changed
+  // Notify LSP about the file - must open first, then notify change
   try {
     const content = await fs.readFile(filePath, 'utf-8');
+    // Open the document (required for LSP to track it)
+    lsp.notifyFileOpened(filePath, content);
+    // Small delay then notify change to trigger diagnostics
+    await new Promise(resolve => setTimeout(resolve, 100));
     lsp.notifyFileChanged(filePath, content, Date.now());
   } catch {
     // File might not exist yet, that's ok

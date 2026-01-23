@@ -275,7 +275,7 @@ export class MetricsCollector {
   /**
    * Record LLM call metrics.
    */
-  recordLLMCall(inputTokens: number, outputTokens: number, durationMs: number, model: string): void {
+  recordLLMCall(inputTokens: number, outputTokens: number, durationMs: number, model: string, actualCost?: number): void {
     if (this.config.collectTokens) {
       this.increment('llm.input_tokens', inputTokens);
       this.increment('llm.output_tokens', outputTokens);
@@ -283,7 +283,8 @@ export class MetricsCollector {
     }
 
     if (this.config.collectCosts) {
-      const cost = this.estimateCost(model, inputTokens, outputTokens);
+      // Use actual cost from provider if available, otherwise estimate
+      const cost = actualCost ?? this.estimateCost(model, inputTokens, outputTokens);
       this.increment('llm.estimated_cost_cents', Math.round(cost * 100));
     }
 
