@@ -1,3 +1,4 @@
+#!/usr/bin/env node
 /**
  * Attocode - A Production Coding Agent
  *
