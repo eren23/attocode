@@ -379,6 +379,7 @@ export {
   buildContextFromChunks,
   summarizeRepoStructure,
   type CodeChunk,
+  type MinimalCodeChunk,
   type CodeChunkType,
   type RepoMap,
   type CodebaseContextConfig,

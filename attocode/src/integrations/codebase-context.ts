@@ -1041,10 +1041,20 @@ export function createCodebaseContext(
 }
 
 /**
+ * Minimal chunk interface for building context.
+ * Only requires the properties actually used by buildContextFromChunks.
+ */
+export interface MinimalCodeChunk {
+  filePath: string;
+  content: string;
+  tokenCount: number;
+}
+
+/**
  * Build context string from selected chunks.
  */
 export function buildContextFromChunks(
-  chunks: CodeChunk[],
+  chunks: MinimalCodeChunk[],
   options: {
     includeFilePaths?: boolean;
     includeSeparators?: boolean;

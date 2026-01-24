@@ -55,6 +55,7 @@ export interface ToolDefinition {
  * LLM provider interface.
  */
 export interface LLMProvider {
+  name?: string;
   chat(messages: Message[], options?: ChatOptions): Promise<ChatResponse>;
   stream?(messages: Message[], options?: ChatOptions): AsyncIterable<StreamChunk>;
 }
@@ -71,6 +72,7 @@ export interface ChatResponse {
   toolCalls?: ToolCall[];
   usage?: TokenUsage;
   model?: string;
+  stopReason?: 'end_turn' | 'tool_use' | 'max_tokens' | 'stop_sequence';
 }
 
 export interface StreamChunk {
@@ -84,6 +86,9 @@ export interface TokenUsage {
   inputTokens: number;
   outputTokens: number;
   totalTokens: number;
+  cacheReadTokens?: number;
+  cacheWriteTokens?: number;
+  cost?: number;
 }
 
 // =============================================================================
@@ -106,6 +111,12 @@ export interface ProductionAgentConfig {
 
   /** Model to use */
   model?: string;
+
+  /** Maximum tokens for LLM responses */
+  maxTokens?: number;
+
+  /** Temperature for LLM responses */
+  temperature?: number;
 
   /** Hook system configuration */
   hooks?: HooksConfig | false;
@@ -747,6 +758,35 @@ export interface CodebaseContextAgentConfig {
 
   /** Selection strategy: importance_first, relevance_first, breadth_first, depth_first */
   strategy?: 'importance_first' | 'relevance_first' | 'breadth_first' | 'depth_first';
+}
+
+/**
+ * Configuration for trace collection.
+ */
+export interface TraceCollectorConfig {
+  /** Enable trace collection */
+  enabled?: boolean;
+
+  /** Capture full message content (can be large) */
+  captureMessageContent?: boolean;
+
+  /** Capture tool results (can be large) */
+  captureToolResults?: boolean;
+
+  /** Max result size before truncation */
+  maxResultSize?: number;
+
+  /** Enable cache boundary analysis */
+  analyzeCacheBoundaries?: boolean;
+
+  /** Output directory for traces */
+  outputDir?: string;
+
+  /** JSONL file name pattern */
+  filePattern?: string;
+
+  /** Enable console output for traces */
+  enableConsoleOutput?: boolean;
 }
 
 // =============================================================================

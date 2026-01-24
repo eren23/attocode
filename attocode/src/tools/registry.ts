@@ -119,7 +119,7 @@ export class ToolRegistry {
     if (this.tools.has(tool.name)) {
       throw new Error(`Tool "${tool.name}" is already registered`);
     }
-    this.tools.set(tool.name, tool as ToolDefinition);
+    this.tools.set(tool.name, tool as unknown as ToolDefinition);
   }
 
   /**
@@ -157,7 +157,7 @@ export class ToolRegistry {
     return Array.from(this.tools.values()).map(tool => ({
       name: tool.name,
       description: tool.description,
-      input_schema: zodToJsonSchema(tool.parameters) as ToolDescription['input_schema'],
+      input_schema: zodToJsonSchema(tool.parameters) as unknown as ToolDescription['input_schema'],
     }));
   }
 

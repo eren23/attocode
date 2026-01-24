@@ -116,7 +116,11 @@ export class StreamHandler {
     const response: ChatResponse = {
       content: state.content,
       toolCalls: state.toolCalls.length > 0 ? state.toolCalls : undefined,
-      usage: state.usage.inputTokens > 0 ? state.usage : undefined,
+      usage: state.usage.inputTokens > 0 ? {
+        inputTokens: state.usage.inputTokens,
+        outputTokens: state.usage.outputTokens,
+        totalTokens: state.usage.inputTokens + state.usage.outputTokens,
+      } : undefined,
     };
 
     this.emit({ type: 'stream.complete', response });
@@ -393,7 +397,7 @@ export async function* adaptAnthropicStream(
 
   const decoder = new TextDecoder();
   let buffer = '';
-  let currentToolId: string | null = null;
+  let currentToolId: string | undefined = undefined;
 
   try {
     while (true) {
@@ -443,7 +447,7 @@ export async function* adaptAnthropicStream(
               case 'content_block_stop':
                 if (currentToolId) {
                   yield { type: 'tool_call_end' };
-                  currentToolId = null;
+                  currentToolId = undefined;
                 }
                 break;
 
