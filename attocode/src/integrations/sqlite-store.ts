@@ -14,17 +14,18 @@
 
 import Database from 'better-sqlite3';
 import { join, dirname } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { mkdir } from 'node:fs/promises';
 import { existsSync, readFileSync } from 'node:fs';
 import type { Message, ToolCall } from '../types.js';
 import type {
-  SessionMetadata,
   SessionEntry,
   SessionEntryType,
   SessionEvent,
   SessionEventListener,
   SessionStoreConfig,
 } from './session-store.js';
+import { applyMigrations } from '../persistence/migrator.js';
 
 // =============================================================================
 // TYPES
@@ -38,6 +39,52 @@ export interface SQLiteStoreConfig extends SessionStoreConfig {
   dbPath?: string;
   /** Enable WAL mode for better concurrency (default: true) */
   walMode?: boolean;
+}
+
+/**
+ * Usage log entry for tracking API costs.
+ */
+export interface UsageLog {
+  /** Session ID this usage belongs to */
+  sessionId: string;
+  /** Model ID used for the request */
+  modelId: string;
+  /** Number of prompt tokens used */
+  promptTokens: number;
+  /** Number of completion tokens generated */
+  completionTokens: number;
+  /** Cost in USD for this request */
+  costUsd: number;
+  /** ISO timestamp of when the usage occurred */
+  timestamp: string;
+}
+
+/**
+ * Session types for hierarchy management.
+ */
+export type SessionType = 'main' | 'subagent' | 'branch' | 'fork';
+
+/**
+ * Session metadata with cost tracking and hierarchy support.
+ */
+export interface SessionMetadata {
+  id: string;
+  name?: string;
+  createdAt: string;
+  lastActiveAt: string;
+  messageCount: number;
+  tokenCount: number;
+  summary?: string;
+  /** Parent session ID for child sessions */
+  parentSessionId?: string;
+  /** Type of session */
+  sessionType?: SessionType;
+  /** Total prompt tokens used */
+  promptTokens?: number;
+  /** Total completion tokens generated */
+  completionTokens?: number;
+  /** Total cost in USD */
+  costUsd?: number;
 }
 
 // =============================================================================
@@ -124,6 +171,14 @@ export class SQLiteStore {
     updateToolCall: Database.Statement;
     insertCheckpoint: Database.Statement;
     getLatestCheckpoint: Database.Statement;
+    // Cost tracking statements
+    insertUsageLog: Database.Statement;
+    updateSessionCosts: Database.Statement;
+    getSessionUsage: Database.Statement;
+    // Session hierarchy statements
+    insertChildSession: Database.Statement;
+    getChildSessions: Database.Statement;
+    getSessionTree: Database.Statement;
   };
 
   constructor(config: SQLiteStoreConfig = {}) {
@@ -157,8 +212,10 @@ export class SQLiteStore {
       await mkdir(dbDir, { recursive: true });
     }
 
-    // Create tables
-    this.db.exec(SCHEMA);
+    // Apply migrations (includes initial schema creation for new databases)
+    const __dirname = dirname(fileURLToPath(import.meta.url));
+    const migrationsDir = join(__dirname, '../persistence/migrations');
+    applyMigrations(this.db, migrationsDir);
 
     // Prepare statements
     this.prepareStatements();
@@ -188,13 +245,19 @@ export class SQLiteStore {
 
       getSession: this.db.prepare(`
         SELECT id, name, created_at as createdAt, last_active_at as lastActiveAt,
-               message_count as messageCount, token_count as tokenCount, summary
+               message_count as messageCount, token_count as tokenCount, summary,
+               parent_session_id as parentSessionId, session_type as sessionType,
+               prompt_tokens as promptTokens, completion_tokens as completionTokens,
+               cost_usd as costUsd
         FROM sessions WHERE id = ?
       `),
 
       listSessions: this.db.prepare(`
         SELECT id, name, created_at as createdAt, last_active_at as lastActiveAt,
-               message_count as messageCount, token_count as tokenCount, summary
+               message_count as messageCount, token_count as tokenCount, summary,
+               parent_session_id as parentSessionId, session_type as sessionType,
+               prompt_tokens as promptTokens, completion_tokens as completionTokens,
+               cost_usd as costUsd
         FROM sessions ORDER BY last_active_at DESC
       `),
 
@@ -233,6 +296,64 @@ export class SQLiteStore {
                created_at as createdAt, description
         FROM checkpoints WHERE session_id = ?
         ORDER BY created_at DESC, rowid DESC LIMIT 1
+      `),
+
+      // Cost tracking statements
+      insertUsageLog: this.db.prepare(`
+        INSERT INTO usage_logs (session_id, model_id, prompt_tokens, completion_tokens, cost_usd, timestamp)
+        VALUES (@sessionId, @modelId, @promptTokens, @completionTokens, @costUsd, @timestamp)
+      `),
+
+      updateSessionCosts: this.db.prepare(`
+        UPDATE sessions SET
+          prompt_tokens = COALESCE(prompt_tokens, 0) + @promptTokens,
+          completion_tokens = COALESCE(completion_tokens, 0) + @completionTokens,
+          cost_usd = COALESCE(cost_usd, 0) + @costUsd
+        WHERE id = @sessionId
+      `),
+
+      getSessionUsage: this.db.prepare(`
+        SELECT
+          COALESCE(SUM(prompt_tokens), 0) as promptTokens,
+          COALESCE(SUM(completion_tokens), 0) as completionTokens,
+          COALESCE(SUM(cost_usd), 0) as costUsd
+        FROM usage_logs WHERE session_id = ?
+      `),
+
+      // Session hierarchy statements
+      insertChildSession: this.db.prepare(`
+        INSERT INTO sessions (id, name, created_at, last_active_at, message_count, token_count, parent_session_id, session_type)
+        VALUES (@id, @name, @createdAt, @lastActiveAt, @messageCount, @tokenCount, @parentSessionId, @sessionType)
+      `),
+
+      getChildSessions: this.db.prepare(`
+        SELECT id, name, created_at as createdAt, last_active_at as lastActiveAt,
+               message_count as messageCount, token_count as tokenCount, summary,
+               parent_session_id as parentSessionId, session_type as sessionType,
+               prompt_tokens as promptTokens, completion_tokens as completionTokens,
+               cost_usd as costUsd
+        FROM sessions WHERE parent_session_id = ?
+        ORDER BY created_at ASC
+      `),
+
+      getSessionTree: this.db.prepare(`
+        WITH RECURSIVE session_tree AS (
+          SELECT id, name, created_at as createdAt, last_active_at as lastActiveAt,
+                 message_count as messageCount, token_count as tokenCount, summary,
+                 parent_session_id as parentSessionId, session_type as sessionType,
+                 prompt_tokens as promptTokens, completion_tokens as completionTokens,
+                 cost_usd as costUsd, 0 as depth
+          FROM sessions WHERE id = ?
+          UNION ALL
+          SELECT s.id, s.name, s.created_at, s.last_active_at,
+                 s.message_count, s.token_count, s.summary,
+                 s.parent_session_id, s.session_type,
+                 s.prompt_tokens, s.completion_tokens,
+                 s.cost_usd, st.depth + 1
+          FROM sessions s
+          INNER JOIN session_tree st ON s.parent_session_id = st.id
+        )
+        SELECT * FROM session_tree ORDER BY depth, createdAt ASC
       `),
     };
   }
@@ -533,6 +654,93 @@ export class SQLiteStore {
     const dbSizeBytes = (this.db.prepare('SELECT page_count * page_size as size FROM pragma_page_count(), pragma_page_size()').get() as { size: number }).size;
 
     return { sessionCount, entryCount, toolCallCount, checkpointCount, dbSizeBytes };
+  }
+
+  // ===========================================================================
+  // COST TRACKING
+  // ===========================================================================
+
+  /**
+   * Log API usage for cost tracking.
+   * Inserts a usage log entry and updates session totals atomically.
+   */
+  logUsage(usage: UsageLog): void {
+    // Use transaction to ensure atomicity of insert + update
+    this.db.transaction(() => {
+      // Insert into usage_logs table
+      this.stmts.insertUsageLog.run({
+        sessionId: usage.sessionId,
+        modelId: usage.modelId,
+        promptTokens: usage.promptTokens,
+        completionTokens: usage.completionTokens,
+        costUsd: usage.costUsd,
+        timestamp: usage.timestamp,
+      });
+
+      // Update session totals
+      this.stmts.updateSessionCosts.run({
+        sessionId: usage.sessionId,
+        promptTokens: usage.promptTokens,
+        completionTokens: usage.completionTokens,
+        costUsd: usage.costUsd,
+      });
+    })();
+  }
+
+  /**
+   * Get aggregated usage for a session.
+   */
+  getSessionUsage(sessionId: string): { promptTokens: number; completionTokens: number; costUsd: number } {
+    const result = this.stmts.getSessionUsage.get(sessionId) as {
+      promptTokens: number;
+      completionTokens: number;
+      costUsd: number;
+    } | undefined;
+
+    return result || { promptTokens: 0, completionTokens: 0, costUsd: 0 };
+  }
+
+  // ===========================================================================
+  // SESSION HIERARCHY
+  // ===========================================================================
+
+  /**
+   * Create a child session linked to a parent.
+   */
+  createChildSession(parentId: string, name?: string, type: SessionType = 'subagent'): string {
+    const id = `session-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`;
+    const now = new Date().toISOString();
+
+    this.stmts.insertChildSession.run({
+      id,
+      name: name || null,
+      createdAt: now,
+      lastActiveAt: now,
+      messageCount: 0,
+      tokenCount: 0,
+      parentSessionId: parentId,
+      sessionType: type,
+    });
+
+    this.emit({ type: 'session.created', sessionId: id });
+    return id;
+  }
+
+  /**
+   * Get all direct child sessions of a parent.
+   */
+  getChildSessions(parentId: string): SessionMetadata[] {
+    return this.stmts.getChildSessions.all(parentId) as SessionMetadata[];
+  }
+
+  /**
+   * Get the full session tree starting from a root session.
+   * Uses a recursive CTE to traverse the hierarchy.
+   */
+  getSessionTree(rootId: string): SessionMetadata[] {
+    const rows = this.stmts.getSessionTree.all(rootId) as Array<SessionMetadata & { depth: number }>;
+    // Remove the depth field from results (used only for ordering)
+    return rows.map(({ depth, ...session }) => session);
   }
 
   // ===========================================================================
