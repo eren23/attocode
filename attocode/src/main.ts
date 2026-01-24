@@ -1,3 +1,4 @@
+#!/usr/bin/env node
 /**
  * Attocode - A Production Coding Agent
  *
@@ -63,38 +64,143 @@ import {
 // Session store type that works with both SQLite and JSONL
 type AnySessionStore = SQLiteStore | SessionStore;
 
+// =============================================================================
+// DEBUG LOGGER FOR PERSISTENCE OPERATIONS
+// =============================================================================
+
+/**
+ * Debug logger for persistence operations.
+ * Enabled via --debug flag. Shows data flow at each layer boundary.
+ */
+class PersistenceDebugger {
+  private enabled = false;
+
+  enable(): void {
+    this.enabled = true;
+    this.log('🔍 Persistence debug mode ENABLED');
+  }
+
+  isEnabled(): boolean {
+    return this.enabled;
+  }
+
+  log(message: string, data?: unknown): void {
+    if (!this.enabled) return;
+    const timestamp = new Date().toISOString().split('T')[1].slice(0, 12);
+    console.log(`[${timestamp}] 🔧 ${message}`);
+    if (data !== undefined) {
+      console.log(`    └─ ${JSON.stringify(data, null, 2).split('\n').join('\n    ')}`);
+    }
+  }
+
+  error(message: string, err: unknown): void {
+    if (!this.enabled) return;
+    const timestamp = new Date().toISOString().split('T')[1].slice(0, 12);
+    console.error(`[${timestamp}] ❌ ${message}`);
+    if (err instanceof Error) {
+      console.error(`    └─ ${err.message}`);
+      if (err.stack) {
+        console.error(`    └─ Stack: ${err.stack.split('\n').slice(1, 3).join(' → ')}`);
+      }
+    } else {
+      console.error(`    └─ ${String(err)}`);
+    }
+  }
+
+  storeType(store: AnySessionStore): string {
+    if ('saveCheckpoint' in store && typeof store.saveCheckpoint === 'function') {
+      return 'SQLiteStore';
+    }
+    return 'JSONLStore';
+  }
+}
+
+// Global debug instance - enabled via --debug flag
+const persistenceDebug = new PersistenceDebugger();
+
+/**
+ * Checkpoint data structure for full state restoration.
+ */
+interface CheckpointData {
+  id: string;
+  label?: string;
+  messages: unknown[];
+  iteration: number;
+  metrics?: unknown;
+  plan?: unknown;
+  memoryContext?: string[];
+}
+
 /**
  * Save checkpoint to session store (works with both SQLite and JSONL).
+ * Now includes plan and memoryContext for full state restoration.
  */
 function saveCheckpointToStore(
   store: AnySessionStore,
-  checkpoint: { id: string; label?: string; messages: unknown[]; iteration: number; metrics?: unknown }
+  checkpoint: CheckpointData
 ): void {
-  if ('saveCheckpoint' in store && typeof store.saveCheckpoint === 'function') {
-    // SQLite store
-    store.saveCheckpoint(
-      {
-        id: checkpoint.id,
-        label: checkpoint.label,
-        messages: checkpoint.messages,
-        iteration: checkpoint.iteration,
-        metrics: checkpoint.metrics,
-      },
-      checkpoint.label || `auto-checkpoint-${checkpoint.id}`
-    );
-  } else if ('appendEntry' in store && typeof store.appendEntry === 'function') {
-    // JSONL store - use appendEntry with checkpoint type
-    store.appendEntry({
-      type: 'checkpoint',
-      data: {
-        id: checkpoint.id,
-        label: checkpoint.label,
-        messages: checkpoint.messages,
-        iteration: checkpoint.iteration,
-        metrics: checkpoint.metrics,
-        createdAt: new Date().toISOString(),
-      },
-    });
+  const storeType = persistenceDebug.storeType(store);
+  persistenceDebug.log(`saveCheckpointToStore called`, {
+    storeType,
+    checkpointId: checkpoint.id,
+    messageCount: checkpoint.messages?.length ?? 0,
+    hasLabel: !!checkpoint.label,
+    hasPlan: !!checkpoint.plan,
+  });
+
+  try {
+    if ('saveCheckpoint' in store && typeof store.saveCheckpoint === 'function') {
+      // SQLite store - check currentSessionId
+      const sqliteStore = store as SQLiteStore;
+      const currentSessionId = sqliteStore.getCurrentSessionId();
+      persistenceDebug.log(`SQLite saveCheckpoint`, {
+        currentSessionId,
+        hasCurrentSession: !!currentSessionId,
+      });
+
+      if (!currentSessionId) {
+        persistenceDebug.error('SQLite store has no currentSessionId!', new Error('No active session'));
+      }
+
+      const ckptId = store.saveCheckpoint(
+        {
+          id: checkpoint.id,
+          label: checkpoint.label,
+          messages: checkpoint.messages,
+          iteration: checkpoint.iteration,
+          metrics: checkpoint.metrics,
+          plan: checkpoint.plan,
+          memoryContext: checkpoint.memoryContext,
+        },
+        checkpoint.label || `auto-checkpoint-${checkpoint.id}`
+      );
+      persistenceDebug.log(`SQLite checkpoint saved successfully`, { returnedId: ckptId });
+    } else if ('appendEntry' in store && typeof store.appendEntry === 'function') {
+      // JSONL store - use appendEntry with checkpoint type
+      persistenceDebug.log(`JSONL appendEntry (checkpoint type)`);
+      store.appendEntry({
+        type: 'checkpoint',
+        data: {
+          id: checkpoint.id,
+          label: checkpoint.label,
+          messages: checkpoint.messages,
+          iteration: checkpoint.iteration,
+          metrics: checkpoint.metrics,
+          plan: checkpoint.plan,
+          memoryContext: checkpoint.memoryContext,
+          createdAt: new Date().toISOString(),
+        },
+      });
+      persistenceDebug.log(`JSONL checkpoint appended successfully`);
+    } else {
+      persistenceDebug.error('No compatible save method found on store', { storeType });
+    }
+  } catch (err) {
+    persistenceDebug.error(`Failed to save checkpoint`, err);
+    // Re-throw in debug mode so the error is visible
+    if (persistenceDebug.isEnabled()) {
+      throw err;
+    }
   }
 }
 
@@ -454,6 +560,11 @@ async function startProductionREPL(
     },
     hooks: { enabled: true },
     plugins: { enabled: true },
+    // LSP integration for code intelligence and diagnostics
+    lsp: {
+      enabled: true,
+      autoDetect: true, // Auto-detect and start language servers based on file types
+    },
   });
 
   // Subscribe to events
@@ -461,11 +572,26 @@ async function startProductionREPL(
 
   // Initialize session storage (try SQLite, fall back to JSONL if native module fails)
   let sessionStore: AnySessionStore;
+  let usingSQLite = false;
+  persistenceDebug.log('Initializing session store', { baseDir: '.agent/sessions' });
   try {
     sessionStore = await createSQLiteStore({ baseDir: '.agent/sessions' });
+    usingSQLite = true;
+    persistenceDebug.log('SQLite store created successfully');
+    console.log(c('✓ SQLite session store initialized', 'green'));
+
+    // Debug: verify SQLite tables
+    if (persistenceDebug.isEnabled()) {
+      const sqliteStore = sessionStore as SQLiteStore;
+      const stats = sqliteStore.getStats();
+      persistenceDebug.log('SQLite store stats', stats);
+    }
   } catch (sqliteError) {
+    persistenceDebug.error('SQLite initialization failed', sqliteError);
     console.log(c('⚠️  SQLite unavailable, using JSONL fallback', 'yellow'));
+    console.log(c(`   Error: ${(sqliteError as Error).message}`, 'dim'));
     sessionStore = await createSessionStore({ baseDir: '.agent/sessions' });
+    persistenceDebug.log('JSONL store created as fallback');
   }
   // mcpClient was created earlier for toolResolver
   const compactor = createCompactor(adaptedProvider, {
@@ -514,7 +640,13 @@ async function startProductionREPL(
   }
 
   // Create a new session
+  persistenceDebug.log('Creating new session');
   const sessionId = await sessionStore.createSession();
+  persistenceDebug.log('Session created', {
+    sessionId,
+    storeType: persistenceDebug.storeType(sessionStore),
+    currentSessionId: usingSQLite ? (sessionStore as SQLiteStore).getCurrentSessionId() : 'N/A (JSONL)',
+  });
 
   // Welcome
   console.log(`
@@ -580,9 +712,16 @@ ${c('╚════════════════════════
         console.log(c(`\n📊 Tokens: ${metrics.inputTokens} in / ${metrics.outputTokens} out | Tools: ${metrics.toolCalls} | Duration: ${metrics.duration}ms`, 'dim'));
 
         // Auto-checkpoint after Q&A cycle (force=true for every Q&A)
+        persistenceDebug.log('Attempting auto-checkpoint');
         const checkpoint = agent.autoCheckpoint(true);
         if (checkpoint) {
           console.log(c(`💾 Auto-checkpoint: ${checkpoint.id}`, 'dim'));
+          persistenceDebug.log('Auto-checkpoint created in agent', {
+            id: checkpoint.id,
+            label: checkpoint.label,
+            messageCount: checkpoint.state.messages?.length ?? 0,
+            iteration: checkpoint.state.iteration,
+          });
 
           // Persist checkpoint to session store for cross-session recovery
           try {
@@ -592,10 +731,18 @@ ${c('╚════════════════════════
               messages: checkpoint.state.messages,
               iteration: checkpoint.state.iteration,
               metrics: checkpoint.state.metrics,
+              plan: checkpoint.state.plan,
+              memoryContext: checkpoint.state.memoryContext,
             });
-          } catch {
-            // Silently ignore persistence errors
+          } catch (err) {
+            // Log error in debug mode, otherwise silent
+            persistenceDebug.error('Failed to persist checkpoint to store', err);
+            if (persistenceDebug.isEnabled()) {
+              console.log(c(`⚠️  Checkpoint persistence failed: ${(err as Error).message}`, 'yellow'));
+            }
           }
+        } else {
+          persistenceDebug.log('No checkpoint created (autoCheckpoint returned null)');
         }
 
       } catch (error) {
@@ -767,6 +914,36 @@ ${c('Activity:', 'bold')}
   Duration:        ${metrics.duration}ms
   Est. Cost:       $${metrics.estimatedCost.toFixed(4)}
 `);
+      break;
+
+    case '/theme':
+      try {
+        const { getThemeNames, getTheme } = await import('./tui/theme/index.js');
+        const themes = getThemeNames();
+
+        if (args.length === 0) {
+          console.log(`
+${c('Available Themes:', 'bold')}
+${themes.map(t => `  ${c(t, 'cyan')}`).join('\n')}
+
+${c('Usage:', 'dim')} /theme <name>
+${c('Note:', 'dim')} Theme switching is visual in TUI mode. REPL mode uses fixed ANSI colors.
+`);
+        } else {
+          const themeName = args[0];
+          if (themes.includes(themeName)) {
+            const selectedTheme = getTheme(themeName as 'dark' | 'light' | 'high-contrast' | 'auto');
+            console.log(c(`✓ Theme set to: ${themeName}`, 'green'));
+            console.log(c(`  Primary: ${selectedTheme.colors.primary}`, 'dim'));
+            console.log(c(`  Note: Full theme support requires TUI mode`, 'dim'));
+          } else {
+            console.log(c(`Unknown theme: ${themeName}`, 'red'));
+            console.log(c(`Available: ${themes.join(', ')}`, 'dim'));
+          }
+        }
+      } catch (error) {
+        console.log(c(`Error loading themes: ${(error as Error).message}`, 'red'));
+      }
       break;
 
     case '/react':
@@ -1243,15 +1420,27 @@ ${c('Tip:', 'dim')} Use /mcp search <query> to load specific tools on-demand.
     case '/save':
       try {
         const state = agent.getState();
-        await sessionStore.appendEntry({
-          type: 'checkpoint',
-          data: {
-            messages: state.messages,
-            metadata: agent.getMetrics(),
-          },
+        const metrics = agent.getMetrics();
+        const saveCheckpointId = `ckpt-manual-${Date.now().toString(36)}`;
+
+        persistenceDebug.log('/save command - creating checkpoint', {
+          checkpointId: saveCheckpointId,
+          messageCount: state.messages?.length ?? 0,
         });
-        console.log(c(`✓ Session saved: ${sessionId}`, 'green'));
+
+        saveCheckpointToStore(sessionStore, {
+          id: saveCheckpointId,
+          label: 'manual-save',
+          messages: state.messages,
+          iteration: state.iteration,
+          metrics: metrics,
+          plan: state.plan,
+          memoryContext: state.memoryContext,
+        });
+
+        console.log(c(`✓ Session saved: ${sessionId} (checkpoint: ${saveCheckpointId})`, 'green'));
       } catch (error) {
+        persistenceDebug.error('/save command failed', error);
         console.log(c(`Error saving session: ${(error as Error).message}`, 'red'));
       }
       break;
@@ -1263,19 +1452,38 @@ ${c('Tip:', 'dim')} Use /mcp search <query> to load specific tools on-demand.
       } else {
         const loadId = args[0];
         try {
-          const entries = await sessionStore.loadSession(loadId);
-          if (entries.length === 0) {
-            console.log(c(`No entries found for session: ${loadId}`, 'yellow'));
-          } else {
-            // Find the last checkpoint
-            const checkpoint = [...entries].reverse().find(e => e.type === 'checkpoint');
-            const checkpointData = checkpoint?.data as { messages?: unknown[] } | undefined;
-            if (checkpointData?.messages) {
-              agent.loadMessages(checkpointData.messages as any);
-              console.log(c(`✓ Loaded ${checkpointData.messages.length} messages from ${loadId}`, 'green'));
-            } else {
-              console.log(c('No checkpoint found in session', 'yellow'));
+          // Try SQLite's loadLatestCheckpoint first (checkpoints are in separate table)
+          let checkpointData: CheckpointData | undefined;
+          if ('loadLatestCheckpoint' in sessionStore && typeof sessionStore.loadLatestCheckpoint === 'function') {
+            const sqliteCheckpoint = sessionStore.loadLatestCheckpoint(loadId);
+            if (sqliteCheckpoint?.state) {
+              checkpointData = sqliteCheckpoint.state as unknown as CheckpointData;
             }
+          }
+
+          // Fall back to entries-based lookup (for JSONL or if SQLite checkpoint not found)
+          if (!checkpointData) {
+            const entries = await sessionStore.loadSession(loadId);
+            if (entries.length === 0) {
+              console.log(c(`No entries found for session: ${loadId}`, 'yellow'));
+              break;
+            }
+            const checkpoint = [...entries].reverse().find(e => e.type === 'checkpoint');
+            checkpointData = checkpoint?.data as CheckpointData | undefined;
+          }
+
+          if (checkpointData?.messages) {
+            // Use loadState for full state restoration
+            agent.loadState({
+              messages: checkpointData.messages as any,
+              iteration: checkpointData.iteration,
+              metrics: checkpointData.metrics as any,
+              plan: checkpointData.plan as any,
+              memoryContext: checkpointData.memoryContext,
+            });
+            console.log(c(`✓ Loaded ${checkpointData.messages.length} messages from ${loadId}`, 'green'));
+          } else {
+            console.log(c('No checkpoint found in session', 'yellow'));
           }
         } catch (error) {
           console.log(c(`Error loading session: ${(error as Error).message}`, 'red'));
@@ -1293,26 +1501,51 @@ ${c('Tip:', 'dim')} Use /mcp search <query> to load specific tools on-demand.
           console.log(c(`   Created: ${new Date(recentSession.createdAt).toLocaleString()}`, 'dim'));
           console.log(c(`   Messages: ${recentSession.messageCount}`, 'dim'));
 
-          // loadSession may be sync (SQLite) or async (JSONL)
-          const entriesResult = sessionStore.loadSession(recentSession.id);
-          const entries = Array.isArray(entriesResult) ? entriesResult : await entriesResult;
+          // Try SQLite's loadLatestCheckpoint first (checkpoints are in separate table)
+          let resumeCheckpointData: CheckpointData | undefined;
+          if ('loadLatestCheckpoint' in sessionStore && typeof sessionStore.loadLatestCheckpoint === 'function') {
+            const sqliteCheckpoint = sessionStore.loadLatestCheckpoint(recentSession.id);
+            if (sqliteCheckpoint?.state) {
+              resumeCheckpointData = sqliteCheckpoint.state as unknown as CheckpointData;
+            }
+          }
 
-          // Find the last checkpoint
-          const checkpoint = [...entries].reverse().find(e => e.type === 'checkpoint');
-          const checkpointData = checkpoint?.data as { messages?: unknown[] } | undefined;
-          if (checkpointData?.messages) {
-            agent.loadMessages(checkpointData.messages as any);
-            console.log(c(`✓ Resumed ${checkpointData.messages.length} messages from last session`, 'green'));
-          } else {
-            // No checkpoint, try to load messages directly from entries
-            const messages = entries
-              .filter((e: { type: string }) => e.type === 'message')
-              .map((e: { data: unknown }) => e.data);
-            if (messages.length > 0) {
-              agent.loadMessages(messages as any);
-              console.log(c(`✓ Resumed ${messages.length} messages from last session`, 'green'));
+          // Fall back to entries-based lookup (for JSONL or if SQLite checkpoint not found)
+          if (!resumeCheckpointData) {
+            const entriesResult = sessionStore.loadSession(recentSession.id);
+            const entries = Array.isArray(entriesResult) ? entriesResult : await entriesResult;
+            const checkpoint = [...entries].reverse().find(e => e.type === 'checkpoint');
+            if (checkpoint?.data) {
+              resumeCheckpointData = checkpoint.data as CheckpointData;
             } else {
-              console.log(c('No messages found in last session', 'yellow'));
+              // No checkpoint, try to load messages directly from entries
+              const messages = entries
+                .filter((e: { type: string }) => e.type === 'message')
+                .map((e: { data: unknown }) => e.data);
+              if (messages.length > 0) {
+                agent.loadState({ messages: messages as any });
+                console.log(c(`✓ Resumed ${messages.length} messages from last session`, 'green'));
+              } else {
+                console.log(c('No messages found in last session', 'yellow'));
+              }
+            }
+          }
+
+          if (resumeCheckpointData?.messages) {
+            // Use loadState for full state restoration
+            agent.loadState({
+              messages: resumeCheckpointData.messages as any,
+              iteration: resumeCheckpointData.iteration,
+              metrics: resumeCheckpointData.metrics as any,
+              plan: resumeCheckpointData.plan as any,
+              memoryContext: resumeCheckpointData.memoryContext,
+            });
+            console.log(c(`✓ Resumed ${resumeCheckpointData.messages.length} messages from last session`, 'green'));
+            if (resumeCheckpointData.iteration) {
+              console.log(c(`   Iteration: ${resumeCheckpointData.iteration}`, 'dim'));
+            }
+            if (resumeCheckpointData.plan) {
+              console.log(c(`   Plan restored`, 'dim'));
             }
           }
         }
@@ -1703,6 +1936,7 @@ interface CLIArgs {
   tui: boolean | 'auto';
   theme?: 'dark' | 'light' | 'auto';
   version: boolean;
+  debug: boolean;
 }
 
 function parseArgs(): CLIArgs {
@@ -1714,6 +1948,7 @@ function parseArgs(): CLIArgs {
     trace: false,
     tui: 'auto',
     version: false,
+    debug: false,
   };
 
   for (let i = 0; i < args.length; i++) {
@@ -1724,6 +1959,8 @@ function parseArgs(): CLIArgs {
       result.version = true;
     } else if (arg === '--trace') {
       result.trace = true;
+    } else if (arg === '--debug') {
+      result.debug = true;
     } else if (arg === '--tui') {
       result.tui = true;
     } else if (arg === '--legacy' || arg === '--no-tui') {
@@ -1780,6 +2017,7 @@ ${c('INTERFACE OPTIONS:', 'bold')}
   --legacy, --no-tui      Force legacy readline mode
   --theme THEME           Color theme: dark, light, auto (default: auto)
   --trace                 Enable JSONL trace capture (saved to .traces/)
+  --debug                 Enable verbose debug logging for persistence
 
 ${c('EXAMPLES:', 'bold')}
   ${c('# Interactive mode (auto-detects TUI)', 'dim')}
@@ -1859,6 +2097,35 @@ async function startTUIMode(
       return startProductionREPL(provider, options);
     }
 
+    // CRITICAL: Initialize session storage FIRST, before any heavy dynamic imports
+    // This ensures better-sqlite3 native module loads cleanly
+    let sessionStore: AnySessionStore;
+    let usingSQLiteTUI = false;
+
+    if (persistenceDebug.isEnabled()) {
+      process.stderr.write('[DEBUG] [TUI] Initializing session store BEFORE dynamic imports...\n');
+    }
+
+    try {
+      sessionStore = await createSQLiteStore({ baseDir: '.agent/sessions' });
+      usingSQLiteTUI = true;
+
+      if (persistenceDebug.isEnabled()) {
+        const sqliteStore = sessionStore as SQLiteStore;
+        const stats = sqliteStore.getStats();
+        process.stderr.write(`[DEBUG] [TUI] ✓ SQLite store initialized! Sessions: ${stats.sessionCount}, Checkpoints: ${stats.checkpointCount}\n`);
+      }
+      console.log('✓ SQLite session store initialized');
+    } catch (sqliteError) {
+      const errMsg = (sqliteError as Error).message;
+      if (persistenceDebug.isEnabled()) {
+        process.stderr.write(`[DEBUG] [TUI] ❌ SQLite FAILED: ${errMsg}\n`);
+      }
+      console.log('⚠️  SQLite unavailable, using JSONL fallback');
+      console.log(`   Error: ${errMsg}`);
+      sessionStore = await createSessionStore({ baseDir: '.agent/sessions' });
+    }
+
     // Dynamic imports - using our modular TUI components
     const { render, Box, Text, useApp, useInput } = await import('ink');
     const React = await import('react');
@@ -1925,19 +2192,18 @@ async function startTUIMode(
       observability: trace ? { enabled: true, traceCapture: { enabled: true, outputDir: '.traces' } } : undefined,
     });
 
-    // Initialize session storage (try SQLite, fall back to JSONL if native module fails)
-    let sessionStore: AnySessionStore;
-    try {
-      sessionStore = await createSQLiteStore({ baseDir: '.agent/sessions' });
-    } catch {
-      console.log('⚠️  SQLite unavailable, using JSONL fallback');
-      sessionStore = await createSessionStore({ baseDir: '.agent/sessions' });
-    }
+    // Session store was already initialized at the top of startTUIMode
     const compactor = createCompactor(adaptedProvider, {
       tokenThreshold: 80000,
       preserveRecentCount: 10,
     });
+    persistenceDebug.log('[TUI] Creating new session');
     const currentSessionId = await sessionStore.createSession();
+    persistenceDebug.log('[TUI] Session created', {
+      sessionId: currentSessionId,
+      storeType: persistenceDebug.storeType(sessionStore),
+      currentSessionId: usingSQLiteTUI ? (sessionStore as SQLiteStore).getCurrentSessionId() : 'N/A (JSONL)',
+    });
 
     // Initial theme (will be stateful inside component)
     const initialTheme = getTheme(theme);
@@ -2022,12 +2288,27 @@ async function startTUIMode(
           case 'save':
             try {
               const agentState = agent.getState();
-              await sessionStore.appendEntry({
-                type: 'checkpoint',
-                data: { messages: agentState.messages, metadata: agent.getMetrics() },
+              const agentMetrics = agent.getMetrics();
+              const tuiSaveCheckpointId = `ckpt-manual-${Date.now().toString(36)}`;
+
+              persistenceDebug.log('[TUI] /save command - creating checkpoint', {
+                checkpointId: tuiSaveCheckpointId,
+                messageCount: agentState.messages?.length ?? 0,
               });
-              addMessage('system', `Session saved: ${currentSessionId}`);
+
+              saveCheckpointToStore(sessionStore, {
+                id: tuiSaveCheckpointId,
+                label: 'manual-save',
+                messages: agentState.messages,
+                iteration: agentState.iteration,
+                metrics: agentMetrics,
+                plan: agentState.plan,
+                memoryContext: agentState.memoryContext,
+              });
+
+              addMessage('system', `Session saved: ${currentSessionId} (checkpoint: ${tuiSaveCheckpointId})`);
             } catch (e) {
+              persistenceDebug.error('[TUI] /save command failed', e);
               addMessage('error', (e as Error).message);
             }
             return;
@@ -2038,12 +2319,34 @@ async function startTUIMode(
               return;
             }
             try {
-              const loadResult = sessionStore.loadSession(args[0]);
-              const loadEntries = Array.isArray(loadResult) ? loadResult : await loadResult;
-              const checkpoint = [...loadEntries].reverse().find((e: any) => e.type === 'checkpoint');
-              const checkpointData = checkpoint?.data as { messages?: unknown[] } | undefined;
-              if (checkpointData?.messages) {
-                agent.loadMessages(checkpointData.messages as any);
+              // Try SQLite's loadLatestCheckpoint first (checkpoints are in separate table)
+              let tuiLoadCheckpoint: CheckpointData | undefined;
+              if ('loadLatestCheckpoint' in sessionStore && typeof sessionStore.loadLatestCheckpoint === 'function') {
+                const sqliteCheckpoint = sessionStore.loadLatestCheckpoint(args[0]);
+                if (sqliteCheckpoint?.state) {
+                  tuiLoadCheckpoint = sqliteCheckpoint.state as unknown as CheckpointData;
+                }
+              }
+
+              // Fall back to entries-based lookup
+              if (!tuiLoadCheckpoint) {
+                const loadResult = sessionStore.loadSession(args[0]);
+                const loadEntries = Array.isArray(loadResult) ? loadResult : await loadResult;
+                const checkpoint = [...loadEntries].reverse().find((e: any) => e.type === 'checkpoint');
+                if (checkpoint?.data) {
+                  tuiLoadCheckpoint = checkpoint.data as CheckpointData;
+                }
+              }
+
+              if (tuiLoadCheckpoint?.messages) {
+                // Use loadState for full state restoration
+                agent.loadState({
+                  messages: tuiLoadCheckpoint.messages as any,
+                  iteration: tuiLoadCheckpoint.iteration,
+                  metrics: tuiLoadCheckpoint.metrics as any,
+                  plan: tuiLoadCheckpoint.plan as any,
+                  memoryContext: tuiLoadCheckpoint.memoryContext,
+                });
                 // Sync TUI with loaded messages
                 const loadedMsgs = agent.getState().messages;
                 const syncedLoaded = loadedMsgs.map((m, i) => ({
@@ -2053,7 +2356,7 @@ async function startTUIMode(
                   ts: new Date(),
                 }));
                 setMessages(syncedLoaded);
-                addMessage('system', `Loaded ${checkpointData.messages.length} messages from ${args[0]}`);
+                addMessage('system', `Loaded ${tuiLoadCheckpoint.messages.length} messages from ${args[0]}`);
               } else {
                 addMessage('system', 'No checkpoint found in session');
               }
@@ -2071,20 +2374,42 @@ async function startTUIMode(
               }
               addMessage('system', `📂 Found: ${recentSess.id} (${recentSess.messageCount} messages)`);
 
-              const resumeResult = sessionStore.loadSession(recentSess.id);
-              const resumeEntries = Array.isArray(resumeResult) ? resumeResult : await resumeResult;
-              const resumeCheckpoint = [...resumeEntries].reverse().find((e: any) => e.type === 'checkpoint');
-              const resumeData = resumeCheckpoint?.data as { messages?: unknown[] } | undefined;
-
-              if (resumeData?.messages) {
-                agent.loadMessages(resumeData.messages as any);
-              } else {
-                const msgs = resumeEntries
-                  .filter((e: any) => e.type === 'message')
-                  .map((e: any) => e.data);
-                if (msgs.length > 0) {
-                  agent.loadMessages(msgs as any);
+              // Try SQLite's loadLatestCheckpoint first (checkpoints are in separate table)
+              let tuiResumeCheckpoint: CheckpointData | undefined;
+              if ('loadLatestCheckpoint' in sessionStore && typeof sessionStore.loadLatestCheckpoint === 'function') {
+                const sqliteCheckpoint = sessionStore.loadLatestCheckpoint(recentSess.id);
+                if (sqliteCheckpoint?.state) {
+                  tuiResumeCheckpoint = sqliteCheckpoint.state as unknown as CheckpointData;
                 }
+              }
+
+              // Fall back to entries-based lookup
+              if (!tuiResumeCheckpoint) {
+                const resumeResult = sessionStore.loadSession(recentSess.id);
+                const resumeEntries = Array.isArray(resumeResult) ? resumeResult : await resumeResult;
+                const resumeCheckpoint = [...resumeEntries].reverse().find((e: any) => e.type === 'checkpoint');
+                if (resumeCheckpoint?.data) {
+                  tuiResumeCheckpoint = resumeCheckpoint.data as CheckpointData;
+                } else {
+                  // No checkpoint, try to load messages directly from entries
+                  const msgs = resumeEntries
+                    .filter((e: any) => e.type === 'message')
+                    .map((e: any) => e.data);
+                  if (msgs.length > 0) {
+                    agent.loadState({ messages: msgs as any });
+                  }
+                }
+              }
+
+              if (tuiResumeCheckpoint?.messages) {
+                // Use loadState for full state restoration
+                agent.loadState({
+                  messages: tuiResumeCheckpoint.messages as any,
+                  iteration: tuiResumeCheckpoint.iteration,
+                  metrics: tuiResumeCheckpoint.metrics as any,
+                  plan: tuiResumeCheckpoint.plan as any,
+                  memoryContext: tuiResumeCheckpoint.memoryContext,
+                });
               }
 
               // Sync TUI with loaded messages
@@ -2806,9 +3131,16 @@ async function startTUIMode(
           addMessage('assistant', response + metricsLine);
 
           // Auto-checkpoint after Q&A cycle (force=true for every Q&A)
+          persistenceDebug.log('[TUI] Attempting auto-checkpoint');
           const checkpoint = agent.autoCheckpoint(true);
           if (checkpoint) {
             addMessage('system', `💾 Auto-checkpoint: ${checkpoint.id}`);
+            persistenceDebug.log('[TUI] Auto-checkpoint created in agent', {
+              id: checkpoint.id,
+              label: checkpoint.label,
+              messageCount: checkpoint.state.messages?.length ?? 0,
+              iteration: checkpoint.state.iteration,
+            });
 
             // Persist checkpoint to session store for cross-session recovery
             try {
@@ -2818,10 +3150,18 @@ async function startTUIMode(
                 messages: checkpoint.state.messages,
                 iteration: checkpoint.state.iteration,
                 metrics: checkpoint.state.metrics,
+                plan: checkpoint.state.plan,
+                memoryContext: checkpoint.state.memoryContext,
               });
-            } catch {
-              // Silently ignore persistence errors
+            } catch (ckptErr) {
+              // Log error in debug mode, otherwise silent
+              persistenceDebug.error('[TUI] Failed to persist checkpoint to store', ckptErr);
+              if (persistenceDebug.isEnabled()) {
+                addMessage('system', `⚠️ Checkpoint persistence failed: ${(ckptErr as Error).message}`);
+              }
             }
+          } else {
+            persistenceDebug.log('[TUI] No checkpoint created (autoCheckpoint returned null)');
           }
         } catch (e) {
           addMessage('error', (e as Error).message);
@@ -2917,8 +3257,12 @@ async function startTUIMode(
       );
     };
 
-    // Render TUI
-    console.clear();
+    // Render TUI (don't clear in debug mode so we can see initialization messages)
+    if (!persistenceDebug.isEnabled()) {
+      console.clear();
+    } else {
+      console.log('\n--- TUI Starting (debug mode - console not cleared) ---\n');
+    }
     const instance = render(React.createElement(TUIApp));
     await instance.waitUntilExit();
     await agent.cleanup();
@@ -2938,6 +3282,11 @@ async function startTUIMode(
 
 async function main(): Promise<void> {
   const args = parseArgs();
+
+  // Enable debug mode if requested
+  if (args.debug) {
+    persistenceDebug.enable();
+  }
 
   if (args.version) {
     console.log(`attocode v${VERSION}`);

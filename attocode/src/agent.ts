@@ -27,6 +27,8 @@ import type {
   ToolResult,
   ToolDefinition,
   AgentState,
+  AgentMetrics,
+  AgentPlan,
   AgentResult,
   AgentEvent,
   AgentEventListener,
@@ -1507,6 +1509,7 @@ export class ProductionAgent {
 
   /**
    * Load messages from a previous session.
+   * @deprecated Use loadState() for full state restoration
    */
   loadMessages(messages: Message[]): void {
     this.state.messages = [...messages];
@@ -1518,6 +1521,84 @@ export class ProductionAgent {
     }
 
     this.observability?.logger?.info('Messages loaded', { count: messages.length });
+  }
+
+  /**
+   * Serializable state for checkpoints (excludes non-serializable fields).
+   */
+  getSerializableState(): {
+    messages: Message[];
+    iteration: number;
+    metrics: AgentMetrics;
+    plan?: AgentPlan;
+    memoryContext?: string[];
+  } {
+    return {
+      messages: this.state.messages,
+      iteration: this.state.iteration,
+      metrics: { ...this.state.metrics },
+      plan: this.state.plan ? { ...this.state.plan } : undefined,
+      memoryContext: this.state.memoryContext ? [...this.state.memoryContext] : undefined,
+    };
+  }
+
+  /**
+   * Load full state from a checkpoint.
+   * Restores messages, iteration, metrics, plan, and memory context.
+   */
+  loadState(savedState: {
+    messages: Message[];
+    iteration?: number;
+    metrics?: Partial<AgentMetrics>;
+    plan?: AgentPlan;
+    memoryContext?: string[];
+  }): void {
+    // Restore messages
+    this.state.messages = [...savedState.messages];
+
+    // Restore iteration (default to messages length / 2 as approximation)
+    this.state.iteration = savedState.iteration ?? Math.floor(savedState.messages.length / 2);
+
+    // Restore metrics (merge with defaults)
+    if (savedState.metrics) {
+      this.state.metrics = {
+        totalTokens: savedState.metrics.totalTokens ?? 0,
+        inputTokens: savedState.metrics.inputTokens ?? 0,
+        outputTokens: savedState.metrics.outputTokens ?? 0,
+        estimatedCost: savedState.metrics.estimatedCost ?? 0,
+        llmCalls: savedState.metrics.llmCalls ?? 0,
+        toolCalls: savedState.metrics.toolCalls ?? 0,
+        duration: savedState.metrics.duration ?? 0,
+        reflectionAttempts: savedState.metrics.reflectionAttempts,
+      };
+    }
+
+    // Restore plan if present
+    if (savedState.plan) {
+      this.state.plan = { ...savedState.plan };
+      // Sync with planning manager if enabled
+      if (this.planning) {
+        this.planning.loadPlan(savedState.plan);
+      }
+    }
+
+    // Restore memory context if present
+    if (savedState.memoryContext) {
+      this.state.memoryContext = [...savedState.memoryContext];
+    }
+
+    // Sync to threadManager if enabled
+    if (this.threadManager) {
+      const thread = this.threadManager.getActiveThread();
+      thread.messages = [...savedState.messages];
+    }
+
+    this.observability?.logger?.info('State loaded', {
+      messageCount: savedState.messages.length,
+      iteration: this.state.iteration,
+      hasPlan: !!savedState.plan,
+      hasMemoryContext: !!savedState.memoryContext,
+    });
   }
 
   /**

@@ -1,16 +1,24 @@
 {
   "name": "attocode",
-  "version": "1.0.0",
+  "version": "0.1.0",
   "description": "Standalone production coding agent extracted from first-principles-agent",
   "type": "module",
   "main": "dist/src/main.js",
+  "bin": {
+    "attocode": "./dist/src/main.js"
+  },
+  "files": [
+    "dist",
+    "README.md"
+  ],
   "scripts": {
     "build": "tsc",
     "dev": "tsx watch src/main.ts",
     "start": "tsx src/main.ts",
     "test": "vitest",
     "test:ui": "vitest --ui",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "prepublishOnly": "npm run build"
   },
   "dependencies": {
     "better-sqlite3": "^12.6.2",

@@ -258,6 +258,13 @@ Return ONLY the JSON array, no other text.`;
     this.currentPlan = null;
   }
 
+  /**
+   * Load a plan from a checkpoint.
+   */
+  loadPlan(plan: AgentPlan): void {
+    this.currentPlan = { ...plan };
+  }
+
   // ===========================================================================
   // REFLECTION
   // ===========================================================================
