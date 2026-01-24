@@ -6,7 +6,7 @@
  * rollback, and state recovery.
  */
 
-import type { Message, AgentState, AgentMetrics } from '../types.js';
+import type { Message, AgentState, AgentMetrics, AgentPlan } from '../types.js';
 
 // =============================================================================
 // TYPES
@@ -48,6 +48,8 @@ export interface CheckpointState {
   messages: Message[];
   metrics: AgentMetrics;
   iteration: number;
+  plan?: AgentPlan;
+  memoryContext?: string[];
   custom?: Record<string, unknown>;
 }
 
@@ -321,6 +323,8 @@ export class ThreadManager {
         messages: thread.messages.map(m => ({ ...m })),
         metrics: options.agentState?.metrics ?? this.emptyMetrics(),
         iteration: options.agentState?.iteration ?? 0,
+        plan: options.agentState?.plan ? { ...options.agentState.plan } : undefined,
+        memoryContext: options.agentState?.memoryContext ? [...options.agentState.memoryContext] : undefined,
         custom: options.metadata,
       },
       createdAt: new Date(),
