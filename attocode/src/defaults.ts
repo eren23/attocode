@@ -26,6 +26,7 @@ import type {
   SemanticCacheAgentConfig,
   SkillsAgentConfig,
   CodebaseContextAgentConfig,
+  CompactionAgentConfig,
   ProductionAgentConfig,
 } from './types.js';
 
@@ -295,6 +296,19 @@ export const DEFAULT_SKILLS_CONFIG: SkillsAgentConfig = {
   autoActivate: false, // Manual activation by default
 };
 
+/**
+ * Default compaction configuration.
+ */
+export const DEFAULT_COMPACTION_CONFIG: CompactionAgentConfig = {
+  enabled: true, // Enabled by default for context management
+  tokenThreshold: 80000, // Trigger at 80K tokens
+  preserveRecentCount: 10, // Keep last 10 messages verbatim
+  preserveToolResults: true, // Keep tool results
+  summaryMaxTokens: 2000, // Summary size limit
+  summaryModel: undefined, // Uses default model
+  mode: 'auto', // Auto-compact without prompting
+};
+
 // =============================================================================
 // MERGE HELPERS
 // =============================================================================
@@ -383,6 +397,7 @@ export function buildConfig(
     semanticCache: mergeConfig(DEFAULT_SEMANTIC_CACHE_CONFIG, userConfig.semanticCache),
     skills: mergeConfig(DEFAULT_SKILLS_CONFIG, userConfig.skills),
     codebaseContext: mergeConfig(DEFAULT_CODEBASE_CONTEXT_CONFIG, userConfig.codebaseContext),
+    compaction: mergeConfig(DEFAULT_COMPACTION_CONFIG, userConfig.compaction),
     maxContextTokens: userConfig.maxContextTokens ?? 100000, // 100k tokens default
     maxIterations: userConfig.maxIterations ?? 50,
     timeout: userConfig.timeout ?? 300000, // 5 minutes

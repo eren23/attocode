@@ -35,41 +35,56 @@ describe('ResourceManager', () => {
   describe('initialization', () => {
     it('should create with default config', () => {
       const defaultManager = createResourceManager();
-      expect(defaultManager.isEnabled()).toBe(true);
+      expect(defaultManager.getLimits().enabled).toBe(true);
       defaultManager.cleanup();
     });
 
     it('should respect enabled flag', () => {
       const disabledManager = createResourceManager({ enabled: false });
-      expect(disabledManager.isEnabled()).toBe(false);
+      expect(disabledManager.getLimits().enabled).toBe(false);
       disabledManager.cleanup();
     });
   });
 
   describe('concurrent operations', () => {
     it('should track operation start and end', () => {
-      manager.startOperation('op1');
-      expect(manager.getUsage().concurrent).toBe(1);
+      const end1 = manager.startOperation();
+      expect(manager.getUsage().concurrentOps).toBe(1);
 
-      manager.startOperation('op2');
-      expect(manager.getUsage().concurrent).toBe(2);
+      const end2 = manager.startOperation();
+      expect(manager.getUsage().concurrentOps).toBe(2);
 
-      manager.endOperation('op1');
-      expect(manager.getUsage().concurrent).toBe(1);
+      end1();
+      expect(manager.getUsage().concurrentOps).toBe(1);
+
+      end2();
+      expect(manager.getUsage().concurrentOps).toBe(0);
     });
 
-    it('should enforce max concurrent operations', () => {
+    it('should enforce max concurrent operations via canStartOperation', () => {
+      const ends: (() => void)[] = [];
       for (let i = 0; i < 5; i++) {
-        expect(manager.startOperation(`op${i}`)).toBe(true);
+        expect(manager.canStartOperation()).toBe(true);
+        ends.push(manager.startOperation());
       }
 
-      // 6th operation should fail
-      expect(manager.startOperation('op5')).toBe(false);
+      // At max capacity, canStartOperation should return false
+      expect(manager.canStartOperation()).toBe(false);
+
+      // Cleanup
+      ends.forEach(end => end());
     });
 
-    it('should handle unknown operation end gracefully', () => {
-      // Should not throw
-      manager.endOperation('nonexistent');
+    it('should handle cleanup via returned function', () => {
+      const end = manager.startOperation();
+      expect(manager.getUsage().concurrentOps).toBe(1);
+
+      end();
+      expect(manager.getUsage().concurrentOps).toBe(0);
+
+      // Calling end again should be safe (floors at 0)
+      end();
+      expect(manager.getUsage().concurrentOps).toBe(0);
     });
   });
 
@@ -77,7 +92,7 @@ describe('ResourceManager', () => {
     it('should report healthy status when under thresholds', () => {
       const check = manager.check();
       expect(check.status).toBe('healthy');
-      expect(check.shouldContinue).toBe(true);
+      expect(check.canContinue).toBe(true);
     });
 
     it('should track memory usage', () => {
@@ -94,24 +109,39 @@ describe('ResourceManager', () => {
   describe('resource status levels', () => {
     it('should update status based on concurrent ops', () => {
       // Add operations to push into warning/critical
+      const ends: (() => void)[] = [];
       for (let i = 0; i < 4; i++) {
-        manager.startOperation(`op${i}`);
+        ends.push(manager.startOperation());
       }
 
       const check = manager.check();
       // With 4/5 concurrent (80%), should be warning or critical
       expect(['warning', 'critical', 'healthy']).toContain(check.status);
+
+      // Cleanup
+      ends.forEach(end => end());
     });
   });
 
-  describe('getStatus', () => {
+  describe('getStatusString', () => {
     it('should return detailed status info', () => {
-      const status = manager.getStatus();
+      const statusString = manager.getStatusString();
 
-      expect(status.enabled).toBe(true);
-      expect(status.usage).toBeDefined();
-      expect(status.limits).toBeDefined();
-      expect(status.check).toBeDefined();
+      expect(statusString).toContain('Memory');
+      expect(statusString).toContain('CPU Time');
+      expect(statusString).toContain('Operations');
+      expect(statusString).toContain('Status');
+    });
+  });
+
+  describe('getLimits and setLimits', () => {
+    it('should get and set limits', () => {
+      const limits = manager.getLimits();
+      expect(limits.enabled).toBe(true);
+      expect(limits.maxMemoryMB).toBe(100);
+
+      manager.setLimits({ maxMemoryMB: 200 });
+      expect(manager.getLimits().maxMemoryMB).toBe(200);
     });
   });
 
@@ -120,11 +150,56 @@ describe('ResourceManager', () => {
       const events: unknown[] = [];
       manager.subscribe(e => events.push(e));
 
-      manager.startOperation('test');
-      manager.endOperation('test');
+      const end = manager.startOperation();
+      end();
 
       // Events may or may not fire depending on status changes
       expect(Array.isArray(events)).toBe(true);
+    });
+  });
+
+  describe('runTracked', () => {
+    it('should track operation during async function', async () => {
+      const result = await manager.runTracked(async () => {
+        expect(manager.getUsage().concurrentOps).toBe(1);
+        return 'done';
+      });
+
+      expect(result).toBe('done');
+      expect(manager.getUsage().concurrentOps).toBe(0);
+    });
+  });
+
+  describe('runIfAvailable', () => {
+    it('should run if resources available', async () => {
+      const result = await manager.runIfAvailable(async () => 'success', 'fallback');
+      expect(result).toBe('success');
+    });
+
+    it('should return fallback if resources not available', async () => {
+      // Fill up concurrent operations
+      const ends: (() => void)[] = [];
+      for (let i = 0; i < 5; i++) {
+        ends.push(manager.startOperation());
+      }
+
+      const result = await manager.runIfAvailable(async () => 'success', 'fallback');
+      expect(result).toBe('fallback');
+
+      // Cleanup
+      ends.forEach(end => end());
+    });
+  });
+
+  describe('reset', () => {
+    it('should reset timing and operation count', () => {
+      const end = manager.startOperation();
+      expect(manager.getUsage().concurrentOps).toBe(1);
+
+      manager.reset();
+      expect(manager.getUsage().concurrentOps).toBe(0);
+
+      // Note: end() is now orphaned, but that's fine for testing
     });
   });
 });
@@ -135,7 +210,8 @@ describe('Factory functions', () => {
     const regular = createResourceManager();
 
     // Strict manager should have different config
-    expect(strict.isEnabled()).toBe(true);
+    expect(strict.getLimits().enabled).toBe(true);
+    expect(strict.getLimits().maxMemoryMB).toBeLessThan(regular.getLimits().maxMemoryMB);
 
     strict.cleanup();
     regular.cleanup();
@@ -143,10 +219,13 @@ describe('Factory functions', () => {
 
   it('createLenientResourceManager should have higher limits', () => {
     const lenient = createLenientResourceManager();
+    const regular = createResourceManager();
 
-    expect(lenient.isEnabled()).toBe(true);
+    expect(lenient.getLimits().enabled).toBe(true);
+    expect(lenient.getLimits().maxMemoryMB).toBeGreaterThan(regular.getLimits().maxMemoryMB);
 
     lenient.cleanup();
+    regular.cleanup();
   });
 });
 
@@ -154,12 +233,9 @@ describe('combinedShouldContinue', () => {
   it('should combine economics and resource checks', () => {
     const manager = createResourceManager();
 
-    // Mock economics result
-    const economicsResult = { shouldContinue: true, reason: '' };
+    const result = combinedShouldContinue(manager, true);
 
-    const result = combinedShouldContinue(economicsResult, manager);
-
-    expect(result.shouldContinue).toBe(true);
+    expect(result.canContinue).toBe(true);
 
     manager.cleanup();
   });
@@ -167,44 +243,34 @@ describe('combinedShouldContinue', () => {
   it('should stop if economics says stop', () => {
     const manager = createResourceManager();
 
-    const economicsResult = { shouldContinue: false, reason: 'budget exceeded' };
+    const result = combinedShouldContinue(manager, false);
 
-    const result = combinedShouldContinue(economicsResult, manager);
-
-    expect(result.shouldContinue).toBe(false);
-    expect(result.reason).toContain('budget');
+    expect(result.canContinue).toBe(false);
+    expect(result.reason).toContain('Budget');
 
     manager.cleanup();
   });
 
-  it('should stop if resources exceeded', () => {
-    const manager = createResourceManager({ maxConcurrentOps: 1 });
+  it('should work with null manager', () => {
+    const result = combinedShouldContinue(null, true);
+    expect(result.canContinue).toBe(true);
 
-    manager.startOperation('op1');
-    manager.startOperation('op2'); // Will fail
-
-    const economicsResult = { shouldContinue: true, reason: '' };
-
-    // Check still passes because op2 didn't actually start
-    const result = combinedShouldContinue(economicsResult, manager);
-
-    expect(typeof result.shouldContinue).toBe('boolean');
-
-    manager.cleanup();
+    const resultFalse = combinedShouldContinue(null, false);
+    expect(resultFalse.canContinue).toBe(false);
   });
 });
 
 describe('ResourceLimitError', () => {
-  it('should create error with resource type', () => {
-    const error = new ResourceLimitError('memory', 'Exceeded limit');
+  it('should create error with message', () => {
+    const error = new ResourceLimitError('Exceeded limit');
 
     expect(error.message).toBe('Exceeded limit');
-    expect(error.resource).toBe('memory');
     expect(error.name).toBe('ResourceLimitError');
+    expect(error.isResourceLimit).toBe(true);
   });
 
   it('should be identifiable with isResourceLimitError', () => {
-    const resourceError = new ResourceLimitError('cpu', 'test');
+    const resourceError = new ResourceLimitError('test');
     const regularError = new Error('test');
 
     expect(isResourceLimitError(resourceError)).toBe(true);

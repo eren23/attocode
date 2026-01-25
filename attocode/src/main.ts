@@ -34,6 +34,7 @@ import * as readline from 'node:readline/promises';
 import { stdin, stdout } from 'node:process';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
+import { existsSync, readFileSync } from 'node:fs';
 
 import { getProvider } from './providers/provider.js';
 import { createStandardRegistry } from './tools/standard.js';
@@ -50,7 +51,6 @@ import {
   createSQLiteStore,
   SessionStore,
   createSessionStore,
-  formatSessionList,
   MCPClient,
   createMCPClient,
   formatServerList,
@@ -61,8 +61,46 @@ import {
   createMCPMetaTools,
 } from './integrations/index.js';
 
+// First-run and init command
+import { runInit } from './commands/init.js';
+import { isFirstRun, hasUsableProvider, getFirstRunMessage } from './first-run.js';
+
+// Config paths
+import { getConfigPath, getMCPConfigPaths } from './paths.js';
+
+// Session picker
+import { showSessionPicker, showQuickPicker, formatSessionsTable } from './session-picker.js';
+
 // Session store type that works with both SQLite and JSONL
 type AnySessionStore = SQLiteStore | SessionStore;
+
+// =============================================================================
+// CONFIG LOADING
+// =============================================================================
+
+interface UserConfig {
+  providers?: { default?: string };
+  model?: string;
+  maxIterations?: number;
+  timeout?: number;
+}
+
+/**
+ * Load user config from ~/.config/attocode/config.json
+ * Returns undefined if file doesn't exist or is invalid.
+ */
+function loadUserConfig(): UserConfig | undefined {
+  try {
+    const configPath = getConfigPath();
+    if (!existsSync(configPath)) {
+      return undefined;
+    }
+    const content = readFileSync(configPath, 'utf-8');
+    return JSON.parse(content) as UserConfig;
+  } catch {
+    return undefined;
+  }
+}
 
 // =============================================================================
 // DEBUG LOGGER FOR PERSISTENCE OPERATIONS
@@ -202,6 +240,61 @@ function saveCheckpointToStore(
       throw err;
     }
   }
+}
+
+/**
+ * Load session state (checkpoint or messages) for resuming.
+ * Returns checkpoint data if found, or null.
+ */
+async function loadSessionState(
+  sessionStore: AnySessionStore,
+  sessionId: string
+): Promise<CheckpointData | null> {
+  persistenceDebug.log('Loading session state', { sessionId });
+
+  // Try SQLite's loadLatestCheckpoint first
+  if ('loadLatestCheckpoint' in sessionStore && typeof sessionStore.loadLatestCheckpoint === 'function') {
+    const sqliteCheckpoint = sessionStore.loadLatestCheckpoint(sessionId);
+    if (sqliteCheckpoint?.state) {
+      persistenceDebug.log('Loaded from SQLite checkpoint', {
+        messageCount: (sqliteCheckpoint.state as any).messages?.length,
+      });
+      return sqliteCheckpoint.state as unknown as CheckpointData;
+    }
+  }
+
+  // Fall back to entries-based lookup (for JSONL or if SQLite checkpoint not found)
+  try {
+    const entriesResult = sessionStore.loadSession(sessionId);
+    const entries = Array.isArray(entriesResult) ? entriesResult : await entriesResult;
+
+    // Try to find a checkpoint entry
+    const checkpoint = [...entries].reverse().find(e => e.type === 'checkpoint');
+    if (checkpoint?.data) {
+      persistenceDebug.log('Loaded from entries checkpoint', {
+        messageCount: (checkpoint.data as any).messages?.length,
+      });
+      return checkpoint.data as CheckpointData;
+    }
+
+    // No checkpoint, try to load messages directly from entries
+    const messages = entries
+      .filter((e: { type: string }) => e.type === 'message')
+      .map((e: { data: unknown }) => e.data);
+
+    if (messages.length > 0) {
+      persistenceDebug.log('Loaded messages from entries', { count: messages.length });
+      return {
+        id: `loaded-${sessionId}`,
+        messages,
+        iteration: 0,
+      };
+    }
+  } catch (error) {
+    persistenceDebug.error('Failed to load session entries', error);
+  }
+
+  return null;
 }
 
 // LSP integration
@@ -382,6 +475,55 @@ function createEventDisplay() {
   };
 }
 
+/**
+ * Create a juncture logger that captures critical moments from agent events.
+ * Requires a SQLite store to persist junctures.
+ */
+function createJunctureLogger(store: SQLiteStore) {
+  return (event: AgentEvent): void => {
+    switch (event.type) {
+      case 'tool.blocked':
+        store.logJuncture('failure', `Tool blocked: ${(event as any).tool || 'unknown'}`, {
+          outcome: (event as any).reason,
+          importance: 2,
+        });
+        break;
+
+      case 'agent.error':
+        store.logJuncture('failure', `Subagent error: ${(event as any).agentId}`, {
+          outcome: String((event as any).error),
+          importance: 1,
+        });
+        break;
+
+      case 'error':
+        store.logJuncture('failure', `Error: ${(event as any).error}`, {
+          importance: 1,
+        });
+        break;
+
+      case 'complete':
+        if (!event.result.success) {
+          store.logJuncture('failure', 'Task failed', {
+            outcome: (event.result as any).output?.slice(0, 200) || 'No output',
+            importance: 1,
+          });
+        }
+        break;
+
+      case 'reflection':
+        // Log when reflection requires multiple attempts (indicates difficulty)
+        if ((event as any).attempt > 2) {
+          store.logJuncture('pivot', `Reflection required ${(event as any).attempt} attempts`, {
+            outcome: (event as any).satisfied ? 'resolved' : 'ongoing',
+            importance: 3,
+          });
+        }
+        break;
+    }
+  };
+}
+
 // =============================================================================
 // MAIN REPL
 // =============================================================================
@@ -413,8 +555,9 @@ async function startProductionREPL(
   const adaptedProvider = new ProviderAdapter(provider, model);
 
   // Create MCP client early so we can use it for lazy-loading tool resolution
+  // Uses hierarchical config: global (~/.config/attocode/mcp.json) + workspace (.mcp.json)
   const mcpClient = await createMCPClient({
-    configPath: join(__dirname, '.mcp.json'),
+    configPaths: getMCPConfigPaths(),
     lazyLoading: true,  // Enable lazy loading by default
     alwaysLoadTools: [], // No tools always loaded - use search on-demand
     summaryDescriptionLimit: 100,
@@ -586,6 +729,9 @@ async function startProductionREPL(
       const stats = sqliteStore.getStats();
       persistenceDebug.log('SQLite store stats', stats);
     }
+
+    // Subscribe juncture logger for automatic failure tracking
+    agent.subscribe(createJunctureLogger(sessionStore as SQLiteStore));
   } catch (sqliteError) {
     persistenceDebug.error('SQLite initialization failed', sqliteError);
     console.log(c('⚠️  SQLite unavailable, using JSONL fallback', 'yellow'));
@@ -639,29 +785,78 @@ async function startProductionREPL(
     }
   }
 
-  // Create a new session
-  persistenceDebug.log('Creating new session');
-  const sessionId = await sessionStore.createSession();
-  persistenceDebug.log('Session created', {
+  // Check for existing sessions to offer resume
+  let sessionId: string;
+  let resumedSession = false;
+
+  const existingSessions = await sessionStore.listSessions();
+  persistenceDebug.log('Checking existing sessions', { count: existingSessions.length });
+
+  if (existingSessions.length > 0) {
+    // Show quick picker (most recent session)
+    const pickerResult = await showQuickPicker(existingSessions);
+
+    if (pickerResult.action === 'cancel') {
+      // User typed 'list' - show full picker
+      const fullResult = await showSessionPicker(existingSessions);
+
+      if (fullResult.action === 'resume' && fullResult.sessionId) {
+        sessionId = fullResult.sessionId;
+        resumedSession = true;
+      } else if (fullResult.action === 'cancel') {
+        console.log(c('Goodbye! 👋', 'cyan'));
+        await mcpClient.cleanup();
+        await agent.cleanup();
+        tui.cleanup();
+        rl.close();
+        return;
+      } else {
+        sessionId = await sessionStore.createSession();
+      }
+    } else if (pickerResult.action === 'resume' && pickerResult.sessionId) {
+      sessionId = pickerResult.sessionId;
+      resumedSession = true;
+    } else {
+      sessionId = await sessionStore.createSession();
+    }
+  } else {
+    // No existing sessions - create new
+    sessionId = await sessionStore.createSession();
+  }
+
+  persistenceDebug.log('Session selected', {
     sessionId,
+    resumed: resumedSession,
     storeType: persistenceDebug.storeType(sessionStore),
-    currentSessionId: usingSQLite ? (sessionStore as SQLiteStore).getCurrentSessionId() : 'N/A (JSONL)',
   });
 
-  // Welcome
+  // CRITICAL: Sync the session ID to the store's internal state
+  // This is necessary for resumption because sessionStore.createSession()
+  // sets this internally, but resumption only returns the ID.
+  sessionStore.setCurrentSessionId(sessionId);
+
+  // If resuming, load the session state
+  if (resumedSession) {
+    const sessionState = await loadSessionState(sessionStore, sessionId);
+    if (sessionState?.messages) {
+      agent.loadState({
+        messages: sessionState.messages as any,
+        iteration: sessionState.iteration,
+        metrics: sessionState.metrics as any,
+        plan: sessionState.plan as any,
+        memoryContext: sessionState.memoryContext,
+      });
+      console.log(c(`✓ Resumed ${sessionState.messages.length} messages from session`, 'green'));
+    }
+  }
+
+  // Welcome banner (simplified)
   console.log(`
-${c('╔════════════════════════════════════════════════════════════════╗', 'cyan')}
-${c('║          ATTOCODE - PRODUCTION CODING AGENT                ║', 'cyan')}
-${c('║                                                                 ║', 'cyan')}
-${c('║  A fully-featured coding agent with all lessons integrated:    ║', 'cyan')}
-${c('║  • Memory & Planning (Lessons 14-16)                           ║', 'cyan')}
-${c('║  • Multi-Agent & ReAct (Lessons 17-18)                         ║', 'cyan')}
-${c('║  • Observability & Safety (Lessons 19-21)                      ║', 'cyan')}
-${c('║  • Execution Policies (Lesson 23)                              ║', 'cyan')}
-${c('║  • Threads & Checkpoints (Lesson 24)                           ║', 'cyan')}
-${c('╚════════════════════════════════════════════════════════════════╝', 'cyan')}
+${c('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━', 'dim')}
+${c('                    ATTOCODE - PRODUCTION CODING AGENT', 'bold')}
+${c('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━', 'dim')}
 `);
-  console.log(c(`Session: ${sessionId}`, 'dim'));
+  console.log(c(`Session: ${sessionId}${resumedSession ? ' (resumed)' : ''}`, 'dim'));
   console.log(c(`Model: ${model || provider.defaultModel}`, 'dim'));
   console.log(c(`Permission mode: ${permissionMode}`, 'dim'));
   console.log(c('\nType your request, or /help for commands.\n', 'dim'));
@@ -885,6 +1080,7 @@ ${c('━━━━━━━━━━━━━━━━━━━━━━━━━
   ${c('✓', 'green')} Skills System     Reusable prompts & workflows
   ${c('✓', 'green')} PTY Shell         Persistent shell state
   ${c('✓', 'green')} TUI               Syntax highlighted output
+  ${c('✓', 'green')} Goal Tracking     Persistent goals via /goals
 
 ${c('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━', 'dim')}
 ${c('SHORTCUTS', 'bold')}
@@ -896,6 +1092,41 @@ ${c('━━━━━━━━━━━━━━━━━━━━━━━━━
     case '/status':
       const metrics = agent.getMetrics();
       const state = agent.getState();
+
+      // Get goals summary if SQLite store
+      let goalsSummary = '';
+      if ('listActiveGoals' in sessionStore) {
+        const sqlStore = sessionStore as SQLiteStore;
+        const activeGoals = sqlStore.listActiveGoals();
+        if (activeGoals.length > 0) {
+          // Calculate overall progress
+          let totalCurrent = 0;
+          let totalExpected = 0;
+          const goalLines: string[] = [];
+
+          for (const goal of activeGoals) {
+            if (goal.progressTotal) {
+              totalCurrent += goal.progressCurrent;
+              totalExpected += goal.progressTotal;
+              const pct = Math.round((goal.progressCurrent / goal.progressTotal) * 100);
+              goalLines.push(`  • ${goal.goalText} (${goal.progressCurrent}/${goal.progressTotal} - ${pct}%)`);
+            } else {
+              goalLines.push(`  • ${goal.goalText}`);
+            }
+          }
+
+          goalsSummary = `\n${c('Active Goals:', 'bold')} (${activeGoals.length})`;
+          if (totalExpected > 0) {
+            const overallPct = Math.round((totalCurrent / totalExpected) * 100);
+            goalsSummary += c(` [Overall: ${overallPct}%]`, 'cyan');
+          }
+          goalsSummary += '\n' + goalLines.slice(0, 5).join('\n');
+          if (activeGoals.length > 5) {
+            goalsSummary += c(`\n  ... and ${activeGoals.length - 5} more`, 'dim');
+          }
+        }
+      }
+
       console.log(`
 ${c('Session Status:', 'bold')}
   Session ID:      ${sessionId}
@@ -913,7 +1144,110 @@ ${c('Activity:', 'bold')}
   Tool calls:      ${metrics.toolCalls}
   Duration:        ${metrics.duration}ms
   Est. Cost:       $${metrics.estimatedCost.toFixed(4)}
-`);
+${goalsSummary}`);
+      break;
+
+    case '/goals':
+      // Goal management commands
+      if ('listActiveGoals' in sessionStore) {
+        const sqliteStore = sessionStore as SQLiteStore;
+        const subCmd = args[0]?.toLowerCase();
+
+        if (!subCmd || subCmd === 'list') {
+          // List active goals
+          const goals = sqliteStore.listActiveGoals();
+          if (goals.length === 0) {
+            console.log(c('No active goals. Use /goals add <text> to create one.', 'dim'));
+          } else {
+            console.log(c('\nActive Goals:', 'bold'));
+            for (const goal of goals) {
+              const progress = goal.progressTotal
+                ? ` (${goal.progressCurrent}/${goal.progressTotal})`
+                : '';
+              const priority = goal.priority === 1 ? c(' [HIGH]', 'red') :
+                              goal.priority === 3 ? c(' [low]', 'dim') : '';
+              console.log(`  • ${goal.goalText}${progress}${priority}`);
+              console.log(c(`    ID: ${goal.id}`, 'dim'));
+            }
+            console.log('');
+          }
+        } else if (subCmd === 'add' && args.length > 1) {
+          // Add new goal
+          const goalText = args.slice(1).join(' ');
+          const goalId = sqliteStore.createGoal(goalText);
+          console.log(c(`✓ Goal created: ${goalId}`, 'green'));
+        } else if (subCmd === 'done' && args[1]) {
+          // Complete a goal
+          sqliteStore.completeGoal(args[1]);
+          console.log(c(`✓ Goal completed: ${args[1]}`, 'green'));
+        } else if (subCmd === 'progress' && args[1] && args[2] && args[3]) {
+          // Update progress: /goals progress <id> <current> <total>
+          sqliteStore.updateGoal(args[1], {
+            progressCurrent: parseInt(args[2], 10),
+            progressTotal: parseInt(args[3], 10),
+          });
+          console.log(c(`✓ Progress updated: ${args[2]}/${args[3]}`, 'green'));
+        } else if (subCmd === 'all') {
+          // List all goals including completed
+          const goals = sqliteStore.listGoals();
+          console.log(c('\nAll Goals:', 'bold'));
+          for (const goal of goals) {
+            const status = goal.status === 'completed' ? c('✓', 'green') :
+                          goal.status === 'abandoned' ? c('✗', 'red') : ' ';
+            console.log(`  ${status} ${goal.goalText} [${goal.status}]`);
+          }
+          console.log('');
+        } else if (subCmd === 'junctures') {
+          // Show recent junctures
+          const junctures = sqliteStore.listJunctures(undefined, 10);
+          if (junctures.length === 0) {
+            console.log(c('No junctures logged yet.', 'dim'));
+          } else {
+            console.log(c('\nRecent Key Moments:', 'bold'));
+            for (const j of junctures) {
+              const icon = j.type === 'failure' ? c('✗', 'red') :
+                          j.type === 'breakthrough' ? c('★', 'yellow') :
+                          j.type === 'decision' ? c('→', 'cyan') : c('↻', 'magenta');
+              console.log(`  ${icon} [${j.type}] ${j.description}`);
+              if (j.outcome) console.log(c(`     └─ ${j.outcome}`, 'dim'));
+            }
+            console.log('');
+          }
+        } else {
+          console.log(c('Usage:', 'bold'));
+          console.log(c('  /goals              - List active goals', 'dim'));
+          console.log(c('  /goals add <text>   - Create a new goal', 'dim'));
+          console.log(c('  /goals done <id>    - Mark goal as completed', 'dim'));
+          console.log(c('  /goals progress <id> <current> <total> - Update progress', 'dim'));
+          console.log(c('  /goals all          - List all goals (including completed)', 'dim'));
+          console.log(c('  /goals junctures    - Show recent key moments', 'dim'));
+        }
+      } else {
+        console.log(c('Goals require SQLite store (not available with JSONL fallback)', 'yellow'));
+      }
+      break;
+
+    case '/handoff':
+      // Export session for handoff to another agent or human
+      if ('exportSessionManifest' in sessionStore) {
+        const sqliteStore = sessionStore as SQLiteStore;
+        const format = args[0]?.toLowerCase() || 'markdown';
+
+        if (format === 'json') {
+          const manifest = sqliteStore.exportSessionManifest();
+          if (manifest) {
+            console.log(JSON.stringify(manifest, null, 2));
+          } else {
+            console.log(c('No active session to export', 'yellow'));
+          }
+        } else {
+          // Default: markdown format
+          const markdown = sqliteStore.exportSessionMarkdown();
+          console.log(markdown);
+        }
+      } else {
+        console.log(c('Handoff requires SQLite store (not available with JSONL fallback)', 'yellow'));
+      }
       break;
 
     case '/theme':
@@ -1557,7 +1891,7 @@ ${c('Tip:', 'dim')} Use /mcp search <query> to load specific tools on-demand.
     case '/sessions':
       try {
         const sessions = await sessionStore.listSessions();
-        console.log(formatSessionList(sessions));
+        console.log(formatSessionsTable(sessions));
       } catch (error) {
         console.log(c(`Error: ${(error as Error).message}`, 'red'));
       }
@@ -1937,6 +2271,7 @@ interface CLIArgs {
   theme?: 'dark' | 'light' | 'auto';
   version: boolean;
   debug: boolean;
+  init: boolean;
 }
 
 function parseArgs(): CLIArgs {
@@ -1949,7 +2284,14 @@ function parseArgs(): CLIArgs {
     tui: 'auto',
     version: false,
     debug: false,
+    init: false,
   };
+
+  // Check for init command first
+  if (args[0] === 'init') {
+    result.init = true;
+    return result;
+  }
 
   for (let i = 0; i < args.length; i++) {
     const arg = args[i];
@@ -1998,7 +2340,10 @@ A fully-featured AI coding agent with:
   • MCP Integration                  • Context Compaction
 
 ${c('USAGE:', 'bold')}
-  npx tsx src/main.ts [OPTIONS] [TASK]
+  attocode [COMMAND] [OPTIONS] [TASK]
+
+${c('COMMANDS:', 'bold')}
+  init                    Interactive setup (API key, model, etc.)
 
 ${c('OPTIONS:', 'bold')}
   -h, --help              Show this help
@@ -2020,17 +2365,20 @@ ${c('INTERFACE OPTIONS:', 'bold')}
   --debug                 Enable verbose debug logging for persistence
 
 ${c('EXAMPLES:', 'bold')}
+  ${c('# First-time setup', 'dim')}
+  attocode init
+
   ${c('# Interactive mode (auto-detects TUI)', 'dim')}
-  npx tsx src/main.ts
+  attocode
 
   ${c('# Single task execution', 'dim')}
-  npx tsx src/main.ts "List all TypeScript files"
+  attocode "List all TypeScript files"
 
   ${c('# With specific model', 'dim')}
-  npx tsx src/main.ts -m anthropic/claude-sonnet-4 "Explain this code"
+  attocode -m anthropic/claude-sonnet-4 "Explain this code"
 
   ${c('# Force legacy mode with tracing', 'dim')}
-  npx tsx src/main.ts --legacy --trace
+  attocode --legacy --trace
 
 ${c('KEY REPL COMMANDS:', 'bold')}
   /help        Show all commands         /status      Show metrics
@@ -2144,8 +2492,9 @@ async function startTUIMode(
     const tools = convertToolsFromRegistry(registry);
     const adaptedProvider = new ProviderAdapter(provider, model);
 
+    // Hierarchical MCP config: global (~/.config/attocode/mcp.json) + workspace (.mcp.json)
     const mcpClient = await createMCPClient({
-      configPath: join(__dirname, '.mcp.json'),
+      configPaths: getMCPConfigPaths(),
       lazyLoading: true,
       alwaysLoadTools: [],
       summaryDescriptionLimit: 100,
@@ -2197,13 +2546,68 @@ async function startTUIMode(
       tokenThreshold: 80000,
       preserveRecentCount: 10,
     });
-    persistenceDebug.log('[TUI] Creating new session');
-    const currentSessionId = await sessionStore.createSession();
-    persistenceDebug.log('[TUI] Session created', {
+
+    // Check for existing sessions to offer resume
+    let currentSessionId: string;
+    let resumedSession = false;
+
+    const existingSessions = await sessionStore.listSessions();
+    persistenceDebug.log('[TUI] Checking existing sessions', { count: existingSessions.length });
+
+    if (existingSessions.length > 0) {
+      const pickerResult = await showQuickPicker(existingSessions);
+
+      if (pickerResult.action === 'cancel') {
+        // User typed 'list' - show full picker
+        const fullResult = await showSessionPicker(existingSessions);
+
+        if (fullResult.action === 'resume' && fullResult.sessionId) {
+          currentSessionId = fullResult.sessionId;
+          resumedSession = true;
+        } else if (fullResult.action === 'cancel') {
+          console.log('Goodbye! 👋');
+          await mcpClient.cleanup();
+          await agent.cleanup();
+          await lspManager.cleanup();
+          return;
+        } else {
+          currentSessionId = await sessionStore.createSession();
+        }
+      } else if (pickerResult.action === 'resume' && pickerResult.sessionId) {
+        currentSessionId = pickerResult.sessionId;
+        resumedSession = true;
+      } else {
+        currentSessionId = await sessionStore.createSession();
+      }
+    } else {
+      currentSessionId = await sessionStore.createSession();
+    }
+
+    persistenceDebug.log('[TUI] Session selected', {
       sessionId: currentSessionId,
+      resumed: resumedSession,
       storeType: persistenceDebug.storeType(sessionStore),
-      currentSessionId: usingSQLiteTUI ? (sessionStore as SQLiteStore).getCurrentSessionId() : 'N/A (JSONL)',
     });
+
+    // CRITICAL: Sync the session ID to the store's internal state
+    // This is necessary for resumption because sessionStore.createSession()
+    // sets this internally, but resumption only returns the ID.
+    sessionStore.setCurrentSessionId(currentSessionId);
+
+    // If resuming, load the session state
+    if (resumedSession) {
+      const sessionState = await loadSessionState(sessionStore, currentSessionId);
+      if (sessionState?.messages) {
+        agent.loadState({
+          messages: sessionState.messages as any,
+          iteration: sessionState.iteration,
+          metrics: sessionState.metrics as any,
+          plan: sessionState.plan as any,
+          memoryContext: sessionState.memoryContext,
+        });
+        console.log(`✓ Resumed ${sessionState.messages.length} messages from session`);
+      }
+    }
 
     // Initial theme (will be stateful inside component)
     const initialTheme = getTheme(theme);
@@ -2248,16 +2652,106 @@ async function startTUIMode(
           case 'stats': {
             const metrics = agent.getMetrics();
             const agentState = agent.getState();
-            addMessage('system', [
+            const statusLines = [
               `Session Status:`,
               `  Status: ${agentState.status} | Iteration: ${agentState.iteration}`,
               `  Messages: ${agentState.messages.length}`,
               `  Tokens: ${metrics.totalTokens.toLocaleString()} (${metrics.inputTokens} in / ${metrics.outputTokens} out)`,
               `  LLM Calls: ${metrics.llmCalls} | Tool Calls: ${metrics.toolCalls}`,
               `  Duration: ${metrics.duration}ms | Cost: $${metrics.estimatedCost.toFixed(4)}`,
-            ].join('\n'));
+            ];
+
+            // Add goals progress if available
+            if ('listActiveGoals' in sessionStore) {
+              const goalsStore = sessionStore as SQLiteStore;
+              const activeGoals = goalsStore.listActiveGoals();
+              if (activeGoals.length > 0) {
+                let totalCurrent = 0, totalExpected = 0;
+                for (const g of activeGoals) {
+                  if (g.progressTotal) {
+                    totalCurrent += g.progressCurrent;
+                    totalExpected += g.progressTotal;
+                  }
+                }
+                statusLines.push('');
+                statusLines.push(`Active Goals: ${activeGoals.length}`);
+                if (totalExpected > 0) {
+                  const pct = Math.round((totalCurrent / totalExpected) * 100);
+                  statusLines.push(`  Progress: ${totalCurrent}/${totalExpected} (${pct}%)`);
+                }
+              }
+            }
+
+            addMessage('system', statusLines.join('\n'));
             return;
           }
+
+          case 'goals':
+            if ('listActiveGoals' in sessionStore) {
+              const sqlStore = sessionStore as SQLiteStore;
+              const subCmd = args[0]?.toLowerCase();
+
+              if (!subCmd || subCmd === 'list') {
+                const goals = sqlStore.listActiveGoals();
+                if (goals.length === 0) {
+                  addMessage('system', 'No active goals. Use /goals add <text> to create one.');
+                } else {
+                  const lines = ['Active Goals:'];
+                  for (const goal of goals) {
+                    const progress = goal.progressTotal ? ` (${goal.progressCurrent}/${goal.progressTotal})` : '';
+                    const priority = goal.priority === 1 ? ' [HIGH]' : goal.priority === 3 ? ' [low]' : '';
+                    lines.push(`  • ${goal.goalText}${progress}${priority}`);
+                  }
+                  addMessage('system', lines.join('\n'));
+                }
+              } else if (subCmd === 'add' && args.length > 1) {
+                const goalText = args.slice(1).join(' ');
+                const goalId = sqlStore.createGoal(goalText);
+                addMessage('system', `✓ Goal created: ${goalId}`);
+              } else if (subCmd === 'done' && args[1]) {
+                sqlStore.completeGoal(args[1]);
+                addMessage('system', `✓ Goal completed`);
+              } else if (subCmd === 'junctures') {
+                const junctures = sqlStore.listJunctures(undefined, 10);
+                if (junctures.length === 0) {
+                  addMessage('system', 'No junctures logged yet.');
+                } else {
+                  const lines = ['Recent Key Moments:'];
+                  for (const j of junctures) {
+                    const icon = j.type === 'failure' ? '✗' : j.type === 'breakthrough' ? '★' :
+                                j.type === 'decision' ? '→' : '↻';
+                    lines.push(`  ${icon} [${j.type}] ${j.description}`);
+                  }
+                  addMessage('system', lines.join('\n'));
+                }
+              } else {
+                addMessage('system', 'Usage: /goals [list|add <text>|done <id>|junctures]');
+              }
+            } else {
+              addMessage('system', 'Goals require SQLite store');
+            }
+            return;
+
+          case 'handoff':
+            if ('exportSessionManifest' in sessionStore) {
+              const sqlStore = sessionStore as SQLiteStore;
+              const format = args[0]?.toLowerCase() || 'markdown';
+
+              if (format === 'json') {
+                const manifest = sqlStore.exportSessionManifest();
+                if (manifest) {
+                  addMessage('system', JSON.stringify(manifest, null, 2));
+                } else {
+                  addMessage('system', 'No active session to export');
+                }
+              } else {
+                const markdown = sqlStore.exportSessionMarkdown();
+                addMessage('system', markdown);
+              }
+            } else {
+              addMessage('system', 'Handoff requires SQLite store');
+            }
+            return;
 
           case 'help':
           case 'h':
@@ -2265,7 +2759,8 @@ async function startTUIMode(
               'Available Commands:',
               '',
               'General: /quit /clear /status /reset /help /model /theme /tools',
-              'Sessions: /save /load <id> /sessions /resume',
+              'Sessions: /save /load <id> /sessions /resume /handoff [json]',
+              'Goals: /goals [list|add|done|junctures]',
               'Context: /context /compact',
               'MCP: /mcp /mcp tools /mcp search <query> /mcp stats',
               'Advanced: /react <task> /team <task> /checkpoint /rollback /fork /threads /switch',
@@ -2434,11 +2929,7 @@ async function startTUIMode(
           case 'sessions':
             try {
               const sessions = await sessionStore.listSessions();
-              if (sessions.length === 0) {
-                addMessage('system', 'No saved sessions.');
-              } else {
-                addMessage('system', `Sessions (${sessions.length}):\n${sessions.slice(0, 10).map((s: any) => `  ${s.id} - ${new Date(s.created).toLocaleString()}`).join('\n')}`);
-              }
+              addMessage('system', formatSessionsTable(sessions));
             } catch (e) {
               addMessage('error', (e as Error).message);
             }
@@ -3298,13 +3789,31 @@ async function main(): Promise<void> {
     return;
   }
 
+  // Handle init command
+  if (args.init) {
+    await runInit();
+    return;
+  }
+
+  // First-run check
+  if (isFirstRun() && !hasUsableProvider()) {
+    console.log(getFirstRunMessage());
+    console.log('\nRun "attocode init" to set up.\n');
+    process.exit(1);
+  }
+
   const useTUI = shouldUseTUI(args);
+
+  // Load user config from ~/.config/attocode/config.json
+  const userConfig = loadUserConfig();
 
   console.log('🔌 Detecting LLM provider...');
 
   let provider: LLMProviderWithTools;
   try {
-    const baseProvider = await getProvider();
+    // Use preferred provider from config if available
+    const preferredProvider = userConfig?.providers?.default;
+    const baseProvider = await getProvider(preferredProvider);
 
     if (!('chatWithTools' in baseProvider)) {
       console.error('❌ Provider does not support native tool use.');
@@ -3319,8 +3828,8 @@ async function main(): Promise<void> {
     process.exit(1);
   }
 
-  // Resolve model from args > env > default
-  const resolvedModel = args.model || process.env.OPENROUTER_MODEL || provider.defaultModel;
+  // Resolve model: CLI args > env var > user config > provider default
+  const resolvedModel = args.model || process.env.OPENROUTER_MODEL || userConfig?.model || provider.defaultModel;
   console.log(`✓ Using ${provider.name} (${resolvedModel})`);
   if (args.trace) {
     console.log(`📊 Trace capture enabled → .traces/ (Lesson 26)`);

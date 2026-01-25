@@ -786,6 +786,9 @@ export interface TraceCollectorConfig {
 
   /** JSONL file name pattern */
   filePattern: string;
+
+  /** Enable console output for traces */
+  enableConsoleOutput?: boolean;
 }
 
 /**

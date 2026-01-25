@@ -23,6 +23,7 @@ interface TestConfig {
   count: number;
   nested?: { value: string };
   enabled?: boolean;
+  [key: string]: unknown;
 }
 
 describe('HierarchicalConfigManager', () => {

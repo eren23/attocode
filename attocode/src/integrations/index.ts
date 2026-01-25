@@ -147,7 +147,27 @@ export {
   SQLiteStore,
   createSQLiteStore,
   type SQLiteStoreConfig,
+  type Goal,
+  type GoalStatus,
+  type Juncture,
+  type JunctureType,
+  type WorkerResult,
+  type WorkerResultStatus,
+  type WorkerResultRef,
+  type SessionManifest,
 } from './sqlite-store.js';
+
+// Schema management (embedded migrations)
+export {
+  MIGRATIONS,
+  applyMigrations as applySchemaMigrations,
+  getMigrationStatus as getSchemaMigrationStatus,
+  needsMigration as schemaNeedsMigration,
+  detectFeatures,
+  type Migration,
+  type MigrationResult,
+  type SchemaFeatures,
+} from '../persistence/schema.js';
 
 // Streaming responses
 export {

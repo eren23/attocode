@@ -37,7 +37,7 @@ export type StreamCallback = (chunk: StreamChunk) => void;
 export interface StreamConfig {
   /** Enable streaming (default: true) */
   enabled?: boolean;
-  /** Buffer size before flushing (default: 1 - immediate) */
+  /** Buffer size before flushing (default: 50 chars for batched updates) */
   bufferSize?: number;
   /** Show typing indicator (default: true) */
   showTypingIndicator?: boolean;
@@ -80,7 +80,7 @@ export class StreamHandler {
   constructor(config: StreamConfig = {}) {
     this.config = {
       enabled: config.enabled ?? true,
-      bufferSize: config.bufferSize ?? 1,
+      bufferSize: config.bufferSize ?? 50,  // Batch updates to reduce re-renders
       showTypingIndicator: config.showTypingIndicator ?? true,
     };
   }
@@ -165,12 +165,8 @@ export class StreamHandler {
             state.currentToolCall.name = chunk.toolCall.name;
           }
           if (chunk.toolCall.arguments) {
-            // Arguments come as JSON string chunks
-            const existingArgs = JSON.stringify(state.currentToolCall.arguments || {});
-            const newArgs = typeof chunk.toolCall.arguments === 'string'
-              ? chunk.toolCall.arguments
-              : JSON.stringify(chunk.toolCall.arguments);
-            // This is simplified - real implementation would handle partial JSON
+            // Simplified - just assign the latest arguments
+            // Real implementation would merge partial JSON properly
             state.currentToolCall.arguments = chunk.toolCall.arguments;
           }
         }

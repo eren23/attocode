@@ -178,6 +178,9 @@ export interface ProductionAgentConfig {
   /** Codebase context configuration (intelligent code selection) */
   codebaseContext?: CodebaseContextAgentConfig | false;
 
+  /** Compaction configuration (context management) */
+  compaction?: CompactionAgentConfig | false;
+
   /** Maximum context tokens before compaction */
   maxContextTokens?: number;
 
@@ -761,6 +764,33 @@ export interface CodebaseContextAgentConfig {
 }
 
 /**
+ * Compaction configuration.
+ * Controls automatic context compaction for long sessions.
+ */
+export interface CompactionAgentConfig {
+  /** Enable/disable compaction */
+  enabled?: boolean;
+
+  /** Token threshold to trigger compaction (e.g., 80000) */
+  tokenThreshold?: number;
+
+  /** Number of recent messages to preserve verbatim */
+  preserveRecentCount?: number;
+
+  /** Whether to preserve tool results in compaction */
+  preserveToolResults?: boolean;
+
+  /** Maximum tokens for the summary */
+  summaryMaxTokens?: number;
+
+  /** Model to use for summarization (defaults to main model) */
+  summaryModel?: string;
+
+  /** Compaction mode: auto, approval, manual */
+  mode?: 'auto' | 'approval' | 'manual';
+}
+
+/**
  * Configuration for trace collection.
  */
 export interface TraceCollectorConfig {
@@ -929,6 +959,9 @@ export type AgentEvent =
   | { type: 'cache.hit'; query: string; similarity: number }
   | { type: 'cache.miss'; query: string }
   | { type: 'cache.set'; query: string }
+  // Compaction events
+  | { type: 'compaction.auto'; tokensBefore: number; tokensAfter: number; messagesCompacted: number }
+  | { type: 'compaction.warning'; currentTokens: number; threshold: number }
   // Mode events
   | { type: 'mode.changed'; from: string; to: string };
 

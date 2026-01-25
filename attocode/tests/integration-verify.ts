@@ -59,7 +59,7 @@ if (parsedDiffs.length > 0) {
   console.log(`   Expected: "${newContent}"`);
   if (result.success && result.content === newContent) {
     console.log('   ✓ Diff generation and application works');
-  } else if (result.success && result.content.includes('line 2 modified')) {
+  } else if (result.success && result.content?.includes('line 2 modified')) {
     console.log('   ✓ Diff application modified content correctly');
   } else {
     console.log('   ✗ Diff application failed');

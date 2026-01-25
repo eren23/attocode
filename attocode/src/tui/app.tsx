@@ -5,8 +5,8 @@
  * This file orchestrates all TUI components and state management.
  */
 
-import React, { useState, useEffect, useCallback, createContext, useContext } from 'react';
-import { Box, Text, useApp, useInput, useStdin } from 'ink';
+import React, { useState, useEffect, useCallback, createContext, useContext, memo } from 'react';
+import { Box, Text, useApp, useInput } from 'ink';
 import type {
   TUIConfig,
   TUIState,
@@ -128,7 +128,10 @@ interface HeaderProps {
   title?: string;
 }
 
-function Header({ status, title = 'Attocode' }: HeaderProps) {
+/**
+ * Header component - memoized since it only changes with status updates.
+ */
+const Header = memo(function Header({ status, title = 'Attocode' }: HeaderProps) {
   const { theme } = useTheme();
 
   return (
@@ -148,7 +151,7 @@ function Header({ status, title = 'Attocode' }: HeaderProps) {
       )}
     </Box>
   );
-}
+});
 
 // =============================================================================
 // FOOTER COMPONENT
@@ -158,7 +161,10 @@ interface FooterProps {
   mode?: string;
 }
 
-function Footer({ mode = 'ready' }: FooterProps) {
+/**
+ * Footer component - memoized since it only changes with mode updates.
+ */
+const Footer = memo(function Footer({ mode = 'ready' }: FooterProps) {
   const { theme } = useTheme();
 
   return (
@@ -171,7 +177,7 @@ function Footer({ mode = 'ready' }: FooterProps) {
       </Text>
     </Box>
   );
-}
+});
 
 // =============================================================================
 // MESSAGE LIST COMPONENT
@@ -181,7 +187,10 @@ interface MessageItemProps {
   message: MessageDisplay;
 }
 
-function MessageItem({ message }: MessageItemProps) {
+/**
+ * Single message display - memoized to prevent re-renders on input changes.
+ */
+const MessageItem = memo(function MessageItem({ message }: MessageItemProps) {
   const { theme } = useTheme();
 
   const roleColors: Record<string, string> = {
@@ -208,7 +217,7 @@ function MessageItem({ message }: MessageItemProps) {
       </Box>
     </Box>
   );
-}
+});
 
 interface MessageListProps {
   messages: MessageDisplay[];
@@ -240,7 +249,10 @@ interface ToolCallItemProps {
   toolCall: ToolCallDisplay;
 }
 
-function ToolCallItem({ toolCall }: ToolCallItemProps) {
+/**
+ * Single tool call display - memoized to prevent re-renders during typing.
+ */
+const ToolCallItem = memo(function ToolCallItem({ toolCall }: ToolCallItemProps) {
   const { theme } = useTheme();
 
   const statusIcons: Record<string, string> = {
@@ -267,7 +279,7 @@ function ToolCallItem({ toolCall }: ToolCallItemProps) {
       )}
     </Box>
   );
-}
+});
 
 interface ToolCallListProps {
   toolCalls: Map<string, ToolCallDisplay>;
@@ -334,7 +346,6 @@ interface InputAreaProps {
 function InputArea({ onSubmit, disabled = false }: InputAreaProps) {
   const { theme } = useTheme();
   const [value, setValue] = useState('');
-  const { isRawModeSupported } = useStdin();
 
   useInput((input, key) => {
     if (disabled) return;
