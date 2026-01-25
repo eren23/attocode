@@ -1,18 +1,19 @@
 /**
  * OpenAI Provider Adapter
- * 
+ *
  * Adapts the OpenAI API to our LLMProvider interface.
  */
 
-import type { 
-  LLMProvider, 
-  Message, 
-  ChatOptions, 
+import type {
+  LLMProvider,
+  Message,
+  ChatOptions,
   ChatResponse,
-  OpenAIConfig 
+  OpenAIConfig
 } from '../types.js';
 import { ProviderError } from '../types.js';
 import { registerProvider, hasEnv, requireEnv } from '../provider.js';
+import { resilientFetch, type NetworkConfig } from '../resilient-fetch.js';
 
 // =============================================================================
 // OPENAI PROVIDER
@@ -21,17 +22,23 @@ import { registerProvider, hasEnv, requireEnv } from '../provider.js';
 export class OpenAIProvider implements LLMProvider {
   readonly name = 'openai';
   readonly defaultModel = 'gpt-4-turbo-preview';
-  
+
   private apiKey: string;
   private model: string;
   private baseUrl: string;
   private organization?: string;
+  private networkConfig: NetworkConfig;
 
   constructor(config?: OpenAIConfig) {
     this.apiKey = config?.apiKey ?? requireEnv('OPENAI_API_KEY');
     this.model = config?.model ?? this.defaultModel;
     this.baseUrl = config?.baseUrl ?? 'https://api.openai.com';
     this.organization = config?.organization ?? process.env.OPENAI_ORG_ID;
+    this.networkConfig = {
+      timeout: 120000,  // 2 minutes
+      maxRetries: 3,
+      baseRetryDelay: 1000,
+    };
   }
 
   isConfigured(): boolean {
@@ -66,10 +73,18 @@ export class OpenAIProvider implements LLMProvider {
     }
 
     try {
-      const response = await fetch(`${this.baseUrl}/v1/chat/completions`, {
-        method: 'POST',
-        headers,
-        body: JSON.stringify(body),
+      const { response } = await resilientFetch({
+        url: `${this.baseUrl}/v1/chat/completions`,
+        init: {
+          method: 'POST',
+          headers,
+          body: JSON.stringify(body),
+        },
+        providerName: this.name,
+        networkConfig: this.networkConfig,
+        onRetry: (attempt, delay, error) => {
+          console.warn(`[OpenAI] Retry attempt ${attempt} after ${delay}ms: ${error.message}`);
+        },
       });
 
       if (!response.ok) {
@@ -89,7 +104,7 @@ export class OpenAIProvider implements LLMProvider {
       };
 
       const choice = data.choices[0];
-      
+
       return {
         content: choice.message.content,
         stopReason: this.mapStopReason(choice.finish_reason),

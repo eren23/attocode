@@ -65,7 +65,8 @@ export type AutoCompactionEvent =
   | { type: 'autocompaction.completed'; tokensBefore: number; tokensAfter: number; reduction: number }
   | { type: 'autocompaction.cooldown'; remainingMs: number }
   | { type: 'autocompaction.hard_limit'; currentTokens: number; ratio: number }
-  | { type: 'autocompaction.needs_approval'; currentTokens: number; ratio: number };
+  | { type: 'autocompaction.needs_approval'; currentTokens: number; ratio: number }
+  | { type: 'autocompaction.emergency_truncate'; reason: string; messagesBefore: number; messagesAfter: number };
 
 export type AutoCompactionEventListener = (event: AutoCompactionEvent) => void;
 
@@ -369,11 +370,26 @@ export class AutoCompactionManager {
     let result: CompactionResult;
     try {
       result = await this.compactor.compact(messages);
-    } finally {
+    } catch (compactionError) {
+      // LLM-based compaction failed - use emergency truncation as fallback
+      console.error('[AutoCompaction] LLM compaction failed, using emergency truncation:', compactionError);
+
+      const emergencyResult = this.emergencyTruncate(messages, totalPreserve);
+
       // Restore original config
       if (needsRestore) {
         this.compactor.updateConfig({ preserveRecentCount: currentCompactorConfig.preserveRecentCount });
       }
+
+      // Update cooldown even for emergency truncation
+      this.lastCompactionTime = Date.now();
+
+      return emergencyResult;
+    }
+
+    // Restore original config
+    if (needsRestore) {
+      this.compactor.updateConfig({ preserveRecentCount: currentCompactorConfig.preserveRecentCount });
     }
 
     // Update cooldown
@@ -397,6 +413,55 @@ export class AutoCompactionManager {
       ratio: result.tokensAfter / maxTokens,
       compactedMessages: result.preservedMessages,
       summary: result.summary,
+    };
+  }
+
+  /**
+   * Emergency truncation fallback when LLM-based compaction fails.
+   * Simply keeps system message and last N messages without summarization.
+   */
+  private emergencyTruncate(messages: Message[], preserveCount: number): CompactionCheckResult {
+    const messagesBefore = messages.length;
+
+    // Find and keep the system message
+    const systemMessage = messages.find(m => m.role === 'system');
+
+    // Get the last N messages (excluding system message from count)
+    const nonSystemMessages = messages.filter(m => m.role !== 'system');
+    const preservedMessages = nonSystemMessages.slice(-preserveCount);
+
+    // Build the truncated message array
+    const truncatedMessages: Message[] = [];
+
+    if (systemMessage) {
+      truncatedMessages.push(systemMessage);
+    }
+
+    // Add a marker message about the truncation
+    truncatedMessages.push({
+      role: 'system',
+      content: `[CONTEXT TRUNCATED: ${messagesBefore - preservedMessages.length - (systemMessage ? 1 : 0)} messages were removed due to compaction failure. The conversation continues from the most recent ${preservedMessages.length} messages.]`,
+    });
+
+    truncatedMessages.push(...preservedMessages);
+
+    const messagesAfter = truncatedMessages.length;
+    const tokensAfter = this.compactor.estimateTokens(truncatedMessages);
+
+    this.emit({
+      type: 'autocompaction.emergency_truncate',
+      reason: 'LLM compaction failed',
+      messagesBefore,
+      messagesAfter,
+    });
+
+    return {
+      status: 'compacted',
+      currentTokens: tokensAfter,
+      maxTokens: this.config.maxContextTokens,
+      ratio: tokensAfter / this.config.maxContextTokens,
+      compactedMessages: truncatedMessages,
+      summary: '[Emergency truncation - no summary available]',
     };
   }
 

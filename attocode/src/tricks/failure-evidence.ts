@@ -166,7 +166,8 @@ export type FailureEvent =
   | { type: 'failure.recorded'; failure: Failure }
   | { type: 'failure.repeated'; failure: Failure; count: number }
   | { type: 'pattern.detected'; pattern: FailurePattern }
-  | { type: 'failure.resolved'; failureId: string };
+  | { type: 'failure.resolved'; failureId: string }
+  | { type: 'failure.evicted'; failure: Failure; reason: string };
 
 export type FailureEventListener = (event: FailureEvent) => void;
 
@@ -385,12 +386,23 @@ export class FailureTracker {
     actionFailures.push(failure.id);
     this.actionHistory.set(input.action, actionFailures);
 
-    // Enforce max failures
+    // Enforce max failures with eviction warning
     if (this.failures.length > this.config.maxFailures) {
-      const removed = this.failures.shift()!;
+      const evicted = this.failures.shift()!;
+
+      // Log warning about eviction
+      console.warn(`[FailureTracker] Evicted failure due to limit (${this.config.maxFailures}): ${evicted.action} - ${evicted.error.slice(0, 50)}`);
+
+      // Emit eviction event for observability
+      this.emit({
+        type: 'failure.evicted',
+        failure: evicted,
+        reason: `Max failures limit (${this.config.maxFailures}) exceeded`,
+      });
+
       // Clean up action history
-      for (const [action, ids] of this.actionHistory) {
-        const idx = ids.indexOf(removed.id);
+      for (const [_action, ids] of this.actionHistory) {
+        const idx = ids.indexOf(evicted.id);
         if (idx >= 0) ids.splice(idx, 1);
       }
     }

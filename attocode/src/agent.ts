@@ -151,6 +151,10 @@ export class ProductionAgent {
   private modeManager: ModeManager;
   private toolResolver: ((toolName: string) => ToolDefinition | null) | null = null;
 
+  // Initialization tracking
+  private initPromises: Promise<void>[] = [];
+  private initComplete = false;
+
   // State
   private state: AgentState = {
     status: 'idle',
@@ -289,10 +293,12 @@ export class ProductionAgent {
         sources: ruleSources,
         watch: this.config.rules.watch,
       });
-      // Load rules asynchronously - will be ready for next call
-      this.rules.loadRules().catch(err => {
-        console.warn('[ProductionAgent] Failed to load rules:', err);
-      });
+      // Load rules asynchronously - tracked for ensureReady()
+      this.initPromises.push(
+        this.rules.loadRules().catch(err => {
+          console.warn('[ProductionAgent] Failed to load rules:', err);
+        })
+      );
     }
 
     // Economics System (Token Budget) - always enabled
@@ -305,10 +311,12 @@ export class ProductionAgent {
 
     // Agent Registry - always enabled for subagent support
     this.agentRegistry = new AgentRegistry();
-    // Load user agents asynchronously
-    this.agentRegistry.loadUserAgents().catch(err => {
-      console.warn('[ProductionAgent] Failed to load user agents:', err);
-    });
+    // Load user agents asynchronously - tracked for ensureReady()
+    this.initPromises.push(
+      this.agentRegistry.loadUserAgents().catch(err => {
+        console.warn('[ProductionAgent] Failed to load user agents:', err);
+      })
+    );
 
     // Cancellation Support
     if (isFeatureEnabled(this.config.cancellation)) {
@@ -372,10 +380,14 @@ export class ProductionAgent {
         loadBuiltIn: this.config.skills.loadBuiltIn,
         autoActivate: this.config.skills.autoActivate,
       });
-      // Load skills asynchronously - will be ready for next call
-      this.skillManager.loadSkills().catch(err => {
-        console.warn('[ProductionAgent] Failed to load skills:', err);
-      });
+      // Load skills asynchronously - tracked for ensureReady()
+      this.initPromises.push(
+        this.skillManager.loadSkills()
+          .then(() => {}) // Convert to void
+          .catch(err => {
+            console.warn('[ProductionAgent] Failed to load skills:', err);
+          })
+      );
     }
 
     // Context Engineering (Manus-inspired tricks P, Q, R, S, T)
@@ -436,9 +448,28 @@ export class ProductionAgent {
   }
 
   /**
+   * Ensure all async initialization is complete before running.
+   * Call this at the start of run() to prevent race conditions.
+   */
+  async ensureReady(): Promise<void> {
+    if (this.initComplete) {
+      return;
+    }
+
+    if (this.initPromises.length > 0) {
+      await Promise.all(this.initPromises);
+    }
+
+    this.initComplete = true;
+  }
+
+  /**
    * Run the agent on a task.
    */
   async run(task: string): Promise<AgentResult> {
+    // Ensure all integrations are ready before running
+    await this.ensureReady();
+
     const startTime = Date.now();
 
     // Create cancellation context if enabled
@@ -1544,8 +1575,107 @@ export class ProductionAgent {
   }
 
   /**
+   * Validate checkpoint data before loading.
+   * Returns validation result with errors and warnings.
+   */
+  private validateCheckpoint(data: unknown): {
+    valid: boolean;
+    errors: string[];
+    warnings: string[];
+    sanitized: {
+      messages: Message[];
+      iteration: number;
+      metrics?: Partial<AgentMetrics>;
+      plan?: AgentPlan;
+      memoryContext?: string[];
+    } | null;
+  } {
+    const errors: string[] = [];
+    const warnings: string[] = [];
+
+    // Check if data is an object
+    if (!data || typeof data !== 'object') {
+      errors.push('Checkpoint data must be an object');
+      return { valid: false, errors, warnings, sanitized: null };
+    }
+
+    const checkpoint = data as Record<string, unknown>;
+
+    // Validate messages array (required)
+    if (!checkpoint.messages) {
+      errors.push('Checkpoint missing required "messages" field');
+    } else if (!Array.isArray(checkpoint.messages)) {
+      errors.push('Checkpoint "messages" must be an array');
+    } else {
+      // Validate each message has required fields
+      for (let i = 0; i < checkpoint.messages.length; i++) {
+        const msg = checkpoint.messages[i] as Record<string, unknown>;
+        if (!msg || typeof msg !== 'object') {
+          errors.push(`Message at index ${i} is not an object`);
+          continue;
+        }
+        if (!msg.role || typeof msg.role !== 'string') {
+          errors.push(`Message at index ${i} missing valid "role" field`);
+        }
+        if (msg.content !== undefined && msg.content !== null && typeof msg.content !== 'string') {
+          // Content can be undefined for tool call messages
+          warnings.push(`Message at index ${i} has non-string content (type: ${typeof msg.content})`);
+        }
+      }
+    }
+
+    // Validate iteration (optional but should be non-negative number)
+    if (checkpoint.iteration !== undefined) {
+      if (typeof checkpoint.iteration !== 'number' || checkpoint.iteration < 0) {
+        warnings.push(`Invalid iteration value: ${checkpoint.iteration}, will use default`);
+      }
+    }
+
+    // Validate metrics (optional)
+    if (checkpoint.metrics !== undefined && checkpoint.metrics !== null) {
+      if (typeof checkpoint.metrics !== 'object') {
+        warnings.push('Metrics field is not an object, will be ignored');
+      }
+    }
+
+    // Validate memoryContext (optional)
+    if (checkpoint.memoryContext !== undefined && checkpoint.memoryContext !== null) {
+      if (!Array.isArray(checkpoint.memoryContext)) {
+        warnings.push('memoryContext is not an array, will be ignored');
+      }
+    }
+
+    // If we have critical errors, fail validation
+    if (errors.length > 0) {
+      return { valid: false, errors, warnings, sanitized: null };
+    }
+
+    // Build sanitized checkpoint
+    const messages = (checkpoint.messages as Message[]).filter(
+      (msg): msg is Message => msg && typeof msg === 'object' && typeof msg.role === 'string'
+    );
+
+    const sanitized = {
+      messages,
+      iteration: typeof checkpoint.iteration === 'number' && checkpoint.iteration >= 0
+        ? checkpoint.iteration
+        : Math.floor(messages.length / 2),
+      metrics: typeof checkpoint.metrics === 'object' && checkpoint.metrics !== null
+        ? checkpoint.metrics as Partial<AgentMetrics>
+        : undefined,
+      plan: checkpoint.plan as AgentPlan | undefined,
+      memoryContext: Array.isArray(checkpoint.memoryContext)
+        ? checkpoint.memoryContext as string[]
+        : undefined,
+    };
+
+    return { valid: true, errors, warnings, sanitized };
+  }
+
+  /**
    * Load full state from a checkpoint.
    * Restores messages, iteration, metrics, plan, and memory context.
+   * Validates checkpoint data before loading to prevent corrupted state.
    */
   loadState(savedState: {
     messages: Message[];
@@ -1554,51 +1684,70 @@ export class ProductionAgent {
     plan?: AgentPlan;
     memoryContext?: string[];
   }): void {
-    // Restore messages
-    this.state.messages = [...savedState.messages];
+    // Validate checkpoint data
+    const validation = this.validateCheckpoint(savedState);
 
-    // Restore iteration (default to messages length / 2 as approximation)
-    this.state.iteration = savedState.iteration ?? Math.floor(savedState.messages.length / 2);
+    // Log warnings
+    for (const warning of validation.warnings) {
+      console.warn(`[Checkpoint] Warning: ${warning}`);
+      this.observability?.logger?.warn('Checkpoint validation warning', { warning });
+    }
+
+    // Fail on validation errors
+    if (!validation.valid || !validation.sanitized) {
+      const errorMsg = `Invalid checkpoint: ${validation.errors.join('; ')}`;
+      this.observability?.logger?.error('Checkpoint validation failed', { errors: validation.errors });
+      throw new Error(errorMsg);
+    }
+
+    // Use sanitized data
+    const sanitized = validation.sanitized;
+
+    // Restore messages
+    this.state.messages = [...sanitized.messages];
+
+    // Restore iteration (already validated/defaulted in sanitized)
+    this.state.iteration = sanitized.iteration;
 
     // Restore metrics (merge with defaults)
-    if (savedState.metrics) {
+    if (sanitized.metrics) {
       this.state.metrics = {
-        totalTokens: savedState.metrics.totalTokens ?? 0,
-        inputTokens: savedState.metrics.inputTokens ?? 0,
-        outputTokens: savedState.metrics.outputTokens ?? 0,
-        estimatedCost: savedState.metrics.estimatedCost ?? 0,
-        llmCalls: savedState.metrics.llmCalls ?? 0,
-        toolCalls: savedState.metrics.toolCalls ?? 0,
-        duration: savedState.metrics.duration ?? 0,
-        reflectionAttempts: savedState.metrics.reflectionAttempts,
+        totalTokens: sanitized.metrics.totalTokens ?? 0,
+        inputTokens: sanitized.metrics.inputTokens ?? 0,
+        outputTokens: sanitized.metrics.outputTokens ?? 0,
+        estimatedCost: sanitized.metrics.estimatedCost ?? 0,
+        llmCalls: sanitized.metrics.llmCalls ?? 0,
+        toolCalls: sanitized.metrics.toolCalls ?? 0,
+        duration: sanitized.metrics.duration ?? 0,
+        reflectionAttempts: sanitized.metrics.reflectionAttempts,
       };
     }
 
     // Restore plan if present
-    if (savedState.plan) {
-      this.state.plan = { ...savedState.plan };
+    if (sanitized.plan) {
+      this.state.plan = { ...sanitized.plan };
       // Sync with planning manager if enabled
       if (this.planning) {
-        this.planning.loadPlan(savedState.plan);
+        this.planning.loadPlan(sanitized.plan);
       }
     }
 
     // Restore memory context if present
-    if (savedState.memoryContext) {
-      this.state.memoryContext = [...savedState.memoryContext];
+    if (sanitized.memoryContext) {
+      this.state.memoryContext = [...sanitized.memoryContext];
     }
 
     // Sync to threadManager if enabled
     if (this.threadManager) {
       const thread = this.threadManager.getActiveThread();
-      thread.messages = [...savedState.messages];
+      thread.messages = [...sanitized.messages];
     }
 
     this.observability?.logger?.info('State loaded', {
-      messageCount: savedState.messages.length,
+      messageCount: sanitized.messages.length,
       iteration: this.state.iteration,
-      hasPlan: !!savedState.plan,
-      hasMemoryContext: !!savedState.memoryContext,
+      hasPlan: !!sanitized.plan,
+      hasMemoryContext: !!sanitized.memoryContext,
     });
   }
 

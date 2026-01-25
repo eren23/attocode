@@ -22,6 +22,21 @@ import type {
 // =============================================================================
 
 /**
+ * Hook error record for observability.
+ */
+export interface HookError {
+  event: HookEvent;
+  error: Error;
+  timestamp: Date;
+  hookId?: string;
+}
+
+/**
+ * Hook error listener type.
+ */
+export type HookErrorListener = (error: HookError) => void;
+
+/**
  * Manages hooks and plugins for the agent.
  */
 export class HookManager {
@@ -30,6 +45,12 @@ export class HookManager {
   private tools: Map<string, ToolDefinition> = new Map();
   private listeners: Set<AgentEventListener> = new Set();
   private config: { hooks: HooksConfig; plugins: PluginsConfig };
+
+  // Async hook tracking for error handling and cleanup
+  private pendingHooks: Set<Promise<void>> = new Set();
+  private hookErrors: HookError[] = [];
+  private errorListeners: Set<HookErrorListener> = new Set();
+  private maxHookErrors = 100; // Bounded error history
 
   constructor(hooksConfig: HooksConfig, pluginsConfig: PluginsConfig) {
     this.config = { hooks: hooksConfig, plugins: pluginsConfig };
@@ -204,8 +225,11 @@ export class HookManager {
 
   /**
    * Emit an agent event.
+   * Synchronous listeners are called immediately.
+   * Async hooks are fire-and-forget but errors are tracked.
    */
   emit(event: AgentEvent): void {
+    // Sync listeners (unchanged)
     for (const listener of this.listeners) {
       try {
         listener(event);
@@ -217,8 +241,98 @@ export class HookManager {
     // Map agent events to hook events
     const hookEvent = this.mapToHookEvent(event);
     if (hookEvent) {
-      this.executeHooks(hookEvent, event);
+      // Fire-and-forget WITH error tracking
+      const hookPromise = this.executeHooks(hookEvent, event)
+        .catch((err) => this.recordHookError(hookEvent, err))
+        .finally(() => this.pendingHooks.delete(hookPromise));
+      this.pendingHooks.add(hookPromise);
     }
+  }
+
+  /**
+   * Emit an event and wait for all hooks to complete.
+   * Use this for critical events that MUST complete before continuing.
+   */
+  async emitAsync(event: AgentEvent): Promise<void> {
+    // Sync listeners
+    for (const listener of this.listeners) {
+      try {
+        listener(event);
+      } catch (err) {
+        console.error('[Hook] Event listener error:', err);
+      }
+    }
+
+    // Map agent events to hook events and await
+    const hookEvent = this.mapToHookEvent(event);
+    if (hookEvent) {
+      await this.executeHooks(hookEvent, event);
+    }
+  }
+
+  /**
+   * Wait for all pending hooks to complete.
+   * Call this before shutdown or when you need to ensure all hooks have finished.
+   */
+  async flush(): Promise<void> {
+    if (this.pendingHooks.size === 0) {
+      return;
+    }
+
+    // Wait for all pending hooks (they already have error handling)
+    await Promise.all(Array.from(this.pendingHooks));
+  }
+
+  /**
+   * Record a hook error for observability.
+   */
+  private recordHookError(event: HookEvent, error: unknown): void {
+    const hookError: HookError = {
+      event,
+      error: error instanceof Error ? error : new Error(String(error)),
+      timestamp: new Date(),
+    };
+
+    // Add to bounded error history
+    this.hookErrors.push(hookError);
+    if (this.hookErrors.length > this.maxHookErrors) {
+      this.hookErrors.shift();
+    }
+
+    // Notify error listeners
+    for (const listener of this.errorListeners) {
+      try {
+        listener(hookError);
+      } catch {
+        // Ignore errors in error listeners to prevent cascading failures
+      }
+    }
+
+    // Always log to console for visibility
+    console.error(`[Hook] Error in ${event} hook:`, hookError.error.message);
+  }
+
+  /**
+   * Subscribe to hook errors for observability.
+   * Returns an unsubscribe function.
+   */
+  subscribeToErrors(listener: HookErrorListener): () => void {
+    this.errorListeners.add(listener);
+    return () => this.errorListeners.delete(listener);
+  }
+
+  /**
+   * Get recent hook errors.
+   */
+  getHookErrors(limit = 10): HookError[] {
+    return this.hookErrors.slice(-limit);
+  }
+
+  /**
+   * Get count of pending hooks (for diagnostics).
+   */
+  getPendingHookCount(): number {
+    return this.pendingHooks.size;
   }
 
   /**
@@ -255,12 +369,19 @@ export class HookManager {
   }
 
   /**
-   * Cleanup all plugins.
+   * Cleanup all plugins and flush pending hooks.
    */
   async cleanup(): Promise<void> {
+    // Wait for pending hooks to complete
+    await this.flush();
+
+    // Unload all plugins
     for (const name of this.plugins.keys()) {
       await this.unloadPlugin(name);
     }
+
+    // Clear error listeners
+    this.errorListeners.clear();
   }
 }
 

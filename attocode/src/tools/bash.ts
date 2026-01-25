@@ -55,11 +55,30 @@ export const bashTool = defineTool(
       let killed = false;
       const maxOutput = 100000; // 100KB limit
 
-      // Set timeout
+      // Set timeout with proper cleanup
       const timer = setTimeout(() => {
         killed = true;
         proc.kill('SIGTERM');
-        setTimeout(() => proc.kill('SIGKILL'), 1000);
+
+        // Escalate to SIGKILL after 1 second
+        setTimeout(() => {
+          if (!proc.killed) {
+            proc.kill('SIGKILL');
+
+            // Verify termination after SIGKILL, attempt process group kill if needed
+            setTimeout(() => {
+              if (!proc.killed && proc.pid) {
+                console.warn(`[Bash] Process ${proc.pid} may be zombie after SIGKILL, attempting process group kill`);
+                try {
+                  // Try to kill the entire process group (negative PID)
+                  process.kill(-proc.pid, 'SIGKILL');
+                } catch {
+                  // Ignore errors - process may already be dead or we lack permissions
+                }
+              }
+            }, 2000);
+          }
+        }, 1000);
       }, input.timeout);
 
       // Capture stdout

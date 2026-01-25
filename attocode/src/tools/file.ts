@@ -49,6 +49,37 @@ export const readFileTool = defineTool(
 // WRITE FILE
 // =============================================================================
 
+/**
+ * Atomic file write helper.
+ * Writes to a temp file first, then renames to target path.
+ * This prevents partial writes from corrupting files on disk full or crash.
+ */
+async function writeFileAtomic(filePath: string, content: string): Promise<void> {
+  const tempPath = `${filePath}.tmp.${Date.now()}.${Math.random().toString(36).slice(2, 8)}`;
+
+  try {
+    // Write to temp file
+    await fs.writeFile(tempPath, content, 'utf-8');
+
+    // Atomic rename (on same filesystem)
+    await fs.rename(tempPath, filePath);
+  } catch (err) {
+    // Clean up temp file on failure
+    try {
+      await fs.unlink(tempPath);
+    } catch {
+      // Ignore cleanup errors - temp file may not exist
+    }
+
+    // Re-throw with specific error for disk full
+    const nodeErr = err as NodeJS.ErrnoException;
+    if (nodeErr.code === 'ENOSPC') {
+      throw new Error(`Disk full - cannot write file: ${filePath}`);
+    }
+    throw err;
+  }
+}
+
 const writeFileSchema = z.object({
   path: z.string().describe('Path to the file to write'),
   content: z.string().describe('Content to write to the file'),
@@ -63,7 +94,7 @@ export const writeFileTool = defineTool(
       // Ensure directory exists
       const dir = path.dirname(input.path);
       await fs.mkdir(dir, { recursive: true });
-      
+
       // Check if file exists
       let action = 'created';
       try {
@@ -72,10 +103,11 @@ export const writeFileTool = defineTool(
       } catch {
         // File doesn't exist, that's fine
       }
-      
-      await fs.writeFile(input.path, input.content, 'utf-8');
+
+      // Use atomic write to prevent corruption
+      await writeFileAtomic(input.path, input.content);
       const lines = input.content.split('\n').length;
-      
+
       return {
         success: true,
         output: `Successfully ${action} ${input.path} (${lines} lines, ${input.content.length} bytes)`,
@@ -83,6 +115,9 @@ export const writeFileTool = defineTool(
       };
     } catch (error) {
       const err = error as NodeJS.ErrnoException;
+      if (err.code === 'ENOSPC' || err.message.includes('Disk full')) {
+        return { success: false, output: `Disk full - cannot write file: ${input.path}` };
+      }
       return { success: false, output: `Error writing file: ${err.message}` };
     }
   },
@@ -127,12 +162,12 @@ export const editFileTool = defineTool(
         };
       }
       
-      // Replace
+      // Replace and write atomically
       const newContent = content.replace(input.old_string, input.new_string);
-      await fs.writeFile(input.path, newContent, 'utf-8');
-      
+      await writeFileAtomic(input.path, newContent);
+
       const linesDiff = input.new_string.split('\n').length - input.old_string.split('\n').length;
-      
+
       return {
         success: true,
         output: `Successfully edited ${input.path} (${linesDiff >= 0 ? '+' : ''}${linesDiff} lines)`,
@@ -142,6 +177,9 @@ export const editFileTool = defineTool(
       const err = error as NodeJS.ErrnoException;
       if (err.code === 'ENOENT') {
         return { success: false, output: `File not found: ${input.path}` };
+      }
+      if (err.code === 'ENOSPC' || err.message.includes('Disk full')) {
+        return { success: false, output: `Disk full - cannot edit file: ${input.path}` };
       }
       return { success: false, output: `Error editing file: ${err.message}` };
     }
