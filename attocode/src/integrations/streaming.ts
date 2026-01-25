@@ -37,7 +37,7 @@ export type StreamCallback = (chunk: StreamChunk) => void;
 export interface StreamConfig {
   /** Enable streaming (default: true) */
   enabled?: boolean;
-  /** Buffer size before flushing (default: 1 - immediate) */
+  /** Buffer size before flushing (default: 50 chars for batched updates) */
   bufferSize?: number;
   /** Show typing indicator (default: true) */
   showTypingIndicator?: boolean;
@@ -80,7 +80,7 @@ export class StreamHandler {
   constructor(config: StreamConfig = {}) {
     this.config = {
       enabled: config.enabled ?? true,
-      bufferSize: config.bufferSize ?? 1,
+      bufferSize: config.bufferSize ?? 50,  // Batch updates to reduce re-renders
       showTypingIndicator: config.showTypingIndicator ?? true,
     };
   }
@@ -116,7 +116,11 @@ export class StreamHandler {
     const response: ChatResponse = {
       content: state.content,
       toolCalls: state.toolCalls.length > 0 ? state.toolCalls : undefined,
-      usage: state.usage.inputTokens > 0 ? state.usage : undefined,
+      usage: state.usage.inputTokens > 0 ? {
+        inputTokens: state.usage.inputTokens,
+        outputTokens: state.usage.outputTokens,
+        totalTokens: state.usage.inputTokens + state.usage.outputTokens,
+      } : undefined,
     };
 
     this.emit({ type: 'stream.complete', response });
@@ -161,12 +165,8 @@ export class StreamHandler {
             state.currentToolCall.name = chunk.toolCall.name;
           }
           if (chunk.toolCall.arguments) {
-            // Arguments come as JSON string chunks
-            const existingArgs = JSON.stringify(state.currentToolCall.arguments || {});
-            const newArgs = typeof chunk.toolCall.arguments === 'string'
-              ? chunk.toolCall.arguments
-              : JSON.stringify(chunk.toolCall.arguments);
-            // This is simplified - real implementation would handle partial JSON
+            // Simplified - just assign the latest arguments
+            // Real implementation would merge partial JSON properly
             state.currentToolCall.arguments = chunk.toolCall.arguments;
           }
         }
@@ -393,7 +393,7 @@ export async function* adaptAnthropicStream(
 
   const decoder = new TextDecoder();
   let buffer = '';
-  let currentToolId: string | null = null;
+  let currentToolId: string | undefined = undefined;
 
   try {
     while (true) {
@@ -443,7 +443,7 @@ export async function* adaptAnthropicStream(
               case 'content_block_stop':
                 if (currentToolId) {
                   yield { type: 'tool_call_end' };
-                  currentToolId = null;
+                  currentToolId = undefined;
                 }
                 break;
 

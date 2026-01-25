@@ -590,11 +590,12 @@ export class ProductionAgent {
 
     // Reflection configuration
     const reflectionConfig = this.config.reflection;
-    const autoReflect = reflectionConfig && reflectionConfig !== false && reflectionConfig.autoReflect;
-    const maxReflectionAttempts = (reflectionConfig && reflectionConfig !== false)
+    const reflectionEnabled = isFeatureEnabled(reflectionConfig);
+    const autoReflect = reflectionEnabled && reflectionConfig.autoReflect;
+    const maxReflectionAttempts = reflectionEnabled
       ? (reflectionConfig.maxAttempts || 3)
       : 1;
-    const confidenceThreshold = (reflectionConfig && reflectionConfig !== false)
+    const confidenceThreshold = reflectionEnabled
       ? (reflectionConfig.confidenceThreshold || 0.8)
       : 0.8;
 
@@ -1041,7 +1042,7 @@ export class ProductionAgent {
 
     // Lesson 26: Record LLM request for tracing
     const model = this.config.model || 'default';
-    const provider = this.config.provider?.name || 'unknown';
+    const provider = (this.config.provider as { name?: string })?.name || 'unknown';
     this.traceCollector?.record({
       type: 'llm.request',
       data: {

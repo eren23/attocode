@@ -25,6 +25,8 @@ import type {
   LSPAgentConfig,
   SemanticCacheAgentConfig,
   SkillsAgentConfig,
+  CodebaseContextAgentConfig,
+  CompactionAgentConfig,
   ProductionAgentConfig,
 } from './types.js';
 
@@ -294,6 +296,19 @@ export const DEFAULT_SKILLS_CONFIG: SkillsAgentConfig = {
   autoActivate: false, // Manual activation by default
 };
 
+/**
+ * Default compaction configuration.
+ */
+export const DEFAULT_COMPACTION_CONFIG: CompactionAgentConfig = {
+  enabled: true, // Enabled by default for context management
+  tokenThreshold: 80000, // Trigger at 80K tokens
+  preserveRecentCount: 10, // Keep last 10 messages verbatim
+  preserveToolResults: true, // Keep tool results
+  summaryMaxTokens: 2000, // Summary size limit
+  summaryModel: undefined, // Uses default model
+  mode: 'auto', // Auto-compact without prompting
+};
+
 // =============================================================================
 // MERGE HELPERS
 // =============================================================================
@@ -338,6 +353,18 @@ export function mergeConfig<T extends object>(
 }
 
 /**
+ * Default codebase context configuration.
+ */
+export const DEFAULT_CODEBASE_CONTEXT_CONFIG: CodebaseContextAgentConfig = {
+  enabled: false, // Disabled by default (optimization, not critical)
+  includePatterns: ['**/*.ts', '**/*.tsx', '**/*.js', '**/*.jsx', '**/*.py', '**/*.go', '**/*.rs'],
+  excludePatterns: ['**/node_modules/**', '**/dist/**', '**/build/**', '**/.git/**'],
+  maxFileSize: 100 * 1024, // 100KB
+  maxTokens: 50000,
+  strategy: 'importance_first',
+};
+
+/**
  * Build complete configuration from partial user config.
  */
 export function buildConfig(
@@ -348,6 +375,8 @@ export function buildConfig(
     tools: userConfig.tools || [],
     systemPrompt: userConfig.systemPrompt || DEFAULT_SYSTEM_PROMPT,
     model: userConfig.model || 'default',
+    maxTokens: userConfig.maxTokens ?? 4096,
+    temperature: userConfig.temperature ?? 0.7,
     hooks: mergeConfig(DEFAULT_HOOKS_CONFIG, userConfig.hooks),
     plugins: mergeConfig(DEFAULT_PLUGINS_CONFIG, userConfig.plugins),
     rules: mergeConfig(DEFAULT_RULES_CONFIG, userConfig.rules),
@@ -367,6 +396,9 @@ export function buildConfig(
     lsp: mergeConfig(DEFAULT_LSP_CONFIG, userConfig.lsp),
     semanticCache: mergeConfig(DEFAULT_SEMANTIC_CACHE_CONFIG, userConfig.semanticCache),
     skills: mergeConfig(DEFAULT_SKILLS_CONFIG, userConfig.skills),
+    codebaseContext: mergeConfig(DEFAULT_CODEBASE_CONTEXT_CONFIG, userConfig.codebaseContext),
+    compaction: mergeConfig(DEFAULT_COMPACTION_CONFIG, userConfig.compaction),
+    maxContextTokens: userConfig.maxContextTokens ?? 100000, // 100k tokens default
     maxIterations: userConfig.maxIterations ?? 50,
     timeout: userConfig.timeout ?? 300000, // 5 minutes
     toolResolver: userConfig.toolResolver, // Optional: for lazy-loading MCP tools

@@ -5,8 +5,9 @@
  * Tracks operations as spans with parent-child relationships.
  */
 
-import { webcrypto } from 'crypto';
-const crypto = webcrypto as Crypto;
+import { webcrypto } from 'node:crypto';
+// Use webcrypto directly - it's compatible with Web Crypto API
+const crypto = webcrypto;
 
 import type {
   Span,

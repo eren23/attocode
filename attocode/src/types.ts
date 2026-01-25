@@ -55,6 +55,7 @@ export interface ToolDefinition {
  * LLM provider interface.
  */
 export interface LLMProvider {
+  name?: string;
   chat(messages: Message[], options?: ChatOptions): Promise<ChatResponse>;
   stream?(messages: Message[], options?: ChatOptions): AsyncIterable<StreamChunk>;
 }
@@ -71,6 +72,7 @@ export interface ChatResponse {
   toolCalls?: ToolCall[];
   usage?: TokenUsage;
   model?: string;
+  stopReason?: 'end_turn' | 'tool_use' | 'max_tokens' | 'stop_sequence';
 }
 
 export interface StreamChunk {
@@ -84,6 +86,9 @@ export interface TokenUsage {
   inputTokens: number;
   outputTokens: number;
   totalTokens: number;
+  cacheReadTokens?: number;
+  cacheWriteTokens?: number;
+  cost?: number;
 }
 
 // =============================================================================
@@ -106,6 +111,12 @@ export interface ProductionAgentConfig {
 
   /** Model to use */
   model?: string;
+
+  /** Maximum tokens for LLM responses */
+  maxTokens?: number;
+
+  /** Temperature for LLM responses */
+  temperature?: number;
 
   /** Hook system configuration */
   hooks?: HooksConfig | false;
@@ -166,6 +177,9 @@ export interface ProductionAgentConfig {
 
   /** Codebase context configuration (intelligent code selection) */
   codebaseContext?: CodebaseContextAgentConfig | false;
+
+  /** Compaction configuration (context management) */
+  compaction?: CompactionAgentConfig | false;
 
   /** Maximum context tokens before compaction */
   maxContextTokens?: number;
@@ -749,6 +763,62 @@ export interface CodebaseContextAgentConfig {
   strategy?: 'importance_first' | 'relevance_first' | 'breadth_first' | 'depth_first';
 }
 
+/**
+ * Compaction configuration.
+ * Controls automatic context compaction for long sessions.
+ */
+export interface CompactionAgentConfig {
+  /** Enable/disable compaction */
+  enabled?: boolean;
+
+  /** Token threshold to trigger compaction (e.g., 80000) */
+  tokenThreshold?: number;
+
+  /** Number of recent messages to preserve verbatim */
+  preserveRecentCount?: number;
+
+  /** Whether to preserve tool results in compaction */
+  preserveToolResults?: boolean;
+
+  /** Maximum tokens for the summary */
+  summaryMaxTokens?: number;
+
+  /** Model to use for summarization (defaults to main model) */
+  summaryModel?: string;
+
+  /** Compaction mode: auto, approval, manual */
+  mode?: 'auto' | 'approval' | 'manual';
+}
+
+/**
+ * Configuration for trace collection.
+ */
+export interface TraceCollectorConfig {
+  /** Enable trace collection */
+  enabled?: boolean;
+
+  /** Capture full message content (can be large) */
+  captureMessageContent?: boolean;
+
+  /** Capture tool results (can be large) */
+  captureToolResults?: boolean;
+
+  /** Max result size before truncation */
+  maxResultSize?: number;
+
+  /** Enable cache boundary analysis */
+  analyzeCacheBoundaries?: boolean;
+
+  /** Output directory for traces */
+  outputDir?: string;
+
+  /** JSONL file name pattern */
+  filePattern?: string;
+
+  /** Enable console output for traces */
+  enableConsoleOutput?: boolean;
+}
+
 // =============================================================================
 // AGENT STATE & RESULTS
 // =============================================================================
@@ -889,6 +959,9 @@ export type AgentEvent =
   | { type: 'cache.hit'; query: string; similarity: number }
   | { type: 'cache.miss'; query: string }
   | { type: 'cache.set'; query: string }
+  // Compaction events
+  | { type: 'compaction.auto'; tokensBefore: number; tokensAfter: number; messagesCompacted: number }
+  | { type: 'compaction.warning'; currentTokens: number; threshold: number }
   // Mode events
   | { type: 'mode.changed'; from: string; to: string };
 

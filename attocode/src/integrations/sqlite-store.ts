@@ -14,7 +14,6 @@
 
 import Database from 'better-sqlite3';
 import { join, dirname } from 'node:path';
-import { fileURLToPath } from 'node:url';
 import { mkdir } from 'node:fs/promises';
 import { existsSync, readFileSync } from 'node:fs';
 import type { Message, ToolCall } from '../types.js';
@@ -25,7 +24,12 @@ import type {
   SessionEventListener,
   SessionStoreConfig,
 } from './session-store.js';
-import { applyMigrations } from '../persistence/migrator.js';
+import {
+  applyMigrations,
+  getMigrationStatus,
+  detectFeatures,
+  type SchemaFeatures,
+} from '../persistence/schema.js';
 
 // =============================================================================
 // TYPES
@@ -87,63 +91,143 @@ export interface SessionMetadata {
   costUsd?: number;
 }
 
-// =============================================================================
-// SCHEMA
-// =============================================================================
+/**
+ * Goal status types.
+ */
+export type GoalStatus = 'active' | 'completed' | 'abandoned';
 
-const SCHEMA = `
--- Sessions table
-CREATE TABLE IF NOT EXISTS sessions (
-  id TEXT PRIMARY KEY,
-  name TEXT,
-  created_at TEXT NOT NULL,
-  last_active_at TEXT NOT NULL,
-  message_count INTEGER DEFAULT 0,
-  token_count INTEGER DEFAULT 0,
-  summary TEXT
-);
+/**
+ * Goal for tracking agent objectives.
+ * Goals persist outside of context and survive compaction.
+ */
+export interface Goal {
+  id: string;
+  sessionId: string;
+  goalText: string;
+  status: GoalStatus;
+  priority: number;        // 1=highest, 3=lowest
+  parentGoalId?: string;   // for sub-goals
+  progressCurrent: number;
+  progressTotal?: number;
+  createdAt: string;
+  updatedAt: string;
+  completedAt?: string;
+  metadata?: string;       // JSON for extensibility
+}
 
--- Session entries table (messages, tool calls, checkpoints, etc.)
-CREATE TABLE IF NOT EXISTS entries (
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
-  session_id TEXT NOT NULL,
-  timestamp TEXT NOT NULL,
-  type TEXT NOT NULL,
-  data TEXT NOT NULL,
-  FOREIGN KEY (session_id) REFERENCES sessions(id) ON DELETE CASCADE
-);
+/**
+ * Juncture type - key moments in agent execution.
+ */
+export type JunctureType = 'decision' | 'failure' | 'breakthrough' | 'pivot';
 
--- Tool calls table (for fast tool lookup)
-CREATE TABLE IF NOT EXISTS tool_calls (
-  id TEXT PRIMARY KEY,
-  session_id TEXT NOT NULL,
-  name TEXT NOT NULL,
-  arguments TEXT NOT NULL,
-  status TEXT DEFAULT 'pending',
-  result TEXT,
-  error TEXT,
-  duration_ms INTEGER,
-  created_at TEXT NOT NULL,
-  completed_at TEXT,
-  FOREIGN KEY (session_id) REFERENCES sessions(id) ON DELETE CASCADE
-);
+/**
+ * Critical juncture - captures key decisions, failures, breakthroughs.
+ */
+export interface Juncture {
+  id: number;
+  sessionId: string;
+  goalId?: string;
+  type: JunctureType;
+  description: string;
+  outcome?: string;
+  importance: number;      // 1=critical, 2=significant, 3=minor
+  context?: string;        // JSON
+  createdAt: string;
+}
 
--- Checkpoints table (for state restoration)
-CREATE TABLE IF NOT EXISTS checkpoints (
-  id TEXT PRIMARY KEY,
-  session_id TEXT NOT NULL,
-  state_json TEXT NOT NULL,
-  created_at TEXT NOT NULL,
-  description TEXT,
-  FOREIGN KEY (session_id) REFERENCES sessions(id) ON DELETE CASCADE
-);
+/**
+ * Worker result status types.
+ */
+export type WorkerResultStatus = 'pending' | 'success' | 'error';
 
--- Indexes for common queries
-CREATE INDEX IF NOT EXISTS idx_entries_session ON entries(session_id);
-CREATE INDEX IF NOT EXISTS idx_entries_session_type ON entries(session_id, type);
-CREATE INDEX IF NOT EXISTS idx_tool_calls_session ON tool_calls(session_id);
-CREATE INDEX IF NOT EXISTS idx_checkpoints_session ON checkpoints(session_id);
-`;
+/**
+ * Worker result - stores full output outside main context.
+ * Main agent only sees reference + summary.
+ */
+export interface WorkerResult {
+  id: string;
+  sessionId: string;
+  workerId: string;
+  taskDescription: string;
+  modelUsed?: string;
+  status: WorkerResultStatus;
+  summary?: string;           // Brief summary for context injection
+  fullOutput?: string;        // Complete output stored here (not in context)
+  artifacts?: string;         // JSON: files modified, code generated
+  metrics?: string;           // JSON: tokens, duration, tool_calls
+  error?: string;
+  createdAt: string;
+  completedAt?: string;
+}
+
+/**
+ * Worker result reference - lightweight pointer to stored result.
+ * This is what gets injected into context instead of full output.
+ */
+export interface WorkerResultRef {
+  id: string;
+  workerId: string;
+  taskDescription: string;
+  status: WorkerResultStatus;
+  summary?: string;
+  modelUsed?: string;
+  /** Hint: Use store.getWorkerResult(id) to retrieve full output */
+  retrievalHint: string;
+}
+
+/**
+ * Session manifest - complete snapshot for handoff.
+ * Contains all information needed for another agent/human to pick up work.
+ */
+export interface SessionManifest {
+  version: string;
+  exportedAt: string;
+  session: {
+    id: string;
+    name?: string;
+    createdAt: string;
+    lastActiveAt: string;
+    summary?: string;
+  };
+  state: {
+    messageCount: number;
+    toolCallCount: number;
+    compactionCount: number;
+    tokenCount?: number;
+    costUsd?: number;
+  };
+  goals: {
+    active: Array<{
+      id: string;
+      text: string;
+      priority: number;
+      progress?: string;
+    }>;
+    completed: Array<{
+      id: string;
+      text: string;
+      completedAt?: string;
+    }>;
+  };
+  keyMoments: Array<{
+    type: string;
+    description: string;
+    outcome?: string;
+    createdAt: string;
+  }>;
+  workerResults: Array<{
+    id: string;
+    task: string;
+    status: string;
+    summary?: string;
+    model?: string;
+  }>;
+  resumption: {
+    currentSessionId: string;
+    canResume: boolean;
+    hint: string;
+  };
+}
 
 // =============================================================================
 // SQLITE STORE
@@ -158,8 +242,21 @@ export class SQLiteStore {
   private currentSessionId: string | null = null;
   private listeners: SessionEventListener[] = [];
 
+  /** Available schema features (detected after migration) */
+  private features: SchemaFeatures = {
+    core: false,
+    costs: false,
+    hierarchy: false,
+    compaction: false,
+    fileChanges: false,
+    goals: false,
+    workerResults: false,
+  };
+
   // Prepared statements for performance
+  // Goal-related statements are optional (only prepared if feature is available)
   private stmts!: {
+    // Core statements (always available)
     insertSession: Database.Statement;
     updateSession: Database.Statement;
     deleteSession: Database.Statement;
@@ -179,6 +276,20 @@ export class SQLiteStore {
     insertChildSession: Database.Statement;
     getChildSessions: Database.Statement;
     getSessionTree: Database.Statement;
+    // Goal integrity statements (optional - only if goals feature available)
+    insertGoal?: Database.Statement;
+    updateGoal?: Database.Statement;
+    getGoal?: Database.Statement;
+    listGoals?: Database.Statement;
+    listActiveGoals?: Database.Statement;
+    insertJuncture?: Database.Statement;
+    listJunctures?: Database.Statement;
+    // Worker result statements (optional - only if workerResults feature available)
+    insertWorkerResult?: Database.Statement;
+    updateWorkerResult?: Database.Statement;
+    getWorkerResult?: Database.Statement;
+    listWorkerResults?: Database.Statement;
+    listPendingWorkerResults?: Database.Statement;
   };
 
   constructor(config: SQLiteStoreConfig = {}) {
@@ -212,12 +323,34 @@ export class SQLiteStore {
       await mkdir(dbDir, { recursive: true });
     }
 
-    // Apply migrations (includes initial schema creation for new databases)
-    const __dirname = dirname(fileURLToPath(import.meta.url));
-    const migrationsDir = join(__dirname, '../persistence/migrations');
-    applyMigrations(this.db, migrationsDir);
+    // Apply embedded migrations (no file I/O needed)
+    const isDebug = process.env.DEBUG || process.argv.includes('--debug');
+    if (isDebug) {
+      const status = getMigrationStatus(this.db);
+      process.stderr.write(
+        `[DEBUG] [SQLite] DB version: ${status.currentVersion}, latest: ${status.latestVersion}, pending: ${status.pendingCount}\n`
+      );
+    }
 
-    // Prepare statements
+    const result = applyMigrations(this.db);
+
+    if (isDebug && result.applied > 0) {
+      process.stderr.write(
+        `[DEBUG] [SQLite] Applied ${result.applied} migrations: ${result.appliedMigrations.join(', ')}\n`
+      );
+    }
+
+    // Detect available features after migrations
+    this.features = detectFeatures(this.db);
+
+    if (isDebug) {
+      const enabled = Object.entries(this.features)
+        .filter(([, v]) => v)
+        .map(([k]) => k);
+      process.stderr.write(`[DEBUG] [SQLite] Features: ${enabled.join(', ')}\n`);
+    }
+
+    // Prepare statements for available features
     this.prepareStatements();
   }
 
@@ -244,7 +377,8 @@ export class SQLiteStore {
       deleteSession: this.db.prepare(`DELETE FROM sessions WHERE id = ?`),
 
       getSession: this.db.prepare(`
-        SELECT id, name, created_at as createdAt, last_active_at as lastActiveAt,
+        SELECT id, name, created_at as createdAt,
+               COALESCE(last_active_at, created_at) as lastActiveAt,
                message_count as messageCount, token_count as tokenCount, summary,
                parent_session_id as parentSessionId, session_type as sessionType,
                prompt_tokens as promptTokens, completion_tokens as completionTokens,
@@ -253,12 +387,13 @@ export class SQLiteStore {
       `),
 
       listSessions: this.db.prepare(`
-        SELECT id, name, created_at as createdAt, last_active_at as lastActiveAt,
+        SELECT id, name, created_at as createdAt,
+               COALESCE(last_active_at, created_at) as lastActiveAt,
                message_count as messageCount, token_count as tokenCount, summary,
                parent_session_id as parentSessionId, session_type as sessionType,
                prompt_tokens as promptTokens, completion_tokens as completionTokens,
                cost_usd as costUsd
-        FROM sessions ORDER BY last_active_at DESC
+        FROM sessions ORDER BY COALESCE(last_active_at, created_at) DESC
       `),
 
       insertEntry: this.db.prepare(`
@@ -356,6 +491,116 @@ export class SQLiteStore {
         SELECT * FROM session_tree ORDER BY depth, createdAt ASC
       `),
     };
+
+    // Goal integrity statements - only prepare if feature is available
+    if (this.features.goals) {
+      this.stmts.insertGoal = this.db.prepare(`
+        INSERT INTO goals (id, session_id, goal_text, status, priority, parent_goal_id,
+                          progress_current, progress_total, created_at, updated_at, metadata)
+        VALUES (@id, @sessionId, @goalText, @status, @priority, @parentGoalId,
+                @progressCurrent, @progressTotal, @createdAt, @updatedAt, @metadata)
+      `);
+
+      this.stmts.updateGoal = this.db.prepare(`
+        UPDATE goals SET
+          goal_text = COALESCE(@goalText, goal_text),
+          status = COALESCE(@status, status),
+          priority = COALESCE(@priority, priority),
+          progress_current = COALESCE(@progressCurrent, progress_current),
+          progress_total = COALESCE(@progressTotal, progress_total),
+          updated_at = @updatedAt,
+          completed_at = @completedAt,
+          metadata = COALESCE(@metadata, metadata)
+        WHERE id = @id
+      `);
+
+      this.stmts.getGoal = this.db.prepare(`
+        SELECT id, session_id as sessionId, goal_text as goalText, status, priority,
+               parent_goal_id as parentGoalId, progress_current as progressCurrent,
+               progress_total as progressTotal, created_at as createdAt,
+               updated_at as updatedAt, completed_at as completedAt, metadata
+        FROM goals WHERE id = ?
+      `);
+
+      this.stmts.listGoals = this.db.prepare(`
+        SELECT id, session_id as sessionId, goal_text as goalText, status, priority,
+               parent_goal_id as parentGoalId, progress_current as progressCurrent,
+               progress_total as progressTotal, created_at as createdAt,
+               updated_at as updatedAt, completed_at as completedAt, metadata
+        FROM goals WHERE session_id = ? ORDER BY priority ASC, created_at ASC
+      `);
+
+      this.stmts.listActiveGoals = this.db.prepare(`
+        SELECT id, session_id as sessionId, goal_text as goalText, status, priority,
+               parent_goal_id as parentGoalId, progress_current as progressCurrent,
+               progress_total as progressTotal, created_at as createdAt,
+               updated_at as updatedAt, completed_at as completedAt, metadata
+        FROM goals WHERE session_id = ? AND status = 'active'
+        ORDER BY priority ASC, created_at ASC
+      `);
+
+      this.stmts.insertJuncture = this.db.prepare(`
+        INSERT INTO junctures (session_id, goal_id, type, description, outcome,
+                               importance, context, created_at)
+        VALUES (@sessionId, @goalId, @type, @description, @outcome,
+                @importance, @context, @createdAt)
+      `);
+
+      this.stmts.listJunctures = this.db.prepare(`
+        SELECT id, session_id as sessionId, goal_id as goalId, type, description,
+               outcome, importance, context, created_at as createdAt
+        FROM junctures WHERE session_id = ? ORDER BY created_at DESC
+      `);
+    }
+
+    // Worker result statements - only prepare if feature is available
+    if (this.features.workerResults) {
+      this.stmts.insertWorkerResult = this.db.prepare(`
+        INSERT INTO worker_results (id, session_id, worker_id, task_description, model_used,
+                                    status, summary, full_output, artifacts, metrics, error,
+                                    created_at, completed_at)
+        VALUES (@id, @sessionId, @workerId, @taskDescription, @modelUsed,
+                @status, @summary, @fullOutput, @artifacts, @metrics, @error,
+                @createdAt, @completedAt)
+      `);
+
+      this.stmts.updateWorkerResult = this.db.prepare(`
+        UPDATE worker_results SET
+          status = COALESCE(@status, status),
+          summary = COALESCE(@summary, summary),
+          full_output = COALESCE(@fullOutput, full_output),
+          artifacts = COALESCE(@artifacts, artifacts),
+          metrics = COALESCE(@metrics, metrics),
+          error = @error,
+          completed_at = @completedAt
+        WHERE id = @id
+      `);
+
+      this.stmts.getWorkerResult = this.db.prepare(`
+        SELECT id, session_id as sessionId, worker_id as workerId,
+               task_description as taskDescription, model_used as modelUsed,
+               status, summary, full_output as fullOutput, artifacts, metrics,
+               error, created_at as createdAt, completed_at as completedAt
+        FROM worker_results WHERE id = ?
+      `);
+
+      this.stmts.listWorkerResults = this.db.prepare(`
+        SELECT id, session_id as sessionId, worker_id as workerId,
+               task_description as taskDescription, model_used as modelUsed,
+               status, summary, full_output as fullOutput, artifacts, metrics,
+               error, created_at as createdAt, completed_at as completedAt
+        FROM worker_results WHERE session_id = ?
+        ORDER BY created_at DESC
+      `);
+
+      this.stmts.listPendingWorkerResults = this.db.prepare(`
+        SELECT id, session_id as sessionId, worker_id as workerId,
+               task_description as taskDescription, model_used as modelUsed,
+               status, summary, created_at as createdAt
+        FROM worker_results WHERE session_id = ? AND status = 'pending'
+        ORDER BY created_at ASC
+      `);
+    }
   }
 
   // ===========================================================================
@@ -420,6 +665,20 @@ export class SQLiteStore {
 
     // Update session metadata
     if (entry.type === 'message') {
+      const msg = entry.data as Message;
+
+      // Set summary from first user message (for session picker display)
+      if (msg.role === 'user' && typeof msg.content === 'string') {
+        // Only set if no summary yet
+        const session = this.stmts.getSession.get(this.currentSessionId) as SessionMetadata | undefined;
+        if (session && !session.summary) {
+          // Extract first line or first ~50 chars as summary
+          const firstLine = msg.content.split('\n')[0].trim();
+          const summary = firstLine.length > 60 ? firstLine.slice(0, 57) + '...' : firstLine;
+          this.db.prepare(`UPDATE sessions SET summary = ? WHERE id = ?`).run(summary, this.currentSessionId);
+        }
+      }
+
       this.db.prepare(`
         UPDATE sessions SET
           last_active_at = ?,
@@ -741,6 +1000,643 @@ export class SQLiteStore {
     const rows = this.stmts.getSessionTree.all(rootId) as Array<SessionMetadata & { depth: number }>;
     // Remove the depth field from results (used only for ordering)
     return rows.map(({ depth, ...session }) => session);
+  }
+
+  // ===========================================================================
+  // GOAL INTEGRITY
+  // ===========================================================================
+
+  /**
+   * Check if goals feature is available.
+   */
+  hasGoalsFeature(): boolean {
+    return this.features.goals;
+  }
+
+  /**
+   * Create a new goal for the current session.
+   * Goals persist outside of context and survive compaction.
+   * Returns undefined if goals feature is not available.
+   */
+  createGoal(
+    goalText: string,
+    options: {
+      priority?: number;
+      parentGoalId?: string;
+      progressTotal?: number;
+      metadata?: Record<string, unknown>;
+    } = {}
+  ): string | undefined {
+    if (!this.features.goals || !this.stmts.insertGoal) {
+      return undefined;
+    }
+
+    if (!this.currentSessionId) {
+      this.createSession();
+    }
+
+    const id = `goal-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`;
+    const now = new Date().toISOString();
+
+    this.stmts.insertGoal.run({
+      id,
+      sessionId: this.currentSessionId,
+      goalText,
+      status: 'active',
+      priority: options.priority ?? 2,
+      parentGoalId: options.parentGoalId ?? null,
+      progressCurrent: 0,
+      progressTotal: options.progressTotal ?? null,
+      createdAt: now,
+      updatedAt: now,
+      metadata: options.metadata ? JSON.stringify(options.metadata) : null,
+    });
+
+    return id;
+  }
+
+  /**
+   * Update a goal's status or progress.
+   */
+  updateGoal(
+    goalId: string,
+    updates: {
+      goalText?: string;
+      status?: GoalStatus;
+      priority?: number;
+      progressCurrent?: number;
+      progressTotal?: number;
+      metadata?: Record<string, unknown>;
+    }
+  ): void {
+    if (!this.features.goals || !this.stmts.updateGoal) {
+      return;
+    }
+
+    const now = new Date().toISOString();
+
+    this.stmts.updateGoal.run({
+      id: goalId,
+      goalText: updates.goalText ?? null,
+      status: updates.status ?? null,
+      priority: updates.priority ?? null,
+      progressCurrent: updates.progressCurrent ?? null,
+      progressTotal: updates.progressTotal ?? null,
+      updatedAt: now,
+      completedAt: updates.status === 'completed' || updates.status === 'abandoned' ? now : null,
+      metadata: updates.metadata ? JSON.stringify(updates.metadata) : null,
+    });
+  }
+
+  /**
+   * Mark a goal as completed.
+   */
+  completeGoal(goalId: string): void {
+    this.updateGoal(goalId, { status: 'completed' });
+  }
+
+  /**
+   * Get a goal by ID.
+   */
+  getGoal(goalId: string): Goal | undefined {
+    if (!this.features.goals || !this.stmts.getGoal) {
+      return undefined;
+    }
+    return this.stmts.getGoal.get(goalId) as Goal | undefined;
+  }
+
+  /**
+   * List all goals for a session.
+   */
+  listGoals(sessionId?: string): Goal[] {
+    if (!this.features.goals || !this.stmts.listGoals) {
+      return [];
+    }
+    const sid = sessionId ?? this.currentSessionId;
+    if (!sid) return [];
+    return this.stmts.listGoals.all(sid) as Goal[];
+  }
+
+  /**
+   * List active goals for a session.
+   */
+  listActiveGoals(sessionId?: string): Goal[] {
+    if (!this.features.goals || !this.stmts.listActiveGoals) {
+      return [];
+    }
+    const sid = sessionId ?? this.currentSessionId;
+    if (!sid) return [];
+    return this.stmts.listActiveGoals.all(sid) as Goal[];
+  }
+
+  /**
+   * Get a summary of the current goals for context injection.
+   * This is what gets recited to maintain goal awareness.
+   */
+  getGoalsSummary(sessionId?: string): string {
+    if (!this.features.goals) {
+      return 'Goals feature not available.';
+    }
+
+    const goals = this.listActiveGoals(sessionId);
+    if (goals.length === 0) {
+      return 'No active goals.';
+    }
+
+    const lines: string[] = ['Active Goals:'];
+    for (const goal of goals) {
+      const progress = goal.progressTotal
+        ? ` (${goal.progressCurrent}/${goal.progressTotal})`
+        : '';
+      const priority = goal.priority === 1 ? ' [HIGH]' : goal.priority === 3 ? ' [low]' : '';
+      lines.push(`• ${goal.goalText}${progress}${priority}`);
+    }
+    return lines.join('\n');
+  }
+
+  /**
+   * Log a critical juncture (decision, failure, breakthrough, pivot).
+   * Returns -1 if goals feature is not available.
+   */
+  logJuncture(
+    type: JunctureType,
+    description: string,
+    options: {
+      goalId?: string;
+      outcome?: string;
+      importance?: number;
+      context?: Record<string, unknown>;
+    } = {}
+  ): number {
+    if (!this.features.goals || !this.stmts.insertJuncture) {
+      return -1;
+    }
+
+    if (!this.currentSessionId) {
+      this.createSession();
+    }
+
+    const result = this.stmts.insertJuncture.run({
+      sessionId: this.currentSessionId,
+      goalId: options.goalId ?? null,
+      type,
+      description,
+      outcome: options.outcome ?? null,
+      importance: options.importance ?? 2,
+      context: options.context ? JSON.stringify(options.context) : null,
+      createdAt: new Date().toISOString(),
+    });
+
+    return Number(result.lastInsertRowid);
+  }
+
+  /**
+   * List junctures for a session.
+   */
+  listJunctures(sessionId?: string, limit?: number): Juncture[] {
+    if (!this.features.goals || !this.stmts.listJunctures) {
+      return [];
+    }
+
+    const sid = sessionId ?? this.currentSessionId;
+    if (!sid) return [];
+
+    const junctures = this.stmts.listJunctures.all(sid) as Juncture[];
+    return limit ? junctures.slice(0, limit) : junctures;
+  }
+
+  /**
+   * Get recent critical junctures for context.
+   */
+  getJuncturesSummary(sessionId?: string, limit: number = 5): string {
+    if (!this.features.goals) {
+      return '';
+    }
+
+    const junctures = this.listJunctures(sessionId, limit);
+    if (junctures.length === 0) {
+      return '';
+    }
+
+    const lines: string[] = ['Recent Key Moments:'];
+    for (const j of junctures) {
+      const icon = j.type === 'failure' ? '✗' : j.type === 'breakthrough' ? '★' :
+                   j.type === 'decision' ? '→' : '↻';
+      lines.push(`${icon} [${j.type}] ${j.description}`);
+      if (j.outcome) {
+        lines.push(`  └─ ${j.outcome}`);
+      }
+    }
+    return lines.join('\n');
+  }
+
+  // ===========================================================================
+  // WORKER RESULTS
+  // ===========================================================================
+
+  /**
+   * Check if worker results feature is available.
+   */
+  hasWorkerResultsFeature(): boolean {
+    return this.features.workerResults;
+  }
+
+  /**
+   * Create a pending worker result entry.
+   * Call this when spawning a worker to reserve the result slot.
+   * Returns the result ID for later reference.
+   */
+  createWorkerResult(
+    workerId: string,
+    taskDescription: string,
+    modelUsed?: string
+  ): string | undefined {
+    if (!this.features.workerResults || !this.stmts.insertWorkerResult) {
+      return undefined;
+    }
+
+    if (!this.currentSessionId) {
+      this.createSession();
+    }
+
+    const id = `wr-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`;
+    const now = new Date().toISOString();
+
+    this.stmts.insertWorkerResult.run({
+      id,
+      sessionId: this.currentSessionId,
+      workerId,
+      taskDescription,
+      modelUsed: modelUsed ?? null,
+      status: 'pending',
+      summary: null,
+      fullOutput: null,
+      artifacts: null,
+      metrics: null,
+      error: null,
+      createdAt: now,
+      completedAt: null,
+    });
+
+    return id;
+  }
+
+  /**
+   * Complete a worker result with output.
+   * Stores full output in database, generates summary for context injection.
+   */
+  completeWorkerResult(
+    resultId: string,
+    output: {
+      fullOutput: string;
+      summary?: string;
+      artifacts?: Record<string, unknown>[];
+      metrics?: { tokens?: number; duration?: number; toolCalls?: number };
+    }
+  ): WorkerResultRef | undefined {
+    if (!this.features.workerResults || !this.stmts.updateWorkerResult) {
+      return undefined;
+    }
+
+    const now = new Date().toISOString();
+
+    // Auto-generate summary if not provided (first 200 chars)
+    const summary = output.summary ?? this.generateResultSummary(output.fullOutput);
+
+    this.stmts.updateWorkerResult.run({
+      id: resultId,
+      status: 'success',
+      summary,
+      fullOutput: output.fullOutput,
+      artifacts: output.artifacts ? JSON.stringify(output.artifacts) : null,
+      metrics: output.metrics ? JSON.stringify(output.metrics) : null,
+      error: null,
+      completedAt: now,
+    });
+
+    // Return reference for context injection
+    const result = this.getWorkerResult(resultId);
+    return result ? this.toResultRef(result) : undefined;
+  }
+
+  /**
+   * Mark a worker result as failed.
+   */
+  failWorkerResult(resultId: string, error: string): void {
+    if (!this.features.workerResults || !this.stmts.updateWorkerResult) {
+      return;
+    }
+
+    this.stmts.updateWorkerResult.run({
+      id: resultId,
+      status: 'error',
+      summary: `Failed: ${error.slice(0, 100)}`,
+      fullOutput: null,
+      artifacts: null,
+      metrics: null,
+      error,
+      completedAt: new Date().toISOString(),
+    });
+  }
+
+  /**
+   * Get a worker result by ID (includes full output).
+   */
+  getWorkerResult(resultId: string): WorkerResult | undefined {
+    if (!this.features.workerResults || !this.stmts.getWorkerResult) {
+      return undefined;
+    }
+    return this.stmts.getWorkerResult.get(resultId) as WorkerResult | undefined;
+  }
+
+  /**
+   * Get a lightweight reference to a worker result (for context injection).
+   * Does NOT include full output - that stays in database.
+   */
+  getWorkerResultRef(resultId: string): WorkerResultRef | undefined {
+    const result = this.getWorkerResult(resultId);
+    return result ? this.toResultRef(result) : undefined;
+  }
+
+  /**
+   * List all worker results for a session.
+   */
+  listWorkerResults(sessionId?: string): WorkerResult[] {
+    if (!this.features.workerResults || !this.stmts.listWorkerResults) {
+      return [];
+    }
+    const sid = sessionId ?? this.currentSessionId;
+    if (!sid) return [];
+    return this.stmts.listWorkerResults.all(sid) as WorkerResult[];
+  }
+
+  /**
+   * List pending worker results (workers still running).
+   */
+  listPendingWorkerResults(sessionId?: string): WorkerResult[] {
+    if (!this.features.workerResults || !this.stmts.listPendingWorkerResults) {
+      return [];
+    }
+    const sid = sessionId ?? this.currentSessionId;
+    if (!sid) return [];
+    return this.stmts.listPendingWorkerResults.all(sid) as WorkerResult[];
+  }
+
+  /**
+   * Get a summary of worker results for context injection.
+   * Returns lightweight references, not full outputs.
+   */
+  getWorkerResultsSummary(sessionId?: string): string {
+    if (!this.features.workerResults) {
+      return '';
+    }
+
+    const results = this.listWorkerResults(sessionId);
+    if (results.length === 0) {
+      return '';
+    }
+
+    const lines: string[] = ['Worker Results:'];
+    for (const r of results.slice(0, 10)) {
+      const status = r.status === 'success' ? '✓' : r.status === 'error' ? '✗' : '⏳';
+      const task = r.taskDescription.length > 50
+        ? r.taskDescription.slice(0, 47) + '...'
+        : r.taskDescription;
+      lines.push(`${status} [${r.id}] ${task}`);
+      if (r.summary) {
+        lines.push(`  └─ ${r.summary}`);
+      }
+    }
+    if (results.length > 10) {
+      lines.push(`  ... and ${results.length - 10} more`);
+    }
+    return lines.join('\n');
+  }
+
+  /**
+   * Convert a full WorkerResult to a lightweight reference.
+   */
+  private toResultRef(result: WorkerResult): WorkerResultRef {
+    return {
+      id: result.id,
+      workerId: result.workerId,
+      taskDescription: result.taskDescription,
+      status: result.status,
+      summary: result.summary,
+      modelUsed: result.modelUsed,
+      retrievalHint: `Full output available: store.getWorkerResult('${result.id}')`,
+    };
+  }
+
+  /**
+   * Generate a brief summary from full output.
+   */
+  private generateResultSummary(fullOutput: string): string {
+    const firstLine = fullOutput.split('\n')[0].trim();
+    if (firstLine.length <= 150) {
+      return firstLine;
+    }
+    return firstLine.slice(0, 147) + '...';
+  }
+
+  // ===========================================================================
+  // SESSION MANIFEST (Handoff Support)
+  // ===========================================================================
+
+  /**
+   * Export a complete session manifest for handoff.
+   * Contains all information needed for another agent/human to pick up the work.
+   */
+  exportSessionManifest(sessionId?: string): SessionManifest | undefined {
+    const sid = sessionId ?? this.currentSessionId;
+    if (!sid) return undefined;
+
+    const session = this.getSessionMetadata(sid);
+    if (!session) return undefined;
+
+    // Collect all session state
+    const goals = this.listGoals(sid);
+    const activeGoals = goals.filter(g => g.status === 'active');
+    const completedGoals = goals.filter(g => g.status === 'completed');
+    const junctures = this.listJunctures(sid, 20);
+    const workerResults = this.listWorkerResults(sid);
+    const entries = this.loadSession(sid);
+
+    // Count message types from entries
+    let messageCount = entries.filter(e => e.type === 'message').length;
+    const toolCallCount = entries.filter(e => e.type === 'tool_call').length;
+    const compactionCount = entries.filter(e => e.type === 'compaction').length;
+
+    // If no messages in entries, check the latest checkpoint (where messages are actually stored)
+    if (messageCount === 0) {
+      const checkpoint = this.loadLatestCheckpoint(sid);
+      if (checkpoint?.state?.messages && Array.isArray(checkpoint.state.messages)) {
+        messageCount = checkpoint.state.messages.length;
+      }
+    }
+
+    return {
+      version: '1.0',
+      exportedAt: new Date().toISOString(),
+      session: {
+        id: session.id,
+        name: session.name,
+        createdAt: session.createdAt,
+        lastActiveAt: session.lastActiveAt,
+        summary: session.summary,
+      },
+      state: {
+        messageCount,
+        toolCallCount,
+        compactionCount,
+        tokenCount: session.tokenCount,
+        costUsd: session.costUsd,
+      },
+      goals: {
+        active: activeGoals.map(g => ({
+          id: g.id,
+          text: g.goalText,
+          priority: g.priority,
+          progress: g.progressTotal
+            ? `${g.progressCurrent}/${g.progressTotal}`
+            : undefined,
+        })),
+        completed: completedGoals.map(g => ({
+          id: g.id,
+          text: g.goalText,
+          completedAt: g.completedAt,
+        })),
+      },
+      keyMoments: junctures.map(j => ({
+        type: j.type,
+        description: j.description,
+        outcome: j.outcome,
+        createdAt: j.createdAt,
+      })),
+      workerResults: workerResults.map(r => ({
+        id: r.id,
+        task: r.taskDescription,
+        status: r.status,
+        summary: r.summary,
+        model: r.modelUsed,
+      })),
+      resumption: {
+        currentSessionId: sid,
+        canResume: true,
+        hint: 'Load this session with /load ' + sid.slice(-8),
+      },
+    };
+  }
+
+  /**
+   * Export session as human-readable markdown.
+   * Suitable for printing, sharing, or reviewing offline.
+   */
+  exportSessionMarkdown(sessionId?: string): string {
+    const manifest = this.exportSessionManifest(sessionId);
+    if (!manifest) return '# Session Not Found\n';
+
+    const lines: string[] = [];
+
+    // Header
+    lines.push(`# Session Handoff: ${manifest.session.name || manifest.session.id}`);
+    lines.push('');
+    lines.push(`> Exported: ${manifest.exportedAt}`);
+    lines.push(`> Session ID: \`${manifest.session.id}\``);
+    lines.push('');
+
+    // Summary
+    if (manifest.session.summary) {
+      lines.push('## Summary');
+      lines.push('');
+      lines.push(manifest.session.summary);
+      lines.push('');
+    }
+
+    // State
+    lines.push('## Session State');
+    lines.push('');
+    lines.push(`- Messages: ${manifest.state.messageCount}`);
+    lines.push(`- Tool Calls: ${manifest.state.toolCallCount}`);
+    lines.push(`- Compactions: ${manifest.state.compactionCount}`);
+    lines.push(`- Tokens: ${manifest.state.tokenCount?.toLocaleString() ?? 'N/A'}`);
+    if (manifest.state.costUsd) {
+      lines.push(`- Cost: $${manifest.state.costUsd.toFixed(4)}`);
+    }
+    lines.push('');
+
+    // Active Goals
+    if (manifest.goals.active.length > 0) {
+      lines.push('## Active Goals');
+      lines.push('');
+      for (const goal of manifest.goals.active) {
+        const priority = goal.priority === 1 ? ' **[HIGH]**' : goal.priority === 3 ? ' [low]' : '';
+        const progress = goal.progress ? ` (${goal.progress})` : '';
+        lines.push(`- [ ] ${goal.text}${progress}${priority}`);
+      }
+      lines.push('');
+    }
+
+    // Completed Goals
+    if (manifest.goals.completed.length > 0) {
+      lines.push('## Completed Goals');
+      lines.push('');
+      for (const goal of manifest.goals.completed) {
+        lines.push(`- [x] ${goal.text}`);
+      }
+      lines.push('');
+    }
+
+    // Key Moments
+    if (manifest.keyMoments.length > 0) {
+      lines.push('## Key Moments');
+      lines.push('');
+      for (const moment of manifest.keyMoments) {
+        const icon = moment.type === 'failure' ? '❌' :
+                     moment.type === 'breakthrough' ? '⭐' :
+                     moment.type === 'decision' ? '→' : '↻';
+        lines.push(`### ${icon} ${moment.type.charAt(0).toUpperCase() + moment.type.slice(1)}`);
+        lines.push('');
+        lines.push(moment.description);
+        if (moment.outcome) {
+          lines.push('');
+          lines.push(`**Outcome:** ${moment.outcome}`);
+        }
+        lines.push('');
+      }
+    }
+
+    // Worker Results
+    if (manifest.workerResults.length > 0) {
+      lines.push('## Worker Results');
+      lines.push('');
+      for (const result of manifest.workerResults) {
+        const status = result.status === 'success' ? '✅' :
+                      result.status === 'error' ? '❌' : '⏳';
+        lines.push(`- ${status} **${result.task}**`);
+        if (result.summary) {
+          lines.push(`  - ${result.summary}`);
+        }
+        if (result.model) {
+          lines.push(`  - Model: ${result.model}`);
+        }
+      }
+      lines.push('');
+    }
+
+    // Resumption
+    lines.push('## How to Resume');
+    lines.push('');
+    lines.push('```bash');
+    lines.push(`attocode --load ${manifest.resumption.currentSessionId}`);
+    lines.push('```');
+    lines.push('');
+    lines.push('Or within attocode:');
+    lines.push('```');
+    lines.push(manifest.resumption.hint);
+    lines.push('```');
+
+    return lines.join('\n');
   }
 
   // ===========================================================================

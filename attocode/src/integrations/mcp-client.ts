@@ -89,8 +89,14 @@ interface MCPConnection {
  * MCP client configuration.
  */
 export interface MCPClientConfig {
-  /** Config file path (default: .mcp.json) */
+  /** Config file path (default: .mcp.json in cwd) */
   configPath?: string;
+  /**
+   * Multiple config paths loaded in order (later overrides earlier).
+   * Example: ['/path/to/global.mcp.json', './.mcp.json']
+   * If provided, takes precedence over configPath.
+   */
+  configPaths?: string[];
   /** Timeout for requests in ms (default: 30000) */
   requestTimeout?: number;
   /** Auto-connect on load (default: true) */
@@ -164,6 +170,7 @@ export class MCPClient {
   constructor(config: MCPClientConfig = {}) {
     this.config = {
       configPath: config.configPath || '.mcp.json',
+      configPaths: config.configPaths ?? [],
       requestTimeout: config.requestTimeout ?? 30000,
       autoConnect: config.autoConnect ?? true,
       lazyLoading: config.lazyLoading ?? false,
@@ -200,6 +207,45 @@ export class MCPClient {
       }
     } catch (err) {
       console.warn(`[MCP] Failed to load config from ${path}:`, err);
+    }
+  }
+
+  /**
+   * Load servers from multiple config files (hierarchical).
+   * Later configs override earlier ones for the same server name.
+   * Servers from all configs are merged together.
+   */
+  async loadFromHierarchicalConfigs(configPaths: string[]): Promise<void> {
+    const mergedServers: Record<string, MCPServerConfig> = {};
+
+    // Load and merge all configs
+    for (const configPath of configPaths) {
+      if (!existsSync(configPath)) {
+        continue;
+      }
+
+      try {
+        const content = await readFile(configPath, 'utf-8');
+        const mcpConfig: MCPConfigFile = JSON.parse(content);
+
+        // Merge servers (later overrides earlier)
+        for (const [name, serverConfig] of Object.entries(mcpConfig.servers)) {
+          mergedServers[name] = this.expandEnvVars(serverConfig);
+        }
+      } catch (err) {
+        console.warn(`[MCP] Failed to load config from ${configPath}:`, err);
+      }
+    }
+
+    // Register all merged servers
+    for (const [name, config] of Object.entries(mergedServers)) {
+      this.registerServer(name, config);
+
+      if (this.config.autoConnect) {
+        await this.connectServer(name).catch(err => {
+          console.warn(`[MCP] Failed to connect to ${name}:`, err.message);
+        });
+      }
     }
   }
 
@@ -810,7 +856,14 @@ export class MCPClient {
  */
 export async function createMCPClient(config?: MCPClientConfig): Promise<MCPClient> {
   const client = new MCPClient(config);
-  await client.loadFromConfig();
+
+  // Use hierarchical loading if configPaths provided, otherwise single config
+  if (config?.configPaths && config.configPaths.length > 0) {
+    await client.loadFromHierarchicalConfigs(config.configPaths);
+  } else {
+    await client.loadFromConfig();
+  }
+
   return client;
 }
 

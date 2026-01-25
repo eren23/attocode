@@ -35,8 +35,6 @@ function createMockProvider(responses: string[] = ['Mock response']): LLMProvide
         },
       };
     }),
-    complete: vi.fn(async (prompt: string) => 'Mock completion'),
-    embed: vi.fn(async (text: string) => new Array(1536).fill(0).map(() => Math.random())),
   };
 }
 
@@ -58,8 +56,6 @@ function createMockProviderWithTools(toolResponses: Array<{
         usage: { inputTokens: 100, outputTokens: 50, totalTokens: 150 },
       };
     }),
-    complete: vi.fn(async () => 'Mock completion'),
-    embed: vi.fn(async () => new Array(1536).fill(0).map(() => Math.random())),
   };
 }
 
@@ -866,11 +862,15 @@ describe('buildAgent builder methods', () => {
         name: 'reviewer',
         description: 'Reviews code',
         systemPrompt: 'You are a code reviewer.',
+        capabilities: ['review', 'analyze'],
+        authority: 1,
       })
       .addRole({
         name: 'writer',
         description: 'Writes code',
         systemPrompt: 'You are a code writer.',
+        capabilities: ['write', 'refactor'],
+        authority: 1,
       });
 
     const agent = builder.build();
