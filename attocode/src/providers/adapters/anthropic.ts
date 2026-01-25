@@ -1,18 +1,19 @@
 /**
  * Anthropic Claude Provider Adapter
- * 
+ *
  * Adapts the Anthropic SDK to our LLMProvider interface.
  */
 
-import type { 
-  LLMProvider, 
-  Message, 
-  ChatOptions, 
+import type {
+  LLMProvider,
+  Message,
+  ChatOptions,
   ChatResponse,
-  AnthropicConfig 
+  AnthropicConfig
 } from '../types.js';
 import { ProviderError } from '../types.js';
 import { registerProvider, hasEnv, requireEnv } from '../provider.js';
+import { resilientFetch, type NetworkConfig } from '../resilient-fetch.js';
 
 // =============================================================================
 // ANTHROPIC PROVIDER
@@ -21,15 +22,22 @@ import { registerProvider, hasEnv, requireEnv } from '../provider.js';
 export class AnthropicProvider implements LLMProvider {
   readonly name = 'anthropic';
   readonly defaultModel = 'claude-sonnet-4-20250514';
-  
+
   private apiKey: string;
   private model: string;
   private baseUrl: string;
+  private networkConfig: NetworkConfig;
 
   constructor(config?: AnthropicConfig) {
     this.apiKey = config?.apiKey ?? requireEnv('ANTHROPIC_API_KEY');
     this.model = config?.model ?? this.defaultModel;
     this.baseUrl = config?.baseUrl ?? 'https://api.anthropic.com';
+    // Anthropic requests can be slow for complex tasks
+    this.networkConfig = {
+      timeout: 120000,  // 2 minutes for complex reasoning
+      maxRetries: 3,
+      baseRetryDelay: 1000,
+    };
   }
 
   isConfigured(): boolean {
@@ -59,14 +67,22 @@ export class AnthropicProvider implements LLMProvider {
     };
 
     try {
-      const response = await fetch(`${this.baseUrl}/v1/messages`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'x-api-key': this.apiKey,
-          'anthropic-version': '2023-06-01',
+      const { response } = await resilientFetch({
+        url: `${this.baseUrl}/v1/messages`,
+        init: {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'x-api-key': this.apiKey,
+            'anthropic-version': '2023-06-01',
+          },
+          body: JSON.stringify(body),
         },
-        body: JSON.stringify(body),
+        providerName: this.name,
+        networkConfig: this.networkConfig,
+        onRetry: (attempt, delay, error) => {
+          console.warn(`[Anthropic] Retry attempt ${attempt} after ${delay}ms: ${error.message}`);
+        },
       });
 
       if (!response.ok) {

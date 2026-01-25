@@ -331,10 +331,28 @@ export class MCPClient {
       proc.on('error', (err) => {
         server.status = 'error';
         server.error = err.message;
+
+        // CRITICAL: Reject ALL pending requests before clearing
+        const errorMsg = new Error(`MCP server "${name}" process error: ${err.message}`);
+        for (const [_id, pending] of server.pendingRequests) {
+          pending.reject(errorMsg);
+        }
+        server.pendingRequests.clear();
+
         this.emit({ type: 'server.error', name, error: err.message });
       });
 
-      proc.on('exit', (code) => {
+      proc.on('exit', (code, signal) => {
+        // CRITICAL: Reject ALL pending requests before clearing
+        // This prevents orphaned promises that never resolve
+        const exitError = new Error(
+          `MCP server "${name}" exited unexpectedly (code: ${code}, signal: ${signal})`
+        );
+        for (const [_id, pending] of server.pendingRequests) {
+          pending.reject(exitError);
+        }
+        server.pendingRequests.clear();
+
         server.status = 'disconnected';
         server.process = null;
         server.readline = null;
@@ -433,27 +451,34 @@ export class MCPClient {
    * Handle incoming message from server.
    */
   private handleServerMessage(server: MCPConnection, line: string): void {
-    try {
-      const message = JSON.parse(line);
+    let message: { id?: number; result?: unknown; error?: { message?: string } };
 
-      // Handle response
-      if (message.id !== undefined) {
-        const pending = server.pendingRequests.get(message.id);
-        if (pending) {
-          server.pendingRequests.delete(message.id);
-          if (message.error) {
-            pending.reject(new Error(message.error.message || 'Unknown error'));
-          } else {
-            pending.resolve(message.result);
-          }
+    try {
+      message = JSON.parse(line);
+    } catch (parseError) {
+      // Log malformed JSON instead of silently ignoring
+      // This helps diagnose protocol desync issues
+      const preview = line.length > 100 ? line.substring(0, 100) + '...' : line;
+      console.error(`[MCP ${server.name}] Malformed JSON-RPC message: ${preview}`);
+      this.emit({ type: 'server.error', name: server.name, error: 'Protocol error: malformed JSON' });
+      return; // Don't crash, just skip this malformed message
+    }
+
+    // Handle response
+    if (message.id !== undefined) {
+      const pending = server.pendingRequests.get(message.id);
+      if (pending) {
+        server.pendingRequests.delete(message.id);
+        if (message.error) {
+          pending.reject(new Error(message.error.message || 'Unknown error'));
+        } else {
+          pending.resolve(message.result);
         }
       }
-
-      // Handle notifications from server (if any)
-      // MCP servers can send notifications for things like resource updates
-    } catch {
-      // Ignore parse errors
     }
+
+    // Handle notifications from server (if any)
+    // MCP servers can send notifications for things like resource updates
   }
 
   /**

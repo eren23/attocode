@@ -20,6 +20,7 @@ import type {
 } from '../types.js';
 import { ProviderError } from '../types.js';
 import { registerProvider, hasEnv, requireEnv } from '../provider.js';
+import { resilientFetch, type NetworkConfig } from '../resilient-fetch.js';
 
 // =============================================================================
 // DEFAULT MODEL SELECTION
@@ -64,6 +65,7 @@ export class OpenRouterProvider implements LLMProvider, LLMProviderWithTools {
   private baseUrl = 'https://openrouter.ai/api/v1';
   private siteUrl?: string;
   private siteName?: string;
+  private networkConfig: NetworkConfig;
 
   constructor(config?: OpenRouterConfig) {
     this.apiKey = config?.apiKey ?? requireEnv('OPENROUTER_API_KEY');
@@ -71,6 +73,11 @@ export class OpenRouterProvider implements LLMProvider, LLMProviderWithTools {
     this.model = config?.model ?? process.env.OPENROUTER_MODEL ?? this.defaultModel;
     this.siteUrl = config?.siteUrl ?? process.env.OPENROUTER_SITE_URL;
     this.siteName = config?.siteName ?? process.env.OPENROUTER_SITE_NAME;
+    this.networkConfig = {
+      timeout: 120000,  // 2 minutes
+      maxRetries: 3,
+      baseRetryDelay: 1000,
+    };
   }
 
   isConfigured(): boolean {
@@ -112,10 +119,18 @@ export class OpenRouterProvider implements LLMProvider, LLMProviderWithTools {
     }
 
     try {
-      const response = await fetch(`${this.baseUrl}/chat/completions`, {
-        method: 'POST',
-        headers,
-        body: JSON.stringify(body),
+      const { response } = await resilientFetch({
+        url: `${this.baseUrl}/chat/completions`,
+        init: {
+          method: 'POST',
+          headers,
+          body: JSON.stringify(body),
+        },
+        providerName: this.name,
+        networkConfig: this.networkConfig,
+        onRetry: (attempt, delay, error) => {
+          console.warn(`[OpenRouter] Retry attempt ${attempt} after ${delay}ms: ${error.message}`);
+        },
       });
 
       if (!response.ok) {
@@ -259,10 +274,18 @@ export class OpenRouterProvider implements LLMProvider, LLMProviderWithTools {
     }
 
     try {
-      const response = await fetch(`${this.baseUrl}/chat/completions`, {
-        method: 'POST',
-        headers,
-        body: JSON.stringify(body),
+      const { response } = await resilientFetch({
+        url: `${this.baseUrl}/chat/completions`,
+        init: {
+          method: 'POST',
+          headers,
+          body: JSON.stringify(body),
+        },
+        providerName: this.name,
+        networkConfig: this.networkConfig,
+        onRetry: (attempt, delay, error) => {
+          console.warn(`[OpenRouter] Retry attempt ${attempt} after ${delay}ms: ${error.message}`);
+        },
       });
 
       if (!response.ok) {
