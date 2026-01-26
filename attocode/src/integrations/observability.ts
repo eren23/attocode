@@ -6,6 +6,7 @@
  */
 
 import type { ObservabilityConfig, Span, SpanExporter, AgentMetrics } from '../types.js';
+import { calculateCost as calculateOpenRouterCost } from './openrouter-pricing.js';
 
 // =============================================================================
 // TRACER
@@ -332,27 +333,11 @@ export class MetricsCollector {
   }
 
   /**
-   * Estimate cost based on model.
+   * Estimate cost based on model using OpenRouter pricing cache.
    */
   private estimateCost(model: string, inputTokens: number, outputTokens: number): number {
-    const pricing: Record<string, { input: number; output: number }> = {
-      'gpt-4': { input: 0.03, output: 0.06 },
-      'gpt-4-turbo': { input: 0.01, output: 0.03 },
-      'gpt-3.5-turbo': { input: 0.0005, output: 0.0015 },
-      'claude-3-opus': { input: 0.015, output: 0.075 },
-      'claude-3-sonnet': { input: 0.003, output: 0.015 },
-      'claude-3-haiku': { input: 0.00025, output: 0.00125 },
-    };
-
-    // Find matching pricing
-    for (const [key, price] of Object.entries(pricing)) {
-      if (model.toLowerCase().includes(key)) {
-        return (inputTokens / 1000) * price.input + (outputTokens / 1000) * price.output;
-      }
-    }
-
-    // Default pricing
-    return (inputTokens / 1000) * 0.01 + (outputTokens / 1000) * 0.03;
+    // Delegate to the centralized pricing function which uses the cached OpenRouter data
+    return calculateOpenRouterCost(model, inputTokens, outputTokens);
   }
 
   /**

@@ -229,39 +229,68 @@ function loadUserConfig(): UserConfig | undefined {
 /**
  * Debug logger for persistence operations.
  * Enabled via --debug flag. Shows data flow at each layer boundary.
+ * In TUI mode, logs are buffered instead of printed to avoid interfering with Ink.
  */
 class PersistenceDebugger {
   private enabled = false;
+  private tuiMode = false;
+  private buffer: string[] = [];
 
   enable(): void {
     this.enabled = true;
     this.log('🔍 Persistence debug mode ENABLED');
   }
 
+  enableTUIMode(): void {
+    this.tuiMode = true;
+  }
+
   isEnabled(): boolean {
     return this.enabled;
+  }
+
+  getBuffer(): string[] {
+    const logs = [...this.buffer];
+    this.buffer = [];
+    return logs;
   }
 
   log(message: string, data?: unknown): void {
     if (!this.enabled) return;
     const timestamp = new Date().toISOString().split('T')[1].slice(0, 12);
-    console.log(`[${timestamp}] 🔧 ${message}`);
-    if (data !== undefined) {
-      console.log(`    └─ ${JSON.stringify(data, null, 2).split('\n').join('\n    ')}`);
+    const logLine = `[${timestamp}] 🔧 ${message}`;
+    const dataLine = data !== undefined ? `    └─ ${JSON.stringify(data, null, 2).split('\n').join('\n    ')}` : '';
+
+    if (this.tuiMode) {
+      // Buffer logs in TUI mode to avoid console interference
+      this.buffer.push(logLine);
+      if (dataLine) this.buffer.push(dataLine);
+    } else {
+      console.log(logLine);
+      if (dataLine) console.log(dataLine);
     }
   }
 
   error(message: string, err: unknown): void {
     if (!this.enabled) return;
     const timestamp = new Date().toISOString().split('T')[1].slice(0, 12);
-    console.error(`[${timestamp}] ❌ ${message}`);
+    const errLine = `[${timestamp}] ❌ ${message}`;
+    let details = '';
     if (err instanceof Error) {
-      console.error(`    └─ ${err.message}`);
+      details = `    └─ ${err.message}`;
       if (err.stack) {
-        console.error(`    └─ Stack: ${err.stack.split('\n').slice(1, 3).join(' → ')}`);
+        details += `\n    └─ Stack: ${err.stack.split('\n').slice(1, 3).join(' → ')}`;
       }
     } else {
-      console.error(`    └─ ${String(err)}`);
+      details = `    └─ ${String(err)}`;
+    }
+
+    if (this.tuiMode) {
+      this.buffer.push(errLine);
+      this.buffer.push(details);
+    } else {
+      console.error(errLine);
+      console.error(details);
     }
   }
 
@@ -2571,14 +2600,15 @@ async function startTUIMode(
       return startProductionREPL(provider, options);
     }
 
+    // Enable TUI mode for debug logger to prevent console interference with Ink
+    persistenceDebug.enableTUIMode();
+
     // CRITICAL: Initialize session storage FIRST, before any heavy dynamic imports
     // This ensures better-sqlite3 native module loads cleanly
     let sessionStore: AnySessionStore;
     let usingSQLiteTUI = false;
 
-    if (persistenceDebug.isEnabled()) {
-      process.stderr.write('[DEBUG] [TUI] Initializing session store BEFORE dynamic imports...\n');
-    }
+    persistenceDebug.log('[TUI] Initializing session store BEFORE dynamic imports...');
 
     try {
       sessionStore = await createSQLiteStore({ baseDir: '.agent/sessions' });
@@ -2587,7 +2617,7 @@ async function startTUIMode(
       if (persistenceDebug.isEnabled()) {
         const sqliteStore = sessionStore as SQLiteStore;
         const stats = sqliteStore.getStats();
-        process.stderr.write(`[DEBUG] [TUI] ✓ SQLite store initialized! Sessions: ${stats.sessionCount}, Checkpoints: ${stats.checkpointCount}\n`);
+        persistenceDebug.log('[TUI] ✓ SQLite store initialized!', { sessions: stats.sessionCount, checkpoints: stats.checkpointCount });
       }
       console.log('✓ SQLite session store initialized');
     } catch (sqliteError) {
@@ -2603,7 +2633,7 @@ async function startTUIMode(
     // Dynamic imports - using our modular TUI components
     const { render, Box, Text, useApp, useInput } = await import('ink');
     const React = await import('react');
-    const { useState, useCallback } = React;
+    const { useState, useCallback, useEffect } = React;
     const { getTheme, getThemeNames } = await import('./tui/theme/index.js');
     const { ToolCallList } = await import('./tui/components/ToolCall.js');
     const { Header } = await import('./tui/layout/Header.js');
@@ -2664,7 +2694,20 @@ async function startTUIMode(
       memory: { enabled: true, types: { episodic: true, semantic: true, working: true } },
       planning: { enabled: true, autoplan: true, complexityThreshold: 6 },
       humanInLoop: permissionMode === 'interactive' ? { enabled: true, alwaysApprove: ['dangerous'] } : false,
-      observability: trace ? { enabled: true, traceCapture: { enabled: true, outputDir: '.traces' } } : undefined,
+      // Observability: trace capture to file when --trace, logging disabled in TUI (use debug mode instead)
+      observability: trace
+        ? { enabled: true, traceCapture: { enabled: true, outputDir: '.traces' }, logging: { enabled: false } }
+        : undefined,
+      // Hooks: Only enable console output in debug mode
+      hooks: {
+        enabled: true,
+        builtIn: {
+          logging: persistenceDebug.isEnabled(), // Only show [Hook] logs in debug mode
+          timing: persistenceDebug.isEnabled(),  // Only show timing in debug mode
+          metrics: true,
+        },
+        custom: [],
+      },
     });
 
     // Session store was already initialized at the top of startTUIMode
@@ -2738,7 +2781,18 @@ async function startTUIMode(
     // Initial theme (will be stateful inside component)
     const initialTheme = getTheme(theme);
 
-    // TUI Component
+    // Get git branch for status line (using execFileSync for safety - no shell injection possible)
+    const getGitBranch = (): string => {
+      try {
+        const { execFileSync } = require('child_process');
+        return execFileSync('git', ['rev-parse', '--abbrev-ref', 'HEAD'], { encoding: 'utf8', stdio: ['pipe', 'pipe', 'pipe'] }).trim();
+      } catch {
+        return '';
+      }
+    };
+    const gitBranch = getGitBranch();
+
+    // TUI Component - direct rendering with static icons (flicker-free)
     const TUIApp = () => {
       const { exit } = useApp();
       const [messages, setMessages] = useState<Array<{ id: string; role: string; content: string; ts: Date }>>([]);
@@ -2747,6 +2801,13 @@ async function startTUIMode(
       const [status, setStatus] = useState({ iter: 0, tokens: 0, cost: 0, mode: 'ready' });
       const [toolCalls, setToolCalls] = useState<ToolCallDisplay[]>([]);
       const [currentThemeName, setCurrentThemeName] = useState<string>(theme);
+      const [contextTokens, setContextTokens] = useState(0);
+      const [elapsedTime, setElapsedTime] = useState(0);
+      const processingStartRef = React.useRef<number | null>(null);
+
+      // Display toggles
+      const [toolCallsExpanded, setToolCallsExpanded] = useState(false);
+      const [showThinking, setShowThinking] = useState(true);
 
       // Derive theme and colors from state
       const selectedTheme = getTheme(currentThemeName);
@@ -2882,19 +2943,77 @@ async function startTUIMode(
           case 'help':
           case 'h':
             addMessage('system', [
-              'Available Commands:',
+              '═══════════════════════════════════════════════════════',
+              '                    ATTOCODE COMMANDS',
+              '═══════════════════════════════════════════════════════',
               '',
-              'General: /quit /clear /status /reset /help /model /theme /tools',
-              'Sessions: /save /load <id> /sessions /resume /handoff [json]',
-              'Goals: /goals [list|add|done|junctures]',
-              'Context: /context /compact',
-              'MCP: /mcp /mcp tools /mcp search <query> /mcp stats',
-              'Advanced: /react <task> /team <task> /checkpoint /rollback /fork /threads /switch',
-              'Subagents: /agents /spawn <agent> <task> /find <query> /suggest <task> /auto <task>',
-              'Budget: /budget /extend <type> <amount>',
-              'Testing: /skills /sandbox /shell /lsp /tui',
+              '▸ GENERAL',
+              '  /help /h          Show this help',
+              '  /quit /exit /q    Exit the agent',
+              '  /clear /cls       Clear screen',
+              '  /reset            Reset agent state',
+              '  /status /stats    Show session metrics',
+              '  /model            Show/change model',
+              '  /theme [name]     Show/change theme',
+              '  /tools            List available tools',
               '',
-              'Shortcuts: Ctrl+C (quit) | Ctrl+L (clear)',
+              '▸ SESSIONS & PERSISTENCE',
+              '  /save             Save current session',
+              '  /load <id>        Load a session',
+              '  /sessions         List all sessions',
+              '  /resume           Resume last session',
+              '  /handoff [json]   Export session for handoff',
+              '  /checkpoint       Create checkpoint',
+              '  /checkpoints      List checkpoints',
+              '  /restore <id>     Restore checkpoint',
+              '  /rollback [n]     Rollback n steps',
+              '',
+              '▸ CONTEXT & MEMORY',
+              '  /context /ctx     Show context token breakdown',
+              '  /compact          Compress context',
+              '  /goals            Manage goals [list|add|done|junctures]',
+              '',
+              '▸ THREADS & BRANCHING',
+              '  /fork <name>      Fork conversation',
+              '  /threads          List all threads',
+              '  /switch <id>      Switch to thread',
+              '',
+              '▸ MCP SERVERS',
+              '  /mcp              List MCP servers',
+              '  /mcp tools        List MCP tools',
+              '  /mcp search <q>   Search & load tools',
+              '  /mcp stats        Show MCP context usage',
+              '',
+              '▸ SUBAGENTS',
+              '  /agents           List available agents',
+              '  /spawn <a> <task> Spawn agent with task',
+              '  /find <query>     Find agents for task',
+              '  /suggest <task>   Get agent suggestions',
+              '  /auto <task>      Auto-route to best agent',
+              '',
+              '▸ ADVANCED',
+              '  /react <task>     Run with ReAct reasoning',
+              '  /team <task>      Run with multi-agent team',
+              '  /grants           List permission grants',
+              '  /audit            Show audit log',
+              '  /budget           Show budget usage',
+              '  /extend <t> <n>   Extend budget (tokens|cost|time)',
+              '',
+              '▸ DEBUG',
+              '  /skills           List loaded skills',
+              '  /sandbox          Show sandbox status',
+              '  /shell            Show shell status',
+              '  /lsp              Show LSP status',
+              '  /tui              Show TUI status',
+              '',
+              '═══════════════════════════════════════════════════════',
+              'KEYBOARD SHORTCUTS',
+              '  Ctrl+C    Exit',
+              '  Ctrl+L    Clear screen',
+              '  Ctrl+P    Command palette',
+              '  Cmd+T     Toggle tool details',
+              '  Cmd+O     Toggle thinking display',
+              '═══════════════════════════════════════════════════════',
             ].join('\n'));
             return;
 
@@ -3702,12 +3821,13 @@ async function startTUIMode(
         }
 
         setIsProcessing(true);
-        setStatus(s => ({ ...s, mode: 'running' }));
+        setStatus(s => ({ ...s, mode: 'thinking' }));
 
-        // Subscribe to events
+        // Subscribe to events for live progress
         const unsub = agent.subscribe((event) => {
           if (event.type === 'tool.start') {
             const now = new Date();
+            setStatus(s => ({ ...s, mode: `calling ${event.tool}` }));
             setToolCalls(prev => [...prev.slice(-4), {
               id: `${event.tool}-${Date.now()}`,
               name: event.tool,
@@ -3716,6 +3836,7 @@ async function startTUIMode(
               startTime: now,
             }]);
           } else if (event.type === 'tool.complete') {
+            setStatus(s => ({ ...s, mode: 'thinking' }));
             setToolCalls(prev => prev.map(t => t.name === event.tool ? {
               ...t,
               status: 'success' as const,
@@ -3728,6 +3849,41 @@ async function startTUIMode(
               status: 'error' as const,
               error: (event as any).reason || 'Blocked',
             } : t));
+          } else if (event.type === 'llm.start') {
+            setStatus(s => ({ ...s, mode: 'thinking', iter: s.iter + 1 }));
+          } else if (event.type === 'react.thought') {
+            // Show ReAct reasoning step
+            const thought = (event as any).thought || '';
+            if (thought) {
+              setStatus(s => ({ ...s, mode: `💭 ${thought.slice(0, 50)}` }));
+            }
+          } else if (event.type === 'react.action') {
+            // Show ReAct action being taken
+            const action = (event as any).action || '';
+            if (action) {
+              setStatus(s => ({ ...s, mode: `▶ ${action}` }));
+            }
+          } else if (event.type === 'react.observation') {
+            // Show observation received
+            setStatus(s => ({ ...s, mode: 'processing result' }));
+          }
+          // Insight events for verbose feedback (only shown when showThinking is enabled)
+          else if (event.type === 'insight.context' && showThinking) {
+            const e = event as { currentTokens: number; maxTokens: number; percentUsed: number; messageCount: number };
+            addMessage('system', `★ Context: ${e.currentTokens.toLocaleString()}/${e.maxTokens.toLocaleString()} tokens (${e.percentUsed}%) │ ${e.messageCount} messages`);
+          } else if (event.type === 'insight.tokens' && showThinking) {
+            const e = event as { inputTokens: number; outputTokens: number; cacheReadTokens?: number; cacheWriteTokens?: number; cost?: number; model: string };
+            const cacheInfo = e.cacheReadTokens ? ` │ Cache: ${e.cacheReadTokens.toLocaleString()} read` : '';
+            const costInfo = e.cost ? ` │ $${e.cost.toFixed(6)}` : '';
+            addMessage('system', `★ Tokens: ${e.inputTokens.toLocaleString()} in, ${e.outputTokens.toLocaleString()} out${cacheInfo}${costInfo}`);
+          } else if (event.type === 'insight.tool' && showThinking) {
+            const e = event as { tool: string; summary: string; durationMs: number; success: boolean };
+            const icon = e.success ? '✓' : '✗';
+            addMessage('system', `  ${icon} ${e.tool}: ${e.summary} (${e.durationMs}ms)`);
+          } else if (event.type === 'insight.routing' && showThinking) {
+            const e = event as { model: string; reason: string; complexity?: string };
+            const complexityInfo = e.complexity ? ` [${e.complexity}]` : '';
+            addMessage('system', `★ Model: ${e.model}${complexityInfo} - ${e.reason}`);
           }
         });
 
@@ -3738,7 +3894,6 @@ async function startTUIMode(
 
           // Show response with metrics
           const response = result.response || result.error || 'No response';
-          const totalTokens = metrics.inputTokens + metrics.outputTokens;
           const durationSec = (metrics.duration / 1000).toFixed(1);
           const metricsLine = [
             '',
@@ -3790,8 +3945,68 @@ async function startTUIMode(
       }, [addMessage, handleCommand]);
 
       useInput((input, key) => {
+        // Ctrl+C to exit
         if (key.ctrl && input === 'c') {
           agent.cleanup().then(() => mcpClient.cleanup()).then(() => lspManager.cleanup()).then(() => exit());
+          return;
+        }
+        // Ctrl+L to clear screen
+        if (key.ctrl && input === 'l') {
+          setMessages([]);
+          setToolCalls([]);
+          return;
+        }
+        // Ctrl+P for command palette/help
+        if (key.ctrl && input === 'p') {
+          addMessage('system', [
+            '╭────────────────────────────────────────────────────╮',
+            '│              ⌘ Command Palette ⌘                  │',
+            '├────────────────────────────────────────────────────┤',
+            '│ GENERAL                                            │',
+            '│   /help /status /clear /reset /theme /model /tools │',
+            '│ SESSIONS                                           │',
+            '│   /save /load <id> /sessions /resume /handoff      │',
+            '│ CONTEXT                                            │',
+            '│   /context /compact /goals                         │',
+            '│ MCP                                                 │',
+            '│   /mcp /mcp tools /mcp search <q> /mcp stats       │',
+            '│ ADVANCED                                           │',
+            '│   /react /team /checkpoint /rollback /fork         │',
+            '│   /threads /switch /grants /audit                  │',
+            '│ SUBAGENTS                                          │',
+            '│   /agents /spawn <agent> <task> /find /suggest     │',
+            '│   /auto <task>                                     │',
+            '│ BUDGET                                             │',
+            '│   /budget /extend <tokens|cost|time> <amount>      │',
+            '│ DEBUG                                              │',
+            '│   /skills /sandbox /shell /lsp /tui                │',
+            '├────────────────────────────────────────────────────┤',
+            '│ SHORTCUTS                                          │',
+            '│   ^C exit  ^L clear  ^P this palette               │',
+            '│   ⌥T toggle tool details  ⌥O toggle thinking  ESC cancel │',
+            '╰────────────────────────────────────────────────────╯',
+          ].join('\n'));
+          return;
+        }
+        // ESC to cancel current processing
+        if (key.escape) {
+          if (isProcessing) {
+            agent.cancel('Cancelled by user (ESC)');
+            setIsProcessing(false);
+            addMessage('system', '⏹ Cancelled by ESC');
+          }
+          return;
+        }
+        // Alt+T / Option+T (produces '†' on macOS) to toggle tool call expansion
+        if (input === '†' || (key.meta && input === 't')) {
+          setToolCallsExpanded(prev => !prev);
+          addMessage('system', toolCallsExpanded ? '○ Tool details: collapsed' : '● Tool details: expanded');
+          return;
+        }
+        // Alt+O / Option+O (produces 'ø' on macOS) to toggle thinking/status display
+        if (input === 'ø' || (key.meta && input === 'o')) {
+          setShowThinking(prev => !prev);
+          addMessage('system', showThinking ? '○ Thinking display: minimal' : '● Thinking display: verbose');
           return;
         }
         if (isProcessing) return;
@@ -3806,71 +4021,193 @@ async function startTUIMode(
         }
       });
 
-      const visibleMessages = messages.slice(-12);
+      // ===== DIRECT RENDERING (flicker-free via static icons) =====
 
-      // Build StatusDisplay for Header component
-      const statusDisplay = {
-        mode: status.mode,
-        iteration: status.iter,
-        tokens: status.tokens,
-        maxTokens: 128000, // Approximate context window
-        cost: status.cost,
-        elapsed: agent.getMetrics().duration,
-        model: model || 'auto',
+      // Update context tokens when status changes
+      useEffect(() => {
+        const agentState = agent.getState();
+        const estimateTokens = (str: string) => Math.ceil(str.length / 3.2);
+        const tokens = agentState.messages.reduce((sum, m) =>
+          sum + estimateTokens(typeof m.content === 'string' ? m.content : JSON.stringify(m.content)), 0);
+        setContextTokens(tokens);
+      }, [status.tokens, messages.length]);
+
+      // Track elapsed time during processing
+      useEffect(() => {
+        if (isProcessing) {
+          processingStartRef.current = Date.now();
+          setElapsedTime(0);
+          const interval = setInterval(() => {
+            if (processingStartRef.current) {
+              setElapsedTime(Math.floor((Date.now() - processingStartRef.current) / 1000));
+            }
+          }, 1000);
+          return () => clearInterval(interval);
+        } else {
+          processingStartRef.current = null;
+          return undefined;
+        }
+      }, [isProcessing]);
+
+      // Keep last N messages visible to prevent layout overflow
+      const visibleMessages = messages.slice(-15);
+
+      // Helper to format tool args concisely
+      const formatToolArgs = (args: Record<string, unknown>): string => {
+        const entries = Object.entries(args);
+        if (entries.length === 0) return '';
+        if (entries.length === 1) {
+          const [key, val] = entries[0];
+          const valStr = typeof val === 'string' ? val : JSON.stringify(val);
+          return valStr.length > 50 ? `${key}: ${valStr.slice(0, 47)}...` : `${key}: ${valStr}`;
+        }
+        return `{${entries.length} args}`;
       };
 
-      return React.createElement(Box, { flexDirection: 'column', padding: 1 },
-        // Header - using our Header component
-        React.createElement(Header, {
-          theme: selectedTheme,
-          title: 'Attocode',
-          status: statusDisplay,
-          showMetrics: true,
-        }),
+      // Status line components
+      const modelShort = (model || 'unknown').split('/').pop() || model || 'unknown';
+      const contextPct = Math.round((contextTokens / 80000) * 100);
+      const costStr = status.cost > 0 ? `$${status.cost.toFixed(4)}` : '$0.00';
 
-        // Spacer after header
-        React.createElement(Box, { marginBottom: 1 }),
-
-        // Messages
+      return React.createElement(Box, { flexDirection: 'column', height: '100%' },
+        // Messages area - direct rendering
         React.createElement(Box, { flexDirection: 'column', flexGrow: 1, marginBottom: 1 },
           visibleMessages.length === 0
-            ? React.createElement(Text, { color: colors.textMuted }, 'Type a message or /help for commands')
-            : visibleMessages.map(m => React.createElement(Box, { key: m.id, marginBottom: 1, flexDirection: 'column' },
-                React.createElement(Text, { color: m.role === 'user' ? colors.userMessage : m.role === 'assistant' ? colors.assistantMessage : m.role === 'error' ? colors.error : colors.systemMessage, bold: m.role === 'user' },
-                  `[${m.role === 'user' ? 'You' : m.role === 'assistant' ? 'AI' : m.role === 'error' ? '!' : 'Sys'}] `
+            ? React.createElement(Text, { color: colors.textMuted }, 'Type a message or /help')
+            : visibleMessages.map(m => {
+                const isUser = m.role === 'user';
+                const isAssistant = m.role === 'assistant';
+                const isError = m.role === 'error';
+                const icon = isUser ? '❯' : isAssistant ? '◆' : isError ? '✖' : '●';
+                const roleColor = isUser ? '#87CEEB' : isAssistant ? '#98FB98' : isError ? '#FF6B6B' : '#FFD700';
+                const label = isUser ? 'You' : isAssistant ? 'Assistant' : isError ? 'Error' : 'System';
+
+                return React.createElement(Box, { key: m.id, marginBottom: 1, flexDirection: 'column' },
+                  // Role header
+                  React.createElement(Box, { gap: 1 },
+                    React.createElement(Text, { color: roleColor, bold: true }, icon),
+                    React.createElement(Text, { color: roleColor, bold: true }, label),
+                    React.createElement(Text, { color: colors.textMuted, dimColor: true },
+                      ` ${m.ts.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}`
+                    )
+                  ),
+                  // Message content
+                  React.createElement(Box, { marginLeft: 2 },
+                    React.createElement(Text, { wrap: 'wrap', color: isError ? colors.error : colors.text }, m.content)
+                  )
+                );
+              })
+        ),
+
+        // Tool calls - expandable view
+        toolCalls.length > 0 && React.createElement(Box, { flexDirection: 'column', marginBottom: 1 },
+          React.createElement(Text, { color: '#DDA0DD', bold: true }, `🔧 Tools ${toolCallsExpanded ? '▼' : '▶'}`),
+          ...toolCalls.slice(-5).map(tc => {
+            const icon = tc.status === 'success' ? '✓' : tc.status === 'error' ? '✗' : tc.status === 'running' ? '⟳' : '○';
+            const statusColor = tc.status === 'success' ? '#98FB98' : tc.status === 'error' ? '#FF6B6B' : tc.status === 'running' ? '#87CEEB' : colors.textMuted;
+            const argsStr = formatToolArgs(tc.args);
+
+            // Expanded view shows more details
+            if (toolCallsExpanded) {
+              return React.createElement(Box, { key: `${tc.id}-${tc.status}`, marginLeft: 2, flexDirection: 'column' },
+                React.createElement(Box, { gap: 1 },
+                  React.createElement(Text, { color: statusColor }, icon),
+                  React.createElement(Text, { color: '#DDA0DD', bold: true }, tc.name),
+                  tc.duration ? React.createElement(Text, { color: colors.textMuted, dimColor: true }, `(${tc.duration}ms)`) : null
                 ),
-                React.createElement(Box, { marginLeft: 2 },
-                  React.createElement(Text, { wrap: 'wrap' }, m.content.length > 800 ? m.content.slice(0, 800) + '...' : m.content)
-                )
-              ))
+                // Show args in expanded mode
+                Object.keys(tc.args).length > 0 ? React.createElement(Box, { marginLeft: 3 },
+                  React.createElement(Text, { color: colors.textMuted, dimColor: true },
+                    JSON.stringify(tc.args, null, 0).slice(0, 100) + (JSON.stringify(tc.args).length > 100 ? '...' : '')
+                  )
+                ) : null,
+                // Show result preview in expanded mode
+                (tc.status === 'success' && tc.result) ? React.createElement(Box, { marginLeft: 3 },
+                  React.createElement(Text, { color: '#98FB98', dimColor: true },
+                    `→ ${String(tc.result).slice(0, 80)}${String(tc.result).length > 80 ? '...' : ''}`
+                  )
+                ) : null,
+                // Show error in expanded mode
+                (tc.status === 'error' && tc.error) ? React.createElement(Box, { marginLeft: 3 },
+                  React.createElement(Text, { color: '#FF6B6B' }, `✗ ${tc.error}`)
+                ) : null
+              );
+            }
+
+            // Collapsed view (default)
+            return React.createElement(Box, { key: `${tc.id}-${tc.status}`, marginLeft: 2, gap: 1 },
+              React.createElement(Text, { color: statusColor }, icon),
+              React.createElement(Text, { color: '#DDA0DD', bold: true }, tc.name),
+              argsStr ? React.createElement(Text, { color: colors.textMuted, dimColor: true }, argsStr) : null,
+              tc.duration ? React.createElement(Text, { color: colors.textMuted, dimColor: true }, `(${tc.duration}ms)`) : null
+            );
+          })
         ),
 
-        // Tool calls (if any) - using ToolCallList component
-        toolCalls.length > 0 && React.createElement(ToolCallList, {
-          theme: selectedTheme,
-          toolCalls: toolCalls,
-          maxVisible: 5,
-          title: '🔧 Tools',
-        }),
-
-        // Processing indicator
-        isProcessing && React.createElement(Box, { marginBottom: 1 },
-          React.createElement(Text, { color: colors.info }, `🔄 ${status.mode}...`)
-        ),
-
-        // Input
-        React.createElement(Box, { borderStyle: 'round', borderColor: isProcessing ? colors.textMuted : colors.borderFocus, paddingX: 1 },
-          React.createElement(Text, { color: colors.primary }, '> '),
+        // Input box
+        React.createElement(Box, {
+          borderStyle: 'round',
+          borderColor: isProcessing ? colors.textMuted : '#87CEEB',
+          paddingX: 1,
+        },
+          React.createElement(Text, { color: '#98FB98', bold: true }, '❯ '),
           React.createElement(Text, {}, inputValue),
-          !isProcessing && React.createElement(Text, { backgroundColor: colors.primary, color: colors.textInverse }, ' ')
+          !isProcessing && React.createElement(Text, { backgroundColor: '#87CEEB', color: '#1a1a2e' }, ' ')
         ),
 
-        // Footer - using our Footer component
-        React.createElement(Footer, {
-          theme: selectedTheme,
-          mode: status.mode,
-          showShortcuts: true,
-        })
+        // ═══════════════════════════════════════════════════════════════════════
+        // FIXED STATUS BAR - Always visible at bottom (like Claude Code)
+        // Shows: [action indicator] current mode • elapsed time • tokens • cost
+        // ═══════════════════════════════════════════════════════════════════════
+        React.createElement(Box, {
+          borderStyle: 'single',
+          borderColor: isProcessing ? colors.info : colors.textMuted,
+          paddingX: 1,
+          justifyContent: 'space-between',
+        },
+          // Left: Current action/mode with indicator
+          React.createElement(Box, { gap: 1 },
+            // Status indicator (spinning when processing)
+            React.createElement(Text, {
+              color: isProcessing ? colors.info : '#98FB98',
+              bold: isProcessing,
+            }, isProcessing ? '⏳' : '●'),
+            // Current mode/action
+            React.createElement(Text, {
+              color: isProcessing ? colors.info : colors.text,
+              bold: isProcessing,
+            }, isProcessing
+              ? (status.mode.length > 40 ? status.mode.slice(0, 37) + '...' : status.mode)
+              : 'ready'
+            ),
+            // Elapsed time when processing
+            isProcessing && elapsedTime > 0 && React.createElement(Text, {
+              color: colors.textMuted,
+              dimColor: true,
+            }, `• ${elapsedTime}s`),
+            // Iteration count
+            status.iter > 0 && React.createElement(Text, {
+              color: colors.textMuted,
+              dimColor: true,
+            }, `• iter ${status.iter}`)
+          ),
+          // Right: Stats and shortcuts
+          React.createElement(Box, { gap: 2 },
+            // Model
+            React.createElement(Text, { color: '#DDA0DD', dimColor: true }, modelShort),
+            // Context usage
+            React.createElement(Text, {
+              color: contextPct > 70 ? '#FFD700' : colors.textMuted,
+              dimColor: true,
+            }, `${(contextTokens / 1000).toFixed(1)}k`),
+            // Cost
+            React.createElement(Text, { color: '#98FB98', dimColor: true }, costStr),
+            // Git branch
+            gitBranch ? React.createElement(Text, { color: '#87CEEB', dimColor: true }, ` ${gitBranch}`) : null,
+            // Shortcuts hint
+            React.createElement(Text, { color: colors.textMuted, dimColor: true }, 'ESC:cancel ^P:help')
+          )
+        )
       );
     };
 
