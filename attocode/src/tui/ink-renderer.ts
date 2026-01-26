@@ -14,6 +14,27 @@ import type { MessageDisplay, TUIEventHandlers } from './types.js';
 // Dynamic import types
 type InkInstance = { unmount: () => void; rerender: (element: unknown) => void };
 
+// Action type for dispatching to React state
+type AppAction =
+  | { type: 'ADD_MESSAGE'; message: MessageDisplay }
+  | { type: 'UPDATE_MESSAGE'; id: string; content: string }
+  | { type: 'SET_TOOL_CALL'; toolCall: ToolCallDisplay }
+  | { type: 'UPDATE_TOOL_CALL'; id: string; updates: Partial<ToolCallDisplay> }
+  | { type: 'SET_STATUS'; status: StatusDisplay | null }
+  | { type: 'SET_THINKING'; content: string }
+  | { type: 'SET_SPINNER'; visible: boolean; message?: string }
+  | { type: 'SET_DIALOG'; dialog: unknown }
+  | { type: 'TOGGLE_COMMAND_PALETTE' }
+  | { type: 'SET_COMMAND_QUERY'; query: string }
+  | { type: 'CLEAR_MESSAGES' }
+  | { type: 'SET_FOCUS'; target: 'input' | 'messages' | 'tools' | 'sidebar' }
+  | { type: 'TOGGLE_SIDEBAR' }
+  | { type: 'SET_SESSIONS'; sessions: unknown[] }
+  | { type: 'SET_ACTIVE_SESSION'; sessionId: string | null };
+
+// Type for the dispatch function ref
+type DispatchFn = (action: AppAction) => void;
+
 // =============================================================================
 // INK RENDERER
 // =============================================================================
@@ -29,6 +50,14 @@ export class InkRenderer implements TUIRenderer {
   private inkInstance: InkInstance | null = null;
   private messageIdCounter = 0;
   private handlers: TUIEventHandlers = {};
+
+  // Ref to dispatch function set by App component
+  private dispatchRef: DispatchFn | null = null;
+
+  // Batching for rapid updates
+  private pendingActions: AppAction[] = [];
+  private batchTimeout: ReturnType<typeof setTimeout> | null = null;
+  private batchDelayMs = 16; // ~60fps
 
   // Local state tracking (mirrors app state for methods that need sync access)
   private localState = {
@@ -66,7 +95,7 @@ export class InkRenderer implements TUIRenderer {
       const React = await import(reactModule);
       const { App } = await import(appModule);
 
-      // Create a wrapper component that forwards to App
+      // Create a wrapper component that forwards to App and captures dispatch
       const self = this;
 
       function AppWrapper() {
@@ -75,6 +104,7 @@ export class InkRenderer implements TUIRenderer {
           onInput: (value: string) => self.handlers.onInput?.(value),
           onCommand: (cmd: string, args: string[]) => self.handlers.onCommand?.(cmd, args),
           onKeyPress: (key: string, modifiers) => self.handlers.onKeyPress?.(key, modifiers),
+          onSessionSwitch: (sessionId: string) => self.handlers.onSessionSwitch?.(sessionId),
         };
 
         return React.createElement(App, {
@@ -84,6 +114,10 @@ export class InkRenderer implements TUIRenderer {
             messages: self.localState.messages,
             toolCalls: self.localState.toolCalls,
             status: self.localState.status,
+          },
+          // Pass ref setter for dispatch function
+          onDispatchReady: (dispatch: DispatchFn) => {
+            self.dispatchRef = dispatch;
           },
         });
       }
@@ -229,13 +263,54 @@ export class InkRenderer implements TUIRenderer {
 
   /**
    * Dispatch an action to trigger state updates.
-   * The App component receives state updates via the localState which
-   * is passed as initialState on each render cycle.
+   * Uses batching to prevent flickering from rapid updates.
    */
-  private dispatchAction(_action: unknown): void {
-    // State is managed via localState and passed to App component
-    // The action parameter is kept for future direct dispatch integration
-    // Currently, Ink handles re-rendering automatically when the component tree updates
+  private dispatchAction(action: AppAction): void {
+    // If no dispatch ref yet, queue the action
+    if (!this.dispatchRef) {
+      this.pendingActions.push(action);
+      return;
+    }
+
+    // Flush any pending actions first
+    if (this.pendingActions.length > 0) {
+      for (const pending of this.pendingActions) {
+        this.dispatchRef(pending);
+      }
+      this.pendingActions = [];
+    }
+
+    // Batch rapid updates to reduce flicker
+    this.pendingActions.push(action);
+
+    if (!this.batchTimeout) {
+      this.batchTimeout = setTimeout(() => {
+        if (this.dispatchRef) {
+          for (const pending of this.pendingActions) {
+            this.dispatchRef(pending);
+          }
+        }
+        this.pendingActions = [];
+        this.batchTimeout = null;
+      }, this.batchDelayMs);
+    }
+  }
+
+  /**
+   * Flush any pending batched actions immediately.
+   * Call this before operations that need synchronous state.
+   */
+  flushPendingActions(): void {
+    if (this.batchTimeout) {
+      clearTimeout(this.batchTimeout);
+      this.batchTimeout = null;
+    }
+    if (this.dispatchRef && this.pendingActions.length > 0) {
+      for (const pending of this.pendingActions) {
+        this.dispatchRef(pending);
+      }
+      this.pendingActions = [];
+    }
   }
 
   /**

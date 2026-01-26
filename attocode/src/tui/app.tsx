@@ -1,545 +1,1153 @@
 /**
- * Root Ink Application
+ * TUI Application Component
  *
- * Main TUI application using Ink (React for CLI).
- * This file orchestrates all TUI components and state management.
+ * Extracted from main.ts with all anti-flicker patterns preserved:
+ * - <Static> component for messages (render once, never re-render)
+ * - Single useInput hook in MemoizedInputArea (no competing hooks)
+ * - Ref-based callbacks (prevents useInput re-subscription)
+ * - Custom memo comparator (only re-render on visual prop changes)
  */
 
-import React, { useState, useEffect, useCallback, createContext, useContext, memo } from 'react';
-import { Box, Text, useApp, useInput } from 'ink';
-import type {
-  TUIConfig,
-  TUIState,
-  TUIEventHandlers,
-  MessageDisplay,
-  ToolCallDisplay,
-  StatusDisplay,
-  DialogConfig,
-  ThemeName,
-} from './types.js';
-import { getTheme, type Theme } from './theme/index.js';
+import { useState, useCallback, useEffect, memo, useRef, useMemo } from 'react';
+import { Box, Text, useApp, useInput, Static } from 'ink';
+import type { ProductionAgent } from '../agent.js';
+import type { SQLiteStore } from '../integrations/sqlite-store.js';
+import type { MCPClient } from '../integrations/mcp-client.js';
+import type { Compactor } from '../integrations/compaction.js';
+import type { ThemeColors, CommandPaletteItem } from './types.js';
+import { getTheme, getThemeNames } from './theme/index.js';
+import { ControlledCommandPalette } from './input/CommandPalette.js';
 
 // =============================================================================
-// THEME CONTEXT
+// TYPES
 // =============================================================================
 
-interface ThemeContextValue {
-  theme: Theme;
-  setTheme: (name: ThemeName) => void;
+/** Props for the main TUI application */
+export interface TUIAppProps {
+  agent: ProductionAgent;
+  sessionStore: SQLiteStore;
+  mcpClient: MCPClient;
+  compactor: Compactor;
+  lspManager: { cleanup: () => Promise<void>; getActiveServers: () => string[] };
+  theme: string;
+  model: string;
+  gitBranch: string;
+  currentSessionId: string;
+  formatSessionsTable: (sessions: any[]) => string;
+  saveCheckpointToStore: (store: any, data: any) => void;
+  loadSessionState: (store: any, id: string) => Promise<any>;
+  persistenceDebug: {
+    isEnabled: () => boolean;
+    log: (message: string, data?: any) => void;
+    error: (message: string, error?: any) => void;
+  };
 }
 
-const ThemeContext = createContext<ThemeContextValue>({
-  theme: getTheme('dark'),
-  setTheme: () => {},
-});
-
-export const useTheme = () => useContext(ThemeContext);
-
-// =============================================================================
-// APP STATE CONTEXT
-// =============================================================================
-
-interface AppStateContextValue {
-  state: TUIState;
-  dispatch: (action: AppAction) => void;
+/** TUI message display format */
+interface TUIMessage {
+  id: string;
+  role: string;
+  content: string;
+  ts: Date;
 }
 
-type AppAction =
-  | { type: 'ADD_MESSAGE'; message: MessageDisplay }
-  | { type: 'UPDATE_MESSAGE'; id: string; content: string }
-  | { type: 'SET_TOOL_CALL'; toolCall: ToolCallDisplay }
-  | { type: 'UPDATE_TOOL_CALL'; id: string; updates: Partial<ToolCallDisplay> }
-  | { type: 'SET_STATUS'; status: StatusDisplay | null }
-  | { type: 'SET_THINKING'; content: string }
-  | { type: 'SET_SPINNER'; visible: boolean; message?: string }
-  | { type: 'SET_DIALOG'; dialog: DialogConfig | null }
-  | { type: 'TOGGLE_COMMAND_PALETTE' }
-  | { type: 'SET_COMMAND_QUERY'; query: string }
-  | { type: 'CLEAR_MESSAGES' }
-  | { type: 'SET_FOCUS'; target: TUIState['focused'] }
-  | { type: 'TOGGLE_ALL_TOOL_CALLS' }
-  | { type: 'TOGGLE_THINKING_DISPLAY' };
-
-function appReducer(state: TUIState, action: AppAction): TUIState {
-  switch (action.type) {
-    case 'ADD_MESSAGE':
-      return { ...state, messages: [...state.messages, action.message] };
-    case 'UPDATE_MESSAGE': {
-      const messages = state.messages.map(m =>
-        m.id === action.id ? { ...m, content: action.content } : m
-      );
-      return { ...state, messages };
-    }
-    case 'SET_TOOL_CALL': {
-      const toolCalls = new Map(state.toolCalls);
-      toolCalls.set(action.toolCall.id, action.toolCall);
-      return { ...state, toolCalls };
-    }
-    case 'UPDATE_TOOL_CALL': {
-      const toolCalls = new Map(state.toolCalls);
-      const existing = toolCalls.get(action.id);
-      if (existing) {
-        toolCalls.set(action.id, { ...existing, ...action.updates });
-      }
-      return { ...state, toolCalls };
-    }
-    case 'SET_STATUS':
-      return { ...state, status: action.status };
-    case 'SET_THINKING':
-      return { ...state, thinking: action.content };
-    case 'SET_SPINNER':
-      return { ...state, spinner: { visible: action.visible, message: action.message ?? '' } };
-    case 'SET_DIALOG':
-      return { ...state, dialog: action.dialog };
-    case 'TOGGLE_COMMAND_PALETTE':
-      return {
-        ...state,
-        commandPalette: { visible: !state.commandPalette.visible, query: '' },
-      };
-    case 'SET_COMMAND_QUERY':
-      return { ...state, commandPalette: { ...state.commandPalette, query: action.query } };
-    case 'CLEAR_MESSAGES':
-      return { ...state, messages: [], toolCalls: new Map() };
-    case 'SET_FOCUS':
-      return { ...state, focused: action.target };
-    case 'TOGGLE_ALL_TOOL_CALLS':
-      return { ...state, toolCallsExpanded: !state.toolCallsExpanded };
-    case 'TOGGLE_THINKING_DISPLAY':
-      return { ...state, showThinkingPanel: !state.showThinkingPanel };
-    default:
-      return state;
-  }
+/** Tool call display item */
+interface ToolCallDisplayItem {
+  id: string;
+  name: string;
+  args: Record<string, unknown>;
+  status: 'pending' | 'running' | 'success' | 'error';
+  result?: unknown;
+  error?: string;
+  duration?: number;
+  startTime?: Date;
 }
 
-const AppStateContext = createContext<AppStateContextValue | null>(null);
-
-export const useAppState = () => {
-  const ctx = useContext(AppStateContext);
-  if (!ctx) throw new Error('useAppState must be used within AppStateProvider');
-  return ctx;
-};
-
 // =============================================================================
-// HEADER COMPONENT
-// =============================================================================
-
-interface HeaderProps {
-  status: StatusDisplay | null;
-  title?: string;
-}
-
-/**
- * Header component - memoized since it only changes with status updates.
- */
-const Header = memo(function Header({ status, title = 'Attocode' }: HeaderProps) {
-  const { theme } = useTheme();
-
-  return (
-    <Box
-      borderStyle="round"
-      borderColor={theme.colors.primary}
-      paddingX={1}
-      justifyContent="space-between"
-    >
-      <Text bold color={theme.colors.primary}>
-        {title}
-      </Text>
-      {status && (
-        <Text color={theme.colors.textMuted}>
-          {status.model ?? 'unknown'} | {status.tokens.toLocaleString()} tokens
-        </Text>
-      )}
-    </Box>
-  );
-});
-
-// =============================================================================
-// FOOTER COMPONENT
-// =============================================================================
-
-interface FooterProps {
-  mode?: string;
-}
-
-/**
- * Footer component - memoized since it only changes with mode updates.
- */
-const Footer = memo(function Footer({ mode = 'ready' }: FooterProps) {
-  const { theme } = useTheme();
-
-  return (
-    <Box paddingX={1} justifyContent="space-between">
-      <Text color={theme.colors.textMuted}>
-        Mode: {mode}
-      </Text>
-      <Text color={theme.colors.textMuted}>
-        Ctrl+P: Commands | Ctrl+C: Exit
-      </Text>
-    </Box>
-  );
-});
-
-// =============================================================================
-// MESSAGE LIST COMPONENT
+// MEMOIZED MESSAGE ITEM
+// Prevents re-render when parent state changes
 // =============================================================================
 
 interface MessageItemProps {
-  message: MessageDisplay;
+  msg: TUIMessage;
+  colors: ThemeColors;
 }
 
-/**
- * Single message display - memoized to prevent re-renders on input changes.
- */
-const MessageItem = memo(function MessageItem({ message }: MessageItemProps) {
-  const { theme } = useTheme();
-
-  const roleColors: Record<string, string> = {
-    user: theme.colors.userMessage,
-    assistant: theme.colors.assistantMessage,
-    system: theme.colors.systemMessage,
-    tool: theme.colors.toolMessage,
-  };
-
-  const roleIcons: Record<string, string> = {
-    user: 'You',
-    assistant: 'AI',
-    system: 'Sys',
-    tool: 'Tool',
-  };
+const MessageItem = memo(function MessageItem({ msg, colors }: MessageItemProps) {
+  const isUser = msg.role === 'user';
+  const isAssistant = msg.role === 'assistant';
+  const isError = msg.role === 'error';
+  const icon = isUser ? '>' : isAssistant ? '<>' : isError ? 'x' : '*';
+  const roleColor = isUser ? '#87CEEB' : isAssistant ? '#98FB98' : isError ? '#FF6B6B' : '#FFD700';
+  const label = isUser ? 'You' : isAssistant ? 'Assistant' : isError ? 'Error' : 'System';
 
   return (
-    <Box flexDirection="column" marginBottom={1}>
-      <Text bold color={roleColors[message.role] || theme.colors.text}>
-        [{roleIcons[message.role] || message.role}]
-      </Text>
+    <Box marginBottom={1} flexDirection="column">
+      <Box gap={1}>
+        <Text color={roleColor} bold>{icon}</Text>
+        <Text color={roleColor} bold>{label}</Text>
+        <Text color={colors.textMuted} dimColor>
+          {` ${msg.ts.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}`}
+        </Text>
+      </Box>
       <Box marginLeft={2}>
-        <Text wrap="wrap">{message.content}</Text>
+        <Text wrap="wrap" color={isError ? colors.error : colors.text}>{msg.content}</Text>
       </Box>
     </Box>
   );
 });
 
-interface MessageListProps {
-  messages: MessageDisplay[];
-  maxHeight?: number;
-}
-
-function MessageList({ messages, maxHeight = 20 }: MessageListProps) {
-  const { theme } = useTheme();
-
-  // Show only the last N messages to fit in maxHeight
-  const visibleMessages = messages.slice(-maxHeight);
-
-  return (
-    <Box flexDirection="column" flexGrow={1} overflowY="hidden">
-      {visibleMessages.length === 0 ? (
-        <Text color={theme.colors.textMuted}>No messages yet. Type a message to start.</Text>
-      ) : (
-        visibleMessages.map((msg) => <MessageItem key={msg.id} message={msg} />)
-      )}
-    </Box>
-  );
-}
-
 // =============================================================================
-// TOOL CALL COMPONENT
+// MEMOIZED TOOL CALL ITEM
 // =============================================================================
 
 interface ToolCallItemProps {
-  toolCall: ToolCallDisplay;
+  tc: ToolCallDisplayItem;
+  expanded: boolean;
+  colors: ThemeColors;
 }
 
-/**
- * Single tool call display - memoized to prevent re-renders during typing.
- */
-const ToolCallItem = memo(function ToolCallItem({ toolCall }: ToolCallItemProps) {
-  const { theme } = useTheme();
+const ToolCallItem = memo(function ToolCallItem({ tc, expanded, colors }: ToolCallItemProps) {
+  const icon = tc.status === 'success' ? '[OK]' : tc.status === 'error' ? '[X]' : tc.status === 'running' ? '[~]' : '[ ]';
+  const statusColor = tc.status === 'success' ? '#98FB98' : tc.status === 'error' ? '#FF6B6B' : tc.status === 'running' ? '#87CEEB' : colors.textMuted;
 
-  const statusIcons: Record<string, string> = {
-    pending: '...',
-    running: '>>>',
-    success: '+++',
-    error: '!!!',
+  const formatToolArgs = (args: Record<string, unknown>): string => {
+    const entries = Object.entries(args);
+    if (entries.length === 0) return '';
+    if (entries.length === 1) {
+      const [key, val] = entries[0];
+      const valStr = typeof val === 'string' ? val : JSON.stringify(val);
+      return valStr.length > 50 ? `${key}: ${valStr.slice(0, 47)}...` : `${key}: ${valStr}`;
+    }
+    return `{${entries.length} args}`;
   };
 
-  const statusColors: Record<string, string> = {
-    pending: theme.colors.textMuted,
-    running: theme.colors.info,
-    success: theme.colors.success,
-    error: theme.colors.error,
-  };
+  const argsStr = formatToolArgs(tc.args);
+
+  if (expanded) {
+    return (
+      <Box marginLeft={2} flexDirection="column">
+        <Box gap={1}>
+          <Text color={statusColor}>{icon}</Text>
+          <Text color="#DDA0DD" bold>{tc.name}</Text>
+          {tc.duration ? <Text color={colors.textMuted} dimColor>({tc.duration}ms)</Text> : null}
+        </Box>
+        {Object.keys(tc.args).length > 0 && (
+          <Box marginLeft={3}>
+            <Text color={colors.textMuted} dimColor>
+              {JSON.stringify(tc.args, null, 0).slice(0, 100) + (JSON.stringify(tc.args).length > 100 ? '...' : '')}
+            </Text>
+          </Box>
+        )}
+        {tc.status === 'success' && tc.result !== undefined && tc.result !== null ? (
+          <Box marginLeft={3}>
+            <Text color="#98FB98" dimColor>
+              {`-> ${String(tc.result).slice(0, 80)}${String(tc.result).length > 80 ? '...' : ''}`}
+            </Text>
+          </Box>
+        ) : null}
+        {tc.status === 'error' && tc.error && (
+          <Box marginLeft={3}>
+            <Text color="#FF6B6B">{`x ${tc.error}`}</Text>
+          </Box>
+        )}
+      </Box>
+    );
+  }
 
   return (
-    <Box>
-      <Text color={statusColors[toolCall.status]}>
-        [{statusIcons[toolCall.status]}] {toolCall.name}
-      </Text>
-      {toolCall.duration && (
-        <Text color={theme.colors.textMuted}> ({toolCall.duration}ms)</Text>
-      )}
+    <Box marginLeft={2} gap={1}>
+      <Text color={statusColor}>{icon}</Text>
+      <Text color="#DDA0DD" bold>{tc.name}</Text>
+      {argsStr ? <Text color={colors.textMuted} dimColor>{argsStr}</Text> : null}
+      {tc.duration ? <Text color={colors.textMuted} dimColor>({tc.duration}ms)</Text> : null}
     </Box>
   );
 });
 
-interface ToolCallListProps {
-  toolCalls: Map<string, ToolCallDisplay>;
-}
-
-function ToolCallList({ toolCalls }: ToolCallListProps) {
-  const { theme } = useTheme();
-  const calls = Array.from(toolCalls.values());
-
-  if (calls.length === 0) return null;
-
-  return (
-    <Box
-      flexDirection="column"
-      borderStyle="single"
-      borderColor={theme.colors.border}
-      paddingX={1}
-      marginTop={1}
-    >
-      <Text bold color={theme.colors.toolMessage}>Tools</Text>
-      {calls.slice(-5).map((tc) => (
-        <ToolCallItem key={tc.id} toolCall={tc} />
-      ))}
-    </Box>
-  );
-}
-
 // =============================================================================
-// SPINNER COMPONENT
+// MEMOIZED INPUT AREA
+// Manages own state to prevent parent re-renders
+// Handles ALL keyboard input to prevent multiple useInput hooks
 // =============================================================================
 
-interface SpinnerDisplayProps {
-  message: string;
-}
-
-/**
- * Static "working" indicator - no animation to avoid re-render flicker.
- * Animation causes terminal artifacts when content overflows screen height.
- */
-function SpinnerDisplay({ message }: SpinnerDisplayProps) {
-  const { theme } = useTheme();
-
-  return (
-    <Box>
-      <Text color={theme.colors.info}>⏳ {message}</Text>
-    </Box>
-  );
-}
-
-// =============================================================================
-// INPUT AREA COMPONENT
-// =============================================================================
-
-interface InputAreaProps {
+interface MemoizedInputAreaProps {
   onSubmit: (value: string) => void;
-  disabled?: boolean;
+  disabled: boolean;
+  borderColor: string;
+  textColor: string;
+  cursorColor: string;
+  onCtrlC?: () => void;
+  onCtrlL?: () => void;
+  onCtrlP?: () => void;
+  onEscape?: () => void;
+  onToggleToolExpand?: () => void;
+  onToggleThinking?: () => void;
+  onPageUp?: () => void;
+  onPageDown?: () => void;
+  onHome?: () => void;
+  onEnd?: () => void;
+  // Command palette state (controlled from parent)
+  commandPaletteOpen?: boolean;
+  onCommandPaletteInput?: (input: string, key: any) => void;
 }
 
-function InputArea({ onSubmit, disabled = false }: InputAreaProps) {
-  const { theme } = useTheme();
+const MemoizedInputArea = memo(function MemoizedInputArea({
+  onSubmit,
+  disabled,
+  borderColor,
+  textColor,
+  cursorColor,
+  onCtrlC,
+  onCtrlL,
+  onCtrlP,
+  onEscape,
+  onToggleToolExpand,
+  onToggleThinking,
+  onPageUp,
+  onPageDown,
+  onHome,
+  onEnd,
+  commandPaletteOpen,
+  onCommandPaletteInput,
+}: MemoizedInputAreaProps) {
   const [value, setValue] = useState('');
+  const [cursorPos, setCursorPos] = useState(0);
+
+  // Store callbacks in refs so useInput doesn't re-subscribe on prop changes
+  const callbacksRef = useRef({
+    onSubmit, onCtrlC, onCtrlL, onCtrlP, onEscape,
+    onToggleToolExpand, onToggleThinking,
+    onPageUp, onPageDown, onHome, onEnd,
+    commandPaletteOpen, onCommandPaletteInput,
+  });
+  callbacksRef.current = {
+    onSubmit, onCtrlC, onCtrlL, onCtrlP, onEscape,
+    onToggleToolExpand, onToggleThinking,
+    onPageUp, onPageDown, onHome, onEnd,
+    commandPaletteOpen, onCommandPaletteInput,
+  };
+  const disabledRef = useRef(disabled);
+  disabledRef.current = disabled;
 
   useInput((input, key) => {
-    if (disabled) return;
+    const cb = callbacksRef.current;
 
-    if (key.return) {
-      if (value.trim()) {
-        onSubmit(value);
-        setValue('');
+    // Global shortcuts (always active)
+    if (key.ctrl && input === 'c') {
+      cb.onCtrlC?.();
+      return;
+    }
+    if (key.ctrl && input === 'l') {
+      cb.onCtrlL?.();
+      return;
+    }
+    if (key.ctrl && input === 'p') {
+      cb.onCtrlP?.();
+      return;
+    }
+    if (key.escape) {
+      cb.onEscape?.();
+      return;
+    }
+    // Alt+T / Option+T
+    if (input === '\u2020' || (key.meta && input === 't')) {
+      cb.onToggleToolExpand?.();
+      return;
+    }
+    // Alt+O / Option+O
+    if (input === '\u00f8' || (key.meta && input === 'o')) {
+      cb.onToggleThinking?.();
+      return;
+    }
+
+    // Command palette keyboard handling (when open)
+    if (cb.commandPaletteOpen && cb.onCommandPaletteInput) {
+      cb.onCommandPaletteInput(input, key);
+      return;
+    }
+
+    // Scroll navigation
+    if (key.pageUp) {
+      cb.onPageUp?.();
+      return;
+    }
+    if (key.pageDown) {
+      cb.onPageDown?.();
+      return;
+    }
+    if (key.ctrl && key.upArrow) {
+      cb.onHome?.();
+      return;
+    }
+    if (key.ctrl && key.downArrow) {
+      cb.onEnd?.();
+      return;
+    }
+
+    // Input handling (only when not disabled)
+    if (disabledRef.current) return;
+
+    if (key.return && value.trim()) {
+      cb.onSubmit(value);
+      setValue('');
+      setCursorPos(0);
+      return;
+    }
+
+    if (key.backspace || key.delete) {
+      if (cursorPos > 0) {
+        setValue(v => v.slice(0, cursorPos - 1) + v.slice(cursorPos));
+        setCursorPos(p => p - 1);
       }
-    } else if (key.backspace || key.delete) {
-      setValue((v) => v.slice(0, -1));
-    } else if (!key.ctrl && !key.meta && input) {
-      setValue((v) => v + input);
+      return;
+    }
+
+    if (key.leftArrow) {
+      setCursorPos(p => Math.max(0, p - 1));
+      return;
+    }
+    if (key.rightArrow) {
+      setCursorPos(p => Math.min(value.length, p + 1));
+      return;
+    }
+
+    if (key.ctrl && input === 'a') {
+      setCursorPos(0);
+      return;
+    }
+    if (key.ctrl && input === 'e') {
+      setCursorPos(value.length);
+      return;
+    }
+    if (key.ctrl && input === 'u') {
+      setValue('');
+      setCursorPos(0);
+      return;
+    }
+
+    if (input && !key.ctrl && !key.meta) {
+      setValue(v => v.slice(0, cursorPos) + input + v.slice(cursorPos));
+      setCursorPos(p => p + input.length);
     }
   });
 
   return (
     <Box
       borderStyle="round"
-      borderColor={disabled ? theme.colors.textMuted : theme.colors.borderFocus}
+      borderColor={disabledRef.current ? '#666' : borderColor}
       paddingX={1}
     >
-      <Text color={theme.colors.primary}>{'>'} </Text>
-      <Text>{value}</Text>
-      {!disabled && <Text color={theme.colors.textMuted}>|</Text>}
+      <Text color={textColor} bold>{'>'} </Text>
+      <Text>{value.slice(0, cursorPos)}</Text>
+      {!disabled && (
+        <Text backgroundColor={cursorColor} color="#1a1a2e">
+          {value[cursorPos] ?? ' '}
+        </Text>
+      )}
+      <Text>{value.slice(cursorPos + 1)}</Text>
     </Box>
   );
-}
+}, (prevProps, nextProps) => {
+  // Custom comparison: only re-render if visual props change
+  return prevProps.disabled === nextProps.disabled &&
+         prevProps.borderColor === nextProps.borderColor &&
+         prevProps.textColor === nextProps.textColor &&
+         prevProps.cursorColor === nextProps.cursorColor &&
+         prevProps.commandPaletteOpen === nextProps.commandPaletteOpen;
+});
 
 // =============================================================================
-// MAIN APP COMPONENT
+// MAIN TUI APP COMPONENT
 // =============================================================================
 
-export interface AppProps {
-  config: TUIConfig;
-  handlers: TUIEventHandlers;
-  initialState?: Partial<TUIState>;
-}
-
-export function App({ config, handlers, initialState }: AppProps) {
+export function TUIApp({
+  agent,
+  sessionStore,
+  mcpClient,
+  compactor,
+  lspManager,
+  theme,
+  model,
+  gitBranch,
+  currentSessionId,
+  formatSessionsTable,
+  saveCheckpointToStore,
+  persistenceDebug,
+}: TUIAppProps) {
   const { exit } = useApp();
+  const [messages, setMessages] = useState<TUIMessage[]>([]);
+  const [isProcessing, setIsProcessing] = useState(false);
+  const initialModeInfo = agent.getModeInfo();
+  const initialMode = initialModeInfo.name === 'Plan' ? 'ready (plan)' : 'ready';
+  const [status, setStatus] = useState({ iter: 0, tokens: 0, cost: 0, mode: initialMode });
+  const [toolCalls, setToolCalls] = useState<ToolCallDisplayItem[]>([]);
+  const [currentThemeName, setCurrentThemeName] = useState<string>(theme);
+  const [contextTokens, setContextTokens] = useState(0);
+  const [elapsedTime, setElapsedTime] = useState(0);
+  const processingStartRef = useRef<number | null>(null);
 
-  // Theme state
-  const [themeName, setThemeName] = useState<ThemeName>(config.theme ?? 'dark');
-  const theme = getTheme(themeName);
+  // Display toggles
+  const [toolCallsExpanded, setToolCallsExpanded] = useState(false);
+  const [showThinking, setShowThinking] = useState(true);
 
-  // App state using reducer
-  const [state, dispatch] = React.useReducer(appReducer, {
-    messages: [],
-    toolCalls: new Map(),
-    status: null,
-    thinking: '',
-    spinner: { visible: false, message: '' },
-    dialog: null,
-    commandPalette: { visible: false, query: '' },
-    sessions: [],
-    activeSessionId: null,
-    layout: {
-      header: { visible: true, height: 3 },
-      sidebar: { visible: config.showSidebar ?? false, width: 30 },
-      main: { visible: true },
-      footer: { visible: true, height: 1 },
-      toolPanel: { visible: config.showToolCalls ?? true, height: 'auto', maxHeight: 10 },
-    },
-    focused: 'input',
-    toolCallsExpanded: false,
-    showThinkingPanel: config.showThinking ?? true,
-    ...initialState,
-  });
+  // Command palette state
+  const [commandPaletteOpen, setCommandPaletteOpen] = useState(false);
+  const [commandPaletteQuery, setCommandPaletteQuery] = useState('');
+  const [commandPaletteIndex, setCommandPaletteIndex] = useState(0);
 
-  // Handle keyboard shortcuts
-  useInput((input, key) => {
-    // Ctrl+C to exit
-    if (key.ctrl && input === 'c') {
-      exit();
+  // Refs for stable callbacks
+  const isProcessingRef = useRef(isProcessing);
+  const messagesLengthRef = useRef(messages.length);
+  isProcessingRef.current = isProcessing;
+  messagesLengthRef.current = messages.length;
+
+  // Derive theme and colors
+  const selectedTheme = getTheme(currentThemeName);
+  const colors = selectedTheme.colors;
+
+  const messageIdCounter = useRef(0);
+  const addMessage = useCallback((role: string, content: string) => {
+    const uniqueId = `${role}-${Date.now()}-${++messageIdCounter.current}`;
+    setMessages(prev => [...prev, { id: uniqueId, role, content, ts: new Date() }]);
+  }, []);
+
+  // =========================================================================
+  // COMMAND HANDLER
+  // =========================================================================
+
+  const handleCommand = useCallback(async (cmd: string, args: string[]) => {
+    switch (cmd) {
+      case 'quit':
+      case 'exit':
+      case 'q':
+        await agent.cleanup();
+        await mcpClient.cleanup();
+        await lspManager.cleanup();
+        exit();
+        return;
+
+      case 'clear':
+      case 'cls':
+        setMessages([]);
+        setToolCalls([]);
+        return;
+
+      case 'status':
+      case 'stats': {
+        const metrics = agent.getMetrics();
+        const agentState = agent.getState();
+        addMessage('system', [
+          `Session Status:`,
+          `  Status: ${agentState.status} | Iteration: ${agentState.iteration}`,
+          `  Messages: ${agentState.messages.length}`,
+          `  Tokens: ${metrics.totalTokens.toLocaleString()} (${metrics.inputTokens} in / ${metrics.outputTokens} out)`,
+          `  LLM Calls: ${metrics.llmCalls} | Tool Calls: ${metrics.toolCalls}`,
+          `  Cost: $${metrics.estimatedCost.toFixed(4)}`,
+        ].join('\n'));
+        return;
+      }
+
+      case 'help':
+      case 'h':
+        addMessage('system', [
+          '===== ATTOCODE COMMANDS =====',
+          '',
+          '> GENERAL',
+          '  /help /h          Show this help',
+          '  /quit /exit /q    Exit',
+          '  /clear /cls       Clear screen',
+          '  /reset            Reset agent state',
+          '  /status /stats    Show metrics',
+          '  /theme [name]     Show/change theme',
+          '  /tools            List tools',
+          '',
+          '> SESSIONS',
+          '  /save             Save session',
+          '  /sessions         List sessions',
+          '  /checkpoint       Create checkpoint',
+          '  /checkpoints      List checkpoints',
+          '  /restore <id>     Restore checkpoint',
+          '  /rollback [n]     Rollback n steps',
+          '',
+          '> CONTEXT',
+          '  /context /ctx     Show token breakdown',
+          '  /compact          Compress context',
+          '',
+          '> MCP',
+          '  /mcp              List servers',
+          '  /mcp tools        List MCP tools',
+          '  /mcp search <q>   Search & load tools',
+          '',
+          '> PLAN MODE',
+          '  /mode             Show current mode',
+          '  /plan             Toggle plan mode',
+          '  /show-plan        Display pending plan',
+          '  /approve [n]      Approve plan',
+          '  /reject           Reject plan',
+          '',
+          '===== SHORTCUTS =====',
+          '  Ctrl+C      Exit',
+          '  Ctrl+L      Clear screen',
+          '  Ctrl+P      Help',
+          '  Alt+T       Toggle tool details',
+          '  Alt+O       Toggle thinking',
+          '========================',
+        ].join('\n'));
+        return;
+
+      case 'reset':
+        agent.reset();
+        setMessages([]);
+        setToolCalls([]);
+        addMessage('system', 'Agent state reset');
+        return;
+
+      case 'save':
+        try {
+          const agentState = agent.getState();
+          const agentMetrics = agent.getMetrics();
+          const ckptId = `ckpt-manual-${Date.now().toString(36)}`;
+          saveCheckpointToStore(sessionStore, {
+            id: ckptId,
+            label: 'manual-save',
+            messages: agentState.messages,
+            iteration: agentState.iteration,
+            metrics: agentMetrics,
+            plan: agentState.plan,
+            memoryContext: agentState.memoryContext,
+          });
+          addMessage('system', `Session saved: ${currentSessionId} (checkpoint: ${ckptId})`);
+        } catch (e) {
+          addMessage('error', (e as Error).message);
+        }
+        return;
+
+      case 'sessions':
+        try {
+          const sessions = await sessionStore.listSessions();
+          addMessage('system', formatSessionsTable(sessions));
+        } catch (e) {
+          addMessage('error', (e as Error).message);
+        }
+        return;
+
+      case 'context':
+      case 'ctx': {
+        const agentState = agent.getState();
+        const mcpStats = mcpClient.getContextStats();
+        const estimateTokens = (str: string) => Math.ceil(str.length / 3.2);
+        const systemPrompt = agent.getSystemPromptWithMode ? agent.getSystemPromptWithMode() : '';
+        const systemTokens = estimateTokens(systemPrompt);
+        const mcpTokens = mcpStats.summaryTokens + mcpStats.definitionTokens;
+        const agentTools = agent.getTools().filter((t: any) => !t.name.startsWith('mcp_'));
+        const agentToolTokens = agentTools.length * 150;
+        const convTokens = agentState.messages
+          .filter((m: any) => m.role !== 'system')
+          .reduce((sum: number, m: any) => sum + estimateTokens(typeof m.content === 'string' ? m.content : JSON.stringify(m.content)), 0);
+        const totalTokens = systemTokens + mcpTokens + agentToolTokens + convTokens;
+        const contextLimit = 80000;
+        const percent = Math.round((totalTokens / contextLimit) * 100);
+        const bar = '='.repeat(Math.min(20, Math.round(percent / 5))) + '-'.repeat(Math.max(0, 20 - Math.round(percent / 5)));
+
+        addMessage('system', [
+          `Context (~${totalTokens.toLocaleString()} / ${(contextLimit / 1000)}k)`,
+          `  [${bar}] ${percent}%`,
+          `  System: ~${systemTokens.toLocaleString()}`,
+          `  Tools:  ~${agentToolTokens.toLocaleString()} (${agentTools.length})`,
+          `  MCP:    ~${mcpTokens.toLocaleString()} (${mcpStats.loadedCount}/${mcpStats.totalTools})`,
+          `  Conv:   ~${convTokens.toLocaleString()} (${agentState.messages.length} msgs)`,
+          percent >= 80 ? '  ! Consider /compact' : '  OK',
+        ].join('\n'));
+        return;
+      }
+
+      case 'compact':
+        try {
+          const agentState = agent.getState();
+          if (agentState.messages.length < 5) {
+            addMessage('system', 'Not enough messages to compact.');
+            return;
+          }
+          setIsProcessing(true);
+          setStatus(s => ({ ...s, mode: 'compacting' }));
+          const result = await compactor.compact(agentState.messages);
+          agent.loadMessages(result.preservedMessages);
+          addMessage('system', `Compacted: ${result.compactedCount + result.preservedMessages.length} -> ${result.preservedMessages.length} msgs`);
+        } catch (e) {
+          addMessage('error', (e as Error).message);
+        }
+        setIsProcessing(false);
+        setStatus(s => ({ ...s, mode: 'ready' }));
+        return;
+
+      case 'mcp': {
+        if (args[0] === 'tools') {
+          const tools = mcpClient.getAllTools();
+          if (tools.length === 0) {
+            addMessage('system', 'No MCP tools available.');
+          } else {
+            const stats = mcpClient.getContextStats();
+            addMessage('system', `MCP Tools (${stats.loadedCount}/${stats.totalTools}):\n${tools.slice(0, 15).map((t: any) => `  ${mcpClient.isToolLoaded(t.name) ? '[Y]' : '[ ]'} ${t.name}`).join('\n')}`);
+          }
+          return;
+        }
+        if (args[0] === 'search' && args.slice(1).length > 0) {
+          const query = args.slice(1).join(' ');
+          const results = mcpClient.searchTools(query, { limit: 10 });
+          if (results.length === 0) {
+            addMessage('system', `No tools found for: "${query}"`);
+          } else {
+            const loaded = mcpClient.loadTools(results.map((r: any) => r.name));
+            for (const tool of loaded) agent.addTool(tool);
+            addMessage('system', `Found & loaded ${loaded.length} tools`);
+          }
+          return;
+        }
+        const servers = mcpClient.listServers();
+        const stats = mcpClient.getContextStats();
+        if (servers.length === 0) {
+          addMessage('system', 'No MCP servers configured.');
+        } else {
+          addMessage('system', [
+            `MCP Servers:`,
+            ...servers.map((s: any) => `  ${s.status === 'connected' ? '[OK]' : '[ ]'} ${s.name} - ${s.toolCount || 0} tools`),
+            `Loaded: ${stats.loadedCount}/${stats.totalTools}`,
+          ].join('\n'));
+        }
+        return;
+      }
+
+      case 'tools': {
+        const allTools = agent.getTools();
+        const builtIn = allTools.filter((t: any) => !t.name.startsWith('mcp_'));
+        const mcpTools = allTools.filter((t: any) => t.name.startsWith('mcp_'));
+        addMessage('system', [
+          `Tools (${allTools.length}):`,
+          `Built-in (${builtIn.length}):`,
+          ...builtIn.slice(0, 10).map((t: any) => `  * ${t.name}`),
+          builtIn.length > 10 ? `  ... +${builtIn.length - 10}` : '',
+          `MCP (${mcpTools.length}):`,
+          ...(mcpTools.length > 0 ? mcpTools.slice(0, 5).map((t: any) => `  * ${t.name}`) : ['  (none)']),
+        ].filter(Boolean).join('\n'));
+        return;
+      }
+
+      case 'checkpoint':
+      case 'cp':
+        try {
+          const cp = agent.createCheckpoint(args.join(' ') || undefined);
+          addMessage('system', `Checkpoint: ${cp.id}${cp.label ? ` (${cp.label})` : ''}`);
+        } catch (e) {
+          addMessage('error', (e as Error).message);
+        }
+        return;
+
+      case 'checkpoints':
+      case 'cps':
+        try {
+          const cps = agent.getCheckpoints();
+          if (cps.length === 0) {
+            addMessage('system', 'No checkpoints.');
+          } else {
+            addMessage('system', `Checkpoints:\n${cps.map((cp: any) => `  ${cp.id}${cp.label ? ` - ${cp.label}` : ''}`).join('\n')}`);
+          }
+        } catch (e) {
+          addMessage('error', (e as Error).message);
+        }
+        return;
+
+      case 'restore':
+        if (!args[0]) {
+          addMessage('system', 'Usage: /restore <checkpoint-id>');
+          return;
+        }
+        if (agent.restoreCheckpoint(args[0])) {
+          const msgs = agent.getState().messages;
+          setMessages(msgs.map((m: any, i: number) => ({
+            id: `msg-${i}`,
+            role: m.role,
+            content: typeof m.content === 'string' ? m.content : JSON.stringify(m.content),
+            ts: new Date(),
+          })));
+          addMessage('system', `Restored: ${args[0]} - ${msgs.length} messages`);
+        } else {
+          addMessage('system', `Not found: ${args[0]}`);
+        }
+        return;
+
+      case 'rollback':
+      case 'rb': {
+        const steps = parseInt(args[0], 10) || 1;
+        if (agent.rollback(steps)) {
+          const msgs = agent.getState().messages;
+          setMessages(msgs.map((m: any, i: number) => ({
+            id: `msg-${i}`,
+            role: m.role,
+            content: typeof m.content === 'string' ? m.content : JSON.stringify(m.content),
+            ts: new Date(),
+          })));
+          addMessage('system', `Rolled back ${steps} step(s)`);
+        } else {
+          addMessage('system', 'Rollback failed');
+        }
+        return;
+      }
+
+      case 'mode': {
+        if (!args[0]) {
+          const modeInfo = agent.getModeInfo();
+          const hasPlan = agent.hasPendingPlan();
+          addMessage('system', [
+            `Mode: ${modeInfo.icon} ${modeInfo.name}`,
+            hasPlan ? `  Pending: ${agent.getPendingChangeCount()} changes` : '',
+            agent.getAvailableModes(),
+          ].filter(Boolean).join('\n'));
+        } else {
+          agent.setMode(args[0].toLowerCase());
+          const modeInfo = agent.getModeInfo();
+          setStatus(s => ({ ...s, mode: modeInfo.name === 'Plan' ? 'ready (plan)' : 'ready' }));
+          addMessage('system', `Mode: ${modeInfo.icon} ${modeInfo.name}`);
+        }
+        return;
+      }
+
+      case 'plan': {
+        agent.togglePlanMode();
+        const modeInfo = agent.getModeInfo();
+        setStatus(s => ({ ...s, mode: modeInfo.name === 'Plan' ? 'ready (plan)' : 'ready' }));
+        addMessage('system', `Mode: ${modeInfo.icon} ${modeInfo.name}`);
+        if (modeInfo.name === 'Plan') {
+          addMessage('system', 'Plan Mode: writes are queued. /show-plan, /approve, /reject');
+        }
+        return;
+      }
+
+      case 'show-plan':
+        if (!agent.hasPendingPlan()) {
+          addMessage('system', 'No pending plan.');
+        } else {
+          addMessage('system', agent.formatPendingPlan());
+        }
+        return;
+
+      case 'approve': {
+        if (!agent.hasPendingPlan()) {
+          addMessage('system', 'No plan to approve.');
+          return;
+        }
+        const count = args[0] ? parseInt(args[0], 10) : undefined;
+        const result = await agent.approvePlan(count);
+        if (result.success) {
+          addMessage('system', `[OK] Executed ${result.executed} change(s)`);
+        } else {
+          addMessage('system', `[!] ${result.executed} done, ${result.errors.length} errors`);
+        }
+        if (agent.getMode() === 'plan') {
+          agent.setMode('build');
+          setStatus(s => ({ ...s, mode: 'ready' }));
+        }
+        return;
+      }
+
+      case 'reject':
+        if (!agent.hasPendingPlan()) {
+          addMessage('system', 'No plan to reject.');
+          return;
+        }
+        agent.rejectPlan();
+        addMessage('system', '[X] Plan rejected');
+        if (agent.getMode() === 'plan') {
+          agent.setMode('build');
+          setStatus(s => ({ ...s, mode: 'ready' }));
+        }
+        return;
+
+      case 'theme': {
+        const availableThemes = getThemeNames();
+        if (!args[0]) {
+          addMessage('system', `Theme: ${currentThemeName}\nAvailable: ${availableThemes.join(', ')}`);
+          return;
+        }
+        const newTheme = args[0].toLowerCase();
+        if (availableThemes.includes(newTheme) || newTheme === 'auto') {
+          setCurrentThemeName(newTheme);
+          addMessage('system', `Theme: ${newTheme}`);
+        } else {
+          addMessage('system', `Unknown theme: ${newTheme}`);
+        }
+        return;
+      }
+
+      case 'lsp': {
+        const servers = lspManager.getActiveServers();
+        addMessage('system', servers.length > 0
+          ? `LSP Active:\n${servers.map((s: string) => `  [OK] ${s}`).join('\n')}`
+          : 'No LSP servers running');
+        return;
+      }
+
+      case 'tui':
+        addMessage('system', 'TUI: Active (Ink + Static + Single useInput)');
+        return;
+
+      case 'model':
+        addMessage('system', `Model: ${model || 'auto'}\nRestart to change.`);
+        return;
+
+      default:
+        addMessage('system', `Unknown: /${cmd}. Try /help`);
+    }
+  }, [addMessage, exit, agent, mcpClient, lspManager, sessionStore, compactor, model, currentThemeName, currentSessionId, formatSessionsTable, saveCheckpointToStore]);
+
+  // =========================================================================
+  // SUBMIT HANDLER
+  // =========================================================================
+
+  const handleSubmit = useCallback(async (input: string) => {
+    const trimmed = input.trim();
+    if (!trimmed) return;
+
+    addMessage('user', trimmed);
+
+    if (trimmed.startsWith('/')) {
+      const parts = trimmed.slice(1).split(/\s+/);
+      await handleCommand(parts[0], parts.slice(1));
       return;
     }
 
-    // Ctrl+P for command palette
-    if (key.ctrl && input === 'p') {
-      dispatch({ type: 'TOGGLE_COMMAND_PALETTE' });
+    setIsProcessing(true);
+    setStatus(s => ({ ...s, mode: 'thinking' }));
+
+    const unsub = agent.subscribe((event: any) => {
+      if (event.type === 'tool.start') {
+        setStatus(s => ({ ...s, mode: `calling ${event.tool}` }));
+        setToolCalls(prev => [...prev.slice(-4), {
+          id: `${event.tool}-${Date.now()}`,
+          name: event.tool,
+          args: event.args || {},
+          status: 'running',
+          startTime: new Date(),
+        }]);
+      } else if (event.type === 'tool.complete') {
+        setStatus(s => ({ ...s, mode: 'thinking' }));
+        setToolCalls(prev => prev.map(t => t.name === event.tool ? {
+          ...t,
+          status: 'success',
+          result: event.result,
+          duration: t.startTime ? Date.now() - t.startTime.getTime() : undefined,
+        } : t));
+      } else if (event.type === 'tool.blocked') {
+        setToolCalls(prev => prev.map(t => t.name === event.tool ? {
+          ...t,
+          status: 'error',
+          error: event.reason || 'Blocked',
+        } : t));
+      } else if (event.type === 'llm.start') {
+        setStatus(s => ({ ...s, mode: 'thinking', iter: s.iter + 1 }));
+      } else if (event.type === 'insight.tokens' && showThinking) {
+        const e = event as { inputTokens: number; outputTokens: number; cost?: number };
+        addMessage('system', `* ${e.inputTokens.toLocaleString()} in, ${e.outputTokens.toLocaleString()} out${e.cost ? ` $${e.cost.toFixed(6)}` : ''}`);
+      } else if (event.type === 'plan.change.queued') {
+        addMessage('system', `[PLAN] Queued: ${event.tool}`);
+      }
+    });
+
+    try {
+      const result = await agent.run(trimmed);
+      const metrics = agent.getMetrics();
+      const modeInfo = agent.getModeInfo();
+      setStatus({ iter: metrics.llmCalls, tokens: metrics.totalTokens, cost: metrics.estimatedCost, mode: modeInfo.name === 'Plan' ? 'ready (plan)' : 'ready' });
+
+      const durationSec = (metrics.duration / 1000).toFixed(1);
+      const metricsLine = `\n---\n${metrics.inputTokens.toLocaleString()} in | ${metrics.outputTokens.toLocaleString()} out | ${metrics.toolCalls} tools | ${durationSec}s`;
+
+      if (agent.hasPendingPlan()) {
+        const plan = agent.getPendingPlan();
+        if (plan) {
+          const planSummary = `\n[PLAN] ${plan.proposedChanges.length} change(s) queued\n/show-plan | /approve | /reject`;
+          addMessage('assistant', (result.response || 'Changes queued.') + planSummary + metricsLine);
+        }
+      } else {
+        addMessage('assistant', (result.response || result.error || 'No response') + metricsLine);
+      }
+
+      const checkpoint = agent.autoCheckpoint(true);
+      if (checkpoint) {
+        addMessage('system', `[*] Auto-checkpoint: ${checkpoint.id}`);
+        try {
+          saveCheckpointToStore(sessionStore, {
+            id: checkpoint.id,
+            label: checkpoint.label,
+            messages: checkpoint.state.messages,
+            iteration: checkpoint.state.iteration,
+            metrics: checkpoint.state.metrics,
+            plan: checkpoint.state.plan,
+            memoryContext: checkpoint.state.memoryContext,
+          });
+        } catch (e) {
+          persistenceDebug.error('[TUI] Checkpoint failed', e);
+        }
+      }
+    } catch (e) {
+      addMessage('error', (e as Error).message);
+    } finally {
+      unsub();
+      setIsProcessing(false);
+      setToolCalls([]);
+    }
+  }, [addMessage, handleCommand, agent, sessionStore, saveCheckpointToStore, persistenceDebug, showThinking]);
+
+  // =========================================================================
+  // COMMAND PALETTE ITEMS
+  // =========================================================================
+
+  const commandPaletteItems: CommandPaletteItem[] = useMemo(() => [
+    { id: 'help', label: 'Help', shortcut: '/help', category: 'General', action: () => handleCommand('help', []) },
+    { id: 'status', label: 'Show Status', shortcut: '/status', category: 'General', action: () => handleCommand('status', []) },
+    { id: 'clear', label: 'Clear Screen', shortcut: 'Ctrl+L', category: 'General', action: () => { setMessages([]); setToolCalls([]); } },
+    { id: 'save', label: 'Save Session', shortcut: '/save', category: 'Sessions', action: () => handleCommand('save', []) },
+    { id: 'sessions', label: 'List Sessions', shortcut: '/sessions', category: 'Sessions', action: () => handleCommand('sessions', []) },
+    { id: 'context', label: 'Context Info', shortcut: '/context', category: 'Context', action: () => handleCommand('context', []) },
+    { id: 'compact', label: 'Compact Context', shortcut: '/compact', category: 'Context', action: () => handleCommand('compact', []) },
+    { id: 'mcp', label: 'MCP Servers', shortcut: '/mcp', category: 'MCP', action: () => handleCommand('mcp', []) },
+    { id: 'mcp-tools', label: 'MCP Tools', shortcut: '/mcp tools', category: 'MCP', action: () => handleCommand('mcp', ['tools']) },
+    { id: 'plan', label: 'Toggle Plan Mode', shortcut: '/plan', category: 'Plan', action: () => handleCommand('plan', []) },
+    { id: 'show-plan', label: 'Show Plan', shortcut: '/show-plan', category: 'Plan', action: () => handleCommand('show-plan', []) },
+    { id: 'approve', label: 'Approve Plan', shortcut: '/approve', category: 'Plan', action: () => handleCommand('approve', []) },
+    { id: 'reject', label: 'Reject Plan', shortcut: '/reject', category: 'Plan', action: () => handleCommand('reject', []) },
+    { id: 'tools', label: 'List Tools', shortcut: '/tools', category: 'Debug', action: () => handleCommand('tools', []) },
+    { id: 'theme', label: 'Change Theme', shortcut: '/theme', category: 'Settings', action: () => handleCommand('theme', []) },
+    { id: 'exit', label: 'Exit', shortcut: 'Ctrl+C', category: 'General', action: () => agent.cleanup().then(() => exit()) },
+  ], [handleCommand, agent, exit]);
+
+  // Get filtered command palette items for current query
+  const filteredCommandItems = useMemo(() => {
+    if (!commandPaletteQuery) return commandPaletteItems;
+    const q = commandPaletteQuery.toLowerCase();
+    return commandPaletteItems.filter(item =>
+      item.label.toLowerCase().includes(q) ||
+      item.id.toLowerCase().includes(q) ||
+      (item.shortcut && item.shortcut.toLowerCase().includes(q))
+    );
+  }, [commandPaletteItems, commandPaletteQuery]);
+
+  // Handle command palette keyboard input (called from MemoizedInputArea)
+  const handleCommandPaletteInput = useCallback((input: string, key: any) => {
+    // Escape closes palette
+    if (key.escape) {
+      setCommandPaletteOpen(false);
+      setCommandPaletteQuery('');
+      setCommandPaletteIndex(0);
       return;
     }
 
-    // Ctrl+L to clear
-    if (key.ctrl && input === 'l') {
-      dispatch({ type: 'CLEAR_MESSAGES' });
+    // Enter selects item
+    if (key.return) {
+      const item = filteredCommandItems[commandPaletteIndex];
+      if (item) {
+        setCommandPaletteOpen(false);
+        setCommandPaletteQuery('');
+        setCommandPaletteIndex(0);
+        item.action();
+      }
       return;
     }
 
-    // Cmd+T (meta+t) to toggle all tool calls expanded/collapsed
-    if (key.meta && input === 't') {
-      dispatch({ type: 'TOGGLE_ALL_TOOL_CALLS' });
+    // Arrow keys navigate
+    if (key.upArrow) {
+      setCommandPaletteIndex(i => Math.max(0, i - 1));
+      return;
+    }
+    if (key.downArrow) {
+      setCommandPaletteIndex(i => Math.min(filteredCommandItems.length - 1, i + 1));
       return;
     }
 
-    // Cmd+O (meta+o) to toggle thinking/reasoning display
-    if (key.meta && input === 'o') {
-      dispatch({ type: 'TOGGLE_THINKING_DISPLAY' });
+    // Backspace
+    if (key.backspace || key.delete) {
+      setCommandPaletteQuery(q => q.slice(0, -1));
+      setCommandPaletteIndex(0);
       return;
     }
 
-    // Forward to handler
-    if (handlers.onKeyPress) {
-      handlers.onKeyPress(input, {
-        ctrl: key.ctrl ?? false,
-        alt: key.meta ?? false,
-        meta: key.meta ?? false,
-        shift: key.shift ?? false,
-      });
+    // Regular character input
+    if (input && !key.ctrl && !key.meta) {
+      setCommandPaletteQuery(q => q + input);
+      setCommandPaletteIndex(0);
     }
-  });
+  }, [filteredCommandItems, commandPaletteIndex]);
 
-  // Handle input submission
-  const handleSubmit = useCallback((value: string) => {
-    // Check if it's a command
-    if (value.startsWith('/')) {
-      const [command, ...args] = value.slice(1).split(' ');
-      handlers.onCommand?.(command, args);
+  // =========================================================================
+  // KEYBOARD CALLBACKS
+  // =========================================================================
+
+  const handleCtrlC = useCallback(() => {
+    agent.cleanup().then(() => mcpClient.cleanup()).then(() => lspManager.cleanup()).then(() => exit());
+  }, [agent, mcpClient, lspManager, exit]);
+
+  const handleCtrlL = useCallback(() => {
+    setMessages([]);
+    setToolCalls([]);
+  }, []);
+
+  const handleCtrlP = useCallback(() => {
+    setCommandPaletteOpen(prev => !prev);
+    setCommandPaletteQuery('');
+    setCommandPaletteIndex(0);
+  }, []);
+
+  const handleEscape = useCallback(() => {
+    // Close command palette first if open
+    if (commandPaletteOpen) {
+      setCommandPaletteOpen(false);
+      setCommandPaletteQuery('');
+      setCommandPaletteIndex(0);
+      return;
+    }
+    // Otherwise cancel processing
+    if (isProcessingRef.current) {
+      agent.cancel('Cancelled by ESC');
+      setIsProcessing(false);
+      addMessage('system', '[STOP] Cancelled');
+    }
+  }, [agent, addMessage, commandPaletteOpen]);
+
+  const handleToggleToolExpand = useCallback(() => {
+    setToolCallsExpanded(prev => {
+      addMessage('system', !prev ? '[*] Tool details: expanded' : '[ ] Tool details: collapsed');
+      return !prev;
+    });
+  }, [addMessage]);
+
+  const handleToggleThinking = useCallback(() => {
+    setShowThinking(prev => {
+      addMessage('system', !prev ? '[*] Thinking: verbose' : '[ ] Thinking: minimal');
+      return !prev;
+    });
+  }, [addMessage]);
+
+  // Update context tokens
+  useEffect(() => {
+    const agentState = agent.getState();
+    const estimateTokens = (str: string) => Math.ceil(str.length / 3.2);
+    const tokens = agentState.messages.reduce((sum: number, m: any) =>
+      sum + estimateTokens(typeof m.content === 'string' ? m.content : JSON.stringify(m.content)), 0);
+    setContextTokens(tokens);
+  }, [status.tokens, messages.length, agent]);
+
+  // Track elapsed time
+  useEffect(() => {
+    if (isProcessing) {
+      processingStartRef.current = Date.now();
+      setElapsedTime(0);
+      const interval = setInterval(() => {
+        if (processingStartRef.current) {
+          setElapsedTime(Math.floor((Date.now() - processingStartRef.current) / 1000));
+        }
+      }, 1000);
+      return () => clearInterval(interval);
     } else {
-      handlers.onInput?.(value);
+      processingStartRef.current = null;
+      return undefined;
     }
-  }, [handlers]);
+  }, [isProcessing]);
 
-  // Theme context value
-  const themeContextValue: ThemeContextValue = {
-    theme,
-    setTheme: setThemeName,
-  };
+  const modelShort = (model || 'unknown').split('/').pop() || model || 'unknown';
+  const contextPct = Math.round((contextTokens / 80000) * 100);
+  const costStr = status.cost > 0 ? `$${status.cost.toFixed(4)}` : '$0.00';
 
-  // App state context value
-  const appStateValue: AppStateContextValue = {
-    state,
-    dispatch,
-  };
-
-  // Keep last N messages visible
-  const visibleMessages = state.messages.slice(-15);
-  const toolCallsArray = Array.from(state.toolCalls.values()).slice(-5);
+  // =========================================================================
+  // RENDER
+  // =========================================================================
 
   return (
-    <ThemeContext.Provider value={themeContextValue}>
-      <AppStateContext.Provider value={appStateValue}>
-        <Box flexDirection="column" height="100%">
-          {/* Messages area - direct rendering */}
-          <Box flexDirection="column" flexGrow={1}>
-            {visibleMessages.length === 0 ? (
-              <Text color={theme.colors.textMuted}>No messages yet. Type a message to start.</Text>
-            ) : (
-              visibleMessages.map((msg) => <MessageItem key={msg.id} message={msg} />)
-            )}
+    <>
+      {/* Static messages - rendered once, never re-render */}
+      <Static items={messages}>
+        {(m: TUIMessage) => (
+          <MessageItem key={m.id} msg={m} colors={colors} />
+        )}
+      </Static>
+
+      {/* Dynamic section */}
+      <Box flexDirection="column">
+        {toolCalls.length > 0 && (
+          <Box flexDirection="column" marginBottom={1}>
+            <Text color="#DDA0DD" bold>{`Tools ${toolCallsExpanded ? '[-]' : '[+]'}`}</Text>
+            {toolCalls.slice(-5).map(tc => (
+              <ToolCallItem key={`${tc.id}-${tc.status}`} tc={tc} expanded={toolCallsExpanded} colors={colors} />
+            ))}
           </Box>
+        )}
 
-          {/* Tool calls */}
-          {toolCallsArray.length > 0 && (
-            <Box flexDirection="column" marginBottom={1}>
-              <Text bold color={theme.colors.toolMessage}>Tools</Text>
-              {toolCallsArray.map((tc) => (
-                <Box key={tc.id}>
-                  <Text color={
-                    tc.status === 'success' ? theme.colors.success :
-                    tc.status === 'error' ? theme.colors.error :
-                    tc.status === 'running' ? theme.colors.info :
-                    theme.colors.textMuted
-                  }>
-                    [{tc.status === 'success' ? '✓' :
-                      tc.status === 'error' ? '✗' :
-                      tc.status === 'running' ? '⟳' : '...'}] {tc.name}
-                  </Text>
-                  {tc.duration && (
-                    <Text color={theme.colors.textMuted}> ({tc.duration}ms)</Text>
-                  )}
-                </Box>
-              ))}
-            </Box>
-          )}
+        <MemoizedInputArea
+          onSubmit={handleSubmit}
+          disabled={isProcessing}
+          borderColor="#87CEEB"
+          textColor="#98FB98"
+          cursorColor="#87CEEB"
+          onCtrlC={handleCtrlC}
+          onCtrlL={handleCtrlL}
+          onCtrlP={handleCtrlP}
+          onEscape={handleEscape}
+          onToggleToolExpand={handleToggleToolExpand}
+          onToggleThinking={handleToggleThinking}
+          commandPaletteOpen={commandPaletteOpen}
+          onCommandPaletteInput={handleCommandPaletteInput}
+        />
 
-          {/* Spinner - static icon */}
-          {state.spinner.visible && (
-            <Text color={theme.colors.info}>⏳ {state.spinner.message}</Text>
-          )}
-
-          {/* Input */}
-          <InputArea
-            onSubmit={handleSubmit}
-            disabled={state.spinner.visible}
+        {/* Command Palette (positioned above input) */}
+        {commandPaletteOpen && (
+          <ControlledCommandPalette
+            theme={selectedTheme}
+            items={filteredCommandItems}
+            visible={commandPaletteOpen}
+            query={commandPaletteQuery}
+            selectedIndex={commandPaletteIndex}
+            onQueryChange={setCommandPaletteQuery}
+            onSelectItem={(item) => {
+              setCommandPaletteOpen(false);
+              setCommandPaletteQuery('');
+              setCommandPaletteIndex(0);
+              item.action();
+            }}
+            onClose={() => {
+              setCommandPaletteOpen(false);
+              setCommandPaletteQuery('');
+              setCommandPaletteIndex(0);
+            }}
           />
-          <Text color={theme.colors.textMuted} dimColor>
-            Ctrl+C:Exit | Ctrl+L:Clear
-          </Text>
+        )}
+
+        {/* Status bar */}
+        <Box
+          borderStyle="single"
+          borderColor={isProcessing ? colors.info : colors.textMuted}
+          paddingX={1}
+          justifyContent="space-between"
+        >
+          <Box gap={1}>
+            <Text color={isProcessing ? colors.info : '#98FB98'} bold={isProcessing}>
+              {isProcessing ? '[~]' : '[*]'}
+            </Text>
+            <Text color={isProcessing ? colors.info : colors.text} bold={isProcessing}>
+              {status.mode.length > 40 ? status.mode.slice(0, 37) + '...' : status.mode}
+            </Text>
+            {isProcessing && elapsedTime > 0 && <Text color={colors.textMuted} dimColor>| {elapsedTime}s</Text>}
+            {status.iter > 0 && <Text color={colors.textMuted} dimColor>| iter {status.iter}</Text>}
+          </Box>
+          <Box gap={2}>
+            <Text color="#DDA0DD" dimColor>{modelShort}</Text>
+            <Text color={contextPct > 70 ? '#FFD700' : colors.textMuted} dimColor>{`${(contextTokens / 1000).toFixed(1)}k`}</Text>
+            <Text color="#98FB98" dimColor>{costStr}</Text>
+            {gitBranch && <Text color="#87CEEB" dimColor>{gitBranch}</Text>}
+            <Text color={colors.textMuted} dimColor>ESC:cancel ^P:help</Text>
+          </Box>
         </Box>
-      </AppStateContext.Provider>
-    </ThemeContext.Provider>
+      </Box>
+    </>
   );
 }
 
-// =============================================================================
-// EXPORTS
-// =============================================================================
-
-export { ThemeContext, AppStateContext };
-export type { AppAction, ThemeContextValue, AppStateContextValue };
+export default TUIApp;

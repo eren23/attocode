@@ -454,7 +454,7 @@ import { createLSPFileTools } from './agent-tools/lsp-file-tools.js';
 import { initPricingCache } from './integrations/openrouter-pricing.js';
 
 // TUI for colored output
-import { createTUIRenderer } from './tui/index.js';
+import { createTUIRenderer, TUIApp, type TUIAppProps } from './tui/index.js';
 
 // ESM equivalent of __dirname
 const __filename = fileURLToPath(import.meta.url);
@@ -2800,13 +2800,11 @@ async function startTUIMode(
     }
 
     // Dynamic imports - using our modular TUI components
-    const { render, Box, Text, useApp, useInput } = await import('ink');
+    const { render, Box, Text, useApp, useInput, Static } = await import('ink');
     const React = await import('react');
-    const { useState, useCallback, useEffect } = React;
+    const { useState, useCallback, useEffect, memo, useRef } = React;
     const { getTheme, getThemeNames } = await import('./tui/theme/index.js');
-    const { ToolCallList } = await import('./tui/components/ToolCall.js');
-    const { Header } = await import('./tui/layout/Header.js');
-    const { Footer } = await import('./tui/layout/Footer.js');
+    type ThemeColors = import('./tui/types.js').ThemeColors;
     type ToolCallDisplay = import('./tui/types.js').ToolCallDisplay;
 
     // Initialize pricing cache from OpenRouter
@@ -2961,11 +2959,328 @@ async function startTUIMode(
     };
     const gitBranch = getGitBranch();
 
-    // TUI Component - direct rendering with static icons (flicker-free)
-    const TUIApp = () => {
+    // =========================================================================
+    // MEMOIZED COMPONENTS - Prevent re-renders on state changes
+    // =========================================================================
+
+    // TUI Message type for the memoized components
+    interface TUIMessage {
+      id: string;
+      role: string;
+      content: string;
+      ts: Date;
+    }
+
+    // Memoized message item - prevents re-render when parent state changes
+    interface MessageItemProps {
+      msg: TUIMessage;
+      colors: ThemeColors;
+    }
+
+    const MessageItem = memo(function MessageItem({ msg, colors }: MessageItemProps) {
+      const isUser = msg.role === 'user';
+      const isAssistant = msg.role === 'assistant';
+      const isError = msg.role === 'error';
+      const icon = isUser ? '❯' : isAssistant ? '◆' : isError ? '✖' : '●';
+      const roleColor = isUser ? '#87CEEB' : isAssistant ? '#98FB98' : isError ? '#FF6B6B' : '#FFD700';
+      const label = isUser ? 'You' : isAssistant ? 'Assistant' : isError ? 'Error' : 'System';
+
+      return React.createElement(Box, { marginBottom: 1, flexDirection: 'column' },
+        // Role header
+        React.createElement(Box, { gap: 1 },
+          React.createElement(Text, { color: roleColor, bold: true }, icon),
+          React.createElement(Text, { color: roleColor, bold: true }, label),
+          React.createElement(Text, { color: colors.textMuted, dimColor: true },
+            ` ${msg.ts.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}`
+          )
+        ),
+        // Message content
+        React.createElement(Box, { marginLeft: 2 },
+          React.createElement(Text, { wrap: 'wrap', color: isError ? colors.error : colors.text }, msg.content)
+        )
+      );
+    });
+
+    // Tool call display type
+    interface ToolCallDisplayItem {
+      id: string;
+      name: string;
+      args: Record<string, unknown>;
+      status: 'pending' | 'running' | 'success' | 'error';
+      result?: unknown;
+      error?: string;
+      duration?: number;
+      startTime?: Date;
+    }
+
+    // Memoized tool call item
+    interface ToolCallItemProps {
+      tc: ToolCallDisplayItem;
+      expanded: boolean;
+      colors: ThemeColors;
+    }
+
+    const ToolCallItem = memo(function ToolCallItem({ tc, expanded, colors }: ToolCallItemProps) {
+      const icon = tc.status === 'success' ? '✓' : tc.status === 'error' ? '✗' : tc.status === 'running' ? '⟳' : '○';
+      const statusColor = tc.status === 'success' ? '#98FB98' : tc.status === 'error' ? '#FF6B6B' : tc.status === 'running' ? '#87CEEB' : colors.textMuted;
+
+      // Helper to format tool args concisely
+      const formatToolArgs = (args: Record<string, unknown>): string => {
+        const entries = Object.entries(args);
+        if (entries.length === 0) return '';
+        if (entries.length === 1) {
+          const [key, val] = entries[0];
+          const valStr = typeof val === 'string' ? val : JSON.stringify(val);
+          return valStr.length > 50 ? `${key}: ${valStr.slice(0, 47)}...` : `${key}: ${valStr}`;
+        }
+        return `{${entries.length} args}`;
+      };
+
+      const argsStr = formatToolArgs(tc.args);
+
+      // Expanded view shows more details
+      if (expanded) {
+        return React.createElement(Box, { marginLeft: 2, flexDirection: 'column' },
+          React.createElement(Box, { gap: 1 },
+            React.createElement(Text, { color: statusColor }, icon),
+            React.createElement(Text, { color: '#DDA0DD', bold: true }, tc.name),
+            tc.duration ? React.createElement(Text, { color: colors.textMuted, dimColor: true }, `(${tc.duration}ms)`) : null
+          ),
+          // Show args in expanded mode
+          Object.keys(tc.args).length > 0 ? React.createElement(Box, { marginLeft: 3 },
+            React.createElement(Text, { color: colors.textMuted, dimColor: true },
+              JSON.stringify(tc.args, null, 0).slice(0, 100) + (JSON.stringify(tc.args).length > 100 ? '...' : '')
+            )
+          ) : null,
+          // Show result preview in expanded mode
+          (tc.status === 'success' && tc.result) ? React.createElement(Box, { marginLeft: 3 },
+            React.createElement(Text, { color: '#98FB98', dimColor: true },
+              `→ ${String(tc.result).slice(0, 80)}${String(tc.result).length > 80 ? '...' : ''}`
+            )
+          ) : null,
+          // Show error in expanded mode
+          (tc.status === 'error' && tc.error) ? React.createElement(Box, { marginLeft: 3 },
+            React.createElement(Text, { color: '#FF6B6B' }, `✗ ${tc.error}`)
+          ) : null
+        );
+      }
+
+      // Collapsed view (default)
+      return React.createElement(Box, { marginLeft: 2, gap: 1 },
+        React.createElement(Text, { color: statusColor }, icon),
+        React.createElement(Text, { color: '#DDA0DD', bold: true }, tc.name),
+        argsStr ? React.createElement(Text, { color: colors.textMuted, dimColor: true }, argsStr) : null,
+        tc.duration ? React.createElement(Text, { color: colors.textMuted, dimColor: true }, `(${tc.duration}ms)`) : null
+      );
+    });
+
+    // =========================================================================
+    // MEMOIZED INPUT AREA - Manages own state to prevent parent re-renders
+    // Also handles ALL keyboard input to prevent multiple useInput hooks
+    // =========================================================================
+    interface MemoizedInputAreaProps {
+      onSubmit: (value: string) => void;
+      disabled: boolean;
+      borderColor: string;
+      textColor: string;
+      cursorColor: string;
+      // Global keyboard handlers to avoid multiple useInput hooks
+      onCtrlC?: () => void;
+      onCtrlL?: () => void;
+      onCtrlP?: () => void;
+      onEscape?: () => void;
+      onToggleToolExpand?: () => void;
+      onToggleThinking?: () => void;
+      // Scroll handlers for message navigation
+      onPageUp?: () => void;
+      onPageDown?: () => void;
+      onHome?: () => void;
+      onEnd?: () => void;
+    }
+
+    const MemoizedInputArea = memo(function MemoizedInputArea({
+      onSubmit,
+      disabled,
+      borderColor,
+      textColor,
+      cursorColor,
+      onCtrlC,
+      onCtrlL,
+      onCtrlP,
+      onEscape,
+      onToggleToolExpand,
+      onToggleThinking,
+      onPageUp,
+      onPageDown,
+      onHome,
+      onEnd,
+    }: MemoizedInputAreaProps) {
+      const [value, setValue] = useState('');
+      const [cursorPos, setCursorPos] = useState(0);
+
+      // Store callbacks in refs so useInput doesn't re-subscribe on prop changes
+      const callbacksRef = React.useRef({
+        onSubmit, onCtrlC, onCtrlL, onCtrlP, onEscape,
+        onToggleToolExpand, onToggleThinking,
+        onPageUp, onPageDown, onHome, onEnd
+      });
+      // Update refs on every render (but don't cause re-render)
+      callbacksRef.current = {
+        onSubmit, onCtrlC, onCtrlL, onCtrlP, onEscape,
+        onToggleToolExpand, onToggleThinking,
+        onPageUp, onPageDown, onHome, onEnd
+      };
+      const disabledRef = React.useRef(disabled);
+      disabledRef.current = disabled;
+
+      useInput((input, key) => {
+        const cb = callbacksRef.current;
+        // Global shortcuts (always active)
+        if (key.ctrl && input === 'c') {
+          cb.onCtrlC?.();
+          return;
+        }
+        if (key.ctrl && input === 'l') {
+          cb.onCtrlL?.();
+          return;
+        }
+        if (key.ctrl && input === 'p') {
+          cb.onCtrlP?.();
+          return;
+        }
+        if (key.escape) {
+          cb.onEscape?.();
+          return;
+        }
+        // Alt+T / Option+T (produces '†' on macOS)
+        if (input === '†' || (key.meta && input === 't')) {
+          cb.onToggleToolExpand?.();
+          return;
+        }
+        // Alt+O / Option+O (produces 'ø' on macOS)
+        if (input === 'ø' || (key.meta && input === 'o')) {
+          cb.onToggleThinking?.();
+          return;
+        }
+
+        // Scroll navigation (always active)
+        if (key.pageUp) {
+          cb.onPageUp?.();
+          return;
+        }
+        if (key.pageDown) {
+          cb.onPageDown?.();
+          return;
+        }
+        // Ctrl+Home (go to first message) and Ctrl+End (go to last message)
+        if (key.ctrl && key.upArrow) {
+          cb.onHome?.();
+          return;
+        }
+        if (key.ctrl && key.downArrow) {
+          cb.onEnd?.();
+          return;
+        }
+
+        // Input handling (only when not disabled)
+        if (disabledRef.current) return;
+
+        // Submit on Enter
+        if (key.return && value.trim()) {
+          cb.onSubmit(value);
+          setValue('');
+          setCursorPos(0);
+          return;
+        }
+
+        // Backspace
+        if (key.backspace || key.delete) {
+          if (cursorPos > 0) {
+            setValue(v => v.slice(0, cursorPos - 1) + v.slice(cursorPos));
+            setCursorPos(p => p - 1);
+          }
+          return;
+        }
+
+        // Arrow keys
+        if (key.leftArrow) {
+          setCursorPos(p => Math.max(0, p - 1));
+          return;
+        }
+        if (key.rightArrow) {
+          setCursorPos(p => Math.min(value.length, p + 1));
+          return;
+        }
+
+        // Ctrl+A: start of line
+        if (key.ctrl && input === 'a') {
+          setCursorPos(0);
+          return;
+        }
+
+        // Ctrl+E: end of line
+        if (key.ctrl && input === 'e') {
+          setCursorPos(value.length);
+          return;
+        }
+
+        // Ctrl+U: clear line
+        if (key.ctrl && input === 'u') {
+          setValue('');
+          setCursorPos(0);
+          return;
+        }
+
+        // Regular character input
+        if (input && !key.ctrl && !key.meta) {
+          setValue(v => v.slice(0, cursorPos) + input + v.slice(cursorPos));
+          setCursorPos(p => p + input.length);
+        }
+      });
+
+      return React.createElement(Box, {
+        borderStyle: 'round',
+        borderColor: disabledRef.current ? '#666' : borderColor,
+        paddingX: 1,
+      },
+        React.createElement(Text, { color: textColor, bold: true }, '❯ '),
+        React.createElement(Text, {}, value.slice(0, cursorPos)),
+        !disabled && React.createElement(Text, { backgroundColor: cursorColor, color: '#1a1a2e' },
+          value[cursorPos] ?? ' '
+        ),
+        React.createElement(Text, {}, value.slice(cursorPos + 1))
+      );
+    }, (prevProps, nextProps) => {
+      // Custom comparison: only re-render if visual props change
+      // Callbacks are stored in refs so we don't care if they change
+      return prevProps.disabled === nextProps.disabled &&
+             prevProps.borderColor === nextProps.borderColor &&
+             prevProps.textColor === nextProps.textColor &&
+             prevProps.cursorColor === nextProps.cursorColor;
+    });
+
+    // ═══════════════════════════════════════════════════════════════════════════
+    // ACTUAL TUI COMPONENT - This is what's actually used!
+    // ═══════════════════════════════════════════════════════════════════════════
+    //
+    // NOTE: There's a more feature-rich TUI in src/tui/app.tsx that is NOT USED.
+    // That file has: CommandPalette, Sidebar, true scrolling, focus management,
+    // dialog system, and more. It was built but never integrated.
+    //
+    // This inline TUIApp is simpler but is the one that actually runs.
+    // If you want more features, consider replacing this with app.tsx.
+    //
+    // Key differences:
+    // - app.tsx: Full component library, proper architecture, more features
+    // - This TUIApp: Simple inline, fewer features, but it's what runs
+    //
+    // ═══════════════════════════════════════════════════════════════════════════
+    // NOTE: This inline TUIApp is now replaced by the extracted TUIApp from src/tui/app.tsx
+    // Keeping it renamed for reference until the extracted version is verified working.
+    const _LegacyInlineTUIApp = () => {
       const { exit } = useApp();
       const [messages, setMessages] = useState<Array<{ id: string; role: string; content: string; ts: Date }>>([]);
-      const [inputValue, setInputValue] = useState('');
+      // Input state moved to MemoizedInputArea to prevent full re-renders on keystroke
       const [isProcessing, setIsProcessing] = useState(false);
       const initialModeInfo = agent.getModeInfo();
       const initialMode = initialModeInfo.name === 'Plan' ? 'ready 📋' : 'ready';
@@ -2979,6 +3294,16 @@ async function startTUIMode(
       // Display toggles
       const [toolCallsExpanded, setToolCallsExpanded] = useState(false);
       const [showThinking, setShowThinking] = useState(true);
+
+      // Scroll state for message viewport
+      const [scrollOffset, setScrollOffset] = useState(0);
+      const VISIBLE_MESSAGES = 10; // Show up to 10 messages at a time (enables scrolling sooner)
+
+      // Refs for stable callbacks - prevents re-renders when these values change
+      const isProcessingRef = React.useRef(isProcessing);
+      const messagesLengthRef = React.useRef(messages.length);
+      isProcessingRef.current = isProcessing;
+      messagesLengthRef.current = messages.length;
 
       // Derive theme and colors from state
       const selectedTheme = getTheme(currentThemeName);
@@ -3188,11 +3513,13 @@ async function startTUIMode(
               '',
               '═══════════════════════════════════════════════════════',
               'KEYBOARD SHORTCUTS',
-              '  Ctrl+C    Exit',
-              '  Ctrl+L    Clear screen',
-              '  Ctrl+P    Command palette',
-              '  Cmd+T     Toggle tool details',
-              '  Cmd+O     Toggle thinking display',
+              '  Ctrl+C      Exit',
+              '  Ctrl+L      Clear screen',
+              '  Ctrl+P      Command palette',
+              '  Cmd+T       Toggle tool details',
+              '  Cmd+O       Toggle thinking display',
+              '  Page Up/Dn  Scroll messages',
+              '  Ctrl+↑/↓    Jump to first/last message',
               '═══════════════════════════════════════════════════════',
             ].join('\n'));
             return;
@@ -4272,84 +4599,102 @@ async function startTUIMode(
         }
       }, [addMessage, handleCommand]);
 
-      useInput((input, key) => {
-        // Ctrl+C to exit
-        if (key.ctrl && input === 'c') {
-          agent.cleanup().then(() => mcpClient.cleanup()).then(() => lspManager.cleanup()).then(() => exit());
-          return;
-        }
-        // Ctrl+L to clear screen
-        if (key.ctrl && input === 'l') {
-          setMessages([]);
-          setToolCalls([]);
-          return;
-        }
-        // Ctrl+P for command palette/help
-        if (key.ctrl && input === 'p') {
-          addMessage('system', [
-            '╭────────────────────────────────────────────────────╮',
-            '│              ⌘ Command Palette ⌘                  │',
-            '├────────────────────────────────────────────────────┤',
-            '│ GENERAL                                            │',
-            '│   /help /status /clear /reset /theme /model /tools │',
-            '│ SESSIONS                                           │',
-            '│   /save /load <id> /sessions /resume /handoff      │',
-            '│ CONTEXT                                            │',
-            '│   /context /compact /goals                         │',
-            '│ MCP                                                 │',
-            '│   /mcp /mcp tools /mcp search <q> /mcp stats       │',
-            '│ ADVANCED                                           │',
-            '│   /react /team /checkpoint /rollback /fork         │',
-            '│   /threads /switch /grants /audit                  │',
-            '│ SUBAGENTS                                          │',
-            '│   /agents /spawn <agent> <task> /find /suggest     │',
-            '│   /auto <task>                                     │',
-            '│ PLAN MODE                                          │',
-            '│   /plan /mode /show-plan /approve /reject          │',
-            '│ BUDGET                                             │',
-            '│   /budget /extend <tokens|cost|time> <amount>      │',
-            '│ DEBUG                                              │',
-            '│   /skills /sandbox /shell /lsp /tui                │',
-            '├────────────────────────────────────────────────────┤',
-            '│ SHORTCUTS                                          │',
-            '│   ^C exit  ^L clear  ^P this palette               │',
-            '│   ⌥T toggle tool details  ⌥O toggle thinking  ESC cancel │',
-            '╰────────────────────────────────────────────────────╯',
-          ].join('\n'));
-          return;
-        }
-        // ESC to cancel current processing
-        if (key.escape) {
-          if (isProcessing) {
-            agent.cancel('Cancelled by user (ESC)');
-            setIsProcessing(false);
-            addMessage('system', '⏹ Cancelled by ESC');
-          }
-          return;
-        }
-        // Alt+T / Option+T (produces '†' on macOS) to toggle tool call expansion
-        if (input === '†' || (key.meta && input === 't')) {
-          setToolCallsExpanded(prev => !prev);
-          addMessage('system', toolCallsExpanded ? '○ Tool details: collapsed' : '● Tool details: expanded');
-          return;
-        }
-        // Alt+O / Option+O (produces 'ø' on macOS) to toggle thinking/status display
-        if (input === 'ø' || (key.meta && input === 'o')) {
-          setShowThinking(prev => !prev);
-          addMessage('system', showThinking ? '○ Thinking display: minimal' : '● Thinking display: verbose');
-          return;
-        }
-        if (isProcessing) return;
+      // =========================================================================
+      // KEYBOARD CALLBACKS - passed to MemoizedInputArea (single useInput hook)
+      // =========================================================================
+      const handleCtrlC = useCallback(() => {
+        agent.cleanup().then(() => mcpClient.cleanup()).then(() => lspManager.cleanup()).then(() => exit());
+      }, [exit]);
 
-        if (key.return && inputValue.trim()) {
-          handleSubmit(inputValue);
-          setInputValue('');
-        } else if (key.backspace || key.delete) {
-          setInputValue(v => v.slice(0, -1));
-        } else if (input && !key.ctrl && !key.meta) {
-          setInputValue(v => v + input);
+      const handleCtrlL = useCallback(() => {
+        setMessages([]);
+        setToolCalls([]);
+      }, []);
+
+      const handleCtrlP = useCallback(() => {
+        addMessage('system', [
+          '╭────────────────────────────────────────────────────╮',
+          '│              ⌘ Command Palette ⌘                  │',
+          '├────────────────────────────────────────────────────┤',
+          '│ GENERAL                                            │',
+          '│   /help /status /clear /reset /theme /model /tools │',
+          '│ SESSIONS                                           │',
+          '│   /save /load <id> /sessions /resume /handoff      │',
+          '│ CONTEXT                                            │',
+          '│   /context /compact /goals                         │',
+          '│ MCP                                                 │',
+          '│   /mcp /mcp tools /mcp search <q> /mcp stats       │',
+          '│ ADVANCED                                           │',
+          '│   /react /team /checkpoint /rollback /fork         │',
+          '│   /threads /switch /grants /audit                  │',
+          '│ SUBAGENTS                                          │',
+          '│   /agents /spawn <agent> <task> /find /suggest     │',
+          '│   /auto <task>                                     │',
+          '│ PLAN MODE                                          │',
+          '│   /plan /mode /show-plan /approve /reject          │',
+          '│ BUDGET                                             │',
+          '│   /budget /extend <tokens|cost|time> <amount>      │',
+          '│ DEBUG                                              │',
+          '│   /skills /sandbox /shell /lsp /tui                │',
+          '├────────────────────────────────────────────────────┤',
+          '│ SHORTCUTS                                          │',
+          '│   ^C exit  ^L clear  ^P this palette  ESC cancel   │',
+          '│   ⌥T toggle tool details  ⌥O toggle thinking       │',
+          '│   PgUp/PgDn scroll messages  ^↑/^↓ first/last      │',
+          '╰────────────────────────────────────────────────────╯',
+        ].join('\n'));
+      }, [addMessage]);
+
+      const handleEscape = useCallback(() => {
+        if (isProcessingRef.current) {
+          agent.cancel('Cancelled by user (ESC)');
+          setIsProcessing(false);
+          addMessage('system', '⏹ Cancelled by ESC');
         }
-      });
+      }, [addMessage]); // Uses ref, not state - stable callback
+
+      const handleToggleToolExpand = useCallback(() => {
+        setToolCallsExpanded(prev => {
+          const next = !prev;
+          addMessage('system', next ? '● Tool details: expanded' : '○ Tool details: collapsed');
+          return next;
+        });
+      }, [addMessage]);
+
+      const handleToggleThinking = useCallback(() => {
+        setShowThinking(prev => {
+          const next = !prev;
+          addMessage('system', next ? '● Thinking display: verbose' : '○ Thinking display: minimal');
+          return next;
+        });
+      }, [addMessage]);
+
+      // Scroll handlers - use refs for stable callbacks
+      const handlePageUp = useCallback(() => {
+        setScrollOffset(prev => Math.max(0, prev - VISIBLE_MESSAGES));
+      }, []);
+
+      const handlePageDown = useCallback(() => {
+        setScrollOffset(prev => {
+          const maxOffset = Math.max(0, messagesLengthRef.current - VISIBLE_MESSAGES);
+          return Math.min(maxOffset, prev + VISIBLE_MESSAGES);
+        });
+      }, []); // Uses ref, stable callback
+
+      const handleHome = useCallback(() => {
+        setScrollOffset(0);
+      }, []);
+
+      const handleEnd = useCallback(() => {
+        const maxOffset = Math.max(0, messagesLengthRef.current - VISIBLE_MESSAGES);
+        setScrollOffset(maxOffset);
+      }, []); // Uses ref, stable callback
+
+      // Auto-scroll to bottom when new messages arrive
+      useEffect(() => {
+        const maxOffset = Math.max(0, messages.length - VISIBLE_MESSAGES);
+        setScrollOffset(maxOffset);
+      }, [messages.length]);
 
       // ===== DIRECT RENDERING (flicker-free via static icons) =====
 
@@ -4379,111 +4724,52 @@ async function startTUIMode(
         }
       }, [isProcessing]);
 
-      // Keep last N messages visible to prevent layout overflow
-      const visibleMessages = messages.slice(-15);
-
-      // Helper to format tool args concisely
-      const formatToolArgs = (args: Record<string, unknown>): string => {
-        const entries = Object.entries(args);
-        if (entries.length === 0) return '';
-        if (entries.length === 1) {
-          const [key, val] = entries[0];
-          const valStr = typeof val === 'string' ? val : JSON.stringify(val);
-          return valStr.length > 50 ? `${key}: ${valStr.slice(0, 47)}...` : `${key}: ${valStr}`;
-        }
-        return `{${entries.length} args}`;
-      };
-
-      // Status line components
+      // Status line components (scroll variables removed - using Static for messages)
       const modelShort = (model || 'unknown').split('/').pop() || model || 'unknown';
       const contextPct = Math.round((contextTokens / 80000) * 100);
       const costStr = status.cost > 0 ? `$${status.cost.toFixed(4)}` : '$0.00';
 
-      return React.createElement(Box, { flexDirection: 'column', height: '100%' },
-        // Messages area - direct rendering
-        React.createElement(Box, { flexDirection: 'column', flexGrow: 1, marginBottom: 1 },
-          visibleMessages.length === 0
-            ? React.createElement(Text, { color: colors.textMuted }, 'Type a message or /help')
-            : visibleMessages.map(m => {
-                const isUser = m.role === 'user';
-                const isAssistant = m.role === 'assistant';
-                const isError = m.role === 'error';
-                const icon = isUser ? '❯' : isAssistant ? '◆' : isError ? '✖' : '●';
-                const roleColor = isUser ? '#87CEEB' : isAssistant ? '#98FB98' : isError ? '#FF6B6B' : '#FFD700';
-                const label = isUser ? 'You' : isAssistant ? 'Assistant' : isError ? 'Error' : 'System';
+      return React.createElement(React.Fragment, null,
+        // Static messages - rendered once, never re-render (prevents flicker)
+        (React.createElement as any)(Static, {
+          items: messages,
+          children: (m: { id: string; role: string; content: string; ts: Date }) =>
+            React.createElement(MessageItem, { key: m.id, msg: m, colors })
+        }),
 
-                return React.createElement(Box, { key: m.id, marginBottom: 1, flexDirection: 'column' },
-                  // Role header
-                  React.createElement(Box, { gap: 1 },
-                    React.createElement(Text, { color: roleColor, bold: true }, icon),
-                    React.createElement(Text, { color: roleColor, bold: true }, label),
-                    React.createElement(Text, { color: colors.textMuted, dimColor: true },
-                      ` ${m.ts.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}`
-                    )
-                  ),
-                  // Message content
-                  React.createElement(Box, { marginLeft: 2 },
-                    React.createElement(Text, { wrap: 'wrap', color: isError ? colors.error : colors.text }, m.content)
-                  )
-                );
-              })
-        ),
-
-        // Tool calls - expandable view
-        toolCalls.length > 0 && React.createElement(Box, { flexDirection: 'column', marginBottom: 1 },
+        // Dynamic section below messages
+        React.createElement(Box, { flexDirection: 'column' },
+          // Tool calls
+          toolCalls.length > 0 && React.createElement(Box, { flexDirection: 'column', marginBottom: 1 },
           React.createElement(Text, { color: '#DDA0DD', bold: true }, `🔧 Tools ${toolCallsExpanded ? '▼' : '▶'}`),
-          ...toolCalls.slice(-5).map(tc => {
-            const icon = tc.status === 'success' ? '✓' : tc.status === 'error' ? '✗' : tc.status === 'running' ? '⟳' : '○';
-            const statusColor = tc.status === 'success' ? '#98FB98' : tc.status === 'error' ? '#FF6B6B' : tc.status === 'running' ? '#87CEEB' : colors.textMuted;
-            const argsStr = formatToolArgs(tc.args);
-
-            // Expanded view shows more details
-            if (toolCallsExpanded) {
-              return React.createElement(Box, { key: `${tc.id}-${tc.status}`, marginLeft: 2, flexDirection: 'column' },
-                React.createElement(Box, { gap: 1 },
-                  React.createElement(Text, { color: statusColor }, icon),
-                  React.createElement(Text, { color: '#DDA0DD', bold: true }, tc.name),
-                  tc.duration ? React.createElement(Text, { color: colors.textMuted, dimColor: true }, `(${tc.duration}ms)`) : null
-                ),
-                // Show args in expanded mode
-                Object.keys(tc.args).length > 0 ? React.createElement(Box, { marginLeft: 3 },
-                  React.createElement(Text, { color: colors.textMuted, dimColor: true },
-                    JSON.stringify(tc.args, null, 0).slice(0, 100) + (JSON.stringify(tc.args).length > 100 ? '...' : '')
-                  )
-                ) : null,
-                // Show result preview in expanded mode
-                (tc.status === 'success' && tc.result) ? React.createElement(Box, { marginLeft: 3 },
-                  React.createElement(Text, { color: '#98FB98', dimColor: true },
-                    `→ ${String(tc.result).slice(0, 80)}${String(tc.result).length > 80 ? '...' : ''}`
-                  )
-                ) : null,
-                // Show error in expanded mode
-                (tc.status === 'error' && tc.error) ? React.createElement(Box, { marginLeft: 3 },
-                  React.createElement(Text, { color: '#FF6B6B' }, `✗ ${tc.error}`)
-                ) : null
-              );
-            }
-
-            // Collapsed view (default)
-            return React.createElement(Box, { key: `${tc.id}-${tc.status}`, marginLeft: 2, gap: 1 },
-              React.createElement(Text, { color: statusColor }, icon),
-              React.createElement(Text, { color: '#DDA0DD', bold: true }, tc.name),
-              argsStr ? React.createElement(Text, { color: colors.textMuted, dimColor: true }, argsStr) : null,
-              tc.duration ? React.createElement(Text, { color: colors.textMuted, dimColor: true }, `(${tc.duration}ms)`) : null
-            );
-          })
+          ...toolCalls.slice(-5).map(tc =>
+            React.createElement(ToolCallItem, {
+              key: `${tc.id}-${tc.status}`,
+              tc: tc as ToolCallDisplayItem,
+              expanded: toolCallsExpanded,
+              colors
+            })
+          )
         ),
 
-        // Input box
-        React.createElement(Box, {
-          borderStyle: 'round',
-          borderColor: isProcessing ? colors.textMuted : '#87CEEB',
-          paddingX: 1,
-        },
-          React.createElement(Text, { color: '#98FB98', bold: true }, '❯ '),
-          React.createElement(Text, {}, inputValue),
-          !isProcessing && React.createElement(Text, { backgroundColor: '#87CEEB', color: '#1a1a2e' }, ' ')
-        ),
+        // Input box - memoized with all keyboard handlers (single useInput hook)
+        React.createElement(MemoizedInputArea, {
+          onSubmit: handleSubmit,
+          disabled: isProcessing,
+          borderColor: '#87CEEB',
+          textColor: '#98FB98',
+          cursorColor: '#87CEEB',
+          onCtrlC: handleCtrlC,
+          onCtrlL: handleCtrlL,
+          onCtrlP: handleCtrlP,
+          onEscape: handleEscape,
+          onToggleToolExpand: handleToggleToolExpand,
+          onToggleThinking: handleToggleThinking,
+          onPageUp: handlePageUp,
+          onPageDown: handlePageDown,
+          onHome: handleHome,
+          onEnd: handleEnd,
+        }),
 
         // ═══════════════════════════════════════════════════════════════════════
         // FIXED STATUS BAR - Always visible at bottom (like Claude Code)
@@ -4536,6 +4822,7 @@ async function startTUIMode(
             React.createElement(Text, { color: colors.textMuted, dimColor: true }, 'ESC:cancel ^P:help')
           )
         )
+        ) // Close dynamic Box
       );
     };
 
@@ -4545,7 +4832,30 @@ async function startTUIMode(
     } else {
       console.log('\n--- TUI Starting (debug mode - console not cleared) ---\n');
     }
-    const instance = render(React.createElement(TUIApp));
+    // Pass all required props to the extracted TUIApp
+    const tuiProps: TUIAppProps = {
+      agent,
+      sessionStore: sessionStore as SQLiteStore,
+      mcpClient,
+      compactor,
+      lspManager: {
+        cleanup: () => lspManager.cleanup(),
+        getActiveServers: () => lspManager.getActiveServers(),
+      },
+      theme: theme as string,
+      model: model || 'default',
+      gitBranch,
+      currentSessionId,
+      formatSessionsTable,
+      saveCheckpointToStore,
+      loadSessionState,
+      persistenceDebug: {
+        isEnabled: () => persistenceDebug.isEnabled(),
+        log: (message: string, data?: any) => persistenceDebug.log(message, data),
+        error: (message: string, error?: any) => persistenceDebug.error(message, error),
+      },
+    };
+    const instance = render(React.createElement(TUIApp, tuiProps));
     await instance.waitUntilExit();
     await agent.cleanup();
     await mcpClient.cleanup();
