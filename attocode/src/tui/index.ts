@@ -325,7 +325,21 @@ export {
 export { TUIApp, type TUIAppProps } from './app.js';
 
 // UI components
-export { ScrollableBox, type ScrollableBoxProps, CodeBlock, type CodeBlockProps, ToolCall, ToolCallList, type ToolCallProps, type ToolCallListProps } from './components/index.js';
+export {
+  ScrollableBox,
+  type ScrollableBoxProps,
+  MessageItem,
+  type MessageItemProps,
+  type TUIMessage,
+  ToolCallItem,
+  type ToolCallItemProps,
+  type ToolCallDisplayItem,
+  MemoizedInputArea,
+  type InputAreaProps,
+} from './components/index.js';
 
 // Command palette
 export { ControlledCommandPalette, CommandPalette, type ControlledCommandPaletteProps, type CommandPaletteProps } from './input/CommandPalette.js';
+
+// Event display (console output handlers)
+export { createEventDisplay, createJunctureLogger } from './event-display.js';

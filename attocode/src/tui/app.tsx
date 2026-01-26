@@ -470,6 +470,11 @@ export function TUIApp({
           '  /restore <id>     Restore checkpoint',
           '  /rollback [n]     Rollback n steps',
           '',
+          '> THREADS (Branching)',
+          '  /fork <name>      Fork into new thread',
+          '  /threads          List all threads',
+          '  /switch <id>      Switch to thread',
+          '',
           '> CONTEXT',
           '  /context /ctx     Show token breakdown',
           '  /compact          Compress context',
@@ -478,6 +483,10 @@ export function TUIApp({
           '  /mcp              List servers',
           '  /mcp tools        List MCP tools',
           '  /mcp search <q>   Search & load tools',
+          '',
+          '> SUBAGENTS',
+          '  /agents           List available agents',
+          '  /spawn <a> <task> Run agent with task',
           '',
           '> PLAN MODE',
           '  /mode             Show current mode',
@@ -694,6 +703,55 @@ export function TUIApp({
         return;
       }
 
+      // Thread/branching commands
+      case 'fork':
+        if (args.length === 0) {
+          addMessage('system', 'Usage: /fork <name>');
+        } else {
+          try {
+            const threadId = agent.fork(args.join(' '));
+            addMessage('system', `+ Forked: ${threadId}`);
+          } catch (e) {
+            addMessage('error', (e as Error).message);
+          }
+        }
+        return;
+
+      case 'threads':
+        try {
+          const threads = agent.getAllThreads();
+          if (threads.length === 0) {
+            addMessage('system', 'No threads.');
+          } else {
+            addMessage('system', 'Threads:\n' + threads.map((t: any) =>
+              `  ${t.id}${t.name ? ` - ${t.name}` : ''} (${t.messages?.length || 0} msgs)`
+            ).join('\n'));
+          }
+        } catch (e) {
+          addMessage('error', (e as Error).message);
+        }
+        return;
+
+      case 'switch':
+        if (args.length === 0) {
+          addMessage('system', 'Usage: /switch <thread-id>');
+        } else {
+          const ok = agent.switchThread(args[0]);
+          if (ok) {
+            const msgs = agent.getState().messages;
+            setMessages(msgs.map((m: any, i: number) => ({
+              id: `msg-${i}`,
+              role: m.role,
+              content: typeof m.content === 'string' ? m.content : JSON.stringify(m.content),
+              ts: new Date(),
+            })));
+            addMessage('system', `Switched to: ${args[0]}`);
+          } else {
+            addMessage('system', `Not found: ${args[0]}`);
+          }
+        }
+        return;
+
       case 'mode': {
         if (!args[0]) {
           const modeInfo = agent.getModeInfo();
@@ -793,6 +851,35 @@ export function TUIApp({
 
       case 'model':
         addMessage('system', `Model: ${model || 'auto'}\nRestart to change.`);
+        return;
+
+      // Subagent commands
+      case 'agents':
+        try {
+          const agentList = agent.formatAgentList();
+          addMessage('system', `Available Agents:\n${agentList}`);
+        } catch (e) {
+          addMessage('error', (e as Error).message);
+        }
+        return;
+
+      case 'spawn':
+        if (args.length < 2) {
+          addMessage('system', 'Usage: /spawn <agent-name> <task>');
+          return;
+        }
+        setIsProcessing(true);
+        setStatus(s => ({ ...s, mode: 'spawning' }));
+        try {
+          const [agentName, ...taskParts] = args;
+          const task = taskParts.join(' ');
+          const result = await agent.spawnAgent(agentName, task);
+          addMessage('assistant', `Agent ${agentName}: ${result.success ? 'OK' : 'Failed'}\n${result.output}`);
+        } catch (e) {
+          addMessage('error', (e as Error).message);
+        }
+        setIsProcessing(false);
+        setStatus(s => ({ ...s, mode: 'ready' }));
         return;
 
       default:

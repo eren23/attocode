@@ -7,5 +7,8 @@
  */
 
 export { ScrollableBox, type ScrollableBoxProps } from './ScrollableBox.js';
-export { CodeBlock, type CodeBlockProps } from './CodeBlock.js';
-export { ToolCall, ToolCallList, type ToolCallProps, type ToolCallListProps } from './ToolCall.js';
+
+// Memoized components extracted from main.ts
+export { MessageItem, type MessageItemProps, type TUIMessage } from './MessageItem.js';
+export { ToolCallItem, type ToolCallItemProps, type ToolCallDisplayItem } from './ToolCallItem.js';
+export { MemoizedInputArea, type InputAreaProps } from './InputArea.js';

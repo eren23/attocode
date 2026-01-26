@@ -32,3 +32,6 @@ export * from './protocol/index.js';
 
 // Queue system
 export * from './queues/index.js';
+
+// Process handlers and cleanup
+export * from './process-handlers.js';
