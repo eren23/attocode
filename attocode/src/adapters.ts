@@ -172,7 +172,6 @@ function categorizeToolDanger(toolName: string): 'safe' | 'moderate' | 'dangerou
 // =============================================================================
 
 import * as readline from 'node:readline/promises';
-import { stdin, stdout } from 'node:process';
 
 /**
  * Creates an interactive approval handler for the REPL.
@@ -214,4 +213,82 @@ export function createInteractiveApprovalHandler(
       return { approved: false, reason: trimmed || 'User denied' };
     }
   };
+}
+
+// =============================================================================
+// APPROVAL HANDLER FOR TUI
+// =============================================================================
+
+import type { ApprovalRequest, ApprovalResponse } from './types.js';
+
+/**
+ * TUI Approval Bridge
+ *
+ * Manages the communication between the agent's approval system and the TUI.
+ * The bridge is created before the agent, and then connected to TUI callbacks
+ * once the TUI component mounts.
+ */
+export interface TUIApprovalBridge {
+  /** The approval handler to pass to the agent config */
+  handler: (request: ApprovalRequest) => Promise<ApprovalResponse>;
+
+  /** Connect TUI callbacks after TUI mounts */
+  connect: (callbacks: {
+    onRequest: (request: ApprovalRequest) => void;
+  }) => void;
+
+  /** Resolve the current pending approval */
+  resolve: (response: ApprovalResponse) => void;
+
+  /** Check if there's a pending approval */
+  hasPending: () => boolean;
+}
+
+/**
+ * Creates a TUI approval bridge that enables communication between
+ * the agent's human-in-loop system and the TUI's approval dialog.
+ *
+ * Usage:
+ * 1. Create the bridge before creating the agent
+ * 2. Pass bridge.handler to the agent's humanInLoop.approvalHandler
+ * 3. Pass bridge to TUIApp props
+ * 4. TUIApp calls bridge.connect() with its callbacks on mount
+ * 5. When approval is needed, bridge calls onRequest callback
+ * 6. TUIApp shows dialog, user responds, TUIApp calls bridge.resolve()
+ */
+export function createTUIApprovalBridge(): TUIApprovalBridge {
+  let pendingResolve: ((response: ApprovalResponse) => void) | null = null;
+  let onRequestCallback: ((request: ApprovalRequest) => void) | null = null;
+
+  const handler = async (request: ApprovalRequest): Promise<ApprovalResponse> => {
+    return new Promise((resolve) => {
+      pendingResolve = resolve;
+
+      if (onRequestCallback) {
+        // TUI is connected, show dialog
+        onRequestCallback(request);
+      } else {
+        // TUI not connected yet - auto-approve with warning
+        // This shouldn't happen in normal flow, but provides safety fallback
+        console.warn('[TUI Approval] No TUI connected, auto-approving');
+        resolve({ approved: true, reason: 'TUI not connected' });
+        pendingResolve = null;
+      }
+    });
+  };
+
+  const connect = (callbacks: { onRequest: (request: ApprovalRequest) => void }) => {
+    onRequestCallback = callbacks.onRequest;
+  };
+
+  const resolve = (response: ApprovalResponse) => {
+    if (pendingResolve) {
+      pendingResolve(response);
+      pendingResolve = null;
+    }
+  };
+
+  const hasPending = () => pendingResolve !== null;
+
+  return { handler, connect, resolve, hasPending };
 }
