@@ -80,34 +80,50 @@ export type IgnoreEventListener = (event: IgnoreEvent) => void;
  * Implements most of the gitignore specification.
  */
 function compilePattern(pattern: string): RegExp {
-  // Handle special characters
-  let regexStr = pattern
-    // Escape regex special chars except * and ?
-    .replace(/[.+^${}()|[\]\\]/g, '\\$&')
-    // ** matches anything including /
-    .replace(/\*\*/g, '{{GLOBSTAR}}')
-    // * matches anything except /
-    .replace(/\*/g, '[^/]*')
-    // ? matches single char except /
-    .replace(/\?/g, '[^/]')
-    // Restore globstar
-    .replace(/{{GLOBSTAR}}/g, '.*');
+  // Check if anchored to root (starts with /)
+  const isAnchored = pattern.startsWith('/');
 
-  // If pattern doesn't start with /, match anywhere in path
-  if (!pattern.startsWith('/')) {
+  // Remove leading and trailing slashes for processing
+  let cleanPattern = pattern;
+  if (isAnchored) {
+    cleanPattern = cleanPattern.slice(1);  // Remove leading /
+  }
+  if (cleanPattern.endsWith('/')) {
+    cleanPattern = cleanPattern.slice(0, -1);  // Remove trailing /
+  }
+
+  // Convert gitignore pattern to regex, processing glob patterns before escaping
+  let regexStr = cleanPattern
+    // First, replace ** with a placeholder
+    .replace(/\*\*/g, '\x00GLOBSTAR\x00')
+    // Then replace single *
+    .replace(/\*/g, '\x00STAR\x00')
+    // Then replace ?
+    .replace(/\?/g, '\x00QUESTION\x00')
+    // Escape remaining regex special chars
+    .replace(/[.+^${}()|[\]\\]/g, '\\$&')
+    // Restore glob patterns as regex
+    .replace(/\x00GLOBSTAR\x00/g, '.*')
+    .replace(/\x00STAR\x00/g, '[^/]*')
+    .replace(/\x00QUESTION\x00/g, '[^/]');
+
+  // Handle the prefix: **/ at start matches any depth including root
+  if (cleanPattern.startsWith('**/')) {
+    // The pattern can match at root level or at any subdirectory
+    // (.*/)? matches optional path prefix, then the rest of the pattern
+    regexStr = '(.*/)?' + regexStr.slice(4);  // slice(4) removes the '.*/' from regex
+  } else if (cleanPattern.startsWith('**')) {
+    regexStr = `^${regexStr}`;
+  } else if (!isAnchored) {
+    // Match anywhere in path (at start or after /)
     regexStr = `(^|/)${regexStr}`;
   } else {
-    // Remove leading / and anchor to start
-    regexStr = `^${regexStr.slice(1)}`;
+    // Anchored to root
+    regexStr = `^${regexStr}`;
   }
 
-  // If pattern ends with /, only match directories
-  if (pattern.endsWith('/')) {
-    regexStr = regexStr.slice(0, -1) + '(/|$)';
-  } else {
-    // Match the pattern at end or followed by /
-    regexStr = `${regexStr}(/.*)?$`;
-  }
+  // Match at end of path or as a directory prefix
+  regexStr = `${regexStr}(/.*)?$`;
 
   return new RegExp(regexStr);
 }
@@ -287,13 +303,27 @@ export class IgnoreManager {
     if (!this.config.enabled) return false;
 
     // Normalize the path
-    const normalizedPath = this.normalizePath(path);
+    let normalizedPath = this.normalizePath(path);
+
+    // If path ends with /, treat it as a directory
+    if (normalizedPath.endsWith('/')) {
+      isDirectory = true;
+      normalizedPath = normalizedPath.slice(0, -1);
+    }
 
     let ignored = false;
 
     for (const pattern of this.patterns) {
       // Skip directory-only patterns for files
       if (pattern.directoryOnly && !isDirectory) {
+        // However, if the path is inside a directory that matches,
+        // we should still ignore it (e.g., temp/cache matches temp/)
+        const dirPath = normalizedPath.split('/').slice(0, -1).join('/');
+        if (dirPath && pattern.regex.test(dirPath)) {
+          ignored = true;
+          this.emit({ type: 'ignore.matched', path, pattern: pattern.pattern });
+          continue;
+        }
         continue;
       }
 

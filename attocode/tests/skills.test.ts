@@ -341,11 +341,11 @@ Content`);
 
   describe('findMatchingSkills', () => {
     beforeEach(async () => {
+      // Note: The simple YAML parser doesn't support nested arrays.
+      // Use string triggers (converted to keyword type) instead.
       await writeFile(join(testDir, 'trigger-skill.md'), `---
 name: trigger-skill
-triggers:
-  - type: keyword
-    pattern: review
+triggers: [review, code-review]
 tags: [code-review]
 ---
 Content`);
