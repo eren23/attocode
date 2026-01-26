@@ -45,6 +45,12 @@ export interface ModeConfig {
 
   /** Icon for display */
   icon: string;
+
+  /** Whether write operations require approval before execution (plan mode feature) */
+  requireWriteApproval: boolean;
+
+  /** Whether to show plan-specific prompts and UI elements */
+  showPlanPrompt: boolean;
 }
 
 /**
@@ -52,9 +58,58 @@ export interface ModeConfig {
  */
 export type ModeEvent =
   | { type: 'mode.changed'; from: AgentMode; to: AgentMode }
-  | { type: 'mode.tool.filtered'; tool: string; mode: AgentMode };
+  | { type: 'mode.tool.filtered'; tool: string; mode: AgentMode }
+  | { type: 'mode.write.intercepted'; tool: string; reason: string };
 
 export type ModeEventListener = (event: ModeEvent) => void;
+
+/**
+ * Tools that modify the filesystem or execute side effects.
+ * In plan mode with write approval, these are queued instead of executed.
+ */
+export const WRITE_TOOLS = [
+  'write_file',
+  'edit_file',
+  'delete_file',
+  'bash',           // Can have side effects
+  'spawn_agent',    // Subagents can modify files
+  'run_tests',      // Can have side effects
+  'execute_code',   // Can have side effects
+];
+
+/**
+ * Check if a tool is a write operation.
+ */
+export function isWriteTool(toolName: string): boolean {
+  return WRITE_TOOLS.includes(toolName);
+}
+
+/**
+ * Analyze bash command to determine if it's a write operation.
+ * Returns true for commands that modify state.
+ */
+export function isBashWriteCommand(command: string): boolean {
+  const writePatterns = [
+    /\brm\b/,           // Remove files
+    /\bmv\b/,           // Move/rename files
+    /\bcp\b/,           // Copy files
+    /\bmkdir\b/,        // Create directories
+    /\btouch\b/,        // Create/modify files
+    /\bchmod\b/,        // Change permissions
+    /\bchown\b/,        // Change ownership
+    /\b(npm|yarn|pnpm)\s+(install|add|remove|uninstall)/i,  // Package managers
+    /\bgit\s+(add|commit|push|pull|merge|rebase|reset|checkout)/i, // Git write ops
+    /\becho\b.*>/,      // Redirect to file
+    /\bcat\b.*>/,       // Redirect to file
+    /\btee\b/,          // Write to file
+    /\bsed\b.*-i/,      // In-place edit
+    /\bawk\b.*-i/,      // In-place edit
+    />\s*\S/,           // Any redirect
+    /\|\s*tee\b/,       // Pipe to tee
+  ];
+
+  return writePatterns.some(pattern => pattern.test(command));
+}
 
 // =============================================================================
 // MODE DEFINITIONS
@@ -101,22 +156,27 @@ You are in BUILD mode with full access to modify files and run commands.
 `,
     color: '\x1b[32m', // Green
     icon: '🔨',
+    requireWriteApproval: false,
+    showPlanPrompt: false,
   },
 
   plan: {
     name: 'Plan',
-    description: 'Read-only mode for exploration and planning',
-    availableTools: READ_ONLY_TOOLS,
+    description: 'Exploration mode - writes queued for approval',
+    availableTools: [ALL_TOOLS], // All tools available, but writes are intercepted
     systemPromptAddition: `
-You are in PLAN mode (read-only).
-- You can read files and explore the codebase
-- You CANNOT modify files or run destructive commands
-- Focus on understanding, analysis, and planning
-- Create detailed plans that can be executed in Build mode
-- Use this time to gather context and propose solutions
+You are in PLAN mode.
+- You can read files, explore the codebase, and use all tools
+- IMPORTANT: Write operations (file edits, bash commands with side effects) will be QUEUED for user approval
+- The queued changes will be shown to the user as a "pending plan"
+- Focus on understanding the codebase and proposing specific changes
+- Your proposed changes should include clear explanations of WHY each change is needed
+- After you finish exploring, the user can approve, modify, or reject the pending plan
 `,
     color: '\x1b[34m', // Blue
     icon: '📋',
+    requireWriteApproval: true,
+    showPlanPrompt: true,
   },
 
   review: {
@@ -134,6 +194,8 @@ You are in REVIEW mode (read-only).
 `,
     color: '\x1b[33m', // Yellow
     icon: '🔍',
+    requireWriteApproval: false,
+    showPlanPrompt: false,
   },
 
   debug: {
@@ -150,6 +212,8 @@ You are in DEBUG mode.
 `,
     color: '\x1b[35m', // Magenta
     icon: '🐛',
+    requireWriteApproval: false,
+    showPlanPrompt: false,
   },
 };
 
@@ -295,6 +359,58 @@ export class ModeManager {
     this.allToolNames.clear();
     for (const tool of tools) {
       this.allToolNames.add(tool.name);
+    }
+  }
+
+  /**
+   * Check if the current mode requires write approval.
+   */
+  requiresWriteApproval(): boolean {
+    return MODES[this.currentMode].requireWriteApproval;
+  }
+
+  /**
+   * Check if the current mode should show plan prompts.
+   */
+  shouldShowPlanPrompt(): boolean {
+    return MODES[this.currentMode].showPlanPrompt;
+  }
+
+  /**
+   * Check if a tool call should be intercepted (queued) in current mode.
+   * Returns true if the tool is a write operation and mode requires approval.
+   *
+   * @param toolName - The name of the tool
+   * @param args - The tool arguments (needed to check bash commands)
+   */
+  shouldInterceptTool(toolName: string, args?: Record<string, unknown>): boolean {
+    if (!this.requiresWriteApproval()) {
+      return false;
+    }
+
+    // Check if it's a known write tool
+    if (isWriteTool(toolName)) {
+      // Special case: bash commands need content analysis
+      if (toolName === 'bash' && args?.command) {
+        return isBashWriteCommand(String(args.command));
+      }
+      return true;
+    }
+
+    return false;
+  }
+
+  /**
+   * Toggle between build and plan modes.
+   * Useful for shift-tab or /plan command.
+   */
+  togglePlanMode(): AgentMode {
+    if (this.currentMode === 'plan') {
+      this.setMode('build');
+      return 'build';
+    } else {
+      this.setMode('plan');
+      return 'plan';
     }
   }
 

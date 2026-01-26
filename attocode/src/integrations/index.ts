@@ -471,3 +471,16 @@ export {
   type ResultSynthesizerEvent,
   type ResultSynthesizerEventListener,
 } from './result-synthesizer.js';
+
+// Pending Plan (plan mode write interception)
+export {
+  PendingPlanManager,
+  createPendingPlanManager,
+  formatPlanStatus,
+  type PendingPlan,
+  type ProposedChange,
+  type PlanStatus,
+  type PlanApprovalResult,
+  type PendingPlanEvent,
+  type PendingPlanEventListener,
+} from './pending-plan.js';

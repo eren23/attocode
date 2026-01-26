@@ -30,6 +30,7 @@ import {
   detectFeatures,
   type SchemaFeatures,
 } from '../persistence/schema.js';
+import type { PendingPlan, ProposedChange } from './pending-plan.js';
 
 // =============================================================================
 // TYPES
@@ -251,6 +252,7 @@ export class SQLiteStore {
     fileChanges: false,
     goals: false,
     workerResults: false,
+    pendingPlans: false,
   };
 
   // Prepared statements for performance
@@ -290,6 +292,11 @@ export class SQLiteStore {
     getWorkerResult?: Database.Statement;
     listWorkerResults?: Database.Statement;
     listPendingWorkerResults?: Database.Statement;
+    // Pending plan statements (optional - only if pendingPlans feature available)
+    insertPendingPlan?: Database.Statement;
+    updatePendingPlan?: Database.Statement;
+    getPendingPlan?: Database.Statement;
+    deletePendingPlan?: Database.Statement;
   };
 
   constructor(config: SQLiteStoreConfig = {}) {
@@ -599,6 +606,34 @@ export class SQLiteStore {
                status, summary, created_at as createdAt
         FROM worker_results WHERE session_id = ? AND status = 'pending'
         ORDER BY created_at ASC
+      `);
+    }
+
+    // Pending plan statements (optional - only if pendingPlans feature available)
+    if (this.features.pendingPlans) {
+      this.stmts.insertPendingPlan = this.db.prepare(`
+        INSERT INTO pending_plans (id, session_id, task, proposed_changes, exploration_summary, status, created_at, updated_at)
+        VALUES (@id, @sessionId, @task, @proposedChanges, @explorationSummary, @status, @createdAt, @updatedAt)
+      `);
+
+      this.stmts.updatePendingPlan = this.db.prepare(`
+        UPDATE pending_plans SET
+          proposed_changes = @proposedChanges,
+          exploration_summary = @explorationSummary,
+          status = @status,
+          updated_at = @updatedAt
+        WHERE id = @id
+      `);
+
+      this.stmts.getPendingPlan = this.db.prepare(`
+        SELECT id, session_id as sessionId, task, proposed_changes as proposedChanges,
+               exploration_summary as explorationSummary, status, created_at as createdAt, updated_at as updatedAt
+        FROM pending_plans WHERE session_id = ? AND status = 'pending'
+        ORDER BY created_at DESC LIMIT 1
+      `);
+
+      this.stmts.deletePendingPlan = this.db.prepare(`
+        DELETE FROM pending_plans WHERE id = ?
       `);
     }
   }
@@ -1437,6 +1472,125 @@ export class SQLiteStore {
       return firstLine;
     }
     return firstLine.slice(0, 147) + '...';
+  }
+
+  // ===========================================================================
+  // PENDING PLANS (Plan Mode Support)
+  // ===========================================================================
+
+  /**
+   * Check if pending plans feature is available.
+   */
+  hasPendingPlansFeature(): boolean {
+    return this.features.pendingPlans;
+  }
+
+  /**
+   * Save a pending plan to the database.
+   */
+  savePendingPlan(plan: PendingPlan, sessionId?: string): void {
+    if (!this.features.pendingPlans || !this.stmts.insertPendingPlan) {
+      return;
+    }
+
+    const sid = sessionId ?? this.currentSessionId;
+    if (!sid) return;
+
+    const now = new Date().toISOString();
+
+    // Check if plan already exists
+    const existing = this.getPendingPlan(sid);
+    if (existing && existing.id === plan.id) {
+      // Update existing plan
+      this.stmts.updatePendingPlan?.run({
+        id: plan.id,
+        proposedChanges: JSON.stringify(plan.proposedChanges),
+        explorationSummary: plan.explorationSummary || null,
+        status: plan.status,
+        updatedAt: now,
+      });
+    } else {
+      // Delete any existing pending plan first
+      if (existing) {
+        this.stmts.deletePendingPlan?.run(existing.id);
+      }
+
+      // Insert new plan
+      this.stmts.insertPendingPlan.run({
+        id: plan.id,
+        sessionId: sid,
+        task: plan.task,
+        proposedChanges: JSON.stringify(plan.proposedChanges),
+        explorationSummary: plan.explorationSummary || null,
+        status: plan.status,
+        createdAt: plan.createdAt,
+        updatedAt: now,
+      });
+    }
+  }
+
+  /**
+   * Get the pending plan for a session.
+   * Returns the most recent pending plan, or null if none.
+   */
+  getPendingPlan(sessionId?: string): PendingPlan | null {
+    if (!this.features.pendingPlans || !this.stmts.getPendingPlan) {
+      return null;
+    }
+
+    const sid = sessionId ?? this.currentSessionId;
+    if (!sid) return null;
+
+    const row = this.stmts.getPendingPlan.get(sid) as {
+      id: string;
+      sessionId: string;
+      task: string;
+      proposedChanges: string;
+      explorationSummary: string | null;
+      status: string;
+      createdAt: string;
+      updatedAt: string;
+    } | undefined;
+
+    if (!row) return null;
+
+    return {
+      id: row.id,
+      task: row.task,
+      createdAt: row.createdAt,
+      updatedAt: row.updatedAt,
+      proposedChanges: JSON.parse(row.proposedChanges) as ProposedChange[],
+      explorationSummary: row.explorationSummary || '',
+      status: row.status as PendingPlan['status'],
+      sessionId: row.sessionId,
+    };
+  }
+
+  /**
+   * Update the status of a pending plan.
+   */
+  updatePlanStatus(planId: string, status: 'approved' | 'rejected' | 'partially_approved'): void {
+    if (!this.features.pendingPlans || !this.stmts.updatePendingPlan) {
+      return;
+    }
+
+    const now = new Date().toISOString();
+
+    // We need to get the plan first to preserve other fields
+    // Since we update by id, we do a direct update here
+    this.db.prepare(`
+      UPDATE pending_plans SET status = ?, updated_at = ? WHERE id = ?
+    `).run(status, now, planId);
+  }
+
+  /**
+   * Delete a pending plan.
+   */
+  deletePendingPlan(planId: string): void {
+    if (!this.features.pendingPlans || !this.stmts.deletePendingPlan) {
+      return;
+    }
+    this.stmts.deletePendingPlan.run(planId);
   }
 
   // ===========================================================================

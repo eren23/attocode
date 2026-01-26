@@ -48,6 +48,8 @@ import {
   createModeManager,
   formatModeList,
   parseMode,
+  isWriteTool,
+  isBashWriteCommand,
   type AgentMode,
 } from './modes.js';
 
@@ -109,6 +111,10 @@ import {
   type ContextEngineeringConfig,
   type CodebaseContextConfig,
   type SelectionOptions,
+  PendingPlanManager,
+  createPendingPlanManager,
+  type PendingPlan,
+  type ProposedChange,
 } from './integrations/index.js';
 
 // Lesson 26: Tracing & Evaluation integration
@@ -152,6 +158,7 @@ export class ProductionAgent {
   private codebaseContext: CodebaseContextManager | null = null;
   private traceCollector: TraceCollector | null = null;
   private modeManager: ModeManager;
+  private pendingPlanManager: PendingPlanManager;
   private toolResolver: ((toolName: string) => ToolDefinition | null) | null = null;
 
   // Initialization tracking
@@ -192,6 +199,9 @@ export class ProductionAgent {
 
     // Initialize mode manager (always enabled)
     this.modeManager = createModeManager(this.config.tools);
+
+    // Initialize pending plan manager for plan mode write interception
+    this.pendingPlanManager = createPendingPlanManager();
 
     // Initialize enabled features
     this.initializeFeatures();
@@ -1259,6 +1269,53 @@ export class ProductionAgent {
 
       try {
         // =====================================================================
+        // PLAN MODE WRITE INTERCEPTION
+        // =====================================================================
+        // In plan mode, intercept write operations and queue them as proposed changes
+        if (this.modeManager.shouldInterceptTool(toolCall.name, toolCall.arguments as Record<string, unknown>)) {
+          // Extract reason from context - use last assistant message or generate one
+          const lastAssistantMsg = [...this.state.messages].reverse().find(m => m.role === 'assistant');
+          const reason = typeof lastAssistantMsg?.content === 'string'
+            ? lastAssistantMsg.content.slice(0, 200)
+            : `Proposed change: ${toolCall.name}`;
+
+          // Start a new plan if needed
+          if (!this.pendingPlanManager.hasPendingPlan()) {
+            const lastUserMsg = [...this.state.messages].reverse().find(m => m.role === 'user');
+            const task = typeof lastUserMsg?.content === 'string' ? lastUserMsg.content : 'Plan';
+            this.pendingPlanManager.startPlan(task);
+          }
+
+          // Queue the write operation
+          const change = this.pendingPlanManager.addProposedChange(
+            toolCall.name,
+            toolCall.arguments as Record<string, unknown>,
+            reason,
+            toolCall.id
+          );
+
+          // Emit event for UI
+          this.emit({
+            type: 'plan.change.queued',
+            tool: toolCall.name,
+            changeId: change?.id,
+          } as AgentEvent);
+
+          // Return a message indicating the change was queued
+          const queueMessage = `[PLAN MODE] Change queued for approval:\n` +
+            `Tool: ${toolCall.name}\n` +
+            `${this.formatToolArgsForPlan(toolCall.name, toolCall.arguments as Record<string, unknown>)}\n` +
+            `Use /show-plan to see all pending changes, /approve to execute, /reject to discard.`;
+
+          results.push({
+            callId: toolCall.id,
+            result: queueMessage,
+          });
+
+          this.observability?.tracer?.endSpan(spanId);
+          continue; // Skip actual execution
+        }
+        // =====================================================================
         // EXECUTION POLICY ENFORCEMENT (Lesson 23)
         // =====================================================================
         if (this.executionPolicy) {
@@ -1566,6 +1623,30 @@ export class ProductionAgent {
       return resultStr;
     }
     return `${resultStr.slice(0, 47)}...`;
+  }
+
+  /**
+   * Format tool arguments for plan display.
+   */
+  private formatToolArgsForPlan(toolName: string, args: Record<string, unknown>): string {
+    if (toolName === 'write_file') {
+      const path = args.path || args.file_path;
+      const content = String(args.content || '');
+      const preview = content.slice(0, 100).replace(/\n/g, '\\n');
+      return `File: ${path}\nContent preview: ${preview}${content.length > 100 ? '...' : ''}`;
+    }
+    if (toolName === 'edit_file') {
+      const path = args.path || args.file_path;
+      return `File: ${path}\nOld: ${String(args.old_string || args.search || '').slice(0, 50)}...\nNew: ${String(args.new_string || args.replace || '').slice(0, 50)}...`;
+    }
+    if (toolName === 'bash') {
+      return `Command: ${String(args.command || '').slice(0, 100)}`;
+    }
+    if (toolName === 'delete_file') {
+      return `Delete: ${args.path || args.file_path}`;
+    }
+    // Generic
+    return `Args: ${JSON.stringify(args).slice(0, 100)}...`;
   }
 
   /**
@@ -2929,6 +3010,113 @@ If the task is a simple question or doesn't need specialized handling, set bestA
     const base = this.config.systemPrompt;
     const modeAddition = this.modeManager.getSystemPromptAddition();
     return `${base}\n\n${modeAddition}`;
+  }
+
+  /**
+   * Toggle between build and plan modes.
+   */
+  togglePlanMode(): AgentMode {
+    return this.modeManager.togglePlanMode();
+  }
+
+  // =========================================================================
+  // PENDING PLAN METHODS (Plan Mode)
+  // =========================================================================
+
+  /**
+   * Get the current pending plan.
+   */
+  getPendingPlan(): PendingPlan | null {
+    return this.pendingPlanManager.getPendingPlan();
+  }
+
+  /**
+   * Check if there's a pending plan awaiting approval.
+   */
+  hasPendingPlan(): boolean {
+    return this.pendingPlanManager.hasPendingPlan();
+  }
+
+  /**
+   * Get formatted plan for display.
+   */
+  formatPendingPlan(): string {
+    return this.pendingPlanManager.formatPlan();
+  }
+
+  /**
+   * Approve the pending plan and execute the changes.
+   * @param count - If provided, only approve first N changes
+   * @returns Result of executing the approved changes
+   */
+  async approvePlan(count?: number): Promise<{ success: boolean; executed: number; errors: string[] }> {
+    const result = this.pendingPlanManager.approve(count);
+
+    if (result.changes.length === 0) {
+      return { success: true, executed: 0, errors: [] };
+    }
+
+    // Switch to build mode for execution
+    const previousMode = this.getMode();
+    this.setMode('build');
+
+    this.emit({ type: 'plan.approved', changeCount: result.changes.length });
+
+    const errors: string[] = [];
+    let executed = 0;
+
+    // Execute each change
+    for (let i = 0; i < result.changes.length; i++) {
+      const change = result.changes[i];
+      this.emit({ type: 'plan.executing', changeIndex: i, totalChanges: result.changes.length });
+
+      try {
+        const tool = this.tools.get(change.tool);
+        if (!tool) {
+          errors.push(`Unknown tool: ${change.tool}`);
+          continue;
+        }
+
+        await tool.execute(change.args);
+        executed++;
+      } catch (err) {
+        const error = err instanceof Error ? err.message : String(err);
+        errors.push(`${change.tool}: ${error}`);
+      }
+    }
+
+    // Restore previous mode if it wasn't build
+    if (previousMode !== 'build' && previousMode !== 'plan') {
+      this.setMode(previousMode);
+    }
+
+    return {
+      success: errors.length === 0,
+      executed,
+      errors,
+    };
+  }
+
+  /**
+   * Reject the pending plan and discard all proposed changes.
+   */
+  rejectPlan(): void {
+    this.pendingPlanManager.reject();
+    this.emit({ type: 'plan.rejected' });
+  }
+
+  /**
+   * Clear the pending plan without emitting rejection event.
+   */
+  clearPlan(): void {
+    this.pendingPlanManager.clear();
+  }
+
+  /**
+   * Get the number of pending changes.
+   */
+  getPendingChangeCount(): number {
+    return this.pendingPlanManager.getChangeCount();
   }
 
   // =========================================================================

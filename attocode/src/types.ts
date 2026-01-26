@@ -968,6 +968,11 @@ export type AgentEvent =
   | { type: 'insight.tool'; tool: string; summary: string; durationMs: number; success: boolean }
   | { type: 'insight.routing'; model: string; reason: string; complexity?: string }
   // Mode events
-  | { type: 'mode.changed'; from: string; to: string };
+  | { type: 'mode.changed'; from: string; to: string }
+  // Plan mode events
+  | { type: 'plan.change.queued'; tool: string; changeId?: string }
+  | { type: 'plan.approved'; changeCount: number }
+  | { type: 'plan.rejected' }
+  | { type: 'plan.executing'; changeIndex: number; totalChanges: number };
 
 export type AgentEventListener = (event: AgentEvent) => void;
