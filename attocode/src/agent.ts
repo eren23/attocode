@@ -114,6 +114,9 @@ import {
 // Lesson 26: Tracing & Evaluation integration
 import { TraceCollector, createTraceCollector } from './tracing/trace-collector.js';
 
+// Spawn agent tool for LLM-driven subagent delegation
+import { createBoundSpawnAgentTool } from './tools/agent.js';
+
 // =============================================================================
 // PRODUCTION AGENT
 // =============================================================================
@@ -198,8 +201,11 @@ export class ProductionAgent {
    * Initialize all enabled features.
    */
   private initializeFeatures(): void {
-    const features = getEnabledFeatures(this.config);
-    console.log(`[ProductionAgent] Initializing with features: ${features.join(', ')}`);
+    // Debug output only when DEBUG env var is set
+    if (process.env.DEBUG) {
+      const features = getEnabledFeatures(this.config);
+      console.log(`[ProductionAgent] Initializing with features: ${features.join(', ')}`);
+    }
 
     // Hooks & Plugins
     if (isFeatureEnabled(this.config.hooks) && isFeatureEnabled(this.config.plugins)) {
@@ -317,6 +323,12 @@ export class ProductionAgent {
         console.warn('[ProductionAgent] Failed to load user agents:', err);
       })
     );
+
+    // Register spawn_agent tool so LLM can delegate to subagents
+    const boundSpawnTool = createBoundSpawnAgentTool(
+      (name, task) => this.spawnAgent(name, task)
+    );
+    this.tools.set(boundSpawnTool.name, boundSpawnTool);
 
     // Cancellation Support
     if (isFeatureEnabled(this.config.cancellation)) {
@@ -498,9 +510,12 @@ export class ProductionAgent {
         await this.executeDirectly(task);
       }
 
-      // Get final response
-      const lastMessage = this.state.messages[this.state.messages.length - 1];
-      const response = lastMessage?.role === 'assistant' ? lastMessage.content : '';
+      // Get final response - find the LAST assistant message (not just check if last message is assistant)
+      const assistantMessages = this.state.messages.filter(m => m.role === 'assistant');
+      const lastAssistantMessage = assistantMessages[assistantMessages.length - 1];
+      const response = typeof lastAssistantMessage?.content === 'string'
+        ? lastAssistantMessage.content
+        : '';
 
       // Finalize
       const duration = Date.now() - startTime;
@@ -714,7 +729,7 @@ export class ProductionAgent {
         // =======================================================================
         if (this.contextEngineering) {
           if (process.env.DEBUG_LLM) {
-            console.log(`[recitation] Before: ${messages.length} messages`);
+            if (process.env.DEBUG) console.log(`[recitation] Before: ${messages.length} messages`);
           }
 
           const enrichedMessages = this.contextEngineering.injectRecitation(
@@ -738,7 +753,7 @@ export class ProductionAgent {
           );
 
           if (process.env.DEBUG_LLM) {
-            console.log(`[recitation] After: ${enrichedMessages?.length ?? 'null/undefined'} messages`);
+            if (process.env.DEBUG) console.log(`[recitation] After: ${enrichedMessages?.length ?? 'null/undefined'} messages`);
           }
 
           // Only replace if we got a DIFFERENT array back (avoid clearing same reference)
@@ -1055,6 +1070,20 @@ export class ProductionAgent {
 
     this.emit({ type: 'llm.start', model: this.config.model || 'default' });
 
+    // Emit context insight for verbose feedback
+    const estimatedTokens = messages.reduce((sum, m) => {
+      const content = typeof m.content === 'string' ? m.content : JSON.stringify(m.content);
+      return sum + Math.ceil(content.length / 3.5); // ~3.5 chars per token estimate
+    }, 0);
+    const maxTokens = this.config.maxTokens || 128000;
+    this.emit({
+      type: 'insight.context',
+      currentTokens: estimatedTokens,
+      maxTokens,
+      messageCount: messages.length,
+      percentUsed: Math.round((estimatedTokens / maxTokens) * 100),
+    });
+
     const startTime = Date.now();
     const requestId = `req-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 
@@ -1108,9 +1137,10 @@ export class ProductionAgent {
 
       // Use routing if enabled
       if (this.routing) {
+        const complexity = this.routing.estimateComplexity(messages[messages.length - 1]?.content || '');
         const context = {
           task: messages[messages.length - 1]?.content || '',
-          complexity: this.routing.estimateComplexity(messages[messages.length - 1]?.content || ''),
+          complexity,
           hasTools: this.tools.size > 0,
           hasImages: false,
           taskType: 'general',
@@ -1120,6 +1150,14 @@ export class ProductionAgent {
         const result = await this.routing.executeWithFallback(messages, context);
         response = result.response;
         actualModel = result.model;
+
+        // Emit routing insight
+        this.emit({
+          type: 'insight.routing',
+          model: actualModel,
+          reason: actualModel !== model ? 'Routed based on complexity' : 'Default model',
+          complexity: complexity <= 0.3 ? 'low' : complexity <= 0.7 ? 'medium' : 'high',
+        });
       } else {
         response = await this.provider.chat(messages, {
           model: this.config.model,
@@ -1170,6 +1208,19 @@ export class ProductionAgent {
       this.state.metrics.totalTokens = this.state.metrics.inputTokens + this.state.metrics.outputTokens;
 
       this.emit({ type: 'llm.complete', response });
+
+      // Emit token usage insight for verbose feedback
+      if (response.usage) {
+        this.emit({
+          type: 'insight.tokens',
+          inputTokens: response.usage.inputTokens,
+          outputTokens: response.usage.outputTokens,
+          cacheReadTokens: response.usage.cacheReadTokens,
+          cacheWriteTokens: response.usage.cacheWriteTokens,
+          cost: response.usage.cost,
+          model: actualModel,
+        });
+      }
 
       this.observability?.tracer?.endSpan(spanId);
 
@@ -1292,7 +1343,7 @@ export class ProductionAgent {
           if (resolved) {
             this.addTool(resolved);
             tool = resolved;
-            console.log(`  🔄 Auto-loaded MCP tool: ${toolCall.name}`);
+            if (process.env.DEBUG) console.log(`  🔄 Auto-loaded MCP tool: ${toolCall.name}`);
             this.observability?.logger?.info('Tool auto-loaded', { tool: toolCall.name });
           }
         }
@@ -1300,7 +1351,7 @@ export class ProductionAgent {
           throw new Error(`Unknown tool: ${toolCall.name}`);
         }
         // Log whether tool was pre-loaded or auto-loaded (for MCP tools)
-        if (toolCall.name.startsWith('mcp_') && wasPreloaded) {
+        if (process.env.DEBUG && toolCall.name.startsWith('mcp_') && wasPreloaded) {
           console.log(`  ✓ Using pre-loaded MCP tool: ${toolCall.name}`);
         }
 
@@ -1332,6 +1383,16 @@ export class ProductionAgent {
         this.state.metrics.toolCalls++;
 
         this.emit({ type: 'tool.complete', tool: toolCall.name, result });
+
+        // Emit tool insight with result summary
+        const summary = this.summarizeToolResult(toolCall.name, result);
+        this.emit({
+          type: 'insight.tool',
+          tool: toolCall.name,
+          summary,
+          durationMs: duration,
+          success: true,
+        });
 
         results.push({
           callId: toolCall.id,
@@ -1464,6 +1525,47 @@ export class ProductionAgent {
    */
   private emit(event: AgentEvent): void {
     this.hooks?.emit(event);
+  }
+
+  /**
+   * Create a brief summary of a tool result for insight display.
+   */
+  private summarizeToolResult(toolName: string, result: unknown): string {
+    if (result === null || result === undefined) {
+      return 'No output';
+    }
+
+    const resultStr = typeof result === 'string' ? result : JSON.stringify(result);
+
+    // Tool-specific summaries
+    if (toolName === 'list_files' || toolName === 'glob') {
+      const lines = resultStr.split('\n').filter(l => l.trim());
+      return `Found ${lines.length} file${lines.length !== 1 ? 's' : ''}`;
+    }
+    if (toolName === 'bash' || toolName === 'execute_command') {
+      const lines = resultStr.split('\n').filter(l => l.trim());
+      if (resultStr.includes('exit code: 0') || !resultStr.includes('exit code:')) {
+        return lines.length > 1 ? `Success (${lines.length} lines)` : 'Success';
+      }
+      return `Failed - ${lines[0]?.slice(0, 50) || 'see output'}`;
+    }
+    if (toolName === 'read_file') {
+      const lines = resultStr.split('\n').length;
+      return `Read ${lines} line${lines !== 1 ? 's' : ''}`;
+    }
+    if (toolName === 'write_file' || toolName === 'edit_file') {
+      return 'File updated';
+    }
+    if (toolName === 'search' || toolName === 'grep') {
+      const matches = (resultStr.match(/\n/g) || []).length;
+      return `${matches} match${matches !== 1 ? 'es' : ''}`;
+    }
+
+    // Generic summary
+    if (resultStr.length <= 50) {
+      return resultStr;
+    }
+    return `${resultStr.slice(0, 47)}...`;
   }
 
   /**
@@ -1787,7 +1889,7 @@ export class ProductionAgent {
       }
     }
 
-    if (compactedCount > 0) {
+    if (compactedCount > 0 && process.env.DEBUG) {
       console.log(`  📦 Compacted ${compactedCount} tool outputs (saved ~${Math.round(savedChars / 4)} tokens)`);
     }
   }
@@ -2327,6 +2429,12 @@ export class ProductionAgent {
         humanInLoop: this.config.humanInLoop,
         executionPolicy: this.config.executionPolicy,
         threads: false,
+        // Disable hooks console output in subagents - parent handles event display
+        hooks: this.config.hooks === false ? false : {
+          enabled: true,
+          builtIn: { logging: false, timing: false, metrics: false },
+          custom: [],
+        },
       });
 
       // Forward events from subagent

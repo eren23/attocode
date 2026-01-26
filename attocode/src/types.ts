@@ -962,6 +962,11 @@ export type AgentEvent =
   // Compaction events
   | { type: 'compaction.auto'; tokensBefore: number; tokensAfter: number; messagesCompacted: number }
   | { type: 'compaction.warning'; currentTokens: number; threshold: number }
+  // Insight events (verbose execution feedback)
+  | { type: 'insight.tokens'; inputTokens: number; outputTokens: number; cacheReadTokens?: number; cacheWriteTokens?: number; cost?: number; model: string }
+  | { type: 'insight.context'; currentTokens: number; maxTokens: number; messageCount: number; percentUsed: number }
+  | { type: 'insight.tool'; tool: string; summary: string; durationMs: number; success: boolean }
+  | { type: 'insight.routing'; model: string; reason: string; complexity?: string }
   // Mode events
   | { type: 'mode.changed'; from: string; to: string };
 

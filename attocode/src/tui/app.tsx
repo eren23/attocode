@@ -315,21 +315,16 @@ interface SpinnerDisplayProps {
   message: string;
 }
 
+/**
+ * Static "working" indicator - no animation to avoid re-render flicker.
+ * Animation causes terminal artifacts when content overflows screen height.
+ */
 function SpinnerDisplay({ message }: SpinnerDisplayProps) {
   const { theme } = useTheme();
-  const [frame, setFrame] = useState(0);
-  const frames = ['|', '/', '-', '\\'];
-
-  useEffect(() => {
-    const timer = setInterval(() => {
-      setFrame((f) => (f + 1) % frames.length);
-    }, 100);
-    return () => clearInterval(timer);
-  }, []);
 
   return (
     <Box>
-      <Text color={theme.colors.info}>{frames[frame]} {message}</Text>
+      <Text color={theme.colors.info}>⏳ {message}</Text>
     </Box>
   );
 }
@@ -482,74 +477,60 @@ export function App({ config, handlers, initialState }: AppProps) {
     dispatch,
   };
 
+  // Keep last N messages visible
+  const visibleMessages = state.messages.slice(-15);
+  const toolCallsArray = Array.from(state.toolCalls.values()).slice(-5);
+
   return (
     <ThemeContext.Provider value={themeContextValue}>
       <AppStateContext.Provider value={appStateValue}>
         <Box flexDirection="column" height="100%">
-          {/* Header */}
-          {state.layout.header.visible && (
-            <Header status={state.status} />
-          )}
-
-          {/* Main Content Area */}
-          <Box flexDirection="row" flexGrow={1}>
-            {/* Sidebar (if enabled) */}
-            {state.layout.sidebar.visible && (
-              <Box
-                width={state.layout.sidebar.width}
-                borderStyle="single"
-                borderColor={theme.colors.border}
-                flexDirection="column"
-                paddingX={1}
-              >
-                <Text bold>Sessions</Text>
-                {state.sessions.map((s) => (
-                  <Text
-                    key={s.id}
-                    color={s.active ? theme.colors.primary : theme.colors.textMuted}
-                  >
-                    {s.active ? '> ' : '  '}{s.name || s.id.slice(0, 8)}
-                  </Text>
-                ))}
-              </Box>
+          {/* Messages area - direct rendering */}
+          <Box flexDirection="column" flexGrow={1}>
+            {visibleMessages.length === 0 ? (
+              <Text color={theme.colors.textMuted}>No messages yet. Type a message to start.</Text>
+            ) : (
+              visibleMessages.map((msg) => <MessageItem key={msg.id} message={msg} />)
             )}
-
-            {/* Messages Area */}
-            <Box flexDirection="column" flexGrow={1}>
-              <MessageList
-                messages={state.messages}
-                maxHeight={config.maxPanelHeight}
-              />
-
-              {/* Tool Calls */}
-              {state.layout.toolPanel.visible && (
-                <ToolCallList toolCalls={state.toolCalls} />
-              )}
-
-              {/* Thinking indicator - controlled by both config and state toggle */}
-              {state.showThinkingPanel && state.thinking && (
-                <Box marginTop={1}>
-                  <Text color={theme.colors.textMuted}>Thinking: {state.thinking}</Text>
-                </Box>
-              )}
-
-              {/* Spinner */}
-              {state.spinner.visible && (
-                <SpinnerDisplay message={state.spinner.message} />
-              )}
-            </Box>
           </Box>
 
-          {/* Input Area */}
+          {/* Tool calls */}
+          {toolCallsArray.length > 0 && (
+            <Box flexDirection="column" marginBottom={1}>
+              <Text bold color={theme.colors.toolMessage}>Tools</Text>
+              {toolCallsArray.map((tc) => (
+                <Box key={tc.id}>
+                  <Text color={
+                    tc.status === 'success' ? theme.colors.success :
+                    tc.status === 'error' ? theme.colors.error :
+                    tc.status === 'running' ? theme.colors.info :
+                    theme.colors.textMuted
+                  }>
+                    [{tc.status === 'success' ? '✓' :
+                      tc.status === 'error' ? '✗' :
+                      tc.status === 'running' ? '⟳' : '...'}] {tc.name}
+                  </Text>
+                  {tc.duration && (
+                    <Text color={theme.colors.textMuted}> ({tc.duration}ms)</Text>
+                  )}
+                </Box>
+              ))}
+            </Box>
+          )}
+
+          {/* Spinner - static icon */}
+          {state.spinner.visible && (
+            <Text color={theme.colors.info}>⏳ {state.spinner.message}</Text>
+          )}
+
+          {/* Input */}
           <InputArea
             onSubmit={handleSubmit}
             disabled={state.spinner.visible}
           />
-
-          {/* Footer */}
-          {state.layout.footer.visible && (
-            <Footer mode={state.status?.mode} />
-          )}
+          <Text color={theme.colors.textMuted} dimColor>
+            Ctrl+C:Exit | Ctrl+L:Clear
+          </Text>
         </Box>
       </AppStateContext.Provider>
     </ThemeContext.Provider>

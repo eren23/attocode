@@ -36,13 +36,14 @@ import type {
 
 /**
  * Default hooks configuration.
+ * Console output is DISABLED by default - enable explicitly when needed.
  */
 export const DEFAULT_HOOKS_CONFIG: HooksConfig = {
   enabled: true,
   builtIn: {
-    logging: true,
+    logging: false, // Disabled by default - prints [Hook] logs to console
     metrics: true,
-    timing: true,
+    timing: false,  // Disabled by default - prints [Hook] timing to console
   },
   custom: [],
 };
@@ -106,11 +107,12 @@ export const DEFAULT_REFLECTION_CONFIG: ReflectionConfig = {
 
 /**
  * Default observability configuration.
+ * Console output is DISABLED by default - enable explicitly when needed.
  */
 export const DEFAULT_OBSERVABILITY_CONFIG: ObservabilityConfig = {
   enabled: true,
   tracing: {
-    enabled: true,
+    enabled: false, // Disabled by default - prints trace tree to console
     serviceName: 'production-agent',
     exporter: 'console',
   },
@@ -121,7 +123,7 @@ export const DEFAULT_OBSERVABILITY_CONFIG: ObservabilityConfig = {
     collectLatencies: true,
   },
   logging: {
-    enabled: true,
+    enabled: false, // Disabled by default - prints JSON logs to console
     level: 'info',
     structured: true,
   },
