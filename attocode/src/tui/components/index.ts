@@ -12,3 +12,6 @@ export { ScrollableBox, type ScrollableBoxProps } from './ScrollableBox.js';
 export { MessageItem, type MessageItemProps, type TUIMessage } from './MessageItem.js';
 export { ToolCallItem, type ToolCallItemProps, type ToolCallDisplayItem } from './ToolCallItem.js';
 export { MemoizedInputArea, type InputAreaProps } from './InputArea.js';
+
+// Approval dialog for permission requests
+export { ApprovalDialog, type ApprovalDialogProps, type ApprovalRequest } from './ApprovalDialog.js';

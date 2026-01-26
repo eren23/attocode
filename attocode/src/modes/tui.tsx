@@ -14,7 +14,7 @@
  */
 
 import { createProductionAgent } from '../agent.js';
-import { ProviderAdapter, convertToolsFromRegistry } from '../adapters.js';
+import { ProviderAdapter, convertToolsFromRegistry, createTUIApprovalBridge } from '../adapters.js';
 import { createStandardRegistry } from '../tools/standard.js';
 import type { LLMProviderWithTools } from '../providers/types.js';
 import type { PermissionMode } from '../tools/types.js';
@@ -114,8 +114,12 @@ export async function startTUIMode(
     // Initialize pricing cache from OpenRouter
     await initPricingCache();
 
-    // Setup agent (same as REPL)
-    const registry = createStandardRegistry(permissionMode);
+    // Setup agent
+    // In TUI mode with interactive permissions, we use 'yolo' at registry level
+    // and let the agent's HumanInLoopManager handle permissions via TUI dialog.
+    // This prevents the old console-based permission prompt from conflicting with Ink.
+    const registryPermissionMode = permissionMode === 'interactive' ? 'yolo' : permissionMode;
+    const registry = createStandardRegistry(registryPermissionMode);
     const tools = convertToolsFromRegistry(registry);
     const adaptedProvider = new ProviderAdapter(provider, model);
 
@@ -155,6 +159,10 @@ export async function startTUIMode(
     const standardToolsWithoutFileOps = tools.filter(t => !['edit_file', 'write_file'].includes(t.name));
     const allTools = [...standardToolsWithoutFileOps, ...lspFileTools];
 
+    // Create approval bridge for TUI permission dialogs
+    // This must be created before the agent so we can pass the handler
+    const approvalBridge = permissionMode === 'interactive' ? createTUIApprovalBridge() : null;
+
     const agent = createProductionAgent({
       toolResolver: (toolName: string) => toolName.startsWith('mcp_') ? mcpClient.getFullToolDefinition(toolName) : null,
       mcpToolSummaries: mcpSummaries,
@@ -164,7 +172,16 @@ export async function startTUIMode(
       maxIterations,
       memory: { enabled: true, types: { episodic: true, semantic: true, working: true } },
       planning: { enabled: true, autoplan: true, complexityThreshold: 6 },
-      humanInLoop: permissionMode === 'interactive' ? { enabled: true, alwaysApprove: ['dangerous'] } : false,
+      humanInLoop: permissionMode === 'interactive'
+        ? {
+            enabled: true,
+            riskThreshold: 'moderate',  // Require approval for moderate+ risk tools
+            alwaysApprove: [],  // Don't auto-approve anything, show dialog
+            neverApprove: ['read_file', 'list_files', 'glob', 'grep'],  // Safe read tools
+            approvalHandler: approvalBridge!.handler,  // TUI approval handler
+            auditLog: true,
+          }
+        : false,
       // Observability: trace capture to file when --trace, logging disabled in TUI (use debug mode instead)
       observability: trace
         ? { enabled: true, traceCapture: { enabled: true, outputDir: '.traces' }, logging: { enabled: false } }
@@ -287,6 +304,8 @@ export async function startTUIMode(
         log: (message: string, data?: any) => persistenceDebug.log(message, data),
         error: (message: string, error?: any) => persistenceDebug.error(message, error),
       },
+      // Approval bridge for TUI permission dialogs (only in interactive mode)
+      approvalBridge: approvalBridge || undefined,
     };
 
     const instance = render(React.createElement(TUIApp, tuiProps));

@@ -336,6 +336,9 @@ export {
   type ToolCallDisplayItem,
   MemoizedInputArea,
   type InputAreaProps,
+  ApprovalDialog,
+  type ApprovalDialogProps,
+  type ApprovalRequest as TUIApprovalRequest,
 } from './components/index.js';
 
 // Command palette

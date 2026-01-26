@@ -17,6 +17,9 @@ import type { Compactor } from '../integrations/compaction.js';
 import type { ThemeColors, CommandPaletteItem } from './types.js';
 import { getTheme, getThemeNames } from './theme/index.js';
 import { ControlledCommandPalette } from './input/CommandPalette.js';
+import { ApprovalDialog } from './components/ApprovalDialog.js';
+import type { TUIApprovalBridge } from '../adapters.js';
+import type { ApprovalRequest as TypesApprovalRequest } from '../types.js';
 
 // =============================================================================
 // TYPES
@@ -41,6 +44,8 @@ export interface TUIAppProps {
     log: (message: string, data?: any) => void;
     error: (message: string, error?: any) => void;
   };
+  /** Approval bridge for TUI permission dialogs (optional) */
+  approvalBridge?: TUIApprovalBridge;
 }
 
 /** TUI message display format */
@@ -190,6 +195,14 @@ interface MemoizedInputAreaProps {
   // Command palette state (controlled from parent)
   commandPaletteOpen?: boolean;
   onCommandPaletteInput?: (input: string, key: any) => void;
+  // Approval dialog state (controlled from parent)
+  approvalDialogOpen?: boolean;
+  approvalDenyReasonMode?: boolean;
+  onApprovalApprove?: () => void;
+  onApprovalDeny?: (reason?: string) => void;
+  onApprovalDenyWithReason?: () => void;
+  onApprovalCancelDenyReason?: () => void;
+  onApprovalDenyReasonInput?: (input: string, key: any) => void;
 }
 
 const MemoizedInputArea = memo(function MemoizedInputArea({
@@ -210,6 +223,13 @@ const MemoizedInputArea = memo(function MemoizedInputArea({
   onEnd,
   commandPaletteOpen,
   onCommandPaletteInput,
+  approvalDialogOpen,
+  approvalDenyReasonMode,
+  onApprovalApprove,
+  onApprovalDeny,
+  onApprovalDenyWithReason,
+  onApprovalCancelDenyReason,
+  onApprovalDenyReasonInput,
 }: MemoizedInputAreaProps) {
   const [value, setValue] = useState('');
   const [cursorPos, setCursorPos] = useState(0);
@@ -220,12 +240,18 @@ const MemoizedInputArea = memo(function MemoizedInputArea({
     onToggleToolExpand, onToggleThinking,
     onPageUp, onPageDown, onHome, onEnd,
     commandPaletteOpen, onCommandPaletteInput,
+    approvalDialogOpen, approvalDenyReasonMode,
+    onApprovalApprove, onApprovalDeny, onApprovalDenyWithReason,
+    onApprovalCancelDenyReason, onApprovalDenyReasonInput,
   });
   callbacksRef.current = {
     onSubmit, onCtrlC, onCtrlL, onCtrlP, onEscape,
     onToggleToolExpand, onToggleThinking,
     onPageUp, onPageDown, onHome, onEnd,
     commandPaletteOpen, onCommandPaletteInput,
+    approvalDialogOpen, approvalDenyReasonMode,
+    onApprovalApprove, onApprovalDeny, onApprovalDenyWithReason,
+    onApprovalCancelDenyReason, onApprovalDenyReasonInput,
   };
   const disabledRef = useRef(disabled);
   disabledRef.current = disabled;
@@ -264,6 +290,42 @@ const MemoizedInputArea = memo(function MemoizedInputArea({
     // Command palette keyboard handling (when open)
     if (cb.commandPaletteOpen && cb.onCommandPaletteInput) {
       cb.onCommandPaletteInput(input, key);
+      return;
+    }
+
+    // Approval dialog keyboard handling (when open)
+    if (cb.approvalDialogOpen) {
+      // If in deny reason mode, handle text input
+      if (cb.approvalDenyReasonMode && cb.onApprovalDenyReasonInput) {
+        // Escape cancels deny reason mode
+        if (key.escape) {
+          cb.onApprovalCancelDenyReason?.();
+          return;
+        }
+        // Enter submits the deny reason
+        if (key.return) {
+          cb.onApprovalDenyReasonInput(input, key);
+          return;
+        }
+        // Regular input for deny reason
+        cb.onApprovalDenyReasonInput(input, key);
+        return;
+      }
+
+      // Standard approval dialog shortcuts
+      if (input === 'y' || input === 'Y') {
+        cb.onApprovalApprove?.();
+        return;
+      }
+      if (input === 'n' || input === 'N') {
+        cb.onApprovalDeny?.();
+        return;
+      }
+      if (input === 'd' || input === 'D') {
+        cb.onApprovalDenyWithReason?.();
+        return;
+      }
+      // Block other input while approval dialog is open
       return;
     }
 
@@ -354,7 +416,9 @@ const MemoizedInputArea = memo(function MemoizedInputArea({
          prevProps.borderColor === nextProps.borderColor &&
          prevProps.textColor === nextProps.textColor &&
          prevProps.cursorColor === nextProps.cursorColor &&
-         prevProps.commandPaletteOpen === nextProps.commandPaletteOpen;
+         prevProps.commandPaletteOpen === nextProps.commandPaletteOpen &&
+         prevProps.approvalDialogOpen === nextProps.approvalDialogOpen &&
+         prevProps.approvalDenyReasonMode === nextProps.approvalDenyReasonMode;
 });
 
 // =============================================================================
@@ -374,6 +438,7 @@ export function TUIApp({
   formatSessionsTable,
   saveCheckpointToStore,
   persistenceDebug,
+  approvalBridge,
 }: TUIAppProps) {
   const { exit } = useApp();
   const [messages, setMessages] = useState<TUIMessage[]>([]);
@@ -396,11 +461,18 @@ export function TUIApp({
   const [commandPaletteQuery, setCommandPaletteQuery] = useState('');
   const [commandPaletteIndex, setCommandPaletteIndex] = useState(0);
 
+  // Approval dialog state
+  const [pendingApproval, setPendingApproval] = useState<TypesApprovalRequest | null>(null);
+  const [denyReasonMode, setDenyReasonMode] = useState(false);
+  const [denyReason, setDenyReason] = useState('');
+
   // Refs for stable callbacks
   const isProcessingRef = useRef(isProcessing);
   const messagesLengthRef = useRef(messages.length);
+  const pendingApprovalRef = useRef(pendingApproval);
   isProcessingRef.current = isProcessing;
   messagesLengthRef.current = messages.length;
+  pendingApprovalRef.current = pendingApproval;
 
   // Derive theme and colors
   const selectedTheme = getTheme(currentThemeName);
@@ -411,6 +483,58 @@ export function TUIApp({
     const uniqueId = `${role}-${Date.now()}-${++messageIdCounter.current}`;
     setMessages(prev => [...prev, { id: uniqueId, role, content, ts: new Date() }]);
   }, []);
+
+  // =========================================================================
+  // APPROVAL DIALOG HANDLERS
+  // =========================================================================
+
+  // Handle approval request from bridge
+  const handleApprovalRequest = useCallback((request: TypesApprovalRequest) => {
+    setPendingApproval(request);
+    setDenyReasonMode(false);
+    setDenyReason('');
+  }, []);
+
+  // Approve the pending request
+  const handleApprove = useCallback(() => {
+    if (approvalBridge && pendingApprovalRef.current) {
+      approvalBridge.resolve({ approved: true });
+      setPendingApproval(null);
+      setDenyReasonMode(false);
+      setDenyReason('');
+    }
+  }, [approvalBridge]);
+
+  // Deny the pending request
+  const handleDeny = useCallback((reason?: string) => {
+    if (approvalBridge && pendingApprovalRef.current) {
+      approvalBridge.resolve({ approved: false, reason: reason || 'User denied' });
+      setPendingApproval(null);
+      setDenyReasonMode(false);
+      setDenyReason('');
+    }
+  }, [approvalBridge]);
+
+  // Enter deny with reason mode
+  const handleDenyWithReason = useCallback(() => {
+    setDenyReasonMode(true);
+    setDenyReason('');
+  }, []);
+
+  // Cancel deny with reason mode
+  const handleCancelDenyReason = useCallback(() => {
+    setDenyReasonMode(false);
+    setDenyReason('');
+  }, []);
+
+  // Connect approval bridge on mount
+  useEffect(() => {
+    if (approvalBridge) {
+      approvalBridge.connect({
+        onRequest: handleApprovalRequest,
+      });
+    }
+  }, [approvalBridge, handleApprovalRequest]);
 
   // =========================================================================
   // COMMAND HANDLER
@@ -1065,6 +1189,26 @@ export function TUIApp({
     }
   }, [filteredCommandItems, commandPaletteIndex]);
 
+  // Handle approval deny reason input (called from MemoizedInputArea)
+  const handleApprovalDenyReasonInput = useCallback((input: string, key: any) => {
+    // Enter submits the deny reason
+    if (key.return) {
+      handleDeny(denyReason || 'User denied');
+      return;
+    }
+
+    // Backspace
+    if (key.backspace || key.delete) {
+      setDenyReason(r => r.slice(0, -1));
+      return;
+    }
+
+    // Regular character input
+    if (input && !key.ctrl && !key.meta) {
+      setDenyReason(r => r + input);
+    }
+  }, [denyReason, handleDeny]);
+
   // =========================================================================
   // KEYBOARD CALLBACKS
   // =========================================================================
@@ -1168,10 +1312,29 @@ export function TUIApp({
           </Box>
         )}
 
+        {/* Approval Dialog (positioned above input when active) */}
+        {pendingApproval && (
+          <ApprovalDialog
+            visible={true}
+            request={{
+              id: pendingApproval.id,
+              tool: pendingApproval.tool || pendingApproval.action,
+              args: pendingApproval.args || {},
+              risk: pendingApproval.risk,
+              context: pendingApproval.context,
+            }}
+            onApprove={handleApprove}
+            onDeny={handleDeny}
+            colors={colors}
+            denyReasonMode={denyReasonMode}
+            denyReason={denyReason}
+          />
+        )}
+
         <MemoizedInputArea
           onSubmit={handleSubmit}
-          disabled={isProcessing}
-          borderColor="#87CEEB"
+          disabled={isProcessing || !!pendingApproval}
+          borderColor={pendingApproval ? '#FFD700' : '#87CEEB'}
           textColor="#98FB98"
           cursorColor="#87CEEB"
           onCtrlC={handleCtrlC}
@@ -1182,6 +1345,13 @@ export function TUIApp({
           onToggleThinking={handleToggleThinking}
           commandPaletteOpen={commandPaletteOpen}
           onCommandPaletteInput={handleCommandPaletteInput}
+          approvalDialogOpen={!!pendingApproval}
+          approvalDenyReasonMode={denyReasonMode}
+          onApprovalApprove={handleApprove}
+          onApprovalDeny={handleDeny}
+          onApprovalDenyWithReason={handleDenyWithReason}
+          onApprovalCancelDenyReason={handleCancelDenyReason}
+          onApprovalDenyReasonInput={handleApprovalDenyReasonInput}
         />
 
         {/* Command Palette (positioned above input) */}
