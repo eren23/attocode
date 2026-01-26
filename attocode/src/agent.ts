@@ -1085,13 +1085,14 @@ export class ProductionAgent {
       const content = typeof m.content === 'string' ? m.content : JSON.stringify(m.content);
       return sum + Math.ceil(content.length / 3.5); // ~3.5 chars per token estimate
     }, 0);
-    const maxTokens = this.config.maxTokens || 128000;
+    // Use context window size, not output token limit
+    const contextLimit = this.config.maxContextTokens || 100000;
     this.emit({
       type: 'insight.context',
       currentTokens: estimatedTokens,
-      maxTokens,
+      maxTokens: contextLimit,
       messageCount: messages.length,
-      percentUsed: Math.round((estimatedTokens / maxTokens) * 100),
+      percentUsed: Math.round((estimatedTokens / contextLimit) * 100),
     });
 
     const startTime = Date.now();

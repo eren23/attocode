@@ -1,19 +1,47 @@
 /**
- * CommandPalette Component
+ * CommandPalette Component (Controlled)
  *
  * Fuzzy-search command palette for quick access to commands.
+ *
+ * IMPORTANT: This is a CONTROLLED component with NO useInput hook.
+ * All keyboard handling must be done by the parent component
+ * (MemoizedInputArea) to prevent input conflicts.
  */
 
-import React, { useState, useMemo, useCallback } from 'react';
-import { Box, Text, useInput } from 'ink';
+import { useMemo } from 'react';
+import { Box, Text } from 'ink';
 import type { CommandPaletteItem } from '../types.js';
 import type { Theme } from '../theme/index.js';
 
+/**
+ * Original props (uncontrolled version - kept for backwards compatibility)
+ */
 export interface CommandPaletteProps {
   theme: Theme;
   items: CommandPaletteItem[];
   visible: boolean;
   onSelect: (item: CommandPaletteItem) => void;
+  onClose: () => void;
+  placeholder?: string;
+  maxVisible?: number;
+}
+
+/**
+ * Controlled version props - parent manages query and selection state
+ */
+export interface ControlledCommandPaletteProps {
+  theme: Theme;
+  items: CommandPaletteItem[];
+  visible: boolean;
+  /** Current search query (controlled by parent) */
+  query: string;
+  /** Currently selected index (controlled by parent) */
+  selectedIndex: number;
+  /** Callback when user changes query */
+  onQueryChange: (query: string) => void;
+  /** Callback when user selects an item */
+  onSelectItem: (item: CommandPaletteItem) => void;
+  /** Callback to close the palette */
   onClose: () => void;
   placeholder?: string;
   maxVisible?: number;
@@ -123,20 +151,25 @@ function HighlightedText({
 }
 
 /**
- * Command palette component.
+ * Controlled command palette component.
+ * NO useInput hook - parent handles all keyboard input.
  */
-export function CommandPalette({
+export function ControlledCommandPalette({
   theme,
   items,
   visible,
-  onSelect,
-  onClose,
+  query,
+  selectedIndex,
+  // These props are passed by parent but used via callbacks, not rendered directly
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  onQueryChange: _onQueryChange,
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  onSelectItem: _onSelectItem,
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  onClose: _onClose,
   placeholder = 'Type to search commands...',
   maxVisible = 10,
-}: CommandPaletteProps) {
-  const [query, setQuery] = useState('');
-  const [selectedIndex, setSelectedIndex] = useState(0);
-
+}: ControlledCommandPaletteProps) {
   // Filter and sort items by fuzzy match score
   const filteredItems = useMemo(() => {
     if (!query) return items.slice(0, maxVisible);
@@ -156,63 +189,6 @@ export function CommandPalette({
       .map(({ item }) => item);
   }, [items, query, maxVisible]);
 
-  // Handle keyboard input
-  useInput((input, key) => {
-    if (!visible) return;
-
-    // Close on Escape
-    if (key.escape) {
-      setQuery('');
-      setSelectedIndex(0);
-      onClose();
-      return;
-    }
-
-    // Select on Enter
-    if (key.return) {
-      if (filteredItems[selectedIndex]) {
-        const selected = filteredItems[selectedIndex];
-        setQuery('');
-        setSelectedIndex(0);
-        onSelect(selected);
-      }
-      return;
-    }
-
-    // Navigate with arrow keys
-    if (key.upArrow) {
-      setSelectedIndex(i => Math.max(0, i - 1));
-      return;
-    }
-    if (key.downArrow) {
-      setSelectedIndex(i => Math.min(filteredItems.length - 1, i + 1));
-      return;
-    }
-
-    // Tab to cycle
-    if (key.tab) {
-      if (key.shift) {
-        setSelectedIndex(i => (i - 1 + filteredItems.length) % filteredItems.length);
-      } else {
-        setSelectedIndex(i => (i + 1) % filteredItems.length);
-      }
-      return;
-    }
-
-    // Backspace
-    if (key.backspace || key.delete) {
-      setQuery(q => q.slice(0, -1));
-      setSelectedIndex(0);
-      return;
-    }
-
-    // Regular character input
-    if (input && !key.ctrl && !key.meta) {
-      setQuery(q => q + input);
-      setSelectedIndex(0);
-    }
-  }, { isActive: visible });
-
   if (!visible) return null;
 
   // Group items by category
@@ -225,9 +201,6 @@ export function CommandPalette({
     }
     return cats;
   }, [filteredItems]);
-
-  // Flatten for index calculation
-  let flatIndex = 0;
 
   return (
     <Box
@@ -322,4 +295,10 @@ export function CommandPalette({
   );
 }
 
-export default CommandPalette;
+/**
+ * Alias for backwards compatibility.
+ * Use ControlledCommandPalette directly when integrating with the TUI.
+ */
+export const CommandPalette = ControlledCommandPalette;
+
+export default ControlledCommandPalette;

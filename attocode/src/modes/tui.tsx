@@ -1,0 +1,303 @@
+/**
+ * TUI Mode
+ *
+ * Full-featured Terminal User Interface for the coding agent.
+ * Uses Ink/React for rendering with anti-flicker patterns.
+ *
+ * Features:
+ * - Flicker-free rendering via Ink's <Static> component
+ * - Single useInput hook (no input conflicts)
+ * - Command palette with fuzzy search (Ctrl+P)
+ * - Theme system (dark, light, high-contrast)
+ * - LSP integration for code intelligence
+ * - Session persistence with checkpoints
+ */
+
+import { createProductionAgent } from '../agent.js';
+import { ProviderAdapter, convertToolsFromRegistry } from '../adapters.js';
+import { createStandardRegistry } from '../tools/standard.js';
+import type { LLMProviderWithTools } from '../providers/types.js';
+import type { PermissionMode } from '../tools/types.js';
+
+import {
+  SQLiteStore,
+  createSQLiteStore,
+  createSessionStore,
+  createMCPClient,
+  createCompactor,
+} from '../integrations/index.js';
+
+import {
+  persistenceDebug,
+  saveCheckpointToStore,
+  loadSessionState,
+  type AnySessionStore,
+} from '../integrations/persistence.js';
+
+import { getMCPConfigPaths } from '../paths.js';
+import { showSessionPicker, showQuickPicker, formatSessionsTable } from '../session-picker.js';
+import { createLSPManager } from '../integrations/lsp.js';
+import { createLSPFileTools } from '../agent-tools/lsp-file-tools.js';
+import { initPricingCache } from '../integrations/openrouter-pricing.js';
+
+// Import TUI components and utilities
+import { TUIApp, type TUIAppProps, checkTUICapabilities } from '../tui/index.js';
+
+// Import REPL mode for fallback
+import { startProductionREPL } from './repl.js';
+
+export interface TUIModeOptions {
+  permissionMode?: PermissionMode;
+  maxIterations?: number;
+  model?: string;
+  trace?: boolean;
+  theme?: 'dark' | 'light' | 'auto';
+}
+
+/**
+ * Start the TUI mode.
+ * Falls back to REPL mode if TUI is not available.
+ */
+export async function startTUIMode(
+  provider: LLMProviderWithTools,
+  options: TUIModeOptions = {}
+): Promise<void> {
+  const {
+    permissionMode = 'interactive',
+    maxIterations = 50,
+    model,
+    trace = false,
+    theme = 'auto',
+  } = options;
+
+  try {
+    // Check Ink availability
+    const capabilities = await checkTUICapabilities();
+
+    if (!capabilities.inkAvailable) {
+      console.log('! TUI not available. Falling back to legacy mode.');
+      return startProductionREPL(provider, options);
+    }
+
+    // Enable TUI mode for debug logger to prevent console interference with Ink
+    persistenceDebug.enableTUIMode();
+
+    // CRITICAL: Initialize session storage FIRST, before any heavy dynamic imports
+    // This ensures better-sqlite3 native module loads cleanly
+    let sessionStore: AnySessionStore;
+
+    persistenceDebug.log('[TUI] Initializing session store BEFORE dynamic imports...');
+
+    try {
+      sessionStore = await createSQLiteStore({ baseDir: '.agent/sessions' });
+
+      if (persistenceDebug.isEnabled()) {
+        const sqliteStore = sessionStore as SQLiteStore;
+        const stats = sqliteStore.getStats();
+        persistenceDebug.log('[TUI] SQLite store initialized!', { sessions: stats.sessionCount, checkpoints: stats.checkpointCount });
+      }
+      console.log('+ SQLite session store initialized');
+    } catch (sqliteError) {
+      const errMsg = (sqliteError as Error).message;
+      if (persistenceDebug.isEnabled()) {
+        process.stderr.write(`[DEBUG] [TUI] SQLite FAILED: ${errMsg}\n`);
+      }
+      console.log('! SQLite unavailable, using JSONL fallback');
+      console.log(`   Error: ${errMsg}`);
+      sessionStore = await createSessionStore({ baseDir: '.agent/sessions' });
+    }
+
+    // Dynamic imports - using our modular TUI components
+    const { render } = await import('ink');
+    const React = await import('react');
+
+    // Initialize pricing cache from OpenRouter
+    await initPricingCache();
+
+    // Setup agent (same as REPL)
+    const registry = createStandardRegistry(permissionMode);
+    const tools = convertToolsFromRegistry(registry);
+    const adaptedProvider = new ProviderAdapter(provider, model);
+
+    // Hierarchical MCP config: global (~/.config/attocode/mcp.json) + workspace (.mcp.json)
+    const mcpClient = await createMCPClient({
+      configPaths: getMCPConfigPaths(),
+      lazyLoading: true,
+      alwaysLoadTools: [],
+      summaryDescriptionLimit: 100,
+      maxToolsPerSearch: 5,
+    });
+
+    const mcpSummaries = mcpClient.getAllToolSummaries().map(s => ({
+      name: s.name,
+      description: s.description,
+    }));
+
+    // Initialize LSP manager for code intelligence
+    const lspManager = createLSPManager({ autoDetect: true });
+    let lspServers: string[] = [];
+    try {
+      lspServers = await lspManager.autoStart(process.cwd());
+      if (lspServers.length > 0) {
+        console.log(`@ LSP: Started ${lspServers.join(', ')} language server(s)`);
+      } else {
+        console.log(`* LSP: No language servers found (optional)`);
+        console.log(`   For inline diagnostics: npm i -g typescript-language-server typescript`);
+      }
+    } catch (err) {
+      console.log(`! LSP: Could not start language servers (${(err as Error).message})`);
+    }
+
+    // Create LSP-enhanced file tools (replaces standard edit_file/write_file)
+    const lspFileTools = createLSPFileTools({ lspManager, diagnosticDelay: 500 });
+
+    // Replace standard edit_file/write_file with LSP-enhanced versions
+    const standardToolsWithoutFileOps = tools.filter(t => !['edit_file', 'write_file'].includes(t.name));
+    const allTools = [...standardToolsWithoutFileOps, ...lspFileTools];
+
+    const agent = createProductionAgent({
+      toolResolver: (toolName: string) => toolName.startsWith('mcp_') ? mcpClient.getFullToolDefinition(toolName) : null,
+      mcpToolSummaries: mcpSummaries,
+      provider: adaptedProvider,
+      tools: allTools,
+      model,
+      maxIterations,
+      memory: { enabled: true, types: { episodic: true, semantic: true, working: true } },
+      planning: { enabled: true, autoplan: true, complexityThreshold: 6 },
+      humanInLoop: permissionMode === 'interactive' ? { enabled: true, alwaysApprove: ['dangerous'] } : false,
+      // Observability: trace capture to file when --trace, logging disabled in TUI (use debug mode instead)
+      observability: trace
+        ? { enabled: true, traceCapture: { enabled: true, outputDir: '.traces' }, logging: { enabled: false } }
+        : undefined,
+      // Hooks: Only enable console output in debug mode
+      hooks: {
+        enabled: true,
+        builtIn: {
+          logging: persistenceDebug.isEnabled(), // Only show [Hook] logs in debug mode
+          timing: persistenceDebug.isEnabled(),  // Only show timing in debug mode
+          metrics: true,
+        },
+        custom: [],
+      },
+    });
+
+    // Session store was already initialized at the top
+    const compactor = createCompactor(adaptedProvider, {
+      tokenThreshold: 80000,
+      preserveRecentCount: 10,
+    });
+
+    // Check for existing sessions to offer resume
+    let currentSessionId: string;
+    let resumedSession = false;
+
+    const existingSessions = await sessionStore.listSessions();
+    persistenceDebug.log('[TUI] Checking existing sessions', { count: existingSessions.length });
+
+    if (existingSessions.length > 0) {
+      const pickerResult = await showQuickPicker(existingSessions);
+
+      if (pickerResult.action === 'cancel') {
+        // User typed 'list' - show full picker
+        const fullResult = await showSessionPicker(existingSessions);
+
+        if (fullResult.action === 'resume' && fullResult.sessionId) {
+          currentSessionId = fullResult.sessionId;
+          resumedSession = true;
+        } else if (fullResult.action === 'cancel') {
+          console.log('Goodbye!');
+          await mcpClient.cleanup();
+          await agent.cleanup();
+          await lspManager.cleanup();
+          return;
+        } else {
+          currentSessionId = await sessionStore.createSession();
+        }
+      } else if (pickerResult.action === 'resume' && pickerResult.sessionId) {
+        currentSessionId = pickerResult.sessionId;
+        resumedSession = true;
+      } else {
+        currentSessionId = await sessionStore.createSession();
+      }
+    } else {
+      currentSessionId = await sessionStore.createSession();
+    }
+
+    persistenceDebug.log('[TUI] Session selected', {
+      sessionId: currentSessionId,
+      resumed: resumedSession,
+      storeType: persistenceDebug.storeType(sessionStore),
+    });
+
+    // CRITICAL: Sync the session ID to the store's internal state
+    sessionStore.setCurrentSessionId(currentSessionId);
+
+    // If resuming, load the session state
+    if (resumedSession) {
+      const sessionState = await loadSessionState(sessionStore, currentSessionId);
+      if (sessionState?.messages) {
+        agent.loadState({
+          messages: sessionState.messages as any,
+          iteration: sessionState.iteration,
+          metrics: sessionState.metrics as any,
+          plan: sessionState.plan as any,
+          memoryContext: sessionState.memoryContext,
+        });
+        console.log(`+ Resumed ${sessionState.messages.length} messages from session`);
+      }
+    }
+
+    // Get git branch for status line (using execFileSync for safety - no shell injection possible)
+    const getGitBranch = (): string => {
+      try {
+        const { execFileSync } = require('child_process');
+        return execFileSync('git', ['rev-parse', '--abbrev-ref', 'HEAD'], { encoding: 'utf8', stdio: ['pipe', 'pipe', 'pipe'] }).trim();
+      } catch {
+        return '';
+      }
+    };
+    const gitBranch = getGitBranch();
+
+    // Render TUI (don't clear in debug mode so we can see initialization messages)
+    if (!persistenceDebug.isEnabled()) {
+      console.clear();
+    } else {
+      console.log('\n--- TUI Starting (debug mode - console not cleared) ---\n');
+    }
+
+    // Pass all required props to the TUIApp
+    const tuiProps: TUIAppProps = {
+      agent,
+      sessionStore: sessionStore as SQLiteStore,
+      mcpClient,
+      compactor,
+      lspManager: {
+        cleanup: () => lspManager.cleanup(),
+        getActiveServers: () => lspManager.getActiveServers(),
+      },
+      theme: theme as string,
+      model: model || 'default',
+      gitBranch,
+      currentSessionId,
+      formatSessionsTable,
+      saveCheckpointToStore,
+      loadSessionState,
+      persistenceDebug: {
+        isEnabled: () => persistenceDebug.isEnabled(),
+        log: (message: string, data?: any) => persistenceDebug.log(message, data),
+        error: (message: string, error?: any) => persistenceDebug.error(message, error),
+      },
+    };
+
+    const instance = render(React.createElement(TUIApp, tuiProps));
+    await instance.waitUntilExit();
+    await agent.cleanup();
+    await mcpClient.cleanup();
+    await lspManager.cleanup();
+
+  } catch (error) {
+    console.error('! TUI failed:', (error as Error).message);
+    console.log('   Falling back to legacy mode.');
+    return startProductionREPL(provider, options);
+  }
+}

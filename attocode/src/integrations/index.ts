@@ -484,3 +484,13 @@ export {
   type PendingPlanEvent,
   type PendingPlanEventListener,
 } from './pending-plan.js';
+
+// Persistence utilities (debug logging, checkpoint management)
+export {
+  PersistenceDebugger,
+  persistenceDebug,
+  saveCheckpointToStore,
+  loadSessionState,
+  type AnySessionStore,
+  type CheckpointData,
+} from './persistence.js';
