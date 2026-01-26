@@ -276,6 +276,27 @@ export const MIGRATIONS: Migration[] = [
       CREATE INDEX IF NOT EXISTS idx_worker_results_status ON worker_results(session_id, status);
     `,
   },
+  {
+    version: 8,
+    name: 'pending_plans',
+    sql: `
+      -- Pending plans table - stores plans awaiting user approval (plan mode)
+      CREATE TABLE IF NOT EXISTS pending_plans (
+        id TEXT PRIMARY KEY,
+        session_id TEXT NOT NULL,
+        task TEXT NOT NULL,
+        proposed_changes TEXT NOT NULL,
+        exploration_summary TEXT,
+        status TEXT NOT NULL DEFAULT 'pending',
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL,
+        FOREIGN KEY (session_id) REFERENCES sessions(id) ON DELETE CASCADE
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_pending_plans_session ON pending_plans(session_id);
+      CREATE INDEX IF NOT EXISTS idx_pending_plans_status ON pending_plans(session_id, status);
+    `,
+  },
 ];
 
 // =============================================================================
@@ -300,6 +321,8 @@ export interface SchemaFeatures {
   goals: boolean;
   /** Worker result storage: worker_results */
   workerResults: boolean;
+  /** Pending plans for plan mode: pending_plans */
+  pendingPlans: boolean;
 }
 
 /**
@@ -321,6 +344,7 @@ export function detectFeatures(db: Database.Database): SchemaFeatures {
     fileChanges: tableExists('file_changes'),
     goals: tableExists('goals') && tableExists('junctures'),
     workerResults: tableExists('worker_results'),
+    pendingPlans: tableExists('pending_plans'),
   };
 }
 

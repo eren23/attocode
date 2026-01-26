@@ -1018,7 +1018,20 @@ ${c('━━━━━━━━━━━━━━━━━━━━━━━━━
 
   try {
     while (true) {
-      const input = await rl.question(c('You: ', 'green'));
+      // Generate prompt with mode indicator
+      const modeInfo = agent.getModeInfo();
+      const pendingCount = agent.getPendingChangeCount();
+      let prompt = '';
+      if (modeInfo.name !== 'Build') {
+        // Show mode indicator for non-default modes
+        prompt = `${modeInfo.color}${modeInfo.icon}\x1b[0m `;
+        if (pendingCount > 0) {
+          prompt += c(`[${pendingCount}] `, 'yellow');
+        }
+      }
+      prompt += c('You: ', 'green');
+
+      const input = await rl.question(prompt);
       const trimmed = input.trim();
 
       if (!trimmed) continue;
@@ -1061,6 +1074,13 @@ ${c('━━━━━━━━━━━━━━━━━━━━━━━━━
         const metrics = result.metrics;
         console.log(c(`\n📊 Tokens: ${metrics.inputTokens} in / ${metrics.outputTokens} out | Tools: ${metrics.toolCalls} | Duration: ${metrics.duration}ms`, 'dim'));
 
+        // Show plan mode status if there are pending changes
+        if (agent.hasPendingPlan()) {
+          const changeCount = agent.getPendingChangeCount();
+          console.log(c(`\n📋 Plan Mode: ${changeCount} change(s) queued for approval`, 'yellow'));
+          console.log(c('   Use /show-plan to review, /approve to execute, /reject to discard', 'dim'));
+        }
+
         // Auto-checkpoint after Q&A cycle (force=true for every Q&A)
         persistenceDebug.log('Attempting auto-checkpoint');
         const checkpoint = agent.autoCheckpoint(true);
@@ -1084,6 +1104,15 @@ ${c('━━━━━━━━━━━━━━━━━━━━━━━━━
               plan: checkpoint.state.plan,
               memoryContext: checkpoint.state.memoryContext,
             });
+
+            // Save pending plan if any
+            if (agent.hasPendingPlan() && 'savePendingPlan' in sessionStore && typeof sessionStore.savePendingPlan === 'function') {
+              const pendingPlan = agent.getPendingPlan();
+              if (pendingPlan) {
+                sessionStore.savePendingPlan(pendingPlan, sessionId);
+                persistenceDebug.log('Pending plan saved', { planId: pendingPlan.id, changes: pendingPlan.proposedChanges.length });
+              }
+            }
           } catch (err) {
             // Log error in debug mode, otherwise silent
             persistenceDebug.error('Failed to persist checkpoint to store', err);
@@ -1146,6 +1175,17 @@ ${c('GENERAL', 'bold')}
   ${c('/clear', 'cyan')}             Clear the screen
   ${c('/reset', 'cyan')}             Reset agent state (clears conversation)
   ${c('/quit', 'cyan')}              Exit attocode (alias: /exit, /q)
+
+${c('AGENT MODES', 'bold')}
+  ${c('/mode', 'cyan')}              Show current mode and available modes
+  ${c('/mode <name>', 'cyan')}       Switch to mode (build, plan, review, debug)
+  ${c('/plan', 'cyan')}              Toggle plan mode (writes queued for approval)
+
+${c('PLAN APPROVAL (in Plan Mode)', 'bold')}
+  ${c('/show-plan', 'cyan')}         Show pending plan with proposed changes
+  ${c('/approve', 'cyan')}           Approve and execute all pending changes
+  ${c('/approve <n>', 'cyan')}       Approve and execute first n changes only
+  ${c('/reject', 'cyan')}            Reject and discard all pending changes
 
 ${c('SESSIONS & PERSISTENCE', 'bold')}
   ${c('/save', 'cyan')}              Save current session to disk
@@ -1301,6 +1341,125 @@ ${c('Activity:', 'bold')}
   Est. Cost:       $${metrics.estimatedCost.toFixed(4)}
 ${goalsSummary}`);
       break;
+
+    // =========================================================================
+    // MODE MANAGEMENT
+    // =========================================================================
+
+    case '/mode': {
+      if (args.length === 0) {
+        // Show current mode and available modes
+        const modeInfo = agent.getModeInfo();
+        const hasPlan = agent.hasPendingPlan();
+        const pendingCount = agent.getPendingChangeCount();
+
+        console.log(`
+${c('Current Mode:', 'bold')} ${modeInfo.color}${modeInfo.icon} ${modeInfo.name}\x1b[0m
+${hasPlan ? c(`  Pending Plan: ${pendingCount} change(s) awaiting approval`, 'yellow') : ''}
+
+${agent.getAvailableModes()}
+
+${c('Usage:', 'dim')} /mode <name> to switch, /plan to toggle plan mode`);
+      } else {
+        // Switch mode
+        const newMode = args[0].toLowerCase();
+        agent.setMode(newMode);
+        const modeInfo = agent.getModeInfo();
+        console.log(`${c('Mode changed to:', 'green')} ${modeInfo.color}${modeInfo.icon} ${modeInfo.name}\x1b[0m`);
+
+        // Warn about pending plan if leaving plan mode
+        if (newMode !== 'plan' && agent.hasPendingPlan()) {
+          console.log(c('Warning: You have a pending plan. Use /show-plan to view, /approve or /reject to resolve.', 'yellow'));
+        }
+      }
+      break;
+    }
+
+    case '/plan': {
+      // Toggle plan mode
+      const newMode = agent.togglePlanMode();
+      const modeInfo = agent.getModeInfo();
+      console.log(`${c('Mode toggled to:', 'green')} ${modeInfo.color}${modeInfo.icon} ${modeInfo.name}\x1b[0m`);
+
+      if (newMode === 'plan') {
+        console.log(c(`
+In Plan Mode:
+  - You can explore the codebase and use all tools
+  - Write operations will be QUEUED for approval
+  - Use /show-plan to see queued changes
+  - Use /approve to execute, /reject to discard
+`, 'dim'));
+      } else if (agent.hasPendingPlan()) {
+        console.log(c('Note: You have a pending plan. Use /show-plan, /approve, or /reject.', 'yellow'));
+      }
+      break;
+    }
+
+    // =========================================================================
+    // PLAN APPROVAL COMMANDS
+    // =========================================================================
+
+    case '/show-plan': {
+      if (!agent.hasPendingPlan()) {
+        console.log(c('No pending plan. Enter plan mode with /plan and make requests that would modify files.', 'dim'));
+      } else {
+        console.log(`\n${agent.formatPendingPlan()}`);
+      }
+      break;
+    }
+
+    case '/approve': {
+      if (!agent.hasPendingPlan()) {
+        console.log(c('No pending plan to approve.', 'dim'));
+        break;
+      }
+
+      const count = args[0] ? parseInt(args[0], 10) : undefined;
+      if (args[0] && (isNaN(count!) || count! < 1)) {
+        console.log(c('Invalid count. Use /approve or /approve <number>', 'red'));
+        break;
+      }
+
+      const pendingCount = agent.getPendingChangeCount();
+      const toApprove = count ?? pendingCount;
+      console.log(c(`Approving ${toApprove} of ${pendingCount} change(s)...`, 'yellow'));
+
+      const result = await agent.approvePlan(count);
+
+      if (result.success) {
+        console.log(c(`\n✓ Successfully executed ${result.executed} change(s)`, 'green'));
+      } else {
+        console.log(c(`\n⚠ Executed ${result.executed} change(s) with ${result.errors.length} error(s):`, 'yellow'));
+        for (const err of result.errors) {
+          console.log(c(`  - ${err}`, 'red'));
+        }
+      }
+
+      // Auto-switch back to build mode
+      if (agent.getMode() === 'plan') {
+        agent.setMode('build');
+        console.log(c('\nSwitched to Build mode.', 'dim'));
+      }
+      break;
+    }
+
+    case '/reject': {
+      if (!agent.hasPendingPlan()) {
+        console.log(c('No pending plan to reject.', 'dim'));
+        break;
+      }
+
+      const pendingCount = agent.getPendingChangeCount();
+      agent.rejectPlan();
+      console.log(c(`✗ Rejected plan with ${pendingCount} change(s). All proposed changes discarded.`, 'yellow'));
+
+      // Auto-switch back to build mode
+      if (agent.getMode() === 'plan') {
+        agent.setMode('build');
+        console.log(c('Switched to Build mode.', 'dim'));
+      }
+      break;
+    }
 
     case '/goals':
       // Goal management commands
@@ -2035,6 +2194,16 @@ ${c('Tip:', 'dim')} Use /mcp search <query> to load specific tools on-demand.
             }
             if (resumeCheckpointData.plan) {
               console.log(c(`   Plan restored`, 'dim'));
+            }
+
+            // Check for pending plan in plan mode
+            if ('getPendingPlan' in sessionStore && typeof sessionStore.getPendingPlan === 'function') {
+              const pendingPlan = sessionStore.getPendingPlan(recentSession.id);
+              if (pendingPlan && pendingPlan.status === 'pending') {
+                console.log(c(`\n📋 Found pending plan: "${pendingPlan.task}"`, 'yellow'));
+                console.log(c(`   ${pendingPlan.proposedChanges.length} change(s) awaiting approval`, 'yellow'));
+                console.log(c('   Use /show-plan to view, /approve to execute, /reject to discard', 'dim'));
+              }
             }
           }
         }
@@ -2798,7 +2967,9 @@ async function startTUIMode(
       const [messages, setMessages] = useState<Array<{ id: string; role: string; content: string; ts: Date }>>([]);
       const [inputValue, setInputValue] = useState('');
       const [isProcessing, setIsProcessing] = useState(false);
-      const [status, setStatus] = useState({ iter: 0, tokens: 0, cost: 0, mode: 'ready' });
+      const initialModeInfo = agent.getModeInfo();
+      const initialMode = initialModeInfo.name === 'Plan' ? 'ready 📋' : 'ready';
+      const [status, setStatus] = useState({ iter: 0, tokens: 0, cost: 0, mode: initialMode });
       const [toolCalls, setToolCalls] = useState<ToolCallDisplay[]>([]);
       const [currentThemeName, setCurrentThemeName] = useState<string>(theme);
       const [contextTokens, setContextTokens] = useState(0);
@@ -2813,8 +2984,10 @@ async function startTUIMode(
       const selectedTheme = getTheme(currentThemeName);
       const colors = selectedTheme.colors;
 
+      const messageIdCounter = React.useRef(0);
       const addMessage = useCallback((role: string, content: string) => {
-        setMessages(prev => [...prev, { id: `${role}-${Date.now()}`, role, content, ts: new Date() }]);
+        const uniqueId = `${role}-${Date.now()}-${++messageIdCounter.current}`;
+        setMessages(prev => [...prev, { id: uniqueId, role, content, ts: new Date() }]);
       }, []);
 
       const handleCommand = useCallback(async (cmd: string, args: string[]) => {
@@ -2998,6 +3171,13 @@ async function startTUIMode(
               '  /audit            Show audit log',
               '  /budget           Show budget usage',
               '  /extend <t> <n>   Extend budget (tokens|cost|time)',
+              '',
+              '▸ PLAN MODE',
+              '  /mode             Show current mode',
+              '  /plan             Toggle plan mode (queue writes)',
+              '  /show-plan        Display pending plan',
+              '  /approve [n]      Approve plan (or first n changes)',
+              '  /reject           Reject and discard plan',
               '',
               '▸ DEBUG',
               '  /skills           List loaded skills',
@@ -3803,10 +3983,117 @@ async function startTUIMode(
             return;
           }
 
+          // =========================================================================
+          // MODE & PLAN COMMANDS
+          // =========================================================================
+
+          case 'mode': {
+            if (!args[0]) {
+              const modeInfo = agent.getModeInfo();
+              const hasPlan = agent.hasPendingPlan();
+              const pendingCount = agent.getPendingChangeCount();
+              addMessage('system', [
+                `Current Mode: ${modeInfo.icon} ${modeInfo.name}`,
+                hasPlan ? `  Pending Plan: ${pendingCount} change(s) awaiting approval` : '',
+                '',
+                agent.getAvailableModes(),
+                '',
+                'Usage: /mode <name> to switch, /plan to toggle plan mode',
+              ].filter(Boolean).join('\n'));
+            } else {
+              const newMode = args[0].toLowerCase();
+              agent.setMode(newMode);
+              const modeInfo = agent.getModeInfo();
+              const statusMode = modeInfo.name === 'Plan' ? 'ready 📋' : 'ready';
+              setStatus(s => ({ ...s, mode: statusMode }));
+              addMessage('system', `Mode changed to: ${modeInfo.icon} ${modeInfo.name}`);
+              if (newMode !== 'plan' && agent.hasPendingPlan()) {
+                addMessage('system', '⚠️  You have a pending plan. Use /show-plan to view, /approve or /reject to resolve.');
+              }
+            }
+            return;
+          }
+
+          case 'plan': {
+            const newMode = agent.togglePlanMode();
+            const modeInfo = agent.getModeInfo();
+            const statusMode = modeInfo.name === 'Plan' ? 'ready 📋' : 'ready';
+            setStatus(s => ({ ...s, mode: statusMode }));
+            addMessage('system', `Mode toggled to: ${modeInfo.icon} ${modeInfo.name}`);
+            if (newMode === 'plan') {
+              addMessage('system', [
+                '',
+                'In Plan Mode:',
+                '  • You can explore the codebase and use all tools',
+                '  • Write operations will be QUEUED for approval',
+                '  • Use /show-plan to see queued changes',
+                '  • Use /approve to execute, /reject to discard',
+              ].join('\n'));
+            } else if (agent.hasPendingPlan()) {
+              addMessage('system', '⚠️  You have a pending plan. Use /show-plan, /approve, or /reject.');
+            }
+            return;
+          }
+
+          case 'show-plan': {
+            if (!agent.hasPendingPlan()) {
+              addMessage('system', 'No pending plan. Enter plan mode with /plan and make requests that would modify files.');
+            } else {
+              addMessage('system', agent.formatPendingPlan());
+            }
+            return;
+          }
+
+          case 'approve': {
+            if (!agent.hasPendingPlan()) {
+              addMessage('system', 'No pending plan to approve.');
+              return;
+            }
+            const count = args[0] ? parseInt(args[0], 10) : undefined;
+            if (args[0] && (isNaN(count!) || count! < 1)) {
+              addMessage('system', '❌ Invalid count. Use /approve or /approve <number>');
+              return;
+            }
+            const pendingCount = agent.getPendingChangeCount();
+            const toApprove = count ?? pendingCount;
+            addMessage('system', `Approving ${toApprove} of ${pendingCount} change(s)...`);
+            const result = await agent.approvePlan(count);
+            if (result.success) {
+              addMessage('system', `✅ Successfully executed ${result.executed} change(s)`);
+            } else {
+              addMessage('system', [
+                `⚠️  Executed ${result.executed} change(s) with ${result.errors.length} error(s):`,
+                ...result.errors.map(e => `  • ${e}`),
+              ].join('\n'));
+            }
+            if (agent.getMode() === 'plan') {
+              agent.setMode('build');
+              setStatus(s => ({ ...s, mode: 'ready' }));
+              addMessage('system', 'Switched to Build mode.');
+            }
+            return;
+          }
+
+          case 'reject': {
+            if (!agent.hasPendingPlan()) {
+              addMessage('system', 'No pending plan to reject.');
+              return;
+            }
+            const pendingCount = agent.getPendingChangeCount();
+            agent.rejectPlan();
+            addMessage('system', `❌ Rejected plan with ${pendingCount} change(s). All proposed changes discarded.`);
+            if (agent.getMode() === 'plan') {
+              agent.setMode('build');
+              setStatus(s => ({ ...s, mode: 'ready' }));
+              addMessage('system', 'Switched to Build mode.');
+            }
+            return;
+          }
+
           default:
             addMessage('system', `Unknown command: /${cmd}. Try /help`);
         }
-      }, [addMessage, exit, agent, mcpClient, sessionStore, compactor, model, currentThemeName]);
+      }, [addMessage, exit, agent, mcpClient, sessionStore, compactor, model, currentThemeName, setStatus]);
 
       const handleSubmit = useCallback(async (input: string) => {
         const trimmed = input.trim();
@@ -3885,22 +4172,63 @@ async function startTUIMode(
             const complexityInfo = e.complexity ? ` [${e.complexity}]` : '';
             addMessage('system', `★ Model: ${e.model}${complexityInfo} - ${e.reason}`);
           }
+          // Plan mode events
+          else if (event.type === 'plan.change.queued') {
+            const e = event as { tool: string; changeId?: string };
+            addMessage('system', `📋 [PLAN MODE] Queued: ${e.tool}${e.changeId ? ` (${e.changeId})` : ''}`);
+          } else if (event.type === 'plan.approved') {
+            const e = event as { changeCount: number };
+            addMessage('system', `✅ Plan approved - executing ${e.changeCount} changes...`);
+          } else if (event.type === 'plan.rejected') {
+            addMessage('system', `❌ Plan rejected - all pending changes discarded`);
+          } else if (event.type === 'plan.executing') {
+            const e = event as { changeIndex: number; totalChanges: number };
+            addMessage('system', `⚙️ Executing change ${e.changeIndex + 1}/${e.totalChanges}...`);
+          }
         });
 
         try {
           const result = await agent.run(trimmed);
           const metrics = agent.getMetrics();
-          setStatus({ iter: metrics.llmCalls, tokens: metrics.totalTokens, cost: metrics.estimatedCost, mode: 'ready' });
+          const modeInfo = agent.getModeInfo();
+          const modeIndicator = modeInfo.name === 'Plan' ? ' 📋' : '';
+          setStatus({ iter: metrics.llmCalls, tokens: metrics.totalTokens, cost: metrics.estimatedCost, mode: `ready${modeIndicator}` });
 
           // Show response with metrics
-          const response = result.response || result.error || 'No response';
           const durationSec = (metrics.duration / 1000).toFixed(1);
           const metricsLine = [
             '',
             '───────────────────────────────────────',
             `📊 ${metrics.inputTokens.toLocaleString()} in │ ${metrics.outputTokens.toLocaleString()} out │ 🔧 ${metrics.toolCalls} tools │ ⏱️ ${durationSec}s`,
           ].join('\n');
-          addMessage('assistant', response + metricsLine);
+
+          // Check for pending plan and show it
+          if (agent.hasPendingPlan()) {
+            const plan = agent.getPendingPlan();
+            if (plan) {
+              const planSummary = [
+                '',
+                '╭─────────────────────────────────────────────────────╮',
+                `│  📋 PLAN: ${plan.proposedChanges.length} change(s) queued for approval`,
+                '├─────────────────────────────────────────────────────┤',
+                ...plan.proposedChanges.slice(0, 5).map((c, i) =>
+                  `│  ${i + 1}. [${c.tool}] ${c.reason?.slice(0, 40) || 'No description'}${c.reason && c.reason.length > 40 ? '...' : ''}`
+                ),
+                plan.proposedChanges.length > 5 ? `│  ... and ${plan.proposedChanges.length - 5} more` : '',
+                '├─────────────────────────────────────────────────────┤',
+                '│  /show-plan  - View full details                    │',
+                '│  /approve    - Execute all changes                  │',
+                '│  /reject     - Discard all changes                  │',
+                '╰─────────────────────────────────────────────────────╯',
+              ].filter(Boolean).join('\n');
+
+              const response = result.response || 'Changes have been queued for your review.';
+              addMessage('assistant', response + planSummary + metricsLine);
+            }
+          } else {
+            const response = result.response || result.error || 'No response';
+            addMessage('assistant', response + metricsLine);
+          }
 
           // Auto-checkpoint after Q&A cycle (force=true for every Q&A)
           persistenceDebug.log('[TUI] Attempting auto-checkpoint');
@@ -3976,6 +4304,8 @@ async function startTUIMode(
             '│ SUBAGENTS                                          │',
             '│   /agents /spawn <agent> <task> /find /suggest     │',
             '│   /auto <task>                                     │',
+            '│ PLAN MODE                                          │',
+            '│   /plan /mode /show-plan /approve /reject          │',
             '│ BUDGET                                             │',
             '│   /budget /extend <tokens|cost|time> <amount>      │',
             '│ DEBUG                                              │',
@@ -4176,9 +4506,7 @@ async function startTUIMode(
             React.createElement(Text, {
               color: isProcessing ? colors.info : colors.text,
               bold: isProcessing,
-            }, isProcessing
-              ? (status.mode.length > 40 ? status.mode.slice(0, 37) + '...' : status.mode)
-              : 'ready'
+            }, status.mode.length > 40 ? status.mode.slice(0, 37) + '...' : status.mode
             ),
             // Elapsed time when processing
             isProcessing && elapsedTime > 0 && React.createElement(Text, {
