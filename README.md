@@ -129,7 +129,7 @@ while (task not complete) {
 }
 ```
 
-**Files**: `01-core-loop/`
+**Files**: `lessons/01-core-loop/`
 **Key Concepts**: Agent loop, tool parsing, conversation history
 
 ---
@@ -149,7 +149,7 @@ interface LLMProvider {
 const provider = await getProvider() // Uses ANTHROPIC_API_KEY, OPENAI_API_KEY, etc.
 ```
 
-**Files**: `02-provider-abstraction/`
+**Files**: `lessons/02-provider-abstraction/`
 **Key Concepts**: Adapter pattern, environment detection, provider registry
 
 ---
@@ -175,7 +175,7 @@ const tool = defineTool(
 )
 ```
 
-**Files**: `03-tool-system/`
+**Files**: `lessons/03-tool-system/`
 **Key Concepts**: Zod validation, permission modes, danger classification
 
 ---
@@ -194,7 +194,7 @@ async function* streamResponse(): AsyncGenerator<StreamEvent> {
 }
 ```
 
-**Files**: `04-streaming/`
+**Files**: `lessons/04-streaming/`
 **Key Concepts**: Async generators, SSE parsing, terminal UI
 
 ---
@@ -215,7 +215,7 @@ const result = await retryManager.execute(
 )
 ```
 
-**Files**: `05-error-recovery/`
+**Files**: `lessons/05-error-recovery/`
 **Key Concepts**: Error classification, retry strategies, circuit breaker pattern
 
 ---
@@ -235,7 +235,7 @@ const result = await runAgent('fix bug', { llm: mock })
 expect(result.toolsUsed).toContain('read_file')
 ```
 
-**Files**: `06-testing-agents/`
+**Files**: `lessons/06-testing-agents/`
 **Key Concepts**: Mock providers, fixtures, behavioral assertions
 
 ---
@@ -253,7 +253,7 @@ const tools = await client.listTools() // Dynamic tool discovery
 const result = await client.callTool('search', { query: 'auth' })
 ```
 
-**Files**: `07-mcp-integration/`
+**Files**: `lessons/07-mcp-integration/`
 **Key Concepts**: MCP protocol, stdio transport, tool aggregation
 
 ---
@@ -263,7 +263,7 @@ const result = await client.callTool('search', { query: 'auth' })
 
 Learn to implement prompt caching strategies that reduce latency and costs.
 
-**Files**: `08-cache-hitting/`
+**Files**: `lessons/08-cache-hitting/`
 **Key Concepts**: Prompt caching, cache invalidation, cost optimization
 
 ---
@@ -273,7 +273,7 @@ Learn to implement prompt caching strategies that reduce latency and costs.
 
 Build a complete, production-ready agent combining all previous lessons.
 
-**Files**: `09-complete-agent/`
+**Files**: `lessons/09-complete-agent/`
 **Key Concepts**: Integration, REPL interface, production patterns
 
 ---
@@ -304,7 +304,7 @@ eventBus.on('tool.before', async (event) => {
 });
 ```
 
-**Files**: `10-hook-system/`
+**Files**: `lessons/10-hook-system/`
 **Key Concepts**: Event bus, hook priorities, sync/async hooks
 
 ---
@@ -324,7 +324,7 @@ const plugin: Plugin = {
 };
 ```
 
-**Files**: `11-plugin-system/`
+**Files**: `lessons/11-plugin-system/`
 **Key Concepts**: Plugin lifecycle, sandboxed context, hot-reloading
 
 ---
@@ -334,7 +334,7 @@ const plugin: Plugin = {
 
 Load and merge rules from multiple sources (CLAUDE.md, project files) with priority handling.
 
-**Files**: `12-rules-system/`
+**Files**: `lessons/12-rules-system/`
 **Key Concepts**: Hierarchical config, rule merging, glob patterns
 
 ---
@@ -351,7 +351,7 @@ const session = await client.createSession({ model: 'gpt-4' });
 const response = await client.sendMessage(session.id, 'Hello!');
 ```
 
-**Files**: `13-client-server/`
+**Files**: `lessons/13-client-server/`
 **Key Concepts**: Session management, protocol design, event streaming
 
 ---
@@ -372,7 +372,7 @@ const memory = createMemorySystem({
 const relevant = await memory.retrieve('authentication flow', { limit: 5 });
 ```
 
-**Files**: `14-memory-systems/`
+**Files**: `lessons/14-memory-systems/`
 **Key Concepts**: Memory types, importance scoring, retrieval strategies
 
 ---
@@ -387,7 +387,7 @@ const plan = await planner.createPlan('Add user authentication', context);
 // Returns: { tasks: [...], dependencies: [...], estimatedSteps: 5 }
 ```
 
-**Files**: `15-planning/`
+**Files**: `lessons/15-planning/`
 **Key Concepts**: Task decomposition, dependency graphs, re-planning
 
 ---
@@ -405,7 +405,7 @@ const { output, reflections } = await reflectionLoop.execute(
 );
 ```
 
-**Files**: `16-reflection/`
+**Files**: `lessons/16-reflection/`
 **Key Concepts**: Critique prompts, confidence scoring, iteration limits
 
 ---
@@ -424,7 +424,7 @@ const team = createAgentTeam({
 const result = await team.execute(complexTask);
 ```
 
-**Files**: `17-multi-agent/`
+**Files**: `lessons/17-multi-agent/`
 **Key Concepts**: Role specialization, orchestration, consensus
 
 ---
@@ -443,7 +443,7 @@ for await (const step of reactAgent.run('Find and fix the bug')) {
 }
 ```
 
-**Files**: `18-react-pattern/`
+**Files**: `lessons/18-react-pattern/`
 **Key Concepts**: Thought parsing, observation formatting, trace logging
 
 ---
@@ -464,7 +464,7 @@ await tracer.withSpan('agent.run', async (span) => {
 });
 ```
 
-**Files**: `19-observability/`
+**Files**: `lessons/19-observability/`
 **Key Concepts**: Spans, metrics, cost attribution
 
 ---
@@ -483,7 +483,7 @@ const sandbox = createProcessSandbox({
 const result = await sandbox.execute('node script.js');
 ```
 
-**Files**: `20-sandboxing/`
+**Files**: `lessons/20-sandboxing/`
 **Key Concepts**: Process isolation, resource limits, security policies
 
 ---
@@ -505,7 +505,7 @@ const approved = await queue.requestApproval({
 });
 ```
 
-**Files**: `21-human-in-loop/`
+**Files**: `lessons/21-human-in-loop/`
 **Key Concepts**: Risk assessment, approval workflows, audit logging
 
 ---
@@ -526,7 +526,7 @@ const router = createSmartRouter({
 });
 ```
 
-**Files**: `22-model-routing/`
+**Files**: `lessons/22-model-routing/`
 **Key Concepts**: Capability matching, cost optimization, circuit breakers
 
 ---
@@ -538,7 +538,7 @@ const router = createSmartRouter({
 
 Implement flexible execution policies that control how tools are executed, with support for timeouts, retries, and conditional execution.
 
-**Files**: `23-execution-policies/`
+**Files**: `lessons/23-execution-policies/`
 **Key Concepts**: Policy composition, execution control, conditional logic
 
 ---
@@ -548,7 +548,7 @@ Implement flexible execution policies that control how tools are executed, with 
 
 Combine all previous concepts into advanced integration patterns for production systems.
 
-**Files**: `24-advanced-patterns/`
+**Files**: `lessons/24-advanced-patterns/`
 **Key Concepts**: Pattern composition, integration strategies, best practices
 
 ---
@@ -558,7 +558,7 @@ Combine all previous concepts into advanced integration patterns for production 
 
 Build and deploy a complete production-ready agent with all systems integrated.
 
-**Files**: `25-production-agent/`
+**Files**: `lessons/25-production-agent/`
 **Key Concepts**: Production deployment, system integration, configuration management
 
 ---
@@ -568,7 +568,7 @@ Build and deploy a complete production-ready agent with all systems integrated.
 
 Implement comprehensive tracing and evaluation systems to measure and improve agent performance.
 
-**Files**: `26-tracing-and-evaluation/`
+**Files**: `lessons/26-tracing-and-evaluation/`
 **Key Concepts**: Trace collection, performance metrics, evaluation frameworks
 
 ---
@@ -590,7 +590,7 @@ Standalone utility modules that can be used independently or integrated into age
 | I | File Watcher | Watch files for changes |
 | J | LSP Client | Language Server Protocol integration |
 
-**Files**: `tricks/`
+**Files**: `lessons/tricks/`
 
 ---
 
@@ -677,54 +677,61 @@ attocode/
 ├── tsconfig.json
 ├── README.md
 │
-├── # Part 1: Foundations (Lessons 1-9)
-├── 01-core-loop/           # Agent loop basics
-├── 02-provider-abstraction/ # Multi-provider support
-├── 03-tool-system/         # Tool registry + permissions
-├── 04-streaming/           # Real-time streaming
-├── 05-error-recovery/      # Retry + circuit breakers
-├── 06-testing-agents/      # Mock providers + testing
-├── 07-mcp-integration/     # Model Context Protocol
-├── 08-cache-hitting/       # Prompt caching
-├── 09-complete-agent/      # Full integration
+├── lessons/                    # All educational content
+│   ├── # Part 1: Foundations (Lessons 1-9)
+│   ├── 01-core-loop/           # Agent loop basics
+│   ├── 02-provider-abstraction/ # Multi-provider support
+│   ├── 03-tool-system/         # Tool registry + permissions
+│   ├── 04-streaming/           # Real-time streaming
+│   ├── 05-error-recovery/      # Retry + circuit breakers
+│   ├── 06-testing-agents/      # Mock providers + testing
+│   ├── 07-mcp-integration/     # Model Context Protocol
+│   ├── 08-cache-hitting/       # Prompt caching
+│   ├── 09-complete-agent/      # Full integration
+│   │
+│   ├── # Part 2: Production Infrastructure (Lessons 10-13)
+│   ├── 10-hook-system/         # Event bus + hooks
+│   ├── 11-plugin-system/       # Plugin architecture
+│   ├── 12-rules-system/        # Dynamic configuration
+│   ├── 13-client-server/       # API architecture
+│   │
+│   ├── # Part 3: AI Reasoning (Lessons 14-18)
+│   ├── 14-memory-systems/      # Episodic + semantic memory
+│   ├── 15-planning/            # Task decomposition
+│   ├── 16-reflection/          # Self-critique loops
+│   ├── 17-multi-agent/         # Agent coordination
+│   ├── 18-react-pattern/       # Reasoning + Acting
+│   │
+│   ├── # Part 4: Operations (Lessons 19-22)
+│   ├── 19-observability/       # Tracing + metrics
+│   ├── 20-sandboxing/          # Code isolation
+│   ├── 21-human-in-loop/       # Approval workflows
+│   ├── 22-model-routing/       # Model selection
+│   │
+│   ├── # Part 5: Advanced Patterns (Lessons 23-26)
+│   ├── 23-execution-policies/  # Policy-based execution
+│   ├── 24-advanced-patterns/   # Production patterns
+│   ├── 25-production-agent/    # Full deployment
+│   ├── 26-tracing-and-evaluation/ # Performance analysis
+│   │
+│   └── tricks/                 # Standalone utilities
+│       ├── structured-output.ts
+│       ├── token-counter.ts
+│       ├── prompt-templates.ts
+│       ├── tool-batching.ts
+│       ├── context-sliding.ts
+│       ├── semantic-cache.ts
+│       ├── rate-limiter.ts
+│       ├── branching.ts
+│       ├── file-watcher.ts
+│       ├── lsp-client.ts
+│       └── index.ts
 │
-├── # Part 2: Production Infrastructure (Lessons 10-13)
-├── 10-hook-system/         # Event bus + hooks
-├── 11-plugin-system/       # Plugin architecture
-├── 12-rules-system/        # Dynamic configuration
-├── 13-client-server/       # API architecture
+├── attocode/                   # Production CLI application
+│   └── src/                    # Application source code
 │
-├── # Part 3: AI Reasoning (Lessons 14-18)
-├── 14-memory-systems/      # Episodic + semantic memory
-├── 15-planning/            # Task decomposition
-├── 16-reflection/          # Self-critique loops
-├── 17-multi-agent/         # Agent coordination
-├── 18-react-pattern/       # Reasoning + Acting
-│
-├── # Part 4: Operations (Lessons 19-22)
-├── 19-observability/       # Tracing + metrics
-├── 20-sandboxing/          # Code isolation
-├── 21-human-in-loop/       # Approval workflows
-├── 22-model-routing/       # Model selection
-│
-├── # Part 5: Advanced Patterns (Lessons 23-26)
-├── 23-execution-policies/  # Policy-based execution
-├── 24-advanced-patterns/   # Production patterns
-├── 25-production-agent/    # Full deployment
-├── 26-tracing-and-evaluation/ # Performance analysis
-│
-└── tricks/                 # Standalone utilities
-    ├── structured-output.ts
-    ├── token-counter.ts
-    ├── prompt-templates.ts
-    ├── tool-batching.ts
-    ├── context-sliding.ts
-    ├── semantic-cache.ts
-    ├── rate-limiter.ts
-    ├── branching.ts
-    ├── file-watcher.ts
-    ├── lsp-client.ts
-    └── index.ts
+├── testing/                    # Test infrastructure
+└── docs/                       # Documentation
 ```
 
 ## Learning Path

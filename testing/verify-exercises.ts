@@ -16,6 +16,7 @@ import { join } from 'path';
 import { spawnSync } from 'child_process';
 
 const ROOT_DIR = process.cwd();
+const LESSONS_DIR = join(ROOT_DIR, 'lessons');
 const LESSONS = Array.from({ length: 26 }, (_, i) => i + 1);
 
 interface VerificationResult {
@@ -29,7 +30,7 @@ interface VerificationResult {
 
 function getLessonDir(lesson: number): string {
   const prefix = lesson.toString().padStart(2, '0');
-  const dirs = readdirSync(ROOT_DIR).filter(d => d.startsWith(prefix + '-'));
+  const dirs = readdirSync(LESSONS_DIR).filter(d => d.startsWith(prefix + '-'));
   return dirs[0] || '';
 }
 
@@ -49,9 +50,9 @@ function verifyLesson(lesson: number): VerificationResult {
     return result;
   }
 
-  const exercisesDir = join(ROOT_DIR, lessonDir, 'exercises');
+  const exercisesDir = join(LESSONS_DIR, lessonDir, 'exercises');
   const answersDir = join(exercisesDir, 'answers');
-  const exerciseTestFile = join(ROOT_DIR, lessonDir, 'exercises.test.ts');
+  const exerciseTestFile = join(LESSONS_DIR, lessonDir, 'exercises.test.ts');
 
   // Check if exercises directory exists
   if (existsSync(exercisesDir)) {

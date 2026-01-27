@@ -86,11 +86,14 @@ This compiles TypeScript to the `dist/` directory.
 
 ```
 first-principles-agent/
-├── 01-core-loop/        # Lesson 1: Agent loop basics
-├── 02-provider-abstraction/  # Lesson 2: Multi-provider support
-├── ...                  # Lessons 3-26
-├── tricks/              # Standalone utility modules
-├── docs/                # Documentation
+├── lessons/                  # All educational content
+│   ├── 01-core-loop/         # Lesson 1: Agent loop basics
+│   ├── 02-provider-abstraction/  # Lesson 2: Multi-provider support
+│   ├── ...                   # Lessons 3-26
+│   └── tricks/               # Standalone utility modules
+├── attocode/                 # Production CLI application
+├── testing/                  # Test infrastructure
+├── docs/                     # Documentation
 ├── package.json
 └── tsconfig.json
 ```
@@ -163,7 +166,7 @@ chmod +x node_modules/.bin/*
 
 ## Next Steps
 
-1. Start with [Lesson 1: Core Loop](../01-core-loop/README.md)
+1. Start with [Lesson 1: Core Loop](../lessons/01-core-loop/README.md)
 2. Configure your preferred [LLM provider](./PROVIDERS.md)
 3. Try the exercises in each lesson
 4. Build your own agent using these patterns!
