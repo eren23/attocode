@@ -7,7 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.1] - 2026-01-27
+
 ### Added
+- "Always Allow" option (`[A]`) in TUI approval dialog - auto-approves matching commands for the session
 - TUI permission approval system with safety fallbacks
 - Architecture diagrams in CLAUDE.md documentation
 
