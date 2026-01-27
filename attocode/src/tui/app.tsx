@@ -22,6 +22,41 @@ import type { TUIApprovalBridge } from '../adapters.js';
 import type { ApprovalRequest as TypesApprovalRequest } from '../types.js';
 
 // =============================================================================
+// PATTERN GENERATION FOR ALWAYS-ALLOW
+// =============================================================================
+
+/**
+ * Generates an approval pattern for matching future requests.
+ * Pattern format: `tool:key_argument`
+ *
+ * Matching strategy by tool type:
+ * - bash: match on base command (first 2 tokens, e.g., "npm test")
+ * - file operations: match on file path
+ * - other tools: match on first string argument
+ */
+function generateApprovalPattern(request: TypesApprovalRequest): string {
+  const tool = request.tool || request.action || 'unknown';
+  const args = request.args || {};
+
+  // Tool-specific key extraction
+  if (tool === 'bash' && typeof args.command === 'string') {
+    // Extract base command: "npm test --coverage" → "npm test"
+    const parts = args.command.trim().split(/\s+/);
+    const baseCmd = parts.slice(0, 2).join(' '); // First 2 tokens
+    return `bash:${baseCmd}`;
+  }
+
+  if (['write_file', 'edit_file', 'read_file'].includes(tool)) {
+    const path = (args.path || args.file_path || '') as string;
+    return `${tool}:${path}`;
+  }
+
+  // Default: tool + first string argument
+  const firstStringArg = Object.values(args).find(v => typeof v === 'string') as string | undefined;
+  return `${tool}:${firstStringArg || ''}`;
+}
+
+// =============================================================================
 // TYPES
 // =============================================================================
 
@@ -236,6 +271,7 @@ interface MemoizedInputAreaProps {
   approvalDialogOpen?: boolean;
   approvalDenyReasonMode?: boolean;
   onApprovalApprove?: () => void;
+  onApprovalAlwaysAllow?: () => void;
   onApprovalDeny?: (reason?: string) => void;
   onApprovalDenyWithReason?: () => void;
   onApprovalCancelDenyReason?: () => void;
@@ -263,6 +299,7 @@ const MemoizedInputArea = memo(function MemoizedInputArea({
   approvalDialogOpen,
   approvalDenyReasonMode,
   onApprovalApprove,
+  onApprovalAlwaysAllow,
   onApprovalDeny,
   onApprovalDenyWithReason,
   onApprovalCancelDenyReason,
@@ -278,7 +315,7 @@ const MemoizedInputArea = memo(function MemoizedInputArea({
     onPageUp, onPageDown, onHome, onEnd,
     commandPaletteOpen, onCommandPaletteInput,
     approvalDialogOpen, approvalDenyReasonMode,
-    onApprovalApprove, onApprovalDeny, onApprovalDenyWithReason,
+    onApprovalApprove, onApprovalAlwaysAllow, onApprovalDeny, onApprovalDenyWithReason,
     onApprovalCancelDenyReason, onApprovalDenyReasonInput,
   });
   callbacksRef.current = {
@@ -287,7 +324,7 @@ const MemoizedInputArea = memo(function MemoizedInputArea({
     onPageUp, onPageDown, onHome, onEnd,
     commandPaletteOpen, onCommandPaletteInput,
     approvalDialogOpen, approvalDenyReasonMode,
-    onApprovalApprove, onApprovalDeny, onApprovalDenyWithReason,
+    onApprovalApprove, onApprovalAlwaysAllow, onApprovalDeny, onApprovalDenyWithReason,
     onApprovalCancelDenyReason, onApprovalDenyReasonInput,
   };
   const disabledRef = useRef(disabled);
@@ -352,6 +389,10 @@ const MemoizedInputArea = memo(function MemoizedInputArea({
       // Standard approval dialog shortcuts
       if (input === 'y' || input === 'Y') {
         cb.onApprovalApprove?.();
+        return;
+      }
+      if (input === 'a' || input === 'A') {
+        cb.onApprovalAlwaysAllow?.();
         return;
       }
       if (input === 'n' || input === 'N') {
@@ -503,6 +544,9 @@ export function TUIApp({
   const [denyReasonMode, setDenyReasonMode] = useState(false);
   const [denyReason, setDenyReason] = useState('');
 
+  // Session-scoped always-allowed patterns (e.g., "bash:npm test", "write_file:/path")
+  const [alwaysAllowed, setAlwaysAllowed] = useState<Set<string>>(new Set());
+
   // Refs for stable callbacks
   const isProcessingRef = useRef(isProcessing);
   const messagesLengthRef = useRef(messages.length);
@@ -527,10 +571,19 @@ export function TUIApp({
 
   // Handle approval request from bridge
   const handleApprovalRequest = useCallback((request: TypesApprovalRequest) => {
+    // Check if this matches an always-allowed pattern
+    const pattern = generateApprovalPattern(request);
+    if (alwaysAllowed.has(pattern)) {
+      // Auto-approve without showing dialog
+      approvalBridge?.resolve({ approved: true });
+      return;
+    }
+
+    // Show dialog as normal
     setPendingApproval(request);
     setDenyReasonMode(false);
     setDenyReason('');
-  }, []);
+  }, [alwaysAllowed, approvalBridge]);
 
   // Approve the pending request
   const handleApprove = useCallback(() => {
@@ -546,6 +599,18 @@ export function TUIApp({
   const handleDeny = useCallback((reason?: string) => {
     if (approvalBridge && pendingApprovalRef.current) {
       approvalBridge.resolve({ approved: false, reason: reason || 'User denied' });
+      setPendingApproval(null);
+      setDenyReasonMode(false);
+      setDenyReason('');
+    }
+  }, [approvalBridge]);
+
+  // Always allow this pattern for the rest of the session
+  const handleAlwaysAllow = useCallback(() => {
+    if (approvalBridge && pendingApprovalRef.current) {
+      const pattern = generateApprovalPattern(pendingApprovalRef.current);
+      setAlwaysAllowed(prev => new Set(prev).add(pattern));
+      approvalBridge.resolve({ approved: true });
       setPendingApproval(null);
       setDenyReasonMode(false);
       setDenyReason('');
@@ -1385,6 +1450,7 @@ export function TUIApp({
           approvalDialogOpen={!!pendingApproval}
           approvalDenyReasonMode={denyReasonMode}
           onApprovalApprove={handleApprove}
+          onApprovalAlwaysAllow={handleAlwaysAllow}
           onApprovalDeny={handleDeny}
           onApprovalDenyWithReason={handleDenyWithReason}
           onApprovalCancelDenyReason={handleCancelDenyReason}
