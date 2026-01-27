@@ -2519,10 +2519,11 @@ export class ProductionAgent {
         },
       });
 
-      // Forward events from subagent
+      // Forward events from subagent with context
       subAgent.subscribe(event => {
-        // Just forward the event as-is - the agent.spawn event already logged the agent name
-        this.emit(event);
+        // Tag event with subagent source so TUI can display it properly
+        const taggedEvent = { ...event, subagent: agentName };
+        this.emit(taggedEvent);
       });
 
       // Run the task

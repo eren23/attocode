@@ -305,13 +305,22 @@ export class PendingPlanManager {
       for (const change of this.currentPlan.proposedChanges) {
         lines.push(`${change.order}. [${change.tool}]`);
 
-        // Format args nicely
+        // Format args nicely based on tool type
         if (change.tool === 'write_file' || change.tool === 'edit_file') {
           const path = change.args.path || change.args.file_path;
           lines.push(`   File: ${path}`);
         } else if (change.tool === 'bash') {
           const cmd = String(change.args.command || '').slice(0, 60);
           lines.push(`   Command: ${cmd}${cmd.length >= 60 ? '...' : ''}`);
+        } else if (change.tool === 'spawn_agent') {
+          // Special formatting for spawn_agent to show agent type and task clearly
+          const agentType = change.args.agent || change.args.type || 'unknown';
+          const task = String(change.args.task || change.args.prompt || '');
+          lines.push(`   Agent: ${agentType}`);
+          // Show task with newlines replaced by spaces, truncated to 300 chars
+          const flattened = task.replace(/\n+/g, ' ').replace(/\s+/g, ' ').trim();
+          const truncated = flattened.length > 300 ? flattened.slice(0, 297) + '...' : flattened;
+          lines.push(`   Task: ${truncated}`);
         } else {
           lines.push(`   Args: ${JSON.stringify(change.args).slice(0, 80)}...`);
         }
