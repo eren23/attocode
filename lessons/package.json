@@ -1,0 +1,102 @@
+{
+  "name": "first-principles-agent",
+  "version": "1.0.0",
+  "description": "A hands-on course building a coding agent from first principles",
+  "type": "module",
+  "main": "dist/index.js",
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsx watch src/main.ts",
+    "start": "tsx src/main.ts",
+    "test": "vitest",
+    "test:ui": "vitest --ui",
+    "test:exercises": "vitest run --config testing/vitest.exercises.config.ts",
+    "test:lesson:1:exercise": "vitest run 01-core-loop/exercises.test.ts",
+    "test:lesson:2:exercise": "vitest run 02-provider-abstraction/exercises.test.ts",
+    "test:lesson:3:exercise": "vitest run 03-tool-system/exercises.test.ts",
+    "test:lesson:4:exercise": "vitest run 04-streaming/exercises.test.ts",
+    "test:lesson:5:exercise": "vitest run 05-error-recovery/exercises.test.ts",
+    "test:lesson:6:exercise": "vitest run 06-testing-agents/exercises.test.ts",
+    "test:lesson:7:exercise": "vitest run 07-mcp-integration/exercises.test.ts",
+    "test:lesson:8:exercise": "vitest run 08-cache-hitting/exercises.test.ts",
+    "test:lesson:9:exercise": "vitest run 09-complete-agent/exercises.test.ts",
+    "test:lesson:10:exercise": "vitest run 10-hook-system/exercises.test.ts",
+    "test:lesson:11:exercise": "vitest run 11-plugin-system/exercises.test.ts",
+    "test:lesson:12:exercise": "vitest run 12-rules-system/exercises.test.ts",
+    "test:lesson:13:exercise": "vitest run 13-client-server/exercises.test.ts",
+    "test:lesson:14:exercise": "vitest run 14-memory-systems/exercises.test.ts",
+    "test:lesson:15:exercise": "vitest run 15-planning/exercises.test.ts",
+    "test:lesson:16:exercise": "vitest run 16-reflection/exercises.test.ts",
+    "test:lesson:17:exercise": "vitest run 17-multi-agent/exercises.test.ts",
+    "test:lesson:18:exercise": "vitest run 18-react-pattern/exercises.test.ts",
+    "test:lesson:19:exercise": "vitest run 19-observability/exercises.test.ts",
+    "test:lesson:20:exercise": "vitest run 20-sandboxing/exercises.test.ts",
+    "test:lesson:21:exercise": "vitest run 21-human-in-loop/exercises.test.ts",
+    "test:lesson:22:exercise": "vitest run 22-model-routing/exercises.test.ts",
+    "test:lesson:23:exercise": "vitest run 23-execution-policies/exercises.test.ts",
+    "test:lesson:24:exercise": "vitest run 24-advanced-patterns/exercises.test.ts",
+    "test:lesson:25:exercise": "vitest run 25-production-agent/exercises.test.ts",
+    "test:lesson:26:exercise": "vitest run 26-tracing-and-evaluation/exercises.test.ts",
+    "verify:exercises": "tsx testing/verify-exercises.ts",
+    "lint": "eslint src --ext .ts",
+    "lesson:1": "tsx 01-core-loop/main.ts",
+    "lesson:2": "tsx 02-provider-abstraction/main.ts",
+    "lesson:3": "tsx 03-tool-system/main.ts",
+    "lesson:4": "tsx 04-streaming/main.ts",
+    "lesson:5": "tsx 05-error-recovery/main.ts",
+    "lesson:6": "vitest run 06-testing-agents/",
+    "lesson:7": "tsx 07-mcp-integration/main.ts",
+    "lesson:8": "tsx 08-cache-hitting/main.ts",
+    "lesson:9": "tsx 09-complete-agent/main.ts",
+    "lesson:10": "tsx 10-hook-system/main.ts",
+    "lesson:11": "tsx 11-plugin-system/main.ts",
+    "lesson:12": "tsx 12-rules-system/main.ts",
+    "lesson:13": "tsx 13-client-server/main.ts",
+    "lesson:14": "tsx 14-memory-systems/main.ts",
+    "lesson:15": "tsx 15-planning/main.ts",
+    "lesson:16": "tsx 16-reflection/main.ts",
+    "lesson:17": "tsx 17-multi-agent/main.ts",
+    "lesson:18": "tsx 18-react-pattern/main.ts",
+    "lesson:19": "tsx 19-observability/main.ts",
+    "lesson:20": "tsx 20-sandboxing/main.ts",
+    "lesson:21": "tsx 21-human-in-loop/main.ts",
+    "lesson:22": "tsx 22-model-routing/main.ts",
+    "lesson:23": "tsx 23-execution-policies/main.ts",
+    "lesson:24": "tsx 24-advanced-patterns/main.ts",
+    "lesson:25": "tsx 25-production-agent/main.ts",
+    "lesson:26": "tsx 26-tracing-and-evaluation/main.ts"
+  },
+  "dependencies": {
+    "chalk": "^5.3.0",
+    "dotenv": "^17.2.3",
+    "zod": "^3.22.4"
+  },
+  "devDependencies": {
+    "@types/node": "^20.10.0",
+    "tsx": "^4.6.0",
+    "typescript": "^5.3.0",
+    "vitest": "^1.0.0"
+  },
+  "peerDependencies": {
+    "@anthropic-ai/sdk": "^0.25.0",
+    "openai": "^4.20.0"
+  },
+  "peerDependenciesMeta": {
+    "@anthropic-ai/sdk": {
+      "optional": true
+    },
+    "openai": {
+      "optional": true
+    }
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "keywords": [
+    "agent",
+    "llm",
+    "coding-assistant",
+    "tutorial",
+    "first-principles"
+  ]
+}
