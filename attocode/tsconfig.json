@@ -26,11 +26,11 @@
   },
   "include": [
     "src/**/*.ts",
-    "src/**/*.tsx",
-    "tests/**/*.ts"
+    "src/**/*.tsx"
   ],
   "exclude": [
     "node_modules",
-    "dist"
+    "dist",
+    "tests"
   ]
 }

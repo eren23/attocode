@@ -49,10 +49,10 @@ describe('MODES configuration', () => {
     expect(MODES.build.availableTools).toContain(ALL_TOOLS);
   });
 
-  it('plan mode should have read-only tools', () => {
-    for (const tool of READ_ONLY_TOOLS) {
-      expect(MODES.plan.availableTools).toContain(tool);
-    }
+  it('plan mode should allow all tools but intercept writes', () => {
+    // Plan mode allows all tools but requires write approval
+    expect(MODES.plan.availableTools).toContain(ALL_TOOLS);
+    expect(MODES.plan.requireWriteApproval).toBe(true);
   });
 
   it('review mode should have read-only tools', () => {
@@ -153,13 +153,13 @@ describe('ModeManager', () => {
       expect(manager.isToolAvailable('execute_command')).toBe(true);
     });
 
-    it('should restrict tools in plan mode', () => {
+    it('should allow all tools in plan mode (writes are intercepted, not filtered)', () => {
       manager.setMode('plan');
 
+      // Plan mode allows all tools - writes are intercepted, not blocked
       expect(manager.isToolAvailable('read_file')).toBe(true);
       expect(manager.isToolAvailable('list_files')).toBe(true);
-      // write_file is not in READ_ONLY_TOOLS
-      expect(manager.isToolAvailable('write_file')).toBe(false);
+      expect(manager.isToolAvailable('write_file')).toBe(true); // Available, but intercepted
     });
   });
 
@@ -171,20 +171,28 @@ describe('ModeManager', () => {
       expect(filtered.length).toBe(mockTools.length);
     });
 
-    it('should filter tools in plan mode', () => {
+    it('should not filter tools in plan mode (all tools available, writes intercepted)', () => {
       manager.setMode('plan');
       const filtered = manager.filterTools(mockTools);
 
-      // Only read-only tools should remain
+      // Plan mode allows all tools - writes are intercepted by shouldInterceptTool, not filtered
+      expect(filtered.length).toBe(mockTools.length);
+    });
+
+    it('should filter tools in review mode', () => {
+      manager.setMode('review');
+      const filtered = manager.filterTools(mockTools);
+
+      // Review mode is actually read-only with tool filtering
       expect(filtered.length).toBeLessThan(mockTools.length);
       expect(filtered.every(t => READ_ONLY_TOOLS.includes(t.name))).toBe(true);
     });
 
-    it('should emit events for filtered tools', () => {
+    it('should emit events for filtered tools in review mode', () => {
       const events: unknown[] = [];
       manager.subscribe(e => events.push(e));
 
-      manager.setMode('plan');
+      manager.setMode('review');
       events.length = 0; // Clear mode change event
 
       manager.filterTools(mockTools);
@@ -203,7 +211,15 @@ describe('ModeManager', () => {
       manager.setMode('plan');
       const planPrompt = manager.getSystemPromptAddition();
       expect(planPrompt).toContain('PLAN');
-      expect(planPrompt).toContain('read-only');
+      // Plan mode mentions write approval (not read-only, since it allows all tools)
+      expect(planPrompt).toContain('QUEUED');
+    });
+
+    it('should return read-only prompt for review mode', () => {
+      manager.setMode('review');
+      const reviewPrompt = manager.getSystemPromptAddition();
+      expect(reviewPrompt).toContain('REVIEW');
+      expect(reviewPrompt).toContain('read-only');
     });
   });
 

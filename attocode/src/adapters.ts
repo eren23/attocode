@@ -242,6 +242,9 @@ export interface TUIApprovalBridge {
 
   /** Check if there's a pending approval */
   hasPending: () => boolean;
+
+  /** Check if TUI is connected and ready to handle approvals */
+  isConnected: () => boolean;
 }
 
 /**
@@ -259,19 +262,20 @@ export interface TUIApprovalBridge {
 export function createTUIApprovalBridge(): TUIApprovalBridge {
   let pendingResolve: ((response: ApprovalResponse) => void) | null = null;
   let onRequestCallback: ((request: ApprovalRequest) => void) | null = null;
+  let connected = false;
 
   const handler = async (request: ApprovalRequest): Promise<ApprovalResponse> => {
     return new Promise((resolve) => {
       pendingResolve = resolve;
 
-      if (onRequestCallback) {
+      if (onRequestCallback && connected) {
         // TUI is connected, show dialog
         onRequestCallback(request);
       } else {
-        // TUI not connected yet - auto-approve with warning
-        // This shouldn't happen in normal flow, but provides safety fallback
-        console.warn('[TUI Approval] No TUI connected, auto-approving');
-        resolve({ approved: true, reason: 'TUI not connected' });
+        // TUI not connected yet - BLOCK dangerous operations instead of auto-approving
+        // This is a safety fallback to prevent operations when the approval system isn't ready
+        console.warn('[TUI Approval] No TUI connected - blocking operation for safety');
+        resolve({ approved: false, reason: 'Approval system not ready - TUI not connected' });
         pendingResolve = null;
       }
     });
@@ -279,6 +283,7 @@ export function createTUIApprovalBridge(): TUIApprovalBridge {
 
   const connect = (callbacks: { onRequest: (request: ApprovalRequest) => void }) => {
     onRequestCallback = callbacks.onRequest;
+    connected = true;
   };
 
   const resolve = (response: ApprovalResponse) => {
@@ -290,5 +295,7 @@ export function createTUIApprovalBridge(): TUIApprovalBridge {
 
   const hasPending = () => pendingResolve !== null;
 
-  return { handler, connect, resolve, hasPending };
+  const isConnected = () => connected;
+
+  return { handler, connect, resolve, hasPending, isConnected };
 }

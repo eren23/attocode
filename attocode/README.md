@@ -15,20 +15,21 @@ A production-ready AI coding agent for your terminal.
 
 ## Quick Start
 
-### 1. Install globally
+### 1. Install
+
+**From npm (recommended):**
 
 ```bash
-# Clone the repo
+npm install -g attocode
+```
+
+**Or build from source:**
+
+```bash
 git clone https://github.com/eren23/attocode.git
 cd attocode
-
-# Install dependencies
 npm install
-
-# Build
 npm run build
-
-# Install globally
 npm link
 ```
 
@@ -153,10 +154,13 @@ Options:
 ## Uninstall
 
 ```bash
-# Remove global link
+# If installed from npm
+npm uninstall -g attocode
+
+# If installed from source
 npm unlink -g attocode
 
-# Remove config (optional)
+# Remove config and data (optional)
 rm -rf ~/.config/attocode
 rm -rf ~/.local/share/attocode
 rm -rf ~/.local/state/attocode
