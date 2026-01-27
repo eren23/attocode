@@ -13,8 +13,8 @@ This guide will help you set up and run your first AI agent lesson.
 ### 1. Clone the Repository
 
 ```bash
-git clone https://github.com/your-username/first-principles-agent.git
-cd first-principles-agent
+git clone https://github.com/eren23/attocode.git
+cd attocode/lessons
 ```
 
 ### 2. Install Dependencies
@@ -85,12 +85,13 @@ This compiles TypeScript to the `dist/` directory.
 ## Project Structure
 
 ```
-first-principles-agent/
-├── 01-core-loop/        # Lesson 1: Agent loop basics
+lessons/
+├── 01-core-loop/             # Lesson 1: Agent loop basics
 ├── 02-provider-abstraction/  # Lesson 2: Multi-provider support
-├── ...                  # Lessons 3-26
-├── tricks/              # Standalone utility modules
-├── docs/                # Documentation
+├── ...                       # Lessons 3-26
+├── tricks/                   # Standalone utility modules
+├── testing/                  # Test infrastructure
+├── docs/                     # This documentation
 ├── package.json
 └── tsconfig.json
 ```
