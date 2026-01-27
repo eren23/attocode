@@ -198,3 +198,62 @@ export function isDangerous(command: string): boolean {
   const { level } = classifyCommand(command);
   return level === 'dangerous' || level === 'critical';
 }
+
+// =============================================================================
+// TUI PERMISSION CHECKER
+// =============================================================================
+
+import type { TUIApprovalBridge } from '../adapters.js';
+
+/**
+ * TUI Permission Checker
+ *
+ * Routes permission requests through the TUI approval dialog.
+ * This replaces the console-based InteractivePermissionChecker when in TUI mode.
+ *
+ * Key behaviors:
+ * - Safe operations: auto-approve
+ * - Moderate/dangerous/critical: route to TUI dialog
+ * - Safety fallback: block if bridge not connected
+ */
+export class TUIPermissionChecker implements PermissionChecker {
+  constructor(private bridge: TUIApprovalBridge) {}
+
+  async check(request: PermissionRequest): Promise<PermissionResponse> {
+    // Safety fallback: block non-safe operations if bridge not connected
+    if (!this.bridge.isConnected() && request.dangerLevel !== 'safe') {
+      return {
+        granted: false,
+        reason: 'Approval system not ready - TUI not connected'
+      };
+    }
+
+    // Safe operations always auto-approve
+    if (request.dangerLevel === 'safe') {
+      return { granted: true };
+    }
+
+    // Map danger level to risk level for the approval dialog
+    const riskMap: Record<DangerLevel, 'low' | 'moderate' | 'high' | 'critical'> = {
+      safe: 'low',
+      moderate: 'moderate',
+      dangerous: 'high',
+      critical: 'critical',
+    };
+
+    // Route to TUI approval dialog
+    const approvalResponse = await this.bridge.handler({
+      id: `perm-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+      action: request.operation,
+      tool: request.tool,
+      args: { target: request.target },
+      risk: riskMap[request.dangerLevel],
+      context: request.context || `Tool: ${request.tool}`,
+    });
+
+    return {
+      granted: approvalResponse.approved,
+      reason: approvalResponse.reason,
+    };
+  }
+}

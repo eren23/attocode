@@ -116,7 +116,8 @@ const ToolCallItem = memo(function ToolCallItem({ tc, expanded, colors }: ToolCa
   const icon = tc.status === 'success' ? '[OK]' : tc.status === 'error' ? '[X]' : tc.status === 'running' ? '[~]' : '[ ]';
   const statusColor = tc.status === 'success' ? '#98FB98' : tc.status === 'error' ? '#FF6B6B' : tc.status === 'running' ? '#87CEEB' : colors.textMuted;
 
-  const formatToolArgs = (args: Record<string, unknown>): string => {
+  // Compact formatting for collapsed view
+  const formatToolArgsCompact = (args: Record<string, unknown>): string => {
     const entries = Object.entries(args);
     if (entries.length === 0) return '';
     if (entries.length === 1) {
@@ -127,9 +128,46 @@ const ToolCallItem = memo(function ToolCallItem({ tc, expanded, colors }: ToolCa
     return `{${entries.length} args}`;
   };
 
-  const argsStr = formatToolArgs(tc.args);
+  // Expanded formatting - each arg on its own line with proper handling
+  const formatToolArgsExpanded = (args: Record<string, unknown>): string[] => {
+    const entries = Object.entries(args);
+    if (entries.length === 0) return [];
+
+    return entries.map(([key, val]) => {
+      let valStr: string;
+      if (typeof val === 'string') {
+        // For strings, show with quotes, handle multiline
+        if (val.includes('\n')) {
+          const lines = val.split('\n');
+          if (lines.length > 3) {
+            valStr = `"${lines.slice(0, 3).join('\\n')}..." (${lines.length} lines)`;
+          } else {
+            valStr = `"${val.replace(/\n/g, '\\n')}"`;
+          }
+        } else if (val.length > 100) {
+          valStr = `"${val.slice(0, 97)}..."`;
+        } else {
+          valStr = `"${val}"`;
+        }
+      } else if (typeof val === 'object' && val !== null) {
+        const json = JSON.stringify(val, null, 2);
+        if (json.length > 200) {
+          valStr = JSON.stringify(val).slice(0, 197) + '...';
+        } else {
+          valStr = json;
+        }
+      } else {
+        valStr = String(val);
+      }
+      return `${key}: ${valStr}`;
+    });
+  };
+
+  const argsStr = formatToolArgsCompact(tc.args);
 
   if (expanded) {
+    const expandedArgs = formatToolArgsExpanded(tc.args);
+
     return (
       <Box marginLeft={2} flexDirection="column">
         <Box gap={1}>
@@ -137,17 +175,16 @@ const ToolCallItem = memo(function ToolCallItem({ tc, expanded, colors }: ToolCa
           <Text color="#DDA0DD" bold>{tc.name}</Text>
           {tc.duration ? <Text color={colors.textMuted} dimColor>({tc.duration}ms)</Text> : null}
         </Box>
-        {Object.keys(tc.args).length > 0 && (
-          <Box marginLeft={3}>
-            <Text color={colors.textMuted} dimColor>
-              {JSON.stringify(tc.args, null, 0).slice(0, 100) + (JSON.stringify(tc.args).length > 100 ? '...' : '')}
-            </Text>
+        {/* Show each arg on its own line for readability */}
+        {expandedArgs.map((argLine, i) => (
+          <Box key={i} marginLeft={3}>
+            <Text color="#87CEEB" dimColor>{argLine}</Text>
           </Box>
-        )}
+        ))}
         {tc.status === 'success' && tc.result !== undefined && tc.result !== null ? (
           <Box marginLeft={3}>
             <Text color="#98FB98" dimColor>
-              {`-> ${String(tc.result).slice(0, 80)}${String(tc.result).length > 80 ? '...' : ''}`}
+              {`-> ${String(tc.result).slice(0, 150)}${String(tc.result).length > 150 ? '...' : ''}`}
             </Text>
           </Box>
         ) : null}

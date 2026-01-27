@@ -266,10 +266,18 @@ export class ToolRegistry {
   }
 
   /**
-   * Update the permission checker.
+   * Update the permission checker by mode.
    */
   setPermissionMode(mode: ExecuteOptions['permissionMode']): void {
     this.permissionChecker = createPermissionChecker(mode);
+  }
+
+  /**
+   * Set a custom permission checker instance.
+   * This allows TUI mode to inject its own checker that routes through the approval dialog.
+   */
+  setPermissionChecker(checker: PermissionChecker): void {
+    this.permissionChecker = checker;
   }
 }
 

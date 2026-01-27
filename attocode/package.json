@@ -1,7 +1,7 @@
 {
   "name": "attocode",
   "version": "0.1.0",
-  "description": "Standalone production coding agent extracted from first-principles-agent",
+  "description": "Production AI coding agent for your terminal - multi-provider support, context management, MCP integration",
   "type": "module",
   "main": "dist/src/main.js",
   "bin": {
@@ -9,14 +9,27 @@
   },
   "files": [
     "dist",
-    "README.md"
+    "README.md",
+    "CHANGELOG.md"
   ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/eren23/attocode.git"
+  },
+  "homepage": "https://github.com/eren23/attocode#readme",
+  "bugs": {
+    "url": "https://github.com/eren23/attocode/issues"
+  },
+  "author": "eren23",
+  "license": "MIT",
   "scripts": {
     "build": "tsc",
     "dev": "tsx watch src/main.ts",
     "start": "tsx src/main.ts",
     "test": "vitest",
+    "test:run": "vitest run",
     "test:ui": "vitest --ui",
+    "test:coverage": "vitest run --coverage",
     "typecheck": "tsc --noEmit",
     "prepublishOnly": "npm run build"
   },
@@ -36,6 +49,7 @@
     "@types/better-sqlite3": "^7.6.13",
     "@types/node": "^20.10.0",
     "@types/react": "^18.2.0",
+    "@vitest/coverage-v8": "^1.6.1",
     "tsx": "^4.6.0",
     "typescript": "^5.9.3",
     "vitest": "^1.0.0"
@@ -56,9 +70,20 @@
     "node": ">=18.0.0"
   },
   "keywords": [
+    "ai",
     "agent",
     "llm",
     "coding-assistant",
+    "claude",
+    "anthropic",
+    "openai",
+    "gpt",
+    "terminal",
+    "cli",
+    "mcp",
+    "model-context-protocol",
+    "developer-tools",
+    "code-generation",
     "attocode"
   ]
 }

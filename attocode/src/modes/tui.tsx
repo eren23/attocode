@@ -16,6 +16,7 @@
 import { createProductionAgent } from '../agent.js';
 import { ProviderAdapter, convertToolsFromRegistry, createTUIApprovalBridge } from '../adapters.js';
 import { createStandardRegistry } from '../tools/standard.js';
+import { TUIPermissionChecker } from '../tools/permission.js';
 import type { LLMProviderWithTools } from '../providers/types.js';
 import type { PermissionMode } from '../tools/types.js';
 
@@ -115,11 +116,21 @@ export async function startTUIMode(
     await initPricingCache();
 
     // Setup agent
-    // In TUI mode with interactive permissions, we use 'yolo' at registry level
-    // and let the agent's HumanInLoopManager handle permissions via TUI dialog.
-    // This prevents the old console-based permission prompt from conflicting with Ink.
-    const registryPermissionMode = permissionMode === 'interactive' ? 'yolo' : permissionMode;
-    const registry = createStandardRegistry(registryPermissionMode);
+    // Create approval bridge FIRST so we can use it for the permission checker
+    // This must be created before the registry to inject the TUI permission checker
+    const approvalBridge = permissionMode === 'interactive' ? createTUIApprovalBridge() : null;
+
+    // Create registry with the real permission mode
+    // For interactive mode, we inject a TUIPermissionChecker that routes through the TUI dialog
+    // This prevents the console-based permission prompt from conflicting with Ink
+    const registry = createStandardRegistry(permissionMode);
+
+    // In interactive mode, inject TUI permission checker that routes through approval dialog
+    if (approvalBridge) {
+      const tuiChecker = new TUIPermissionChecker(approvalBridge);
+      registry.setPermissionChecker(tuiChecker);
+    }
+
     const tools = convertToolsFromRegistry(registry);
     const adaptedProvider = new ProviderAdapter(provider, model);
 
@@ -159,9 +170,7 @@ export async function startTUIMode(
     const standardToolsWithoutFileOps = tools.filter(t => !['edit_file', 'write_file'].includes(t.name));
     const allTools = [...standardToolsWithoutFileOps, ...lspFileTools];
 
-    // Create approval bridge for TUI permission dialogs
-    // This must be created before the agent so we can pass the handler
-    const approvalBridge = permissionMode === 'interactive' ? createTUIApprovalBridge() : null;
+    // approvalBridge is already created above with the permission checker
 
     const agent = createProductionAgent({
       toolResolver: (toolName: string) => toolName.startsWith('mcp_') ? mcpClient.getFullToolDefinition(toolName) : null,
