@@ -115,6 +115,12 @@ import {
   createPendingPlanManager,
   type PendingPlan,
   type ProposedChange,
+  // Interactive Planning
+  InteractivePlanner,
+  createInteractivePlanner,
+  // Recursive Context (RLM)
+  RecursiveContextManager,
+  createRecursiveContext,
 } from './integrations/index.js';
 
 // Lesson 26: Tracing & Evaluation integration
@@ -159,6 +165,8 @@ export class ProductionAgent {
   private traceCollector: TraceCollector | null = null;
   private modeManager: ModeManager;
   private pendingPlanManager: PendingPlanManager;
+  private interactivePlanner: InteractivePlanner | null = null;
+  private recursiveContext: RecursiveContextManager | null = null;
   private toolResolver: ((toolName: string) => ToolDefinition | null) | null = null;
 
   // Initialization tracking
@@ -467,6 +475,94 @@ export class ProductionAgent {
           break;
       }
     });
+
+    // Interactive Planning (conversational + editable planning)
+    if (isFeatureEnabled(this.config.interactivePlanning)) {
+      const interactiveConfig = typeof this.config.interactivePlanning === 'object'
+        ? this.config.interactivePlanning
+        : {};
+
+      this.interactivePlanner = createInteractivePlanner({
+        autoCheckpoint: interactiveConfig.enableCheckpoints ?? true,
+        confirmBeforeExecute: interactiveConfig.requireApproval ?? true,
+        maxCheckpoints: 20,
+        autoPauseAtDecisions: true,
+      });
+
+      // Forward planner events to observability
+      this.interactivePlanner.on(event => {
+        switch (event.type) {
+          case 'plan.created':
+            this.observability?.logger?.info('Interactive plan created', {
+              planId: event.plan.id,
+              stepCount: event.plan.steps.length,
+            });
+            break;
+          case 'step.completed':
+            this.observability?.logger?.debug('Plan step completed', {
+              stepId: event.step.id,
+              status: event.step.status,
+            });
+            break;
+          case 'plan.cancelled':
+            this.observability?.logger?.info('Plan cancelled', { reason: event.reason });
+            break;
+          case 'checkpoint.created':
+            this.observability?.logger?.debug('Plan checkpoint created', {
+              checkpointId: event.checkpoint.id,
+            });
+            break;
+        }
+      });
+    }
+
+    // Recursive Context (RLM - Recursive Language Models)
+    // Enables on-demand context exploration for large codebases
+    if (isFeatureEnabled(this.config.recursiveContext)) {
+      const recursiveConfig = typeof this.config.recursiveContext === 'object'
+        ? this.config.recursiveContext
+        : {};
+
+      this.recursiveContext = createRecursiveContext({
+        maxDepth: recursiveConfig.maxRecursionDepth ?? 5,
+        snippetTokens: recursiveConfig.maxSnippetTokens ?? 2000,
+        synthesisTokens: 1000,
+        totalBudget: 50000,
+        cacheResults: recursiveConfig.cacheNavigationResults ?? true,
+      });
+
+      // Note: File system source should be registered when needed with proper glob/readFile functions
+      // This is deferred to allow flexible configuration
+
+      // Forward RLM events
+      this.recursiveContext.on(event => {
+        switch (event.type) {
+          case 'process.started':
+            this.observability?.logger?.debug('RLM process started', {
+              query: event.query,
+              depth: event.depth,
+            });
+            break;
+          case 'navigation.command':
+            this.observability?.logger?.debug('RLM navigation command', {
+              command: event.command,
+              depth: event.depth,
+            });
+            break;
+          case 'process.completed':
+            this.observability?.logger?.debug('RLM process completed', {
+              stats: event.stats,
+            });
+            break;
+          case 'budget.warning':
+            this.observability?.logger?.warn('RLM budget warning', {
+              remaining: event.remaining,
+              total: event.total,
+            });
+            break;
+        }
+      });
+    }
   }
 
   /**
@@ -698,12 +794,98 @@ export class ProductionAgent {
 
         // =======================================================================
         // ECONOMICS CHECK (Token Budget) - replaces hard iteration limit
+        // With recovery: try compaction before giving up on token limits
         // =======================================================================
         if (this.economics) {
           const budgetCheck = this.economics.checkBudget();
 
           if (!budgetCheck.canContinue) {
-            // Hard limit reached
+            // ===================================================================
+            // RECOVERY ATTEMPT: Try emergency context reduction before giving up
+            // Only for token-based limits, not iteration limits
+            // ===================================================================
+            const isTokenLimit = budgetCheck.budgetType === 'tokens' || budgetCheck.budgetType === 'cost';
+            const alreadyTriedRecovery = (this.state as { _recoveryAttempted?: boolean })._recoveryAttempted === true;
+
+            if (isTokenLimit && !alreadyTriedRecovery) {
+              this.observability?.logger?.info('Budget limit reached, attempting recovery via context reduction', {
+                reason: budgetCheck.reason,
+                percentUsed: budgetCheck.percentUsed,
+              });
+
+              this.emit({
+                type: 'resilience.retry',
+                reason: 'budget_limit_compaction',
+                attempt: 1,
+                maxAttempts: 1,
+              });
+
+              // Mark that we've attempted recovery to prevent infinite loops
+              (this.state as { _recoveryAttempted?: boolean })._recoveryAttempted = true;
+
+              const tokensBefore = this.estimateContextTokens(messages);
+
+              // Step 1: Compact tool outputs aggressively
+              this.compactToolOutputs();
+
+              // Step 2: Emergency truncation - keep system + last N messages
+              const PRESERVE_RECENT = 10;
+              if (messages.length > PRESERVE_RECENT + 2) {
+                const systemMessage = messages.find(m => m.role === 'system');
+                const recentMessages = messages.slice(-(PRESERVE_RECENT));
+
+                // Rebuild message array
+                messages.length = 0;
+                if (systemMessage) {
+                  messages.push(systemMessage);
+                }
+                messages.push({
+                  role: 'system',
+                  content: `[CONTEXT REDUCED: Earlier messages were removed to stay within budget. Conversation continues from recent context.]`,
+                });
+                messages.push(...recentMessages);
+
+                // Update state messages too
+                this.state.messages.length = 0;
+                this.state.messages.push(...messages);
+              }
+
+              const tokensAfter = this.estimateContextTokens(messages);
+              const reduction = Math.round((1 - tokensAfter / tokensBefore) * 100);
+
+              if (tokensAfter < tokensBefore * 0.8) {
+                // Significant reduction achieved
+                this.observability?.logger?.info('Context reduction successful, continuing execution', {
+                  tokensBefore,
+                  tokensAfter,
+                  reduction,
+                });
+
+                this.emit({
+                  type: 'resilience.recovered',
+                  reason: 'budget_limit_compaction',
+                  attempts: 1,
+                });
+
+                this.emit({
+                  type: 'compaction.auto',
+                  tokensBefore,
+                  tokensAfter,
+                  messagesCompacted: tokensBefore - tokensAfter,
+                });
+
+                // Continue execution instead of breaking
+                continue;
+              }
+
+              this.observability?.logger?.warn('Context reduction insufficient', {
+                tokensBefore,
+                tokensAfter,
+                reduction,
+              });
+            }
+
+            // Hard limit reached and recovery failed (or not applicable)
             this.observability?.logger?.warn('Budget limit reached', {
               reason: budgetCheck.reason,
               budgetType: budgetCheck.budgetType,
@@ -805,8 +987,108 @@ export class ProductionAgent {
           }
         }
 
-        // Make LLM call
-        const response = await this.callLLM(messages);
+        // =====================================================================
+        // RESILIENT LLM CALL: Empty response retries + max_tokens continuation
+        // =====================================================================
+        const MAX_EMPTY_RETRIES = 2;
+        const MAX_CONTINUATIONS = 3;
+        let response = await this.callLLM(messages);
+        let emptyRetries = 0;
+        let continuations = 0;
+
+        // Phase 1: Handle empty responses with retry
+        while (emptyRetries < MAX_EMPTY_RETRIES) {
+          const hasContent = response.content && response.content.length > 0;
+          const hasToolCalls = response.toolCalls && response.toolCalls.length > 0;
+
+          if (hasContent || hasToolCalls) {
+            // Valid response received
+            if (emptyRetries > 0) {
+              this.emit({
+                type: 'resilience.recovered',
+                reason: 'empty_response',
+                attempts: emptyRetries,
+              });
+              this.observability?.logger?.info('Recovered from empty response', {
+                retries: emptyRetries,
+              });
+            }
+            break;
+          }
+
+          // Empty response - retry with nudge
+          emptyRetries++;
+          this.emit({
+            type: 'resilience.retry',
+            reason: 'empty_response',
+            attempt: emptyRetries,
+            maxAttempts: MAX_EMPTY_RETRIES,
+          });
+          this.observability?.logger?.warn('Empty LLM response, retrying', {
+            attempt: emptyRetries,
+            maxAttempts: MAX_EMPTY_RETRIES,
+          });
+
+          // Add gentle nudge and retry
+          const nudgeMessage: Message = {
+            role: 'user',
+            content: '[System: Your previous response was empty. Please provide a response or use a tool.]',
+          };
+          messages.push(nudgeMessage);
+          this.state.messages.push(nudgeMessage);
+
+          response = await this.callLLM(messages);
+        }
+
+        // Phase 2: Handle max_tokens truncation with continuation
+        if (response.stopReason === 'max_tokens' && !response.toolCalls?.length) {
+          let accumulatedContent = response.content || '';
+
+          while (continuations < MAX_CONTINUATIONS && response.stopReason === 'max_tokens') {
+            continuations++;
+            this.emit({
+              type: 'resilience.continue',
+              reason: 'max_tokens',
+              continuation: continuations,
+              maxContinuations: MAX_CONTINUATIONS,
+              accumulatedLength: accumulatedContent.length,
+            });
+            this.observability?.logger?.info('Response truncated at max_tokens, continuing', {
+              continuation: continuations,
+              accumulatedLength: accumulatedContent.length,
+            });
+
+            // Add continuation request
+            const continuationMessage: Message = {
+              role: 'assistant',
+              content: accumulatedContent,
+            };
+            const continueRequest: Message = {
+              role: 'user',
+              content: '[System: Please continue from where you left off. Do not repeat what you already said.]',
+            };
+            messages.push(continuationMessage, continueRequest);
+            this.state.messages.push(continuationMessage, continueRequest);
+
+            response = await this.callLLM(messages);
+
+            // Accumulate content
+            if (response.content) {
+              accumulatedContent += response.content;
+            }
+          }
+
+          // Update response with accumulated content
+          if (continuations > 0) {
+            response = { ...response, content: accumulatedContent };
+            this.emit({
+              type: 'resilience.completed',
+              reason: 'max_tokens_continuation',
+              continuations,
+              finalLength: accumulatedContent.length,
+            });
+          }
+        }
 
         // Record LLM usage for economics
         if (this.economics && response.usage) {
@@ -834,6 +1116,21 @@ export class ProductionAgent {
           // The model has "consumed" the tool outputs and produced a response,
           // so we can replace verbose outputs with compact summaries
           this.compactToolOutputs();
+
+          // Final validation: warn if response is still empty after all retries
+          if (!response.content || response.content.length === 0) {
+            this.observability?.logger?.error('Agent finished with empty response after all retries', {
+              emptyRetries,
+              continuations,
+              iteration: this.state.iteration,
+            });
+            this.emit({
+              type: 'resilience.failed',
+              reason: 'empty_final_response',
+              emptyRetries,
+              continuations,
+            });
+          }
           break;
         }
 
@@ -1300,7 +1597,7 @@ export class ProductionAgent {
             type: 'plan.change.queued',
             tool: toolCall.name,
             changeId: change?.id,
-          } as AgentEvent);
+          });
 
           // Return a message indicating the change was queued
           const queueMessage = `[PLAN MODE] Change queued for approval:\n` +

@@ -284,14 +284,17 @@ export class PendingPlanManager {
     }
 
     const lines: string[] = [
-      `Plan: "${this.currentPlan.task}"`,
+      `━━━ PENDING PLAN ━━━`,
+      ``,
+      `Task: "${this.currentPlan.task}"`,
       `Status: ${this.currentPlan.status}`,
       `Created: ${this.currentPlan.createdAt}`,
       '',
     ];
 
+    // Show exploration summary if available
     if (this.currentPlan.explorationSummary) {
-      lines.push('Exploration Summary:');
+      lines.push('📋 Exploration Summary:');
       lines.push(this.currentPlan.explorationSummary);
       lines.push('');
     }
@@ -299,37 +302,83 @@ export class PendingPlanManager {
     if (this.currentPlan.proposedChanges.length === 0) {
       lines.push('No proposed changes yet.');
     } else {
-      lines.push(`Proposed Changes (${this.currentPlan.proposedChanges.length}):`);
+      // Extract overall approach from first change's reason (often shared across spawn_agent calls)
+      const firstReason = this.currentPlan.proposedChanges[0]?.reason || '';
+      const allSameReason = this.currentPlan.proposedChanges.every(c => c.reason === firstReason);
+
+      if (allSameReason && firstReason && this.currentPlan.proposedChanges.length > 1) {
+        lines.push('🎯 Overall Approach:');
+        lines.push(`   ${firstReason}`);
+        lines.push('');
+      }
+
+      lines.push(`📝 Proposed Actions (${this.currentPlan.proposedChanges.length}):`);
       lines.push('');
 
       for (const change of this.currentPlan.proposedChanges) {
-        lines.push(`${change.order}. [${change.tool}]`);
-
-        // Format args nicely based on tool type
+        // Format based on tool type
         if (change.tool === 'write_file' || change.tool === 'edit_file') {
           const path = change.args.path || change.args.file_path;
-          lines.push(`   File: ${path}`);
+          lines.push(`${change.order}. [${change.tool}] ${path}`);
+          if (!allSameReason) {
+            lines.push(`   └─ ${change.reason}`);
+          }
         } else if (change.tool === 'bash') {
-          const cmd = String(change.args.command || '').slice(0, 60);
-          lines.push(`   Command: ${cmd}${cmd.length >= 60 ? '...' : ''}`);
+          const cmd = String(change.args.command || '').slice(0, 80);
+          lines.push(`${change.order}. [bash] ${cmd}${cmd.length >= 80 ? '...' : ''}`);
+          if (!allSameReason) {
+            lines.push(`   └─ ${change.reason}`);
+          }
         } else if (change.tool === 'spawn_agent') {
-          // Special formatting for spawn_agent to show agent type and task clearly
-          const agentType = change.args.agent || change.args.type || 'unknown';
+          // For spawn_agent, the task IS the plan - show it prominently
+          const agentType = change.args.agent || change.args.type || 'subagent';
           const task = String(change.args.task || change.args.prompt || '');
-          lines.push(`   Agent: ${agentType}`);
-          // Show task with newlines replaced by spaces, truncated to 300 chars
-          const flattened = task.replace(/\n+/g, ' ').replace(/\s+/g, ' ').trim();
-          const truncated = flattened.length > 300 ? flattened.slice(0, 297) + '...' : flattened;
-          lines.push(`   Task: ${truncated}`);
-        } else {
-          lines.push(`   Args: ${JSON.stringify(change.args).slice(0, 80)}...`);
-        }
 
-        lines.push(`   Reason: ${change.reason}`);
+          lines.push(`${change.order}. [${agentType}]`);
+
+          // Show the full task, properly formatted with line breaks
+          const taskLines = task.split(/\n/).filter(l => l.trim());
+          if (taskLines.length <= 3) {
+            // Short task - show inline
+            for (const taskLine of taskLines) {
+              lines.push(`   ${taskLine.trim()}`);
+            }
+          } else {
+            // Longer task - show first few lines and indicate more
+            for (let i = 0; i < Math.min(4, taskLines.length); i++) {
+              const line = taskLines[i].trim();
+              if (line.length > 100) {
+                lines.push(`   ${line.slice(0, 97)}...`);
+              } else {
+                lines.push(`   ${line}`);
+              }
+            }
+            if (taskLines.length > 4) {
+              lines.push(`   ... (${taskLines.length - 4} more lines)`);
+            }
+          }
+
+          if (!allSameReason) {
+            lines.push(`   └─ ${change.reason}`);
+          }
+        } else {
+          // Generic tool
+          lines.push(`${change.order}. [${change.tool}]`);
+          const argsStr = JSON.stringify(change.args);
+          if (argsStr.length > 100) {
+            lines.push(`   Args: ${argsStr.slice(0, 97)}...`);
+          } else {
+            lines.push(`   Args: ${argsStr}`);
+          }
+          if (!allSameReason) {
+            lines.push(`   └─ ${change.reason}`);
+          }
+        }
         lines.push('');
       }
     }
 
+    lines.push('━━━━━━━━━━━━━━━━━━━━━━━');
     lines.push('Commands: /approve, /reject, /show-plan');
 
     return lines.join('\n');

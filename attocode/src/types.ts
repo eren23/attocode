@@ -178,6 +178,12 @@ export interface ProductionAgentConfig {
   /** Codebase context configuration (intelligent code selection) */
   codebaseContext?: CodebaseContextAgentConfig | false;
 
+  /** Interactive planning configuration (conversational + editable planning) */
+  interactivePlanning?: InteractivePlanningAgentConfig | false;
+
+  /** Recursive context configuration (RLM - Recursive Language Models) */
+  recursiveContext?: RecursiveContextAgentConfig | false;
+
   /** Compaction configuration (context management) */
   compaction?: CompactionAgentConfig | false;
 
@@ -764,6 +770,48 @@ export interface CodebaseContextAgentConfig {
 }
 
 /**
+ * Interactive planning configuration.
+ * Controls the conversational + editable planning feature.
+ */
+export interface InteractivePlanningAgentConfig {
+  /** Enable/disable interactive planning */
+  enabled?: boolean;
+
+  /** Enable checkpoints for rollback (default: true) */
+  enableCheckpoints?: boolean;
+
+  /** Auto-checkpoint every N completed steps (default: 3) */
+  autoCheckpointInterval?: number;
+
+  /** Maximum number of plan steps (default: 20) */
+  maxPlanSteps?: number;
+
+  /** Require user approval before executing plan (default: true) */
+  requireApproval?: boolean;
+}
+
+/**
+ * Recursive context (RLM) configuration.
+ * Controls the Recursive Language Models feature for large context handling.
+ */
+export interface RecursiveContextAgentConfig {
+  /** Enable/disable recursive context */
+  enabled?: boolean;
+
+  /** Maximum recursion depth (default: 5) */
+  maxRecursionDepth?: number;
+
+  /** Maximum tokens per snippet (default: 2000) */
+  maxSnippetTokens?: number;
+
+  /** Cache navigation results (default: true) */
+  cacheNavigationResults?: boolean;
+
+  /** Enable synthesis across recursive calls (default: true) */
+  enableSynthesis?: boolean;
+}
+
+/**
  * Compaction configuration.
  * Controls automatic context compaction for long sessions.
  */
@@ -973,6 +1021,12 @@ export type AgentEvent =
   | { type: 'plan.change.queued'; tool: string; changeId?: string }
   | { type: 'plan.approved'; changeCount: number }
   | { type: 'plan.rejected' }
-  | { type: 'plan.executing'; changeIndex: number; totalChanges: number };
+  | { type: 'plan.executing'; changeIndex: number; totalChanges: number }
+  // Resilience events (LLM call recovery)
+  | { type: 'resilience.retry'; reason: string; attempt: number; maxAttempts: number }
+  | { type: 'resilience.recovered'; reason: string; attempts: number }
+  | { type: 'resilience.continue'; reason: string; continuation: number; maxContinuations: number; accumulatedLength: number }
+  | { type: 'resilience.completed'; reason: string; continuations: number; finalLength: number }
+  | { type: 'resilience.failed'; reason: string; emptyRetries: number; continuations: number };
 
 export type AgentEventListener = (event: AgentEvent) => void;
