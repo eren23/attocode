@@ -494,3 +494,101 @@ export {
   type AnySessionStore,
   type CheckpointData,
 } from './persistence.js';
+
+// Interactive Planning (conversational + editable planning)
+export {
+  InteractivePlanner,
+  createInteractivePlanner,
+  formatPlan,
+  formatStep,
+  type InteractivePlan,
+  type PlanStep,
+  type PlanCheckpoint,
+  type PlanStatus as InteractivePlanStatus,
+  type EditCommand,
+  type ParsedEdit,
+  type PlannerLLMCall,
+  type InteractivePlannerConfig,
+  type InteractivePlannerEvent,
+  type InteractivePlannerEventListener,
+} from './interactive-planning.js';
+
+// Learning Store (persistent cross-session learning)
+export {
+  LearningStore,
+  createLearningStore,
+  createInMemoryLearningStore,
+  formatLearningsContext,
+  formatLearningStats,
+  type Learning,
+  type LearningProposal,
+  type LearningStatus,
+  type LearningType,
+  type LearningStoreConfig,
+  type LearningStoreEvent,
+  type LearningStoreEventListener,
+} from './learning-store.js';
+
+// Recursive Context (RLM) - from tricks
+export {
+  RecursiveContextManager,
+  createRecursiveContext,
+  createMinimalRecursiveContext,
+  createFileSystemSource,
+  createConversationSource,
+  formatRecursiveResult,
+  formatRecursiveStats,
+  type ContextSource,
+  type NavigationCommand,
+  type RecursiveResult,
+  type NavigationStep,
+  type RecursiveStats,
+  type RecursiveContextConfig,
+  type ProcessOptions as RecursiveProcessOptions,
+  type LLMCallFunction,
+  type RecursiveContextEvent,
+  type RecursiveContextEventListener,
+} from '../tricks/recursive-context.js';
+
+// Provider Resilience (circuit breaker + fallback chain)
+export {
+  getResilientProvider,
+  createResilientFallbackChain,
+  createAutoFallbackChain,
+  getCircuitBreaker,
+  getAllCircuitBreakerMetrics,
+  resetAllCircuitBreakers,
+  formatResilienceStatus,
+  hasResilientProviderSupport,
+  type ResilientProviderConfig,
+  type ResilientChainConfig,
+} from '../providers/resilient-provider.js';
+
+// Circuit Breaker (for direct use)
+export {
+  CircuitBreaker,
+  createCircuitBreaker,
+  createStrictCircuitBreaker,
+  createLenientCircuitBreaker,
+  formatCircuitBreakerMetrics,
+  isCircuitBreakerError,
+  type CircuitState,
+  type CircuitBreakerConfig,
+  type CircuitBreakerMetrics,
+  type CircuitBreakerEvent,
+  type CircuitBreakerEventListener,
+} from '../providers/circuit-breaker.js';
+
+// Fallback Chain (for direct use)
+export {
+  FallbackChain,
+  createFallbackChain,
+  createFallbackChainFromRegistry,
+  formatHealthStatus,
+  isChainExhaustedError,
+  type ChainedProvider,
+  type ProviderHealth,
+  type FallbackChainConfig,
+  type FallbackChainEvent,
+  type FallbackChainEventListener,
+} from '../providers/fallback-chain.js';

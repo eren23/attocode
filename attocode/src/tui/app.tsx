@@ -1133,34 +1133,46 @@ export function TUIApp({
     setStatus(s => ({ ...s, mode: 'thinking' }));
 
     const unsub = agent.subscribe((event: any) => {
-      if (event.type === 'tool.start') {
-        setStatus(s => ({ ...s, mode: `calling ${event.tool}` }));
+      // Check if event is from a subagent
+      const subagentPrefix = event.subagent ? `[${event.subagent}] ` : '';
+
+      if (event.type === 'agent.spawn') {
+        // A subagent is starting
+        addMessage('system', `[AGENT] Spawning ${event.name}: ${event.task.slice(0, 100)}${event.task.length > 100 ? '...' : ''}`);
+      } else if (event.type === 'agent.complete') {
+        // A subagent finished
+        addMessage('system', `[AGENT] ${event.agentId} ${event.success ? 'completed' : 'failed'}`);
+      } else if (event.type === 'tool.start') {
+        const displayName = event.subagent ? `${event.subagent}:${event.tool}` : event.tool;
+        setStatus(s => ({ ...s, mode: `calling ${displayName}` }));
         setToolCalls(prev => [...prev.slice(-4), {
-          id: `${event.tool}-${Date.now()}`,
-          name: event.tool,
+          id: `${displayName}-${Date.now()}`,
+          name: displayName,
           args: event.args || {},
           status: 'running',
           startTime: new Date(),
         }]);
       } else if (event.type === 'tool.complete') {
-        setStatus(s => ({ ...s, mode: 'thinking' }));
-        setToolCalls(prev => prev.map(t => t.name === event.tool ? {
+        const displayName = event.subagent ? `${event.subagent}:${event.tool}` : event.tool;
+        setStatus(s => ({ ...s, mode: event.subagent ? `${event.subagent} thinking` : 'thinking' }));
+        setToolCalls(prev => prev.map(t => t.name === displayName ? {
           ...t,
           status: 'success',
           result: event.result,
           duration: t.startTime ? Date.now() - t.startTime.getTime() : undefined,
         } : t));
       } else if (event.type === 'tool.blocked') {
-        setToolCalls(prev => prev.map(t => t.name === event.tool ? {
+        const displayName = event.subagent ? `${event.subagent}:${event.tool}` : event.tool;
+        setToolCalls(prev => prev.map(t => t.name === displayName ? {
           ...t,
           status: 'error',
           error: event.reason || 'Blocked',
         } : t));
       } else if (event.type === 'llm.start') {
-        setStatus(s => ({ ...s, mode: 'thinking', iter: s.iter + 1 }));
+        setStatus(s => ({ ...s, mode: event.subagent ? `${event.subagent} thinking` : 'thinking', iter: s.iter + 1 }));
       } else if (event.type === 'insight.tokens' && showThinking) {
-        const e = event as { inputTokens: number; outputTokens: number; cost?: number };
-        addMessage('system', `* ${e.inputTokens.toLocaleString()} in, ${e.outputTokens.toLocaleString()} out${e.cost ? ` $${e.cost.toFixed(6)}` : ''}`);
+        const e = event as { inputTokens: number; outputTokens: number; cost?: number; subagent?: string };
+        addMessage('system', `${subagentPrefix}* ${e.inputTokens.toLocaleString()} in, ${e.outputTokens.toLocaleString()} out${e.cost ? ` $${e.cost.toFixed(6)}` : ''}`);
       } else if (event.type === 'plan.change.queued') {
         addMessage('system', `[PLAN] Queued: ${event.tool}`);
       }
@@ -1172,14 +1184,28 @@ export function TUIApp({
       const modeInfo = agent.getModeInfo();
       setStatus({ iter: metrics.llmCalls, tokens: metrics.totalTokens, cost: metrics.estimatedCost, mode: modeInfo.name === 'Plan' ? 'ready (plan)' : 'ready' });
 
+      // Calculate current context size (what's actually in the window now)
+      const agentState = agent.getState();
+      const estimateTokens = (str: string) => Math.ceil(str.length / 3.2);
+      const currentContextTokens = agentState.messages.reduce((sum: number, m: any) =>
+        sum + estimateTokens(typeof m.content === 'string' ? m.content : JSON.stringify(m.content)), 0);
+      const contextLimit = 80000;
+      const contextPct = Math.round((currentContextTokens / contextLimit) * 100);
+
       const durationSec = (metrics.duration / 1000).toFixed(1);
-      const metricsLine = `\n---\n${metrics.inputTokens.toLocaleString()} in | ${metrics.outputTokens.toLocaleString()} out | ${metrics.toolCalls} tools | ${durationSec}s`;
+      // Format: Session total (cumulative cost) | Current context (compaction awareness)
+      const sessionIn = metrics.inputTokens >= 1000 ? `${(metrics.inputTokens / 1000).toFixed(1)}k` : metrics.inputTokens.toLocaleString();
+      const sessionOut = metrics.outputTokens >= 1000 ? `${(metrics.outputTokens / 1000).toFixed(1)}k` : metrics.outputTokens.toLocaleString();
+      const contextK = (currentContextTokens / 1000).toFixed(1);
+      const metricsLine = `\n---\nSession: ${sessionIn} in / ${sessionOut} out | Context: ${contextK}k/${contextLimit / 1000}k (${contextPct}%) | ${metrics.toolCalls} tools | ${durationSec}s`;
 
       if (agent.hasPendingPlan()) {
         const plan = agent.getPendingPlan();
         if (plan) {
-          const planSummary = `\n[PLAN] ${plan.proposedChanges.length} change(s) queued\n/show-plan | /approve | /reject`;
-          addMessage('assistant', (result.response || 'Changes queued.') + planSummary + metricsLine);
+          // Auto-show the full plan instead of just a count
+          const fullPlan = agent.formatPendingPlan();
+          addMessage('assistant', (result.response || 'Planning complete.') + metricsLine);
+          addMessage('system', fullPlan);
         }
       } else {
         addMessage('assistant', (result.response || result.error || 'No response') + metricsLine);

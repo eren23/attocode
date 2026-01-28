@@ -27,6 +27,8 @@ import type {
   SkillsAgentConfig,
   CodebaseContextAgentConfig,
   CompactionAgentConfig,
+  InteractivePlanningAgentConfig,
+  RecursiveContextAgentConfig,
   ProductionAgentConfig,
 } from './types.js';
 
@@ -367,6 +369,28 @@ export const DEFAULT_CODEBASE_CONTEXT_CONFIG: CodebaseContextAgentConfig = {
 };
 
 /**
+ * Default interactive planning configuration.
+ */
+export const DEFAULT_INTERACTIVE_PLANNING_CONFIG: InteractivePlanningAgentConfig = {
+  enabled: false, // Disabled by default (feature in development)
+  enableCheckpoints: true,
+  autoCheckpointInterval: 3,
+  maxPlanSteps: 20,
+  requireApproval: true,
+};
+
+/**
+ * Default recursive context (RLM) configuration.
+ */
+export const DEFAULT_RECURSIVE_CONTEXT_CONFIG: RecursiveContextAgentConfig = {
+  enabled: false, // Disabled by default (feature in development)
+  maxRecursionDepth: 5,
+  maxSnippetTokens: 2000,
+  cacheNavigationResults: true,
+  enableSynthesis: true,
+};
+
+/**
  * Build complete configuration from partial user config.
  */
 export function buildConfig(
@@ -399,6 +423,8 @@ export function buildConfig(
     semanticCache: mergeConfig(DEFAULT_SEMANTIC_CACHE_CONFIG, userConfig.semanticCache),
     skills: mergeConfig(DEFAULT_SKILLS_CONFIG, userConfig.skills),
     codebaseContext: mergeConfig(DEFAULT_CODEBASE_CONTEXT_CONFIG, userConfig.codebaseContext),
+    interactivePlanning: mergeConfig(DEFAULT_INTERACTIVE_PLANNING_CONFIG, userConfig.interactivePlanning),
+    recursiveContext: mergeConfig(DEFAULT_RECURSIVE_CONTEXT_CONFIG, userConfig.recursiveContext),
     compaction: mergeConfig(DEFAULT_COMPACTION_CONFIG, userConfig.compaction),
     maxContextTokens: userConfig.maxContextTokens ?? 100000, // 100k tokens default
     maxIterations: userConfig.maxIterations ?? 50,
