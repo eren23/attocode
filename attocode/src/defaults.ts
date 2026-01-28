@@ -29,6 +29,10 @@ import type {
   CompactionAgentConfig,
   InteractivePlanningAgentConfig,
   RecursiveContextAgentConfig,
+  LearningStoreAgentConfig,
+  LLMResilienceAgentConfig,
+  FileChangeTrackerAgentConfig,
+  SubagentConfig,
   ProductionAgentConfig,
 } from './types.js';
 
@@ -391,6 +395,50 @@ export const DEFAULT_RECURSIVE_CONTEXT_CONFIG: RecursiveContextAgentConfig = {
 };
 
 /**
+ * Default learning store configuration.
+ * Cross-session learning from failures.
+ */
+export const DEFAULT_LEARNING_STORE_CONFIG: LearningStoreAgentConfig = {
+  enabled: true, // Enabled by default for cross-session learning
+  dbPath: undefined, // Uses default .agent/learnings.db
+  requireValidation: true, // Require user validation for safety
+  autoValidateThreshold: 0.9, // High confidence threshold
+  maxLearnings: 500,
+};
+
+/**
+ * Default LLM resilience configuration.
+ * Handles empty responses and max_tokens continuation.
+ */
+export const DEFAULT_LLM_RESILIENCE_CONFIG: LLMResilienceAgentConfig = {
+  enabled: true, // Enabled by default for reliability
+  maxEmptyRetries: 2,
+  maxContinuations: 3,
+  autoContinue: true,
+  minContentLength: 1,
+};
+
+/**
+ * Default file change tracker configuration.
+ * Enables undo capability for file operations.
+ */
+export const DEFAULT_FILE_CHANGE_TRACKER_CONFIG: FileChangeTrackerAgentConfig = {
+  enabled: false, // Disabled by default (requires database setup)
+  maxFullContentBytes: 50 * 1024, // 50KB
+};
+
+/**
+ * Default subagent configuration.
+ * Controls timeout and iteration limits for spawned subagents.
+ */
+export const DEFAULT_SUBAGENT_CONFIG: SubagentConfig = {
+  enabled: true, // Enabled by default
+  defaultTimeout: 120000, // 2 minutes per subagent
+  defaultMaxIterations: 10, // Reduced from 30 for better control
+  inheritObservability: true,
+};
+
+/**
  * Build complete configuration from partial user config.
  */
 export function buildConfig(
@@ -426,6 +474,10 @@ export function buildConfig(
     interactivePlanning: mergeConfig(DEFAULT_INTERACTIVE_PLANNING_CONFIG, userConfig.interactivePlanning),
     recursiveContext: mergeConfig(DEFAULT_RECURSIVE_CONTEXT_CONFIG, userConfig.recursiveContext),
     compaction: mergeConfig(DEFAULT_COMPACTION_CONFIG, userConfig.compaction),
+    learningStore: mergeConfig(DEFAULT_LEARNING_STORE_CONFIG, userConfig.learningStore),
+    resilience: mergeConfig(DEFAULT_LLM_RESILIENCE_CONFIG, userConfig.resilience),
+    fileChangeTracker: mergeConfig(DEFAULT_FILE_CHANGE_TRACKER_CONFIG, userConfig.fileChangeTracker),
+    subagent: mergeConfig(DEFAULT_SUBAGENT_CONFIG, userConfig.subagent),
     maxContextTokens: userConfig.maxContextTokens ?? 100000, // 100k tokens default
     maxIterations: userConfig.maxIterations ?? 50,
     timeout: userConfig.timeout ?? 300000, // 5 minutes

@@ -187,6 +187,18 @@ export interface ProductionAgentConfig {
   /** Compaction configuration (context management) */
   compaction?: CompactionAgentConfig | false;
 
+  /** Learning store configuration (cross-session learning) */
+  learningStore?: LearningStoreAgentConfig | false;
+
+  /** LLM resilience configuration (empty response retry, continuation) */
+  resilience?: LLMResilienceAgentConfig | false;
+
+  /** File change tracker configuration (undo capability) */
+  fileChangeTracker?: FileChangeTrackerAgentConfig | false;
+
+  /** Subagent configuration (timeout and iteration limits) */
+  subagent?: SubagentConfig | false;
+
   /** Maximum context tokens before compaction */
   maxContextTokens?: number;
 
@@ -839,6 +851,78 @@ export interface CompactionAgentConfig {
 }
 
 /**
+ * Learning store configuration.
+ * Controls cross-session learning from failures.
+ */
+export interface LearningStoreAgentConfig {
+  /** Enable/disable learning store */
+  enabled?: boolean;
+
+  /** Path to SQLite database (default: .agent/learnings.db) */
+  dbPath?: string;
+
+  /** Whether to require user validation for learnings (default: true) */
+  requireValidation?: boolean;
+
+  /** Minimum confidence to auto-validate (default: 0.9) */
+  autoValidateThreshold?: number;
+
+  /** Maximum learnings to keep (default: 500) */
+  maxLearnings?: number;
+}
+
+/**
+ * LLM resilience configuration.
+ * Controls empty response retry and max_tokens continuation behavior.
+ */
+export interface LLMResilienceAgentConfig {
+  /** Enable/disable resilience layer */
+  enabled?: boolean;
+
+  /** Maximum retries for empty responses (default: 2) */
+  maxEmptyRetries?: number;
+
+  /** Maximum continuation attempts for max_tokens (default: 3) */
+  maxContinuations?: number;
+
+  /** Whether to auto-continue on max_tokens (default: true) */
+  autoContinue?: boolean;
+
+  /** Minimum acceptable content length (default: 1) */
+  minContentLength?: number;
+}
+
+/**
+ * File change tracker configuration.
+ * Controls undo capability for file operations.
+ */
+export interface FileChangeTrackerAgentConfig {
+  /** Enable/disable file change tracking */
+  enabled?: boolean;
+
+  /** Maximum bytes for full content storage (default: 50KB) */
+  maxFullContentBytes?: number;
+}
+
+/**
+ * Subagent configuration.
+ * Controls timeout and iteration limits for spawned subagents.
+ */
+export interface SubagentConfig {
+  /** Enable/disable subagent spawning */
+  enabled?: boolean;
+
+  /** Default timeout in ms for subagent execution (default: 120000 = 2 min) */
+  defaultTimeout?: number;
+
+  /** Default max iterations for subagents (default: 10, reduced from 30) */
+  defaultMaxIterations?: number;
+
+  /** Whether subagents inherit observability config from parent */
+  inheritObservability?: boolean;
+}
+
+/**
  * Configuration for trace collection.
  */
 export interface TraceCollectorConfig {
@@ -1027,6 +1111,10 @@ export type AgentEvent =
   | { type: 'resilience.recovered'; reason: string; attempts: number }
   | { type: 'resilience.continue'; reason: string; continuation: number; maxContinuations: number; accumulatedLength: number }
   | { type: 'resilience.completed'; reason: string; continuations: number; finalLength: number }
-  | { type: 'resilience.failed'; reason: string; emptyRetries: number; continuations: number };
+  | { type: 'resilience.failed'; reason: string; emptyRetries: number; continuations: number }
+  // Learning store events
+  | { type: 'learning.proposed'; learningId: string; description: string }
+  | { type: 'learning.validated'; learningId: string }
+  | { type: 'learning.applied'; learningId: string; context: string };
 
 export type AgentEventListener = (event: AgentEvent) => void;

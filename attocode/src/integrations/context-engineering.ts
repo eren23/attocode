@@ -419,6 +419,14 @@ export class ContextEngineeringManager {
   }
 
   /**
+   * Get the underlying failure tracker for external integrations.
+   * Useful for connecting to LearningStore for cross-session learning.
+   */
+  getFailureTracker(): FailureTracker | undefined {
+    return this.failureTracker;
+  }
+
+  /**
    * Get current statistics.
    */
   getStats(): ContextEngineeringStats {

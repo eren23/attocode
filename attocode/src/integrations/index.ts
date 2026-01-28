@@ -199,6 +199,28 @@ export {
   type ToolDefinition,
 } from './compaction.js';
 
+// Auto-Compaction Manager
+export {
+  AutoCompactionManager,
+  createAutoCompactionManager,
+  formatCompactionCheckResult,
+  getSuggestedAction,
+  type AutoCompactionConfig,
+  type CompactionCheckResult,
+  type AutoCompactionEvent,
+  type AutoCompactionEventListener,
+} from './auto-compaction.js';
+
+// File Change Tracker (undo capability)
+export {
+  FileChangeTracker,
+  createFileChangeTracker,
+  type FileChangeTrackerConfig,
+  type FileChange as TrackedFileChange,
+  type UndoResult,
+  type ChangeSummary,
+} from './file-change-tracker.js';
+
 // MCP client
 export {
   MCPClient,

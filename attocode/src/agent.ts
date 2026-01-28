@@ -80,6 +80,8 @@ import {
   CancellationManager,
   createCancellationManager,
   isCancellationError,
+  createTimeoutToken,
+  race,
   ResourceManager,
   createResourceManager,
   combinedShouldContinue,
@@ -121,6 +123,19 @@ import {
   // Recursive Context (RLM)
   RecursiveContextManager,
   createRecursiveContext,
+  // Learning Store (cross-session learning)
+  LearningStore,
+  createLearningStore,
+  // Compaction
+  Compactor,
+  createCompactor,
+  // Auto-Compaction Manager
+  AutoCompactionManager,
+  createAutoCompactionManager,
+  type AutoCompactionEvent,
+  // File Change Tracker (undo capability)
+  FileChangeTracker,
+  createFileChangeTracker,
 } from './integrations/index.js';
 
 // Lesson 26: Tracing & Evaluation integration
@@ -167,6 +182,10 @@ export class ProductionAgent {
   private pendingPlanManager: PendingPlanManager;
   private interactivePlanner: InteractivePlanner | null = null;
   private recursiveContext: RecursiveContextManager | null = null;
+  private learningStore: LearningStore | null = null;
+  private compactor: Compactor | null = null;
+  private autoCompactionManager: AutoCompactionManager | null = null;
+  private fileChangeTracker: FileChangeTracker | null = null;
   private toolResolver: ((toolName: string) => ToolDefinition | null) | null = null;
 
   // Initialization tracking
@@ -563,6 +582,203 @@ export class ProductionAgent {
         }
       });
     }
+
+    // Learning Store (cross-session learning from failures)
+    // Connects to the failure tracker in contextEngineering for automatic learning extraction
+    if (isFeatureEnabled(this.config.learningStore)) {
+      const learningConfig = typeof this.config.learningStore === 'object'
+        ? this.config.learningStore
+        : {};
+
+      this.learningStore = createLearningStore({
+        dbPath: learningConfig.dbPath ?? '.agent/learnings.db',
+        requireValidation: learningConfig.requireValidation ?? true,
+        autoValidateThreshold: learningConfig.autoValidateThreshold ?? 0.9,
+        maxLearnings: learningConfig.maxLearnings ?? 500,
+      });
+
+      // Connect to the failure tracker if available
+      if (this.contextEngineering) {
+        const failureTracker = this.contextEngineering.getFailureTracker();
+        if (failureTracker) {
+          this.learningStore.connectFailureTracker(failureTracker);
+        }
+      }
+
+      // Forward learning events to observability
+      this.learningStore.on(event => {
+        switch (event.type) {
+          case 'learning.proposed':
+            this.observability?.logger?.info('Learning proposed', {
+              learningId: event.learning.id,
+              description: event.learning.description,
+            });
+            this.emit({
+              type: 'learning.proposed',
+              learningId: event.learning.id,
+              description: event.learning.description,
+            });
+            break;
+          case 'learning.validated':
+            this.observability?.logger?.info('Learning validated', {
+              learningId: event.learningId,
+            });
+            this.emit({ type: 'learning.validated', learningId: event.learningId });
+            break;
+          case 'learning.applied':
+            this.observability?.logger?.debug('Learning applied', {
+              learningId: event.learningId,
+              context: event.context,
+            });
+            this.emit({
+              type: 'learning.applied',
+              learningId: event.learningId,
+              context: event.context,
+            });
+            break;
+          case 'pattern.extracted':
+            this.observability?.logger?.info('Pattern extracted as learning', {
+              pattern: event.pattern.description,
+              learningId: event.learning.id,
+            });
+            break;
+        }
+      });
+    }
+
+    // Auto-Compaction Manager (sophisticated context compaction)
+    // Uses the Compactor for LLM-based summarization with threshold monitoring
+    if (isFeatureEnabled(this.config.compaction)) {
+      const compactionConfig = typeof this.config.compaction === 'object'
+        ? this.config.compaction
+        : {};
+
+      // Create the compactor (requires provider for LLM summarization)
+      this.compactor = createCompactor(this.provider, {
+        enabled: true,
+        tokenThreshold: compactionConfig.tokenThreshold ?? 80000,
+        preserveRecentCount: compactionConfig.preserveRecentCount ?? 10,
+        preserveToolResults: compactionConfig.preserveToolResults ?? true,
+        summaryMaxTokens: compactionConfig.summaryMaxTokens ?? 2000,
+        summaryModel: compactionConfig.summaryModel,
+      });
+
+      // Create the auto-compaction manager with threshold monitoring
+      this.autoCompactionManager = createAutoCompactionManager(this.compactor, {
+        mode: compactionConfig.mode ?? 'auto',
+        warningThreshold: 0.80,
+        autoCompactThreshold: 0.90,
+        hardLimitThreshold: 0.98,
+        preserveRecentUserMessages: Math.ceil((compactionConfig.preserveRecentCount ?? 10) / 2),
+        preserveRecentAssistantMessages: Math.ceil((compactionConfig.preserveRecentCount ?? 10) / 2),
+        cooldownMs: 60000, // 1 minute cooldown
+        maxContextTokens: this.config.maxContextTokens ?? 200000,
+      });
+
+      // Forward compactor events to observability
+      this.compactor.on(event => {
+        switch (event.type) {
+          case 'compaction.start':
+            this.observability?.logger?.info('Compaction started', {
+              messageCount: event.messageCount,
+            });
+            break;
+          case 'compaction.complete':
+            this.observability?.logger?.info('Compaction complete', {
+              tokensBefore: event.result.tokensBefore,
+              tokensAfter: event.result.tokensAfter,
+              compactedCount: event.result.compactedCount,
+            });
+            break;
+          case 'compaction.error':
+            this.observability?.logger?.error('Compaction error', {
+              error: event.error,
+            });
+            break;
+        }
+      });
+
+      // Forward auto-compaction events
+      this.autoCompactionManager.on((event: AutoCompactionEvent) => {
+        switch (event.type) {
+          case 'autocompaction.warning':
+            this.observability?.logger?.warn('Context approaching limit', {
+              currentTokens: event.currentTokens,
+              ratio: event.ratio,
+            });
+            this.emit({
+              type: 'compaction.warning',
+              currentTokens: event.currentTokens,
+              threshold: Math.round(event.ratio * (this.config.maxContextTokens ?? 200000)),
+            });
+            break;
+          case 'autocompaction.triggered':
+            this.observability?.logger?.info('Auto-compaction triggered', {
+              mode: event.mode,
+              currentTokens: event.currentTokens,
+            });
+            break;
+          case 'autocompaction.completed':
+            this.observability?.logger?.info('Auto-compaction completed', {
+              tokensBefore: event.tokensBefore,
+              tokensAfter: event.tokensAfter,
+              reduction: event.reduction,
+            });
+            this.emit({
+              type: 'compaction.auto',
+              tokensBefore: event.tokensBefore,
+              tokensAfter: event.tokensAfter,
+              messagesCompacted: event.tokensBefore - event.tokensAfter,
+            });
+            break;
+          case 'autocompaction.hard_limit':
+            this.observability?.logger?.error('Context hard limit reached', {
+              currentTokens: event.currentTokens,
+              ratio: event.ratio,
+            });
+            break;
+          case 'autocompaction.emergency_truncate':
+            this.observability?.logger?.warn('Emergency truncation performed', {
+              reason: event.reason,
+              messagesBefore: event.messagesBefore,
+              messagesAfter: event.messagesAfter,
+            });
+            break;
+        }
+      });
+    }
+
+    // Note: FileChangeTracker requires a database instance which is not
+    // available at this point. Use initFileChangeTracker() to enable it
+    // after the agent is constructed with a database reference.
+    // This allows the feature to be optional and not require SQLite at all times.
+  }
+
+  /**
+   * Initialize the file change tracker with a database instance.
+   * Call this if you want undo capability for file operations.
+   *
+   * @param db - SQLite database instance from better-sqlite3
+   * @param sessionId - Session ID for tracking changes
+   */
+  initFileChangeTracker(db: import('better-sqlite3').Database, sessionId: string): void {
+    if (!isFeatureEnabled(this.config.fileChangeTracker)) {
+      return;
+    }
+
+    const trackerConfig = typeof this.config.fileChangeTracker === 'object'
+      ? this.config.fileChangeTracker
+      : {};
+
+    this.fileChangeTracker = createFileChangeTracker(db, sessionId, {
+      enabled: true,
+      maxFullContentBytes: trackerConfig.maxFullContentBytes ?? 50 * 1024,
+    });
+
+    this.observability?.logger?.info('File change tracker initialized', {
+      sessionId,
+      maxFullContentBytes: trackerConfig.maxFullContentBytes ?? 50 * 1024,
+    });
   }
 
   /**
@@ -990,15 +1206,23 @@ export class ProductionAgent {
         // =====================================================================
         // RESILIENT LLM CALL: Empty response retries + max_tokens continuation
         // =====================================================================
-        const MAX_EMPTY_RETRIES = 2;
-        const MAX_CONTINUATIONS = 3;
+        // Get resilience config
+        const resilienceConfig = typeof this.config.resilience === 'object'
+          ? this.config.resilience
+          : {};
+        const resilienceEnabled = isFeatureEnabled(this.config.resilience);
+        const MAX_EMPTY_RETRIES = resilienceConfig.maxEmptyRetries ?? 2;
+        const MAX_CONTINUATIONS = resilienceConfig.maxContinuations ?? 3;
+        const AUTO_CONTINUE = resilienceConfig.autoContinue ?? true;
+        const MIN_CONTENT_LENGTH = resilienceConfig.minContentLength ?? 1;
+
         let response = await this.callLLM(messages);
         let emptyRetries = 0;
         let continuations = 0;
 
-        // Phase 1: Handle empty responses with retry
-        while (emptyRetries < MAX_EMPTY_RETRIES) {
-          const hasContent = response.content && response.content.length > 0;
+        // Phase 1: Handle empty responses with retry (if resilience enabled)
+        while (resilienceEnabled && emptyRetries < MAX_EMPTY_RETRIES) {
+          const hasContent = response.content && response.content.length >= MIN_CONTENT_LENGTH;
           const hasToolCalls = response.toolCalls && response.toolCalls.length > 0;
 
           if (hasContent || hasToolCalls) {
@@ -1040,8 +1264,8 @@ export class ProductionAgent {
           response = await this.callLLM(messages);
         }
 
-        // Phase 2: Handle max_tokens truncation with continuation
-        if (response.stopReason === 'max_tokens' && !response.toolCalls?.length) {
+        // Phase 2: Handle max_tokens truncation with continuation (if enabled)
+        if (resilienceEnabled && AUTO_CONTINUE && response.stopReason === 'max_tokens' && !response.toolCalls?.length) {
           let accumulatedContent = response.content || '';
 
           while (continuations < MAX_CONTINUATIONS && response.stopReason === 'max_tokens') {
@@ -1149,8 +1373,34 @@ export class ProductionAgent {
 
         // =======================================================================
         // PROACTIVE BUDGET CHECK - compact BEFORE we overflow, not after
+        // Uses AutoCompactionManager if available for sophisticated compaction
         // =======================================================================
-        if (this.economics) {
+        const currentContextTokens = this.estimateContextTokens(messages);
+
+        if (this.autoCompactionManager) {
+          // Use the AutoCompactionManager for threshold-based compaction
+          const compactionResult = await this.autoCompactionManager.checkAndMaybeCompact({
+            currentTokens: currentContextTokens,
+            messages: messages,
+          });
+
+          // Handle compaction result
+          if (compactionResult.status === 'compacted' && compactionResult.compactedMessages) {
+            // Replace messages with compacted version
+            messages.length = 0;
+            messages.push(...compactionResult.compactedMessages);
+            this.state.messages.length = 0;
+            this.state.messages.push(...compactionResult.compactedMessages);
+          } else if (compactionResult.status === 'hard_limit') {
+            // Hard limit reached - this is serious, emit error
+            this.emit({
+              type: 'error',
+              error: `Context hard limit reached (${Math.round(compactionResult.ratio * 100)}% of max tokens)`,
+            });
+            break;
+          }
+        } else if (this.economics) {
+          // Fallback to simple compaction
           const currentUsage = this.economics.getUsage();
           const budget = this.economics.getBudget();
           const percentUsed = (currentUsage.tokens / budget.maxTokens) * 100;
@@ -1266,6 +1516,12 @@ export class ProductionAgent {
     const skillsPrompt = this.skillManager?.getActiveSkillsPrompt() ?? '';
     const memoryContext = this.memory?.getContextStrings(task) ?? [];
 
+    // Get relevant learnings from past sessions
+    const learningsContext = this.learningStore?.getLearningContext({
+      query: task,
+      maxLearnings: 5,
+    }) ?? '';
+
     // Budget-aware codebase context selection
     let codebaseContextStr = '';
     if (this.codebaseContext) {
@@ -1318,9 +1574,10 @@ export class ProductionAgent {
     // Build system prompt using cache-aware builder if available (Trick P)
     let systemPrompt: string;
 
-    // Combine memory and codebase context
+    // Combine memory, learnings, and codebase context
     const combinedContext = [
       ...(memoryContext.length > 0 ? memoryContext : []),
+      ...(learningsContext ? [learningsContext] : []),
       ...(codebaseContextStr ? [`\n## Relevant Code\n${codebaseContextStr}`] : []),
     ].join('\n');
 
@@ -1980,6 +2237,80 @@ export class ProductionAgent {
    */
   getTraceCollector(): TraceCollector | null {
     return this.traceCollector;
+  }
+
+  /**
+   * Get the learning store for cross-session learning.
+   * Returns null if learning store is not enabled.
+   */
+  getLearningStore(): LearningStore | null {
+    return this.learningStore;
+  }
+
+  /**
+   * Get the auto-compaction manager.
+   * Returns null if compaction is not enabled.
+   */
+  getAutoCompactionManager(): AutoCompactionManager | null {
+    return this.autoCompactionManager;
+  }
+
+  /**
+   * Get the file change tracker for undo capability.
+   * Returns null if file change tracking is not enabled.
+   */
+  getFileChangeTracker(): FileChangeTracker | null {
+    return this.fileChangeTracker;
+  }
+
+  /**
+   * Record a file change for potential undo.
+   * No-op if file change tracking is not enabled.
+   *
+   * @param params - Change details
+   * @returns Change ID if tracked, -1 otherwise
+   */
+  async trackFileChange(params: {
+    filePath: string;
+    operation: 'create' | 'write' | 'edit' | 'delete';
+    contentBefore?: string;
+    contentAfter?: string;
+    toolCallId?: string;
+  }): Promise<number> {
+    if (!this.fileChangeTracker) {
+      return -1;
+    }
+
+    return this.fileChangeTracker.recordChange({
+      filePath: params.filePath,
+      operation: params.operation,
+      contentBefore: params.contentBefore,
+      contentAfter: params.contentAfter,
+      turnNumber: this.state.iteration,
+      toolCallId: params.toolCallId,
+    });
+  }
+
+  /**
+   * Undo the last change to a specific file.
+   * Returns null if file change tracking is not enabled.
+   */
+  async undoLastFileChange(filePath: string): Promise<import('./integrations/index.js').UndoResult | null> {
+    if (!this.fileChangeTracker) {
+      return null;
+    }
+    return this.fileChangeTracker.undoLastChange(filePath);
+  }
+
+  /**
+   * Undo all changes in the current turn.
+   * Returns null if file change tracking is not enabled.
+   */
+  async undoCurrentTurn(): Promise<import('./integrations/index.js').UndoResult[] | null> {
+    if (!this.fileChangeTracker) {
+      return null;
+    }
+    return this.fileChangeTracker.undoTurn(this.state.iteration);
   }
 
   /**
@@ -2792,13 +3123,24 @@ export class ProductionAgent {
         ? agentDef.model
         : this.config.model;
 
+      // Get subagent config with defaults
+      // Note: subagent config is SubagentConfig | false from buildConfig
+      const subagentConfig = this.config.subagent;
+      const hasSubagentConfig = subagentConfig !== false && subagentConfig !== undefined;
+      const defaultMaxIterations = hasSubagentConfig
+        ? (subagentConfig as { defaultMaxIterations?: number }).defaultMaxIterations ?? 10
+        : 10;
+      const subagentTimeout = hasSubagentConfig
+        ? (subagentConfig as { defaultTimeout?: number }).defaultTimeout ?? 120000
+        : 120000;
+
       // Create a sub-agent with the agent's config
       const subAgent = new ProductionAgent({
         provider: this.provider,
         tools: agentTools,
         systemPrompt: agentDef.systemPrompt,
         model: resolvedModel,
-        maxIterations: agentDef.maxIterations || 30,
+        maxIterations: agentDef.maxIterations || defaultMaxIterations,
         // Inherit some features but keep subagent simpler
         memory: false,
         planning: false,
@@ -2823,25 +3165,52 @@ export class ProductionAgent {
         this.emit(taggedEvent);
       });
 
-      // Run the task
-      const result = await subAgent.run(task);
+      // Create timeout token for subagent execution
+      const timeoutSource = createTimeoutToken(subagentTimeout);
 
-      const duration = Date.now() - startTime;
-      const spawnResult: SpawnResult = {
-        success: result.success,
-        output: result.response || result.error || '',
-        metrics: {
-          tokens: result.metrics.totalTokens,
-          duration,
-          toolCalls: result.metrics.toolCalls,
-        },
-      };
+      try {
+        // Run the task with timeout protection
+        const result = await race(subAgent.run(task), timeoutSource.token);
 
-      this.emit({ type: 'agent.complete', agentId: agentName, success: result.success });
+        const duration = Date.now() - startTime;
+        const spawnResult: SpawnResult = {
+          success: result.success,
+          output: result.response || result.error || '',
+          metrics: {
+            tokens: result.metrics.totalTokens,
+            duration,
+            toolCalls: result.metrics.toolCalls,
+          },
+        };
 
-      await subAgent.cleanup();
+        this.emit({ type: 'agent.complete', agentId: agentName, success: result.success });
 
-      return spawnResult;
+        await subAgent.cleanup();
+
+        return spawnResult;
+      } catch (err) {
+        // Handle timeout separately for cleaner error message
+        if (isCancellationError(err)) {
+          const duration = Date.now() - startTime;
+          this.emit({ type: 'agent.error', agentId: agentName, error: `Timed out after ${subagentTimeout}ms` });
+
+          // Try to cleanup the subagent gracefully
+          try {
+            await subAgent.cleanup();
+          } catch {
+            // Ignore cleanup errors on timeout
+          }
+
+          return {
+            success: false,
+            output: `Subagent '${agentName}' timed out after ${Math.round(subagentTimeout / 1000)}s. The task may be too complex or the model may be slow.`,
+            metrics: { tokens: 0, duration, toolCalls: 0 },
+          };
+        }
+        throw err; // Re-throw non-cancellation errors
+      } finally {
+        timeoutSource.dispose();
+      }
     } catch (err) {
       const error = err instanceof Error ? err.message : String(err);
       this.emit({ type: 'agent.error', agentId: agentName, error });
