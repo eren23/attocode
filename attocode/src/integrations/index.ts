@@ -58,12 +58,22 @@ export {
   createAgentRegistry,
   filterToolsForAgent,
   formatAgentList,
+  getDefaultAgentDirectories,
+  getAgentCreationDirectory,
+  getUserAgentDirectory,
+  getAgentSourceType,
+  getAgentLocationDisplay,
+  getAgentScaffold,
+  createAgentScaffold,
+  getAgentStats,
   type AgentDefinition,
   type LoadedAgent,
+  type AgentSourceType,
   type SpawnOptions,
   type SpawnResult,
   type RegistryEvent,
   type RegistryEventListener,
+  type AgentScaffoldResult,
 } from './agent-registry.js';
 
 // Multi-agent coordination (from Lesson 17)
@@ -363,12 +373,48 @@ export {
   formatSkillList,
   getSampleSkillContent,
   getDefaultSkillDirectories,
+  getSkillCreationDirectory,
+  getUserSkillDirectory,
+  getSkillSourceType,
+  getSkillLocationDisplay,
+  getSkillScaffold,
+  createSkillScaffold,
+  getSkillStats,
   type Skill,
+  type SkillArgument,
   type SkillTrigger,
+  type SkillSourceType,
   type SkillsConfig,
   type SkillEvent,
   type SkillEventListener,
+  type SkillScaffoldResult,
 } from './skills.js';
+
+// Skill Executor (invokable skills)
+export {
+  SkillExecutor,
+  createSkillExecutor,
+  type ParsedArgs,
+  type SkillExecutionContext,
+  type SkillExecutionResult,
+  type SkillExecutorEvent,
+  type SkillExecutorEventListener,
+} from './skill-executor.js';
+
+// Capabilities Registry (unified discovery)
+export {
+  CapabilitiesRegistry,
+  createCapabilitiesRegistry,
+  formatCapabilitiesSummary,
+  formatCapabilitiesList,
+  formatSearchResults,
+  type Capability,
+  type CapabilityType,
+  type CapabilitySearchResult,
+  type CapabilityCounts,
+  type CapabilitiesEvent,
+  type CapabilitiesEventListener,
+} from './capabilities.js';
 
 // Ignore File Support
 export {

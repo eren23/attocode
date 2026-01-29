@@ -1115,6 +1115,10 @@ export type AgentEvent =
   // Learning store events
   | { type: 'learning.proposed'; learningId: string; description: string }
   | { type: 'learning.validated'; learningId: string }
-  | { type: 'learning.applied'; learningId: string; context: string };
+  | { type: 'learning.applied'; learningId: string; context: string }
+  // Decision transparency events (Phase 3)
+  | { type: 'decision.routing'; model: string; reason: string; alternatives?: Array<{ model: string; rejected: string }> }
+  | { type: 'decision.tool'; tool: string; decision: 'allowed' | 'prompted' | 'blocked'; policyMatch?: string }
+  | { type: 'context.health'; currentTokens: number; maxTokens: number; estimatedExchanges: number; percentUsed: number };
 
 export type AgentEventListener = (event: AgentEvent) => void;

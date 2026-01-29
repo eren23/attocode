@@ -81,6 +81,7 @@ import {
   createCancellationManager,
   isCancellationError,
   createTimeoutToken,
+  createLinkedToken,
   race,
   ResourceManager,
   createResourceManager,
@@ -136,6 +137,9 @@ import {
   // File Change Tracker (undo capability)
   FileChangeTracker,
   createFileChangeTracker,
+  // Capabilities Registry (unified discovery)
+  CapabilitiesRegistry,
+  createCapabilitiesRegistry,
 } from './integrations/index.js';
 
 // Lesson 26: Tracing & Evaluation integration
@@ -186,6 +190,7 @@ export class ProductionAgent {
   private compactor: Compactor | null = null;
   private autoCompactionManager: AutoCompactionManager | null = null;
   private fileChangeTracker: FileChangeTracker | null = null;
+  private capabilitiesRegistry: CapabilitiesRegistry | null = null;
   private toolResolver: ((toolName: string) => ToolDefinition | null) | null = null;
 
   // Initialization tracking
@@ -1461,6 +1466,22 @@ export class ProductionAgent {
           messages.push(toolMessage);
           this.state.messages.push(toolMessage);
         }
+
+        // Emit context health after adding tool results
+        const currentTokenEstimate = this.estimateContextTokens(messages);
+        const contextLimit = this.config.maxContextTokens || 100000;
+        const percentUsed = Math.round((currentTokenEstimate / contextLimit) * 100);
+        const avgTokensPerExchange = currentTokenEstimate / Math.max(1, this.state.iteration);
+        const remainingTokens = contextLimit - currentTokenEstimate;
+        const estimatedExchanges = Math.floor(remainingTokens / Math.max(1, avgTokensPerExchange));
+
+        this.emit({
+          type: 'context.health',
+          currentTokens: currentTokenEstimate,
+          maxTokens: contextLimit,
+          estimatedExchanges,
+          percentUsed,
+        });
       }
 
       // =======================================================================
@@ -1723,6 +1744,18 @@ export class ProductionAgent {
           reason: actualModel !== model ? 'Routed based on complexity' : 'Default model',
           complexity: complexity <= 0.3 ? 'low' : complexity <= 0.7 ? 'medium' : 'high',
         });
+
+        // Emit decision transparency event
+        this.emit({
+          type: 'decision.routing',
+          model: actualModel,
+          reason: actualModel !== model
+            ? `Complexity ${(complexity * 100).toFixed(0)}% - using ${actualModel}`
+            : 'Default model for current task',
+          alternatives: actualModel !== model
+            ? [{ model, rejected: 'complexity threshold exceeded' }]
+            : undefined,
+        });
       } else {
         response = await this.provider.chat(messages, {
           model: this.config.model,
@@ -1888,6 +1921,16 @@ export class ProductionAgent {
             tool: toolCall.name,
             policy: evaluation.policy,
             reason: evaluation.reason,
+          });
+
+          // Emit decision transparency event
+          this.emit({
+            type: 'decision.tool',
+            tool: toolCall.name,
+            decision: evaluation.policy === 'forbidden' ? 'blocked'
+              : evaluation.policy === 'prompt' ? 'prompted'
+              : 'allowed',
+            policyMatch: evaluation.reason,
           });
 
           // Handle forbidden policy - always block
@@ -3138,6 +3181,10 @@ export class ProductionAgent {
       const subAgent = new ProductionAgent({
         provider: this.provider,
         tools: agentTools,
+        // Pass toolResolver so subagent can lazy-load MCP tools
+        toolResolver: this.toolResolver || undefined,
+        // Pass MCP tool summaries so subagent knows what tools are available
+        mcpToolSummaries: this.config.mcpToolSummaries,
         systemPrompt: agentDef.systemPrompt,
         model: resolvedModel,
         maxIterations: agentDef.maxIterations || defaultMaxIterations,
@@ -3168,9 +3215,15 @@ export class ProductionAgent {
       // Create timeout token for subagent execution
       const timeoutSource = createTimeoutToken(subagentTimeout);
 
+      // Link parent's cancellation with subagent timeout so ESC propagates to subagents
+      const parentSource = this.cancellation?.getSource();
+      const effectiveSource = parentSource
+        ? createLinkedToken(parentSource, timeoutSource)
+        : timeoutSource;
+
       try {
-        // Run the task with timeout protection
-        const result = await race(subAgent.run(task), timeoutSource.token);
+        // Run the task with cancellation propagation from parent
+        const result = await race(subAgent.run(task), effectiveSource.token);
 
         const duration = Date.now() - startTime;
         const spawnResult: SpawnResult = {
@@ -3189,26 +3242,36 @@ export class ProductionAgent {
 
         return spawnResult;
       } catch (err) {
-        // Handle timeout separately for cleaner error message
+        // Handle cancellation (user ESC or timeout) for cleaner error messages
         if (isCancellationError(err)) {
           const duration = Date.now() - startTime;
-          this.emit({ type: 'agent.error', agentId: agentName, error: `Timed out after ${subagentTimeout}ms` });
+          const isUserCancellation = parentSource?.isCancellationRequested;
+          const reason = isUserCancellation
+            ? 'User cancelled'
+            : `Timed out after ${subagentTimeout}ms`;
+          this.emit({ type: 'agent.error', agentId: agentName, error: reason });
 
           // Try to cleanup the subagent gracefully
           try {
             await subAgent.cleanup();
           } catch {
-            // Ignore cleanup errors on timeout
+            // Ignore cleanup errors on cancellation
           }
+
+          const output = isUserCancellation
+            ? `Subagent '${agentName}' was cancelled by user.`
+            : `Subagent '${agentName}' timed out after ${Math.round(subagentTimeout / 1000)}s. The task may be too complex or the model may be slow.`;
 
           return {
             success: false,
-            output: `Subagent '${agentName}' timed out after ${Math.round(subagentTimeout / 1000)}s. The task may be too complex or the model may be slow.`,
+            output,
             metrics: { tokens: 0, duration, toolCalls: 0 },
           };
         }
         throw err; // Re-throw non-cancellation errors
       } finally {
+        // Dispose both sources (linked source disposes its internal state, timeout source handles its timer)
+        effectiveSource.dispose();
         timeoutSource.dispose();
       }
     } catch (err) {
@@ -3792,6 +3855,20 @@ If the task is a simple question or doesn't need specialized handling, set bestA
   // =========================================================================
 
   /**
+   * Get the skill manager instance for advanced operations.
+   */
+  getSkillManager(): SkillManager | null {
+    return this.skillManager;
+  }
+
+  /**
+   * Get the agent registry instance for advanced operations.
+   */
+  getAgentRegistry(): AgentRegistry | null {
+    return this.agentRegistry;
+  }
+
+  /**
    * Get all loaded skills.
    */
   getSkills(): Skill[] {
@@ -3840,6 +3917,41 @@ If the task is a simple question or doesn't need specialized handling, set bestA
    */
   findMatchingSkills(query: string): Skill[] {
     return this.skillManager?.findMatchingSkills(query) || [];
+  }
+
+  /**
+   * Get the capabilities registry for unified discovery.
+   * Lazily creates and populates the registry on first access.
+   */
+  getCapabilitiesRegistry(): CapabilitiesRegistry {
+    if (!this.capabilitiesRegistry) {
+      this.capabilitiesRegistry = createCapabilitiesRegistry();
+
+      // Register sources
+      this.capabilitiesRegistry.registerToolRegistry({
+        getTools: () => this.getTools(),
+      });
+
+      if (this.skillManager) {
+        this.capabilitiesRegistry.registerSkillManager(this.skillManager);
+      }
+
+      if (this.agentRegistry) {
+        this.capabilitiesRegistry.registerAgentRegistry(this.agentRegistry);
+      }
+
+      // MCP client is registered externally if available
+    }
+
+    return this.capabilitiesRegistry;
+  }
+
+  /**
+   * Register an MCP client with the capabilities registry.
+   */
+  registerMCPClient(client: { getAllTools(): ToolDefinition[]; isToolLoaded(name: string): boolean }): void {
+    const registry = this.getCapabilitiesRegistry();
+    registry.registerMCPClient(client as any);
   }
 
   /**

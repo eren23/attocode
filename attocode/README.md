@@ -101,6 +101,130 @@ Once in the REPL:
 | `/load` | Load a previous session |
 | `/exit` | Exit attocode |
 
+## Skills & Agents
+
+Extend attocode with custom skills and agents:
+
+```bash
+# Initialize project directory
+/init
+
+# Create a custom skill
+/skills new code-review
+
+# Create a custom agent
+/agents new domain-expert
+
+# List available skills/agents
+/skills
+/agents
+
+# Spawn an agent
+/spawn researcher "Find all API endpoints"
+```
+
+**Directory structure:**
+```
+.attocode/              # Project-level
+├── skills/             # Custom skills
+└── agents/             # Custom agents
+
+~/.attocode/            # User-level (shared across projects)
+├── skills/
+└── agents/
+```
+
+See [docs/skills-and-agents-guide.md](docs/skills-and-agents-guide.md) for the complete guide.
+
+## MCP Servers
+
+Connect external tools via the [Model Context Protocol](https://modelcontextprotocol.io/).
+
+### Configuration Files
+
+MCP servers are configured in JSON files. Attocode loads configs in order (later overrides earlier):
+
+| Location | Scope | Priority |
+|----------|-------|----------|
+| `~/.config/attocode/mcp.json` | User-level (all projects) | Lower |
+| `.mcp.json` | Project-level (this project) | Higher |
+
+### Setup
+
+**1. Create a config file:**
+
+```bash
+# User-level (shared across all projects)
+mkdir -p ~/.config/attocode
+touch ~/.config/attocode/mcp.json
+
+# Or project-level (this project only)
+touch .mcp.json
+```
+
+**2. Add server configurations:**
+
+```json
+{
+  "servers": {
+    "filesystem": {
+      "command": "npx",
+      "args": ["-y", "@anthropic/mcp-server-filesystem", "/path/to/allowed/dir"]
+    },
+    "github": {
+      "command": "npx",
+      "args": ["-y", "@anthropic/mcp-server-github"],
+      "env": {
+        "GITHUB_TOKEN": "${GITHUB_TOKEN}"
+      }
+    },
+    "sqlite": {
+      "command": "npx",
+      "args": ["-y", "@anthropic/mcp-server-sqlite", "~/database.db"]
+    }
+  }
+}
+```
+
+**3. Verify with commands:**
+
+```bash
+/mcp              # List connected servers
+/mcp tools        # List available MCP tools
+/mcp search <q>   # Search and load tools
+```
+
+### Environment Variables
+
+Use `${VAR_NAME}` syntax to reference environment variables in configs:
+
+```json
+{
+  "servers": {
+    "postgres": {
+      "command": "npx",
+      "args": ["-y", "@anthropic/mcp-server-postgres"],
+      "env": {
+        "DATABASE_URL": "${DATABASE_URL}"
+      }
+    }
+  }
+}
+```
+
+### Popular MCP Servers
+
+| Server | Package | Description |
+|--------|---------|-------------|
+| Filesystem | `@anthropic/mcp-server-filesystem` | Read/write files in allowed directories |
+| GitHub | `@anthropic/mcp-server-github` | GitHub API integration |
+| SQLite | `@anthropic/mcp-server-sqlite` | Query SQLite databases |
+| Postgres | `@anthropic/mcp-server-postgres` | Query PostgreSQL databases |
+| Brave Search | `@anthropic/mcp-server-brave-search` | Web search via Brave |
+| Puppeteer | `@anthropic/mcp-server-puppeteer` | Browser automation |
+
+Find more at [MCP Servers Directory](https://github.com/modelcontextprotocol/servers).
+
 ## Configuration
 
 Config file: `~/.config/attocode/config.json`

@@ -406,6 +406,14 @@ export class CancellationManager {
   }
 
   /**
+   * Get the current cancellation source for linking with other tokens.
+   * Returns null if no active context.
+   */
+  getSource(): CancellationTokenSource | null {
+    return this.currentSource;
+  }
+
+  /**
    * Subscribe to cancellation events.
    */
   subscribe(listener: CancellationEventListener): () => void {

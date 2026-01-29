@@ -19,7 +19,12 @@ import { getTheme, getThemeNames } from './theme/index.js';
 import { ControlledCommandPalette } from './input/CommandPalette.js';
 import { ApprovalDialog } from './components/ApprovalDialog.js';
 import type { TUIApprovalBridge } from '../adapters.js';
-import type { ApprovalRequest as TypesApprovalRequest } from '../types.js';
+import type { ApprovalRequest as TypesApprovalRequest, AgentEvent } from '../types.js';
+import { TransparencyAggregator, formatTransparencyState, type TransparencyState } from './transparency-aggregator.js';
+import { handleSkillsCommand, formatEnhancedSkillList } from '../commands/skills-commands.js';
+import { handleAgentsCommand, formatEnhancedAgentList } from '../commands/agents-commands.js';
+import { handleInitCommand } from '../commands/init-commands.js';
+import type { CommandOutput } from '../commands/types.js';
 
 // =============================================================================
 // PATTERN GENERATION FOR ALWAYS-ALLOW
@@ -260,6 +265,7 @@ interface MemoizedInputAreaProps {
   onEscape?: () => void;
   onToggleToolExpand?: () => void;
   onToggleThinking?: () => void;
+  onToggleTransparency?: () => void;
   onPageUp?: () => void;
   onPageDown?: () => void;
   onHome?: () => void;
@@ -290,6 +296,7 @@ const MemoizedInputArea = memo(function MemoizedInputArea({
   onEscape,
   onToggleToolExpand,
   onToggleThinking,
+  onToggleTransparency,
   onPageUp,
   onPageDown,
   onHome,
@@ -311,7 +318,7 @@ const MemoizedInputArea = memo(function MemoizedInputArea({
   // Store callbacks in refs so useInput doesn't re-subscribe on prop changes
   const callbacksRef = useRef({
     onSubmit, onCtrlC, onCtrlL, onCtrlP, onEscape,
-    onToggleToolExpand, onToggleThinking,
+    onToggleToolExpand, onToggleThinking, onToggleTransparency,
     onPageUp, onPageDown, onHome, onEnd,
     commandPaletteOpen, onCommandPaletteInput,
     approvalDialogOpen, approvalDenyReasonMode,
@@ -320,7 +327,7 @@ const MemoizedInputArea = memo(function MemoizedInputArea({
   });
   callbacksRef.current = {
     onSubmit, onCtrlC, onCtrlL, onCtrlP, onEscape,
-    onToggleToolExpand, onToggleThinking,
+    onToggleToolExpand, onToggleThinking, onToggleTransparency,
     onPageUp, onPageDown, onHome, onEnd,
     commandPaletteOpen, onCommandPaletteInput,
     approvalDialogOpen, approvalDenyReasonMode,
@@ -358,6 +365,11 @@ const MemoizedInputArea = memo(function MemoizedInputArea({
     // Alt+O / Option+O
     if (input === '\u00f8' || (key.meta && input === 'o')) {
       cb.onToggleThinking?.();
+      return;
+    }
+    // Alt+I / Option+I - Toggle transparency panel
+    if (input === '\u00ee' || input === '\u0131' || (key.meta && input === 'i')) {
+      cb.onToggleTransparency?.();
       return;
     }
 
@@ -533,6 +545,7 @@ export function TUIApp({
   // Display toggles
   const [toolCallsExpanded, setToolCallsExpanded] = useState(false);
   const [showThinking, setShowThinking] = useState(true);
+  const [transparencyExpanded, setTransparencyExpanded] = useState(false);
 
   // Command palette state
   const [commandPaletteOpen, setCommandPaletteOpen] = useState(false);
@@ -546,6 +559,10 @@ export function TUIApp({
 
   // Session-scoped always-allowed patterns (e.g., "bash:npm test", "write_file:/path")
   const [alwaysAllowed, setAlwaysAllowed] = useState<Set<string>>(new Set());
+
+  // Transparency state
+  const [transparencyState, setTransparencyState] = useState<TransparencyState | null>(null);
+  const transparencyAggregatorRef = useRef<TransparencyAggregator | null>(null);
 
   // Refs for stable callbacks
   const isProcessingRef = useRef(isProcessing);
@@ -638,6 +655,27 @@ export function TUIApp({
     }
   }, [approvalBridge, handleApprovalRequest]);
 
+  // Set up transparency aggregator and subscribe to agent events
+  useEffect(() => {
+    const aggregator = new TransparencyAggregator();
+    transparencyAggregatorRef.current = aggregator;
+
+    // Subscribe to state changes
+    const unsubscribeAggregator = aggregator.subscribe((state) => {
+      setTransparencyState(state);
+    });
+
+    // Subscribe to agent events
+    const unsubscribeAgent = agent.subscribe((event: AgentEvent) => {
+      aggregator.processEvent(event);
+    });
+
+    return () => {
+      unsubscribeAggregator();
+      unsubscribeAgent();
+    };
+  }, [agent]);
+
   // =========================================================================
   // COMMAND HANDLER
   // =========================================================================
@@ -710,9 +748,17 @@ export function TUIApp({
           '  /mcp tools        List MCP tools',
           '  /mcp search <q>   Search & load tools',
           '',
-          '> SUBAGENTS',
-          '  /agents           List available agents',
+          '> SKILLS & AGENTS',
+          '  /skills           List all skills',
+          '  /skills new <n>   Create new skill',
+          '  /skills info <n>  Show skill details',
+          '  /agents           List all agents',
+          '  /agents new <n>   Create new agent',
+          '  /agents info <n>  Show agent details',
           '  /spawn <a> <task> Run agent with task',
+          '',
+          '> INITIALIZATION',
+          '  /init             Setup .attocode/ directory',
           '',
           '> PLAN MODE',
           '  /mode             Show current mode',
@@ -727,6 +773,7 @@ export function TUIApp({
           '  Ctrl+P      Help',
           '  Alt+T       Toggle tool details',
           '  Alt+O       Toggle thinking',
+          '  Alt+I       Toggle transparency panel',
           '========================',
         ].join('\n'));
         return;
@@ -1079,15 +1126,81 @@ export function TUIApp({
         addMessage('system', `Model: ${model || 'auto'}\nRestart to change.`);
         return;
 
-      // Subagent commands
-      case 'agents':
-        try {
-          const agentList = agent.formatAgentList();
-          addMessage('system', `Available Agents:\n${agentList}`);
-        } catch (e) {
-          addMessage('error', (e as Error).message);
+      // Skills commands
+      case 'skills': {
+        const skillManager = agent.getSkillManager();
+        if (skillManager) {
+          // Create output adapter for TUI
+          const tuiOutput: CommandOutput = {
+            log: (msg: string) => addMessage('system', msg),
+            error: (msg: string) => addMessage('error', msg),
+            clear: () => setMessages([]),
+          };
+          const ctx = {
+            agent,
+            sessionId: currentSessionId,
+            output: tuiOutput,
+            integrations: {
+              sessionStore,
+              mcpClient,
+              compactor,
+              skillManager,
+            },
+          };
+          await handleSkillsCommand(args, ctx, skillManager);
+        } else {
+          addMessage('system', 'Skills not enabled');
         }
         return;
+      }
+
+      // Init command
+      case 'init': {
+        const tuiOutput: CommandOutput = {
+          log: (msg: string) => addMessage('system', msg),
+          error: (msg: string) => addMessage('error', msg),
+          clear: () => setMessages([]),
+        };
+        const ctx = {
+          agent,
+          sessionId: currentSessionId,
+          output: tuiOutput,
+          integrations: {
+            sessionStore,
+            mcpClient,
+            compactor,
+          },
+        };
+        await handleInitCommand(args, ctx);
+        return;
+      }
+
+      // Subagent commands
+      case 'agents': {
+        const agentRegistry = agent.getAgentRegistry();
+        if (agentRegistry) {
+          const tuiOutput: CommandOutput = {
+            log: (msg: string) => addMessage('system', msg),
+            error: (msg: string) => addMessage('error', msg),
+            clear: () => setMessages([]),
+          };
+          const ctx = {
+            agent,
+            sessionId: currentSessionId,
+            output: tuiOutput,
+            integrations: {
+              sessionStore,
+              mcpClient,
+              compactor,
+              agentRegistry,
+            },
+          };
+          await handleAgentsCommand(args, ctx, agentRegistry);
+        } else {
+          addMessage('system', 'Agents not enabled');
+        }
+        return;
+      }
 
       case 'spawn':
         if (args.length < 2) {
@@ -1386,6 +1499,13 @@ export function TUIApp({
     });
   }, [addMessage]);
 
+  const handleToggleTransparency = useCallback(() => {
+    setTransparencyExpanded(prev => {
+      addMessage('system', !prev ? '[v] Transparency panel: visible' : '[^] Transparency panel: hidden');
+      return !prev;
+    });
+  }, [addMessage]);
+
   // Update context tokens
   useEffect(() => {
     const agentState = agent.getState();
@@ -1440,6 +1560,58 @@ export function TUIApp({
           </Box>
         )}
 
+        {/* Transparency Panel (toggle with Alt+I) */}
+        {transparencyExpanded && transparencyState && (
+          <Box flexDirection="column" marginBottom={1} borderStyle="single" borderColor={colors.border} paddingX={1}>
+            <Text color={colors.accent} bold>[v] Transparency Panel</Text>
+            <Box marginLeft={2} flexDirection="column">
+              <Text color={colors.text}>REASONING</Text>
+              {transparencyState.lastRouting ? (
+                <>
+                  <Text color={colors.textMuted}>  Routing: {transparencyState.lastRouting.model}</Text>
+                  <Text color={colors.textMuted}>    {transparencyState.lastRouting.reason}</Text>
+                </>
+              ) : (
+                <Text color={colors.textMuted}>  Routing: (no routing decisions yet)</Text>
+              )}
+              {transparencyState.lastPolicy && (
+                <Text color={transparencyState.lastPolicy.decision === 'blocked' ? colors.error :
+                             transparencyState.lastPolicy.decision === 'prompted' ? colors.warning : colors.success}>
+                  Policy: {transparencyState.lastPolicy.decision === 'allowed' ? '+' :
+                           transparencyState.lastPolicy.decision === 'blocked' ? 'x' : '?'} {transparencyState.lastPolicy.tool}
+                </Text>
+              )}
+            </Box>
+            <Box marginLeft={2} marginTop={1} flexDirection="column">
+              <Text color={colors.text}>CONTEXT</Text>
+              {transparencyState.contextHealth ? (
+                <>
+                  <Text color={colors.textMuted}>
+                    {'  [' + '='.repeat(Math.round((transparencyState.contextHealth.percentUsed / 100) * 20)) +
+                     '-'.repeat(20 - Math.round((transparencyState.contextHealth.percentUsed / 100) * 20)) +
+                     '] ' + transparencyState.contextHealth.percentUsed + '%'}
+                  </Text>
+                  <Text color={colors.textMuted}>
+                    {'  ' + (transparencyState.contextHealth.currentTokens / 1000).toFixed(1) + 'k / ' +
+                     (transparencyState.contextHealth.maxTokens / 1000).toFixed(0) + 'k tokens'}
+                  </Text>
+                  <Text color={colors.textMuted}>
+                    {'  ~' + transparencyState.contextHealth.estimatedExchanges + ' exchanges remaining'}
+                  </Text>
+                </>
+              ) : (
+                <Text color={colors.textMuted}>  (no context data yet)</Text>
+              )}
+            </Box>
+            {transparencyState.activeLearnings.length > 0 && (
+              <Box marginLeft={2} marginTop={1} flexDirection="column">
+                <Text color={colors.text}>MEMORY</Text>
+                <Text color={colors.textMuted}>  Learnings applied: {transparencyState.activeLearnings.length}</Text>
+              </Box>
+            )}
+          </Box>
+        )}
+
         {/* Approval Dialog (positioned above input when active) */}
         {pendingApproval && (
           <ApprovalDialog
@@ -1471,6 +1643,7 @@ export function TUIApp({
           onEscape={handleEscape}
           onToggleToolExpand={handleToggleToolExpand}
           onToggleThinking={handleToggleThinking}
+          onToggleTransparency={handleToggleTransparency}
           commandPaletteOpen={commandPaletteOpen}
           onCommandPaletteInput={handleCommandPaletteInput}
           approvalDialogOpen={!!pendingApproval}
@@ -1525,10 +1698,19 @@ export function TUIApp({
           </Box>
           <Box gap={2}>
             <Text color="#DDA0DD" dimColor>{modelShort}</Text>
-            <Text color={contextPct > 70 ? '#FFD700' : colors.textMuted} dimColor>{`${(contextTokens / 1000).toFixed(1)}k`}</Text>
+            {/* Mini context bar: [====----] 42% */}
+            <Text color={contextPct > 70 ? '#FFD700' : colors.textMuted} dimColor>
+              {'[' + '='.repeat(Math.min(8, Math.round((contextPct / 100) * 8))) +
+               '-'.repeat(Math.max(0, 8 - Math.round((contextPct / 100) * 8))) + '] ' +
+               contextPct + '%'}
+            </Text>
             <Text color="#98FB98" dimColor>{costStr}</Text>
             {gitBranch && <Text color="#87CEEB" dimColor>{gitBranch}</Text>}
-            <Text color={colors.textMuted} dimColor>ESC:cancel ^P:help</Text>
+            {/* Show learnings count if any */}
+            {transparencyState?.activeLearnings && transparencyState.activeLearnings.length > 0 && (
+              <Text color="#87CEEB" dimColor>L:{transparencyState.activeLearnings.length}</Text>
+            )}
+            <Text color={colors.textMuted} dimColor>^P:help</Text>
           </Box>
         </Box>
       </Box>
