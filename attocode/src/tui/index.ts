@@ -346,3 +346,14 @@ export { ControlledCommandPalette, CommandPalette, type ControlledCommandPalette
 
 // Event display (console output handlers)
 export { createEventDisplay, createJunctureLogger } from './event-display.js';
+
+// Transparency aggregator (decision tracking)
+export {
+  TransparencyAggregator,
+  createTransparencyAggregator,
+  formatTransparencyState,
+  getTransparencySummary,
+  type TransparencyState,
+  type DecisionRecord,
+  type TransparencyAggregatorConfig,
+} from './transparency-aggregator.js';

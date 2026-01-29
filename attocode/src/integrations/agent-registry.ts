@@ -9,10 +9,16 @@
  * - NL-based agent selection
  */
 
-import { readFile, readdir, watch } from 'node:fs/promises';
+import { readFile, readdir, writeFile, mkdir } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
-import { join, extname } from 'node:path';
+import { join, extname, dirname } from 'node:path';
+import { homedir } from 'node:os';
+import { fileURLToPath } from 'node:url';
 import type { LLMProvider, ToolDefinition } from '../types.js';
+
+// ES Module __dirname equivalent
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
 
 // =============================================================================
 // TYPES
@@ -34,10 +40,15 @@ export interface AgentDefinition {
 }
 
 /**
+ * Agent source type for display and management.
+ */
+export type AgentSourceType = 'builtin' | 'user' | 'project' | 'legacy';
+
+/**
  * Loaded agent with source info.
  */
 export interface LoadedAgent extends AgentDefinition {
-  source: 'builtin' | 'user';
+  source: AgentSourceType;
   filePath?: string;
   loadedAt: Date;
 }
@@ -188,6 +199,88 @@ Focus on clarity and usefulness. Write for your audience.`,
 ];
 
 // =============================================================================
+// DEFAULT DIRECTORIES
+// =============================================================================
+
+/**
+ * Default agent directories with priority hierarchy:
+ * built-in < ~/.attocode/ < .attocode/ (later entries override earlier)
+ *
+ * Legacy paths (.agents/) are included for backward compatibility.
+ */
+export function getDefaultAgentDirectories(): string[] {
+  const homeDir = homedir();
+  return [
+    // User-level agents (medium priority)
+    join(homeDir, '.attocode', 'agents'),
+
+    // Project-level agents (highest priority)
+    join(process.cwd(), '.attocode', 'agents'),
+
+    // Legacy project path (backward compat)
+    join(process.cwd(), '.agents'),
+  ];
+}
+
+/**
+ * Get the directory where new agents should be created.
+ * Prefers .attocode/agents/ in the project root.
+ */
+export function getAgentCreationDirectory(): string {
+  return join(process.cwd(), '.attocode', 'agents');
+}
+
+/**
+ * Get the user-level agent directory.
+ */
+export function getUserAgentDirectory(): string {
+  return join(homedir(), '.attocode', 'agents');
+}
+
+/**
+ * Determine the source type of an agent based on its path.
+ */
+export function getAgentSourceType(agentPath: string): AgentSourceType {
+  const homeDir = homedir();
+  const cwd = process.cwd();
+
+  // Check for project-level (.attocode/agents/)
+  if (agentPath.startsWith(join(cwd, '.attocode', 'agents'))) {
+    return 'project';
+  }
+
+  // Check for user-level (~/.attocode/agents/)
+  if (agentPath.startsWith(join(homeDir, '.attocode', 'agents'))) {
+    return 'user';
+  }
+
+  // Legacy paths (.agents/)
+  if (agentPath.includes('.agents')) {
+    return 'legacy';
+  }
+
+  return 'project'; // Default to project
+}
+
+/**
+ * Get a human-readable location string for an agent.
+ */
+export function getAgentLocationDisplay(agent: LoadedAgent): string {
+  switch (agent.source) {
+    case 'builtin':
+      return 'built-in';
+    case 'user':
+      return '~/.attocode/agents/';
+    case 'project':
+      return '.attocode/agents/';
+    case 'legacy':
+      return '.agents/ (legacy)';
+    default:
+      return agent.filePath || 'unknown';
+  }
+}
+
+// =============================================================================
 // AGENT REGISTRY
 // =============================================================================
 
@@ -214,28 +307,64 @@ export class AgentRegistry {
   }
 
   /**
-   * Load user-defined agents from .agents/ directory.
+   * Load user-defined agents from all configured directories.
+   * Loads in priority order: user-level, project-level, legacy.
+   * Later entries with the same name override earlier ones.
    */
   async loadUserAgents(): Promise<void> {
-    const agentsDir = join(this.baseDir, '.agents');
+    const directories = getDefaultAgentDirectories();
 
-    if (!existsSync(agentsDir)) {
-      return; // No user agents directory
-    }
-
-    try {
-      const files = await readdir(agentsDir);
-
-      for (const file of files) {
-        const ext = extname(file).toLowerCase();
-        if (!['.json', '.yaml', '.yml'].includes(ext)) continue;
-
-        const filePath = join(agentsDir, file);
-        await this.loadAgentFile(filePath);
+    for (const agentsDir of directories) {
+      if (!existsSync(agentsDir)) {
+        continue; // Directory doesn't exist, skip
       }
-    } catch (err) {
-      console.warn('[AgentRegistry] Failed to load user agents:', err);
+
+      try {
+        const files = await readdir(agentsDir);
+
+        for (const file of files) {
+          const ext = extname(file).toLowerCase();
+          if (!['.json', '.yaml', '.yml'].includes(ext)) continue;
+
+          const filePath = join(agentsDir, file);
+          await this.loadAgentFile(filePath);
+        }
+
+        // Also check for subdirectories with AGENT.yaml
+        for (const file of files) {
+          const fullPath = join(agentsDir, file);
+          try {
+            const stat = await import('node:fs/promises').then(m => m.stat(fullPath));
+            if (stat.isDirectory()) {
+              const agentFile = await this.findAgentFileInDir(fullPath);
+              if (agentFile) {
+                await this.loadAgentFile(agentFile);
+              }
+            }
+          } catch {
+            // Not a directory or can't stat
+          }
+        }
+      } catch (err) {
+        // Directory read failed, continue to next
+      }
     }
+  }
+
+  /**
+   * Find an agent definition file in a directory.
+   */
+  private async findAgentFileInDir(dir: string): Promise<string | null> {
+    const possibleFiles = ['AGENT.yaml', 'AGENT.yml', 'agent.yaml', 'agent.yml', 'agent.json'];
+
+    for (const filename of possibleFiles) {
+      const filePath = join(dir, filename);
+      if (existsSync(filePath)) {
+        return filePath;
+      }
+    }
+
+    return null;
   }
 
   /**
@@ -262,10 +391,13 @@ export class AgentRegistry {
         throw new Error('Missing required fields: name, description, systemPrompt');
       }
 
+      // Determine source type from path
+      const sourceType = getAgentSourceType(filePath);
+
       // Store as loaded agent
       const loaded: LoadedAgent = {
         ...definition,
-        source: 'user',
+        source: sourceType,
         filePath,
         loadedAt: new Date(),
       };
@@ -521,6 +653,7 @@ export async function createAgentRegistry(baseDir?: string): Promise<AgentRegist
 
 /**
  * Filter tools based on agent's tool whitelist.
+ * MCP tools (prefixed with 'mcp_') are always included to enable external integrations.
  */
 export function filterToolsForAgent(
   agent: AgentDefinition,
@@ -530,7 +663,9 @@ export function filterToolsForAgent(
     return allTools; // No whitelist = all tools
   }
 
-  return allTools.filter(t => agent.tools!.includes(t.name));
+  return allTools.filter(t =>
+    agent.tools!.includes(t.name) || t.name.startsWith('mcp_')
+  );
 }
 
 /**
@@ -540,7 +675,8 @@ export function formatAgentList(agents: LoadedAgent[]): string {
   const lines: string[] = [];
 
   const builtIn = agents.filter(a => a.source === 'builtin');
-  const user = agents.filter(a => a.source === 'user');
+  const userOrProject = agents.filter(a => a.source === 'user' || a.source === 'project');
+  const legacy = agents.filter(a => a.source === 'legacy');
 
   if (builtIn.length > 0) {
     lines.push('Built-in Agents:');
@@ -549,12 +685,147 @@ export function formatAgentList(agents: LoadedAgent[]): string {
     }
   }
 
-  if (user.length > 0) {
-    lines.push('\nUser Agents:');
-    for (const agent of user) {
+  if (userOrProject.length > 0) {
+    lines.push('\nCustom Agents:');
+    for (const agent of userOrProject) {
+      const location = getAgentLocationDisplay(agent);
+      lines.push(`  ${agent.name} - ${agent.description.split('.')[0]} (${location})`);
+    }
+  }
+
+  if (legacy.length > 0) {
+    lines.push('\nLegacy Agents (.agents/):');
+    for (const agent of legacy) {
       lines.push(`  ${agent.name} - ${agent.description.split('.')[0]}`);
     }
   }
 
   return lines.join('\n');
+}
+
+/**
+ * Get an agent scaffold template in YAML format.
+ */
+export function getAgentScaffold(name: string, options: {
+  description?: string;
+  model?: 'fast' | 'balanced' | 'quality';
+  capabilities?: string[];
+  tools?: string[];
+} = {}): string {
+  const {
+    description = '[Add description here]',
+    model = 'balanced',
+    capabilities = [],
+    tools = [],
+  } = options;
+
+  return `name: ${name}
+description: ${description}
+model: ${model}
+maxIterations: 30
+maxTokenBudget: 80000
+
+capabilities:
+${capabilities.length > 0 ? capabilities.map(c => `  - ${c}`).join('\n') : '  - # Add capabilities for NL matching'}
+
+tools:
+${tools.length > 0 ? tools.map(t => `  - ${t}`).join('\n') : '  - read_file\n  - list_files\n  - glob\n  - grep'}
+
+systemPrompt: |
+  You are ${name}. Your job is to:
+  - [Add primary responsibilities]
+  - [Add secondary tasks]
+
+  Guidelines:
+  - Be thorough but concise
+  - Focus on the user's specific needs
+  - Ask clarifying questions when needed
+
+tags:
+  - ${name}
+`;
+}
+
+/**
+ * Result of creating an agent scaffold.
+ */
+export interface AgentScaffoldResult {
+  success: boolean;
+  path?: string;
+  error?: string;
+}
+
+/**
+ * Create an agent scaffold in the .attocode/agents/ directory.
+ */
+export async function createAgentScaffold(
+  name: string,
+  options: {
+    description?: string;
+    model?: 'fast' | 'balanced' | 'quality';
+    capabilities?: string[];
+    tools?: string[];
+    userLevel?: boolean;  // Create in ~/.attocode/agents/ instead of project
+  } = {}
+): Promise<AgentScaffoldResult> {
+  try {
+    // Validate name
+    if (!/^[a-z][a-z0-9-]*$/.test(name)) {
+      return {
+        success: false,
+        error: 'Agent name must start with a letter and contain only lowercase letters, numbers, and hyphens',
+      };
+    }
+
+    // Determine target directory
+    const baseDir = options.userLevel
+      ? getUserAgentDirectory()
+      : getAgentCreationDirectory();
+
+    const agentDir = join(baseDir, name);
+    const agentPath = join(agentDir, 'AGENT.yaml');
+
+    // Check if agent already exists
+    if (existsSync(agentPath)) {
+      return {
+        success: false,
+        error: `Agent "${name}" already exists at ${agentPath}`,
+      };
+    }
+
+    // Create directory structure
+    await mkdir(agentDir, { recursive: true });
+
+    // Write agent file
+    const content = getAgentScaffold(name, options);
+    await writeFile(agentPath, content, 'utf-8');
+
+    return {
+      success: true,
+      path: agentPath,
+    };
+  } catch (error) {
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : String(error),
+    };
+  }
+}
+
+/**
+ * Get statistics about loaded agents by source.
+ */
+export function getAgentStats(agents: LoadedAgent[]): Record<AgentSourceType, number> {
+  const stats: Record<AgentSourceType, number> = {
+    builtin: 0,
+    user: 0,
+    project: 0,
+    legacy: 0,
+  };
+
+  for (const agent of agents) {
+    stats[agent.source]++;
+  }
+
+  return stats;
 }

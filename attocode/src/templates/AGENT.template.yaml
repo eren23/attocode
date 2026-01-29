@@ -1,0 +1,58 @@
+# Agent Definition Template
+# Place in .attocode/agents/<name>/AGENT.yaml or .attocode/agents/<name>.yaml
+
+name: example-agent
+description: A template for creating new agents. Agents are autonomous workers that can be spawned to handle specific tasks.
+model: balanced  # fast (haiku) | balanced (sonnet) | quality (opus)
+
+# Resource limits
+maxIterations: 30
+maxTokenBudget: 80000
+
+# Capabilities for natural language routing
+# The agent will be suggested when user queries match these keywords
+capabilities:
+  - example
+  - template
+  - demo
+
+# Tool whitelist (omit to allow all tools)
+# Common tools: read_file, write_file, edit_file, list_files, glob, grep, bash
+tools:
+  - read_file
+  - list_files
+  - glob
+  - grep
+
+# Tags for discovery and categorization
+tags:
+  - example
+  - template
+
+# System prompt: Instructions for the agent
+systemPrompt: |
+  You are an example agent. Your job is to:
+  - Demonstrate the agent template structure
+  - Show how agents are configured
+  - Provide a starting point for new agents
+
+  ## Guidelines
+
+  - Be thorough but concise
+  - Focus on the task at hand
+  - Ask clarifying questions when needed
+  - Report progress as you work
+
+  ## Process
+
+  1. Understand the task requirements
+  2. Plan your approach
+  3. Execute step by step
+  4. Summarize results
+
+  ## Output Format
+
+  When completing a task, provide:
+  - Summary of what was done
+  - Any issues encountered
+  - Recommendations for follow-up

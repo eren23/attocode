@@ -12,8 +12,18 @@ import {
   saveCheckpointToStore,
   type CheckpointData,
 } from '../integrations/persistence.js';
-import { formatServerList, getContextUsage, formatCompactionResult } from '../integrations/index.js';
+import {
+  formatServerList,
+  getContextUsage,
+  formatCompactionResult,
+  formatCapabilitiesSummary,
+  formatCapabilitiesList,
+  formatSearchResults,
+} from '../integrations/index.js';
 import { formatSessionsTable } from '../session-picker.js';
+import { handleSkillsCommand } from './skills-commands.js';
+import { handleAgentsCommand } from './agents-commands.js';
+import { handleInitCommand } from './init-commands.js';
 
 // =============================================================================
 // ANSI COLOR UTILITIES
@@ -115,8 +125,22 @@ ${c('PERMISSIONS & SECURITY', 'bold')}
   ${c('/grants', 'cyan')}            Show active permission grants
   ${c('/audit', 'cyan')}             Show security audit log
 
-${c('DEBUGGING & TESTING', 'bold')}
-  ${c('/skills', 'cyan')}            List loaded skills
+${c('SKILLS & AGENTS', 'bold')}
+  ${c('/skills', 'cyan')}            List all skills with usage hints
+  ${c('/skills new <name>', 'cyan')} Create a new skill in .attocode/skills/
+  ${c('/skills info <name>', 'cyan')} Show detailed skill information
+  ${c('/skills enable/disable', 'cyan')} Activate or deactivate a skill
+  ${c('/agents', 'cyan')}            List all available agents
+  ${c('/agents new <name>', 'cyan')} Create a new agent in .attocode/agents/
+  ${c('/agents info <name>', 'cyan')} Show detailed agent information
+
+${c('INITIALIZATION', 'bold')}
+  ${c('/init', 'cyan')}              Initialize .attocode/ directory structure
+
+${c('CAPABILITIES & DEBUGGING', 'bold')}
+  ${c('/powers', 'cyan')}            Show all agent capabilities
+  ${c('/powers <type>', 'cyan')}     List by type (tools, skills, agents, mcp, commands)
+  ${c('/powers search <q>', 'cyan')} Search capabilities
   ${c('/sandbox', 'cyan')}           Show sandbox modes available
   ${c('/shell', 'cyan')}             Show PTY shell integration info
   ${c('/lsp', 'cyan')}               Show LSP integration status
@@ -147,7 +171,34 @@ export async function handleCommand(
   ctx: CommandContext
 ): Promise<CommandResult> {
   const { agent, sessionId, output, integrations } = ctx;
-  const { sessionStore, mcpClient, compactor } = integrations;
+  const { sessionStore, mcpClient, compactor, skillExecutor } = integrations;
+
+  // Check for skill invocation before built-in commands
+  if (skillExecutor) {
+    const skillName = skillExecutor.isSkillInvocation(cmd);
+    if (skillName) {
+      const result = await skillExecutor.executeSkill(skillName, args, {
+        cwd: process.cwd(),
+        sessionId,
+      });
+
+      if (result.success) {
+        if (result.injectedPrompt) {
+          output.log(c(`Invoking skill: /${skillName}`, 'cyan'));
+          // Return skill invocation for the caller to handle
+          return {
+            type: 'skill' as const,
+            skillName,
+            injectedPrompt: result.injectedPrompt,
+          };
+        }
+        output.log(c(result.output, 'green'));
+      } else {
+        output.log(c(`Skill error: ${result.error}`, 'red'));
+      }
+      return;
+    }
+  }
 
   switch (cmd) {
     // =========================================================================
@@ -687,9 +738,15 @@ ${c('Progress:', 'bold')}
 
     case '/agents':
       try {
-        const agentList = agent.formatAgentList();
-        output.log(c('\nAvailable Agents:', 'bold'));
-        output.log(agentList);
+        const { agentRegistry } = integrations;
+        if (agentRegistry) {
+          await handleAgentsCommand(args, ctx, agentRegistry);
+        } else {
+          // Fallback to legacy display if no agentRegistry
+          const agentList = agent.formatAgentList();
+          output.log(c('\nAvailable Agents:', 'bold'));
+          output.log(agentList);
+        }
       } catch (error) {
         output.log(c(`Error: ${(error as Error).message}`, 'red'));
       }
@@ -1205,19 +1262,23 @@ ${c('Note:', 'dim')} Theme switching is visual in TUI mode. REPL mode uses fixed
 
     case '/skills':
       try {
-        const skills = agent.getSkills();
-        if (skills.length === 0) {
-          output.log(c('No skills loaded.', 'dim'));
-          output.log(c('Add .md files to .skills/ directory to create skills.', 'dim'));
+        const { skillManager } = integrations;
+        if (skillManager) {
+          await handleSkillsCommand(args, ctx, skillManager);
         } else {
-          output.log(c('\nLoaded Skills:', 'bold'));
-          skills.forEach((skill: any) => {
-            const active = skill.active ? c('+', 'green') : c('o', 'dim');
-            output.log(`  ${active} ${c(skill.name, 'cyan')} - ${skill.description || 'No description'}`);
-            if (skill.triggers?.length > 0) {
-              output.log(c(`      Triggers: ${skill.triggers.join(', ')}`, 'dim'));
-            }
-          });
+          // Fallback to legacy display if no skillManager
+          const skills = agent.getSkills();
+          if (skills.length === 0) {
+            output.log(c('No skills loaded.', 'dim'));
+            output.log(c('Add .md files to .attocode/skills/ directory to create skills.', 'dim'));
+          } else {
+            output.log(c('\nLoaded Skills:', 'bold'));
+            skills.forEach((skill: any) => {
+              const active = skill.active ? c('+', 'green') : c('o', 'dim');
+              const invokable = skill.invokable ? c('[/]', 'magenta') : '   ';
+              output.log(`  ${active} ${invokable} ${c(skill.name, 'cyan')} - ${skill.description || 'No description'}`);
+            });
+          }
         }
       } catch (error) {
         output.log(c(`Skills not available: ${(error as Error).message}`, 'yellow'));
@@ -1338,6 +1399,71 @@ ${c('Test it:', 'dim')}
   Ask the agent to write code, e.g.:
   "Write a Python function to calculate factorial"
 `);
+      break;
+
+    // =========================================================================
+    // CAPABILITIES DISCOVERY
+    // =========================================================================
+
+    case '/powers': {
+      const capRegistry = agent.getCapabilitiesRegistry?.();
+      if (!capRegistry) {
+        output.log(c('Capabilities registry not available.', 'dim'));
+        break;
+      }
+
+      capRegistry.refresh();
+      const counts = capRegistry.getCounts();
+
+      if (args.length === 0) {
+        // Show summary
+        output.log(c('\n' + formatCapabilitiesSummary(counts), 'reset'));
+        output.log(c('\nUsage:', 'bold'));
+        output.log(c('  /powers tools      - List all tools', 'dim'));
+        output.log(c('  /powers skills     - List all skills', 'dim'));
+        output.log(c('  /powers agents     - List all agents', 'dim'));
+        output.log(c('  /powers mcp        - List MCP tools', 'dim'));
+        output.log(c('  /powers commands   - List commands', 'dim'));
+        output.log(c('  /powers search <q> - Search all capabilities', 'dim'));
+      } else if (args[0] === 'search' && args.length > 1) {
+        const query = args.slice(1).join(' ');
+        const results = capRegistry.search(query);
+        output.log(c(`\nSearch: "${query}"\n`, 'cyan'));
+        output.log(formatSearchResults(results));
+      } else {
+        // List by type
+        const typeMap: Record<string, 'tool' | 'skill' | 'agent' | 'mcp_tool' | 'command'> = {
+          tools: 'tool',
+          tool: 'tool',
+          skills: 'skill',
+          skill: 'skill',
+          agents: 'agent',
+          agent: 'agent',
+          mcp: 'mcp_tool',
+          'mcp-tools': 'mcp_tool',
+          'mcp_tools': 'mcp_tool',
+          commands: 'command',
+          command: 'command',
+        };
+
+        const capType = typeMap[args[0]];
+        if (capType) {
+          const capabilities = capRegistry.getByType(capType);
+          output.log(c('\n' + formatCapabilitiesList(capabilities, capType), 'reset'));
+        } else {
+          output.log(c(`Unknown capability type: ${args[0]}`, 'yellow'));
+          output.log(c('Valid types: tools, skills, agents, mcp, commands', 'dim'));
+        }
+      }
+      break;
+    }
+
+    // =========================================================================
+    // INITIALIZATION
+    // =========================================================================
+
+    case '/init':
+      await handleInitCommand(args, ctx);
       break;
 
     // =========================================================================

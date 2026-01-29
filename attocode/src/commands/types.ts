@@ -6,7 +6,7 @@
  */
 
 import type { ProductionAgent } from '../agent.js';
-import type { MCPClient, Compactor, SQLiteStore, SessionStore } from '../integrations/index.js';
+import type { MCPClient, Compactor, SQLiteStore, SessionStore, SkillExecutor, SkillManager, AgentRegistry } from '../integrations/index.js';
 import type * as readline from 'node:readline/promises';
 
 /**
@@ -42,6 +42,9 @@ export interface CommandContext {
     sessionStore: AnySessionStore;
     mcpClient: MCPClient;
     compactor: Compactor;
+    skillExecutor?: SkillExecutor;
+    skillManager?: SkillManager;
+    agentRegistry?: AgentRegistry;
   };
   /** Readline interface (only available in REPL mode, used for prompts) */
   rl?: readline.Interface;
@@ -51,8 +54,17 @@ export interface CommandContext {
 
 /**
  * Command handler result.
+ * - 'quit': Exit the application
+ * - SkillInvocation: A skill was invoked, run agent with injectedPrompt
+ * - void: Command completed normally
  */
-export type CommandResult = 'quit' | void;
+export interface SkillInvocation {
+  type: 'skill';
+  skillName: string;
+  injectedPrompt: string;
+}
+
+export type CommandResult = 'quit' | SkillInvocation | void;
 
 /**
  * Command definition metadata.
