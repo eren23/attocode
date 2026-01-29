@@ -7,6 +7,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { z } from 'zod';
 import { ToolRegistry, defineTool } from '../src/tools/registry.js';
+import { createStandardRegistry } from '../src/tools/standard.js';
 import { createPermissionChecker, classifyCommand, isDangerous } from '../src/tools/permission.js';
 import type { PermissionChecker } from '../src/tools/types.js';
 
@@ -418,5 +419,47 @@ describe('defineTool', () => {
     const result = await tool.execute({ a: 3, b: 4 });
     expect(result.success).toBe(true);
     expect(result.output).toBe('12');
+  });
+});
+
+// =============================================================================
+// STANDARD REGISTRY TESTS
+// =============================================================================
+
+describe('createStandardRegistry', () => {
+  it('should include core file and bash tools', () => {
+    const registry = createStandardRegistry('yolo');
+    const tools = registry.list();
+
+    // Core file tools
+    expect(tools).toContain('read_file');
+    expect(tools).toContain('write_file');
+    expect(tools).toContain('edit_file');
+    expect(tools).toContain('list_files');
+
+    // Core bash tools
+    expect(tools).toContain('bash');
+    expect(tools).toContain('grep');
+    expect(tools).toContain('glob');
+  });
+
+  it('should include undo tools for file change management', () => {
+    const registry = createStandardRegistry('yolo');
+    const tools = registry.list();
+
+    // Undo tools should be registered for file change tracking
+    expect(tools).toContain('undo_file_change');
+    expect(tools).toContain('show_file_history');
+    expect(tools).toContain('show_session_changes');
+  });
+
+  it('undo tools should work gracefully when tracker not available', async () => {
+    const registry = createStandardRegistry('yolo');
+
+    // When called without context, undo tools should return helpful error
+    const result = await registry.execute('show_session_changes', {});
+
+    expect(result.success).toBe(false);
+    expect(result.output).toContain('tracking');  // "tracking not enabled" or similar
   });
 });

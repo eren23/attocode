@@ -669,6 +669,32 @@ export class ProductionAgent {
       });
 
       // Create the auto-compaction manager with threshold monitoring
+      // Wire reversible compaction through contextEngineering when available
+      const compactHandler = this.contextEngineering
+        ? async (messages: Message[]) => {
+            // Use contextEngineering's reversible compaction to preserve references
+            const summarize = async (msgs: Message[]) => {
+              // Use the basic compactor's summarization capability
+              const result = await this.compactor!.compact(msgs);
+              return result.summary;
+            };
+            const contextMsgs = messages.map(m => ({
+              role: m.role as 'system' | 'user' | 'assistant' | 'tool',
+              content: typeof m.content === 'string' ? m.content : JSON.stringify(m.content),
+            }));
+            const result = await this.contextEngineering!.compact(contextMsgs, summarize);
+            const tokensBefore = this.compactor!.estimateTokens(messages);
+            const tokensAfter = this.compactor!.estimateTokens([{ role: 'assistant', content: result.summary }]);
+            return {
+              summary: result.summary + (result.reconstructionPrompt ? `\n\n${result.reconstructionPrompt}` : ''),
+              tokensBefore,
+              tokensAfter,
+              preservedMessages: [{ role: 'assistant' as const, content: result.summary }],
+              references: result.references,
+            };
+          }
+        : undefined;
+
       this.autoCompactionManager = createAutoCompactionManager(this.compactor, {
         mode: compactionConfig.mode ?? 'auto',
         warningThreshold: 0.80,
@@ -678,6 +704,7 @@ export class ProductionAgent {
         preserveRecentAssistantMessages: Math.ceil((compactionConfig.preserveRecentCount ?? 10) / 2),
         cooldownMs: 60000, // 1 minute cooldown
         maxContextTokens: this.config.maxContextTokens ?? 200000,
+        compactHandler, // Use reversible compaction when contextEngineering is available
       });
 
       // Forward compactor events to observability

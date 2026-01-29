@@ -10,7 +10,7 @@ import { AnthropicProvider } from '../../src/providers/adapters/anthropic.js';
 import { OpenRouterProvider } from '../../src/providers/adapters/openrouter.js';
 import { OpenAIProvider } from '../../src/providers/adapters/openai.js';
 import { MockProvider } from '../../src/providers/adapters/mock.js';
-import type { Message } from '../../src/providers/types.js';
+import type { Message, ToolDefinitionSchema } from '../../src/providers/types.js';
 import { ProviderError } from '../../src/providers/types.js';
 
 // =============================================================================
@@ -131,6 +131,148 @@ describe('AnthropicProvider', () => {
       await expect(
         provider.chat([{ role: 'user', content: 'Hello' }])
       ).rejects.toThrow(ProviderError);
+    });
+  });
+
+  describe('chatWithTools', () => {
+    it('should send tool definitions in Anthropic format', async () => {
+      // Anthropic returns tool_use content blocks
+      const mockResponse = {
+        id: 'msg_123',
+        content: [
+          { type: 'text', text: 'I will read that file for you.' },
+          {
+            type: 'tool_use',
+            id: 'toolu_01XYZ',
+            name: 'read_file',
+            input: { path: '/src/main.ts' },
+          },
+        ],
+        stop_reason: 'tool_use',
+        usage: { input_tokens: 50, output_tokens: 30 },
+      };
+
+      const mockFetchFn = mockFetch(mockResponse);
+      globalThis.fetch = mockFetchFn;
+
+      const provider = new AnthropicProvider();
+
+      const tools: ToolDefinitionSchema[] = [
+        {
+          type: 'function',
+          function: {
+            name: 'read_file',
+            description: 'Read a file from disk',
+            parameters: {
+              type: 'object',
+              properties: {
+                path: { type: 'string', description: 'File path' },
+              },
+              required: ['path'],
+            },
+          },
+        },
+      ];
+
+      const response = await provider.chatWithTools(
+        [{ role: 'user', content: 'Read the file /src/main.ts' }],
+        { tools }
+      );
+
+      // Should return tool calls
+      expect(response.toolCalls).toBeDefined();
+      expect(response.toolCalls).toHaveLength(1);
+      expect(response.toolCalls![0].id).toBe('toolu_01XYZ');
+      expect(response.toolCalls![0].function.name).toBe('read_file');
+      expect(JSON.parse(response.toolCalls![0].function.arguments)).toEqual({ path: '/src/main.ts' });
+
+      // Should also include text content
+      expect(response.content).toBe('I will read that file for you.');
+
+      // Verify the request included tools in Anthropic format
+      const callArgs = mockFetchFn.mock.calls[0];
+      const body = JSON.parse(callArgs[1].body);
+      expect(body.tools).toBeDefined();
+      expect(body.tools[0].name).toBe('read_file');
+      expect(body.tools[0].input_schema).toBeDefined();
+    });
+
+    it('should handle text-only response when tools are available', async () => {
+      const mockResponse = {
+        id: 'msg_456',
+        content: [{ type: 'text', text: 'The file does not exist.' }],
+        stop_reason: 'end_turn',
+        usage: { input_tokens: 30, output_tokens: 10 },
+      };
+
+      globalThis.fetch = mockFetch(mockResponse);
+
+      const provider = new AnthropicProvider();
+
+      const tools: ToolDefinitionSchema[] = [
+        {
+          type: 'function',
+          function: {
+            name: 'read_file',
+            description: 'Read a file',
+            parameters: { type: 'object', properties: {} },
+          },
+        },
+      ];
+
+      const response = await provider.chatWithTools(
+        [{ role: 'user', content: 'What is in file X?' }],
+        { tools }
+      );
+
+      expect(response.content).toBe('The file does not exist.');
+      expect(response.toolCalls).toBeUndefined();
+    });
+
+    it('should handle tool result messages correctly', async () => {
+      const mockResponse = {
+        id: 'msg_789',
+        content: [{ type: 'text', text: 'The file contains a main function.' }],
+        stop_reason: 'end_turn',
+        usage: { input_tokens: 100, output_tokens: 20 },
+      };
+
+      const mockFetchFn = mockFetch(mockResponse);
+      globalThis.fetch = mockFetchFn;
+
+      const provider = new AnthropicProvider();
+
+      // Send conversation with tool result
+      const response = await provider.chatWithTools([
+        { role: 'user', content: 'Read main.ts' },
+        {
+          role: 'assistant',
+          content: '',
+          tool_calls: [
+            {
+              id: 'toolu_01ABC',
+              type: 'function' as const,
+              function: { name: 'read_file', arguments: '{"path":"main.ts"}' },
+            },
+          ],
+        },
+        {
+          role: 'tool',
+          content: 'function main() { console.log("hello"); }',
+          tool_call_id: 'toolu_01ABC',
+          name: 'read_file',
+        },
+      ]);
+
+      expect(response.content).toBe('The file contains a main function.');
+
+      // Verify the tool result was sent in Anthropic format
+      const callArgs = mockFetchFn.mock.calls[0];
+      const body = JSON.parse(callArgs[1].body);
+      const messages = body.messages;
+
+      // Should have user, assistant (with tool_use), and user (with tool_result)
+      expect(messages.length).toBeGreaterThanOrEqual(2);
     });
   });
 });

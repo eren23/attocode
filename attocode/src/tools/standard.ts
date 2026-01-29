@@ -8,6 +8,7 @@
 import { ToolRegistry, defineTool } from './registry.js';
 import { readFileTool, writeFileTool, editFileTool, listFilesTool } from './file.js';
 import { bashTool, grepTool, globTool } from './bash.js';
+import { undoToolsAsStandard } from './undo.js';
 import type { ToolDefinitionSchema } from '../providers/types.js';
 import type { ToolDescription, PermissionMode } from './types.js';
 
@@ -104,6 +105,11 @@ export function createStandardRegistry(permissionMode: PermissionMode = 'interac
   registry.register(grepTool);
   registry.register(globTool);
 
+  // Undo/history operations (gracefully handle missing tracker context)
+  for (const tool of undoToolsAsStandard) {
+    registry.register(tool);
+  }
+
   return registry;
 }
 
@@ -131,6 +137,9 @@ export function getToolsSummary(): string {
     { name: 'bash', desc: 'Execute shell commands', safe: false },
     { name: 'grep', desc: 'Search for patterns in files', safe: true },
     { name: 'glob', desc: 'Find files by pattern', safe: true },
+    { name: 'undo_file_change', desc: 'Undo last change to a file', safe: false },
+    { name: 'show_file_history', desc: 'Show change history for a file', safe: true },
+    { name: 'show_session_changes', desc: 'Show all session changes', safe: true },
   ];
 
   return tools

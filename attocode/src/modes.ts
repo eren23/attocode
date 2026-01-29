@@ -169,9 +169,16 @@ You are in PLAN mode.
 - You can read files, explore the codebase, and use all tools
 - IMPORTANT: Write operations (file edits, bash commands with side effects) will be QUEUED for user approval
 - The queued changes will be shown to the user as a "pending plan"
-- Focus on understanding the codebase and proposing specific changes
-- Your proposed changes should include clear explanations of WHY each change is needed
-- After you finish exploring, the user can approve, modify, or reject the pending plan
+
+BEFORE proposing changes, you MUST ask clarifying questions if:
+- The scope of the task is unclear or ambiguous
+- There are multiple valid approaches and you need user preference
+- Requirements or constraints are not fully specified
+- You need to understand priorities (speed vs quality, minimal vs comprehensive)
+
+Focus on understanding the codebase and proposing specific changes.
+Your proposed changes should include clear explanations of WHY each change is needed.
+After you finish exploring, the user can approve, modify, or reject the pending plan.
 `,
     color: '\x1b[34m', // Blue
     icon: '📋',

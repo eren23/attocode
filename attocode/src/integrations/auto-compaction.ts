@@ -10,10 +10,33 @@
 
 import type { Message } from '../types.js';
 import type { Compactor, CompactionResult } from './compaction.js';
+import type { Reference } from '../tricks/reversible-compaction.js';
 
 // =============================================================================
 // TYPES
 // =============================================================================
+
+/**
+ * Result from a custom compaction handler (supports reversible compaction).
+ */
+export interface CustomCompactionResult {
+  /** The summarized content */
+  summary: string;
+  /** Token count before compaction */
+  tokensBefore: number;
+  /** Token count after compaction */
+  tokensAfter: number;
+  /** Messages to preserve in context */
+  preservedMessages: Message[];
+  /** Preserved references for retrieval (from reversible compaction) */
+  references?: Reference[];
+}
+
+/**
+ * Custom compaction handler function type.
+ * Allows integration with reversible compaction or other compaction strategies.
+ */
+export type CompactHandler = (messages: Message[]) => Promise<CustomCompactionResult>;
 
 /**
  * Configuration for automatic compaction behavior.
@@ -35,6 +58,8 @@ export interface AutoCompactionConfig {
   cooldownMs: number;
   /** Max context window tokens (default: 200000 for Claude) */
   maxContextTokens: number;
+  /** Optional custom compaction handler (e.g., for reversible compaction with reference preservation) */
+  compactHandler?: CompactHandler;
 }
 
 /**
@@ -53,6 +78,8 @@ export interface CompactionCheckResult {
   compactedMessages?: Message[];
   /** Summary generated during compaction */
   summary?: string;
+  /** Preserved references from reversible compaction (for later retrieval) */
+  references?: Reference[];
 }
 
 /**
@@ -347,7 +374,7 @@ export class AutoCompactionManager {
     messages: Message[],
     currentTokens: number,
     maxTokens: number,
-    ratio: number
+    _ratio: number
   ): Promise<CompactionCheckResult> {
     this.emit({
       type: 'autocompaction.triggered',
@@ -355,9 +382,66 @@ export class AutoCompactionManager {
       currentTokens,
     });
 
+    // Use custom compaction handler if provided (e.g., for reversible compaction)
+    if (this.config.compactHandler) {
+      return this.performCustomCompaction(messages, maxTokens);
+    }
+
+    // Otherwise use the default compactor
+    return this.performDefaultCompaction(messages, maxTokens);
+  }
+
+  /**
+   * Perform compaction using custom handler (supports reversible compaction with references).
+   */
+  private async performCustomCompaction(
+    messages: Message[],
+    maxTokens: number
+  ): Promise<CompactionCheckResult> {
+    const totalPreserve = this.config.preserveRecentUserMessages + this.config.preserveRecentAssistantMessages;
+
+    try {
+      const result = await this.config.compactHandler!(messages);
+
+      // Update cooldown
+      this.lastCompactionTime = Date.now();
+
+      const reduction = result.tokensBefore > 0
+        ? Math.round((1 - result.tokensAfter / result.tokensBefore) * 100)
+        : 0;
+
+      this.emit({
+        type: 'autocompaction.completed',
+        tokensBefore: result.tokensBefore,
+        tokensAfter: result.tokensAfter,
+        reduction,
+      });
+
+      return {
+        status: 'compacted',
+        currentTokens: result.tokensAfter,
+        maxTokens,
+        ratio: result.tokensAfter / maxTokens,
+        compactedMessages: result.preservedMessages,
+        summary: result.summary,
+        references: result.references, // Preserve references from reversible compaction
+      };
+    } catch (compactionError) {
+      console.error('[AutoCompaction] Custom compaction failed, using emergency truncation:', compactionError);
+      const emergencyResult = this.emergencyTruncate(messages, totalPreserve);
+      this.lastCompactionTime = Date.now();
+      return emergencyResult;
+    }
+  }
+
+  /**
+   * Perform compaction using default compactor.
+   */
+  private async performDefaultCompaction(
+    messages: Message[],
+    maxTokens: number
+  ): Promise<CompactionCheckResult> {
     // Configure compactor to preserve the specified number of messages
-    // The compactor already handles preserving recent messages, but we can
-    // update its config if needed based on our preservation settings
     const totalPreserve = this.config.preserveRecentUserMessages + this.config.preserveRecentAssistantMessages;
     const currentCompactorConfig = this.compactor.getConfig();
 

@@ -221,6 +221,19 @@ describe('ModeManager', () => {
       expect(reviewPrompt).toContain('REVIEW');
       expect(reviewPrompt).toContain('read-only');
     });
+
+    it('should include clarification instructions in PLAN mode', () => {
+      manager.setMode('plan');
+      const planPrompt = manager.getSystemPromptAddition();
+
+      // PLAN mode MUST instruct the agent to ask clarifying questions
+      // before proposing changes when requirements are ambiguous
+      expect(planPrompt).toContain('clarif');  // clarify/clarification/clarifying
+      expect(planPrompt).toContain('ask');     // ask questions
+
+      // Should mention what to clarify
+      expect(planPrompt.toLowerCase()).toMatch(/scope|requirement|constraint|priorit/);
+    });
   });
 
   describe('getAllModes', () => {
