@@ -6,6 +6,7 @@
 
 import { existsSync, readFileSync } from 'node:fs';
 import { getConfigPath } from './paths.js';
+import type { ProviderResilienceConfig } from './types.js';
 
 /**
  * User configuration structure.
@@ -15,6 +16,8 @@ export interface UserConfig {
   model?: string;
   maxIterations?: number;
   timeout?: number;
+  /** Provider-level resilience (circuit breaker, fallback chain) */
+  providerResilience?: ProviderResilienceConfig;
 }
 
 /**

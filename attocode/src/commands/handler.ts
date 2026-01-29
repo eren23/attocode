@@ -1121,7 +1121,7 @@ ${c('Tip:', 'dim')} Use /mcp search <query> to load specific tools on-demand.
     case '/compact':
       try {
         const state = agent.getState();
-        const contextUsage = getContextUsage(state.messages, 80000);
+        const contextUsage = getContextUsage(state.messages, agent.getMaxContextTokens());
 
         if (args[0] === 'status') {
           output.log(`
@@ -1199,7 +1199,7 @@ ${c('  Category             Tokens    % of Total', 'dim')}
             .reduce((sum, m) => sum + estimateTokens(m.content), 0);
 
           const totalTokens = baseTokens + convTokens;
-          const contextLimit = 80000;
+          const contextLimit = agent.getMaxContextTokens();
           const percent = Math.round((totalTokens / contextLimit) * 100);
           const shouldCompact = percent >= 80;
 

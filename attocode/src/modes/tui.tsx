@@ -26,6 +26,8 @@ import {
   createSessionStore,
   createMCPClient,
   createCompactor,
+  createDeadLetterQueue,
+  type DeadLetterQueue,
 } from '../integrations/index.js';
 
 import {
@@ -89,6 +91,9 @@ export async function startTUIMode(
 
     persistenceDebug.log('[TUI] Initializing session store BEFORE dynamic imports...');
 
+    // Dead letter queue for failed operations (will be null if SQLite unavailable)
+    let dlq: DeadLetterQueue | null = null;
+
     try {
       sessionStore = await createSQLiteStore({ baseDir: '.agent/sessions' });
 
@@ -98,6 +103,18 @@ export async function startTUIMode(
         persistenceDebug.log('[TUI] SQLite store initialized!', { sessions: stats.sessionCount, checkpoints: stats.checkpointCount });
       }
       console.log('+ SQLite session store initialized');
+
+      // Initialize DLQ with SQLite store's database
+      const sqliteStore = sessionStore as SQLiteStore;
+      dlq = createDeadLetterQueue(sqliteStore.getDatabase());
+
+      // Check for pending DLQ items at startup
+      if (dlq.isAvailable()) {
+        const pending = dlq.getPending({ limit: 10 });
+        if (pending.length > 0) {
+          console.log(`[DLQ] ${pending.length} failed operation(s) pending retry`);
+        }
+      }
     } catch (sqliteError) {
       const errMsg = (sqliteError as Error).message;
       if (persistenceDebug.isEnabled()) {
@@ -106,6 +123,7 @@ export async function startTUIMode(
       console.log('! SQLite unavailable, using JSONL fallback');
       console.log(`   Error: ${errMsg}`);
       sessionStore = await createSessionStore({ baseDir: '.agent/sessions' });
+      // DLQ stays null - not available without SQLite
     }
 
     // Dynamic imports - using our modular TUI components
@@ -257,6 +275,12 @@ export async function startTUIMode(
 
     // CRITICAL: Sync the session ID to the store's internal state
     sessionStore.setCurrentSessionId(currentSessionId);
+
+    // Inject DLQ if available for failed operation tracking
+    if (dlq) {
+      registry.setDeadLetterQueue(dlq, currentSessionId);
+      mcpClient.setDeadLetterQueue(dlq, currentSessionId);
+    }
 
     // If resuming, load the session state
     if (resumedSession) {

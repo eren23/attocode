@@ -828,7 +828,7 @@ export function TUIApp({
           .filter((m: any) => m.role !== 'system')
           .reduce((sum: number, m: any) => sum + estimateTokens(typeof m.content === 'string' ? m.content : JSON.stringify(m.content)), 0);
         const totalTokens = systemTokens + mcpTokens + agentToolTokens + convTokens;
-        const contextLimit = 80000;
+        const contextLimit = agent.getMaxContextTokens();
         const percent = Math.round((totalTokens / contextLimit) * 100);
         const bar = '='.repeat(Math.min(20, Math.round(percent / 5))) + '-'.repeat(Math.max(0, 20 - Math.round(percent / 5)));
 
@@ -1302,7 +1302,7 @@ export function TUIApp({
       const estimateTokens = (str: string) => Math.ceil(str.length / 3.2);
       const currentContextTokens = agentState.messages.reduce((sum: number, m: any) =>
         sum + estimateTokens(typeof m.content === 'string' ? m.content : JSON.stringify(m.content)), 0);
-      const contextLimit = 80000;
+      const contextLimit = agent.getMaxContextTokens();
       const contextPct = Math.round((currentContextTokens / contextLimit) * 100);
 
       const durationSec = (metrics.duration / 1000).toFixed(1);
@@ -1533,7 +1533,7 @@ export function TUIApp({
   }, [isProcessing]);
 
   const modelShort = (model || 'unknown').split('/').pop() || model || 'unknown';
-  const contextPct = Math.round((contextTokens / 80000) * 100);
+  const contextPct = Math.round((contextTokens / agent.getMaxContextTokens()) * 100);
   const costStr = status.cost > 0 ? `$${status.cost.toFixed(4)}` : '$0.00';
 
   // =========================================================================

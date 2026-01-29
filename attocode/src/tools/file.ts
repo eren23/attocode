@@ -1,6 +1,6 @@
 /**
  * Lesson 3: File Tools
- * 
+ *
  * Tools for file system operations.
  */
 
@@ -9,6 +9,7 @@ import * as fs from 'node:fs/promises';
 import * as path from 'node:path';
 import { defineTool } from './registry.js';
 import type { ToolResult } from './types.js';
+import { FileOperationError, ErrorCategory } from '../errors/index.js';
 
 // =============================================================================
 // READ FILE
@@ -34,12 +35,24 @@ export const readFileTool = defineTool(
     } catch (error) {
       const err = error as NodeJS.ErrnoException;
       if (err.code === 'ENOENT') {
-        return { success: false, output: `File not found: ${input.path}` };
+        throw FileOperationError.notFound(input.path, 'read');
       }
       if (err.code === 'EACCES') {
-        return { success: false, output: `Permission denied: ${input.path}` };
+        throw FileOperationError.permissionDenied(input.path, 'read');
       }
-      return { success: false, output: `Error reading file: ${err.message}` };
+      if (err.code === 'EBUSY') {
+        throw FileOperationError.busy(input.path, 'read');
+      }
+      // For other errors, wrap with generic file operation error
+      throw new FileOperationError(
+        `Error reading file: ${err.message}`,
+        err.code === 'ETIMEDOUT' ? ErrorCategory.TRANSIENT : ErrorCategory.INTERNAL,
+        err.code === 'ETIMEDOUT',
+        input.path,
+        'read',
+        { code: err.code },
+        err
+      );
     }
   },
   'safe'
@@ -116,9 +129,30 @@ export const writeFileTool = defineTool(
     } catch (error) {
       const err = error as NodeJS.ErrnoException;
       if (err.code === 'ENOSPC' || err.message.includes('Disk full')) {
-        return { success: false, output: `Disk full - cannot write file: ${input.path}` };
+        throw new FileOperationError(
+          `Disk full - cannot write file: ${input.path}`,
+          ErrorCategory.RESOURCE,
+          false, // Not recoverable without human intervention
+          input.path,
+          'write',
+          { code: err.code }
+        );
       }
-      return { success: false, output: `Error writing file: ${err.message}` };
+      if (err.code === 'EACCES') {
+        throw FileOperationError.permissionDenied(input.path, 'write');
+      }
+      if (err.code === 'EBUSY') {
+        throw FileOperationError.busy(input.path, 'write');
+      }
+      throw new FileOperationError(
+        `Error writing file: ${err.message}`,
+        ErrorCategory.INTERNAL,
+        false,
+        input.path,
+        'write',
+        { code: err.code },
+        err
+      );
     }
   },
   'moderate'
@@ -176,12 +210,33 @@ export const editFileTool = defineTool(
     } catch (error) {
       const err = error as NodeJS.ErrnoException;
       if (err.code === 'ENOENT') {
-        return { success: false, output: `File not found: ${input.path}` };
+        throw FileOperationError.notFound(input.path, 'edit');
       }
       if (err.code === 'ENOSPC' || err.message.includes('Disk full')) {
-        return { success: false, output: `Disk full - cannot edit file: ${input.path}` };
+        throw new FileOperationError(
+          `Disk full - cannot edit file: ${input.path}`,
+          ErrorCategory.RESOURCE,
+          false,
+          input.path,
+          'edit',
+          { code: err.code }
+        );
       }
-      return { success: false, output: `Error editing file: ${err.message}` };
+      if (err.code === 'EACCES') {
+        throw FileOperationError.permissionDenied(input.path, 'edit');
+      }
+      if (err.code === 'EBUSY') {
+        throw FileOperationError.busy(input.path, 'edit');
+      }
+      throw new FileOperationError(
+        `Error editing file: ${err.message}`,
+        ErrorCategory.INTERNAL,
+        false,
+        input.path,
+        'edit',
+        { code: err.code },
+        err
+      );
     }
   },
   'moderate'
@@ -229,9 +284,20 @@ export const listFilesTool = defineTool(
     } catch (error) {
       const err = error as NodeJS.ErrnoException;
       if (err.code === 'ENOENT') {
-        return { success: false, output: `Directory not found: ${input.path}` };
+        throw FileOperationError.notFound(input.path, 'list');
       }
-      return { success: false, output: `Error listing directory: ${err.message}` };
+      if (err.code === 'EACCES') {
+        throw FileOperationError.permissionDenied(input.path, 'list');
+      }
+      throw new FileOperationError(
+        `Error listing directory: ${err.message}`,
+        ErrorCategory.INTERNAL,
+        false,
+        input.path,
+        'list',
+        { code: err.code },
+        err
+      );
     }
   },
   'safe'

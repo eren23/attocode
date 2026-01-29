@@ -40,10 +40,11 @@ interface OpenRouterModelsResponse {
 }
 
 // =============================================================================
-// PRICING CACHE
+// MODEL INFO CACHE
 // =============================================================================
 
 let pricingCache: Map<string, ModelPricing> = new Map();
+let contextLengthCache: Map<string, number> = new Map();
 let cacheTimestamp: number = 0;
 const CACHE_TTL = 3600000; // 1 hour
 
@@ -62,14 +63,22 @@ const DEFAULT_PRICING: ModelPricing = {
 // =============================================================================
 
 /**
- * Fetch pricing data from OpenRouter API.
+ * Result of fetching OpenRouter model data.
  */
-export async function fetchOpenRouterPricing(): Promise<Map<string, ModelPricing>> {
+interface OpenRouterModelData {
+  pricing: Map<string, ModelPricing>;
+  contextLengths: Map<string, number>;
+}
+
+/**
+ * Fetch model data (pricing + context lengths) from OpenRouter API.
+ */
+export async function fetchOpenRouterModels(): Promise<OpenRouterModelData> {
   const apiKey = process.env.OPENROUTER_API_KEY;
 
   if (!apiKey) {
-    console.log('⚠️  No OPENROUTER_API_KEY - using default pricing estimates');
-    return new Map();
+    console.log('⚠️  No OPENROUTER_API_KEY - using default estimates');
+    return { pricing: new Map(), contextLengths: new Map() };
   }
 
   try {
@@ -86,6 +95,7 @@ export async function fetchOpenRouterPricing(): Promise<Map<string, ModelPricing
 
     const data = await response.json() as OpenRouterModelsResponse;
     const pricing = new Map<string, ModelPricing>();
+    const contextLengths = new Map<string, number>();
 
     for (const model of data.data) {
       pricing.set(model.id, {
@@ -94,19 +104,32 @@ export async function fetchOpenRouterPricing(): Promise<Map<string, ModelPricing
         request: parseFloat(model.pricing.request || '0'),
         image: parseFloat(model.pricing.image || '0'),
       });
+
+      // Store context length
+      if (model.context_length) {
+        contextLengths.set(model.id, model.context_length);
+      }
     }
 
-    return pricing;
+    return { pricing, contextLengths };
   } catch (error) {
-    console.log(`⚠️  Failed to fetch OpenRouter pricing: ${(error as Error).message}`);
-    return new Map();
+    console.log(`⚠️  Failed to fetch OpenRouter models: ${(error as Error).message}`);
+    return { pricing: new Map(), contextLengths: new Map() };
   }
 }
 
 /**
- * Initialize or refresh the pricing cache.
+ * @deprecated Use fetchOpenRouterModels() instead
  */
-export async function initPricingCache(): Promise<void> {
+export async function fetchOpenRouterPricing(): Promise<Map<string, ModelPricing>> {
+  const { pricing } = await fetchOpenRouterModels();
+  return pricing;
+}
+
+/**
+ * Initialize or refresh the model info cache (pricing + context lengths).
+ */
+export async function initModelCache(): Promise<void> {
   const now = Date.now();
 
   // Only refresh if cache is stale
@@ -114,12 +137,20 @@ export async function initPricingCache(): Promise<void> {
     return;
   }
 
-  const pricing = await fetchOpenRouterPricing();
+  const { pricing, contextLengths } = await fetchOpenRouterModels();
   if (pricing.size > 0) {
     pricingCache = pricing;
+    contextLengthCache = contextLengths;
     cacheTimestamp = now;
-    console.log(`💰 Loaded pricing for ${pricing.size} models from OpenRouter`);
+    console.log(`💰 Loaded ${pricing.size} models from OpenRouter (pricing + context limits)`);
   }
+}
+
+/**
+ * @deprecated Use initModelCache() instead
+ */
+export async function initPricingCache(): Promise<void> {
+  return initModelCache();
 }
 
 // =============================================================================
@@ -145,6 +176,34 @@ export function getModelPricing(modelId: string): ModelPricing {
 
   // Return default
   return DEFAULT_PRICING;
+}
+
+/**
+ * Get context length (max tokens) for a specific model.
+ * Returns undefined if the model is not in the cache.
+ */
+export function getModelContextLength(modelId: string): number | undefined {
+  // Direct lookup
+  if (contextLengthCache.has(modelId)) {
+    return contextLengthCache.get(modelId);
+  }
+
+  // Try without provider prefix (e.g., "gpt-4" instead of "openai/gpt-4")
+  const shortId = modelId.split('/').pop() || modelId;
+  for (const [id, contextLength] of contextLengthCache) {
+    if (id.endsWith(shortId) || id.includes(shortId)) {
+      return contextLength;
+    }
+  }
+
+  return undefined;
+}
+
+/**
+ * Check if model cache has been initialized.
+ */
+export function isModelCacheInitialized(): boolean {
+  return pricingCache.size > 0;
 }
 
 /**
@@ -181,4 +240,4 @@ export function formatCost(cost: number): string {
 // EXPORTS
 // =============================================================================
 
-export { pricingCache, DEFAULT_PRICING };
+export { pricingCache, contextLengthCache, DEFAULT_PRICING };

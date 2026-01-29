@@ -145,6 +145,10 @@ import {
 // Lesson 26: Tracing & Evaluation integration
 import { TraceCollector, createTraceCollector } from './tracing/trace-collector.js';
 
+// Model registry for context window limits
+import { modelRegistry } from './costs/index.js';
+import { getModelContextLength } from './integrations/openrouter-pricing.js';
+
 // Spawn agent tool for LLM-driven subagent delegation
 import { createBoundSpawnAgentTool } from './tools/agent.js';
 
@@ -695,15 +699,25 @@ export class ProductionAgent {
           }
         : undefined;
 
+      // Get model's actual context window - try OpenRouter first (real API data),
+      // then fall back to hardcoded ModelRegistry, then config, then default
+      const openRouterContext = getModelContextLength(this.config.model || '');
+      const registryInfo = modelRegistry.getModel(this.config.model || '');
+      const registryContext = registryInfo?.capabilities?.maxContextTokens;
+      const maxContextTokens = this.config.maxContextTokens
+        ?? openRouterContext   // From OpenRouter API (e.g., GLM-4.7 = 202752)
+        ?? registryContext     // From hardcoded registry (Claude, GPT-4o, etc.)
+        ?? 200000;             // Fallback to 200K
+
       this.autoCompactionManager = createAutoCompactionManager(this.compactor, {
         mode: compactionConfig.mode ?? 'auto',
-        warningThreshold: 0.80,
-        autoCompactThreshold: 0.90,
-        hardLimitThreshold: 0.98,
+        warningThreshold: 0.70,       // Warn at 70% of model's context
+        autoCompactThreshold: 0.80,   // Compact at 80% (changed from 0.90)
+        hardLimitThreshold: 0.95,     // Hard limit at 95%
         preserveRecentUserMessages: Math.ceil((compactionConfig.preserveRecentCount ?? 10) / 2),
         preserveRecentAssistantMessages: Math.ceil((compactionConfig.preserveRecentCount ?? 10) / 2),
         cooldownMs: 60000, // 1 minute cooldown
-        maxContextTokens: this.config.maxContextTokens ?? 200000,
+        maxContextTokens,  // Dynamic from model registry or config
         compactHandler, // Use reversible compaction when contextEngineering is available
       });
 
@@ -1496,7 +1510,7 @@ export class ProductionAgent {
 
         // Emit context health after adding tool results
         const currentTokenEstimate = this.estimateContextTokens(messages);
-        const contextLimit = this.config.maxContextTokens || 100000;
+        const contextLimit = this.getMaxContextTokens();
         const percentUsed = Math.round((currentTokenEstimate / contextLimit) * 100);
         const avgTokensPerExchange = currentTokenEstimate / Math.max(1, this.state.iteration);
         const remainingTokens = contextLimit - currentTokenEstimate;
@@ -1688,7 +1702,7 @@ export class ProductionAgent {
       return sum + Math.ceil(content.length / 3.5); // ~3.5 chars per token estimate
     }, 0);
     // Use context window size, not output token limit
-    const contextLimit = this.config.maxContextTokens || 100000;
+    const contextLimit = this.getMaxContextTokens();
     this.emit({
       type: 'insight.context',
       currentTokens: estimatedTokens,
@@ -2299,6 +2313,28 @@ export class ProductionAgent {
    */
   getState(): AgentState {
     return { ...this.state };
+  }
+
+  /**
+   * Get the maximum context tokens for this agent's model.
+   * Priority: user config > OpenRouter API > hardcoded ModelRegistry > 200K default
+   */
+  getMaxContextTokens(): number {
+    if (this.config.maxContextTokens) {
+      return this.config.maxContextTokens;
+    }
+    // Try OpenRouter API cache (has real data for GLM-4.7, etc.)
+    const openRouterContext = getModelContextLength(this.config.model || '');
+    if (openRouterContext) {
+      return openRouterContext;
+    }
+    // Fall back to hardcoded registry
+    const registryInfo = modelRegistry.getModel(this.config.model || '');
+    if (registryInfo?.capabilities?.maxContextTokens) {
+      return registryInfo.capabilities.maxContextTokens;
+    }
+    // Default
+    return 200000;
   }
 
   /**

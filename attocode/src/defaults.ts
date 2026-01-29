@@ -33,6 +33,7 @@ import type {
   LLMResilienceAgentConfig,
   FileChangeTrackerAgentConfig,
   SubagentConfig,
+  ProviderResilienceConfig,
   ProductionAgentConfig,
 } from './types.js';
 
@@ -306,10 +307,14 @@ export const DEFAULT_SKILLS_CONFIG: SkillsAgentConfig = {
 
 /**
  * Default compaction configuration.
+ *
+ * Note: The actual compaction threshold is calculated as 80% of the model's
+ * context window (from ModelRegistry). The tokenThreshold here is a fallback
+ * for when the model's context window is unknown.
  */
 export const DEFAULT_COMPACTION_CONFIG: CompactionAgentConfig = {
   enabled: true, // Enabled by default for context management
-  tokenThreshold: 80000, // Trigger at 80K tokens
+  tokenThreshold: 160000, // Fallback: 80% of 200K (Claude's default context)
   preserveRecentCount: 10, // Keep last 10 messages verbatim
   preserveToolResults: true, // Keep tool results
   summaryMaxTokens: 2000, // Summary size limit
@@ -439,11 +444,30 @@ export const DEFAULT_SUBAGENT_CONFIG: SubagentConfig = {
 };
 
 /**
+ * Default provider resilience configuration.
+ * Controls circuit breaker and fallback chain for LLM provider calls.
+ */
+export const DEFAULT_PROVIDER_RESILIENCE_CONFIG: ProviderResilienceConfig = {
+  enabled: true, // Enabled by default for production reliability
+  circuitBreaker: {
+    failureThreshold: 5,
+    resetTimeout: 30000, // 30 seconds
+    halfOpenRequests: 1,
+    tripOnErrors: ['RATE_LIMITED', 'SERVER_ERROR', 'NETWORK_ERROR', 'TIMEOUT'],
+  },
+  fallbackProviders: [], // No fallback by default (single provider)
+  fallbackChain: {
+    cooldownMs: 60000, // 1 minute cooldown
+    failureThreshold: 3,
+  },
+};
+
+/**
  * Build complete configuration from partial user config.
  */
 export function buildConfig(
   userConfig: Partial<ProductionAgentConfig>
-): Required<Omit<ProductionAgentConfig, 'provider' | 'tools' | 'toolResolver' | 'mcpToolSummaries'>> & Pick<ProductionAgentConfig, 'provider' | 'tools' | 'toolResolver' | 'mcpToolSummaries'> {
+): Required<Omit<ProductionAgentConfig, 'provider' | 'tools' | 'toolResolver' | 'mcpToolSummaries' | 'maxContextTokens'>> & Pick<ProductionAgentConfig, 'provider' | 'tools' | 'toolResolver' | 'mcpToolSummaries' | 'maxContextTokens'> {
   return {
     provider: userConfig.provider!,
     tools: userConfig.tools || [],
@@ -478,7 +502,8 @@ export function buildConfig(
     resilience: mergeConfig(DEFAULT_LLM_RESILIENCE_CONFIG, userConfig.resilience),
     fileChangeTracker: mergeConfig(DEFAULT_FILE_CHANGE_TRACKER_CONFIG, userConfig.fileChangeTracker),
     subagent: mergeConfig(DEFAULT_SUBAGENT_CONFIG, userConfig.subagent),
-    maxContextTokens: userConfig.maxContextTokens ?? 100000, // 100k tokens default
+    providerResilience: mergeConfig(DEFAULT_PROVIDER_RESILIENCE_CONFIG, userConfig.providerResilience),
+    maxContextTokens: userConfig.maxContextTokens, // Dynamic: fetched from OpenRouter/ModelRegistry if not explicitly set
     maxIterations: userConfig.maxIterations ?? 50,
     timeout: userConfig.timeout ?? 300000, // 5 minutes
     toolResolver: userConfig.toolResolver, // Optional: for lazy-loading MCP tools

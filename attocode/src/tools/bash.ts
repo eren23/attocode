@@ -7,7 +7,7 @@
 import { z } from 'zod';
 import { spawn } from 'node:child_process';
 import { defineTool } from './registry.js';
-import { classifyCommand } from './permission.js';
+import { classifyCommand, classifyBashCommandDangerLevel } from './permission.js';
 import type { ToolResult, DangerLevel } from './types.js';
 
 // =============================================================================
@@ -136,8 +136,12 @@ export const bashTool = defineTool(
       });
     });
   },
-  // Danger level is determined dynamically, but default to moderate
-  'moderate' as DangerLevel
+  {
+    // Default to moderate for backwards compatibility
+    dangerLevel: 'moderate' as DangerLevel,
+    // Dynamic danger level based on actual command
+    getDangerLevel: (input: { command: string }) => classifyBashCommandDangerLevel(input.command),
+  }
 );
 
 // =============================================================================

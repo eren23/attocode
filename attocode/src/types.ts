@@ -199,6 +199,9 @@ export interface ProductionAgentConfig {
   /** Subagent configuration (timeout and iteration limits) */
   subagent?: SubagentConfig | false;
 
+  /** Provider-level resilience (circuit breaker, fallback chain) */
+  providerResilience?: ProviderResilienceConfig | false;
+
   /** Maximum context tokens before compaction */
   maxContextTokens?: number;
 
@@ -920,6 +923,41 @@ export interface SubagentConfig {
 
   /** Whether subagents inherit observability config from parent */
   inheritObservability?: boolean;
+}
+
+/**
+ * Provider-level resilience configuration.
+ * Controls circuit breaker and fallback chain for LLM provider calls.
+ */
+export interface ProviderResilienceConfig {
+  /** Enable/disable provider resilience */
+  enabled?: boolean;
+
+  /** Circuit breaker configuration */
+  circuitBreaker?: {
+    /** Number of failures before opening circuit (default: 5) */
+    failureThreshold?: number;
+    /** Time in ms before testing recovery (default: 30000) */
+    resetTimeout?: number;
+    /** Requests allowed in half-open state (default: 1) */
+    halfOpenRequests?: number;
+    /** Error types that trigger circuit (default: all) */
+    tripOnErrors?: Array<'RATE_LIMITED' | 'SERVER_ERROR' | 'NETWORK_ERROR' | 'TIMEOUT' | 'ALL'>;
+  } | false;
+
+  /** Fallback provider names in priority order */
+  fallbackProviders?: string[];
+
+  /** Fallback chain configuration */
+  fallbackChain?: {
+    /** Cooldown time in ms for failed providers (default: 60000) */
+    cooldownMs?: number;
+    /** Failures before provider cooldown (default: 3) */
+    failureThreshold?: number;
+  };
+
+  /** Callback when falling back between providers */
+  onFallback?: (from: string, to: string, error: Error) => void;
 }
 
 /**

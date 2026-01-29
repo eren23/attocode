@@ -11,6 +11,9 @@ import { existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { createInterface, type Interface as ReadlineInterface } from 'node:readline';
 import type { ToolDefinition } from '../types.js';
+import { withRetry, MCP_RETRY_CONFIG } from './retry.js';
+import { MCPError, isRecoverable } from '../errors/index.js';
+import type { DeadLetterQueue } from './dead-letter-queue.js';
 
 // =============================================================================
 // TYPES
@@ -166,6 +169,8 @@ export class MCPClient {
   private config: Required<MCPClientConfig>;
   private servers: Map<string, MCPConnection> = new Map();
   private listeners: MCPEventListener[] = [];
+  private dlq: DeadLetterQueue | null = null;
+  private sessionId?: string;
 
   constructor(config: MCPClientConfig = {}) {
     this.config = {
@@ -292,7 +297,7 @@ export class MCPClient {
   async connectServer(name: string): Promise<void> {
     const server = this.servers.get(name);
     if (!server) {
-      throw new Error(`Server not registered: ${name}`);
+      throw MCPError.serverNotFound(name);
     }
 
     if (server.status === 'connected') {
@@ -413,7 +418,7 @@ export class MCPClient {
       // Set timeout
       const timeout = setTimeout(() => {
         server.pendingRequests.delete(id);
-        reject(new Error(`Request timeout: ${method}`));
+        reject(MCPError.timeout(server.name, method));
       }, this.config.requestTimeout);
 
       // Store timeout to clear later
@@ -507,24 +512,43 @@ export class MCPClient {
 
   /**
    * Call a tool on a specific server.
+   * Includes automatic retry for transient failures (timeouts, connection resets).
    */
   async callTool(serverName: string, toolName: string, args: unknown): Promise<unknown> {
     const server = this.servers.get(serverName);
     if (!server) {
-      throw new Error(`Server not found: ${serverName}`);
+      throw MCPError.serverNotFound(serverName);
     }
 
     if (server.status !== 'connected') {
-      throw new Error(`Server not connected: ${serverName}`);
+      throw MCPError.serverNotConnected(serverName);
     }
 
     this.emit({ type: 'tool.call', server: serverName, tool: toolName });
 
     try {
-      const result = await this.sendRequest(server, 'tools/call', {
-        name: toolName,
-        arguments: args,
-      }) as { content: Array<{ type: string; text?: string }> };
+      // Wrap the request with retry logic for transient failures
+      const result = await withRetry(
+        async () => {
+          return await this.sendRequest(server, 'tools/call', {
+            name: toolName,
+            arguments: args,
+          }) as { content: Array<{ type: string; text?: string }> };
+        },
+        {
+          maxAttempts: 2, // Initial + 1 retry
+          ...MCP_RETRY_CONFIG,
+          onRetry: (attempt, error, delay) => {
+            this.emit({
+              type: 'tool.call',
+              server: serverName,
+              tool: toolName,
+              // @ts-expect-error Extended event with retry info
+              retry: { attempt, error: error.message, delayMs: delay },
+            });
+          },
+        }
+      );
 
       this.emit({ type: 'tool.result', server: serverName, tool: toolName, success: true });
 
@@ -537,6 +561,21 @@ export class MCPClient {
       return textContent || result;
     } catch (err) {
       this.emit({ type: 'tool.result', server: serverName, tool: toolName, success: false });
+
+      // Write to DLQ if the error is not recoverable (permanent failure)
+      if (this.dlq?.isAvailable() && !isRecoverable(err)) {
+        try {
+          this.dlq.add({
+            operation: `mcp:${serverName}:${toolName}`,
+            args,
+            error: err as Error,
+            sessionId: this.sessionId,
+          });
+        } catch {
+          // Don't let DLQ errors affect MCP execution
+        }
+      }
+
       throw err;
     }
   }
@@ -846,6 +885,15 @@ export class MCPClient {
       const idx = this.listeners.indexOf(listener);
       if (idx >= 0) this.listeners.splice(idx, 1);
     };
+  }
+
+  /**
+   * Set the dead letter queue for failed operation tracking.
+   * When set, permanent failures will be logged to the DLQ for later retry.
+   */
+  setDeadLetterQueue(dlq: DeadLetterQueue | null, sessionId?: string): void {
+    this.dlq = dlq;
+    this.sessionId = sessionId;
   }
 
   /**
