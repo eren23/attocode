@@ -253,6 +253,8 @@ export class SQLiteStore {
     goals: false,
     workerResults: false,
     pendingPlans: false,
+    deadLetterQueue: false,
+    rememberedPermissions: false,
   };
 
   // Prepared statements for performance
@@ -297,6 +299,11 @@ export class SQLiteStore {
     updatePendingPlan?: Database.Statement;
     getPendingPlan?: Database.Statement;
     deletePendingPlan?: Database.Statement;
+    // Remembered permissions statements (optional - only if rememberedPermissions feature available)
+    insertRememberedPermission?: Database.Statement;
+    getRememberedPermission?: Database.Statement;
+    listRememberedPermissions?: Database.Statement;
+    deleteRememberedPermission?: Database.Statement;
   };
 
   constructor(config: SQLiteStoreConfig = {}) {
@@ -636,6 +643,32 @@ export class SQLiteStore {
         DELETE FROM pending_plans WHERE id = ?
       `);
     }
+
+    // Remembered permissions statements (optional - only if feature available)
+    if (this.features.rememberedPermissions) {
+      this.stmts.insertRememberedPermission = this.db.prepare(`
+        INSERT OR REPLACE INTO remembered_permissions (tool_name, pattern, decision, created_at)
+        VALUES (@toolName, @pattern, @decision, @createdAt)
+      `);
+
+      this.stmts.getRememberedPermission = this.db.prepare(`
+        SELECT tool_name as toolName, pattern, decision, created_at as createdAt
+        FROM remembered_permissions
+        WHERE tool_name = ? AND (pattern = ? OR pattern IS NULL)
+        ORDER BY pattern IS NULL ASC
+        LIMIT 1
+      `);
+
+      this.stmts.listRememberedPermissions = this.db.prepare(`
+        SELECT tool_name as toolName, pattern, decision, created_at as createdAt
+        FROM remembered_permissions
+        ORDER BY tool_name, pattern
+      `);
+
+      this.stmts.deleteRememberedPermission = this.db.prepare(`
+        DELETE FROM remembered_permissions WHERE tool_name = ? AND (pattern = ? OR (? IS NULL AND pattern IS NULL))
+      `);
+    }
   }
 
   // ===========================================================================
@@ -948,6 +981,14 @@ export class SQLiteStore {
     const dbSizeBytes = (this.db.prepare('SELECT page_count * page_size as size FROM pragma_page_count(), pragma_page_size()').get() as { size: number }).size;
 
     return { sessionCount, entryCount, toolCallCount, checkpointCount, dbSizeBytes };
+  }
+
+  /**
+   * Get the underlying database instance.
+   * Useful for integrations that need direct database access (e.g., DeadLetterQueue).
+   */
+  getDatabase(): Database.Database {
+    return this.db;
   }
 
   // ===========================================================================
@@ -1863,6 +1904,121 @@ export class SQLiteStore {
     }
 
     return { migrated, failed };
+  }
+
+  // ===========================================================================
+  // REMEMBERED PERMISSIONS
+  // ===========================================================================
+
+  /**
+   * Check if remembered permissions feature is available.
+   */
+  hasRememberedPermissionsFeature(): boolean {
+    return this.features.rememberedPermissions;
+  }
+
+  /**
+   * Remember a permission decision.
+   * @param toolName - The tool name (e.g., 'bash')
+   * @param decision - 'always' or 'never'
+   * @param pattern - Optional command pattern (for bash commands)
+   */
+  rememberPermission(
+    toolName: string,
+    decision: 'always' | 'never',
+    pattern?: string
+  ): void {
+    if (!this.features.rememberedPermissions || !this.stmts.insertRememberedPermission) {
+      return;
+    }
+
+    this.stmts.insertRememberedPermission.run({
+      toolName,
+      pattern: pattern ?? null,
+      decision,
+      createdAt: new Date().toISOString(),
+    });
+  }
+
+  /**
+   * Get a remembered permission decision.
+   * Returns the decision if found, or undefined if no remembered decision.
+   */
+  getRememberedPermission(
+    toolName: string,
+    pattern?: string
+  ): { decision: 'always' | 'never'; pattern?: string } | undefined {
+    if (!this.features.rememberedPermissions || !this.stmts.getRememberedPermission) {
+      return undefined;
+    }
+
+    const row = this.stmts.getRememberedPermission.get(toolName, pattern ?? null) as {
+      toolName: string;
+      pattern: string | null;
+      decision: 'always' | 'never';
+      createdAt: string;
+    } | undefined;
+
+    if (!row) return undefined;
+
+    return {
+      decision: row.decision,
+      pattern: row.pattern ?? undefined,
+    };
+  }
+
+  /**
+   * List all remembered permission decisions.
+   */
+  listRememberedPermissions(): Array<{
+    toolName: string;
+    pattern?: string;
+    decision: 'always' | 'never';
+    createdAt: string;
+  }> {
+    if (!this.features.rememberedPermissions || !this.stmts.listRememberedPermissions) {
+      return [];
+    }
+
+    const rows = this.stmts.listRememberedPermissions.all() as Array<{
+      toolName: string;
+      pattern: string | null;
+      decision: 'always' | 'never';
+      createdAt: string;
+    }>;
+
+    return rows.map(row => ({
+      toolName: row.toolName,
+      pattern: row.pattern ?? undefined,
+      decision: row.decision,
+      createdAt: row.createdAt,
+    }));
+  }
+
+  /**
+   * Remove a remembered permission decision.
+   */
+  forgetPermission(toolName: string, pattern?: string): void {
+    if (!this.features.rememberedPermissions || !this.stmts.deleteRememberedPermission) {
+      return;
+    }
+
+    this.stmts.deleteRememberedPermission.run(toolName, pattern ?? null, pattern ?? null);
+  }
+
+  /**
+   * Clear all remembered permissions for a tool or all tools.
+   */
+  clearRememberedPermissions(toolName?: string): void {
+    if (!this.features.rememberedPermissions) {
+      return;
+    }
+
+    if (toolName) {
+      this.db.prepare('DELETE FROM remembered_permissions WHERE tool_name = ?').run(toolName);
+    } else {
+      this.db.prepare('DELETE FROM remembered_permissions').run();
+    }
   }
 
   // ===========================================================================

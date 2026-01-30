@@ -145,6 +145,10 @@ import {
 // Lesson 26: Tracing & Evaluation integration
 import { TraceCollector, createTraceCollector } from './tracing/trace-collector.js';
 
+// Model registry for context window limits
+import { modelRegistry } from './costs/index.js';
+import { getModelContextLength } from './integrations/openrouter-pricing.js';
+
 // Spawn agent tool for LLM-driven subagent delegation
 import { createBoundSpawnAgentTool } from './tools/agent.js';
 
@@ -669,15 +673,52 @@ export class ProductionAgent {
       });
 
       // Create the auto-compaction manager with threshold monitoring
+      // Wire reversible compaction through contextEngineering when available
+      const compactHandler = this.contextEngineering
+        ? async (messages: Message[]) => {
+            // Use contextEngineering's reversible compaction to preserve references
+            const summarize = async (msgs: Message[]) => {
+              // Use the basic compactor's summarization capability
+              const result = await this.compactor!.compact(msgs);
+              return result.summary;
+            };
+            const contextMsgs = messages.map(m => ({
+              role: m.role as 'system' | 'user' | 'assistant' | 'tool',
+              content: typeof m.content === 'string' ? m.content : JSON.stringify(m.content),
+            }));
+            const result = await this.contextEngineering!.compact(contextMsgs, summarize);
+            const tokensBefore = this.compactor!.estimateTokens(messages);
+            const tokensAfter = this.compactor!.estimateTokens([{ role: 'assistant', content: result.summary }]);
+            return {
+              summary: result.summary + (result.reconstructionPrompt ? `\n\n${result.reconstructionPrompt}` : ''),
+              tokensBefore,
+              tokensAfter,
+              preservedMessages: [{ role: 'assistant' as const, content: result.summary }],
+              references: result.references,
+            };
+          }
+        : undefined;
+
+      // Get model's actual context window - try OpenRouter first (real API data),
+      // then fall back to hardcoded ModelRegistry, then config, then default
+      const openRouterContext = getModelContextLength(this.config.model || '');
+      const registryInfo = modelRegistry.getModel(this.config.model || '');
+      const registryContext = registryInfo?.capabilities?.maxContextTokens;
+      const maxContextTokens = this.config.maxContextTokens
+        ?? openRouterContext   // From OpenRouter API (e.g., GLM-4.7 = 202752)
+        ?? registryContext     // From hardcoded registry (Claude, GPT-4o, etc.)
+        ?? 200000;             // Fallback to 200K
+
       this.autoCompactionManager = createAutoCompactionManager(this.compactor, {
         mode: compactionConfig.mode ?? 'auto',
-        warningThreshold: 0.80,
-        autoCompactThreshold: 0.90,
-        hardLimitThreshold: 0.98,
+        warningThreshold: 0.70,       // Warn at 70% of model's context
+        autoCompactThreshold: 0.80,   // Compact at 80% (changed from 0.90)
+        hardLimitThreshold: 0.95,     // Hard limit at 95%
         preserveRecentUserMessages: Math.ceil((compactionConfig.preserveRecentCount ?? 10) / 2),
         preserveRecentAssistantMessages: Math.ceil((compactionConfig.preserveRecentCount ?? 10) / 2),
         cooldownMs: 60000, // 1 minute cooldown
-        maxContextTokens: this.config.maxContextTokens ?? 200000,
+        maxContextTokens,  // Dynamic from model registry or config
+        compactHandler, // Use reversible compaction when contextEngineering is available
       });
 
       // Forward compactor events to observability
@@ -822,9 +863,18 @@ export class ProductionAgent {
     this.emit({ type: 'start', task, traceId });
     this.observability?.logger?.info('Agent started', { task });
 
-    // Lesson 26: Start trace capture session
-    const traceSessionId = `session-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
-    await this.traceCollector?.startSession(traceSessionId, task, this.config.model || 'default', {});
+    // Lesson 26: Start trace capture
+    // If session is already active (managed by REPL), start a task within it.
+    // Otherwise, start a new session for backward compatibility (single-task mode).
+    const taskId = `task-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+    if (this.traceCollector?.isSessionActive()) {
+      // Session managed by REPL - just start a task
+      await this.traceCollector.startTask(taskId, task);
+    } else {
+      // Single-task mode (backward compatibility) - start session with task
+      const traceSessionId = `session-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+      await this.traceCollector?.startSession(traceSessionId, task, this.config.model || 'default', {});
+    }
 
     try {
       // Check for cancellation before starting
@@ -862,8 +912,13 @@ export class ProductionAgent {
       this.emit({ type: 'complete', result });
       this.observability?.logger?.info('Agent completed', { duration, success: true });
 
-      // Lesson 26: End trace capture session
-      await this.traceCollector?.endSession({ success: true, output: response });
+      // Lesson 26: End trace capture
+      // If task is active (REPL mode), end the task. Otherwise end the session (single-task mode).
+      if (this.traceCollector?.isTaskActive()) {
+        await this.traceCollector.endTask({ success: true, output: response });
+      } else if (this.traceCollector?.isSessionActive()) {
+        await this.traceCollector.endSession({ success: true, output: response });
+      }
 
       return result;
     } catch (err) {
@@ -878,8 +933,12 @@ export class ProductionAgent {
         this.emit({ type: 'cancellation.completed', cleanupDuration });
         this.observability?.logger?.info('Agent cancelled', { reason: error.message, cleanupDuration });
 
-        // Lesson 26: End trace capture session on cancellation
-        await this.traceCollector?.endSession({ success: false, failureReason: `Cancelled: ${error.message}` });
+        // Lesson 26: End trace capture on cancellation
+        if (this.traceCollector?.isTaskActive()) {
+          await this.traceCollector.endTask({ success: false, failureReason: `Cancelled: ${error.message}` });
+        } else if (this.traceCollector?.isSessionActive()) {
+          await this.traceCollector.endSession({ success: false, failureReason: `Cancelled: ${error.message}` });
+        }
 
         return {
           success: false,
@@ -897,8 +956,12 @@ export class ProductionAgent {
       this.emit({ type: 'error', error: error.message });
       this.observability?.logger?.error('Agent failed', { error: error.message });
 
-      // Lesson 26: End trace capture session on error
-      await this.traceCollector?.endSession({ success: false, failureReason: error.message });
+      // Lesson 26: End trace capture on error
+      if (this.traceCollector?.isTaskActive()) {
+        await this.traceCollector.endTask({ success: false, failureReason: error.message });
+      } else if (this.traceCollector?.isSessionActive()) {
+        await this.traceCollector.endSession({ success: false, failureReason: error.message });
+      }
 
       return {
         success: false,
@@ -982,6 +1045,12 @@ export class ProductionAgent {
       // Agent loop - now uses economics-based budget checking
       while (true) {
         this.state.iteration++;
+
+        // Record iteration start for tracing
+        this.traceCollector?.record({
+          type: 'iteration.start',
+          data: { iterationNumber: this.state.iteration },
+        });
 
         // =======================================================================
         // CANCELLATION CHECK
@@ -1360,6 +1429,12 @@ export class ProductionAgent {
               continuations,
             });
           }
+
+          // Record iteration end for tracing (no tool calls case)
+          this.traceCollector?.record({
+            type: 'iteration.end',
+            data: { iterationNumber: this.state.iteration },
+          });
           break;
         }
 
@@ -1469,7 +1544,7 @@ export class ProductionAgent {
 
         // Emit context health after adding tool results
         const currentTokenEstimate = this.estimateContextTokens(messages);
-        const contextLimit = this.config.maxContextTokens || 100000;
+        const contextLimit = this.getMaxContextTokens();
         const percentUsed = Math.round((currentTokenEstimate / contextLimit) * 100);
         const avgTokensPerExchange = currentTokenEstimate / Math.max(1, this.state.iteration);
         const remainingTokens = contextLimit - currentTokenEstimate;
@@ -1481,6 +1556,12 @@ export class ProductionAgent {
           maxTokens: contextLimit,
           estimatedExchanges,
           percentUsed,
+        });
+
+        // Record iteration end for tracing (after tool execution)
+        this.traceCollector?.record({
+          type: 'iteration.end',
+          data: { iterationNumber: this.state.iteration },
         });
       }
 
@@ -1661,7 +1742,7 @@ export class ProductionAgent {
       return sum + Math.ceil(content.length / 3.5); // ~3.5 chars per token estimate
     }, 0);
     // Use context window size, not output token limit
-    const contextLimit = this.config.maxContextTokens || 100000;
+    const contextLimit = this.getMaxContextTokens();
     this.emit({
       type: 'insight.context',
       currentTokens: estimatedTokens,
@@ -1756,6 +1837,28 @@ export class ProductionAgent {
             ? [{ model, rejected: 'complexity threshold exceeded' }]
             : undefined,
         });
+
+        // Enhanced tracing: Record routing decision
+        this.traceCollector?.record({
+          type: 'decision',
+          data: {
+            type: 'routing',
+            decision: `Selected model: ${actualModel}`,
+            outcome: 'allowed',
+            reasoning: actualModel !== model
+              ? `Task complexity ${(complexity * 100).toFixed(0)}% exceeded threshold - routed to ${actualModel}`
+              : `Default model ${model} suitable for task complexity ${(complexity * 100).toFixed(0)}%`,
+            factors: [
+              { name: 'complexity', value: complexity, weight: 0.8 },
+              { name: 'hasTools', value: context.hasTools, weight: 0.1 },
+              { name: 'taskType', value: context.taskType, weight: 0.1 },
+            ],
+            alternatives: actualModel !== model
+              ? [{ option: model, reason: 'complexity threshold exceeded', rejected: true }]
+              : undefined,
+            confidence: 0.9,
+          },
+        });
       } else {
         response = await this.provider.chat(messages, {
           model: this.config.model,
@@ -1790,6 +1893,20 @@ export class ProductionAgent {
           durationMs: duration,
         },
       });
+
+      // Enhanced tracing: Record thinking/reasoning blocks if present
+      if (response.thinking) {
+        this.traceCollector?.record({
+          type: 'llm.thinking',
+          data: {
+            requestId,
+            content: response.thinking,
+            summarized: response.thinking.length > 10000, // Summarize if very long
+            originalLength: response.thinking.length,
+            durationMs: duration,
+          },
+        });
+      }
 
       // Record metrics
       this.observability?.metrics?.recordLLMCall(
@@ -1887,6 +2004,7 @@ export class ProductionAgent {
             type: 'plan.change.queued',
             tool: toolCall.name,
             changeId: change?.id,
+            summary: this.formatToolArgsForPlan(toolCall.name, toolCall.arguments as Record<string, unknown>),
           });
 
           // Return a message indicating the change was queued
@@ -1931,6 +2049,24 @@ export class ProductionAgent {
               : evaluation.policy === 'prompt' ? 'prompted'
               : 'allowed',
             policyMatch: evaluation.reason,
+          });
+
+          // Enhanced tracing: Record policy decision
+          this.traceCollector?.record({
+            type: 'decision',
+            data: {
+              type: 'policy',
+              decision: `Tool ${toolCall.name}: ${evaluation.policy}`,
+              outcome: evaluation.policy === 'forbidden' ? 'blocked'
+                : evaluation.policy === 'prompt' ? 'deferred'
+                : 'allowed',
+              reasoning: evaluation.reason,
+              factors: [
+                { name: 'policy', value: evaluation.policy },
+                { name: 'requiresApproval', value: evaluation.requiresApproval ?? false },
+              ],
+              confidence: evaluation.intent?.confidence ?? 0.8,
+            },
           });
 
           // Handle forbidden policy - always block
@@ -2243,6 +2379,12 @@ export class ProductionAgent {
     if (toolName === 'delete_file') {
       return `Delete: ${args.path || args.file_path}`;
     }
+    if (toolName === 'spawn_agent' || toolName === 'researcher') {
+      const task = String(args.task || args.prompt || args.goal || '');
+      const model = args.model ? ` (${args.model})` : '';
+      const firstLine = task.split('\n')[0].slice(0, 100);
+      return `${firstLine}${task.length > 100 ? '...' : ''}${model}`;
+    }
     // Generic
     return `Args: ${JSON.stringify(args).slice(0, 100)}...`;
   }
@@ -2272,6 +2414,28 @@ export class ProductionAgent {
    */
   getState(): AgentState {
     return { ...this.state };
+  }
+
+  /**
+   * Get the maximum context tokens for this agent's model.
+   * Priority: user config > OpenRouter API > hardcoded ModelRegistry > 200K default
+   */
+  getMaxContextTokens(): number {
+    if (this.config.maxContextTokens) {
+      return this.config.maxContextTokens;
+    }
+    // Try OpenRouter API cache (has real data for GLM-4.7, etc.)
+    const openRouterContext = getModelContextLength(this.config.model || '');
+    if (openRouterContext) {
+      return openRouterContext;
+    }
+    // Fall back to hardcoded registry
+    const registryInfo = modelRegistry.getModel(this.config.model || '');
+    if (registryInfo?.capabilities?.maxContextTokens) {
+      return registryInfo.capabilities.maxContextTokens;
+    }
+    // Default
+    return 200000;
   }
 
   /**
@@ -3155,6 +3319,8 @@ export class ProductionAgent {
     this.observability?.logger?.info('Spawning agent', { name: agentName, task });
 
     const startTime = Date.now();
+    const childSessionId = `subagent-${agentName}-${Date.now()}`;
+    const childTraceId = `trace-${childSessionId}`;
 
     try {
       // Filter tools for this agent
@@ -3237,6 +3403,33 @@ export class ProductionAgent {
         };
 
         this.emit({ type: 'agent.complete', agentId: agentName, success: result.success });
+
+        // Enhanced tracing: Record subagent completion
+        this.traceCollector?.record({
+          type: 'subagent.link',
+          data: {
+            parentSessionId: this.traceCollector.getSessionId() || 'unknown',
+            childSessionId,
+            childTraceId,
+            childConfig: {
+              agentType: agentName,
+              model: resolvedModel || 'default',
+              task,
+              tools: agentTools.map(t => t.name),
+            },
+            spawnContext: {
+              reason: `Delegated task: ${task.slice(0, 100)}`,
+              expectedOutcome: agentDef.description,
+              parentIteration: this.state.iteration,
+            },
+            result: {
+              success: result.success,
+              summary: (result.response || result.error || '').slice(0, 500),
+              tokensUsed: result.metrics.totalTokens,
+              durationMs: duration,
+            },
+          },
+        });
 
         await subAgent.cleanup();
 

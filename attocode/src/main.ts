@@ -30,9 +30,12 @@ import './providers/adapters/anthropic.js';
 import './providers/adapters/openai.js';
 import './providers/adapters/mock.js';
 
-// Provider detection
+// Provider detection and resilience
 import { getProvider } from './providers/provider.js';
+import { getResilientProvider, createResilientFallbackChain } from './providers/resilient-provider.js';
 import type { LLMProviderWithTools } from './providers/types.js';
+import { DEFAULT_PROVIDER_RESILIENCE_CONFIG } from './defaults.js';
+import type { ProviderResilienceConfig } from './types.js';
 
 // Agent and tools
 import { createProductionAgent } from './agent.js';
@@ -58,6 +61,14 @@ import { persistenceDebug } from './integrations/persistence.js';
 
 // Process handlers for graceful shutdown
 import { installProcessHandlers } from './core/process-handlers.js';
+
+// Health check system
+import {
+  createHealthChecker,
+  createFileSystemHealthCheck,
+  createNetworkHealthCheck,
+  formatHealthReport,
+} from './integrations/health-check.js';
 
 // =============================================================================
 // MAIN
@@ -104,19 +115,69 @@ async function main(): Promise<void> {
 
   console.log('Detecting LLM provider...');
 
+  // Merge provider resilience config with defaults
+  const providerResilienceConfig: ProviderResilienceConfig = {
+    ...DEFAULT_PROVIDER_RESILIENCE_CONFIG,
+    ...(userConfig?.providerResilience || {}),
+  };
+  const resilienceEnabled = providerResilienceConfig.enabled !== false;
+
   let provider: LLMProviderWithTools;
   try {
     // Use preferred provider from config if available
     const preferredProvider = userConfig?.providers?.default;
-    const baseProvider = await getProvider(preferredProvider);
 
-    if (!('chatWithTools' in baseProvider)) {
-      console.error('Provider does not support native tool use.');
-      console.error('   Set OPENROUTER_API_KEY to use this application.');
-      process.exit(1);
+    // Determine if we should use fallback chain (multiple providers configured)
+    const hasFallbackProviders =
+      providerResilienceConfig.fallbackProviders &&
+      providerResilienceConfig.fallbackProviders.length > 0;
+
+    if (resilienceEnabled && hasFallbackProviders) {
+      // Use fallback chain with circuit breaker protection
+      const chain = await createResilientFallbackChain({
+        providers: preferredProvider
+          ? [preferredProvider, ...providerResilienceConfig.fallbackProviders!]
+          : providerResilienceConfig.fallbackProviders,
+        circuitBreaker: providerResilienceConfig.circuitBreaker,
+        fallback: providerResilienceConfig.fallbackChain,
+        onFallback: providerResilienceConfig.onFallback ?? ((from, to, error) => {
+          console.log(`[Resilience] Falling back from ${from} to ${to}: ${error.message}`);
+        }),
+      });
+
+      if (!('chatWithTools' in chain)) {
+        console.error('Provider does not support native tool use.');
+        process.exit(1);
+      }
+
+      provider = chain as LLMProviderWithTools;
+      console.log(`+ Provider resilience: fallback chain enabled (${providerResilienceConfig.fallbackProviders!.length + 1} providers)`);
+    } else if (resilienceEnabled && providerResilienceConfig.circuitBreaker !== false) {
+      // Use single provider with circuit breaker protection
+      const resilientProvider = await getResilientProvider(preferredProvider, {
+        circuitBreaker: providerResilienceConfig.circuitBreaker,
+      });
+
+      if (!('chatWithTools' in resilientProvider)) {
+        console.error('Provider does not support native tool use.');
+        console.error('   Set OPENROUTER_API_KEY to use this application.');
+        process.exit(1);
+      }
+
+      provider = resilientProvider as LLMProviderWithTools;
+      console.log('+ Provider resilience: circuit breaker enabled');
+    } else {
+      // Use basic provider without resilience
+      const baseProvider = await getProvider(preferredProvider);
+
+      if (!('chatWithTools' in baseProvider)) {
+        console.error('Provider does not support native tool use.');
+        console.error('   Set OPENROUTER_API_KEY to use this application.');
+        process.exit(1);
+      }
+
+      provider = baseProvider as LLMProviderWithTools;
     }
-
-    provider = baseProvider as LLMProviderWithTools;
   } catch (error) {
     console.error('Failed to initialize provider:', (error as Error).message);
     console.error('\nSet one of: OPENROUTER_API_KEY, ANTHROPIC_API_KEY, OPENAI_API_KEY');
@@ -129,6 +190,43 @@ async function main(): Promise<void> {
   if (args.trace) {
     console.log(`+ Trace capture enabled -> .traces/`);
   }
+
+  // Initialize health checker
+  const healthChecker = createHealthChecker({
+    onStatusChange: (name, healthy, prev) => {
+      // Only warn when something becomes unhealthy (not on initial check)
+      if (!healthy && prev !== undefined) {
+        console.warn(`[Health] ${name} became unhealthy`);
+      }
+    },
+  });
+
+  // Register health checks
+  const fsCheck = createFileSystemHealthCheck('/tmp');
+  healthChecker.register(fsCheck.name, fsCheck.check, fsCheck);
+
+  // Network check uses the provider's API endpoint
+  const networkCheck = createNetworkHealthCheck('https://api.anthropic.com');
+  healthChecker.register(networkCheck.name, networkCheck.check, networkCheck);
+
+  // Run initial health check (non-blocking)
+  healthChecker.checkAll().then(report => {
+    if (!report.healthy) {
+      const unhealthy = report.checks.filter(c => !c.healthy).map(c => c.name);
+      console.warn(`[Health] Some checks failed: ${unhealthy.join(', ')}`);
+      if (args.debug) {
+        console.warn(formatHealthReport(report));
+      }
+    } else if (args.debug) {
+      console.log(`[Health] All ${report.totalCount} checks passed`);
+    }
+  }).catch(err => {
+    // Don't block startup on health check failure
+    if (args.debug) {
+      console.warn('[Health] Initial check failed:', err.message);
+    }
+  });
+
   console.log('');
 
   if (args.task) {

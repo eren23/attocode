@@ -297,6 +297,53 @@ export const MIGRATIONS: Migration[] = [
       CREATE INDEX IF NOT EXISTS idx_pending_plans_status ON pending_plans(session_id, status);
     `,
   },
+  {
+    version: 9,
+    name: 'dead_letter_queue',
+    sql: `
+      -- Dead letter queue for failed operations
+      CREATE TABLE IF NOT EXISTS dead_letters (
+        id TEXT PRIMARY KEY,
+        session_id TEXT,
+        operation TEXT NOT NULL,
+        args TEXT NOT NULL,
+        error TEXT NOT NULL,
+        category TEXT NOT NULL,
+        attempts INTEGER DEFAULT 1,
+        max_attempts INTEGER DEFAULT 3,
+        last_attempt TEXT NOT NULL,
+        next_retry TEXT,
+        metadata TEXT,
+        status TEXT NOT NULL DEFAULT 'pending',
+        created_at TEXT NOT NULL,
+        resolved_at TEXT,
+        FOREIGN KEY (session_id) REFERENCES sessions(id) ON DELETE SET NULL
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_dead_letters_status ON dead_letters(status);
+      CREATE INDEX IF NOT EXISTS idx_dead_letters_session ON dead_letters(session_id);
+      CREATE INDEX IF NOT EXISTS idx_dead_letters_operation ON dead_letters(operation);
+      CREATE INDEX IF NOT EXISTS idx_dead_letters_next_retry ON dead_letters(next_retry) WHERE status = 'pending';
+    `,
+  },
+  {
+    version: 10,
+    name: 'remembered_permissions',
+    sql: `
+      -- Remembered permission decisions for persistent approval across sessions
+      -- This allows "always" decisions to persist and reduces repeated prompts
+      CREATE TABLE IF NOT EXISTS remembered_permissions (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        tool_name TEXT NOT NULL,
+        pattern TEXT,
+        decision TEXT NOT NULL,
+        created_at TEXT NOT NULL,
+        UNIQUE(tool_name, pattern)
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_remembered_permissions_tool ON remembered_permissions(tool_name);
+    `,
+  },
 ];
 
 // =============================================================================
@@ -323,6 +370,10 @@ export interface SchemaFeatures {
   workerResults: boolean;
   /** Pending plans for plan mode: pending_plans */
   pendingPlans: boolean;
+  /** Dead letter queue for failed operations */
+  deadLetterQueue: boolean;
+  /** Remembered permission decisions for persistent approval */
+  rememberedPermissions: boolean;
 }
 
 /**
@@ -345,6 +396,8 @@ export function detectFeatures(db: Database.Database): SchemaFeatures {
     goals: tableExists('goals') && tableExists('junctures'),
     workerResults: tableExists('worker_results'),
     pendingPlans: tableExists('pending_plans'),
+    deadLetterQueue: tableExists('dead_letters'),
+    rememberedPermissions: tableExists('remembered_permissions'),
   };
 }
 

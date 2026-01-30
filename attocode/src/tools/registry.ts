@@ -5,10 +5,10 @@
  */
 
 import { z, ZodError } from 'zod';
-import type { 
-  ToolDefinition, 
-  ToolResult, 
-  ToolDescription, 
+import type {
+  ToolDefinition,
+  ToolResult,
+  ToolDescription,
   ExecuteOptions,
   ToolEvent,
   ToolEventListener,
@@ -16,6 +16,16 @@ import type {
   DangerLevel
 } from './types.js';
 import { createPermissionChecker } from './permission.js';
+import { withRetry, TOOL_RETRY_CONFIG } from '../integrations/retry.js';
+import {
+  ToolError,
+  ValidationError,
+  ResourceError,
+  isAgentError,
+  isRecoverable,
+  formatError,
+} from '../errors/index.js';
+import type { DeadLetterQueue } from '../integrations/dead-letter-queue.js';
 
 // =============================================================================
 // ZOD TO JSON SCHEMA CONVERTER
@@ -107,6 +117,8 @@ export class ToolRegistry {
   private tools: Map<string, ToolDefinition> = new Map();
   private listeners: Set<ToolEventListener> = new Set();
   private permissionChecker: PermissionChecker;
+  private dlq: DeadLetterQueue | null = null;
+  private sessionId?: string;
 
   constructor(permissionMode: ExecuteOptions['permissionMode'] = 'interactive') {
     this.permissionChecker = createPermissionChecker(permissionMode);
@@ -186,21 +198,26 @@ export class ToolRegistry {
       validatedInput = tool.parameters.parse(input);
     } catch (error) {
       if (error instanceof ZodError) {
-        const issues = error.issues.map(i => `${i.path.join('.')}: ${i.message}`).join(', ');
+        const validationError = ValidationError.fromZodError(error);
+        this.emit({ type: 'error', tool: name, error: validationError });
         return {
           success: false,
-          output: `Invalid input: ${issues}`,
+          output: `Invalid input: ${validationError.message}`,
         };
       }
       throw error;
     }
 
-    // Check permissions
+    // Check permissions - use dynamic danger level if available
+    const dangerLevel = tool.getDangerLevel
+      ? tool.getDangerLevel(validatedInput)
+      : tool.dangerLevel;
+
     const permissionRequest = {
       tool: name,
       operation: tool.description,
       target: JSON.stringify(validatedInput).slice(0, 100),
-      dangerLevel: tool.dangerLevel,
+      dangerLevel,
     };
 
     this.emit({ type: 'permission_requested', request: permissionRequest });
@@ -222,24 +239,68 @@ export class ToolRegistry {
     this.emit({ type: 'permission_granted', request: permissionRequest });
     this.emit({ type: 'executing', tool: name });
 
-    // Execute with timeout
+    // Execute with timeout and optional retry
     try {
       const timeout = options?.timeout ?? 30000;
-      const result = await Promise.race([
-        tool.execute(validatedInput),
-        new Promise<never>((_, reject) => 
-          setTimeout(() => reject(new Error('Tool execution timed out')), timeout)
-        ),
-      ]);
+      const maxAttempts = tool.retryConfig?.maxAttempts ?? 1;
+
+      // Wrap execution with timeout
+      const executeWithTimeout = async () => {
+        return await Promise.race([
+          tool.execute(validatedInput),
+          new Promise<never>((_, reject) =>
+            setTimeout(() => reject(ResourceError.timeout(timeout, timeout)), timeout)
+          ),
+        ]);
+      };
+
+      // Execute with retry if configured (maxAttempts > 1)
+      let result: ToolResult;
+      if (maxAttempts > 1) {
+        result = await withRetry(executeWithTimeout, {
+          maxAttempts,
+          ...TOOL_RETRY_CONFIG,
+          baseDelayMs: tool.retryConfig?.baseDelayMs ?? TOOL_RETRY_CONFIG.baseDelayMs,
+          retryableErrors: tool.retryConfig?.retryableErrors ?? TOOL_RETRY_CONFIG.retryableErrors,
+          onRetry: (attempt, error, delay) => {
+            this.emit({
+              type: 'error',
+              tool: name,
+              error: new Error(`Retry ${attempt}: ${error.message} (waiting ${delay}ms)`),
+            });
+          },
+        });
+      } else {
+        result = await executeWithTimeout();
+      }
 
       this.emit({ type: 'complete', tool: name, result });
       return result;
     } catch (error) {
-      const err = error as Error;
-      this.emit({ type: 'error', tool: name, error: err });
+      // Convert to ToolError if not already a typed error
+      const toolError = isAgentError(error)
+        ? error
+        : ToolError.fromError(error as Error, name);
+
+      this.emit({ type: 'error', tool: name, error: toolError });
+
+      // Write to DLQ if the error is not recoverable (permanent failure)
+      if (this.dlq?.isAvailable() && !isRecoverable(toolError)) {
+        try {
+          this.dlq.add({
+            operation: `tool:${name}`,
+            args: validatedInput,
+            error: toolError,
+            sessionId: this.sessionId,
+          });
+        } catch {
+          // Don't let DLQ errors affect tool execution
+        }
+      }
+
       return {
         success: false,
-        output: `Execution error: ${err.message}`,
+        output: `Execution error: ${formatError(toolError)}`,
       };
     }
   }
@@ -279,11 +340,35 @@ export class ToolRegistry {
   setPermissionChecker(checker: PermissionChecker): void {
     this.permissionChecker = checker;
   }
+
+  /**
+   * Set the dead letter queue for failed operation tracking.
+   * When set, permanent failures will be logged to the DLQ for later retry.
+   */
+  setDeadLetterQueue(dlq: DeadLetterQueue | null, sessionId?: string): void {
+    this.dlq = dlq;
+    this.sessionId = sessionId;
+  }
 }
 
 // =============================================================================
 // FACTORY FUNCTIONS
 // =============================================================================
+
+/**
+ * Options for tool definition.
+ */
+export interface DefineToolOptions<T extends z.ZodTypeAny> {
+  /** Default danger level for permission checking */
+  dangerLevel?: DangerLevel;
+  /**
+   * Optional callback to dynamically determine danger level based on input.
+   * If provided, this takes precedence over the static dangerLevel.
+   */
+  getDangerLevel?: (input: z.infer<T>) => DangerLevel;
+  /** Retry configuration */
+  retryConfig?: ToolDefinition['retryConfig'];
+}
 
 /**
  * Create a tool definition with type inference.
@@ -293,13 +378,20 @@ export function defineTool<T extends z.ZodTypeAny>(
   description: string,
   parameters: T,
   execute: (input: z.infer<T>) => Promise<ToolResult>,
-  dangerLevel: DangerLevel = 'safe'
+  dangerLevelOrOptions: DangerLevel | DefineToolOptions<T> = 'safe'
 ): ToolDefinition<T> {
+  // Support both old signature (dangerLevel string) and new signature (options object)
+  const options: DefineToolOptions<T> = typeof dangerLevelOrOptions === 'string'
+    ? { dangerLevel: dangerLevelOrOptions }
+    : dangerLevelOrOptions;
+
   return {
     name,
     description,
     parameters,
-    dangerLevel,
+    dangerLevel: options.dangerLevel ?? 'safe',
+    getDangerLevel: options.getDangerLevel,
     execute,
+    retryConfig: options.retryConfig,
   };
 }

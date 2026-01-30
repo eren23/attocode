@@ -17,23 +17,45 @@ import { z } from 'zod';
 export type ParameterSchema = z.ZodTypeAny;
 
 /**
+ * Retry configuration for a tool.
+ */
+export interface ToolRetryConfig {
+  /** Maximum retry attempts (including initial). Set to 1 to disable retry. */
+  maxAttempts?: number;
+  /** Base delay between retries in ms */
+  baseDelayMs?: number;
+  /** Error patterns that trigger retry */
+  retryableErrors?: string[];
+}
+
+/**
  * Tool definition that includes schema and metadata.
  */
 export interface ToolDefinition<TInput extends z.ZodTypeAny = z.ZodTypeAny> {
   /** Unique identifier */
   name: string;
-  
+
   /** Human-readable description (shown to LLM) */
   description: string;
-  
+
   /** Input parameter schema */
   parameters: TInput;
-  
-  /** Danger level for permission checking */
+
+  /** Default danger level for permission checking */
   dangerLevel: DangerLevel;
-  
+
+  /**
+   * Optional callback to dynamically determine danger level based on input.
+   * If provided, this takes precedence over the static dangerLevel.
+   * Useful for tools like bash where 'ls' is safe but 'rm -rf' is dangerous.
+   */
+  getDangerLevel?: (input: z.infer<TInput>) => DangerLevel;
+
   /** Execute the tool */
   execute: (input: z.infer<TInput>) => Promise<ToolResult>;
+
+  /** Retry configuration for transient failures */
+  retryConfig?: ToolRetryConfig;
 }
 
 /**

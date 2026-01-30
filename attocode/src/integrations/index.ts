@@ -660,3 +660,72 @@ export {
   type FallbackChainEvent,
   type FallbackChainEventListener,
 } from '../providers/fallback-chain.js';
+
+// Retry utility for transient failures
+export {
+  withRetry,
+  withRetryResult,
+  TOOL_RETRY_CONFIG,
+  MCP_RETRY_CONFIG,
+  FILE_RETRY_CONFIG,
+  NETWORK_RETRY_CONFIG,
+  DEFAULT_RETRYABLE_ERRORS,
+  DEFAULT_RETRYABLE_CODES,
+  type RetryConfig,
+  type RetryResult,
+} from './retry.js';
+
+// Centralized error types (CancellationError exported from cancellation.js above)
+export {
+  ErrorCategory,
+  AgentError,
+  ToolError,
+  MCPError,
+  FileOperationError,
+  ProviderError,
+  ValidationError,
+  CancellationError as AgentCancellationError, // Alias to avoid conflict with cancellation.ts
+  ResourceError,
+  categorizeError,
+  wrapError,
+  isAgentError,
+  isRecoverable,
+  isTransient,
+  isRateLimited,
+  formatError,
+  formatErrorForLog,
+} from '../errors/index.js';
+
+// Health check system
+export {
+  HealthChecker,
+  createHealthChecker,
+  createProviderHealthCheck,
+  createFileSystemHealthCheck,
+  createSQLiteHealthCheck,
+  createMCPHealthCheck,
+  createNetworkHealthCheck,
+  formatHealthReport,
+  healthReportToJSON,
+  type HealthCheckResult,
+  type HealthReport,
+  type HealthCheckFn,
+  type HealthCheckConfig,
+  type HealthCheckerConfig,
+  type HealthEvent,
+  type HealthEventListener,
+} from './health-check.js';
+
+// Dead letter queue for failed operations
+export {
+  DeadLetterQueue,
+  createDeadLetterQueue,
+  formatDeadLetterStats,
+  type DeadLetterItem,
+  type DeadLetterStatus,
+  type AddDeadLetterInput,
+  type DeadLetterQueryOptions,
+  type DeadLetterStats,
+  type DeadLetterEvent,
+  type DeadLetterEventListener,
+} from './dead-letter-queue.js';

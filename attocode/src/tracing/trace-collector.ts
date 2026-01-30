@@ -47,12 +47,28 @@ import type {
   JSONLEntry,
   SessionStartEntry,
   SessionEndEntry,
+  TaskStartEntry,
+  TaskEndEntry,
+  TaskTrace,
   LLMRequestEntry,
   LLMResponseEntry,
   ToolExecutionEntry,
   ErrorEntry,
+  // Enhanced trace types
+  ThinkingBlock,
+  ThinkingEntry,
+  MemoryRetrievalTrace,
+  MemoryRetrievalEntry,
+  PlanEvolutionTrace,
+  PlanEvolutionEntry,
+  SubagentTraceLink,
+  SubagentLinkEntry,
+  DecisionTrace,
+  DecisionEntry,
+  IterationWrapperEntry,
+  EnhancedTraceConfig,
 } from './types.js';
-import { DEFAULT_TRACE_CONFIG } from './types.js';
+import { DEFAULT_TRACE_CONFIG, DEFAULT_ENHANCED_TRACE_CONFIG } from './types.js';
 import type { AgentMetrics, Span } from '../observability/types.js';
 
 // =============================================================================
@@ -65,10 +81,15 @@ import type { AgentMetrics, Span } from '../observability/types.js';
 export type TraceEvent =
   | { type: 'llm.request'; data: LLMRequestData }
   | { type: 'llm.response'; data: LLMResponseData }
+  | { type: 'llm.thinking'; data: ThinkingData }
   | { type: 'tool.start'; data: ToolStartData }
   | { type: 'tool.end'; data: ToolEndData }
   | { type: 'iteration.start'; data: { iterationNumber: number } }
   | { type: 'iteration.end'; data: { iterationNumber: number } }
+  | { type: 'memory.retrieval'; data: MemoryRetrievalData }
+  | { type: 'plan.evolution'; data: PlanEvolutionData }
+  | { type: 'subagent.link'; data: SubagentLinkData }
+  | { type: 'decision'; data: DecisionData }
   | { type: 'error'; data: ErrorData };
 
 /**
@@ -148,6 +169,132 @@ export interface ErrorData {
   error?: Error;
 }
 
+/**
+ * LLM thinking data.
+ */
+export interface ThinkingData {
+  /** Request ID this thinking belongs to */
+  requestId: string;
+  /** The thinking content */
+  content: string;
+  /** Whether this is summarized */
+  summarized?: boolean;
+  /** Original length if summarized */
+  originalLength?: number;
+  /** Thinking started timestamp */
+  startTime?: number;
+  /** Thinking duration in ms */
+  durationMs?: number;
+}
+
+/**
+ * Memory retrieval data.
+ */
+export interface MemoryRetrievalData {
+  /** Query used for retrieval */
+  query: string;
+  /** Type of memory being retrieved */
+  memoryType: 'conversation' | 'semantic' | 'episodic' | 'procedural' | 'external';
+  /** Retrieved memories with relevance scores */
+  results: Array<{
+    id: string;
+    content: string;
+    relevance: number;
+    source?: string;
+    createdAt?: number;
+  }>;
+  /** Total memories considered */
+  totalConsidered: number;
+  /** Retrieval duration in ms */
+  durationMs: number;
+}
+
+/**
+ * Plan evolution data.
+ */
+export interface PlanEvolutionData {
+  /** Plan version */
+  version: number;
+  /** Current plan state */
+  plan: {
+    goal: string;
+    steps: Array<{
+      id: string;
+      description: string;
+      status: 'pending' | 'in_progress' | 'completed' | 'failed' | 'skipped';
+      dependencies?: string[];
+    }>;
+    progress: number;
+  };
+  /** What changed from previous version */
+  change?: {
+    type: 'created' | 'step_added' | 'step_removed' | 'step_modified' | 'step_completed' | 'step_failed' | 'replanned';
+    reason: string;
+    affectedSteps?: string[];
+    previousState?: string;
+  };
+}
+
+/**
+ * Subagent link data.
+ */
+export interface SubagentLinkData {
+  /** Parent session ID */
+  parentSessionId: string;
+  /** Child session ID */
+  childSessionId: string;
+  /** Child trace ID */
+  childTraceId: string;
+  /** Child agent configuration */
+  childConfig: {
+    agentType: string;
+    model: string;
+    task: string;
+    tools?: string[];
+  };
+  /** Spawn context */
+  spawnContext: {
+    reason: string;
+    expectedOutcome?: string;
+    parentIteration: number;
+  };
+  /** Result summary (optional, filled when child completes) */
+  result?: {
+    success: boolean;
+    summary: string;
+    tokensUsed: number;
+    durationMs: number;
+  };
+}
+
+/**
+ * Decision data.
+ */
+export interface DecisionData {
+  /** Type of decision */
+  type: 'routing' | 'tool_selection' | 'policy' | 'plan_choice' | 'model_selection' | 'retry' | 'escalation';
+  /** The decision made */
+  decision: string;
+  /** Outcome/result of decision */
+  outcome: 'allowed' | 'blocked' | 'modified' | 'deferred' | 'escalated';
+  /** Reasoning behind decision */
+  reasoning: string;
+  /** Factors that influenced this decision */
+  factors?: Array<{
+    name: string;
+    value: string | number | boolean;
+    weight?: number;
+  }>;
+  /** Alternatives that were considered */
+  alternatives?: Array<{
+    option: string;
+    reason: string;
+    rejected: boolean;
+  }>;
+  /** Confidence in decision (0-1) */
+  confidence?: number;
+}
+
 // =============================================================================
 // TRACE COLLECTOR
 // =============================================================================
@@ -166,6 +313,17 @@ export class TraceCollector {
   private task: string = '';
   private model: string = '';
   private startTime: number = 0;
+
+  // Task-level state (for terminal sessions with multiple tasks)
+  private currentTaskId: string | null = null;
+  private currentTaskPrompt: string = '';
+  private taskStartTime: number = 0;
+  private taskNumber: number = 0;
+  private taskIterations: IterationTrace[] = [];
+  private allTasks: TaskTrace[] = [];
+
+  // Last completed session (for retrieval after endSession)
+  private lastCompletedSession: SessionTrace | null = null;
 
   // Current iteration state
   private currentIteration: number = 0;
@@ -194,10 +352,12 @@ export class TraceCollector {
 
   /**
    * Start a new tracing session.
+   * For terminal sessions (REPL), task can be omitted - individual tasks are tracked via startTask/endTask.
+   * For single-task sessions, task can be provided for backward compatibility.
    */
   async startSession(
     sessionId: string,
-    task: string,
+    task: string | undefined,
     model: string,
     metadata: Record<string, unknown> = {}
   ): Promise<void> {
@@ -206,11 +366,13 @@ export class TraceCollector {
     }
 
     this.sessionId = sessionId;
-    this.task = task;
+    this.task = task ?? '';
     this.model = model;
     this.startTime = Date.now();
     this.currentIteration = 0;
     this.iterations = [];
+    this.taskNumber = 0;
+    this.allTasks = [];
     this.cacheTracker.reset();
 
     // Start root span
@@ -218,7 +380,7 @@ export class TraceCollector {
       kind: 'internal',
       attributes: {
         'session.id': sessionId,
-        'session.task': task,
+        'session.task': task ?? 'terminal-session',
         'session.model': model,
       },
     });
@@ -249,6 +411,11 @@ export class TraceCollector {
   }): Promise<SessionTrace> {
     if (!this.sessionId || !this.traceId) {
       throw new Error('No session in progress');
+    }
+
+    // End any pending task
+    if (this.currentTaskId) {
+      await this.endTask({ success: result.success, failureReason: result.failureReason });
     }
 
     const endTime = Date.now();
@@ -305,13 +472,174 @@ export class TraceCollector {
       await this.flush();
     }
 
+    // Store completed session before resetting state
+    // This allows getSessionTrace() to return data after session ends
+    this.lastCompletedSession = sessionTrace;
+
     // Reset state
     this.sessionId = null;
     this.traceId = null;
     this.task = '';
     this.model = '';
+    this.currentTaskId = null;
+    this.currentTaskPrompt = '';
+    this.taskNumber = 0;
+    this.allTasks = [];
 
     return sessionTrace;
+  }
+
+  // ===========================================================================
+  // TASK LIFECYCLE (for terminal sessions with multiple tasks)
+  // ===========================================================================
+
+  /**
+   * Start a new task within the current session.
+   * Use this for terminal sessions where each user prompt is a separate task.
+   */
+  async startTask(taskId: string, prompt: string): Promise<void> {
+    if (!this.sessionId || !this.traceId) {
+      throw new Error('No session in progress. Call startSession() first.');
+    }
+
+    // End any previous task
+    if (this.currentTaskId) {
+      await this.endTask({ success: true });
+    }
+
+    this.currentTaskId = taskId;
+    this.currentTaskPrompt = prompt;
+    this.taskStartTime = Date.now();
+    this.taskNumber++;
+    this.taskIterations = [];
+    this.currentIteration = 0;
+
+    // Write task start entry
+    if (this.config.enabled) {
+      await this.writeEntry({
+        _type: 'task.start',
+        _ts: new Date().toISOString(),
+        traceId: this.traceId,
+        taskId,
+        sessionId: this.sessionId,
+        prompt,
+        taskNumber: this.taskNumber,
+      } as TaskStartEntry);
+    }
+  }
+
+  /**
+   * End the current task within the session.
+   */
+  async endTask(result: {
+    success: boolean;
+    output?: string;
+    failureReason?: string;
+  }): Promise<TaskTrace | null> {
+    if (!this.currentTaskId || !this.sessionId || !this.traceId) {
+      return null;
+    }
+
+    const endTime = Date.now();
+    const durationMs = endTime - this.taskStartTime;
+
+    // End any pending iteration
+    if (this.iterationSpan) {
+      this.tracer.endSpan(this.iterationSpan);
+      this.iterationSpan = null;
+    }
+
+    // Calculate task metrics from task iterations
+    const metrics = this.calculateTaskMetrics();
+
+    // Build task trace
+    const taskTrace: TaskTrace = {
+      taskId: this.currentTaskId,
+      sessionId: this.sessionId,
+      traceId: this.traceId,
+      prompt: this.currentTaskPrompt,
+      startTime: this.taskStartTime,
+      endTime,
+      durationMs,
+      status: result.success ? 'completed' : 'failed',
+      taskNumber: this.taskNumber,
+      iterations: [...this.taskIterations],
+      metrics,
+      result,
+    };
+
+    // Write task end entry
+    if (this.config.enabled) {
+      await this.writeEntry({
+        _type: 'task.end',
+        _ts: new Date().toISOString(),
+        traceId: this.traceId,
+        taskId: this.currentTaskId,
+        sessionId: this.sessionId,
+        status: taskTrace.status,
+        durationMs,
+        metrics,
+        result,
+      } as TaskEndEntry);
+    }
+
+    // Store in all tasks
+    this.allTasks.push(taskTrace);
+
+    // Move task iterations to session iterations
+    this.iterations.push(...this.taskIterations);
+
+    // Reset task state
+    this.currentTaskId = null;
+    this.currentTaskPrompt = '';
+    this.taskIterations = [];
+
+    return taskTrace;
+  }
+
+  /**
+   * Check if a task is currently active.
+   */
+  isTaskActive(): boolean {
+    return this.currentTaskId !== null;
+  }
+
+  /**
+   * Get current task ID.
+   */
+  getCurrentTaskId(): string | null {
+    return this.currentTaskId;
+  }
+
+  /**
+   * Calculate metrics for the current task.
+   */
+  private calculateTaskMetrics(): TaskTrace['metrics'] {
+    let inputTokens = 0;
+    let outputTokens = 0;
+    let totalCacheHitRate = 0;
+    let toolCalls = 0;
+    let totalCost = 0;
+
+    for (const iteration of this.taskIterations) {
+      inputTokens += iteration.metrics.inputTokens;
+      outputTokens += iteration.metrics.outputTokens;
+      totalCacheHitRate += iteration.metrics.cacheHitRate;
+      toolCalls += iteration.metrics.toolCallCount;
+      totalCost += iteration.metrics.totalCost;
+    }
+
+    const cacheHitRate = this.taskIterations.length > 0
+      ? totalCacheHitRate / this.taskIterations.length
+      : 0;
+
+    return {
+      inputTokens,
+      outputTokens,
+      cacheHitRate,
+      toolCalls,
+      totalCost,
+    };
   }
 
   // ===========================================================================
@@ -331,6 +659,9 @@ export class TraceCollector {
       case 'llm.response':
         await this.recordLLMResponse(event.data);
         break;
+      case 'llm.thinking':
+        await this.recordThinking(event.data);
+        break;
       case 'tool.start':
         await this.recordToolStart(event.data);
         break;
@@ -342,6 +673,18 @@ export class TraceCollector {
         break;
       case 'iteration.end':
         await this.endIteration();
+        break;
+      case 'memory.retrieval':
+        await this.recordMemoryRetrieval(event.data);
+        break;
+      case 'plan.evolution':
+        await this.recordPlanEvolution(event.data);
+        break;
+      case 'subagent.link':
+        await this.recordSubagentLink(event.data);
+        break;
+      case 'decision':
+        await this.recordDecision(event.data);
         break;
       case 'error':
         await this.recordError(event.data);
@@ -625,6 +968,131 @@ export class TraceCollector {
   }
 
   // ===========================================================================
+  // ENHANCED TRACE RECORDING (Maximum Interpretability)
+  // ===========================================================================
+
+  /**
+   * Record LLM thinking/reasoning blocks.
+   */
+  private async recordThinking(data: ThinkingData): Promise<void> {
+    const thinkingId = `think-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+
+    const thinking: ThinkingBlock = {
+      id: thinkingId,
+      content: data.content,
+      estimatedTokens: this.estimateTokens(data.content),
+      summarized: data.summarized ?? false,
+      originalLength: data.originalLength,
+      startTime: data.startTime ?? Date.now(),
+      durationMs: data.durationMs,
+    };
+
+    await this.writeEntry({
+      _type: 'llm.thinking',
+      _ts: new Date().toISOString(),
+      traceId: this.traceId!,
+      requestId: data.requestId,
+      thinking,
+    } as ThinkingEntry);
+  }
+
+  /**
+   * Record memory retrieval events.
+   */
+  private async recordMemoryRetrieval(data: MemoryRetrievalData): Promise<void> {
+    const retrievalId = `ret-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+
+    const retrieval: MemoryRetrievalTrace = {
+      retrievalId,
+      traceId: this.traceId!,
+      query: data.query,
+      memoryType: data.memoryType,
+      results: data.results,
+      totalConsidered: data.totalConsidered,
+      durationMs: data.durationMs,
+      timestamp: Date.now(),
+    };
+
+    await this.writeEntry({
+      _type: 'memory.retrieval',
+      _ts: new Date().toISOString(),
+      traceId: this.traceId!,
+      retrieval,
+    } as MemoryRetrievalEntry);
+  }
+
+  /**
+   * Record plan evolution events.
+   */
+  private async recordPlanEvolution(data: PlanEvolutionData): Promise<void> {
+    const evolution: PlanEvolutionTrace = {
+      version: data.version,
+      traceId: this.traceId!,
+      plan: data.plan,
+      change: data.change,
+      timestamp: Date.now(),
+    };
+
+    await this.writeEntry({
+      _type: 'plan.evolution',
+      _ts: new Date().toISOString(),
+      traceId: this.traceId!,
+      evolution,
+    } as PlanEvolutionEntry);
+  }
+
+  /**
+   * Record subagent spawn/completion events.
+   */
+  private async recordSubagentLink(data: SubagentLinkData): Promise<void> {
+    const link: SubagentTraceLink = {
+      parentTraceId: this.traceId!,
+      parentSessionId: data.parentSessionId,
+      childTraceId: data.childTraceId,
+      childSessionId: data.childSessionId,
+      childConfig: data.childConfig,
+      spawnContext: data.spawnContext,
+      result: data.result,
+      spawnedAt: Date.now(),
+      completedAt: data.result ? Date.now() : undefined,
+    };
+
+    await this.writeEntry({
+      _type: 'subagent.link',
+      _ts: new Date().toISOString(),
+      traceId: this.traceId!,
+      link,
+    } as SubagentLinkEntry);
+  }
+
+  /**
+   * Record decision events.
+   */
+  private async recordDecision(data: DecisionData): Promise<void> {
+    const decisionId = `dec-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+
+    const decision: DecisionTrace = {
+      decisionId,
+      traceId: this.traceId!,
+      type: data.type,
+      decision: data.decision,
+      outcome: data.outcome,
+      reasoning: data.reasoning,
+      factors: data.factors ?? [],
+      alternatives: data.alternatives,
+      confidence: data.confidence,
+      timestamp: Date.now(),
+    };
+
+    await this.writeEntry({
+      _type: 'decision',
+      _ts: new Date().toISOString(),
+      traceId: this.traceId!,
+      decision,
+    } as DecisionEntry);
+  }
+
+  // ===========================================================================
   // ITERATION MANAGEMENT
   // ===========================================================================
 
@@ -685,7 +1153,13 @@ export class TraceCollector {
       metrics,
     };
 
-    this.iterations.push(iterationTrace);
+    // If a task is active, store in task iterations (will be moved to session iterations when task ends)
+    // Otherwise, store directly in session iterations (backward compatibility)
+    if (this.currentTaskId) {
+      this.taskIterations.push(iterationTrace);
+    } else {
+      this.iterations.push(iterationTrace);
+    }
 
     // End span
     this.tracer.setAttributes(this.iterationSpan, {
@@ -928,6 +1402,36 @@ export class TraceCollector {
    */
   getIterationCount(): number {
     return this.iterations.length;
+  }
+
+  /**
+   * Get the current session trace without ending the session.
+   * If no session is active, returns the last completed session.
+   * Returns null if no session data is available.
+   */
+  getSessionTrace(): SessionTrace | null {
+    // If there's an active session, return its current state
+    if (this.sessionId && this.traceId) {
+      const metrics = this.calculateAggregatedMetrics();
+
+      return {
+        sessionId: this.sessionId,
+        traceId: this.traceId,
+        task: this.task,
+        model: this.model,
+        startTime: this.startTime,
+        endTime: Date.now(),
+        durationMs: Date.now() - this.startTime,
+        status: 'running',
+        iterations: [...this.iterations], // Copy to avoid mutation
+        metrics,
+        result: { success: true }, // Placeholder for in-progress session
+        metadata: {},
+      };
+    }
+
+    // Otherwise return the last completed session
+    return this.lastCompletedSession;
   }
 }
 

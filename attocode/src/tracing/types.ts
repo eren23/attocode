@@ -397,7 +397,8 @@ interface BaseJSONLEntry {
 export interface SessionStartEntry extends BaseJSONLEntry {
   _type: 'session.start';
   sessionId: string;
-  task: string;
+  /** Task description (optional for terminal sessions that contain multiple tasks) */
+  task?: string;
   model: string;
   metadata: Record<string, unknown>;
 }
@@ -411,6 +412,86 @@ export interface SessionEndEntry extends BaseJSONLEntry {
   status: SessionTrace['status'];
   durationMs: number;
   metrics: AgentMetrics;
+}
+
+// =============================================================================
+// TASK-LEVEL TRACING (One file per terminal session)
+// =============================================================================
+
+/**
+ * A task within a terminal session (one user prompt/action).
+ * Terminal sessions can contain multiple tasks.
+ */
+export interface TaskTrace {
+  /** Unique task ID */
+  taskId: string;
+
+  /** Parent session ID */
+  sessionId: string;
+
+  /** Parent trace ID */
+  traceId: string;
+
+  /** The user prompt/task */
+  prompt: string;
+
+  /** Task start time */
+  startTime: number;
+
+  /** Task end time */
+  endTime?: number;
+
+  /** Total duration */
+  durationMs?: number;
+
+  /** Task status */
+  status: 'running' | 'completed' | 'failed' | 'cancelled';
+
+  /** Task number within the session (1-indexed) */
+  taskNumber: number;
+
+  /** Iterations within this task */
+  iterations: IterationTrace[];
+
+  /** Task-level aggregated metrics */
+  metrics?: {
+    inputTokens: number;
+    outputTokens: number;
+    cacheHitRate: number;
+    toolCalls: number;
+    totalCost: number;
+  };
+
+  /** Task result */
+  result?: {
+    success: boolean;
+    output?: string;
+    failureReason?: string;
+  };
+}
+
+/**
+ * Task start entry.
+ */
+export interface TaskStartEntry extends BaseJSONLEntry {
+  _type: 'task.start';
+  taskId: string;
+  sessionId: string;
+  prompt: string;
+  taskNumber: number;
+}
+
+/**
+ * Task end entry.
+ */
+export interface TaskEndEntry extends BaseJSONLEntry {
+  _type: 'task.end';
+  taskId: string;
+  sessionId: string;
+  status: TaskTrace['status'];
+  durationMs: number;
+  metrics?: TaskTrace['metrics'];
+  result?: TaskTrace['result'];
 }
 
 /**
@@ -467,10 +548,538 @@ export interface ErrorEntry extends BaseJSONLEntry {
 export type JSONLEntry =
   | SessionStartEntry
   | SessionEndEntry
+  | TaskStartEntry
+  | TaskEndEntry
   | LLMRequestEntry
   | LLMResponseEntry
   | ToolExecutionEntry
-  | ErrorEntry;
+  | ErrorEntry
+  | ThinkingEntry
+  | MemoryRetrievalEntry
+  | PlanEvolutionEntry
+  | SubagentLinkEntry
+  | DecisionEntry
+  | IterationWrapperEntry;
+
+// =============================================================================
+// ENHANCED TRACE TYPES (Maximum Interpretability)
+// =============================================================================
+
+/**
+ * LLM thinking/reasoning block.
+ * Captures the "thought process" from models that support thinking (e.g., Claude's extended thinking).
+ */
+export interface ThinkingBlock {
+  /** Unique ID for this thinking block */
+  id: string;
+
+  /** The thinking content */
+  content: string;
+
+  /** Estimated tokens for thinking */
+  estimatedTokens: number;
+
+  /** Whether this thinking was summarized (for long thinking blocks) */
+  summarized: boolean;
+
+  /** If summarized, the original length */
+  originalLength?: number;
+
+  /** Timestamp when thinking started */
+  startTime: number;
+
+  /** Duration of thinking in ms */
+  durationMs?: number;
+}
+
+/**
+ * Memory retrieval trace.
+ * Captures what memories/context was retrieved and how it influenced the response.
+ */
+export interface MemoryRetrievalTrace {
+  /** Unique retrieval ID */
+  retrievalId: string;
+
+  /** Parent trace ID */
+  traceId: string;
+
+  /** Query used for retrieval */
+  query: string;
+
+  /** Type of memory being retrieved */
+  memoryType: 'conversation' | 'semantic' | 'episodic' | 'procedural' | 'external';
+
+  /** Retrieved memories with relevance scores */
+  results: Array<{
+    /** Memory ID */
+    id: string;
+    /** Memory content (may be truncated) */
+    content: string;
+    /** Relevance score (0-1) */
+    relevance: number;
+    /** Source of this memory */
+    source?: string;
+    /** When this memory was created */
+    createdAt?: number;
+  }>;
+
+  /** Total memories considered */
+  totalConsidered: number;
+
+  /** Retrieval duration in ms */
+  durationMs: number;
+
+  /** Timestamp */
+  timestamp: number;
+}
+
+/**
+ * Plan evolution trace.
+ * Tracks how the agent's plan changes over time.
+ */
+export interface PlanEvolutionTrace {
+  /** Plan version (increments with each change) */
+  version: number;
+
+  /** Parent trace ID */
+  traceId: string;
+
+  /** Current plan state */
+  plan: {
+    /** Plan goal/objective */
+    goal: string;
+    /** Current steps */
+    steps: Array<{
+      id: string;
+      description: string;
+      status: 'pending' | 'in_progress' | 'completed' | 'failed' | 'skipped';
+      dependencies?: string[];
+    }>;
+    /** Overall progress (0-1) */
+    progress: number;
+  };
+
+  /** What changed from previous version */
+  change?: {
+    /** Type of change */
+    type: 'created' | 'step_added' | 'step_removed' | 'step_modified' | 'step_completed' | 'step_failed' | 'replanned';
+    /** Reason for change */
+    reason: string;
+    /** Affected step IDs */
+    affectedSteps?: string[];
+    /** Previous state (for diffs) */
+    previousState?: string;
+  };
+
+  /** Timestamp */
+  timestamp: number;
+}
+
+/**
+ * Subagent trace link.
+ * Correlates parent and child agent traces.
+ */
+export interface SubagentTraceLink {
+  /** Parent agent's trace ID */
+  parentTraceId: string;
+
+  /** Parent agent's session ID */
+  parentSessionId: string;
+
+  /** Child agent's trace ID */
+  childTraceId: string;
+
+  /** Child agent's session ID */
+  childSessionId: string;
+
+  /** Child agent configuration */
+  childConfig: {
+    /** Agent type/role */
+    agentType: string;
+    /** Model used */
+    model: string;
+    /** Task given to child */
+    task: string;
+    /** Tool access */
+    tools?: string[];
+  };
+
+  /** Spawn context */
+  spawnContext: {
+    /** Why this subagent was spawned */
+    reason: string;
+    /** Expected outcome */
+    expectedOutcome?: string;
+    /** Iteration in parent when spawned */
+    parentIteration: number;
+  };
+
+  /** Result summary */
+  result?: {
+    /** Whether child completed successfully */
+    success: boolean;
+    /** Brief summary of result */
+    summary: string;
+    /** Tokens used by child */
+    tokensUsed: number;
+    /** Duration of child execution */
+    durationMs: number;
+  };
+
+  /** Timestamp when spawned */
+  spawnedAt: number;
+
+  /** Timestamp when completed */
+  completedAt?: number;
+}
+
+/**
+ * Decision trace.
+ * Captures why specific decisions were made.
+ */
+export interface DecisionTrace {
+  /** Unique decision ID */
+  decisionId: string;
+
+  /** Parent trace ID */
+  traceId: string;
+
+  /** Type of decision */
+  type: 'routing' | 'tool_selection' | 'policy' | 'plan_choice' | 'model_selection' | 'retry' | 'escalation';
+
+  /** The decision made */
+  decision: string;
+
+  /** Outcome/result of decision */
+  outcome: 'allowed' | 'blocked' | 'modified' | 'deferred' | 'escalated';
+
+  /** Reasoning behind decision */
+  reasoning: string;
+
+  /** Factors that influenced this decision */
+  factors: Array<{
+    name: string;
+    value: string | number | boolean;
+    weight?: number;
+  }>;
+
+  /** Alternatives that were considered */
+  alternatives?: Array<{
+    option: string;
+    reason: string;
+    rejected: boolean;
+  }>;
+
+  /** Confidence in decision (0-1) */
+  confidence?: number;
+
+  /** Timestamp */
+  timestamp: number;
+}
+
+/**
+ * Full content trace (optional, for debugging).
+ * Stores complete content that would otherwise be truncated.
+ */
+export interface FullContentTrace {
+  /** Reference ID (links to truncated version) */
+  referenceId: string;
+
+  /** Content type */
+  contentType: 'prompt' | 'response' | 'tool_result' | 'thinking';
+
+  /** Full content (may be compressed) */
+  content: string;
+
+  /** Whether content is compressed */
+  compressed: boolean;
+
+  /** Original size in bytes */
+  originalSize: number;
+
+  /** Redactions applied */
+  redactions?: Array<{
+    pattern: string;
+    count: number;
+  }>;
+}
+
+// =============================================================================
+// ENHANCED JSONL ENTRY TYPES
+// =============================================================================
+
+/**
+ * Thinking block entry.
+ */
+export interface ThinkingEntry extends BaseJSONLEntry {
+  _type: 'llm.thinking';
+  requestId: string;
+  thinking: ThinkingBlock;
+}
+
+/**
+ * Memory retrieval entry.
+ */
+export interface MemoryRetrievalEntry extends BaseJSONLEntry {
+  _type: 'memory.retrieval';
+  retrieval: MemoryRetrievalTrace;
+}
+
+/**
+ * Plan evolution entry.
+ */
+export interface PlanEvolutionEntry extends BaseJSONLEntry {
+  _type: 'plan.evolution';
+  evolution: PlanEvolutionTrace;
+}
+
+/**
+ * Subagent link entry.
+ */
+export interface SubagentLinkEntry extends BaseJSONLEntry {
+  _type: 'subagent.link';
+  link: SubagentTraceLink;
+}
+
+/**
+ * Decision entry.
+ */
+export interface DecisionEntry extends BaseJSONLEntry {
+  _type: 'decision';
+  decision: DecisionTrace;
+}
+
+/**
+ * Iteration wrapper entry - groups events within a single iteration.
+ */
+export interface IterationWrapperEntry extends BaseJSONLEntry {
+  _type: 'iteration.wrapper';
+  iterationNumber: number;
+  phase: 'start' | 'end';
+  metrics?: {
+    inputTokens: number;
+    outputTokens: number;
+    cacheHitRate: number;
+    toolCallCount: number;
+    totalCost: number;
+    thinkingTokens?: number;
+  };
+}
+
+// =============================================================================
+// ENHANCED TRACE CONFIGURATION
+// =============================================================================
+
+/**
+ * Enhanced configuration for trace collection with maximum interpretability.
+ */
+export interface EnhancedTraceConfig {
+  /** Base tracing enabled */
+  enabled: boolean;
+
+  /** Verbosity level */
+  verbosity: 'minimal' | 'standard' | 'full' | 'debug';
+
+  /** Capture LLM thinking/reasoning blocks */
+  captureThinking: boolean;
+
+  /** Capture memory retrieval events */
+  captureMemoryRetrieval: boolean;
+
+  /** Capture plan evolution */
+  capturePlanEvolution: boolean;
+
+  /** Capture full content (prompts, responses, results) */
+  captureFullContent: boolean;
+
+  /** Capture decision traces */
+  captureDecisions: boolean;
+
+  /** Capture subagent links */
+  captureSubagentLinks: boolean;
+
+  /** Compression settings */
+  compression: {
+    enabled: boolean;
+    /** Compress content larger than this (bytes) */
+    threshold: number;
+  };
+
+  /** Privacy settings */
+  privacy: {
+    enabled: boolean;
+    /** Patterns to redact */
+    patterns: RegExp[];
+  };
+
+  /** Output directory for traces */
+  outputDir: string;
+
+  /** JSONL file name pattern */
+  filePattern: string;
+
+  /** Max result size before truncation */
+  maxResultSize: number;
+
+  /** Enable cache boundary analysis */
+  analyzeCacheBoundaries: boolean;
+}
+
+/**
+ * Default enhanced trace configuration.
+ */
+export const DEFAULT_ENHANCED_TRACE_CONFIG: EnhancedTraceConfig = {
+  enabled: true,
+  verbosity: 'standard',
+  captureThinking: true,
+  captureMemoryRetrieval: true,
+  capturePlanEvolution: true,
+  captureFullContent: false,
+  captureDecisions: true,
+  captureSubagentLinks: true,
+  compression: {
+    enabled: true,
+    threshold: 50000, // 50KB
+  },
+  privacy: {
+    enabled: false,
+    patterns: [],
+  },
+  outputDir: '.traces',
+  filePattern: 'trace-{sessionId}-{timestamp}.jsonl',
+  maxResultSize: 10000,
+  analyzeCacheBoundaries: true,
+};
+
+// =============================================================================
+// TRACE SUMMARY TYPES (for LLM analysis)
+// =============================================================================
+
+/**
+ * Structured summary of a trace session for LLM analysis.
+ * Designed to fit within ~4000 tokens for efficient analysis.
+ */
+export interface TraceSummary {
+  /** Session metadata */
+  meta: {
+    sessionId: string;
+    task: string;
+    model: string;
+    duration: number;
+    status: 'running' | 'completed' | 'failed' | 'cancelled';
+    timestamp: number;
+  };
+
+  /** Aggregated metrics */
+  metrics: {
+    iterations: number;
+    totalTokens: number;
+    inputTokens: number;
+    outputTokens: number;
+    thinkingTokens?: number;
+    cacheHitRate: number;
+    cost: number;
+    costSaved: number;
+    toolCalls: number;
+    uniqueTools: number;
+    errors: number;
+  };
+
+  /** Key decision points */
+  decisionPoints: Array<{
+    iteration: number;
+    type: DecisionTrace['type'];
+    decision: string;
+    outcome: DecisionTrace['outcome'];
+    brief: string;
+  }>;
+
+  /** Detected anomalies */
+  anomalies: Array<{
+    type: 'excessive_iterations' | 'cache_inefficiency' | 'redundant_tool_calls' | 'error_loop' | 'plan_thrashing' | 'memory_miss' | 'slow_tool' | 'token_spike';
+    severity: 'low' | 'medium' | 'high' | 'critical';
+    description: string;
+    evidence: string;
+    iteration?: number;
+  }>;
+
+  /** Tool usage patterns */
+  toolPatterns: {
+    /** Frequency of each tool */
+    frequency: Record<string, number>;
+    /** Redundant calls (same args, same result) */
+    redundantCalls: Array<{
+      tool: string;
+      count: number;
+      iterations: number[];
+    }>;
+    /** Slow tools */
+    slowTools: Array<{
+      tool: string;
+      avgDuration: number;
+      maxDuration: number;
+    }>;
+  };
+
+  /** Per-iteration summaries */
+  iterationSummaries: Array<{
+    number: number;
+    action: string;
+    outcome: 'success' | 'partial' | 'failure';
+    tokensUsed: number;
+    flags: string[];
+  }>;
+
+  /** Code location mapping (for fixes) */
+  codeLocations: Array<{
+    component: string;
+    file: string;
+    relevance: 'primary' | 'secondary' | 'related';
+    description: string;
+  }>;
+}
+
+/**
+ * Analysis result from LLM.
+ */
+export interface TraceAnalysisResult {
+  /** Overall efficiency score (0-100) */
+  efficiencyScore: number;
+
+  /** Issues identified */
+  issues: Array<{
+    id: string;
+    severity: 'low' | 'medium' | 'high' | 'critical';
+    category: string;
+    description: string;
+    evidence: string;
+    suggestedFix?: string;
+    codeLocations?: string[];
+  }>;
+
+  /** Recommendations */
+  recommendations: Array<{
+    priority: number;
+    recommendation: string;
+    expectedImprovement: string;
+    effort: 'low' | 'medium' | 'high';
+  }>;
+
+  /** Root cause analysis (if applicable) */
+  rootCause?: {
+    summary: string;
+    chain: string[];
+    ultimateCause: string;
+  };
+
+  /** Comparison notes (if comparing sessions) */
+  comparison?: {
+    baseline: string;
+    improved: string[];
+    regressed: string[];
+    neutral: string[];
+  };
+}
 
 // =============================================================================
 // BENCHMARK TYPES

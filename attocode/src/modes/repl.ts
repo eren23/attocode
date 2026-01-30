@@ -23,7 +23,10 @@ import {
   createMCPClient,
   createCompactor,
   createMCPMetaTools,
+  createDeadLetterQueue,
+  type DeadLetterQueue,
 } from '../integrations/index.js';
+import { initModelCache } from '../integrations/openrouter-pricing.js';
 
 import {
   persistenceDebug,
@@ -75,6 +78,9 @@ export async function startProductionREPL(
     model,
     trace = false,
   } = options;
+
+  // Initialize OpenRouter model cache (for context limits + pricing)
+  await initModelCache();
 
   // Create readline interface
   const rl = readline.createInterface({ input: stdin, output: stdout });
@@ -313,6 +319,21 @@ export async function startProductionREPL(
 
   sessionStore.setCurrentSessionId(sessionId);
 
+  // Initialize DLQ if SQLite is available
+  let dlq: DeadLetterQueue | null = null;
+  if (sessionStore instanceof SQLiteStore) {
+    dlq = createDeadLetterQueue(sessionStore.getDatabase());
+    if (dlq.isAvailable()) {
+      const pending = dlq.getPending({ limit: 10 });
+      if (pending.length > 0) {
+        console.log(c(`[DLQ] ${pending.length} failed operation(s) pending retry`, 'yellow'));
+      }
+      // Wire DLQ to registry and MCP client
+      registry.setDeadLetterQueue(dlq, sessionId);
+      mcpClient.setDeadLetterQueue(dlq, sessionId);
+    }
+  }
+
   // If resuming, load the session state
   if (resumedSession) {
     const sessionState = await loadSessionState(sessionStore, sessionId);
@@ -341,6 +362,20 @@ ${c('----------------------------------------------------------------------', 'd
 
   // Create command context
   const commandOutput = createConsoleOutput();
+
+  // Start trace session for the entire terminal session (if tracing enabled)
+  // Individual tasks within the session will be tracked via startTask/endTask
+  const terminalSessionId = `terminal-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+  const traceCollector = agent.getTraceCollector();
+  if (trace && traceCollector) {
+    await traceCollector.startSession(
+      terminalSessionId,
+      undefined, // No single task - this is a terminal session with multiple tasks
+      model || provider.defaultModel,
+      { type: 'repl', permissionMode }
+    );
+    console.log(c(`Trace session started: ${terminalSessionId}`, 'dim'));
+  }
 
   try {
     while (true) {
@@ -451,6 +486,16 @@ ${c('----------------------------------------------------------------------', 'd
       console.log();
     }
   } finally {
+    // End trace session for the terminal session
+    if (trace && traceCollector?.isSessionActive()) {
+      try {
+        await traceCollector.endSession({ success: true });
+        console.log(c(`\nTrace session ended -> .traces/`, 'dim'));
+      } catch (err) {
+        console.log(c(`! Failed to end trace session: ${(err as Error).message}`, 'yellow'));
+      }
+    }
+
     tui.cleanup();
     await mcpClient.cleanup();
     await agent.cleanup();
