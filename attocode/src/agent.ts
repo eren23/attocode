@@ -863,9 +863,18 @@ export class ProductionAgent {
     this.emit({ type: 'start', task, traceId });
     this.observability?.logger?.info('Agent started', { task });
 
-    // Lesson 26: Start trace capture session
-    const traceSessionId = `session-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
-    await this.traceCollector?.startSession(traceSessionId, task, this.config.model || 'default', {});
+    // Lesson 26: Start trace capture
+    // If session is already active (managed by REPL), start a task within it.
+    // Otherwise, start a new session for backward compatibility (single-task mode).
+    const taskId = `task-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+    if (this.traceCollector?.isSessionActive()) {
+      // Session managed by REPL - just start a task
+      await this.traceCollector.startTask(taskId, task);
+    } else {
+      // Single-task mode (backward compatibility) - start session with task
+      const traceSessionId = `session-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+      await this.traceCollector?.startSession(traceSessionId, task, this.config.model || 'default', {});
+    }
 
     try {
       // Check for cancellation before starting
@@ -903,8 +912,13 @@ export class ProductionAgent {
       this.emit({ type: 'complete', result });
       this.observability?.logger?.info('Agent completed', { duration, success: true });
 
-      // Lesson 26: End trace capture session
-      await this.traceCollector?.endSession({ success: true, output: response });
+      // Lesson 26: End trace capture
+      // If task is active (REPL mode), end the task. Otherwise end the session (single-task mode).
+      if (this.traceCollector?.isTaskActive()) {
+        await this.traceCollector.endTask({ success: true, output: response });
+      } else if (this.traceCollector?.isSessionActive()) {
+        await this.traceCollector.endSession({ success: true, output: response });
+      }
 
       return result;
     } catch (err) {
@@ -919,8 +933,12 @@ export class ProductionAgent {
         this.emit({ type: 'cancellation.completed', cleanupDuration });
         this.observability?.logger?.info('Agent cancelled', { reason: error.message, cleanupDuration });
 
-        // Lesson 26: End trace capture session on cancellation
-        await this.traceCollector?.endSession({ success: false, failureReason: `Cancelled: ${error.message}` });
+        // Lesson 26: End trace capture on cancellation
+        if (this.traceCollector?.isTaskActive()) {
+          await this.traceCollector.endTask({ success: false, failureReason: `Cancelled: ${error.message}` });
+        } else if (this.traceCollector?.isSessionActive()) {
+          await this.traceCollector.endSession({ success: false, failureReason: `Cancelled: ${error.message}` });
+        }
 
         return {
           success: false,
@@ -938,8 +956,12 @@ export class ProductionAgent {
       this.emit({ type: 'error', error: error.message });
       this.observability?.logger?.error('Agent failed', { error: error.message });
 
-      // Lesson 26: End trace capture session on error
-      await this.traceCollector?.endSession({ success: false, failureReason: error.message });
+      // Lesson 26: End trace capture on error
+      if (this.traceCollector?.isTaskActive()) {
+        await this.traceCollector.endTask({ success: false, failureReason: error.message });
+      } else if (this.traceCollector?.isSessionActive()) {
+        await this.traceCollector.endSession({ success: false, failureReason: error.message });
+      }
 
       return {
         success: false,
@@ -1023,6 +1045,12 @@ export class ProductionAgent {
       // Agent loop - now uses economics-based budget checking
       while (true) {
         this.state.iteration++;
+
+        // Record iteration start for tracing
+        this.traceCollector?.record({
+          type: 'iteration.start',
+          data: { iterationNumber: this.state.iteration },
+        });
 
         // =======================================================================
         // CANCELLATION CHECK
@@ -1401,6 +1429,12 @@ export class ProductionAgent {
               continuations,
             });
           }
+
+          // Record iteration end for tracing (no tool calls case)
+          this.traceCollector?.record({
+            type: 'iteration.end',
+            data: { iterationNumber: this.state.iteration },
+          });
           break;
         }
 
@@ -1522,6 +1556,12 @@ export class ProductionAgent {
           maxTokens: contextLimit,
           estimatedExchanges,
           percentUsed,
+        });
+
+        // Record iteration end for tracing (after tool execution)
+        this.traceCollector?.record({
+          type: 'iteration.end',
+          data: { iterationNumber: this.state.iteration },
         });
       }
 
@@ -1797,6 +1837,28 @@ export class ProductionAgent {
             ? [{ model, rejected: 'complexity threshold exceeded' }]
             : undefined,
         });
+
+        // Enhanced tracing: Record routing decision
+        this.traceCollector?.record({
+          type: 'decision',
+          data: {
+            type: 'routing',
+            decision: `Selected model: ${actualModel}`,
+            outcome: 'allowed',
+            reasoning: actualModel !== model
+              ? `Task complexity ${(complexity * 100).toFixed(0)}% exceeded threshold - routed to ${actualModel}`
+              : `Default model ${model} suitable for task complexity ${(complexity * 100).toFixed(0)}%`,
+            factors: [
+              { name: 'complexity', value: complexity, weight: 0.8 },
+              { name: 'hasTools', value: context.hasTools, weight: 0.1 },
+              { name: 'taskType', value: context.taskType, weight: 0.1 },
+            ],
+            alternatives: actualModel !== model
+              ? [{ option: model, reason: 'complexity threshold exceeded', rejected: true }]
+              : undefined,
+            confidence: 0.9,
+          },
+        });
       } else {
         response = await this.provider.chat(messages, {
           model: this.config.model,
@@ -1831,6 +1893,20 @@ export class ProductionAgent {
           durationMs: duration,
         },
       });
+
+      // Enhanced tracing: Record thinking/reasoning blocks if present
+      if (response.thinking) {
+        this.traceCollector?.record({
+          type: 'llm.thinking',
+          data: {
+            requestId,
+            content: response.thinking,
+            summarized: response.thinking.length > 10000, // Summarize if very long
+            originalLength: response.thinking.length,
+            durationMs: duration,
+          },
+        });
+      }
 
       // Record metrics
       this.observability?.metrics?.recordLLMCall(
@@ -1928,6 +2004,7 @@ export class ProductionAgent {
             type: 'plan.change.queued',
             tool: toolCall.name,
             changeId: change?.id,
+            summary: this.formatToolArgsForPlan(toolCall.name, toolCall.arguments as Record<string, unknown>),
           });
 
           // Return a message indicating the change was queued
@@ -1972,6 +2049,24 @@ export class ProductionAgent {
               : evaluation.policy === 'prompt' ? 'prompted'
               : 'allowed',
             policyMatch: evaluation.reason,
+          });
+
+          // Enhanced tracing: Record policy decision
+          this.traceCollector?.record({
+            type: 'decision',
+            data: {
+              type: 'policy',
+              decision: `Tool ${toolCall.name}: ${evaluation.policy}`,
+              outcome: evaluation.policy === 'forbidden' ? 'blocked'
+                : evaluation.policy === 'prompt' ? 'deferred'
+                : 'allowed',
+              reasoning: evaluation.reason,
+              factors: [
+                { name: 'policy', value: evaluation.policy },
+                { name: 'requiresApproval', value: evaluation.requiresApproval ?? false },
+              ],
+              confidence: evaluation.intent?.confidence ?? 0.8,
+            },
           });
 
           // Handle forbidden policy - always block
@@ -2283,6 +2378,12 @@ export class ProductionAgent {
     }
     if (toolName === 'delete_file') {
       return `Delete: ${args.path || args.file_path}`;
+    }
+    if (toolName === 'spawn_agent' || toolName === 'researcher') {
+      const task = String(args.task || args.prompt || args.goal || '');
+      const model = args.model ? ` (${args.model})` : '';
+      const firstLine = task.split('\n')[0].slice(0, 100);
+      return `${firstLine}${task.length > 100 ? '...' : ''}${model}`;
     }
     // Generic
     return `Args: ${JSON.stringify(args).slice(0, 100)}...`;
@@ -3218,6 +3319,8 @@ export class ProductionAgent {
     this.observability?.logger?.info('Spawning agent', { name: agentName, task });
 
     const startTime = Date.now();
+    const childSessionId = `subagent-${agentName}-${Date.now()}`;
+    const childTraceId = `trace-${childSessionId}`;
 
     try {
       // Filter tools for this agent
@@ -3300,6 +3403,33 @@ export class ProductionAgent {
         };
 
         this.emit({ type: 'agent.complete', agentId: agentName, success: result.success });
+
+        // Enhanced tracing: Record subagent completion
+        this.traceCollector?.record({
+          type: 'subagent.link',
+          data: {
+            parentSessionId: this.traceCollector.getSessionId() || 'unknown',
+            childSessionId,
+            childTraceId,
+            childConfig: {
+              agentType: agentName,
+              model: resolvedModel || 'default',
+              task,
+              tools: agentTools.map(t => t.name),
+            },
+            spawnContext: {
+              reason: `Delegated task: ${task.slice(0, 100)}`,
+              expectedOutcome: agentDef.description,
+              parentIteration: this.state.iteration,
+            },
+            result: {
+              success: result.success,
+              summary: (result.response || result.error || '').slice(0, 500),
+              tokensUsed: result.metrics.totalTokens,
+              durationMs: duration,
+            },
+          },
+        });
 
         await subAgent.cleanup();
 

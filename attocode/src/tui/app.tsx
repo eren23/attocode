@@ -767,6 +767,12 @@ export function TUIApp({
           '  /approve [n]      Approve plan',
           '  /reject           Reject plan',
           '',
+          '> TRACE ANALYSIS',
+          '  /trace            Show trace summary',
+          '  /trace --analyze  Run efficiency analysis',
+          '  /trace issues     List detected issues',
+          '  /trace fixes      List pending improvements',
+          '',
           '===== SHORTCUTS =====',
           '  Ctrl+C      Exit',
           '  Ctrl+L      Clear screen',
@@ -1221,6 +1227,164 @@ export function TUIApp({
         setStatus(s => ({ ...s, mode: 'ready' }));
         return;
 
+      // Trace analysis commands
+      case 'trace': {
+        const traceCollector = agent.getTraceCollector();
+
+        if (args.length === 0) {
+          // Show current session trace summary
+          if (!traceCollector) {
+            addMessage('system', 'Tracing is not enabled. Start agent with --trace to enable.');
+            return;
+          }
+
+          const data = traceCollector.getSessionTrace();
+          if (!data || !data.iterations || data.iterations.length === 0) {
+            addMessage('system', 'No trace data collected yet.');
+            return;
+          }
+
+          addMessage('system', [
+            'Trace Summary:',
+            `  Session ID:    ${data.sessionId}`,
+            `  Status:        ${data.status}`,
+            `  Iterations:    ${data.iterations.length}`,
+            `  Duration:      ${data.durationMs ? `${Math.round(data.durationMs / 1000)}s` : 'ongoing'}`,
+            '',
+            'Metrics:',
+            `  Input tokens:  ${data.metrics.inputTokens.toLocaleString()}`,
+            `  Output tokens: ${data.metrics.outputTokens.toLocaleString()}`,
+            `  Cache hit:     ${Math.round(data.metrics.avgCacheHitRate * 100)}%`,
+            `  Tool calls:    ${data.metrics.toolCalls}`,
+            `  Errors:        ${data.metrics.errors}`,
+            `  Est. Cost:     $${data.metrics.estimatedCost.toFixed(4)}`,
+            '',
+            'Use: /trace --analyze for efficiency analysis',
+            '     /trace issues to see detected inefficiencies',
+          ].join('\n'));
+        } else if (args[0] === '--analyze' || args[0] === 'analyze') {
+          if (!traceCollector) {
+            addMessage('system', 'Tracing is not enabled.');
+            return;
+          }
+
+          const data = traceCollector.getSessionTrace();
+          if (!data || !data.iterations || data.iterations.length === 0) {
+            addMessage('system', 'No trace data to analyze.');
+            return;
+          }
+
+          addMessage('system', 'Analyzing trace...');
+
+          try {
+            const { createTraceSummaryGenerator } = await import('../analysis/trace-summary.js');
+            const generator = createTraceSummaryGenerator(data);
+            const summary = generator.generate();
+
+            const lines = ['Efficiency Analysis:', '', `Anomalies Detected: ${summary.anomalies.length}`];
+
+            if (summary.anomalies.length === 0) {
+              lines.push('  No significant issues detected.');
+            } else {
+              for (const anomaly of summary.anomalies) {
+                lines.push(`  [${anomaly.severity.toUpperCase()}] ${anomaly.type}`);
+                lines.push(`       ${anomaly.description}`);
+              }
+            }
+
+            lines.push('', 'Tool Patterns:');
+            lines.push(`  Unique tools used: ${Object.keys(summary.toolPatterns.frequency).length}`);
+            lines.push(`  Redundant calls:   ${summary.toolPatterns.redundantCalls.length}`);
+            lines.push(`  Slow tools:        ${summary.toolPatterns.slowTools.length}`);
+
+            if (summary.codeLocations.length > 0) {
+              lines.push('', 'Related Code Locations:');
+              for (const loc of summary.codeLocations) {
+                lines.push(`  [${loc.relevance.toUpperCase()}] ${loc.file} - ${loc.component}`);
+              }
+            }
+
+            addMessage('system', lines.join('\n'));
+          } catch (e) {
+            addMessage('error', `Analysis failed: ${(e as Error).message}`);
+          }
+        } else if (args[0] === 'issues') {
+          if (!traceCollector) {
+            addMessage('system', 'Tracing is not enabled.');
+            return;
+          }
+
+          const data = traceCollector.getSessionTrace();
+          if (!data || !data.iterations || data.iterations.length === 0) {
+            addMessage('system', 'No trace data to analyze.');
+            return;
+          }
+
+          try {
+            const { createTraceSummaryGenerator } = await import('../analysis/trace-summary.js');
+            const generator = createTraceSummaryGenerator(data);
+            const summary = generator.generate();
+
+            if (summary.anomalies.length === 0) {
+              addMessage('system', 'No issues detected in current session.');
+            } else {
+              const lines = ['Detected Issues:'];
+              summary.anomalies.forEach((anomaly, i) => {
+                const icon = anomaly.severity === 'high' ? '!' : anomaly.severity === 'medium' ? '*' : '-';
+                lines.push(`  ${icon} ${i + 1}. ${anomaly.type} (${anomaly.severity})`);
+                lines.push(`       ${anomaly.description}`);
+              });
+              addMessage('system', lines.join('\n'));
+            }
+          } catch (e) {
+            addMessage('error', `Analysis failed: ${(e as Error).message}`);
+          }
+        } else if (args[0] === 'fixes') {
+          try {
+            const { createFeedbackLoopManager } = await import('../analysis/feedback-loop.js');
+            const feedbackManager = createFeedbackLoopManager();
+            const pendingFixes = feedbackManager.getPendingFixes();
+            const stats = feedbackManager.getSummaryStats();
+
+            const lines = [
+              'Feedback Loop Summary:',
+              `  Total analyses:     ${stats.totalAnalyses}`,
+              `  Avg efficiency:     ${stats.avgEfficiencyScore}%`,
+              `  Total fixes:        ${stats.totalFixes}`,
+              `  Implemented:        ${stats.implementedFixes}`,
+              `  Verified:           ${stats.verifiedFixes}`,
+              '',
+            ];
+
+            if (pendingFixes.length === 0) {
+              lines.push('No pending fixes.');
+            } else {
+              lines.push('Pending Fixes:');
+              for (const fix of pendingFixes.slice(0, 5)) {
+                lines.push(`  - ${fix.description}`);
+              }
+              if (pendingFixes.length > 5) {
+                lines.push(`  ... and ${pendingFixes.length - 5} more`);
+              }
+            }
+
+            feedbackManager.close();
+            addMessage('system', lines.join('\n'));
+          } catch (e) {
+            addMessage('error', `Error loading feedback data: ${(e as Error).message}`);
+          }
+        } else {
+          addMessage('system', [
+            'Usage:',
+            '  /trace              - Show current session trace summary',
+            '  /trace --analyze    - Run efficiency analysis',
+            '  /trace issues       - List detected inefficiencies',
+            '  /trace fixes        - List pending improvements',
+          ].join('\n'));
+        }
+        return;
+      }
+
       default:
         addMessage('system', `Unknown: /${cmd}. Try /help`);
     }
@@ -1287,7 +1451,8 @@ export function TUIApp({
         const e = event as { inputTokens: number; outputTokens: number; cost?: number; subagent?: string };
         addMessage('system', `${subagentPrefix}* ${e.inputTokens.toLocaleString()} in, ${e.outputTokens.toLocaleString()} out${e.cost ? ` $${e.cost.toFixed(6)}` : ''}`);
       } else if (event.type === 'plan.change.queued') {
-        addMessage('system', `[PLAN] Queued: ${event.tool}`);
+        const summary = event.summary ? `: ${event.summary}` : '';
+        addMessage('system', `[PLAN] Queued ${event.tool}${summary}`);
       }
     });
 

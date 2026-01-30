@@ -137,6 +137,13 @@ ${c('SKILLS & AGENTS', 'bold')}
 ${c('INITIALIZATION', 'bold')}
   ${c('/init', 'cyan')}              Initialize .attocode/ directory structure
 
+${c('TRACE ANALYSIS', 'bold')}
+  ${c('/trace', 'cyan')}             Show current session trace summary
+  ${c('/trace --analyze', 'cyan')}   Run efficiency analysis on trace
+  ${c('/trace issues', 'cyan')}      List detected inefficiencies
+  ${c('/trace fixes', 'cyan')}       List pending improvements
+  ${c('/trace export', 'cyan')}      Export trace JSON for LLM analysis
+
 ${c('CAPABILITIES & DEBUGGING', 'bold')}
   ${c('/powers', 'cyan')}            Show all agent capabilities
   ${c('/powers <type>', 'cyan')}     List by type (tools, skills, agents, mcp, commands)
@@ -1465,6 +1472,208 @@ ${c('Test it:', 'dim')}
     case '/init':
       await handleInitCommand(args, ctx);
       break;
+
+    // =========================================================================
+    // TRACE ANALYSIS
+    // =========================================================================
+
+    case '/trace': {
+      const traceCollector = agent.getTraceCollector();
+
+      if (args.length === 0) {
+        // Show current session trace summary
+        if (!traceCollector) {
+          output.log(c('Tracing is not enabled. Start agent with --trace to enable.', 'yellow'));
+          break;
+        }
+
+        const data = traceCollector.getSessionTrace();
+        if (!data || !data.iterations || data.iterations.length === 0) {
+          output.log(c('No trace data collected yet.', 'dim'));
+          break;
+        }
+
+        output.log(`
+${c('Trace Summary:', 'bold')}
+  Session ID:    ${data.sessionId}
+  Status:        ${data.status}
+  Iterations:    ${data.iterations.length}
+  Duration:      ${data.durationMs ? `${Math.round(data.durationMs / 1000)}s` : 'ongoing'}
+
+${c('Metrics:', 'bold')}
+  Input tokens:  ${data.metrics.inputTokens.toLocaleString()}
+  Output tokens: ${data.metrics.outputTokens.toLocaleString()}
+  Cache hit:     ${Math.round(data.metrics.avgCacheHitRate * 100)}%
+  Tool calls:    ${data.metrics.toolCalls}
+  Errors:        ${data.metrics.errors}
+  Est. Cost:     $${data.metrics.estimatedCost.toFixed(4)}
+
+${c('Use:', 'dim')} /trace --analyze for efficiency analysis
+${c('     ', 'dim')} /trace issues to see detected inefficiencies
+`);
+      } else if (args[0] === '--analyze' || args[0] === 'analyze') {
+        // Run efficiency analysis
+        if (!traceCollector) {
+          output.log(c('Tracing is not enabled.', 'yellow'));
+          break;
+        }
+
+        const data = traceCollector.getSessionTrace();
+        if (!data || !data.iterations || data.iterations.length === 0) {
+          output.log(c('No trace data to analyze.', 'dim'));
+          break;
+        }
+
+        output.log(c('Analyzing trace...', 'cyan'));
+
+        // Import analysis module dynamically
+        const { createTraceSummaryGenerator } = await import('../analysis/trace-summary.js');
+        const generator = createTraceSummaryGenerator(data);
+        const summary = generator.generate();
+
+        // Display analysis results
+        output.log(`
+${c('Efficiency Analysis:', 'bold')}
+
+${c('Anomalies Detected:', 'bold')} ${summary.anomalies.length}
+`);
+
+        if (summary.anomalies.length === 0) {
+          output.log(c('  No significant issues detected.', 'green'));
+        } else {
+          for (const anomaly of summary.anomalies) {
+            const severityColor = anomaly.severity === 'high' ? 'red' :
+                                  anomaly.severity === 'medium' ? 'yellow' : 'dim';
+            output.log(`  ${c(`[${anomaly.severity.toUpperCase()}]`, severityColor)} ${anomaly.type}`);
+            output.log(`       ${anomaly.description}`);
+            output.log(c(`       Evidence: ${anomaly.evidence}`, 'dim'));
+          }
+        }
+
+        output.log(`
+${c('Tool Patterns:', 'bold')}
+  Unique tools used: ${Object.keys(summary.toolPatterns.frequency).length}
+  Redundant calls:   ${summary.toolPatterns.redundantCalls.length}
+  Slow tools:        ${summary.toolPatterns.slowTools.length}
+`);
+
+        if (summary.codeLocations.length > 0) {
+          output.log(c('Related Code Locations:', 'bold'));
+          for (const loc of summary.codeLocations) {
+            const rel = loc.relevance === 'primary' ? c('[PRIMARY]', 'cyan') :
+                       loc.relevance === 'secondary' ? c('[SECONDARY]', 'dim') : '';
+            output.log(`  ${rel} ${loc.file} - ${loc.component}`);
+            output.log(c(`       ${loc.description}`, 'dim'));
+          }
+        }
+
+      } else if (args[0] === 'issues') {
+        // List detected inefficiencies
+        if (!traceCollector) {
+          output.log(c('Tracing is not enabled.', 'yellow'));
+          break;
+        }
+
+        const data = traceCollector.getSessionTrace();
+        if (!data || !data.iterations || data.iterations.length === 0) {
+          output.log(c('No trace data to analyze.', 'dim'));
+          break;
+        }
+
+        const { createTraceSummaryGenerator } = await import('../analysis/trace-summary.js');
+        const generator = createTraceSummaryGenerator(data);
+        const summary = generator.generate();
+
+        if (summary.anomalies.length === 0) {
+          output.log(c('No issues detected in current session.', 'green'));
+        } else {
+          output.log(c('\nDetected Issues:', 'bold'));
+          summary.anomalies.forEach((anomaly, i) => {
+            const icon = anomaly.severity === 'high' ? c('!', 'red') :
+                        anomaly.severity === 'medium' ? c('*', 'yellow') : c('-', 'dim');
+            output.log(`  ${icon} ${i + 1}. ${anomaly.type} (${anomaly.severity})`);
+            output.log(`       ${anomaly.description}`);
+          });
+        }
+
+      } else if (args[0] === 'fixes') {
+        // List pending improvements from feedback loop
+        try {
+          const { createFeedbackLoopManager } = await import('../analysis/feedback-loop.js');
+          const feedbackManager = createFeedbackLoopManager();
+
+          const pendingFixes = feedbackManager.getPendingFixes();
+          const stats = feedbackManager.getSummaryStats();
+
+          output.log(`
+${c('Feedback Loop Summary:', 'bold')}
+  Total analyses:     ${stats.totalAnalyses}
+  Avg efficiency:     ${stats.avgEfficiencyScore}%
+  Total fixes:        ${stats.totalFixes}
+  Implemented:        ${stats.implementedFixes}
+  Verified:           ${stats.verifiedFixes}
+  Avg improvement:    ${stats.avgImprovement}%
+`);
+
+          if (pendingFixes.length === 0) {
+            output.log(c('No pending fixes.', 'dim'));
+          } else {
+            output.log(c('Pending Fixes:', 'bold'));
+            for (const fix of pendingFixes.slice(0, 10)) {
+              output.log(`  - ${fix.description}`);
+              output.log(c(`    ID: ${fix.id} | Created: ${new Date(fix.createdAt).toLocaleDateString()}`, 'dim'));
+            }
+            if (pendingFixes.length > 10) {
+              output.log(c(`  ... and ${pendingFixes.length - 10} more`, 'dim'));
+            }
+          }
+
+          feedbackManager.close();
+        } catch (error) {
+          output.log(c(`Error loading feedback data: ${(error as Error).message}`, 'red'));
+        }
+
+      } else if (args[0] === 'compare' && args.length >= 3) {
+        // Compare two sessions
+        output.log(c(`Comparing sessions: ${args[1]} vs ${args[2]}`, 'cyan'));
+        output.log(c('Use the trace dashboard for session comparison:', 'dim'));
+        output.log(c('  npm run dashboard', 'dim'));
+        output.log(c(`  Then visit: http://localhost:5173/compare?a=${args[1]}&b=${args[2]}`, 'dim'));
+
+      } else if (args[0] === 'export') {
+        // Export current trace as JSON for LLM analysis
+        if (!traceCollector) {
+          output.log(c('Tracing is not enabled.', 'yellow'));
+          break;
+        }
+
+        const data = traceCollector.getSessionTrace();
+        if (!data) {
+          output.log(c('No trace data to export.', 'dim'));
+          break;
+        }
+
+        const { createTraceSummaryGenerator } = await import('../analysis/trace-summary.js');
+        const generator = createTraceSummaryGenerator(data);
+        const summary = generator.generate();
+
+        const outFile = args[1] || `trace-${sessionId}.json`;
+        const { writeFile } = await import('fs/promises');
+        await writeFile(outFile, JSON.stringify(summary, null, 2), 'utf-8');
+        output.log(c(`+ Trace exported to: ${outFile}`, 'green'));
+        output.log(c('  This JSON is optimized for LLM analysis (~4000 tokens)', 'dim'));
+
+      } else {
+        output.log(c('Usage:', 'bold'));
+        output.log(c('  /trace              - Show current session trace summary', 'dim'));
+        output.log(c('  /trace --analyze    - Run efficiency analysis', 'dim'));
+        output.log(c('  /trace issues       - List detected inefficiencies', 'dim'));
+        output.log(c('  /trace fixes        - List pending improvements', 'dim'));
+        output.log(c('  /trace export [file]- Export trace JSON for LLM analysis', 'dim'));
+        output.log(c('  /trace compare <a> <b> - Compare two sessions (via dashboard)', 'dim'));
+      }
+      break;
+    }
 
     // =========================================================================
     // UNKNOWN COMMAND

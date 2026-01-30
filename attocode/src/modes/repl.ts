@@ -363,6 +363,20 @@ ${c('----------------------------------------------------------------------', 'd
   // Create command context
   const commandOutput = createConsoleOutput();
 
+  // Start trace session for the entire terminal session (if tracing enabled)
+  // Individual tasks within the session will be tracked via startTask/endTask
+  const terminalSessionId = `terminal-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+  const traceCollector = agent.getTraceCollector();
+  if (trace && traceCollector) {
+    await traceCollector.startSession(
+      terminalSessionId,
+      undefined, // No single task - this is a terminal session with multiple tasks
+      model || provider.defaultModel,
+      { type: 'repl', permissionMode }
+    );
+    console.log(c(`Trace session started: ${terminalSessionId}`, 'dim'));
+  }
+
   try {
     while (true) {
       // Generate prompt with mode indicator
@@ -472,6 +486,16 @@ ${c('----------------------------------------------------------------------', 'd
       console.log();
     }
   } finally {
+    // End trace session for the terminal session
+    if (trace && traceCollector?.isSessionActive()) {
+      try {
+        await traceCollector.endSession({ success: true });
+        console.log(c(`\nTrace session ended -> .traces/`, 'dim'));
+      } catch (err) {
+        console.log(c(`! Failed to end trace session: ${(err as Error).message}`, 'yellow'));
+      }
+    }
+
     tui.cleanup();
     await mcpClient.cleanup();
     await agent.cleanup();

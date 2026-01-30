@@ -315,6 +315,20 @@ export async function startTUIMode(
       console.log('\n--- TUI Starting (debug mode - console not cleared) ---\n');
     }
 
+    // Start trace session for the entire terminal session (if tracing enabled)
+    // Individual tasks within the session will be tracked via startTask/endTask in agent.run()
+    const terminalSessionId = `terminal-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+    const traceCollector = agent.getTraceCollector();
+    if (trace && traceCollector) {
+      await traceCollector.startSession(
+        terminalSessionId,
+        undefined, // No single task - this is a terminal session with multiple tasks
+        model || 'default',
+        { type: 'tui', permissionMode }
+      );
+      persistenceDebug.log(`[TUI] Trace session started: ${terminalSessionId}`);
+    }
+
     // Pass all required props to the TUIApp
     const tuiProps: TUIAppProps = {
       agent,
@@ -342,10 +356,22 @@ export async function startTUIMode(
     };
 
     const instance = render(React.createElement(TUIApp, tuiProps));
-    await instance.waitUntilExit();
-    await agent.cleanup();
-    await mcpClient.cleanup();
-    await lspManager.cleanup();
+    try {
+      await instance.waitUntilExit();
+    } finally {
+      // End trace session for the terminal session
+      if (trace && traceCollector?.isSessionActive()) {
+        try {
+          await traceCollector.endSession({ success: true });
+          persistenceDebug.log(`[TUI] Trace session ended -> .traces/`);
+        } catch (err) {
+          persistenceDebug.error(`[TUI] Failed to end trace session`, err);
+        }
+      }
+      await agent.cleanup();
+      await mcpClient.cleanup();
+      await lspManager.cleanup();
+    }
 
   } catch (error) {
     console.error('! TUI failed:', (error as Error).message);

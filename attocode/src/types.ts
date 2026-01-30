@@ -73,6 +73,8 @@ export interface ChatResponse {
   usage?: TokenUsage;
   model?: string;
   stopReason?: 'end_turn' | 'tool_use' | 'max_tokens' | 'stop_sequence';
+  /** Thinking/reasoning content from models that support extended thinking (e.g., Claude) */
+  thinking?: string;
 }
 
 export interface StreamChunk {
@@ -1140,7 +1142,7 @@ export type AgentEvent =
   // Mode events
   | { type: 'mode.changed'; from: string; to: string }
   // Plan mode events
-  | { type: 'plan.change.queued'; tool: string; changeId?: string }
+  | { type: 'plan.change.queued'; tool: string; changeId?: string; summary?: string }
   | { type: 'plan.approved'; changeCount: number }
   | { type: 'plan.rejected' }
   | { type: 'plan.executing'; changeIndex: number; totalChanges: number }

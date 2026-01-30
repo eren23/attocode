@@ -275,6 +275,62 @@ Options:
   --debug                 Enable debug logging
 ```
 
+## Tracing & Performance Analysis
+
+Attocode includes comprehensive tracing capabilities for understanding agent behavior, debugging issues, and optimizing performance.
+
+### Quick Start
+
+```bash
+# Enable tracing when starting attocode
+attocode --trace
+
+# View trace summary after running commands
+/trace
+
+# Analyze efficiency issues
+/trace --analyze
+```
+
+### Trace Commands
+
+| Command | Description |
+|---------|-------------|
+| `/trace` | Show current session trace summary |
+| `/trace --analyze` | Run efficiency analysis on trace |
+| `/trace issues` | List detected inefficiencies |
+| `/trace fixes` | List pending improvements |
+| `/trace export [file]` | Export trace JSON for LLM analysis |
+
+### Trace Viewer CLI
+
+For detailed offline analysis, use the trace-viewer tool:
+
+```bash
+# Navigate to the trace viewer
+cd tools/trace-viewer
+
+# Build (first time)
+npm install && npm run build
+
+# View trace summary
+npx tsx bin/trace-viewer.ts .traces/
+
+# Timeline view
+npx tsx bin/trace-viewer.ts .traces/ --view timeline
+
+# Token flow analysis
+npx tsx bin/trace-viewer.ts .traces/ --view tokens
+
+# Generate HTML report
+npx tsx bin/trace-viewer.ts .traces/ --output html
+
+# Compare two sessions
+npx tsx bin/trace-viewer.ts compare <baseline.jsonl> <comparison.jsonl>
+```
+
+See [docs/tracing-guide.md](docs/tracing-guide.md) for the complete tracing documentation.
+
 ## Uninstall
 
 ```bash
