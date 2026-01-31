@@ -939,8 +939,8 @@ export class TraceCollector {
       message: data.status === 'error' ? data.error?.message : undefined,
     });
 
-    // Write JSONL entry
-    await this.writeEntry({
+    // Write JSONL entry with input/output details
+    const entry: ToolExecutionEntry = {
       _type: 'tool.execution',
       _ts: new Date().toISOString(),
       traceId: this.traceId!,
@@ -949,7 +949,86 @@ export class TraceCollector {
       durationMs: data.durationMs,
       status: data.status,
       resultSize: toolTrace.result?.originalSize,
-    } as ToolExecutionEntry);
+      input: this.truncateInput(startData.arguments, startData.toolName),
+      outputPreview: this.getOutputPreview(data.result, data.status),
+      errorMessage: data.status === 'error' ? data.error?.message : undefined,
+    };
+    await this.writeEntry(entry);
+  }
+
+  /**
+   * Truncate tool input for trace logging.
+   * Shows key arguments but limits large values.
+   */
+  private truncateInput(
+    args: Record<string, unknown>,
+    toolName: string
+  ): Record<string, unknown> {
+    const MAX_STRING_LENGTH = 200;
+    const result: Record<string, unknown> = {};
+
+    for (const [key, value] of Object.entries(args)) {
+      if (typeof value === 'string') {
+        // For file paths, show full path
+        if (key === 'path' || key === 'file_path' || key === 'directory') {
+          result[key] = value;
+        } else if (key === 'command' && toolName === 'bash') {
+          // Show bash commands (truncated if very long)
+          result[key] = value.length > 500 ? value.slice(0, 500) + '...' : value;
+        } else if (key === 'content' || key === 'new_content') {
+          // Truncate file content
+          result[key] = value.length > MAX_STRING_LENGTH
+            ? `${value.slice(0, MAX_STRING_LENGTH)}... (${value.length} chars)`
+            : value;
+        } else {
+          result[key] = value.length > MAX_STRING_LENGTH
+            ? value.slice(0, MAX_STRING_LENGTH) + '...'
+            : value;
+        }
+      } else if (typeof value === 'object' && value !== null) {
+        // Show structure but truncate nested values
+        const str = JSON.stringify(value);
+        result[key] = str.length > MAX_STRING_LENGTH
+          ? `${str.slice(0, MAX_STRING_LENGTH)}...`
+          : value;
+      } else {
+        result[key] = value;
+      }
+    }
+
+    return result;
+  }
+
+  /**
+   * Get a preview of the tool output.
+   */
+  private getOutputPreview(result: unknown, status: string): string | undefined {
+    if (status === 'error' || status === 'blocked' || status === 'timeout') {
+      return undefined;
+    }
+
+    if (result === undefined || result === null) {
+      return undefined;
+    }
+
+    const MAX_PREVIEW_LENGTH = 300;
+    let preview: string;
+
+    if (typeof result === 'string') {
+      preview = result;
+    } else {
+      try {
+        preview = JSON.stringify(result);
+      } catch {
+        preview = String(result);
+      }
+    }
+
+    if (preview.length > MAX_PREVIEW_LENGTH) {
+      return preview.slice(0, MAX_PREVIEW_LENGTH) + '...';
+    }
+
+    return preview;
   }
 
   /**

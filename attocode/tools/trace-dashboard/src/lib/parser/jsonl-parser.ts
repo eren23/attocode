@@ -101,6 +101,12 @@ interface ToolExecutionEntry extends BaseJSONLEntry {
   durationMs: number;
   status: string;
   resultSize?: number;
+  /** Tool input arguments (truncated for large values) */
+  input?: Record<string, unknown>;
+  /** Preview of the result (truncated) */
+  outputPreview?: string;
+  /** Error message if status is error */
+  errorMessage?: string;
 }
 
 interface ThinkingEntry extends BaseJSONLEntry {
@@ -513,6 +519,9 @@ export class JSONLParser {
               durationMs: tool.durationMs,
               status: tool.status as 'success' | 'error' | 'timeout' | 'blocked',
               resultSize: tool.resultSize,
+              input: tool.input,
+              outputPreview: tool.outputPreview,
+              errorMessage: tool.errorMessage,
             });
           }
           break;

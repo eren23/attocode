@@ -529,6 +529,12 @@ export interface ToolExecutionEntry extends BaseJSONLEntry {
   durationMs: number;
   status: ToolExecutionTrace['status'];
   resultSize?: number;
+  /** Tool input arguments (truncated for large values) */
+  input?: Record<string, unknown>;
+  /** Preview of the result (truncated) */
+  outputPreview?: string;
+  /** Error message if status is error */
+  errorMessage?: string;
 }
 
 /**

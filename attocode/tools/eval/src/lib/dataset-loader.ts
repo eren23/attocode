@@ -7,6 +7,7 @@
 import type { EvalDataset, EvalTask, EvalRunConfig, TaskMetadata } from '../types.js';
 import * as fs from 'fs/promises';
 import * as path from 'path';
+import { loadSWEBenchLite, convertToEvalTask as convertSWEBenchTask } from '../adapters/swe-bench.js';
 
 // =============================================================================
 // DATASET LOADING
@@ -42,6 +43,10 @@ async function loadBuiltInDataset(name: string): Promise<EvalDataset | null> {
       return getGoldenDataset();
     case 'smoke':
       return getSmokeTestDataset();
+    case 'swe-bench-lite':
+    case 'swebench-lite':
+    case 'swebench':
+      return getSWEBenchLiteDataset();
     default:
       return null;
   }
@@ -365,6 +370,33 @@ export function main(x: number): number {
         },
       }),
     ],
+  };
+}
+
+/**
+ * SWE-bench Lite dataset - real-world GitHub issues.
+ *
+ * Options can be passed via environment variables:
+ * - SWE_BENCH_LIMIT: Number of tasks to load (default: all)
+ * - SWE_BENCH_INSTANCE_IDS: Comma-separated instance IDs to load
+ */
+async function getSWEBenchLiteDataset(): Promise<EvalDataset> {
+  const limit = process.env.SWE_BENCH_LIMIT ? parseInt(process.env.SWE_BENCH_LIMIT, 10) : undefined;
+  const instanceIds = process.env.SWE_BENCH_INSTANCE_IDS
+    ? process.env.SWE_BENCH_INSTANCE_IDS.split(',').map((id) => id.trim())
+    : undefined;
+
+  console.log('Loading SWE-bench Lite dataset from HuggingFace...');
+  const instances = await loadSWEBenchLite({ limit, instanceIds });
+  console.log(`Loaded ${instances.length} SWE-bench instances`);
+
+  const tasks = instances.map(convertSWEBenchTask);
+
+  return {
+    name: 'swe-bench-lite',
+    description: 'SWE-bench Lite: 300 real-world GitHub issues from Python repositories',
+    version: '1.0.0',
+    tasks,
   };
 }
 

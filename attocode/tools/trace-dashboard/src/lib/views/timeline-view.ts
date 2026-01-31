@@ -111,6 +111,9 @@ export class TimelineView {
             executionId: tool.executionId,
             status: tool.status,
             resultSize: tool.resultSize,
+            input: tool.input,
+            outputPreview: tool.outputPreview,
+            errorMessage: tool.errorMessage,
           },
         });
         toolOffset += tool.durationMs + 10;

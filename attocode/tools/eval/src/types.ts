@@ -46,6 +46,7 @@ export type GraderType =
   | 'test-based'       // Run tests and check pass rate
   | 'file-contains'    // Check if files contain expected content
   | 'llm-judge'        // Use LLM to evaluate quality
+  | 'swe-bench'        // SWE-bench evaluation (patch generation)
   | 'custom';          // Custom grading function
 
 export interface ExpectedResult {
@@ -72,6 +73,15 @@ export interface ExpectedResult {
 
   /** For custom graders */
   custom?: Record<string, unknown>;
+
+  /** SWE-bench specific metadata */
+  swe_bench?: {
+    instance_id: string;
+    repo: string;
+    base_commit: string;
+    fail_to_pass?: string;
+    pass_to_pass?: string;
+  };
 }
 
 export interface TaskMetadata {
@@ -79,10 +89,16 @@ export interface TaskMetadata {
   difficulty: 'easy' | 'medium' | 'hard' | 'expert';
 
   /** Category of the task */
-  category: 'bug-fix' | 'feature' | 'refactor' | 'test' | 'docs' | 'should-fail' | 'edge-case';
+  category: 'bug-fix' | 'feature' | 'refactor' | 'test' | 'docs' | 'should-fail' | 'edge-case' | 'swe-bench';
 
   /** Source of the task */
-  source: 'golden' | 'humaneval' | 'swe-bench' | 'custom';
+  source: 'golden' | 'humaneval' | 'swe-bench' | 'swe-bench-lite' | 'custom';
+
+  /** Repository (for SWE-bench) */
+  repo?: string;
+
+  /** Version (for SWE-bench) */
+  version?: string;
 
   /** Programming language(s) involved */
   languages?: string[];

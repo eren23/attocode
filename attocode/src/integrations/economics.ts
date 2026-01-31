@@ -206,8 +206,12 @@ export class ExecutionEconomicsManager {
     // Track file operations
     if (toolName === 'read_file' && args.path) {
       this.progress.filesRead.add(String(args.path));
-      this.progress.lastMeaningfulProgress = Date.now();
-      this.progress.stuckCount = 0;
+      // Only count reads as progress during initial exploration (first 5 iterations)
+      // After that, we need actual edits to reset the stuck counter
+      if (this.usage.iterations <= 5) {
+        this.progress.lastMeaningfulProgress = Date.now();
+        this.progress.stuckCount = 0;
+      }
     }
 
     if (['write_file', 'edit_file'].includes(toolName) && args.path) {

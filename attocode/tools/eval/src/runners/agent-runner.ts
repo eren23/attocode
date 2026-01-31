@@ -312,11 +312,9 @@ export class ProductionAgentRunner implements EvalRunner {
 
     if (task.setup?.commands) {
       for (const cmd of task.setup.commands) {
-        // Parse command into executable and args for security
-        const parts = cmd.split(' ');
-        const executable = parts[0];
-        const args = parts.slice(1);
-        execFileSync(executable, args, { cwd: workdir, stdio: 'inherit' });
+        // Use shell for complex commands with && or pipes
+        console.log(`  Running setup: ${cmd.slice(0, 80)}${cmd.length > 80 ? '...' : ''}`);
+        execFileSync('sh', ['-c', cmd], { cwd: workdir, stdio: 'inherit' });
       }
     }
 
@@ -340,10 +338,7 @@ export class ProductionAgentRunner implements EvalRunner {
     if (task.teardown?.commands) {
       for (const cmd of task.teardown.commands) {
         try {
-          const parts = cmd.split(' ');
-          const executable = parts[0];
-          const args = parts.slice(1);
-          execFileSync(executable, args, { cwd: workdir, stdio: 'inherit' });
+          execFileSync('sh', ['-c', cmd], { cwd: workdir, stdio: 'inherit' });
         } catch {
           // Command may fail
         }

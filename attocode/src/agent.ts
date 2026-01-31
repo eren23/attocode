@@ -1207,6 +1207,26 @@ export class ProductionAgent {
         }
 
         // =======================================================================
+        // EXPLORATION LOOP DETECTION - Nudge agent to make edits
+        // =======================================================================
+        if (this.economics) {
+          const progress = this.economics.getProgress();
+          // After 10 iterations with no edits, inject a nudge to take action
+          if (this.state.iteration >= 10 && progress.filesModified === 0) {
+            messages.push({
+              role: 'user',
+              content: '[System] You have explored the codebase but made no edits yet. If you understand the issue, make the code changes now rather than reading more files.',
+            });
+
+            this.observability?.logger?.info('Exploration loop detected - injecting edit nudge', {
+              iteration: this.state.iteration,
+              filesRead: progress.filesRead,
+              filesModified: progress.filesModified,
+            });
+          }
+        }
+
+        // =======================================================================
         // RECITATION INJECTION (Trick Q) - Combat "lost in middle" attention
         // =======================================================================
         if (this.contextEngineering) {
