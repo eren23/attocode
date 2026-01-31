@@ -1,0 +1,21 @@
+{
+  "name": "@attocode/eval",
+  "version": "0.1.0",
+  "description": "Evaluation framework for attocode AI coding agent",
+  "type": "module",
+  "main": "dist/index.js",
+  "scripts": {
+    "build": "tsc",
+    "run": "tsx src/cli.ts run",
+    "compare": "tsx src/cli.ts compare",
+    "list": "tsx src/cli.ts list",
+    "test": "vitest run",
+    "test:watch": "vitest"
+  },
+  "dependencies": {},
+  "devDependencies": {
+    "tsx": "^4.19.2",
+    "typescript": "^5.5.0",
+    "vitest": "^2.1.0"
+  }
+}
