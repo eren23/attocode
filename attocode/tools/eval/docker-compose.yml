@@ -1,0 +1,42 @@
+services:
+  eval:
+    build:
+      context: ../..  # Project root (attocode/)
+      dockerfile: tools/eval/Dockerfile
+    volumes:
+      # Persist eval results
+      - ./results:/app/tools/eval/results
+      # Write traces to project root .traces/ for dashboard visibility
+      - ../../.traces:/app/.traces
+      # Mount datasets for custom evaluation sets
+      - ./datasets:/app/tools/eval/datasets:ro
+    environment:
+      # API keys (passed from host environment)
+      - ANTHROPIC_API_KEY
+      - OPENROUTER_API_KEY
+      - OPENAI_API_KEY
+      # SWE-bench configuration
+      - SWE_BENCH_LIMIT
+      - SWE_BENCH_INSTANCE_IDS
+      # Trace output directory (inside container)
+      - TRACE_OUTPUT_DIR=/app/.traces
+    working_dir: /app
+    # Enable pseudo-TTY for better output
+    tty: true
+    stdin_open: true
+
+  # Convenience service to run the trace dashboard
+  dashboard:
+    build:
+      context: ../..
+      dockerfile: tools/eval/Dockerfile
+    volumes:
+      - ../../.traces:/app/.traces:ro
+      - ./results:/app/tools/eval/results:ro
+    ports:
+      - "3000:3000"  # Dashboard UI
+      - "4000:4000"  # Dashboard API
+    working_dir: /app/tools/trace-dashboard
+    command: npm run dev
+    environment:
+      - NODE_ENV=development

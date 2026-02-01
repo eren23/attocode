@@ -15,7 +15,7 @@
 import Database from 'better-sqlite3';
 import { join, dirname } from 'node:path';
 import { mkdir } from 'node:fs/promises';
-import { existsSync, readFileSync } from 'node:fs';
+import { existsSync, readFileSync, mkdirSync } from 'node:fs';
 import type { Message, ToolCall } from '../types.js';
 import type {
   SessionEntry,
@@ -314,6 +314,13 @@ export class SQLiteStore {
       maxSessions: config.maxSessions || 50,
       walMode: config.walMode ?? true,
     };
+
+    // Ensure directory exists BEFORE opening database
+    // (better-sqlite3 requires the parent directory to exist)
+    const dbDir = dirname(this.config.dbPath);
+    if (!existsSync(dbDir)) {
+      mkdirSync(dbDir, { recursive: true });
+    }
 
     // Initialize database
     this.db = new Database(this.config.dbPath);

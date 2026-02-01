@@ -22,6 +22,7 @@ const DEFAULT_TRACE_DIRS = [
   '.traces',
   '.agent/traces',
   'traces',
+  'tools/eval/results',  // Eval framework traces
 ];
 
 // Find project root by looking for package.json

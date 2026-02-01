@@ -2,11 +2,39 @@
 
 Automated evaluation framework for testing the attocode AI coding agent.
 
-## Quick Start
+## Quick Start (Docker - Recommended)
+
+Docker provides a consistent environment with all Python/Node dependencies pre-installed:
+
+```bash
+cd tools/eval
+
+# Build the Docker image (one-time)
+./docker-eval.sh build
+
+# Run SWE-bench evaluation
+./docker-eval.sh run -d swe-bench-lite --provider openrouter -m anthropic/claude-3.5-sonnet:beta --trace
+
+# Run with limited instances
+SWE_BENCH_LIMIT=5 ./docker-eval.sh run -d swe-bench-lite --provider openrouter -m z-ai/glm-4.7 --trace
+
+# Run golden dataset
+./docker-eval.sh run -d golden --provider openrouter -m anthropic/claude-3.5-sonnet:beta
+
+# Open a shell in the container for debugging
+./docker-eval.sh shell
+```
+
+Results are persisted to `tools/eval/results/` and traces to `.traces/` (viewable in trace dashboard).
+
+## Quick Start (Local)
 
 ```bash
 # Use Node.js 20+
 export PATH="/opt/homebrew/opt/node@20/bin:$PATH"
+
+# Install Python deps for SWE-bench
+pip install datasets pandas numpy
 
 # List available tasks
 npx tsx tools/eval/src/cli.ts list --dataset golden
@@ -88,6 +116,56 @@ tools/eval/
 ├── datasets/               # Custom dataset files (JSON)
 └── results/               # Evaluation results + traces
 ```
+
+## Docker Setup
+
+The Docker environment bundles all dependencies (Node.js 20, Python 3.11, datasets, pandas, numpy) for reproducible evaluation runs.
+
+### Files
+
+| File | Purpose |
+|------|---------|
+| `Dockerfile` | Multi-stage build with Node 20 + Python 3.11 |
+| `docker-compose.yml` | Orchestration with volume mounts |
+| `docker-eval.sh` | Convenience wrapper script |
+
+### Commands
+
+```bash
+# Build image
+./docker-eval.sh build
+
+# Run evaluation (pass any CLI args)
+./docker-eval.sh run -d swe-bench-lite --provider openrouter -m MODEL --trace
+
+# Open shell for debugging
+./docker-eval.sh shell
+
+# Start trace dashboard (Docker)
+./docker-eval.sh dashboard
+```
+
+### Environment Variables
+
+API keys are passed through from your host environment:
+
+```bash
+export ANTHROPIC_API_KEY=sk-...
+export OPENROUTER_API_KEY=sk-or-...
+export OPENAI_API_KEY=sk-...
+
+# Then run
+./docker-eval.sh run -d swe-bench-lite --provider openrouter -m MODEL
+```
+
+### Volume Mounts
+
+| Host Path | Container Path | Purpose |
+|-----------|----------------|---------|
+| `./results` | `/app/tools/eval/results` | Eval results (JSON) |
+| `../../.traces` | `/app/.traces` | Traces (JSONL) for dashboard |
+
+Traces from Docker runs automatically appear in the trace dashboard.
 
 ## Built-in Datasets
 
