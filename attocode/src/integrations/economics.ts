@@ -56,9 +56,50 @@ export interface ProgressState {
   filesRead: Set<string>;
   filesModified: Set<string>;
   commandsRun: string[];
-  recentToolCalls: Array<{ tool: string; args: string }>;
+  recentToolCalls: Array<{ tool: string; args: string; timestamp: number }>;
   lastMeaningfulProgress: number;
   stuckCount: number;
+}
+
+/**
+ * Doom loop detection state (OpenCode pattern).
+ * Detects when agent is stuck calling the same tool repeatedly.
+ */
+export interface LoopDetectionState {
+  /** Whether a doom loop was detected */
+  doomLoopDetected: boolean;
+  /** The tool that's being called repeatedly */
+  lastTool: string | null;
+  /** How many consecutive times the same call was made */
+  consecutiveCount: number;
+  /** Threshold for doom loop detection (default: 3) */
+  threshold: number;
+  /** Timestamp of last doom loop warning */
+  lastWarningTime: number;
+}
+
+/**
+ * Exploration phase state - tracks whether agent is gathering info vs taking action.
+ */
+export interface PhaseState {
+  /** Current phase of execution */
+  phase: 'exploring' | 'planning' | 'acting' | 'verifying';
+  /** Iteration when exploration started */
+  explorationStartIteration: number;
+  /** Unique files read during exploration */
+  uniqueFilesRead: Set<string>;
+  /** Unique search queries performed */
+  uniqueSearches: Set<string>;
+  /** Files that have been modified */
+  filesModified: Set<string>;
+  /** Number of test runs */
+  testsRun: number;
+  /** Whether phase transition is recommended */
+  shouldTransition: boolean;
+  /** Iterations spent in current phase */
+  iterationsInPhase: number;
+  /** Files read in recent iterations (for diminishing returns) */
+  recentNewFiles: number;
 }
 
 /**
@@ -72,6 +113,10 @@ export interface BudgetCheckResult {
   isSoftLimit: boolean;
   percentUsed: number;
   suggestedAction?: 'continue' | 'request_extension' | 'stop' | 'warn';
+  /** Force text-only response (no tool calls allowed) */
+  forceTextOnly?: boolean;
+  /** Prompt to inject for contextual guidance */
+  injectedPrompt?: string;
 }
 
 /**
@@ -94,7 +139,10 @@ export type EconomicsEvent =
   | { type: 'progress.made'; filesRead: number; filesModified: number }
   | { type: 'extension.requested'; request: ExtensionRequest }
   | { type: 'extension.granted'; extension: Partial<ExecutionBudget> }
-  | { type: 'extension.denied'; reason: string };
+  | { type: 'extension.denied'; reason: string }
+  | { type: 'doom_loop.detected'; tool: string; consecutiveCount: number }
+  | { type: 'phase.transition'; from: string; to: string; reason: string }
+  | { type: 'exploration.saturation'; filesRead: number; iterations: number };
 
 export type EconomicsEventListener = (event: EconomicsEvent) => void;
 
@@ -103,12 +151,43 @@ export type EconomicsEventListener = (event: EconomicsEvent) => void;
 // =============================================================================
 
 /**
+ * Max steps prompt - injected when iteration limit reached.
+ * Forces a summary response instead of more tool calls.
+ */
+const MAX_STEPS_PROMPT = `[System] Maximum steps reached. You must now:
+1. Summarize what you've accomplished
+2. List any remaining work
+3. Explain any blockers encountered
+
+Do NOT call any more tools. Respond with text only.`;
+
+/**
+ * Doom loop prompt - injected when same tool called repeatedly.
+ */
+const DOOM_LOOP_PROMPT = (tool: string, count: number) =>
+`[System] You've called ${tool} with the same arguments ${count} times. This indicates a stuck state. Either:
+1. Try a DIFFERENT approach or tool
+2. If blocked, explain what's preventing progress
+3. If the task is complete, say so explicitly`;
+
+/**
+ * Exploration saturation prompt - gentle nudge to start making edits.
+ */
+const EXPLORATION_NUDGE_PROMPT = (filesRead: number, iterations: number) =>
+`[System] You've read ${filesRead} files across ${iterations} iterations. If you understand the issue:
+- Make the code changes now
+- Run tests to verify
+If you're still gathering context, briefly explain what you're looking for.`;
+
+/**
  * ExecutionEconomicsManager handles budget tracking and progress detection.
  */
 export class ExecutionEconomicsManager {
   private budget: ExecutionBudget;
   private usage: ExecutionUsage;
   private progress: ProgressState;
+  private loopState: LoopDetectionState;
+  private phaseState: PhaseState;
   private startTime: number;
   private listeners: EconomicsEventListener[] = [];
   private extensionHandler?: (request: ExtensionRequest) => Promise<Partial<ExecutionBudget> | null>;
@@ -150,6 +229,28 @@ export class ExecutionEconomicsManager {
       stuckCount: 0,
     };
 
+    // Initialize doom loop detection state
+    this.loopState = {
+      doomLoopDetected: false,
+      lastTool: null,
+      consecutiveCount: 0,
+      threshold: 3,
+      lastWarningTime: 0,
+    };
+
+    // Initialize phase tracking state
+    this.phaseState = {
+      phase: 'exploring',
+      explorationStartIteration: 0,
+      uniqueFilesRead: new Set(),
+      uniqueSearches: new Set(),
+      filesModified: new Set(),
+      testsRun: 0,
+      shouldTransition: false,
+      iterationsInPhase: 0,
+      recentNewFiles: 0,
+    };
+
     this.startTime = Date.now();
   }
 
@@ -188,39 +289,88 @@ export class ExecutionEconomicsManager {
   }
 
   /**
-   * Record a tool call for progress tracking.
+   * Record a tool call for progress tracking and loop detection.
    */
-  recordToolCall(toolName: string, args: Record<string, unknown>, result?: unknown): void {
+  recordToolCall(toolName: string, args: Record<string, unknown>, _result?: unknown): void {
     this.usage.toolCalls++;
     this.usage.iterations++;
 
+    const now = Date.now();
+
     // Track for loop detection (stableStringify ensures consistent ordering for comparison)
     const argsStr = stableStringify(args);
-    this.progress.recentToolCalls.push({ tool: toolName, args: argsStr });
+    this.progress.recentToolCalls.push({ tool: toolName, args: argsStr, timestamp: now });
 
     // Keep only last 10 for loop detection
     if (this.progress.recentToolCalls.length > 10) {
       this.progress.recentToolCalls.shift();
     }
 
+    // =========================================================================
+    // DOOM LOOP DETECTION (OpenCode pattern)
+    // =========================================================================
+    this.updateDoomLoopState(toolName, argsStr);
+
+    // =========================================================================
+    // PHASE TRACKING
+    // =========================================================================
+    this.updatePhaseState(toolName, args);
+
     // Track file operations
     if (toolName === 'read_file' && args.path) {
-      this.progress.filesRead.add(String(args.path));
-      this.progress.lastMeaningfulProgress = Date.now();
-      this.progress.stuckCount = 0;
+      const path = String(args.path);
+      const isNewFile = !this.progress.filesRead.has(path);
+      this.progress.filesRead.add(path);
+      this.phaseState.uniqueFilesRead.add(path);
+
+      // Track new files for diminishing returns detection
+      if (isNewFile) {
+        this.phaseState.recentNewFiles++;
+      }
+
+      // Only count reads as progress during initial exploration (first 5 iterations)
+      if (this.usage.iterations <= 5) {
+        this.progress.lastMeaningfulProgress = now;
+        this.progress.stuckCount = 0;
+      }
+    }
+
+    // Track search operations
+    if (['grep', 'search', 'glob', 'find_files', 'search_files'].includes(toolName)) {
+      const query = String(args.pattern || args.query || args.path || '');
+      this.phaseState.uniqueSearches.add(query);
     }
 
     if (['write_file', 'edit_file'].includes(toolName) && args.path) {
       this.progress.filesModified.add(String(args.path));
-      this.progress.lastMeaningfulProgress = Date.now();
+      this.phaseState.filesModified.add(String(args.path));
+      this.progress.lastMeaningfulProgress = now;
       this.progress.stuckCount = 0;
+
+      // Transition to acting phase when first edit is made
+      if (this.phaseState.phase === 'exploring' || this.phaseState.phase === 'planning') {
+        this.transitionPhase('acting', 'First file edit made');
+      }
     }
 
     if (toolName === 'bash' && args.command) {
-      this.progress.commandsRun.push(String(args.command));
-      this.progress.lastMeaningfulProgress = Date.now();
+      const command = String(args.command);
+      this.progress.commandsRun.push(command);
+      this.progress.lastMeaningfulProgress = now;
       this.progress.stuckCount = 0;
+
+      // Detect test runs
+      if (command.includes('test') || command.includes('pytest') || command.includes('npm test') || command.includes('jest')) {
+        this.phaseState.testsRun++;
+        // Transition to verifying phase when tests are run after edits
+        if (this.phaseState.phase === 'acting' && this.phaseState.filesModified.size > 0) {
+          this.transitionPhase('verifying', 'Tests run after edits');
+        }
+      }
     }
+
+    // Update exploration saturation check
+    this.checkExplorationSaturation();
 
     // Check for stuck state
     if (this.isStuck()) {
@@ -233,6 +383,114 @@ export class ExecutionEconomicsManager {
         filesModified: this.progress.filesModified.size,
       });
     }
+  }
+
+  /**
+   * Update doom loop detection state.
+   * Detects when the same tool+args are called consecutively.
+   */
+  private updateDoomLoopState(toolName: string, argsStr: string): void {
+    const currentCall = `${toolName}:${argsStr}`;
+    const recentCalls = this.progress.recentToolCalls;
+
+    // Count consecutive identical calls from the end
+    let consecutiveCount = 0;
+    for (let i = recentCalls.length - 1; i >= 0; i--) {
+      const call = recentCalls[i];
+      if (`${call.tool}:${call.args}` === currentCall) {
+        consecutiveCount++;
+      } else {
+        break;
+      }
+    }
+
+    this.loopState.consecutiveCount = consecutiveCount;
+    this.loopState.lastTool = toolName;
+
+    // Detect doom loop when threshold reached
+    const wasDoomLoop = this.loopState.doomLoopDetected;
+    this.loopState.doomLoopDetected = consecutiveCount >= this.loopState.threshold;
+
+    // Emit event when doom loop first detected (not on every check)
+    if (this.loopState.doomLoopDetected && !wasDoomLoop) {
+      this.emit({
+        type: 'doom_loop.detected',
+        tool: toolName,
+        consecutiveCount,
+      });
+    }
+  }
+
+  /**
+   * Update phase tracking state.
+   */
+  private updatePhaseState(_toolName: string, _args: Record<string, unknown>): void {
+    this.phaseState.iterationsInPhase++;
+
+    // Reset recentNewFiles counter every 3 iterations for diminishing returns check
+    if (this.phaseState.iterationsInPhase % 3 === 0) {
+      this.phaseState.recentNewFiles = 0;
+    }
+  }
+
+  /**
+   * Transition to a new phase.
+   */
+  private transitionPhase(newPhase: PhaseState['phase'], reason: string): void {
+    const oldPhase = this.phaseState.phase;
+    if (oldPhase === newPhase) return;
+
+    this.emit({
+      type: 'phase.transition',
+      from: oldPhase,
+      to: newPhase,
+      reason,
+    });
+
+    this.phaseState.phase = newPhase;
+    this.phaseState.iterationsInPhase = 0;
+    this.phaseState.recentNewFiles = 0;
+
+    if (newPhase === 'exploring') {
+      this.phaseState.explorationStartIteration = this.usage.iterations;
+    }
+  }
+
+  /**
+   * Check for exploration saturation (reading too many files without action).
+   */
+  private checkExplorationSaturation(): void {
+    const { phase, uniqueFilesRead, iterationsInPhase, recentNewFiles, filesModified } = this.phaseState;
+
+    // Only check during exploration phase
+    if (phase !== 'exploring') {
+      this.phaseState.shouldTransition = false;
+      return;
+    }
+
+    // After reading 10+ unique files without edits, suggest transition
+    if (uniqueFilesRead.size >= 10 && filesModified.size === 0) {
+      this.phaseState.shouldTransition = true;
+      this.emit({
+        type: 'exploration.saturation',
+        filesRead: uniqueFilesRead.size,
+        iterations: iterationsInPhase,
+      });
+      return;
+    }
+
+    // After 5+ iterations in exploration with diminishing returns (< 2 new files)
+    if (iterationsInPhase >= 5 && recentNewFiles < 2 && filesModified.size === 0) {
+      this.phaseState.shouldTransition = true;
+      this.emit({
+        type: 'exploration.saturation',
+        filesRead: uniqueFilesRead.size,
+        iterations: iterationsInPhase,
+      });
+      return;
+    }
+
+    this.phaseState.shouldTransition = false;
   }
 
   /**
@@ -281,15 +539,53 @@ export class ExecutionEconomicsManager {
       };
     }
 
+    // Max iterations reached - allow one more turn for summary (forceTextOnly)
     if (this.usage.iterations >= this.budget.maxIterations) {
       return {
-        canContinue: false,
+        canContinue: true,  // Allow one more turn for summary
         reason: `Maximum iterations reached (${this.usage.iterations} / ${this.budget.maxIterations})`,
         budgetType: 'iterations',
         isHardLimit: true,
         isSoftLimit: false,
         percentUsed: 100,
         suggestedAction: 'stop',
+        forceTextOnly: true,  // No more tool calls
+        injectedPrompt: MAX_STEPS_PROMPT,
+      };
+    }
+
+    // =========================================================================
+    // DOOM LOOP DETECTION - Strong intervention
+    // =========================================================================
+    if (this.loopState.doomLoopDetected) {
+      return {
+        canContinue: true,
+        reason: `Doom loop detected: ${this.loopState.lastTool} called ${this.loopState.consecutiveCount} times`,
+        budgetType: 'iterations',
+        isHardLimit: false,
+        isSoftLimit: true,
+        percentUsed: (this.usage.iterations / this.budget.targetIterations) * 100,
+        suggestedAction: 'warn',
+        injectedPrompt: DOOM_LOOP_PROMPT(this.loopState.lastTool || 'unknown', this.loopState.consecutiveCount),
+      };
+    }
+
+    // =========================================================================
+    // EXPLORATION SATURATION - Gentle nudge
+    // =========================================================================
+    if (this.phaseState.shouldTransition) {
+      return {
+        canContinue: true,
+        reason: `Exploration saturation: ${this.phaseState.uniqueFilesRead.size} files read`,
+        budgetType: 'iterations',
+        isHardLimit: false,
+        isSoftLimit: true,
+        percentUsed: (this.usage.iterations / this.budget.targetIterations) * 100,
+        suggestedAction: 'warn',
+        injectedPrompt: EXPLORATION_NUDGE_PROMPT(
+          this.phaseState.uniqueFilesRead.size,
+          this.phaseState.iterationsInPhase
+        ),
       };
     }
 
@@ -436,6 +732,36 @@ export class ExecutionEconomicsManager {
   }
 
   /**
+   * Get doom loop detection state.
+   */
+  getLoopState(): LoopDetectionState {
+    return { ...this.loopState };
+  }
+
+  /**
+   * Get exploration phase state.
+   */
+  getPhaseState(): {
+    phase: string;
+    uniqueFilesRead: number;
+    uniqueSearches: number;
+    filesModified: number;
+    testsRun: number;
+    shouldTransition: boolean;
+    iterationsInPhase: number;
+  } {
+    return {
+      phase: this.phaseState.phase,
+      uniqueFilesRead: this.phaseState.uniqueFilesRead.size,
+      uniqueSearches: this.phaseState.uniqueSearches.size,
+      filesModified: this.phaseState.filesModified.size,
+      testsRun: this.phaseState.testsRun,
+      shouldTransition: this.phaseState.shouldTransition,
+      iterationsInPhase: this.phaseState.iterationsInPhase,
+    };
+  }
+
+  /**
    * Subscribe to events.
    */
   on(listener: EconomicsEventListener): () => void {
@@ -468,6 +794,29 @@ export class ExecutionEconomicsManager {
       lastMeaningfulProgress: Date.now(),
       stuckCount: 0,
     };
+
+    // Reset loop detection state
+    this.loopState = {
+      doomLoopDetected: false,
+      lastTool: null,
+      consecutiveCount: 0,
+      threshold: 3,
+      lastWarningTime: 0,
+    };
+
+    // Reset phase tracking state
+    this.phaseState = {
+      phase: 'exploring',
+      explorationStartIteration: 0,
+      uniqueFilesRead: new Set(),
+      uniqueSearches: new Set(),
+      filesModified: new Set(),
+      testsRun: 0,
+      shouldTransition: false,
+      iterationsInPhase: 0,
+      recentNewFiles: 0,
+    };
+
     this.startTime = Date.now();
   }
 

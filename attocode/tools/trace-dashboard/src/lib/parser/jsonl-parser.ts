@@ -101,6 +101,12 @@ interface ToolExecutionEntry extends BaseJSONLEntry {
   durationMs: number;
   status: string;
   resultSize?: number;
+  /** Tool input arguments (truncated for large values) */
+  input?: Record<string, unknown>;
+  /** Preview of the result (truncated) */
+  outputPreview?: string;
+  /** Error message if status is error */
+  errorMessage?: string;
 }
 
 interface ThinkingEntry extends BaseJSONLEntry {
@@ -444,7 +450,17 @@ export class JSONLParser {
             timestamp: new Date(entry._ts),
           });
 
-          // Auto-create iteration if no wrapper
+          // Finalize previous iteration if it exists and has content
+          // (i.e., we received an llm.response and possibly tool calls)
+          if (currentIteration && currentIteration.llm) {
+            currentIteration.endTime = new Date(entry._ts);
+            currentIteration.durationMs = currentIteration.endTime.getTime() -
+              (currentIteration.startTime?.getTime() || 0);
+            iterations.push(currentIteration as ParsedIteration);
+            currentIteration = null;
+          }
+
+          // Start new iteration
           if (!currentIteration) {
             iterationNumber++;
             currentIteration = {
@@ -513,6 +529,9 @@ export class JSONLParser {
               durationMs: tool.durationMs,
               status: tool.status as 'success' | 'error' | 'timeout' | 'blocked',
               resultSize: tool.resultSize,
+              input: tool.input,
+              outputPreview: tool.outputPreview,
+              errorMessage: tool.errorMessage,
             });
           }
           break;

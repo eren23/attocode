@@ -1086,8 +1086,15 @@ export class ProductionAgent {
         // ECONOMICS CHECK (Token Budget) - replaces hard iteration limit
         // With recovery: try compaction before giving up on token limits
         // =======================================================================
+        let forceTextOnly = false;  // Track if we should skip tool execution
+        let budgetInjectedPrompt: string | undefined;
+
         if (this.economics) {
           const budgetCheck = this.economics.checkBudget();
+
+          // Capture forceTextOnly and injectedPrompt for later use
+          forceTextOnly = budgetCheck.forceTextOnly ?? false;
+          budgetInjectedPrompt = budgetCheck.injectedPrompt;
 
           if (!budgetCheck.canContinue) {
             // ===================================================================
@@ -1204,6 +1211,31 @@ export class ProductionAgent {
             this.observability?.logger?.warn('Max iterations reached');
             break;
           }
+        }
+
+        // =======================================================================
+        // INTELLIGENT LOOP DETECTION & NUDGE INJECTION
+        // Uses economics system for doom loops, exploration saturation, etc.
+        // =======================================================================
+        if (this.economics && budgetInjectedPrompt) {
+          // Inject contextual guidance from economics system
+          messages.push({
+            role: 'user',
+            content: budgetInjectedPrompt,
+          });
+
+          const loopState = this.economics.getLoopState();
+          const phaseState = this.economics.getPhaseState();
+
+          this.observability?.logger?.info('Loop detection - injecting guidance', {
+            iteration: this.state.iteration,
+            doomLoop: loopState.doomLoopDetected,
+            phase: phaseState.phase,
+            filesRead: phaseState.uniqueFilesRead,
+            filesModified: phaseState.filesModified,
+            shouldTransition: phaseState.shouldTransition,
+            forceTextOnly,
+          });
         }
 
         // =======================================================================
@@ -1409,8 +1441,18 @@ export class ProductionAgent {
         lastResponse = response.content;
 
         // Check for tool calls
-        if (!response.toolCalls || response.toolCalls.length === 0) {
-          // No tool calls, agent is done - compact tool outputs to save context
+        // When forceTextOnly is set (max iterations reached), ignore any tool calls
+        const hasToolCalls = response.toolCalls && response.toolCalls.length > 0;
+        if (!hasToolCalls || forceTextOnly) {
+          // Log if we're ignoring tool calls due to forceTextOnly
+          if (forceTextOnly && hasToolCalls) {
+            this.observability?.logger?.info('Ignoring tool calls due to forceTextOnly (max steps reached)', {
+              toolCallCount: response.toolCalls?.length,
+              iteration: this.state.iteration,
+            });
+          }
+
+          // No tool calls (or forced to ignore), agent is done - compact tool outputs to save context
           // The model has "consumed" the tool outputs and produced a response,
           // so we can replace verbose outputs with compact summaries
           this.compactToolOutputs();
@@ -1438,12 +1480,13 @@ export class ProductionAgent {
           break;
         }
 
-        // Execute tool calls
-        const toolResults = await this.executeToolCalls(response.toolCalls);
+        // Execute tool calls (we know toolCalls is defined here due to the check above)
+        const toolCalls = response.toolCalls!;
+        const toolResults = await this.executeToolCalls(toolCalls);
 
         // Record tool calls for economics/progress tracking
-        for (let i = 0; i < response.toolCalls.length; i++) {
-          const toolCall = response.toolCalls[i];
+        for (let i = 0; i < toolCalls.length; i++) {
+          const toolCall = toolCalls[i];
           const result = toolResults[i];
           this.economics?.recordToolCall(toolCall.name, toolCall.arguments, result?.result);
         }

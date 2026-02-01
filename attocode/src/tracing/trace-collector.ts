@@ -70,6 +70,7 @@ import type {
 } from './types.js';
 import { DEFAULT_TRACE_CONFIG, DEFAULT_ENHANCED_TRACE_CONFIG } from './types.js';
 import type { AgentMetrics, Span } from '../observability/types.js';
+import { calculateCost as calculateOpenRouterCost } from '../integrations/openrouter-pricing.js';
 
 // =============================================================================
 // TYPES
@@ -939,8 +940,8 @@ export class TraceCollector {
       message: data.status === 'error' ? data.error?.message : undefined,
     });
 
-    // Write JSONL entry
-    await this.writeEntry({
+    // Write JSONL entry with input/output details
+    const entry: ToolExecutionEntry = {
       _type: 'tool.execution',
       _ts: new Date().toISOString(),
       traceId: this.traceId!,
@@ -949,7 +950,86 @@ export class TraceCollector {
       durationMs: data.durationMs,
       status: data.status,
       resultSize: toolTrace.result?.originalSize,
-    } as ToolExecutionEntry);
+      input: this.truncateInput(startData.arguments, startData.toolName),
+      outputPreview: this.getOutputPreview(data.result, data.status),
+      errorMessage: data.status === 'error' ? data.error?.message : undefined,
+    };
+    await this.writeEntry(entry);
+  }
+
+  /**
+   * Truncate tool input for trace logging.
+   * Shows key arguments but limits large values.
+   */
+  private truncateInput(
+    args: Record<string, unknown>,
+    toolName: string
+  ): Record<string, unknown> {
+    const MAX_STRING_LENGTH = 200;
+    const result: Record<string, unknown> = {};
+
+    for (const [key, value] of Object.entries(args)) {
+      if (typeof value === 'string') {
+        // For file paths, show full path
+        if (key === 'path' || key === 'file_path' || key === 'directory') {
+          result[key] = value;
+        } else if (key === 'command' && toolName === 'bash') {
+          // Show bash commands (truncated if very long)
+          result[key] = value.length > 500 ? value.slice(0, 500) + '...' : value;
+        } else if (key === 'content' || key === 'new_content') {
+          // Truncate file content
+          result[key] = value.length > MAX_STRING_LENGTH
+            ? `${value.slice(0, MAX_STRING_LENGTH)}... (${value.length} chars)`
+            : value;
+        } else {
+          result[key] = value.length > MAX_STRING_LENGTH
+            ? value.slice(0, MAX_STRING_LENGTH) + '...'
+            : value;
+        }
+      } else if (typeof value === 'object' && value !== null) {
+        // Show structure but truncate nested values
+        const str = JSON.stringify(value);
+        result[key] = str.length > MAX_STRING_LENGTH
+          ? `${str.slice(0, MAX_STRING_LENGTH)}...`
+          : value;
+      } else {
+        result[key] = value;
+      }
+    }
+
+    return result;
+  }
+
+  /**
+   * Get a preview of the tool output.
+   */
+  private getOutputPreview(result: unknown, status: string): string | undefined {
+    if (status === 'error' || status === 'blocked' || status === 'timeout') {
+      return undefined;
+    }
+
+    if (result === undefined || result === null) {
+      return undefined;
+    }
+
+    const MAX_PREVIEW_LENGTH = 300;
+    let preview: string;
+
+    if (typeof result === 'string') {
+      preview = result;
+    } else {
+      try {
+        preview = JSON.stringify(result);
+      } catch {
+        preview = String(result);
+      }
+    }
+
+    if (preview.length > MAX_PREVIEW_LENGTH) {
+      return preview.slice(0, MAX_PREVIEW_LENGTH) + '...';
+    }
+
+    return preview;
   }
 
   /**
@@ -1281,20 +1361,25 @@ export class TraceCollector {
   }
 
   /**
-   * Calculate cost for tokens.
+   * Calculate cost for tokens using OpenRouter pricing data.
+   * Falls back to reasonable defaults if model not found.
    */
   private calculateCost(inputTokens: number, outputTokens: number, cachedTokens: number): number {
-    // Claude 3 Sonnet pricing
-    const inputCostPer1k = 0.003;
-    const outputCostPer1k = 0.015;
-    const cachedCostPer1k = 0.0003; // ~10x cheaper
+    // Use OpenRouter pricing (fetched from API or defaults)
+    // Note: OpenRouter pricing doesn't have separate cached pricing,
+    // so we treat cached tokens as ~10x cheaper (standard cache discount)
 
-    const uncachedInput = inputTokens - cachedTokens;
-    return (
-      (uncachedInput / 1000) * inputCostPer1k +
-      (cachedTokens / 1000) * cachedCostPer1k +
-      (outputTokens / 1000) * outputCostPer1k
-    );
+    // Calculate full cost using OpenRouter pricing
+    const fullCost = calculateOpenRouterCost(this.model, inputTokens, outputTokens);
+
+    // Apply cache discount: cached tokens cost ~10% of regular input
+    // fullCost = (input * inputPrice) + (output * outputPrice)
+    // We need to subtract the savings from cached tokens
+    const inputPricePerToken = inputTokens > 0 ?
+      (fullCost - calculateOpenRouterCost(this.model, 0, outputTokens)) / inputTokens : 0;
+    const cacheSavings = cachedTokens * inputPricePerToken * 0.9; // 90% discount
+
+    return Math.max(0, fullCost - cacheSavings);
   }
 
   /**

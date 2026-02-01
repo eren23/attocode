@@ -7,6 +7,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.5] - 2026-02-01
+
+### Fixed
+- **SWE-bench Eval Working Directory** - Agent now runs in correct task workspace
+  - Was running in attocode/ instead of `/tmp/swe-bench-workspace/<instance>`
+  - Caused all file edits to go to wrong location
+- **Cost Calculation** - Fixed $0.0000 cost display in eval runner
+  - Added metrics config (was missing `collectCosts: true`)
+  - Initialize OpenRouter pricing cache before running tasks
+- **Trace Dashboard Iterations** - Fixed all events showing "Iteration #1"
+  - Parser now correctly detects iteration boundaries on LLM request cycles
+
+### Changed
+- **Model-Aware Pricing** - Replaced hardcoded Claude pricing throughout
+  - `trace-collector.ts` now uses OpenRouter pricing API
+  - Dashboard `token-analyzer.ts` has 20+ model pricing (Claude, GPT, GLM, Gemini, etc.)
+  - Default fallback uses Gemini Flash tier (~$0.075/M) instead of Claude Sonnet (~$3/M)
+
 ## [0.1.4] - 2026-01-30
 
 ### Added
@@ -121,7 +139,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Sandbox execution for bash commands (macOS Seatbelt)
 - Dangerous operation blocking in strict mode
 
-[Unreleased]: https://github.com/eren23/attocode/compare/v0.1.4...HEAD
+[Unreleased]: https://github.com/eren23/attocode/compare/v0.1.5...HEAD
+[0.1.5]: https://github.com/eren23/attocode/compare/v0.1.4...v0.1.5
 [0.1.4]: https://github.com/eren23/attocode/compare/v0.1.3...v0.1.4
 [0.1.3]: https://github.com/eren23/attocode/compare/v0.1.2...v0.1.3
 [0.1.2]: https://github.com/eren23/attocode/compare/v0.1.1...v0.1.2

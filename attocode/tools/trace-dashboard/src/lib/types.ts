@@ -63,6 +63,12 @@ export interface ParsedIteration {
     durationMs: number;
     status: 'success' | 'error' | 'timeout' | 'blocked';
     resultSize?: number;
+    /** Tool input arguments (truncated) */
+    input?: Record<string, unknown>;
+    /** Preview of the output (truncated) */
+    outputPreview?: string;
+    /** Error message if status is error */
+    errorMessage?: string;
   }>;
   /** Decisions made in this iteration */
   decisions: Array<{

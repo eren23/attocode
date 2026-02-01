@@ -296,7 +296,7 @@ COMMANDS:
 
 RUN OPTIONS:
   --dataset, -d <name>       Dataset to evaluate (required)
-                             Built-in: golden, smoke
+                             Built-in: golden, smoke, swe-bench-lite
   --model, -m <model>        Model to use (default: claude-3-5-sonnet-20241022)
   --provider, -p <provider>  Provider: anthropic, openrouter, openai (default: anthropic)
   --trace                    Enable detailed tracing
@@ -321,11 +321,22 @@ EXAMPLES:
   # Test eval framework without LLM costs
   npx tsx tools/eval/src/cli.ts run -d smoke --mock-llm
 
+  # Run SWE-bench Lite (requires Python + datasets)
+  npx tsx tools/eval/src/cli.ts run -d swe-bench-lite --provider openrouter -m anthropic/claude-3.5-sonnet:beta
+
+  # Run subset of SWE-bench using env vars
+  SWE_BENCH_LIMIT=5 npx tsx tools/eval/src/cli.ts run -d swe-bench-lite
+
   # Compare two runs
   npx tsx tools/eval/src/cli.ts compare results/run-a.json results/run-b.json
 
   # List tasks in a dataset
   npx tsx tools/eval/src/cli.ts list --dataset golden
+
+SWE-BENCH LITE NOTES:
+  Requires: pip install datasets swebench
+  Env vars: SWE_BENCH_LIMIT, SWE_BENCH_INSTANCE_IDS
+  Full grading needs the official SWE-bench harness
 `);
 }
 

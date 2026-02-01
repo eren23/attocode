@@ -8,6 +8,7 @@ import type { EvalTask, Grader, AgentOutput, GradeResult, GraderType } from '../
 import { ExactMatchGrader } from './exact-match.js';
 import { TestBasedGrader } from './test-based.js';
 import { FileContainsGrader } from './file-contains.js';
+import { SWEBenchGrader } from './swe-bench.js';
 
 // =============================================================================
 // GRADER REGISTRY
@@ -17,6 +18,7 @@ const graders = new Map<GraderType, Grader>();
 graders.set('exact-match', new ExactMatchGrader());
 graders.set('test-based', new TestBasedGrader());
 graders.set('file-contains', new FileContainsGrader());
+graders.set('swe-bench', new SWEBenchGrader());
 
 /**
  * Get a grader by type.
@@ -107,3 +109,4 @@ function gradeShoudFail(_task: EvalTask, agentOutput: AgentOutput): GradeResult 
 export { ExactMatchGrader } from './exact-match.js';
 export { TestBasedGrader } from './test-based.js';
 export { FileContainsGrader } from './file-contains.js';
+export { SWEBenchGrader } from './swe-bench.js';
