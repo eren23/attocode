@@ -1,0 +1,47 @@
+# Node modules (will be installed in container)
+node_modules/
+**/node_modules/
+
+# Build outputs
+dist/
+**/dist/
+
+# Traces and results (mounted as volumes)
+.traces/
+tools/eval/results/*.json
+tools/eval/results/*.jsonl
+
+# Logs
+*.log
+logs/
+
+# IDE and editor
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Git
+.git/
+.gitignore
+
+# Test coverage
+coverage/
+
+# Environment files (use docker-compose environment instead)
+.env
+.env.*
+!.env.example
+
+# Temporary files
+tmp/
+temp/
+*.tmp
+
+# Agent data
+.agent/
+.attocode/

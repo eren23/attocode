@@ -49,14 +49,22 @@ import { execFileSync } from 'child_process';
 export class ProductionAgentRunner implements EvalRunner {
   private baseWorkdir: string;
   private outputDir: string;
+  private traceOutputDir: string;
 
   constructor(options: { workdir?: string; outputDir?: string } = {}) {
     this.baseWorkdir = options.workdir || process.cwd();
     this.outputDir = options.outputDir || './tools/eval/results';
 
-    // Ensure output directory exists
+    // Use TRACE_OUTPUT_DIR env var for traces (Docker support)
+    // Falls back to outputDir for local runs
+    this.traceOutputDir = process.env.TRACE_OUTPUT_DIR || this.outputDir;
+
+    // Ensure output directories exist
     if (!existsSync(this.outputDir)) {
       mkdirSync(this.outputDir, { recursive: true });
+    }
+    if (this.traceOutputDir !== this.outputDir && !existsSync(this.traceOutputDir)) {
+      mkdirSync(this.traceOutputDir, { recursive: true });
     }
   }
 
@@ -261,7 +269,7 @@ export class ProductionAgentRunner implements EvalRunner {
         },
         traceCapture: {
           enabled: true,
-          outputDir: this.outputDir,
+          outputDir: this.traceOutputDir,
           captureMessageContent: true,
           captureToolResults: true,
         },
@@ -298,6 +306,10 @@ export class ProductionAgentRunner implements EvalRunner {
         defaultPolicy: 'allow', // Auto-allow everything
         toolPolicies: {}, // No per-tool overrides
       },
+
+      // Disable features that require filesystem access with relative paths
+      // (eval runs change cwd to task workspace, breaking relative paths)
+      learningStore: false,
     });
 
     return {
@@ -434,14 +446,14 @@ export class ProductionAgentRunner implements EvalRunner {
   }
 
   /**
-   * Get all trace files in the output directory.
+   * Get all trace files in the trace output directory.
    */
   private async getTraceFiles(): Promise<string[]> {
     try {
-      const files = await fs.readdir(this.outputDir);
+      const files = await fs.readdir(this.traceOutputDir);
       return files
         .filter(f => f.startsWith('trace-') && f.endsWith('.jsonl'))
-        .map(f => path.join(this.outputDir, f));
+        .map(f => path.join(this.traceOutputDir, f));
     } catch {
       return [];
     }
