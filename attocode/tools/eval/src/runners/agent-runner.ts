@@ -19,6 +19,7 @@ import { createProductionAgent } from '../../../../src/agent.js';
 import { ProviderAdapter, convertToolsFromRegistry } from '../../../../src/adapters.js';
 import { createStandardRegistry } from '../../../../src/tools/standard.js';
 import { getProvider } from '../../../../src/providers/provider.js';
+import { initModelCache } from '../../../../src/integrations/openrouter-pricing.js';
 
 // Import providers to register them (side-effect imports)
 import '../../../../src/providers/adapters/anthropic.js';
@@ -175,6 +176,9 @@ export class ProductionAgentRunner implements EvalRunner {
    * Run all tasks in a dataset.
    */
   async runDataset(tasks: EvalTask[], config: EvalRunConfig): Promise<EvalResult[]> {
+    // Initialize OpenRouter pricing cache for accurate cost estimation
+    await initModelCache();
+
     const results: EvalResult[] = [];
     let totalCost = 0;
 
@@ -217,8 +221,14 @@ export class ProductionAgentRunner implements EvalRunner {
    */
   private async createAgent(
     config: EvalRunConfig,
-    _workdir: string
+    workdir: string
   ): Promise<{ agent: ReturnType<typeof createProductionAgent>; cleanup: () => Promise<void> }> {
+
+    // CRITICAL: Change to task workspace directory
+    // The agent and all its tools (bash, file operations) must operate in the task's directory
+    const originalCwd = process.cwd();
+    process.chdir(workdir);
+    console.log(`  Working directory: ${workdir}`);
 
     // Get the provider
     const provider = config.mock_llm
@@ -240,16 +250,31 @@ export class ProductionAgentRunner implements EvalRunner {
       maxIterations: 50,
       humanInLoop: false, // Disable for automated evals
 
-      // Enable observability for traces
+      // Enable observability for traces and metrics
       observability: config.trace ? {
         enabled: true,
+        metrics: {
+          enabled: true,
+          collectTokens: true,
+          collectCosts: true,
+          collectLatencies: true,
+        },
         traceCapture: {
           enabled: true,
           outputDir: this.outputDir,
           captureMessageContent: true,
           captureToolResults: true,
         },
-      } : undefined,
+      } : {
+        // Always enable metrics for cost tracking, even without trace
+        enabled: true,
+        metrics: {
+          enabled: true,
+          collectTokens: true,
+          collectCosts: true,
+          collectLatencies: true,
+        },
+      },
 
       // Enable planning for complex tasks
       planning: {
@@ -279,6 +304,8 @@ export class ProductionAgentRunner implements EvalRunner {
       agent,
       cleanup: async () => {
         await agent.cleanup();
+        // Restore original working directory
+        process.chdir(originalCwd);
       },
     };
   }

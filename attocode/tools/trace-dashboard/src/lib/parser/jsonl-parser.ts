@@ -450,7 +450,17 @@ export class JSONLParser {
             timestamp: new Date(entry._ts),
           });
 
-          // Auto-create iteration if no wrapper
+          // Finalize previous iteration if it exists and has content
+          // (i.e., we received an llm.response and possibly tool calls)
+          if (currentIteration && currentIteration.llm) {
+            currentIteration.endTime = new Date(entry._ts);
+            currentIteration.durationMs = currentIteration.endTime.getTime() -
+              (currentIteration.startTime?.getTime() || 0);
+            iterations.push(currentIteration as ParsedIteration);
+            currentIteration = null;
+          }
+
+          // Start new iteration
           if (!currentIteration) {
             iterationNumber++;
             currentIteration = {

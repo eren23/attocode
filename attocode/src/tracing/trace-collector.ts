@@ -70,6 +70,7 @@ import type {
 } from './types.js';
 import { DEFAULT_TRACE_CONFIG, DEFAULT_ENHANCED_TRACE_CONFIG } from './types.js';
 import type { AgentMetrics, Span } from '../observability/types.js';
+import { calculateCost as calculateOpenRouterCost } from '../integrations/openrouter-pricing.js';
 
 // =============================================================================
 // TYPES
@@ -1360,20 +1361,25 @@ export class TraceCollector {
   }
 
   /**
-   * Calculate cost for tokens.
+   * Calculate cost for tokens using OpenRouter pricing data.
+   * Falls back to reasonable defaults if model not found.
    */
   private calculateCost(inputTokens: number, outputTokens: number, cachedTokens: number): number {
-    // Claude 3 Sonnet pricing
-    const inputCostPer1k = 0.003;
-    const outputCostPer1k = 0.015;
-    const cachedCostPer1k = 0.0003; // ~10x cheaper
+    // Use OpenRouter pricing (fetched from API or defaults)
+    // Note: OpenRouter pricing doesn't have separate cached pricing,
+    // so we treat cached tokens as ~10x cheaper (standard cache discount)
 
-    const uncachedInput = inputTokens - cachedTokens;
-    return (
-      (uncachedInput / 1000) * inputCostPer1k +
-      (cachedTokens / 1000) * cachedCostPer1k +
-      (outputTokens / 1000) * outputCostPer1k
-    );
+    // Calculate full cost using OpenRouter pricing
+    const fullCost = calculateOpenRouterCost(this.model, inputTokens, outputTokens);
+
+    // Apply cache discount: cached tokens cost ~10% of regular input
+    // fullCost = (input * inputPrice) + (output * outputPrice)
+    // We need to subtract the savings from cached tokens
+    const inputPricePerToken = inputTokens > 0 ?
+      (fullCost - calculateOpenRouterCost(this.model, 0, outputTokens)) / inputTokens : 0;
+    const cacheSavings = cachedTokens * inputPricePerToken * 0.9; // 90% discount
+
+    return Math.max(0, fullCost - cacheSavings);
   }
 
   /**
