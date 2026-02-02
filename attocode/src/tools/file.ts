@@ -10,6 +10,7 @@ import * as path from 'node:path';
 import { defineTool } from './registry.js';
 import type { ToolResult } from './types.js';
 import { FileOperationError, ErrorCategory } from '../errors/index.js';
+import { generateDiff } from '../integrations/diff-utils.js';
 
 // =============================================================================
 // READ FILE
@@ -108,10 +109,12 @@ export const writeFileTool = defineTool(
       const dir = path.dirname(input.path);
       await fs.mkdir(dir, { recursive: true });
 
-      // Check if file exists
+      // Check if file exists and read old content for diff
       let action = 'created';
+      let oldContent = '';
       try {
         await fs.access(input.path);
+        oldContent = await fs.readFile(input.path, 'utf-8');
         action = 'overwrote';
       } catch {
         // File doesn't exist, that's fine
@@ -121,10 +124,15 @@ export const writeFileTool = defineTool(
       await writeFileAtomic(input.path, input.content);
       const lines = input.content.split('\n').length;
 
+      // Generate unified diff for display (shows what changed)
+      const diff = action === 'overwrote'
+        ? generateDiff(oldContent, input.content, input.path, input.path)
+        : generateDiff('', input.content, '/dev/null', input.path);
+
       return {
         success: true,
         output: `Successfully ${action} ${input.path} (${lines} lines, ${input.content.length} bytes)`,
-        metadata: { action, lines, bytes: input.content.length },
+        metadata: { action, lines, bytes: input.content.length, diff },
       };
     } catch (error) {
       const err = error as NodeJS.ErrnoException;
@@ -202,10 +210,18 @@ export const editFileTool = defineTool(
 
       const linesDiff = input.new_string.split('\n').length - input.old_string.split('\n').length;
 
+      // Generate unified diff for display
+      const diff = generateDiff(content, newContent, input.path, input.path);
+
       return {
         success: true,
         output: `Successfully edited ${input.path} (${linesDiff >= 0 ? '+' : ''}${linesDiff} lines)`,
-        metadata: { linesDiff },
+        metadata: {
+          linesDiff,
+          diff,
+          oldSnippet: input.old_string.slice(0, 100),
+          newSnippet: input.new_string.slice(0, 100),
+        },
       };
     } catch (error) {
       const err = error as NodeJS.ErrnoException;

@@ -66,22 +66,61 @@ export type ModeEventListener = (event: ModeEvent) => void;
 /**
  * Tools that modify the filesystem or execute side effects.
  * In plan mode with write approval, these are queued instead of executed.
+ *
+ * Note: spawn_agent is NOT in this list because:
+ * 1. Spawning itself is a read-only operation (just creates a subagent)
+ * 2. Subagents inherit the parent's mode, so they queue their own writes
+ * 3. This allows research/exploration subagents to run immediately
+ * 4. Only the subagent's write operations get queued (if parent is in plan mode)
  */
 export const WRITE_TOOLS = [
   'write_file',
   'edit_file',
   'delete_file',
   'bash',           // Can have side effects
-  'spawn_agent',    // Subagents can modify files
   'run_tests',      // Can have side effects
   'execute_code',   // Can have side effects
 ];
 
 /**
+ * MCP tool name patterns that indicate write operations.
+ * Pattern: mcp_{server}_{action}_{target}
+ *
+ * These patterns catch MCP tools that modify external state:
+ * - mcp_github_create_or_update_file
+ * - mcp_filesystem_write
+ * - mcp_notion_create_page
+ * etc.
+ */
+const MCP_WRITE_PATTERNS = [
+  // Action verbs in the middle of the name
+  /^mcp_.*_(create|write|update|delete|edit|remove|push|commit|put|post|patch)_/i,
+  // Action verbs at the end
+  /^mcp_.*_(create|write|update|delete|edit|remove)$/i,
+  // Specific patterns for common MCP servers
+  /^mcp_.*_create_or_update/i,
+  /^mcp_.*_add_/i,
+  /^mcp_.*_set_/i,
+  /^mcp_.*_insert/i,
+  /^mcp_.*_modify/i,
+];
+
+/**
  * Check if a tool is a write operation.
+ * Checks both static list and MCP write patterns.
  */
 export function isWriteTool(toolName: string): boolean {
-  return WRITE_TOOLS.includes(toolName);
+  // Check static list first (most common case)
+  if (WRITE_TOOLS.includes(toolName)) {
+    return true;
+  }
+
+  // Check MCP write patterns for mcp_ prefixed tools
+  if (toolName.startsWith('mcp_')) {
+    return MCP_WRITE_PATTERNS.some(pattern => pattern.test(toolName));
+  }
+
+  return false;
 }
 
 /**
@@ -169,6 +208,12 @@ You are in PLAN mode.
 - You can read files, explore the codebase, and use all tools
 - IMPORTANT: Write operations (file edits, bash commands with side effects) will be QUEUED for user approval
 - The queued changes will be shown to the user as a "pending plan"
+
+**CRITICAL FOR RESEARCH TASKS:**
+- If the user asks for analysis, research, or exploration, provide your findings VERBALLY
+- Do NOT create documentation files, reports, or markdown files unless EXPLICITLY requested
+- Your analysis should be returned as text output in the conversation, not written to files
+- Only propose file writes when the user explicitly asks to create or modify files
 
 BEFORE proposing changes, you MUST ask clarifying questions if:
 - The scope of the task is unclear or ambiguous

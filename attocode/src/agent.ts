@@ -1440,6 +1440,20 @@ export class ProductionAgent {
         this.state.messages.push(assistantMessage);
         lastResponse = response.content;
 
+        // In plan mode: capture exploration findings as we go (not just at the end)
+        // This ensures we collect context from exploration iterations before writes are queued
+        if (this.modeManager.getMode() === 'plan' && response.content && response.content.length > 50) {
+          const hasReadOnlyTools = response.toolCalls?.every(tc =>
+            ['read_file', 'list_files', 'glob', 'grep', 'search', 'mcp_'].some(prefix =>
+              tc.name.startsWith(prefix) || tc.name === prefix
+            )
+          );
+          // Capture substantive exploration content (not just "let me read..." responses)
+          if (hasReadOnlyTools && !response.content.match(/^(Let me|I'll|I will|I need to|First,)/i)) {
+            this.pendingPlanManager.appendExplorationFinding(response.content.slice(0, 1000));
+          }
+        }
+
         // Check for tool calls
         // When forceTextOnly is set (max iterations reached), ignore any tool calls
         const hasToolCalls = response.toolCalls && response.toolCalls.length > 0;
@@ -1456,6 +1470,15 @@ export class ProductionAgent {
           // The model has "consumed" the tool outputs and produced a response,
           // so we can replace verbose outputs with compact summaries
           this.compactToolOutputs();
+
+          // In plan mode: capture exploration summary from the final response
+          // This provides context for what was learned during exploration before proposing changes
+          if (this.modeManager.getMode() === 'plan' && this.pendingPlanManager.hasPendingPlan()) {
+            const explorationContent = response.content || '';
+            if (explorationContent.length > 0) {
+              this.pendingPlanManager.setExplorationSummary(explorationContent);
+            }
+          }
 
           // Final validation: warn if response is still empty after all retries
           if (!response.content || response.content.length === 0) {
@@ -2021,11 +2044,8 @@ export class ProductionAgent {
         // =====================================================================
         // In plan mode, intercept write operations and queue them as proposed changes
         if (this.modeManager.shouldInterceptTool(toolCall.name, toolCall.arguments as Record<string, unknown>)) {
-          // Extract reason from context - use last assistant message or generate one
-          const lastAssistantMsg = [...this.state.messages].reverse().find(m => m.role === 'assistant');
-          const reason = typeof lastAssistantMsg?.content === 'string'
-            ? lastAssistantMsg.content.slice(0, 200)
-            : `Proposed change: ${toolCall.name}`;
+          // Extract contextual reasoning instead of simple truncation
+          const reason = this.extractChangeReasoning(toolCall, this.state.messages);
 
           // Start a new plan if needed
           if (!this.pendingPlanManager.hasPendingPlan()) {
@@ -2192,8 +2212,22 @@ export class ProductionAgent {
         // Execute tool (with sandbox if available)
         let result: unknown;
         if (this.safety?.sandbox) {
+          // CRITICAL: spawn_agent needs a MUCH longer timeout than regular tools
+          // The default 60s sandbox timeout would kill subagents prematurely
+          // Subagents may run for minutes (per their own timeout config)
+          const isSpawnAgent = toolCall.name === 'spawn_agent';
+          const subagentConfig = this.config.subagent;
+          const hasSubagentConfig = subagentConfig !== false && subagentConfig !== undefined;
+          const subagentTimeout = hasSubagentConfig
+            ? (subagentConfig as { defaultTimeout?: number }).defaultTimeout ?? 600000 // 10 min default
+            : 600000;
+
+          // Use subagent timeout + buffer for spawn_agent, default for others
+          const toolTimeout = isSpawnAgent ? subagentTimeout + 30000 : undefined;
+
           result = await this.safety.sandbox.executeWithLimits(
-            () => tool.execute(toolCall.arguments)
+            () => tool.execute(toolCall.arguments),
+            toolTimeout
           );
         } else {
           result = await tool.execute(toolCall.arguments);
@@ -2430,6 +2464,70 @@ export class ProductionAgent {
     }
     // Generic
     return `Args: ${JSON.stringify(args).slice(0, 100)}...`;
+  }
+
+  /**
+   * Extract contextual reasoning for a proposed change in plan mode.
+   * Looks at recent assistant messages to find relevant explanation.
+   * Returns a more complete reason than simple truncation.
+   */
+  private extractChangeReasoning(
+    toolCall: { name: string; arguments: unknown },
+    messages: Message[]
+  ): string {
+    // Get last few assistant messages (most recent first)
+    const assistantMsgs = messages
+      .filter(m => m.role === 'assistant' && typeof m.content === 'string')
+      .slice(-3)
+      .reverse();
+
+    if (assistantMsgs.length === 0) {
+      return `Proposed change: ${toolCall.name}`;
+    }
+
+    // Use the most recent assistant message
+    const lastMsg = assistantMsgs[0];
+    const content = lastMsg.content as string;
+
+    // For spawn_agent, the task itself is usually the reason
+    if (toolCall.name === 'spawn_agent') {
+      const args = toolCall.arguments as Record<string, unknown>;
+      const task = String(args.task || args.prompt || args.goal || '');
+      if (task.length > 0) {
+        // Use first paragraph or 500 chars of task as reason
+        const firstPara = task.split(/\n\n/)[0];
+        return firstPara.length > 500 ? firstPara.slice(0, 500) + '...' : firstPara;
+      }
+    }
+
+    // For file operations, look for context about the file
+    if (['write_file', 'edit_file'].includes(toolCall.name)) {
+      const args = toolCall.arguments as Record<string, unknown>;
+      const path = String(args.path || args.file_path || '');
+
+      // Look for mentions of this file in the assistant's explanation
+      if (path && content.toLowerCase().includes(path.toLowerCase().split('/').pop() || '')) {
+        // Extract the sentence(s) mentioning this file
+        const sentences = content.split(/[.!?\n]+/).filter(s =>
+          s.toLowerCase().includes(path.toLowerCase().split('/').pop() || '')
+        );
+        if (sentences.length > 0) {
+          const relevant = sentences.slice(0, 2).join('. ').trim();
+          return relevant.length > 500 ? relevant.slice(0, 500) + '...' : relevant;
+        }
+      }
+    }
+
+    // Fallback: use first 500 chars instead of 200
+    // Look for the first meaningful paragraph/section
+    const paragraphs = content.split(/\n\n+/).filter(p => p.trim().length > 20);
+    if (paragraphs.length > 0) {
+      const firstPara = paragraphs[0].trim();
+      return firstPara.length > 500 ? firstPara.slice(0, 500) + '...' : firstPara;
+    }
+
+    // Ultimate fallback
+    return content.length > 500 ? content.slice(0, 500) + '...' : content;
   }
 
   /**
@@ -3380,11 +3478,11 @@ export class ProductionAgent {
       const subagentConfig = this.config.subagent;
       const hasSubagentConfig = subagentConfig !== false && subagentConfig !== undefined;
       const defaultMaxIterations = hasSubagentConfig
-        ? (subagentConfig as { defaultMaxIterations?: number }).defaultMaxIterations ?? 10
-        : 10;
+        ? (subagentConfig as { defaultMaxIterations?: number }).defaultMaxIterations ?? 25
+        : 25; // Increased from 10 to allow more thorough exploration
       const subagentTimeout = hasSubagentConfig
-        ? (subagentConfig as { defaultTimeout?: number }).defaultTimeout ?? 120000
-        : 120000;
+        ? (subagentConfig as { defaultTimeout?: number }).defaultTimeout ?? 600000
+        : 600000; // Increased from 120s to 600s (10 minutes) for deeper analysis
 
       // Create a sub-agent with the agent's config
       const subAgent = new ProductionAgent({
@@ -3413,6 +3511,16 @@ export class ProductionAgent {
           custom: [],
         },
       });
+
+      // CRITICAL: Subagent inherits parent's mode
+      // This ensures that if parent is in plan mode:
+      // - Subagent's read operations execute immediately (visible exploration)
+      // - Subagent's write operations get queued in the subagent's pending plan
+      // - User maintains control over what actually gets written
+      const parentMode = this.getMode();
+      if (parentMode !== 'build') {
+        subAgent.setMode(parentMode);
+      }
 
       // Forward events from subagent with context
       subAgent.subscribe(event => {
@@ -3445,7 +3553,36 @@ export class ProductionAgent {
           },
         };
 
-        this.emit({ type: 'agent.complete', agentId: agentName, success: result.success });
+        // BEFORE cleanup - extract subagent's pending plan and merge into parent's plan
+        // This ensures that when a subagent in plan mode queues writes, they bubble up to the parent
+        if (subAgent.hasPendingPlan()) {
+          const subPlan = subAgent.getPendingPlan();
+          if (subPlan && subPlan.proposedChanges.length > 0) {
+            // Emit event for TUI to display
+            this.emit({
+              type: 'agent.pending_plan',
+              agentId: agentName,
+              changes: subPlan.proposedChanges,
+            });
+
+            // Merge into parent's pending plan with subagent context
+            for (const change of subPlan.proposedChanges) {
+              this.pendingPlanManager.addProposedChange(
+                change.tool,
+                { ...change.args, _fromSubagent: agentName },
+                `[${agentName}] ${change.reason}`,
+                change.toolCallId
+              );
+            }
+          }
+        }
+
+        this.emit({
+          type: 'agent.complete',
+          agentId: agentName,
+          success: result.success,
+          output: (result.response || '').slice(0, 500),  // Include output preview
+        });
 
         // Enhanced tracing: Record subagent completion
         this.traceCollector?.record({
@@ -3486,6 +3623,27 @@ export class ProductionAgent {
             ? 'User cancelled'
             : `Timed out after ${subagentTimeout}ms`;
           this.emit({ type: 'agent.error', agentId: agentName, error: reason });
+
+          // Extract pending plan before cleanup (even on cancellation, preserve any queued work)
+          if (subAgent.hasPendingPlan()) {
+            const subPlan = subAgent.getPendingPlan();
+            if (subPlan && subPlan.proposedChanges.length > 0) {
+              this.emit({
+                type: 'agent.pending_plan',
+                agentId: agentName,
+                changes: subPlan.proposedChanges,
+              });
+
+              for (const change of subPlan.proposedChanges) {
+                this.pendingPlanManager.addProposedChange(
+                  change.tool,
+                  { ...change.args, _fromSubagent: agentName },
+                  `[${agentName}] ${change.reason}`,
+                  change.toolCallId
+                );
+              }
+            }
+          }
 
           // Try to cleanup the subagent gracefully
           try {
@@ -4014,13 +4172,18 @@ If the task is a simple question or doesn't need specialized handling, set bestA
   /**
    * Approve the pending plan and execute the changes.
    * @param count - If provided, only approve first N changes
-   * @returns Result of executing the approved changes
+   * @returns Result of executing the approved changes, including tool outputs
    */
-  async approvePlan(count?: number): Promise<{ success: boolean; executed: number; errors: string[] }> {
+  async approvePlan(count?: number): Promise<{
+    success: boolean;
+    executed: number;
+    errors: string[];
+    results: Array<{ tool: string; output: unknown }>;
+  }> {
     const result = this.pendingPlanManager.approve(count);
 
     if (result.changes.length === 0) {
-      return { success: true, executed: 0, errors: [] };
+      return { success: true, executed: 0, errors: [], results: [] };
     }
 
     // Switch to build mode for execution
@@ -4030,9 +4193,10 @@ If the task is a simple question or doesn't need specialized handling, set bestA
     this.emit({ type: 'plan.approved', changeCount: result.changes.length });
 
     const errors: string[] = [];
+    const results: Array<{ tool: string; output: unknown }> = [];
     let executed = 0;
 
-    // Execute each change
+    // Execute each change and CAPTURE results
     for (let i = 0; i < result.changes.length; i++) {
       const change = result.changes[i];
       this.emit({ type: 'plan.executing', changeIndex: i, totalChanges: result.changes.length });
@@ -4041,14 +4205,38 @@ If the task is a simple question or doesn't need specialized handling, set bestA
         const tool = this.tools.get(change.tool);
         if (!tool) {
           errors.push(`Unknown tool: ${change.tool}`);
+          this.emit({
+            type: 'plan.change.complete',
+            changeIndex: i,
+            tool: change.tool,
+            result: null,
+            error: `Unknown tool: ${change.tool}`,
+          });
           continue;
         }
 
-        await tool.execute(change.args);
+        // CRITICAL: Capture tool result instead of discarding it
+        const toolResult = await tool.execute(change.args);
+        results.push({ tool: change.tool, output: toolResult });
         executed++;
+
+        // Emit result for TUI display
+        this.emit({
+          type: 'plan.change.complete',
+          changeIndex: i,
+          tool: change.tool,
+          result: toolResult,
+        });
       } catch (err) {
         const error = err instanceof Error ? err.message : String(err);
         errors.push(`${change.tool}: ${error}`);
+        this.emit({
+          type: 'plan.change.complete',
+          changeIndex: i,
+          tool: change.tool,
+          result: null,
+          error,
+        });
       }
     }
 
@@ -4061,6 +4249,7 @@ If the task is a simple question or doesn't need specialized handling, set bestA
       success: errors.length === 0,
       executed,
       errors,
+      results,
     };
   }
 

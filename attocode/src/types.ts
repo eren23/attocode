@@ -1084,10 +1084,10 @@ export type AgentEvent =
   | { type: 'planning'; plan: AgentPlan }
   | { type: 'task.start'; task: PlanTask }
   | { type: 'task.complete'; task: PlanTask }
-  | { type: 'llm.start'; model: string }
-  | { type: 'llm.chunk'; content: string }
-  | { type: 'llm.complete'; response: ChatResponse }
-  | { type: 'tool.start'; tool: string; args: Record<string, unknown> }
+  | { type: 'llm.start'; model: string; subagent?: string }
+  | { type: 'llm.chunk'; content: string; subagent?: string }
+  | { type: 'llm.complete'; response: ChatResponse; subagent?: string }
+  | { type: 'tool.start'; tool: string; args: Record<string, unknown>; subagent?: string }
   | { type: 'tool.complete'; tool: string; result: unknown }
   | { type: 'tool.blocked'; tool: string; reason: string }
   | { type: 'approval.required'; request: ApprovalRequest }
@@ -1095,7 +1095,7 @@ export type AgentEvent =
   | { type: 'reflection'; attempt: number; satisfied: boolean }
   | { type: 'memory.retrieved'; count: number }
   | { type: 'memory.stored'; memoryType: string }
-  | { type: 'error'; error: string }
+  | { type: 'error'; error: string; subagent?: string }
   | { type: 'complete'; result: AgentResult }
   // ReAct events (Lesson 18)
   | { type: 'react.thought'; step: number; thought: string }
@@ -1120,10 +1120,11 @@ export type AgentEvent =
   | { type: 'rollback'; steps: number }
   // Agent registry events (subagent support)
   | { type: 'agent.spawn'; agentId: string; name: string; task: string }
-  | { type: 'agent.complete'; agentId: string; success: boolean }
+  | { type: 'agent.complete'; agentId: string; success: boolean; output?: string }
   | { type: 'agent.error'; agentId: string; error: string }
   | { type: 'agent.registered'; name: string }
   | { type: 'agent.unregistered'; name: string }
+  | { type: 'agent.pending_plan'; agentId: string; changes: Array<{ id: string; tool: string; args: Record<string, unknown>; reason: string }> }
   // Cancellation events
   | { type: 'cancellation.requested'; reason?: string }
   | { type: 'cancellation.completed'; cleanupDuration: number }
@@ -1142,10 +1143,11 @@ export type AgentEvent =
   // Mode events
   | { type: 'mode.changed'; from: string; to: string }
   // Plan mode events
-  | { type: 'plan.change.queued'; tool: string; changeId?: string; summary?: string }
+  | { type: 'plan.change.queued'; tool: string; changeId?: string; summary?: string; subagent?: string }
   | { type: 'plan.approved'; changeCount: number }
   | { type: 'plan.rejected' }
   | { type: 'plan.executing'; changeIndex: number; totalChanges: number }
+  | { type: 'plan.change.complete'; changeIndex: number; tool: string; result: unknown; error?: string }
   // Resilience events (LLM call recovery)
   | { type: 'resilience.retry'; reason: string; attempt: number; maxAttempts: number }
   | { type: 'resilience.recovered'; reason: string; attempts: number }
@@ -1159,6 +1161,9 @@ export type AgentEvent =
   // Decision transparency events (Phase 3)
   | { type: 'decision.routing'; model: string; reason: string; alternatives?: Array<{ model: string; rejected: string }> }
   | { type: 'decision.tool'; tool: string; decision: 'allowed' | 'prompted' | 'blocked'; policyMatch?: string }
-  | { type: 'context.health'; currentTokens: number; maxTokens: number; estimatedExchanges: number; percentUsed: number };
+  | { type: 'context.health'; currentTokens: number; maxTokens: number; estimatedExchanges: number; percentUsed: number }
+  // Subagent visibility events (Phase 5)
+  | { type: 'subagent.iteration'; agentId: string; iteration: number; maxIterations: number }
+  | { type: 'subagent.phase'; agentId: string; phase: 'exploring' | 'planning' | 'executing' | 'completing' };
 
 export type AgentEventListener = (event: AgentEvent) => void;

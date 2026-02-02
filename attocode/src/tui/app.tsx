@@ -10,6 +10,7 @@
 
 import { useState, useCallback, useEffect, memo, useRef, useMemo } from 'react';
 import { Box, Text, useApp, useInput, Static } from 'ink';
+import { DiffView } from './components/DiffView.js';
 import type { ProductionAgent } from '../agent.js';
 import type { SQLiteStore } from '../integrations/sqlite-store.js';
 import type { MCPClient } from '../integrations/mcp-client.js';
@@ -222,10 +223,22 @@ const ToolCallItem = memo(function ToolCallItem({ tc, expanded, colors }: ToolCa
           </Box>
         ))}
         {tc.status === 'success' && tc.result !== undefined && tc.result !== null ? (
-          <Box marginLeft={3}>
-            <Text color="#98FB98" dimColor>
-              {`-> ${String(tc.result).slice(0, 150)}${String(tc.result).length > 150 ? '...' : ''}`}
-            </Text>
+          <Box marginLeft={3} flexDirection="column">
+            {/* Show diff if available for file operations */}
+            {(tc.name === 'edit_file' || tc.name === 'write_file') &&
+             typeof tc.result === 'object' && tc.result !== null &&
+             'metadata' in tc.result &&
+             typeof (tc.result as { metadata?: { diff?: string } }).metadata?.diff === 'string' ? (
+              <DiffView
+                diff={(tc.result as { metadata: { diff: string } }).metadata.diff}
+                expanded={true}
+                maxLines={15}
+              />
+            ) : (
+              <Text color="#98FB98" dimColor>
+                {`-> ${String(tc.result).slice(0, 150)}${String(tc.result).length > 150 ? '...' : ''}`}
+              </Text>
+            )}
           </Box>
         ) : null}
         {tc.status === 'error' && tc.error && (
@@ -237,11 +250,25 @@ const ToolCallItem = memo(function ToolCallItem({ tc, expanded, colors }: ToolCa
     );
   }
 
+  // Check if result has diff metadata for collapsed summary
+  const hasDiff = tc.status === 'success' &&
+    (tc.name === 'edit_file' || tc.name === 'write_file') &&
+    typeof tc.result === 'object' && tc.result !== null &&
+    'metadata' in tc.result &&
+    typeof (tc.result as { metadata?: { diff?: string } }).metadata?.diff === 'string';
+
   return (
     <Box marginLeft={2} gap={1}>
       <Text color={statusColor}>{icon}</Text>
       <Text color="#DDA0DD" bold>{tc.name}</Text>
       {argsStr ? <Text color={colors.textMuted} dimColor>{argsStr}</Text> : null}
+      {/* Show diff summary in collapsed view */}
+      {hasDiff && (
+        <DiffView
+          diff={(tc.result as { metadata: { diff: string } }).metadata.diff}
+          expanded={false}
+        />
+      )}
       {tc.duration ? <Text color={colors.textMuted} dimColor>({tc.duration}ms)</Text> : null}
     </Box>
   );
@@ -1073,15 +1100,111 @@ export function TUIApp({
           addMessage('system', 'No plan to approve.');
           return;
         }
-        const count = args[0] ? parseInt(args[0], 10) : undefined;
-        const result = await agent.approvePlan(count);
-        if (result.success) {
-          addMessage('system', `[OK] Executed ${result.executed} change(s)`);
-        } else {
-          addMessage('system', `[!] ${result.executed} done, ${result.errors.length} errors`);
-        }
-        if (agent.getMode() === 'plan') {
-          agent.setMode('build');
+
+        // Set up event subscription for plan execution (same pattern as handleSubmit)
+        // This fixes the bug where subagent spawning would run silently
+        setIsProcessing(true);
+        setStatus(s => ({ ...s, mode: 'executing plan' }));
+
+        const unsub = agent.subscribe((event: any) => {
+          const subagentPrefix = event.subagent ? `[${event.subagent}] ` : '';
+
+          // Plan execution events
+          if (event.type === 'plan.approved') {
+            addMessage('system', `[PLAN] Executing ${event.changeCount} change(s)...`);
+          } else if (event.type === 'plan.executing') {
+            setStatus(s => ({ ...s, mode: `executing ${event.changeIndex + 1}/${event.totalChanges}` }));
+          }
+          // Subagent events
+          else if (event.type === 'agent.spawn') {
+            addMessage('system', `[AGENT] Spawning ${event.name}: ${event.task.slice(0, 100)}${event.task.length > 100 ? '...' : ''}`);
+          } else if (event.type === 'agent.complete') {
+            addMessage('system', `[AGENT] ${event.agentId} ${event.success ? 'completed' : 'failed'}`);
+          } else if (event.type === 'agent.error') {
+            addMessage('system', `[AGENT] ${event.agentId} error: ${event.error}`);
+          }
+          // Tool events (including from subagents)
+          else if (event.type === 'tool.start') {
+            const displayName = event.subagent ? `${event.subagent}:${event.tool}` : event.tool;
+            setStatus(s => ({ ...s, mode: `calling ${displayName}` }));
+            setToolCalls(prev => [...prev.slice(-4), {
+              id: `${displayName}-${Date.now()}`,
+              name: displayName,
+              args: event.args || {},
+              status: 'running',
+              startTime: new Date(),
+            }]);
+          } else if (event.type === 'tool.complete') {
+            const displayName = event.subagent ? `${event.subagent}:${event.tool}` : event.tool;
+            setStatus(s => ({ ...s, mode: event.subagent ? `${event.subagent} thinking` : 'executing plan' }));
+            setToolCalls(prev => prev.map(t => t.name === displayName ? {
+              ...t,
+              status: 'success',
+              result: event.result,
+              duration: t.startTime ? Date.now() - t.startTime.getTime() : undefined,
+            } : t));
+          } else if (event.type === 'tool.blocked') {
+            const displayName = event.subagent ? `${event.subagent}:${event.tool}` : event.tool;
+            setToolCalls(prev => prev.map(t => t.name === displayName ? {
+              ...t,
+              status: 'error',
+              error: event.reason || 'Blocked',
+            } : t));
+          }
+          // LLM events (for subagents)
+          else if (event.type === 'llm.start') {
+            setStatus(s => ({ ...s, mode: event.subagent ? `${event.subagent} thinking` : 'executing plan', iter: s.iter + 1 }));
+          } else if (event.type === 'llm.complete' && event.subagent && showThinking) {
+            // Display LLM reasoning for subagents
+            const response = event.response as { thinking?: string; content?: string } | undefined;
+            const thinking = response?.thinking;
+            if (thinking) {
+              const preview = thinking.length > 500 ? thinking.slice(0, 500) + '...' : thinking;
+              addMessage('system', `[${event.subagent}] ${preview}`);
+            }
+          } else if (event.type === 'error') {
+            // Display error events
+            const prefix = event.subagent ? `[${event.subagent} ERROR]` : '[ERROR]';
+            const errorMsg = typeof event.error === 'string' ? event.error :
+                            (event.error as { message?: string })?.message || 'Unknown error';
+            addMessage('error', `${prefix} ${errorMsg}`);
+          } else if (event.type === 'insight.tokens' && showThinking) {
+            const e = event as { inputTokens: number; outputTokens: number; cost?: number; subagent?: string };
+            addMessage('system', `${subagentPrefix}* ${e.inputTokens.toLocaleString()} in, ${e.outputTokens.toLocaleString()} out${e.cost ? ` $${e.cost.toFixed(6)}` : ''}`);
+          }
+          // Resilience events
+          else if (event.type === 'resilience.retry') {
+            const e = event as { reason: string; attempt: number; maxAttempts: number };
+            addMessage('system', `[RETRY] ${e.reason} (${e.attempt}/${e.maxAttempts})`);
+          }
+          // Subagent visibility events
+          else if (event.type === 'subagent.iteration') {
+            const e = event as { agentId: string; iteration: number; maxIterations: number };
+            setStatus(s => ({ ...s, mode: `${e.agentId} iter ${e.iteration}/${e.maxIterations}` }));
+          } else if (event.type === 'subagent.phase') {
+            const e = event as { agentId: string; phase: string };
+            setStatus(s => ({ ...s, mode: `${e.agentId} ${e.phase}` }));
+          }
+        });
+
+        try {
+          const count = args[0] ? parseInt(args[0], 10) : undefined;
+          const result = await agent.approvePlan(count);
+
+          if (result.success) {
+            addMessage('system', `[OK] Executed ${result.executed} change(s)`);
+          } else {
+            addMessage('system', `[!] ${result.executed} done, ${result.errors.length} errors:\n${result.errors.join('\n')}`);
+          }
+        } catch (e) {
+          addMessage('error', `Plan execution failed: ${(e as Error).message}`);
+        } finally {
+          unsub();
+          setIsProcessing(false);
+          setToolCalls([]);
+          if (agent.getMode() === 'plan') {
+            agent.setMode('build');
+          }
           setStatus(s => ({ ...s, mode: 'ready' }));
         }
         return;
@@ -1388,7 +1511,7 @@ export function TUIApp({
       default:
         addMessage('system', `Unknown: /${cmd}. Try /help`);
     }
-  }, [addMessage, exit, agent, mcpClient, lspManager, sessionStore, compactor, model, currentThemeName, currentSessionId, formatSessionsTable, saveCheckpointToStore]);
+  }, [addMessage, exit, agent, mcpClient, lspManager, sessionStore, compactor, model, currentThemeName, currentSessionId, formatSessionsTable, saveCheckpointToStore, showThinking]);
 
   // =========================================================================
   // SUBMIT HANDLER
@@ -1417,8 +1540,20 @@ export function TUIApp({
         // A subagent is starting
         addMessage('system', `[AGENT] Spawning ${event.name}: ${event.task.slice(0, 100)}${event.task.length > 100 ? '...' : ''}`);
       } else if (event.type === 'agent.complete') {
-        // A subagent finished
-        addMessage('system', `[AGENT] ${event.agentId} ${event.success ? 'completed' : 'failed'}`);
+        // A subagent finished - show status and output preview if substantive
+        const e = event as { agentId: string; success: boolean; output?: string };
+        const status = e.success ? 'completed' : 'failed';
+        addMessage('system', `[AGENT] ${e.agentId} ${status}`);
+
+        // If there's substantive output, show a preview
+        if (e.output && e.output.length > 50) {
+          const preview = e.output.slice(0, 300);
+          addMessage('system', `[AGENT OUTPUT]\n${preview}${e.output.length > 300 ? '\n...(truncated)' : ''}`);
+        }
+      } else if (event.type === 'agent.pending_plan') {
+        // Subagent has queued changes that were merged into parent's plan
+        const e = event as { agentId: string; changes: Array<{ tool: string }> };
+        addMessage('system', `[AGENT] ${e.agentId} queued ${e.changes.length} change(s) to pending plan`);
       } else if (event.type === 'tool.start') {
         const displayName = event.subagent ? `${event.subagent}:${event.tool}` : event.tool;
         setStatus(s => ({ ...s, mode: `calling ${displayName}` }));
@@ -1447,12 +1582,78 @@ export function TUIApp({
         } : t));
       } else if (event.type === 'llm.start') {
         setStatus(s => ({ ...s, mode: event.subagent ? `${event.subagent} thinking` : 'thinking', iter: s.iter + 1 }));
+      } else if (event.type === 'llm.complete' && event.subagent && showThinking) {
+        // Display LLM reasoning for subagents when thinking display is enabled
+        const response = event.response as { thinking?: string; content?: string } | undefined;
+        const thinking = response?.thinking;
+        if (thinking) {
+          const preview = thinking.length > 500 ? thinking.slice(0, 500) + '...' : thinking;
+          addMessage('system', `[${event.subagent}] ${preview}`);
+        }
+      } else if (event.type === 'error') {
+        // Display error events to users
+        const prefix = event.subagent ? `[${event.subagent} ERROR]` : '[ERROR]';
+        const errorMsg = typeof event.error === 'string' ? event.error :
+                        (event.error as { message?: string })?.message || 'Unknown error';
+        addMessage('error', `${prefix} ${errorMsg}`);
       } else if (event.type === 'insight.tokens' && showThinking) {
         const e = event as { inputTokens: number; outputTokens: number; cost?: number; subagent?: string };
         addMessage('system', `${subagentPrefix}* ${e.inputTokens.toLocaleString()} in, ${e.outputTokens.toLocaleString()} out${e.cost ? ` $${e.cost.toFixed(6)}` : ''}`);
       } else if (event.type === 'plan.change.queued') {
         const summary = event.summary ? `: ${event.summary}` : '';
-        addMessage('system', `[PLAN] Queued ${event.tool}${summary}`);
+        // Show subagent source if event came from a subagent
+        const prefix = event.subagent ? `[${event.subagent} PLAN]` : '[PLAN]';
+        addMessage('system', `${prefix} Queued ${event.tool}${summary}`);
+      } else if (event.type === 'plan.change.complete') {
+        // Display results from plan execution (especially important for spawn_agent)
+        const e = event as { changeIndex: number; tool: string; result: unknown; error?: string };
+        if (e.error) {
+          addMessage('system', `[PLAN ${e.changeIndex + 1}] ${e.tool} FAILED: ${e.error}`);
+        } else if (e.tool === 'spawn_agent' && e.result) {
+          // For spawn_agent, show the subagent's output (this was previously lost!)
+          const output = typeof e.result === 'object' && e.result !== null && 'output' in e.result
+            ? String((e.result as { output: unknown }).output)
+            : String(e.result);
+          const preview = output.length > 800 ? output.slice(0, 800) + '\n... (truncated)' : output;
+          addMessage('system', `[PLAN ${e.changeIndex + 1}] ${e.tool} result:\n${preview}`);
+        } else {
+          // For other tools, show a brief success message
+          addMessage('system', `[PLAN ${e.changeIndex + 1}] ${e.tool} completed`);
+        }
+      }
+      // Cache events (show cache activity when verbose)
+      else if (event.type === 'cache.hit' && showThinking) {
+        const e = event as { query: string; similarity: number };
+        addMessage('system', `[CACHE HIT] similarity: ${(e.similarity * 100).toFixed(0)}%`);
+      } else if (event.type === 'cache.miss' && showThinking) {
+        addMessage('system', `[CACHE MISS]`);
+      }
+      // Resilience events (show retry attempts)
+      else if (event.type === 'resilience.retry') {
+        const e = event as { reason: string; attempt: number; maxAttempts: number };
+        addMessage('system', `[RETRY] ${e.reason} (${e.attempt}/${e.maxAttempts})`);
+      } else if (event.type === 'resilience.recovered') {
+        const e = event as { reason: string; attempts: number };
+        addMessage('system', `[RECOVERED] ${e.reason} after ${e.attempts} attempt(s)`);
+      }
+      // Compaction events
+      else if (event.type === 'compaction.auto') {
+        const e = event as { tokensBefore: number; tokensAfter: number; messagesCompacted: number };
+        const before = (e.tokensBefore / 1000).toFixed(1);
+        const after = (e.tokensAfter / 1000).toFixed(1);
+        addMessage('system', `[COMPACT] ${before}k -> ${after}k tokens (${e.messagesCompacted} messages)`);
+      } else if (event.type === 'compaction.warning' && showThinking) {
+        const e = event as { currentTokens: number; threshold: number };
+        const pct = Math.round((e.currentTokens / e.threshold) * 100);
+        addMessage('system', `[!] Context at ${pct}% of threshold`);
+      }
+      // Subagent visibility events
+      else if (event.type === 'subagent.iteration') {
+        const e = event as { agentId: string; iteration: number; maxIterations: number };
+        setStatus(s => ({ ...s, mode: `${e.agentId} iter ${e.iteration}/${e.maxIterations}` }));
+      } else if (event.type === 'subagent.phase') {
+        const e = event as { agentId: string; phase: string };
+        setStatus(s => ({ ...s, mode: `${e.agentId} ${e.phase}` }));
       }
     });
 
