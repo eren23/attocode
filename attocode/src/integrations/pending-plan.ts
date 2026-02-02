@@ -180,12 +180,31 @@ export class PendingPlanManager {
 
   /**
    * Set the exploration summary for the current plan.
+   * Can be called multiple times - will append to existing summary.
+   *
+   * @param summary - The exploration content to add
+   * @param append - If true, appends to existing summary (default: false, replaces)
    */
-  setExplorationSummary(summary: string): void {
+  setExplorationSummary(summary: string, append = false): void {
     if (this.currentPlan) {
-      this.currentPlan.explorationSummary = summary;
+      if (append && this.currentPlan.explorationSummary) {
+        // Avoid duplicates by checking if this content is already included
+        if (!this.currentPlan.explorationSummary.includes(summary.slice(0, 100))) {
+          this.currentPlan.explorationSummary += '\n\n' + summary;
+        }
+      } else {
+        this.currentPlan.explorationSummary = summary;
+      }
       this.currentPlan.updatedAt = new Date().toISOString();
     }
+  }
+
+  /**
+   * Append exploration findings to the current plan.
+   * Useful for capturing incremental exploration during planning.
+   */
+  appendExplorationFinding(finding: string): void {
+    this.setExplorationSummary(finding, true);
   }
 
   /**
@@ -318,7 +337,7 @@ export class PendingPlanManager {
       for (const change of this.currentPlan.proposedChanges) {
         // Format based on tool type
         if (change.tool === 'write_file' || change.tool === 'edit_file') {
-          const path = change.args.path || change.args.file_path;
+          const path = change.args.path || change.args.file_path || '(no path specified)';
           lines.push(`${change.order}. [${change.tool}] ${path}`);
           if (!allSameReason) {
             lines.push(`   └─ ${change.reason}`);
@@ -380,6 +399,130 @@ export class PendingPlanManager {
 
     lines.push('━━━━━━━━━━━━━━━━━━━━━━━');
     lines.push('Commands: /approve, /reject, /show-plan');
+
+    return lines.join('\n');
+  }
+
+  /**
+   * Synthesize a coherent plan summary.
+   * This creates a well-structured executive summary from the proposed changes.
+   *
+   * @param llmProvider - Optional LLM provider for AI-generated synthesis.
+   *                      If not provided, uses structured template formatting.
+   * @returns A coherent plan summary string
+   */
+  async synthesizePlan(llmProvider?: {
+    chat(messages: Array<{ role: 'user' | 'assistant' | 'system'; content: string }>): Promise<{ content: string }>;
+  }): Promise<string> {
+    if (!this.currentPlan) {
+      return 'No pending plan.';
+    }
+
+    const plan = this.currentPlan;
+    const changes = plan.proposedChanges;
+
+    // If LLM provider is available, use it for intelligent synthesis
+    if (llmProvider && changes.length > 0) {
+      try {
+        const changesDescription = changes.map(c => {
+          const target = c.tool === 'spawn_agent'
+            ? `Delegate to subagent: ${String(c.args.agent || c.args.type || 'subagent')}`
+            : c.tool === 'bash'
+            ? `Execute: ${String(c.args.command || '').slice(0, 100)}`
+            : `${c.tool}: ${String(c.args.path || c.args.file_path || JSON.stringify(c.args)).slice(0, 100)}`;
+          return `${c.order}. [${c.tool}] ${target}\n   Reason: ${c.reason}`;
+        }).join('\n\n');
+
+        const prompt = `Analyze this plan and provide a concise executive summary.
+
+Task: ${plan.task}
+${plan.explorationSummary ? `\nExploration findings:\n${plan.explorationSummary.slice(0, 1000)}` : ''}
+
+Proposed Changes:
+${changesDescription}
+
+Provide:
+1. A 2-3 sentence executive summary explaining what this plan accomplishes
+2. Key files/components that will be affected
+3. Any dependencies between the changes (what must happen first)
+4. Brief verification steps after completion
+
+Keep it concise and actionable. Focus on the "why" not just the "what".`;
+
+        const response = await llmProvider.chat([
+          { role: 'user', content: prompt },
+        ]);
+
+        if (response.content && response.content.length > 50) {
+          return response.content;
+        }
+      } catch {
+        // Fall through to template-based synthesis
+      }
+    }
+
+    // Template-based synthesis (no LLM or LLM failed)
+    const lines: string[] = [];
+
+    // Executive summary based on change types
+    const fileChanges = changes.filter(c => ['write_file', 'edit_file'].includes(c.tool));
+    const bashCommands = changes.filter(c => c.tool === 'bash');
+    const subagentTasks = changes.filter(c => c.tool === 'spawn_agent');
+
+    lines.push('## Executive Summary');
+    lines.push('');
+
+    if (subagentTasks.length > 0) {
+      lines.push(`This plan delegates ${subagentTasks.length} task(s) to specialized subagents.`);
+    }
+    if (fileChanges.length > 0) {
+      const uniqueFiles = new Set(fileChanges.map(c => String(c.args.path || c.args.file_path || '')));
+      lines.push(`${fileChanges.length} file operation(s) across ${uniqueFiles.size} file(s).`);
+    }
+    if (bashCommands.length > 0) {
+      lines.push(`${bashCommands.length} shell command(s) to execute.`);
+    }
+    lines.push('');
+
+    // Exploration context if available
+    if (plan.explorationSummary && plan.explorationSummary.length > 0) {
+      lines.push('## Context from Exploration');
+      // Take first 500 chars or first paragraph
+      const summary = plan.explorationSummary.split('\n\n')[0].slice(0, 500);
+      lines.push(summary + (plan.explorationSummary.length > 500 ? '...' : ''));
+      lines.push('');
+    }
+
+    // Key targets
+    if (fileChanges.length > 0) {
+      lines.push('## Files Affected');
+      const uniqueFiles = [...new Set(fileChanges.map(c => String(c.args.path || c.args.file_path || 'unknown')))];
+      for (const file of uniqueFiles.slice(0, 10)) {
+        lines.push(`- ${file}`);
+      }
+      if (uniqueFiles.length > 10) {
+        lines.push(`... and ${uniqueFiles.length - 10} more`);
+      }
+      lines.push('');
+    }
+
+    // Dependencies (simple sequential assumption)
+    if (changes.length > 1) {
+      lines.push('## Execution Order');
+      lines.push('Changes will be executed sequentially in the order shown.');
+      lines.push('');
+    }
+
+    // Verification suggestion
+    lines.push('## Verification');
+    if (bashCommands.some(c => String(c.args.command || '').includes('test'))) {
+      lines.push('- Tests are included in this plan');
+    } else {
+      lines.push('- Consider running tests after approval: `npm test` or relevant test command');
+    }
+    if (fileChanges.length > 0) {
+      lines.push('- Review changed files after execution');
+    }
 
     return lines.join('\n');
   }

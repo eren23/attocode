@@ -30,6 +30,16 @@ export interface LLMResilienceConfig {
   minContentLength?: number;
   /** Callback for resilience events */
   onEvent?: (event: LLMResilienceEvent) => void;
+
+  // Exponential backoff configuration (Codex-inspired)
+  /** Initial backoff delay in ms (default: 1000) */
+  initialBackoffMs?: number;
+  /** Maximum backoff delay in ms (default: 60000) */
+  maxBackoffMs?: number;
+  /** Backoff multiplier (default: 2) */
+  backoffMultiplier?: number;
+  /** Add jitter to prevent thundering herd (default: true) */
+  useJitter?: boolean;
 }
 
 /**
@@ -73,7 +83,46 @@ const DEFAULT_CONFIG: Required<Omit<LLMResilienceConfig, 'onEvent'>> = {
   maxContinuations: 3,
   autoContinue: true,
   minContentLength: 1,
+  // Exponential backoff defaults (Codex-inspired: 1s→60s + jitter)
+  initialBackoffMs: 1000,
+  maxBackoffMs: 60000,
+  backoffMultiplier: 2,
+  useJitter: true,
 };
+
+/**
+ * Calculate exponential backoff delay with optional jitter.
+ * Inspired by Codex's retry strategy.
+ *
+ * @param attempt - The current attempt number (1-indexed)
+ * @param config - Backoff configuration
+ * @returns Delay in milliseconds
+ */
+function calculateBackoff(
+  attempt: number,
+  config: {
+    initialBackoffMs: number;
+    maxBackoffMs: number;
+    backoffMultiplier: number;
+    useJitter: boolean;
+  }
+): number {
+  const baseDelay = config.initialBackoffMs * Math.pow(config.backoffMultiplier, attempt - 1);
+  const cappedDelay = Math.min(baseDelay, config.maxBackoffMs);
+
+  if (config.useJitter) {
+    // Add up to 25% jitter to prevent thundering herd
+    return cappedDelay * (0.75 + Math.random() * 0.5);
+  }
+  return cappedDelay;
+}
+
+/**
+ * Sleep for a specified duration.
+ */
+function sleep(ms: number): Promise<void> {
+  return new Promise(resolve => setTimeout(resolve, ms));
+}
 
 // =============================================================================
 // RESILIENT LLM CALL
@@ -136,6 +185,10 @@ export async function resilientLLMCall(
       emptyRetries++;
       onEvent({ type: 'empty_response', attempt, maxAttempts: cfg.maxEmptyRetries + 1 });
 
+      // Apply exponential backoff before retry (Codex-inspired)
+      const backoffMs = calculateBackoff(attempt, cfg);
+      await sleep(backoffMs);
+
       // Add a gentle nudge to encourage response
       currentMessages = [
         ...messages,
@@ -179,6 +232,12 @@ export async function resilientLLMCall(
         continuation: continuations,
         maxContinuations: cfg.maxContinuations,
       });
+
+      // Apply exponential backoff before continuation (prevents rate limiting)
+      if (continuations > 1) {
+        const backoffMs = calculateBackoff(continuations, cfg);
+        await sleep(backoffMs);
+      }
 
       // Create continuation request
       const continuationMessages: Message[] = [

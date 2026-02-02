@@ -103,7 +103,14 @@ const BUILTIN_AGENTS: AgentDefinition[] = [
 - Summarize code structure and patterns
 - Answer questions about the codebase
 
-Be thorough but concise. Focus on finding the specific information requested.`,
+IMPORTANT:
+- Return your findings as TEXT OUTPUT in the conversation, not as files
+- Do NOT spawn documenter agents or create documentation files
+- Do NOT write reports or markdown files unless explicitly asked
+- Your analysis should be verbal - the user will see it in the conversation
+
+Be thorough but concise. Focus on finding the specific information requested.
+Explain what you found and why it matters.`,
     tools: ['read_file', 'list_files', 'glob', 'grep'],
     model: 'fast',
     maxTokenBudget: 50000,

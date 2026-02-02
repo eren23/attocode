@@ -197,12 +197,12 @@ export class ExecutionEconomicsManager {
       // Hard limits
       maxTokens: budget?.maxTokens ?? 200000,
       maxCost: budget?.maxCost ?? 1.00,
-      maxDuration: budget?.maxDuration ?? 300000, // 5 minutes
+      maxDuration: budget?.maxDuration ?? 900000, // 15 minutes (up from 5min to support subagent tasks)
 
       // Soft limits (80% of hard limits)
       softTokenLimit: budget?.softTokenLimit ?? 150000,
       softCostLimit: budget?.softCostLimit ?? 0.75,
-      softDurationLimit: budget?.softDurationLimit ?? 240000, // 4 minutes
+      softDurationLimit: budget?.softDurationLimit ?? 720000, // 12 minutes
 
       // Iteration guidance
       targetIterations: budget?.targetIterations ?? 20,
