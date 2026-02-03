@@ -117,16 +117,50 @@ Return ONLY the JSON array, no other text.`;
 
   /**
    * Parse plan response from LLM.
+   *
+   * Handles multiple response formats:
+   * - Markdown code blocks: ```json [...] ```
+   * - Plain JSON arrays: [...]
+   * - Text before/after JSON
    */
   private parsePlanResponse(content: string, goal: string): PlanTask[] {
     try {
-      // Extract JSON from response
-      const jsonMatch = content.match(/\[[\s\S]*\]/);
-      if (!jsonMatch) {
+      let jsonStr = content;
+
+      // Step 1: Try extracting from markdown code blocks first
+      const codeBlockMatch = content.match(/```(?:json)?\s*([\s\S]*?)```/);
+      if (codeBlockMatch) {
+        jsonStr = codeBlockMatch[1].trim();
+      }
+
+      // Step 2: Try to find a JSON array (non-greedy to get first complete array)
+      // Use a bracket-balanced approach for robustness
+      const arrayStart = jsonStr.indexOf('[');
+      if (arrayStart === -1) {
         throw new Error('No JSON array found');
       }
 
-      const parsed = JSON.parse(jsonMatch[0]);
+      // Find the matching closing bracket using bracket counting
+      let depth = 0;
+      let arrayEnd = -1;
+      for (let i = arrayStart; i < jsonStr.length; i++) {
+        const char = jsonStr[i];
+        if (char === '[') depth++;
+        else if (char === ']') {
+          depth--;
+          if (depth === 0) {
+            arrayEnd = i;
+            break;
+          }
+        }
+      }
+
+      if (arrayEnd === -1) {
+        throw new Error('No valid JSON array found - unbalanced brackets');
+      }
+
+      const extractedJson = jsonStr.slice(arrayStart, arrayEnd + 1);
+      const parsed = JSON.parse(extractedJson);
 
       if (!Array.isArray(parsed)) {
         throw new Error('Response is not an array');
@@ -249,6 +283,55 @@ Return ONLY the JSON array, no other text.`;
     return this.currentPlan.tasks.every(
       (t) => t.status === 'completed' || t.status === 'failed'
     );
+  }
+
+  /**
+   * Get groups of tasks that can be executed in parallel.
+   * Groups tasks by dependency level - tasks in the same group have
+   * no dependencies on each other and can run concurrently.
+   *
+   * @returns Array of task arrays, where each inner array contains
+   *          tasks that can be executed in parallel
+   */
+  getParallelizableTasks(): PlanTask[][] {
+    if (!this.currentPlan) return [];
+
+    const groups: PlanTask[][] = [];
+    const pending = this.currentPlan.tasks.filter(t => t.status === 'pending');
+    const processed = new Set<string>();
+
+    // Find tasks whose dependencies are all completed
+    while (processed.size < pending.length) {
+      const canRun = pending.filter(t => {
+        // Skip already processed
+        if (processed.has(t.id)) return false;
+
+        // Check all dependencies are completed
+        return t.dependencies.every(depId => {
+          const dep = this.currentPlan!.tasks.find(x => x.id === depId);
+          return dep?.status === 'completed' || processed.has(depId);
+        });
+      });
+
+      if (canRun.length === 0) {
+        // No more tasks can run (circular dependency or all processed)
+        break;
+      }
+
+      groups.push(canRun);
+      canRun.forEach(t => processed.add(t.id));
+    }
+
+    return groups;
+  }
+
+  /**
+   * Get the next group of tasks that can be run in parallel.
+   * Returns tasks whose dependencies are all completed.
+   */
+  getNextParallelGroup(): PlanTask[] {
+    const groups = this.getParallelizableTasks();
+    return groups[0] || [];
   }
 
   /**

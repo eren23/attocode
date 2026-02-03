@@ -476,6 +476,10 @@ export {
   type SelectionResult,
   type CodebaseContextEvent,
   type CodebaseContextEventListener,
+  // Enhanced search (Phase 4.4)
+  type SearchOptions,
+  type RankedSearchOptions,
+  type ScoredChunk,
 } from './codebase-context.js';
 
 // Shared Blackboard (subagent coordination)
@@ -729,3 +733,16 @@ export {
   type DeadLetterEvent,
   type DeadLetterEventListener,
 } from './dead-letter-queue.js';
+
+// Graph Visualization (dependency diagrams)
+export {
+  generateDependencyDiagram,
+  generateFocusedDiagram,
+  generateReverseDiagram,
+  createGraphVisualizer,
+  type FileDependencyGraph,
+  type DiagramFormat,
+  type DiagramDirection,
+  type GraphVisualizationOptions,
+  type DiagramResult,
+} from './graph-visualization.js';

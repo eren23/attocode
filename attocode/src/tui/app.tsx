@@ -569,6 +569,12 @@ export function TUIApp({
   const [elapsedTime, setElapsedTime] = useState(0);
   const processingStartRef = useRef<number | null>(null);
 
+  // Execution mode to prevent duplicate event handling
+  // 'idle' = no active execution, 'processing' = handleSubmit running, 'approving' = /approve running
+  type ExecutionMode = 'idle' | 'processing' | 'approving';
+  const [executionMode, setExecutionMode] = useState<ExecutionMode>('idle');
+  const executionModeRef = useRef<ExecutionMode>('idle');
+
   // Display toggles
   const [toolCallsExpanded, setToolCallsExpanded] = useState(false);
   const [showThinking, setShowThinking] = useState(true);
@@ -682,6 +688,213 @@ export function TUIApp({
     }
   }, [approvalBridge, handleApprovalRequest]);
 
+  // =========================================================================
+  // UNIFIED EVENT HANDLER
+  // Consolidated handler for all agent events - prevents duplicate messages
+  // =========================================================================
+
+  const handleAgentEvent = useCallback((event: AgentEvent) => {
+    const mode = executionModeRef.current;
+    if (mode === 'idle') return; // No active execution, ignore events
+
+    // Extract subagent from event if present (not all events have it)
+    const eventWithSubagent = event as { subagent?: string };
+    const subagentPrefix = eventWithSubagent.subagent ? `[${eventWithSubagent.subagent}] ` : '';
+
+    // -------------------------------------------------------------------------
+    // Approving-only events (plan execution)
+    // -------------------------------------------------------------------------
+    if (mode === 'approving') {
+      if (event.type === 'plan.approved') {
+        const e = event as { changeCount: number };
+        addMessage('system', `[PLAN] Executing ${e.changeCount} change(s)...`);
+        return;
+      }
+      if (event.type === 'plan.executing') {
+        const e = event as { changeIndex: number; totalChanges: number };
+        setStatus(s => ({ ...s, mode: `executing ${e.changeIndex + 1}/${e.totalChanges}` }));
+        return;
+      }
+    }
+
+    // -------------------------------------------------------------------------
+    // Shared events (both processing and approving modes)
+    // -------------------------------------------------------------------------
+
+    // Subagent lifecycle events
+    if (event.type === 'agent.spawn') {
+      const e = event as { name: string; task: string };
+      addMessage('system', `[AGENT] Spawning ${e.name}: ${e.task.slice(0, 100)}${e.task.length > 100 ? '...' : ''}`);
+      return;
+    }
+    if (event.type === 'agent.complete') {
+      const e = event as { agentId: string; success: boolean; output?: string };
+      const statusText = e.success ? 'completed' : 'failed';
+      addMessage('system', `[AGENT] ${e.agentId} ${statusText}`);
+      // Show output preview if substantive
+      if (e.output && e.output.length > 50) {
+        const preview = e.output.slice(0, 300);
+        addMessage('system', `[AGENT OUTPUT]\n${preview}${e.output.length > 300 ? '\n...(truncated)' : ''}`);
+      }
+      return;
+    }
+    if (event.type === 'agent.error') {
+      const e = event as { agentId: string; error: string };
+      addMessage('system', `[AGENT] ${e.agentId} error: ${e.error}`);
+      return;
+    }
+    if (event.type === 'agent.pending_plan') {
+      const e = event as { agentId: string; changes: Array<{ tool: string }> };
+      addMessage('system', `[AGENT] ${e.agentId} queued ${e.changes.length} change(s) to pending plan`);
+      return;
+    }
+
+    // Tool events
+    if (event.type === 'tool.start') {
+      const e = event as { tool: string; args?: Record<string, unknown>; subagent?: string };
+      const displayName = e.subagent ? `${e.subagent}:${e.tool}` : e.tool;
+      setStatus(s => ({ ...s, mode: `calling ${displayName}` }));
+      setToolCalls(prev => [...prev.slice(-4), {
+        id: `${displayName}-${Date.now()}`,
+        name: displayName,
+        args: e.args || {},
+        status: 'running',
+        startTime: new Date(),
+      }]);
+      return;
+    }
+    if (event.type === 'tool.complete') {
+      const e = event as { tool: string; result?: unknown; subagent?: string };
+      const displayName = e.subagent ? `${e.subagent}:${e.tool}` : e.tool;
+      const modeText = e.subagent ? `${e.subagent} thinking` : (mode === 'approving' ? 'executing plan' : 'thinking');
+      setStatus(s => ({ ...s, mode: modeText }));
+      setToolCalls(prev => prev.map(t => t.name === displayName ? {
+        ...t,
+        status: 'success' as const,
+        result: e.result,
+        duration: t.startTime ? Date.now() - t.startTime.getTime() : undefined,
+      } : t));
+      return;
+    }
+    if (event.type === 'tool.blocked') {
+      const e = event as { tool: string; reason?: string; subagent?: string };
+      const displayName = e.subagent ? `${e.subagent}:${e.tool}` : e.tool;
+      setToolCalls(prev => prev.map(t => t.name === displayName ? {
+        ...t,
+        status: 'error' as const,
+        error: e.reason || 'Blocked',
+      } : t));
+      return;
+    }
+
+    // LLM events
+    if (event.type === 'llm.start') {
+      const e = event as { subagent?: string };
+      const modeText = e.subagent ? `${e.subagent} thinking` : (mode === 'approving' ? 'executing plan' : 'thinking');
+      setStatus(s => ({ ...s, mode: modeText, iter: s.iter + 1 }));
+      return;
+    }
+    if (event.type === 'llm.complete' && eventWithSubagent.subagent && showThinking) {
+      const e = event as { response?: { thinking?: string; content?: string } };
+      const thinking = e.response?.thinking;
+      if (thinking) {
+        const preview = thinking.length > 500 ? thinking.slice(0, 500) + '...' : thinking;
+        addMessage('system', `[${eventWithSubagent.subagent}] ${preview}`);
+      }
+      return;
+    }
+
+    // Error events
+    if (event.type === 'error') {
+      const e = event as { error: string | { message?: string }; subagent?: string };
+      const prefix = e.subagent ? `[${e.subagent} ERROR]` : '[ERROR]';
+      const errorMsg = typeof e.error === 'string' ? e.error : e.error?.message || 'Unknown error';
+      addMessage('error', `${prefix} ${errorMsg}`);
+      return;
+    }
+
+    // Insight events
+    if (event.type === 'insight.tokens' && showThinking) {
+      const e = event as { inputTokens: number; outputTokens: number; cost?: number };
+      addMessage('system', `${subagentPrefix}* ${e.inputTokens.toLocaleString()} in, ${e.outputTokens.toLocaleString()} out${e.cost ? ` $${e.cost.toFixed(6)}` : ''}`);
+      return;
+    }
+
+    // Resilience events
+    if (event.type === 'resilience.retry') {
+      const e = event as { reason: string; attempt: number; maxAttempts: number };
+      addMessage('system', `[RETRY] ${e.reason} (${e.attempt}/${e.maxAttempts})`);
+      return;
+    }
+    if (event.type === 'resilience.recovered') {
+      const e = event as { reason: string; attempts: number };
+      addMessage('system', `[RECOVERED] ${e.reason} after ${e.attempts} attempt(s)`);
+      return;
+    }
+
+    // Subagent visibility events
+    if (event.type === 'subagent.iteration') {
+      const e = event as { agentId: string; iteration: number; maxIterations: number };
+      setStatus(s => ({ ...s, mode: `${e.agentId} iter ${e.iteration}/${e.maxIterations}` }));
+      return;
+    }
+    if (event.type === 'subagent.phase') {
+      const e = event as { agentId: string; phase: string };
+      setStatus(s => ({ ...s, mode: `${e.agentId} ${e.phase}` }));
+      return;
+    }
+
+    // -------------------------------------------------------------------------
+    // Processing-only events (normal message submission)
+    // -------------------------------------------------------------------------
+    if (mode === 'processing') {
+      if (event.type === 'plan.change.queued') {
+        const e = event as { tool: string; summary?: string; subagent?: string };
+        const summary = e.summary ? `: ${e.summary}` : '';
+        const prefix = e.subagent ? `[${e.subagent} PLAN]` : '[PLAN]';
+        addMessage('system', `${prefix} Queued ${e.tool}${summary}`);
+        return;
+      }
+      if (event.type === 'plan.change.complete') {
+        const e = event as { changeIndex: number; tool: string; result: unknown; error?: string };
+        if (e.error) {
+          addMessage('system', `[PLAN ${e.changeIndex + 1}] ${e.tool} FAILED: ${e.error}`);
+        } else if (e.tool === 'spawn_agent' && e.result) {
+          const output = typeof e.result === 'object' && e.result !== null && 'output' in e.result
+            ? String((e.result as { output: unknown }).output)
+            : String(e.result);
+          const preview = output.length > 800 ? output.slice(0, 800) + '\n... (truncated)' : output;
+          addMessage('system', `[PLAN ${e.changeIndex + 1}] ${e.tool} result:\n${preview}`);
+        } else {
+          addMessage('system', `[PLAN ${e.changeIndex + 1}] ${e.tool} completed`);
+        }
+        return;
+      }
+      if (event.type === 'cache.hit' && showThinking) {
+        const e = event as { query: string; similarity: number };
+        addMessage('system', `[CACHE HIT] similarity: ${(e.similarity * 100).toFixed(0)}%`);
+        return;
+      }
+      if (event.type === 'cache.miss' && showThinking) {
+        addMessage('system', `[CACHE MISS]`);
+        return;
+      }
+      if (event.type === 'compaction.auto') {
+        const e = event as { tokensBefore: number; tokensAfter: number; messagesCompacted: number };
+        const before = (e.tokensBefore / 1000).toFixed(1);
+        const after = (e.tokensAfter / 1000).toFixed(1);
+        addMessage('system', `[COMPACT] ${before}k -> ${after}k tokens (${e.messagesCompacted} messages)`);
+        return;
+      }
+      if (event.type === 'compaction.warning' && showThinking) {
+        const e = event as { currentTokens: number; threshold: number };
+        const pct = Math.round((e.currentTokens / e.threshold) * 100);
+        addMessage('system', `[!] Context at ${pct}% of threshold`);
+        return;
+      }
+    }
+  }, [addMessage, showThinking]);
+
   // Set up transparency aggregator and subscribe to agent events
   useEffect(() => {
     const aggregator = new TransparencyAggregator();
@@ -695,13 +908,14 @@ export function TUIApp({
     // Subscribe to agent events
     const unsubscribeAgent = agent.subscribe((event: AgentEvent) => {
       aggregator.processEvent(event);
+      handleAgentEvent(event); // Unified event handler for TUI display
     });
 
     return () => {
       unsubscribeAggregator();
       unsubscribeAgent();
     };
-  }, [agent]);
+  }, [agent, handleAgentEvent]);
 
   // =========================================================================
   // COMMAND HANDLER
@@ -1101,91 +1315,11 @@ export function TUIApp({
           return;
         }
 
-        // Set up event subscription for plan execution (same pattern as handleSubmit)
-        // This fixes the bug where subagent spawning would run silently
+        // Set execution mode - unified event handler will display events
         setIsProcessing(true);
+        executionModeRef.current = 'approving';
+        setExecutionMode('approving');
         setStatus(s => ({ ...s, mode: 'executing plan' }));
-
-        const unsub = agent.subscribe((event: any) => {
-          const subagentPrefix = event.subagent ? `[${event.subagent}] ` : '';
-
-          // Plan execution events
-          if (event.type === 'plan.approved') {
-            addMessage('system', `[PLAN] Executing ${event.changeCount} change(s)...`);
-          } else if (event.type === 'plan.executing') {
-            setStatus(s => ({ ...s, mode: `executing ${event.changeIndex + 1}/${event.totalChanges}` }));
-          }
-          // Subagent events
-          else if (event.type === 'agent.spawn') {
-            addMessage('system', `[AGENT] Spawning ${event.name}: ${event.task.slice(0, 100)}${event.task.length > 100 ? '...' : ''}`);
-          } else if (event.type === 'agent.complete') {
-            addMessage('system', `[AGENT] ${event.agentId} ${event.success ? 'completed' : 'failed'}`);
-          } else if (event.type === 'agent.error') {
-            addMessage('system', `[AGENT] ${event.agentId} error: ${event.error}`);
-          }
-          // Tool events (including from subagents)
-          else if (event.type === 'tool.start') {
-            const displayName = event.subagent ? `${event.subagent}:${event.tool}` : event.tool;
-            setStatus(s => ({ ...s, mode: `calling ${displayName}` }));
-            setToolCalls(prev => [...prev.slice(-4), {
-              id: `${displayName}-${Date.now()}`,
-              name: displayName,
-              args: event.args || {},
-              status: 'running',
-              startTime: new Date(),
-            }]);
-          } else if (event.type === 'tool.complete') {
-            const displayName = event.subagent ? `${event.subagent}:${event.tool}` : event.tool;
-            setStatus(s => ({ ...s, mode: event.subagent ? `${event.subagent} thinking` : 'executing plan' }));
-            setToolCalls(prev => prev.map(t => t.name === displayName ? {
-              ...t,
-              status: 'success',
-              result: event.result,
-              duration: t.startTime ? Date.now() - t.startTime.getTime() : undefined,
-            } : t));
-          } else if (event.type === 'tool.blocked') {
-            const displayName = event.subagent ? `${event.subagent}:${event.tool}` : event.tool;
-            setToolCalls(prev => prev.map(t => t.name === displayName ? {
-              ...t,
-              status: 'error',
-              error: event.reason || 'Blocked',
-            } : t));
-          }
-          // LLM events (for subagents)
-          else if (event.type === 'llm.start') {
-            setStatus(s => ({ ...s, mode: event.subagent ? `${event.subagent} thinking` : 'executing plan', iter: s.iter + 1 }));
-          } else if (event.type === 'llm.complete' && event.subagent && showThinking) {
-            // Display LLM reasoning for subagents
-            const response = event.response as { thinking?: string; content?: string } | undefined;
-            const thinking = response?.thinking;
-            if (thinking) {
-              const preview = thinking.length > 500 ? thinking.slice(0, 500) + '...' : thinking;
-              addMessage('system', `[${event.subagent}] ${preview}`);
-            }
-          } else if (event.type === 'error') {
-            // Display error events
-            const prefix = event.subagent ? `[${event.subagent} ERROR]` : '[ERROR]';
-            const errorMsg = typeof event.error === 'string' ? event.error :
-                            (event.error as { message?: string })?.message || 'Unknown error';
-            addMessage('error', `${prefix} ${errorMsg}`);
-          } else if (event.type === 'insight.tokens' && showThinking) {
-            const e = event as { inputTokens: number; outputTokens: number; cost?: number; subagent?: string };
-            addMessage('system', `${subagentPrefix}* ${e.inputTokens.toLocaleString()} in, ${e.outputTokens.toLocaleString()} out${e.cost ? ` $${e.cost.toFixed(6)}` : ''}`);
-          }
-          // Resilience events
-          else if (event.type === 'resilience.retry') {
-            const e = event as { reason: string; attempt: number; maxAttempts: number };
-            addMessage('system', `[RETRY] ${e.reason} (${e.attempt}/${e.maxAttempts})`);
-          }
-          // Subagent visibility events
-          else if (event.type === 'subagent.iteration') {
-            const e = event as { agentId: string; iteration: number; maxIterations: number };
-            setStatus(s => ({ ...s, mode: `${e.agentId} iter ${e.iteration}/${e.maxIterations}` }));
-          } else if (event.type === 'subagent.phase') {
-            const e = event as { agentId: string; phase: string };
-            setStatus(s => ({ ...s, mode: `${e.agentId} ${e.phase}` }));
-          }
-        });
 
         try {
           const count = args[0] ? parseInt(args[0], 10) : undefined;
@@ -1199,7 +1333,8 @@ export function TUIApp({
         } catch (e) {
           addMessage('error', `Plan execution failed: ${(e as Error).message}`);
         } finally {
-          unsub();
+          executionModeRef.current = 'idle';
+          setExecutionMode('idle');
           setIsProcessing(false);
           setToolCalls([]);
           if (agent.getMode() === 'plan') {
@@ -1529,133 +1664,11 @@ export function TUIApp({
       return;
     }
 
+    // Set execution mode - unified event handler will display events
     setIsProcessing(true);
+    executionModeRef.current = 'processing';
+    setExecutionMode('processing');
     setStatus(s => ({ ...s, mode: 'thinking' }));
-
-    const unsub = agent.subscribe((event: any) => {
-      // Check if event is from a subagent
-      const subagentPrefix = event.subagent ? `[${event.subagent}] ` : '';
-
-      if (event.type === 'agent.spawn') {
-        // A subagent is starting
-        addMessage('system', `[AGENT] Spawning ${event.name}: ${event.task.slice(0, 100)}${event.task.length > 100 ? '...' : ''}`);
-      } else if (event.type === 'agent.complete') {
-        // A subagent finished - show status and output preview if substantive
-        const e = event as { agentId: string; success: boolean; output?: string };
-        const status = e.success ? 'completed' : 'failed';
-        addMessage('system', `[AGENT] ${e.agentId} ${status}`);
-
-        // If there's substantive output, show a preview
-        if (e.output && e.output.length > 50) {
-          const preview = e.output.slice(0, 300);
-          addMessage('system', `[AGENT OUTPUT]\n${preview}${e.output.length > 300 ? '\n...(truncated)' : ''}`);
-        }
-      } else if (event.type === 'agent.pending_plan') {
-        // Subagent has queued changes that were merged into parent's plan
-        const e = event as { agentId: string; changes: Array<{ tool: string }> };
-        addMessage('system', `[AGENT] ${e.agentId} queued ${e.changes.length} change(s) to pending plan`);
-      } else if (event.type === 'tool.start') {
-        const displayName = event.subagent ? `${event.subagent}:${event.tool}` : event.tool;
-        setStatus(s => ({ ...s, mode: `calling ${displayName}` }));
-        setToolCalls(prev => [...prev.slice(-4), {
-          id: `${displayName}-${Date.now()}`,
-          name: displayName,
-          args: event.args || {},
-          status: 'running',
-          startTime: new Date(),
-        }]);
-      } else if (event.type === 'tool.complete') {
-        const displayName = event.subagent ? `${event.subagent}:${event.tool}` : event.tool;
-        setStatus(s => ({ ...s, mode: event.subagent ? `${event.subagent} thinking` : 'thinking' }));
-        setToolCalls(prev => prev.map(t => t.name === displayName ? {
-          ...t,
-          status: 'success',
-          result: event.result,
-          duration: t.startTime ? Date.now() - t.startTime.getTime() : undefined,
-        } : t));
-      } else if (event.type === 'tool.blocked') {
-        const displayName = event.subagent ? `${event.subagent}:${event.tool}` : event.tool;
-        setToolCalls(prev => prev.map(t => t.name === displayName ? {
-          ...t,
-          status: 'error',
-          error: event.reason || 'Blocked',
-        } : t));
-      } else if (event.type === 'llm.start') {
-        setStatus(s => ({ ...s, mode: event.subagent ? `${event.subagent} thinking` : 'thinking', iter: s.iter + 1 }));
-      } else if (event.type === 'llm.complete' && event.subagent && showThinking) {
-        // Display LLM reasoning for subagents when thinking display is enabled
-        const response = event.response as { thinking?: string; content?: string } | undefined;
-        const thinking = response?.thinking;
-        if (thinking) {
-          const preview = thinking.length > 500 ? thinking.slice(0, 500) + '...' : thinking;
-          addMessage('system', `[${event.subagent}] ${preview}`);
-        }
-      } else if (event.type === 'error') {
-        // Display error events to users
-        const prefix = event.subagent ? `[${event.subagent} ERROR]` : '[ERROR]';
-        const errorMsg = typeof event.error === 'string' ? event.error :
-                        (event.error as { message?: string })?.message || 'Unknown error';
-        addMessage('error', `${prefix} ${errorMsg}`);
-      } else if (event.type === 'insight.tokens' && showThinking) {
-        const e = event as { inputTokens: number; outputTokens: number; cost?: number; subagent?: string };
-        addMessage('system', `${subagentPrefix}* ${e.inputTokens.toLocaleString()} in, ${e.outputTokens.toLocaleString()} out${e.cost ? ` $${e.cost.toFixed(6)}` : ''}`);
-      } else if (event.type === 'plan.change.queued') {
-        const summary = event.summary ? `: ${event.summary}` : '';
-        // Show subagent source if event came from a subagent
-        const prefix = event.subagent ? `[${event.subagent} PLAN]` : '[PLAN]';
-        addMessage('system', `${prefix} Queued ${event.tool}${summary}`);
-      } else if (event.type === 'plan.change.complete') {
-        // Display results from plan execution (especially important for spawn_agent)
-        const e = event as { changeIndex: number; tool: string; result: unknown; error?: string };
-        if (e.error) {
-          addMessage('system', `[PLAN ${e.changeIndex + 1}] ${e.tool} FAILED: ${e.error}`);
-        } else if (e.tool === 'spawn_agent' && e.result) {
-          // For spawn_agent, show the subagent's output (this was previously lost!)
-          const output = typeof e.result === 'object' && e.result !== null && 'output' in e.result
-            ? String((e.result as { output: unknown }).output)
-            : String(e.result);
-          const preview = output.length > 800 ? output.slice(0, 800) + '\n... (truncated)' : output;
-          addMessage('system', `[PLAN ${e.changeIndex + 1}] ${e.tool} result:\n${preview}`);
-        } else {
-          // For other tools, show a brief success message
-          addMessage('system', `[PLAN ${e.changeIndex + 1}] ${e.tool} completed`);
-        }
-      }
-      // Cache events (show cache activity when verbose)
-      else if (event.type === 'cache.hit' && showThinking) {
-        const e = event as { query: string; similarity: number };
-        addMessage('system', `[CACHE HIT] similarity: ${(e.similarity * 100).toFixed(0)}%`);
-      } else if (event.type === 'cache.miss' && showThinking) {
-        addMessage('system', `[CACHE MISS]`);
-      }
-      // Resilience events (show retry attempts)
-      else if (event.type === 'resilience.retry') {
-        const e = event as { reason: string; attempt: number; maxAttempts: number };
-        addMessage('system', `[RETRY] ${e.reason} (${e.attempt}/${e.maxAttempts})`);
-      } else if (event.type === 'resilience.recovered') {
-        const e = event as { reason: string; attempts: number };
-        addMessage('system', `[RECOVERED] ${e.reason} after ${e.attempts} attempt(s)`);
-      }
-      // Compaction events
-      else if (event.type === 'compaction.auto') {
-        const e = event as { tokensBefore: number; tokensAfter: number; messagesCompacted: number };
-        const before = (e.tokensBefore / 1000).toFixed(1);
-        const after = (e.tokensAfter / 1000).toFixed(1);
-        addMessage('system', `[COMPACT] ${before}k -> ${after}k tokens (${e.messagesCompacted} messages)`);
-      } else if (event.type === 'compaction.warning' && showThinking) {
-        const e = event as { currentTokens: number; threshold: number };
-        const pct = Math.round((e.currentTokens / e.threshold) * 100);
-        addMessage('system', `[!] Context at ${pct}% of threshold`);
-      }
-      // Subagent visibility events
-      else if (event.type === 'subagent.iteration') {
-        const e = event as { agentId: string; iteration: number; maxIterations: number };
-        setStatus(s => ({ ...s, mode: `${e.agentId} iter ${e.iteration}/${e.maxIterations}` }));
-      } else if (event.type === 'subagent.phase') {
-        const e = event as { agentId: string; phase: string };
-        setStatus(s => ({ ...s, mode: `${e.agentId} ${e.phase}` }));
-      }
-    });
 
     try {
       const result = await agent.run(trimmed);
@@ -1710,11 +1723,12 @@ export function TUIApp({
     } catch (e) {
       addMessage('error', (e as Error).message);
     } finally {
-      unsub();
+      executionModeRef.current = 'idle';
+      setExecutionMode('idle');
       setIsProcessing(false);
       setToolCalls([]);
     }
-  }, [addMessage, handleCommand, agent, sessionStore, saveCheckpointToStore, persistenceDebug, showThinking]);
+  }, [addMessage, handleCommand, agent, sessionStore, saveCheckpointToStore, persistenceDebug]);
 
   // =========================================================================
   // COMMAND PALETTE ITEMS

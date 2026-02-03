@@ -467,7 +467,7 @@ export const DEFAULT_PROVIDER_RESILIENCE_CONFIG: ProviderResilienceConfig = {
  */
 export function buildConfig(
   userConfig: Partial<ProductionAgentConfig>
-): Required<Omit<ProductionAgentConfig, 'provider' | 'tools' | 'toolResolver' | 'mcpToolSummaries' | 'maxContextTokens'>> & Pick<ProductionAgentConfig, 'provider' | 'tools' | 'toolResolver' | 'mcpToolSummaries' | 'maxContextTokens'> {
+): Required<Omit<ProductionAgentConfig, 'provider' | 'tools' | 'toolResolver' | 'mcpToolSummaries' | 'maxContextTokens' | 'blackboard'>> & Pick<ProductionAgentConfig, 'provider' | 'tools' | 'toolResolver' | 'mcpToolSummaries' | 'maxContextTokens' | 'blackboard'> {
   return {
     provider: userConfig.provider!,
     tools: userConfig.tools || [],

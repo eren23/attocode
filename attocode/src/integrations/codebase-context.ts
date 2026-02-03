@@ -16,6 +16,7 @@
 
 import * as fs from 'fs/promises';
 import * as path from 'path';
+import type { LSPManager, LSPLocation } from './lsp.js';
 
 // =============================================================================
 // TYPES
@@ -163,6 +164,86 @@ export type CodebaseContextEvent =
 
 export type CodebaseContextEventListener = (event: CodebaseContextEvent) => void;
 
+/**
+ * Position in a source file.
+ */
+export interface SourcePosition {
+  line: number;
+  character: number;
+}
+
+/**
+ * LSP enhancements for context selection.
+ */
+export interface LSPEnhancements {
+  /** Files that reference the editing file */
+  referencingFiles: string[];
+  /** Files that the editing file references */
+  referencedFiles: string[];
+  /** Symbols found at cursor position */
+  symbolAtCursor?: {
+    name: string;
+    definitionFile?: string;
+    referenceCount: number;
+  };
+}
+
+/**
+ * Options for LSP-enhanced context selection.
+ */
+export interface EnhancedContextOptions extends SelectionOptions {
+  /** File currently being edited */
+  editingFile?: string;
+  /** Cursor position in editing file */
+  editingPosition?: SourcePosition;
+  /** Boost factor for LSP-related files (0-1, default 0.3) */
+  lspBoostFactor?: number;
+}
+
+/**
+ * Result of LSP-enhanced context selection.
+ */
+export interface EnhancedContextResult extends SelectionResult {
+  /** LSP enhancements applied, if any */
+  lspEnhancements: LSPEnhancements | null;
+  /** Files that were boosted due to LSP relationships */
+  lspBoostedFiles: string[];
+}
+
+/**
+ * Options for searching code chunks.
+ */
+export interface SearchOptions {
+  /** Search in symbol names (function, class, variable names) */
+  includeSymbols?: boolean;
+  /** Search in file paths */
+  includePaths?: boolean;
+  /** Search in file content (expensive) */
+  includeContent?: boolean;
+  /** Case-sensitive matching */
+  caseSensitive?: boolean;
+  /** Enable fuzzy matching for typos */
+  fuzzyMatch?: boolean;
+  /** Maximum edit distance for fuzzy matching (default: 2) */
+  maxDistance?: number;
+}
+
+/**
+ * Options for ranked search.
+ */
+export interface RankedSearchOptions extends SearchOptions {
+  /** Maximum number of results to return */
+  limit?: number;
+}
+
+/**
+ * A code chunk with a relevance score.
+ */
+export interface ScoredChunk {
+  chunk: CodeChunk;
+  score: number;
+}
+
 // =============================================================================
 // CONSTANTS
 // =============================================================================
@@ -228,9 +309,34 @@ export class CodebaseContextManager {
   private repoMap: RepoMap | null = null;
   private cache: Map<string, { map: RepoMap; expires: number }> = new Map();
   private listeners: CodebaseContextEventListener[] = [];
+  private lspManager: LSPManager | null = null;
 
   constructor(config: CodebaseContextConfig = {}) {
     this.config = { ...DEFAULT_CONFIG, ...config };
+  }
+
+  /**
+   * Set the LSP manager for enhanced context selection.
+   * When set, context selection can use LSP for more accurate relevance scoring.
+   */
+  setLSPManager(lsp: LSPManager): void {
+    this.lspManager = lsp;
+  }
+
+  /**
+   * Get the current LSP manager, if any.
+   */
+  getLSPManager(): LSPManager | null {
+    return this.lspManager;
+  }
+
+  /**
+   * Check if LSP is available and active.
+   */
+  hasActiveLSP(): boolean {
+    if (!this.lspManager) return false;
+    const servers = this.lspManager.getActiveServers();
+    return servers.length > 0;
   }
 
   // ===========================================================================
@@ -751,6 +857,283 @@ export class CodebaseContextManager {
     return result;
   }
 
+  // ===========================================================================
+  // LSP-ENHANCED CONTEXT SELECTION
+  // ===========================================================================
+
+  /**
+   * Select relevant code with LSP-enhanced relevance scoring.
+   *
+   * When an LSP manager is set and active, this method uses LSP to:
+   * - Find files that reference the editing file (who uses this code?)
+   * - Find files that the editing file references (what does this depend on?)
+   * - Boost priority of related files in the selection
+   *
+   * @example
+   * ```typescript
+   * const codebase = createCodebaseContext({ root: './project' });
+   * codebase.setLSPManager(lspManager);
+   *
+   * const result = await codebase.getEnhancedContext({
+   *   task: 'fix bug in authentication',
+   *   maxTokens: 10000,
+   *   editingFile: 'src/auth/login.ts',
+   *   editingPosition: { line: 25, character: 10 },
+   * });
+   *
+   * // Result includes LSP-boosted files
+   * console.log('LSP boosted:', result.lspBoostedFiles);
+   * ```
+   */
+  async getEnhancedContext(options: EnhancedContextOptions): Promise<EnhancedContextResult> {
+    const {
+      editingFile,
+      editingPosition,
+      lspBoostFactor = 0.3,
+      ...baseOptions
+    } = options;
+
+    // Start with base selection
+    const baseResult = await this.selectRelevantCode(baseOptions);
+
+    // If no LSP or no editing file, return base result
+    if (!this.lspManager || !editingFile || !this.hasActiveLSP()) {
+      return {
+        ...baseResult,
+        lspEnhancements: null,
+        lspBoostedFiles: [],
+      };
+    }
+
+    // Gather LSP enhancements
+    const enhancements = await this.gatherLSPEnhancements(editingFile, editingPosition);
+
+    // If no LSP data, return base result
+    if (!enhancements.referencingFiles.length && !enhancements.referencedFiles.length) {
+      return {
+        ...baseResult,
+        lspEnhancements: enhancements,
+        lspBoostedFiles: [],
+      };
+    }
+
+    // Re-select with LSP boosting
+    const lspRelatedFiles = new Set([
+      ...enhancements.referencingFiles,
+      ...enhancements.referencedFiles,
+    ]);
+
+    // Get all chunks and apply LSP boost
+    const repoMap = this.repoMap!;
+    const boostedFiles: string[] = [];
+
+    const boostedChunks = Array.from(repoMap.chunks.values()).map(chunk => {
+      const isLspRelated = lspRelatedFiles.has(chunk.filePath) ||
+        lspRelatedFiles.has(chunk.id);
+
+      if (isLspRelated) {
+        boostedFiles.push(chunk.filePath);
+        return {
+          ...chunk,
+          importance: Math.min(1, chunk.importance + lspBoostFactor),
+        };
+      }
+      return chunk;
+    });
+
+    // Re-sort and select with boosted importance
+    const candidates = boostedChunks.filter(chunk => {
+      if (chunk.importance < (baseOptions.minImportance ?? 0)) return false;
+      if (!baseOptions.includeTypes && chunk.type === 'types') return false;
+      if (!baseOptions.includeTests && chunk.type === 'test') return false;
+      return true;
+    });
+
+    // Calculate relevance if task provided
+    const withRelevance = baseOptions.task
+      ? candidates.map(chunk => ({
+          ...chunk,
+          relevance: this.calculateRelevance(chunk, baseOptions.task!),
+        }))
+      : candidates;
+
+    // Sort and select within budget
+    const sorted = this.sortByStrategy(
+      withRelevance,
+      baseOptions.strategy ?? 'importance_first',
+      baseOptions.task
+    );
+
+    const selected: CodeChunk[] = [];
+    let totalTokens = 0;
+    const excluded: string[] = [];
+
+    // Prioritize editing file first
+    if (editingFile) {
+      const editingChunk = repoMap.chunks.get(editingFile);
+      if (editingChunk && totalTokens + editingChunk.tokenCount <= baseOptions.maxTokens) {
+        selected.push(editingChunk);
+        totalTokens += editingChunk.tokenCount;
+      }
+    }
+
+    // Then priority files
+    for (const priorityFile of baseOptions.priorityFiles ?? []) {
+      const chunk = repoMap.chunks.get(priorityFile);
+      if (chunk && !selected.some(s => s.id === priorityFile)) {
+        if (totalTokens + chunk.tokenCount <= baseOptions.maxTokens) {
+          selected.push(chunk);
+          totalTokens += chunk.tokenCount;
+        }
+      }
+    }
+
+    // Fill remaining budget
+    for (const chunk of sorted) {
+      if (selected.some(s => s.id === chunk.id)) continue;
+      if (totalTokens + chunk.tokenCount <= baseOptions.maxTokens) {
+        selected.push(chunk);
+        totalTokens += chunk.tokenCount;
+      } else {
+        excluded.push(chunk.id);
+      }
+    }
+
+    return {
+      chunks: selected,
+      totalTokens,
+      budgetRemaining: baseOptions.maxTokens - totalTokens,
+      excluded,
+      stats: {
+        filesConsidered: repoMap.chunks.size,
+        filesSelected: selected.length,
+        coveragePercent: (selected.length / repoMap.chunks.size) * 100,
+        averageImportance: selected.reduce((sum, c) => sum + c.importance, 0) / selected.length || 0,
+      },
+      lspEnhancements: enhancements,
+      lspBoostedFiles: boostedFiles.filter(f => selected.some(s => s.filePath === f)),
+    };
+  }
+
+  /**
+   * Gather LSP enhancements for a file.
+   */
+  private async gatherLSPEnhancements(
+    file: string,
+    position?: SourcePosition
+  ): Promise<LSPEnhancements> {
+    const enhancements: LSPEnhancements = {
+      referencingFiles: [],
+      referencedFiles: [],
+    };
+
+    if (!this.lspManager) return enhancements;
+
+    try {
+      // Get references to symbols in this file
+      // Use position if provided, otherwise check common export positions
+      const checkPositions = position
+        ? [position]
+        : [
+            { line: 0, character: 0 },
+            { line: 10, character: 0 },
+            { line: 20, character: 0 },
+          ];
+
+      const seenRefs = new Set<string>();
+      for (const pos of checkPositions) {
+        const refs = await this.lspManager.getReferences(file, pos.line, pos.character, false);
+        for (const ref of refs) {
+          const refFile = this.uriToPath(ref.uri);
+          if (refFile && refFile !== file && !seenRefs.has(refFile)) {
+            seenRefs.add(refFile);
+            enhancements.referencingFiles.push(refFile);
+          }
+        }
+      }
+
+      // Get definition to find what this file depends on
+      if (position) {
+        const def = await this.lspManager.getDefinition(file, position.line, position.character);
+        if (def) {
+          const defFile = this.uriToPath(def.uri);
+          if (defFile && defFile !== file) {
+            enhancements.referencedFiles.push(defFile);
+
+            // Get symbol info from hover
+            const hover = await this.lspManager.getHover(file, position.line, position.character);
+            if (hover) {
+              const symbolName = this.extractSymbolName(hover);
+              if (symbolName) {
+                enhancements.symbolAtCursor = {
+                  name: symbolName,
+                  definitionFile: defFile,
+                  referenceCount: enhancements.referencingFiles.length,
+                };
+              }
+            }
+          }
+        }
+      }
+
+      // Also use the dependency graph from analyze() to supplement LSP data
+      if (this.repoMap) {
+        const deps = this.repoMap.dependencyGraph.get(file);
+        if (deps) {
+          for (const dep of deps) {
+            if (!enhancements.referencedFiles.includes(dep)) {
+              enhancements.referencedFiles.push(dep);
+            }
+          }
+        }
+
+        const reverseDeps = this.repoMap.reverseDependencyGraph.get(file);
+        if (reverseDeps) {
+          for (const dep of reverseDeps) {
+            if (!enhancements.referencingFiles.includes(dep)) {
+              enhancements.referencingFiles.push(dep);
+            }
+          }
+        }
+      }
+    } catch (error) {
+      // LSP errors shouldn't break context selection
+      // Just return what we have
+    }
+
+    return enhancements;
+  }
+
+  /**
+   * Convert LSP URI to file path.
+   */
+  private uriToPath(uri: string): string | null {
+    if (uri.startsWith('file://')) {
+      return uri.slice(7);
+    }
+    return uri;
+  }
+
+  /**
+   * Extract symbol name from hover text.
+   */
+  private extractSymbolName(hover: string): string | null {
+    // Try to extract function/variable name from hover text
+    // Common patterns: "function foo(...)", "const bar", "class Baz"
+    const patterns = [
+      /(?:function|const|let|var|class|interface|type)\s+(\w+)/,
+      /^(\w+)\s*[:(]/,
+      /^(\w+)\s*$/,
+    ];
+
+    for (const pattern of patterns) {
+      const match = hover.match(pattern);
+      if (match) return match[1];
+    }
+
+    return null;
+  }
+
   /**
    * Calculate task relevance for a chunk.
    */
@@ -1002,6 +1385,233 @@ export class CodebaseContextManager {
         // Ignore listener errors
       }
     }
+  }
+
+  // ===========================================================================
+  // ENHANCED SEARCH (Phase 4.4)
+  // ===========================================================================
+
+  /**
+   * Search for code chunks matching a query.
+   *
+   * @example
+   * ```typescript
+   * const results = codebase.search('authentication', {
+   *   includeSymbols: true,
+   *   includePaths: true,
+   * });
+   * ```
+   */
+  search(query: string, options: SearchOptions = {}): CodeChunk[] {
+    const {
+      includeSymbols = true,
+      includePaths = true,
+      includeContent = false,
+      caseSensitive = false,
+      fuzzyMatch = false,
+      maxDistance = 2,
+    } = options;
+
+    if (!this.repoMap) return [];
+
+    const queryTerms = this.tokenizeQuery(query);
+    if (queryTerms.length === 0) return [];
+
+    const normalize = caseSensitive
+      ? (s: string) => s
+      : (s: string) => s.toLowerCase();
+
+    const chunks = Array.from(this.repoMap.chunks.values());
+
+    return chunks.filter(chunk => {
+      // Symbol matching (most relevant for code search)
+      if (includeSymbols && chunk.symbols.length > 0) {
+        const symbolMatch = chunk.symbols.some(symbol => {
+          const normalizedSymbol = normalize(symbol);
+          return queryTerms.some(term => {
+            if (fuzzyMatch) {
+              return this.fuzzyMatch(normalizedSymbol, normalize(term), maxDistance);
+            }
+            return normalizedSymbol.includes(normalize(term));
+          });
+        });
+        if (symbolMatch) return true;
+      }
+
+      // Path matching
+      if (includePaths) {
+        const normalizedPath = normalize(chunk.filePath);
+        const pathMatch = queryTerms.some(term => {
+          const normalizedTerm = normalize(term);
+          // Always check substring first
+          if (normalizedPath.includes(normalizedTerm)) {
+            return true;
+          }
+          // Additionally check fuzzy match on filename if enabled
+          if (fuzzyMatch) {
+            const filename = path.basename(chunk.filePath, path.extname(chunk.filePath));
+            return this.fuzzyMatch(normalize(filename), normalizedTerm, maxDistance);
+          }
+          return false;
+        });
+        if (pathMatch) return true;
+      }
+
+      // Content matching (expensive, off by default)
+      if (includeContent) {
+        const normalizedContent = normalize(chunk.content);
+        const contentMatch = queryTerms.every(term =>
+          normalizedContent.includes(normalize(term))
+        );
+        if (contentMatch) return true;
+      }
+
+      return false;
+    });
+  }
+
+  /**
+   * Search and rank results by relevance.
+   *
+   * @example
+   * ```typescript
+   * const ranked = codebase.searchRanked('user auth', { limit: 10 });
+   * ranked.forEach(r => console.log(`${r.chunk.filePath}: ${r.score}`));
+   * ```
+   */
+  searchRanked(query: string, options: RankedSearchOptions = {}): ScoredChunk[] {
+    const { limit, ...searchOptions } = options;
+
+    const matches = this.search(query, searchOptions);
+
+    const scored = matches.map(chunk => ({
+      chunk,
+      score: this.calculateSearchScore(chunk, query),
+    }));
+
+    scored.sort((a, b) => b.score - a.score);
+
+    if (limit && limit > 0) {
+      return scored.slice(0, limit);
+    }
+
+    return scored;
+  }
+
+  /**
+   * Calculate relevance score for a chunk given a search query.
+   */
+  private calculateSearchScore(chunk: CodeChunk, query: string): number {
+    const queryLower = query.toLowerCase();
+    const queryTerms = this.tokenizeQuery(query);
+    let score = chunk.importance * 10; // Base score from importance
+
+    // Boost for exact symbol name match
+    for (const symbol of chunk.symbols) {
+      const symbolLower = symbol.toLowerCase();
+      if (symbolLower === queryLower) {
+        score += 50; // Exact match
+      } else if (symbolLower.includes(queryLower)) {
+        score += 20; // Partial match
+      } else {
+        // Check individual terms
+        for (const term of queryTerms) {
+          if (symbolLower.includes(term.toLowerCase())) {
+            score += 10;
+          }
+        }
+      }
+    }
+
+    // Boost for file name match
+    const filename = path.basename(chunk.filePath).toLowerCase();
+    if (filename.includes(queryLower)) {
+      score += 15;
+    } else {
+      for (const term of queryTerms) {
+        if (filename.includes(term.toLowerCase())) {
+          score += 5;
+        }
+      }
+    }
+
+    // Boost for entry points and core modules
+    if (chunk.type === 'entry_point') {
+      score += 10;
+    } else if (chunk.type === 'core_module') {
+      score += 5;
+    }
+
+    // Small boost for path matches
+    const pathLower = chunk.filePath.toLowerCase();
+    for (const term of queryTerms) {
+      if (pathLower.includes(term.toLowerCase())) {
+        score += 2;
+      }
+    }
+
+    return score;
+  }
+
+  /**
+   * Tokenize a search query into terms.
+   */
+  private tokenizeQuery(query: string): string[] {
+    // Common stop words to filter out
+    const stopWords = new Set([
+      'the', 'and', 'for', 'with', 'this', 'that', 'from', 'are', 'was', 'were',
+      'been', 'being', 'have', 'has', 'had', 'does', 'did', 'will', 'would',
+      'could', 'should', 'may', 'might', 'must', 'can',
+    ]);
+
+    return query
+      .split(/\s+/)
+      .map(term => term.replace(/[^\w]/g, '')) // Remove punctuation
+      .filter(term => term.length > 1) // At least 2 chars
+      .filter(term => !stopWords.has(term.toLowerCase()));
+  }
+
+  /**
+   * Fuzzy match two strings using Levenshtein distance.
+   */
+  private fuzzyMatch(a: string, b: string, maxDistance: number): boolean {
+    // Quick length check
+    if (Math.abs(a.length - b.length) > maxDistance) return false;
+
+    // If one contains the other, it's a match
+    if (a.includes(b) || b.includes(a)) return true;
+
+    // Compute Levenshtein distance
+    const distance = this.levenshteinDistance(a, b);
+    return distance <= maxDistance;
+  }
+
+  /**
+   * Compute Levenshtein distance between two strings.
+   */
+  private levenshteinDistance(a: string, b: string): number {
+    if (a.length === 0) return b.length;
+    if (b.length === 0) return a.length;
+
+    // Use two-row optimization for memory efficiency
+    let previousRow = Array.from({ length: b.length + 1 }, (_, i) => i);
+    let currentRow = new Array(b.length + 1);
+
+    for (let i = 0; i < a.length; i++) {
+      currentRow[0] = i + 1;
+
+      for (let j = 0; j < b.length; j++) {
+        const insertCost = currentRow[j] + 1;
+        const deleteCost = previousRow[j + 1] + 1;
+        const replaceCost = previousRow[j] + (a[i] === b[j] ? 0 : 1);
+
+        currentRow[j + 1] = Math.min(insertCost, deleteCost, replaceCost);
+      }
+
+      [previousRow, currentRow] = [currentRow, previousRow];
+    }
+
+    return previousRow[b.length];
   }
 }
 

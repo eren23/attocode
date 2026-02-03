@@ -5,7 +5,8 @@
  * into the production agent. Provides execution safety and approval workflows.
  */
 
-import { resolve, isAbsolute } from 'node:path';
+import { resolve, isAbsolute, dirname } from 'node:path';
+import { realpathSync, existsSync } from 'node:fs';
 import type {
   SandboxConfig,
   HumanInLoopConfig,
@@ -53,19 +54,47 @@ export class SandboxManager {
   /**
    * Check if a path is allowed.
    * Resolves relative paths against cwd before comparison.
+   * Uses realpath to resolve symlinks and prevent symlink escape attacks.
    */
   isPathAllowed(path: string): boolean {
     const allowedPaths = this.config.allowedPaths || ['.'];
 
-    // Resolve the target path to absolute
-    const resolvedPath = isAbsolute(path) ? path : resolve(process.cwd(), path);
+    // Resolve the path, handling symlinks for security
+    let resolvedPath: string;
+    try {
+      const absolutePath = isAbsolute(path) ? path : resolve(process.cwd(), path);
+
+      // If path exists, use realpath to resolve symlinks
+      if (existsSync(absolutePath)) {
+        resolvedPath = realpathSync(absolutePath);
+      } else {
+        // Path doesn't exist yet - recursively check that parent is allowed
+        const parentDir = dirname(absolutePath);
+        if (parentDir === absolutePath) {
+          return false; // Root reached without match
+        }
+        return this.isPathAllowed(parentDir);
+      }
+    } catch {
+      // realpath failed (broken symlink, permission denied, etc.)
+      // Fail closed - deny access
+      return false;
+    }
 
     for (const allowed of allowedPaths) {
-      // Resolve each allowed path to absolute (handles '.' and relative paths)
-      const resolvedAllowed = isAbsolute(allowed) ? allowed : resolve(process.cwd(), allowed);
+      let resolvedAllowed: string;
+      try {
+        const absoluteAllowed = isAbsolute(allowed) ? allowed : resolve(process.cwd(), allowed);
+        // Use realpath if allowed path exists, otherwise just the absolute path
+        resolvedAllowed = existsSync(absoluteAllowed)
+          ? realpathSync(absoluteAllowed)
+          : absoluteAllowed;
+      } catch {
+        continue; // Skip invalid allowed paths
+      }
 
-      // Check if target path is within or equals the allowed path
-      if (resolvedPath.startsWith(resolvedAllowed + '/') || resolvedPath === resolvedAllowed) {
+      // Check if resolved target is within resolved allowed path
+      if (resolvedPath === resolvedAllowed || resolvedPath.startsWith(resolvedAllowed + '/')) {
         return true;
       }
     }
@@ -148,6 +177,10 @@ export class HumanInLoopManager {
   private config: HumanInLoopConfig;
   private auditLog: AuditEntry[] = [];
   private pendingApprovals: Map<string, PendingApproval> = new Map();
+
+  // Audit log limits to prevent unbounded memory growth
+  private readonly maxAuditEntries = 10000;
+  private readonly auditTrimSize = 5000; // Keep this many when trimming
 
   constructor(config: HumanInLoopConfig) {
     this.config = config;
@@ -305,6 +338,7 @@ export class HumanInLoopManager {
 
   /**
    * Log an action to audit trail.
+   * Trims the log when it exceeds maxAuditEntries to prevent unbounded growth.
    */
   private logAction(
     toolCall: ToolCall,
@@ -324,6 +358,11 @@ export class HumanInLoopManager {
     };
 
     this.auditLog.push(entry);
+
+    // Trim if exceeded max size - keep most recent entries
+    if (this.auditLog.length > this.maxAuditEntries) {
+      this.auditLog = this.auditLog.slice(-this.auditTrimSize);
+    }
   }
 
   /**

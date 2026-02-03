@@ -41,8 +41,32 @@ export class MemoryManager {
   private working: MemoryEntry[] = [];
   private config: MemoryConfig;
 
+  // Memory limits to prevent unbounded growth
+  private readonly maxEpisodicEntries: number;
+  private readonly maxSemanticEntries: number;
+  private readonly evictionBatchSize = 100;
+
   constructor(config: MemoryConfig) {
     this.config = config;
+    this.maxEpisodicEntries = config.maxEpisodicEntries ?? 1000;
+    this.maxSemanticEntries = config.maxSemanticEntries ?? 500;
+  }
+
+  /**
+   * Evict oldest entries from a memory store when it exceeds max size.
+   * Uses createdAt timestamp to determine age.
+   */
+  private evictOldest(store: Map<string, MemoryEntry>, maxSize: number): void {
+    if (store.size <= maxSize) return;
+
+    const toEvict = store.size - maxSize + this.evictionBatchSize;
+    const entries = [...store.entries()].sort(
+      (a, b) => a[1].createdAt.getTime() - b[1].createdAt.getTime()
+    );
+
+    for (let i = 0; i < toEvict && i < entries.length; i++) {
+      store.delete(entries[i][0]);
+    }
   }
 
   /**
@@ -53,6 +77,10 @@ export class MemoryManager {
 
     const entry = this.createEntry('episodic', content, metadata);
     this.episodic.set(entry.id, entry);
+
+    // Evict oldest entries if over limit
+    this.evictOldest(this.episodic, this.maxEpisodicEntries);
+
     return entry.id;
   }
 
@@ -72,6 +100,10 @@ export class MemoryManager {
       }
     }
     this.semantic.set(entry.id, entry);
+
+    // Evict oldest entries if over limit
+    this.evictOldest(this.semantic, this.maxSemanticEntries);
+
     return entry.id;
   }
 

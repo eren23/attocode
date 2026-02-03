@@ -291,6 +291,7 @@ export class FileChangeTracker {
     getLastFileChange: Database.Statement;
     getTurnChanges: Database.Statement;
     markUndone: Database.Statement;
+    clearUndone: Database.Statement;
     getSessionSummary: Database.Statement;
   };
 
@@ -398,6 +399,12 @@ export class FileChangeTracker {
       markUndone: this.db.prepare(`
         UPDATE file_changes
         SET is_undone = 1, undo_change_id = ?
+        WHERE id = ? AND session_id = ? AND is_undone = 0
+      `),
+
+      clearUndone: this.db.prepare(`
+        UPDATE file_changes
+        SET is_undone = 0, undo_change_id = NULL
         WHERE id = ? AND session_id = ?
       `),
 
@@ -477,9 +484,11 @@ export class FileChangeTracker {
 
   /**
    * Undo a specific change by ID.
+   * Uses a transaction with optimistic locking to prevent TOCTOU race conditions.
    */
   async undoChange(changeId: number): Promise<UndoResult> {
-    const row = this.stmts.getChange.get(changeId, this.sessionId) as {
+    // Type for the row returned from the database
+    type ChangeRow = {
       id: number;
       sessionId: string;
       turnNumber: number;
@@ -495,24 +504,49 @@ export class FileChangeTracker {
       undoChangeId: number | null;
       toolCallId: string | null;
       createdAt: string;
-    } | undefined;
+    };
 
-    if (!row) {
+    // Type for transaction result
+    interface TxResult {
+      success: boolean;
+      error?: string;
+      row?: ChangeRow;
+    }
+
+    // Use database transaction with optimistic locking to prevent race condition
+    // The key insight: we mark as undone BEFORE file operations, inside a transaction
+    // If two calls race, only one will succeed in updating is_undone from 0 to 1
+    const txResult = this.db.transaction((): TxResult => {
+      const row = this.stmts.getChange.get(changeId, this.sessionId) as ChangeRow | undefined;
+
+      if (!row) {
+        return { success: false, error: 'Change not found' };
+      }
+
+      if (row.isUndone) {
+        return { success: false, error: 'Change already undone' };
+      }
+
+      // Optimistic lock: mark as undone BEFORE file operations
+      // The WHERE clause includes is_undone = 0, so only one concurrent call succeeds
+      const result = this.stmts.markUndone.run(null, changeId, this.sessionId);
+
+      if (result.changes === 0) {
+        return { success: false, error: 'Concurrent modification detected' };
+      }
+
+      return { success: true, row };
+    })();
+
+    if (!txResult.success || !txResult.row) {
       return {
         success: false,
         filePath: '',
-        message: `Change ${changeId} not found`,
+        message: txResult.error || 'Transaction failed',
       };
     }
 
-    if (row.isUndone) {
-      return {
-        success: false,
-        filePath: row.filePath,
-        message: `Change ${changeId} has already been undone`,
-      };
-    }
-
+    const row = txResult.row;
     const filePath = row.filePath;
 
     try {
@@ -556,9 +590,6 @@ export class FileChangeTracker {
           break;
       }
 
-      // Mark as undone (no undo change id since this isn't creating a new change record)
-      this.stmts.markUndone.run(null, changeId, this.sessionId);
-
       return {
         success: true,
         filePath,
@@ -566,6 +597,9 @@ export class FileChangeTracker {
         changeId,
       };
     } catch (error) {
+      // File operations failed - rollback the database change
+      this.stmts.clearUndone.run(changeId, this.sessionId);
+
       return {
         success: false,
         filePath,
