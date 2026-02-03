@@ -1,0 +1,27 @@
+name: valid-agent-name
+description: [Add description here]
+model: balanced
+maxIterations: 30
+maxTokenBudget: 80000
+
+capabilities:
+  - # Add capabilities for NL matching
+
+tools:
+  - read_file
+  - list_files
+  - glob
+  - grep
+
+systemPrompt: |
+  You are valid-agent-name. Your job is to:
+  - [Add primary responsibilities]
+  - [Add secondary tasks]
+
+  Guidelines:
+  - Be thorough but concise
+  - Focus on the user's specific needs
+  - Ask clarifying questions when needed
+
+tags:
+  - valid-agent-name

@@ -50,6 +50,8 @@ import {
   parseMode,
   isWriteTool,
   isBashWriteCommand,
+  calculateTaskSimilarity,
+  SUBAGENT_PLAN_MODE_ADDITION,
   type AgentMode,
 } from './modes.js';
 
@@ -3614,10 +3616,10 @@ export class ProductionAgent {
       };
     }
 
-    // DUPLICATE SPAWN PREVENTION
-    // Create a key from agent name and normalized task (first 150 chars to catch same intent)
+    // DUPLICATE SPAWN PREVENTION with SEMANTIC SIMILARITY
+    // First try exact string match, then check semantic similarity for similar tasks
+    const SEMANTIC_SIMILARITY_THRESHOLD = 0.75; // 75% similarity = duplicate
     const taskKey = `${agentName}:${task.slice(0, 150).toLowerCase().replace(/\s+/g, ' ').trim()}`;
-    const existing = this.spawnedTasks.get(taskKey);
     const now = Date.now();
 
     // Clean up old entries (older than dedup window)
@@ -3627,23 +3629,52 @@ export class ProductionAgent {
       }
     }
 
-    if (existing && now - existing.timestamp < ProductionAgent.SPAWN_DEDUP_WINDOW_MS) {
-      // Same task spawned within the dedup window - return cached result
-      // Log this as a warning for observability (no special event type needed)
+    // Check for exact match first
+    let existingMatch = this.spawnedTasks.get(taskKey);
+    let matchType: 'exact' | 'semantic' = 'exact';
+
+    // If no exact match, check for semantic similarity among same agent's tasks
+    if (!existingMatch) {
+      for (const [key, entry] of this.spawnedTasks.entries()) {
+        // Only compare tasks from the same agent type
+        if (!key.startsWith(`${agentName}:`)) continue;
+        if (now - entry.timestamp >= ProductionAgent.SPAWN_DEDUP_WINDOW_MS) continue;
+
+        // Extract the task portion from the key
+        const existingTask = key.slice(agentName.length + 1);
+        const similarity = calculateTaskSimilarity(task, existingTask);
+
+        if (similarity >= SEMANTIC_SIMILARITY_THRESHOLD) {
+          existingMatch = entry;
+          matchType = 'semantic';
+          this.observability?.logger?.debug('Semantic duplicate detected', {
+            agent: agentName,
+            newTask: task.slice(0, 80),
+            existingTask: existingTask.slice(0, 80),
+            similarity: (similarity * 100).toFixed(1) + '%',
+          });
+          break;
+        }
+      }
+    }
+
+    if (existingMatch && now - existingMatch.timestamp < ProductionAgent.SPAWN_DEDUP_WINDOW_MS) {
+      // Same or semantically similar task spawned within the dedup window
       this.observability?.logger?.warn('Duplicate spawn prevented', {
         agent: agentName,
         task: task.slice(0, 100),
-        originalTimestamp: existing.timestamp,
-        elapsedMs: now - existing.timestamp,
+        matchType,
+        originalTimestamp: existingMatch.timestamp,
+        elapsedMs: now - existingMatch.timestamp,
       });
 
-      const duplicateMessage = `[DUPLICATE SPAWN PREVENTED]\n` +
-        `This task was already spawned ${Math.round((now - existing.timestamp) / 1000)}s ago.\n` +
-        `${existing.queuedChanges > 0
-          ? `The previous spawn queued ${existing.queuedChanges} change(s) to the pending plan.\n` +
+      const duplicateMessage = `[DUPLICATE SPAWN PREVENTED${matchType === 'semantic' ? ' - SEMANTIC MATCH' : ''}]\n` +
+        `This task was already spawned ${Math.round((now - existingMatch.timestamp) / 1000)}s ago.\n` +
+        `${existingMatch.queuedChanges > 0
+          ? `The previous spawn queued ${existingMatch.queuedChanges} change(s) to the pending plan.\n` +
             `These changes are already in your plan - do NOT spawn again.\n`
           : ''
-        }Previous result summary:\n${existing.result.slice(0, 500)}`;
+        }Previous result summary:\n${existingMatch.result.slice(0, 500)}`;
 
       return {
         success: true, // Mark as success since original task completed
@@ -3680,6 +3711,55 @@ export class ProductionAgent {
         ? (subagentConfig as { defaultTimeout?: number }).defaultTimeout ?? 600000
         : 600000; // Increased from 120s to 600s (10 minutes) for deeper analysis
 
+      // BLACKBOARD CONTEXT INJECTION
+      // Gather relevant context from the blackboard for the subagent
+      let blackboardContext = '';
+      const parentAgentId = `parent-${Date.now()}`;
+
+      if (this.blackboard) {
+        // Post parent's exploration context before spawning
+        this.blackboard.post(parentAgentId, {
+          topic: 'spawn.parent_context',
+          content: `Parent spawning ${agentName} for task: ${task.slice(0, 200)}`,
+          type: 'progress',
+          confidence: 1,
+          metadata: { agentName, taskPreview: task.slice(0, 100) },
+        });
+
+        // Gather recent findings that might help the subagent
+        const recentFindings = this.blackboard.query({
+          limit: 5,
+          types: ['discovery', 'analysis', 'progress'],
+          minConfidence: 0.7,
+        });
+
+        if (recentFindings.length > 0) {
+          const findingsSummary = recentFindings
+            .map(f => `- [${f.agentId}] ${f.topic}: ${f.content.slice(0, 150)}${f.content.length > 150 ? '...' : ''}`)
+            .join('\n');
+          blackboardContext = `\n\n**BLACKBOARD CONTEXT (from parent/sibling agents):**\n${findingsSummary}\n`;
+        }
+      }
+
+      // Check for files already being modified in parent's pending plan
+      const currentPlan = this.pendingPlanManager.getPendingPlan();
+      if (currentPlan && currentPlan.proposedChanges.length > 0) {
+        const pendingFiles = currentPlan.proposedChanges
+          .filter((c: { tool: string }) => c.tool === 'write_file' || c.tool === 'edit_file')
+          .map((c: { args: { path?: string; file_path?: string } }) => c.args.path || c.args.file_path)
+          .filter(Boolean) as string[];
+
+        if (pendingFiles.length > 0) {
+          blackboardContext += `\n**FILES ALREADY IN PENDING PLAN (do not duplicate):**\n${pendingFiles.slice(0, 10).join('\n')}\n`;
+        }
+      }
+
+      // Build subagent system prompt with subagent-specific plan mode addition
+      const parentMode = this.getMode();
+      const subagentSystemPrompt = parentMode === 'plan'
+        ? `${agentDef.systemPrompt}\n\n${SUBAGENT_PLAN_MODE_ADDITION}${blackboardContext}`
+        : `${agentDef.systemPrompt}${blackboardContext}`;
+
       // Create a sub-agent with the agent's config
       const subAgent = new ProductionAgent({
         provider: this.provider,
@@ -3688,7 +3768,7 @@ export class ProductionAgent {
         toolResolver: this.toolResolver || undefined,
         // Pass MCP tool summaries so subagent knows what tools are available
         mcpToolSummaries: this.config.mcpToolSummaries,
-        systemPrompt: agentDef.systemPrompt,
+        systemPrompt: subagentSystemPrompt,
         model: resolvedModel,
         maxIterations: agentDef.maxIterations || defaultMaxIterations,
         // Inherit some features but keep subagent simpler
@@ -3715,7 +3795,6 @@ export class ProductionAgent {
       // - Subagent's read operations execute immediately (visible exploration)
       // - Subagent's write operations get queued in the subagent's pending plan
       // - User maintains control over what actually gets written
-      const parentMode = this.getMode();
       if (parentMode !== 'build') {
         subAgent.setMode(parentMode);
       }

@@ -357,3 +357,31 @@ export {
   type DecisionRecord,
   type TransparencyAggregatorConfig,
 } from './transparency-aggregator.js';
+
+// =============================================================================
+// NEW MODERNIZATION EXPORTS
+// =============================================================================
+
+// Error boundaries
+export { TUIErrorBoundary, ErrorFallback, withErrorBoundary } from './components/ErrorBoundary.js';
+
+// Message pruning hook
+export {
+  useMessagePruning,
+  type TUIMessage as PruningTUIMessage,
+  type MessagePruningConfig,
+  type PruneStats,
+  type UseMessagePruningResult,
+} from './hooks/index.js';
+
+// Cross-platform keyboard utilities
+export {
+  detectAltShortcut,
+  isAltShortcut,
+  normalizeShortcut,
+  createShortcutHandler,
+  formatShortcutDisplay,
+  type KeyEvent,
+  type NormalizedShortcut,
+  type ShortcutHandlers,
+} from './utils/index.js';
