@@ -551,7 +551,7 @@ export class AgentRegistry {
       }
 
       // Check description match
-      const descWords = agent.description.toLowerCase().split(/\s+/);
+      const descWords = String(agent.description || '').toLowerCase().split(/\s+/);
       for (const word of descWords) {
         if (queryLower.includes(word) && word.length > 3) {
           score += 2;
@@ -688,7 +688,7 @@ export function formatAgentList(agents: LoadedAgent[]): string {
   if (builtIn.length > 0) {
     lines.push('Built-in Agents:');
     for (const agent of builtIn) {
-      lines.push(`  ${agent.name} - ${agent.description.split('.')[0]}`);
+      lines.push(`  ${agent.name} - ${String(agent.description || '').split('.')[0]}`);
     }
   }
 
@@ -696,14 +696,14 @@ export function formatAgentList(agents: LoadedAgent[]): string {
     lines.push('\nCustom Agents:');
     for (const agent of userOrProject) {
       const location = getAgentLocationDisplay(agent);
-      lines.push(`  ${agent.name} - ${agent.description.split('.')[0]} (${location})`);
+      lines.push(`  ${agent.name} - ${String(agent.description || '').split('.')[0]} (${location})`);
     }
   }
 
   if (legacy.length > 0) {
     lines.push('\nLegacy Agents (.agents/):');
     for (const agent of legacy) {
-      lines.push(`  ${agent.name} - ${agent.description.split('.')[0]}`);
+      lines.push(`  ${agent.name} - ${String(agent.description || '').split('.')[0]}`);
     }
   }
 
