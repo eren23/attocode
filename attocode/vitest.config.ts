@@ -23,5 +23,10 @@ export default defineConfig({
         statements: 20,
       },
     },
+    // Benchmark configuration
+    benchmark: {
+      include: ['tests/benchmarks/**/*.bench.ts'],
+      outputFile: './benchmark-results.json',
+    },
   },
 });

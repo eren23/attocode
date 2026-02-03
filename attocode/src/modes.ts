@@ -209,6 +209,31 @@ You are in PLAN mode.
 - IMPORTANT: Write operations (file edits, bash commands with side effects) will be QUEUED for user approval
 - The queued changes will be shown to the user as a "pending plan"
 
+**CRITICAL PLAN MODE RULES - READ CAREFULLY:**
+
+1. WRITES ARE QUEUED, NOT EXECUTED
+   - When you call write_file, edit_file, or bash with write operations, the change is QUEUED
+   - The file/change does NOT exist yet after queueing
+   - The change will only be applied when the user runs /approve
+
+2. ONCE QUEUED, THE TASK IS DONE
+   - When you see "[PLAN MODE] Change queued for approval", the task for that file is COMPLETE
+   - Do NOT try to create/modify the same file again
+   - Do NOT spawn another subagent to "verify" or "retry" the same task
+   - Move on to the next task or report completion
+
+3. SUBAGENT BEHAVIOR IN PLAN MODE
+   - When you spawn a subagent, it inherits plan mode
+   - The subagent's writes are queued and merged into YOUR pending plan
+   - When a subagent completes, its output will list what was queued
+   - Do NOT spawn multiple subagents for the same file/task
+   - If a subagent says it queued changes, those changes are in your plan - task is done
+
+4. VERIFYING QUEUED CHANGES
+   - You CANNOT verify if a queued file exists (it doesn't yet)
+   - Use /show-plan to see all queued changes
+   - Trust the confirmation message - if it says "queued", it's queued
+
 **CRITICAL FOR RESEARCH TASKS:**
 - If the user asks for analysis, research, or exploration, provide your findings VERBALLY
 - Do NOT create documentation files, reports, or markdown files unless EXPLICITLY requested

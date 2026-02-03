@@ -15,3 +15,12 @@ export { MemoizedInputArea, type InputAreaProps } from './InputArea.js';
 
 // Approval dialog for permission requests
 export { ApprovalDialog, type ApprovalDialogProps, type ApprovalRequest } from './ApprovalDialog.js';
+
+// Diff display components with syntax highlighting support
+export { DiffView, type UnifiedDiff, type DiffHunk, type DiffLine } from './DiffView.js';
+export { SideBySideDiff, type SideBySideDiffProps, type AlignedPair } from './SideBySideDiff.js';
+export { CollapsibleDiffView, type CollapsibleDiffViewProps } from './CollapsibleDiffView.js';
+export { FileChangeSummary } from './FileChangeSummary.js';
+
+// Syntax highlighting component
+export { SyntaxText, MemoizedSyntaxText, SyntaxLine, MemoizedSyntaxLine, type SyntaxTextProps, type SyntaxLineProps } from './SyntaxText.js';

@@ -140,6 +140,10 @@ import {
   // Capabilities Registry (unified discovery)
   CapabilitiesRegistry,
   createCapabilitiesRegistry,
+  // Shared Blackboard (subagent coordination)
+  SharedBlackboard,
+  createSharedBlackboard,
+  type BlackboardConfig,
 } from './integrations/index.js';
 
 // Lesson 26: Tracing & Evaluation integration
@@ -149,8 +153,11 @@ import { TraceCollector, createTraceCollector } from './tracing/trace-collector.
 import { modelRegistry } from './costs/index.js';
 import { getModelContextLength } from './integrations/openrouter-pricing.js';
 
-// Spawn agent tool for LLM-driven subagent delegation
-import { createBoundSpawnAgentTool } from './tools/agent.js';
+// Spawn agent tools for LLM-driven subagent delegation
+import {
+  createBoundSpawnAgentTool,
+  createBoundSpawnAgentsParallelTool,
+} from './tools/agent.js';
 
 // =============================================================================
 // PRODUCTION AGENT
@@ -196,6 +203,15 @@ export class ProductionAgent {
   private fileChangeTracker: FileChangeTracker | null = null;
   private capabilitiesRegistry: CapabilitiesRegistry | null = null;
   private toolResolver: ((toolName: string) => ToolDefinition | null) | null = null;
+  private blackboard: SharedBlackboard | null = null;
+
+  // Duplicate spawn prevention - tracks recently spawned tasks to prevent doom loops
+  // Map<taskKey, { timestamp: number; result: string; queuedChanges: number }>
+  private spawnedTasks = new Map<string, { timestamp: number; result: string; queuedChanges: number }>();
+  private static readonly SPAWN_DEDUP_WINDOW_MS = 60000; // 60 seconds
+
+  // Parent iteration tracking for total budget calculation
+  private parentIterations = 0;
 
   // Initialization tracking
   private initPromises: Promise<void>[] = [];
@@ -238,6 +254,18 @@ export class ProductionAgent {
 
     // Initialize pending plan manager for plan mode write interception
     this.pendingPlanManager = createPendingPlanManager();
+
+    // Shared Blackboard - enables coordination between parallel subagents
+    // Subagents inherit parent's blackboard; parent agents create their own
+    if (userConfig.blackboard) {
+      this.blackboard = userConfig.blackboard as SharedBlackboard;
+    } else if (this.config.subagent !== false) {
+      this.blackboard = createSharedBlackboard({
+        maxFindings: 500,
+        defaultClaimTTL: 120000, // 2 minutes for file claims
+        deduplicateFindings: true,
+      });
+    }
 
     // Initialize enabled features
     this.initializeFeatures();
@@ -376,6 +404,12 @@ export class ProductionAgent {
     );
     this.tools.set(boundSpawnTool.name, boundSpawnTool);
 
+    // Register spawn_agents_parallel tool for parallel subagent execution
+    const boundParallelSpawnTool = createBoundSpawnAgentsParallelTool(
+      (tasks) => this.spawnAgentsParallel(tasks)
+    );
+    this.tools.set(boundParallelSpawnTool.name, boundParallelSpawnTool);
+
     // Cancellation Support
     if (isFeatureEnabled(this.config.cancellation)) {
       this.cancellation = createCancellationManager();
@@ -478,6 +512,12 @@ export class ProductionAgent {
         cacheResults: true,
         cacheTTL: 5 * 60 * 1000, // 5 minutes
       });
+
+      // Connect LSP manager to codebase context for enhanced code selection
+      // This enables LSP-based relevance boosting (Phase 4.1)
+      if (this.lspManager) {
+        this.codebaseContext.setLSPManager(this.lspManager);
+      }
     }
 
     // Forward context engineering events
@@ -1006,9 +1046,13 @@ export class ProductionAgent {
         // Continue with other tasks if possible
       }
 
-      // Check iteration limit
-      if (this.state.iteration >= this.config.maxIterations) {
-        this.observability?.logger?.warn('Max iterations reached');
+      // Check iteration limit (using total iterations to account for parent)
+      if (this.getTotalIterations() >= this.config.maxIterations) {
+        this.observability?.logger?.warn('Max iterations reached', {
+          iteration: this.state.iteration,
+          parentIterations: this.parentIterations,
+          total: this.getTotalIterations(),
+        });
         break;
       }
     }
@@ -1190,7 +1234,11 @@ export class ProductionAgent {
 
             // Emit appropriate event
             if (budgetCheck.budgetType === 'iterations') {
-              this.emit({ type: 'error', error: `Max iterations reached (${this.state.iteration})` });
+              const totalIter = this.getTotalIterations();
+              const iterMsg = this.parentIterations > 0
+                ? `${this.state.iteration} + ${this.parentIterations} parent = ${totalIter}`
+                : `${this.state.iteration}`;
+              this.emit({ type: 'error', error: `Max iterations reached (${iterMsg})` });
             } else {
               this.emit({ type: 'error', error: budgetCheck.reason || 'Budget exceeded' });
             }
@@ -1207,8 +1255,13 @@ export class ProductionAgent {
           }
         } else {
           // Fallback to simple iteration check if economics not available
-          if (this.state.iteration >= this.config.maxIterations) {
-            this.observability?.logger?.warn('Max iterations reached');
+          // Use getTotalIterations() to account for parent iterations (subagent hierarchy)
+          if (this.getTotalIterations() >= this.config.maxIterations) {
+            this.observability?.logger?.warn('Max iterations reached', {
+              iteration: this.state.iteration,
+              parentIterations: this.parentIterations,
+              total: this.getTotalIterations(),
+            });
             break;
           }
         }
@@ -2209,6 +2262,29 @@ export class ProductionAgent {
           console.log(`  ✓ Using pre-loaded MCP tool: ${toolCall.name}`);
         }
 
+        // =====================================================================
+        // BLACKBOARD FILE COORDINATION (Parallel Subagent Support)
+        // =====================================================================
+        // Claim file resources before write operations to prevent conflicts
+        if (this.blackboard && (toolCall.name === 'write_file' || toolCall.name === 'edit_file')) {
+          const args = toolCall.arguments as Record<string, unknown>;
+          const filePath = String(args.path || args.file_path || '');
+          if (filePath) {
+            const agentId = this.config.systemPrompt?.slice(0, 50) || 'agent';
+            const claimed = this.blackboard.claim(filePath, agentId, 'write', {
+              ttl: 60000, // 1 minute claim
+              intent: `${toolCall.name}: ${filePath}`,
+            });
+            if (!claimed) {
+              const existingClaim = this.blackboard.getClaim(filePath);
+              throw new Error(
+                `File "${filePath}" is being edited by another agent (${existingClaim?.agentId || 'unknown'}). ` +
+                `Wait for the other agent to complete or choose a different file.`
+              );
+            }
+          }
+        }
+
         // Execute tool (with sandbox if available)
         let result: unknown;
         if (this.safety?.sandbox) {
@@ -2267,6 +2343,16 @@ export class ProductionAgent {
           result,
         });
 
+        // Release blackboard claim after successful file write
+        if (this.blackboard && (toolCall.name === 'write_file' || toolCall.name === 'edit_file')) {
+          const args = toolCall.arguments as Record<string, unknown>;
+          const filePath = String(args.path || args.file_path || '');
+          if (filePath) {
+            const agentId = this.config.systemPrompt?.slice(0, 50) || 'agent';
+            this.blackboard.release(filePath, agentId);
+          }
+        }
+
         this.observability?.tracer?.endSpan(spanId);
       } catch (err) {
         const error = err instanceof Error ? err : new Error(String(err));
@@ -2310,12 +2396,39 @@ export class ProductionAgent {
   }
 
   /**
+   * Get recently modified file paths from the file change tracker.
+   * Returns paths of files modified in this session (not undone).
+   */
+  private getRecentlyModifiedFiles(limit: number = 5): string[] {
+    if (!this.fileChangeTracker) return [];
+
+    try {
+      const changes = this.fileChangeTracker.getChanges();
+      const recentFiles = new Set<string>();
+
+      // Iterate in reverse to get most recent first
+      for (let i = changes.length - 1; i >= 0 && recentFiles.size < limit; i--) {
+        const change = changes[i];
+        if (!change.isUndone) {
+          recentFiles.add(change.filePath);
+        }
+      }
+
+      return Array.from(recentFiles);
+    } catch {
+      return [];
+    }
+  }
+
+  /**
    * Select relevant code synchronously using cached repo analysis.
+   * Uses LSP-enhanced selection when available to boost related files.
    * Returns empty result if analysis hasn't been run yet.
    */
   private selectRelevantCodeSync(task: string, maxTokens: number): {
     chunks: Array<{ filePath: string; content: string; tokenCount: number; importance: number }>;
     totalTokens: number;
+    lspBoostedFiles?: string[];
   } {
     if (!this.codebaseContext) {
       return { chunks: [], totalTokens: 0 };
@@ -2324,6 +2437,32 @@ export class ProductionAgent {
     const repoMap = this.codebaseContext.getRepoMap();
     if (!repoMap) {
       return { chunks: [], totalTokens: 0 };
+    }
+
+    // Get recently modified files for LSP-enhanced selection
+    const recentFiles = this.getRecentlyModifiedFiles();
+    const priorityFileSet = new Set(recentFiles);
+
+    // LSP-related files (files that reference or are referenced by recent files)
+    const lspRelatedFiles = new Set<string>();
+    if (this.codebaseContext.hasActiveLSP() && recentFiles.length > 0) {
+      // Use dependency graph as a synchronous proxy for LSP relationships
+      for (const file of recentFiles) {
+        // Files that this file depends on
+        const deps = repoMap.dependencyGraph.get(file);
+        if (deps) {
+          for (const dep of deps) {
+            lspRelatedFiles.add(dep);
+          }
+        }
+        // Files that depend on this file
+        const reverseDeps = repoMap.reverseDependencyGraph.get(file);
+        if (reverseDeps) {
+          for (const dep of reverseDeps) {
+            lspRelatedFiles.add(dep);
+          }
+        }
+      }
     }
 
     // Get all chunks and score by relevance
@@ -2352,7 +2491,16 @@ export class ProductionAgent {
       }
 
       // Combine with base importance
-      const combinedScore = chunk.importance * 0.4 + Math.min(relevance, 1) * 0.6;
+      let combinedScore = chunk.importance * 0.4 + Math.min(relevance, 1) * 0.6;
+
+      // Boost recently modified files (highest priority)
+      if (priorityFileSet.has(chunk.filePath)) {
+        combinedScore = Math.min(1.0, combinedScore + 0.4);
+      }
+      // Boost LSP-related files (files connected to recent edits)
+      else if (lspRelatedFiles.has(chunk.filePath)) {
+        combinedScore = Math.min(1.0, combinedScore + 0.25);
+      }
 
       return { chunk, score: combinedScore };
     });
@@ -2362,6 +2510,7 @@ export class ProductionAgent {
 
     const selected: Array<{ filePath: string; content: string; tokenCount: number; importance: number }> = [];
     let totalTokens = 0;
+    const boostedFiles: string[] = [];
 
     for (const { chunk, score } of scored) {
       if (score < 0.1) continue; // Skip very low relevance
@@ -2374,9 +2523,18 @@ export class ProductionAgent {
         importance: score,
       });
       totalTokens += chunk.tokenCount;
+
+      // Track which files were boosted by LSP/dependency relationships
+      if (lspRelatedFiles.has(chunk.filePath)) {
+        boostedFiles.push(chunk.filePath);
+      }
     }
 
-    return { chunks: selected, totalTokens };
+    return {
+      chunks: selected,
+      totalTokens,
+      lspBoostedFiles: boostedFiles.length > 0 ? boostedFiles : undefined,
+    };
   }
 
   /**
@@ -3456,6 +3614,44 @@ export class ProductionAgent {
       };
     }
 
+    // DUPLICATE SPAWN PREVENTION
+    // Create a key from agent name and normalized task (first 150 chars to catch same intent)
+    const taskKey = `${agentName}:${task.slice(0, 150).toLowerCase().replace(/\s+/g, ' ').trim()}`;
+    const existing = this.spawnedTasks.get(taskKey);
+    const now = Date.now();
+
+    // Clean up old entries (older than dedup window)
+    for (const [key, entry] of this.spawnedTasks.entries()) {
+      if (now - entry.timestamp > ProductionAgent.SPAWN_DEDUP_WINDOW_MS) {
+        this.spawnedTasks.delete(key);
+      }
+    }
+
+    if (existing && now - existing.timestamp < ProductionAgent.SPAWN_DEDUP_WINDOW_MS) {
+      // Same task spawned within the dedup window - return cached result
+      // Log this as a warning for observability (no special event type needed)
+      this.observability?.logger?.warn('Duplicate spawn prevented', {
+        agent: agentName,
+        task: task.slice(0, 100),
+        originalTimestamp: existing.timestamp,
+        elapsedMs: now - existing.timestamp,
+      });
+
+      const duplicateMessage = `[DUPLICATE SPAWN PREVENTED]\n` +
+        `This task was already spawned ${Math.round((now - existing.timestamp) / 1000)}s ago.\n` +
+        `${existing.queuedChanges > 0
+          ? `The previous spawn queued ${existing.queuedChanges} change(s) to the pending plan.\n` +
+            `These changes are already in your plan - do NOT spawn again.\n`
+          : ''
+        }Previous result summary:\n${existing.result.slice(0, 500)}`;
+
+      return {
+        success: true, // Mark as success since original task completed
+        output: duplicateMessage,
+        metrics: { tokens: 0, duration: 0, toolCalls: 0 },
+      };
+    }
+
     this.emit({ type: 'agent.spawn', agentId: `spawn-${Date.now()}`, name: agentName, task });
     this.observability?.logger?.info('Spawning agent', { name: agentName, task });
 
@@ -3510,6 +3706,8 @@ export class ProductionAgent {
           builtIn: { logging: false, timing: false, metrics: false },
           custom: [],
         },
+        // Share parent's blackboard for coordination between parallel subagents
+        blackboard: this.blackboard || undefined,
       });
 
       // CRITICAL: Subagent inherits parent's mode
@@ -3521,6 +3719,10 @@ export class ProductionAgent {
       if (parentMode !== 'build') {
         subAgent.setMode(parentMode);
       }
+
+      // Pass parent's iteration count to subagent for accurate budget tracking
+      // This prevents subagents from consuming excessive iterations when parent already used many
+      subAgent.setParentIterations(this.getTotalIterations());
 
       // Forward events from subagent with context
       subAgent.subscribe(event => {
@@ -3543,27 +3745,42 @@ export class ProductionAgent {
         const result = await race(subAgent.run(task), effectiveSource.token);
 
         const duration = Date.now() - startTime;
-        const spawnResult: SpawnResult = {
-          success: result.success,
-          output: result.response || result.error || '',
-          metrics: {
-            tokens: result.metrics.totalTokens,
-            duration,
-            toolCalls: result.metrics.toolCalls,
-          },
-        };
 
         // BEFORE cleanup - extract subagent's pending plan and merge into parent's plan
         // This ensures that when a subagent in plan mode queues writes, they bubble up to the parent
+        let queuedChangeSummary = '';
+        let queuedChangesCount = 0;
         if (subAgent.hasPendingPlan()) {
           const subPlan = subAgent.getPendingPlan();
           if (subPlan && subPlan.proposedChanges.length > 0) {
+            queuedChangesCount = subPlan.proposedChanges.length;
+
             // Emit event for TUI to display
             this.emit({
               type: 'agent.pending_plan',
               agentId: agentName,
               changes: subPlan.proposedChanges,
             });
+
+            // Build detailed summary of what was queued for the return message
+            // This prevents the "doom loop" where parent doesn't know what subagent did
+            const changeSummaries = subPlan.proposedChanges.map(c => {
+              if (c.tool === 'write_file' || c.tool === 'edit_file') {
+                const path = c.args.path || c.args.file_path || '(unknown file)';
+                return `  - [${c.tool}] ${path}: ${c.reason}`;
+              } else if (c.tool === 'bash') {
+                const cmd = String(c.args.command || '').slice(0, 60);
+                return `  - [bash] ${cmd}${String(c.args.command || '').length > 60 ? '...' : ''}: ${c.reason}`;
+              }
+              return `  - [${c.tool}]: ${c.reason}`;
+            });
+
+            queuedChangeSummary = `\n\n[PLAN MODE - CHANGES QUEUED TO PARENT]\n` +
+              `The following ${subPlan.proposedChanges.length} change(s) have been queued in the parent's pending plan:\n` +
+              changeSummaries.join('\n') + '\n' +
+              `\nThese changes are now in YOUR pending plan. The task for this subagent is COMPLETE.\n` +
+              `Do NOT spawn another agent for the same task - the changes are already queued.\n` +
+              `Use /show-plan to see all pending changes, /approve to execute them.`;
 
             // Merge into parent's pending plan with subagent context
             for (const change of subPlan.proposedChanges) {
@@ -3575,13 +3792,36 @@ export class ProductionAgent {
               );
             }
           }
+
+          // Also merge exploration summary if available
+          if (subPlan?.explorationSummary) {
+            this.pendingPlanManager.appendExplorationFinding(
+              `[${agentName}] ${subPlan.explorationSummary}`
+            );
+          }
         }
+
+        // If subagent queued changes, override output with informative message
+        // This is critical to prevent doom loops where parent doesn't understand what happened
+        const finalOutput = queuedChangeSummary
+          ? (result.response || '') + queuedChangeSummary
+          : (result.response || result.error || '');
+
+        const spawnResultFinal: SpawnResult = {
+          success: result.success,
+          output: finalOutput,
+          metrics: {
+            tokens: result.metrics.totalTokens,
+            duration,
+            toolCalls: result.metrics.toolCalls,
+          },
+        };
 
         this.emit({
           type: 'agent.complete',
           agentId: agentName,
           success: result.success,
-          output: (result.response || '').slice(0, 500),  // Include output preview
+          output: finalOutput.slice(0, 500),  // Include output preview
         });
 
         // Enhanced tracing: Record subagent completion
@@ -3613,7 +3853,15 @@ export class ProductionAgent {
 
         await subAgent.cleanup();
 
-        return spawnResult;
+        // Cache result for duplicate spawn prevention
+        // Use the same taskKey from the dedup check above
+        this.spawnedTasks.set(taskKey, {
+          timestamp: Date.now(),
+          result: finalOutput,
+          queuedChanges: queuedChangesCount,
+        });
+
+        return spawnResultFinal;
       } catch (err) {
         // Handle cancellation (user ESC or timeout) for cleaner error messages
         if (isCancellationError(err)) {
@@ -3625,6 +3873,7 @@ export class ProductionAgent {
           this.emit({ type: 'agent.error', agentId: agentName, error: reason });
 
           // Extract pending plan before cleanup (even on cancellation, preserve any queued work)
+          let cancelledQueuedSummary = '';
           if (subAgent.hasPendingPlan()) {
             const subPlan = subAgent.getPendingPlan();
             if (subPlan && subPlan.proposedChanges.length > 0) {
@@ -3633,6 +3882,23 @@ export class ProductionAgent {
                 agentId: agentName,
                 changes: subPlan.proposedChanges,
               });
+
+              // Build summary of changes that were queued before cancellation
+              const changeSummaries = subPlan.proposedChanges.map(c => {
+                if (c.tool === 'write_file' || c.tool === 'edit_file') {
+                  const path = c.args.path || c.args.file_path || '(unknown file)';
+                  return `  - [${c.tool}] ${path}: ${c.reason}`;
+                } else if (c.tool === 'bash') {
+                  const cmd = String(c.args.command || '').slice(0, 60);
+                  return `  - [bash] ${cmd}...: ${c.reason}`;
+                }
+                return `  - [${c.tool}]: ${c.reason}`;
+              });
+
+              cancelledQueuedSummary = `\n\n[PLAN MODE - CHANGES QUEUED BEFORE CANCELLATION]\n` +
+                `${subPlan.proposedChanges.length} change(s) were queued to the parent plan:\n` +
+                changeSummaries.join('\n') + '\n' +
+                `These changes are preserved in your pending plan.`;
 
               for (const change of subPlan.proposedChanges) {
                 this.pendingPlanManager.addProposedChange(
@@ -3643,6 +3909,13 @@ export class ProductionAgent {
                 );
               }
             }
+
+            // Also preserve exploration summary
+            if (subPlan?.explorationSummary) {
+              this.pendingPlanManager.appendExplorationFinding(
+                `[${agentName}] ${subPlan.explorationSummary}`
+              );
+            }
           }
 
           // Try to cleanup the subagent gracefully
@@ -3652,13 +3925,13 @@ export class ProductionAgent {
             // Ignore cleanup errors on cancellation
           }
 
-          const output = isUserCancellation
+          const baseOutput = isUserCancellation
             ? `Subagent '${agentName}' was cancelled by user.`
             : `Subagent '${agentName}' timed out after ${Math.round(subagentTimeout / 1000)}s. The task may be too complex or the model may be slow.`;
 
           return {
             success: false,
-            output,
+            output: baseOutput + cancelledQueuedSummary,
             metrics: { tokens: 0, duration, toolCalls: 0 },
           };
         }
@@ -3678,6 +3951,39 @@ export class ProductionAgent {
         metrics: { tokens: 0, duration: Date.now() - startTime, toolCalls: 0 },
       };
     }
+  }
+
+  /**
+   * Spawn multiple agents in parallel to work on independent tasks.
+   * Uses the shared blackboard for coordination and conflict prevention.
+   */
+  async spawnAgentsParallel(
+    tasks: Array<{ agent: string; task: string }>
+  ): Promise<SpawnResult[]> {
+    // Emit start event for TUI visibility
+    this.emit({
+      type: 'parallel.spawn.start',
+      count: tasks.length,
+      agents: tasks.map(t => t.agent),
+    });
+
+    // Execute all tasks in parallel
+    const promises = tasks.map(({ agent, task }) => this.spawnAgent(agent, task));
+    const results = await Promise.all(promises);
+
+    // Emit completion event
+    this.emit({
+      type: 'parallel.spawn.complete',
+      count: tasks.length,
+      successCount: results.filter(r => r.success).length,
+      results: results.map((r, i) => ({
+        agent: tasks[i].agent,
+        success: r.success,
+        tokens: r.metrics?.tokens || 0,
+      })),
+    });
+
+    return results;
   }
 
   /**
@@ -4084,6 +4390,23 @@ If the task is a simple question or doesn't need specialized handling, set bestA
       this.modeManager.setMode(parsed);
       this.emit({ type: 'mode.changed' as any, from: this.getMode(), to: parsed });
     }
+  }
+
+  /**
+   * Set the parent's iteration count for total budget tracking.
+   * When this agent is a subagent, the parent passes its iteration count
+   * so the subagent can account for total iterations across the hierarchy.
+   */
+  setParentIterations(count: number): void {
+    this.parentIterations = count;
+  }
+
+  /**
+   * Get total iterations (this agent + parent).
+   * Used for accurate budget tracking across subagent hierarchies.
+   */
+  getTotalIterations(): number {
+    return this.state.iteration + this.parentIterations;
   }
 
   /**

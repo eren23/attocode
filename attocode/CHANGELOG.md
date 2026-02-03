@@ -7,6 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.6] - 2026-02-03
+
+### Fixed
+- **Subagent iteration tracking** - Parent agents now pass their iteration count to subagents via `setParentIterations()`, preventing subagents from consuming excessive iterations when parent already used many
+- **Budget check accuracy** - All iteration limit checks now use `getTotalIterations()` which accounts for parent iterations in the subagent hierarchy
+- **Error message clarity** - Iteration limit errors now show parent context (e.g., "5 + 40 parent = 45" instead of just "5")
+
+### Already Implemented (Found During Exploration)
+- Duplicate spawn prevention with 60-second dedup window
+- Subagent pending plan merging to parent
+- Exploration summary merging
+- Enhanced plan mode system prompt with critical rules
+- Shared blackboard for parallel subagent coordination
+- `spawn_agents_parallel` tool for parallel execution
+
 ## [0.1.5] - 2026-02-01
 
 ### Fixed
@@ -139,7 +154,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Sandbox execution for bash commands (macOS Seatbelt)
 - Dangerous operation blocking in strict mode
 
-[Unreleased]: https://github.com/eren23/attocode/compare/v0.1.5...HEAD
+[Unreleased]: https://github.com/eren23/attocode/compare/v0.1.6...HEAD
+[0.1.6]: https://github.com/eren23/attocode/compare/v0.1.5...v0.1.6
 [0.1.5]: https://github.com/eren23/attocode/compare/v0.1.4...v0.1.5
 [0.1.4]: https://github.com/eren23/attocode/compare/v0.1.3...v0.1.4
 [0.1.3]: https://github.com/eren23/attocode/compare/v0.1.2...v0.1.3

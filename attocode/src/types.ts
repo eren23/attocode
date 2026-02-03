@@ -227,6 +227,15 @@ export interface ProductionAgentConfig {
    * are available without loading full schemas.
    */
   mcpToolSummaries?: Array<{ name: string; description: string }>;
+
+  /**
+   * Shared blackboard for subagent coordination.
+   * When provided, the agent will use this blackboard for finding sharing
+   * and resource claiming. Parent agents create their own; subagents inherit
+   * from their parent.
+   * @internal Used for subagent spawning
+   */
+  blackboard?: unknown; // SharedBlackboard - using unknown to avoid circular import
 }
 
 // =============================================================================
@@ -339,6 +348,12 @@ export interface MemoryConfig {
 
   /** Persistence path */
   persistPath?: string;
+
+  /** Maximum episodic memory entries before eviction (default: 1000) */
+  maxEpisodicEntries?: number;
+
+  /** Maximum semantic memory entries before eviction (default: 500) */
+  maxSemanticEntries?: number;
 }
 
 /**
@@ -1164,6 +1179,9 @@ export type AgentEvent =
   | { type: 'context.health'; currentTokens: number; maxTokens: number; estimatedExchanges: number; percentUsed: number }
   // Subagent visibility events (Phase 5)
   | { type: 'subagent.iteration'; agentId: string; iteration: number; maxIterations: number }
-  | { type: 'subagent.phase'; agentId: string; phase: 'exploring' | 'planning' | 'executing' | 'completing' };
+  | { type: 'subagent.phase'; agentId: string; phase: 'exploring' | 'planning' | 'executing' | 'completing' }
+  // Parallel subagent events
+  | { type: 'parallel.spawn.start'; count: number; agents: string[] }
+  | { type: 'parallel.spawn.complete'; count: number; successCount: number; results: Array<{ agent: string; success: boolean; tokens: number }> };
 
 export type AgentEventListener = (event: AgentEvent) => void;

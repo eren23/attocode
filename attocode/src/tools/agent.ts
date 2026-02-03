@@ -139,3 +139,150 @@ export function createBoundSpawnAgentTool(spawnFn: SpawnFunction): ToolDefinitio
     },
   };
 }
+
+// =============================================================================
+// PARALLEL SPAWN TOOL
+// =============================================================================
+
+/**
+ * Input type for spawn_agents_parallel tool.
+ */
+export interface SpawnAgentsParallelInput {
+  tasks: Array<{
+    agent: string;
+    task: string;
+  }>;
+}
+
+/**
+ * Type for the parallel spawn function.
+ */
+export type ParallelSpawnFunction = (
+  tasks: Array<{ agent: string; task: string }>
+) => Promise<SpawnResult[]>;
+
+/**
+ * JSON Schema parameters for the spawn_agents_parallel tool.
+ */
+const spawnAgentsParallelParameters: Record<string, unknown> = {
+  type: 'object',
+  properties: {
+    tasks: {
+      type: 'array',
+      description: 'Array of tasks to execute in parallel',
+      items: {
+        type: 'object',
+        properties: {
+          agent: {
+            type: 'string',
+            description: 'The specialized agent to spawn (researcher, coder, reviewer, etc.)',
+          },
+          task: {
+            type: 'string',
+            description: 'The specific task for this agent to complete',
+          },
+        },
+        required: ['agent', 'task'],
+      },
+      minItems: 2,
+      maxItems: 5,
+    },
+  },
+  required: ['tasks'],
+};
+
+/**
+ * Description for the spawn_agents_parallel tool.
+ */
+const SPAWN_AGENTS_PARALLEL_DESCRIPTION = `Spawn multiple subagents to work on independent tasks in parallel.
+
+Use this when you have 2+ tasks that:
+- Are independent (don't depend on each other's results)
+- Can benefit from parallel execution
+- Each require different specializations or focus areas
+
+Example use cases:
+- Research two different parts of a codebase simultaneously
+- Create multiple files at once (with different agents)
+- Run code review while implementing related changes
+
+The agents share a coordination blackboard to:
+- Avoid duplicate work
+- Prevent file edit conflicts
+- Share discoveries across agents
+
+Returns results from all agents once they complete.`;
+
+/**
+ * Create a spawn_agents_parallel tool bound to a specific agent's parallel spawn method.
+ */
+export function createBoundSpawnAgentsParallelTool(
+  parallelSpawnFn: ParallelSpawnFunction
+): ToolDefinition {
+  return {
+    name: 'spawn_agents_parallel',
+    description: SPAWN_AGENTS_PARALLEL_DESCRIPTION,
+    parameters: spawnAgentsParallelParameters,
+    dangerLevel: 'moderate',
+    execute: async (args: Record<string, unknown>) => {
+      const input = args as unknown as SpawnAgentsParallelInput;
+
+      // Validate tasks array
+      if (!Array.isArray(input.tasks) || input.tasks.length < 2) {
+        return {
+          success: false,
+          output: 'At least 2 tasks are required for parallel execution. Use spawn_agent for single tasks.',
+        };
+      }
+
+      if (input.tasks.length > 5) {
+        return {
+          success: false,
+          output: 'Maximum 5 parallel tasks allowed. Split into batches if needed.',
+        };
+      }
+
+      // Validate each task
+      for (const task of input.tasks) {
+        if (!task.agent || typeof task.agent !== 'string') {
+          return {
+            success: false,
+            output: 'Each task must have an agent name',
+          };
+        }
+        if (!task.task || typeof task.task !== 'string') {
+          return {
+            success: false,
+            output: 'Each task must have a task description',
+          };
+        }
+      }
+
+      const results = await parallelSpawnFn(input.tasks);
+
+      // Aggregate results
+      const successCount = results.filter(r => r.success).length;
+      const totalTokens = results.reduce((sum, r) => sum + (r.metrics?.tokens || 0), 0);
+      const totalDuration = Math.max(...results.map(r => r.metrics?.duration || 0));
+
+      const outputs = results.map((r, i) => {
+        const task = input.tasks[i];
+        return `## ${task.agent} (${r.success ? '✓' : '✗'})\n${r.output}`;
+      }).join('\n\n');
+
+      return {
+        success: successCount === results.length,
+        output: `Parallel execution complete: ${successCount}/${results.length} succeeded\n\n${outputs}`,
+        metadata: {
+          tasks: input.tasks,
+          results: results.map(r => ({ success: r.success, metrics: r.metrics })),
+          aggregateMetrics: {
+            totalTokens,
+            wallClockDuration: totalDuration,
+            successRate: successCount / results.length,
+          },
+        },
+      };
+    },
+  };
+}
