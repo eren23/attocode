@@ -24,3 +24,6 @@ export { FileChangeSummary } from './FileChangeSummary.js';
 
 // Syntax highlighting component
 export { SyntaxText, MemoizedSyntaxText, SyntaxLine, MemoizedSyntaxLine, type SyntaxTextProps, type SyntaxLineProps } from './SyntaxText.js';
+
+// Error boundaries
+export { TUIErrorBoundary, ErrorFallback, withErrorBoundary } from './ErrorBoundary.js';

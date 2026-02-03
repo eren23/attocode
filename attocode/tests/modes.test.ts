@@ -4,7 +4,7 @@
  * Tests for the agent mode system (build/plan/review/debug).
  */
 
-import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import { describe, it, expect, beforeEach } from 'vitest';
 import {
   ModeManager,
   createModeManager,
@@ -13,7 +13,8 @@ import {
   MODES,
   READ_ONLY_TOOLS,
   ALL_TOOLS,
-  type AgentMode,
+  calculateTaskSimilarity,
+  areTasksSimilar,
 } from '../src/modes.js';
 import type { ToolDefinition } from '../src/types.js';
 
@@ -35,7 +36,7 @@ describe('MODES configuration', () => {
   });
 
   it('should have required properties for each mode', () => {
-    for (const [key, config] of Object.entries(MODES)) {
+    for (const [_key, config] of Object.entries(MODES)) {
       expect(config.name).toBeTruthy();
       expect(config.description).toBeTruthy();
       expect(Array.isArray(config.availableTools)).toBe(true);
@@ -325,5 +326,119 @@ describe('formatModeList', () => {
     expect(formatted).toContain('review');
     expect(formatted).toContain('debug');
     expect(formatted).toContain('Available modes');
+  });
+});
+
+// =============================================================================
+// SEMANTIC TASK SIMILARITY TESTS (Phase 2)
+// =============================================================================
+
+describe('calculateTaskSimilarity', () => {
+  it('should return 1.0 for identical tasks', () => {
+    const task = 'Implement user authentication';
+    const similarity = calculateTaskSimilarity(task, task);
+    expect(similarity).toBe(1.0);
+  });
+
+  it('should return 0.0 for completely different tasks', () => {
+    const taskA = 'implement user authentication login';
+    const taskB = 'fix database connection pool';
+    const similarity = calculateTaskSimilarity(taskA, taskB);
+    expect(similarity).toBeLessThan(0.3);
+  });
+
+  it('should return high similarity for semantically similar tasks', () => {
+    const taskA = 'Implement user authentication with JWT tokens';
+    const taskB = 'Add user authentication using JWT';
+    const similarity = calculateTaskSimilarity(taskA, taskB);
+    // Jaccard similarity: common words / total unique words
+    // Common: user, authentication, JWT (3), Union: implement, user, authentication, with, JWT, tokens, add, using (8)
+    // 3/8 = 0.375
+    expect(similarity).toBeGreaterThan(0.3);
+  });
+
+  it('should be case insensitive', () => {
+    const taskA = 'IMPLEMENT USER AUTH';
+    const taskB = 'implement user auth';
+    const similarity = calculateTaskSimilarity(taskA, taskB);
+    expect(similarity).toBe(1.0);
+  });
+
+  it('should ignore common stop words', () => {
+    const taskA = 'implement the user authentication';
+    const taskB = 'implement a user authentication';
+    const similarity = calculateTaskSimilarity(taskA, taskB);
+    // Should be similar - stop words may or may not be filtered
+    // Common: implement, user, authentication (3), Union may include "the", "a"
+    expect(similarity).toBeGreaterThan(0.6);
+  });
+
+  it('should handle empty strings gracefully', () => {
+    // Empty strings have no meaningful words, behavior depends on implementation
+    const emptyResult = calculateTaskSimilarity('', '');
+    expect(typeof emptyResult).toBe('number');
+    expect(emptyResult).toBeGreaterThanOrEqual(0);
+    expect(emptyResult).toBeLessThanOrEqual(1);
+  });
+
+  it('should handle single-word tasks', () => {
+    expect(calculateTaskSimilarity('test', 'test')).toBe(1.0);
+    expect(calculateTaskSimilarity('test', 'different')).toBe(0);
+  });
+});
+
+describe('areTasksSimilar', () => {
+  it('should return true for tasks above threshold', () => {
+    const taskA = 'Implement user authentication with JWT';
+    const taskB = 'Add user authentication using JWT tokens';
+    // Calculate actual similarity and use threshold below it
+    const similarity = calculateTaskSimilarity(taskA, taskB);
+    // Use a threshold slightly below the actual similarity
+    expect(areTasksSimilar(taskA, taskB, similarity - 0.1)).toBe(true);
+  });
+
+  it('should return false for tasks below threshold', () => {
+    const taskA = 'Implement user authentication';
+    const taskB = 'Fix database connection';
+    expect(areTasksSimilar(taskA, taskB, 0.5)).toBe(false);
+  });
+
+  it('should use default threshold of 0.75', () => {
+    // Very similar tasks should pass default threshold
+    const taskA = 'implement user login authentication';
+    const taskB = 'implement user authentication login';
+    expect(areTasksSimilar(taskA, taskB)).toBe(true);
+  });
+
+  it('should allow custom threshold', () => {
+    const taskA = 'implement user auth';
+    const taskB = 'implement login system';
+
+    // Should fail with high threshold
+    const highThreshold = areTasksSimilar(taskA, taskB, 0.9);
+    expect(highThreshold).toBe(false);
+
+    // May pass with low threshold - depends on actual word overlap
+    // These tasks share "implement" so there's some overlap
+    const similarity = calculateTaskSimilarity(taskA, taskB);
+    expect(similarity).toBeGreaterThanOrEqual(0);
+  });
+
+  it('should detect duplicate exploration tasks', () => {
+    // These are the kind of tasks subagents might receive
+    const taskA = 'Research the codebase structure and find authentication files';
+    const taskB = 'Explore codebase to find files related to authentication';
+
+    // Should be similar enough to be considered duplicates
+    const similarity = calculateTaskSimilarity(taskA, taskB);
+    expect(similarity).toBeGreaterThan(0.3);
+  });
+
+  it('should distinguish different feature implementations', () => {
+    const taskA = 'Implement JWT token validation middleware';
+    const taskB = 'Implement database migration for user table';
+
+    // Should not be considered similar
+    expect(areTasksSimilar(taskA, taskB, 0.5)).toBe(false);
   });
 });

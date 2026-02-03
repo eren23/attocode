@@ -516,6 +516,76 @@ export function createModeManager(tools?: ToolDefinition[]): ModeManager {
 }
 
 /**
+ * Subagent-specific plan mode prompt addition.
+ *
+ * This is a SHORTER version of the plan mode prompt specifically for subagents.
+ * It removes parent-only sections (like "SUBAGENT BEHAVIOR" which tells the parent
+ * how to manage subagents - irrelevant when you ARE the subagent).
+ *
+ * Key differences from parent plan mode prompt:
+ * - No "SUBAGENT BEHAVIOR" section (subagents don't spawn more subagents)
+ * - Focused on immediate task completion
+ * - Clearer about what happens to queued writes
+ */
+export const SUBAGENT_PLAN_MODE_ADDITION = `
+You are a SUBAGENT operating in PLAN MODE.
+
+**YOUR TASK:**
+- Complete the specific task you were given
+- Your writes are queued to the PARENT's pending plan
+- Once you queue a change, your task for that file is DONE
+
+**RULES:**
+1. When you see "Change queued for approval", the change is in the parent's plan - DO NOT retry
+2. You CANNOT verify queued files (they don't exist yet)
+3. Focus on your assigned task only - don't explore beyond scope
+4. Report your findings clearly so the parent knows what you did
+
+**READ THE BLACKBOARD:**
+If context was provided from the parent or sibling agents, use it to avoid duplicate work.
+`;
+
+/**
+ * Calculate task similarity using Jaccard index.
+ * Returns a value between 0 and 1, where 1 means identical.
+ */
+export function calculateTaskSimilarity(taskA: string, taskB: string): number {
+  // Normalize both tasks
+  const normalize = (s: string): Set<string> => {
+    const words = s
+      .toLowerCase()
+      .replace(/[^a-z0-9\s]/g, ' ')  // Remove punctuation
+      .split(/\s+/)
+      .filter(w => w.length > 2);     // Filter short words
+    return new Set(words);
+  };
+
+  const wordsA = normalize(taskA);
+  const wordsB = normalize(taskB);
+
+  if (wordsA.size === 0 && wordsB.size === 0) return 1;
+  if (wordsA.size === 0 || wordsB.size === 0) return 0;
+
+  // Calculate Jaccard index: |intersection| / |union|
+  const intersection = new Set([...wordsA].filter(x => wordsB.has(x)));
+  const union = new Set([...wordsA, ...wordsB]);
+
+  return intersection.size / union.size;
+}
+
+/**
+ * Check if two tasks are semantically similar.
+ * Uses Jaccard similarity with a default threshold of 0.75 (75%).
+ */
+export function areTasksSimilar(
+  taskA: string,
+  taskB: string,
+  threshold: number = 0.75
+): boolean {
+  return calculateTaskSimilarity(taskA, taskB) >= threshold;
+}
+
+/**
  * Format all modes for display.
  */
 export function formatModeList(): string {

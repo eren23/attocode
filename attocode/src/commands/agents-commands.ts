@@ -42,6 +42,18 @@ function c(text: string, color: keyof typeof colors): string {
   return `${colors[color]}${text}${colors.reset}`;
 }
 
+/**
+ * Safely extract description as string.
+ * Handles undefined, null, arrays, objects, and other non-string types.
+ * This is necessary because YAML parsing may produce non-string values.
+ */
+function safeDescription(desc: unknown): string {
+  if (typeof desc === 'string') return desc;
+  if (desc == null) return '';
+  if (Array.isArray(desc)) return desc.join(' ');
+  return String(desc);
+}
+
 // =============================================================================
 // MODEL DISPLAY HELPERS
 // =============================================================================
@@ -94,7 +106,7 @@ ${c('Agent Locations:', 'dim')}
 
     for (const agent of builtIn) {
       const model = formatModel(agent.model);
-      const desc = agent.description.split('.')[0].slice(0, 40);
+      const desc = safeDescription(agent.description).split('.')[0].slice(0, 40);
       lines.push(`    ${c(agent.name.padEnd(14), 'cyan')} ${desc.padEnd(42)} ${model}`);
     }
     lines.push('');
@@ -109,7 +121,7 @@ ${c('Agent Locations:', 'dim')}
     for (const agent of userDefined) {
       const model = formatModel(agent.model);
       const location = getAgentLocationDisplay(agent);
-      const desc = agent.description.split('.')[0].slice(0, 35);
+      const desc = safeDescription(agent.description).split('.')[0].slice(0, 35);
       lines.push(`    ${c(agent.name.padEnd(14), 'yellow')} ${desc.padEnd(37)} ${model}`);
       lines.push(`    ${c(' '.repeat(14), 'dim')} ${c(`Source: ${location}`, 'dim')}`);
     }
@@ -124,7 +136,7 @@ ${c('Agent Locations:', 'dim')}
 
     for (const agent of legacy) {
       const model = formatModel(agent.model);
-      const desc = agent.description.split('.')[0].slice(0, 40);
+      const desc = safeDescription(agent.description).split('.')[0].slice(0, 40);
       lines.push(`    ${c(agent.name.padEnd(14), 'dim')} ${desc.padEnd(42)} ${model}`);
     }
     lines.push('');
@@ -149,7 +161,7 @@ export function formatAgentInfo(agent: LoadedAgent): string {
   lines.push(`${c(`Agent: ${agent.name}`, 'bold')}`);
   lines.push(c('─'.repeat(60), 'dim'));
 
-  lines.push(`  ${c('Description:', 'cyan').padEnd(20)} ${agent.description}`);
+  lines.push(`  ${c('Description:', 'cyan').padEnd(20)} ${safeDescription(agent.description) || 'No description'}`);
   lines.push(`  ${c('Source:', 'cyan').padEnd(20)} ${getAgentLocationDisplay(agent)}`);
 
   if (agent.filePath) {

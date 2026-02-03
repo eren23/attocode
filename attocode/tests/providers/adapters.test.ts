@@ -430,6 +430,325 @@ describe('OpenAIProvider', () => {
       expect(body.max_tokens).toBe(100);
     });
   });
+
+  describe('chatWithTools', () => {
+    it('should send tool definitions in OpenAI format', async () => {
+      const mockResponse = {
+        id: 'chatcmpl-123',
+        object: 'chat.completion',
+        choices: [
+          {
+            index: 0,
+            message: {
+              role: 'assistant',
+              content: null,
+              tool_calls: [
+                {
+                  id: 'call_abc123',
+                  type: 'function',
+                  function: {
+                    name: 'read_file',
+                    arguments: '{"path":"/src/main.ts"}',
+                  },
+                },
+              ],
+            },
+            finish_reason: 'tool_calls',
+          },
+        ],
+        usage: {
+          prompt_tokens: 50,
+          completion_tokens: 20,
+          total_tokens: 70,
+        },
+      };
+
+      const mockFetchFn = mockFetch(mockResponse);
+      globalThis.fetch = mockFetchFn;
+
+      const provider = new OpenAIProvider();
+
+      const tools: ToolDefinitionSchema[] = [
+        {
+          type: 'function',
+          function: {
+            name: 'read_file',
+            description: 'Read file contents',
+            parameters: {
+              type: 'object',
+              properties: {
+                path: { type: 'string', description: 'File path' },
+              },
+              required: ['path'],
+            },
+          },
+        },
+      ];
+
+      const response = await provider.chatWithTools(
+        [{ role: 'user', content: 'Read the file /src/main.ts' }],
+        { tools }
+      );
+
+      // Should return tool calls
+      expect(response.toolCalls).toBeDefined();
+      expect(response.toolCalls).toHaveLength(1);
+      expect(response.toolCalls![0].id).toBe('call_abc123');
+      expect(response.toolCalls![0].function.name).toBe('read_file');
+      expect(JSON.parse(response.toolCalls![0].function.arguments)).toEqual({ path: '/src/main.ts' });
+
+      // Verify request includes tools
+      const callArgs = mockFetchFn.mock.calls[0];
+      const body = JSON.parse(callArgs[1].body);
+      expect(body.tools).toBeDefined();
+      expect(body.tools).toHaveLength(1);
+      expect(body.tools[0].type).toBe('function');
+      expect(body.tools[0].function.name).toBe('read_file');
+    });
+
+    it('should handle response without tool calls', async () => {
+      const mockResponse = {
+        id: 'chatcmpl-456',
+        choices: [
+          {
+            index: 0,
+            message: {
+              role: 'assistant',
+              content: 'The file does not exist.',
+            },
+            finish_reason: 'stop',
+          },
+        ],
+        usage: { prompt_tokens: 20, completion_tokens: 10, total_tokens: 30 },
+      };
+
+      globalThis.fetch = mockFetch(mockResponse);
+
+      const provider = new OpenAIProvider();
+
+      const tools: ToolDefinitionSchema[] = [
+        {
+          type: 'function',
+          function: {
+            name: 'read_file',
+            description: 'Read a file',
+            parameters: { type: 'object', properties: {} },
+          },
+        },
+      ];
+
+      const response = await provider.chatWithTools(
+        [{ role: 'user', content: 'What is in file X?' }],
+        { tools }
+      );
+
+      expect(response.content).toBe('The file does not exist.');
+      expect(response.toolCalls).toBeUndefined();
+    });
+
+    it('should handle tool result messages correctly', async () => {
+      const mockResponse = {
+        id: 'chatcmpl-789',
+        choices: [
+          {
+            message: { role: 'assistant', content: 'The file contains a main function.' },
+            finish_reason: 'stop',
+          },
+        ],
+        usage: { prompt_tokens: 100, completion_tokens: 20, total_tokens: 120 },
+      };
+
+      const mockFetchFn = mockFetch(mockResponse);
+      globalThis.fetch = mockFetchFn;
+
+      const provider = new OpenAIProvider();
+
+      // Send conversation with tool result
+      const response = await provider.chatWithTools([
+        { role: 'user', content: 'Read main.ts' },
+        {
+          role: 'assistant',
+          content: '',
+          tool_calls: [
+            {
+              id: 'call_xyz789',
+              type: 'function' as const,
+              function: { name: 'read_file', arguments: '{"path":"main.ts"}' },
+            },
+          ],
+        },
+        {
+          role: 'tool',
+          content: 'function main() { console.log("hello"); }',
+          tool_call_id: 'call_xyz789',
+          name: 'read_file',
+        },
+      ]);
+
+      expect(response.content).toBe('The file contains a main function.');
+
+      // Verify the tool result message was formatted correctly
+      const callArgs = mockFetchFn.mock.calls[0];
+      const body = JSON.parse(callArgs[1].body);
+      expect(body.messages).toHaveLength(3);
+
+      // Tool result message
+      const toolMsg = body.messages[2];
+      expect(toolMsg.role).toBe('tool');
+      expect(toolMsg.tool_call_id).toBe('call_xyz789');
+      expect(toolMsg.content).toBe('function main() { console.log("hello"); }');
+    });
+
+    it('should convert tool_choice options correctly', async () => {
+      const mockResponse = {
+        id: 'chatcmpl-choice',
+        choices: [
+          {
+            message: { role: 'assistant', content: 'Forced tool use' },
+            finish_reason: 'stop',
+          },
+        ],
+        usage: { prompt_tokens: 30, completion_tokens: 10, total_tokens: 40 },
+      };
+
+      const mockFetchFn = mockFetch(mockResponse);
+      globalThis.fetch = mockFetchFn;
+
+      const provider = new OpenAIProvider();
+
+      const tools: ToolDefinitionSchema[] = [
+        {
+          type: 'function',
+          function: {
+            name: 'specific_tool',
+            description: 'A specific tool',
+            parameters: { type: 'object', properties: {} },
+          },
+        },
+      ];
+
+      // Test 'required' tool_choice
+      await provider.chatWithTools(
+        [{ role: 'user', content: 'Test' }],
+        { tools, tool_choice: 'required' }
+      );
+
+      let callArgs = mockFetchFn.mock.calls[0];
+      let body = JSON.parse(callArgs[1].body);
+      expect(body.tool_choice).toBe('required');
+
+      // Test specific function tool_choice
+      await provider.chatWithTools(
+        [{ role: 'user', content: 'Test' }],
+        { tools, tool_choice: { type: 'function', function: { name: 'specific_tool' } } }
+      );
+
+      callArgs = mockFetchFn.mock.calls[1];
+      body = JSON.parse(callArgs[1].body);
+      expect(body.tool_choice).toEqual({ type: 'function', function: { name: 'specific_tool' } });
+    });
+
+    it('should handle multiple tool calls in response', async () => {
+      const mockResponse = {
+        id: 'chatcmpl-multi',
+        choices: [
+          {
+            message: {
+              role: 'assistant',
+              content: null,
+              tool_calls: [
+                {
+                  id: 'call_1',
+                  type: 'function',
+                  function: { name: 'read_file', arguments: '{"path":"a.ts"}' },
+                },
+                {
+                  id: 'call_2',
+                  type: 'function',
+                  function: { name: 'read_file', arguments: '{"path":"b.ts"}' },
+                },
+              ],
+            },
+            finish_reason: 'tool_calls',
+          },
+        ],
+        usage: { prompt_tokens: 50, completion_tokens: 30, total_tokens: 80 },
+      };
+
+      globalThis.fetch = mockFetch(mockResponse);
+
+      const provider = new OpenAIProvider();
+
+      const response = await provider.chatWithTools(
+        [{ role: 'user', content: 'Read both files' }],
+        {
+          tools: [
+            {
+              type: 'function',
+              function: {
+                name: 'read_file',
+                description: 'Read file',
+                parameters: { type: 'object', properties: {} },
+              },
+            },
+          ],
+        }
+      );
+
+      expect(response.toolCalls).toHaveLength(2);
+      expect(response.toolCalls![0].id).toBe('call_1');
+      expect(response.toolCalls![1].id).toBe('call_2');
+    });
+  });
+
+  describe('error handling', () => {
+    it('should throw ProviderError on API error', async () => {
+      globalThis.fetch = mockFetch({ error: 'Bad request' }, { status: 400, ok: false });
+
+      const provider = new OpenAIProvider();
+
+      await expect(
+        provider.chat([{ role: 'user', content: 'Hello' }])
+      ).rejects.toThrow(ProviderError);
+    });
+
+    it('should identify context length errors', async () => {
+      globalThis.fetch = mockFetch(
+        { error: { message: 'maximum context length exceeded' } },
+        { status: 400, ok: false }
+      );
+
+      const provider = new OpenAIProvider();
+
+      try {
+        await provider.chat([{ role: 'user', content: 'Hello' }]);
+        expect.fail('Should have thrown');
+      } catch (err) {
+        expect(err).toBeInstanceOf(ProviderError);
+        expect((err as ProviderError).code).toBe('CONTEXT_LENGTH_EXCEEDED');
+      }
+    });
+
+    // Note: Rate limit (429) tests are difficult because resilientFetch retries automatically
+    // The retry mechanism is tested separately in the resilient-fetch tests
+
+    it('should identify authentication errors', async () => {
+      globalThis.fetch = mockFetch(
+        { error: 'Invalid API key' },
+        { status: 401, ok: false }
+      );
+
+      const provider = new OpenAIProvider();
+
+      try {
+        await provider.chat([{ role: 'user', content: 'Hello' }]);
+        expect.fail('Should have thrown');
+      } catch (err) {
+        expect(err).toBeInstanceOf(ProviderError);
+        expect((err as ProviderError).code).toBe('AUTHENTICATION_FAILED');
+      }
+    });
+  });
 });
 
 // =============================================================================

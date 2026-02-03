@@ -331,6 +331,53 @@ npx tsx bin/trace-viewer.ts compare <baseline.jsonl> <comparison.jsonl>
 
 See [docs/tracing-guide.md](docs/tracing-guide.md) for the complete tracing documentation.
 
+## Architecture
+
+Attocode follows a modular architecture:
+
+```
+┌─────────────────────────────────────────────────────┐
+│                    Entry Point                       │
+│                 src/main.ts (CLI + TUI)              │
+└─────────────────────────────────────────────────────┘
+                          │
+                          ▼
+┌─────────────────────────────────────────────────────┐
+│                  ProductionAgent                     │
+│  ┌─────────────┐ ┌─────────────┐ ┌───────────────┐  │
+│  │   Hooks     │ │   Memory    │ │   Planning    │  │
+│  └─────────────┘ └─────────────┘ └───────────────┘  │
+│  ┌─────────────┐ ┌─────────────┐ ┌───────────────┐  │
+│  │   Safety    │ │  Economics  │ │Context Engine │  │
+│  └─────────────┘ └─────────────┘ └───────────────┘  │
+└─────────────────────────────────────────────────────┘
+        │                  │                  │
+        ▼                  ▼                  ▼
+┌──────────────┐   ┌──────────────┐   ┌──────────────┐
+│ LLM Providers│   │ Tool Registry│   │ Integrations │
+│ - Anthropic  │   │ - File Ops   │   │ - Sessions   │
+│ - OpenRouter │   │ - Bash       │   │ - MCP Client │
+│ - OpenAI     │   │ - Search     │   │ - Compaction │
+└──────────────┘   └──────────────┘   └──────────────┘
+```
+
+See [docs/architecture.md](docs/architecture.md) for the complete architecture documentation.
+
+## Documentation
+
+| Document | Description |
+|----------|-------------|
+| [Architecture](docs/architecture.md) | System design and data flow |
+| [API Reference](docs/api-reference.md) | Core interfaces and types |
+| [Extending](docs/extending.md) | Adding providers, tools, integrations |
+| [Skills & Agents](docs/skills-and-agents-guide.md) | Custom skills and agents |
+| [Tracing](docs/tracing-guide.md) | Performance analysis |
+| [Troubleshooting](docs/troubleshooting.md) | Common issues and solutions |
+
+## Contributing
+
+See [CONTRIBUTING.md](CONTRIBUTING.md) for development setup and guidelines.
+
 ## Uninstall
 
 ```bash

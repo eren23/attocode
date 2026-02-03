@@ -248,6 +248,22 @@ export interface TUIApprovalBridge {
 }
 
 /**
+ * Configuration for the TUI approval bridge.
+ */
+export interface TUIApprovalBridgeConfig {
+  /**
+   * Timeout for approval requests in milliseconds.
+   * If an approval is not resolved within this time, it will be automatically denied.
+   * Default: 120000 (2 minutes)
+   */
+  timeout?: number;
+  /**
+   * Callback when a timeout occurs, for logging/telemetry.
+   */
+  onTimeout?: (request: ApprovalRequest) => void;
+}
+
+/**
  * Creates a TUI approval bridge that enables communication between
  * the agent's human-in-loop system and the TUI's approval dialog.
  *
@@ -258,11 +274,27 @@ export interface TUIApprovalBridge {
  * 4. TUIApp calls bridge.connect() with its callbacks on mount
  * 5. When approval is needed, bridge calls onRequest callback
  * 6. TUIApp shows dialog, user responds, TUIApp calls bridge.resolve()
+ *
+ * Safety features:
+ * - 2-minute timeout (configurable) - prevents agent from hanging if TUI crashes
+ * - Timeout results in denial (fail-safe default)
+ * - Logs timeout events for debugging
  */
-export function createTUIApprovalBridge(): TUIApprovalBridge {
+export function createTUIApprovalBridge(config: TUIApprovalBridgeConfig = {}): TUIApprovalBridge {
+  const DEFAULT_TIMEOUT_MS = 120000; // 2 minutes
+  const timeoutMs = config.timeout ?? DEFAULT_TIMEOUT_MS;
+
   let pendingResolve: ((response: ApprovalResponse) => void) | null = null;
+  let pendingTimeoutId: ReturnType<typeof setTimeout> | null = null;
   let onRequestCallback: ((request: ApprovalRequest) => void) | null = null;
   let connected = false;
+
+  const clearPendingTimeout = () => {
+    if (pendingTimeoutId) {
+      clearTimeout(pendingTimeoutId);
+      pendingTimeoutId = null;
+    }
+  };
 
   const handler = async (request: ApprovalRequest): Promise<ApprovalResponse> => {
     return new Promise((resolve) => {
@@ -271,6 +303,20 @@ export function createTUIApprovalBridge(): TUIApprovalBridge {
       if (onRequestCallback && connected) {
         // TUI is connected, show dialog
         onRequestCallback(request);
+
+        // Set up timeout - deny if not resolved within the timeout period
+        pendingTimeoutId = setTimeout(() => {
+          if (pendingResolve) {
+            console.warn(`[TUI Approval] Timeout after ${timeoutMs}ms - denying operation for safety`);
+            config.onTimeout?.(request);
+            pendingResolve({
+              approved: false,
+              reason: `Approval timed out after ${Math.round(timeoutMs / 1000)}s - operation denied for safety`,
+            });
+            pendingResolve = null;
+            pendingTimeoutId = null;
+          }
+        }, timeoutMs);
       } else {
         // TUI not connected yet - BLOCK dangerous operations instead of auto-approving
         // This is a safety fallback to prevent operations when the approval system isn't ready
@@ -287,6 +333,7 @@ export function createTUIApprovalBridge(): TUIApprovalBridge {
   };
 
   const resolve = (response: ApprovalResponse) => {
+    clearPendingTimeout();
     if (pendingResolve) {
       pendingResolve(response);
       pendingResolve = null;
