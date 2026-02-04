@@ -1481,7 +1481,7 @@ ${c('Test it:', 'dim')}
       const traceCollector = agent.getTraceCollector();
 
       if (args.length === 0) {
-        // Show current session trace summary
+        // Show current session trace summary with subagent hierarchy
         if (!traceCollector) {
           output.log(c('Tracing is not enabled. Start agent with --trace to enable.', 'yellow'));
           break;
@@ -1493,7 +1493,49 @@ ${c('Test it:', 'dim')}
           break;
         }
 
-        output.log(`
+        // Get subagent hierarchy from JSONL file
+        const hierarchy = await traceCollector.getSubagentHierarchy();
+
+        if (hierarchy && hierarchy.subagents.length > 0) {
+          // Show hierarchy view with subagents
+          output.log(`
+${c('Trace Summary:', 'bold')}
+  Session ID:    ${data.sessionId}
+  Status:        ${data.status}
+  Duration:      ${data.durationMs ? `${Math.round(data.durationMs / 1000)}s` : 'ongoing'}
+
+${c('Main Agent:', 'bold')}
+  Iterations:    ${hierarchy.mainAgent.llmCalls}
+  Input tokens:  ${hierarchy.mainAgent.inputTokens.toLocaleString()}
+  Output tokens: ${hierarchy.mainAgent.outputTokens.toLocaleString()}
+  Tool calls:    ${hierarchy.mainAgent.toolCalls}
+
+${c('Subagent Tree:', 'bold')}`);
+
+          // Sort subagents by spawn time
+          const sortedSubagents = hierarchy.subagents.sort((a, b) =>
+            (a.spawnedAtIteration || 0) - (b.spawnedAtIteration || 0)
+          );
+
+          for (const sub of sortedSubagents) {
+            const durationSec = Math.round(sub.duration / 1000);
+            output.log(`  └─ ${c(sub.agentId, 'cyan')} (spawned iter ${sub.spawnedAtIteration || '?'})`);
+            output.log(`     ├─ ${sub.inputTokens.toLocaleString()} in / ${sub.outputTokens.toLocaleString()} out tokens`);
+            output.log(`     ├─ ${sub.toolCalls} tools | ${durationSec}s`);
+          }
+
+          output.log(`
+${c('TOTALS (all agents):', 'bold')}
+  Input tokens:  ${hierarchy.totals.inputTokens.toLocaleString()}
+  Output tokens: ${hierarchy.totals.outputTokens.toLocaleString()}
+  Tool calls:    ${hierarchy.totals.toolCalls}
+  LLM calls:     ${hierarchy.totals.llmCalls}
+  Est. Cost:     $${hierarchy.totals.estimatedCost.toFixed(4)}
+  Duration:      ${Math.round(hierarchy.totals.duration / 1000)}s
+`);
+        } else {
+          // Original simple view (no subagents)
+          output.log(`
 ${c('Trace Summary:', 'bold')}
   Session ID:    ${data.sessionId}
   Status:        ${data.status}
@@ -1507,10 +1549,11 @@ ${c('Metrics:', 'bold')}
   Tool calls:    ${data.metrics.toolCalls}
   Errors:        ${data.metrics.errors}
   Est. Cost:     $${data.metrics.estimatedCost.toFixed(4)}
-
-${c('Use:', 'dim')} /trace --analyze for efficiency analysis
-${c('     ', 'dim')} /trace issues to see detected inefficiencies
 `);
+        }
+
+        output.log(`${c('Use:', 'dim')} /trace --analyze for efficiency analysis
+${c('     ', 'dim')} /trace issues to see detected inefficiencies`);
       } else if (args[0] === '--analyze' || args[0] === 'analyze') {
         // Run efficiency analysis
         if (!traceCollector) {

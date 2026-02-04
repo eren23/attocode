@@ -2774,6 +2774,14 @@ export class ProductionAgent {
   }
 
   /**
+   * Set a trace collector for this agent.
+   * Used for subagents to share the parent's trace collector (with subagent context).
+   */
+  setTraceCollector(collector: TraceCollector): void {
+    this.traceCollector = collector;
+  }
+
+  /**
    * Get the learning store for cross-session learning.
    * Returns null if learning store is not enabled.
    */
@@ -3871,6 +3879,18 @@ export class ProductionAgent {
       // Pass parent's iteration count to subagent for accurate budget tracking
       // This prevents subagents from consuming excessive iterations when parent already used many
       subAgent.setParentIterations(this.getTotalIterations());
+
+      // UNIFIED TRACING: Share parent's trace collector with subagent context
+      // This ensures all subagent events are written to the same trace file as the parent,
+      // tagged with subagent context for proper aggregation in /trace output
+      if (this.traceCollector) {
+        const subagentTraceView = this.traceCollector.createSubagentView({
+          parentSessionId: this.traceCollector.getSessionId() || 'unknown',
+          agentType: agentName,
+          spawnedAtIteration: this.state.iteration,
+        });
+        subAgent.setTraceCollector(subagentTraceView);
+      }
 
       // Forward events from subagent with context
       subAgent.subscribe(event => {

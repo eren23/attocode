@@ -1547,7 +1547,7 @@ export function TUIApp({
         const traceCollector = agent.getTraceCollector();
 
         if (args.length === 0) {
-          // Show current session trace summary
+          // Show current session trace summary with subagent hierarchy
           if (!traceCollector) {
             addMessage('system', 'Tracing is not enabled. Start agent with --trace to enable.');
             return;
@@ -1559,24 +1559,74 @@ export function TUIApp({
             return;
           }
 
-          addMessage('system', [
-            'Trace Summary:',
-            `  Session ID:    ${data.sessionId}`,
-            `  Status:        ${data.status}`,
-            `  Iterations:    ${data.iterations.length}`,
-            `  Duration:      ${data.durationMs ? `${Math.round(data.durationMs / 1000)}s` : 'ongoing'}`,
-            '',
-            'Metrics:',
-            `  Input tokens:  ${data.metrics.inputTokens.toLocaleString()}`,
-            `  Output tokens: ${data.metrics.outputTokens.toLocaleString()}`,
-            `  Cache hit:     ${Math.round(data.metrics.avgCacheHitRate * 100)}%`,
-            `  Tool calls:    ${data.metrics.toolCalls}`,
-            `  Errors:        ${data.metrics.errors}`,
-            `  Est. Cost:     $${data.metrics.estimatedCost.toFixed(4)}`,
-            '',
-            'Use: /trace --analyze for efficiency analysis',
-            '     /trace issues to see detected inefficiencies',
-          ].join('\n'));
+          // Get subagent hierarchy from JSONL file
+          const hierarchy = await traceCollector.getSubagentHierarchy();
+
+          if (hierarchy && hierarchy.subagents.length > 0) {
+            // Show hierarchy view with subagents
+            const lines = [
+              'Trace Summary:',
+              `  Session ID:    ${data.sessionId}`,
+              `  Status:        ${data.status}`,
+              `  Duration:      ${data.durationMs ? `${Math.round(data.durationMs / 1000)}s` : 'ongoing'}`,
+              '',
+              'Main Agent:',
+              `  Iterations:    ${hierarchy.mainAgent.llmCalls}`,
+              `  Input tokens:  ${hierarchy.mainAgent.inputTokens.toLocaleString()}`,
+              `  Output tokens: ${hierarchy.mainAgent.outputTokens.toLocaleString()}`,
+              `  Tool calls:    ${hierarchy.mainAgent.toolCalls}`,
+              '',
+              'Subagent Tree:',
+            ];
+
+            // Sort subagents by spawn time
+            const sortedSubagents = hierarchy.subagents.sort((a, b) =>
+              (a.spawnedAtIteration || 0) - (b.spawnedAtIteration || 0)
+            );
+
+            for (const sub of sortedSubagents) {
+              const durationSec = Math.round(sub.duration / 1000);
+              lines.push(`  └─ ${sub.agentId} (spawned iter ${sub.spawnedAtIteration || '?'})`);
+              lines.push(`     ├─ ${sub.inputTokens.toLocaleString()} in / ${sub.outputTokens.toLocaleString()} out tokens`);
+              lines.push(`     ├─ ${sub.toolCalls} tools | ${durationSec}s`);
+            }
+
+            lines.push(
+              '',
+              'TOTALS (all agents):',
+              `  Input tokens:  ${hierarchy.totals.inputTokens.toLocaleString()}`,
+              `  Output tokens: ${hierarchy.totals.outputTokens.toLocaleString()}`,
+              `  Tool calls:    ${hierarchy.totals.toolCalls}`,
+              `  LLM calls:     ${hierarchy.totals.llmCalls}`,
+              `  Est. Cost:     $${hierarchy.totals.estimatedCost.toFixed(4)}`,
+              `  Duration:      ${Math.round(hierarchy.totals.duration / 1000)}s`,
+              '',
+              'Use: /trace --analyze for efficiency analysis',
+              '     /trace issues to see detected inefficiencies',
+            );
+
+            addMessage('system', lines.join('\n'));
+          } else {
+            // Original simple view (no subagents)
+            addMessage('system', [
+              'Trace Summary:',
+              `  Session ID:    ${data.sessionId}`,
+              `  Status:        ${data.status}`,
+              `  Iterations:    ${data.iterations.length}`,
+              `  Duration:      ${data.durationMs ? `${Math.round(data.durationMs / 1000)}s` : 'ongoing'}`,
+              '',
+              'Metrics:',
+              `  Input tokens:  ${data.metrics.inputTokens.toLocaleString()}`,
+              `  Output tokens: ${data.metrics.outputTokens.toLocaleString()}`,
+              `  Cache hit:     ${Math.round(data.metrics.avgCacheHitRate * 100)}%`,
+              `  Tool calls:    ${data.metrics.toolCalls}`,
+              `  Errors:        ${data.metrics.errors}`,
+              `  Est. Cost:     $${data.metrics.estimatedCost.toFixed(4)}`,
+              '',
+              'Use: /trace --analyze for efficiency analysis',
+              '     /trace issues to see detected inefficiencies',
+            ].join('\n'));
+          }
         } else if (args[0] === '--analyze' || args[0] === 'analyze') {
           if (!traceCollector) {
             addMessage('system', 'Tracing is not enabled.');
