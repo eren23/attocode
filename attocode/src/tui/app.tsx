@@ -12,6 +12,8 @@ import { useState, useCallback, useEffect, memo, useRef, useMemo } from 'react';
 import { Box, Text, useApp, useInput, Static } from 'ink';
 import { DiffView } from './components/DiffView.js';
 import { ActiveAgentsPanel, type ActiveAgent, type ActiveAgentStatus } from './components/ActiveAgentsPanel.js';
+import { TasksPanel } from './components/TasksPanel.js';
+import type { Task } from '../integrations/task-manager.js';
 import type { ProductionAgent } from '../agent.js';
 import type { SQLiteStore } from '../integrations/sqlite-store.js';
 import type { MCPClient } from '../integrations/mcp-client.js';
@@ -295,6 +297,7 @@ interface MemoizedInputAreaProps {
   onToggleThinking?: () => void;
   onToggleTransparency?: () => void;
   onToggleActiveAgents?: () => void;
+  onToggleTasks?: () => void;
   onPageUp?: () => void;
   onPageDown?: () => void;
   onHome?: () => void;
@@ -327,6 +330,7 @@ const MemoizedInputArea = memo(function MemoizedInputArea({
   onToggleThinking,
   onToggleTransparency,
   onToggleActiveAgents,
+  onToggleTasks,
   onPageUp,
   onPageDown,
   onHome,
@@ -348,7 +352,7 @@ const MemoizedInputArea = memo(function MemoizedInputArea({
   // Store callbacks in refs so useInput doesn't re-subscribe on prop changes
   const callbacksRef = useRef({
     onSubmit, onCtrlC, onCtrlL, onCtrlP, onEscape,
-    onToggleToolExpand, onToggleThinking, onToggleTransparency, onToggleActiveAgents,
+    onToggleToolExpand, onToggleThinking, onToggleTransparency, onToggleActiveAgents, onToggleTasks,
     onPageUp, onPageDown, onHome, onEnd,
     commandPaletteOpen, onCommandPaletteInput,
     approvalDialogOpen, approvalDenyReasonMode,
@@ -357,7 +361,7 @@ const MemoizedInputArea = memo(function MemoizedInputArea({
   });
   callbacksRef.current = {
     onSubmit, onCtrlC, onCtrlL, onCtrlP, onEscape,
-    onToggleToolExpand, onToggleThinking, onToggleTransparency, onToggleActiveAgents,
+    onToggleToolExpand, onToggleThinking, onToggleTransparency, onToggleActiveAgents, onToggleTasks,
     onPageUp, onPageDown, onHome, onEnd,
     commandPaletteOpen, onCommandPaletteInput,
     approvalDialogOpen, approvalDenyReasonMode,
@@ -405,6 +409,11 @@ const MemoizedInputArea = memo(function MemoizedInputArea({
     // Alt+A / Option+A - Toggle active agents panel
     if (input === '\u00e5' || (key.meta && input === 'a')) {
       cb.onToggleActiveAgents?.();
+      return;
+    }
+    // Alt+K / Option+K - Toggle tasks panel
+    if (input === '\u02da' || (key.meta && input === 'k')) {
+      cb.onToggleTasks?.();
       return;
     }
 
@@ -588,9 +597,13 @@ export function TUIApp({
   const [showThinking, setShowThinking] = useState(true);
   const [transparencyExpanded, setTransparencyExpanded] = useState(false);
   const [activeAgentsExpanded, setActiveAgentsExpanded] = useState(true);
+  const [tasksExpanded, setTasksExpanded] = useState(true);
 
   // Active agents tracking (for Active Agents Panel)
   const [activeAgents, setActiveAgents] = useState<ActiveAgent[]>([]);
+
+  // Tasks tracking (for Tasks Panel)
+  const [tasks, setTasks] = useState<Task[]>([]);
 
   // Command palette state
   const [commandPaletteOpen, setCommandPaletteOpen] = useState(false);
@@ -933,6 +946,21 @@ export function TUIApp({
       return;
     }
 
+    // Task events - update Tasks Panel
+    if (event.type === 'task.created') {
+      const e = event as unknown as { task: Task };
+      setTasks(prev => [...prev, e.task]);
+      addMessage('system', `[TASK] Created: ${e.task.subject}`);
+      return;
+    }
+    if (event.type === 'task.updated') {
+      const e = event as unknown as { task: Task };
+      setTasks(prev => prev.map(t => t.id === e.task.id ? e.task : t));
+      // Only log status changes
+      addMessage('system', `[TASK] ${e.task.subject}: ${e.task.status}`);
+      return;
+    }
+
     // -------------------------------------------------------------------------
     // Processing-only events (normal message submission)
     // -------------------------------------------------------------------------
@@ -1056,9 +1084,10 @@ export function TUIApp({
           '  /theme [name]     Show/change theme',
           '  /tools            List tools',
           '',
-          '> SESSIONS',
+          '> SESSIONS & TASKS',
           '  /save             Save session',
           '  /sessions         List sessions',
+          '  /tasks            List tracked tasks',
           '  /checkpoint       Create checkpoint',
           '  /checkpoints      List checkpoints',
           '  /restore <id>     Restore checkpoint',
@@ -1110,6 +1139,7 @@ export function TUIApp({
           '  Alt+T       Toggle tool details',
           '  Alt+O       Toggle thinking',
           '  Alt+I       Toggle transparency panel',
+          '  Alt+K       Toggle tasks panel',
           '========================',
         ].join('\n'));
         return;
@@ -1149,6 +1179,38 @@ export function TUIApp({
           addMessage('error', (e as Error).message);
         }
         return;
+
+      case 'tasks': {
+        // Filter out deleted tasks
+        const visibleTasks = tasks.filter(t => t.status !== 'deleted');
+        if (visibleTasks.length === 0) {
+          addMessage('system', 'No tasks. Tasks are created when the agent uses task_create tool.');
+          return;
+        }
+        // Count by status
+        const pending = visibleTasks.filter(t => t.status === 'pending').length;
+        const inProgress = visibleTasks.filter(t => t.status === 'in_progress').length;
+        const completed = visibleTasks.filter(t => t.status === 'completed').length;
+        // Format task list
+        const taskLines = visibleTasks.map(t => {
+          const isBlocked = t.blockedBy.some(id => {
+            const blocker = visibleTasks.find(bt => bt.id === id);
+            return blocker && blocker.status !== 'completed';
+          });
+          const icon = isBlocked ? '◌' : t.status === 'completed' ? '✓' : t.status === 'in_progress' ? '●' : '○';
+          const blockedInfo = isBlocked ? ` (blocked by: ${t.blockedBy.slice(0, 2).join(', ')})` : '';
+          const activeInfo = t.status === 'in_progress' && t.activeForm ? `\n     └ ${t.activeForm}...` : '';
+          return `  ${icon} ${t.id}  ${t.subject}${blockedInfo}${activeInfo}`;
+        });
+        addMessage('system', [
+          `TASKS [${pending} pending, ${inProgress} in_progress, ${completed} completed]`,
+          '',
+          ...taskLines,
+          '',
+          'Toggle panel: Alt+K',
+        ].join('\n'));
+        return;
+      }
 
       case 'context':
       case 'ctx': {
@@ -2032,6 +2094,13 @@ export function TUIApp({
     });
   }, [addMessage]);
 
+  const handleToggleTasks = useCallback(() => {
+    setTasksExpanded(prev => {
+      addMessage('system', !prev ? '[v] Tasks: visible' : '[^] Tasks: hidden');
+      return !prev;
+    });
+  }, [addMessage]);
+
   // Update context tokens
   useEffect(() => {
     const agentState = agent.getState();
@@ -2157,6 +2226,13 @@ export function TUIApp({
           />
         )}
 
+        {/* Tasks Panel (positioned above input for task tracking) */}
+        <TasksPanel
+          tasks={tasks}
+          colors={colors}
+          expanded={tasksExpanded}
+        />
+
         {/* Active Agents Panel (positioned above input when agents are running) */}
         <ActiveAgentsPanel
           agents={activeAgents}
@@ -2178,6 +2254,7 @@ export function TUIApp({
           onToggleThinking={handleToggleThinking}
           onToggleTransparency={handleToggleTransparency}
           onToggleActiveAgents={handleToggleActiveAgents}
+          onToggleTasks={handleToggleTasks}
           commandPaletteOpen={commandPaletteOpen}
           onCommandPaletteInput={handleCommandPaletteInput}
           approvalDialogOpen={!!pendingApproval}

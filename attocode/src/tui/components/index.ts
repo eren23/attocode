@@ -35,3 +35,6 @@ export {
   type ActiveAgent,
   type ActiveAgentStatus,
 } from './ActiveAgentsPanel.js';
+
+// Tasks panel (task tracking visibility)
+export { TasksPanel, type TasksPanelProps } from './TasksPanel.js';
