@@ -27,3 +27,11 @@ export { SyntaxText, MemoizedSyntaxText, SyntaxLine, MemoizedSyntaxLine, type Sy
 
 // Error boundaries
 export { TUIErrorBoundary, ErrorFallback, withErrorBoundary } from './ErrorBoundary.js';
+
+// Active agents panel (subagent visibility)
+export {
+  ActiveAgentsPanel,
+  type ActiveAgentsPanelProps,
+  type ActiveAgent,
+  type ActiveAgentStatus,
+} from './ActiveAgentsPanel.js';

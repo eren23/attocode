@@ -41,6 +41,8 @@ import {
   buildConfig,
   isFeatureEnabled,
   getEnabledFeatures,
+  getSubagentTimeout,
+  getSubagentMaxIterations,
 } from './defaults.js';
 
 import {
@@ -146,6 +148,9 @@ import {
   SharedBlackboard,
   createSharedBlackboard,
   type BlackboardConfig,
+  // Task Management
+  TaskManager,
+  createTaskManager,
 } from './integrations/index.js';
 
 // Lesson 26: Tracing & Evaluation integration
@@ -160,6 +165,11 @@ import {
   createBoundSpawnAgentTool,
   createBoundSpawnAgentsParallelTool,
 } from './tools/agent.js';
+
+// Task tools for Claude Code-style task management
+import {
+  createTaskTools,
+} from './tools/tasks.js';
 
 // =============================================================================
 // PRODUCTION AGENT
@@ -206,6 +216,7 @@ export class ProductionAgent {
   private capabilitiesRegistry: CapabilitiesRegistry | null = null;
   private toolResolver: ((toolName: string) => ToolDefinition | null) | null = null;
   private blackboard: SharedBlackboard | null = null;
+  private taskManager: TaskManager | null = null;
 
   // Duplicate spawn prevention - tracks recently spawned tasks to prevent doom loops
   // Map<taskKey, { timestamp: number; result: string; queuedChanges: number }>
@@ -402,7 +413,7 @@ export class ProductionAgent {
 
     // Register spawn_agent tool so LLM can delegate to subagents
     const boundSpawnTool = createBoundSpawnAgentTool(
-      (name, task) => this.spawnAgent(name, task)
+      (name, task, constraints) => this.spawnAgent(name, task, constraints)
     );
     this.tools.set(boundSpawnTool.name, boundSpawnTool);
 
@@ -411,6 +422,21 @@ export class ProductionAgent {
       (tasks) => this.spawnAgentsParallel(tasks)
     );
     this.tools.set(boundParallelSpawnTool.name, boundParallelSpawnTool);
+
+    // Task Manager - Claude Code-style task system for coordination
+    this.taskManager = createTaskManager();
+    // Forward task events
+    this.taskManager.on('task.created', (data) => {
+      this.emit({ type: 'task.created', task: data.task });
+    });
+    this.taskManager.on('task.updated', (data) => {
+      this.emit({ type: 'task.updated', task: data.task });
+    });
+    // Register task tools
+    const taskTools = createTaskTools(this.taskManager);
+    for (const tool of taskTools) {
+      this.tools.set(tool.name, tool);
+    }
 
     // Cancellation Support
     if (isFeatureEnabled(this.config.cancellation)) {
@@ -3597,8 +3623,12 @@ export class ProductionAgent {
   /**
    * Spawn an agent to execute a task.
    * Returns the result when the agent completes.
+   *
+   * @param agentName - Name of the agent to spawn (researcher, coder, etc.)
+   * @param task - The task description for the agent
+   * @param constraints - Optional constraints to keep the subagent focused
    */
-  async spawnAgent(agentName: string, task: string): Promise<SpawnResult> {
+  async spawnAgent(agentName: string, task: string, constraints?: import('./tools/agent.js').SpawnConstraints): Promise<SpawnResult> {
     if (!this.agentRegistry) {
       return {
         success: false,
@@ -3700,16 +3730,24 @@ export class ProductionAgent {
         ? agentDef.model
         : this.config.model;
 
-      // Get subagent config with defaults
-      // Note: subagent config is SubagentConfig | false from buildConfig
+      // Get subagent config with agent-type-specific timeouts and iteration limits
+      // Uses dynamic configuration based on agent type (researcher needs more time than reviewer)
       const subagentConfig = this.config.subagent;
       const hasSubagentConfig = subagentConfig !== false && subagentConfig !== undefined;
-      const defaultMaxIterations = hasSubagentConfig
-        ? (subagentConfig as { defaultMaxIterations?: number }).defaultMaxIterations ?? 25
-        : 25; // Increased from 10 to allow more thorough exploration
-      const subagentTimeout = hasSubagentConfig
-        ? (subagentConfig as { defaultTimeout?: number }).defaultTimeout ?? 600000
-        : 600000; // Increased from 120s to 600s (10 minutes) for deeper analysis
+
+      // Agent-type-specific timeout: researchers get 5min, reviewers get 2min, etc.
+      const agentTypeTimeout = getSubagentTimeout(agentName);
+      const configTimeout = hasSubagentConfig
+        ? (subagentConfig as { defaultTimeout?: number }).defaultTimeout
+        : undefined;
+      const subagentTimeout = configTimeout ?? agentTypeTimeout;
+
+      // Agent-type-specific iteration limit: researchers get 25, documenters get 10, etc.
+      const agentTypeMaxIter = getSubagentMaxIterations(agentName);
+      const configMaxIter = hasSubagentConfig
+        ? (subagentConfig as { defaultMaxIterations?: number }).defaultMaxIterations
+        : undefined;
+      const defaultMaxIterations = agentDef.maxIterations ?? configMaxIter ?? agentTypeMaxIter;
 
       // BLACKBOARD CONTEXT INJECTION
       // Gather relevant context from the blackboard for the subagent
@@ -3754,11 +3792,42 @@ export class ProductionAgent {
         }
       }
 
+      // CONSTRAINT INJECTION
+      // Add constraints to the subagent's context if provided
+      let constraintContext = '';
+      if (constraints) {
+        const constraintParts: string[] = [];
+
+        if (constraints.focusAreas && constraints.focusAreas.length > 0) {
+          constraintParts.push(`**FOCUS AREAS (limit exploration to these paths):**\n${constraints.focusAreas.map(a => `  - ${a}`).join('\n')}`);
+        }
+
+        if (constraints.excludeAreas && constraints.excludeAreas.length > 0) {
+          constraintParts.push(`**EXCLUDED AREAS (do NOT explore these):**\n${constraints.excludeAreas.map(a => `  - ${a}`).join('\n')}`);
+        }
+
+        if (constraints.requiredDeliverables && constraints.requiredDeliverables.length > 0) {
+          constraintParts.push(`**REQUIRED DELIVERABLES (you must produce these):**\n${constraints.requiredDeliverables.map(d => `  - ${d}`).join('\n')}`);
+        }
+
+        if (constraints.maxTokens) {
+          constraintParts.push(`**TOKEN BUDGET:** ${constraints.maxTokens} tokens maximum`);
+        }
+
+        if (constraints.timeboxMinutes) {
+          constraintParts.push(`**TIME LIMIT:** ${constraints.timeboxMinutes} minutes (soft limit - wrap up if approaching)`);
+        }
+
+        if (constraintParts.length > 0) {
+          constraintContext = `\n\n**EXECUTION CONSTRAINTS:**\n${constraintParts.join('\n\n')}\n`;
+        }
+      }
+
       // Build subagent system prompt with subagent-specific plan mode addition
       const parentMode = this.getMode();
       const subagentSystemPrompt = parentMode === 'plan'
-        ? `${agentDef.systemPrompt}\n\n${SUBAGENT_PLAN_MODE_ADDITION}${blackboardContext}`
-        : `${agentDef.systemPrompt}${blackboardContext}`;
+        ? `${agentDef.systemPrompt}\n\n${SUBAGENT_PLAN_MODE_ADDITION}${blackboardContext}${constraintContext}`
+        : `${agentDef.systemPrompt}${blackboardContext}${constraintContext}`;
 
       // Create a sub-agent with the agent's config
       const subAgent = new ProductionAgent({
@@ -4693,6 +4762,13 @@ If the task is a simple question or doesn't need specialized handling, set bestA
    */
   getAgentRegistry(): AgentRegistry | null {
     return this.agentRegistry;
+  }
+
+  /**
+   * Get the task manager instance for task tracking.
+   */
+  getTaskManager(): TaskManager | null {
+    return this.taskManager;
   }
 
   /**

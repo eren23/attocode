@@ -433,13 +433,61 @@ export const DEFAULT_FILE_CHANGE_TRACKER_CONFIG: FileChangeTrackerAgentConfig = 
 };
 
 /**
+ * Agent-type-specific timeout configurations.
+ * Research tasks need more time than focused review tasks.
+ */
+export const SUBAGENT_TIMEOUTS: Record<string, number> = {
+  researcher: 300000,    // 5 minutes - exploration needs time
+  coder: 180000,         // 3 minutes - implementation tasks
+  reviewer: 120000,      // 2 minutes - focused review
+  architect: 240000,     // 4 minutes - design thinking
+  debugger: 180000,      // 3 minutes - investigation
+  documenter: 120000,    // 2 minutes - documentation
+  default: 120000,       // 2 minutes - fallback
+} as const;
+
+/**
+ * Agent-type-specific iteration limits.
+ * Research may need more iterations than documentation.
+ */
+export const SUBAGENT_MAX_ITERATIONS: Record<string, number> = {
+  researcher: 25,        // More iterations for thorough exploration
+  coder: 20,             // Sufficient for implementation
+  reviewer: 15,          // Focused review needs fewer
+  architect: 20,         // Design requires iteration
+  debugger: 20,          // Investigation can be iterative
+  documenter: 10,        // Documentation is straightforward
+  default: 15,           // Balanced default
+} as const;
+
+/**
+ * Extension granted when subagent shows progress.
+ * If tool calls are happening, grant more time.
+ */
+export const TIMEOUT_EXTENSION_ON_PROGRESS = 60000; // +1 minute when making progress
+
+/**
+ * Get timeout for a specific agent type.
+ */
+export function getSubagentTimeout(agentType: string): number {
+  return SUBAGENT_TIMEOUTS[agentType] ?? SUBAGENT_TIMEOUTS.default;
+}
+
+/**
+ * Get max iterations for a specific agent type.
+ */
+export function getSubagentMaxIterations(agentType: string): number {
+  return SUBAGENT_MAX_ITERATIONS[agentType] ?? SUBAGENT_MAX_ITERATIONS.default;
+}
+
+/**
  * Default subagent configuration.
  * Controls timeout and iteration limits for spawned subagents.
  */
 export const DEFAULT_SUBAGENT_CONFIG: SubagentConfig = {
   enabled: true, // Enabled by default
-  defaultTimeout: 120000, // 2 minutes per subagent
-  defaultMaxIterations: 10, // Reduced from 30 for better control
+  defaultTimeout: 120000, // 2 minutes per subagent (fallback, agent-specific timeouts preferred)
+  defaultMaxIterations: 15, // Balanced default (agent-specific limits preferred)
   inheritObservability: true,
 };
 

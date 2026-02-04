@@ -1182,6 +1182,10 @@ export type AgentEvent =
   | { type: 'subagent.phase'; agentId: string; phase: 'exploring' | 'planning' | 'executing' | 'completing' }
   // Parallel subagent events
   | { type: 'parallel.spawn.start'; count: number; agents: string[] }
-  | { type: 'parallel.spawn.complete'; count: number; successCount: number; results: Array<{ agent: string; success: boolean; tokens: number }> };
+  | { type: 'parallel.spawn.complete'; count: number; successCount: number; results: Array<{ agent: string; success: boolean; tokens: number }> }
+  // Task system events (Claude Code-style)
+  | { type: 'task.created'; task: { id: string; subject: string; status: string } }
+  | { type: 'task.updated'; task: { id: string; subject: string; status: string } }
+  | { type: 'task.deleted'; taskId: string };
 
 export type AgentEventListener = (event: AgentEvent) => void;

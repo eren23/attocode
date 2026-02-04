@@ -28,11 +28,29 @@ export const SPAWNABLE_AGENTS = [
 export type SpawnableAgent = typeof SPAWNABLE_AGENTS[number];
 
 /**
+ * Spawn constraints for focused execution.
+ * Optional limits to keep subagents on-task.
+ */
+export interface SpawnConstraints {
+  /** Hard budget limit for tokens consumed */
+  maxTokens?: number;
+  /** Directories/files to focus on (glob patterns) */
+  focusAreas?: string[];
+  /** Directories/files to avoid (glob patterns) */
+  excludeAreas?: string[];
+  /** Required outputs - agent must produce these */
+  requiredDeliverables?: string[];
+  /** Soft time limit in minutes (agent will be warned) */
+  timeboxMinutes?: number;
+}
+
+/**
  * Input type for spawn_agent tool.
  */
 export interface SpawnAgentInput {
   agent: SpawnableAgent;
   task: string;
+  constraints?: SpawnConstraints;
 }
 
 // =============================================================================
@@ -54,6 +72,35 @@ const spawnAgentParameters: Record<string, unknown> = {
       type: 'string',
       description: 'The specific task for the agent to complete',
     },
+    constraints: {
+      type: 'object',
+      description: 'Optional constraints to keep the subagent focused',
+      properties: {
+        maxTokens: {
+          type: 'number',
+          description: 'Hard budget limit for tokens consumed',
+        },
+        focusAreas: {
+          type: 'array',
+          items: { type: 'string' },
+          description: 'Directories/files to focus on (glob patterns like "src/**/*.ts")',
+        },
+        excludeAreas: {
+          type: 'array',
+          items: { type: 'string' },
+          description: 'Directories/files to avoid (glob patterns)',
+        },
+        requiredDeliverables: {
+          type: 'array',
+          items: { type: 'string' },
+          description: 'Required outputs the agent must produce',
+        },
+        timeboxMinutes: {
+          type: 'number',
+          description: 'Soft time limit in minutes',
+        },
+      },
+    },
   },
   required: ['agent', 'task'],
 };
@@ -72,7 +119,13 @@ Available agents:
 - documenter: Writes documentation
 
 The subagent runs with its own context, executes the task, and returns results.
-Use this for tasks that benefit from specialized focus or parallel work.`;
+Use this for tasks that benefit from specialized focus or parallel work.
+
+Optional constraints help keep subagents focused:
+- focusAreas: Limit exploration to specific directories (e.g., ["src/api/**"])
+- excludeAreas: Avoid certain directories (e.g., ["node_modules/**", "dist/**"])
+- maxTokens: Set a hard token budget
+- timeboxMinutes: Soft time warning`;
 
 // =============================================================================
 // BOUND TOOL FACTORY
@@ -81,7 +134,7 @@ Use this for tasks that benefit from specialized focus or parallel work.`;
 /**
  * Type for the spawn function provided by ProductionAgent.
  */
-export type SpawnFunction = (agentName: string, task: string) => Promise<SpawnResult>;
+export type SpawnFunction = (agentName: string, task: string, constraints?: SpawnConstraints) => Promise<SpawnResult>;
 
 /**
  * Create a spawn_agent tool bound to a specific agent's spawnAgent method.
@@ -125,7 +178,7 @@ export function createBoundSpawnAgentTool(spawnFn: SpawnFunction): ToolDefinitio
         };
       }
 
-      const result = await spawnFn(input.agent, input.task);
+      const result = await spawnFn(input.agent, input.task, input.constraints);
 
       return {
         success: result.success,
@@ -133,6 +186,7 @@ export function createBoundSpawnAgentTool(spawnFn: SpawnFunction): ToolDefinitio
         metadata: {
           agent: input.agent,
           task: input.task,
+          constraints: input.constraints,
           metrics: result.metrics,
         },
       };

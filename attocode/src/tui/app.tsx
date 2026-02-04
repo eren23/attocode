@@ -11,6 +11,7 @@
 import { useState, useCallback, useEffect, memo, useRef, useMemo } from 'react';
 import { Box, Text, useApp, useInput, Static } from 'ink';
 import { DiffView } from './components/DiffView.js';
+import { ActiveAgentsPanel, type ActiveAgent, type ActiveAgentStatus } from './components/ActiveAgentsPanel.js';
 import type { ProductionAgent } from '../agent.js';
 import type { SQLiteStore } from '../integrations/sqlite-store.js';
 import type { MCPClient } from '../integrations/mcp-client.js';
@@ -293,6 +294,7 @@ interface MemoizedInputAreaProps {
   onToggleToolExpand?: () => void;
   onToggleThinking?: () => void;
   onToggleTransparency?: () => void;
+  onToggleActiveAgents?: () => void;
   onPageUp?: () => void;
   onPageDown?: () => void;
   onHome?: () => void;
@@ -324,6 +326,7 @@ const MemoizedInputArea = memo(function MemoizedInputArea({
   onToggleToolExpand,
   onToggleThinking,
   onToggleTransparency,
+  onToggleActiveAgents,
   onPageUp,
   onPageDown,
   onHome,
@@ -345,7 +348,7 @@ const MemoizedInputArea = memo(function MemoizedInputArea({
   // Store callbacks in refs so useInput doesn't re-subscribe on prop changes
   const callbacksRef = useRef({
     onSubmit, onCtrlC, onCtrlL, onCtrlP, onEscape,
-    onToggleToolExpand, onToggleThinking, onToggleTransparency,
+    onToggleToolExpand, onToggleThinking, onToggleTransparency, onToggleActiveAgents,
     onPageUp, onPageDown, onHome, onEnd,
     commandPaletteOpen, onCommandPaletteInput,
     approvalDialogOpen, approvalDenyReasonMode,
@@ -354,7 +357,7 @@ const MemoizedInputArea = memo(function MemoizedInputArea({
   });
   callbacksRef.current = {
     onSubmit, onCtrlC, onCtrlL, onCtrlP, onEscape,
-    onToggleToolExpand, onToggleThinking, onToggleTransparency,
+    onToggleToolExpand, onToggleThinking, onToggleTransparency, onToggleActiveAgents,
     onPageUp, onPageDown, onHome, onEnd,
     commandPaletteOpen, onCommandPaletteInput,
     approvalDialogOpen, approvalDenyReasonMode,
@@ -397,6 +400,11 @@ const MemoizedInputArea = memo(function MemoizedInputArea({
     // Alt+I / Option+I - Toggle transparency panel
     if (input === '\u00ee' || input === '\u0131' || (key.meta && input === 'i')) {
       cb.onToggleTransparency?.();
+      return;
+    }
+    // Alt+A / Option+A - Toggle active agents panel
+    if (input === '\u00e5' || (key.meta && input === 'a')) {
+      cb.onToggleActiveAgents?.();
       return;
     }
 
@@ -579,6 +587,10 @@ export function TUIApp({
   const [toolCallsExpanded, setToolCallsExpanded] = useState(false);
   const [showThinking, setShowThinking] = useState(true);
   const [transparencyExpanded, setTransparencyExpanded] = useState(false);
+  const [activeAgentsExpanded, setActiveAgentsExpanded] = useState(true);
+
+  // Active agents tracking (for Active Agents Panel)
+  const [activeAgents, setActiveAgents] = useState<ActiveAgent[]>([]);
 
   // Command palette state
   const [commandPaletteOpen, setCommandPaletteOpen] = useState(false);
@@ -721,10 +733,20 @@ export function TUIApp({
     // Shared events (both processing and approving modes)
     // -------------------------------------------------------------------------
 
-    // Subagent lifecycle events
+    // Subagent lifecycle events - also update Active Agents Panel
     if (event.type === 'agent.spawn') {
-      const e = event as { name: string; task: string };
+      const e = event as { agentId: string; name: string; task: string };
+      const agentId = e.agentId || `spawn-${Date.now()}`;
       addMessage('system', `[AGENT] Spawning ${e.name}: ${e.task.slice(0, 100)}${e.task.length > 100 ? '...' : ''}`);
+      // Add to active agents panel
+      setActiveAgents(prev => [...prev, {
+        id: agentId,
+        type: e.name,
+        task: e.task,
+        status: 'running' as ActiveAgentStatus,
+        tokens: 0,
+        startTime: Date.now(),
+      }]);
       return;
     }
     if (event.type === 'agent.complete') {
@@ -736,11 +758,23 @@ export function TUIApp({
         const preview = e.output.slice(0, 300);
         addMessage('system', `[AGENT OUTPUT]\n${preview}${e.output.length > 300 ? '\n...(truncated)' : ''}`);
       }
+      // Update active agents panel
+      setActiveAgents(prev => prev.map(a =>
+        a.type === e.agentId || a.id.includes(e.agentId)
+          ? { ...a, status: e.success ? 'completed' as ActiveAgentStatus : 'error' as ActiveAgentStatus }
+          : a
+      ));
       return;
     }
     if (event.type === 'agent.error') {
       const e = event as { agentId: string; error: string };
       addMessage('system', `[AGENT] ${e.agentId} error: ${e.error}`);
+      // Update active agents panel with error status
+      setActiveAgents(prev => prev.map(a =>
+        a.type === e.agentId || a.id.includes(e.agentId)
+          ? { ...a, status: (e.error.includes('timed out') ? 'timeout' : 'error') as ActiveAgentStatus }
+          : a
+      ));
       return;
     }
     if (event.type === 'agent.pending_plan') {
@@ -813,10 +847,21 @@ export function TUIApp({
       return;
     }
 
-    // Insight events
-    if (event.type === 'insight.tokens' && showThinking) {
-      const e = event as { inputTokens: number; outputTokens: number; cost?: number };
-      addMessage('system', `${subagentPrefix}* ${e.inputTokens.toLocaleString()} in, ${e.outputTokens.toLocaleString()} out${e.cost ? ` $${e.cost.toFixed(6)}` : ''}`);
+    // Insight events - also track tokens for active agents
+    if (event.type === 'insight.tokens') {
+      const e = event as { inputTokens: number; outputTokens: number; cost?: number; subagent?: string };
+      if (showThinking) {
+        addMessage('system', `${subagentPrefix}* ${e.inputTokens.toLocaleString()} in, ${e.outputTokens.toLocaleString()} out${e.cost ? ` $${e.cost.toFixed(6)}` : ''}`);
+      }
+      // Update tokens for active agent if this event is from a subagent
+      if (e.subagent || eventWithSubagent.subagent) {
+        const agentName = e.subagent || eventWithSubagent.subagent;
+        setActiveAgents(prev => prev.map(a =>
+          a.type === agentName || a.id.includes(agentName || '')
+            ? { ...a, tokens: a.tokens + (e.inputTokens || 0) + (e.outputTokens || 0) }
+            : a
+        ));
+      }
       return;
     }
 
@@ -832,15 +877,27 @@ export function TUIApp({
       return;
     }
 
-    // Subagent visibility events
+    // Subagent visibility events - also update Active Agents Panel
     if (event.type === 'subagent.iteration') {
       const e = event as { agentId: string; iteration: number; maxIterations: number };
       setStatus(s => ({ ...s, mode: `${e.agentId} iter ${e.iteration}/${e.maxIterations}` }));
+      // Update active agents panel with iteration info
+      setActiveAgents(prev => prev.map(a =>
+        a.type === e.agentId || a.id.includes(e.agentId)
+          ? { ...a, iteration: e.iteration, maxIterations: e.maxIterations }
+          : a
+      ));
       return;
     }
     if (event.type === 'subagent.phase') {
       const e = event as { agentId: string; phase: string };
       setStatus(s => ({ ...s, mode: `${e.agentId} ${e.phase}` }));
+      // Update active agents panel with phase info
+      setActiveAgents(prev => prev.map(a =>
+        a.type === e.agentId || a.id.includes(e.agentId)
+          ? { ...a, currentPhase: e.phase }
+          : a
+      ));
       return;
     }
 
@@ -1886,6 +1943,13 @@ export function TUIApp({
     });
   }, [addMessage]);
 
+  const handleToggleActiveAgents = useCallback(() => {
+    setActiveAgentsExpanded(prev => {
+      addMessage('system', !prev ? '[v] Active agents: visible' : '[^] Active agents: hidden');
+      return !prev;
+    });
+  }, [addMessage]);
+
   // Update context tokens
   useEffect(() => {
     const agentState = agent.getState();
@@ -2011,6 +2075,13 @@ export function TUIApp({
           />
         )}
 
+        {/* Active Agents Panel (positioned above input when agents are running) */}
+        <ActiveAgentsPanel
+          agents={activeAgents}
+          colors={colors}
+          expanded={activeAgentsExpanded}
+        />
+
         <MemoizedInputArea
           onSubmit={handleSubmit}
           disabled={isProcessing || !!pendingApproval}
@@ -2024,6 +2095,7 @@ export function TUIApp({
           onToggleToolExpand={handleToggleToolExpand}
           onToggleThinking={handleToggleThinking}
           onToggleTransparency={handleToggleTransparency}
+          onToggleActiveAgents={handleToggleActiveAgents}
           commandPaletteOpen={commandPaletteOpen}
           onCommandPaletteInput={handleCommandPaletteInput}
           approvalDialogOpen={!!pendingApproval}
