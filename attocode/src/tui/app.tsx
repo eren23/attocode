@@ -769,12 +769,37 @@ export function TUIApp({
     if (event.type === 'agent.error') {
       const e = event as { agentId: string; error: string };
       addMessage('system', `[AGENT] ${e.agentId} error: ${e.error}`);
-      // Update active agents panel with error status
-      setActiveAgents(prev => prev.map(a =>
-        a.type === e.agentId || a.id.includes(e.agentId)
-          ? { ...a, status: (e.error.includes('timed out') ? 'timeout' : 'error') as ActiveAgentStatus }
-          : a
-      ));
+
+      // For timeout errors, use 'timing_out' status first to indicate the agent
+      // is in the process of stopping. Then transition to 'timeout' after a delay.
+      // This provides better UX than immediately showing "failed" while tokens accumulate.
+      const isTimeout = e.error.includes('timed out') || e.error.includes('Timed out');
+
+      if (isTimeout) {
+        // First, mark as timing_out
+        setActiveAgents(prev => prev.map(a =>
+          a.type === e.agentId || a.id.includes(e.agentId)
+            ? { ...a, status: 'timing_out' as ActiveAgentStatus }
+            : a
+        ));
+
+        // After 3 seconds, transition to final timeout status
+        // (agent should have stopped by then due to cancellation token check)
+        setTimeout(() => {
+          setActiveAgents(prev => prev.map(a =>
+            (a.type === e.agentId || a.id.includes(e.agentId)) && a.status === 'timing_out'
+              ? { ...a, status: 'timeout' as ActiveAgentStatus }
+              : a
+          ));
+        }, 3000);
+      } else {
+        // Regular error - set immediately
+        setActiveAgents(prev => prev.map(a =>
+          a.type === e.agentId || a.id.includes(e.agentId)
+            ? { ...a, status: 'error' as ActiveAgentStatus }
+            : a
+        ));
+      }
       return;
     }
     if (event.type === 'agent.pending_plan') {
@@ -854,13 +879,20 @@ export function TUIApp({
         addMessage('system', `${subagentPrefix}* ${e.inputTokens.toLocaleString()} in, ${e.outputTokens.toLocaleString()} out${e.cost ? ` $${e.cost.toFixed(6)}` : ''}`);
       }
       // Update tokens for active agent if this event is from a subagent
+      // IMPORTANT: Don't update tokens for agents that are timing_out/timeout/error
+      // These agents should have stopped, and any lingering events are from
+      // zombie processes that we don't want to count.
       if (e.subagent || eventWithSubagent.subagent) {
         const agentName = e.subagent || eventWithSubagent.subagent;
-        setActiveAgents(prev => prev.map(a =>
-          a.type === agentName || a.id.includes(agentName || '')
-            ? { ...a, tokens: a.tokens + (e.inputTokens || 0) + (e.outputTokens || 0) }
-            : a
-        ));
+        setActiveAgents(prev => prev.map(a => {
+          const matchesAgent = a.type === agentName || a.id.includes(agentName || '');
+          const isStillRunning = a.status === 'running';
+          // Only update tokens if agent is still running
+          if (matchesAgent && isStillRunning) {
+            return { ...a, tokens: a.tokens + (e.inputTokens || 0) + (e.outputTokens || 0) };
+          }
+          return a;
+        }));
       }
       return;
     }

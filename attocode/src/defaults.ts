@@ -435,15 +435,18 @@ export const DEFAULT_FILE_CHANGE_TRACKER_CONFIG: FileChangeTrackerAgentConfig = 
 /**
  * Agent-type-specific timeout configurations.
  * Research tasks need more time than focused review tasks.
+ *
+ * NOTE: Timeouts were increased to better support research-heavy workflows.
+ * The previous defaults (2-5 min) caused frequent timeouts during exploration.
  */
 export const SUBAGENT_TIMEOUTS: Record<string, number> = {
-  researcher: 300000,    // 5 minutes - exploration needs time
-  coder: 180000,         // 3 minutes - implementation tasks
-  reviewer: 120000,      // 2 minutes - focused review
-  architect: 240000,     // 4 minutes - design thinking
-  debugger: 180000,      // 3 minutes - investigation
-  documenter: 120000,    // 2 minutes - documentation
-  default: 120000,       // 2 minutes - fallback
+  researcher: 420000,    // 7 minutes - exploration needs time (was 5 min)
+  coder: 300000,         // 5 minutes - implementation tasks (was 3 min)
+  reviewer: 180000,      // 3 minutes - focused review (was 2 min)
+  architect: 360000,     // 6 minutes - design thinking (was 4 min)
+  debugger: 300000,      // 5 minutes - investigation (was 3 min)
+  documenter: 180000,    // 3 minutes - documentation (was 2 min)
+  default: 300000,       // 5 minutes - fallback (was 2 min)
 } as const;
 
 /**
@@ -483,10 +486,14 @@ export function getSubagentMaxIterations(agentType: string): number {
 /**
  * Default subagent configuration.
  * Controls timeout and iteration limits for spawned subagents.
+ *
+ * NOTE: Research-focused tasks often need more time than 2 minutes.
+ * The default timeout was increased from 120s to 300s (5 minutes) to allow
+ * subagents to complete research tasks without premature timeout.
  */
 export const DEFAULT_SUBAGENT_CONFIG: SubagentConfig = {
   enabled: true, // Enabled by default
-  defaultTimeout: 120000, // 2 minutes per subagent (fallback, agent-specific timeouts preferred)
+  defaultTimeout: 300000, // 5 minutes per subagent (increased from 2 min for research tasks)
   defaultMaxIterations: 15, // Balanced default (agent-specific limits preferred)
   inheritObservability: true,
 };

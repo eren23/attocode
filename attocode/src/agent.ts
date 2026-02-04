@@ -226,6 +226,10 @@ export class ProductionAgent {
   // Parent iteration tracking for total budget calculation
   private parentIterations = 0;
 
+  // External cancellation token (for subagent timeout propagation)
+  // When set, the agent will check this token in addition to its own cancellation manager
+  private externalCancellationToken: CancellationTokenType | null = null;
+
   // Initialization tracking
   private initPromises: Promise<void>[] = [];
   private initComplete = false;
@@ -1126,9 +1130,15 @@ export class ProductionAgent {
 
         // =======================================================================
         // CANCELLATION CHECK
+        // Checks both internal cancellation (ESC key) and external cancellation
+        // (parent timeout when this agent is a subagent)
         // =======================================================================
         if (this.cancellation?.isCancelled) {
           this.cancellation.token.throwIfCancellationRequested();
+        }
+        // Also check external cancellation token (from parent when spawned as subagent)
+        if (this.externalCancellationToken?.isCancellationRequested) {
+          this.externalCancellationToken.throwIfCancellationRequested();
         }
 
         // =======================================================================
@@ -2316,18 +2326,23 @@ export class ProductionAgent {
         // Execute tool (with sandbox if available)
         let result: unknown;
         if (this.safety?.sandbox) {
-          // CRITICAL: spawn_agent needs a MUCH longer timeout than regular tools
+          // CRITICAL: spawn_agent and spawn_agents_parallel need MUCH longer timeouts
           // The default 60s sandbox timeout would kill subagents prematurely
           // Subagents may run for minutes (per their own timeout config)
           const isSpawnAgent = toolCall.name === 'spawn_agent';
+          const isSpawnParallel = toolCall.name === 'spawn_agents_parallel';
+          const isSubagentTool = isSpawnAgent || isSpawnParallel;
+
           const subagentConfig = this.config.subagent;
           const hasSubagentConfig = subagentConfig !== false && subagentConfig !== undefined;
           const subagentTimeout = hasSubagentConfig
             ? (subagentConfig as { defaultTimeout?: number }).defaultTimeout ?? 600000 // 10 min default
             : 600000;
 
-          // Use subagent timeout + buffer for spawn_agent, default for others
-          const toolTimeout = isSpawnAgent ? subagentTimeout + 30000 : undefined;
+          // Use subagent timeout + buffer for spawn tools, default for others
+          // For spawn_agents_parallel, multiply by number of agents (they run in parallel,
+          // but the total wall-clock time should still allow the slowest agent to complete)
+          const toolTimeout = isSubagentTool ? subagentTimeout + 30000 : undefined;
 
           result = await this.safety.sandbox.executeWithLimits(
             () => tool.execute(toolCall.arguments),
@@ -3908,6 +3923,11 @@ export class ProductionAgent {
         ? createLinkedToken(parentSource, timeoutSource)
         : timeoutSource;
 
+      // CRITICAL: Pass the cancellation token to the subagent so it can check and stop
+      // gracefully when timeout fires. Without this, the subagent continues running as
+      // a "zombie" even after race() returns with a timeout error.
+      subAgent.setExternalCancellation(effectiveSource.token);
+
       try {
         // Run the task with cancellation propagation from parent
         const result = await race(subAgent.run(task), effectiveSource.token);
@@ -4040,6 +4060,22 @@ export class ProductionAgent {
             : `Timed out after ${subagentTimeout}ms`;
           this.emit({ type: 'agent.error', agentId: agentName, error: reason });
 
+          // =======================================================================
+          // PRESERVE PARTIAL RESULTS
+          // Instead of discarding all work, capture whatever the subagent produced
+          // before timeout. This prevents the "zombie agent" problem where tokens
+          // are consumed but results are lost.
+          // =======================================================================
+          const subagentState = subAgent.getState();
+          const subagentMetrics = subAgent.getMetrics();
+
+          // Extract partial response from the last assistant message
+          const assistantMessages = subagentState.messages.filter(m => m.role === 'assistant');
+          const lastAssistantMsg = assistantMessages[assistantMessages.length - 1];
+          const partialResponse = typeof lastAssistantMsg?.content === 'string'
+            ? lastAssistantMsg.content
+            : '';
+
           // Extract pending plan before cleanup (even on cancellation, preserve any queued work)
           let cancelledQueuedSummary = '';
           if (subAgent.hasPendingPlan()) {
@@ -4093,14 +4129,53 @@ export class ProductionAgent {
             // Ignore cleanup errors on cancellation
           }
 
+          // Build output message with partial results
           const baseOutput = isUserCancellation
             ? `Subagent '${agentName}' was cancelled by user.`
-            : `Subagent '${agentName}' timed out after ${Math.round(subagentTimeout / 1000)}s. The task may be too complex or the model may be slow.`;
+            : `Subagent '${agentName}' timed out after ${Math.round(subagentTimeout / 1000)}s.`;
+
+          // Include partial response if we have one
+          const partialResultSection = partialResponse
+            ? `\n\n[PARTIAL RESULTS BEFORE TIMEOUT]\n${partialResponse.slice(0, 2000)}${partialResponse.length > 2000 ? '...(truncated)' : ''}`
+            : '';
+
+          // Enhanced tracing: Record subagent timeout with partial results
+          this.traceCollector?.record({
+            type: 'subagent.link',
+            data: {
+              parentSessionId: this.traceCollector.getSessionId() || 'unknown',
+              childSessionId,
+              childTraceId,
+              childConfig: {
+                agentType: agentName,
+                model: resolvedModel || 'default',
+                task,
+                tools: agentTools.map(t => t.name),
+              },
+              spawnContext: {
+                reason: `Delegated task: ${task.slice(0, 100)}`,
+                expectedOutcome: agentDef.description,
+                parentIteration: this.state.iteration,
+              },
+              result: {
+                success: false,
+                summary: `[TIMEOUT] ${baseOutput}\n${partialResponse.slice(0, 200)}`,
+                tokensUsed: subagentMetrics.totalTokens,
+                durationMs: duration,
+              },
+            },
+          });
 
           return {
             success: false,
-            output: baseOutput + cancelledQueuedSummary,
-            metrics: { tokens: 0, duration, toolCalls: 0 },
+            output: baseOutput + partialResultSection + cancelledQueuedSummary,
+            // IMPORTANT: Use actual metrics instead of zeros
+            // This ensures accurate token tracking in /trace output
+            metrics: {
+              tokens: subagentMetrics.totalTokens,
+              duration,
+              toolCalls: subagentMetrics.toolCalls,
+            },
           };
         }
         throw err; // Re-throw non-cancellation errors
@@ -4567,6 +4642,24 @@ If the task is a simple question or doesn't need specialized handling, set bestA
    */
   setParentIterations(count: number): void {
     this.parentIterations = count;
+  }
+
+  /**
+   * Set an external cancellation token for this agent.
+   * Used when spawning subagents to propagate parent timeout/cancellation.
+   * The agent will check this token in its main loop and stop gracefully
+   * when cancellation is requested, preserving partial results.
+   */
+  setExternalCancellation(token: CancellationTokenType): void {
+    this.externalCancellationToken = token;
+  }
+
+  /**
+   * Check if external cancellation has been requested.
+   * Returns true if the external token signals cancellation.
+   */
+  isExternallyCancelled(): boolean {
+    return this.externalCancellationToken?.isCancellationRequested ?? false;
   }
 
   /**

@@ -19,7 +19,7 @@ import type { ThemeColors } from '../types.js';
 // TYPES
 // =============================================================================
 
-export type ActiveAgentStatus = 'running' | 'completed' | 'error' | 'timeout';
+export type ActiveAgentStatus = 'running' | 'completed' | 'error' | 'timeout' | 'timing_out';
 
 export interface ActiveAgent {
   /** Unique agent ID (e.g., "spawn-1234567890") */
@@ -68,6 +68,8 @@ function getStatusIcon(status: ActiveAgentStatus): string {
       return '✗';
     case 'timeout':
       return '⏱';
+    case 'timing_out':
+      return '⧖';  // Hourglass - indicates timing out but still running
     default:
       return '○';
   }
@@ -86,6 +88,8 @@ function getStatusColor(status: ActiveAgentStatus, colors: ThemeColors): string 
       return colors.error;
     case 'timeout':
       return colors.warning;
+    case 'timing_out':
+      return colors.warning;  // Warning color to indicate impending timeout
     default:
       return colors.textMuted;
   }
@@ -184,8 +188,8 @@ export const ActiveAgentsPanel = memo(function ActiveAgentsPanel({
     return null;
   }
 
-  // Count by status
-  const running = agents.filter(a => a.status === 'running').length;
+  // Count by status (timing_out counts as running since agent is still executing)
+  const running = agents.filter(a => a.status === 'running' || a.status === 'timing_out').length;
   const completed = agents.filter(a => a.status === 'completed').length;
   const failed = agents.filter(a => a.status === 'error' || a.status === 'timeout').length;
 
