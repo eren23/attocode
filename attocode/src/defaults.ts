@@ -265,11 +265,13 @@ export const DEFAULT_CANCELLATION_CONFIG: CancellationConfig = {
 
 /**
  * Default resource monitoring configuration.
+ * Note: CPU time is reset per-prompt, so this limit applies to a single prompt's execution,
+ * not the entire session. 30 minutes allows complex multi-subagent tasks to complete.
  */
 export const DEFAULT_RESOURCE_CONFIG: ResourceConfig = {
   enabled: true, // Enabled by default for resource protection
   maxMemoryMB: 512, // 512MB default memory limit
-  maxCpuTimeSec: 900, // 15 minutes default CPU time limit (was 5 min - too strict for complex tasks)
+  maxCpuTimeSec: 1800, // 30 minutes per-prompt CPU time limit (reset on each new prompt)
   maxConcurrentOps: 10, // Max 10 concurrent operations
   warnThreshold: 0.7, // Warn at 70% usage
   criticalThreshold: 0.9, // Critical at 90% usage
@@ -522,7 +524,7 @@ export const DEFAULT_PROVIDER_RESILIENCE_CONFIG: ProviderResilienceConfig = {
  */
 export function buildConfig(
   userConfig: Partial<ProductionAgentConfig>
-): Required<Omit<ProductionAgentConfig, 'provider' | 'tools' | 'toolResolver' | 'mcpToolSummaries' | 'maxContextTokens' | 'blackboard'>> & Pick<ProductionAgentConfig, 'provider' | 'tools' | 'toolResolver' | 'mcpToolSummaries' | 'maxContextTokens' | 'blackboard'> {
+): Required<Omit<ProductionAgentConfig, 'provider' | 'tools' | 'toolResolver' | 'mcpToolSummaries' | 'maxContextTokens' | 'blackboard' | 'budget'>> & Pick<ProductionAgentConfig, 'provider' | 'tools' | 'toolResolver' | 'mcpToolSummaries' | 'maxContextTokens' | 'blackboard' | 'budget'> {
   return {
     provider: userConfig.provider!,
     tools: userConfig.tools || [],
@@ -563,6 +565,7 @@ export function buildConfig(
     timeout: userConfig.timeout ?? 300000, // 5 minutes
     toolResolver: userConfig.toolResolver, // Optional: for lazy-loading MCP tools
     mcpToolSummaries: userConfig.mcpToolSummaries, // Optional: MCP tool summaries for system prompt
+    budget: userConfig.budget, // Optional: custom budget for subagents
   };
 }
 

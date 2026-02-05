@@ -271,6 +271,14 @@ export class ResourceManager {
   }
 
   /**
+   * Reset only the CPU time counter (per-prompt reset).
+   * This allows long sessions with multiple prompts without hitting the wall-clock limit.
+   */
+  resetCpuTime(): void {
+    this.startTime = Date.now();
+  }
+
+  /**
    * Get formatted status string.
    */
   getStatusString(): string {

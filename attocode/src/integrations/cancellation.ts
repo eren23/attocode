@@ -230,6 +230,91 @@ export function createLinkedToken(...sources: CancellationTokenSource[]): Cancel
 }
 
 /**
+ * Progress-aware timeout token.
+ * Extends CancellationTokenSource with the ability to reset the timeout when progress is detected.
+ * Only triggers timeout if there's been no progress for `idleTimeout` milliseconds.
+ */
+export interface ProgressAwareTimeoutSource extends CancellationTokenSource {
+  /** Call this when progress is detected (e.g., tool call, token update) */
+  reportProgress(): void;
+  /** Get time since last progress in ms */
+  getIdleTime(): number;
+  /** Get total elapsed time in ms */
+  getElapsedTime(): number;
+}
+
+/**
+ * Create a progress-aware timeout token.
+ *
+ * @param maxTimeout - Maximum total execution time (hard limit)
+ * @param idleTimeout - Time without progress before cancellation (soft limit)
+ * @param checkInterval - How often to check for idle timeout (default: 5000ms)
+ *
+ * The token will be cancelled when either:
+ * 1. maxTimeout is reached (regardless of progress)
+ * 2. idleTimeout passes without any progress reported
+ *
+ * @example
+ * ```ts
+ * const timeout = createProgressAwareTimeout(300000, 60000); // 5 min max, 1 min idle
+ *
+ * // In event handler:
+ * subAgent.subscribe(event => {
+ *   if (event.type === 'tool.start' || event.type === 'llm.response') {
+ *     timeout.reportProgress();
+ *   }
+ * });
+ * ```
+ */
+export function createProgressAwareTimeout(
+  maxTimeout: number,
+  idleTimeout: number,
+  checkInterval = 5000
+): ProgressAwareTimeoutSource {
+  const source = createCancellationTokenSource() as CancellationTokenSourceImpl;
+  const startTime = Date.now();
+  let lastProgressTime = Date.now();
+  let checkTimer: ReturnType<typeof setInterval> | undefined;
+  let maxTimer: ReturnType<typeof setTimeout> | undefined;
+
+  // Hard limit - cancel after maxTimeout regardless of progress
+  maxTimer = setTimeout(() => {
+    if (!source.isCancellationRequested) {
+      source.cancel(`Maximum timeout exceeded (${Math.round(maxTimeout / 1000)}s)`);
+    }
+  }, maxTimeout);
+
+  // Periodic check for idle timeout
+  checkTimer = setInterval(() => {
+    const idleTime = Date.now() - lastProgressTime;
+    if (idleTime >= idleTimeout && !source.isCancellationRequested) {
+      source.cancel(`Idle timeout - no progress for ${Math.round(idleTime / 1000)}s`);
+    }
+  }, checkInterval);
+
+  // Cleanup timers on dispose
+  const originalDispose = source.dispose.bind(source);
+  source.dispose = () => {
+    if (checkTimer) clearInterval(checkTimer);
+    if (maxTimer) clearTimeout(maxTimer);
+    originalDispose();
+  };
+
+  // Return extended source with progress reporting
+  return Object.assign(source, {
+    reportProgress() {
+      lastProgressTime = Date.now();
+    },
+    getIdleTime() {
+      return Date.now() - lastProgressTime;
+    },
+    getElapsedTime() {
+      return Date.now() - startTime;
+    },
+  });
+}
+
+/**
  * Create a "none" token that is never cancelled.
  * Useful as a default when no cancellation is needed.
  */

@@ -38,6 +38,18 @@ const CODE_LOCATIONS: Record<string, Array<{ file: string; component: string; re
     { file: 'src/providers/adapters/anthropic.ts', component: 'AnthropicProvider', relevance: 'primary' },
     { file: 'src/agent.ts', component: 'callLLM', relevance: 'secondary' },
   ],
+  subagent_inefficiency: [
+    { file: 'src/agent.ts', component: 'spawnAgent', relevance: 'primary' },
+    { file: 'src/agent.ts', component: 'spawnAgentsParallel', relevance: 'secondary' },
+  ],
+  context_limit_warning: [
+    { file: 'src/integrations/auto-compaction.ts', component: 'AutoCompactionManager', relevance: 'primary' },
+    { file: 'src/agent.ts', component: 'ProductionAgent.run', relevance: 'secondary' },
+  ],
+  tool_timeout_patterns: [
+    { file: 'src/tools/', component: 'Tool implementations', relevance: 'primary' },
+    { file: 'src/integrations/cancellation.ts', component: 'CancellationManager', relevance: 'secondary' },
+  ],
 };
 
 /**
@@ -66,6 +78,9 @@ export class InefficiencyDetector {
     this.detectSlowTools();
     this.detectTokenSpike();
     this.detectThinkingOverhead();
+    this.detectSubagentInefficiency();
+    this.detectContextLimitWarning();
+    this.detectToolTimeoutPatterns();
 
     // Sort by severity
     const severityOrder = { critical: 0, high: 1, medium: 2, low: 3 };
@@ -301,6 +316,131 @@ export class InefficiencyDetector {
           suggestedFix: 'Consider if extended thinking is necessary for this task type',
         });
       }
+    }
+  }
+
+  /**
+   * Detect subagent inefficiency (repeated failures).
+   */
+  private detectSubagentInefficiency(): void {
+    const subagentFailures = this.session.subagentLinks.filter(link => link.success === false);
+    const failedAgents = new Map<string, number>();
+
+    for (const link of subagentFailures) {
+      const count = (failedAgents.get(link.agentType) || 0) + 1;
+      failedAgents.set(link.agentType, count);
+    }
+
+    // Check for same agent failing multiple times
+    for (const [agentType, count] of failedAgents) {
+      if (count >= 2) {
+        this.addInefficiency({
+          type: 'subagent_inefficiency',
+          severity: count >= 3 ? 'high' : 'medium',
+          description: `Subagent '${agentType}' failed ${count} times`,
+          evidence: `${count} failures out of ${this.session.subagentLinks.filter(l => l.agentType === agentType).length} spawns`,
+          suggestedFix: 'Review subagent configuration or task delegation logic',
+        });
+      }
+    }
+
+    // Check for high overall subagent failure rate
+    const totalSubagents = this.session.subagentLinks.length;
+    if (totalSubagents >= 3 && subagentFailures.length / totalSubagents > 0.5) {
+      this.addInefficiency({
+        type: 'subagent_inefficiency',
+        severity: 'high',
+        description: `High subagent failure rate: ${Math.round((subagentFailures.length / totalSubagents) * 100)}%`,
+        evidence: `${subagentFailures.length} of ${totalSubagents} subagents failed`,
+        suggestedFix: 'Check task complexity and subagent capabilities',
+      });
+    }
+  }
+
+  /**
+   * Detect when approaching context token limit.
+   */
+  private detectContextLimitWarning(): void {
+    // Estimate typical context limits (Claude: 200k, GPT-4: 128k)
+    const estimatedLimit = 200000; // Conservative estimate
+
+    // Calculate total tokens used in last iteration
+    const lastIteration = this.session.iterations[this.session.iterations.length - 1];
+    if (!lastIteration) return;
+
+    // Sum up all input/output tokens to estimate context window usage
+    const totalTokens = this.session.metrics.inputTokens;
+
+    if (totalTokens > estimatedLimit * 0.9) {
+      this.addInefficiency({
+        type: 'context_limit_warning',
+        severity: 'critical',
+        description: `Context window critically full: ~${Math.round((totalTokens / estimatedLimit) * 100)}% used`,
+        evidence: `Estimated ${totalTokens.toLocaleString()} tokens used (limit ~${estimatedLimit.toLocaleString()})`,
+        suggestedFix: 'Enable auto-compaction or start a new session',
+      });
+    } else if (totalTokens > estimatedLimit * 0.7) {
+      this.addInefficiency({
+        type: 'context_limit_warning',
+        severity: 'medium',
+        description: `Context window filling up: ~${Math.round((totalTokens / estimatedLimit) * 100)}% used`,
+        evidence: `Estimated ${totalTokens.toLocaleString()} tokens used (limit ~${estimatedLimit.toLocaleString()})`,
+        suggestedFix: 'Consider enabling auto-compaction',
+      });
+    }
+  }
+
+  /**
+   * Detect patterns of tool timeouts.
+   */
+  private detectToolTimeoutPatterns(): void {
+    const toolTimeouts = new Map<string, number[]>();
+
+    for (const iter of this.session.iterations) {
+      for (const tool of iter.tools) {
+        if (tool.status === 'timeout') {
+          const iters = toolTimeouts.get(tool.name) || [];
+          iters.push(iter.number);
+          toolTimeouts.set(tool.name, iters);
+        }
+      }
+    }
+
+    // Find tools that timeout repeatedly
+    for (const [toolName, iterations] of toolTimeouts) {
+      if (iterations.length >= 3) {
+        this.addInefficiency({
+          type: 'tool_timeout_patterns',
+          severity: 'high',
+          description: `Tool '${toolName}' timed out ${iterations.length} times`,
+          evidence: `Timeouts in iterations: ${iterations.join(', ')}`,
+          iterations,
+          suggestedFix: 'Increase tool timeout or optimize tool implementation',
+        });
+      } else if (iterations.length >= 2) {
+        this.addInefficiency({
+          type: 'tool_timeout_patterns',
+          severity: 'medium',
+          description: `Tool '${toolName}' timed out ${iterations.length} times`,
+          evidence: `Timeouts in iterations: ${iterations.join(', ')}`,
+          iterations,
+          suggestedFix: 'Monitor tool performance and consider increasing timeout',
+        });
+      }
+    }
+
+    // Check for overall timeout rate
+    const totalToolCalls = this.session.iterations.reduce((sum, iter) => sum + iter.tools.length, 0);
+    const totalTimeouts = Array.from(toolTimeouts.values()).reduce((sum, arr) => sum + arr.length, 0);
+
+    if (totalToolCalls >= 10 && totalTimeouts / totalToolCalls > 0.2) {
+      this.addInefficiency({
+        type: 'tool_timeout_patterns',
+        severity: 'high',
+        description: `High tool timeout rate: ${Math.round((totalTimeouts / totalToolCalls) * 100)}%`,
+        evidence: `${totalTimeouts} timeouts out of ${totalToolCalls} tool calls`,
+        suggestedFix: 'Review global timeout settings and tool performance',
+      });
     }
   }
 

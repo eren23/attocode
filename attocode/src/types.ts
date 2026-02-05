@@ -236,6 +236,21 @@ export interface ProductionAgentConfig {
    * @internal Used for subagent spawning
    */
   blackboard?: unknown; // SharedBlackboard - using unknown to avoid circular import
+
+  /**
+   * Custom budget configuration for the economics system.
+   * Subagents should use SUBAGENT_BUDGET for constrained execution.
+   * @internal Used for subagent spawning
+   */
+  budget?: {
+    maxTokens?: number;
+    softTokenLimit?: number;
+    maxCost?: number;
+    maxDuration?: number;
+    softDurationLimit?: number;
+    targetIterations?: number;
+    maxIterations?: number;
+  };
 }
 
 // =============================================================================
@@ -1134,9 +1149,11 @@ export type AgentEvent =
   | { type: 'checkpoint.restored'; checkpointId: string }
   | { type: 'rollback'; steps: number }
   // Agent registry events (subagent support)
+  // agentId is the unique instance ID (e.g., "spawn-1704067200000-abc123")
+  // agentType is the agent type name (e.g., "researcher") for display purposes
   | { type: 'agent.spawn'; agentId: string; name: string; task: string }
-  | { type: 'agent.complete'; agentId: string; success: boolean; output?: string }
-  | { type: 'agent.error'; agentId: string; error: string }
+  | { type: 'agent.complete'; agentId: string; agentType?: string; success: boolean; output?: string }
+  | { type: 'agent.error'; agentId: string; agentType?: string; error: string }
   | { type: 'agent.registered'; name: string }
   | { type: 'agent.unregistered'; name: string }
   | { type: 'agent.pending_plan'; agentId: string; changes: Array<{ id: string; tool: string; args: Record<string, unknown>; reason: string }> }

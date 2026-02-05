@@ -10,9 +10,10 @@
 
 import { useState, useCallback, useEffect, memo, useRef, useMemo } from 'react';
 import { Box, Text, useApp, useInput, Static } from 'ink';
-import { DiffView } from './components/DiffView.js';
 import { ActiveAgentsPanel, type ActiveAgent, type ActiveAgentStatus } from './components/ActiveAgentsPanel.js';
 import { TasksPanel } from './components/TasksPanel.js';
+import { ToolCallItem, type ToolCallDisplayItem as ImportedToolCallDisplayItem } from './components/ToolCallItem.js';
+import { DebugPanel, useDebugBuffer } from './components/DebugPanel.js';
 import type { Task } from '../integrations/task-manager.js';
 import type { ProductionAgent } from '../agent.js';
 import type { SQLiteStore } from '../integrations/sqlite-store.js';
@@ -29,6 +30,7 @@ import { handleSkillsCommand, formatEnhancedSkillList } from '../commands/skills
 import { handleAgentsCommand, formatEnhancedAgentList } from '../commands/agents-commands.js';
 import { handleInitCommand } from '../commands/init-commands.js';
 import type { CommandOutput } from '../commands/types.js';
+import { createHistoryManager, type HistoryManager } from '../integrations/history.js';
 
 // =============================================================================
 // PATTERN GENERATION FOR ALWAYS-ALLOW
@@ -100,17 +102,9 @@ interface TUIMessage {
   ts: Date;
 }
 
-/** Tool call display item */
-interface ToolCallDisplayItem {
-  id: string;
-  name: string;
-  args: Record<string, unknown>;
-  status: 'pending' | 'running' | 'success' | 'error';
-  result?: unknown;
-  error?: string;
-  duration?: number;
-  startTime?: Date;
-}
+// ToolCallDisplayItem is imported from ./components/ToolCallItem.js
+// Re-export type alias for local usage
+type ToolCallDisplayItem = ImportedToolCallDisplayItem;
 
 // =============================================================================
 // MEMOIZED MESSAGE ITEM
@@ -146,136 +140,8 @@ const MessageItem = memo(function MessageItem({ msg, colors }: MessageItemProps)
   );
 });
 
-// =============================================================================
-// MEMOIZED TOOL CALL ITEM
-// =============================================================================
-
-interface ToolCallItemProps {
-  tc: ToolCallDisplayItem;
-  expanded: boolean;
-  colors: ThemeColors;
-}
-
-const ToolCallItem = memo(function ToolCallItem({ tc, expanded, colors }: ToolCallItemProps) {
-  const icon = tc.status === 'success' ? '[OK]' : tc.status === 'error' ? '[X]' : tc.status === 'running' ? '[~]' : '[ ]';
-  const statusColor = tc.status === 'success' ? '#98FB98' : tc.status === 'error' ? '#FF6B6B' : tc.status === 'running' ? '#87CEEB' : colors.textMuted;
-
-  // Compact formatting for collapsed view
-  const formatToolArgsCompact = (args: Record<string, unknown>): string => {
-    const entries = Object.entries(args);
-    if (entries.length === 0) return '';
-    if (entries.length === 1) {
-      const [key, val] = entries[0];
-      const valStr = typeof val === 'string' ? val : JSON.stringify(val);
-      return valStr.length > 50 ? `${key}: ${valStr.slice(0, 47)}...` : `${key}: ${valStr}`;
-    }
-    return `{${entries.length} args}`;
-  };
-
-  // Expanded formatting - each arg on its own line with proper handling
-  const formatToolArgsExpanded = (args: Record<string, unknown>): string[] => {
-    const entries = Object.entries(args);
-    if (entries.length === 0) return [];
-
-    return entries.map(([key, val]) => {
-      let valStr: string;
-      if (typeof val === 'string') {
-        // For strings, show with quotes, handle multiline
-        if (val.includes('\n')) {
-          const lines = val.split('\n');
-          if (lines.length > 3) {
-            valStr = `"${lines.slice(0, 3).join('\\n')}..." (${lines.length} lines)`;
-          } else {
-            valStr = `"${val.replace(/\n/g, '\\n')}"`;
-          }
-        } else if (val.length > 100) {
-          valStr = `"${val.slice(0, 97)}..."`;
-        } else {
-          valStr = `"${val}"`;
-        }
-      } else if (typeof val === 'object' && val !== null) {
-        const json = JSON.stringify(val, null, 2);
-        if (json.length > 200) {
-          valStr = JSON.stringify(val).slice(0, 197) + '...';
-        } else {
-          valStr = json;
-        }
-      } else {
-        valStr = String(val);
-      }
-      return `${key}: ${valStr}`;
-    });
-  };
-
-  const argsStr = formatToolArgsCompact(tc.args);
-
-  if (expanded) {
-    const expandedArgs = formatToolArgsExpanded(tc.args);
-
-    return (
-      <Box marginLeft={2} flexDirection="column">
-        <Box gap={1}>
-          <Text color={statusColor}>{icon}</Text>
-          <Text color="#DDA0DD" bold>{tc.name}</Text>
-          {tc.duration ? <Text color={colors.textMuted} dimColor>({tc.duration}ms)</Text> : null}
-        </Box>
-        {/* Show each arg on its own line for readability */}
-        {expandedArgs.map((argLine, i) => (
-          <Box key={i} marginLeft={3}>
-            <Text color="#87CEEB" dimColor>{argLine}</Text>
-          </Box>
-        ))}
-        {tc.status === 'success' && tc.result !== undefined && tc.result !== null ? (
-          <Box marginLeft={3} flexDirection="column">
-            {/* Show diff if available for file operations */}
-            {(tc.name === 'edit_file' || tc.name === 'write_file') &&
-             typeof tc.result === 'object' && tc.result !== null &&
-             'metadata' in tc.result &&
-             typeof (tc.result as { metadata?: { diff?: string } }).metadata?.diff === 'string' ? (
-              <DiffView
-                diff={(tc.result as { metadata: { diff: string } }).metadata.diff}
-                expanded={true}
-                maxLines={15}
-              />
-            ) : (
-              <Text color="#98FB98" dimColor>
-                {`-> ${String(tc.result).slice(0, 150)}${String(tc.result).length > 150 ? '...' : ''}`}
-              </Text>
-            )}
-          </Box>
-        ) : null}
-        {tc.status === 'error' && tc.error && (
-          <Box marginLeft={3}>
-            <Text color="#FF6B6B">{`x ${tc.error}`}</Text>
-          </Box>
-        )}
-      </Box>
-    );
-  }
-
-  // Check if result has diff metadata for collapsed summary
-  const hasDiff = tc.status === 'success' &&
-    (tc.name === 'edit_file' || tc.name === 'write_file') &&
-    typeof tc.result === 'object' && tc.result !== null &&
-    'metadata' in tc.result &&
-    typeof (tc.result as { metadata?: { diff?: string } }).metadata?.diff === 'string';
-
-  return (
-    <Box marginLeft={2} gap={1}>
-      <Text color={statusColor}>{icon}</Text>
-      <Text color="#DDA0DD" bold>{tc.name}</Text>
-      {argsStr ? <Text color={colors.textMuted} dimColor>{argsStr}</Text> : null}
-      {/* Show diff summary in collapsed view */}
-      {hasDiff && (
-        <DiffView
-          diff={(tc.result as { metadata: { diff: string } }).metadata.diff}
-          expanded={false}
-        />
-      )}
-      {tc.duration ? <Text color={colors.textMuted} dimColor>({tc.duration}ms)</Text> : null}
-    </Box>
-  );
-});
+// ToolCallItem is imported from ./components/ToolCallItem.js
+// It handles diff rendering, subagent-prefixed names, and result stringification
 
 // =============================================================================
 // MEMOIZED INPUT AREA
@@ -298,6 +164,7 @@ interface MemoizedInputAreaProps {
   onToggleTransparency?: () => void;
   onToggleActiveAgents?: () => void;
   onToggleTasks?: () => void;
+  onToggleDebug?: () => void;
   onPageUp?: () => void;
   onPageDown?: () => void;
   onHome?: () => void;
@@ -314,6 +181,9 @@ interface MemoizedInputAreaProps {
   onApprovalDenyWithReason?: () => void;
   onApprovalCancelDenyReason?: () => void;
   onApprovalDenyReasonInput?: (input: string, key: any) => void;
+  // History support
+  history?: string[];
+  onHistorySearch?: (query: string) => string[];
 }
 
 const MemoizedInputArea = memo(function MemoizedInputArea({
@@ -331,6 +201,7 @@ const MemoizedInputArea = memo(function MemoizedInputArea({
   onToggleTransparency,
   onToggleActiveAgents,
   onToggleTasks,
+  onToggleDebug,
   onPageUp,
   onPageDown,
   onHome,
@@ -345,28 +216,38 @@ const MemoizedInputArea = memo(function MemoizedInputArea({
   onApprovalDenyWithReason,
   onApprovalCancelDenyReason,
   onApprovalDenyReasonInput,
+  history = [],
+  onHistorySearch,
 }: MemoizedInputAreaProps) {
   const [value, setValue] = useState('');
   const [cursorPos, setCursorPos] = useState(0);
 
+  // History navigation state
+  const [historyIndex, setHistoryIndex] = useState(-1); // -1 = current input (not browsing history)
+  const [savedInput, setSavedInput] = useState(''); // Preserve current input when browsing
+  const historyRef = useRef(history);
+  historyRef.current = history;
+
   // Store callbacks in refs so useInput doesn't re-subscribe on prop changes
   const callbacksRef = useRef({
     onSubmit, onCtrlC, onCtrlL, onCtrlP, onEscape,
-    onToggleToolExpand, onToggleThinking, onToggleTransparency, onToggleActiveAgents, onToggleTasks,
+    onToggleToolExpand, onToggleThinking, onToggleTransparency, onToggleActiveAgents, onToggleTasks, onToggleDebug,
     onPageUp, onPageDown, onHome, onEnd,
     commandPaletteOpen, onCommandPaletteInput,
     approvalDialogOpen, approvalDenyReasonMode,
     onApprovalApprove, onApprovalAlwaysAllow, onApprovalDeny, onApprovalDenyWithReason,
     onApprovalCancelDenyReason, onApprovalDenyReasonInput,
+    onHistorySearch,
   });
   callbacksRef.current = {
     onSubmit, onCtrlC, onCtrlL, onCtrlP, onEscape,
-    onToggleToolExpand, onToggleThinking, onToggleTransparency, onToggleActiveAgents, onToggleTasks,
+    onToggleToolExpand, onToggleThinking, onToggleTransparency, onToggleActiveAgents, onToggleTasks, onToggleDebug,
     onPageUp, onPageDown, onHome, onEnd,
     commandPaletteOpen, onCommandPaletteInput,
     approvalDialogOpen, approvalDenyReasonMode,
     onApprovalApprove, onApprovalAlwaysAllow, onApprovalDeny, onApprovalDenyWithReason,
     onApprovalCancelDenyReason, onApprovalDenyReasonInput,
+    onHistorySearch,
   };
   const disabledRef = useRef(disabled);
   disabledRef.current = disabled;
@@ -414,6 +295,11 @@ const MemoizedInputArea = memo(function MemoizedInputArea({
     // Alt+K / Option+K - Toggle tasks panel
     if (input === '\u02da' || (key.meta && input === 'k')) {
       cb.onToggleTasks?.();
+      return;
+    }
+    // Alt+D / Option+D - Toggle debug panel
+    if (input === '\u2202' || (key.meta && input === 'd')) {
+      cb.onToggleDebug?.();
       return;
     }
 
@@ -484,10 +370,19 @@ const MemoizedInputArea = memo(function MemoizedInputArea({
     // Input handling (only when not disabled)
     if (disabledRef.current) return;
 
+    // Shift+Enter for multiline input (insert newline)
+    if (key.return && key.shift) {
+      setValue(v => v.slice(0, cursorPos) + '\n' + v.slice(cursorPos));
+      setCursorPos(p => p + 1);
+      return;
+    }
+
     if (key.return && value.trim()) {
       cb.onSubmit(value);
       setValue('');
       setCursorPos(0);
+      setHistoryIndex(-1); // Reset history navigation
+      setSavedInput('');
       return;
     }
 
@@ -505,6 +400,52 @@ const MemoizedInputArea = memo(function MemoizedInputArea({
     }
     if (key.rightArrow) {
       setCursorPos(p => Math.min(value.length, p + 1));
+      return;
+    }
+
+    // History navigation with up/down arrows
+    if (key.upArrow && historyRef.current.length > 0) {
+      setHistoryIndex(prevIndex => {
+        const maxIndex = historyRef.current.length - 1;
+        if (prevIndex === -1) {
+          // First press - save current input and go to most recent history
+          setSavedInput(value);
+          const newValue = historyRef.current[maxIndex] || '';
+          setValue(newValue);
+          setCursorPos(newValue.length);
+          return maxIndex;
+        } else if (prevIndex > 0) {
+          // Go to older entry
+          const newIndex = prevIndex - 1;
+          const newValue = historyRef.current[newIndex] || '';
+          setValue(newValue);
+          setCursorPos(newValue.length);
+          return newIndex;
+        }
+        return prevIndex; // Already at oldest
+      });
+      return;
+    }
+    if (key.downArrow && historyRef.current.length > 0) {
+      setHistoryIndex(prevIndex => {
+        if (prevIndex === -1) {
+          // Not browsing history, do nothing
+          return -1;
+        } else if (prevIndex < historyRef.current.length - 1) {
+          // Go to newer entry
+          const newIndex = prevIndex + 1;
+          const newValue = historyRef.current[newIndex] || '';
+          setValue(newValue);
+          setCursorPos(newValue.length);
+          return newIndex;
+        } else {
+          // At most recent - restore saved input
+          setValue(savedInput);
+          setCursorPos(savedInput.length);
+          setSavedInput('');
+          return -1;
+        }
+      });
       return;
     }
 
@@ -528,20 +469,30 @@ const MemoizedInputArea = memo(function MemoizedInputArea({
     }
   });
 
+  // Check if multiline (for visual indicator)
+  const isMultiline = value.includes('\n');
+  const lineCount = value.split('\n').length;
+
   return (
     <Box
       borderStyle="round"
       borderColor={disabledRef.current ? '#666' : borderColor}
       paddingX={1}
+      flexDirection="column"
     >
-      <Text color={textColor} bold>{'>'} </Text>
-      <Text>{value.slice(0, cursorPos)}</Text>
-      {!disabled && (
-        <Text backgroundColor={cursorColor} color="#1a1a2e">
-          {value[cursorPos] ?? ' '}
-        </Text>
-      )}
-      <Text>{value.slice(cursorPos + 1)}</Text>
+      <Box>
+        <Text color={textColor} bold>{isMultiline ? '»' : '>'} </Text>
+        <Text>{value.slice(0, cursorPos).replace(/\n/g, '⏎')}</Text>
+        {!disabled && (
+          <Text backgroundColor={cursorColor} color="#1a1a2e">
+            {value[cursorPos] === '\n' ? '⏎' : (value[cursorPos] ?? ' ')}
+          </Text>
+        )}
+        <Text>{value.slice(cursorPos + 1).replace(/\n/g, '⏎')}</Text>
+        {isMultiline && (
+          <Text color="#666" dimColor> ({lineCount} lines)</Text>
+        )}
+      </Box>
     </Box>
   );
 }, (prevProps, nextProps) => {
@@ -586,6 +537,18 @@ export function TUIApp({
   const [elapsedTime, setElapsedTime] = useState(0);
   const processingStartRef = useRef<number | null>(null);
 
+  // Command history manager (persistent)
+  const historyManagerRef = useRef<HistoryManager | null>(null);
+  if (!historyManagerRef.current) {
+    historyManagerRef.current = createHistoryManager();
+  }
+  const [historyEntries, setHistoryEntries] = useState<string[]>(() =>
+    historyManagerRef.current?.getHistory() || []
+  );
+
+  // Debug buffer for debug panel
+  const debugBuffer = useDebugBuffer(100);
+
   // Execution mode to prevent duplicate event handling
   // 'idle' = no active execution, 'processing' = handleSubmit running, 'approving' = /approve running
   type ExecutionMode = 'idle' | 'processing' | 'approving';
@@ -598,6 +561,7 @@ export function TUIApp({
   const [transparencyExpanded, setTransparencyExpanded] = useState(false);
   const [activeAgentsExpanded, setActiveAgentsExpanded] = useState(true);
   const [tasksExpanded, setTasksExpanded] = useState(true);
+  const [debugExpanded, setDebugExpanded] = useState(false);
 
   // Active agents tracking (for Active Agents Panel)
   const [activeAgents, setActiveAgents] = useState<ActiveAgent[]>([]);
@@ -621,6 +585,10 @@ export function TUIApp({
   // Transparency state
   const [transparencyState, setTransparencyState] = useState<TransparencyState | null>(null);
   const transparencyAggregatorRef = useRef<TransparencyAggregator | null>(null);
+
+  // Consecutive Ctrl+C tracking for force exit
+  const [ctrlCCount, setCtrlCCount] = useState(0);
+  const ctrlCTimerRef = useRef<NodeJS.Timeout | null>(null);
 
   // Refs for stable callbacks
   const isProcessingRef = useRef(isProcessing);
@@ -722,6 +690,11 @@ export function TUIApp({
     const mode = executionModeRef.current;
     if (mode === 'idle') return; // No active execution, ignore events
 
+    // Log event to debug buffer
+    if (debugExpanded) {
+      debugBuffer.debug(`Event: ${event.type}`, event as Record<string, unknown>);
+    }
+
     // Extract subagent from event if present (not all events have it)
     const eventWithSubagent = event as { subagent?: string };
     const subagentPrefix = eventWithSubagent.subagent ? `[${eventWithSubagent.subagent}] ` : '';
@@ -763,25 +736,28 @@ export function TUIApp({
       return;
     }
     if (event.type === 'agent.complete') {
-      const e = event as { agentId: string; success: boolean; output?: string };
+      const e = event as { agentId: string; agentType?: string; success: boolean; output?: string };
       const statusText = e.success ? 'completed' : 'failed';
-      addMessage('system', `[AGENT] ${e.agentId} ${statusText}`);
-      // Show output preview if substantive
+      const displayName = e.agentType || e.agentId;
+      addMessage('system', `[AGENT] ${displayName} ${statusText}`);
+      // Show output preview if substantive (increased from 300 to 1000 chars)
       if (e.output && e.output.length > 50) {
-        const preview = e.output.slice(0, 300);
-        addMessage('system', `[AGENT OUTPUT]\n${preview}${e.output.length > 300 ? '\n...(truncated)' : ''}`);
+        const preview = e.output.slice(0, 1000);
+        const truncated = e.output.length > 1000;
+        addMessage('system', `[AGENT OUTPUT]\n${preview}${truncated ? `\n...(full output: ${e.output.length} chars)` : ''}`);
       }
-      // Update active agents panel
+      // Update active agents panel - use strict ID matching
       setActiveAgents(prev => prev.map(a =>
-        a.type === e.agentId || a.id.includes(e.agentId)
+        a.id === e.agentId
           ? { ...a, status: e.success ? 'completed' as ActiveAgentStatus : 'error' as ActiveAgentStatus }
           : a
       ));
       return;
     }
     if (event.type === 'agent.error') {
-      const e = event as { agentId: string; error: string };
-      addMessage('system', `[AGENT] ${e.agentId} error: ${e.error}`);
+      const e = event as { agentId: string; agentType?: string; error: string };
+      const displayName = e.agentType || e.agentId;
+      addMessage('system', `[AGENT] ${displayName} error: ${e.error}`);
 
       // For timeout errors, use 'timing_out' status first to indicate the agent
       // is in the process of stopping. Then transition to 'timeout' after a delay.
@@ -789,9 +765,9 @@ export function TUIApp({
       const isTimeout = e.error.includes('timed out') || e.error.includes('Timed out');
 
       if (isTimeout) {
-        // First, mark as timing_out
+        // First, mark as timing_out - use strict ID matching
         setActiveAgents(prev => prev.map(a =>
-          a.type === e.agentId || a.id.includes(e.agentId)
+          a.id === e.agentId
             ? { ...a, status: 'timing_out' as ActiveAgentStatus }
             : a
         ));
@@ -800,15 +776,15 @@ export function TUIApp({
         // (agent should have stopped by then due to cancellation token check)
         setTimeout(() => {
           setActiveAgents(prev => prev.map(a =>
-            (a.type === e.agentId || a.id.includes(e.agentId)) && a.status === 'timing_out'
+            a.id === e.agentId && a.status === 'timing_out'
               ? { ...a, status: 'timeout' as ActiveAgentStatus }
               : a
           ));
         }, 3000);
       } else {
-        // Regular error - set immediately
+        // Regular error - set immediately with strict ID matching
         setActiveAgents(prev => prev.map(a =>
-          a.type === e.agentId || a.id.includes(e.agentId)
+          a.id === e.agentId
             ? { ...a, status: 'error' as ActiveAgentStatus }
             : a
         ));
@@ -896,9 +872,14 @@ export function TUIApp({
       // These agents should have stopped, and any lingering events are from
       // zombie processes that we don't want to count.
       if (e.subagent || eventWithSubagent.subagent) {
+        const subagentId = (e as { subagentId?: string }).subagentId || (eventWithSubagent as { subagentId?: string }).subagentId;
         const agentName = e.subagent || eventWithSubagent.subagent;
         setActiveAgents(prev => prev.map(a => {
-          const matchesAgent = a.type === agentName || a.id.includes(agentName || '');
+          // Use strict ID matching when subagentId is available (prevents duplicate counting
+          // when multiple agents of the same type run in parallel)
+          const matchesAgent = subagentId
+            ? a.id === subagentId
+            : (a.type === agentName || a.id.includes(agentName || ''));
           const isStillRunning = a.status === 'running';
           // Only update tokens if agent is still running
           if (matchesAgent && isStillRunning) {
@@ -924,25 +905,29 @@ export function TUIApp({
 
     // Subagent visibility events - also update Active Agents Panel
     if (event.type === 'subagent.iteration') {
-      const e = event as { agentId: string; iteration: number; maxIterations: number };
+      const e = event as { agentId: string; iteration: number; maxIterations: number; subagentId?: string };
       setStatus(s => ({ ...s, mode: `${e.agentId} iter ${e.iteration}/${e.maxIterations}` }));
       // Update active agents panel with iteration info
-      setActiveAgents(prev => prev.map(a =>
-        a.type === e.agentId || a.id.includes(e.agentId)
-          ? { ...a, iteration: e.iteration, maxIterations: e.maxIterations }
-          : a
-      ));
+      // Use subagentId for strict matching when available (parallel same-type agents)
+      setActiveAgents(prev => prev.map(a => {
+        const matches = e.subagentId
+          ? a.id === e.subagentId
+          : (a.type === e.agentId || a.id.includes(e.agentId));
+        return matches ? { ...a, iteration: e.iteration, maxIterations: e.maxIterations } : a;
+      }));
       return;
     }
     if (event.type === 'subagent.phase') {
-      const e = event as { agentId: string; phase: string };
+      const e = event as { agentId: string; phase: string; subagentId?: string };
       setStatus(s => ({ ...s, mode: `${e.agentId} ${e.phase}` }));
       // Update active agents panel with phase info
-      setActiveAgents(prev => prev.map(a =>
-        a.type === e.agentId || a.id.includes(e.agentId)
-          ? { ...a, currentPhase: e.phase }
-          : a
-      ));
+      // Use subagentId for strict matching when available (parallel same-type agents)
+      setActiveAgents(prev => prev.map(a => {
+        const matches = e.subagentId
+          ? a.id === e.subagentId
+          : (a.type === e.agentId || a.id.includes(e.agentId));
+        return matches ? { ...a, currentPhase: e.phase } : a;
+      }));
       return;
     }
 
@@ -1141,6 +1126,7 @@ export function TUIApp({
           '  Alt+O       Toggle thinking',
           '  Alt+I       Toggle transparency panel',
           '  Alt+K       Toggle tasks panel',
+          '  Alt+D       Toggle debug panel',
           '========================',
         ].join('\n'));
         return;
@@ -1922,6 +1908,12 @@ export function TUIApp({
     const trimmed = input.trim();
     if (!trimmed) return;
 
+    // Add to history (persistent)
+    if (historyManagerRef.current) {
+      historyManagerRef.current.addEntry(trimmed);
+      setHistoryEntries(historyManagerRef.current.getHistory());
+    }
+
     addMessage('user', trimmed);
 
     if (trimmed.startsWith('/')) {
@@ -1935,6 +1927,9 @@ export function TUIApp({
     executionModeRef.current = 'processing';
     setExecutionMode('processing');
     setStatus(s => ({ ...s, mode: 'thinking' }));
+
+    // Reset CPU time counter for per-prompt resource limits (prevents session-wide timeout)
+    agent.resetResourceTimer();
 
     try {
       const result = await agent.run(trimmed);
@@ -2102,8 +2097,39 @@ export function TUIApp({
   // =========================================================================
 
   const handleCtrlC = useCallback(() => {
-    agent.cleanup().then(() => mcpClient.cleanup()).then(() => lspManager.cleanup()).then(() => exit());
-  }, [agent, mcpClient, lspManager, exit]);
+    // Clear any existing timer
+    if (ctrlCTimerRef.current) {
+      clearTimeout(ctrlCTimerRef.current);
+      ctrlCTimerRef.current = null;
+    }
+
+    setCtrlCCount(prevCount => {
+      const newCount = prevCount + 1;
+
+      if (newCount >= 2) {
+        // Second Ctrl+C within timeout window - force exit immediately
+        process.exit(1);
+      }
+
+      // First Ctrl+C - show warning and start graceful cleanup
+      addMessage('system', '[CTRL+C] Press again within 1s to force exit...');
+
+      // Start graceful cleanup in background
+      agent.cleanup()
+        .then(() => mcpClient.cleanup())
+        .then(() => lspManager.cleanup())
+        .then(() => exit())
+        .catch(() => exit()); // Exit even if cleanup fails
+
+      // Reset counter after 1 second
+      ctrlCTimerRef.current = setTimeout(() => {
+        setCtrlCCount(0);
+        ctrlCTimerRef.current = null;
+      }, 1000);
+
+      return newCount;
+    });
+  }, [agent, mcpClient, lspManager, exit, addMessage]);
 
   const handleCtrlL = useCallback(() => {
     setMessages([]);
@@ -2116,7 +2142,7 @@ export function TUIApp({
     setCommandPaletteIndex(0);
   }, []);
 
-  const handleEscape = useCallback(() => {
+  const handleEscape = useCallback(async () => {
     // Close command palette first if open
     if (commandPaletteOpen) {
       setCommandPaletteOpen(false);
@@ -2126,11 +2152,30 @@ export function TUIApp({
     }
     // Otherwise cancel processing
     if (isProcessingRef.current) {
+      // Immediate visual feedback
+      addMessage('system', '[ESC] Stopping agent...');
+
+      // Autosave checkpoint before cancel (async, don't block)
+      try {
+        const agentState = agent.getState();
+        saveCheckpointToStore(sessionStore, {
+          sessionId: currentSessionId,
+          reason: 'user_cancel',
+          messages: agentState.messages,
+          iteration: agentState.iteration,
+          timestamp: Date.now(),
+        });
+        persistenceDebug.log('Checkpoint saved before cancel');
+      } catch (e) {
+        persistenceDebug.error('Failed to save checkpoint before cancel', e);
+      }
+
+      // Cancel the agent
       agent.cancel('Cancelled by ESC');
       setIsProcessing(false);
-      addMessage('system', '[STOP] Cancelled');
+      addMessage('system', '[STOP] Cancelled (checkpoint saved)');
     }
-  }, [agent, addMessage, commandPaletteOpen]);
+  }, [agent, addMessage, commandPaletteOpen, sessionStore, currentSessionId, saveCheckpointToStore, persistenceDebug]);
 
   const handleToggleToolExpand = useCallback(() => {
     setToolCallsExpanded(prev => {
@@ -2163,6 +2208,13 @@ export function TUIApp({
   const handleToggleTasks = useCallback(() => {
     setTasksExpanded(prev => {
       addMessage('system', !prev ? '[v] Tasks: visible' : '[^] Tasks: hidden');
+      return !prev;
+    });
+  }, [addMessage]);
+
+  const handleToggleDebug = useCallback(() => {
+    setDebugExpanded(prev => {
+      addMessage('system', !prev ? '[v] Debug panel: visible (Alt+D)' : '[^] Debug panel: hidden');
       return !prev;
     });
   }, [addMessage]);
@@ -2292,6 +2344,13 @@ export function TUIApp({
           />
         )}
 
+        {/* Debug Panel (toggle with Alt+D) */}
+        <DebugPanel
+          entries={debugBuffer.entries}
+          expanded={debugExpanded}
+          colors={colors}
+        />
+
         {/* Tasks Panel (positioned above input for task tracking) */}
         <TasksPanel
           tasks={tasks}
@@ -2321,6 +2380,7 @@ export function TUIApp({
           onToggleTransparency={handleToggleTransparency}
           onToggleActiveAgents={handleToggleActiveAgents}
           onToggleTasks={handleToggleTasks}
+          onToggleDebug={handleToggleDebug}
           commandPaletteOpen={commandPaletteOpen}
           onCommandPaletteInput={handleCommandPaletteInput}
           approvalDialogOpen={!!pendingApproval}
@@ -2331,6 +2391,7 @@ export function TUIApp({
           onApprovalDenyWithReason={handleDenyWithReason}
           onApprovalCancelDenyReason={handleCancelDenyReason}
           onApprovalDenyReasonInput={handleApprovalDenyReasonInput}
+          history={historyEntries}
         />
 
         {/* Command Palette (positioned above input) */}

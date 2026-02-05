@@ -38,3 +38,16 @@ export {
 
 // Tasks panel (task tracking visibility)
 export { TasksPanel, type TasksPanelProps } from './TasksPanel.js';
+
+// Debug panel (debug logging visibility)
+export { DebugPanel, useDebugBuffer, type DebugEntry, type DebugPanelProps } from './DebugPanel.js';
+
+// Error detail panel (expandable stack traces)
+export {
+  ErrorDetailPanel,
+  parseStackTrace,
+  formatPath,
+  type ErrorDetail,
+  type ErrorDetailPanelProps,
+  type StackFrame,
+} from './ErrorDetailPanel.js';
