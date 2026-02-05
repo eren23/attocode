@@ -301,6 +301,22 @@ export interface DecisionData {
 // =============================================================================
 
 /**
+ * Subagent context for tagging events from child agents.
+ * When a subagent shares its parent's trace collector, events are tagged
+ * with this context so they can be aggregated in the parent's trace file.
+ */
+export interface SubagentContext {
+  /** Parent's session ID (the trace file belongs to the parent) */
+  parentSessionId: string;
+  /** Type/name of this subagent (e.g., 'researcher', 'coder') */
+  agentType: string;
+  /** Iteration number in the parent when this subagent was spawned */
+  spawnedAtIteration: number;
+  /** Unique ID for this subagent instance */
+  subagentId: string;
+}
+
+/**
  * Central trace collection hub.
  */
 export class TraceCollector {
@@ -341,10 +357,44 @@ export class TraceCollector {
   private outputPath: string | null = null;
   private writeQueue: Promise<void> = Promise.resolve();
 
+  // Subagent context (set when this collector is shared with a subagent)
+  private subagentContext: SubagentContext | null = null;
+
   constructor(config: Partial<TraceCollectorConfig> = {}) {
     this.config = { ...DEFAULT_TRACE_CONFIG, ...config };
     this.tracer = createTracer('trace-collector');
     this.cacheTracker = createCacheBoundaryTracker();
+  }
+
+  // Reference to parent collector (for subagent views to share write queue)
+  private parentCollector: TraceCollector | null = null;
+
+  /**
+   * Create a subagent view of this trace collector.
+   * The subagent will write to the same trace file, but events will be tagged
+   * with the subagent context for proper aggregation.
+   */
+  createSubagentView(context: Omit<SubagentContext, 'subagentId'>): TraceCollector {
+    const subagentId = `${context.agentType}-${context.spawnedAtIteration}`;
+    const view = new TraceCollector(this.config);
+
+    // Share the same output file and session state
+    view.sessionId = this.sessionId;
+    view.traceId = this.traceId;
+    view.outputPath = this.outputPath;
+    view.model = this.model;
+    view.startTime = this.startTime;
+
+    // Keep reference to parent for shared write queue
+    view.parentCollector = this;
+
+    // Set the subagent context for event tagging
+    view.subagentContext = {
+      ...context,
+      subagentId,
+    };
+
+    return view;
   }
 
   // ===========================================================================
@@ -1276,11 +1326,47 @@ export class TraceCollector {
 
   /**
    * Write a JSONL entry.
+   * If this is a subagent view, entries are enriched with subagent context
+   * and written using the parent's write queue to avoid race conditions.
    */
   private async writeEntry(entry: JSONLEntry): Promise<void> {
     if (!this.outputPath) return;
 
+    // Enrich entry with subagent context if present
+    const enrichedEntry = this.subagentContext
+      ? {
+          ...entry,
+          subagentId: this.subagentContext.subagentId,
+          subagentType: this.subagentContext.agentType,
+          parentSessionId: this.subagentContext.parentSessionId,
+          spawnedAtIteration: this.subagentContext.spawnedAtIteration,
+        }
+      : entry;
+
+    // If this is a subagent view, delegate to parent's write queue
+    // to ensure all writes to the same file are serialized
+    if (this.parentCollector) {
+      await this.parentCollector.writeEntryDirect(enrichedEntry);
+      return;
+    }
+
     // Queue writes to avoid race conditions
+    this.writeQueue = this.writeQueue.then(async () => {
+      try {
+        await appendFile(this.outputPath!, JSON.stringify(enrichedEntry) + '\n');
+      } catch (err) {
+        console.error('Failed to write trace entry:', err);
+      }
+    });
+  }
+
+  /**
+   * Direct write entry method for subagent views to use parent's write queue.
+   * @internal
+   */
+  private async writeEntryDirect(entry: JSONLEntry): Promise<void> {
+    if (!this.outputPath) return;
+
     this.writeQueue = this.writeQueue.then(async () => {
       try {
         await appendFile(this.outputPath!, JSON.stringify(entry) + '\n');
@@ -1292,9 +1378,14 @@ export class TraceCollector {
 
   /**
    * Flush pending writes.
+   * If this is a subagent view, flushes the parent's write queue.
    */
   async flush(): Promise<void> {
-    await this.writeQueue;
+    if (this.parentCollector) {
+      await this.parentCollector.flush();
+    } else {
+      await this.writeQueue;
+    }
   }
 
   // ===========================================================================
@@ -1490,6 +1581,27 @@ export class TraceCollector {
   }
 
   /**
+   * Get the output file path for this trace.
+   */
+  getOutputPath(): string | null {
+    return this.outputPath;
+  }
+
+  /**
+   * Get the subagent context if this is a subagent view.
+   */
+  getSubagentContext(): SubagentContext | null {
+    return this.subagentContext;
+  }
+
+  /**
+   * Check if this is a subagent view.
+   */
+  isSubagentView(): boolean {
+    return this.subagentContext !== null;
+  }
+
+  /**
    * Get the current session trace without ending the session.
    * If no session is active, returns the last completed session.
    * Returns null if no session data is available.
@@ -1518,6 +1630,184 @@ export class TraceCollector {
     // Otherwise return the last completed session
     return this.lastCompletedSession;
   }
+
+  /**
+   * Parse the current JSONL trace file and aggregate subagent metrics.
+   * Returns hierarchical view of all agents with their metrics.
+   */
+  async getSubagentHierarchy(): Promise<SubagentHierarchy | null> {
+    if (!this.outputPath) {
+      return null;
+    }
+
+    try {
+      const { readFile } = await import('fs/promises');
+      const content = await readFile(this.outputPath, 'utf-8');
+      const lines = content.trim().split('\n').filter(line => line.length > 0);
+
+      // Parse all entries
+      const entries = lines.map(line => {
+        try {
+          return JSON.parse(line) as JSONLEntry & {
+            subagentId?: string;
+            subagentType?: string;
+            parentSessionId?: string;
+            spawnedAtIteration?: number;
+          };
+        } catch {
+          return null;
+        }
+      }).filter((e): e is NonNullable<typeof e> => e !== null);
+
+      // Group by agent (null = main agent, string = subagent)
+      const mainAgent: AgentMetricsData = {
+        agentId: 'main',
+        agentType: 'main',
+        inputTokens: 0,
+        outputTokens: 0,
+        toolCalls: 0,
+        llmCalls: 0,
+        estimatedCost: 0,
+        duration: 0,
+        startTime: 0,
+        endTime: 0,
+      };
+
+      const subagents = new Map<string, AgentMetricsData>();
+
+      for (const entry of entries) {
+        const isSubagent = entry.subagentId !== undefined;
+        let target: AgentMetricsData;
+
+        if (isSubagent) {
+          if (!subagents.has(entry.subagentId!)) {
+            subagents.set(entry.subagentId!, {
+              agentId: entry.subagentId!,
+              agentType: entry.subagentType!,
+              parentSessionId: entry.parentSessionId,
+              spawnedAtIteration: entry.spawnedAtIteration,
+              inputTokens: 0,
+              outputTokens: 0,
+              toolCalls: 0,
+              llmCalls: 0,
+              estimatedCost: 0,
+              duration: 0,
+              startTime: 0,
+              endTime: 0,
+            });
+          }
+          target = subagents.get(entry.subagentId!)!;
+        } else {
+          target = mainAgent;
+        }
+
+        // Aggregate metrics based on entry type
+        if (entry._type === 'llm.response') {
+          const resp = entry as LLMResponseEntry;
+          target.inputTokens += resp.tokens?.input ?? 0;
+          target.outputTokens += resp.tokens?.output ?? 0;
+          target.llmCalls++;
+        } else if (entry._type === 'tool.execution') {
+          target.toolCalls++;
+        } else if (entry._type === 'session.start') {
+          if (!isSubagent) {
+            mainAgent.startTime = new Date(entry._ts).getTime();
+          }
+        } else if (entry._type === 'session.end') {
+          if (!isSubagent) {
+            mainAgent.endTime = new Date(entry._ts).getTime();
+            const sessionEnd = entry as SessionEndEntry;
+            mainAgent.estimatedCost = sessionEnd.metrics?.estimatedCost ?? 0;
+          }
+        }
+
+        // Track timing
+        const ts = new Date(entry._ts).getTime();
+        if (target.startTime === 0 || ts < target.startTime) {
+          target.startTime = ts;
+        }
+        if (ts > target.endTime) {
+          target.endTime = ts;
+        }
+      }
+
+      // Calculate durations
+      mainAgent.duration = mainAgent.endTime - mainAgent.startTime;
+      for (const sub of subagents.values()) {
+        sub.duration = sub.endTime - sub.startTime;
+      }
+
+      // Calculate totals
+      const subagentArray = Array.from(subagents.values());
+      const totalInputTokens = mainAgent.inputTokens + subagentArray.reduce((sum, s) => sum + s.inputTokens, 0);
+      const totalOutputTokens = mainAgent.outputTokens + subagentArray.reduce((sum, s) => sum + s.outputTokens, 0);
+      const totalToolCalls = mainAgent.toolCalls + subagentArray.reduce((sum, s) => sum + s.toolCalls, 0);
+      const totalLLMCalls = mainAgent.llmCalls + subagentArray.reduce((sum, s) => sum + s.llmCalls, 0);
+
+      // Estimate cost for subagents based on token usage ratio
+      // (since actual cost is only tracked at session level)
+      const tokenRatioMain = mainAgent.inputTokens / Math.max(totalInputTokens, 1);
+      const mainCost = mainAgent.estimatedCost;
+      for (const sub of subagentArray) {
+        const tokenRatio = sub.inputTokens / Math.max(totalInputTokens, 1);
+        sub.estimatedCost = (mainCost / tokenRatioMain) * tokenRatio * (1 / Math.max(tokenRatioMain, 0.01));
+      }
+
+      const totalCost = mainAgent.estimatedCost + subagentArray.reduce((sum, s) => sum + s.estimatedCost, 0);
+
+      return {
+        sessionId: this.sessionId || 'unknown',
+        mainAgent,
+        subagents: subagentArray,
+        totals: {
+          inputTokens: totalInputTokens,
+          outputTokens: totalOutputTokens,
+          toolCalls: totalToolCalls,
+          llmCalls: totalLLMCalls,
+          estimatedCost: totalCost,
+          duration: mainAgent.duration,
+        },
+      };
+    } catch (error) {
+      // File may not exist yet or be unreadable
+      return null;
+    }
+  }
+}
+
+/**
+ * Metrics data for a single agent (main or subagent).
+ */
+export interface AgentMetricsData {
+  agentId: string;
+  agentType: string;
+  parentSessionId?: string;
+  spawnedAtIteration?: number;
+  inputTokens: number;
+  outputTokens: number;
+  toolCalls: number;
+  llmCalls: number;
+  estimatedCost: number;
+  duration: number;
+  startTime: number;
+  endTime: number;
+}
+
+/**
+ * Hierarchical view of all agents in a session.
+ */
+export interface SubagentHierarchy {
+  sessionId: string;
+  mainAgent: AgentMetricsData;
+  subagents: AgentMetricsData[];
+  totals: {
+    inputTokens: number;
+    outputTokens: number;
+    toolCalls: number;
+    llmCalls: number;
+    estimatedCost: number;
+    duration: number;
+  };
 }
 
 // =============================================================================

@@ -41,6 +41,8 @@ import {
   buildConfig,
   isFeatureEnabled,
   getEnabledFeatures,
+  getSubagentTimeout,
+  getSubagentMaxIterations,
 } from './defaults.js';
 
 import {
@@ -146,6 +148,9 @@ import {
   SharedBlackboard,
   createSharedBlackboard,
   type BlackboardConfig,
+  // Task Management
+  TaskManager,
+  createTaskManager,
 } from './integrations/index.js';
 
 // Lesson 26: Tracing & Evaluation integration
@@ -160,6 +165,11 @@ import {
   createBoundSpawnAgentTool,
   createBoundSpawnAgentsParallelTool,
 } from './tools/agent.js';
+
+// Task tools for Claude Code-style task management
+import {
+  createTaskTools,
+} from './tools/tasks.js';
 
 // =============================================================================
 // PRODUCTION AGENT
@@ -206,6 +216,7 @@ export class ProductionAgent {
   private capabilitiesRegistry: CapabilitiesRegistry | null = null;
   private toolResolver: ((toolName: string) => ToolDefinition | null) | null = null;
   private blackboard: SharedBlackboard | null = null;
+  private taskManager: TaskManager | null = null;
 
   // Duplicate spawn prevention - tracks recently spawned tasks to prevent doom loops
   // Map<taskKey, { timestamp: number; result: string; queuedChanges: number }>
@@ -214,6 +225,10 @@ export class ProductionAgent {
 
   // Parent iteration tracking for total budget calculation
   private parentIterations = 0;
+
+  // External cancellation token (for subagent timeout propagation)
+  // When set, the agent will check this token in addition to its own cancellation manager
+  private externalCancellationToken: CancellationTokenType | null = null;
 
   // Initialization tracking
   private initPromises: Promise<void>[] = [];
@@ -402,7 +417,7 @@ export class ProductionAgent {
 
     // Register spawn_agent tool so LLM can delegate to subagents
     const boundSpawnTool = createBoundSpawnAgentTool(
-      (name, task) => this.spawnAgent(name, task)
+      (name, task, constraints) => this.spawnAgent(name, task, constraints)
     );
     this.tools.set(boundSpawnTool.name, boundSpawnTool);
 
@@ -411,6 +426,21 @@ export class ProductionAgent {
       (tasks) => this.spawnAgentsParallel(tasks)
     );
     this.tools.set(boundParallelSpawnTool.name, boundParallelSpawnTool);
+
+    // Task Manager - Claude Code-style task system for coordination
+    this.taskManager = createTaskManager();
+    // Forward task events
+    this.taskManager.on('task.created', (data) => {
+      this.emit({ type: 'task.created', task: data.task });
+    });
+    this.taskManager.on('task.updated', (data) => {
+      this.emit({ type: 'task.updated', task: data.task });
+    });
+    // Register task tools
+    const taskTools = createTaskTools(this.taskManager);
+    for (const tool of taskTools) {
+      this.tools.set(tool.name, tool);
+    }
 
     // Cancellation Support
     if (isFeatureEnabled(this.config.cancellation)) {
@@ -1100,9 +1130,15 @@ export class ProductionAgent {
 
         // =======================================================================
         // CANCELLATION CHECK
+        // Checks both internal cancellation (ESC key) and external cancellation
+        // (parent timeout when this agent is a subagent)
         // =======================================================================
         if (this.cancellation?.isCancelled) {
           this.cancellation.token.throwIfCancellationRequested();
+        }
+        // Also check external cancellation token (from parent when spawned as subagent)
+        if (this.externalCancellationToken?.isCancellationRequested) {
+          this.externalCancellationToken.throwIfCancellationRequested();
         }
 
         // =======================================================================
@@ -2290,18 +2326,23 @@ export class ProductionAgent {
         // Execute tool (with sandbox if available)
         let result: unknown;
         if (this.safety?.sandbox) {
-          // CRITICAL: spawn_agent needs a MUCH longer timeout than regular tools
+          // CRITICAL: spawn_agent and spawn_agents_parallel need MUCH longer timeouts
           // The default 60s sandbox timeout would kill subagents prematurely
           // Subagents may run for minutes (per their own timeout config)
           const isSpawnAgent = toolCall.name === 'spawn_agent';
+          const isSpawnParallel = toolCall.name === 'spawn_agents_parallel';
+          const isSubagentTool = isSpawnAgent || isSpawnParallel;
+
           const subagentConfig = this.config.subagent;
           const hasSubagentConfig = subagentConfig !== false && subagentConfig !== undefined;
           const subagentTimeout = hasSubagentConfig
             ? (subagentConfig as { defaultTimeout?: number }).defaultTimeout ?? 600000 // 10 min default
             : 600000;
 
-          // Use subagent timeout + buffer for spawn_agent, default for others
-          const toolTimeout = isSpawnAgent ? subagentTimeout + 30000 : undefined;
+          // Use subagent timeout + buffer for spawn tools, default for others
+          // For spawn_agents_parallel, multiply by number of agents (they run in parallel,
+          // but the total wall-clock time should still allow the slowest agent to complete)
+          const toolTimeout = isSubagentTool ? subagentTimeout + 30000 : undefined;
 
           result = await this.safety.sandbox.executeWithLimits(
             () => tool.execute(toolCall.arguments),
@@ -2745,6 +2786,14 @@ export class ProductionAgent {
    */
   getTraceCollector(): TraceCollector | null {
     return this.traceCollector;
+  }
+
+  /**
+   * Set a trace collector for this agent.
+   * Used for subagents to share the parent's trace collector (with subagent context).
+   */
+  setTraceCollector(collector: TraceCollector): void {
+    this.traceCollector = collector;
   }
 
   /**
@@ -3392,6 +3441,12 @@ export class ProductionAgent {
       throw new Error('Thread management not enabled. Enable it in config to use createCheckpoint()');
     }
 
+    // CRITICAL: Sync current state.messages to threadManager before checkpoint
+    // The run() method adds messages directly to this.state.messages but doesn't sync
+    // to threadManager, so thread.messages would be empty without this sync
+    const thread = this.threadManager.getActiveThread();
+    thread.messages = [...this.state.messages];
+
     const checkpoint = this.threadManager.createCheckpoint({
       label,
       agentState: this.state,
@@ -3597,8 +3652,12 @@ export class ProductionAgent {
   /**
    * Spawn an agent to execute a task.
    * Returns the result when the agent completes.
+   *
+   * @param agentName - Name of the agent to spawn (researcher, coder, etc.)
+   * @param task - The task description for the agent
+   * @param constraints - Optional constraints to keep the subagent focused
    */
-  async spawnAgent(agentName: string, task: string): Promise<SpawnResult> {
+  async spawnAgent(agentName: string, task: string, constraints?: import('./tools/agent.js').SpawnConstraints): Promise<SpawnResult> {
     if (!this.agentRegistry) {
       return {
         success: false,
@@ -3700,16 +3759,24 @@ export class ProductionAgent {
         ? agentDef.model
         : this.config.model;
 
-      // Get subagent config with defaults
-      // Note: subagent config is SubagentConfig | false from buildConfig
+      // Get subagent config with agent-type-specific timeouts and iteration limits
+      // Uses dynamic configuration based on agent type (researcher needs more time than reviewer)
       const subagentConfig = this.config.subagent;
       const hasSubagentConfig = subagentConfig !== false && subagentConfig !== undefined;
-      const defaultMaxIterations = hasSubagentConfig
-        ? (subagentConfig as { defaultMaxIterations?: number }).defaultMaxIterations ?? 25
-        : 25; // Increased from 10 to allow more thorough exploration
-      const subagentTimeout = hasSubagentConfig
-        ? (subagentConfig as { defaultTimeout?: number }).defaultTimeout ?? 600000
-        : 600000; // Increased from 120s to 600s (10 minutes) for deeper analysis
+
+      // Agent-type-specific timeout: researchers get 5min, reviewers get 2min, etc.
+      const agentTypeTimeout = getSubagentTimeout(agentName);
+      const configTimeout = hasSubagentConfig
+        ? (subagentConfig as { defaultTimeout?: number }).defaultTimeout
+        : undefined;
+      const subagentTimeout = configTimeout ?? agentTypeTimeout;
+
+      // Agent-type-specific iteration limit: researchers get 25, documenters get 10, etc.
+      const agentTypeMaxIter = getSubagentMaxIterations(agentName);
+      const configMaxIter = hasSubagentConfig
+        ? (subagentConfig as { defaultMaxIterations?: number }).defaultMaxIterations
+        : undefined;
+      const defaultMaxIterations = agentDef.maxIterations ?? configMaxIter ?? agentTypeMaxIter;
 
       // BLACKBOARD CONTEXT INJECTION
       // Gather relevant context from the blackboard for the subagent
@@ -3754,11 +3821,42 @@ export class ProductionAgent {
         }
       }
 
+      // CONSTRAINT INJECTION
+      // Add constraints to the subagent's context if provided
+      let constraintContext = '';
+      if (constraints) {
+        const constraintParts: string[] = [];
+
+        if (constraints.focusAreas && constraints.focusAreas.length > 0) {
+          constraintParts.push(`**FOCUS AREAS (limit exploration to these paths):**\n${constraints.focusAreas.map(a => `  - ${a}`).join('\n')}`);
+        }
+
+        if (constraints.excludeAreas && constraints.excludeAreas.length > 0) {
+          constraintParts.push(`**EXCLUDED AREAS (do NOT explore these):**\n${constraints.excludeAreas.map(a => `  - ${a}`).join('\n')}`);
+        }
+
+        if (constraints.requiredDeliverables && constraints.requiredDeliverables.length > 0) {
+          constraintParts.push(`**REQUIRED DELIVERABLES (you must produce these):**\n${constraints.requiredDeliverables.map(d => `  - ${d}`).join('\n')}`);
+        }
+
+        if (constraints.maxTokens) {
+          constraintParts.push(`**TOKEN BUDGET:** ${constraints.maxTokens} tokens maximum`);
+        }
+
+        if (constraints.timeboxMinutes) {
+          constraintParts.push(`**TIME LIMIT:** ${constraints.timeboxMinutes} minutes (soft limit - wrap up if approaching)`);
+        }
+
+        if (constraintParts.length > 0) {
+          constraintContext = `\n\n**EXECUTION CONSTRAINTS:**\n${constraintParts.join('\n\n')}\n`;
+        }
+      }
+
       // Build subagent system prompt with subagent-specific plan mode addition
       const parentMode = this.getMode();
       const subagentSystemPrompt = parentMode === 'plan'
-        ? `${agentDef.systemPrompt}\n\n${SUBAGENT_PLAN_MODE_ADDITION}${blackboardContext}`
-        : `${agentDef.systemPrompt}${blackboardContext}`;
+        ? `${agentDef.systemPrompt}\n\n${SUBAGENT_PLAN_MODE_ADDITION}${blackboardContext}${constraintContext}`
+        : `${agentDef.systemPrompt}${blackboardContext}${constraintContext}`;
 
       // Create a sub-agent with the agent's config
       const subAgent = new ProductionAgent({
@@ -3803,6 +3901,18 @@ export class ProductionAgent {
       // This prevents subagents from consuming excessive iterations when parent already used many
       subAgent.setParentIterations(this.getTotalIterations());
 
+      // UNIFIED TRACING: Share parent's trace collector with subagent context
+      // This ensures all subagent events are written to the same trace file as the parent,
+      // tagged with subagent context for proper aggregation in /trace output
+      if (this.traceCollector) {
+        const subagentTraceView = this.traceCollector.createSubagentView({
+          parentSessionId: this.traceCollector.getSessionId() || 'unknown',
+          agentType: agentName,
+          spawnedAtIteration: this.state.iteration,
+        });
+        subAgent.setTraceCollector(subagentTraceView);
+      }
+
       // Forward events from subagent with context
       subAgent.subscribe(event => {
         // Tag event with subagent source so TUI can display it properly
@@ -3818,6 +3928,11 @@ export class ProductionAgent {
       const effectiveSource = parentSource
         ? createLinkedToken(parentSource, timeoutSource)
         : timeoutSource;
+
+      // CRITICAL: Pass the cancellation token to the subagent so it can check and stop
+      // gracefully when timeout fires. Without this, the subagent continues running as
+      // a "zombie" even after race() returns with a timeout error.
+      subAgent.setExternalCancellation(effectiveSource.token);
 
       try {
         // Run the task with cancellation propagation from parent
@@ -3951,6 +4066,22 @@ export class ProductionAgent {
             : `Timed out after ${subagentTimeout}ms`;
           this.emit({ type: 'agent.error', agentId: agentName, error: reason });
 
+          // =======================================================================
+          // PRESERVE PARTIAL RESULTS
+          // Instead of discarding all work, capture whatever the subagent produced
+          // before timeout. This prevents the "zombie agent" problem where tokens
+          // are consumed but results are lost.
+          // =======================================================================
+          const subagentState = subAgent.getState();
+          const subagentMetrics = subAgent.getMetrics();
+
+          // Extract partial response from the last assistant message
+          const assistantMessages = subagentState.messages.filter(m => m.role === 'assistant');
+          const lastAssistantMsg = assistantMessages[assistantMessages.length - 1];
+          const partialResponse = typeof lastAssistantMsg?.content === 'string'
+            ? lastAssistantMsg.content
+            : '';
+
           // Extract pending plan before cleanup (even on cancellation, preserve any queued work)
           let cancelledQueuedSummary = '';
           if (subAgent.hasPendingPlan()) {
@@ -4004,14 +4135,53 @@ export class ProductionAgent {
             // Ignore cleanup errors on cancellation
           }
 
+          // Build output message with partial results
           const baseOutput = isUserCancellation
             ? `Subagent '${agentName}' was cancelled by user.`
-            : `Subagent '${agentName}' timed out after ${Math.round(subagentTimeout / 1000)}s. The task may be too complex or the model may be slow.`;
+            : `Subagent '${agentName}' timed out after ${Math.round(subagentTimeout / 1000)}s.`;
+
+          // Include partial response if we have one
+          const partialResultSection = partialResponse
+            ? `\n\n[PARTIAL RESULTS BEFORE TIMEOUT]\n${partialResponse.slice(0, 2000)}${partialResponse.length > 2000 ? '...(truncated)' : ''}`
+            : '';
+
+          // Enhanced tracing: Record subagent timeout with partial results
+          this.traceCollector?.record({
+            type: 'subagent.link',
+            data: {
+              parentSessionId: this.traceCollector.getSessionId() || 'unknown',
+              childSessionId,
+              childTraceId,
+              childConfig: {
+                agentType: agentName,
+                model: resolvedModel || 'default',
+                task,
+                tools: agentTools.map(t => t.name),
+              },
+              spawnContext: {
+                reason: `Delegated task: ${task.slice(0, 100)}`,
+                expectedOutcome: agentDef.description,
+                parentIteration: this.state.iteration,
+              },
+              result: {
+                success: false,
+                summary: `[TIMEOUT] ${baseOutput}\n${partialResponse.slice(0, 200)}`,
+                tokensUsed: subagentMetrics.totalTokens,
+                durationMs: duration,
+              },
+            },
+          });
 
           return {
             success: false,
-            output: baseOutput + cancelledQueuedSummary,
-            metrics: { tokens: 0, duration, toolCalls: 0 },
+            output: baseOutput + partialResultSection + cancelledQueuedSummary,
+            // IMPORTANT: Use actual metrics instead of zeros
+            // This ensures accurate token tracking in /trace output
+            metrics: {
+              tokens: subagentMetrics.totalTokens,
+              duration,
+              toolCalls: subagentMetrics.toolCalls,
+            },
           };
         }
         throw err; // Re-throw non-cancellation errors
@@ -4481,6 +4651,24 @@ If the task is a simple question or doesn't need specialized handling, set bestA
   }
 
   /**
+   * Set an external cancellation token for this agent.
+   * Used when spawning subagents to propagate parent timeout/cancellation.
+   * The agent will check this token in its main loop and stop gracefully
+   * when cancellation is requested, preserving partial results.
+   */
+  setExternalCancellation(token: CancellationTokenType): void {
+    this.externalCancellationToken = token;
+  }
+
+  /**
+   * Check if external cancellation has been requested.
+   * Returns true if the external token signals cancellation.
+   */
+  isExternallyCancelled(): boolean {
+    return this.externalCancellationToken?.isCancellationRequested ?? false;
+  }
+
+  /**
    * Get total iterations (this agent + parent).
    * Used for accurate budget tracking across subagent hierarchies.
    */
@@ -4693,6 +4881,13 @@ If the task is a simple question or doesn't need specialized handling, set bestA
    */
   getAgentRegistry(): AgentRegistry | null {
     return this.agentRegistry;
+  }
+
+  /**
+   * Get the task manager instance for task tracking.
+   */
+  getTaskManager(): TaskManager | null {
+    return this.taskManager;
   }
 
   /**

@@ -5,7 +5,16 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [0.1.7] - 2026-02-05
+
+### Added
+- **Session loading in TUI** - New `/load <session-id>` command to load a session by ID; checks for existing sessions and loads messages from checkpoints or entries; SQLiteStore syncs message counts with checkpoint data; detailed logs during load including session metadata and error handling; thread management supports auto-checkpoints and message sync
+- **Tasks Panel** - New TasksPanel in TUI for real-time task display and management; task create/update events; keyboard shortcuts to toggle panel; visual indicators for task status and blocking conditions
+- **Task management system** - TaskManager for persistent task tracking and coordination across subagents; task create/update/list with event emissions; ProductionAgent integration; agent-type-specific timeout and iteration limits; Active Agents Panel in TUI for real-time subagent monitoring; TaskManager tests
+- **Unified tracing with subagent hierarchy** - `setTraceCollector` on ProductionAgent to share trace collectors with subagents; subagent context tagging in TraceCollector to aggregate events in parent trace file; TUI trace summaries with subagent hierarchies and metrics; tests for unified tracing (subagent view, event tagging, metric aggregation)
+
+### Changed
+- **Subagent timeout and cancellation** - External cancellation token in ProductionAgent for subagent timeouts; updated timeout configs for research-style tasks; TUI shows `timing_out` during cancellation; Active Agents Panel includes `timing_out` state; partial subagent results preserved on timeout
 
 ## [0.1.6] - 2026-02-03
 

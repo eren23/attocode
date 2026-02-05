@@ -746,3 +746,14 @@ export {
   type GraphVisualizationOptions,
   type DiagramResult,
 } from './graph-visualization.js';
+
+// Task Management (Claude Code-style)
+export {
+  TaskManager,
+  createTaskManager,
+  type Task,
+  type TaskStatus,
+  type CreateTaskOptions,
+  type UpdateTaskOptions,
+  type TaskSummary,
+} from './task-manager.js';

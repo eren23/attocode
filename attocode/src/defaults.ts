@@ -433,13 +433,68 @@ export const DEFAULT_FILE_CHANGE_TRACKER_CONFIG: FileChangeTrackerAgentConfig = 
 };
 
 /**
+ * Agent-type-specific timeout configurations.
+ * Research tasks need more time than focused review tasks.
+ *
+ * NOTE: Timeouts were increased to better support research-heavy workflows.
+ * The previous defaults (2-5 min) caused frequent timeouts during exploration.
+ */
+export const SUBAGENT_TIMEOUTS: Record<string, number> = {
+  researcher: 420000,    // 7 minutes - exploration needs time (was 5 min)
+  coder: 300000,         // 5 minutes - implementation tasks (was 3 min)
+  reviewer: 180000,      // 3 minutes - focused review (was 2 min)
+  architect: 360000,     // 6 minutes - design thinking (was 4 min)
+  debugger: 300000,      // 5 minutes - investigation (was 3 min)
+  documenter: 180000,    // 3 minutes - documentation (was 2 min)
+  default: 300000,       // 5 minutes - fallback (was 2 min)
+} as const;
+
+/**
+ * Agent-type-specific iteration limits.
+ * Research may need more iterations than documentation.
+ */
+export const SUBAGENT_MAX_ITERATIONS: Record<string, number> = {
+  researcher: 25,        // More iterations for thorough exploration
+  coder: 20,             // Sufficient for implementation
+  reviewer: 15,          // Focused review needs fewer
+  architect: 20,         // Design requires iteration
+  debugger: 20,          // Investigation can be iterative
+  documenter: 10,        // Documentation is straightforward
+  default: 15,           // Balanced default
+} as const;
+
+/**
+ * Extension granted when subagent shows progress.
+ * If tool calls are happening, grant more time.
+ */
+export const TIMEOUT_EXTENSION_ON_PROGRESS = 60000; // +1 minute when making progress
+
+/**
+ * Get timeout for a specific agent type.
+ */
+export function getSubagentTimeout(agentType: string): number {
+  return SUBAGENT_TIMEOUTS[agentType] ?? SUBAGENT_TIMEOUTS.default;
+}
+
+/**
+ * Get max iterations for a specific agent type.
+ */
+export function getSubagentMaxIterations(agentType: string): number {
+  return SUBAGENT_MAX_ITERATIONS[agentType] ?? SUBAGENT_MAX_ITERATIONS.default;
+}
+
+/**
  * Default subagent configuration.
  * Controls timeout and iteration limits for spawned subagents.
+ *
+ * NOTE: Research-focused tasks often need more time than 2 minutes.
+ * The default timeout was increased from 120s to 300s (5 minutes) to allow
+ * subagents to complete research tasks without premature timeout.
  */
 export const DEFAULT_SUBAGENT_CONFIG: SubagentConfig = {
   enabled: true, // Enabled by default
-  defaultTimeout: 120000, // 2 minutes per subagent
-  defaultMaxIterations: 10, // Reduced from 30 for better control
+  defaultTimeout: 300000, // 5 minutes per subagent (increased from 2 min for research tasks)
+  defaultMaxIterations: 15, // Balanced default (agent-specific limits preferred)
   inheritObservability: true,
 };
 

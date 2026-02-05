@@ -389,6 +389,16 @@ interface BaseJSONLEntry {
 
   /** Trace ID for correlation */
   traceId: string;
+
+  // Subagent context fields (present when entry comes from a subagent)
+  /** Unique ID for the subagent that generated this entry */
+  subagentId?: string;
+  /** Type/name of the subagent (e.g., 'researcher', 'coder') */
+  subagentType?: string;
+  /** Session ID of the parent agent */
+  parentSessionId?: string;
+  /** Parent iteration when subagent was spawned */
+  spawnedAtIteration?: number;
 }
 
 /**

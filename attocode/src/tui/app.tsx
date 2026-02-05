@@ -11,6 +11,9 @@
 import { useState, useCallback, useEffect, memo, useRef, useMemo } from 'react';
 import { Box, Text, useApp, useInput, Static } from 'ink';
 import { DiffView } from './components/DiffView.js';
+import { ActiveAgentsPanel, type ActiveAgent, type ActiveAgentStatus } from './components/ActiveAgentsPanel.js';
+import { TasksPanel } from './components/TasksPanel.js';
+import type { Task } from '../integrations/task-manager.js';
 import type { ProductionAgent } from '../agent.js';
 import type { SQLiteStore } from '../integrations/sqlite-store.js';
 import type { MCPClient } from '../integrations/mcp-client.js';
@@ -293,6 +296,8 @@ interface MemoizedInputAreaProps {
   onToggleToolExpand?: () => void;
   onToggleThinking?: () => void;
   onToggleTransparency?: () => void;
+  onToggleActiveAgents?: () => void;
+  onToggleTasks?: () => void;
   onPageUp?: () => void;
   onPageDown?: () => void;
   onHome?: () => void;
@@ -324,6 +329,8 @@ const MemoizedInputArea = memo(function MemoizedInputArea({
   onToggleToolExpand,
   onToggleThinking,
   onToggleTransparency,
+  onToggleActiveAgents,
+  onToggleTasks,
   onPageUp,
   onPageDown,
   onHome,
@@ -345,7 +352,7 @@ const MemoizedInputArea = memo(function MemoizedInputArea({
   // Store callbacks in refs so useInput doesn't re-subscribe on prop changes
   const callbacksRef = useRef({
     onSubmit, onCtrlC, onCtrlL, onCtrlP, onEscape,
-    onToggleToolExpand, onToggleThinking, onToggleTransparency,
+    onToggleToolExpand, onToggleThinking, onToggleTransparency, onToggleActiveAgents, onToggleTasks,
     onPageUp, onPageDown, onHome, onEnd,
     commandPaletteOpen, onCommandPaletteInput,
     approvalDialogOpen, approvalDenyReasonMode,
@@ -354,7 +361,7 @@ const MemoizedInputArea = memo(function MemoizedInputArea({
   });
   callbacksRef.current = {
     onSubmit, onCtrlC, onCtrlL, onCtrlP, onEscape,
-    onToggleToolExpand, onToggleThinking, onToggleTransparency,
+    onToggleToolExpand, onToggleThinking, onToggleTransparency, onToggleActiveAgents, onToggleTasks,
     onPageUp, onPageDown, onHome, onEnd,
     commandPaletteOpen, onCommandPaletteInput,
     approvalDialogOpen, approvalDenyReasonMode,
@@ -397,6 +404,16 @@ const MemoizedInputArea = memo(function MemoizedInputArea({
     // Alt+I / Option+I - Toggle transparency panel
     if (input === '\u00ee' || input === '\u0131' || (key.meta && input === 'i')) {
       cb.onToggleTransparency?.();
+      return;
+    }
+    // Alt+A / Option+A - Toggle active agents panel
+    if (input === '\u00e5' || (key.meta && input === 'a')) {
+      cb.onToggleActiveAgents?.();
+      return;
+    }
+    // Alt+K / Option+K - Toggle tasks panel
+    if (input === '\u02da' || (key.meta && input === 'k')) {
+      cb.onToggleTasks?.();
       return;
     }
 
@@ -579,6 +596,14 @@ export function TUIApp({
   const [toolCallsExpanded, setToolCallsExpanded] = useState(false);
   const [showThinking, setShowThinking] = useState(true);
   const [transparencyExpanded, setTransparencyExpanded] = useState(false);
+  const [activeAgentsExpanded, setActiveAgentsExpanded] = useState(true);
+  const [tasksExpanded, setTasksExpanded] = useState(true);
+
+  // Active agents tracking (for Active Agents Panel)
+  const [activeAgents, setActiveAgents] = useState<ActiveAgent[]>([]);
+
+  // Tasks tracking (for Tasks Panel)
+  const [tasks, setTasks] = useState<Task[]>([]);
 
   // Command palette state
   const [commandPaletteOpen, setCommandPaletteOpen] = useState(false);
@@ -721,10 +746,20 @@ export function TUIApp({
     // Shared events (both processing and approving modes)
     // -------------------------------------------------------------------------
 
-    // Subagent lifecycle events
+    // Subagent lifecycle events - also update Active Agents Panel
     if (event.type === 'agent.spawn') {
-      const e = event as { name: string; task: string };
+      const e = event as { agentId: string; name: string; task: string };
+      const agentId = e.agentId || `spawn-${Date.now()}`;
       addMessage('system', `[AGENT] Spawning ${e.name}: ${e.task.slice(0, 100)}${e.task.length > 100 ? '...' : ''}`);
+      // Add to active agents panel
+      setActiveAgents(prev => [...prev, {
+        id: agentId,
+        type: e.name,
+        task: e.task,
+        status: 'running' as ActiveAgentStatus,
+        tokens: 0,
+        startTime: Date.now(),
+      }]);
       return;
     }
     if (event.type === 'agent.complete') {
@@ -736,11 +771,48 @@ export function TUIApp({
         const preview = e.output.slice(0, 300);
         addMessage('system', `[AGENT OUTPUT]\n${preview}${e.output.length > 300 ? '\n...(truncated)' : ''}`);
       }
+      // Update active agents panel
+      setActiveAgents(prev => prev.map(a =>
+        a.type === e.agentId || a.id.includes(e.agentId)
+          ? { ...a, status: e.success ? 'completed' as ActiveAgentStatus : 'error' as ActiveAgentStatus }
+          : a
+      ));
       return;
     }
     if (event.type === 'agent.error') {
       const e = event as { agentId: string; error: string };
       addMessage('system', `[AGENT] ${e.agentId} error: ${e.error}`);
+
+      // For timeout errors, use 'timing_out' status first to indicate the agent
+      // is in the process of stopping. Then transition to 'timeout' after a delay.
+      // This provides better UX than immediately showing "failed" while tokens accumulate.
+      const isTimeout = e.error.includes('timed out') || e.error.includes('Timed out');
+
+      if (isTimeout) {
+        // First, mark as timing_out
+        setActiveAgents(prev => prev.map(a =>
+          a.type === e.agentId || a.id.includes(e.agentId)
+            ? { ...a, status: 'timing_out' as ActiveAgentStatus }
+            : a
+        ));
+
+        // After 3 seconds, transition to final timeout status
+        // (agent should have stopped by then due to cancellation token check)
+        setTimeout(() => {
+          setActiveAgents(prev => prev.map(a =>
+            (a.type === e.agentId || a.id.includes(e.agentId)) && a.status === 'timing_out'
+              ? { ...a, status: 'timeout' as ActiveAgentStatus }
+              : a
+          ));
+        }, 3000);
+      } else {
+        // Regular error - set immediately
+        setActiveAgents(prev => prev.map(a =>
+          a.type === e.agentId || a.id.includes(e.agentId)
+            ? { ...a, status: 'error' as ActiveAgentStatus }
+            : a
+        ));
+      }
       return;
     }
     if (event.type === 'agent.pending_plan') {
@@ -813,10 +885,28 @@ export function TUIApp({
       return;
     }
 
-    // Insight events
-    if (event.type === 'insight.tokens' && showThinking) {
-      const e = event as { inputTokens: number; outputTokens: number; cost?: number };
-      addMessage('system', `${subagentPrefix}* ${e.inputTokens.toLocaleString()} in, ${e.outputTokens.toLocaleString()} out${e.cost ? ` $${e.cost.toFixed(6)}` : ''}`);
+    // Insight events - also track tokens for active agents
+    if (event.type === 'insight.tokens') {
+      const e = event as { inputTokens: number; outputTokens: number; cost?: number; subagent?: string };
+      if (showThinking) {
+        addMessage('system', `${subagentPrefix}* ${e.inputTokens.toLocaleString()} in, ${e.outputTokens.toLocaleString()} out${e.cost ? ` $${e.cost.toFixed(6)}` : ''}`);
+      }
+      // Update tokens for active agent if this event is from a subagent
+      // IMPORTANT: Don't update tokens for agents that are timing_out/timeout/error
+      // These agents should have stopped, and any lingering events are from
+      // zombie processes that we don't want to count.
+      if (e.subagent || eventWithSubagent.subagent) {
+        const agentName = e.subagent || eventWithSubagent.subagent;
+        setActiveAgents(prev => prev.map(a => {
+          const matchesAgent = a.type === agentName || a.id.includes(agentName || '');
+          const isStillRunning = a.status === 'running';
+          // Only update tokens if agent is still running
+          if (matchesAgent && isStillRunning) {
+            return { ...a, tokens: a.tokens + (e.inputTokens || 0) + (e.outputTokens || 0) };
+          }
+          return a;
+        }));
+      }
       return;
     }
 
@@ -832,15 +922,42 @@ export function TUIApp({
       return;
     }
 
-    // Subagent visibility events
+    // Subagent visibility events - also update Active Agents Panel
     if (event.type === 'subagent.iteration') {
       const e = event as { agentId: string; iteration: number; maxIterations: number };
       setStatus(s => ({ ...s, mode: `${e.agentId} iter ${e.iteration}/${e.maxIterations}` }));
+      // Update active agents panel with iteration info
+      setActiveAgents(prev => prev.map(a =>
+        a.type === e.agentId || a.id.includes(e.agentId)
+          ? { ...a, iteration: e.iteration, maxIterations: e.maxIterations }
+          : a
+      ));
       return;
     }
     if (event.type === 'subagent.phase') {
       const e = event as { agentId: string; phase: string };
       setStatus(s => ({ ...s, mode: `${e.agentId} ${e.phase}` }));
+      // Update active agents panel with phase info
+      setActiveAgents(prev => prev.map(a =>
+        a.type === e.agentId || a.id.includes(e.agentId)
+          ? { ...a, currentPhase: e.phase }
+          : a
+      ));
+      return;
+    }
+
+    // Task events - update Tasks Panel
+    if (event.type === 'task.created') {
+      const e = event as unknown as { task: Task };
+      setTasks(prev => [...prev, e.task]);
+      addMessage('system', `[TASK] Created: ${e.task.subject}`);
+      return;
+    }
+    if (event.type === 'task.updated') {
+      const e = event as unknown as { task: Task };
+      setTasks(prev => prev.map(t => t.id === e.task.id ? e.task : t));
+      // Only log status changes
+      addMessage('system', `[TASK] ${e.task.subject}: ${e.task.status}`);
       return;
     }
 
@@ -967,9 +1084,11 @@ export function TUIApp({
           '  /theme [name]     Show/change theme',
           '  /tools            List tools',
           '',
-          '> SESSIONS',
+          '> SESSIONS & TASKS',
           '  /save             Save session',
           '  /sessions         List sessions',
+          '  /load <id>        Load session by ID',
+          '  /tasks            List tracked tasks',
           '  /checkpoint       Create checkpoint',
           '  /checkpoints      List checkpoints',
           '  /restore <id>     Restore checkpoint',
@@ -1021,6 +1140,7 @@ export function TUIApp({
           '  Alt+T       Toggle tool details',
           '  Alt+O       Toggle thinking',
           '  Alt+I       Toggle transparency panel',
+          '  Alt+K       Toggle tasks panel',
           '========================',
         ].join('\n'));
         return;
@@ -1060,6 +1180,102 @@ export function TUIApp({
           addMessage('error', (e as Error).message);
         }
         return;
+
+      case 'load': {
+        const targetSessionId = args[0];
+        if (!targetSessionId) {
+          addMessage('system', 'Usage: /load <session-id>\n  Use /sessions to list available sessions');
+          return;
+        }
+
+        // Check if session exists
+        const targetSession = sessionStore.getSessionMetadata(targetSessionId);
+        if (!targetSession) {
+          addMessage('error', `Session not found: ${targetSessionId}\n  Use /sessions to list available sessions`);
+          return;
+        }
+
+        try {
+          addMessage('system', `Loading session: ${targetSession.id}\n   Created: ${new Date(targetSession.createdAt).toLocaleString()}\n   Messages: ${targetSession.messageCount}`);
+
+          // Try to load from checkpoint first
+          let loadCheckpointData: any;
+          if ('loadLatestCheckpoint' in sessionStore && typeof sessionStore.loadLatestCheckpoint === 'function') {
+            const sqliteCheckpoint = sessionStore.loadLatestCheckpoint(targetSession.id);
+            if (sqliteCheckpoint?.state) {
+              loadCheckpointData = sqliteCheckpoint.state;
+            }
+          }
+
+          // Fall back to loading from entries if no checkpoint
+          if (!loadCheckpointData) {
+            const entriesResult = sessionStore.loadSession(targetSession.id);
+            const entries = Array.isArray(entriesResult) ? entriesResult : await entriesResult;
+            const checkpoint = [...entries].reverse().find((e: any) => e.type === 'checkpoint');
+            if (checkpoint?.data) {
+              loadCheckpointData = checkpoint.data;
+            } else {
+              const messages = entries
+                .filter((e: any) => e.type === 'message')
+                .map((e: any) => e.data);
+              if (messages.length > 0) {
+                agent.loadState({ messages });
+                addMessage('system', `+ Loaded ${messages.length} messages from session`);
+              } else {
+                addMessage('system', 'No messages found in session');
+              }
+              return;
+            }
+          }
+
+          // Load from checkpoint data
+          if (loadCheckpointData?.messages) {
+            agent.loadState({
+              messages: loadCheckpointData.messages,
+              iteration: loadCheckpointData.iteration,
+              metrics: loadCheckpointData.metrics,
+              plan: loadCheckpointData.plan,
+              memoryContext: loadCheckpointData.memoryContext,
+            });
+            addMessage('system', `+ Loaded ${loadCheckpointData.messages.length} messages from session${loadCheckpointData.iteration ? `\n   Iteration: ${loadCheckpointData.iteration}` : ''}${loadCheckpointData.plan ? '\n   Plan restored' : ''}`);
+          }
+        } catch (e) {
+          addMessage('error', `Error loading session: ${(e as Error).message}`);
+        }
+        return;
+      }
+
+      case 'tasks': {
+        // Filter out deleted tasks
+        const visibleTasks = tasks.filter(t => t.status !== 'deleted');
+        if (visibleTasks.length === 0) {
+          addMessage('system', 'No tasks. Tasks are created when the agent uses task_create tool.');
+          return;
+        }
+        // Count by status
+        const pending = visibleTasks.filter(t => t.status === 'pending').length;
+        const inProgress = visibleTasks.filter(t => t.status === 'in_progress').length;
+        const completed = visibleTasks.filter(t => t.status === 'completed').length;
+        // Format task list
+        const taskLines = visibleTasks.map(t => {
+          const isBlocked = t.blockedBy.some(id => {
+            const blocker = visibleTasks.find(bt => bt.id === id);
+            return blocker && blocker.status !== 'completed';
+          });
+          const icon = isBlocked ? '◌' : t.status === 'completed' ? '✓' : t.status === 'in_progress' ? '●' : '○';
+          const blockedInfo = isBlocked ? ` (blocked by: ${t.blockedBy.slice(0, 2).join(', ')})` : '';
+          const activeInfo = t.status === 'in_progress' && t.activeForm ? `\n     └ ${t.activeForm}...` : '';
+          return `  ${icon} ${t.id}  ${t.subject}${blockedInfo}${activeInfo}`;
+        });
+        addMessage('system', [
+          `TASKS [${pending} pending, ${inProgress} in_progress, ${completed} completed]`,
+          '',
+          ...taskLines,
+          '',
+          'Toggle panel: Alt+K',
+        ].join('\n'));
+        return;
+      }
 
       case 'context':
       case 'ctx': {
@@ -1490,7 +1706,7 @@ export function TUIApp({
         const traceCollector = agent.getTraceCollector();
 
         if (args.length === 0) {
-          // Show current session trace summary
+          // Show current session trace summary with subagent hierarchy
           if (!traceCollector) {
             addMessage('system', 'Tracing is not enabled. Start agent with --trace to enable.');
             return;
@@ -1502,24 +1718,74 @@ export function TUIApp({
             return;
           }
 
-          addMessage('system', [
-            'Trace Summary:',
-            `  Session ID:    ${data.sessionId}`,
-            `  Status:        ${data.status}`,
-            `  Iterations:    ${data.iterations.length}`,
-            `  Duration:      ${data.durationMs ? `${Math.round(data.durationMs / 1000)}s` : 'ongoing'}`,
-            '',
-            'Metrics:',
-            `  Input tokens:  ${data.metrics.inputTokens.toLocaleString()}`,
-            `  Output tokens: ${data.metrics.outputTokens.toLocaleString()}`,
-            `  Cache hit:     ${Math.round(data.metrics.avgCacheHitRate * 100)}%`,
-            `  Tool calls:    ${data.metrics.toolCalls}`,
-            `  Errors:        ${data.metrics.errors}`,
-            `  Est. Cost:     $${data.metrics.estimatedCost.toFixed(4)}`,
-            '',
-            'Use: /trace --analyze for efficiency analysis',
-            '     /trace issues to see detected inefficiencies',
-          ].join('\n'));
+          // Get subagent hierarchy from JSONL file
+          const hierarchy = await traceCollector.getSubagentHierarchy();
+
+          if (hierarchy && hierarchy.subagents.length > 0) {
+            // Show hierarchy view with subagents
+            const lines = [
+              'Trace Summary:',
+              `  Session ID:    ${data.sessionId}`,
+              `  Status:        ${data.status}`,
+              `  Duration:      ${data.durationMs ? `${Math.round(data.durationMs / 1000)}s` : 'ongoing'}`,
+              '',
+              'Main Agent:',
+              `  Iterations:    ${hierarchy.mainAgent.llmCalls}`,
+              `  Input tokens:  ${hierarchy.mainAgent.inputTokens.toLocaleString()}`,
+              `  Output tokens: ${hierarchy.mainAgent.outputTokens.toLocaleString()}`,
+              `  Tool calls:    ${hierarchy.mainAgent.toolCalls}`,
+              '',
+              'Subagent Tree:',
+            ];
+
+            // Sort subagents by spawn time
+            const sortedSubagents = hierarchy.subagents.sort((a, b) =>
+              (a.spawnedAtIteration || 0) - (b.spawnedAtIteration || 0)
+            );
+
+            for (const sub of sortedSubagents) {
+              const durationSec = Math.round(sub.duration / 1000);
+              lines.push(`  └─ ${sub.agentId} (spawned iter ${sub.spawnedAtIteration || '?'})`);
+              lines.push(`     ├─ ${sub.inputTokens.toLocaleString()} in / ${sub.outputTokens.toLocaleString()} out tokens`);
+              lines.push(`     ├─ ${sub.toolCalls} tools | ${durationSec}s`);
+            }
+
+            lines.push(
+              '',
+              'TOTALS (all agents):',
+              `  Input tokens:  ${hierarchy.totals.inputTokens.toLocaleString()}`,
+              `  Output tokens: ${hierarchy.totals.outputTokens.toLocaleString()}`,
+              `  Tool calls:    ${hierarchy.totals.toolCalls}`,
+              `  LLM calls:     ${hierarchy.totals.llmCalls}`,
+              `  Est. Cost:     $${hierarchy.totals.estimatedCost.toFixed(4)}`,
+              `  Duration:      ${Math.round(hierarchy.totals.duration / 1000)}s`,
+              '',
+              'Use: /trace --analyze for efficiency analysis',
+              '     /trace issues to see detected inefficiencies',
+            );
+
+            addMessage('system', lines.join('\n'));
+          } else {
+            // Original simple view (no subagents)
+            addMessage('system', [
+              'Trace Summary:',
+              `  Session ID:    ${data.sessionId}`,
+              `  Status:        ${data.status}`,
+              `  Iterations:    ${data.iterations.length}`,
+              `  Duration:      ${data.durationMs ? `${Math.round(data.durationMs / 1000)}s` : 'ongoing'}`,
+              '',
+              'Metrics:',
+              `  Input tokens:  ${data.metrics.inputTokens.toLocaleString()}`,
+              `  Output tokens: ${data.metrics.outputTokens.toLocaleString()}`,
+              `  Cache hit:     ${Math.round(data.metrics.avgCacheHitRate * 100)}%`,
+              `  Tool calls:    ${data.metrics.toolCalls}`,
+              `  Errors:        ${data.metrics.errors}`,
+              `  Est. Cost:     $${data.metrics.estimatedCost.toFixed(4)}`,
+              '',
+              'Use: /trace --analyze for efficiency analysis',
+              '     /trace issues to see detected inefficiencies',
+            ].join('\n'));
+          }
         } else if (args[0] === '--analyze' || args[0] === 'analyze') {
           if (!traceCollector) {
             addMessage('system', 'Tracing is not enabled.');
@@ -1740,6 +2006,7 @@ export function TUIApp({
     { id: 'clear', label: 'Clear Screen', shortcut: 'Ctrl+L', category: 'General', action: () => { setMessages([]); setToolCalls([]); } },
     { id: 'save', label: 'Save Session', shortcut: '/save', category: 'Sessions', action: () => handleCommand('save', []) },
     { id: 'sessions', label: 'List Sessions', shortcut: '/sessions', category: 'Sessions', action: () => handleCommand('sessions', []) },
+    { id: 'load', label: 'Load Session', shortcut: '/load <id>', category: 'Sessions', action: () => handleCommand('sessions', []) }, // Shows sessions, user types /load <id>
     { id: 'context', label: 'Context Info', shortcut: '/context', category: 'Context', action: () => handleCommand('context', []) },
     { id: 'compact', label: 'Compact Context', shortcut: '/compact', category: 'Context', action: () => handleCommand('compact', []) },
     { id: 'mcp', label: 'MCP Servers', shortcut: '/mcp', category: 'MCP', action: () => handleCommand('mcp', []) },
@@ -1886,6 +2153,20 @@ export function TUIApp({
     });
   }, [addMessage]);
 
+  const handleToggleActiveAgents = useCallback(() => {
+    setActiveAgentsExpanded(prev => {
+      addMessage('system', !prev ? '[v] Active agents: visible' : '[^] Active agents: hidden');
+      return !prev;
+    });
+  }, [addMessage]);
+
+  const handleToggleTasks = useCallback(() => {
+    setTasksExpanded(prev => {
+      addMessage('system', !prev ? '[v] Tasks: visible' : '[^] Tasks: hidden');
+      return !prev;
+    });
+  }, [addMessage]);
+
   // Update context tokens
   useEffect(() => {
     const agentState = agent.getState();
@@ -2011,6 +2292,20 @@ export function TUIApp({
           />
         )}
 
+        {/* Tasks Panel (positioned above input for task tracking) */}
+        <TasksPanel
+          tasks={tasks}
+          colors={colors}
+          expanded={tasksExpanded}
+        />
+
+        {/* Active Agents Panel (positioned above input when agents are running) */}
+        <ActiveAgentsPanel
+          agents={activeAgents}
+          colors={colors}
+          expanded={activeAgentsExpanded}
+        />
+
         <MemoizedInputArea
           onSubmit={handleSubmit}
           disabled={isProcessing || !!pendingApproval}
@@ -2024,6 +2319,8 @@ export function TUIApp({
           onToggleToolExpand={handleToggleToolExpand}
           onToggleThinking={handleToggleThinking}
           onToggleTransparency={handleToggleTransparency}
+          onToggleActiveAgents={handleToggleActiveAgents}
+          onToggleTasks={handleToggleTasks}
           commandPaletteOpen={commandPaletteOpen}
           onCommandPaletteInput={handleCommandPaletteInput}
           approvalDialogOpen={!!pendingApproval}
