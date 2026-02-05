@@ -1087,6 +1087,7 @@ export function TUIApp({
           '> SESSIONS & TASKS',
           '  /save             Save session',
           '  /sessions         List sessions',
+          '  /load <id>        Load session by ID',
           '  /tasks            List tracked tasks',
           '  /checkpoint       Create checkpoint',
           '  /checkpoints      List checkpoints',
@@ -1179,6 +1180,70 @@ export function TUIApp({
           addMessage('error', (e as Error).message);
         }
         return;
+
+      case 'load': {
+        const targetSessionId = args[0];
+        if (!targetSessionId) {
+          addMessage('system', 'Usage: /load <session-id>\n  Use /sessions to list available sessions');
+          return;
+        }
+
+        // Check if session exists
+        const targetSession = sessionStore.getSessionMetadata(targetSessionId);
+        if (!targetSession) {
+          addMessage('error', `Session not found: ${targetSessionId}\n  Use /sessions to list available sessions`);
+          return;
+        }
+
+        try {
+          addMessage('system', `Loading session: ${targetSession.id}\n   Created: ${new Date(targetSession.createdAt).toLocaleString()}\n   Messages: ${targetSession.messageCount}`);
+
+          // Try to load from checkpoint first
+          let loadCheckpointData: any;
+          if ('loadLatestCheckpoint' in sessionStore && typeof sessionStore.loadLatestCheckpoint === 'function') {
+            const sqliteCheckpoint = sessionStore.loadLatestCheckpoint(targetSession.id);
+            if (sqliteCheckpoint?.state) {
+              loadCheckpointData = sqliteCheckpoint.state;
+            }
+          }
+
+          // Fall back to loading from entries if no checkpoint
+          if (!loadCheckpointData) {
+            const entriesResult = sessionStore.loadSession(targetSession.id);
+            const entries = Array.isArray(entriesResult) ? entriesResult : await entriesResult;
+            const checkpoint = [...entries].reverse().find((e: any) => e.type === 'checkpoint');
+            if (checkpoint?.data) {
+              loadCheckpointData = checkpoint.data;
+            } else {
+              const messages = entries
+                .filter((e: any) => e.type === 'message')
+                .map((e: any) => e.data);
+              if (messages.length > 0) {
+                agent.loadState({ messages });
+                addMessage('system', `+ Loaded ${messages.length} messages from session`);
+              } else {
+                addMessage('system', 'No messages found in session');
+              }
+              return;
+            }
+          }
+
+          // Load from checkpoint data
+          if (loadCheckpointData?.messages) {
+            agent.loadState({
+              messages: loadCheckpointData.messages,
+              iteration: loadCheckpointData.iteration,
+              metrics: loadCheckpointData.metrics,
+              plan: loadCheckpointData.plan,
+              memoryContext: loadCheckpointData.memoryContext,
+            });
+            addMessage('system', `+ Loaded ${loadCheckpointData.messages.length} messages from session${loadCheckpointData.iteration ? `\n   Iteration: ${loadCheckpointData.iteration}` : ''}${loadCheckpointData.plan ? '\n   Plan restored' : ''}`);
+          }
+        } catch (e) {
+          addMessage('error', `Error loading session: ${(e as Error).message}`);
+        }
+        return;
+      }
 
       case 'tasks': {
         // Filter out deleted tasks
@@ -1941,6 +2006,7 @@ export function TUIApp({
     { id: 'clear', label: 'Clear Screen', shortcut: 'Ctrl+L', category: 'General', action: () => { setMessages([]); setToolCalls([]); } },
     { id: 'save', label: 'Save Session', shortcut: '/save', category: 'Sessions', action: () => handleCommand('save', []) },
     { id: 'sessions', label: 'List Sessions', shortcut: '/sessions', category: 'Sessions', action: () => handleCommand('sessions', []) },
+    { id: 'load', label: 'Load Session', shortcut: '/load <id>', category: 'Sessions', action: () => handleCommand('sessions', []) }, // Shows sessions, user types /load <id>
     { id: 'context', label: 'Context Info', shortcut: '/context', category: 'Context', action: () => handleCommand('context', []) },
     { id: 'compact', label: 'Compact Context', shortcut: '/compact', category: 'Context', action: () => handleCommand('compact', []) },
     { id: 'mcp', label: 'MCP Servers', shortcut: '/mcp', category: 'MCP', action: () => handleCommand('mcp', []) },

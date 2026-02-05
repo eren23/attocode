@@ -3441,6 +3441,12 @@ export class ProductionAgent {
       throw new Error('Thread management not enabled. Enable it in config to use createCheckpoint()');
     }
 
+    // CRITICAL: Sync current state.messages to threadManager before checkpoint
+    // The run() method adds messages directly to this.state.messages but doesn't sync
+    // to threadManager, so thread.messages would be empty without this sync
+    const thread = this.threadManager.getActiveThread();
+    thread.messages = [...this.state.messages];
+
     const checkpoint = this.threadManager.createCheckpoint({
       label,
       agentState: this.state,

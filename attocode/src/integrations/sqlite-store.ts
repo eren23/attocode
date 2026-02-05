@@ -883,7 +883,19 @@ export class SQLiteStore {
    * List all sessions.
    */
   listSessions(): SessionMetadata[] {
-    return this.stmts.listSessions.all() as SessionMetadata[];
+    const sessions = this.stmts.listSessions.all() as SessionMetadata[];
+
+    // Check checkpoints for sessions with 0 message count (same pattern as exportSessionManifest)
+    for (const session of sessions) {
+      if (session.messageCount === 0) {
+        const checkpoint = this.loadLatestCheckpoint(session.id);
+        if (checkpoint?.state?.messages && Array.isArray(checkpoint.state.messages)) {
+          session.messageCount = checkpoint.state.messages.length;
+        }
+      }
+    }
+
+    return sessions;
   }
 
   /**
@@ -939,6 +951,13 @@ export class SQLiteStore {
       createdAt: new Date().toISOString(),
       description: description || null,
     });
+
+    // Update message_count in sessions table to match checkpoint
+    if (state.messages && Array.isArray(state.messages)) {
+      this.db.prepare(`
+        UPDATE sessions SET message_count = ? WHERE id = ?
+      `).run(state.messages.length, this.currentSessionId);
+    }
 
     return id;
   }

@@ -1121,6 +1121,88 @@ ${c('Tip:', 'dim')} Use /mcp search <query> to load specific tools on-demand.
       }
       break;
 
+    case '/load':
+      try {
+        const targetSessionId = args[0];
+        if (!targetSessionId) {
+          output.log(c('Usage: /load <session-id>', 'yellow'));
+          output.log(c('  Use /sessions to list available sessions', 'dim'));
+          break;
+        }
+
+        // Check if session exists
+        const targetSession = sessionStore.getSessionMetadata(targetSessionId);
+        if (!targetSession) {
+          output.log(c(`Session not found: ${targetSessionId}`, 'red'));
+          output.log(c('  Use /sessions to list available sessions', 'dim'));
+          break;
+        }
+
+        output.log(c(`Loading session: ${targetSession.id}`, 'dim'));
+        output.log(c(`   Created: ${new Date(targetSession.createdAt).toLocaleString()}`, 'dim'));
+        output.log(c(`   Messages: ${targetSession.messageCount}`, 'dim'));
+
+        // Try to load from checkpoint first (same as /resume)
+        let loadCheckpointData: CheckpointData | undefined;
+        if ('loadLatestCheckpoint' in sessionStore && typeof sessionStore.loadLatestCheckpoint === 'function') {
+          const sqliteCheckpoint = sessionStore.loadLatestCheckpoint(targetSession.id);
+          if (sqliteCheckpoint?.state) {
+            loadCheckpointData = sqliteCheckpoint.state as unknown as CheckpointData;
+          }
+        }
+
+        // Fall back to loading from entries if no checkpoint
+        if (!loadCheckpointData) {
+          const entriesResult = sessionStore.loadSession(targetSession.id);
+          const entries = Array.isArray(entriesResult) ? entriesResult : await entriesResult;
+          const checkpoint = [...entries].reverse().find(e => e.type === 'checkpoint');
+          if (checkpoint?.data) {
+            loadCheckpointData = checkpoint.data as CheckpointData;
+          } else {
+            const messages = entries
+              .filter((e: { type: string }) => e.type === 'message')
+              .map((e: { data: unknown }) => e.data);
+            if (messages.length > 0) {
+              agent.loadState({ messages: messages as any });
+              output.log(c(`+ Loaded ${messages.length} messages from session`, 'green'));
+            } else {
+              output.log(c('No messages found in session', 'yellow'));
+            }
+          }
+        }
+
+        // Load from checkpoint data if available
+        if (loadCheckpointData?.messages) {
+          agent.loadState({
+            messages: loadCheckpointData.messages as any,
+            iteration: loadCheckpointData.iteration,
+            metrics: loadCheckpointData.metrics as any,
+            plan: loadCheckpointData.plan as any,
+            memoryContext: loadCheckpointData.memoryContext,
+          });
+          output.log(c(`+ Loaded ${loadCheckpointData.messages.length} messages from session`, 'green'));
+          if (loadCheckpointData.iteration) {
+            output.log(c(`   Iteration: ${loadCheckpointData.iteration}`, 'dim'));
+          }
+          if (loadCheckpointData.plan) {
+            output.log(c(`   Plan restored`, 'dim'));
+          }
+
+          // Check for pending plans
+          if ('getPendingPlan' in sessionStore && typeof sessionStore.getPendingPlan === 'function') {
+            const pendingPlan = sessionStore.getPendingPlan(targetSession.id);
+            if (pendingPlan && pendingPlan.status === 'pending') {
+              output.log(c(`\nFound pending plan: "${pendingPlan.task}"`, 'yellow'));
+              output.log(c(`   ${pendingPlan.proposedChanges.length} change(s) awaiting approval`, 'yellow'));
+              output.log(c('   Use /show-plan to view, /approve to execute, /reject to discard', 'dim'));
+            }
+          }
+        }
+      } catch (error) {
+        output.log(c(`Error loading session: ${(error as Error).message}`, 'red'));
+      }
+      break;
+
     // =========================================================================
     // CONTEXT MANAGEMENT
     // =========================================================================

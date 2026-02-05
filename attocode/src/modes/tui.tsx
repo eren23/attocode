@@ -199,6 +199,15 @@ export async function startTUIMode(
       maxIterations,
       memory: { enabled: true, types: { episodic: true, semantic: true, working: true } },
       planning: { enabled: true, autoplan: true, complexityThreshold: 6 },
+      // Thread management with auto-checkpoints (same as REPL mode)
+      threads: {
+        enabled: true,
+        autoCheckpoint: true,
+        checkpointFrequency: 5,
+        maxCheckpoints: 10,
+        enableRollback: true,
+        enableForking: true,
+      },
       humanInLoop: permissionMode === 'interactive'
         ? {
             enabled: true,
