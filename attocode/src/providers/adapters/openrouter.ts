@@ -84,14 +84,17 @@ export class OpenRouterProvider implements LLMProvider, LLMProviderWithTools {
     return hasEnv('OPENROUTER_API_KEY');
   }
 
-  async chat(messages: Message[], options?: ChatOptions): Promise<ChatResponse> {
+  async chat(messages: (Message | MessageWithContent)[], options?: ChatOptions): Promise<ChatResponse> {
     const model = options?.model ?? this.model;
 
     // OpenRouter uses OpenAI-compatible message format
-    const openRouterMessages = messages.map(m => ({
-      role: m.role,
-      content: m.content,
-    }));
+    // Handles both string content and structured content with cache_control markers
+    const openRouterMessages = messages.map(m => {
+      if (typeof m.content !== 'string') {
+        return { role: m.role, content: m.content }; // Pass structured content for caching
+      }
+      return { role: m.role, content: m.content };
+    });
 
     // Build request body (OpenAI-compatible)
     const body = {

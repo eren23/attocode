@@ -20,6 +20,7 @@ export {
   HumanInLoopManager,
   SafetyManager,
   createSafetyManager,
+  type ApprovalScope,
 } from './safety.js';
 export { RoutingManager, createRoutingManager } from './routing.js';
 
@@ -465,6 +466,7 @@ export {
   type ContextEngineeringStats,
   type ContextEngineeringEvent,
   type ContextEngineeringEventListener,
+  type CacheableContentBlock,
 } from './context-engineering.js';
 
 // Codebase Context (intelligent code selection)
@@ -506,6 +508,24 @@ export {
   type BlackboardEventListener,
   type BlackboardStats,
 } from './shared-blackboard.js';
+
+// Shared Budget Pool (parent-child token budget sharing)
+export {
+  SharedBudgetPool,
+  createBudgetPool,
+  type BudgetPoolConfig,
+  type BudgetAllocation,
+  type BudgetPoolStats,
+} from './budget-pool.js';
+
+// Shared File Cache (cross-agent read deduplication)
+export {
+  SharedFileCache,
+  createSharedFileCache,
+  type FileCacheConfig,
+  type FileCacheStats,
+  type FileCacheEntry,
+} from './file-cache.js';
 
 // Smart Decomposer (semantic task decomposition)
 export {

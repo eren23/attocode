@@ -109,6 +109,16 @@ export type CacheEvent =
 
 export type CacheEventListener = (event: CacheEvent) => void;
 
+/**
+ * Content block with optional cache_control marker.
+ * Used to build system prompts that enable prompt caching at the API level.
+ */
+export interface CacheableContentBlock {
+  type: 'text';
+  text: string;
+  cache_control?: { type: 'ephemeral' };
+}
+
 // =============================================================================
 // DETERMINISTIC JSON SERIALIZATION
 // =============================================================================
@@ -283,6 +293,89 @@ export class CacheAwareContext {
     }
 
     return parts.join('');
+  }
+
+  /**
+   * Build system prompt as CacheableContent[] with cache_control markers.
+   * Each section becomes a separate content block; static/semi-stable sections
+   * get `cache_control: { type: 'ephemeral' }` so the LLM provider can cache them.
+   *
+   * Returns structured content suitable for MessageWithContent.
+   */
+  buildCacheableSystemPrompt(options: {
+    rules?: string;
+    tools?: string;
+    memory?: string;
+    dynamic?: DynamicContent;
+  }): CacheableContentBlock[] {
+    const blocks: CacheableContentBlock[] = [];
+
+    // 1. Static prefix — most stable, always cached
+    if (this.config.staticPrefix) {
+      blocks.push({
+        type: 'text',
+        text: this.config.staticPrefix,
+        cache_control: { type: 'ephemeral' },
+      });
+    }
+
+    // 2. Rules content — semi-stable, cached
+    if (options.rules) {
+      blocks.push({
+        type: 'text',
+        text: '\n\n## Rules\n' + options.rules,
+        cache_control: { type: 'ephemeral' },
+      });
+    }
+
+    // 3. Tool descriptions — semi-stable, cached
+    if (options.tools) {
+      blocks.push({
+        type: 'text',
+        text: '\n\n## Available Tools\n' + options.tools,
+        cache_control: { type: 'ephemeral' },
+      });
+    }
+
+    // 4. Memory/context — changes more frequently, still cache-worthy
+    if (options.memory) {
+      blocks.push({
+        type: 'text',
+        text: '\n\n## Relevant Context\n' + options.memory,
+        cache_control: { type: 'ephemeral' },
+      });
+    }
+
+    // 5. Dynamic content at END — changes every request, NO cache marker
+    if (options.dynamic && Object.keys(options.dynamic).length > 0) {
+      const dynamicParts: string[] = [];
+
+      if (options.dynamic.sessionId) {
+        dynamicParts.push(`Session: ${options.dynamic.sessionId}`);
+      }
+      if (options.dynamic.mode) {
+        dynamicParts.push(`Mode: ${options.dynamic.mode}`);
+      }
+      if (options.dynamic.timestamp) {
+        dynamicParts.push(`Time: ${options.dynamic.timestamp}`);
+      }
+
+      for (const [key, value] of Object.entries(options.dynamic)) {
+        if (!['sessionId', 'mode', 'timestamp'].includes(key) && value) {
+          dynamicParts.push(`${key}: ${value}`);
+        }
+      }
+
+      if (dynamicParts.length > 0) {
+        blocks.push({
+          type: 'text',
+          text: '\n\n---\n' + dynamicParts.join(' | '),
+          // No cache_control — dynamic content should not be cached
+        });
+      }
+    }
+
+    return blocks;
   }
 
   /**

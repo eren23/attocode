@@ -5,11 +5,12 @@
  * Always available as a fallback.
  */
 
-import type { 
-  LLMProvider, 
-  Message, 
-  ChatOptions, 
-  ChatResponse 
+import type {
+  LLMProvider,
+  Message,
+  MessageWithContent,
+  ChatOptions,
+  ChatResponse
 } from '../types.js';
 import { registerProvider } from '../provider.js';
 
@@ -90,7 +91,7 @@ export class MockProvider implements LLMProvider {
     return true; // Always available
   }
 
-  async chat(messages: Message[], _options?: ChatOptions): Promise<ChatResponse> {
+  async chat(messages: (Message | MessageWithContent)[], _options?: ChatOptions): Promise<ChatResponse> {
     // Simulate network latency
     await new Promise(resolve => setTimeout(resolve, 100));
     
@@ -101,7 +102,8 @@ export class MockProvider implements LLMProvider {
       .reverse()
       .find(m => m.role === 'user');
     
-    const content = lastUserMessage?.content ?? '';
+    const rawContent = lastUserMessage?.content ?? '';
+    const content = typeof rawContent === 'string' ? rawContent : rawContent.map(c => c.text).join('');
     
     // Try to match a scenario
     if (!this.currentScenario || this.scenarioIndex >= this.currentScenario.responses.length) {

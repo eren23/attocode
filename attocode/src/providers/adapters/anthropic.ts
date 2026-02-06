@@ -68,24 +68,37 @@ export class AnthropicProvider implements LLMProvider, LLMProviderWithTools {
     return hasEnv('ANTHROPIC_API_KEY');
   }
 
-  async chat(messages: Message[], options?: ChatOptions): Promise<ChatResponse> {
+  async chat(messages: (Message | MessageWithContent)[], options?: ChatOptions): Promise<ChatResponse> {
     const model = options?.model ?? this.model;
-    
+
     // Separate system message from conversation
     const systemMessage = messages.find(m => m.role === 'system');
     const conversationMessages = messages
       .filter(m => m.role !== 'system')
       .map(m => ({
         role: m.role as 'user' | 'assistant',
-        content: m.content,
+        content: typeof m.content === 'string' ? m.content : m.content.map(c => c.text).join(''),
       }));
+
+    // Build system content — supports structured blocks with cache_control for prompt caching
+    let systemContent: string | Array<{ type: 'text'; text: string; cache_control?: { type: 'ephemeral' } }> | undefined;
+    if (systemMessage) {
+      if (typeof systemMessage.content !== 'string' && Array.isArray(systemMessage.content)) {
+        // Structured content with cache_control markers
+        systemContent = systemMessage.content;
+      } else {
+        systemContent = typeof systemMessage.content === 'string'
+          ? systemMessage.content
+          : (systemMessage.content as Array<{ text: string }>).map(c => c.text).join('');
+      }
+    }
 
     // Build request body
     const body = {
       model,
       max_tokens: options?.maxTokens ?? 4096,
       temperature: options?.temperature ?? 0.7,
-      system: systemMessage?.content,
+      system: systemContent,
       messages: conversationMessages,
       ...(options?.stopSequences && { stop_sequences: options.stopSequences }),
     };
