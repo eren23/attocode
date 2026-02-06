@@ -71,7 +71,7 @@ export interface LLMProvider {
    * @param messages - Conversation history
    * @param options - Optional configuration
    */
-  chat(messages: Message[], options?: ChatOptions): Promise<ChatResponse>;
+  chat(messages: (Message | MessageWithContent)[], options?: ChatOptions): Promise<ChatResponse>;
   
   /**
    * Check if the provider is properly configured.

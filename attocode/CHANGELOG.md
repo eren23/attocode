@@ -5,6 +5,28 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.9] - 2026-02-06
+
+### Added
+- **Prompt cache markers (P1)** - System prompts are now sent as structured `CacheableContentBlock[]` with `cache_control: { type: 'ephemeral' }` markers, enabling LLM provider-level prompt caching. Static sections (prefix, rules, tools, memory) are marked for caching; dynamic content (session ID, timestamp) is not. Anthropic and OpenRouter adapters pass markers through; OpenAI adapter gracefully flattens to string. Expected 60-70% cache hit rate on multi-turn sessions.
+- **Shared file cache (P2)** - New `SharedFileCache` (LRU, TTL-based) shared across parent and child agents via same-process Map reference. Eliminates redundant file reads in multi-agent workflows (previously 3x reads of large files like agent.ts at 212KB). All file paths normalized via `path.resolve()` for consistent keys. Write operations and `undo_file_change` invalidate cache entries. Configurable max size (5MB default) and TTL (5 min default).
+- **Budget pooling (P4)** - New `SharedBudgetPool` replaces independent per-subagent budgets. Parent reserves 25% for synthesis work; remaining 75% is shared across children. Pessimistic reservation accounting prevents over-allocation during parallel spawns. `recordUsage()` and `release()` called in `finally` block to track actual consumption and return unused budget. Pool exhaustion grants minimal 5K emergency budget instead of bypassing limits.
+- **Subagent compaction (P5)** - Subagents now have auto-compaction enabled with `maxContextTokens: 80000` (compaction triggers at ~64K tokens via 80% threshold). More aggressive settings: fewer preserved messages, no tool result preservation, smaller summaries.
+- **Approval batching (P6)** - New `ApprovalScope` system for subagent pre-approval. Read-only tools (`read_file`, `glob`, `grep`, etc.) auto-approved. Write tools (`write_file`, `edit_file`) scoped-approved within `src/`, `tests/`, `tools/` directories. Directory-boundary-aware path matching prevents false positives (e.g., `src/` won't match `src-backup/`). Tool name matching uses exact comparison, not substring.
+- **Comprehensive test coverage** - 81 new tests across 5 test files: `budget-pool.test.ts` (23 tests), `file-cache.test.ts` (22 tests), `approval-scope.test.ts` (14 tests), `timeout-precedence.test.ts` (14 tests), `cache-markers.test.ts` (8 tests)
+
+### Fixed
+- **Subagent timeout precedence (P3)** - Changed from `configTimeout ?? agentTypeTimeout` (config always wins) to proper 4-level chain: per-type config > agent-type default > global config > hardcoded fallback. Reviewers now correctly get 180s (not global 300s), researchers get 420s. Added per-type config support via `subagent.timeouts` record.
+- **Timeout/iteration validation** - Negative, NaN, and Infinity values in timeout/iteration configs are now rejected and fall through to next precedence level instead of causing runtime errors in `createGracefulTimeout()`.
+- **Budget pool initialization** - Pool now uses the agent's actual configured budget (custom or default) instead of always using `STANDARD_BUDGET` (200K). Users with 500K budgets no longer get a pool capped at 200K.
+- **Cache markers fallback** - When KV-cache context is not configured, `buildCacheableSystemPrompt()` returns empty array (signal to use plain string) instead of an unmarked block that would be sent as structured content without cache benefits.
+- **Approval scope matching** - Tool name matching changed from `includes()` to exact `===` comparison, preventing `requireApproval: ['bash']` from blocking `bash_completion`. Path matching now checks directory boundaries, preventing `src/` from matching `src-backup/file.ts`.
+
+### Changed
+- **LLM Provider interface** - `chat()` method widened to accept `(Message | MessageWithContent)[]` across both provider interfaces (`src/types.ts` and `src/providers/types.ts`). All 4 provider adapters (Anthropic, OpenRouter, OpenAI, Mock) updated.
+- **Subagent budget model** - Subagents no longer get independent 150K budgets (which exposed 250%+ of intended cost). Budget is now drawn from a shared pool bounded by the parent's total budget.
+- **Subagent spawn flow** - `spawnAgent()` now allocates from budget pool, passes file cache, sets approval scope, enables compaction, and records actual usage on completion.
+
 ## [0.1.8] - 2026-02-06
 
 ### Added

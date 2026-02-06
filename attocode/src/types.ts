@@ -54,11 +54,32 @@ export interface ToolDefinition {
 }
 
 /**
+ * Content block with optional cache_control marker for prompt caching.
+ */
+export interface ContentBlock {
+  type: 'text';
+  text: string;
+  cache_control?: { type: 'ephemeral' };
+}
+
+/**
+ * Message that supports both string and structured content (for prompt caching).
+ */
+export interface MessageWithStructuredContent {
+  role: 'system' | 'user' | 'assistant' | 'tool';
+  content: string | ContentBlock[];
+  toolCalls?: ToolCall[];
+  toolResults?: ToolResult[];
+  toolCallId?: string;
+  metadata?: Record<string, unknown>;
+}
+
+/**
  * LLM provider interface.
  */
 export interface LLMProvider {
   name?: string;
-  chat(messages: Message[], options?: ChatOptions): Promise<ChatResponse>;
+  chat(messages: (Message | MessageWithStructuredContent)[], options?: ChatOptions): Promise<ChatResponse>;
   stream?(messages: Message[], options?: ChatOptions): AsyncIterable<StreamChunk>;
 }
 
@@ -238,6 +259,13 @@ export interface ProductionAgentConfig {
    * @internal Used for subagent spawning
    */
   blackboard?: unknown; // SharedBlackboard - using unknown to avoid circular import
+
+  /**
+   * Shared file cache for cross-agent read deduplication.
+   * Created by parent agent, inherited by subagents.
+   * @internal Used for subagent spawning
+   */
+  fileCache?: unknown; // SharedFileCache - using unknown to avoid circular import
 
   /**
    * Custom budget configuration for the economics system.
@@ -967,8 +995,14 @@ export interface SubagentConfig {
   /** Default timeout in ms for subagent execution (default: 120000 = 2 min) */
   defaultTimeout?: number;
 
+  /** Per-agent-type timeout overrides in ms (takes priority over defaultTimeout) */
+  timeouts?: Record<string, number>;
+
   /** Default max iterations for subagents (default: 10, reduced from 30) */
   defaultMaxIterations?: number;
+
+  /** Per-agent-type max iteration overrides (takes priority over defaultMaxIterations) */
+  maxIterations?: Record<string, number>;
 
   /** Whether subagents inherit observability config from parent */
   inheritObservability?: boolean;

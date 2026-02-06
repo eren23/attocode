@@ -111,10 +111,10 @@ export class OpenAIProvider implements LLMProvider, LLMProviderWithTools {
   /**
    * Basic chat without tool support.
    */
-  async chat(messages: Message[], options?: ChatOptions): Promise<ChatResponse> {
+  async chat(messages: (Message | MessageWithContent)[], options?: ChatOptions): Promise<ChatResponse> {
     const model = options?.model ?? this.model;
 
-    // Convert to OpenAI message format
+    // Convert to OpenAI message format (flatten structured content to string)
     const openaiMessages = this.convertMessagesToOpenAIFormat(messages);
 
     // Build request body
@@ -238,10 +238,10 @@ export class OpenAIProvider implements LLMProvider, LLMProviderWithTools {
   /**
    * Convert basic messages to OpenAI format.
    */
-  private convertMessagesToOpenAIFormat(messages: Message[]): OpenAIMessage[] {
+  private convertMessagesToOpenAIFormat(messages: (Message | MessageWithContent)[]): OpenAIMessage[] {
     return messages.map(m => ({
       role: m.role as OpenAIMessage['role'],
-      content: m.content,
+      content: typeof m.content === 'string' ? m.content : m.content.map(c => c.text).join(''),
     }));
   }
 

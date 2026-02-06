@@ -123,10 +123,15 @@ import {
   type ContextEngineeringConfig,
   type CodebaseContextConfig,
   type SelectionOptions,
+  type CacheableContentBlock,
+  SharedFileCache,
+  createSharedFileCache,
+  SharedBudgetPool,
+  createBudgetPool,
+  type ApprovalScope,
   PendingPlanManager,
   createPendingPlanManager,
   type PendingPlan,
-  type ProposedChange,
   // Interactive Planning
   InteractivePlanner,
   createInteractivePlanner,
@@ -152,7 +157,6 @@ import {
   // Shared Blackboard (subagent coordination)
   SharedBlackboard,
   createSharedBlackboard,
-  type BlackboardConfig,
   // Task Management
   TaskManager,
   createTaskManager,
@@ -161,6 +165,9 @@ import {
 
 // Lesson 26: Tracing & Evaluation integration
 import { TraceCollector, createTraceCollector } from './tracing/trace-collector.js';
+
+// Provider types for cache-aware messages
+import type { MessageWithContent } from './providers/types.js';
 
 // Model registry for context window limits
 import { modelRegistry } from './costs/index.js';
@@ -222,6 +229,8 @@ export class ProductionAgent {
   private capabilitiesRegistry: CapabilitiesRegistry | null = null;
   private toolResolver: ((toolName: string) => ToolDefinition | null) | null = null;
   private blackboard: SharedBlackboard | null = null;
+  private fileCache: SharedFileCache | null = null;
+  private budgetPool: SharedBudgetPool | null = null;
   private taskManager: TaskManager | null = null;
   private store: SQLiteStore | null = null;
 
@@ -240,6 +249,10 @@ export class ProductionAgent {
   // Graceful wrapup support (for subagent timeout wrapup phase)
   private wrapupRequested = false;
   private wrapupReason: string | null = null;
+
+  // Cacheable system prompt blocks for prompt caching (Improvement P1)
+  // When set, callLLM() will inject these as structured content with cache_control markers
+  private cacheableSystemBlocks: CacheableContentBlock[] | null = null;
 
   // Initialization tracking
   private initPromises: Promise<void>[] = [];
@@ -300,6 +313,27 @@ export class ProductionAgent {
         defaultClaimTTL: 120000, // 2 minutes for file claims
         deduplicateFindings: true,
       });
+    }
+
+    // Shared File Cache - eliminates redundant file reads across parent and subagents
+    // Subagents inherit parent's cache; parent agents create their own
+    if ((userConfig as Record<string, unknown>).fileCache) {
+      this.fileCache = (userConfig as Record<string, unknown>).fileCache as SharedFileCache;
+    } else if (this.config.subagent !== false) {
+      this.fileCache = createSharedFileCache({
+        maxCacheBytes: 5 * 1024 * 1024, // 5MB
+        ttlMs: 5 * 60 * 1000, // 5 minutes
+      });
+    }
+
+    // Shared Budget Pool - pools token budget across parent and subagents
+    // Only parent agents create the pool; subagents don't need their own
+    // The pool is used in spawnAgent() to allocate budgets from the parent's total
+    if (this.config.subagent !== false) {
+      // Use actual configured budget (custom or default), not always STANDARD_BUDGET
+      const baseBudget = this.config.budget ?? STANDARD_BUDGET;
+      const parentBudgetTokens = baseBudget.maxTokens ?? STANDARD_BUDGET.maxTokens ?? 200000;
+      this.budgetPool = createBudgetPool(parentBudgetTokens, 0.25, 100000);
     }
 
     // Initialize enabled features
@@ -2047,8 +2081,6 @@ export class ProductionAgent {
     }
 
     // Build system prompt using cache-aware builder if available (Trick P)
-    let systemPrompt: string;
-
     // Combine memory, learnings, and codebase context
     const combinedContext = [
       ...(memoryContext.length > 0 ? memoryContext : []),
@@ -2056,20 +2088,36 @@ export class ProductionAgent {
       ...(codebaseContextStr ? [`\n## Relevant Code\n${codebaseContextStr}`] : []),
     ].join('\n');
 
+    const promptOptions = {
+      rules: rulesContent + (skillsPrompt ? '\n\n' + skillsPrompt : ''),
+      tools: toolDescriptions,
+      memory: combinedContext.length > 0 ? combinedContext : undefined,
+      dynamic: {
+        mode: this.modeManager?.getMode() ?? 'default',
+      },
+    };
+
     if (this.contextEngineering) {
-      // Use cache-optimized prompt builder - orders sections for KV-cache reuse:
-      // static prefix -> rules -> tools -> memory/codebase -> dynamic
-      systemPrompt = this.contextEngineering.buildSystemPrompt({
-        rules: rulesContent + (skillsPrompt ? '\n\n' + skillsPrompt : ''),
-        tools: toolDescriptions,
-        memory: combinedContext.length > 0 ? combinedContext : undefined,
-        dynamic: {
-          mode: this.modeManager?.getMode() ?? 'default',
-        },
-      });
+      // Build cache-aware system prompt with cache_control markers (Improvement P1).
+      // Store structured blocks for callLLM() to inject as MessageWithContent.
+      // The string version is still used for token estimation and debugging.
+      const cacheableBlocks = this.contextEngineering.buildCacheableSystemPrompt(promptOptions);
+
+      // Safety check: ensure we have content (empty array = no cache context configured)
+      if (cacheableBlocks.length === 0 || cacheableBlocks.every(b => b.text.trim().length === 0)) {
+        this.cacheableSystemBlocks = null;
+        messages.push({ role: 'system', content: this.config.systemPrompt || 'You are a helpful AI assistant.' });
+      } else {
+        // Store cacheable blocks for provider injection
+        this.cacheableSystemBlocks = cacheableBlocks;
+        // Push a regular string Message for backward compatibility (token estimation, etc.)
+        const flatPrompt = cacheableBlocks.map(b => b.text).join('');
+        messages.push({ role: 'system', content: flatPrompt });
+      }
     } else {
-      // Fallback: manual concatenation (original behavior)
-      systemPrompt = this.config.systemPrompt;
+      // Fallback: manual concatenation (original behavior) — no cache markers
+      this.cacheableSystemBlocks = null;
+      let systemPrompt = this.config.systemPrompt;
       if (rulesContent) systemPrompt += '\n\n' + rulesContent;
       if (skillsPrompt) systemPrompt += skillsPrompt;
       if (combinedContext.length > 0) {
@@ -2078,15 +2126,15 @@ export class ProductionAgent {
       if (toolDescriptions) {
         systemPrompt += '\n\nAvailable tools:\n' + toolDescriptions;
       }
-    }
 
-    // Safety check: ensure system prompt is not empty
-    if (!systemPrompt || systemPrompt.trim().length === 0) {
-      console.warn('[buildMessages] Warning: Empty system prompt detected, using fallback');
-      systemPrompt = this.config.systemPrompt || 'You are a helpful AI assistant.';
-    }
+      // Safety check: ensure system prompt is not empty
+      if (!systemPrompt || systemPrompt.trim().length === 0) {
+        console.warn('[buildMessages] Warning: Empty system prompt detected, using fallback');
+        systemPrompt = this.config.systemPrompt || 'You are a helpful AI assistant.';
+      }
 
-    messages.push({ role: 'system', content: systemPrompt });
+      messages.push({ role: 'system', content: systemPrompt });
+    }
 
     // Add existing conversation
     for (const msg of this.state.messages) {
@@ -2108,6 +2156,23 @@ export class ProductionAgent {
     const spanId = this.observability?.tracer?.startSpan('llm.call');
 
     this.emit({ type: 'llm.start', model: this.config.model || 'default' });
+
+    // Prompt caching (Improvement P1): Replace the system message with structured content
+    // that includes cache_control markers, enabling 60-70% cache hit rates.
+    // The original Message[] is kept for token estimation; the provider gets MessageWithContent[].
+    let providerMessages: (Message | MessageWithContent)[] = messages;
+    if (this.cacheableSystemBlocks && this.cacheableSystemBlocks.length > 0) {
+      providerMessages = messages.map((m, i) => {
+        if (i === 0 && m.role === 'system') {
+          // Replace system message with structured cacheable content
+          return {
+            role: 'system' as const,
+            content: this.cacheableSystemBlocks!,
+          } as MessageWithContent;
+        }
+        return m;
+      });
+    }
 
     // Emit context insight for verbose feedback
     const estimatedTokens = messages.reduce((sum, m) => {
@@ -2233,7 +2298,7 @@ export class ProductionAgent {
           },
         });
       } else {
-        response = await this.provider.chat(messages, {
+        response = await this.provider.chat(providerMessages, {
           model: this.config.model,
           tools: Array.from(this.tools.values()),
         });
@@ -2561,6 +2626,33 @@ export class ProductionAgent {
           }
         }
 
+        // FILE CACHE: Check cache for read_file operations before executing
+        if (this.fileCache && toolCall.name === 'read_file') {
+          const args = toolCall.arguments as Record<string, unknown>;
+          const readPath = String(args.path || '');
+          if (readPath) {
+            const cached = this.fileCache.get(readPath);
+            if (cached !== undefined) {
+              const lines = cached.split('\n').length;
+              const cacheResult = { success: true, output: cached, metadata: { lines, bytes: cached.length, cached: true } };
+
+              const duration = Date.now() - startTime;
+              this.traceCollector?.record({ type: 'tool.end', data: { executionId, status: 'success', result: cacheResult, durationMs: duration } });
+              this.observability?.metrics?.recordToolCall(toolCall.name, duration, true);
+              this.state.metrics.toolCalls++;
+              this.emit({ type: 'tool.complete', tool: toolCall.name, result: cacheResult });
+
+              results.push({
+                callId: toolCall.id,
+                result: typeof cacheResult === 'string' ? cacheResult : JSON.stringify(cacheResult),
+              });
+
+              this.observability?.tracer?.endSpan(spanId);
+              continue; // Skip actual file I/O
+            }
+          }
+        }
+
         // Execute tool (with sandbox if available)
         let result: unknown;
         if (this.safety?.sandbox) {
@@ -2608,6 +2700,23 @@ export class ProductionAgent {
         this.state.metrics.toolCalls++;
 
         this.emit({ type: 'tool.complete', tool: toolCall.name, result });
+
+        // FILE CACHE: Store read results and invalidate on writes
+        if (this.fileCache) {
+          const args = toolCall.arguments as Record<string, unknown>;
+          const filePath = String(args.path || args.file_path || '');
+
+          if (toolCall.name === 'read_file' && filePath) {
+            // Cache successful read results
+            const resultObj = result as { success?: boolean; output?: string };
+            if (resultObj?.success && typeof resultObj.output === 'string') {
+              this.fileCache.set(filePath, resultObj.output);
+            }
+          } else if ((toolCall.name === 'write_file' || toolCall.name === 'edit_file' || toolCall.name === 'undo_file_change') && filePath) {
+            // Invalidate cache when files are modified (including undo operations)
+            this.fileCache.invalidate(filePath);
+          }
+        }
 
         // Emit tool insight with result summary
         const summary = this.summarizeToolResult(toolCall.name, result);
@@ -4102,22 +4211,38 @@ export class ProductionAgent {
 
       // Get subagent config with agent-type-specific timeouts and iteration limits
       // Uses dynamic configuration based on agent type (researcher needs more time than reviewer)
+      // Precedence: per-type config > per-type default > global config > hardcoded fallback
       const subagentConfig = this.config.subagent;
       const hasSubagentConfig = subagentConfig !== false && subagentConfig !== undefined;
 
-      // Agent-type-specific timeout: researchers get 5min, reviewers get 2min, etc.
+      // Timeout precedence: per-type config override > agent-type default > global config default
       const agentTypeTimeout = getSubagentTimeout(agentName);
-      const configTimeout = hasSubagentConfig
+      const rawPerTypeTimeout = hasSubagentConfig
+        ? (subagentConfig as { timeouts?: Record<string, number> }).timeouts?.[agentName]
+        : undefined;
+      const rawGlobalTimeout = hasSubagentConfig
         ? (subagentConfig as { defaultTimeout?: number }).defaultTimeout
         : undefined;
-      const subagentTimeout = configTimeout ?? agentTypeTimeout;
+      // Validate: reject negative, NaN, or non-finite timeout values
+      const isValidTimeout = (v: number | undefined): v is number =>
+        v !== undefined && Number.isFinite(v) && v > 0;
+      const perTypeConfigTimeout = isValidTimeout(rawPerTypeTimeout) ? rawPerTypeTimeout : undefined;
+      const globalConfigTimeout = isValidTimeout(rawGlobalTimeout) ? rawGlobalTimeout : undefined;
+      const subagentTimeout = perTypeConfigTimeout ?? agentTypeTimeout ?? globalConfigTimeout ?? 300000;
 
-      // Agent-type-specific iteration limit: researchers get 25, documenters get 10, etc.
+      // Iteration precedence: per-type config override > agent-type default > global config default
       const agentTypeMaxIter = getSubagentMaxIterations(agentName);
-      const configMaxIter = hasSubagentConfig
+      const rawPerTypeMaxIter = hasSubagentConfig
+        ? (subagentConfig as { maxIterations?: Record<string, number> }).maxIterations?.[agentName]
+        : undefined;
+      const rawGlobalMaxIter = hasSubagentConfig
         ? (subagentConfig as { defaultMaxIterations?: number }).defaultMaxIterations
         : undefined;
-      const defaultMaxIterations = agentDef.maxIterations ?? configMaxIter ?? agentTypeMaxIter;
+      const isValidIter = (v: number | undefined): v is number =>
+        v !== undefined && Number.isFinite(v) && v > 0 && Number.isInteger(v);
+      const perTypeConfigMaxIter = isValidIter(rawPerTypeMaxIter) ? rawPerTypeMaxIter : undefined;
+      const globalConfigMaxIter = isValidIter(rawGlobalMaxIter) ? rawGlobalMaxIter : undefined;
+      const defaultMaxIterations = agentDef.maxIterations ?? perTypeConfigMaxIter ?? agentTypeMaxIter ?? globalConfigMaxIter ?? 15;
 
       // BLACKBOARD CONTEXT INJECTION
       // Gather relevant context from the blackboard for the subagent
@@ -4207,6 +4332,10 @@ export class ProductionAgent {
         ? `${agentDef.systemPrompt}\n\n${SUBAGENT_PLAN_MODE_ADDITION}${blackboardContext}${constraintContext}`
         : `${agentDef.systemPrompt}${blackboardContext}${constraintContext}`;
 
+      // Allocate budget from pool (or use default) — track allocation ID for release later
+      const pooledBudget = this.getSubagentBudget(agentName, constraints);
+      const poolAllocationId = pooledBudget.allocationId;
+
       // Create a sub-agent with the agent's config
       // Use SUBAGENT_BUDGET to constrain resource usage (prevents runaway token consumption)
       const subAgent = new ProductionAgent({
@@ -4223,6 +4352,20 @@ export class ProductionAgent {
         memory: false,
         planning: false,
         reflection: false,
+        // Enable lightweight compaction for subagents (Improvement P5)
+        // tokenThreshold configures the Compactor's per-pass size limit
+        // maxContextTokens constrains AutoCompactionManager's percentage thresholds
+        // With maxContextTokens=80000 and default 80% threshold, compaction triggers at ~64K
+        compaction: {
+          enabled: true,
+          mode: 'auto',
+          tokenThreshold: 40000, // Compactor summarization size limit per pass
+          preserveRecentCount: 4, // Preserve fewer messages (splits to 2 user + 2 assistant)
+          preserveToolResults: false, // More aggressive — subagents can re-read files
+          summaryMaxTokens: 500,
+        },
+        // Lower context window for subagents so percentage-based compaction triggers earlier
+        maxContextTokens: 80000,
         observability: this.config.observability,
         sandbox: this.config.sandbox,
         humanInLoop: this.config.humanInLoop,
@@ -4236,11 +4379,11 @@ export class ProductionAgent {
         },
         // Share parent's blackboard for coordination between parallel subagents
         blackboard: this.blackboard || undefined,
-        // CONSTRAINED BUDGET: Subagents get smaller budget to prevent runaway consumption
-        // Uses SUBAGENT_BUDGET (100k tokens, 4 min) vs STANDARD_BUDGET (200k, 5 min)
-        budget: constraints?.maxTokens
-          ? { ...SUBAGENT_BUDGET, maxTokens: constraints.maxTokens }
-          : SUBAGENT_BUDGET,
+        // Share parent's file cache to eliminate redundant reads across agents
+        fileCache: this.fileCache || undefined,
+        // CONSTRAINED BUDGET: Use pooled budget when available, falling back to SUBAGENT_BUDGET
+        // Pooled budget ensures total tree cost stays bounded by parent's budget
+        budget: pooledBudget.budget,
       });
 
       // CRITICAL: Subagent inherits parent's mode
@@ -4251,6 +4394,18 @@ export class ProductionAgent {
       if (parentMode !== 'build') {
         subAgent.setMode(parentMode);
       }
+
+      // APPROVAL BATCHING (Improvement P6): Set approval scope for subagents
+      // Read-only tools are auto-approved; write tools get scoped approval
+      // This reduces interruptions from ~8 per session to ~1-2
+      subAgent.setApprovalScope({
+        autoApprove: ['read_file', 'list_files', 'glob', 'grep', 'show_file_history', 'show_session_changes'],
+        scopedApprove: {
+          write_file: { paths: ['src/', 'tests/', 'tools/'] },
+          edit_file: { paths: ['src/', 'tests/', 'tools/'] },
+        },
+        requireApproval: ['bash', 'delete_file'],
+      });
 
       // Pass parent's iteration count to subagent for accurate budget tracking
       // This prevents subagents from consuming excessive iterations when parent already used many
@@ -4657,6 +4812,18 @@ export class ProductionAgent {
         // Dispose both sources (linked source disposes its internal state, timeout source handles its timer)
         effectiveSource.dispose();
         progressAwareTimeout.dispose();
+
+        // BUDGET POOL: Record actual usage and release the allocation
+        // This must happen in finally to ensure cleanup on both success and error paths
+        if (this.budgetPool && poolAllocationId) {
+          const subMetrics = subAgent.getMetrics();
+          this.budgetPool.recordUsage(
+            poolAllocationId,
+            subMetrics.totalTokens,
+            subMetrics.estimatedCost,
+          );
+          this.budgetPool.release(poolAllocationId);
+        }
       }
     } catch (err) {
       const error = err instanceof Error ? err.message : String(err);
@@ -4685,6 +4852,55 @@ export class ProductionAgent {
    * Spawn multiple agents in parallel to work on independent tasks.
    * Uses the shared blackboard for coordination and conflict prevention.
    *
+   * Get budget for a subagent, using the pooled budget when available.
+   * Falls back to the static SUBAGENT_BUDGET if no pool is configured.
+   * Returns both the budget and the pool allocation ID (if any) for tracking.
+   */
+  private getSubagentBudget(
+    agentName: string,
+    constraints?: { maxTokens?: number },
+  ): { budget: Partial<ExecutionBudget>; allocationId: string | null } {
+    // If explicit maxTokens constraint, use that
+    if (constraints?.maxTokens) {
+      return {
+        budget: { ...SUBAGENT_BUDGET, maxTokens: constraints.maxTokens },
+        allocationId: null,
+      };
+    }
+
+    // Try to allocate from the shared budget pool
+    if (this.budgetPool) {
+      const allocationId = `${agentName}-${Date.now()}`;
+      const allocation = this.budgetPool.reserve(allocationId);
+      if (allocation) {
+        return {
+          budget: {
+            ...SUBAGENT_BUDGET,
+            maxTokens: allocation.tokenBudget,
+            softTokenLimit: Math.floor(allocation.tokenBudget * 0.7),
+            maxCost: allocation.costBudget,
+          },
+          allocationId,
+        };
+      }
+      // Pool exhausted — give a tiny emergency budget (just enough to report failure)
+      // This does NOT bypass the pool — it's a fixed small cost for error messaging
+      return {
+        budget: {
+          ...SUBAGENT_BUDGET,
+          maxTokens: 5000,
+          softTokenLimit: 3000,
+          maxCost: 0.01,
+        },
+        allocationId: null,
+      };
+    }
+
+    // No pool — use default subagent budget
+    return { budget: SUBAGENT_BUDGET, allocationId: null };
+  }
+
+  /**
    * Uses Promise.allSettled to handle partial failures gracefully - if one
    * agent fails or times out, others can still complete successfully.
    */
@@ -5161,6 +5377,16 @@ If the task is a simple question or doesn't need specialized handling, set bestA
    */
   setParentIterations(count: number): void {
     this.parentIterations = count;
+  }
+
+  /**
+   * Set an approval scope for this agent (used by parent when spawning subagents).
+   * Enables pre-approved operations within a defined scope, reducing approval prompts.
+   */
+  setApprovalScope(scope: ApprovalScope): void {
+    if (this.safety?.humanInLoop) {
+      this.safety.humanInLoop.setApprovalScope(scope);
+    }
   }
 
   /**

@@ -188,6 +188,7 @@ export class HumanInLoopManager {
   private config: HumanInLoopConfig;
   private auditLog: AuditEntry[] = [];
   private pendingApprovals: Map<string, PendingApproval> = new Map();
+  private approvalScope: ApprovalScope | null = null;
 
   // Audit log limits to prevent unbounded memory growth
   private readonly maxAuditEntries = 10000;
@@ -195,6 +196,55 @@ export class HumanInLoopManager {
 
   constructor(config: HumanInLoopConfig) {
     this.config = config;
+  }
+
+  /**
+   * Set an approval scope for pre-approved operations.
+   * Used by subagents to reduce approval interruptions.
+   */
+  setApprovalScope(scope: ApprovalScope): void {
+    this.approvalScope = scope;
+  }
+
+  /**
+   * Check if a tool call is pre-approved by the current scope.
+   */
+  private isPreApproved(toolCall: ToolCall): boolean {
+    if (!this.approvalScope) return false;
+
+    const toolName = toolCall.name.toLowerCase();
+
+    // Check require-approval list first (highest priority) — exact match only
+    if (this.approvalScope.requireApproval?.some(t => toolName === t.toLowerCase())) {
+      return false;
+    }
+
+    // Check auto-approve list — exact match only
+    if (this.approvalScope.autoApprove?.some(t => toolName === t.toLowerCase())) {
+      return true;
+    }
+
+    // Check scoped approval (tool + path match)
+    if (this.approvalScope.scopedApprove?.[toolCall.name]) {
+      const scope = this.approvalScope.scopedApprove[toolCall.name];
+      const args = toolCall.arguments as Record<string, unknown>;
+      const filePath = String(args.path || args.file_path || '');
+
+      if (filePath && scope.paths.some(p => {
+        // Directory-aware path matching
+        const dir = p.endsWith('/**') ? p.slice(0, -3) : p;
+        // Ensure directory boundary: "src/" matches "src/foo.ts" but not "src-backup/foo.ts"
+        // If dir already ends with '/', use as-is; otherwise check exact match or '/' boundary
+        if (dir.endsWith('/')) {
+          return filePath.startsWith(dir);
+        }
+        return filePath === dir || filePath.startsWith(dir + '/');
+      })) {
+        return true;
+      }
+    }
+
+    return false;
   }
 
   /**
@@ -246,6 +296,11 @@ export class HumanInLoopManager {
    * Check if action needs approval.
    */
   needsApproval(toolCall: ToolCall): boolean {
+    // Check pre-approval scope first (for subagent batched approvals)
+    if (this.isPreApproved(toolCall)) {
+      return false;
+    }
+
     const risk = this.assessRisk(toolCall);
     const threshold = this.config.riskThreshold || 'high';
 
@@ -490,6 +545,20 @@ export class SafetyManager {
 // =============================================================================
 // TYPES
 // =============================================================================
+
+/**
+ * Approval scope for subagent pre-approval.
+ * Allows specifying which tools and paths are pre-approved,
+ * reducing interruptions during multi-agent workflows.
+ */
+export interface ApprovalScope {
+  /** Tools that are always auto-approved (e.g., read_file, glob, grep) */
+  autoApprove?: string[];
+  /** Tools approved within specific path scopes */
+  scopedApprove?: Record<string, { paths: string[] }>;
+  /** Tools that always require approval regardless of scope */
+  requireApproval?: string[];
+}
 
 /**
  * Risk levels for safety assessment.
