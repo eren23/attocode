@@ -5,6 +5,16 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.8] - 2026-02-06
+
+### Added
+- **Command history and debug panel in TUI** - HistoryManager for persistent command history with deduplication and search; DebugPanel for real-time debug logging with color-coded levels and timestamps; ErrorDetailPanel for structured error display; TUI toggles for debug output and command history
+- **Agent resilience and timeout handling** - Graceful wrapup during timeouts with structured summaries before cancellation; metrics for success, failure, cancellation, and retries; incomplete action recovery with configurable retry limits; TUI display of subagent metrics and structured reports
+
+### Changed
+- **Subagent timeout flow** - ProductionAgent supports graceful wrapup and structured reports on timeout; cancellation and economics integrations updated for new metrics and recovery behavior
+- **TUI** - Integrated HistoryManager and DebugPanel; ToolCallItem and app layout updates for new panels and error details
+
 ## [0.1.7] - 2026-02-05
 
 ### Added
@@ -163,7 +173,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Sandbox execution for bash commands (macOS Seatbelt)
 - Dangerous operation blocking in strict mode
 
-[Unreleased]: https://github.com/eren23/attocode/compare/v0.1.6...HEAD
+[Unreleased]: https://github.com/eren23/attocode/compare/v0.1.8...HEAD
+[0.1.8]: https://github.com/eren23/attocode/compare/v0.1.7...v0.1.8
+[0.1.7]: https://github.com/eren23/attocode/compare/v0.1.6...v0.1.7
 [0.1.6]: https://github.com/eren23/attocode/compare/v0.1.5...v0.1.6
 [0.1.5]: https://github.com/eren23/attocode/compare/v0.1.4...v0.1.5
 [0.1.4]: https://github.com/eren23/attocode/compare/v0.1.3...v0.1.4
