@@ -20,6 +20,8 @@ export interface Message {
   toolResults?: ToolResult[];
   /** For tool role messages, references the tool call this responds to */
   toolCallId?: string;
+  /** Optional message metadata (compaction hints, provenance, etc.) */
+  metadata?: Record<string, unknown>;
 }
 
 /**
@@ -925,6 +927,21 @@ export interface LLMResilienceAgentConfig {
 
   /** Minimum acceptable content length (default: 1) */
   minContentLength?: number;
+
+  /**
+   * Recover when model emits "I'll do X" without calling tools.
+   * Enabled by default to prevent false-complete turns.
+   */
+  incompleteActionRecovery?: boolean;
+
+  /** Maximum retries for incomplete action recovery (default: 2) */
+  maxIncompleteActionRetries?: number;
+
+  /**
+   * Enforce requested artifact delivery (e.g., "write *.md").
+   * When enabled, completion is blocked until required write tools run.
+   */
+  enforceRequestedArtifacts?: boolean;
 }
 
 /**
@@ -955,6 +972,12 @@ export interface SubagentConfig {
 
   /** Whether subagents inherit observability config from parent */
   inheritObservability?: boolean;
+
+  /** Graceful wrapup window before hard timeout kill in ms (default: 30000) */
+  wrapupWindowMs?: number;
+
+  /** Interval for idle timeout checks in ms (default: 5000) */
+  idleCheckIntervalMs?: number;
 }
 
 /**
@@ -1073,6 +1096,14 @@ export interface AgentMetrics {
   toolCalls: number;
   duration: number;
   reflectionAttempts?: number;
+  /** Number of successful run() completions in this session */
+  successCount?: number;
+  /** Number of failed run() completions in this session */
+  failureCount?: number;
+  /** Number of cancelled run() completions in this session */
+  cancelCount?: number;
+  /** Number of resilience retry attempts in this session */
+  retryCount?: number;
 }
 
 /**
@@ -1186,6 +1217,10 @@ export type AgentEvent =
   | { type: 'resilience.continue'; reason: string; continuation: number; maxContinuations: number; accumulatedLength: number }
   | { type: 'resilience.completed'; reason: string; continuations: number; finalLength: number }
   | { type: 'resilience.failed'; reason: string; emptyRetries: number; continuations: number }
+  | { type: 'resilience.truncated_tool_call'; toolNames: string[] }
+  | { type: 'resilience.incomplete_action_detected'; reason: string; attempt: number; maxAttempts: number; requiresArtifact: boolean }
+  | { type: 'resilience.incomplete_action_recovered'; reason: string; attempts: number }
+  | { type: 'resilience.incomplete_action_failed'; reason: string; attempts: number; maxAttempts: number }
   // Learning store events
   | { type: 'learning.proposed'; learningId: string; description: string }
   | { type: 'learning.validated'; learningId: string }
@@ -1197,6 +1232,9 @@ export type AgentEvent =
   // Subagent visibility events (Phase 5)
   | { type: 'subagent.iteration'; agentId: string; iteration: number; maxIterations: number }
   | { type: 'subagent.phase'; agentId: string; phase: 'exploring' | 'planning' | 'executing' | 'completing' }
+  | { type: 'subagent.wrapup.started'; agentId: string; agentType: string; reason: string; elapsedMs: number }
+  | { type: 'subagent.wrapup.completed'; agentId: string; agentType: string; elapsedMs: number }
+  | { type: 'subagent.timeout.hard_kill'; agentId: string; agentType: string; reason: string; elapsedMs: number }
   // Parallel subagent events
   | { type: 'parallel.spawn.start'; count: number; agents: string[] }
   | { type: 'parallel.spawn.complete'; count: number; successCount: number; results: Array<{ agent: string; success: boolean; tokens: number }> }

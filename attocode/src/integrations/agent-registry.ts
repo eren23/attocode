@@ -74,6 +74,21 @@ export interface SpawnResult {
     duration: number;
     toolCalls: number;
   };
+  /** Structured closure report (populated when subagent wraps up properly) */
+  structured?: StructuredClosureReport;
+}
+
+/**
+ * Structured closure report from a subagent.
+ * Populated when a subagent produces a wrapup summary (graceful timeout or normal completion).
+ */
+export interface StructuredClosureReport {
+  findings: string[];
+  actionsTaken: string[];
+  failures: string[];
+  remainingWork: string[];
+  exitReason: 'completed' | 'timeout_graceful' | 'timeout_hard' | 'cancelled' | 'budget_exceeded' | 'error';
+  suggestedNextSteps?: string[];
 }
 
 /**

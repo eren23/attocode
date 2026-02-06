@@ -260,7 +260,7 @@ export interface ProgressAwareTimeoutSource extends CancellationTokenSource {
  *
  * // In event handler:
  * subAgent.subscribe(event => {
- *   if (event.type === 'tool.start' || event.type === 'llm.response') {
+ *   if (['tool.start', 'tool.complete', 'llm.start', 'llm.complete'].includes(event.type)) {
  *     timeout.reportProgress();
  *   }
  * });
@@ -310,6 +310,134 @@ export function createProgressAwareTimeout(
     },
     getElapsedTime() {
       return Date.now() - startTime;
+    },
+  });
+}
+
+/**
+ * Graceful timeout source that supports a wrapup phase before hard cancellation.
+ * Extends ProgressAwareTimeoutSource with wrapup callbacks.
+ */
+export interface GracefulTimeoutSource extends ProgressAwareTimeoutSource {
+  /** Register a callback that fires `wrapupWindow` ms before the hard cancel */
+  onWrapupWarning(callback: () => void): void;
+  /** Whether the timeout is currently in the wrapup phase */
+  isInWrapupPhase(): boolean;
+}
+
+/**
+ * Create a graceful timeout that fires a wrapup warning before hard cancellation.
+ *
+ * The lifecycle is:
+ * 1. Normal operation — progress extends the idle timer (same as createProgressAwareTimeout)
+ * 2. Wrapup phase — `wrapupWindow` ms before hard kill, wrapup callbacks fire
+ *    - Progress during wrapup does NOT extend the deadline (wrapping up, not working)
+ * 3. Hard kill — `race()` throws CancellationError after wrapup window expires
+ *
+ * @param maxTimeout - Maximum total execution time (hard limit)
+ * @param idleTimeout - Time without progress before cancellation (soft limit)
+ * @param wrapupWindow - Time between wrapup warning and hard kill (default: 30000ms)
+ * @param checkInterval - How often to check for idle timeout (default: 5000ms)
+ */
+export function createGracefulTimeout(
+  maxTimeout: number,
+  idleTimeout: number,
+  wrapupWindow = 30000,
+  checkInterval = 5000
+): GracefulTimeoutSource {
+  const source = createCancellationTokenSource() as CancellationTokenSourceImpl;
+  const startTime = Date.now();
+  let lastProgressTime = Date.now();
+  let checkTimer: ReturnType<typeof setInterval> | undefined;
+  let maxTimer: ReturnType<typeof setTimeout> | undefined;
+  let wrapupTimer: ReturnType<typeof setTimeout> | undefined;
+  let hardKillTimer: ReturnType<typeof setTimeout> | undefined;
+  let inWrapupPhase = false;
+  const wrapupCallbacks: Array<() => void> = [];
+
+  function fireWrapup() {
+    if (inWrapupPhase || source.isCancellationRequested) return;
+    inWrapupPhase = true;
+
+    // Fire all wrapup callbacks
+    for (const cb of wrapupCallbacks) {
+      try {
+        cb();
+      } catch {
+        // Ignore callback errors
+      }
+    }
+
+    // Schedule hard kill after wrapup window
+    hardKillTimer = setTimeout(() => {
+      if (!source.isCancellationRequested) {
+        source.cancel(`Timeout after graceful wrapup (${Math.round((Date.now() - startTime) / 1000)}s total)`);
+      }
+    }, wrapupWindow);
+  }
+
+  // Compute effective timeouts: fire wrapup `wrapupWindow` ms before hard kill
+  const effectiveMaxTimeout = Math.max(0, maxTimeout - wrapupWindow);
+
+  // Hard limit wrapup — fires wrapup `wrapupWindow` ms before maxTimeout
+  wrapupTimer = setTimeout(() => {
+    fireWrapup();
+  }, effectiveMaxTimeout);
+
+  // Absolute hard limit — cancel after maxTimeout regardless (safety net)
+  maxTimer = setTimeout(() => {
+    if (!source.isCancellationRequested) {
+      source.cancel(`Maximum timeout exceeded (${Math.round(maxTimeout / 1000)}s)`);
+    }
+  }, maxTimeout);
+
+  // Periodic check for idle timeout
+  checkTimer = setInterval(() => {
+    if (inWrapupPhase) return; // Don't check idle during wrapup
+    const idleTime = Date.now() - lastProgressTime;
+    if (idleTime >= idleTimeout && !source.isCancellationRequested) {
+      // Fire wrapup instead of immediate cancel
+      fireWrapup();
+    }
+  }, checkInterval);
+
+  // Cleanup timers on dispose
+  const originalDispose = source.dispose.bind(source);
+  source.dispose = () => {
+    if (checkTimer) clearInterval(checkTimer);
+    if (maxTimer) clearTimeout(maxTimer);
+    if (wrapupTimer) clearTimeout(wrapupTimer);
+    if (hardKillTimer) clearTimeout(hardKillTimer);
+    originalDispose();
+  };
+
+  // Return extended source with progress reporting and wrapup support
+  return Object.assign(source, {
+    reportProgress() {
+      // Progress during wrapup does NOT extend the deadline
+      if (!inWrapupPhase) {
+        lastProgressTime = Date.now();
+      }
+    },
+    getIdleTime() {
+      return Date.now() - lastProgressTime;
+    },
+    getElapsedTime() {
+      return Date.now() - startTime;
+    },
+    onWrapupWarning(callback: () => void) {
+      wrapupCallbacks.push(callback);
+      // If already in wrapup phase, fire immediately
+      if (inWrapupPhase) {
+        try {
+          callback();
+        } catch {
+          // Ignore
+        }
+      }
+    },
+    isInWrapupPhase() {
+      return inWrapupPhase;
     },
   });
 }

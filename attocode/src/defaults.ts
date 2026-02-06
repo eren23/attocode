@@ -423,6 +423,9 @@ export const DEFAULT_LLM_RESILIENCE_CONFIG: LLMResilienceAgentConfig = {
   maxContinuations: 3,
   autoContinue: true,
   minContentLength: 1,
+  incompleteActionRecovery: true,
+  maxIncompleteActionRetries: 2,
+  enforceRequestedArtifacts: true,
 };
 
 /**
@@ -498,6 +501,8 @@ export const DEFAULT_SUBAGENT_CONFIG: SubagentConfig = {
   defaultTimeout: 300000, // 5 minutes per subagent (increased from 2 min for research tasks)
   defaultMaxIterations: 15, // Balanced default (agent-specific limits preferred)
   inheritObservability: true,
+  wrapupWindowMs: 30000, // 30s graceful wrapup before hard timeout kill
+  idleCheckIntervalMs: 5000, // Check idle timeout every 5s
 };
 
 /**

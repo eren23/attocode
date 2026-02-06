@@ -6,7 +6,7 @@
  */
 
 import { resolve, isAbsolute, dirname } from 'node:path';
-import { realpathSync, existsSync } from 'node:fs';
+import { realpathSync, existsSync, lstatSync } from 'node:fs';
 import type {
   SandboxConfig,
   HumanInLoopConfig,
@@ -68,6 +68,17 @@ export class SandboxManager {
       if (existsSync(absolutePath)) {
         resolvedPath = realpathSync(absolutePath);
       } else {
+        // Special case: broken symlink exists as a link entry but target is missing.
+        // Deny to fail closed and avoid symlink-escape bypasses.
+        try {
+          const stat = lstatSync(absolutePath);
+          if (stat.isSymbolicLink()) {
+            return false;
+          }
+        } catch {
+          // No direct entry - continue with parent-directory check.
+        }
+
         // Path doesn't exist yet - recursively check that parent is allowed
         const parentDir = dirname(absolutePath);
         if (parentDir === absolutePath) {
@@ -208,8 +219,15 @@ export class HumanInLoopManager {
     }
 
     // Heuristic risk assessment
-    const riskyPatterns = ['delete', 'remove', 'drop', 'truncate', 'write', 'modify', 'update'];
-    for (const pattern of riskyPatterns) {
+    const highRiskPatterns = ['delete', 'remove', 'drop', 'truncate', 'wipe', 'destroy'];
+    for (const pattern of highRiskPatterns) {
+      if (toolName.includes(pattern)) {
+        return 'high';
+      }
+    }
+
+    const moderateRiskPatterns = ['write', 'modify', 'update'];
+    for (const pattern of moderateRiskPatterns) {
       if (toolName.includes(pattern)) {
         return 'moderate';
       }
@@ -422,7 +440,8 @@ export class SafetyManager {
    */
   async validateAndApprove(
     toolCall: ToolCall,
-    context: string
+    context: string,
+    options?: { skipHumanApproval?: boolean }
   ): Promise<{ allowed: boolean; reason?: string }> {
     // Sandbox validation
     if (this.sandbox) {
@@ -434,7 +453,7 @@ export class SafetyManager {
 
     // Human-in-loop approval
     if (this.humanInLoop) {
-      if (this.humanInLoop.needsApproval(toolCall)) {
+      if (!options?.skipHumanApproval && this.humanInLoop.needsApproval(toolCall)) {
         const result = await this.humanInLoop.requestApproval(toolCall, context);
         if (!result.approved) {
           return { allowed: false, reason: `Denied by ${result.approver}` };

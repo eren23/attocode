@@ -97,7 +97,7 @@ export class OpenRouterProvider implements LLMProvider, LLMProviderWithTools {
     const body = {
       model,
       messages: openRouterMessages,
-      max_tokens: options?.maxTokens ?? 4096,
+      max_tokens: options?.maxTokens ?? 16384,
       temperature: options?.temperature ?? 0.7,
       ...(options?.stopSequences && { stop: options.stopSequences }),
       // Enable usage accounting to get actual cost from OpenRouter
@@ -248,7 +248,7 @@ export class OpenRouterProvider implements LLMProvider, LLMProviderWithTools {
     const body: Record<string, unknown> = {
       model,
       messages: openRouterMessages,
-      max_tokens: options?.maxTokens ?? 4096,
+      max_tokens: options?.maxTokens ?? 16384,
       temperature: options?.temperature ?? 0.7,
       ...(options?.stopSequences && { stop: options.stopSequences }),
       // Enable usage accounting to get cached_tokens in response

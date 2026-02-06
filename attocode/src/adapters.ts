@@ -87,12 +87,20 @@ export class ProviderAdapter implements ProductionLLMProvider {
     // Convert response to ProductionChatResponse
     return {
       content: response.content,
+      stopReason: response.stopReason,
       toolCalls: response.toolCalls?.map(tc => {
         let args: Record<string, unknown>;
         if (typeof tc.function.arguments === 'string') {
           const result = safeParseJson<Record<string, unknown>>(tc.function.arguments, {
             context: `tool ${tc.function.name}`,
           });
+          if (!result.success) {
+            console.warn(
+              `[ProviderAdapter] Failed to parse tool call arguments for ${tc.function.name}: ${result.error}. ` +
+              `First 100 chars: ${tc.function.arguments.slice(0, 100)}... ` +
+              `Last 50 chars: ...${tc.function.arguments.slice(-50)}`
+            );
+          }
           args = result.success && result.value ? result.value : {};
         } else {
           args = tc.function.arguments;

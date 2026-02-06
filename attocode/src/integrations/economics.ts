@@ -162,6 +162,21 @@ const MAX_STEPS_PROMPT = `[System] Maximum steps reached. You must now:
 Do NOT call any more tools. Respond with text only.`;
 
 /**
+ * Timeout wrapup prompt - injected when a subagent is about to be stopped due to timeout.
+ * Forces a structured JSON summary so the parent agent can make intelligent follow-up decisions.
+ */
+export const TIMEOUT_WRAPUP_PROMPT = `[System] You are about to be stopped due to timeout. You MUST respond with a structured summary NOW.
+
+Respond with ONLY this JSON (no tool calls):
+{
+  "findings": ["what you discovered or accomplished"],
+  "actionsTaken": ["files read, modifications made, commands run"],
+  "failures": ["what failed or was blocked"],
+  "remainingWork": ["what you didn't finish"],
+  "suggestedNextSteps": ["what the parent agent should do next"]
+}`;
+
+/**
  * Doom loop prompt - injected when same tool called repeatedly.
  */
 const DOOM_LOOP_PROMPT = (tool: string, count: number) =>
@@ -621,10 +636,15 @@ export class ExecutionEconomicsManager {
     }
 
     // Check soft limits (warnings)
+    // Two-tier approach: 67-79% = warning, 80%+ = forceTextOnly to prevent overshoot
     if (this.usage.tokens >= this.budget.softTokenLimit) {
       const remaining = this.budget.maxTokens - this.usage.tokens;
       const percentUsed = Math.round((this.usage.tokens / this.budget.maxTokens) * 100);
       this.emit({ type: 'budget.warning', budgetType: 'tokens', percentUsed, remaining });
+
+      // If 80%+ used, force text-only to prevent overshoot past hard limit
+      const forceTextOnly = percentUsed >= 80;
+
       return {
         canContinue: true,
         reason: `Token budget at ${percentUsed}%`,
@@ -632,11 +652,14 @@ export class ExecutionEconomicsManager {
         isHardLimit: false,
         isSoftLimit: true,
         percentUsed,
-        suggestedAction: 'request_extension',
-        // Inject warning prompt so agent knows to wrap up
-        injectedPrompt: `⚠️ **BUDGET WARNING**: You have used ${percentUsed}% of your token budget (${this.usage.tokens.toLocaleString()}/${this.budget.maxTokens.toLocaleString()} tokens). ` +
-          `Only ~${remaining.toLocaleString()} tokens remaining. WRAP UP NOW - summarize your findings and return a concise result. ` +
-          `Do not start new explorations.`,
+        suggestedAction: forceTextOnly ? 'stop' : 'request_extension',
+        forceTextOnly,
+        injectedPrompt: forceTextOnly
+          ? `⚠️ **BUDGET CRITICAL**: ${percentUsed}% used (${this.usage.tokens.toLocaleString()}/${this.budget.maxTokens.toLocaleString()}). ` +
+            `WRAP UP IMMEDIATELY. Return a concise summary. Do NOT call any tools.`
+          : `⚠️ **BUDGET WARNING**: You have used ${percentUsed}% of your token budget (${this.usage.tokens.toLocaleString()}/${this.budget.maxTokens.toLocaleString()} tokens). ` +
+            `Only ~${remaining.toLocaleString()} tokens remaining. WRAP UP NOW - summarize your findings and return a concise result. ` +
+            `Do not start new explorations.`,
       };
     }
 

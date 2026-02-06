@@ -608,6 +608,23 @@ export function TUIApp({
     setMessages(prev => [...prev, { id: uniqueId, role, content, ts: new Date() }]);
   }, []);
 
+  const persistPendingPlanToStore = useCallback(() => {
+    if (!agent.hasPendingPlan()) return;
+    if (!('savePendingPlan' in sessionStore) || typeof sessionStore.savePendingPlan !== 'function') {
+      return;
+    }
+
+    const pendingPlan = agent.getPendingPlan();
+    if (!pendingPlan) return;
+
+    sessionStore.savePendingPlan(pendingPlan, currentSessionId);
+    persistenceDebug.log('Pending plan saved', {
+      planId: pendingPlan.id,
+      changes: pendingPlan.proposedChanges.length,
+      sessionId: currentSessionId,
+    });
+  }, [agent, sessionStore, currentSessionId, persistenceDebug]);
+
   // =========================================================================
   // APPROVAL DIALOG HANDLERS
   // =========================================================================
@@ -1152,6 +1169,7 @@ export function TUIApp({
             plan: agentState.plan,
             memoryContext: agentState.memoryContext,
           });
+          persistPendingPlanToStore();
           addMessage('system', `Session saved: ${currentSessionId} (checkpoint: ${ckptId})`);
         } catch (e) {
           addMessage('error', (e as Error).message);
@@ -1898,7 +1916,7 @@ export function TUIApp({
       default:
         addMessage('system', `Unknown: /${cmd}. Try /help`);
     }
-  }, [addMessage, exit, agent, mcpClient, lspManager, sessionStore, compactor, model, currentThemeName, currentSessionId, formatSessionsTable, saveCheckpointToStore, showThinking]);
+  }, [addMessage, exit, agent, mcpClient, lspManager, sessionStore, compactor, model, currentThemeName, currentSessionId, formatSessionsTable, saveCheckpointToStore, showThinking, persistPendingPlanToStore]);
 
   // =========================================================================
   // SUBMIT HANDLER
@@ -1977,6 +1995,7 @@ export function TUIApp({
             plan: checkpoint.state.plan,
             memoryContext: checkpoint.state.memoryContext,
           });
+          persistPendingPlanToStore();
         } catch (e) {
           persistenceDebug.error('[TUI] Checkpoint failed', e);
         }
@@ -1989,7 +2008,7 @@ export function TUIApp({
       setIsProcessing(false);
       setToolCalls([]);
     }
-  }, [addMessage, handleCommand, agent, sessionStore, saveCheckpointToStore, persistenceDebug]);
+  }, [addMessage, handleCommand, agent, sessionStore, saveCheckpointToStore, persistenceDebug, persistPendingPlanToStore]);
 
   // =========================================================================
   // COMMAND PALETTE ITEMS
@@ -2165,6 +2184,7 @@ export function TUIApp({
           iteration: agentState.iteration,
           timestamp: Date.now(),
         });
+        persistPendingPlanToStore();
         persistenceDebug.log('Checkpoint saved before cancel');
       } catch (e) {
         persistenceDebug.error('Failed to save checkpoint before cancel', e);
@@ -2175,7 +2195,7 @@ export function TUIApp({
       setIsProcessing(false);
       addMessage('system', '[STOP] Cancelled (checkpoint saved)');
     }
-  }, [agent, addMessage, commandPaletteOpen, sessionStore, currentSessionId, saveCheckpointToStore, persistenceDebug]);
+  }, [agent, addMessage, commandPaletteOpen, sessionStore, currentSessionId, saveCheckpointToStore, persistenceDebug, persistPendingPlanToStore]);
 
   const handleToggleToolExpand = useCallback(() => {
     setToolCallsExpanded(prev => {
