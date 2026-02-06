@@ -275,8 +275,14 @@ ${c('Token Usage:', 'bold')}
 ${c('Activity:', 'bold')}
   LLM calls:       ${metrics.llmCalls}
   Tool calls:      ${metrics.toolCalls}
+  Retries:         ${metrics.retryCount ?? 0}
   Duration:        ${metrics.duration}ms
   Est. Cost:       $${metrics.estimatedCost.toFixed(4)}
+
+${c('Outcomes:', 'bold')}
+  Success:         ${metrics.successCount ?? 0}
+  Failed:          ${metrics.failureCount ?? 0}
+  Cancelled:       ${metrics.cancelCount ?? 0}
 ${goalsSummary}`);
       break;
     }

@@ -180,14 +180,27 @@ export function createBoundSpawnAgentTool(spawnFn: SpawnFunction): ToolDefinitio
 
       const result = await spawnFn(input.agent, input.task, input.constraints);
 
+      // Append structured summary to output when available
+      const structuredSummary = result.structured
+        ? `\n\n**Subagent Structured Report:**\n` +
+          `Exit: ${result.structured.exitReason}\n` +
+          `Findings: ${result.structured.findings.join('; ') || 'none'}\n` +
+          `Actions: ${result.structured.actionsTaken.join('; ') || 'none'}\n` +
+          `Failures: ${result.structured.failures.join('; ') || 'none'}\n` +
+          `Remaining: ${result.structured.remainingWork.join('; ') || 'none'}\n` +
+          (result.structured.suggestedNextSteps?.length
+            ? `Next steps: ${result.structured.suggestedNextSteps.join('; ')}\n` : '')
+        : '';
+
       return {
         success: result.success,
-        output: result.output,
+        output: result.output + structuredSummary,
         metadata: {
           agent: input.agent,
           task: input.task,
           constraints: input.constraints,
           metrics: result.metrics,
+          structured: result.structured,
         },
       };
     },

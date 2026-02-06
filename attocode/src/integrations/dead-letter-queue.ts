@@ -308,7 +308,7 @@ export class DeadLetterQueue {
       params.sessionId = options.sessionId;
     }
 
-    if (options.readyForRetry !== false) {
+    if (options.readyForRetry === true) {
       conditions.push('(next_retry IS NULL OR next_retry <= @now)');
       params.now = new Date().toISOString();
     }

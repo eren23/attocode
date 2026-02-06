@@ -285,6 +285,15 @@ export async function startTUIMode(
     // CRITICAL: Sync the session ID to the store's internal state
     sessionStore.setCurrentSessionId(currentSessionId);
 
+    // Wire durable SQLite worker-results storage into the agent when available.
+    if (
+      'hasWorkerResultsFeature' in sessionStore &&
+      typeof sessionStore.hasWorkerResultsFeature === 'function' &&
+      sessionStore.hasWorkerResultsFeature()
+    ) {
+      agent.setStore(sessionStore as SQLiteStore);
+    }
+
     // Inject DLQ if available for failed operation tracking
     if (dlq) {
       registry.setDeadLetterQueue(dlq, currentSessionId);

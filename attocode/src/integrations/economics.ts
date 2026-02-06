@@ -162,6 +162,21 @@ const MAX_STEPS_PROMPT = `[System] Maximum steps reached. You must now:
 Do NOT call any more tools. Respond with text only.`;
 
 /**
+ * Timeout wrapup prompt - injected when a subagent is about to be stopped due to timeout.
+ * Forces a structured JSON summary so the parent agent can make intelligent follow-up decisions.
+ */
+export const TIMEOUT_WRAPUP_PROMPT = `[System] You are about to be stopped due to timeout. You MUST respond with a structured summary NOW.
+
+Respond with ONLY this JSON (no tool calls):
+{
+  "findings": ["what you discovered or accomplished"],
+  "actionsTaken": ["files read, modifications made, commands run"],
+  "failures": ["what failed or was blocked"],
+  "remainingWork": ["what you didn't finish"],
+  "suggestedNextSteps": ["what the parent agent should do next"]
+}`;
+
+/**
  * Doom loop prompt - injected when same tool called repeatedly.
  */
 const DOOM_LOOP_PROMPT = (tool: string, count: number) =>
@@ -189,6 +204,8 @@ export class ExecutionEconomicsManager {
   private loopState: LoopDetectionState;
   private phaseState: PhaseState;
   private startTime: number;
+  private pausedDuration = 0;
+  private pauseStart: number | null = null;
   private listeners: EconomicsEventListener[] = [];
   private extensionHandler?: (request: ExtensionRequest) => Promise<Partial<ExecutionBudget> | null>;
 
@@ -255,6 +272,35 @@ export class ExecutionEconomicsManager {
   }
 
   /**
+   * Pause duration tracking (e.g., while subagents are running).
+   * Prevents the parent agent's wall-clock timer from advancing
+   * during subagent execution.
+   */
+  pauseDuration(): void {
+    if (this.pauseStart === null) {
+      this.pauseStart = Date.now();
+    }
+  }
+
+  /**
+   * Resume duration tracking after subagent completes.
+   */
+  resumeDuration(): void {
+    if (this.pauseStart !== null) {
+      this.pausedDuration += Date.now() - this.pauseStart;
+      this.pauseStart = null;
+    }
+  }
+
+  /**
+   * Get the effective duration accounting for paused time.
+   */
+  private getEffectiveDuration(): number {
+    const currentPaused = this.pauseStart !== null ? Date.now() - this.pauseStart : 0;
+    return Date.now() - this.startTime - this.pausedDuration - currentPaused;
+  }
+
+  /**
    * Set the extension request handler.
    */
   setExtensionHandler(
@@ -285,7 +331,7 @@ export class ExecutionEconomicsManager {
     }
 
     // Update duration
-    this.usage.duration = Date.now() - this.startTime;
+    this.usage.duration = this.getEffectiveDuration();
   }
 
   /**
@@ -497,7 +543,7 @@ export class ExecutionEconomicsManager {
    * Check if execution can continue.
    */
   checkBudget(): BudgetCheckResult {
-    this.usage.duration = Date.now() - this.startTime;
+    this.usage.duration = this.getEffectiveDuration();
 
     // Check hard limits first
     if (this.usage.tokens >= this.budget.maxTokens) {
@@ -590,17 +636,30 @@ export class ExecutionEconomicsManager {
     }
 
     // Check soft limits (warnings)
+    // Two-tier approach: 67-79% = warning, 80%+ = forceTextOnly to prevent overshoot
     if (this.usage.tokens >= this.budget.softTokenLimit) {
       const remaining = this.budget.maxTokens - this.usage.tokens;
-      this.emit({ type: 'budget.warning', budgetType: 'tokens', percentUsed: (this.usage.tokens / this.budget.maxTokens) * 100, remaining });
+      const percentUsed = Math.round((this.usage.tokens / this.budget.maxTokens) * 100);
+      this.emit({ type: 'budget.warning', budgetType: 'tokens', percentUsed, remaining });
+
+      // If 80%+ used, force text-only to prevent overshoot past hard limit
+      const forceTextOnly = percentUsed >= 80;
+
       return {
         canContinue: true,
-        reason: `Token budget at ${Math.round((this.usage.tokens / this.budget.maxTokens) * 100)}%`,
+        reason: `Token budget at ${percentUsed}%`,
         budgetType: 'tokens',
         isHardLimit: false,
         isSoftLimit: true,
-        percentUsed: (this.usage.tokens / this.budget.maxTokens) * 100,
-        suggestedAction: 'request_extension',
+        percentUsed,
+        suggestedAction: forceTextOnly ? 'stop' : 'request_extension',
+        forceTextOnly,
+        injectedPrompt: forceTextOnly
+          ? `⚠️ **BUDGET CRITICAL**: ${percentUsed}% used (${this.usage.tokens.toLocaleString()}/${this.budget.maxTokens.toLocaleString()}). ` +
+            `WRAP UP IMMEDIATELY. Return a concise summary. Do NOT call any tools.`
+          : `⚠️ **BUDGET WARNING**: You have used ${percentUsed}% of your token budget (${this.usage.tokens.toLocaleString()}/${this.budget.maxTokens.toLocaleString()} tokens). ` +
+            `Only ~${remaining.toLocaleString()} tokens remaining. WRAP UP NOW - summarize your findings and return a concise result. ` +
+            `Do not start new explorations.`,
       };
     }
 
@@ -701,7 +760,7 @@ export class ExecutionEconomicsManager {
    * Get current usage.
    */
   getUsage(): ExecutionUsage {
-    this.usage.duration = Date.now() - this.startTime;
+    this.usage.duration = this.getEffectiveDuration();
     return { ...this.usage };
   }
 
@@ -710,6 +769,51 @@ export class ExecutionEconomicsManager {
    */
   getBudget(): ExecutionBudget {
     return { ...this.budget };
+  }
+
+  /**
+   * Get a formatted budget status string for context awareness.
+   * Used by subagents to understand their remaining resources.
+   */
+  getBudgetStatusString(): string {
+    const usage = this.getUsage();
+    const budget = this.budget;
+
+    const tokenPct = Math.round((usage.tokens / budget.maxTokens) * 100);
+    const remainingTokens = budget.maxTokens - usage.tokens;
+    const remainingSec = Math.max(0, Math.round((budget.maxDuration - usage.duration) / 1000));
+
+    // Determine urgency level
+    let urgency = '';
+    if (tokenPct >= 90) {
+      urgency = '⚠️ CRITICAL: ';
+    } else if (tokenPct >= 70) {
+      urgency = '⚡ WARNING: ';
+    }
+
+    return `${urgency}Budget: ${usage.tokens.toLocaleString()}/${budget.maxTokens.toLocaleString()} tokens (${tokenPct}%), ~${remainingSec}s remaining. ${
+      tokenPct >= 70 ? 'Wrap up soon!' : ''
+    }`.trim();
+  }
+
+  /**
+   * Check if approaching budget limit (for proactive warnings).
+   */
+  isApproachingLimit(): { approaching: boolean; metric: string; percentUsed: number } {
+    const usage = this.getUsage();
+    const budget = this.budget;
+
+    const tokenPct = (usage.tokens / budget.maxTokens) * 100;
+    const durationPct = (usage.duration / budget.maxDuration) * 100;
+
+    if (tokenPct >= 80) {
+      return { approaching: true, metric: 'tokens', percentUsed: tokenPct };
+    }
+    if (durationPct >= 80) {
+      return { approaching: true, metric: 'duration', percentUsed: durationPct };
+    }
+
+    return { approaching: false, metric: '', percentUsed: Math.max(tokenPct, durationPct) };
   }
 
   /**
@@ -818,6 +922,8 @@ export class ExecutionEconomicsManager {
     };
 
     this.startTime = Date.now();
+    this.pausedDuration = 0;
+    this.pauseStart = null;
   }
 
   // -------------------------------------------------------------------------
@@ -888,9 +994,25 @@ export const QUICK_BUDGET: Partial<ExecutionBudget> = {
 export const STANDARD_BUDGET: Partial<ExecutionBudget> = {
   maxTokens: 200000,
   maxCost: 0.50,
-  maxDuration: 300000, // 5 minutes
+  maxDuration: 600000, // 10 minutes (supports subagent workflows)
   targetIterations: 20,
   maxIterations: 50,
+};
+
+/**
+ * Subagent budget - constrained budget for spawned subagents.
+ * Smaller than STANDARD to ensure subagents don't consume all parent's resources.
+ * The 100k token limit gives subagents room to work while leaving budget for the parent
+ * and other parallel subagents.
+ */
+export const SUBAGENT_BUDGET: Partial<ExecutionBudget> = {
+  maxTokens: 150000,       // 150k tokens (research agents need more room)
+  softTokenLimit: 100000,  // Warn at 100k
+  maxCost: 0.50,           // Match standard budget
+  maxDuration: 360000,     // 6 minutes
+  softDurationLimit: 300000, // Warn at 5 minutes
+  targetIterations: 20,
+  maxIterations: 40,
 };
 
 /**

@@ -146,7 +146,7 @@ describe('ToolRegistry', () => {
       registry.register(slowTool);
       const result = await registry.execute('slow', {}, { timeout: 100 });
       expect(result.success).toBe(false);
-      expect(result.output).toContain('timed out');
+      expect(result.output).toMatch(/timed out|Time limit exceeded/i);
     });
 
     it('should handle execution errors', async () => {

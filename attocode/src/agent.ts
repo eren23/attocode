@@ -77,6 +77,8 @@ import {
   DEFAULT_RULE_SOURCES,
   ExecutionEconomicsManager,
   STANDARD_BUDGET,
+  SUBAGENT_BUDGET,
+  TIMEOUT_WRAPUP_PROMPT,
   AgentRegistry,
   createAgentRegistry,
   filterToolsForAgent,
@@ -84,8 +86,10 @@ import {
   CancellationManager,
   createCancellationManager,
   isCancellationError,
+  CancellationError,
   createTimeoutToken,
   createLinkedToken,
+  createGracefulTimeout,
   race,
   ResourceManager,
   createResourceManager,
@@ -113,6 +117,7 @@ import {
   type AgentDefinition,
   type LoadedAgent,
   type SpawnResult,
+  type StructuredClosureReport,
   type CancellationTokenType,
   type Skill,
   type ContextEngineeringConfig,
@@ -151,6 +156,7 @@ import {
   // Task Management
   TaskManager,
   createTaskManager,
+  type SQLiteStore,
 } from './integrations/index.js';
 
 // Lesson 26: Tracing & Evaluation integration
@@ -217,6 +223,7 @@ export class ProductionAgent {
   private toolResolver: ((toolName: string) => ToolDefinition | null) | null = null;
   private blackboard: SharedBlackboard | null = null;
   private taskManager: TaskManager | null = null;
+  private store: SQLiteStore | null = null;
 
   // Duplicate spawn prevention - tracks recently spawned tasks to prevent doom loops
   // Map<taskKey, { timestamp: number; result: string; queuedChanges: number }>
@@ -230,9 +237,16 @@ export class ProductionAgent {
   // When set, the agent will check this token in addition to its own cancellation manager
   private externalCancellationToken: CancellationTokenType | null = null;
 
+  // Graceful wrapup support (for subagent timeout wrapup phase)
+  private wrapupRequested = false;
+  private wrapupReason: string | null = null;
+
   // Initialization tracking
   private initPromises: Promise<void>[] = [];
   private initComplete = false;
+
+  // Event listener cleanup tracking (prevents memory leaks in long sessions)
+  private unsubscribers: Array<() => void> = [];
 
   // State
   private state: AgentState = {
@@ -248,6 +262,10 @@ export class ProductionAgent {
       llmCalls: 0,
       toolCalls: 0,
       duration: 0,
+      successCount: 0,
+      failureCount: 0,
+      cancelCount: 0,
+      retryCount: 0,
     },
     iteration: 0,
   };
@@ -399,11 +417,13 @@ export class ProductionAgent {
     }
 
     // Economics System (Token Budget) - always enabled
+    // Use custom budget if provided (subagents use SUBAGENT_BUDGET), otherwise STANDARD_BUDGET
+    const baseBudget = this.config.budget ?? STANDARD_BUDGET;
     this.economics = new ExecutionEconomicsManager({
-      ...STANDARD_BUDGET,
+      ...baseBudget,
       // Use maxIterations from config as absolute safety cap
       maxIterations: this.config.maxIterations,
-      targetIterations: Math.min(20, this.config.maxIterations),
+      targetIterations: Math.min(baseBudget.targetIterations ?? 20, this.config.maxIterations),
     });
 
     // Agent Registry - always enabled for subagent support
@@ -429,13 +449,18 @@ export class ProductionAgent {
 
     // Task Manager - Claude Code-style task system for coordination
     this.taskManager = createTaskManager();
-    // Forward task events
-    this.taskManager.on('task.created', (data) => {
+    // Forward task events (with cleanup tracking for EventEmitter-based managers)
+    const taskCreatedHandler = (data: { task: any }) => {
       this.emit({ type: 'task.created', task: data.task });
-    });
-    this.taskManager.on('task.updated', (data) => {
+    };
+    this.taskManager.on('task.created', taskCreatedHandler);
+    this.unsubscribers.push(() => this.taskManager?.off('task.created', taskCreatedHandler));
+
+    const taskUpdatedHandler = (data: { task: any }) => {
       this.emit({ type: 'task.updated', task: data.task });
-    });
+    };
+    this.taskManager.on('task.updated', taskUpdatedHandler);
+    this.unsubscribers.push(() => this.taskManager?.off('task.updated', taskUpdatedHandler));
     // Register task tools
     const taskTools = createTaskTools(this.taskManager);
     for (const tool of taskTools) {
@@ -445,12 +470,13 @@ export class ProductionAgent {
     // Cancellation Support
     if (isFeatureEnabled(this.config.cancellation)) {
       this.cancellation = createCancellationManager();
-      // Forward cancellation events
-      this.cancellation.subscribe(event => {
+      // Forward cancellation events (with cleanup tracking)
+      const unsubCancellation = this.cancellation.subscribe(event => {
         if (event.type === 'cancellation.requested') {
           this.emit({ type: 'cancellation.requested', reason: event.reason });
         }
       });
+      this.unsubscribers.push(unsubCancellation);
     }
 
     // Resource Monitoring
@@ -484,8 +510,8 @@ export class ProductionAgent {
         maxSize: this.config.semanticCache.maxSize,
         ttl: this.config.semanticCache.ttl,
       });
-      // Forward cache events
-      this.semanticCache.subscribe(event => {
+      // Forward cache events (with cleanup tracking)
+      const unsubSemanticCache = this.semanticCache.subscribe(event => {
         if (event.type === 'cache.hit') {
           this.emit({ type: 'cache.hit', query: event.query, similarity: event.similarity });
         } else if (event.type === 'cache.miss') {
@@ -494,6 +520,7 @@ export class ProductionAgent {
           this.emit({ type: 'cache.set', query: event.query });
         }
       });
+      this.unsubscribers.push(unsubSemanticCache);
     }
 
     // Skills Support
@@ -552,8 +579,8 @@ export class ProductionAgent {
       }
     }
 
-    // Forward context engineering events
-    this.contextEngineering.on(event => {
+    // Forward context engineering events (with cleanup tracking)
+    const unsubContextEngineering = this.contextEngineering.on(event => {
       switch (event.type) {
         case 'failure.recorded':
           this.observability?.logger?.warn('Failure recorded', {
@@ -575,6 +602,7 @@ export class ProductionAgent {
           break;
       }
     });
+    this.unsubscribers.push(unsubContextEngineering);
 
     // Interactive Planning (conversational + editable planning)
     if (isFeatureEnabled(this.config.interactivePlanning)) {
@@ -589,8 +617,8 @@ export class ProductionAgent {
         autoPauseAtDecisions: true,
       });
 
-      // Forward planner events to observability
-      this.interactivePlanner.on(event => {
+      // Forward planner events to observability (with cleanup tracking)
+      const unsubInteractivePlanner = this.interactivePlanner.on(event => {
         switch (event.type) {
           case 'plan.created':
             this.observability?.logger?.info('Interactive plan created', {
@@ -614,6 +642,7 @@ export class ProductionAgent {
             break;
         }
       });
+      this.unsubscribers.push(unsubInteractivePlanner);
     }
 
     // Recursive Context (RLM - Recursive Language Models)
@@ -634,8 +663,8 @@ export class ProductionAgent {
       // Note: File system source should be registered when needed with proper glob/readFile functions
       // This is deferred to allow flexible configuration
 
-      // Forward RLM events
-      this.recursiveContext.on(event => {
+      // Forward RLM events (with cleanup tracking)
+      const unsubRecursiveContext = this.recursiveContext.on(event => {
         switch (event.type) {
           case 'process.started':
             this.observability?.logger?.debug('RLM process started', {
@@ -662,6 +691,7 @@ export class ProductionAgent {
             break;
         }
       });
+      this.unsubscribers.push(unsubRecursiveContext);
     }
 
     // Learning Store (cross-session learning from failures)
@@ -686,8 +716,8 @@ export class ProductionAgent {
         }
       }
 
-      // Forward learning events to observability
-      this.learningStore.on(event => {
+      // Forward learning events to observability (with cleanup tracking)
+      const unsubLearningStore = this.learningStore.on(event => {
         switch (event.type) {
           case 'learning.proposed':
             this.observability?.logger?.info('Learning proposed', {
@@ -725,6 +755,7 @@ export class ProductionAgent {
             break;
         }
       });
+      this.unsubscribers.push(unsubLearningStore);
     }
 
     // Auto-Compaction Manager (sophisticated context compaction)
@@ -793,8 +824,8 @@ export class ProductionAgent {
         compactHandler, // Use reversible compaction when contextEngineering is available
       });
 
-      // Forward compactor events to observability
-      this.compactor.on(event => {
+      // Forward compactor events to observability (with cleanup tracking)
+      const unsubCompactor = this.compactor.on(event => {
         switch (event.type) {
           case 'compaction.start':
             this.observability?.logger?.info('Compaction started', {
@@ -815,9 +846,10 @@ export class ProductionAgent {
             break;
         }
       });
+      this.unsubscribers.push(unsubCompactor);
 
-      // Forward auto-compaction events
-      this.autoCompactionManager.on((event: AutoCompactionEvent) => {
+      // Forward auto-compaction events (with cleanup tracking)
+      const unsubAutoCompaction = this.autoCompactionManager.on((event: AutoCompactionEvent) => {
         switch (event.type) {
           case 'autocompaction.warning':
             this.observability?.logger?.warn('Context approaching limit', {
@@ -864,6 +896,7 @@ export class ProductionAgent {
             break;
         }
       });
+      this.unsubscribers.push(unsubAutoCompaction);
     }
 
     // Note: FileChangeTracker requires a database instance which is not
@@ -969,6 +1002,7 @@ export class ProductionAgent {
       // Finalize
       const duration = Date.now() - startTime;
       this.state.metrics.duration = duration;
+      this.state.metrics.successCount = (this.state.metrics.successCount ?? 0) + 1;
 
       await this.observability?.tracer?.endTrace();
 
@@ -1004,6 +1038,7 @@ export class ProductionAgent {
 
         this.emit({ type: 'cancellation.completed', cleanupDuration });
         this.observability?.logger?.info('Agent cancelled', { reason: error.message, cleanupDuration });
+        this.state.metrics.cancelCount = (this.state.metrics.cancelCount ?? 0) + 1;
 
         // Lesson 26: End trace capture on cancellation
         if (this.traceCollector?.isTaskActive()) {
@@ -1024,6 +1059,7 @@ export class ProductionAgent {
 
       this.observability?.tracer?.recordError(error);
       await this.observability?.tracer?.endTrace();
+      this.state.metrics.failureCount = (this.state.metrics.failureCount ?? 0) + 1;
 
       this.emit({ type: 'error', error: error.message });
       this.observability?.logger?.error('Agent failed', { error: error.message });
@@ -1113,6 +1149,9 @@ export class ProductionAgent {
 
     let reflectionAttempt = 0;
     let lastResponse = '';
+    let incompleteActionRetries = 0;
+    const requestedArtifact = this.extractRequestedArtifact(task);
+    const executedToolNames = new Set<string>();
 
     // Outer loop for reflection (if enabled)
     while (reflectionAttempt < maxReflectionAttempts) {
@@ -1130,15 +1169,12 @@ export class ProductionAgent {
 
         // =======================================================================
         // CANCELLATION CHECK
-        // Checks both internal cancellation (ESC key) and external cancellation
-        // (parent timeout when this agent is a subagent)
+        // Checks internal cancellation (ESC key) — always immediate.
+        // External cancellation (parent timeout) is checked after economics
+        // to allow graceful wrapup when wrapup has been requested.
         // =======================================================================
         if (this.cancellation?.isCancelled) {
           this.cancellation.token.throwIfCancellationRequested();
-        }
-        // Also check external cancellation token (from parent when spawned as subagent)
-        if (this.externalCancellationToken?.isCancellationRequested) {
-          this.externalCancellationToken.throwIfCancellationRequested();
         }
 
         // =======================================================================
@@ -1198,6 +1234,7 @@ export class ProductionAgent {
                 attempt: 1,
                 maxAttempts: 1,
               });
+              this.state.metrics.retryCount = (this.state.metrics.retryCount ?? 0) + 1;
 
               // Mark that we've attempted recovery to prevent infinite loops
               (this.state as { _recoveryAttempted?: boolean })._recoveryAttempted = true;
@@ -1302,6 +1339,28 @@ export class ProductionAgent {
             });
             break;
           }
+        }
+
+        // =======================================================================
+        // GRACEFUL WRAPUP CHECK
+        // If a wrapup has been requested (e.g., timeout approaching), convert
+        // to forceTextOnly + inject wrapup prompt for structured summary.
+        // Must come after economics check (which may also set forceTextOnly).
+        // =======================================================================
+        if (this.wrapupRequested && !forceTextOnly) {
+          forceTextOnly = true;
+          budgetInjectedPrompt = TIMEOUT_WRAPUP_PROMPT;
+          this.wrapupRequested = false;
+        }
+
+        // =======================================================================
+        // EXTERNAL CANCELLATION CHECK (deferred from above)
+        // Checked after wrapup so that graceful wrapup can intercept the timeout.
+        // If wrapup was already requested and converted to forceTextOnly above,
+        // we skip throwing here to allow one more text-only turn for the summary.
+        // =======================================================================
+        if (this.externalCancellationToken?.isCancellationRequested && !forceTextOnly) {
+          this.externalCancellationToken.throwIfCancellationRequested();
         }
 
         // =======================================================================
@@ -1412,6 +1471,43 @@ export class ProductionAgent {
         const MAX_CONTINUATIONS = resilienceConfig.maxContinuations ?? 3;
         const AUTO_CONTINUE = resilienceConfig.autoContinue ?? true;
         const MIN_CONTENT_LENGTH = resilienceConfig.minContentLength ?? 1;
+        const INCOMPLETE_ACTION_RECOVERY = resilienceConfig.incompleteActionRecovery ?? true;
+        const MAX_INCOMPLETE_ACTION_RETRIES = resilienceConfig.maxIncompleteActionRetries ?? 2;
+        const ENFORCE_REQUESTED_ARTIFACTS = resilienceConfig.enforceRequestedArtifacts ?? true;
+
+        // =================================================================
+        // PRE-FLIGHT BUDGET CHECK: Estimate if LLM call would exceed budget
+        // Catches cases where we're at e.g. 120k and next call adds ~35k
+        // =================================================================
+        if (this.economics && !forceTextOnly) {
+          const estimatedInputTokens = this.estimateContextTokens(messages);
+          const estimatedOutputTokens = 4096; // Conservative output estimate
+          const currentUsage = this.economics.getUsage();
+          const budget = this.economics.getBudget();
+          const projectedTotal = currentUsage.tokens + estimatedInputTokens + estimatedOutputTokens;
+
+          if (projectedTotal > budget.maxTokens) {
+            this.observability?.logger?.warn('Pre-flight budget check: projected overshoot', {
+              currentTokens: currentUsage.tokens,
+              estimatedInput: estimatedInputTokens,
+              projectedTotal,
+              maxTokens: budget.maxTokens,
+            });
+
+            // Inject wrap-up prompt if not already injected
+            if (!budgetInjectedPrompt) {
+              messages.push({
+                role: 'user',
+                content: '[System] BUDGET CRITICAL: This is your LAST response. Summarize findings concisely and stop. Do NOT call tools.',
+              });
+              this.state.messages.push({
+                role: 'user',
+                content: '[System] BUDGET CRITICAL: This is your LAST response. Summarize findings concisely and stop. Do NOT call tools.',
+              });
+            }
+            forceTextOnly = true;
+          }
+        }
 
         let response = await this.callLLM(messages);
         let emptyRetries = 0;
@@ -1445,6 +1541,7 @@ export class ProductionAgent {
             attempt: emptyRetries,
             maxAttempts: MAX_EMPTY_RETRIES,
           });
+          this.state.metrics.retryCount = (this.state.metrics.retryCount ?? 0) + 1;
           this.observability?.logger?.warn('Empty LLM response, retrying', {
             attempt: emptyRetries,
             maxAttempts: MAX_EMPTY_RETRIES,
@@ -1511,6 +1608,37 @@ export class ProductionAgent {
           }
         }
 
+        // Phase 2b: Handle truncated tool calls (stopReason=max_tokens with tool calls present)
+        // When a model hits max_tokens mid-tool-call, the JSON arguments are truncated and unparseable.
+        // Instead of executing broken tool calls, strip them and ask the LLM to retry smaller.
+        if (resilienceEnabled && response.stopReason === 'max_tokens' && response.toolCalls?.length) {
+          this.emit({
+            type: 'resilience.truncated_tool_call',
+            toolNames: response.toolCalls.map(tc => tc.name),
+          });
+          this.observability?.logger?.warn('Tool call truncated at max_tokens', {
+            toolNames: response.toolCalls.map(tc => tc.name),
+            outputTokens: response.usage?.outputTokens,
+          });
+
+          // Strip truncated tool calls, inject recovery message
+          const truncatedResponse = response;
+          response = { ...response, toolCalls: undefined };
+          const recoveryMessage: Message = {
+            role: 'user',
+            content: '[System: Your previous tool call was truncated because the output exceeded the token limit. ' +
+              'The tool call arguments were cut off and could not be parsed. ' +
+              'Please retry with a smaller approach: for write_file, break the content into smaller chunks ' +
+              'or use edit_file for targeted changes instead of rewriting entire files.]',
+          };
+          messages.push({ role: 'assistant', content: truncatedResponse.content || '' });
+          messages.push(recoveryMessage);
+          this.state.messages.push({ role: 'assistant', content: truncatedResponse.content || '' });
+          this.state.messages.push(recoveryMessage);
+
+          response = await this.callLLM(messages);
+        }
+
         // Record LLM usage for economics
         if (this.economics && response.usage) {
           this.economics.recordLLMUsage(
@@ -1519,6 +1647,20 @@ export class ProductionAgent {
             this.config.model,
             response.usage.cost  // Use actual cost from provider when available
           );
+
+          // =================================================================
+          // POST-LLM BUDGET CHECK: Prevent tool execution if over budget
+          // A single LLM call can push us over - catch it before running tools
+          // =================================================================
+          if (!forceTextOnly) {
+            const postCheck = this.economics.checkBudget();
+            if (!postCheck.canContinue) {
+              this.observability?.logger?.warn('Budget exceeded after LLM call, skipping tool execution', {
+                reason: postCheck.reason,
+              });
+              forceTextOnly = true;
+            }
+          }
         }
 
         // Add assistant message
@@ -1555,6 +1697,66 @@ export class ProductionAgent {
               toolCallCount: response.toolCalls?.length,
               iteration: this.state.iteration,
             });
+          }
+
+          const incompleteAction = this.detectIncompleteActionResponse(response.content || '');
+          const missingRequiredArtifact = ENFORCE_REQUESTED_ARTIFACTS
+            ? this.isRequestedArtifactMissing(requestedArtifact, executedToolNames)
+            : false;
+          const shouldRecoverIncompleteAction = resilienceEnabled
+            && INCOMPLETE_ACTION_RECOVERY
+            && !forceTextOnly
+            && (incompleteAction || missingRequiredArtifact);
+
+          if (shouldRecoverIncompleteAction) {
+            if (incompleteActionRetries < MAX_INCOMPLETE_ACTION_RETRIES) {
+              incompleteActionRetries++;
+              const reason = missingRequiredArtifact && requestedArtifact
+                ? `missing_requested_artifact:${requestedArtifact}`
+                : 'future_intent_without_action';
+              this.emit({
+                type: 'resilience.incomplete_action_detected',
+                reason,
+                attempt: incompleteActionRetries,
+                maxAttempts: MAX_INCOMPLETE_ACTION_RETRIES,
+                requiresArtifact: missingRequiredArtifact,
+              });
+              this.observability?.logger?.warn('Incomplete action detected, retrying with nudge', {
+                reason,
+                attempt: incompleteActionRetries,
+                maxAttempts: MAX_INCOMPLETE_ACTION_RETRIES,
+              });
+
+              const nudgeMessage: Message = {
+                role: 'user',
+                content: missingRequiredArtifact && requestedArtifact
+                  ? `[System: You said you would complete the next action, but no tool call was made. The task requires creating or updating "${requestedArtifact}". Execute the required tool now, or explicitly explain why it cannot be produced.]`
+                  : '[System: You described a next action but did not execute it. If work remains, call the required tool now. If the task is complete, provide a final answer with no pending action language.]',
+              };
+              messages.push(nudgeMessage);
+              this.state.messages.push(nudgeMessage);
+              continue;
+            }
+
+            const failureReason = missingRequiredArtifact && requestedArtifact
+              ? `incomplete_action_missing_artifact:${requestedArtifact}`
+              : 'incomplete_action_unresolved';
+            this.emit({
+              type: 'resilience.incomplete_action_failed',
+              reason: failureReason,
+              attempts: incompleteActionRetries,
+              maxAttempts: MAX_INCOMPLETE_ACTION_RETRIES,
+            });
+            throw new Error(`LLM failed to complete requested action after ${incompleteActionRetries} retries (${failureReason})`);
+          }
+
+          if (incompleteActionRetries > 0) {
+            this.emit({
+              type: 'resilience.incomplete_action_recovered',
+              reason: 'incomplete_action',
+              attempts: incompleteActionRetries,
+            });
+            incompleteActionRetries = 0;
           }
 
           // No tool calls (or forced to ignore), agent is done - compact tool outputs to save context
@@ -1602,6 +1804,7 @@ export class ProductionAgent {
         for (let i = 0; i < toolCalls.length; i++) {
           const toolCall = toolCalls[i];
           const result = toolResults[i];
+          executedToolNames.add(toolCall.name);
           this.economics?.recordToolCall(toolCall.name, toolCall.arguments, result?.result);
         }
 
@@ -1653,8 +1856,12 @@ export class ProductionAgent {
           }
         }
 
+        const toolCallNameById = new Map(toolCalls.map(tc => [tc.id, tc.name]));
+
         for (const result of toolResults) {
           let content = typeof result.result === 'string' ? result.result : stableStringify(result.result);
+          const sourceToolName = toolCallNameById.get(result.callId);
+          const isExpensiveResult = sourceToolName === 'spawn_agent' || sourceToolName === 'spawn_agents_parallel';
 
           // Truncate long outputs to save context
           if (content.length > MAX_TOOL_OUTPUT_CHARS) {
@@ -1694,6 +1901,15 @@ export class ProductionAgent {
             role: 'tool',
             content,
             toolCallId: result.callId,
+            ...(isExpensiveResult
+              ? {
+                  metadata: {
+                    preserveFromCompaction: true,
+                    costToRegenerate: 'high',
+                    source: sourceToolName,
+                  },
+                }
+              : {}),
           };
           messages.push(toolMessage);
           this.state.messages.push(toolMessage);
@@ -2106,6 +2322,19 @@ export class ProductionAgent {
   }
 
   /**
+   * Execute an async callback while excluding wall-clock wait time from duration budgeting.
+   * Used for external waits such as approval dialogs and delegation confirmation.
+   */
+  private async withPausedDuration<T>(fn: () => Promise<T>): Promise<T> {
+    this.economics?.pauseDuration();
+    try {
+      return await fn();
+    } finally {
+      this.economics?.resumeDuration();
+    }
+  }
+
+  /**
    * Execute tool calls with safety checks and execution policy enforcement.
    */
   private async executeToolCalls(toolCalls: ToolCall[]): Promise<ToolResult[]> {
@@ -2178,6 +2407,7 @@ export class ProductionAgent {
         // =====================================================================
         // EXECUTION POLICY ENFORCEMENT (Lesson 23)
         // =====================================================================
+        let policyApprovedByUser = false;
         if (this.executionPolicy) {
           const policyContext = {
             messages: this.state.messages,
@@ -2231,15 +2461,19 @@ export class ProductionAgent {
           // Handle prompt policy - requires approval
           if (evaluation.policy === 'prompt' && evaluation.requiresApproval) {
             // Try to get approval through safety manager's human-in-loop
-            if (this.safety?.humanInLoop) {
-              const approval = await this.safety.humanInLoop.requestApproval(
-                toolCall,
-                `Policy requires approval: ${evaluation.reason}`
+            const humanInLoop = this.safety?.humanInLoop;
+            if (humanInLoop) {
+              const approval = await this.withPausedDuration(() =>
+                humanInLoop.requestApproval(
+                  toolCall,
+                  `Policy requires approval: ${evaluation.reason}`
+                )
               );
 
               if (!approval.approved) {
                 throw new Error(`Denied by user: ${approval.reason || 'No reason provided'}`);
               }
+              policyApprovedByUser = true;
 
               // Create a grant for future similar calls if approved
               this.executionPolicy.createGrant({
@@ -2269,9 +2503,13 @@ export class ProductionAgent {
         // SAFETY VALIDATION (Lesson 20-21)
         // =====================================================================
         if (this.safety) {
-          const validation = await this.safety.validateAndApprove(
-            toolCall,
-            `Executing tool: ${toolCall.name}`
+          const safety = this.safety;
+          const validation = await this.withPausedDuration(() =>
+            safety.validateAndApprove(
+              toolCall,
+              `Executing tool: ${toolCall.name}`,
+              { skipHumanApproval: policyApprovedByUser }
+            )
           );
 
           if (!validation.allowed) {
@@ -2746,7 +2984,14 @@ export class ProductionAgent {
    */
   getMetrics(): AgentResult['metrics'] {
     if (this.observability?.metrics) {
-      return this.observability.metrics.getMetrics();
+      const observed = this.observability.metrics.getMetrics();
+      return {
+        ...observed,
+        successCount: this.state.metrics.successCount ?? 0,
+        failureCount: this.state.metrics.failureCount ?? 0,
+        cancelCount: this.state.metrics.cancelCount ?? 0,
+        retryCount: this.state.metrics.retryCount ?? 0,
+      };
     }
     return this.state.metrics;
   }
@@ -2897,6 +3142,10 @@ export class ProductionAgent {
         llmCalls: 0,
         toolCalls: 0,
         duration: 0,
+        successCount: 0,
+        failureCount: 0,
+        cancelCount: 0,
+        retryCount: 0,
       },
       iteration: 0,
     };
@@ -3089,6 +3338,10 @@ export class ProductionAgent {
         toolCalls: sanitized.metrics.toolCalls ?? 0,
         duration: sanitized.metrics.duration ?? 0,
         reflectionAttempts: sanitized.metrics.reflectionAttempts,
+        successCount: sanitized.metrics.successCount ?? 0,
+        failureCount: sanitized.metrics.failureCount ?? 0,
+        cancelCount: sanitized.metrics.cancelCount ?? 0,
+        retryCount: sanitized.metrics.retryCount ?? 0,
       };
     }
 
@@ -3143,11 +3396,25 @@ export class ProductionAgent {
    */
   private compactToolOutputs(): void {
     const COMPACT_PREVIEW_LENGTH = 200; // Keep first 200 chars as preview
+    const MAX_PRESERVED_EXPENSIVE_RESULTS = 6;
     let compactedCount = 0;
     let savedChars = 0;
+    const preservedExpensiveIndexes = this.state.messages
+      .map((msg, index) => ({ msg, index }))
+      .filter(({ msg }) =>
+        msg.role === 'tool' && msg.metadata?.preserveFromCompaction === true
+      )
+      .map(({ index }) => index);
+    const preserveSet = new Set(
+      preservedExpensiveIndexes.slice(-MAX_PRESERVED_EXPENSIVE_RESULTS)
+    );
 
-    for (const msg of this.state.messages) {
+    for (let i = 0; i < this.state.messages.length; i++) {
+      const msg = this.state.messages[i];
       if (msg.role === 'tool' && msg.content && msg.content.length > COMPACT_PREVIEW_LENGTH * 2) {
+        if (msg.metadata?.preserveFromCompaction === true && preserveSet.has(i)) {
+          continue;
+        }
         const originalLength = msg.content.length;
         const preview = msg.content.slice(0, COMPACT_PREVIEW_LENGTH).replace(/\n/g, ' ');
         msg.content = `[${preview}...] (${originalLength} chars, compacted)`;
@@ -3183,6 +3450,51 @@ export class ProductionAgent {
   }
 
   /**
+   * Extract a requested markdown artifact filename from a task prompt.
+   * Returns null when no explicit artifact requirement is detected.
+   */
+  private extractRequestedArtifact(task: string): string | null {
+    const markdownArtifactMatch = task.match(/(?:write|save|create)[^.\n]{0,120}\b([A-Za-z0-9._/-]+\.md)\b/i);
+    return markdownArtifactMatch?.[1] ?? null;
+  }
+
+  /**
+   * Check whether a requested artifact appears to be missing based on executed tools.
+   */
+  private isRequestedArtifactMissing(
+    requestedArtifact: string | null,
+    executedToolNames: Set<string>
+  ): boolean {
+    if (!requestedArtifact) {
+      return false;
+    }
+
+    const artifactWriteTools = ['write_file', 'edit_file', 'apply_patch', 'append_file'];
+    return !artifactWriteTools.some(toolName => executedToolNames.has(toolName));
+  }
+
+  /**
+   * Detect "future-intent" responses that imply the model has not completed work.
+   */
+  private detectIncompleteActionResponse(content: string): boolean {
+    const trimmed = content.trim();
+    if (!trimmed) {
+      return false;
+    }
+
+    const lower = trimmed.toLowerCase();
+    const futureIntentPatterns: RegExp[] = [
+      /^(now|next|then)\s+(i\s+will|i'll|let me)\b/,
+      /^i\s+(will|am going to|can)\b/,
+      /^(let me|i'll|i will)\s+(create|write|save|do|make|generate|start)\b/,
+      /^(now|next|then)\s+i(?:'ll| will)\b/,
+    ];
+    const completionSignals = /\b(done|completed|finished|here is|created|saved|wrote)\b/;
+
+    return futureIntentPatterns.some(pattern => pattern.test(lower)) && !completionSignals.test(lower);
+  }
+
+  /**
    * Get audit log (if human-in-loop is enabled).
    */
   getAuditLog(): unknown[] {
@@ -3209,8 +3521,8 @@ export class ProductionAgent {
       this.multiAgent.registerRole(role);
     }
 
-    // Set up event forwarding
-    this.multiAgent.on(event => {
+    // Set up event forwarding (unsubscribe after operation to prevent memory leaks)
+    const unsubMultiAgent = this.multiAgent.on(event => {
       switch (event.type) {
         case 'agent.spawn':
           this.emit({ type: 'multiagent.spawn', agentId: event.agentId, role: event.role });
@@ -3227,15 +3539,19 @@ export class ProductionAgent {
       }
     });
 
-    const result = await this.multiAgent.runWithTeam(task, {
-      roles,
-      consensusStrategy: this.config.multiAgent && isFeatureEnabled(this.config.multiAgent)
-        ? this.config.multiAgent.consensusStrategy || 'voting'
-        : 'voting',
-      communicationMode: 'broadcast',
-    });
+    try {
+      const result = await this.multiAgent.runWithTeam(task, {
+        roles,
+        consensusStrategy: this.config.multiAgent && isFeatureEnabled(this.config.multiAgent)
+          ? this.config.multiAgent.consensusStrategy || 'voting'
+          : 'voting',
+        communicationMode: 'broadcast',
+      });
 
-    return result;
+      return result;
+    } finally {
+      unsubMultiAgent();
+    }
   }
 
   /**
@@ -3263,8 +3579,8 @@ export class ProductionAgent {
 
     this.observability?.logger?.info('Running with ReAct', { task });
 
-    // Set up event forwarding
-    this.react.on(event => {
+    // Set up event forwarding (unsubscribe after operation to prevent memory leaks)
+    const unsubReact = this.react.on(event => {
       switch (event.type) {
         case 'react.thought':
           this.emit({ type: 'react.thought', step: event.step, thought: event.thought });
@@ -3281,17 +3597,21 @@ export class ProductionAgent {
       }
     });
 
-    const trace = await this.react.run(task);
+    try {
+      const trace = await this.react.run(task);
 
-    // Store trace in memory if available
-    if (this.memory && trace.finalAnswer) {
-      this.memory.storeConversation([
-        { role: 'user', content: task },
-        { role: 'assistant', content: trace.finalAnswer },
-      ]);
+      // Store trace in memory if available
+      if (this.memory && trace.finalAnswer) {
+        this.memory.storeConversation([
+          { role: 'user', content: task },
+          { role: 'assistant', content: trace.finalAnswer },
+        ]);
+      }
+
+      return trace;
+    } finally {
+      unsubReact();
     }
-
-    return trace;
   }
 
   /**
@@ -3742,12 +4062,17 @@ export class ProductionAgent {
       };
     }
 
-    this.emit({ type: 'agent.spawn', agentId: `spawn-${Date.now()}`, name: agentName, task });
+    // Generate a unique ID for this agent instance that will be used consistently
+    // throughout the agent's lifecycle (spawn event, token events, completion events)
+    const agentId = `spawn-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+
+    this.emit({ type: 'agent.spawn', agentId, name: agentName, task });
     this.observability?.logger?.info('Spawning agent', { name: agentName, task });
 
     const startTime = Date.now();
     const childSessionId = `subagent-${agentName}-${Date.now()}`;
     const childTraceId = `trace-${childSessionId}`;
+    let workerResultId: string | undefined;
 
     try {
       // Filter tools for this agent
@@ -3758,6 +4083,22 @@ export class ProductionAgent {
       const resolvedModel = (agentDef.model && agentDef.model.includes('/'))
         ? agentDef.model
         : this.config.model;
+
+      // Persist subagent task lifecycle in durable storage when available
+      if (this.store?.hasWorkerResultsFeature()) {
+        try {
+          workerResultId = this.store.createWorkerResult(
+            agentId,
+            task.slice(0, 500),
+            resolvedModel || 'default'
+          );
+        } catch (storeErr) {
+          this.observability?.logger?.warn('Failed to create worker result record', {
+            agentId,
+            error: (storeErr as Error).message,
+          });
+        }
+      }
 
       // Get subagent config with agent-type-specific timeouts and iteration limits
       // Uses dynamic configuration based on agent type (researcher needs more time than reviewer)
@@ -3823,10 +4164,24 @@ export class ProductionAgent {
 
       // CONSTRAINT INJECTION
       // Add constraints to the subagent's context if provided
-      let constraintContext = '';
-      if (constraints) {
-        const constraintParts: string[] = [];
+      // Also always include budget awareness so subagents know their limits
+      const constraintParts: string[] = [];
 
+      // BUDGET AWARENESS: Always inject so subagent understands its limits
+      const subagentBudgetTokens = constraints?.maxTokens ?? SUBAGENT_BUDGET.maxTokens ?? 100000;
+      const subagentBudgetMinutes = Math.round((SUBAGENT_BUDGET.maxDuration ?? 240000) / 60000);
+      constraintParts.push(
+        `**RESOURCE AWARENESS (CRITICAL):**\n` +
+        `- Token budget: ~${(subagentBudgetTokens / 1000).toFixed(0)}k tokens\n` +
+        `- Time limit: ~${subagentBudgetMinutes} minutes\n` +
+        `- You will receive warnings at 70% usage. When warned, WRAP UP immediately.\n` +
+        `- Do not explore indefinitely - be focused and efficient.\n` +
+        `- If approaching limits, summarize findings and return.\n` +
+        `- **STRUCTURED WRAPUP:** When told to wrap up, respond with ONLY this JSON (no tool calls):\n` +
+        `  {"findings":[...], "actionsTaken":[...], "failures":[...], "remainingWork":[...], "suggestedNextSteps":[...]}`
+      );
+
+      if (constraints) {
         if (constraints.focusAreas && constraints.focusAreas.length > 0) {
           constraintParts.push(`**FOCUS AREAS (limit exploration to these paths):**\n${constraints.focusAreas.map(a => `  - ${a}`).join('\n')}`);
         }
@@ -3839,18 +4194,12 @@ export class ProductionAgent {
           constraintParts.push(`**REQUIRED DELIVERABLES (you must produce these):**\n${constraints.requiredDeliverables.map(d => `  - ${d}`).join('\n')}`);
         }
 
-        if (constraints.maxTokens) {
-          constraintParts.push(`**TOKEN BUDGET:** ${constraints.maxTokens} tokens maximum`);
-        }
-
         if (constraints.timeboxMinutes) {
           constraintParts.push(`**TIME LIMIT:** ${constraints.timeboxMinutes} minutes (soft limit - wrap up if approaching)`);
         }
-
-        if (constraintParts.length > 0) {
-          constraintContext = `\n\n**EXECUTION CONSTRAINTS:**\n${constraintParts.join('\n\n')}\n`;
-        }
       }
+
+      const constraintContext = `\n\n**EXECUTION CONSTRAINTS:**\n${constraintParts.join('\n\n')}\n`;
 
       // Build subagent system prompt with subagent-specific plan mode addition
       const parentMode = this.getMode();
@@ -3859,6 +4208,7 @@ export class ProductionAgent {
         : `${agentDef.systemPrompt}${blackboardContext}${constraintContext}`;
 
       // Create a sub-agent with the agent's config
+      // Use SUBAGENT_BUDGET to constrain resource usage (prevents runaway token consumption)
       const subAgent = new ProductionAgent({
         provider: this.provider,
         tools: agentTools,
@@ -3886,6 +4236,11 @@ export class ProductionAgent {
         },
         // Share parent's blackboard for coordination between parallel subagents
         blackboard: this.blackboard || undefined,
+        // CONSTRAINED BUDGET: Subagents get smaller budget to prevent runaway consumption
+        // Uses SUBAGENT_BUDGET (100k tokens, 4 min) vs STANDARD_BUDGET (200k, 5 min)
+        budget: constraints?.maxTokens
+          ? { ...SUBAGENT_BUDGET, maxTokens: constraints.maxTokens }
+          : SUBAGENT_BUDGET,
       });
 
       // CRITICAL: Subagent inherits parent's mode
@@ -3913,26 +4268,69 @@ export class ProductionAgent {
         subAgent.setTraceCollector(subagentTraceView);
       }
 
-      // Forward events from subagent with context
-      subAgent.subscribe(event => {
-        // Tag event with subagent source so TUI can display it properly
-        const taggedEvent = { ...event, subagent: agentName };
-        this.emit(taggedEvent);
+      // GRACEFUL TIMEOUT with WRAPUP PHASE
+      // Instead of instant death on timeout, the subagent gets a wrapup window
+      // to produce a structured summary before being killed:
+      // 1. Normal operation: progress extends idle timer
+      // 2. Wrapup phase: 30s before hard kill, wrapup callback fires → forceTextOnly
+      // 3. Hard kill: race() throws CancellationError after wrapup window
+      const IDLE_TIMEOUT = 120000; // 2 minutes without progress = timeout
+      let WRAPUP_WINDOW = 30000;
+      let IDLE_CHECK_INTERVAL = 5000;
+      if (this.config.subagent) {
+        WRAPUP_WINDOW = this.config.subagent.wrapupWindowMs ?? WRAPUP_WINDOW;
+        IDLE_CHECK_INTERVAL = this.config.subagent.idleCheckIntervalMs ?? IDLE_CHECK_INTERVAL;
+      }
+      const progressAwareTimeout = createGracefulTimeout(
+        subagentTimeout,  // Max total time (hard limit from agent type config)
+        IDLE_TIMEOUT,     // Idle timeout (soft limit - no progress triggers this)
+        WRAPUP_WINDOW,    // Wrapup window before hard kill
+        IDLE_CHECK_INTERVAL
+      );
+
+      // Register wrapup callback — fires 30s before hard kill
+      // This triggers the subagent's forceTextOnly path for a structured summary
+      progressAwareTimeout.onWrapupWarning(() => {
+        this.emit({
+          type: 'subagent.wrapup.started',
+          agentId,
+          agentType: agentName,
+          reason: 'Timeout approaching - graceful wrapup window opened',
+          elapsedMs: Date.now() - startTime,
+        });
+        subAgent.requestWrapup('Timeout approaching — produce structured summary');
       });
 
-      // Create timeout token for subagent execution
-      const timeoutSource = createTimeoutToken(subagentTimeout);
+      // Forward events from subagent with context (track for cleanup)
+      // Also report progress to the timeout tracker
+      const unsubSubAgent = subAgent.subscribe(event => {
+        // Tag event with subagent source AND unique ID so TUI can properly attribute
+        // events to the specific agent instance (critical for multiple same-type agents)
+        const taggedEvent = { ...event, subagent: agentName, subagentId: agentId };
+        this.emit(taggedEvent);
 
-      // Link parent's cancellation with subagent timeout so ESC propagates to subagents
+        // Report progress for timeout extension
+        // Progress events: tool calls, LLM responses, token updates
+        const progressEvents = ['tool.start', 'tool.complete', 'llm.start', 'llm.complete'];
+        if (progressEvents.includes(event.type)) {
+          progressAwareTimeout.reportProgress();
+        }
+      });
+
+      // Link parent's cancellation with progress-aware timeout so ESC propagates to subagents
       const parentSource = this.cancellation?.getSource();
       const effectiveSource = parentSource
-        ? createLinkedToken(parentSource, timeoutSource)
-        : timeoutSource;
+        ? createLinkedToken(parentSource, progressAwareTimeout)
+        : progressAwareTimeout;
 
       // CRITICAL: Pass the cancellation token to the subagent so it can check and stop
       // gracefully when timeout fires. Without this, the subagent continues running as
       // a "zombie" even after race() returns with a timeout error.
       subAgent.setExternalCancellation(effectiveSource.token);
+
+      // Pause parent's duration timer while subagent runs to prevent
+      // the parent from timing out on wall-clock while waiting for subagent
+      this.economics?.pauseDuration();
 
       try {
         // Run the task with cancellation propagation from parent
@@ -4001,6 +4399,12 @@ export class ProductionAgent {
           ? (result.response || '') + queuedChangeSummary
           : (result.response || result.error || '');
 
+        // Parse structured closure report from agent's response (if it produced one)
+        const structured = parseStructuredClosureReport(
+          result.response || '',
+          'completed'
+        );
+
         const spawnResultFinal: SpawnResult = {
           success: result.success,
           output: finalOutput,
@@ -4009,14 +4413,44 @@ export class ProductionAgent {
             duration,
             toolCalls: result.metrics.toolCalls,
           },
+          structured,
         };
+
+        if (workerResultId && this.store?.hasWorkerResultsFeature()) {
+          try {
+            this.store.completeWorkerResult(workerResultId, {
+              fullOutput: finalOutput,
+              summary: finalOutput.slice(0, 500),
+              artifacts: structured ? [{ type: 'structured_report', data: structured }] : undefined,
+              metrics: {
+                tokens: result.metrics.totalTokens,
+                duration,
+                toolCalls: result.metrics.toolCalls,
+              },
+            });
+          } catch (storeErr) {
+            this.observability?.logger?.warn('Failed to persist worker result', {
+              agentId,
+              error: (storeErr as Error).message,
+            });
+          }
+        }
 
         this.emit({
           type: 'agent.complete',
-          agentId: agentName,
+          agentId,  // Use unique spawn ID for precise tracking
+          agentType: agentName,  // Keep type for display purposes
           success: result.success,
           output: finalOutput.slice(0, 500),  // Include output preview
         });
+        if (progressAwareTimeout.isInWrapupPhase()) {
+          this.emit({
+            type: 'subagent.wrapup.completed',
+            agentId,
+            agentType: agentName,
+            elapsedMs: Date.now() - startTime,
+          });
+        }
 
         // Enhanced tracing: Record subagent completion
         this.traceCollector?.record({
@@ -4045,6 +4479,8 @@ export class ProductionAgent {
           },
         });
 
+        // Unsubscribe from subagent events before cleanup
+        unsubSubAgent();
         await subAgent.cleanup();
 
         // Cache result for duplicate spawn prevention
@@ -4063,8 +4499,17 @@ export class ProductionAgent {
           const isUserCancellation = parentSource?.isCancellationRequested;
           const reason = isUserCancellation
             ? 'User cancelled'
-            : `Timed out after ${subagentTimeout}ms`;
-          this.emit({ type: 'agent.error', agentId: agentName, error: reason });
+            : (err as CancellationError).reason || `Timed out after ${subagentTimeout}ms`;
+          this.emit({ type: 'agent.error', agentId, agentType: agentName, error: reason });
+          if (!isUserCancellation) {
+            this.emit({
+              type: 'subagent.timeout.hard_kill',
+              agentId,
+              agentType: agentName,
+              reason,
+              elapsedMs: Date.now() - startTime,
+            });
+          }
 
           // =======================================================================
           // PRESERVE PARTIAL RESULTS
@@ -4128,7 +4573,8 @@ export class ProductionAgent {
             }
           }
 
-          // Try to cleanup the subagent gracefully
+          // Unsubscribe from subagent events and cleanup gracefully
+          unsubSubAgent();
           try {
             await subAgent.cleanup();
           } catch {
@@ -4172,6 +4618,25 @@ export class ProductionAgent {
             },
           });
 
+          // Parse structured closure report from partial response
+          const exitReason = isUserCancellation ? 'cancelled' as const : 'timeout_graceful' as const;
+          const structured = parseStructuredClosureReport(
+            partialResponse,
+            exitReason,
+            task
+          );
+
+          if (workerResultId && this.store?.hasWorkerResultsFeature()) {
+            try {
+              this.store.failWorkerResult(workerResultId, reason);
+            } catch (storeErr) {
+              this.observability?.logger?.warn('Failed to mark cancelled worker result as failed', {
+                agentId,
+                error: (storeErr as Error).message,
+              });
+            }
+          }
+
           return {
             success: false,
             output: baseOutput + partialResultSection + cancelledQueuedSummary,
@@ -4182,17 +4647,31 @@ export class ProductionAgent {
               duration,
               toolCalls: subagentMetrics.toolCalls,
             },
+            structured,
           };
         }
         throw err; // Re-throw non-cancellation errors
       } finally {
+        // Resume parent's duration timer now that subagent is done
+        this.economics?.resumeDuration();
         // Dispose both sources (linked source disposes its internal state, timeout source handles its timer)
         effectiveSource.dispose();
-        timeoutSource.dispose();
+        progressAwareTimeout.dispose();
       }
     } catch (err) {
       const error = err instanceof Error ? err.message : String(err);
-      this.emit({ type: 'agent.error', agentId: agentName, error });
+      this.emit({ type: 'agent.error', agentId, agentType: agentName, error });
+
+      if (workerResultId && this.store?.hasWorkerResultsFeature()) {
+        try {
+          this.store.failWorkerResult(workerResultId, error);
+        } catch (storeErr) {
+          this.observability?.logger?.warn('Failed to mark worker result as failed', {
+            agentId,
+            error: (storeErr as Error).message,
+          });
+        }
+      }
 
       return {
         success: false,
@@ -4205,6 +4684,9 @@ export class ProductionAgent {
   /**
    * Spawn multiple agents in parallel to work on independent tasks.
    * Uses the shared blackboard for coordination and conflict prevention.
+   *
+   * Uses Promise.allSettled to handle partial failures gracefully - if one
+   * agent fails or times out, others can still complete successfully.
    */
   async spawnAgentsParallel(
     tasks: Array<{ agent: string; task: string }>
@@ -4216,9 +4698,29 @@ export class ProductionAgent {
       agents: tasks.map(t => t.agent),
     });
 
-    // Execute all tasks in parallel
+    // Execute all tasks in parallel using allSettled to handle partial failures
     const promises = tasks.map(({ agent, task }) => this.spawnAgent(agent, task));
-    const results = await Promise.all(promises);
+    const settled = await Promise.allSettled(promises);
+
+    // Convert settled results to SpawnResult array
+    const results: SpawnResult[] = settled.map((result, i) => {
+      if (result.status === 'fulfilled') {
+        return result.value;
+      }
+      // Handle rejected promises (shouldn't happen since spawnAgent catches errors internally,
+      // but this is a safety net for unexpected failures)
+      const error = result.reason instanceof Error ? result.reason.message : String(result.reason);
+      this.emit({
+        type: 'agent.error',
+        agentId: tasks[i].agent,
+        error: `Unexpected parallel spawn error: ${error}`,
+      });
+      return {
+        success: false,
+        output: `Parallel spawn error: ${error}`,
+        metrics: { tokens: 0, duration: 0, toolCalls: 0 },
+      };
+    });
 
     // Emit completion event
     this.emit({
@@ -4409,7 +4911,9 @@ If the task is a simple question or doesn't need specialized handling, set bestA
 
       // If confirmation callback provided, ask user
       if (confirmDelegate && topSuggestion) {
-        const confirmed = await confirmDelegate(topSuggestion.agent, topSuggestion.reason);
+        const confirmed = await this.withPausedDuration(() =>
+          confirmDelegate(topSuggestion.agent, topSuggestion.reason)
+        );
         if (!confirmed) {
           // User declined, run with main agent
           return this.run(task);
@@ -4475,6 +4979,15 @@ If the task is a simple question or doesn't need specialized handling, set bestA
    */
   getResourceStatus(): string | null {
     return this.resourceManager?.getStatusString() || null;
+  }
+
+  /**
+   * Reset CPU time counter for the resource manager.
+   * Call this when starting a new prompt to allow per-prompt time limits
+   * instead of session-wide limits.
+   */
+  resetResourceTimer(): void {
+    this.resourceManager?.resetCpuTime();
   }
 
   // =========================================================================
@@ -4661,11 +5174,28 @@ If the task is a simple question or doesn't need specialized handling, set bestA
   }
 
   /**
+   * Set a SQLite store instance for durable persistence features.
+   */
+  setStore(store: SQLiteStore): void {
+    this.store = store;
+  }
+
+  /**
    * Check if external cancellation has been requested.
    * Returns true if the external token signals cancellation.
    */
   isExternallyCancelled(): boolean {
     return this.externalCancellationToken?.isCancellationRequested ?? false;
+  }
+
+  /**
+   * Request a graceful wrapup of the agent's current work.
+   * On the next main loop iteration, the agent will produce a structured summary
+   * instead of making more tool calls.
+   */
+  requestWrapup(reason?: string): void {
+    this.wrapupRequested = true;
+    this.wrapupReason = reason || 'Timeout approaching';
   }
 
   /**
@@ -4988,6 +5518,31 @@ If the task is a simple question or doesn't need specialized handling, set bestA
    * Cleanup resources.
    */
   async cleanup(): Promise<void> {
+    // Unsubscribe all event listeners (prevents memory leaks in long sessions)
+    for (const unsub of this.unsubscribers) {
+      try {
+        unsub();
+      } catch {
+        // Ignore unsubscribe errors during cleanup
+      }
+    }
+    this.unsubscribers = [];
+
+    // Flush trace collector before cleanup
+    await this.traceCollector?.flush();
+
+    // Clear blackboard (releases file claim locks)
+    this.blackboard?.clear();
+
+    // Wait for any pending init before cleanup
+    if (this.initPromises.length > 0) {
+      try {
+        await Promise.all(this.initPromises);
+      } catch {
+        // Ignore init errors during cleanup
+      }
+    }
+
     this.cancellation?.cleanup();
     this.resourceManager?.cleanup();
     await this.lspManager?.cleanup();
@@ -5224,4 +5779,72 @@ export class ProductionAgentBuilder {
  */
 export function buildAgent(): ProductionAgentBuilder {
   return new ProductionAgentBuilder();
+}
+
+// =============================================================================
+// STRUCTURED CLOSURE REPORT PARSER
+// =============================================================================
+
+/**
+ * Parse a structured closure report from a subagent's text response.
+ * The subagent may have produced JSON in response to a TIMEOUT_WRAPUP_PROMPT.
+ *
+ * @param text - The subagent's last response text
+ * @param defaultExitReason - Exit reason to use (completed, timeout_graceful, cancelled, etc.)
+ * @param fallbackTask - Original task description for fallback remainingWork
+ * @returns Parsed StructuredClosureReport, or undefined if no JSON found and no fallback needed
+ */
+export function parseStructuredClosureReport(
+  text: string,
+  defaultExitReason: StructuredClosureReport['exitReason'],
+  fallbackTask?: string,
+): StructuredClosureReport | undefined {
+  if (!text) {
+    // No text at all — create a hard timeout fallback if we have a task
+    if (fallbackTask) {
+      return {
+        findings: [],
+        actionsTaken: [],
+        failures: ['Timeout before producing structured summary'],
+        remainingWork: [fallbackTask],
+        exitReason: 'timeout_hard',
+      };
+    }
+    return undefined;
+  }
+
+  try {
+    // Try to extract JSON from the response
+    const jsonMatch = text.match(/\{[\s\S]*\}/);
+    if (jsonMatch) {
+      const parsed = JSON.parse(jsonMatch[0]);
+      // Validate that it looks like a closure report (has at least one expected field)
+      if (parsed.findings || parsed.actionsTaken || parsed.failures || parsed.remainingWork) {
+        return {
+          findings: Array.isArray(parsed.findings) ? parsed.findings : [],
+          actionsTaken: Array.isArray(parsed.actionsTaken) ? parsed.actionsTaken : [],
+          failures: Array.isArray(parsed.failures) ? parsed.failures : [],
+          remainingWork: Array.isArray(parsed.remainingWork) ? parsed.remainingWork : [],
+          exitReason: defaultExitReason,
+          suggestedNextSteps: Array.isArray(parsed.suggestedNextSteps) ? parsed.suggestedNextSteps : undefined,
+        };
+      }
+    }
+  } catch {
+    // JSON parse failed — fall through to fallback
+  }
+
+  // Fallback: LLM didn't produce valid JSON but we have text
+  if (defaultExitReason !== 'completed') {
+    return {
+      findings: [text.slice(0, 500)],
+      actionsTaken: [],
+      failures: ['Did not produce structured JSON summary'],
+      remainingWork: fallbackTask ? [fallbackTask] : [],
+      exitReason: defaultExitReason === 'timeout_graceful' ? 'timeout_hard' : defaultExitReason,
+    };
+  }
+
+  // For completed agents, don't force a structured report if they didn't produce one
+  return undefined;
 }

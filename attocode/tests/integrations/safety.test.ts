@@ -511,6 +511,28 @@ describe('SafetyManager', () => {
       expect(result.allowed).toBe(false);
       expect(result.reason).toContain('Path not allowed');
     });
+
+    it('should skip human approval when requested while still running sandbox checks', async () => {
+      const approvalHandler = async () => ({ approved: false, reason: 'Denied by test' });
+      const withHilOnly = createSafetyManager(false, {
+        enabled: true,
+        riskThreshold: 'low',
+        approvalHandler,
+      });
+
+      const blocked = await withHilOnly.validateAndApprove(
+        { id: 'call-hil-1', name: 'write_file', arguments: { path: join(tempDir, 'x.ts'), content: 'x' } },
+        'test context'
+      );
+      expect(blocked.allowed).toBe(false);
+
+      const skipped = await withHilOnly.validateAndApprove(
+        { id: 'call-hil-2', name: 'write_file', arguments: { path: join(tempDir, 'x.ts'), content: 'x' } },
+        'test context',
+        { skipHumanApproval: true }
+      );
+      expect(skipped.allowed).toBe(true);
+    });
   });
 
   describe('disabled managers', () => {

@@ -42,8 +42,10 @@ export {
   createEconomicsManager,
   QUICK_BUDGET,
   STANDARD_BUDGET,
+  SUBAGENT_BUDGET,
   LARGE_BUDGET,
   UNLIMITED_BUDGET,
+  TIMEOUT_WRAPUP_PROMPT,
   type ExecutionBudget,
   type ExecutionUsage,
   type BudgetCheckResult,
@@ -71,6 +73,7 @@ export {
   type AgentSourceType,
   type SpawnOptions,
   type SpawnResult,
+  type StructuredClosureReport,
   type RegistryEvent,
   type RegistryEventListener,
   type AgentScaffoldResult,
@@ -266,6 +269,8 @@ export {
   createCancellationTokenSource,
   createTimeoutToken,
   createLinkedToken,
+  createProgressAwareTimeout,
+  createGracefulTimeout,
   withCancellation,
   sleep,
   race,
@@ -275,6 +280,8 @@ export {
   CancellationToken,
   type CancellationToken as CancellationTokenType,
   type CancellationTokenSource,
+  type ProgressAwareTimeoutSource,
+  type GracefulTimeoutSource,
   type CancellableOptions,
   type CancellationEvent,
   type CancellationEventListener,
@@ -757,3 +764,10 @@ export {
   type UpdateTaskOptions,
   type TaskSummary,
 } from './task-manager.js';
+
+// Command History (persistent input history)
+export {
+  HistoryManager,
+  createHistoryManager,
+  type HistoryManagerConfig,
+} from './history.js';

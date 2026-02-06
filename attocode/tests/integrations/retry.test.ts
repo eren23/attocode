@@ -66,9 +66,10 @@ describe('Retry Utility', () => {
         maxAttempts: 3,
         baseDelayMs: 100,
       });
+      const assertion = expect(promise).rejects.toThrow('ETIMEDOUT');
       await vi.runAllTimersAsync();
 
-      await expect(promise).rejects.toThrow('ETIMEDOUT');
+      await assertion;
       expect(fn).toHaveBeenCalledTimes(3);
     });
 
@@ -125,9 +126,10 @@ describe('Retry Utility', () => {
         baseDelayMs: 100,
         onExhausted,
       });
+      const assertion = expect(promise).rejects.toThrow();
       await vi.runAllTimersAsync();
 
-      await expect(promise).rejects.toThrow();
+      await assertion;
       expect(onExhausted).toHaveBeenCalledWith(2, expect.any(Error));
     });
 
@@ -182,8 +184,9 @@ describe('Retry Utility', () => {
           delays.push(delay);
         },
       });
+      const assertion = expect(promise).rejects.toThrow();
       await vi.runAllTimersAsync();
-      await expect(promise).rejects.toThrow();
+      await assertion;
 
       // Delays should be: 1000, 2000, 2500, 2500 (capped)
       expect(delays[0]).toBe(1000);

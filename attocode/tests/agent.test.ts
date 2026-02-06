@@ -338,8 +338,10 @@ describe('ProductionAgent', () => {
     it('should filter tools by mode', () => {
       agent.setMode('build');
       const buildTools = agent.getModeFilteredTools();
-      // 3 mock tools + spawn_agent (added automatically)
-      expect(buildTools.length).toBe(4);
+      expect(buildTools.some((t) => t.name === 'read_file')).toBe(true);
+      expect(buildTools.some((t) => t.name === 'write_file')).toBe(true);
+      expect(buildTools.some((t) => t.name === 'spawn_agent')).toBe(true);
+      expect(buildTools.some((t) => t.name === 'spawn_agents_parallel')).toBe(true);
 
       agent.setMode('plan');
       const planTools = agent.getModeFilteredTools();
@@ -830,6 +832,196 @@ describe('ProductionAgent with enabled features', () => {
       expect(Array.isArray(matches)).toBe(true);
 
       await agent.cleanup();
+    });
+  });
+
+  describe('incomplete action resilience', () => {
+    it('should recover when response promises action but emits no tool call', async () => {
+      const provider = createMockProviderWithTools([
+        { content: "Now I'll create the report.", toolCalls: [] },
+        { content: '', toolCalls: [{ id: 'call-1', name: 'write_file', arguments: { path: 'analysis.md', content: '# Report' } }] },
+        { content: 'Created analysis.md with the report.', toolCalls: [] },
+      ]);
+
+      const recoveryAgent = new ProductionAgent({
+        provider,
+        tools: mockTools,
+        maxIterations: 6,
+        resilience: {
+          enabled: true,
+          incompleteActionRecovery: true,
+          maxIncompleteActionRetries: 2,
+          enforceRequestedArtifacts: true,
+        },
+        memory: false,
+        planning: false,
+        reflection: false,
+        observability: false,
+        sandbox: false,
+        humanInLoop: false,
+        routing: false,
+        multiAgent: false,
+        react: false,
+        executionPolicy: false,
+        threads: false,
+        rules: false,
+        hooks: false,
+        plugins: false,
+        cancellation: false,
+        resources: false,
+        lsp: false,
+        semanticCache: false,
+      });
+
+      const result = await recoveryAgent.run('Compare systems and write analysis.md');
+
+      expect(result.success).toBe(true);
+      expect(mockWriteFileTool.execute).toHaveBeenCalled();
+      expect((provider.chat as any).mock.calls.length).toBe(3);
+
+      await recoveryAgent.cleanup();
+    });
+
+    it('should fail when incomplete action persists beyond retry limit', async () => {
+      const provider = createMockProviderWithTools([
+        { content: "Now I'll create analysis.md.", toolCalls: [] },
+      ]);
+
+      const failingAgent = new ProductionAgent({
+        provider,
+        tools: mockTools,
+        maxIterations: 4,
+        resilience: {
+          enabled: true,
+          incompleteActionRecovery: true,
+          maxIncompleteActionRetries: 1,
+          enforceRequestedArtifacts: true,
+        },
+        memory: false,
+        planning: false,
+        reflection: false,
+        observability: false,
+        sandbox: false,
+        humanInLoop: false,
+        routing: false,
+        multiAgent: false,
+        react: false,
+        executionPolicy: false,
+        threads: false,
+        rules: false,
+        hooks: false,
+        plugins: false,
+        cancellation: false,
+        resources: false,
+        lsp: false,
+        semanticCache: false,
+      });
+
+      const result = await failingAgent.run('Create a plan and write analysis.md');
+
+      expect(result.success).toBe(false);
+      expect(result.error).toContain('incomplete_action_missing_artifact');
+      expect((provider.chat as any).mock.calls.length).toBe(2);
+
+      await failingAgent.cleanup();
+    });
+
+    it('should not retry normal no-tool final responses', async () => {
+      const provider = createMockProviderWithTools([
+        { content: 'Here is the requested summary.', toolCalls: [] },
+      ]);
+
+      const normalAgent = new ProductionAgent({
+        provider,
+        tools: mockTools,
+        maxIterations: 4,
+        resilience: {
+          enabled: true,
+          incompleteActionRecovery: true,
+          maxIncompleteActionRetries: 2,
+          enforceRequestedArtifacts: true,
+        },
+        memory: false,
+        planning: false,
+        reflection: false,
+        observability: false,
+        sandbox: false,
+        humanInLoop: false,
+        routing: false,
+        multiAgent: false,
+        react: false,
+        executionPolicy: false,
+        threads: false,
+        rules: false,
+        hooks: false,
+        plugins: false,
+        cancellation: false,
+        resources: false,
+        lsp: false,
+        semanticCache: false,
+      });
+
+      const result = await normalAgent.run('Explain current architecture tradeoffs');
+
+      expect(result.success).toBe(true);
+      expect((provider.chat as any).mock.calls.length).toBe(1);
+
+      await normalAgent.cleanup();
+    });
+  });
+
+  describe('auto routing waits', () => {
+    it('should pause and resume duration around delegation confirmation', async () => {
+      const routedAgent = new ProductionAgent({
+        provider: mockProvider,
+        tools: mockTools,
+        memory: false,
+        planning: false,
+        reflection: false,
+        observability: false,
+        sandbox: false,
+        humanInLoop: false,
+        routing: false,
+        multiAgent: false,
+        react: false,
+        executionPolicy: false,
+        threads: false,
+        rules: false,
+        hooks: false,
+        plugins: false,
+        cancellation: false,
+        resources: false,
+        lsp: false,
+        semanticCache: false,
+      });
+
+      const pauseDuration = vi.fn();
+      const resumeDuration = vi.fn();
+      (routedAgent as any).economics = { pauseDuration, resumeDuration };
+      (routedAgent as any).suggestAgentForTask = vi.fn().mockResolvedValue({
+        suggestions: [{
+          agent: { name: 'researcher' },
+          confidence: 0.95,
+          reason: 'best match',
+        }],
+        shouldDelegate: true,
+        delegateAgent: 'researcher',
+      });
+      (routedAgent as any).spawnAgent = vi.fn().mockResolvedValue({
+        success: true,
+        output: 'ok',
+        metrics: { tokens: 1, duration: 1, toolCalls: 0 },
+      });
+
+      await routedAgent.runWithAutoRouting('find files', {
+        confidenceThreshold: 0.8,
+        confirmDelegate: async () => true,
+      });
+
+      expect(pauseDuration).toHaveBeenCalledTimes(1);
+      expect(resumeDuration).toHaveBeenCalledTimes(1);
+
+      await routedAgent.cleanup();
     });
   });
 });

@@ -1048,8 +1048,10 @@ describe('ExecutionEconomicsManager', () => {
       }
       const result = manager.checkBudget();
 
-      expect(result.canContinue).toBe(false);
+      expect(result.canContinue).toBe(true);
       expect(result.budgetType).toBe('iterations');
+      expect(result.forceTextOnly).toBe(true);
+      expect(result.suggestedAction).toBe('stop');
     });
 
     it('should warn but continue on soft limit', () => {

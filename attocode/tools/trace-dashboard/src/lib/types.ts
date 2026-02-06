@@ -237,7 +237,10 @@ export interface Inefficiency {
     | 'memory_miss'
     | 'slow_tool'
     | 'token_spike'
-    | 'thinking_overhead';
+    | 'thinking_overhead'
+    | 'subagent_inefficiency'
+    | 'context_limit_warning'
+    | 'tool_timeout_patterns';
   /** Severity level */
   severity: 'low' | 'medium' | 'high' | 'critical';
   /** Human-readable description */
