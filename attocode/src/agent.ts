@@ -161,6 +161,14 @@ import {
   TaskManager,
   createTaskManager,
   type SQLiteStore,
+  // Swarm Mode
+  SwarmOrchestrator,
+  createSwarmOrchestrator,
+  createThrottledProvider,
+  FREE_TIER_THROTTLE,
+  PAID_TIER_THROTTLE,
+  type SwarmConfig,
+  type SwarmExecutionResult,
 } from './integrations/index.js';
 
 // Lesson 26: Tracing & Evaluation integration
@@ -233,6 +241,7 @@ export class ProductionAgent {
   private budgetPool: SharedBudgetPool | null = null;
   private taskManager: TaskManager | null = null;
   private store: SQLiteStore | null = null;
+  private swarmOrchestrator: SwarmOrchestrator | null = null;
 
   // Duplicate spawn prevention - tracks recently spawned tasks to prevent doom loops
   // Map<taskKey, { timestamp: number; result: string; queuedChanges: number }>
@@ -499,6 +508,39 @@ export class ProductionAgent {
     const taskTools = createTaskTools(this.taskManager);
     for (const tool of taskTools) {
       this.tools.set(tool.name, tool);
+    }
+
+    // Swarm Mode (experimental)
+    if (this.config.swarm) {
+      const swarmConfig = this.config.swarm as SwarmConfig;
+
+      // Wrap provider with request throttle to prevent 429 rate limiting.
+      // All subagents share this.provider by reference (line 4398),
+      // so wrapping here throttles ALL downstream LLM calls.
+      if (swarmConfig.throttle !== false) {
+        const throttleConfig = swarmConfig.throttle === 'paid'
+          ? PAID_TIER_THROTTLE
+          : swarmConfig.throttle === 'free' || swarmConfig.throttle === undefined
+            ? FREE_TIER_THROTTLE
+            : swarmConfig.throttle;
+        this.provider = createThrottledProvider(
+          this.provider as unknown as import('./providers/types.js').LLMProvider,
+          throttleConfig,
+        ) as any;
+      }
+
+      this.swarmOrchestrator = createSwarmOrchestrator(
+        swarmConfig,
+        this.provider as unknown as import('./providers/types.js').LLMProvider,
+        this.agentRegistry,
+        (name, task) => this.spawnAgent(name, task),
+        this.blackboard ?? undefined,
+      );
+
+      // Override parent budget pool with swarm's much larger pool so spawnAgent()
+      // allocates from the swarm budget (e.g. 10M tokens) instead of the parent's
+      // generic pool (200K tokens). Without this, workers get 5K emergency budget.
+      this.budgetPool = this.swarmOrchestrator.getBudgetPool().pool;
     }
 
     // Cancellation Support
@@ -1019,8 +1061,13 @@ export class ProductionAgent {
       // Check for cancellation before starting
       cancellationToken?.throwIfCancellationRequested();
 
-      // Check if planning is needed
-      if (this.planning?.shouldPlan(task)) {
+      // Check if swarm mode should handle this task
+      if (this.swarmOrchestrator) {
+        const swarmResult = await this.runSwarm(task);
+        // Store swarm summary as an assistant message for the response
+        this.state.messages.push({ role: 'assistant', content: swarmResult.summary });
+      } else if (this.planning?.shouldPlan(task)) {
+        // Check if planning is needed
         await this.createAndExecutePlan(task);
       } else {
         await this.executeDirectly(task);
@@ -1157,6 +1204,50 @@ export class ProductionAgent {
         });
         break;
       }
+    }
+  }
+
+  /**
+   * Run a task in swarm mode using the SwarmOrchestrator.
+   */
+  private async runSwarm(task: string): Promise<SwarmExecutionResult> {
+    if (!this.swarmOrchestrator) {
+      throw new Error('Swarm orchestrator not initialized');
+    }
+
+    this.observability?.logger?.info('Starting swarm execution', { task: task.slice(0, 100) });
+    this.observability?.logger?.info('Starting swarm mode — decomposing task into subtasks...');
+
+    // Forward swarm events to the main agent event system
+    const unsubSwarm = this.swarmOrchestrator.subscribe(event => {
+      // Forward as a generic agent event for TUI display
+      this.emit(event as unknown as import('./types.js').AgentEvent);
+    });
+
+    // Bridge events to filesystem for live dashboard
+    const { SwarmEventBridge } = await import('./integrations/swarm/swarm-event-bridge.js');
+    const bridge = new SwarmEventBridge({ outputDir: '.agent/swarm-live' });
+    const unsubBridge = bridge.attach(this.swarmOrchestrator);
+
+    try {
+      const result = await this.swarmOrchestrator.execute(task);
+
+      // Populate task DAG for dashboard after execution
+      bridge.setTasks(result.tasks);
+
+      this.observability?.logger?.info('Swarm execution complete', {
+        success: result.success,
+        tasks: result.stats.totalTasks,
+        completed: result.stats.completedTasks,
+        tokens: result.stats.totalTokens,
+        cost: result.stats.totalCost,
+      });
+
+      return result;
+    } finally {
+      unsubBridge();
+      bridge.close();
+      unsubSwarm();
     }
   }
 
@@ -1551,9 +1642,10 @@ export class ProductionAgent {
         while (resilienceEnabled && emptyRetries < MAX_EMPTY_RETRIES) {
           const hasContent = response.content && response.content.length >= MIN_CONTENT_LENGTH;
           const hasToolCalls = response.toolCalls && response.toolCalls.length > 0;
+          const hasThinking = response.thinking && response.thinking.length > 0;
 
           if (hasContent || hasToolCalls) {
-            // Valid response received
+            // Valid visible response
             if (emptyRetries > 0) {
               this.emit({
                 type: 'resilience.recovered',
@@ -1567,7 +1659,40 @@ export class ProductionAgent {
             break;
           }
 
-          // Empty response - retry with nudge
+          if (hasThinking && !hasContent && !hasToolCalls) {
+            // Model produced reasoning but no visible output (e.g., DeepSeek-R1, GLM-4, QwQ).
+            // Give ONE targeted nudge, then accept thinking as content.
+            if (emptyRetries === 0) {
+              emptyRetries++;
+              this.emit({
+                type: 'resilience.retry',
+                reason: 'thinking_only_response',
+                attempt: emptyRetries,
+                maxAttempts: MAX_EMPTY_RETRIES,
+              });
+              this.state.metrics.retryCount = (this.state.metrics.retryCount ?? 0) + 1;
+              this.observability?.logger?.warn('Thinking-only response (no visible content), nudging', {
+                thinkingLength: response.thinking!.length,
+              });
+
+              const thinkingNudge: Message = {
+                role: 'user',
+                content: '[System: You produced reasoning but no visible response. Please provide your answer based on your analysis.]',
+              };
+              messages.push(thinkingNudge);
+              this.state.messages.push(thinkingNudge);
+              response = await this.callLLM(messages);
+              continue;
+            }
+            // Second attempt also thinking-only → accept thinking as content
+            this.observability?.logger?.info('Accepting thinking as content after nudge failed', {
+              thinkingLength: response.thinking!.length,
+            });
+            response = { ...response, content: response.thinking! };
+            break;
+          }
+
+          // Truly empty (no content, no tools, no thinking) — existing retry logic
           emptyRetries++;
           this.emit({
             type: 'resilience.retry',
@@ -1702,10 +1827,11 @@ export class ProductionAgent {
           role: 'assistant',
           content: response.content,
           toolCalls: response.toolCalls,
+          ...(response.thinking ? { metadata: { thinking: response.thinking } } : {}),
         };
         messages.push(assistantMessage);
         this.state.messages.push(assistantMessage);
-        lastResponse = response.content;
+        lastResponse = response.content || (response.thinking ? response.thinking : '');
 
         // In plan mode: capture exploration findings as we go (not just at the end)
         // This ensures we collect context from exploration iterations before writes are queued
@@ -4105,7 +4231,10 @@ export class ProductionAgent {
     }
 
     // DUPLICATE SPAWN PREVENTION with SEMANTIC SIMILARITY
-    // First try exact string match, then check semantic similarity for similar tasks
+    // Skip for swarm workers — the orchestrator handles retry logic and deduplication
+    // at the task level. Without this bypass, retried swarm tasks return stale results.
+    const isSwarmWorker = agentName.startsWith('swarm-');
+
     const SEMANTIC_SIMILARITY_THRESHOLD = 0.75; // 75% similarity = duplicate
     const taskKey = `${agentName}:${task.slice(0, 150).toLowerCase().replace(/\s+/g, ' ').trim()}`;
     const now = Date.now();
@@ -4117,31 +4246,35 @@ export class ProductionAgent {
       }
     }
 
-    // Check for exact match first
-    let existingMatch = this.spawnedTasks.get(taskKey);
+    let existingMatch: { timestamp: number; result: string; queuedChanges: number } | undefined;
     let matchType: 'exact' | 'semantic' = 'exact';
 
-    // If no exact match, check for semantic similarity among same agent's tasks
-    if (!existingMatch) {
-      for (const [key, entry] of this.spawnedTasks.entries()) {
-        // Only compare tasks from the same agent type
-        if (!key.startsWith(`${agentName}:`)) continue;
-        if (now - entry.timestamp >= ProductionAgent.SPAWN_DEDUP_WINDOW_MS) continue;
+    if (!isSwarmWorker) {
+      // Check for exact match first
+      existingMatch = this.spawnedTasks.get(taskKey);
 
-        // Extract the task portion from the key
-        const existingTask = key.slice(agentName.length + 1);
-        const similarity = calculateTaskSimilarity(task, existingTask);
+      // If no exact match, check for semantic similarity among same agent's tasks
+      if (!existingMatch) {
+        for (const [key, entry] of this.spawnedTasks.entries()) {
+          // Only compare tasks from the same agent type
+          if (!key.startsWith(`${agentName}:`)) continue;
+          if (now - entry.timestamp >= ProductionAgent.SPAWN_DEDUP_WINDOW_MS) continue;
 
-        if (similarity >= SEMANTIC_SIMILARITY_THRESHOLD) {
-          existingMatch = entry;
-          matchType = 'semantic';
-          this.observability?.logger?.debug('Semantic duplicate detected', {
-            agent: agentName,
-            newTask: task.slice(0, 80),
-            existingTask: existingTask.slice(0, 80),
-            similarity: (similarity * 100).toFixed(1) + '%',
-          });
-          break;
+          // Extract the task portion from the key
+          const existingTask = key.slice(agentName.length + 1);
+          const similarity = calculateTaskSimilarity(task, existingTask);
+
+          if (similarity >= SEMANTIC_SIMILARITY_THRESHOLD) {
+            existingMatch = entry;
+            matchType = 'semantic';
+            this.observability?.logger?.debug('Semantic duplicate detected', {
+              agent: agentName,
+              newTask: task.slice(0, 80),
+              existingTask: existingTask.slice(0, 80),
+              similarity: (similarity * 100).toFixed(1) + '%',
+            });
+            break;
+          }
         }
       }
     }
@@ -4369,7 +4502,12 @@ export class ProductionAgent {
         observability: this.config.observability,
         sandbox: this.config.sandbox,
         humanInLoop: this.config.humanInLoop,
-        executionPolicy: this.config.executionPolicy,
+        // Subagents get 'allow' as default policy since they're already
+        // constrained to their registered tool set. The parent's 'prompt'
+        // policy can't work without humanInLoop.
+        executionPolicy: this.config.executionPolicy
+          ? { ...this.config.executionPolicy, defaultPolicy: 'allow' as const }
+          : this.config.executionPolicy,
         threads: false,
         // Disable hooks console output in subagents - parent handles event display
         hooks: this.config.hooks === false ? false : {

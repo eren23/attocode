@@ -1036,3 +1036,30 @@ export const UNLIMITED_BUDGET: Partial<ExecutionBudget> = {
   targetIterations: Infinity,
   maxIterations: Infinity,
 };
+
+/**
+ * Swarm worker budget - tight constraints for small specialist models.
+ * Each worker gets a small slice of the total swarm budget.
+ */
+export const SWARM_WORKER_BUDGET: Partial<ExecutionBudget> = {
+  maxTokens: 20000,
+  softTokenLimit: 15000,
+  maxCost: 0.05,
+  maxDuration: 120000,     // 2 minutes
+  softDurationLimit: 90000, // Warn at 90s
+  targetIterations: 10,
+  maxIterations: 15,
+};
+
+/**
+ * Swarm orchestrator budget - moderate budget for decomposition and quality gates.
+ */
+export const SWARM_ORCHESTRATOR_BUDGET: Partial<ExecutionBudget> = {
+  maxTokens: 100000,
+  softTokenLimit: 80000,
+  maxCost: 0.25,
+  maxDuration: 300000,     // 5 minutes
+  softDurationLimit: 240000,
+  targetIterations: 30,
+  maxIterations: 50,
+};

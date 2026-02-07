@@ -44,6 +44,63 @@ const DEFAULT_CONFIG = `{
 }
 `;
 
+const DEFAULT_SWARM_YAML = `# Swarm Configuration
+# Uncomment and customize sections as needed.
+
+# philosophy: |
+#   Write clean, tested code. Prefer simplicity over cleverness.
+#   Always run tests after changes.
+
+# models:
+#   orchestrator: google/gemini-2.0-flash-001
+#   paid_only: false
+
+# workers:
+#   - name: coder
+#     model: google/gemini-2.0-flash-001
+#     capabilities: [code, refactor]
+#     # persona: "You are a senior TypeScript developer."
+#   - name: researcher
+#     model: google/gemini-2.0-flash-001
+#     capabilities: [research, analysis]
+
+# hierarchy:
+#   manager:
+#     model: anthropic/claude-sonnet-4
+#     # persona: "You are a strict code reviewer."
+#   judge:
+#     model: google/gemini-2.0-flash-001
+#     # persona: "You are a quality assurance expert."
+
+# budget:
+#   total_tokens: 2000000
+#   max_cost: 1.00
+#   max_tokens_per_worker: 20000
+
+# quality:
+#   gates: true
+#   # gate_model: google/gemini-2.0-flash-001
+
+# communication:
+#   blackboard: true
+#   dependency_context_max_length: 2000
+#   include_file_list: true
+
+# resilience:
+#   max_concurrency: 5
+#   worker_retries: 2
+#   rate_limit_retries: 3
+#   dispatch_stagger_ms: 500
+
+# permissions:
+#   mode: auto-safe                      # recommended for non-yolo use
+#   auto_approve: [read_file, glob, grep, list_files, search]
+#   scoped_approve:
+#     write_file: { paths: ["src/", "tests/"] }
+#     bash: { paths: ["src/", "tests/"] }
+#   require_approval: [bash_dangerous]
+`;
+
 const DEFAULT_RULES = `# Project Rules
 
 ## Code Style
@@ -108,6 +165,7 @@ export async function initAttocodeDirectory(options: InitOptions = {}): Promise<
   const files: Array<{ path: string; content: string }> = options.minimal ? [] : [
     { path: '.attocode/config.json', content: DEFAULT_CONFIG },
     { path: '.attocode/rules.md', content: DEFAULT_RULES },
+    { path: '.attocode/swarm.yaml', content: DEFAULT_SWARM_YAML },
   ];
 
   // Create directories

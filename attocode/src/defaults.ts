@@ -564,6 +564,7 @@ export function buildConfig(
     resilience: mergeConfig(DEFAULT_LLM_RESILIENCE_CONFIG, userConfig.resilience),
     fileChangeTracker: mergeConfig(DEFAULT_FILE_CHANGE_TRACKER_CONFIG, userConfig.fileChangeTracker),
     subagent: mergeConfig(DEFAULT_SUBAGENT_CONFIG, userConfig.subagent),
+    swarm: userConfig.swarm || false,
     providerResilience: mergeConfig(DEFAULT_PROVIDER_RESILIENCE_CONFIG, userConfig.providerResilience),
     maxContextTokens: userConfig.maxContextTokens, // Dynamic: fetched from OpenRouter/ModelRegistry if not explicitly set
     maxIterations: userConfig.maxIterations ?? 50,

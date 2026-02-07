@@ -1,0 +1,54 @@
+# Resume-Friendly Swarm Config
+#
+# Optimized for long-running tasks that may be interrupted.
+# Persistence and checkpointing ensure you can resume from
+# the last completed wave.
+#
+# Usage:
+#   # Start a long task
+#   attocode --swarm .attocode/swarm.yaml "Migrate codebase from CommonJS to ESM"
+#
+#   # If interrupted, resume with the session ID shown at startup
+#   attocode --swarm-resume <session-id>
+
+philosophy: |
+  Make incremental, safe changes. Ensure each change is independently valid.
+  Run tests after every modification. Prefer small, focused commits.
+
+# Conservative settings to avoid rate limit interruptions
+throttle: free
+
+budget:
+  total_tokens: 5000000
+  max_cost: 5.00
+  max_tokens_per_worker: 30000
+  max_concurrency: 2
+  dispatch_stagger_ms: 1500
+
+# Quality gates help ensure resumed work builds on good foundations
+quality:
+  enabled: true
+
+# Extra retries to handle transient failures without needing a resume
+resilience:
+  worker_retries: 3
+  rate_limit_retries: 5
+  model_failover: true
+
+communication:
+  blackboard: true
+  dependency_context_max_length: 3000
+  include_file_list: true
+
+# Persistence is the key feature here
+features:
+  planning: true
+  wave_review: true
+  verification: true
+  persistence: true
+
+# State is saved to .agent/swarm-state/ by default.
+# Each wave completion triggers a checkpoint.
+# On resume, the orchestrator loads the last checkpoint,
+# restores task states and model health, and continues
+# from the next incomplete wave.

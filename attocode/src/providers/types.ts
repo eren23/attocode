@@ -40,10 +40,13 @@ export interface ChatOptions {
 export interface ChatResponse {
   /** The assistant's response text */
   content: string;
-  
+
   /** Why the response stopped */
   stopReason: 'end_turn' | 'max_tokens' | 'stop_sequence';
-  
+
+  /** Reasoning/thinking content from models that support it (e.g., DeepSeek-R1, GLM-4, QwQ) */
+  thinking?: string;
+
   /** Token usage (if available) */
   usage?: {
     inputTokens: number;
@@ -52,6 +55,16 @@ export interface ChatResponse {
     cachedTokens?: number;
     /** Actual cost from provider (when available, e.g., OpenRouter) */
     cost?: number;
+  };
+
+  /** Rate limit info from response headers (when available) */
+  rateLimitInfo?: {
+    /** Remaining requests in current window */
+    remainingRequests?: number;
+    /** Remaining tokens in current window */
+    remainingTokens?: number;
+    /** Seconds until rate limit window resets */
+    resetSeconds?: number;
   };
 }
 

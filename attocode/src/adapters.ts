@@ -87,6 +87,7 @@ export class ProviderAdapter implements ProductionLLMProvider {
     // Convert response to ProductionChatResponse
     return {
       content: response.content,
+      thinking: response.thinking,
       stopReason: response.stopReason,
       toolCalls: response.toolCalls?.map(tc => {
         let args: Record<string, unknown>;

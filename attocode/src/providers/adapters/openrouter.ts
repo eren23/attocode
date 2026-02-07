@@ -144,7 +144,11 @@ export class OpenRouterProvider implements LLMProvider, LLMProviderWithTools {
       const data = await response.json() as {
         id: string;
         choices: Array<{
-          message: { content: string };
+          message: {
+            content: string | null;
+            reasoning?: string;
+            reasoning_content?: string;
+          };
           finish_reason: string;
         }>;
         usage: {
@@ -162,14 +166,21 @@ export class OpenRouterProvider implements LLMProvider, LLMProviderWithTools {
         cost = await this.queryGenerationCost(data.id);
       }
 
+      // Extract reasoning/thinking content (used by DeepSeek-R1, GLM-4, QwQ, etc.)
+      const thinking = choice.message.reasoning
+        ?? choice.message.reasoning_content
+        ?? undefined;
+
       return {
-        content: choice.message.content,
+        content: choice.message.content ?? '',
+        thinking: thinking || undefined,
         stopReason: this.mapStopReason(choice.finish_reason),
         usage: {
           inputTokens: data.usage.prompt_tokens,
           outputTokens: data.usage.completion_tokens,
           cost,
         },
+        rateLimitInfo: this.extractRateLimitInfo(response),
       };
     } catch (error) {
       if (error instanceof ProviderError) throw error;
@@ -309,6 +320,8 @@ export class OpenRouterProvider implements LLMProvider, LLMProviderWithTools {
                 arguments: string;
               };
             }>;
+            reasoning?: string;
+            reasoning_content?: string;
           };
           finish_reason: string;
         }>;
@@ -348,8 +361,14 @@ export class OpenRouterProvider implements LLMProvider, LLMProviderWithTools {
         },
       }));
 
+      // Extract reasoning/thinking content (used by DeepSeek-R1, GLM-4, QwQ, etc.)
+      const thinking = choice.message.reasoning
+        ?? choice.message.reasoning_content
+        ?? undefined;
+
       return {
         content: choice.message.content ?? '',
+        thinking: thinking || undefined,
         stopReason: this.mapStopReason(choice.finish_reason),
         usage: {
           inputTokens: data.usage.prompt_tokens,
@@ -359,6 +378,7 @@ export class OpenRouterProvider implements LLMProvider, LLMProviderWithTools {
           cost,
         },
         toolCalls,
+        rateLimitInfo: this.extractRateLimitInfo(response),
       };
     } catch (error) {
       if (error instanceof ProviderError) throw error;
@@ -434,6 +454,58 @@ export class OpenRouterProvider implements LLMProvider, LLMProviderWithTools {
       console.log('[OpenRouter] Failed to get cost after all retries');
     }
     return undefined;
+  }
+
+  /**
+   * Extract rate limit info from response headers.
+   * OpenRouter returns X-RateLimit-* headers on every response.
+   */
+  private extractRateLimitInfo(response: Response): ChatResponse['rateLimitInfo'] {
+    const remaining = response.headers.get('x-ratelimit-remaining');
+    const remainingTokens = response.headers.get('x-ratelimit-remaining-tokens');
+    const reset = response.headers.get('x-ratelimit-reset');
+
+    if (!remaining && !remainingTokens && !reset) return undefined;
+
+    return {
+      remainingRequests: remaining ? parseInt(remaining, 10) : undefined,
+      remainingTokens: remainingTokens ? parseInt(remainingTokens, 10) : undefined,
+      resetSeconds: reset ? parseInt(reset, 10) : undefined,
+    };
+  }
+
+  /**
+   * Pre-flight check: query OpenRouter /api/v1/key to get account limits.
+   * Returns key info including rate limits and credits remaining.
+   */
+  static async checkKeyInfo(apiKey: string): Promise<{
+    rateLimitPerMinute?: number;
+    creditsRemaining?: number;
+    isPaid?: boolean;
+  }> {
+    try {
+      const response = await fetch('https://openrouter.ai/api/v1/key', {
+        headers: { 'Authorization': `Bearer ${apiKey}` },
+      });
+      if (!response.ok) return {};
+      const data = await response.json() as {
+        data?: {
+          rate_limit?: { requests: number; interval: string };
+          limit?: number;
+          usage?: number;
+          is_free_tier?: boolean;
+        };
+      };
+      return {
+        rateLimitPerMinute: data.data?.rate_limit?.requests,
+        creditsRemaining: data.data?.limit != null && data.data?.usage != null
+          ? data.data.limit - data.data.usage
+          : undefined,
+        isPaid: data.data?.is_free_tier === false,
+      };
+    } catch {
+      return {};
+    }
   }
 
   private handleError(status: number, body: string): ProviderError {

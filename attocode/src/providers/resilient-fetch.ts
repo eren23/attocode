@@ -26,6 +26,8 @@ export interface NetworkConfig {
   maxRetryDelay?: number;
   /** HTTP status codes that trigger retry (default: [429, 500, 502, 503, 504]) */
   retryableStatusCodes?: number[];
+  /** Extra retry attempts for HTTP 429 (default: 2, so total = maxRetries + 2) */
+  maxRetriesFor429?: number;
 }
 
 /**
@@ -95,6 +97,7 @@ const DEFAULT_CONFIG: Required<NetworkConfig> = {
   baseRetryDelay: 1000,
   maxRetryDelay: 30000,
   retryableStatusCodes: [429, 500, 502, 503, 504],
+  maxRetriesFor429: 2,
 };
 
 // =============================================================================
@@ -131,7 +134,9 @@ export async function resilientFetch(
   let lastError: Error | undefined;
   let attempts = 0;
 
-  while (attempts < config.maxRetries) {
+  // Use max possible retries (429 may get extra attempts)
+  const maxPossibleRetries = config.maxRetries + config.maxRetriesFor429;
+  while (attempts < maxPossibleRetries) {
     attempts++;
 
     // Check for cancellation before each attempt
@@ -168,14 +173,23 @@ export async function resilientFetch(
 
       // Check if response is retryable
       if (config.retryableStatusCodes.includes(response.status)) {
+        const is429 = response.status === 429;
+        // 429 gets extra retry budget
+        const effectiveMaxRetries = is429
+          ? config.maxRetries + config.maxRetriesFor429
+          : config.maxRetries;
+
         // Parse Retry-After header for rate limits
         const retryAfter = parseRetryAfter(response.headers.get('Retry-After'));
-        const delay = retryAfter ?? calculateBackoff(attempts, config);
+        // 429 uses steeper backoff (3^n instead of 2^n)
+        const delay = retryAfter ?? (is429
+          ? calculate429Backoff(attempts, config)
+          : calculateBackoff(attempts, config));
 
         lastError = new Error(`HTTP ${response.status}: ${response.statusText}`);
 
         // Don't retry if this is the last attempt
-        if (attempts >= config.maxRetries) {
+        if (attempts >= effectiveMaxRetries) {
           throw new ResilientFetchError(
             `${providerName} request failed after ${attempts} attempts: HTTP ${response.status}`,
             providerName,
@@ -301,6 +315,25 @@ function calculateBackoff(
 ): number {
   // Exponential backoff: baseDelay * 2^(attempt-1)
   const exponentialDelay = config.baseRetryDelay * Math.pow(2, attempt - 1);
+
+  // Add jitter (±25%)
+  const jitter = exponentialDelay * 0.25 * (Math.random() * 2 - 1);
+  const delay = exponentialDelay + jitter;
+
+  // Clamp to max delay
+  return Math.min(delay, config.maxRetryDelay);
+}
+
+/**
+ * Steeper exponential backoff for 429 rate limit errors.
+ * Uses 3^n instead of 2^n to give rate limit windows more recovery time.
+ */
+function calculate429Backoff(
+  attempt: number,
+  config: Required<NetworkConfig>
+): number {
+  // Steeper backoff: baseDelay * 3^(attempt-1)
+  const exponentialDelay = config.baseRetryDelay * Math.pow(3, attempt - 1);
 
   // Add jitter (±25%)
   const jitter = exponentialDelay * 0.25 * (Math.random() * 2 - 1);

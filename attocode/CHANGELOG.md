@@ -5,6 +5,124 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.0] - 2026-02-07
+
+### Added
+
+#### Swarm Mode — Multi-Model Parallel Orchestration (Major Feature)
+
+A new execution mode where one orchestrator model decomposes tasks into subtask DAGs, dispatches them across waves of parallel cheap/free specialist worker models, validates outputs through quality gates, and synthesizes a final result.
+
+- **SwarmOrchestrator** (`src/integrations/swarm/swarm-orchestrator.ts`) — Core orchestration loop implementing an 8-phase pipeline: decompose → plan → schedule → execute → review → verify → fix-up → synthesize. Manages wave-based parallel execution with per-wave review cycles and integration verification.
+- **SwarmTaskQueue** (`src/integrations/swarm/task-queue.ts`) — Wave-based task scheduler that organizes subtasks into dependency layers. Tasks flow through `pending → ready → dispatched → completed/failed/skipped` states. Supports fix-up task injection mid-execution and cross-wave ready-task promotion.
+- **SwarmWorkerPool** (`src/integrations/swarm/worker-pool.ts`) — Concurrent worker dispatch with configurable `maxConcurrency` (default: 3). Selects workers by capability matching (code, research, test, review, document) with round-robin load distribution and health-aware selection.
+- **SwarmBudgetPool** (`src/integrations/swarm/swarm-budget.ts`) — Budget management splitting total tokens between orchestrator reserve (15%) and shared worker pool (85%). Per-worker token and cost caps prevent any single worker from exhausting the budget. Overrides the parent agent's budget pool so swarm workers allocate from the swarm's much larger pool.
+- **SwarmQualityGate** (`src/integrations/swarm/swarm-quality-gate.ts`) — Per-task output validation by a judge model scoring 1-5. Failed outputs trigger retries. Quality gates automatically skip under rate limit pressure and on retried tasks to avoid compounding failures.
+- **Model auto-detection** (`src/integrations/swarm/model-selector.ts`) — Queries OpenRouter `/api/v1/models` API, filters by tool support, context window, and cost, then assigns models to worker roles with provider-diverse selection (maximizes rate limit headroom by picking models from different providers). Falls back to hardcoded models (Mistral, Z-AI, AllenAI, Moonshot) when API is unavailable.
+- **ModelHealthTracker** — Per-model health monitoring tracking successes, failures, rate limits, and average latency. Models are marked unhealthy after 2+ rate limits in 60s or >50% failure rate. Unhealthy models are deprioritized in capability matching and can trigger automatic failover to alternative models.
+- **Request throttle** (`src/integrations/swarm/request-throttle.ts`) — Token bucket rate limiter with FIFO queue and minimum spacing. Two presets: `free` (2 concurrent, 0.5 req/s, 1500ms spacing) and `paid` (5 concurrent, 2.0 req/s, 200ms spacing). Features adaptive backoff (halves capacity on 429, recovers after 10s success) and proactive adjustment from rate limit response headers.
+- **ThrottledProvider** — LLM provider wrapper that enforces `throttle.acquire()` before every `chat()` call. Since all subagents share the parent's provider by reference, wrapping the provider at swarm init throttles ALL downstream LLM calls across all workers.
+- **Circuit breaker** — Orchestrator-level safety that pauses all dispatch after 3 rate limit errors within 30 seconds for a 15-second cooldown. Complements the per-request throttle by providing a reactive macro-level stop.
+- **Hierarchy roles** — Three-tier authority separation: **Executor** (workers performing subtasks), **Manager** (reviews wave outputs, spawns fix-up tasks), **Judge** (runs quality gates, verification). Manager and judge models configurable via `hierarchy.manager` and `hierarchy.judge` in swarm.yaml.
+- **Planning phase** — Orchestrator (or manager) creates acceptance criteria per subtask and an integration test plan with bash verification commands. Planning is graceful — continues without criteria if it fails.
+- **Wave review** — Manager reviews all completed outputs after each wave, assesses as "good"/"needs-fixes"/"critical-issues", and can spawn fix-up tasks (`FixupTask`) that execute immediately before the next wave.
+- **Integration verification** — After all waves complete, runs bash commands from the integration test plan. Failed verification triggers fix-up tasks with up to `maxVerificationRetries` (default: 2) retry cycles.
+- **State persistence and resume** (`src/integrations/swarm/swarm-state-store.ts`) — Checkpoints saved after each wave containing full task states, plan, model health, orchestrator decisions, and stats. Resume with `--swarm-resume <session-id>` to continue from the last completed wave.
+- **Orchestrator decision logging** — Every significant decision (planning, review, failover, circuit breaker) is logged with timestamp, phase, decision, and reasoning. Included in checkpoints and emitted as events for dashboard visibility.
+- **Event system** (`src/integrations/swarm/swarm-events.ts`) — 27 typed event categories covering lifecycle, tasks, waves, quality, budget, planning, review, verification, model health, persistence, circuit breaker, and hierarchy role actions. All events forwarded to the main agent event system for TUI display and to the filesystem via `SwarmEventBridge` for dashboard consumption.
+- **SwarmEventBridge** (`src/integrations/swarm/swarm-event-bridge.ts`) — Serializes swarm events to JSONL on disk, enabling the live dashboard to consume events via file polling → SSE streaming.
+- **YAML config system** (`src/integrations/swarm/swarm-config-loader.ts`) — Custom YAML parser supporting nested objects, block arrays, multiline strings (`|`), and type coercion. Config search order: `.attocode/swarm.yaml` → `.attocode/swarm.yml` → `.attocode/swarm.json` → `~/.attocode/swarm.yaml`. Merge order: built-in defaults < yaml config < CLI flags.
+- **Swarm budget presets** (`src/integrations/economics.ts`) — `SWARM_WORKER_BUDGET` (20K tokens, $0.05, 2 min, 15 iterations) and `SWARM_ORCHESTRATOR_BUDGET` (100K tokens, $0.25, 5 min, 50 iterations) for economics system integration.
+- **Worker persona and philosophy** — Per-worker `persona` strings for role-specific behavior and a global `philosophy` string injected into every worker's system prompt for team-wide coding standards.
+- **Inter-worker communication** — Shared blackboard for posting findings between workers. Dependency context aggregation (configurable `dependencyContextMaxLength`). Optional workspace file listing.
+- **File conflict strategies** — Three modes for handling concurrent file modifications: `serialize`, `claim-based` (default), and `orchestrator-merges`.
+
+#### CLI — New Flags
+
+- **`--swarm [CONFIG]`** — Enable swarm mode. Without argument: auto-detect worker models from OpenRouter. With path: load the specified `.attocode/swarm.yaml` config file.
+- **`--swarm-resume ID`** — Resume a swarm session from its last checkpoint. Implicitly enables swarm mode.
+- **`--paid-only`** — Filter out free-tier models in swarm mode. Automatically switches throttle preset to `paid`.
+- **`--yolo`** — Shorthand for `--permission yolo`.
+
+#### TUI — Swarm Status Panel
+
+- **SwarmStatusPanel** (`src/tui/components/SwarmStatusPanel.tsx`) — New TUI panel showing live swarm execution status: current phase, wave progress bar with percentage, queue stats (ready/running/done/failed/skipped), active workers table (model, task description, elapsed time), and budget gauges (tokens + cost). Auto-hides when no swarm is active.
+- **Alt+W keyboard shortcut** — Toggle swarm panel visibility.
+- **Swarm event messages** — All swarm events (wave start/complete, task dispatched/completed/failed, quality rejections, errors) displayed as `[SWARM]` system messages in the TUI message stream.
+
+#### Trace Dashboard — Swarm Visualization
+
+- **SwarmDashboardPage** (`tools/trace-dashboard/src/pages/SwarmDashboardPage.tsx`) — Full-page live swarm visualization with responsive layout. Auto-connects when a swarm starts; shows idle placeholder otherwise.
+- **SwarmHistoryPage** (`tools/trace-dashboard/src/pages/SwarmHistoryPage.tsx`) — Browse and review previous swarm sessions from trace files.
+- **14 dashboard components** — `SwarmHeader`, `MetricsStrip`, `WaveProgressStrip`, `TaskDAGPanel` (interactive dependency graph), `TaskNode`, `TaskInspector` (click-to-inspect task details), `WorkerTimelinePanel` (Gantt-style parallel execution), `BudgetPanel` (radial gauges), `ModelDistributionPanel`, `QualityHeatmapPanel`, `EventFeedPanel` (scrolling event log), `EventRow`, `HierarchyPanel`, `ExpandablePanel`.
+- **SSE live streaming** (`tools/trace-dashboard/src/api/routes/swarm-live.ts`) — Server-Sent Events endpoint streaming swarm events in real-time.
+- **Swarm watcher** (`tools/trace-dashboard/src/api/swarm-watcher.ts`) — Polls JSONL event files for new entries and feeds connected SSE clients.
+- **useSwarmStream hook** (`tools/trace-dashboard/src/hooks/useSwarmStream.ts`) — React hook managing SSE connection lifecycle, state updates, reconnection, and idle detection.
+- **Swarm type library** (`tools/trace-dashboard/src/lib/swarm-types.ts`) — Shared type definitions for dashboard state management.
+- **Navigation** — New "Swarm" nav link in the dashboard header routing to `/swarm` and `/swarm/history`.
+
+#### Provider Enhancements
+
+- **Reasoning/thinking content extraction** — OpenRouter provider now extracts `reasoning` and `reasoning_content` fields from model responses (used by DeepSeek-R1, GLM-4, QwQ, and other reasoning models). Exposed as `ChatResponse.thinking` across the provider interface.
+- **Thinking-only response handling** — Main agent loop now handles responses with thinking but no visible content. Gives one targeted nudge ("provide your answer based on your analysis"), then accepts thinking as content on second attempt. Prevents infinite empty-response retries with reasoning models.
+- **Rate limit info extraction** — OpenRouter provider extracts `X-RateLimit-Remaining`, `X-RateLimit-Remaining-Tokens`, and `X-RateLimit-Reset` headers into `ChatResponse.rateLimitInfo`. Used by the swarm throttle for proactive adjustment.
+- **Pre-flight key check** — `OpenRouterProvider.checkKeyInfo()` queries `/api/v1/key` to detect free-tier keys and low credit balances before swarm execution starts.
+- **Enhanced 429 retry logic** (`src/providers/resilient-fetch.ts`) — Rate limit errors now get extra retry budget (`maxRetriesFor429`, default: +2 beyond `maxRetries`). Uses steeper exponential backoff (3^n instead of 2^n base) with ±25% jitter to give rate limit windows more recovery time.
+
+#### Init Command
+
+- **`attocode init` now scaffolds `swarm.yaml`** — The `/init` command creates `.attocode/swarm.yaml` with all swarm config options commented out alongside the existing `config.json` and `rules.md`.
+
+#### Documentation
+
+- **Comprehensive swarm guide** (`docs/swarm/`) — 8 new documentation files:
+  - `README.md` — Hub page linking all guides and examples
+  - `how-it-works.md` — Deep dive: normal mode vs swarm, 8-phase pipeline, wave execution, hierarchy, budget management
+  - `getting-started.md` — Tutorial: first run, understanding output, when to use swarm vs normal mode, decision flowchart
+  - `configuration-guide.md` — Every config option with defaults, purpose, and examples
+  - `advanced/architecture-deep-dive.md` — Event system, budget pool math, circuit breaker, token bucket throttling, checkpoint format, event bridge pipeline
+  - `advanced/model-selection.md` — Auto-detection flow, capability matching, health tracking, failover, hardcoded fallbacks
+  - `advanced/dashboard.md` — All dashboard panels, real-time SSE architecture, commands
+- **5 annotated example configs** (`docs/swarm/examples/`):
+  - `minimal.yaml` — Zero-config auto-detection
+  - `free-tier.yaml` — Conservative rate limits, persistence
+  - `paid-fast.yaml` — Max parallelism, generous budget
+  - `quality-focused.yaml` — Strict hierarchy with manager + judge
+  - `resume-friendly.yaml` — Checkpointing for long-running tasks
+
+#### Tests
+
+- **9 new test files** with comprehensive swarm coverage:
+  - `tests/swarm/config-loader.test.ts` — YAML parsing, nested objects, arrays, multiline strings, config merge
+  - `tests/swarm/model-selector.test.ts` — Auto-detection, capability matching, provider diversity
+  - `tests/swarm/model-failover.test.ts` — Health tracking, failover selection, unhealthy model handling
+  - `tests/swarm/request-throttle.test.ts` — Token bucket, FIFO ordering, adaptive backoff, recovery
+  - `tests/swarm/swarm-budget.test.ts` — Budget pool split, per-worker caps, capacity checks
+  - `tests/swarm/task-queue.test.ts` — Wave scheduling, task lifecycle, fix-up injection, checkpoint/restore
+  - `tests/swarm/types.test.ts` — Type conversions, defaults, capability mapping
+  - `tests/swarm/state-persistence.test.ts` — Checkpoint save/load, resume flow
+  - `tests/swarm/worker-prompts.test.ts` — Philosophy injection, persona layering, tool filtering
+- **OpenRouter provider tests** — New tests for reasoning content extraction (`reasoning`/`reasoning_content` fields), null content handling, rate limit info extraction from headers, and `chatWithTools` reasoning support.
+
+### Changed
+
+- **Provider types** (`src/providers/types.ts`) — `ChatResponse` interface extended with `thinking?: string` for reasoning content and `rateLimitInfo?: { remainingRequests, remainingTokens, resetSeconds }` for rate limit headers. `content` field in OpenRouter response type widened from `string` to `string | null` to handle thinking-only responses.
+- **ProviderAdapter** (`src/adapters.ts`) — Now passes through `thinking` field from provider responses to the production agent.
+- **Agent types** (`src/types.ts`) — `ProductionAgentConfig` extended with `swarm?: SwarmConfig | false`. `AgentEvent` union extended with `SwarmEvent` types for TUI event forwarding.
+- **Agent main loop** (`src/agent.ts`) — `run()` now checks for `swarmOrchestrator` before falling through to planning/direct execution. New `runSwarm()` method handles the full swarm lifecycle including event bridge setup and cleanup.
+- **Assistant message format** — Messages now include `metadata.thinking` when reasoning content is present. `lastResponse` falls back to thinking content when visible content is empty.
+- **Subagent spawn dedup bypass** — Swarm workers (agents named `swarm-*`) skip the duplicate spawn prevention check, since the orchestrator handles retry logic at the task level.
+- **Subagent execution policy** — Subagents now get `defaultPolicy: 'allow'` since they're already constrained to their registered tool set and the parent's `'prompt'` policy can't work without `humanInLoop`.
+- **Resilient fetch** (`src/providers/resilient-fetch.ts`) — `NetworkConfig` extended with `maxRetriesFor429` (default: 2). Retry loop uses `maxRetries + maxRetriesFor429` for 429 errors with steeper 3^n backoff.
+- **Config builder** (`src/defaults.ts`) — `buildConfig()` now includes `swarm` field from user config.
+- **Integrations barrel** (`src/integrations/index.ts`) — 47 new exports for the entire swarm module (types, classes, factories, constants).
+- **LearningStore** (`src/integrations/learning-store.ts`) — Now creates parent directories with `mkdirSync(recursive: true)` before opening the SQLite database, preventing ENOENT errors when the `.agent/` directory doesn't exist yet.
+- **SmartDecomposer** (`src/integrations/smart-decomposer.ts`) — Falls back to heuristic decomposition when LLM returns 0 subtasks instead of propagating an empty result.
+- **REPL mode** (`src/modes/repl.ts`) — Accepts and passes through `swarm` config option.
+- **TUI mode** (`src/modes/tui.tsx`) — Accepts and passes through `swarm` config option.
+- **Dashboard tailwind config** — Extended with swarm-specific color palette entries.
+- **Existing swarm-mode.md** — Added link to the new comprehensive guide at the top.
+
 ## [0.1.9] - 2026-02-06
 
 ### Added
@@ -195,7 +313,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Sandbox execution for bash commands (macOS Seatbelt)
 - Dangerous operation blocking in strict mode
 
-[Unreleased]: https://github.com/eren23/attocode/compare/v0.1.8...HEAD
+[Unreleased]: https://github.com/eren23/attocode/compare/v0.2.0...HEAD
+[0.2.0]: https://github.com/eren23/attocode/compare/v0.1.9...v0.2.0
+[0.1.9]: https://github.com/eren23/attocode/compare/v0.1.8...v0.1.9
 [0.1.8]: https://github.com/eren23/attocode/compare/v0.1.7...v0.1.8
 [0.1.7]: https://github.com/eren23/attocode/compare/v0.1.6...v0.1.7
 [0.1.6]: https://github.com/eren23/attocode/compare/v0.1.5...v0.1.6
