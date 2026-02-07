@@ -63,6 +63,7 @@ export interface REPLOptions {
   maxIterations?: number;
   model?: string;
   trace?: boolean;
+  swarm?: import('../integrations/swarm/types.js').SwarmConfig;
 }
 
 /**
@@ -77,6 +78,7 @@ export async function startProductionREPL(
     maxIterations = 50,
     model,
     trace = false,
+    swarm,
   } = options;
 
   // Initialize OpenRouter model cache (for context limits + pricing)
@@ -202,6 +204,7 @@ export async function startProductionREPL(
     hooks: { enabled: true },
     plugins: { enabled: true },
     lsp: { enabled: true, autoDetect: true },
+    swarm: swarm || false,
   });
 
   // Subscribe to events

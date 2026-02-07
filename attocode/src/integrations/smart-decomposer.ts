@@ -306,6 +306,14 @@ export class SmartDecomposer {
         subtasks = this.convertLLMResult(llmResult);
         strategy = llmResult.strategy;
         llmAssisted = true;
+
+        // C2: Fall back to heuristic if LLM returned 0 subtasks
+        if (subtasks.length === 0) {
+          const heuristicResult = this.decomposeHeuristic(task, context);
+          subtasks = heuristicResult.subtasks;
+          strategy = heuristicResult.strategy;
+          llmAssisted = false;
+        }
       } catch {
         // Fall back to heuristic decomposition
         const heuristicResult = this.decomposeHeuristic(task, context);

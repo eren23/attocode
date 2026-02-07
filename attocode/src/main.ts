@@ -70,6 +70,97 @@ import {
   formatHealthReport,
 } from './integrations/health-check.js';
 
+// Swarm mode support
+import { DEFAULT_SWARM_CONFIG, autoDetectWorkerModels, type SwarmConfig } from './integrations/swarm/index.js';
+import { loadSwarmYamlConfig, parseSwarmYaml, yamlToSwarmConfig, mergeSwarmConfigs } from './integrations/swarm/swarm-config-loader.js';
+import { readFileSync } from 'node:fs';
+
+/**
+ * Build a SwarmConfig from CLI args.
+ * V3: Supports YAML configs with merge order: DEFAULT < yaml < CLI.
+ */
+async function buildSwarmConfig(
+  swarmArg: boolean | string,
+  orchestratorModel: string,
+  resumeSessionId?: string,
+  paidOnly?: boolean,
+): Promise<SwarmConfig> {
+  let yamlConfig: Partial<SwarmConfig> | null = null;
+
+  if (typeof swarmArg === 'string') {
+    // Explicit config file path
+    try {
+      const content = readFileSync(swarmArg, 'utf-8');
+      if (swarmArg.endsWith('.json')) {
+        // JSON: direct parse as SwarmConfig partial
+        yamlConfig = JSON.parse(content) as Partial<SwarmConfig>;
+      } else {
+        // YAML: parse and map
+        const parsed = parseSwarmYaml(content);
+        yamlConfig = yamlToSwarmConfig(parsed, orchestratorModel);
+      }
+    } catch (err) {
+      console.warn(`[Swarm] Failed to load config from ${swarmArg}: ${(err as Error).message}`);
+    }
+  } else {
+    // Auto-load: try .attocode/swarm.yaml, then ~/.attocode/swarm.yaml
+    const rawYaml = loadSwarmYamlConfig();
+    if (rawYaml) {
+      yamlConfig = yamlToSwarmConfig(rawYaml, orchestratorModel);
+    }
+  }
+
+  // Merge: DEFAULT < yaml < CLI
+  const config = mergeSwarmConfigs(DEFAULT_SWARM_CONFIG, yamlConfig, {
+    paidOnly,
+    orchestratorModel,
+    resumeSessionId,
+  });
+
+  // V3: Pre-flight key check for rate limit awareness
+  const apiKey = process.env.OPENROUTER_API_KEY;
+  if (apiKey) {
+    try {
+      const { OpenRouterProvider } = await import('./providers/adapters/openrouter.js');
+      const keyInfo = await OpenRouterProvider.checkKeyInfo(apiKey);
+      if (keyInfo.isPaid === false && !config.paidOnly) {
+        console.log('[Swarm] Free-tier API key detected — throttle will auto-adjust.');
+      }
+      if (keyInfo.creditsRemaining !== undefined && keyInfo.creditsRemaining < 0.5) {
+        console.warn(`[Swarm] Low credits remaining: $${keyInfo.creditsRemaining.toFixed(2)}`);
+      }
+    } catch {
+      // Non-fatal: continue without key info
+    }
+  }
+
+  // Auto-detect workers if none configured
+  if (config.workers.length === 0) {
+    if (apiKey) {
+      try {
+        config.workers = await autoDetectWorkerModels({
+          apiKey,
+          orchestratorModel,
+          paidOnly: config.paidOnly,
+        });
+      } catch {
+        // Fall through to hardcoded fallback
+      }
+    }
+
+    // If still no workers, use hardcoded fallback
+    if (config.workers.length === 0) {
+      config.workers = await autoDetectWorkerModels({
+        apiKey: '',
+        orchestratorModel,
+        paidOnly: config.paidOnly,
+      });
+    }
+  }
+
+  return config;
+}
+
 // =============================================================================
 // MAIN
 // =============================================================================
@@ -235,12 +326,16 @@ async function main(): Promise<void> {
     const tools = convertToolsFromRegistry(registry);
     const adaptedProvider = new ProviderAdapter(provider, resolvedModel);
 
+    // Build swarm config if --swarm flag is set
+    const swarmConfig = args.swarm ? await buildSwarmConfig(args.swarm, resolvedModel, args.swarmResume, args.paidOnly) : undefined;
+
     const agent = createProductionAgent({
       provider: adaptedProvider,
       tools,
       model: resolvedModel,
       maxIterations: args.maxIterations,
       humanInLoop: false, // Disable for non-interactive
+      swarm: swarmConfig || false,
       observability: args.trace ? {
         enabled: true,
         traceCapture: {
@@ -281,6 +376,7 @@ async function main(): Promise<void> {
         model: resolvedModel,
         trace: args.trace,
         theme: args.theme,
+        swarm: args.swarm ? await buildSwarmConfig(args.swarm, resolvedModel, args.swarmResume, args.paidOnly) : undefined,
       });
     } else {
       await startProductionREPL(provider, {
@@ -288,6 +384,7 @@ async function main(): Promise<void> {
         maxIterations: args.maxIterations,
         model: resolvedModel,
         trace: args.trace,
+        swarm: args.swarm ? await buildSwarmConfig(args.swarm, resolvedModel, args.swarmResume, args.paidOnly) : undefined,
       });
     }
   }

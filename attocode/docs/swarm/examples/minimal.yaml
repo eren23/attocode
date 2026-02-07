@@ -1,0 +1,16 @@
+# Minimal Swarm Config
+#
+# The simplest possible configuration — just enable swarm mode
+# and let auto-detection handle everything else.
+#
+# Workers are auto-detected from OpenRouter (cheapest models with tool support).
+# All other settings use defaults.
+#
+# Usage:
+#   attocode --swarm .attocode/swarm.yaml "Build a REST API"
+
+# That's it! No other settings needed.
+# The orchestrator model comes from --model flag.
+# Workers are auto-detected from OpenRouter.
+# Budget defaults: 5M tokens, $10 cost cap.
+# Throttle defaults to free-tier rate limits.

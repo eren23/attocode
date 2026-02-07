@@ -224,6 +224,9 @@ export interface ProductionAgentConfig {
   /** Subagent configuration (timeout and iteration limits) */
   subagent?: SubagentConfig | false;
 
+  /** Swarm mode configuration (orchestrator + workers) */
+  swarm?: import('./integrations/swarm/types.js').SwarmConfig | false;
+
   /** Provider-level resilience (circuit breaker, fallback chain) */
   providerResilience?: ProviderResilienceConfig | false;
 
@@ -1275,6 +1278,8 @@ export type AgentEvent =
   // Task system events (Claude Code-style)
   | { type: 'task.created'; task: { id: string; subject: string; status: string } }
   | { type: 'task.updated'; task: { id: string; subject: string; status: string } }
-  | { type: 'task.deleted'; taskId: string };
+  | { type: 'task.deleted'; taskId: string }
+  // Swarm mode events (M8: use union with canonical SwarmEvent type)
+  | import('./integrations/swarm/swarm-events.js').SwarmEvent;
 
 export type AgentEventListener = (event: AgentEvent) => void;

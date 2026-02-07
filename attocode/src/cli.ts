@@ -41,6 +41,12 @@ export interface CLIArgs {
   version: boolean;
   debug: boolean;
   init: boolean;
+  /** Swarm mode: true for defaults, string for config file path */
+  swarm?: boolean | string;
+  /** Resume a swarm session by ID */
+  swarmResume?: string;
+  /** Use only paid models in swarm mode (no free tier) */
+  paidOnly?: boolean;
 }
 
 /**
@@ -85,8 +91,24 @@ export function parseArgs(): CLIArgs {
       result.model = args[++i];
     } else if (arg === '--permission' || arg === '-p') {
       result.permission = args[++i] as PermissionMode;
+    } else if (arg === '--yolo') {
+      result.permission = 'yolo';
     } else if (arg === '--max-iterations' || arg === '-i') {
       result.maxIterations = parseInt(args[++i], 10);
+    } else if (arg === '--swarm') {
+      // --swarm or --swarm path/to/config.yaml
+      const next = args[i + 1];
+      if (next && !next.startsWith('-') && (next.endsWith('.yaml') || next.endsWith('.yml') || next.endsWith('.json'))) {
+        result.swarm = args[++i];
+      } else {
+        result.swarm = true;
+      }
+    } else if (arg === '--swarm-resume') {
+      result.swarmResume = args[++i];
+      // Implicitly enable swarm mode
+      if (!result.swarm) result.swarm = true;
+    } else if (arg === '--paid-only') {
+      result.paidOnly = true;
     } else if (arg === '--task' || arg === '-t') {
       result.task = args.slice(i + 1).join(' ');
       break;
@@ -129,8 +151,14 @@ ${c('OPTIONS:', 'bold')}
                             interactive - Ask for dangerous ops (default)
                             auto-safe   - Auto-approve safe ops
                             yolo        - Auto-approve everything
+  --yolo                  Shorthand for --permission yolo
   -i, --max-iterations N  Max agent iterations (default: 50)
   -t, --task TASK         Run single task non-interactively
+  --swarm [CONFIG]        Swarm mode: orchestrator + worker models
+                            Without arg: auto-detect worker models
+                            With path: load .attocode/swarm.yaml
+  --swarm-resume ID       Resume a swarm session from checkpoint
+  --paid-only             Use only paid models in swarm (no free tier)
 
 ${c('INTERFACE OPTIONS:', 'bold')}
   --tui                   Force TUI mode (rich Ink-based interface)
@@ -151,6 +179,15 @@ ${c('EXAMPLES:', 'bold')}
 
   ${c('# With specific model', 'dim')}
   attocode -m anthropic/claude-sonnet-4 "Explain this code"
+
+  ${c('# Swarm mode (orchestrator + worker models)', 'dim')}
+  attocode --swarm "Build a recursive descent parser"
+
+  ${c('# Swarm with approval for dangerous ops only', 'dim')}
+  attocode --swarm --permission auto-safe "Implement login"
+
+  ${c('# Swarm with custom config and paid models only', 'dim')}
+  attocode --swarm .attocode/swarm.yaml --paid-only "Refactor auth module"
 
   ${c('# Force legacy mode with tracing', 'dim')}
   attocode --legacy --trace

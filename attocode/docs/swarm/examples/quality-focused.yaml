@@ -1,0 +1,71 @@
+# Quality-Focused Swarm Config
+#
+# Strict quality gates with explicit manager + judge hierarchy.
+# Prioritizes correctness over speed.
+#
+# Usage:
+#   attocode --swarm .attocode/swarm.yaml "Refactor payment processing module"
+
+philosophy: |
+  Correctness is the top priority. Write defensive code.
+  All changes must have tests. Handle edge cases explicitly.
+  Follow SOLID principles and existing patterns.
+
+# Explicit worker definitions for control over model assignments
+workers:
+  - name: coder
+    model: anthropic/claude-sonnet-4
+    capabilities: [code, refactor]
+    persona: "You are a senior engineer. Focus on correctness and edge cases."
+  - name: coder-alt
+    model: google/gemini-2.0-flash-001
+    capabilities: [code, refactor]
+    persona: "You are a careful developer. Double-check your work."
+  - name: tester
+    model: anthropic/claude-sonnet-4
+    capabilities: [test]
+    persona: "You are a QA expert. Write thorough tests covering edge cases and error paths."
+  - name: researcher
+    model: google/gemini-2.0-flash-001
+    capabilities: [research, review]
+    persona: "You are a code analyst. Identify potential issues and patterns."
+
+# Dedicated manager and judge models for quality control
+hierarchy:
+  manager:
+    model: anthropic/claude-sonnet-4
+    persona: "You are a strict tech lead. Reject work that doesn't meet acceptance criteria. Focus on correctness, test coverage, and error handling."
+  judge:
+    model: google/gemini-2.0-flash-001
+    persona: "You are a quality assurance expert. Score outputs strictly. Only pass work that fully meets requirements."
+
+# Moderate budget with strict per-worker limits
+budget:
+  total_tokens: 3000000
+  max_cost: 3.00
+  max_tokens_per_worker: 40000
+  max_concurrency: 3
+  dispatch_stagger_ms: 500
+
+# Quality gates are critical in this config
+quality:
+  enabled: true
+
+# Allow retries since quality gates may reject first attempts
+resilience:
+  worker_retries: 2
+  rate_limit_retries: 3
+  model_failover: true
+
+# Full context sharing for quality
+communication:
+  blackboard: true
+  dependency_context_max_length: 4000
+  include_file_list: true
+
+# All verification features enabled
+features:
+  planning: true
+  wave_review: true
+  verification: true
+  persistence: true

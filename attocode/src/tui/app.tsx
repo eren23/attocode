@@ -12,6 +12,8 @@ import { useState, useCallback, useEffect, memo, useRef, useMemo } from 'react';
 import { Box, Text, useApp, useInput, Static } from 'ink';
 import { ActiveAgentsPanel, type ActiveAgent, type ActiveAgentStatus } from './components/ActiveAgentsPanel.js';
 import { TasksPanel } from './components/TasksPanel.js';
+import { SwarmStatusPanel } from './components/SwarmStatusPanel.js';
+import type { SwarmStatus } from '../integrations/swarm/types.js';
 import { ToolCallItem, type ToolCallDisplayItem as ImportedToolCallDisplayItem } from './components/ToolCallItem.js';
 import { DebugPanel, useDebugBuffer } from './components/DebugPanel.js';
 import type { Task } from '../integrations/task-manager.js';
@@ -165,6 +167,7 @@ interface MemoizedInputAreaProps {
   onToggleActiveAgents?: () => void;
   onToggleTasks?: () => void;
   onToggleDebug?: () => void;
+  onToggleSwarm?: () => void;
   onPageUp?: () => void;
   onPageDown?: () => void;
   onHome?: () => void;
@@ -202,6 +205,7 @@ const MemoizedInputArea = memo(function MemoizedInputArea({
   onToggleActiveAgents,
   onToggleTasks,
   onToggleDebug,
+  onToggleSwarm,
   onPageUp,
   onPageDown,
   onHome,
@@ -231,7 +235,7 @@ const MemoizedInputArea = memo(function MemoizedInputArea({
   // Store callbacks in refs so useInput doesn't re-subscribe on prop changes
   const callbacksRef = useRef({
     onSubmit, onCtrlC, onCtrlL, onCtrlP, onEscape,
-    onToggleToolExpand, onToggleThinking, onToggleTransparency, onToggleActiveAgents, onToggleTasks, onToggleDebug,
+    onToggleToolExpand, onToggleThinking, onToggleTransparency, onToggleActiveAgents, onToggleTasks, onToggleDebug, onToggleSwarm,
     onPageUp, onPageDown, onHome, onEnd,
     commandPaletteOpen, onCommandPaletteInput,
     approvalDialogOpen, approvalDenyReasonMode,
@@ -241,7 +245,7 @@ const MemoizedInputArea = memo(function MemoizedInputArea({
   });
   callbacksRef.current = {
     onSubmit, onCtrlC, onCtrlL, onCtrlP, onEscape,
-    onToggleToolExpand, onToggleThinking, onToggleTransparency, onToggleActiveAgents, onToggleTasks, onToggleDebug,
+    onToggleToolExpand, onToggleThinking, onToggleTransparency, onToggleActiveAgents, onToggleTasks, onToggleDebug, onToggleSwarm,
     onPageUp, onPageDown, onHome, onEnd,
     commandPaletteOpen, onCommandPaletteInput,
     approvalDialogOpen, approvalDenyReasonMode,
@@ -300,6 +304,11 @@ const MemoizedInputArea = memo(function MemoizedInputArea({
     // Alt+D / Option+D - Toggle debug panel
     if (input === '\u2202' || (key.meta && input === 'd')) {
       cb.onToggleDebug?.();
+      return;
+    }
+    // Alt+W / Option+W - Toggle swarm panel
+    if (input === '\u2211' || (key.meta && input === 'w')) {
+      cb.onToggleSwarm?.();
       return;
     }
 
@@ -562,6 +571,10 @@ export function TUIApp({
   const [activeAgentsExpanded, setActiveAgentsExpanded] = useState(true);
   const [tasksExpanded, setTasksExpanded] = useState(true);
   const [debugExpanded, setDebugExpanded] = useState(false);
+  const [swarmExpanded, setSwarmExpanded] = useState(true);
+
+  // Swarm status tracking (for Swarm Status Panel)
+  const [swarmStatus, setSwarmStatus] = useState<SwarmStatus | null>(null);
 
   // Active agents tracking (for Active Agents Panel)
   const [activeAgents, setActiveAgents] = useState<ActiveAgent[]>([]);
@@ -963,6 +976,65 @@ export function TUIApp({
       return;
     }
 
+    // Swarm events - update Swarm Status Panel
+    if (event.type === 'swarm.status') {
+      const e = event as { status: SwarmStatus };
+      setSwarmStatus(e.status);
+      return;
+    }
+    if (event.type === 'swarm.start') {
+      const e = event as { taskCount: number; waveCount: number };
+      addMessage('system', `[SWARM] Starting: ${e.taskCount} tasks in ${e.waveCount} waves`);
+      return;
+    }
+    if (event.type === 'swarm.wave.start') {
+      const e = event as { wave: number; totalWaves: number; taskCount: number };
+      addMessage('system', `[SWARM] Wave ${e.wave}/${e.totalWaves}: dispatching ${e.taskCount} tasks`);
+      return;
+    }
+    if (event.type === 'swarm.wave.complete') {
+      const e = event as { wave: number; totalWaves: number; completed: number; failed: number; skipped: number };
+      addMessage('system', `[SWARM] Wave ${e.wave}/${e.totalWaves} complete: ${e.completed} done${e.failed > 0 ? `, ${e.failed} failed` : ''}${e.skipped > 0 ? `, ${e.skipped} skipped` : ''}`);
+      return;
+    }
+    if (event.type === 'swarm.task.dispatched') {
+      const e = event as { taskId: string; workerName: string; model: string; description: string };
+      addMessage('system', `[SWARM] ${e.taskId} -> ${e.workerName} (${e.model.split('/').pop()}): ${e.description.slice(0, 80)}`);
+      return;
+    }
+    if (event.type === 'swarm.task.completed') {
+      const e = event as { taskId: string; success: boolean; tokensUsed: number; costUsed: number; durationMs: number };
+      addMessage('system', `[SWARM] ${e.taskId} ${e.success ? 'completed' : 'failed'} (${(e.tokensUsed / 1000).toFixed(1)}k tokens, $${e.costUsed.toFixed(4)}, ${(e.durationMs / 1000).toFixed(1)}s)`);
+      return;
+    }
+    if (event.type === 'swarm.task.failed') {
+      const e = event as { taskId: string; error: string; willRetry: boolean };
+      addMessage('system', `[SWARM] ${e.taskId} failed: ${e.error}${e.willRetry ? ' (will retry)' : ''}`);
+      return;
+    }
+    if (event.type === 'swarm.task.skipped') {
+      const e = event as { taskId: string; reason: string };
+      addMessage('system', `[SWARM] ${e.taskId} skipped: ${e.reason}`);
+      return;
+    }
+    if (event.type === 'swarm.quality.rejected') {
+      const e = event as { taskId: string; score: number; feedback: string };
+      addMessage('system', `[SWARM] ${e.taskId} quality rejected (${e.score}/5): ${e.feedback.slice(0, 100)}`);
+      return;
+    }
+    if (event.type === 'swarm.complete') {
+      const e = event as { stats: { totalTasks: number; completedTasks: number; failedTasks: number; totalTokens: number; totalCost: number } };
+      addMessage('system', `[SWARM] Complete: ${e.stats.completedTasks}/${e.stats.totalTasks} tasks, ${(e.stats.totalTokens / 1000).toFixed(0)}k tokens, $${e.stats.totalCost.toFixed(4)}`);
+      // Clear swarm status after completion (leave panel visible briefly)
+      setTimeout(() => setSwarmStatus(null), 5000);
+      return;
+    }
+    if (event.type === 'swarm.error') {
+      const e = event as { error: string; phase: string };
+      addMessage('error', `[SWARM ERROR] ${e.phase}: ${e.error}`);
+      return;
+    }
+
     // -------------------------------------------------------------------------
     // Processing-only events (normal message submission)
     // -------------------------------------------------------------------------
@@ -1144,6 +1216,7 @@ export function TUIApp({
           '  Alt+I       Toggle transparency panel',
           '  Alt+K       Toggle tasks panel',
           '  Alt+D       Toggle debug panel',
+          '  Alt+W       Toggle swarm panel',
           '========================',
         ].join('\n'));
         return;
@@ -2239,6 +2312,10 @@ export function TUIApp({
     });
   }, [addMessage]);
 
+  const handleToggleSwarm = useCallback(() => {
+    setSwarmExpanded(prev => !prev);
+  }, []);
+
   // Update context tokens
   useEffect(() => {
     const agentState = agent.getState();
@@ -2385,6 +2462,13 @@ export function TUIApp({
           expanded={activeAgentsExpanded}
         />
 
+        {/* Swarm Status Panel (visible when swarm mode is active) */}
+        <SwarmStatusPanel
+          status={swarmStatus}
+          colors={colors}
+          expanded={swarmExpanded}
+        />
+
         <MemoizedInputArea
           onSubmit={handleSubmit}
           disabled={isProcessing || !!pendingApproval}
@@ -2401,6 +2485,7 @@ export function TUIApp({
           onToggleActiveAgents={handleToggleActiveAgents}
           onToggleTasks={handleToggleTasks}
           onToggleDebug={handleToggleDebug}
+          onToggleSwarm={handleToggleSwarm}
           commandPaletteOpen={commandPaletteOpen}
           onCommandPaletteInput={handleCommandPaletteInput}
           approvalDialogOpen={!!pendingApproval}

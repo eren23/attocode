@@ -55,6 +55,7 @@ export interface TUIModeOptions {
   model?: string;
   trace?: boolean;
   theme?: 'dark' | 'light' | 'auto';
+  swarm?: import('../integrations/swarm/types.js').SwarmConfig;
 }
 
 /**
@@ -71,6 +72,7 @@ export async function startTUIMode(
     model,
     trace = false,
     theme = 'auto',
+    swarm,
   } = options;
 
   try {
@@ -222,6 +224,8 @@ export async function startTUIMode(
       observability: trace
         ? { enabled: true, traceCapture: { enabled: true, outputDir: '.traces' }, logging: { enabled: false } }
         : undefined,
+      // Swarm mode (experimental)
+      swarm: swarm || false,
       // Hooks: Only enable console output in debug mode
       hooks: {
         enabled: true,

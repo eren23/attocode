@@ -336,6 +336,122 @@ describe('OpenRouterProvider', () => {
       expect(globalThis.fetch).toHaveBeenCalled();
     });
   });
+
+  describe('reasoning content extraction', () => {
+    it('should extract reasoning field into thinking', async () => {
+      const mockResponse = {
+        choices: [
+          {
+            message: {
+              content: 'The answer is 42.',
+              reasoning: 'Let me think step by step about the meaning of life...',
+            },
+            finish_reason: 'stop',
+          },
+        ],
+        usage: { prompt_tokens: 10, completion_tokens: 50 },
+      };
+
+      globalThis.fetch = mockFetch(mockResponse);
+      const provider = new OpenRouterProvider();
+
+      const response = await provider.chat([{ role: 'user', content: 'What is the answer?' }]);
+
+      expect(response.content).toBe('The answer is 42.');
+      expect(response.thinking).toBe('Let me think step by step about the meaning of life...');
+    });
+
+    it('should extract reasoning_content as alias', async () => {
+      const mockResponse = {
+        choices: [
+          {
+            message: {
+              content: 'Result here.',
+              reasoning_content: 'Internal reasoning via reasoning_content field...',
+            },
+            finish_reason: 'stop',
+          },
+        ],
+        usage: { prompt_tokens: 10, completion_tokens: 30 },
+      };
+
+      globalThis.fetch = mockFetch(mockResponse);
+      const provider = new OpenRouterProvider();
+
+      const response = await provider.chat([{ role: 'user', content: 'Test' }]);
+
+      expect(response.thinking).toBe('Internal reasoning via reasoning_content field...');
+    });
+
+    it('should return undefined thinking when no reasoning', async () => {
+      const mockResponse = {
+        choices: [
+          {
+            message: { content: 'Normal response.' },
+            finish_reason: 'stop',
+          },
+        ],
+        usage: { prompt_tokens: 10, completion_tokens: 5 },
+      };
+
+      globalThis.fetch = mockFetch(mockResponse);
+      const provider = new OpenRouterProvider();
+
+      const response = await provider.chat([{ role: 'user', content: 'Hello' }]);
+
+      expect(response.content).toBe('Normal response.');
+      expect(response.thinking).toBeUndefined();
+    });
+
+    it('should handle null content with reasoning in chatWithTools', async () => {
+      const mockResponse = {
+        choices: [
+          {
+            message: {
+              content: null,
+              reasoning: 'The model reasoned extensively but produced no visible output...',
+            },
+            finish_reason: 'stop',
+          },
+        ],
+        usage: { prompt_tokens: 20, completion_tokens: 100 },
+      };
+
+      globalThis.fetch = mockFetch(mockResponse);
+      const provider = new OpenRouterProvider();
+
+      const response = await provider.chatWithTools(
+        [{ role: 'user', content: 'Analyze this' }],
+        {}
+      );
+
+      expect(response.content).toBe('');
+      expect(response.thinking).toBe('The model reasoned extensively but produced no visible output...');
+    });
+
+    it('should prefer reasoning over reasoning_content', async () => {
+      const mockResponse = {
+        choices: [
+          {
+            message: {
+              content: 'Answer.',
+              reasoning: 'Primary reasoning field',
+              reasoning_content: 'Fallback reasoning field',
+            },
+            finish_reason: 'stop',
+          },
+        ],
+        usage: { prompt_tokens: 10, completion_tokens: 20 },
+      };
+
+      globalThis.fetch = mockFetch(mockResponse);
+      const provider = new OpenRouterProvider();
+
+      const response = await provider.chat([{ role: 'user', content: 'Test' }]);
+
+      expect(response.thinking).toBe('Primary reasoning field');
+    });
+  });
 });
 
 // =============================================================================

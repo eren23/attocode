@@ -11,6 +11,7 @@ import { logger } from 'hono/logger';
 import { serveStatic } from '@hono/node-server/serve-static';
 import { sessionsRoutes } from './routes/sessions.js';
 import { compareRoutes } from './routes/compare.js';
+import { swarmLiveRoutes } from './routes/swarm-live.js';
 
 const app = new Hono();
 
@@ -27,6 +28,7 @@ app.use(
 // API routes
 app.route('/api/sessions', sessionsRoutes);
 app.route('/api/compare', compareRoutes);
+app.route('/api/swarm', swarmLiveRoutes);
 
 // Health check
 app.get('/api/health', (c) => {

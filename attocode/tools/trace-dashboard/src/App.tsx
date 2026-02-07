@@ -2,6 +2,8 @@ import { Routes, Route, Link, useLocation } from 'react-router-dom';
 import { SessionListPage } from './pages/SessionListPage';
 import { SessionDetailPage } from './pages/SessionDetailPage';
 import { ComparePage } from './pages/ComparePage';
+import { SwarmDashboardPage } from './pages/SwarmDashboardPage';
+import { SwarmHistoryPage } from './pages/SwarmHistoryPage';
 
 function NavLink({ to, children }: { to: string; children: React.ReactNode }) {
   const location = useLocation();
@@ -48,6 +50,7 @@ function App() {
               <nav className="ml-10 flex items-baseline space-x-4">
                 <NavLink to="/">Sessions</NavLink>
                 <NavLink to="/compare">Compare</NavLink>
+                <NavLink to="/swarm">Swarm</NavLink>
               </nav>
             </div>
             <div className="flex items-center space-x-4">
@@ -63,6 +66,8 @@ function App() {
           <Route path="/" element={<SessionListPage />} />
           <Route path="/session/:id" element={<SessionDetailPage />} />
           <Route path="/compare" element={<ComparePage />} />
+          <Route path="/swarm" element={<SwarmDashboardPage />} />
+          <Route path="/swarm/history" element={<SwarmHistoryPage />} />
         </Routes>
       </main>
     </div>

@@ -1,0 +1,49 @@
+# Paid Fast Swarm Config
+#
+# Uses paid models with maximum parallelism for speed.
+# Higher cost but significantly faster execution.
+#
+# Usage:
+#   attocode --swarm .attocode/swarm.yaml --paid-only "Implement auth system"
+
+philosophy: |
+  Write production-quality TypeScript with strict types.
+  Include comprehensive error handling. Write tests.
+
+# Paid models only — skip free tier entirely
+models:
+  paid_only: true
+
+# Paid-tier throttle (5 concurrent, 2 req/s, 200ms spacing)
+throttle: paid
+
+# Generous budget for speed
+budget:
+  total_tokens: 5000000
+  max_cost: 5.00
+  max_tokens_per_worker: 50000
+  max_concurrency: 5
+  dispatch_stagger_ms: 200
+
+# Quality gates with a capable model
+quality:
+  enabled: true
+
+# Minimal retries since paid models are reliable
+resilience:
+  worker_retries: 1
+  rate_limit_retries: 2
+  model_failover: true
+
+# Full communication
+communication:
+  blackboard: true
+  dependency_context_max_length: 4000
+  include_file_list: true
+
+# All features enabled
+features:
+  planning: true
+  wave_review: true
+  verification: true
+  persistence: true

@@ -1,0 +1,46 @@
+# Free-Tier Swarm Config
+#
+# Uses only free/cheap models with conservative rate limiting.
+# Good for experimentation and learning without spending money.
+#
+# Usage:
+#   attocode --swarm .attocode/swarm.yaml "Add unit tests for utils module"
+
+# Enforce coding standards across all workers
+philosophy: |
+  Write clean, simple code. Follow existing patterns.
+  Always run tests after making changes.
+
+# Use free-tier throttle (2 concurrent, 0.5 req/s, 1500ms spacing)
+throttle: free
+
+# Conservative budget to stay within free tier limits
+budget:
+  total_tokens: 1000000
+  max_cost: 0.10
+  max_tokens_per_worker: 20000
+  max_concurrency: 2
+  dispatch_stagger_ms: 2000
+
+# Keep quality gates but expect lower scores from free models
+quality:
+  enabled: true
+
+# More retries since free models are less reliable
+resilience:
+  worker_retries: 3
+  rate_limit_retries: 5
+  model_failover: true
+
+# Shared context helps cheaper models produce better results
+communication:
+  blackboard: true
+  dependency_context_max_length: 3000
+  include_file_list: true
+
+# Enable persistence so you can resume if rate limits exhaust
+features:
+  planning: true
+  wave_review: true
+  verification: true
+  persistence: true

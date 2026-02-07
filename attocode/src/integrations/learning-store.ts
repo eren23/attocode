@@ -36,6 +36,8 @@
  * ```
  */
 
+import { mkdirSync } from 'node:fs';
+import { dirname } from 'node:path';
 import Database from 'better-sqlite3';
 import {
   type FailureTracker,
@@ -255,6 +257,11 @@ export class LearningStore {
       maxLearnings: config.maxLearnings ?? 500,
       inMemory: config.inMemory ?? false,
     };
+
+    // Ensure parent directory exists
+    if (!this.config.inMemory) {
+      mkdirSync(dirname(this.config.dbPath), { recursive: true });
+    }
 
     // Initialize database
     this.db = new Database(this.config.inMemory ? ':memory:' : this.config.dbPath);
