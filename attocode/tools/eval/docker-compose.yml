@@ -1,15 +1,16 @@
 services:
   eval:
     build:
-      context: ../..  # Project root (attocode/)
+      context: .  # Resolved via --project-directory to project root
       dockerfile: tools/eval/Dockerfile
+    image: attocode-eval  # Tag the built image so dashboard can reuse it
     volumes:
-      # Persist eval results
-      - ./results:/app/tools/eval/results
+      # Persist eval results (paths relative to --project-directory)
+      - ./tools/eval/results:/app/tools/eval/results
       # Write traces to project root .traces/ for dashboard visibility
-      - ../../.traces:/app/.traces
+      - ./.traces:/app/.traces
       # Mount datasets for custom evaluation sets
-      - ./datasets:/app/tools/eval/datasets:ro
+      - ./tools/eval/datasets:/app/tools/eval/datasets:ro
     environment:
       # API keys (passed from host environment)
       - ANTHROPIC_API_KEY
@@ -27,15 +28,13 @@ services:
 
   # Convenience service to run the trace dashboard
   dashboard:
-    build:
-      context: ../..
-      dockerfile: tools/eval/Dockerfile
+    image: attocode-eval  # Reuse the eval image (no separate build)
     volumes:
-      - ../../.traces:/app/.traces:ro
-      - ./results:/app/tools/eval/results:ro
+      - ./.traces:/app/.traces:ro
+      - ./tools/eval/results:/app/tools/eval/results:ro
     ports:
-      - "3000:3000"  # Dashboard UI
-      - "4000:4000"  # Dashboard API
+      - "3000:5173"  # Vite dev server (host 3000 → container 5173)
+      - "4000:3001"  # Hono API server (host 4000 → container 3001)
     working_dir: /app/tools/trace-dashboard
     command: npm run dev
     environment:

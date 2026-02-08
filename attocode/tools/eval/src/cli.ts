@@ -5,16 +5,23 @@
  * Main entry point for running evaluations.
  *
  * Usage:
- *   npx tsx tools/eval/src/cli.ts run --dataset golden --model claude-3-5-sonnet
- *   npx tsx tools/eval/src/cli.ts compare results/run-a.json results/run-b.json
- *   npx tsx tools/eval/src/cli.ts list --dataset golden
+ *   npm run eval -- run --dataset golden --model claude-3-5-sonnet
+ *   npm run eval -- compare results/run-a.json results/run-b.json
+ *   npm run eval -- list --dataset golden
  */
 
 import type { EvalRunConfig, EvalResult, EvalSummary } from './types.js';
+import type { IsolationType } from './isolation/types.js';
 import { loadDataset, filterTasks } from './lib/dataset-loader.js';
 import { ProductionAgentRunner } from './runners/agent-runner.js';
+import { BatchOrchestrator } from './runners/batch-orchestrator.js';
 import * as fs from 'fs/promises';
 import * as path from 'path';
+import { fileURLToPath } from 'url';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+const projectRoot = path.resolve(__dirname, '../../..'); // tools/eval/src -> project root
 
 // =============================================================================
 // CLI PARSING
@@ -28,6 +35,8 @@ interface CLIArgs {
   trace?: boolean;
   mockLlm?: boolean;
   costLimit?: number;
+  parallelism?: number;
+  isolation?: IsolationType;
   difficulty?: string[];
   category?: string[];
   tags?: string[];
@@ -76,6 +85,14 @@ function parseArgs(argv: string[]): CLIArgs {
         args.costLimit = parseFloat(next);
         i++;
         break;
+      case '--parallelism':
+        args.parallelism = parseInt(next, 10);
+        i++;
+        break;
+      case '--isolation':
+        args.isolation = next as IsolationType;
+        i++;
+        break;
       case '--difficulty':
         args.difficulty = next.split(',');
         i++;
@@ -121,8 +138,8 @@ async function runCommand(args: CLIArgs): Promise<void> {
 
   const config: EvalRunConfig = {
     dataset: args.dataset,
-    model: args.model || 'claude-3-5-sonnet-20241022',
-    provider: args.provider || 'anthropic',
+    model: args.model || 'z-ai/glm-4.7',
+    provider: args.provider || 'openrouter',
     trace: args.trace,
     mock_llm: args.mockLlm,
     cost_limit: args.costLimit,
@@ -130,7 +147,7 @@ async function runCommand(args: CLIArgs): Promise<void> {
     category: args.category as EvalRunConfig['category'],
     tags: args.tags,
     task_ids: args.taskIds,
-    output_dir: args.outputDir || './tools/eval/results',
+    output_dir: args.outputDir || path.join(projectRoot, 'tools/eval/results'),
   };
 
   console.log(`
@@ -139,9 +156,15 @@ async function runCommand(args: CLIArgs): Promise<void> {
 ╚══════════════════════════════════════════════════════════════╝
 `);
 
-  // Load dataset
+  const parallelism = args.parallelism || 1;
+  const isolation = args.isolation || (parallelism > 1 ? 'worktree' : 'none');
+
+  // Load dataset (with isolation-managed flag for worktree/docker modes)
   console.log(`Loading dataset: ${config.dataset}...`);
-  const dataset = await loadDataset(config.dataset);
+  const dataset = await loadDataset(config.dataset, {
+    isolationManaged: isolation !== 'none',
+    projectRoot,
+  });
   console.log(`  Loaded ${dataset.tasks.length} tasks from "${dataset.name}" v${dataset.version}`);
 
   // Filter tasks
@@ -153,13 +176,44 @@ async function runCommand(args: CLIArgs): Promise<void> {
     return;
   }
 
-  // Create runner
-  const runner = new ProductionAgentRunner({
-    outputDir: config.output_dir,
-  });
+  let results: EvalResult[];
 
-  // Run evaluation
-  const results = await runner.runDataset(tasks, config);
+  if (parallelism > 1 || isolation !== 'none') {
+    // Use BatchOrchestrator for parallel / isolated execution
+    console.log(`  Parallelism: ${parallelism} | Isolation: ${isolation}`);
+
+    const orchestrator = new BatchOrchestrator({
+      batchConfig: {
+        parallelism,
+        isolation,
+        costLimit: config.cost_limit,
+        staggerDelayMs: 500,
+        saveIntermediate: true,
+      },
+      evalConfig: config,
+      outputDir: config.output_dir,
+      onProgress: (event) => {
+        switch (event.type) {
+          case 'batch.progress':
+            console.log(
+              `  Progress: ${event.completed}/${event.total} ` +
+              `(${event.passed} passed, ${event.failed} failed, $${event.cost.toFixed(4)})`,
+            );
+            break;
+        }
+      },
+    });
+
+    results = await orchestrator.run(tasks);
+  } else {
+    // Sequential mode (legacy behavior)
+    const runner = new ProductionAgentRunner({
+      outputDir: config.output_dir,
+    });
+
+    results = await runner.runDataset(tasks, config);
+    await runner.cleanup();
+  }
 
   // Calculate and print summary
   const summary = calculateSummary(results);
@@ -168,14 +222,12 @@ async function runCommand(args: CLIArgs): Promise<void> {
   // Save results
   const resultPath = await saveResults(results, summary, config);
   console.log(`\nResults saved to: ${resultPath}`);
-
-  await runner.cleanup();
 }
 
 async function compareCommand(args: CLIArgs): Promise<void> {
   if (!args.files || args.files.length !== 2) {
     console.error('Error: compare command requires exactly 2 result files');
-    console.error('Usage: npx tsx cli.ts compare <baseline.json> <challenger.json>');
+    console.error('Usage: npm run eval -- compare <baseline.json> <challenger.json>');
     process.exit(1);
   }
 
@@ -260,7 +312,7 @@ async function listCommand(args: CLIArgs): Promise<void> {
     process.exit(1);
   }
 
-  const dataset = await loadDataset(args.dataset);
+  const dataset = await loadDataset(args.dataset, { projectRoot });
 
   console.log(`
 Dataset: ${dataset.name}
@@ -286,7 +338,7 @@ function showHelp(): void {
 ╚══════════════════════════════════════════════════════════════╝
 
 USAGE:
-  npx tsx tools/eval/src/cli.ts <command> [options]
+  npm run eval -- <command> [options]
 
 COMMANDS:
   run         Run evaluation on a dataset
@@ -297,8 +349,11 @@ COMMANDS:
 RUN OPTIONS:
   --dataset, -d <name>       Dataset to evaluate (required)
                              Built-in: golden, smoke, swe-bench-lite
-  --model, -m <model>        Model to use (default: claude-3-5-sonnet-20241022)
-  --provider, -p <provider>  Provider: anthropic, openrouter, openai (default: anthropic)
+  --model, -m <model>        Model to use (default: z-ai/glm-4.7)
+  --provider, -p <provider>  Provider: anthropic, openrouter, openai (default: openrouter)
+  --parallelism <n>          Run up to N tasks in parallel (default: 1)
+  --isolation <type>         Isolation: worktree, docker, none (default: auto)
+                             Auto-selects worktree when parallelism > 1
   --trace                    Enable detailed tracing
   --mock-llm                 Use mock LLM (for testing framework)
   --cost-limit <dollars>     Stop if cost exceeds limit
@@ -306,32 +361,35 @@ RUN OPTIONS:
   --category <cats>          Filter by category (comma-separated)
   --tags <tags>              Filter by tags (comma-separated)
   --task-ids <ids>           Run specific task IDs only (comma-separated)
-  --output-dir, -o <dir>     Output directory (default: ./tools/eval/results)
+  --output-dir, -o <dir>     Output directory (default: tools/eval/results)
 
 EXAMPLES:
   # Run golden dataset with default model
-  npx tsx tools/eval/src/cli.ts run --dataset golden
+  npm run eval -- run --dataset golden
 
   # Run with specific model and cost limit
-  npx tsx tools/eval/src/cli.ts run -d golden -m claude-3-5-sonnet-20241022 --cost-limit 10
+  npm run eval -- run -d golden -m claude-3-5-sonnet-20241022 --cost-limit 10
+
+  # Run 10 tasks in parallel with worktree isolation
+  npm run eval -- run -d swe-bench-lite --parallelism 10 --isolation worktree
 
   # Run only easy tasks
-  npx tsx tools/eval/src/cli.ts run -d golden --difficulty easy
+  npm run eval -- run -d golden --difficulty easy
 
   # Test eval framework without LLM costs
-  npx tsx tools/eval/src/cli.ts run -d smoke --mock-llm
+  npm run eval -- run -d smoke --mock-llm
 
   # Run SWE-bench Lite (requires Python + datasets)
-  npx tsx tools/eval/src/cli.ts run -d swe-bench-lite --provider openrouter -m anthropic/claude-3.5-sonnet:beta
+  npm run eval -- run -d swe-bench-lite --provider openrouter -m anthropic/claude-3.5-sonnet:beta
 
   # Run subset of SWE-bench using env vars
-  SWE_BENCH_LIMIT=5 npx tsx tools/eval/src/cli.ts run -d swe-bench-lite
+  SWE_BENCH_LIMIT=5 npm run eval -- run -d swe-bench-lite
 
   # Compare two runs
-  npx tsx tools/eval/src/cli.ts compare results/run-a.json results/run-b.json
+  npm run eval -- compare results/run-a.json results/run-b.json
 
   # List tasks in a dataset
-  npx tsx tools/eval/src/cli.ts list --dataset golden
+  npm run eval -- list --dataset golden
 
 SWE-BENCH LITE NOTES:
   Requires: pip install datasets swebench
@@ -393,7 +451,7 @@ async function saveResults(
   const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
   const modelSlug = config.model.replace(/[/:]/g, '-');
   const filename = `eval-${config.dataset}-${modelSlug}-${timestamp}.json`;
-  const filepath = path.join(config.output_dir || './tools/eval/results', filename);
+  const filepath = path.join(config.output_dir || path.join(projectRoot, 'tools/eval/results'), filename);
 
   // Ensure directory exists
   await fs.mkdir(path.dirname(filepath), { recursive: true });

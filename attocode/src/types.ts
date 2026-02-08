@@ -231,6 +231,14 @@ export interface ProductionAgentConfig {
   /** Provider-level resilience (circuit breaker, fallback chain) */
   providerResilience?: ProviderResilienceConfig | false;
 
+  /**
+   * Working directory for all tool operations.
+   * When set, bash commands default to this cwd, and file operations
+   * resolve relative paths against this directory.
+   * Falls back to process.cwd() when not set.
+   */
+  workingDirectory?: string;
+
   /** Maximum context tokens before compaction */
   maxContextTokens?: number;
 

@@ -52,8 +52,8 @@ export class ProductionAgentRunner implements EvalRunner {
   private traceOutputDir: string;
 
   constructor(options: { workdir?: string; outputDir?: string } = {}) {
-    this.baseWorkdir = options.workdir || process.cwd();
-    this.outputDir = options.outputDir || './tools/eval/results';
+    this.baseWorkdir = options.workdir || projectRoot;
+    this.outputDir = options.outputDir || path.join(projectRoot, 'tools/eval/results');
 
     // Use TRACE_OUTPUT_DIR env var for traces (Docker support)
     // Falls back to outputDir for local runs
@@ -147,6 +147,7 @@ export class ProductionAgentRunner implements EvalRunner {
         success: gradeResult.success,
         partial_credit: gradeResult.partial_credit,
         grading_details: gradeResult.details,
+        explanation: gradeResult.explanation,
         metrics,
         trace_path: tracePath,
         timestamp,
@@ -232,10 +233,6 @@ export class ProductionAgentRunner implements EvalRunner {
     workdir: string
   ): Promise<{ agent: ReturnType<typeof createProductionAgent>; cleanup: () => Promise<void> }> {
 
-    // CRITICAL: Change to task workspace directory
-    // The agent and all its tools (bash, file operations) must operate in the task's directory
-    const originalCwd = process.cwd();
-    process.chdir(workdir);
     console.log(`  Working directory: ${workdir}`);
 
     // Get the provider
@@ -243,8 +240,8 @@ export class ProductionAgentRunner implements EvalRunner {
       ? this.createMockProvider()
       : await getProvider(config.provider) as LLMProviderWithTools;
 
-    // Create tool registry with all standard tools
-    const registry = createStandardRegistry('yolo'); // Auto-approve for evals
+    // Create tool registry with basePath so all tools resolve paths against the workspace
+    const registry = createStandardRegistry('yolo', { basePath: workdir });
     const tools = convertToolsFromRegistry(registry);
 
     // Adapt provider
@@ -257,6 +254,9 @@ export class ProductionAgentRunner implements EvalRunner {
       model: config.model,
       maxIterations: 50,
       humanInLoop: false, // Disable for automated evals
+
+      // Set workingDirectory so agent internals know the workspace
+      workingDirectory: workdir,
 
       // Enable observability for traces and metrics
       observability: config.trace ? {
@@ -308,7 +308,6 @@ export class ProductionAgentRunner implements EvalRunner {
       },
 
       // Disable features that require filesystem access with relative paths
-      // (eval runs change cwd to task workspace, breaking relative paths)
       learningStore: false,
     });
 
@@ -316,8 +315,6 @@ export class ProductionAgentRunner implements EvalRunner {
       agent,
       cleanup: async () => {
         await agent.cleanup();
-        // Restore original working directory
-        process.chdir(originalCwd);
       },
     };
   }
@@ -414,8 +411,25 @@ export class ProductionAgentRunner implements EvalRunner {
     const color = result.success ? '\x1b[32m' : '\x1b[31m';
     const reset = '\x1b[0m';
 
+    // Build score label with test details when available
+    const score = (result.partial_credit * 100).toFixed(0);
+    const tests = result.grading_details?.tests;
+    let scoreLabel: string;
+    if (tests) {
+      scoreLabel = tests.passed === tests.total
+        ? `${score}% (${tests.passed}/${tests.total} tests passing)`
+        : `${score}% (${tests.passed}/${tests.total} tests passing)`;
+    } else if (result.partial_credit === 0.5) {
+      scoreLabel = `${score}% (patch only, unverified)`;
+    } else {
+      scoreLabel = `${score}%`;
+    }
+
     console.log(`  ${color}${status}${reset} ${task.name}`);
-    console.log(`    Score: ${(result.partial_credit * 100).toFixed(0)}%`);
+    console.log(`    Score: ${scoreLabel}`);
+    if (result.explanation) {
+      console.log(`    Reason: ${result.explanation}`);
+    }
     console.log(`    Tokens: ${result.metrics.tokens.total} | Cost: $${result.metrics.estimated_cost.toFixed(4)}`);
     console.log(`    Duration: ${(result.metrics.duration_ms / 1000).toFixed(1)}s | Iterations: ${result.metrics.iterations}`);
   }

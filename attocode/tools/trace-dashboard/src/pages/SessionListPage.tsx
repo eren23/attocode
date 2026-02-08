@@ -11,6 +11,7 @@ import { LoadingSpinner } from '../components/LoadingSpinner';
 import { StatusBadge } from '../components/StatusBadge';
 import { UploadModal } from '../components/UploadModal';
 import { formatTokens, formatCost, formatDuration, formatPercent, relativeTime } from '../lib/utils';
+import { ExportDropdown } from '../components/ExportDropdown';
 
 type SortKey = 'startTime' | 'tokens' | 'cost' | 'iterations' | 'cacheHitRate';
 type SortOrder = 'asc' | 'desc';
@@ -165,6 +166,25 @@ export function SessionListPage() {
           </p>
         </div>
         <div className="flex items-center gap-2">
+          <ExportDropdown
+            label="Export All"
+            options={[
+              {
+                label: 'JSON (all sessions)',
+                onClick: () => {
+                  const ids = filteredAndSorted.map(s => encodeURIComponent(s.filePath)).join(',');
+                  window.open(`/api/sessions/export/batch?ids=${ids}&format=json`, '_blank');
+                },
+              },
+              {
+                label: 'CSV (all sessions)',
+                onClick: () => {
+                  const ids = filteredAndSorted.map(s => encodeURIComponent(s.filePath)).join(',');
+                  window.open(`/api/sessions/export/batch?ids=${ids}&format=csv`, '_blank');
+                },
+              },
+            ]}
+          />
           <button
             onClick={() => setShowUploadModal(true)}
             className="flex items-center gap-2 px-3 py-2 text-sm bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors"

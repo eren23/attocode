@@ -128,44 +128,65 @@ print(json.dumps(instances))
 }
 
 /**
- * Convert SWE-bench instance to EvalTask format.
+ * Options for converting SWE-bench instances to eval tasks.
  */
-export function convertToEvalTask(instance: SWEBenchInstance): EvalTask {
+export interface ConvertOptions {
+  /**
+   * When true, skips repo clone/checkout setup commands.
+   * The isolation provider (WorktreeProvider) handles repo setup instead.
+   * The prompt uses relative paths instead of absolute /tmp paths.
+   */
+  isolationManaged?: boolean;
+}
+
+/**
+ * Convert SWE-bench instance to EvalTask format.
+ *
+ * @param instance - SWE-bench instance data
+ * @param options - Conversion options
+ */
+export function convertToEvalTask(
+  instance: SWEBenchInstance,
+  options: ConvertOptions = {},
+): EvalTask {
+  const { isolationManaged = false } = options;
+
   return {
     id: instance.instance_id,
     name: `SWE-bench: ${instance.instance_id}`,
-    prompt: buildAgentPrompt(instance),
+    prompt: isolationManaged
+      ? buildIsolatedAgentPrompt(instance)
+      : buildAgentPrompt(instance),
     timeout_ms: 1200000, // 20 minutes per task (SWE-bench tasks are complex)
-    grader: 'swe-bench' as GraderType, // Custom grader
+    grader: 'swe-bench' as GraderType,
     expected: {
-      // Store metadata for grading
       swe_bench: {
         instance_id: instance.instance_id,
         repo: instance.repo,
         base_commit: instance.base_commit,
         fail_to_pass: instance.FAIL_TO_PASS,
         pass_to_pass: instance.PASS_TO_PASS,
+        test_patch: instance.test_patch,
       },
     },
     metadata: {
-      difficulty: 'medium', // SWE-bench doesn't have difficulty ratings
+      difficulty: 'medium',
       category: 'swe-bench',
       source: 'swe-bench-lite',
       repo: instance.repo,
       version: instance.version,
     },
-    setup: {
-      // Clone and setup repo
-      commands: [buildSetupCommand(instance)],
-    },
-    teardown: {
-      commands: ['rm -rf /tmp/swe-bench-workspace'],
-    },
+    setup: isolationManaged
+      ? undefined // WorktreeProvider handles repo setup
+      : { commands: [buildSetupCommand(instance)] },
+    teardown: isolationManaged
+      ? undefined
+      : { commands: ['rm -rf /tmp/swe-bench-workspace'] },
   };
 }
 
 /**
- * Build the prompt for the agent.
+ * Build the prompt for the agent (legacy mode with hardcoded paths).
  */
 function buildAgentPrompt(instance: SWEBenchInstance): string {
   const workdir = `/tmp/swe-bench-workspace/${instance.instance_id}`;
@@ -192,6 +213,38 @@ ${instance.hints_text ? `## Hints\n${instance.hints_text}\n` : ''}
 - Do NOT commit your changes - just make the edits
 - The fix should pass the existing test suite
 - Focus on the specific issue described above
+
+Start by exploring the repository structure and understanding the codebase.`;
+}
+
+/**
+ * Build the prompt for isolation-managed mode.
+ * Uses the current working directory (set by workingDirectory config) instead of hardcoded paths.
+ */
+function buildIsolatedAgentPrompt(instance: SWEBenchInstance): string {
+  return `You are working on fixing a GitHub issue in the ${instance.repo} repository.
+
+## Repository Setup
+The repository is already set up in the current working directory.
+It is checked out at commit ${instance.base_commit} (before the fix).
+
+## Issue Description
+${instance.problem_statement}
+
+${instance.hints_text ? `## Hints\n${instance.hints_text}\n` : ''}
+
+## Your Task
+1. Explore the repository structure in the current directory
+2. Understand the codebase and the issue
+3. Make the necessary code changes to fix the issue
+4. Verify your changes work (run relevant tests if possible)
+
+## Important Notes
+- Make minimal, targeted changes to fix the issue
+- Do NOT commit your changes - just make the edits
+- The fix should pass the existing test suite
+- Focus on the specific issue described above
+- All file paths should be relative to the current directory
 
 Start by exploring the repository structure and understanding the codebase.`;
 }

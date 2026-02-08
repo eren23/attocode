@@ -2,30 +2,85 @@
 
 Automated evaluation framework for testing the attocode AI coding agent.
 
-## Quick Start (Docker - Recommended)
+## Quick Start
+
+All commands run from the **project root** — no `cd` required.
+
+```bash
+# Golden smoke test (local, ~15s, 3 quick tasks)
+./scripts/eval-golden.sh --quick
+
+# Golden full (Docker + dashboard at localhost:3000)
+./scripts/eval-golden.sh --docker
+
+# SWE-bench 5 instances (Docker + dashboard)
+./scripts/eval-bench.sh --limit 5
+
+# Compare runs
+./scripts/eval-compare.sh tools/eval/results/run-a.json tools/eval/results/run-b.json
+
+# Dashboard only (view past results)
+./scripts/eval-docker.sh dashboard
+```
+
+Results are persisted to `tools/eval/results/` and traces to `.traces/` (viewable in trace dashboard).
+
+### Docker Setup (for SWE-bench and full isolation)
 
 Docker provides a consistent environment with all Python/Node dependencies pre-installed:
 
 ```bash
-cd tools/eval
-
 # Build the Docker image (one-time)
-./docker-eval.sh build
+./scripts/eval-docker.sh build
 
-# Run SWE-bench evaluation
-./docker-eval.sh run -d swe-bench-lite --provider openrouter -m anthropic/claude-3.5-sonnet:beta --trace
+# Run SWE-bench evaluation (auto-starts dashboard at localhost:3000)
+./scripts/eval-docker.sh run -d swe-bench-lite --trace
 
 # Run with limited instances
-SWE_BENCH_LIMIT=5 ./docker-eval.sh run -d swe-bench-lite --provider openrouter -m z-ai/glm-4.7 --trace
-
-# Run golden dataset
-./docker-eval.sh run -d golden --provider openrouter -m anthropic/claude-3.5-sonnet:beta
+./scripts/eval-bench.sh --limit 5
 
 # Open a shell in the container for debugging
-./docker-eval.sh shell
+./scripts/eval-docker.sh shell
 ```
 
-Results are persisted to `tools/eval/results/` and traces to `.traces/` (viewable in trace dashboard).
+## Quick Start: Run 3 Tasks in Under 2 Minutes
+
+The fastest way to verify everything works:
+
+```bash
+# Using convenience script (recommended)
+./scripts/eval-golden.sh --quick
+
+# Or manually
+npm run eval -- run \
+  --dataset golden \
+  --task-ids fix-typo-001,fix-import-001,fix-type-error-001 \
+  --parallelism 3 \
+  --isolation worktree
+```
+
+This will:
+1. Create 3 isolated git worktrees (one per task)
+2. Run all 3 agents simultaneously (using `z-ai/glm-4.7` via `openrouter` by default)
+3. Grade results and print a summary
+4. Clean up worktrees automatically
+
+Expected output:
+```
+  Progress: 1/3 (1 passed, 0 failed, $0.0023)
+  Progress: 2/3 (2 passed, 0 failed, $0.0041)
+  Progress: 3/3 (3 passed, 0 failed, $0.0058)
+
+  Pass rate:    3/3 (100.0%)
+  Total time:   ~15s  (vs ~40s sequential)
+```
+
+No worktree? Run sequentially instead (no git required):
+```bash
+npm run eval -- run \
+  --dataset golden \
+  --task-ids fix-typo-001,fix-import-001,fix-type-error-001
+```
 
 ## Quick Start (Local)
 
@@ -37,26 +92,34 @@ export PATH="/opt/homebrew/opt/node@20/bin:$PATH"
 pip install datasets pandas numpy
 
 # List available tasks
-npx tsx tools/eval/src/cli.ts list --dataset golden
+npm run eval -- list --dataset golden
 
-# Run full evaluation with tracing
-npx tsx tools/eval/src/cli.ts run --dataset golden --provider openrouter --model anthropic/claude-3.5-sonnet:beta --trace
+# Run full evaluation with tracing (default: z-ai/glm-4.7 via openrouter)
+npm run eval -- run --dataset golden --trace
+
+# Run with a specific model
+npm run eval -- run --dataset golden -m anthropic/claude-3.5-sonnet:beta -p openrouter
 
 # Run a single task
-npx tsx tools/eval/src/cli.ts run --dataset golden --task-ids fix-type-error-001 --provider openrouter --model anthropic/claude-3.5-sonnet:beta
+npm run eval -- run --dataset golden --task-ids fix-type-error-001
+
+# Run 3 tasks in parallel with worktree isolation
+npm run eval -- run --dataset golden \
+  --task-ids fix-typo-001,fix-import-001,fix-type-error-001 \
+  --parallelism 3 --isolation worktree
 
 # Run by category
-npx tsx tools/eval/src/cli.ts run --dataset golden --category bug-fix --provider openrouter
+npm run eval -- run --dataset golden --category bug-fix
 
 # Test framework without LLM costs
-npx tsx tools/eval/src/cli.ts run --dataset smoke --mock-llm
+npm run eval -- run --dataset smoke --mock-llm
 
 # Compare two runs
-npx tsx tools/eval/src/cli.ts compare results/run-a.json results/run-b.json
+./scripts/eval-compare.sh tools/eval/results/run-a.json tools/eval/results/run-b.json
 
 # Run SWE-bench Lite (real GitHub issues)
 pip install datasets  # one-time setup
-SWE_BENCH_LIMIT=1 npx tsx tools/eval/src/cli.ts run -d swe-bench-lite --provider openrouter -m [a model of your choice, i tested with glm 4.7] --trace
+SWE_BENCH_LIMIT=1 npm run eval -- run -d swe-bench-lite --trace
 ```
 
 ## Baseline Results
@@ -80,12 +143,14 @@ Golden dataset benchmark with `anthropic/claude-3.5-sonnet:beta` via OpenRouter:
 ## Features
 
 - **Full Agent Execution**: Uses the complete ProductionAgent with all tools and capabilities (not a skeleton)
+- **Parallel Execution**: Run N tasks simultaneously with `--parallelism N`
+- **Worktree Isolation**: Each task gets its own git worktree — no cross-task contamination
 - **Auto-Approved Tools**: All tools are allowed without prompting via `executionPolicy: { defaultPolicy: 'allow' }`
 - **Detailed Tracing**: Use `--trace` to capture full execution traces with **tool inputs and outputs**
 - **SWE-bench Lite**: Industry-standard benchmark with 300 real GitHub issues
 - **Multiple Graders**: exact-match, test-based, file-contains, swe-bench
 - **Should-Fail Tasks**: Tests that agent correctly refuses dangerous/invalid actions
-- **Cost Tracking**: Token usage and estimated cost per task
+- **Cost Tracking**: Token usage and estimated cost per task with budget enforcement
 - **A/B Comparison**: Compare model performance across runs
 
 ## Architecture
@@ -93,28 +158,35 @@ Golden dataset benchmark with `anthropic/claude-3.5-sonnet:beta` via OpenRouter:
 ```
 tools/eval/
 ├── src/
-│   ├── cli.ts              # Command-line interface
-│   ├── types.ts            # Core type definitions
-│   ├── index.ts            # Public API exports
+│   ├── cli.ts                  # Command-line interface
+│   ├── types.ts                # Core type definitions
+│   ├── index.ts                # Public API exports
 │   ├── adapters/
-│   │   └── swe-bench.ts    # SWE-bench Lite adapter
+│   │   └── swe-bench.ts        # SWE-bench Lite adapter
 │   ├── graders/
-│   │   ├── index.ts        # Grader factory + should-fail logic
-│   │   ├── exact-match.ts  # Exact string comparison
-│   │   ├── test-based.ts   # Run tests and check pass rate
-│   │   ├── file-contains.ts# Check file content
-│   │   └── swe-bench.ts    # SWE-bench patch grader
+│   │   ├── index.ts            # Grader factory + should-fail logic
+│   │   ├── exact-match.ts      # Exact string comparison
+│   │   ├── test-based.ts       # Run tests and check pass rate
+│   │   ├── file-contains.ts    # Check file content
+│   │   └── swe-bench.ts        # SWE-bench patch grader
+│   ├── isolation/
+│   │   ├── index.ts            # Provider factory + NoneProvider
+│   │   ├── types.ts            # TaskEnvironment, IsolationProvider, BatchConfig
+│   │   ├── pool-manager.ts     # Generic warm pool (acquire/release/reset)
+│   │   ├── worktree-provider.ts# Git worktree isolation
+│   │   └── docker-provider.ts  # Docker isolation (stub, future)
 │   ├── runners/
 │   │   ├── index.ts
-│   │   └── agent-runner.ts # Full ProductionAgent runner
+│   │   ├── agent-runner.ts     # Single-task ProductionAgent runner
+│   │   └── batch-orchestrator.ts # Parallel dispatch loop
 │   ├── lib/
 │   │   ├── index.ts
-│   │   └── dataset-loader.ts # Dataset loading and filtering
+│   │   └── dataset-loader.ts   # Dataset loading and filtering
 │   └── reporters/
 │       ├── index.ts
-│       └── json-reporter.ts # JSON and console output
-├── datasets/               # Custom dataset files (JSON)
-└── results/               # Evaluation results + traces
+│       └── json-reporter.ts    # JSON and console output
+├── datasets/                   # Custom dataset files (JSON)
+└── results/                   # Evaluation results + traces
 ```
 
 ## Docker Setup
@@ -127,22 +199,26 @@ The Docker environment bundles all dependencies (Node.js 20, Python 3.11, datase
 |------|---------|
 | `Dockerfile` | Multi-stage build with Node 20 + Python 3.11 |
 | `docker-compose.yml` | Orchestration with volume mounts |
-| `docker-eval.sh` | Convenience wrapper script |
+| `docker-eval.sh` | Legacy wrapper (use `scripts/eval-docker.sh` instead) |
+| `scripts/eval-docker.sh` | Main Docker wrapper (from project root) |
+| `scripts/eval-golden.sh` | Golden dataset convenience script |
+| `scripts/eval-bench.sh` | SWE-bench convenience script (Docker-only) |
+| `scripts/eval-compare.sh` | Compare two runs |
 
 ### Commands
 
 ```bash
-# Build image
-./docker-eval.sh build
+# Build image (from project root)
+./scripts/eval-docker.sh build
 
-# Run evaluation (pass any CLI args)
-./docker-eval.sh run -d swe-bench-lite --provider openrouter -m MODEL --trace
+# Run evaluation (auto-starts dashboard at localhost:3000)
+./scripts/eval-docker.sh run -d swe-bench-lite --trace
 
 # Open shell for debugging
-./docker-eval.sh shell
+./scripts/eval-docker.sh shell
 
-# Start trace dashboard (Docker)
-./docker-eval.sh dashboard
+# Start trace dashboard only
+./scripts/eval-docker.sh dashboard
 ```
 
 ### Environment Variables
@@ -155,15 +231,15 @@ export OPENROUTER_API_KEY=sk-or-...
 export OPENAI_API_KEY=sk-...
 
 # Then run
-./docker-eval.sh run -d swe-bench-lite --provider openrouter -m MODEL
+./scripts/eval-docker.sh run -d swe-bench-lite --trace
 ```
 
 ### Volume Mounts
 
 | Host Path | Container Path | Purpose |
 |-----------|----------------|---------|
-| `./results` | `/app/tools/eval/results` | Eval results (JSON) |
-| `../../.traces` | `/app/.traces` | Traces (JSONL) for dashboard |
+| `tools/eval/results` | `/app/tools/eval/results` | Eval results (JSON) |
+| `.traces` | `/app/.traces` | Traces (JSONL) for dashboard |
 
 Traces from Docker runs automatically appear in the trace dashboard.
 
@@ -199,6 +275,61 @@ A should-fail task passes if the agent:
 
 300 real-world GitHub issues from Python repositories. This is the industry-standard benchmark for evaluating coding agents.
 
+## Parallel Execution and Isolation
+
+Run multiple tasks at the same time with filesystem isolation so they don't interfere with each other.
+
+### Isolation Modes
+
+| Mode | What it does | When to use |
+|------|-------------|-------------|
+| `none` | Shared filesystem, sequential only | Quick single-task runs |
+| `worktree` | Git worktree per task, recycled via pool | Parallel runs (default when `--parallelism > 1`) |
+| `docker` | Docker container per task | Untrusted code / full sandboxing (future) |
+
+### Examples
+
+```bash
+# 3 golden tasks in parallel (convenience script)
+./scripts/eval-golden.sh --quick
+
+# Or manually
+npm run eval -- run \
+  -d golden \
+  --task-ids fix-typo-001,fix-import-001,fix-type-error-001 \
+  --parallelism 3 \
+  --isolation worktree
+
+# 10 SWE-bench tasks in parallel (Docker)
+./scripts/eval-bench.sh --limit 10
+
+# Full SWE-bench Lite (300 tasks) at 10x parallelism
+npm run eval -- run \
+  -d swe-bench-lite \
+  --parallelism 10 \
+  --isolation worktree \
+  --cost-limit 150 \
+  --trace
+```
+
+### How Worktree Isolation Works
+
+```
+1. Pool pre-warms N git worktrees (one per parallelism slot)
+2. Each task acquires a worktree slot
+3. Worktree checks out the correct base commit
+4. Agent runs with workingDirectory pointed at the worktree
+   (all file/bash tools resolve paths against it)
+5. After grading, worktree is reset: git reset --hard && git clean -fdx
+6. Slot is released back to the pool for the next task
+```
+
+Each agent instance is fully isolated — different worktree, different file state, no shared `process.cwd()`. Tasks cannot see or modify each other's files.
+
+### Stagger and Rate Limiting
+
+Agent starts are staggered by 500ms to avoid LLM API rate limit bursts. Combined with `--cost-limit`, you can safely run large benchmarks without surprise bills.
+
 ## SWE-bench Lite: Step-by-Step Guide
 
 ### Step 1: Install Python Dependencies
@@ -218,47 +349,38 @@ pip install swebench
 python3 -c "from datasets import load_dataset; print('OK')"
 
 # List available SWE-bench tasks
-npx tsx tools/eval/src/cli.ts list --dataset swe-bench-lite
+npm run eval -- list --dataset swe-bench-lite
 ```
 
 ### Step 3: Run Your First SWE-bench Task
 
 ```bash
 # Start with a single task to test the setup
-SWE_BENCH_LIMIT=1 npx tsx tools/eval/src/cli.ts run \
-  -d swe-bench-lite \
-  --provider openrouter \
-  -m anthropic/claude-3.5-sonnet:beta \
-  --trace
+./scripts/eval-bench.sh --limit 1
+
+# Or without Docker:
+SWE_BENCH_LIMIT=1 npm run eval -- run -d swe-bench-lite --trace
 ```
 
 ### Step 4: Run a Specific Task
 
 ```bash
 # Run a specific instance by ID
-SWE_BENCH_INSTANCE_IDS=django__django-10914 npx tsx tools/eval/src/cli.ts run \
-  -d swe-bench-lite \
-  --provider openrouter \
-  -m anthropic/claude-3.5-sonnet:beta \
-  --trace
+./scripts/eval-bench.sh --instance-ids django__django-10914
+
+# Or without Docker:
+SWE_BENCH_INSTANCE_IDS=django__django-10914 npm run eval -- run \
+  -d swe-bench-lite --trace
 ```
 
 ### Step 5: Run Multiple Tasks
 
 ```bash
-# Run first 5 tasks
-SWE_BENCH_LIMIT=5 npx tsx tools/eval/src/cli.ts run \
-  -d swe-bench-lite \
-  --provider openrouter \
-  -m anthropic/claude-3.5-sonnet:beta \
-  --trace
+# Run first 5 tasks (Docker, auto-starts dashboard)
+./scripts/eval-bench.sh --limit 5
 
 # Run full benchmark (300 tasks, ~$50-150 cost, several hours)
-npx tsx tools/eval/src/cli.ts run \
-  -d swe-bench-lite \
-  --provider openrouter \
-  -m anthropic/claude-3.5-sonnet:beta \
-  --trace
+./scripts/eval-bench.sh
 ```
 
 ### Step 6: View Results
@@ -278,17 +400,15 @@ cat tools/eval/results/trace-session-*.jsonl | head -20
 
 ```bash
 # Run with model A
-SWE_BENCH_LIMIT=10 npx tsx tools/eval/src/cli.ts run \
-  -d swe-bench-lite -m anthropic/claude-3.5-sonnet:beta --provider openrouter
+./scripts/eval-bench.sh --limit 10 -m anthropic/claude-3.5-sonnet:beta
 
 # Run with model B
-SWE_BENCH_LIMIT=10 npx tsx tools/eval/src/cli.ts run \
-  -d swe-bench-lite -m openai/gpt-4-turbo --provider openrouter
+./scripts/eval-bench.sh --limit 10 -m openai/gpt-4-turbo
 
 # Compare results
-npx tsx tools/eval/src/cli.ts compare \
-  results/eval-swe-bench-lite-anthropic-*.json \
-  results/eval-swe-bench-lite-openai-*.json
+./scripts/eval-compare.sh \
+  tools/eval/results/eval-swe-bench-lite-anthropic-*.json \
+  tools/eval/results/eval-swe-bench-lite-openai-*.json
 ```
 
 ### Environment Variables
@@ -382,18 +502,18 @@ This helps debug why an agent succeeded or failed.
 Run evaluation on a dataset.
 
 ```bash
-npx tsx tools/eval/src/cli.ts run \
+npm run eval -- run \
   --dataset golden \
-  --model anthropic/claude-3.5-sonnet:beta \
-  --provider openrouter \
   --cost-limit 10 \
   --trace
 ```
 
 Options:
 - `--dataset, -d` - Dataset name (required): `golden`, `smoke`, or path to JSON
-- `--model, -m` - Model ID (default: claude-3-5-sonnet-20241022)
-- `--provider, -p` - Provider: anthropic, openrouter, openai
+- `--model, -m` - Model ID (default: z-ai/glm-4.7)
+- `--provider, -p` - Provider: anthropic, openrouter, openai (default: openrouter)
+- `--parallelism <n>` - Run up to N tasks in parallel (default: 1)
+- `--isolation <type>` - Isolation mode: `worktree`, `docker`, `none` (default: auto-selects `worktree` when parallelism > 1)
 - `--trace` - Enable detailed tracing (saves JSONL files)
 - `--mock-llm` - Use mock LLM (no cost, for testing framework)
 - `--cost-limit` - Stop if cost exceeds limit (in USD)
@@ -407,7 +527,7 @@ Options:
 Compare two evaluation runs.
 
 ```bash
-npx tsx tools/eval/src/cli.ts compare results/baseline.json results/challenger.json
+npm run eval -- compare results/baseline.json results/challenger.json
 ```
 
 Output includes:
@@ -420,7 +540,7 @@ Output includes:
 List tasks in a dataset.
 
 ```bash
-npx tsx tools/eval/src/cli.ts list --dataset golden
+npm run eval -- list --dataset golden
 ```
 
 ## Tracing
@@ -566,22 +686,61 @@ The framework loads from `.env` in the project root:
 
 ## How It Works
 
-1. **Setup**: Creates test fixture files specified in task config
+1. **Setup**: Creates test fixture files specified in task config (or acquires an isolated worktree)
 2. **Execution**: Runs full ProductionAgent with all tools auto-allowed
 3. **Grading**: Checks results against expected outcomes
-4. **Teardown**: Cleans up test fixtures
+4. **Teardown**: Cleans up test fixtures (or resets worktree for reuse)
 5. **Reporting**: Saves JSON results and optional JSONL traces
 
 Key implementation details:
 - Uses `executionPolicy: { defaultPolicy: 'allow' }` to auto-approve all tools
+- `workingDirectory` on the agent config scopes all tool paths to the task's workspace
+- Worktree pool pre-warms slots and recycles them via `git reset --hard`
 - Loads `.env` from project root for API keys
 - Imports all provider adapters (anthropic, openrouter, openai, mock)
+
+## Dashboard Export
+
+The trace dashboard supports exporting session data in multiple formats:
+
+### Per-Session Export
+
+Open any session in the dashboard and click the **Export** dropdown:
+- **Download JSON** — Full session data as JSON
+- **Download CSV** — Per-iteration breakdown (iteration, action, outcome, tokens, flags)
+- **Download HTML Report** — Standalone HTML report with charts and timeline
+
+### Bulk Export
+
+From the session list page, click **Export All**:
+- **JSON (all sessions)** — Combined metrics for all filtered sessions
+- **CSV (all sessions)** — Spreadsheet-friendly format for analysis
+
+### Swarm Export
+
+From the swarm dashboard:
+- **Download Events (JSONL)** — Raw swarm event log
+- **Download State (JSON)** — Current swarm state snapshot
+
+### API Endpoints
+
+```bash
+# Single session exports
+GET /api/sessions/:id/export/html   # HTML report
+GET /api/sessions/:id/export/csv    # CSV breakdown
+
+# Batch export
+GET /api/sessions/export/batch?ids=a,b,c&format=json
+GET /api/sessions/export/batch?ids=a,b,c&format=csv
+```
 
 ## Future Enhancements
 
 - [ ] HumanEval integration
 - [x] SWE-bench Lite integration
-- [ ] Parallel execution
+- [x] Parallel execution (`--parallelism N` with worktree isolation)
+- [x] Batch orchestrator with cost tracking and graceful shutdown
+- [ ] Docker session isolation (stub exists, implementation deferred)
 - [ ] Full SWE-bench harness integration (auto-run after eval)
-- [ ] Dashboard integration for results visualization
+- [x] Dashboard integration for results visualization (with export)
 - [ ] CI/CD workflow (GitHub Actions)

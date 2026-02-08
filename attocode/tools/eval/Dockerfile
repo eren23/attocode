@@ -35,6 +35,9 @@ RUN npm ci
 # Copy source code
 COPY . .
 
+# Install trace-dashboard dependencies (separate package)
+RUN cd tools/trace-dashboard && npm ci
+
 # Build TypeScript
 RUN npm run build
 
@@ -46,4 +49,4 @@ ENV NODE_ENV=production
 ENV TRACE_OUTPUT_DIR=/app/.traces
 
 # Default: show help
-CMD ["npx", "tsx", "tools/eval/src/cli.ts", "--help"]
+CMD ["npm", "run", "eval", "--", "--help"]

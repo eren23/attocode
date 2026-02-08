@@ -4,6 +4,7 @@
 
 import { useSwarmStream } from '../hooks/useSwarmStream';
 import { LoadingSpinner } from '../components/LoadingSpinner';
+import { ExportDropdown } from '../components/ExportDropdown';
 import {
   SwarmHeader,
   MetricsStrip,
@@ -52,7 +53,39 @@ export function SwarmDashboardPage() {
   return (
     <div className="space-y-3">
       {/* Header */}
-      <SwarmHeader state={state} connected={connected} />
+      <div className="flex items-center gap-3">
+        <div className="flex-1">
+          <SwarmHeader state={state} connected={connected} />
+        </div>
+        <ExportDropdown
+          options={[
+            {
+              label: 'Download Events (JSONL)',
+              onClick: async () => {
+                try {
+                  const res = await fetch('/api/swarm/history');
+                  const data = await res.json();
+                  if (data.success && data.data?.length > 0) {
+                    window.open(`/api/swarm/events/${data.data[0].filename}`, '_blank');
+                  }
+                } catch { /* ignore */ }
+              },
+            },
+            {
+              label: 'Download State (JSON)',
+              onClick: () => {
+                const blob = new Blob([JSON.stringify(state, null, 2)], { type: 'application/json' });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = 'swarm-state.json';
+                a.click();
+                URL.revokeObjectURL(url);
+              },
+            },
+          ]}
+        />
+      </div>
 
       {/* Metrics Strip */}
       <MetricsStrip state={state} />

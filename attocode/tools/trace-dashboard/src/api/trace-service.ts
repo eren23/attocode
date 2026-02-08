@@ -263,6 +263,13 @@ export async function getSession(idOrPath: string): Promise<ParsedSession | null
 }
 
 /**
+ * Get parsed session object (needed by HTMLGenerator and export endpoints)
+ */
+export async function getSessionParsed(idOrPath: string): Promise<ParsedSession | null> {
+  return getSession(idOrPath);
+}
+
+/**
  * Get session summary (TraceSummary format)
  */
 export async function getSessionSummary(idOrPath: string) {
