@@ -893,9 +893,16 @@ export function TUIApp({
 
     // Insight events - also track tokens for active agents
     if (event.type === 'insight.tokens') {
-      const e = event as { inputTokens: number; outputTokens: number; cost?: number; subagent?: string };
+      const e = event as { inputTokens: number; outputTokens: number; cacheReadTokens?: number; cacheWriteTokens?: number; cost?: number; subagent?: string };
       if (showThinking) {
-        addMessage('system', `${subagentPrefix}* ${e.inputTokens.toLocaleString()} in, ${e.outputTokens.toLocaleString()} out${e.cost ? ` $${e.cost.toFixed(6)}` : ''}`);
+        let cacheStr = '';
+        if (e.cacheReadTokens && e.cacheReadTokens > 0) {
+          cacheStr += ` [cached: ${e.cacheReadTokens.toLocaleString()}]`;
+        }
+        if (e.cacheWriteTokens && e.cacheWriteTokens > 0) {
+          cacheStr += ` [cache-write: ${e.cacheWriteTokens.toLocaleString()}]`;
+        }
+        addMessage('system', `${subagentPrefix}* ${e.inputTokens.toLocaleString()} in, ${e.outputTokens.toLocaleString()} out${cacheStr}${e.cost ? ` $${e.cost.toFixed(6)}` : ''}`);
       }
       // Update tokens for active agent if this event is from a subagent
       // IMPORTANT: Don't update tokens for agents that are timing_out/timeout/error

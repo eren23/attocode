@@ -58,8 +58,15 @@ export function createEventDisplay() {
 
       case 'llm.complete':
         if (event.response.usage) {
+          let cacheStr = '';
+          if (event.response.usage.cacheReadTokens && event.response.usage.cacheReadTokens > 0) {
+            cacheStr += ` [cached: ${event.response.usage.cacheReadTokens}]`;
+          }
+          if (event.response.usage.cacheWriteTokens && event.response.usage.cacheWriteTokens > 0) {
+            cacheStr += ` [cache-write: ${event.response.usage.cacheWriteTokens}]`;
+          }
           console.log(c(
-            `   Tokens: ${event.response.usage.inputTokens} in / ${event.response.usage.outputTokens} out`,
+            `   Tokens: ${event.response.usage.inputTokens} in / ${event.response.usage.outputTokens} out${cacheStr}`,
             'dim'
           ));
         }

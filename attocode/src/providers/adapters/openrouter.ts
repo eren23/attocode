@@ -155,6 +155,10 @@ export class OpenRouterProvider implements LLMProvider, LLMProviderWithTools {
           prompt_tokens: number;
           completion_tokens: number;
           cost?: number;
+          prompt_tokens_details?: {
+            cached_tokens?: number;
+            cache_write_tokens?: number;
+          };
         };
       };
 
@@ -178,6 +182,8 @@ export class OpenRouterProvider implements LLMProvider, LLMProviderWithTools {
         usage: {
           inputTokens: data.usage.prompt_tokens,
           outputTokens: data.usage.completion_tokens,
+          cachedTokens: data.usage.prompt_tokens_details?.cached_tokens,
+          cacheWriteTokens: data.usage.prompt_tokens_details?.cache_write_tokens,
           cost,
         },
         rateLimitInfo: this.extractRateLimitInfo(response),
@@ -333,6 +339,7 @@ export class OpenRouterProvider implements LLMProvider, LLMProviderWithTools {
           // Cache info (when using Anthropic models via OpenRouter)
           prompt_tokens_details?: {
             cached_tokens?: number;
+            cache_write_tokens?: number;
           };
         };
       };
@@ -374,7 +381,7 @@ export class OpenRouterProvider implements LLMProvider, LLMProviderWithTools {
           inputTokens: data.usage.prompt_tokens,
           outputTokens: data.usage.completion_tokens,
           cachedTokens: data.usage.prompt_tokens_details?.cached_tokens,
-          // Use actual cost from OpenRouter
+          cacheWriteTokens: data.usage.prompt_tokens_details?.cache_write_tokens,
           cost,
         },
         toolCalls,

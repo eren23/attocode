@@ -197,6 +197,49 @@ import {
 // =============================================================================
 
 /**
+ * Tools that are safe to execute in parallel (read-only, no side effects).
+ * These tools don't modify state, so running them concurrently is safe.
+ */
+export const PARALLELIZABLE_TOOLS = new Set([
+  'read_file', 'glob', 'grep', 'list_files', 'search_files',
+  'search_code', 'get_file_info',
+]);
+
+/**
+ * Groups consecutive tool calls into batches for parallel/sequential execution.
+ * Consecutive parallelizable tools form a single parallel batch.
+ * Non-parallelizable tools break the sequence, starting a new batch.
+ */
+export function groupToolCallsIntoBatches<T extends { name: string }>(
+  toolCalls: T[],
+  isParallelizable: (tc: T) => boolean = (tc) => PARALLELIZABLE_TOOLS.has(tc.name),
+): T[][] {
+  const batches: T[][] = [];
+  let currentBatch: T[] = [];
+  let currentIsParallel = false;
+
+  for (const toolCall of toolCalls) {
+    const isParallel = isParallelizable(toolCall);
+
+    if (batches.length === 0 && currentBatch.length === 0) {
+      currentBatch.push(toolCall);
+      currentIsParallel = isParallel;
+    } else if (isParallel && currentIsParallel) {
+      currentBatch.push(toolCall);
+    } else {
+      batches.push(currentBatch);
+      currentBatch = [toolCall];
+      currentIsParallel = isParallel;
+    }
+  }
+  if (currentBatch.length > 0) {
+    batches.push(currentBatch);
+  }
+
+  return batches;
+}
+
+/**
  * Production-ready agent that composes all features.
  */
 export class ProductionAgent {
@@ -236,6 +279,7 @@ export class ProductionAgent {
   private fileChangeTracker: FileChangeTracker | null = null;
   private capabilitiesRegistry: CapabilitiesRegistry | null = null;
   private toolResolver: ((toolName: string) => ToolDefinition | null) | null = null;
+  private agentId!: string;
   private blackboard: SharedBlackboard | null = null;
   private fileCache: SharedFileCache | null = null;
   private budgetPool: SharedBudgetPool | null = null;
@@ -296,6 +340,9 @@ export class ProductionAgent {
     // Build complete config with defaults
     this.config = buildConfig(userConfig);
     this.provider = userConfig.provider;
+
+    // Set unique agent ID (passed from spawnAgent for subagents, auto-generated for parents)
+    this.agentId = userConfig.agentId || `agent-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 
     // Initialize tool registry
     this.tools = new Map();
@@ -2285,9 +2332,12 @@ export class ProductionAgent {
 
     // Prompt caching (Improvement P1): Replace the system message with structured content
     // that includes cache_control markers, enabling 60-70% cache hit rates.
-    // The original Message[] is kept for token estimation; the provider gets MessageWithContent[].
+    // Only use structured cache_control markers for Anthropic models — other providers
+    // (DeepSeek, Grok, etc.) use automatic prefix-based caching and don't understand these markers.
+    const configModel = this.config.model || 'default';
+    const isAnthropicModel = configModel.startsWith('anthropic/') || configModel.startsWith('claude-');
     let providerMessages: (Message | MessageWithContent)[] = messages;
-    if (this.cacheableSystemBlocks && this.cacheableSystemBlocks.length > 0) {
+    if (isAnthropicModel && this.cacheableSystemBlocks && this.cacheableSystemBlocks.length > 0) {
       providerMessages = messages.map((m, i) => {
         if (i === 0 && m.role === 'system') {
           // Replace system message with structured cacheable content
@@ -2378,7 +2428,7 @@ export class ProductionAgent {
           estimatedTokens: messages.reduce((sum, m) => sum + m.content.length / 4, 0),
         };
 
-        const result = await this.routing.executeWithFallback(messages, context);
+        const result = await this.routing.executeWithFallback(providerMessages, context);
         response = result.response;
         actualModel = result.model;
 
@@ -2431,6 +2481,15 @@ export class ProductionAgent {
       }
 
       const duration = Date.now() - startTime;
+
+      // Debug cache stats when DEBUG_CACHE is set
+      if (process.env.DEBUG_CACHE) {
+        const cr = response.usage?.cacheReadTokens ?? 0;
+        const cw = response.usage?.cacheWriteTokens ?? 0;
+        const inp = response.usage?.inputTokens ?? 0;
+        const hitRate = inp > 0 ? ((cr / inp) * 100).toFixed(1) : '0.0';
+        console.log(`[Cache] model=${actualModel} read=${cr} write=${cw} input=${inp} hit=${hitRate}%`);
+      }
 
       // Lesson 26: Record LLM response for tracing
       this.traceCollector?.record({
@@ -2527,17 +2586,63 @@ export class ProductionAgent {
 
   /**
    * Execute tool calls with safety checks and execution policy enforcement.
+   * Parallelizable read-only tools are batched and executed concurrently.
    */
   private async executeToolCalls(toolCalls: ToolCall[]): Promise<ToolResult[]> {
     const results: ToolResult[] = [];
 
-    for (const toolCall of toolCalls) {
+    // Group consecutive parallelizable tool calls into batches
+    const batches = groupToolCallsIntoBatches(toolCalls);
+
+    // Execute batches: parallel batches use Promise.allSettled, sequential execute one-by-one
+    for (const batch of batches) {
+      if (batch.length > 1 && PARALLELIZABLE_TOOLS.has(batch[0].name)) {
+        // Execute parallelizable batch concurrently
+        const batchResults = await Promise.allSettled(
+          batch.map(tc => this.executeSingleToolCall(tc))
+        );
+        for (const result of batchResults) {
+          if (result.status === 'fulfilled') {
+            results.push(result.value);
+          } else {
+            // Should not happen since executeSingleToolCall catches errors internally
+            const error = result.reason instanceof Error ? result.reason.message : String(result.reason);
+            results.push({ callId: 'unknown', result: `Error: ${error}`, error });
+          }
+        }
+      } else {
+        // Execute sequentially
+        for (const tc of batch) {
+          results.push(await this.executeSingleToolCall(tc));
+        }
+      }
+    }
+
+    return results;
+  }
+
+  /**
+   * Execute a single tool call with all safety checks, tracing, and error handling.
+   */
+  private async executeSingleToolCall(toolCall: ToolCall): Promise<ToolResult> {
       const spanId = this.observability?.tracer?.startSpan(`tool.${toolCall.name}`);
       const executionId = `exec-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 
       this.emit({ type: 'tool.start', tool: toolCall.name, args: toolCall.arguments });
 
       const startTime = Date.now();
+
+      // Short-circuit if tool call arguments failed to parse
+      if (toolCall.parseError) {
+        const errorMsg = `Tool arguments could not be parsed: ${toolCall.parseError}. Please retry with complete, valid JSON.`;
+        this.emit({ type: 'tool.blocked', tool: toolCall.name, reason: errorMsg });
+        this.traceCollector?.record({
+          type: 'tool.end',
+          data: { executionId, status: 'error', error: new Error(errorMsg), durationMs: Date.now() - startTime },
+        });
+        this.observability?.tracer?.endSpan(spanId);
+        return { callId: toolCall.id, result: `Error: ${errorMsg}`, error: errorMsg };
+      }
 
       // Lesson 26: Record tool start for tracing
       this.traceCollector?.record({
@@ -2587,13 +2692,8 @@ export class ProductionAgent {
             `${this.formatToolArgsForPlan(toolCall.name, toolCall.arguments as Record<string, unknown>)}\n` +
             `Use /show-plan to see all pending changes, /approve to execute, /reject to discard.`;
 
-          results.push({
-            callId: toolCall.id,
-            result: queueMessage,
-          });
-
           this.observability?.tracer?.endSpan(spanId);
-          continue; // Skip actual execution
+          return { callId: toolCall.id, result: queueMessage };
         }
         // =====================================================================
         // EXECUTION POLICY ENFORCEMENT (Lesson 23)
@@ -2603,7 +2703,7 @@ export class ProductionAgent {
           const policyContext = {
             messages: this.state.messages,
             currentMessage: this.state.messages.find(m => m.role === 'user')?.content,
-            previousToolCalls: toolCalls.slice(0, toolCalls.indexOf(toolCall)),
+            previousToolCalls: [],
           };
 
           const evaluation = this.executionPolicy.evaluate(toolCall, policyContext);
@@ -2737,7 +2837,7 @@ export class ProductionAgent {
           const args = toolCall.arguments as Record<string, unknown>;
           const filePath = String(args.path || args.file_path || '');
           if (filePath) {
-            const agentId = this.config.systemPrompt?.slice(0, 50) || 'agent';
+            const agentId = this.agentId;
             const claimed = this.blackboard.claim(filePath, agentId, 'write', {
               ttl: 60000, // 1 minute claim
               intent: `${toolCall.name}: ${filePath}`,
@@ -2768,13 +2868,11 @@ export class ProductionAgent {
               this.state.metrics.toolCalls++;
               this.emit({ type: 'tool.complete', tool: toolCall.name, result: cacheResult });
 
-              results.push({
+              this.observability?.tracer?.endSpan(spanId);
+              return {
                 callId: toolCall.id,
                 result: typeof cacheResult === 'string' ? cacheResult : JSON.stringify(cacheResult),
-              });
-
-              this.observability?.tracer?.endSpan(spanId);
-              continue; // Skip actual file I/O
+              };
             }
           }
         }
@@ -2854,22 +2952,18 @@ export class ProductionAgent {
           success: true,
         });
 
-        results.push({
-          callId: toolCall.id,
-          result,
-        });
-
         // Release blackboard claim after successful file write
         if (this.blackboard && (toolCall.name === 'write_file' || toolCall.name === 'edit_file')) {
           const args = toolCall.arguments as Record<string, unknown>;
           const filePath = String(args.path || args.file_path || '');
           if (filePath) {
-            const agentId = this.config.systemPrompt?.slice(0, 50) || 'agent';
+            const agentId = this.agentId;
             this.blackboard.release(filePath, agentId);
           }
         }
 
         this.observability?.tracer?.endSpan(spanId);
+        return { callId: toolCall.id, result };
       } catch (err) {
         const error = err instanceof Error ? err : new Error(String(err));
         const duration = Date.now() - startTime;
@@ -2898,17 +2992,9 @@ export class ProductionAgent {
           intent: `Execute tool ${toolCall.name}`,
         });
 
-        results.push({
-          callId: toolCall.id,
-          result: `Error: ${error.message}`,
-          error: error.message,
-        });
-
         this.emit({ type: 'tool.blocked', tool: toolCall.name, reason: error.message });
+        return { callId: toolCall.id, result: `Error: ${error.message}`, error: error.message };
       }
-    }
-
-    return results;
   }
 
   /**
@@ -4515,6 +4601,8 @@ export class ProductionAgent {
           builtIn: { logging: false, timing: false, metrics: false },
           custom: [],
         },
+        // Pass unique agentId for blackboard coordination and tracing
+        agentId,
         // Share parent's blackboard for coordination between parallel subagents
         blackboard: this.blackboard || undefined,
         // Share parent's file cache to eliminate redundant reads across agents
@@ -5052,9 +5140,28 @@ export class ProductionAgent {
       agents: tasks.map(t => t.agent),
     });
 
-    // Execute all tasks in parallel using allSettled to handle partial failures
-    const promises = tasks.map(({ agent, task }) => this.spawnAgent(agent, task));
-    const settled = await Promise.allSettled(promises);
+    // Pre-divide budget pool equally to prevent first-come starvation.
+    // Temporarily lower maxPerChild so each spawnAgent's normal reserve() call
+    // gets an equal share instead of racing for the full maxPerChild allocation.
+    let settled: PromiseSettledResult<SpawnResult>[];
+    if (this.budgetPool && tasks.length > 1) {
+      const poolStats = this.budgetPool.getStats();
+      // equalShare is always ≤ remaining ≤ totalTokens ≤ originalMaxPerChild
+      // (guaranteed by createBudgetPool capping maxPerChild to poolTokens)
+      // so we don't need Math.min(equalShare, originalMaxPerChild) here.
+      const equalShare = Math.floor(poolStats.tokensRemaining / tasks.length);
+      this.budgetPool.setMaxPerChild(equalShare);
+      try {
+        const promises = tasks.map(({ agent, task }) => this.spawnAgent(agent, task));
+        settled = await Promise.allSettled(promises);
+      } finally {
+        this.budgetPool.resetMaxPerChild();
+      }
+    } else {
+      // Single task or no pool - use standard sequential allocation
+      const promises = tasks.map(({ agent, task }) => this.spawnAgent(agent, task));
+      settled = await Promise.allSettled(promises);
+    }
 
     // Convert settled results to SpawnResult array
     const results: SpawnResult[] = settled.map((result, i) => {

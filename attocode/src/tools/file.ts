@@ -8,6 +8,7 @@ import { z } from 'zod';
 import * as fs from 'node:fs/promises';
 import * as path from 'node:path';
 import { defineTool } from './registry.js';
+import { coerceBoolean } from './coercion.js';
 import type { ToolResult } from './types.js';
 import { FileOperationError, ErrorCategory } from '../errors/index.js';
 import { generateDiff } from '../integrations/diff-utils.js';
@@ -264,7 +265,7 @@ export const editFileTool = defineTool(
 
 const listFilesSchema = z.object({
   path: z.string().optional().default('.').describe('Directory path to list'),
-  recursive: z.boolean().optional().default(false).describe('List recursively'),
+  recursive: coerceBoolean().optional().default(false).describe('List recursively'),
 });
 
 export const listFilesTool = defineTool(

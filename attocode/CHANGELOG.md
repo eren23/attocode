@@ -5,6 +5,25 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.1] - 2026-02-08
+
+### Added
+- **Parallel tool execution batching (B1)** — Read-only tools (`read_file`, `glob`, `grep`, `list_files`, `search_files`, `search_code`, `get_file_info`) are now batched and executed concurrently via `Promise.allSettled`. Non-parallelizable tools break the batch and execute sequentially. Reduces wall-clock time for multi-read tool call sequences.
+- **Boolean coercion for tool parameters (B6)** — New `coerceBoolean()` schema (via `z.preprocess`) accepts string `"true"`/`"false"`, `"1"`/`"0"`, `"yes"`/`"no"` (case-insensitive, whitespace-tolerant) from weaker models that send booleans as strings.
+- **`allowMcpTools` agent field (B5)** — Agent definitions can now control MCP tool access: `true` (default, all MCP tools), `false` (none), or `string[]` (specific tool names). Applied in `filterToolsForAgent()`.
+- **New test suites** — 6 new/extended test files (+56 tests): `coercion.test.ts`, `anthropic-cache.test.ts`, `adapters-cache.test.ts`, `budget-pool.test.ts` additions, `agent-registry.test.ts` additions, `parallel-tool-execution.test.ts`.
+
+### Fixed
+- **B7: Double budget allocation in parallel spawns** — `spawnAgentsParallel()` previously called `reserveBatch()` to pre-allocate equal shares, then passed `constraints.maxTokens` to each `spawnAgent()`. But `getSubagentBudget()` short-circuits on `constraints.maxTokens` without touching the pool, leaving phantom reservations permanently locked. Fixed by replacing `reserveBatch` with `setMaxPerChild(equalShare)` + `resetMaxPerChild()` in a `finally` block, letting each child allocate normally from the pool at the reduced cap.
+- **Agent hang on unparseable tool call arguments** — When an LLM returns tool calls with truncated/invalid JSON arguments (common with weaker models like glm-4.7), the agent would silently convert args to `{}`, execute the tool (which fails with a cryptic error), and the LLM would retry with the same broken JSON — each attempt taking 120s+ due to provider timeouts. Now: parse failures are propagated via a `parseError` field on `ToolCall`, and `executeSingleToolCall` short-circuits with a clear error message telling the LLM to retry with valid JSON, preventing the confusion-retry loop.
+
+### Changed
+- **Anthropic prompt caching headers (A1)** — Both `chat()` and `chatWithTools()` now send `anthropic-beta: prompt-caching-2024-07-31` header.
+- **Structured system content passthrough (A2-A3)** — System messages with `ContentBlock[]` containing `cache_control` markers are passed through as-is to the Anthropic API (not flattened to string).
+- **Cache usage extraction (A4-A5)** — Anthropic responses with `cache_creation_input_tokens` and `cache_read_input_tokens` are mapped to `cacheWriteTokens` and `cacheReadTokens` in both `chat()` and `chatWithTools()`.
+- **ProviderAdapter cache passthrough** — `cacheReadTokens`, `cacheWriteTokens`, and `cost` fields forwarded from provider responses. `cachedTokens` (OpenRouter) falls back to `cacheReadTokens`.
+- **Budget pool API** — Removed `reserveBatch()` method (fundamentally flawed). Added `setMaxPerChild()` / `resetMaxPerChild()` for temporary cap adjustment during parallel spawns.
+
 ## [0.2.0] - 2026-02-07
 
 ### Added
@@ -313,7 +332,8 @@ A new execution mode where one orchestrator model decomposes tasks into subtask 
 - Sandbox execution for bash commands (macOS Seatbelt)
 - Dangerous operation blocking in strict mode
 
-[Unreleased]: https://github.com/eren23/attocode/compare/v0.2.0...HEAD
+[Unreleased]: https://github.com/eren23/attocode/compare/v0.2.1...HEAD
+[0.2.1]: https://github.com/eren23/attocode/compare/v0.2.0...v0.2.1
 [0.2.0]: https://github.com/eren23/attocode/compare/v0.1.9...v0.2.0
 [0.1.9]: https://github.com/eren23/attocode/compare/v0.1.8...v0.1.9
 [0.1.8]: https://github.com/eren23/attocode/compare/v0.1.7...v0.1.8

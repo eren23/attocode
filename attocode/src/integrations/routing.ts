@@ -11,6 +11,7 @@ import type {
   Message,
   ChatResponse,
 } from '../types.js';
+import type { MessageWithContent } from '../providers/types.js';
 
 // =============================================================================
 // MODEL CAPABILITY
@@ -307,7 +308,7 @@ export class RoutingManager {
    * Execute with fallback chain.
    */
   async executeWithFallback(
-    messages: Message[],
+    messages: (Message | MessageWithContent)[],
     context: TaskContext
   ): Promise<{ response: ChatResponse; model: string }> {
     // Build fallback chain
