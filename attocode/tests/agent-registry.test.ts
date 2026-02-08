@@ -538,6 +538,118 @@ describe('filterToolsForAgent', () => {
     // Empty whitelist means all tools
     expect(filtered.length).toBe(mockTools.length);
   });
+
+  describe('allowMcpTools', () => {
+    it('should exclude MCP tools when allowMcpTools=false with tool whitelist', () => {
+      const agent: AgentDefinition = {
+        name: 'test',
+        description: 'Test',
+        systemPrompt: 'Test',
+        model: 'fast',
+        tools: ['read_file'],
+        allowMcpTools: false,
+      };
+
+      const filtered = filterToolsForAgent(agent, mockTools);
+      expect(filtered.map(t => t.name)).toContain('read_file');
+      expect(filtered.map(t => t.name)).not.toContain('mcp_custom_tool');
+    });
+
+    it('should allow only specific MCP tools when allowMcpTools is a string array', () => {
+      const agent: AgentDefinition = {
+        name: 'test',
+        description: 'Test',
+        systemPrompt: 'Test',
+        model: 'fast',
+        tools: ['read_file'],
+        allowMcpTools: ['mcp_custom_tool'],
+      };
+
+      const filtered = filterToolsForAgent(agent, mockTools);
+      expect(filtered.map(t => t.name)).toContain('read_file');
+      expect(filtered.map(t => t.name)).toContain('mcp_custom_tool');
+    });
+
+    it('should allow all MCP tools when allowMcpTools is undefined (backward compatible)', () => {
+      const agent: AgentDefinition = {
+        name: 'test',
+        description: 'Test',
+        systemPrompt: 'Test',
+        model: 'fast',
+        tools: ['read_file'],
+        allowMcpTools: undefined,
+      };
+
+      const filtered = filterToolsForAgent(agent, mockTools);
+      expect(filtered.map(t => t.name)).toContain('read_file');
+      expect(filtered.map(t => t.name)).toContain('mcp_custom_tool');
+    });
+
+    it('should exclude MCP tools when no tool whitelist and allowMcpTools=false', () => {
+      const agent: AgentDefinition = {
+        name: 'test',
+        description: 'Test',
+        systemPrompt: 'Test',
+        model: 'fast',
+        // No tools specified — all non-MCP tools pass
+        allowMcpTools: false,
+      };
+
+      const filtered = filterToolsForAgent(agent, mockTools);
+      // All non-MCP tools should be present
+      expect(filtered.map(t => t.name)).toContain('read_file');
+      expect(filtered.map(t => t.name)).toContain('write_file');
+      expect(filtered.map(t => t.name)).toContain('bash');
+      // MCP tools should be excluded
+      expect(filtered.map(t => t.name)).not.toContain('mcp_custom_tool');
+    });
+
+    it('should filter MCP tools to specific list when no tool whitelist and allowMcpTools is string[]', () => {
+      const extraMcpTools: ToolDefinition[] = [
+        ...mockTools,
+        { name: 'mcp_other_tool', description: 'Another MCP tool', parameters: {}, execute: async () => '' },
+      ];
+
+      const agent: AgentDefinition = {
+        name: 'test',
+        description: 'Test',
+        systemPrompt: 'Test',
+        model: 'fast',
+        // No tools whitelist
+        allowMcpTools: ['mcp_custom_tool'],
+      };
+
+      const filtered = filterToolsForAgent(agent, extraMcpTools);
+      // All non-MCP tools present
+      expect(filtered.map(t => t.name)).toContain('read_file');
+      expect(filtered.map(t => t.name)).toContain('bash');
+      // Only the allowed MCP tool passes
+      expect(filtered.map(t => t.name)).toContain('mcp_custom_tool');
+      expect(filtered.map(t => t.name)).not.toContain('mcp_other_tool');
+    });
+
+    it('should reject specific MCP tools not in allowMcpTools list with tool whitelist', () => {
+      const extraMcpTools: ToolDefinition[] = [
+        ...mockTools,
+        { name: 'mcp_blocked_tool', description: 'Blocked MCP', parameters: {}, execute: async () => '' },
+      ];
+
+      const agent: AgentDefinition = {
+        name: 'test',
+        description: 'Test',
+        systemPrompt: 'Test',
+        model: 'fast',
+        tools: ['read_file', 'grep'],
+        allowMcpTools: ['mcp_custom_tool'],
+      };
+
+      const filtered = filterToolsForAgent(agent, extraMcpTools);
+      expect(filtered.map(t => t.name)).toContain('read_file');
+      expect(filtered.map(t => t.name)).toContain('grep');
+      expect(filtered.map(t => t.name)).toContain('mcp_custom_tool');
+      expect(filtered.map(t => t.name)).not.toContain('mcp_blocked_tool');
+    });
+  });
 });
 
 describe('formatAgentList', () => {

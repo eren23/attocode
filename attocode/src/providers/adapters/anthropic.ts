@@ -112,6 +112,7 @@ export class AnthropicProvider implements LLMProvider, LLMProviderWithTools {
             'Content-Type': 'application/json',
             'x-api-key': this.apiKey,
             'anthropic-version': '2023-06-01',
+            'anthropic-beta': 'prompt-caching-2024-07-31',
           },
           body: JSON.stringify(body),
         },
@@ -130,7 +131,12 @@ export class AnthropicProvider implements LLMProvider, LLMProviderWithTools {
       const data = await response.json() as {
         content: Array<{ type: string; text: string }>;
         stop_reason: string;
-        usage: { input_tokens: number; output_tokens: number };
+        usage: {
+          input_tokens: number;
+          output_tokens: number;
+          cache_creation_input_tokens?: number;
+          cache_read_input_tokens?: number;
+        };
       };
 
       // Extract text from content blocks
@@ -145,6 +151,8 @@ export class AnthropicProvider implements LLMProvider, LLMProviderWithTools {
         usage: {
           inputTokens: data.usage.input_tokens,
           outputTokens: data.usage.output_tokens,
+          cacheReadTokens: data.usage.cache_read_input_tokens,
+          cacheWriteTokens: data.usage.cache_creation_input_tokens,
         },
       };
     } catch (error) {
@@ -182,14 +190,25 @@ export class AnthropicProvider implements LLMProvider, LLMProviderWithTools {
     // Convert tool definitions from OpenAI format to Anthropic format
     const anthropicTools = options?.tools?.map(this.convertToolToAnthropicFormat);
 
+    // Build system content — supports structured blocks with cache_control for prompt caching
+    let systemContent: string | Array<{ type: 'text'; text: string; cache_control?: { type: 'ephemeral' } }> | undefined;
+    if (systemMessage) {
+      if (typeof systemMessage.content !== 'string' && Array.isArray(systemMessage.content)) {
+        // Structured content with cache_control markers - pass through directly
+        systemContent = systemMessage.content;
+      } else {
+        systemContent = typeof systemMessage.content === 'string'
+          ? systemMessage.content
+          : (systemMessage.content as Array<{ text: string }>).map(c => c.text).join('');
+      }
+    }
+
     // Build request body
     const body: Record<string, unknown> = {
       model,
       max_tokens: options?.maxTokens ?? 4096,
       temperature: options?.temperature ?? 0.7,
-      system: typeof systemMessage?.content === 'string'
-        ? systemMessage.content
-        : systemMessage?.content?.map(c => c.text).join(''),
+      system: systemContent,
       messages: anthropicMessages,
       ...(options?.stopSequences && { stop_sequences: options.stopSequences }),
     };
@@ -212,6 +231,7 @@ export class AnthropicProvider implements LLMProvider, LLMProviderWithTools {
             'Content-Type': 'application/json',
             'x-api-key': this.apiKey,
             'anthropic-version': '2023-06-01',
+            'anthropic-beta': 'prompt-caching-2024-07-31',
           },
           body: JSON.stringify(body),
         },
@@ -231,7 +251,12 @@ export class AnthropicProvider implements LLMProvider, LLMProviderWithTools {
         id: string;
         content: AnthropicContentBlock[];
         stop_reason: string;
-        usage: { input_tokens: number; output_tokens: number };
+        usage: {
+          input_tokens: number;
+          output_tokens: number;
+          cache_creation_input_tokens?: number;
+          cache_read_input_tokens?: number;
+        };
       };
 
       // Extract text content and tool calls from content blocks
@@ -264,6 +289,8 @@ export class AnthropicProvider implements LLMProvider, LLMProviderWithTools {
         usage: {
           inputTokens: data.usage.input_tokens,
           outputTokens: data.usage.output_tokens,
+          cacheReadTokens: data.usage.cache_read_input_tokens,
+          cacheWriteTokens: data.usage.cache_creation_input_tokens,
         },
         toolCalls,
       };

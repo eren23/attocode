@@ -53,6 +53,10 @@ export interface ChatResponse {
     outputTokens: number;
     /** Tokens read from cache (for providers that support caching) */
     cachedTokens?: number;
+    /** Tokens read from prompt cache (Anthropic: cache_read_input_tokens) */
+    cacheReadTokens?: number;
+    /** Tokens written to prompt cache (Anthropic: cache_creation_input_tokens) */
+    cacheWriteTokens?: number;
     /** Actual cost from provider (when available, e.g., OpenRouter) */
     cost?: number;
   };

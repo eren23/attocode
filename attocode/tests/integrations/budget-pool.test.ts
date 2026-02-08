@@ -280,6 +280,114 @@ describe('SharedBudgetPool', () => {
   });
 });
 
+describe('setMaxPerChild / resetMaxPerChild', () => {
+  it('should cap reserves at the new maxPerChild', () => {
+    const pool = new SharedBudgetPool({
+      totalTokens: 200000,
+      maxPerChild: 100000,
+    });
+
+    pool.setMaxPerChild(50000);
+
+    const alloc = pool.reserve('child-1');
+    expect(alloc).not.toBeNull();
+    expect(alloc!.tokenBudget).toBe(50000);
+  });
+
+  it('should restore original maxPerChild after reset', () => {
+    const pool = new SharedBudgetPool({
+      totalTokens: 200000,
+      maxPerChild: 100000,
+    });
+
+    pool.setMaxPerChild(50000);
+    pool.resetMaxPerChild();
+
+    const alloc = pool.reserve('child-1');
+    expect(alloc).not.toBeNull();
+    expect(alloc!.tokenBudget).toBe(100000);
+  });
+
+  it('should divide pool equally among parallel children', () => {
+    const pool = new SharedBudgetPool({
+      totalTokens: 150000,
+      maxPerChild: 100000,
+    });
+
+    // Simulate parallel spawn: 3 children each get 50K
+    pool.setMaxPerChild(50000);
+
+    const alloc1 = pool.reserve('child-1');
+    const alloc2 = pool.reserve('child-2');
+    const alloc3 = pool.reserve('child-3');
+
+    expect(alloc1).not.toBeNull();
+    expect(alloc2).not.toBeNull();
+    expect(alloc3).not.toBeNull();
+    expect(alloc1!.tokenBudget).toBe(50000);
+    expect(alloc2!.tokenBudget).toBe(50000);
+    expect(alloc3!.tokenBudget).toBe(50000);
+
+    pool.resetMaxPerChild();
+  });
+
+  it('should still function correctly if resetMaxPerChild is never called', () => {
+    const pool = new SharedBudgetPool({
+      totalTokens: 200000,
+      maxPerChild: 100000,
+    });
+
+    pool.setMaxPerChild(30000);
+
+    // Pool works with reduced maxPerChild
+    const alloc1 = pool.reserve('child-1');
+    expect(alloc1).not.toBeNull();
+    expect(alloc1!.tokenBudget).toBe(30000);
+
+    // Record usage and release
+    pool.recordUsage('child-1', 20000, 0.05);
+    pool.release('child-1');
+
+    // Pool still works
+    const stats = pool.getStats();
+    expect(stats.tokensUsed).toBe(20000);
+    expect(stats.tokensRemaining).toBe(180000);
+
+    // Can still reserve
+    const alloc2 = pool.reserve('child-2');
+    expect(alloc2).not.toBeNull();
+    expect(alloc2!.tokenBudget).toBe(30000); // Still capped at 30K
+  });
+
+  it('should handle setMaxPerChild larger than remaining tokens', () => {
+    const pool = new SharedBudgetPool({
+      totalTokens: 100000,
+      maxPerChild: 50000,
+    });
+
+    // Reserve 50K
+    pool.reserve('child-1');
+
+    // Set maxPerChild higher than remaining
+    pool.setMaxPerChild(80000);
+
+    // Should get only what's remaining (50K)
+    const alloc = pool.reserve('child-2');
+    expect(alloc).not.toBeNull();
+    expect(alloc!.tokenBudget).toBe(50000); // min(80K, 50K remaining)
+
+    pool.resetMaxPerChild();
+  });
+
+  it('should handle setMaxPerChild(0) — all reserves return null', () => {
+    const pool = new SharedBudgetPool({ totalTokens: 100000, maxPerChild: 100000 });
+    pool.setMaxPerChild(0);
+    const alloc = pool.reserve('child-1');
+    expect(alloc).toBeNull();
+    pool.resetMaxPerChild();
+  });
+});
+
 describe('createBudgetPool', () => {
   it('should reserve parentReserveRatio for parent', () => {
     const pool = createBudgetPool(200000, 0.25, 100000);

@@ -61,7 +61,8 @@ export interface BudgetPoolStats {
 // =============================================================================
 
 export class SharedBudgetPool {
-  private readonly config: BudgetPoolConfig;
+  private config: BudgetPoolConfig;
+  private readonly originalMaxPerChild: number;
   private allocations = new Map<string, BudgetAllocation>();
   private totalTokensUsed = 0;
   private totalCostUsed = 0;
@@ -71,6 +72,7 @@ export class SharedBudgetPool {
 
   constructor(config: BudgetPoolConfig) {
     this.config = config;
+    this.originalMaxPerChild = config.maxPerChild;
   }
 
   /**
@@ -180,6 +182,23 @@ export class SharedBudgetPool {
   hasCapacity(): boolean {
     const committed = Math.max(this.totalTokensUsed, this.totalTokensReserved);
     return (this.config.totalTokens - committed) > 10000; // Minimum 10K tokens
+  }
+
+  /**
+   * Temporarily override maxPerChild for parallel batch spawning.
+   * Used by spawnAgentsParallel to divide the pool equally among children
+   * instead of each child racing for the full maxPerChild allocation.
+   * Must be followed by resetMaxPerChild() in a finally block.
+   */
+  setMaxPerChild(maxPerChild: number): void {
+    this.config.maxPerChild = maxPerChild;
+  }
+
+  /**
+   * Restore maxPerChild to the original value set at construction time.
+   */
+  resetMaxPerChild(): void {
+    this.config.maxPerChild = this.originalMaxPerChild;
   }
 }
 

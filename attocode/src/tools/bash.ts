@@ -8,6 +8,7 @@ import { z } from 'zod';
 import { spawn } from 'node:child_process';
 import { defineTool } from './registry.js';
 import { classifyCommand, classifyBashCommandDangerLevel } from './permission.js';
+import { coerceBoolean } from './coercion.js';
 import type { ToolResult, DangerLevel } from './types.js';
 
 // =============================================================================
@@ -151,7 +152,7 @@ export const bashTool = defineTool(
 const grepSchema = z.object({
   pattern: z.string().describe('Regex pattern to search for'),
   path: z.string().describe('File or directory to search in'),
-  recursive: z.boolean().optional().default(false).describe('Search recursively'),
+  recursive: coerceBoolean().optional().default(false).describe('Search recursively'),
 });
 
 export const grepTool = defineTool(

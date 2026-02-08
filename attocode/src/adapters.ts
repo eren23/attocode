@@ -91,6 +91,7 @@ export class ProviderAdapter implements ProductionLLMProvider {
       stopReason: response.stopReason,
       toolCalls: response.toolCalls?.map(tc => {
         let args: Record<string, unknown>;
+        let parseError: string | undefined;
         if (typeof tc.function.arguments === 'string') {
           const result = safeParseJson<Record<string, unknown>>(tc.function.arguments, {
             context: `tool ${tc.function.name}`,
@@ -101,6 +102,7 @@ export class ProviderAdapter implements ProductionLLMProvider {
               `First 100 chars: ${tc.function.arguments.slice(0, 100)}... ` +
               `Last 50 chars: ...${tc.function.arguments.slice(-50)}`
             );
+            parseError = `Failed to parse arguments as JSON. Raw text (first 200 chars): ${tc.function.arguments.slice(0, 200)}`;
           }
           args = result.success && result.value ? result.value : {};
         } else {
@@ -110,12 +112,16 @@ export class ProviderAdapter implements ProductionLLMProvider {
           id: tc.id,
           name: tc.function.name,
           arguments: args,
+          ...(parseError ? { parseError } : {}),
         };
       }),
       usage: response.usage ? {
         inputTokens: response.usage.inputTokens,
         outputTokens: response.usage.outputTokens,
         totalTokens: (response.usage.inputTokens || 0) + (response.usage.outputTokens || 0),
+        cacheReadTokens: response.usage.cacheReadTokens ?? response.usage.cachedTokens,
+        cacheWriteTokens: response.usage.cacheWriteTokens,
+        cost: response.usage.cost,
       } : undefined,
       model: model,
     };

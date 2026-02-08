@@ -37,6 +37,8 @@ export interface AgentDefinition {
   maxIterations?: number;
   capabilities?: string[];       // Used for NL matching
   tags?: string[];               // Additional tags for discovery
+  /** Control MCP tool access: true = all MCP tools (default), false = none, string[] = specific names */
+  allowMcpTools?: boolean | string[];
 }
 
 /**
@@ -674,20 +676,45 @@ export async function createAgentRegistry(baseDir?: string): Promise<AgentRegist
 // =============================================================================
 
 /**
- * Filter tools based on agent's tool whitelist.
- * MCP tools (prefixed with 'mcp_') are always included to enable external integrations.
+ * Filter tools based on agent's tool whitelist and MCP access policy.
+ * MCP tool access is controlled by `allowMcpTools`:
+ *   - true (default): all MCP tools pass through
+ *   - false: no MCP tools
+ *   - string[]: only specified MCP tool names
  */
 export function filterToolsForAgent(
   agent: AgentDefinition,
   allTools: ToolDefinition[]
 ): ToolDefinition[] {
   if (!agent.tools || agent.tools.length === 0) {
-    return allTools; // No whitelist = all tools
+    // No whitelist — apply MCP filtering only
+    if (agent.allowMcpTools === false) {
+      return allTools.filter(t => !t.name.startsWith('mcp_'));
+    }
+    if (Array.isArray(agent.allowMcpTools)) {
+      const allowed = agent.allowMcpTools;
+      return allTools.filter(t =>
+        !t.name.startsWith('mcp_') || allowed.includes(t.name)
+      );
+    }
+    return allTools;
   }
 
-  return allTools.filter(t =>
-    agent.tools!.includes(t.name) || t.name.startsWith('mcp_')
-  );
+  const mcpPolicy = agent.allowMcpTools;
+  return allTools.filter(t => {
+    // Check explicit tool whitelist
+    if (agent.tools!.includes(t.name)) return true;
+
+    // Check MCP tools based on allowMcpTools policy
+    if (t.name.startsWith('mcp_')) {
+      if (mcpPolicy === false) return false;
+      if (Array.isArray(mcpPolicy)) return mcpPolicy.includes(t.name);
+      // Default: allow MCP tools (backward compatible)
+      return true;
+    }
+
+    return false;
+  });
 }
 
 /**

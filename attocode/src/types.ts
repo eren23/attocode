@@ -31,6 +31,7 @@ export interface ToolCall {
   id: string;
   name: string;
   arguments: Record<string, unknown>;
+  parseError?: string;
 }
 
 /**
@@ -253,6 +254,14 @@ export interface ProductionAgentConfig {
    * are available without loading full schemas.
    */
   mcpToolSummaries?: Array<{ name: string; description: string }>;
+
+  /**
+   * Unique identifier for this agent instance.
+   * Used for blackboard resource claims and tracing.
+   * Parent agents get an auto-generated ID; subagents receive one from spawnAgent().
+   * @internal Used for subagent coordination
+   */
+  agentId?: string;
 
   /**
    * Shared blackboard for subagent coordination.
