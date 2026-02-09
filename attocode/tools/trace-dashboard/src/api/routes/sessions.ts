@@ -11,10 +11,12 @@ import {
   getSessionTokens,
   getSessionIssues,
   getSessionRaw,
+  getSessionParsed,
   uploadTrace,
   uploadTraceInMemory,
   getUploadedTraces,
 } from '../trace-service.js';
+import { HTMLGenerator, createJSONExporter } from '../../lib/index.js';
 
 export const sessionsRoutes = new Hono();
 
@@ -73,6 +75,64 @@ sessionsRoutes.get('/uploaded', async (c) => {
   } catch (err) {
     console.error('Failed to list uploaded traces:', err);
     return c.json({ success: false, error: 'Failed to list uploaded traces' }, 500);
+  }
+});
+
+// Batch export multiple sessions (must be before /:id to avoid wildcard match)
+sessionsRoutes.get('/export/batch', async (c) => {
+  try {
+    const idsParam = c.req.query('ids');
+    const format = c.req.query('format') || 'json';
+
+    if (!idsParam) {
+      return c.json({ success: false, error: 'Missing ids query parameter' }, 400);
+    }
+
+    const ids = idsParam.split(',').map(id => id.trim());
+    const results: Array<Record<string, unknown>> = [];
+
+    for (const id of ids) {
+      const session = await getSessionParsed(decodeURIComponent(id));
+      if (!session) continue;
+
+      results.push({
+        sessionId: session.sessionId,
+        task: session.task,
+        model: session.model,
+        status: session.status,
+        startTime: session.startTime.toISOString(),
+        durationMs: session.durationMs,
+        iterations: session.metrics.iterations,
+        inputTokens: session.metrics.inputTokens,
+        outputTokens: session.metrics.outputTokens,
+        totalCost: session.metrics.totalCost,
+        cacheHitRate: session.metrics.avgCacheHitRate,
+        errors: session.metrics.errors,
+      });
+    }
+
+    if (format === 'csv') {
+      const headers = ['sessionId', 'task', 'model', 'status', 'startTime', 'durationMs', 'iterations', 'inputTokens', 'outputTokens', 'totalCost', 'cacheHitRate', 'errors'];
+      const rows = [headers.join(',')];
+      for (const r of results) {
+        const row = headers.map(h => {
+          const val = r[h];
+          if (typeof val === 'string') return `"${val.replace(/"/g, '""')}"`;
+          return String(val ?? '');
+        }).join(',');
+        rows.push(row);
+      }
+      c.header('Content-Type', 'text/csv');
+      c.header('Content-Disposition', 'attachment; filename="sessions-export.csv"');
+      return c.body(rows.join('\n'));
+    }
+
+    c.header('Content-Type', 'application/json');
+    c.header('Content-Disposition', 'attachment; filename="sessions-export.json"');
+    return c.body(JSON.stringify(results, null, 2));
+  } catch (err) {
+    console.error('Failed to batch export:', err);
+    return c.json({ success: false, error: 'Failed to batch export' }, 500);
   }
 });
 
@@ -148,6 +208,57 @@ sessionsRoutes.get('/:id/issues', async (c) => {
   } catch (err) {
     console.error('Failed to get issues:', err);
     return c.json({ success: false, error: 'Failed to get issues' }, 500);
+  }
+});
+
+// Export session as HTML report
+sessionsRoutes.get('/:id/export/html', async (c) => {
+  try {
+    const id = c.req.param('id');
+    const session = await getSessionParsed(decodeURIComponent(id));
+    if (!session) {
+      return c.json({ success: false, error: 'Session not found' }, 404);
+    }
+    const html = new HTMLGenerator(session).generate();
+    c.header('Content-Type', 'text/html');
+    c.header('Content-Disposition', `attachment; filename="trace-${session.sessionId}.html"`);
+    return c.body(html);
+  } catch (err) {
+    console.error('Failed to export HTML:', err);
+    return c.json({ success: false, error: 'Failed to export HTML' }, 500);
+  }
+});
+
+// Export session as CSV
+sessionsRoutes.get('/:id/export/csv', async (c) => {
+  try {
+    const id = c.req.param('id');
+    const session = await getSessionParsed(decodeURIComponent(id));
+    if (!session) {
+      return c.json({ success: false, error: 'Session not found' }, 404);
+    }
+
+    const summary = createJSONExporter(session).generateSummary();
+    const rows: string[] = ['iteration,action,outcome,tokens_used,flags'];
+
+    for (const iter of summary.iterationSummaries) {
+      const row = [
+        iter.number,
+        `"${iter.action.replace(/"/g, '""')}"`,
+        iter.outcome,
+        iter.tokensUsed,
+        `"${iter.flags.join(';')}"`,
+      ].join(',');
+      rows.push(row);
+    }
+
+    const csv = rows.join('\n');
+    c.header('Content-Type', 'text/csv');
+    c.header('Content-Disposition', `attachment; filename="trace-${session.sessionId}.csv"`);
+    return c.body(csv);
+  } catch (err) {
+    console.error('Failed to export CSV:', err);
+    return c.json({ success: false, error: 'Failed to export CSV' }, 500);
   }
 });
 

@@ -55,7 +55,27 @@ export {
   type ExtensionRequest,
   type EconomicsEvent,
   type EconomicsEventListener,
+  type PhaseBudgetConfig,
 } from './economics.js';
+
+// Work Log (compaction-resilient summary)
+export {
+  WorkLog,
+  createWorkLog,
+  type WorkLogEntry,
+  type TestResult as WorkLogTestResult,
+  type ApproachEntry,
+  type WorkLogConfig,
+} from './work-log.js';
+
+// Verification Gate (opt-in completion verification)
+export {
+  VerificationGate,
+  createVerificationGate,
+  type VerificationCriteria,
+  type VerificationState,
+  type VerificationCheckResult,
+} from './verification-gate.js';
 
 // Extensible agent registry
 export {

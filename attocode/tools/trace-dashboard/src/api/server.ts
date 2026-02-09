@@ -20,7 +20,12 @@ app.use('*', logger());
 app.use(
   '/api/*',
   cors({
-    origin: ['http://localhost:5173', 'http://localhost:3001'],
+    origin: [
+      'http://localhost:5173',
+      'http://localhost:3000',
+      'http://localhost:3001',
+      'http://localhost:4000',
+    ],
     allowMethods: ['GET', 'POST', 'OPTIONS'],
   })
 );
@@ -49,4 +54,5 @@ console.log(`🚀 Trace Dashboard API server starting on http://localhost:${port
 serve({
   fetch: app.fetch,
   port,
+  hostname: '0.0.0.0',
 });

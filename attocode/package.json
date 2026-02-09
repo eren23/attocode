@@ -35,7 +35,11 @@
     "prepublishOnly": "npm run build",
     "dashboard": "cd tools/trace-dashboard && npm run dev",
     "dashboard:build": "cd tools/trace-dashboard && npm run build",
-    "dashboard:start": "cd tools/trace-dashboard && npm run start"
+    "dashboard:start": "cd tools/trace-dashboard && npm run start",
+    "eval": "tsx tools/eval/src/cli.ts",
+    "eval:golden": "tsx tools/eval/src/cli.ts run -d golden --parallelism 3 --isolation worktree",
+    "eval:bench": "./scripts/eval-bench.sh",
+    "eval:docker": "./scripts/eval-docker.sh"
   },
   "dependencies": {
     "better-sqlite3": "^12.6.2",

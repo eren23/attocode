@@ -128,44 +128,65 @@ print(json.dumps(instances))
 }
 
 /**
- * Convert SWE-bench instance to EvalTask format.
+ * Options for converting SWE-bench instances to eval tasks.
  */
-export function convertToEvalTask(instance: SWEBenchInstance): EvalTask {
+export interface ConvertOptions {
+  /**
+   * When true, skips repo clone/checkout setup commands.
+   * The isolation provider (WorktreeProvider) handles repo setup instead.
+   * The prompt uses relative paths instead of absolute /tmp paths.
+   */
+  isolationManaged?: boolean;
+}
+
+/**
+ * Convert SWE-bench instance to EvalTask format.
+ *
+ * @param instance - SWE-bench instance data
+ * @param options - Conversion options
+ */
+export function convertToEvalTask(
+  instance: SWEBenchInstance,
+  options: ConvertOptions = {},
+): EvalTask {
+  const { isolationManaged = false } = options;
+
   return {
     id: instance.instance_id,
     name: `SWE-bench: ${instance.instance_id}`,
-    prompt: buildAgentPrompt(instance),
+    prompt: isolationManaged
+      ? buildIsolatedAgentPrompt(instance)
+      : buildAgentPrompt(instance),
     timeout_ms: 1200000, // 20 minutes per task (SWE-bench tasks are complex)
-    grader: 'swe-bench' as GraderType, // Custom grader
+    grader: 'swe-bench' as GraderType,
     expected: {
-      // Store metadata for grading
       swe_bench: {
         instance_id: instance.instance_id,
         repo: instance.repo,
         base_commit: instance.base_commit,
         fail_to_pass: instance.FAIL_TO_PASS,
         pass_to_pass: instance.PASS_TO_PASS,
+        test_patch: instance.test_patch,
       },
     },
     metadata: {
-      difficulty: 'medium', // SWE-bench doesn't have difficulty ratings
+      difficulty: 'medium',
       category: 'swe-bench',
       source: 'swe-bench-lite',
       repo: instance.repo,
       version: instance.version,
     },
-    setup: {
-      // Clone and setup repo
-      commands: [buildSetupCommand(instance)],
-    },
-    teardown: {
-      commands: ['rm -rf /tmp/swe-bench-workspace'],
-    },
+    setup: isolationManaged
+      ? undefined // WorktreeProvider handles repo setup
+      : { commands: [buildSetupCommand(instance)] },
+    teardown: isolationManaged
+      ? undefined
+      : { commands: ['rm -rf /tmp/swe-bench-workspace'] },
   };
 }
 
 /**
- * Build the prompt for the agent.
+ * Build the prompt for the agent (legacy mode with hardcoded paths).
  */
 function buildAgentPrompt(instance: SWEBenchInstance): string {
   const workdir = `/tmp/swe-bench-workspace/${instance.instance_id}`;
@@ -194,6 +215,81 @@ ${instance.hints_text ? `## Hints\n${instance.hints_text}\n` : ''}
 - Focus on the specific issue described above
 
 Start by exploring the repository structure and understanding the codebase.`;
+}
+
+/**
+ * Build the prompt for isolation-managed mode.
+ * Uses the current working directory (set by workingDirectory config) instead of hardcoded paths.
+ * Includes structured workflow, test commands, and budget awareness.
+ */
+function buildIsolatedAgentPrompt(instance: SWEBenchInstance): string {
+  // Parse FAIL_TO_PASS test IDs
+  let failToPassTests: string[] = [];
+  try {
+    const rawFTP = instance.FAIL_TO_PASS;
+    failToPassTests = Array.isArray(rawFTP)
+      ? rawFTP
+      : typeof rawFTP === 'string' ? JSON.parse(rawFTP) : [];
+  } catch {
+    // Field might already be an array or malformed
+    if (typeof instance.FAIL_TO_PASS === 'string' && instance.FAIL_TO_PASS.trim()) {
+      failToPassTests = [instance.FAIL_TO_PASS];
+    }
+  }
+
+  const testCommand = failToPassTests.length > 0
+    ? `python -m pytest ${failToPassTests.join(' ')} -xvs`
+    : 'python -m pytest -x';
+
+  const testSection = failToPassTests.length > 0
+    ? `## Failing Tests (MUST fix these)
+The following tests should FAIL on the current code and PASS after your fix:
+${failToPassTests.map(t => `- \`${t}\``).join('\n')}
+
+Run them with:
+\`\`\`bash
+${testCommand}
+\`\`\``
+    : '';
+
+  return `You are fixing a GitHub issue in the **${instance.repo}** repository.
+
+## Environment
+- The repo is set up in the current working directory (commit \`${instance.base_commit}\`)
+- Run \`pip install -e .\` if needed before running tests
+- **pytest is available** — use it to verify your fix
+- All file paths should be relative to the current directory
+
+## Issue Description
+${instance.problem_statement}
+
+${instance.hints_text ? `## Hints\n${instance.hints_text}\n` : ''}
+${testSection}
+
+## Workflow (follow this order)
+
+### Phase 1: Understand the failing tests (1-3 iterations)
+- Read the failing test files to understand what the expected behavior is
+- Identify the relevant source files that need to change
+
+### Phase 2: Fix the code (1-3 iterations)
+- Make minimal, targeted changes to fix the issue
+- Do NOT modify test files — only fix source code
+
+### Phase 3: Verify (1-2 iterations)
+- Run the failing tests: \`${testCommand}\`
+- If tests still fail, iterate on your fix
+
+### Phase 4: Done
+- Once tests pass, you're done. Provide a brief summary.
+
+## Critical Rules
+- You MUST run the failing tests before finishing. A fix without verification is incomplete.
+- Make minimal changes — do not refactor unrelated code.
+- Do NOT commit your changes — just make the edits.
+- You have ~50 iterations. Budget them wisely: don't over-explore.
+
+Start by reading the failing test files to understand the expected behavior.`;
 }
 
 /**
@@ -409,12 +505,12 @@ export function gradeSimple(
     };
   }
 
-  // Patch was generated - partial success
+  // Patch was generated but not verified
   // Full grading requires the official harness
   return {
-    success: true, // Optimistic - actual success determined by harness
+    success: false, // Not verified - actual success determined by harness
     partial_credit: 0.5, // Give partial credit for generating a patch
-    explanation: 'Patch generated (full grading requires SWE-bench harness)',
+    explanation: 'Patch generated but unverified (full grading requires SWE-bench harness)',
   };
 }
 

@@ -22,8 +22,20 @@ const bashSchema = z.object({
 });
 
 /**
+ * Auto-convert timeout: values < 300 are almost certainly seconds, not milliseconds.
+ * Models (especially weaker ones) often pass e.g. 60 meaning 60 seconds.
+ * Threshold at 300 avoids mangling legitimate sub-second timeouts (500-999ms in tests).
+ */
+export function normalizeTimeoutMs(timeout: number): number {
+  if (timeout > 0 && timeout < 300) {
+    return timeout * 1000;
+  }
+  return timeout;
+}
+
+/**
  * Execute a bash command.
- * 
+ *
  * Key safety features:
  * 1. Danger classification for permission checking
  * 2. Timeout to prevent hanging
@@ -35,6 +47,8 @@ export const bashTool = defineTool(
   'Execute a bash command and return the output',
   bashSchema,
   async (input): Promise<ToolResult> => {
+    input.timeout = normalizeTimeoutMs(input.timeout);
+
     // Classify the command's danger level
     const { level, reasons } = classifyCommand(input.command);
     

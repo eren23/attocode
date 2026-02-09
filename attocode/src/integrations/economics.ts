@@ -100,6 +100,25 @@ export interface PhaseState {
   iterationsInPhase: number;
   /** Files read in recent iterations (for diminishing returns) */
   recentNewFiles: number;
+  /** Whether the last test passed */
+  lastTestPassed: boolean | null;
+  /** Consecutive test failures count */
+  consecutiveTestFailures: number;
+  /** Whether agent is in a test-fix cycle */
+  inTestFixCycle: boolean;
+}
+
+/**
+ * Phase-aware budget allocation config.
+ * Prevents spending too long in exploration and reserves time for verification.
+ */
+export interface PhaseBudgetConfig {
+  /** Max percent of iterations for exploration (default: 30%) */
+  maxExplorationPercent: number;
+  /** Percent of iterations reserved for verification (default: 20%) */
+  reservedVerificationPercent: number;
+  /** Whether phase budget enforcement is enabled */
+  enabled: boolean;
 }
 
 /**
@@ -195,6 +214,30 @@ const EXPLORATION_NUDGE_PROMPT = (filesRead: number, iterations: number) =>
 If you're still gathering context, briefly explain what you're looking for.`;
 
 /**
+ * Test-fix rethink prompt - injected after consecutive test failures.
+ */
+const TEST_FIX_RETHINK_PROMPT = (failures: number) =>
+`[System] You've had ${failures} consecutive test failures. Step back and rethink:
+1. Re-read the error messages carefully
+2. Consider whether your approach is fundamentally wrong
+3. Try a DIFFERENT fix strategy instead of iterating on the same one
+Do not retry the same fix. Try a new approach.`;
+
+/**
+ * Phase budget exploration exceeded prompt.
+ */
+const EXPLORATION_BUDGET_EXCEEDED_PROMPT = (pct: number) =>
+`[System] You've spent ${pct}% of your iterations in exploration. Start making edits NOW.
+Do not read more files. Use what you know to make the fix.`;
+
+/**
+ * Phase budget verification reserve prompt.
+ */
+const VERIFICATION_RESERVE_PROMPT =
+`[System] You are running low on iterations. Run your tests NOW to verify your changes.
+Do not make more edits until you've confirmed whether the current fix works.`;
+
+/**
  * ExecutionEconomicsManager handles budget tracking and progress detection.
  */
 export class ExecutionEconomicsManager {
@@ -203,6 +246,7 @@ export class ExecutionEconomicsManager {
   private progress: ProgressState;
   private loopState: LoopDetectionState;
   private phaseState: PhaseState;
+  private phaseBudget: PhaseBudgetConfig | null = null;
   private startTime: number;
   private pausedDuration = 0;
   private pauseStart: number | null = null;
@@ -266,6 +310,9 @@ export class ExecutionEconomicsManager {
       shouldTransition: false,
       iterationsInPhase: 0,
       recentNewFiles: 0,
+      lastTestPassed: null,
+      consecutiveTestFailures: 0,
+      inTestFixCycle: false,
     };
 
     this.startTime = Date.now();
@@ -298,6 +345,14 @@ export class ExecutionEconomicsManager {
   private getEffectiveDuration(): number {
     const currentPaused = this.pauseStart !== null ? Date.now() - this.pauseStart : 0;
     return Date.now() - this.startTime - this.pausedDuration - currentPaused;
+  }
+
+  /**
+   * Configure phase-aware budget allocation.
+   * Only active when enabled=true (eval mode). TUI mode leaves it off.
+   */
+  setPhaseBudget(config: PhaseBudgetConfig): void {
+    this.phaseBudget = config;
   }
 
   /**
@@ -405,12 +460,18 @@ export class ExecutionEconomicsManager {
       this.progress.lastMeaningfulProgress = now;
       this.progress.stuckCount = 0;
 
-      // Detect test runs
+      // Detect test runs and track outcomes
       if (command.includes('test') || command.includes('pytest') || command.includes('npm test') || command.includes('jest')) {
         this.phaseState.testsRun++;
         // Transition to verifying phase when tests are run after edits
         if (this.phaseState.phase === 'acting' && this.phaseState.filesModified.size > 0) {
           this.transitionPhase('verifying', 'Tests run after edits');
+        }
+
+        // Track test pass/fail from result if available
+        if (_result !== undefined) {
+          const resultStr = typeof _result === 'string' ? _result : '';
+          this.parseTestOutcome(command, resultStr);
         }
       }
     }
@@ -635,6 +696,64 @@ export class ExecutionEconomicsManager {
       };
     }
 
+    // =========================================================================
+    // TEST-FIX CYCLE - Nudge to rethink after 3+ consecutive failures
+    // =========================================================================
+    if (this.phaseState.consecutiveTestFailures >= 3) {
+      return {
+        canContinue: true,
+        reason: `${this.phaseState.consecutiveTestFailures} consecutive test failures`,
+        budgetType: 'iterations',
+        isHardLimit: false,
+        isSoftLimit: true,
+        percentUsed: (this.usage.iterations / this.budget.targetIterations) * 100,
+        suggestedAction: 'warn',
+        injectedPrompt: TEST_FIX_RETHINK_PROMPT(this.phaseState.consecutiveTestFailures),
+      };
+    }
+
+    // =========================================================================
+    // PHASE-AWARE BUDGET ALLOCATION (opt-in, used in eval mode)
+    // =========================================================================
+    if (this.phaseBudget?.enabled) {
+      const iterPct = (this.usage.iterations / this.budget.maxIterations) * 100;
+      const explorationPct = this.phaseState.phase === 'exploring'
+        ? (this.phaseState.iterationsInPhase / this.budget.maxIterations) * 100
+        : 0;
+
+      // Too much time in exploration
+      if (explorationPct > this.phaseBudget.maxExplorationPercent && this.phaseState.filesModified.size === 0) {
+        return {
+          canContinue: true,
+          reason: `Exploration exceeds ${this.phaseBudget.maxExplorationPercent}% of budget`,
+          budgetType: 'iterations',
+          isHardLimit: false,
+          isSoftLimit: true,
+          percentUsed: iterPct,
+          suggestedAction: 'warn',
+          injectedPrompt: EXPLORATION_BUDGET_EXCEEDED_PROMPT(Math.round(explorationPct)),
+        };
+      }
+
+      // Only verification-reserve iterations remain
+      const remainingPct = 100 - iterPct;
+      if (remainingPct <= this.phaseBudget.reservedVerificationPercent
+          && this.phaseState.phase !== 'verifying'
+          && this.phaseState.filesModified.size > 0
+          && this.phaseState.testsRun === 0) {
+        return {
+          canContinue: true,
+          reason: `Only ${Math.round(remainingPct)}% budget remaining, verification needed`,
+          budgetType: 'iterations',
+          isHardLimit: false,
+          isSoftLimit: true,
+          percentUsed: iterPct,
+          suggestedAction: 'warn',
+          injectedPrompt: VERIFICATION_RESERVE_PROMPT,
+        };
+      }
+    }
+
     // Check soft limits (warnings)
     // Two-tier approach: 67-79% = warning, 80%+ = forceTextOnly to prevent overshoot
     if (this.usage.tokens >= this.budget.softTokenLimit) {
@@ -853,6 +972,9 @@ export class ExecutionEconomicsManager {
     testsRun: number;
     shouldTransition: boolean;
     iterationsInPhase: number;
+    lastTestPassed: boolean | null;
+    consecutiveTestFailures: number;
+    inTestFixCycle: boolean;
   } {
     return {
       phase: this.phaseState.phase,
@@ -862,6 +984,9 @@ export class ExecutionEconomicsManager {
       testsRun: this.phaseState.testsRun,
       shouldTransition: this.phaseState.shouldTransition,
       iterationsInPhase: this.phaseState.iterationsInPhase,
+      lastTestPassed: this.phaseState.lastTestPassed,
+      consecutiveTestFailures: this.phaseState.consecutiveTestFailures,
+      inTestFixCycle: this.phaseState.inTestFixCycle,
     };
   }
 
@@ -919,6 +1044,9 @@ export class ExecutionEconomicsManager {
       shouldTransition: false,
       iterationsInPhase: 0,
       recentNewFiles: 0,
+      lastTestPassed: null,
+      consecutiveTestFailures: 0,
+      inTestFixCycle: false,
     };
 
     this.startTime = Date.now();
@@ -938,6 +1066,36 @@ export class ExecutionEconomicsManager {
         // Ignore listener errors
       }
     }
+  }
+
+  /**
+   * Parse test outcome from bash command output.
+   * Updates phaseState test tracking fields.
+   */
+  private parseTestOutcome(_command: string, output: string): void {
+    if (!output) return;
+
+    // Detect pass/fail from pytest-style output
+    const hasPassed = /(\d+)\s+passed/.test(output) || output.includes('PASSED');
+    const hasFailed = /(\d+)\s+failed/.test(output) || output.includes('FAILED') || output.includes('ERROR');
+
+    if (hasFailed && !hasPassed) {
+      // Pure failure
+      this.phaseState.lastTestPassed = false;
+      this.phaseState.consecutiveTestFailures++;
+      this.phaseState.inTestFixCycle = true;
+    } else if (hasPassed && !hasFailed) {
+      // Pure pass
+      this.phaseState.lastTestPassed = true;
+      this.phaseState.consecutiveTestFailures = 0;
+      this.phaseState.inTestFixCycle = false;
+    } else if (hasPassed && hasFailed) {
+      // Mixed - some passed, some failed
+      this.phaseState.lastTestPassed = false;
+      this.phaseState.consecutiveTestFailures++;
+      this.phaseState.inTestFixCycle = true;
+    }
+    // If no clear signal, don't update
   }
 
   private isStuck(): boolean {

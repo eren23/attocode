@@ -21,6 +21,7 @@ import {
   formatPercent,
   cn,
 } from '../lib/utils';
+import { ExportDropdown } from '../components/ExportDropdown';
 
 type TabId = 'summary' | 'timeline' | 'tree' | 'tokens' | 'issues';
 
@@ -332,6 +333,22 @@ export function SessionDetailPage() {
               <StatusBadge status={session.meta.status} />
             </div>
           </div>
+          <ExportDropdown
+            options={[
+              {
+                label: 'Download JSON',
+                onClick: () => window.open(`/api/sessions/${encodeURIComponent(id!)}/raw`, '_blank'),
+              },
+              {
+                label: 'Download CSV',
+                onClick: () => window.open(`/api/sessions/${encodeURIComponent(id!)}/export/csv`, '_blank'),
+              },
+              {
+                label: 'Download HTML Report',
+                onClick: () => window.open(`/api/sessions/${encodeURIComponent(id!)}/export/html`, '_blank'),
+              },
+            ]}
+          />
         </div>
       </div>
 

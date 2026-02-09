@@ -76,8 +76,17 @@ export function SwarmHistoryPage() {
                   </span>
                 )}
               </div>
-              <div className="text-xs text-gray-500">
-                {(entry.sizeBytes / 1024).toFixed(1)} KB
+              <div className="flex items-center gap-3">
+                <span className="text-xs text-gray-500">
+                  {(entry.sizeBytes / 1024).toFixed(1)} KB
+                </span>
+                <a
+                  href={`/api/swarm/events/${entry.filename}`}
+                  download
+                  className="text-xs text-blue-400 hover:text-blue-300 transition-colors"
+                >
+                  Download
+                </a>
               </div>
             </div>
           ))}

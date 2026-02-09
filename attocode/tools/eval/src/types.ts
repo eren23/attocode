@@ -81,6 +81,7 @@ export interface ExpectedResult {
     base_commit: string;
     fail_to_pass?: string;
     pass_to_pass?: string;
+    test_patch?: string;
   };
 }
 
@@ -169,6 +170,9 @@ export interface EvalResult {
 
   /** Path to trace file for detailed debugging */
   trace_path?: string;
+
+  /** Human-readable grading explanation */
+  explanation?: string;
 
   /** Error message if failed */
   error?: string;
@@ -438,6 +442,9 @@ export interface GradeResult {
 
   /** Human-readable explanation */
   explanation?: string;
+
+  /** SWE-bench patch (git diff) extracted during grading */
+  swe_bench_patch?: string;
 }
 
 // =============================================================================

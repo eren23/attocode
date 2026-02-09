@@ -10,7 +10,8 @@ import { readFileTool, writeFileTool, editFileTool, listFilesTool } from './file
 import { bashTool, grepTool, globTool } from './bash.js';
 import { undoToolsAsStandard } from './undo.js';
 import type { ToolDefinitionSchema } from '../providers/types.js';
-import type { ToolDescription, PermissionMode } from './types.js';
+import type { ToolDescription, PermissionMode, ToolDefinition } from './types.js';
+import * as path from 'node:path';
 
 // =============================================================================
 // RE-EXPORTS
@@ -76,34 +77,113 @@ export function toOpenRouterSchemas(tools: ToolDescription[]): ToolDefinitionSch
 }
 
 // =============================================================================
+// BASE PATH WRAPPING
+// =============================================================================
+
+/**
+ * Resolve a path relative to a base directory.
+ * Absolute paths are returned as-is. Relative paths are resolved against basePath.
+ */
+function resolveAgainstBase(basePath: string, filePath: string): string {
+  if (path.isAbsolute(filePath)) return filePath;
+  return path.resolve(basePath, filePath);
+}
+
+/**
+ * Wrap a tool so that path-like inputs are resolved against a basePath.
+ * The wrapper preserves the original tool's schema, description, and danger level.
+ *
+ * Uses 'any' cast internally because Zod's generic type parameters are invariant,
+ * making it impossible to express "same type in, same type out" without it.
+ */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function wrapToolWithBasePath<T extends ToolDefinition<any>>(
+  tool: T,
+  basePath: string,
+  pathFields: string[],
+  cwdField?: string,
+): T {
+  return {
+    ...tool,
+    execute: async (input: Record<string, unknown>) => {
+      const resolved = { ...input };
+
+      // Resolve path fields
+      for (const field of pathFields) {
+        if (typeof resolved[field] === 'string') {
+          resolved[field] = resolveAgainstBase(basePath, resolved[field] as string);
+        }
+      }
+
+      // Set default cwd if not provided
+      if (cwdField && !resolved[cwdField]) {
+        resolved[cwdField] = basePath;
+      }
+
+      return tool.execute(resolved);
+    },
+  } as T;
+}
+
+// =============================================================================
 // PRESET REGISTRY
 // =============================================================================
+
+/**
+ * Options for creating a standard tool registry.
+ */
+export interface StandardRegistryOptions {
+  /**
+   * Base path for all tool operations.
+   * When set, relative paths in file/bash tools are resolved against this directory,
+   * and bash commands default to this as their cwd.
+   * Falls back to process.cwd() behavior when not set.
+   */
+  basePath?: string;
+}
 
 /**
  * Create a pre-configured tool registry with all standard tools.
  *
  * @param permissionMode - How to handle dangerous operations
+ * @param options - Optional configuration including basePath for path resolution
  * @returns Configured ToolRegistry with all tools registered
  *
  * @example
  * ```typescript
  * const registry = createStandardRegistry('interactive');
  * const result = await registry.execute('read_file', { path: 'README.md' });
+ *
+ * // With basePath for isolated execution
+ * const isolated = createStandardRegistry('yolo', { basePath: '/tmp/workspace' });
  * ```
  */
-export function createStandardRegistry(permissionMode: PermissionMode = 'interactive'): ToolRegistry {
+export function createStandardRegistry(
+  permissionMode: PermissionMode = 'interactive',
+  options?: StandardRegistryOptions,
+): ToolRegistry {
   const registry = new ToolRegistry(permissionMode);
+  const basePath = options?.basePath;
 
-  // File operations
-  registry.register(readFileTool);
-  registry.register(writeFileTool);
-  registry.register(editFileTool);
-  registry.register(listFilesTool);
-
-  // Bash operations
-  registry.register(bashTool);
-  registry.register(grepTool);
-  registry.register(globTool);
+  if (basePath) {
+    // Wrap tools to resolve paths against basePath
+    registry.register(wrapToolWithBasePath(readFileTool, basePath, ['path']));
+    registry.register(wrapToolWithBasePath(writeFileTool, basePath, ['path']));
+    registry.register(wrapToolWithBasePath(editFileTool, basePath, ['path']));
+    registry.register(wrapToolWithBasePath(listFilesTool, basePath, ['path']));
+    registry.register(wrapToolWithBasePath(bashTool, basePath, [], 'cwd'));
+    registry.register(wrapToolWithBasePath(grepTool, basePath, ['path']));
+    registry.register(wrapToolWithBasePath(globTool, basePath, ['path']));
+  } else {
+    // Register tools as-is (original behavior)
+    registry.register(readFileTool);
+    registry.register(writeFileTool);
+    registry.register(editFileTool);
+    registry.register(listFilesTool);
+    registry.register(bashTool);
+    registry.register(grepTool);
+    registry.register(globTool);
+  }
 
   // Undo/history operations (gracefully handle missing tracker context)
   for (const tool of undoToolsAsStandard) {

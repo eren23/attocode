@@ -8,6 +8,7 @@ import type { EvalDataset, EvalTask, EvalRunConfig, TaskMetadata } from '../type
 import * as fs from 'fs/promises';
 import * as path from 'path';
 import { loadSWEBenchLite, convertToEvalTask as convertSWEBenchTask } from '../adapters/swe-bench.js';
+import type { ConvertOptions } from '../adapters/swe-bench.js';
 
 // =============================================================================
 // DATASET LOADING
@@ -16,15 +17,29 @@ import { loadSWEBenchLite, convertToEvalTask as convertSWEBenchTask } from '../a
 /**
  * Load a dataset by name or path.
  */
-export async function loadDataset(nameOrPath: string): Promise<EvalDataset> {
+/**
+ * Options for loading datasets.
+ */
+export interface LoadDatasetOptions {
+  /** When true, SWE-bench tasks skip repo clone setup (isolation provider handles it) */
+  isolationManaged?: boolean;
+  /** Project root directory for resolving dataset paths (defaults to process.cwd()) */
+  projectRoot?: string;
+}
+
+export async function loadDataset(
+  nameOrPath: string,
+  options?: LoadDatasetOptions,
+): Promise<EvalDataset> {
   // Check if it's a built-in dataset
-  const builtIn = await loadBuiltInDataset(nameOrPath);
+  const builtIn = await loadBuiltInDataset(nameOrPath, options);
   if (builtIn) return builtIn;
 
   // Try to load from file
+  const root = options?.projectRoot || process.cwd();
   const filePath = nameOrPath.endsWith('.json')
     ? nameOrPath
-    : path.join(process.cwd(), 'tools', 'eval', 'datasets', `${nameOrPath}.json`);
+    : path.join(root, 'tools', 'eval', 'datasets', `${nameOrPath}.json`);
 
   try {
     const content = await fs.readFile(filePath, 'utf-8');
@@ -37,7 +52,10 @@ export async function loadDataset(nameOrPath: string): Promise<EvalDataset> {
 /**
  * Load a built-in dataset.
  */
-async function loadBuiltInDataset(name: string): Promise<EvalDataset | null> {
+async function loadBuiltInDataset(
+  name: string,
+  options?: LoadDatasetOptions,
+): Promise<EvalDataset | null> {
   switch (name.toLowerCase()) {
     case 'golden':
       return getGoldenDataset();
@@ -46,7 +64,7 @@ async function loadBuiltInDataset(name: string): Promise<EvalDataset | null> {
     case 'swe-bench-lite':
     case 'swebench-lite':
     case 'swebench':
-      return getSWEBenchLiteDataset();
+      return getSWEBenchLiteDataset(options);
     default:
       return null;
   }
@@ -380,7 +398,7 @@ export function main(x: number): number {
  * - SWE_BENCH_LIMIT: Number of tasks to load (default: all)
  * - SWE_BENCH_INSTANCE_IDS: Comma-separated instance IDs to load
  */
-async function getSWEBenchLiteDataset(): Promise<EvalDataset> {
+async function getSWEBenchLiteDataset(options?: LoadDatasetOptions): Promise<EvalDataset> {
   const limit = process.env.SWE_BENCH_LIMIT ? parseInt(process.env.SWE_BENCH_LIMIT, 10) : undefined;
   const instanceIds = process.env.SWE_BENCH_INSTANCE_IDS
     ? process.env.SWE_BENCH_INSTANCE_IDS.split(',').map((id) => id.trim())
@@ -390,7 +408,8 @@ async function getSWEBenchLiteDataset(): Promise<EvalDataset> {
   const instances = await loadSWEBenchLite({ limit, instanceIds });
   console.log(`Loaded ${instances.length} SWE-bench instances`);
 
-  const tasks = instances.map(convertSWEBenchTask);
+  const convertOpts: ConvertOptions = { isolationManaged: options?.isolationManaged };
+  const tasks = instances.map((inst) => convertSWEBenchTask(inst, convertOpts));
 
   return {
     name: 'swe-bench-lite',

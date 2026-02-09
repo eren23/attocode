@@ -36,6 +36,7 @@ import type {
   EvalMetrics,
   AgentOutput,
 } from '../types.js';
+import { appendPrediction } from '../adapters/swe-bench.js';
 
 import * as fs from 'fs/promises';
 import * as path from 'path';
@@ -51,13 +52,20 @@ export class ProductionAgentRunner implements EvalRunner {
   private outputDir: string;
   private traceOutputDir: string;
 
+  /** Path to predictions JSONL file for SWE-bench harness grading */
+  public predictionsPath: string;
+
   constructor(options: { workdir?: string; outputDir?: string } = {}) {
-    this.baseWorkdir = options.workdir || process.cwd();
-    this.outputDir = options.outputDir || './tools/eval/results';
+    this.baseWorkdir = options.workdir || projectRoot;
+    this.outputDir = options.outputDir || path.join(projectRoot, 'tools/eval/results');
 
     // Use TRACE_OUTPUT_DIR env var for traces (Docker support)
     // Falls back to outputDir for local runs
     this.traceOutputDir = process.env.TRACE_OUTPUT_DIR || this.outputDir;
+
+    // Predictions file for SWE-bench harness
+    const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+    this.predictionsPath = path.join(this.outputDir, `predictions-${timestamp}.jsonl`);
 
     // Ensure output directories exist
     if (!existsSync(this.outputDir)) {
@@ -85,7 +93,7 @@ export class ProductionAgentRunner implements EvalRunner {
       const workdir = await this.setupTaskEnvironment(task);
 
       // Create the agent with full capabilities
-      const { agent, cleanup: cleanupAgent } = await this.createAgent(config, workdir);
+      const { agent, cleanup: cleanupAgent } = await this.createAgent(config, workdir, task);
 
       // Get trace files before run to compare after
       const traceFilesBefore = config.trace
@@ -147,10 +155,25 @@ export class ProductionAgentRunner implements EvalRunner {
         success: gradeResult.success,
         partial_credit: gradeResult.partial_credit,
         grading_details: gradeResult.details,
+        explanation: gradeResult.explanation,
         metrics,
         trace_path: tracePath,
         timestamp,
       };
+
+      // Save SWE-bench prediction for harness grading
+      if (task.expected?.swe_bench && gradeResult.swe_bench_patch) {
+        try {
+          appendPrediction({
+            instance_id: task.expected.swe_bench.instance_id,
+            model_name_or_path: config.model,
+            model_patch: gradeResult.swe_bench_patch,
+          }, this.predictionsPath);
+          console.log(`  Prediction saved to: ${this.predictionsPath}`);
+        } catch (err) {
+          console.warn(`  Warning: Failed to save prediction: ${err}`);
+        }
+      }
 
       this.printTaskResult(evalResult, task);
       return evalResult;
@@ -229,23 +252,41 @@ export class ProductionAgentRunner implements EvalRunner {
    */
   private async createAgent(
     config: EvalRunConfig,
-    workdir: string
+    workdir: string,
+    task?: EvalTask,
   ): Promise<{ agent: ReturnType<typeof createProductionAgent>; cleanup: () => Promise<void> }> {
 
-    // CRITICAL: Change to task workspace directory
-    // The agent and all its tools (bash, file operations) must operate in the task's directory
-    const originalCwd = process.cwd();
-    process.chdir(workdir);
     console.log(`  Working directory: ${workdir}`);
+
+    // Parse SWE-bench FAIL_TO_PASS tests for verification criteria
+    let verificationCriteria: { requiredTests?: string[]; requireFileChanges?: boolean; maxAttempts?: number } | undefined;
+    if (task?.expected?.swe_bench?.fail_to_pass) {
+      try {
+        const rawFTP = task.expected.swe_bench.fail_to_pass;
+        const failToPass = Array.isArray(rawFTP)
+          ? rawFTP
+          : typeof rawFTP === 'string' ? JSON.parse(rawFTP) : [];
+        if (Array.isArray(failToPass) && failToPass.length > 0) {
+          verificationCriteria = {
+            requiredTests: failToPass,
+            requireFileChanges: true,
+            maxAttempts: 2,
+          };
+        }
+      } catch {
+        // Ignore parse errors
+      }
+    }
 
     // Get the provider
     const provider = config.mock_llm
       ? this.createMockProvider()
       : await getProvider(config.provider) as LLMProviderWithTools;
 
-    // Create tool registry with all standard tools
-    const registry = createStandardRegistry('yolo'); // Auto-approve for evals
-    const tools = convertToolsFromRegistry(registry);
+    // Create tool registry with basePath so all tools resolve paths against the workspace
+    const registry = createStandardRegistry('yolo', { basePath: workdir });
+    // Use longer default timeout for eval tasks (300s for pip install, test runs, etc.)
+    const tools = convertToolsFromRegistry(registry, { defaultTimeout: 300000 });
 
     // Adapt provider
     const adaptedProvider = new ProviderAdapter(provider, config.model);
@@ -257,6 +298,9 @@ export class ProductionAgentRunner implements EvalRunner {
       model: config.model,
       maxIterations: 50,
       humanInLoop: false, // Disable for automated evals
+
+      // Set workingDirectory so agent internals know the workspace
+      workingDirectory: workdir,
 
       // Enable observability for traces and metrics
       observability: config.trace ? {
@@ -308,16 +352,16 @@ export class ProductionAgentRunner implements EvalRunner {
       },
 
       // Disable features that require filesystem access with relative paths
-      // (eval runs change cwd to task workspace, breaking relative paths)
       learningStore: false,
+
+      // Verification gate: auto-configured from FAIL_TO_PASS tests
+      verificationCriteria,
     });
 
     return {
       agent,
       cleanup: async () => {
         await agent.cleanup();
-        // Restore original working directory
-        process.chdir(originalCwd);
       },
     };
   }
@@ -354,6 +398,106 @@ export class ProductionAgentRunner implements EvalRunner {
         // Use shell for complex commands with && or pipes
         console.log(`  Running setup: ${cmd.slice(0, 80)}${cmd.length > 80 ? '...' : ''}`);
         execFileSync('sh', ['-c', cmd], { cwd: workdir, stdio: 'inherit' });
+      }
+    }
+
+    // SWE-bench specific setup: install deps + apply test_patch in sequential runner too
+    if (task.expected?.swe_bench) {
+      const sweBench = task.expected.swe_bench;
+
+      // Install project dependencies (skip if already done by isolation provider)
+      if (existsSync(path.join(workdir, '.deps_installed'))) {
+        console.log('  Deps already installed by isolation provider, skipping...');
+      } else {
+        const hasSetupFile = existsSync(path.join(workdir, 'setup.py'))
+          || existsSync(path.join(workdir, 'setup.cfg'))
+          || existsSync(path.join(workdir, 'pyproject.toml'));
+        if (hasSetupFile) {
+          // Pin setuptools<70 — older repos (e.g. astropy) use setuptools.dep_util removed in 70.0
+          try {
+            execFileSync('pip', ['install', 'setuptools<70', 'wheel', 'Cython', '--quiet'], {
+              cwd: workdir,
+              timeout: 120000,
+              stdio: 'pipe',
+            });
+          } catch (err) {
+            const msg = err instanceof Error ? err.message : String(err);
+            console.warn(`  Warning: setuptools pre-install failed (non-fatal): ${msg}`);
+          }
+
+          // Install build-system.requires from pyproject.toml (needed for --no-build-isolation)
+          const hasPyproject = existsSync(path.join(workdir, 'pyproject.toml'));
+          if (hasPyproject) {
+            try {
+              const buildDepsOutput = execFileSync('python3', [
+                '-c',
+                'import tomllib, json, sys; f=open("pyproject.toml","rb"); d=tomllib.load(f); print("\\n".join(d.get("build-system",{}).get("requires",[])))',
+              ], { cwd: workdir, timeout: 10000, stdio: 'pipe' });
+              const buildDeps = buildDepsOutput.toString().trim().split('\n').filter(Boolean);
+              // Filter out setuptools and wheel — they're already pinned and re-installing
+              // them causes pip to crash with TypeError on None version metadata
+              const filteredDeps = buildDeps.filter(dep => {
+                const name = dep.split(/[><=!~\s\[]/)[0].trim().toLowerCase();
+                return name !== 'setuptools' && name !== 'wheel';
+              });
+              if (filteredDeps.length > 0) {
+                console.log(`  Installing ${filteredDeps.length} build deps from pyproject.toml...`);
+                execFileSync('pip', ['install', '--ignore-installed', ...filteredDeps, '--quiet'], {
+                  cwd: workdir,
+                  timeout: 120000,
+                  stdio: 'pipe',
+                });
+              }
+            } catch (err) {
+              const msg = err instanceof Error ? err.message : String(err);
+              console.warn(`  Warning: pyproject.toml build deps install failed (non-fatal): ${msg}`);
+            }
+          }
+
+          try {
+            console.log('  Installing project deps (pip install -e .)...');
+            execFileSync('pip', ['install', '-e', '.', '--quiet', '--no-build-isolation'], {
+              cwd: workdir,
+              timeout: 300000,
+              stdio: 'pipe',
+              env: { ...process.env, SETUPTOOLS_ENABLE_FEATURES: 'legacy-editable' },
+            });
+            console.log('  Project deps installed');
+          } catch (pipError) {
+            const stderr = pipError instanceof Error && 'stderr' in pipError
+              ? (pipError as { stderr?: Buffer }).stderr?.toString().slice(-500)
+              : '';
+            console.warn(`  Warning: Failed to install project deps: ${stderr || '(no details)'}`);
+          }
+        }
+      }
+
+      // Apply test_patch so FAIL_TO_PASS tests exist
+      if (sweBench.test_patch) {
+        const patchPath = path.join(workdir, '.test_patch.diff');
+        try {
+          await fs.writeFile(patchPath, sweBench.test_patch);
+          try {
+            // --3way falls back to 3-way merge when context doesn't match exactly
+            execFileSync('git', ['apply', '--3way', patchPath], {
+              cwd: workdir,
+              timeout: 30000,
+              stdio: 'pipe',
+            });
+          } catch {
+            // Fallback: use patch(1) which is more lenient with context
+            execFileSync('patch', ['-p1', '--batch', '--fuzz=3', '-i', patchPath], {
+              cwd: workdir,
+              timeout: 30000,
+              stdio: 'pipe',
+            });
+          }
+          console.log('  Test patch applied');
+        } catch {
+          console.warn('  Warning: Failed to apply test patch (non-fatal)');
+        } finally {
+          try { await fs.unlink(patchPath); } catch { /* ignore */ }
+        }
       }
     }
 
@@ -414,8 +558,23 @@ export class ProductionAgentRunner implements EvalRunner {
     const color = result.success ? '\x1b[32m' : '\x1b[31m';
     const reset = '\x1b[0m';
 
+    // Build score label with test details when available
+    const score = (result.partial_credit * 100).toFixed(0);
+    const tests = result.grading_details?.tests;
+    let scoreLabel: string;
+    if (tests) {
+      scoreLabel = `${score}% (${tests.passed}/${tests.total} tests passing)`;
+    } else if (result.partial_credit === 0.5) {
+      scoreLabel = `${score}% (patch only, unverified)`;
+    } else {
+      scoreLabel = `${score}%`;
+    }
+
     console.log(`  ${color}${status}${reset} ${task.name}`);
-    console.log(`    Score: ${(result.partial_credit * 100).toFixed(0)}%`);
+    console.log(`    Score: ${scoreLabel}`);
+    if (result.explanation) {
+      console.log(`    Reason: ${result.explanation}`);
+    }
     console.log(`    Tokens: ${result.metrics.tokens.total} | Cost: $${result.metrics.estimated_cost.toFixed(4)}`);
     console.log(`    Duration: ${(result.metrics.duration_ms / 1000).toFixed(1)}s | Iterations: ${result.metrics.iterations}`);
   }
