@@ -134,8 +134,14 @@ export class ProviderAdapter implements ProductionLLMProvider {
 
 /**
  * Converts tools from ToolRegistry (lesson 03) to ProductionToolDefinition[] (lesson 25).
+ * @param registry - Tool registry to convert from
+ * @param options - Optional configuration
+ * @param options.defaultTimeout - Default timeout for bash commands (ms). Overrides tool defaults.
  */
-export function convertToolsFromRegistry(registry: ToolRegistry): ProductionToolDefinition[] {
+export function convertToolsFromRegistry(
+  registry: ToolRegistry,
+  options?: { defaultTimeout?: number },
+): ProductionToolDefinition[] {
   const descriptions = registry.getDescriptions();
 
   return descriptions.map(desc => ({
@@ -143,6 +149,10 @@ export function convertToolsFromRegistry(registry: ToolRegistry): ProductionTool
     description: desc.description,
     parameters: desc.input_schema as unknown as Record<string, unknown>,
     execute: async (args: Record<string, unknown>) => {
+      // Inject default timeout for bash tool if not specified by the model
+      if (options?.defaultTimeout && desc.name === 'bash' && !args.timeout) {
+        args = { ...args, timeout: options.defaultTimeout };
+      }
       const result = await registry.execute(desc.name, args);
       if (result.success) {
         return result.output;

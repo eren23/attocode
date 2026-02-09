@@ -15,8 +15,10 @@ import type { IsolationType } from './isolation/types.js';
 import { loadDataset, filterTasks } from './lib/dataset-loader.js';
 import { ProductionAgentRunner } from './runners/agent-runner.js';
 import { BatchOrchestrator } from './runners/batch-orchestrator.js';
+import { runSWEBenchEvaluation } from './adapters/swe-bench.js';
 import * as fs from 'fs/promises';
 import * as path from 'path';
+import { existsSync } from 'fs';
 import { fileURLToPath } from 'url';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -28,7 +30,7 @@ const projectRoot = path.resolve(__dirname, '../../..'); // tools/eval/src -> pr
 // =============================================================================
 
 interface CLIArgs {
-  command: 'run' | 'compare' | 'list' | 'help';
+  command: 'run' | 'compare' | 'list' | 'grade' | 'help';
   dataset?: string;
   model?: string;
   provider?: 'anthropic' | 'openrouter' | 'openai';
@@ -43,6 +45,16 @@ interface CLIArgs {
   taskIds?: string[];
   outputDir?: string;
   files?: string[];
+  /** --harness flag: run official SWE-bench harness after eval */
+  harness?: boolean;
+  /** --predictions: path to predictions.jsonl for grade command */
+  predictions?: string;
+  /** --max-workers: parallel workers for SWE-bench harness */
+  maxWorkers?: number;
+  /** --timeout: timeout per instance for SWE-bench harness (seconds) */
+  harnessTimeout?: number;
+  /** --run-id: run ID for SWE-bench harness output grouping */
+  runId?: string;
 }
 
 function parseArgs(argv: string[]): CLIArgs {
@@ -50,7 +62,7 @@ function parseArgs(argv: string[]): CLIArgs {
 
   // Get command
   const command = argv[2];
-  if (command === 'run' || command === 'compare' || command === 'list') {
+  if (command === 'run' || command === 'compare' || command === 'list' || command === 'grade') {
     args.command = command;
   }
 
@@ -112,6 +124,25 @@ function parseArgs(argv: string[]): CLIArgs {
       case '--output-dir':
       case '-o':
         args.outputDir = next;
+        i++;
+        break;
+      case '--harness':
+        args.harness = true;
+        break;
+      case '--predictions':
+        args.predictions = next;
+        i++;
+        break;
+      case '--max-workers':
+        args.maxWorkers = parseInt(next, 10);
+        i++;
+        break;
+      case '--timeout':
+        args.harnessTimeout = parseInt(next, 10);
+        i++;
+        break;
+      case '--run-id':
+        args.runId = next;
         i++;
         break;
       default:
@@ -177,6 +208,7 @@ async function runCommand(args: CLIArgs): Promise<void> {
   }
 
   let results: EvalResult[];
+  let predictionsPath: string | undefined;
 
   if (parallelism > 1 || isolation !== 'none') {
     // Use BatchOrchestrator for parallel / isolated execution
@@ -205,6 +237,14 @@ async function runCommand(args: CLIArgs): Promise<void> {
     });
 
     results = await orchestrator.run(tasks);
+    // BatchOrchestrator creates runners internally; check for predictions
+    // The predictions are saved per-runner, we need to find them
+    const outputDir = config.output_dir || path.join(projectRoot, 'tools/eval/results');
+    const files = await fs.readdir(outputDir);
+    const predFiles = files.filter(f => f.startsWith('predictions-') && f.endsWith('.jsonl')).sort().reverse();
+    if (predFiles.length > 0) {
+      predictionsPath = path.join(outputDir, predFiles[0]);
+    }
   } else {
     // Sequential mode (legacy behavior)
     const runner = new ProductionAgentRunner({
@@ -212,6 +252,7 @@ async function runCommand(args: CLIArgs): Promise<void> {
     });
 
     results = await runner.runDataset(tasks, config);
+    predictionsPath = existsSync(runner.predictionsPath) ? runner.predictionsPath : undefined;
     await runner.cleanup();
   }
 
@@ -222,6 +263,50 @@ async function runCommand(args: CLIArgs): Promise<void> {
   // Save results
   const resultPath = await saveResults(results, summary, config);
   console.log(`\nResults saved to: ${resultPath}`);
+
+  if (predictionsPath) {
+    console.log(`Predictions saved to: ${predictionsPath}`);
+  }
+
+  // Run official SWE-bench harness if --harness flag is set
+  if (args.harness && predictionsPath) {
+    console.log('\n' + '═'.repeat(60));
+    console.log('Running official SWE-bench harness...');
+    console.log('═'.repeat(60));
+
+    try {
+      const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+      const harnessResults = await runSWEBenchEvaluation({
+        predictionsPath,
+        runId: args.runId || `attocode-${timestamp}`,
+        maxWorkers: args.maxWorkers || args.parallelism || 4,
+        timeout: args.harnessTimeout || 1800,
+      });
+
+      console.log('\n' + '─'.repeat(60));
+      console.log('SWE-BENCH HARNESS RESULTS');
+      console.log('─'.repeat(60));
+      console.log(`  Total instances: ${harnessResults.total}`);
+      console.log(`  Resolved:        ${harnessResults.resolved}`);
+      console.log(`  Resolution rate:  ${(harnessResults.resolutionRate * 100).toFixed(1)}%`);
+
+      if (harnessResults.results.length > 0) {
+        console.log('\n  Per-instance results:');
+        for (const r of harnessResults.results) {
+          const statusIcon = r.status === 'resolved' ? '✓' : r.status === 'error' ? '!' : '✗';
+          console.log(`    ${statusIcon} ${r.instance_id}: ${r.status}`);
+        }
+      }
+
+      console.log('─'.repeat(60));
+    } catch (err) {
+      console.error(`\nSWE-bench harness failed: ${err instanceof Error ? err.message : err}`);
+      console.error('You can run it manually with:');
+      console.error(`  npm run eval -- grade --predictions ${predictionsPath}`);
+    }
+  } else if (args.harness && !predictionsPath) {
+    console.warn('\n--harness flag set but no predictions were generated (no SWE-bench patches found).');
+  }
 }
 
 async function compareCommand(args: CLIArgs): Promise<void> {
@@ -331,6 +416,75 @@ Tasks:
   }
 }
 
+async function gradeCommand(args: CLIArgs): Promise<void> {
+  if (!args.predictions) {
+    // Try positional arg
+    if (args.files && args.files.length > 0) {
+      args.predictions = args.files[0];
+    } else {
+      console.error('Error: --predictions <path.jsonl> is required');
+      console.error('Usage: npm run eval -- grade --predictions <predictions.jsonl>');
+      process.exit(1);
+    }
+  }
+
+  if (!existsSync(args.predictions)) {
+    console.error(`Error: Predictions file not found: ${args.predictions}`);
+    process.exit(1);
+  }
+
+  console.log(`
+╔══════════════════════════════════════════════════════════════╗
+║              SWE-BENCH HARNESS GRADING                      ║
+╚══════════════════════════════════════════════════════════════╝
+`);
+
+  console.log(`Predictions file: ${args.predictions}`);
+
+  // Count predictions
+  const content = await fs.readFile(args.predictions, 'utf-8');
+  const lines = content.trim().split('\n').filter(l => l.trim());
+  console.log(`Instances to evaluate: ${lines.length}`);
+
+  const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+  const runId = args.runId || `attocode-${timestamp}`;
+
+  console.log(`Run ID: ${runId}`);
+  console.log(`Max workers: ${args.maxWorkers || 4}`);
+  console.log(`Timeout per instance: ${args.harnessTimeout || 1800}s`);
+  console.log('');
+
+  const harnessResults = await runSWEBenchEvaluation({
+    predictionsPath: args.predictions,
+    runId,
+    maxWorkers: args.maxWorkers || 4,
+    timeout: args.harnessTimeout || 1800,
+    outputDir: args.outputDir || './swe-bench-results',
+  });
+
+  console.log('\n' + '═'.repeat(60));
+  console.log('HARNESS RESULTS');
+  console.log('═'.repeat(60));
+  console.log(`  Total instances:  ${harnessResults.total}`);
+  console.log(`  Resolved:         ${harnessResults.resolved}`);
+  console.log(`  Resolution rate:  ${(harnessResults.resolutionRate * 100).toFixed(1)}%`);
+
+  if (harnessResults.results.length > 0) {
+    console.log('\n  Per-instance:');
+    for (const r of harnessResults.results) {
+      const statusIcon = r.status === 'resolved' ? '✓' : r.status === 'error' ? '!' : '✗';
+      const color = r.status === 'resolved' ? '\x1b[32m' : '\x1b[31m';
+      const reset = '\x1b[0m';
+      console.log(`    ${color}${statusIcon}${reset} ${r.instance_id}: ${r.status}`);
+      if (r.error_message) {
+        console.log(`      Error: ${r.error_message.slice(0, 200)}`);
+      }
+    }
+  }
+
+  console.log('═'.repeat(60));
+}
+
 function showHelp(): void {
   console.log(`
 ╔══════════════════════════════════════════════════════════════╗
@@ -342,6 +496,7 @@ USAGE:
 
 COMMANDS:
   run         Run evaluation on a dataset
+  grade       Grade predictions using official SWE-bench harness
   compare     Compare two evaluation results
   list        List tasks in a dataset
   help        Show this help message
@@ -362,6 +517,13 @@ RUN OPTIONS:
   --tags <tags>              Filter by tags (comma-separated)
   --task-ids <ids>           Run specific task IDs only (comma-separated)
   --output-dir, -o <dir>     Output directory (default: tools/eval/results)
+  --harness                  Run official SWE-bench harness after eval run
+
+GRADE OPTIONS:
+  --predictions <path>       Path to predictions.jsonl file (required)
+  --max-workers <n>          Parallel workers for harness (default: 4)
+  --timeout <seconds>        Timeout per instance (default: 1800)
+  --run-id <id>              Run ID for harness output grouping
 
 EXAMPLES:
   # Run golden dataset with default model
@@ -391,10 +553,16 @@ EXAMPLES:
   # List tasks in a dataset
   npm run eval -- list --dataset golden
 
+  # Grade predictions using official SWE-bench harness
+  npm run eval -- grade --predictions results/predictions-2026-01-01.jsonl
+
+  # Run eval + auto-grade with harness
+  npm run eval -- run -d swe-bench-lite --harness
+
 SWE-BENCH LITE NOTES:
   Requires: pip install datasets swebench
   Env vars: SWE_BENCH_LIMIT, SWE_BENCH_INSTANCE_IDS
-  Full grading needs the official SWE-bench harness
+  Grade command requires: pip install swebench (and Docker for harness containers)
 `);
 }
 
@@ -478,6 +646,9 @@ async function main(): Promise<void> {
     switch (args.command) {
       case 'run':
         await runCommand(args);
+        break;
+      case 'grade':
+        await gradeCommand(args);
         break;
       case 'compare':
         await compareCommand(args);

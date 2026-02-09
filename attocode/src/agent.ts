@@ -169,6 +169,12 @@ import {
   PAID_TIER_THROTTLE,
   type SwarmConfig,
   type SwarmExecutionResult,
+  // Work Log (compaction-resilient summary)
+  WorkLog,
+  createWorkLog,
+  // Verification Gate (opt-in completion verification)
+  VerificationGate,
+  createVerificationGate,
 } from './integrations/index.js';
 
 // Lesson 26: Tracing & Evaluation integration
@@ -286,6 +292,8 @@ export class ProductionAgent {
   private taskManager: TaskManager | null = null;
   private store: SQLiteStore | null = null;
   private swarmOrchestrator: SwarmOrchestrator | null = null;
+  private workLog: WorkLog | null = null;
+  private verificationGate: VerificationGate | null = null;
 
   // Duplicate spawn prevention - tracks recently spawned tasks to prevent doom loops
   // Map<taskKey, { timestamp: number; result: string; queuedChanges: number }>
@@ -515,6 +523,15 @@ export class ProductionAgent {
       maxIterations: this.config.maxIterations,
       targetIterations: Math.min(baseBudget.targetIterations ?? 20, this.config.maxIterations),
     });
+
+    // Work Log - compaction-resilient summary of agent work
+    // Always enabled - minimal overhead and critical for long-running tasks
+    this.workLog = createWorkLog();
+
+    // Verification Gate - opt-in completion verification
+    if (this.config.verificationCriteria) {
+      this.verificationGate = createVerificationGate(this.config.verificationCriteria);
+    }
 
     // Agent Registry - always enabled for subagent support
     this.agentRegistry = new AgentRegistry();
@@ -1433,6 +1450,15 @@ export class ProductionAgent {
                 });
                 messages.push(...recentMessages);
 
+                // Inject work log after emergency truncation to prevent amnesia
+                if (this.workLog?.hasContent()) {
+                  const workLogMessage: Message = {
+                    role: 'user',
+                    content: this.workLog.toCompactString(),
+                  };
+                  messages.push(workLogMessage);
+                }
+
                 // Update state messages too
                 this.state.messages.length = 0;
                 this.state.messages.push(...messages);
@@ -1966,6 +1992,25 @@ export class ProductionAgent {
             incompleteActionRetries = 0;
           }
 
+          // Verification gate: if criteria not met, nudge agent to verify before completing
+          if (this.verificationGate && !forceTextOnly) {
+            const vResult = this.verificationGate.check();
+            if (!vResult.satisfied && !vResult.forceAllow && vResult.nudge) {
+              // Inject nudge and continue the loop
+              const nudgeMessage: Message = {
+                role: 'user',
+                content: vResult.nudge,
+              };
+              messages.push(nudgeMessage);
+              this.state.messages.push(nudgeMessage);
+              this.observability?.logger?.info('Verification gate nudge', {
+                missing: vResult.missing,
+                nudgeCount: this.verificationGate.getState().nudgeCount,
+              });
+              continue;
+            }
+          }
+
           // No tool calls (or forced to ignore), agent is done - compact tool outputs to save context
           // The model has "consumed" the tool outputs and produced a response,
           // so we can replace verbose outputs with compact summaries
@@ -2007,12 +2052,41 @@ export class ProductionAgent {
         const toolCalls = response.toolCalls!;
         const toolResults = await this.executeToolCalls(toolCalls);
 
-        // Record tool calls for economics/progress tracking
+        // Record tool calls for economics/progress tracking + work log
         for (let i = 0; i < toolCalls.length; i++) {
           const toolCall = toolCalls[i];
           const result = toolResults[i];
           executedToolNames.add(toolCall.name);
           this.economics?.recordToolCall(toolCall.name, toolCall.arguments, result?.result);
+          // Record in work log for compaction resilience
+          const toolOutput = result?.result && typeof result.result === 'object' && 'output' in (result.result as any)
+            ? String((result.result as any).output)
+            : typeof result?.result === 'string' ? result.result : undefined;
+          this.workLog?.recordToolExecution(
+            toolCall.name,
+            toolCall.arguments,
+            toolOutput,
+          );
+          // Record in verification gate
+          if (this.verificationGate) {
+            if (toolCall.name === 'bash') {
+              const toolRes = result?.result as any;
+              const output = toolRes && typeof toolRes === 'object' && 'output' in toolRes
+                ? String(toolRes.output)
+                : typeof toolRes === 'string' ? toolRes : '';
+              const exitCode = toolRes && typeof toolRes === 'object' && toolRes.metadata
+                ? (toolRes.metadata as any).exitCode ?? null
+                : null;
+              this.verificationGate.recordBashExecution(
+                String(toolCall.arguments.command || ''),
+                output,
+                exitCode,
+              );
+            }
+            if (['write_file', 'edit_file'].includes(toolCall.name)) {
+              this.verificationGate.recordFileChange();
+            }
+          }
         }
 
         // Add tool results to messages (with truncation and proactive budget management)
@@ -2038,6 +2112,16 @@ export class ProductionAgent {
             messages.push(...compactionResult.compactedMessages);
             this.state.messages.length = 0;
             this.state.messages.push(...compactionResult.compactedMessages);
+
+            // Inject work log after compaction to prevent amnesia
+            if (this.workLog?.hasContent()) {
+              const workLogMessage: Message = {
+                role: 'user',
+                content: this.workLog.toCompactString(),
+              };
+              messages.push(workLogMessage);
+              this.state.messages.push(workLogMessage);
+            }
           } else if (compactionResult.status === 'hard_limit') {
             // Hard limit reached - this is serious, emit error
             this.emit({

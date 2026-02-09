@@ -232,6 +232,18 @@ export interface ProductionAgentConfig {
   providerResilience?: ProviderResilienceConfig | false;
 
   /**
+   * Verification criteria for completion verification.
+   * When set, the agent must satisfy these criteria before completing.
+   * - TUI mode: off by default
+   * - Eval mode: auto-configured from FAIL_TO_PASS tests
+   */
+  verificationCriteria?: {
+    requiredTests?: string[];
+    requireFileChanges?: boolean;
+    maxAttempts?: number;
+  };
+
+  /**
    * Working directory for all tool operations.
    * When set, bash commands default to this cwd, and file operations
    * resolve relative paths against this directory.

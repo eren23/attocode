@@ -69,6 +69,9 @@ export interface TaskDescriptor {
 
   /** Working directory override within the workspace */
   workdir?: string;
+
+  /** Test patch to apply before agent runs (SWE-bench test_patch) */
+  testPatch?: string;
 }
 
 /**

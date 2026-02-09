@@ -293,6 +293,7 @@ export class BatchOrchestrator {
       setupCommands: task.setup?.commands,
       setupFiles: task.setup?.files,
       workdir: task.setup?.workdir,
+      testPatch: task.expected?.swe_bench?.test_patch,
     };
   }
 

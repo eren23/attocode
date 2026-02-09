@@ -442,6 +442,9 @@ export interface GradeResult {
 
   /** Human-readable explanation */
   explanation?: string;
+
+  /** SWE-bench patch (git diff) extracted during grading */
+  swe_bench_patch?: string;
 }
 
 // =============================================================================

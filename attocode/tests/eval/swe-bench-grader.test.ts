@@ -52,7 +52,7 @@ describe('gradeSimple', () => {
     expect(result.partial_credit).toBe(0.2);
   });
 
-  it('returns 0.5 for valid source patch', () => {
+  it('returns 0.5 partial credit for valid source patch (not verified)', () => {
     const patch = `diff --git a/src/main.py b/src/main.py
 --- a/src/main.py
 +++ b/src/main.py
@@ -60,7 +60,7 @@ describe('gradeSimple', () => {
 -old
 +new`;
     const result = gradeSimple(baseInstance, patch);
-    expect(result.success).toBe(true);
+    expect(result.success).toBe(false); // Not verified - actual success determined by harness
     expect(result.partial_credit).toBe(0.5);
   });
 });

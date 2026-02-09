@@ -3,11 +3,14 @@
 
 FROM node:20-slim
 
-# Install system dependencies
+# deps-v2: build-essential, python3-dev, gfortran for compiling C/Fortran extensions
 RUN apt-get update && apt-get install -y \
     python3 \
     python3-pip \
     python3-venv \
+    python3-dev \
+    build-essential \
+    gfortran \
     git \
     curl \
     && rm -rf /var/lib/apt/lists/*
@@ -21,7 +24,19 @@ ENV PATH="/opt/venv/bin:$PATH"
 RUN pip install --no-cache-dir \
     datasets \
     pandas \
-    numpy
+    numpy \
+    pytest \
+    pytest-xdist \
+    'setuptools<70' \
+    wheel \
+    Cython \
+    swebench \
+    setuptools_scm \
+    extension-helpers \
+    oldest-supported-numpy
+
+# Enable legacy editable installs for setuptools<70 (PEP 660 compat)
+ENV SETUPTOOLS_ENABLE_FEATURES="legacy-editable"
 
 # Set working directory to project root
 WORKDIR /app

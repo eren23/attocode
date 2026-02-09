@@ -529,7 +529,7 @@ export const DEFAULT_PROVIDER_RESILIENCE_CONFIG: ProviderResilienceConfig = {
  */
 export function buildConfig(
   userConfig: Partial<ProductionAgentConfig>
-): Required<Omit<ProductionAgentConfig, 'provider' | 'tools' | 'toolResolver' | 'mcpToolSummaries' | 'maxContextTokens' | 'blackboard' | 'fileCache' | 'budget' | 'agentId' | 'workingDirectory'>> & Pick<ProductionAgentConfig, 'provider' | 'tools' | 'toolResolver' | 'mcpToolSummaries' | 'maxContextTokens' | 'blackboard' | 'fileCache' | 'budget' | 'agentId' | 'workingDirectory'> {
+): Required<Omit<ProductionAgentConfig, 'provider' | 'tools' | 'toolResolver' | 'mcpToolSummaries' | 'maxContextTokens' | 'blackboard' | 'fileCache' | 'budget' | 'agentId' | 'workingDirectory' | 'verificationCriteria'>> & Pick<ProductionAgentConfig, 'provider' | 'tools' | 'toolResolver' | 'mcpToolSummaries' | 'maxContextTokens' | 'blackboard' | 'fileCache' | 'budget' | 'agentId' | 'workingDirectory' | 'verificationCriteria'> {
   return {
     provider: userConfig.provider!,
     tools: userConfig.tools || [],
@@ -573,6 +573,7 @@ export function buildConfig(
     mcpToolSummaries: userConfig.mcpToolSummaries, // Optional: MCP tool summaries for system prompt
     budget: userConfig.budget, // Optional: custom budget for subagents
     workingDirectory: userConfig.workingDirectory, // Optional: base path for tool operations
+    verificationCriteria: userConfig.verificationCriteria, // Optional: completion verification
   };
 }
 

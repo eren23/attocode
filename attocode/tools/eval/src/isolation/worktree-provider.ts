@@ -60,6 +60,8 @@ export class WorktreeProvider implements IsolationProvider {
   private repoCache: Map<string, RepoCache> = new Map();
   private baseDir: string;
   private maxSlots: number;
+  /** Mutex to serialize pip installs — concurrent pip in shared venv corrupts metadata */
+  private pipMutex: Promise<void> = Promise.resolve();
 
   constructor(options: { baseDir?: string; maxSlots?: number } = {}) {
     this.baseDir = options.baseDir || path.join('/tmp', `attocode-eval-${Date.now()}`);
@@ -140,6 +142,14 @@ export class WorktreeProvider implements IsolationProvider {
         }
 
         await this.checkoutCommit(slot.resource.path, task.baseCommit);
+      }
+
+      // Install project dependencies (non-fatal if it fails)
+      await this.installProjectDeps(slot.resource.path);
+
+      // Apply test_patch before agent runs so FAIL_TO_PASS tests exist
+      if (task.testPatch) {
+        await this.applyTestPatch(slot.resource.path, task.testPatch);
       }
     }
 
@@ -293,6 +303,119 @@ export class WorktreeProvider implements IsolationProvider {
     );
 
     return { path: wtPath, repoKey, bareClonePath };
+  }
+
+  /**
+   * Install project dependencies if a setup.py/setup.cfg/pyproject.toml exists.
+   * Serialized via mutex — concurrent pip in a shared venv crashes the resolver.
+   */
+  private async installProjectDeps(worktreePath: string): Promise<void> {
+    let release!: () => void;
+    const gate = new Promise<void>(r => { release = r; });
+    const prev = this.pipMutex;
+    this.pipMutex = gate;
+    await prev;
+    try {
+      await this._installProjectDepsImpl(worktreePath);
+    } finally {
+      release();
+    }
+  }
+
+  private async _installProjectDepsImpl(worktreePath: string): Promise<void> {
+    const hasSetupPy = existsSync(path.join(worktreePath, 'setup.py'));
+    const hasSetupCfg = existsSync(path.join(worktreePath, 'setup.cfg'));
+    const hasPyproject = existsSync(path.join(worktreePath, 'pyproject.toml'));
+
+    if (!hasSetupPy && !hasSetupCfg && !hasPyproject) return;
+
+    // Pin setuptools<70 — older repos (e.g. astropy) use setuptools.dep_util removed in 70.0
+    try {
+      await execFileAsync('pip', ['install', 'setuptools<70', 'wheel', 'Cython', '--quiet'], {
+        cwd: worktreePath,
+        timeout: 120000,
+        maxBuffer: 10 * 1024 * 1024,
+      });
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      console.warn(`[WorktreeProvider] setuptools pre-install failed (non-fatal): ${msg}`);
+    }
+
+    // Install build-system.requires from pyproject.toml (needed for --no-build-isolation)
+    if (hasPyproject) {
+      try {
+        const { stdout } = await execFileAsync('python3', [
+          '-c',
+          'import tomllib, json, sys; f=open("pyproject.toml","rb"); d=tomllib.load(f); print("\\n".join(d.get("build-system",{}).get("requires",[])))',
+        ], { cwd: worktreePath, timeout: 10000 });
+        const buildDeps = stdout.trim().split('\n').filter(Boolean);
+        // Filter out setuptools and wheel — they're already pinned and re-installing
+        // them causes pip to crash with TypeError on None version metadata
+        const filteredDeps = buildDeps.filter(dep => {
+          const name = dep.split(/[><=!~\s\[]/)[0].trim().toLowerCase();
+          return name !== 'setuptools' && name !== 'wheel';
+        });
+        if (filteredDeps.length > 0) {
+          console.log(`[WorktreeProvider] Installing ${filteredDeps.length} build deps from pyproject.toml...`);
+          await execFileAsync('pip', ['install', '--ignore-installed', ...filteredDeps, '--quiet'], {
+            cwd: worktreePath,
+            timeout: 120000,
+            maxBuffer: 10 * 1024 * 1024,
+          });
+        }
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        console.warn(`[WorktreeProvider] pyproject.toml build deps install failed (non-fatal): ${msg}`);
+      }
+    }
+
+    console.log(`[WorktreeProvider] Installing project deps in ${worktreePath}...`);
+    try {
+      await execFileAsync('pip', ['install', '-e', '.', '--quiet', '--no-build-isolation'], {
+        cwd: worktreePath,
+        timeout: 300000, // 5 minutes
+        maxBuffer: 10 * 1024 * 1024, // 10MB to handle large pip output
+        env: { ...process.env, SETUPTOOLS_ENABLE_FEATURES: 'legacy-editable' },
+      });
+      console.log(`[WorktreeProvider] Project deps installed successfully`);
+      // Write marker so agent-runner can skip its redundant install
+      await fs.writeFile(path.join(worktreePath, '.deps_installed'), '');
+    } catch (err) {
+      const stderr = err instanceof Error && 'stderr' in err
+        ? (err as { stderr?: string | Buffer }).stderr?.toString().slice(-500)
+        : '';
+      console.warn(`[WorktreeProvider] Failed to install project deps: ${stderr || '(no details)'}`);
+    }
+  }
+
+  /**
+   * Apply a test patch (git diff) to the worktree.
+   * This makes FAIL_TO_PASS tests available before the agent runs.
+   */
+  private async applyTestPatch(worktreePath: string, patch: string): Promise<void> {
+    const patchFile = path.join(worktreePath, '.test_patch.diff');
+    try {
+      await fs.writeFile(patchFile, patch);
+      try {
+        // --3way falls back to 3-way merge when context doesn't match exactly
+        await execFileAsync('git', ['apply', '--3way', patchFile], {
+          cwd: worktreePath,
+          timeout: 30000,
+        });
+      } catch {
+        // Fallback: use patch(1) which is more lenient with context
+        await execFileAsync('patch', ['-p1', '--batch', '--fuzz=3', '-i', patchFile], {
+          cwd: worktreePath,
+          timeout: 30000,
+        });
+      }
+      console.log(`[WorktreeProvider] Test patch applied successfully`);
+    } catch (err) {
+      console.warn(`[WorktreeProvider] Failed to apply test patch (non-fatal):`, err);
+    } finally {
+      // Clean up the patch file
+      try { await fs.unlink(patchFile); } catch { /* ignore */ }
+    }
   }
 
   private async checkoutCommit(worktreePath: string, commit: string): Promise<void> {

@@ -218,7 +218,7 @@ export class SWEBenchGrader implements Grader {
 
     // If no valid patch, return simple result as-is (0 or 0.1 or 0.2)
     if (simpleResult.partial_credit < 0.5) {
-      return simpleResult;
+      return { ...simpleResult, swe_bench_patch: patch || undefined };
     }
 
     // Patch exists and looks valid — apply test_patch and run FAIL_TO_PASS tests
@@ -239,6 +239,7 @@ export class SWEBenchGrader implements Grader {
       console.log(`  [grading] FAIL_TO_PASS tests not run (pytest error or timeout)`);
       return {
         ...simpleResult,
+        swe_bench_patch: patch || undefined,
         explanation: `${simpleResult.explanation} | Tests not run (pytest unavailable or errored)`,
       };
     }
@@ -247,6 +248,7 @@ export class SWEBenchGrader implements Grader {
       // No FAIL_TO_PASS tests defined — can't verify
       return {
         ...simpleResult,
+        swe_bench_patch: patch || undefined,
         explanation: `${simpleResult.explanation} | No FAIL_TO_PASS tests defined`,
       };
     }
@@ -261,6 +263,7 @@ export class SWEBenchGrader implements Grader {
       return {
         success: true,
         partial_credit: 1.0,
+        swe_bench_patch: patch || undefined,
         explanation: `All ${testSummary}`,
         details: {
           tests: { passed: testResult.passedTests, total: testResult.totalTests },
@@ -273,6 +276,7 @@ export class SWEBenchGrader implements Grader {
       return {
         success: false,
         partial_credit: 0.5 + 0.5 * passRatio,
+        swe_bench_patch: patch || undefined,
         explanation: `Partial: ${testSummary}`,
         details: {
           tests: { passed: testResult.passedTests, total: testResult.totalTests },
@@ -284,6 +288,7 @@ export class SWEBenchGrader implements Grader {
     return {
       success: false,
       partial_credit: 0.5,
+      swe_bench_patch: patch || undefined,
       explanation: `Patch generated but ${testSummary}`,
       details: {
         tests: { passed: 0, total: testResult.totalTests },

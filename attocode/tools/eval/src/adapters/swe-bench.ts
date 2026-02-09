@@ -220,33 +220,76 @@ Start by exploring the repository structure and understanding the codebase.`;
 /**
  * Build the prompt for isolation-managed mode.
  * Uses the current working directory (set by workingDirectory config) instead of hardcoded paths.
+ * Includes structured workflow, test commands, and budget awareness.
  */
 function buildIsolatedAgentPrompt(instance: SWEBenchInstance): string {
-  return `You are working on fixing a GitHub issue in the ${instance.repo} repository.
+  // Parse FAIL_TO_PASS test IDs
+  let failToPassTests: string[] = [];
+  try {
+    const rawFTP = instance.FAIL_TO_PASS;
+    failToPassTests = Array.isArray(rawFTP)
+      ? rawFTP
+      : typeof rawFTP === 'string' ? JSON.parse(rawFTP) : [];
+  } catch {
+    // Field might already be an array or malformed
+    if (typeof instance.FAIL_TO_PASS === 'string' && instance.FAIL_TO_PASS.trim()) {
+      failToPassTests = [instance.FAIL_TO_PASS];
+    }
+  }
 
-## Repository Setup
-The repository is already set up in the current working directory.
-It is checked out at commit ${instance.base_commit} (before the fix).
+  const testCommand = failToPassTests.length > 0
+    ? `python -m pytest ${failToPassTests.join(' ')} -xvs`
+    : 'python -m pytest -x';
+
+  const testSection = failToPassTests.length > 0
+    ? `## Failing Tests (MUST fix these)
+The following tests should FAIL on the current code and PASS after your fix:
+${failToPassTests.map(t => `- \`${t}\``).join('\n')}
+
+Run them with:
+\`\`\`bash
+${testCommand}
+\`\`\``
+    : '';
+
+  return `You are fixing a GitHub issue in the **${instance.repo}** repository.
+
+## Environment
+- The repo is set up in the current working directory (commit \`${instance.base_commit}\`)
+- Run \`pip install -e .\` if needed before running tests
+- **pytest is available** — use it to verify your fix
+- All file paths should be relative to the current directory
 
 ## Issue Description
 ${instance.problem_statement}
 
 ${instance.hints_text ? `## Hints\n${instance.hints_text}\n` : ''}
+${testSection}
 
-## Your Task
-1. Explore the repository structure in the current directory
-2. Understand the codebase and the issue
-3. Make the necessary code changes to fix the issue
-4. Verify your changes work (run relevant tests if possible)
+## Workflow (follow this order)
 
-## Important Notes
+### Phase 1: Understand the failing tests (1-3 iterations)
+- Read the failing test files to understand what the expected behavior is
+- Identify the relevant source files that need to change
+
+### Phase 2: Fix the code (1-3 iterations)
 - Make minimal, targeted changes to fix the issue
-- Do NOT commit your changes - just make the edits
-- The fix should pass the existing test suite
-- Focus on the specific issue described above
-- All file paths should be relative to the current directory
+- Do NOT modify test files — only fix source code
 
-Start by exploring the repository structure and understanding the codebase.`;
+### Phase 3: Verify (1-2 iterations)
+- Run the failing tests: \`${testCommand}\`
+- If tests still fail, iterate on your fix
+
+### Phase 4: Done
+- Once tests pass, you're done. Provide a brief summary.
+
+## Critical Rules
+- You MUST run the failing tests before finishing. A fix without verification is incomplete.
+- Make minimal changes — do not refactor unrelated code.
+- Do NOT commit your changes — just make the edits.
+- You have ~50 iterations. Budget them wisely: don't over-explore.
+
+Start by reading the failing test files to understand the expected behavior.`;
 }
 
 /**
@@ -462,12 +505,12 @@ export function gradeSimple(
     };
   }
 
-  // Patch was generated - partial success
+  // Patch was generated but not verified
   // Full grading requires the official harness
   return {
-    success: true, // Optimistic - actual success determined by harness
+    success: false, // Not verified - actual success determined by harness
     partial_credit: 0.5, // Give partial credit for generating a patch
-    explanation: 'Patch generated (full grading requires SWE-bench harness)',
+    explanation: 'Patch generated but unverified (full grading requires SWE-bench harness)',
   };
 }
 

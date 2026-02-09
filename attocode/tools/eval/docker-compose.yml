@@ -11,6 +11,8 @@ services:
       - ./.traces:/app/.traces
       # Mount datasets for custom evaluation sets
       - ./tools/eval/datasets:/app/tools/eval/datasets:ro
+      # Docker socket for SWE-bench harness (creates per-instance containers)
+      - /var/run/docker.sock:/var/run/docker.sock
     environment:
       # API keys (passed from host environment)
       - ANTHROPIC_API_KEY
