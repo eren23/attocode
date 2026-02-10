@@ -205,7 +205,7 @@ attocode --swarm --trace "task"
 - The circuit breaker will automatically pause dispatch after 3 rate limits in 30 seconds
 
 ### Quality gates too strict
-- Try setting a specific `gate_model` that's good at evaluation
+- Try setting `models.qualityGate` to a model that's good at evaluation
 - Customize the judge persona for your project's standards
 
 See the [troubleshooting section](../swarm-mode.md#troubleshooting) for more.

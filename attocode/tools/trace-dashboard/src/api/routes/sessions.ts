@@ -100,7 +100,7 @@ sessionsRoutes.get('/export/batch', async (c) => {
         task: session.task,
         model: session.model,
         status: session.status,
-        startTime: session.startTime.toISOString(),
+        startTime: isNaN(session.startTime.getTime()) ? null : session.startTime.toISOString(),
         durationMs: session.durationMs,
         iterations: session.metrics.iterations,
         inputTokens: session.metrics.inputTokens,

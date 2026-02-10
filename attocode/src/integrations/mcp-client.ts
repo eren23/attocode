@@ -14,6 +14,7 @@ import type { ToolDefinition } from '../types.js';
 import { withRetry, MCP_RETRY_CONFIG } from './retry.js';
 import { MCPError, isRecoverable } from '../errors/index.js';
 import type { DeadLetterQueue } from './dead-letter-queue.js';
+import { validateAllTools, formatValidationSummary } from './mcp-tool-validator.js';
 
 // =============================================================================
 // TYPES
@@ -830,6 +831,19 @@ export class MCPClient {
               return this.callTool(server.name, tool.name, args);
             },
           });
+        }
+      }
+
+      // Validate tool descriptions (non-invasive: logs warnings, doesn't reject tools)
+      if (tools.length > 0) {
+        try {
+          const results = validateAllTools(tools);
+          const poor = results.filter(r => r.score < 50);
+          if (poor.length > 0) {
+            console.warn(`[MCP] Tool quality issues (${poor.length}/${tools.length} below threshold):\n${formatValidationSummary(poor)}`);
+          }
+        } catch {
+          // Validation is optional — don't fail if module has issues
         }
       }
 

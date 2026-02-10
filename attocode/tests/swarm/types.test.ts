@@ -136,6 +136,10 @@ describe('SUBTASK_TO_CAPABILITY', () => {
     expect(SUBTASK_TO_CAPABILITY.refactor).toBe('code');
     expect(SUBTASK_TO_CAPABILITY.integrate).toBe('code');
   });
+
+  it('should map merge to write capability', () => {
+    expect(SUBTASK_TO_CAPABILITY.merge).toBe('write');
+  });
 });
 
 describe('DEFAULT_SWARM_CONFIG V2 fields', () => {

@@ -1,5 +1,8 @@
 /**
  * WorkerTimelinePanel - Gantt-style horizontal bar chart for task execution
+ *
+ * V9: Shows dispatched (in-progress) tasks with estimated elapsed time,
+ * not just completed tasks.
  */
 
 import { useMemo } from 'react';
@@ -38,20 +41,30 @@ interface TimelineBar {
   model: string;
   status: string;
   wave: number;
+  inProgress: boolean;
 }
 
 export function WorkerTimelinePanel({ tasks }: WorkerTimelinePanelProps) {
   const data = useMemo((): TimelineBar[] => {
+    const now = Date.now();
     return tasks
-      .filter((t) => t.result?.durationMs)
+      .filter((t) => t.result?.durationMs || t.status === 'dispatched')
       .sort((a, b) => a.wave - b.wave || a.id.localeCompare(b.id))
-      .map((t) => ({
-        name: t.id,
-        duration: t.result!.durationMs / 1000,
-        model: t.assignedModel ?? t.result?.model ?? 'unknown',
-        status: t.status,
-        wave: t.wave,
-      }));
+      .map((t) => {
+        const isDispatched = t.status === 'dispatched';
+        // For dispatched tasks, estimate elapsed time from dispatchedAt or fallback
+        const durationMs = isDispatched
+          ? (t.dispatchedAt ? now - t.dispatchedAt : 0)
+          : t.result!.durationMs;
+        return {
+          name: t.id,
+          duration: durationMs / 1000,
+          model: t.assignedModel ?? t.result?.model ?? 'unknown',
+          status: t.status,
+          wave: t.wave,
+          inProgress: isDispatched,
+        };
+      });
   }, [tasks]);
 
   if (data.length === 0) {
@@ -92,15 +105,20 @@ export function WorkerTimelinePanel({ tasks }: WorkerTimelinePanelProps) {
                 const v = Number(value);
                 const entry = props?.payload as TimelineBar | undefined;
                 if (!entry) return [`${formatDuration(v * 1000)}`, 'Duration'];
+                const suffix = entry.inProgress ? ' (in progress)' : '';
                 return [
-                  `${formatDuration(v * 1000)} — ${shortModelName(entry.model)} (Wave ${entry.wave})`,
+                  `${formatDuration(v * 1000)} — ${shortModelName(entry.model)} (Wave ${entry.wave})${suffix}`,
                   'Duration',
                 ];
               }}
             />
             <Bar dataKey="duration" radius={[0, 4, 4, 0]}>
               {data.map((entry, i) => (
-                <Cell key={i} fill={getModelColor(entry.model)} />
+                <Cell
+                  key={i}
+                  fill={getModelColor(entry.model)}
+                  opacity={entry.inProgress ? 0.5 : 1}
+                />
               ))}
             </Bar>
           </BarChart>

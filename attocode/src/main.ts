@@ -84,6 +84,7 @@ async function buildSwarmConfig(
   orchestratorModel: string,
   resumeSessionId?: string,
   paidOnly?: boolean,
+  orchestratorModelExplicit?: boolean,
 ): Promise<SwarmConfig> {
   let yamlConfig: Partial<SwarmConfig> | null = null;
 
@@ -114,6 +115,7 @@ async function buildSwarmConfig(
   const config = mergeSwarmConfigs(DEFAULT_SWARM_CONFIG, yamlConfig, {
     paidOnly,
     orchestratorModel,
+    orchestratorModelExplicit,
     resumeSessionId,
   });
 
@@ -327,7 +329,7 @@ async function main(): Promise<void> {
     const adaptedProvider = new ProviderAdapter(provider, resolvedModel);
 
     // Build swarm config if --swarm flag is set
-    const swarmConfig = args.swarm ? await buildSwarmConfig(args.swarm, resolvedModel, args.swarmResume, args.paidOnly) : undefined;
+    const swarmConfig = args.swarm ? await buildSwarmConfig(args.swarm, resolvedModel, args.swarmResume, args.paidOnly, !!args.model) : undefined;
 
     const agent = createProductionAgent({
       provider: adaptedProvider,
@@ -376,7 +378,7 @@ async function main(): Promise<void> {
         model: resolvedModel,
         trace: args.trace,
         theme: args.theme,
-        swarm: args.swarm ? await buildSwarmConfig(args.swarm, resolvedModel, args.swarmResume, args.paidOnly) : undefined,
+        swarm: args.swarm ? await buildSwarmConfig(args.swarm, resolvedModel, args.swarmResume, args.paidOnly, !!args.model) : undefined,
       });
     } else {
       await startProductionREPL(provider, {
@@ -384,7 +386,7 @@ async function main(): Promise<void> {
         maxIterations: args.maxIterations,
         model: resolvedModel,
         trace: args.trace,
-        swarm: args.swarm ? await buildSwarmConfig(args.swarm, resolvedModel, args.swarmResume, args.paidOnly) : undefined,
+        swarm: args.swarm ? await buildSwarmConfig(args.swarm, resolvedModel, args.swarmResume, args.paidOnly, !!args.model) : undefined,
       });
     }
   }

@@ -94,9 +94,41 @@ describe('selectAlternativeModel', () => {
     expect(alt!.model).toBe('model/b');
   });
 
-  it('should return undefined when no alternatives exist', () => {
+  it('should fall back to FALLBACK_WORKERS when no config alternatives exist', () => {
     const tracker = new ModelHealthTracker();
     const alt = selectAlternativeModel(workers, 'model/c', 'research', tracker);
-    expect(alt).toBeUndefined();
+    // V7: No config worker alternative, but FALLBACK_WORKERS has a researcher
+    expect(alt).toBeDefined();
+    expect(alt!.model).not.toBe('model/c');
+    expect(alt!.capabilities).toContain('research');
+  });
+
+  it('should fall back to code workers when write capability has no match', () => {
+    const tracker = new ModelHealthTracker();
+    // No worker has 'write' capability, but coder1/coder2 have 'code'
+    const alt = selectAlternativeModel(workers, 'model/c', 'write', tracker);
+    expect(alt).toBeDefined();
+    expect(alt!.capabilities).toContain('code');
+  });
+
+  it('should prefer healthy code workers for write fallback', () => {
+    const tracker = new ModelHealthTracker();
+    tracker.recordFailure('model/a', '429');
+    tracker.recordFailure('model/a', '429'); // model/a unhealthy
+
+    const alt = selectAlternativeModel(workers, 'model/c', 'write', tracker);
+    expect(alt).toBeDefined();
+    expect(alt!.model).toBe('model/b'); // healthy code worker
+  });
+
+  it('should select write-capable worker over code fallback when available', () => {
+    const workersWithWrite: SwarmWorkerSpec[] = [
+      ...workers,
+      { name: 'synthesizer', model: 'model/d', capabilities: ['write'] },
+    ];
+    const tracker = new ModelHealthTracker();
+    const alt = selectAlternativeModel(workersWithWrite, 'model/x', 'write', tracker);
+    expect(alt).toBeDefined();
+    expect(alt!.name).toBe('synthesizer');
   });
 });

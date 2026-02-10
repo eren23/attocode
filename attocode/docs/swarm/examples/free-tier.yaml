@@ -11,6 +11,11 @@ philosophy: |
   Write clean, simple code. Follow existing patterns.
   Always run tests after making changes.
 
+# Free-friendly models (override with --model if needed)
+models:
+  orchestrator: google/gemini-2.0-flash-001
+  quality_gate: google/gemini-2.0-flash-001
+
 # Use free-tier throttle (2 concurrent, 0.5 req/s, 1500ms spacing)
 throttle: free
 
@@ -28,15 +33,15 @@ quality:
 
 # More retries since free models are less reliable
 resilience:
-  worker_retries: 3
-  rate_limit_retries: 5
-  model_failover: true
+  workerRetries: 3
+  rateLimitRetries: 5
+  modelFailover: true
 
 # Shared context helps cheaper models produce better results
 communication:
   blackboard: true
-  dependency_context_max_length: 3000
-  include_file_list: true
+  dependencyContextMaxLength: 3000
+  includeFileList: true
 
 # Enable persistence so you can resume if rate limits exhaust
 features:

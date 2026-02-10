@@ -65,6 +65,23 @@ export interface SwarmTask {
   assignedModel?: string;
   result?: SwarmTaskResult;
   attempts: number;
+  retryContext?: { previousFeedback: string; previousScore: number; attempt: number };
+  /** Timestamp when this task was dispatched to a worker */
+  dispatchedAt?: number;
+}
+
+/** Detailed task output loaded on-demand from per-task files */
+export interface TaskDetail {
+  taskId: string;
+  output: string;
+  qualityFeedback?: string;
+  closureReport?: {
+    findings?: string[];
+    actionsTaken?: string[];
+    failures?: string[];
+    remainingWork?: string[];
+  };
+  toolCalls?: number;
 }
 
 export interface SwarmStatus {
@@ -117,7 +134,9 @@ export type SwarmEventType =
   | 'swarm.circuit.open'
   | 'swarm.circuit.closed'
   // V3: Hierarchy role events
-  | 'swarm.role.action';
+  | 'swarm.role.action'
+  // V9: Phase progress
+  | 'swarm.phase.progress';
 
 export interface TimestampedSwarmEvent {
   ts: string;
@@ -265,6 +284,8 @@ export function getEventMessage(event: TimestampedSwarmEvent): string {
       return `Circuit breaker OPEN: pausing ${(e.pauseMs as number) / 1000}s`;
     case 'swarm.circuit.closed':
       return `Circuit breaker closed: dispatch resumed`;
+    case 'swarm.phase.progress':
+      return `[${e.phase}] ${e.message}`;
     default:
       return `${e.type}`;
   }

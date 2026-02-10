@@ -243,9 +243,10 @@ export function yamlToSwarmConfig(yaml: SwarmYamlConfig, orchestratorModel: stri
   if (models) {
     if (models.paidOnly !== undefined) config.paidOnly = Boolean(models.paidOnly);
     if (models.paid_only !== undefined) config.paidOnly = Boolean(models.paid_only);
-    if (models.qualityGate) config.qualityGateModel = String(models.qualityGate);
+    if (models.qualityGate || models.quality_gate) config.qualityGateModel = String(models.qualityGate ?? models.quality_gate);
     if (models.planner) config.plannerModel = String(models.planner);
-    // models.orchestrator: null means use --model flag (handled by merge)
+    // orchestrator from YAML is a default; CLI --model always overrides
+    if (models.orchestrator) config.orchestratorModel = String(models.orchestrator);
   }
 
   // throttle
@@ -263,11 +264,13 @@ export function yamlToSwarmConfig(yaml: SwarmYamlConfig, orchestratorModel: stri
       const spec: SwarmWorkerSpec = {
         name: String(w.name ?? 'worker'),
         model: String(w.model ?? orchestratorModel),
-        capabilities: (Array.isArray(w.capabilities)
-          ? w.capabilities.map(String)
-          : typeof w.capabilities === 'string'
-            ? (w.capabilities as string).replace(/^\[|\]$/g, '').split(',').map((s: string) => s.trim()).filter(Boolean)
-            : ['code']) as WorkerCapability[],
+        capabilities: normalizeCapabilities(
+          Array.isArray(w.capabilities)
+            ? w.capabilities.map(String)
+            : typeof w.capabilities === 'string'
+              ? (w.capabilities as string).replace(/^\[|\]$/g, '').split(',').map((s: string) => s.trim()).filter(Boolean)
+              : ['code'],
+        ),
       };
       if (w.contextWindow) spec.contextWindow = Number(w.contextWindow);
       if (w.persona) spec.persona = String(w.persona);
@@ -320,7 +323,7 @@ export function yamlToSwarmConfig(yaml: SwarmYamlConfig, orchestratorModel: stri
     if (budget.maxTokensPerWorker || budget.max_tokens_per_worker) config.maxTokensPerWorker = Number(budget.maxTokensPerWorker ?? budget.max_tokens_per_worker);
     if (budget.workerTimeout || budget.worker_timeout) config.workerTimeout = Number(budget.workerTimeout ?? budget.worker_timeout);
     if (budget.workerMaxIterations) config.workerMaxIterations = Number(budget.workerMaxIterations);
-    if (budget.dispatchStaggerMs) config.dispatchStaggerMs = Number(budget.dispatchStaggerMs);
+    if (budget.dispatchStaggerMs || budget.dispatch_stagger_ms) config.dispatchStaggerMs = Number(budget.dispatchStaggerMs ?? budget.dispatch_stagger_ms);
   }
 
   // quality
@@ -363,8 +366,22 @@ export function yamlToSwarmConfig(yaml: SwarmYamlConfig, orchestratorModel: stri
   if (features) {
     if (features.planning !== undefined) config.enablePlanning = Boolean(features.planning);
     if (features.waveReview !== undefined) config.enableWaveReview = Boolean(features.waveReview);
+    if (features.wave_review !== undefined) config.enableWaveReview = Boolean(features.wave_review);
     if (features.verification !== undefined) config.enableVerification = Boolean(features.verification);
     if (features.persistence !== undefined) config.enablePersistence = Boolean(features.persistence);
+  }
+
+  // facts — user-configurable grounding facts
+  const facts = yaml.facts as Record<string, unknown> | undefined;
+  if (facts) {
+    config.facts = {};
+    if (facts.currentDate) config.facts.currentDate = String(facts.currentDate);
+    if (facts.currentYear) config.facts.currentYear = Number(facts.currentYear);
+    if (facts.custom && Array.isArray(facts.custom)) {
+      config.facts.custom = facts.custom.map(String);
+    } else if (typeof facts.custom === 'string') {
+      config.facts.custom = [String(facts.custom)];
+    }
   }
 
   return config;
@@ -378,7 +395,7 @@ export function yamlToSwarmConfig(yaml: SwarmYamlConfig, orchestratorModel: stri
 export function mergeSwarmConfigs(
   defaults: typeof DEFAULT_SWARM_CONFIG,
   yamlConfig: Partial<SwarmConfig> | null,
-  cliOverrides: { paidOnly?: boolean; orchestratorModel: string; resumeSessionId?: string },
+  cliOverrides: { paidOnly?: boolean; orchestratorModel: string; orchestratorModelExplicit?: boolean; resumeSessionId?: string },
 ): SwarmConfig {
   // Start with defaults + orchestratorModel
   const merged: SwarmConfig = {
@@ -397,6 +414,11 @@ export function mergeSwarmConfigs(
   }
 
   // Apply CLI overrides (highest priority)
+  // V7: Only re-apply orchestratorModel if the user explicitly passed --model.
+  // Otherwise, let the YAML orchestrator setting (applied above) take precedence.
+  if (cliOverrides.orchestratorModelExplicit) {
+    merged.orchestratorModel = cliOverrides.orchestratorModel;
+  }
   if (cliOverrides.paidOnly !== undefined) {
     merged.paidOnly = cliOverrides.paidOnly;
   }
@@ -410,6 +432,55 @@ export function mergeSwarmConfigs(
   }
 
   return merged;
+}
+
+// ─── Capability Normalization ────────────────────────────────────────────────
+
+const VALID_CAPABILITIES = new Set<WorkerCapability>(['code', 'research', 'review', 'test', 'document', 'write']);
+
+const CAPABILITY_ALIASES: Record<string, WorkerCapability> = {
+  refactor: 'code',
+  implement: 'code',
+  coding: 'code',
+  writing: 'write',
+  synthesis: 'write',
+  synthesize: 'write',
+  merge: 'write',
+  docs: 'document',
+  documentation: 'document',
+  testing: 'test',
+  reviewing: 'review',
+  researching: 'research',
+};
+
+/**
+ * Normalize capability strings from YAML config.
+ * - Passes valid capabilities through
+ * - Maps known aliases (refactor→code, writing→write, etc.)
+ * - Drops unknown values silently
+ * - Falls back to ['code'] if empty after filtering
+ */
+export function normalizeCapabilities(raw: string[]): WorkerCapability[] {
+  const result: WorkerCapability[] = [];
+  const seen = new Set<WorkerCapability>();
+
+  for (const cap of raw) {
+    const lower = cap.toLowerCase().trim();
+    let resolved: WorkerCapability | undefined;
+
+    if (VALID_CAPABILITIES.has(lower as WorkerCapability)) {
+      resolved = lower as WorkerCapability;
+    } else if (CAPABILITY_ALIASES[lower]) {
+      resolved = CAPABILITY_ALIASES[lower];
+    }
+
+    if (resolved && !seen.has(resolved)) {
+      seen.add(resolved);
+      result.push(resolved);
+    }
+  }
+
+  return result.length > 0 ? result : ['code'];
 }
 
 // ─── Helper Functions ───────────────────────────────────────────────────────

@@ -150,6 +150,81 @@ export function isBashWriteCommand(command: string): boolean {
   return writePatterns.some(pattern => pattern.test(command));
 }
 
+/**
+ * Commands known to be safe (read-only, no side effects) in plan mode.
+ * Uses allowlist approach: only commands matching these patterns pass through.
+ * Everything else is intercepted for approval.
+ */
+const SAFE_BASH_PATTERNS = [
+  /^\s*ls\b/,
+  /^\s*cat\b/,
+  /^\s*head\b/,
+  /^\s*tail\b/,
+  /^\s*wc\b/,
+  /^\s*find\b/,
+  /^\s*grep\b/,
+  /^\s*rg\b/,
+  /^\s*fd\b/,
+  /^\s*tree\b/,
+  /^\s*pwd\b/,
+  /^\s*which\b/,
+  /^\s*whoami\b/,
+  /^\s*env\b/,
+  /^\s*echo\b/,
+  /^\s*git\s+(status|log|diff|show|branch|remote|rev-parse|describe|tag)\b/,
+  /^\s*node\s+(--version|-v)\b/,
+  /^\s*npm\s+(list|ls|view|info|show|outdated|audit)\b/,
+  /^\s*python\s+(--version|-V)\b/,
+  /^\s*du\b/,
+  /^\s*df\b/,
+  /^\s*file\b/,
+  /^\s*stat\b/,
+  /^\s*uname\b/,
+  /^\s*date\b/,
+  /^\s*uptime\b/,
+  /^\s*type\b/,
+  /^\s*less\b/,
+  /^\s*more\b/,
+  /^\s*diff\b/,
+  /^\s*jq\b/,
+  /^\s*sort\b/,
+  /^\s*uniq\b/,
+  /^\s*cut\b/,
+  /^\s*tr\b/,
+];
+
+/**
+ * Dangerous patterns that override safe command matching.
+ * Even if the base command is "safe", these suffixes indicate side effects.
+ */
+const DANGEROUS_SUFFIXES = [
+  /\|\s*(rm|sudo|tee|dd|mkfs)\b/,    // Pipe to destructive tool
+  />\s*\S/,                            // Output redirect
+  />>\s*\S/,                           // Append redirect
+  /-exec\b/,                           // find -exec
+  /-delete\b/,                         // find -delete
+  /\bsed\b.*-i/,                       // In-place sed edit
+  /\bawk\b.*-i\s*inplace/,             // In-place awk edit
+  /\bxargs\s.*\b(rm|mv|cp)\b/,         // xargs with destructive commands
+];
+
+/**
+ * Check if a bash command is safe (read-only) for plan mode.
+ * Uses allowlist approach: only known-safe commands pass through.
+ * Returns true if the command is safe, false if it should be intercepted.
+ */
+export function isBashSafeCommand(command: string): boolean {
+  const trimmed = command.trim();
+
+  // Check if command matches any safe pattern
+  const matchesSafe = SAFE_BASH_PATTERNS.some(p => p.test(trimmed));
+  if (!matchesSafe) return false;
+
+  // Even if "safe" base command, check for dangerous suffixes
+  const hasDanger = DANGEROUS_SUFFIXES.some(p => p.test(trimmed));
+  return !hasDanger;
+}
+
 // =============================================================================
 // MODE DEFINITIONS
 // =============================================================================
@@ -467,9 +542,9 @@ export class ModeManager {
 
     // Check if it's a known write tool
     if (isWriteTool(toolName)) {
-      // Special case: bash commands need content analysis
+      // Special case: bash uses allowlist — only safe commands pass through
       if (toolName === 'bash' && args?.command) {
-        return isBashWriteCommand(String(args.command));
+        return !isBashSafeCommand(String(args.command));
       }
       return true;
     }

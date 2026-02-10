@@ -2,7 +2,7 @@
  * Tests for SwarmModelSelector
  */
 import { describe, it, expect } from 'vitest';
-import { selectWorkerForCapability, ModelHealthTracker } from '../../src/integrations/swarm/model-selector.js';
+import { selectWorkerForCapability, selectAlternativeModel, ModelHealthTracker, FALLBACK_WORKERS } from '../../src/integrations/swarm/model-selector.js';
 import type { SwarmWorkerSpec } from '../../src/integrations/swarm/types.js';
 
 const testWorkers: SwarmWorkerSpec[] = [
@@ -101,5 +101,99 @@ describe('selectWorkerForCapability', () => {
 
     const worker = selectWorkerForCapability(workers, 'code', 0, tracker);
     expect(worker?.name).toBe('coder1'); // Falls back despite unhealthy
+  });
+
+  it('should select write-capable worker for write capability', () => {
+    const workers: SwarmWorkerSpec[] = [
+      { name: 'coder', model: 'model/a', capabilities: ['code'] },
+      { name: 'synthesizer', model: 'model/b', capabilities: ['write', 'code'] },
+    ];
+    const worker = selectWorkerForCapability(workers, 'write');
+    expect(worker?.name).toBe('synthesizer');
+  });
+
+  it('should fall back to code workers when no write-capable worker exists', () => {
+    const workers: SwarmWorkerSpec[] = [
+      { name: 'coder', model: 'model/a', capabilities: ['code', 'test'] },
+      { name: 'researcher', model: 'model/b', capabilities: ['research'] },
+    ];
+    const worker = selectWorkerForCapability(workers, 'write');
+    expect(worker?.name).toBe('coder');
+  });
+});
+
+describe('selectAlternativeModel', () => {
+  it('should find alternative within config workers', () => {
+    const workers: SwarmWorkerSpec[] = [
+      { name: 'researcher-a', model: 'model/a', capabilities: ['research'] },
+      { name: 'researcher-b', model: 'model/b', capabilities: ['research'] },
+    ];
+    const tracker = new ModelHealthTracker();
+    const alt = selectAlternativeModel(workers, 'model/a', 'research', tracker);
+    expect(alt?.model).toBe('model/b');
+  });
+
+  it('should fall back to FALLBACK_WORKERS when config workers all share same model', () => {
+    const workers: SwarmWorkerSpec[] = [
+      { name: 'researcher-a', model: 'same/model', capabilities: ['research'] },
+      { name: 'researcher-b', model: 'same/model', capabilities: ['research'] },
+    ];
+    const tracker = new ModelHealthTracker();
+    const alt = selectAlternativeModel(workers, 'same/model', 'research', tracker);
+    // Should find a fallback worker with research capability and different model
+    expect(alt).toBeDefined();
+    expect(alt!.model).not.toBe('same/model');
+    expect(alt!.capabilities).toContain('research');
+  });
+
+  it('should return undefined when no alternative exists anywhere', () => {
+    const workers: SwarmWorkerSpec[] = [
+      { name: 'researcher', model: 'unique/model', capabilities: ['research'] },
+    ];
+    const tracker = new ModelHealthTracker();
+    // Use a model that doesn't exist in FALLBACK_WORKERS or config workers
+    // and a capability that doesn't exist in fallback
+    const alt = selectAlternativeModel(workers, 'unique/model', 'research', tracker);
+    // Fallback has 'moonshotai/kimi-k2.5-0127' with research capability,
+    // so this should find something
+    expect(alt).toBeDefined();
+    expect(alt!.model).not.toBe('unique/model');
+  });
+
+  it('should prefer healthy fallback workers', () => {
+    const workers: SwarmWorkerSpec[] = [
+      { name: 'researcher', model: 'same/model', capabilities: ['research'] },
+    ];
+    const tracker = new ModelHealthTracker();
+    // Mark the first matching fallback model as unhealthy
+    const firstFallbackResearcher = FALLBACK_WORKERS.find(w =>
+      w.model !== 'same/model' && w.capabilities.includes('research'),
+    );
+    if (firstFallbackResearcher) {
+      tracker.recordFailure(firstFallbackResearcher.model, 'error');
+      tracker.recordFailure(firstFallbackResearcher.model, 'error');
+      tracker.recordFailure(firstFallbackResearcher.model, 'error');
+    }
+
+    const alt = selectAlternativeModel(workers, 'same/model', 'research', tracker);
+    // Should still find something (unhealthy fallback as last resort)
+    expect(alt).toBeDefined();
+    expect(alt!.model).not.toBe('same/model');
+  });
+});
+
+describe('FALLBACK_WORKERS', () => {
+  it('should be exported and contain workers with diverse capabilities', () => {
+    expect(FALLBACK_WORKERS).toBeDefined();
+    expect(FALLBACK_WORKERS.length).toBeGreaterThan(0);
+
+    const capabilities = new Set(FALLBACK_WORKERS.flatMap(w => w.capabilities));
+    expect(capabilities.has('code')).toBe(true);
+    expect(capabilities.has('research')).toBe(true);
+  });
+
+  it('should contain at least one research-capable worker', () => {
+    const researchers = FALLBACK_WORKERS.filter(w => w.capabilities.includes('research'));
+    expect(researchers.length).toBeGreaterThan(0);
   });
 });

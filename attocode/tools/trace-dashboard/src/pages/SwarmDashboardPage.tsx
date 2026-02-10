@@ -2,6 +2,7 @@
  * SwarmDashboardPage - Main layout for live swarm visualization
  */
 
+import { useState, useEffect, useCallback } from 'react';
 import { useSwarmStream } from '../hooks/useSwarmStream';
 import { LoadingSpinner } from '../components/LoadingSpinner';
 import { ExportDropdown } from '../components/ExportDropdown';
@@ -18,8 +19,183 @@ import {
   ExpandablePanel,
 } from '../components/swarm';
 
+interface SwarmDir {
+  path: string;
+  label: string;
+}
+
+const STORAGE_KEY = 'swarm-extra-dirs';
+
+function loadExtraDirs(): string[] {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    return raw ? JSON.parse(raw) : [];
+  } catch {
+    return [];
+  }
+}
+
+function saveExtraDirs(dirs: string[]): void {
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(dirs));
+}
+
+function SwarmDirPicker({
+  selectedDir,
+  onSelect,
+}: {
+  selectedDir: string | undefined;
+  onSelect: (dir: string | undefined) => void;
+}) {
+  const [dirs, setDirs] = useState<SwarmDir[]>([]);
+  const [extraDirs, setExtraDirs] = useState<string[]>(loadExtraDirs);
+  const [addInput, setAddInput] = useState('');
+  const [showAdd, setShowAdd] = useState(false);
+
+  const fetchDirs = useCallback(() => {
+    fetch('/api/swarm/dirs')
+      .then((res) => res.json())
+      .then((data) => {
+        if (data.success && Array.isArray(data.data)) {
+          // Merge server dirs with client-side extra dirs
+          const serverDirs: SwarmDir[] = data.data;
+          const serverPaths = new Set(serverDirs.map((d: SwarmDir) => d.path));
+
+          const merged = [...serverDirs];
+          for (const extra of extraDirs) {
+            if (!serverPaths.has(extra)) {
+              // Derive label from path
+              const parts = extra.split('/').filter(Boolean);
+              const agentIdx = parts.lastIndexOf('.agent');
+              const label = agentIdx > 0 ? parts[agentIdx - 1] : parts.slice(-2).join('/');
+              merged.push({ path: extra, label: `${label} (custom)` });
+            }
+          }
+          setDirs(merged);
+        }
+      })
+      .catch(() => {
+        // Use extra dirs only
+        setDirs(
+          extraDirs.map((p) => {
+            const parts = p.split('/').filter(Boolean);
+            const agentIdx = parts.lastIndexOf('.agent');
+            const label = agentIdx > 0 ? parts[agentIdx - 1] : parts.slice(-2).join('/');
+            return { path: p, label: `${label} (custom)` };
+          })
+        );
+      });
+  }, [extraDirs]);
+
+  useEffect(() => {
+    fetchDirs();
+  }, [fetchDirs]);
+
+  const handleAdd = () => {
+    const trimmed = addInput.trim();
+    if (!trimmed) return;
+    const updated = [...new Set([...extraDirs, trimmed])];
+    setExtraDirs(updated);
+    saveExtraDirs(updated);
+    setAddInput('');
+    setShowAdd(false);
+    // Select the newly added dir
+    onSelect(trimmed);
+  };
+
+  const handleRemoveExtra = (dirPath: string) => {
+    const updated = extraDirs.filter((d) => d !== dirPath);
+    setExtraDirs(updated);
+    saveExtraDirs(updated);
+    if (selectedDir === dirPath) {
+      onSelect(undefined);
+    }
+  };
+
+  if (dirs.length <= 1 && !showAdd) {
+    // Single or no dirs — show compact inline
+    return (
+      <div className="flex items-center gap-2">
+        {dirs.length === 1 && (
+          <span className="text-xs text-gray-400 truncate max-w-[200px]" title={dirs[0].path}>
+            {dirs[0].label}
+          </span>
+        )}
+        <button
+          onClick={() => setShowAdd(true)}
+          className="text-xs text-gray-500 hover:text-gray-300 transition-colors"
+          title="Add swarm directory"
+        >
+          + Add path
+        </button>
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex items-center gap-2">
+      <select
+        value={selectedDir ?? ''}
+        onChange={(e) => onSelect(e.target.value || undefined)}
+        className="bg-gray-800 border border-gray-700 text-gray-200 text-xs rounded px-2 py-1 max-w-[220px] truncate focus:outline-none focus:border-blue-500"
+      >
+        {!selectedDir && <option value="">Auto-detect</option>}
+        {dirs.map((d) => (
+          <option key={d.path} value={d.path}>
+            {d.label}
+          </option>
+        ))}
+      </select>
+
+      {selectedDir && extraDirs.includes(selectedDir) && (
+        <button
+          onClick={() => handleRemoveExtra(selectedDir)}
+          className="text-xs text-gray-500 hover:text-red-400 transition-colors"
+          title="Remove custom path"
+        >
+          x
+        </button>
+      )}
+
+      {showAdd ? (
+        <div className="flex items-center gap-1">
+          <input
+            type="text"
+            value={addInput}
+            onChange={(e) => setAddInput(e.target.value)}
+            onKeyDown={(e) => e.key === 'Enter' && handleAdd()}
+            placeholder="/path/to/.agent/swarm-live"
+            className="bg-gray-800 border border-gray-700 text-gray-200 text-xs rounded px-2 py-1 w-[280px] focus:outline-none focus:border-blue-500"
+            autoFocus
+          />
+          <button
+            onClick={handleAdd}
+            className="text-xs bg-blue-600 text-white px-2 py-1 rounded hover:bg-blue-500 transition-colors"
+          >
+            Add
+          </button>
+          <button
+            onClick={() => { setShowAdd(false); setAddInput(''); }}
+            className="text-xs text-gray-500 hover:text-gray-300 transition-colors"
+          >
+            Cancel
+          </button>
+        </div>
+      ) : (
+        <button
+          onClick={() => setShowAdd(true)}
+          className="text-xs text-gray-500 hover:text-gray-300 transition-colors"
+          title="Add swarm directory"
+        >
+          +
+        </button>
+      )}
+    </div>
+  );
+}
+
 export function SwarmDashboardPage() {
-  const { connected, idle, state, recentEvents, error, reconnect } = useSwarmStream();
+  const [selectedDir, setSelectedDir] = useState<string | undefined>(undefined);
+  const { connected, idle, state, recentEvents, error, reconnect } = useSwarmStream(selectedDir);
 
   // Still loading initial state
   if (!state && !error && !idle) {
@@ -33,19 +209,24 @@ export function SwarmDashboardPage() {
   // No active swarm (idle or error without state)
   if (!state) {
     return (
-      <div className="flex flex-col items-center justify-center py-20">
-        {error && <div className="text-red-400 text-sm mb-4">{error.message}</div>}
-        <div className="text-gray-400 text-lg mb-2">No active swarm</div>
-        <p className="text-xs text-gray-500 max-w-md text-center mb-4">
-          Start a swarm task with <code className="text-gray-400">--swarm</code> flag
-          to see live visualization. The dashboard will auto-connect when a swarm starts.
-        </p>
-        <button
-          onClick={reconnect}
-          className="px-4 py-2 bg-blue-600 text-white text-sm rounded-lg hover:bg-blue-500 transition-colors"
-        >
-          Refresh
-        </button>
+      <div className="space-y-3">
+        <div className="flex items-center gap-3">
+          <SwarmDirPicker selectedDir={selectedDir} onSelect={setSelectedDir} />
+        </div>
+        <div className="flex flex-col items-center justify-center py-20">
+          {error && <div className="text-red-400 text-sm mb-4">{error.message}</div>}
+          <div className="text-gray-400 text-lg mb-2">No active swarm</div>
+          <p className="text-xs text-gray-500 max-w-md text-center mb-4">
+            Start a swarm task with <code className="text-gray-400">--swarm</code> flag
+            to see live visualization. The dashboard will auto-connect when a swarm starts.
+          </p>
+          <button
+            onClick={reconnect}
+            className="px-4 py-2 bg-blue-600 text-white text-sm rounded-lg hover:bg-blue-500 transition-colors"
+          >
+            Refresh
+          </button>
+        </div>
       </div>
     );
   }
@@ -54,6 +235,7 @@ export function SwarmDashboardPage() {
     <div className="space-y-3">
       {/* Header */}
       <div className="flex items-center gap-3">
+        <SwarmDirPicker selectedDir={selectedDir} onSelect={setSelectedDir} />
         <div className="flex-1">
           <SwarmHeader state={state} connected={connected} />
         </div>
@@ -63,7 +245,10 @@ export function SwarmDashboardPage() {
               label: 'Download Events (JSONL)',
               onClick: async () => {
                 try {
-                  const res = await fetch('/api/swarm/history');
+                  const url = selectedDir
+                    ? `/api/swarm/history?dir=${encodeURIComponent(selectedDir)}`
+                    : '/api/swarm/history';
+                  const res = await fetch(url);
                   const data = await res.json();
                   if (data.success && data.data?.length > 0) {
                     window.open(`/api/swarm/events/${data.data[0].filename}`, '_blank');

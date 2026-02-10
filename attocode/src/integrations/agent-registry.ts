@@ -78,6 +78,8 @@ export interface SpawnResult {
   };
   /** Structured closure report (populated when subagent wraps up properly) */
   structured?: StructuredClosureReport;
+  /** Reference ID in SubagentOutputStore for retrieving full output */
+  outputStoreId?: string;
 }
 
 /**

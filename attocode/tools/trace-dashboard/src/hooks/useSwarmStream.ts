@@ -2,6 +2,7 @@
  * useSwarmStream Hook
  *
  * Connects to the SSE endpoint and maintains live swarm state.
+ * Accepts an optional `dir` param to select which swarm-live directory to watch.
  */
 
 import { useState, useEffect, useCallback, useRef } from 'react';
@@ -21,7 +22,15 @@ export interface UseSwarmStreamResult {
   reconnect: () => void;
 }
 
-export function useSwarmStream(): UseSwarmStreamResult {
+function buildUrl(base: string, params: Record<string, string | undefined>): string {
+  const url = new URL(base, window.location.origin);
+  for (const [k, v] of Object.entries(params)) {
+    if (v !== undefined) url.searchParams.set(k, v);
+  }
+  return url.pathname + url.search;
+}
+
+export function useSwarmStream(dir?: string): UseSwarmStreamResult {
   const [connected, setConnected] = useState(false);
   const [state, setState] = useState<SwarmLiveState | null>(null);
   const [recentEvents, setRecentEvents] = useState<TimestampedSwarmEvent[]>([]);
@@ -32,6 +41,8 @@ export function useSwarmStream(): UseSwarmStreamResult {
   const reconnectAttemptRef = useRef(0);
   const reconnectTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const lastSeqRef = useRef(0);
+  const dirRef = useRef(dir);
+  dirRef.current = dir;
 
   const connect = useCallback(() => {
     // Clean up existing connection
@@ -40,7 +51,11 @@ export function useSwarmStream(): UseSwarmStreamResult {
       eventSourceRef.current = null;
     }
 
-    const es = new EventSource(`/api/swarm/stream?since=${lastSeqRef.current}`);
+    const sseUrl = buildUrl('/api/swarm/stream', {
+      since: String(lastSeqRef.current),
+      dir: dirRef.current,
+    });
+    const es = new EventSource(sseUrl);
     eventSourceRef.current = es;
 
     es.onopen = () => {
@@ -117,7 +132,8 @@ export function useSwarmStream(): UseSwarmStreamResult {
 
   // Initial fetch of state (in case SSE hasn't connected yet)
   useEffect(() => {
-    fetch('/api/swarm/state')
+    const stateUrl = buildUrl('/api/swarm/state', { dir });
+    fetch(stateUrl)
       .then((res) => res.json())
       .then((data) => {
         if (data.success && data.data) {
@@ -132,10 +148,18 @@ export function useSwarmStream(): UseSwarmStreamResult {
         // Initial fetch failed; SSE will provide data
         setInitialFetchDone(true);
       });
-  }, []);
+  }, [dir]);
 
-  // Connect SSE on mount
+  // Connect SSE on mount and reconnect when dir changes
   useEffect(() => {
+    // Reset state when dir changes
+    setState(null);
+    setRecentEvents([]);
+    setError(null);
+    setInitialFetchDone(false);
+    lastSeqRef.current = 0;
+    reconnectAttemptRef.current = 0;
+
     connect();
     return () => {
       if (eventSourceRef.current) {
@@ -147,7 +171,7 @@ export function useSwarmStream(): UseSwarmStreamResult {
         reconnectTimerRef.current = null;
       }
     };
-  }, [connect]);
+  }, [connect, dir]);
 
   // idle = initial fetch done but no state received (no active swarm)
   const idle = initialFetchDone && !state;
@@ -178,7 +202,7 @@ function updateStateFromEvent(
     switch (e.type) {
       case 'swarm.task.dispatched': {
         const tasks = prev.tasks.map((t) =>
-          t.id === e.taskId ? { ...t, status: 'dispatched' as const, assignedModel: e.model as string } : t
+          t.id === e.taskId ? { ...t, status: 'dispatched' as const, assignedModel: e.model as string, dispatchedAt: Date.now() } : t
         );
         return { ...prev, tasks, lastSeq: event.seq };
       }
@@ -217,6 +241,22 @@ function updateStateFromEvent(
       case 'swarm.task.skipped': {
         const tasks = prev.tasks.map((t) =>
           t.id === e.taskId ? { ...t, status: 'skipped' as const } : t
+        );
+        return { ...prev, tasks, lastSeq: event.seq };
+      }
+
+      case 'swarm.quality.rejected': {
+        const tasks = prev.tasks.map((t) =>
+          t.id === e.taskId
+            ? {
+                ...t,
+                retryContext: {
+                  previousFeedback: e.feedback as string,
+                  previousScore: e.score as number,
+                  attempt: t.attempts,
+                },
+              }
+            : t
         );
         return { ...prev, tasks, lastSeq: event.seq };
       }

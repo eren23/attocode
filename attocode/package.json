@@ -1,6 +1,6 @@
 {
   "name": "attocode",
-  "version": "0.2.1",
+  "version": "0.2.2",
   "description": "Production AI coding agent for your terminal - multi-provider support, context management, MCP integration",
   "type": "module",
   "main": "dist/src/main.js",

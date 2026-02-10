@@ -114,6 +114,9 @@ export interface SwarmConfig {
   /** Model to use for quality gates instead of orchestratorModel (default: orchestratorModel) */
   qualityGateModel?: string;
 
+  /** Minimum quality score to pass (default: 3, range 1-5) */
+  qualityThreshold?: number;
+
   // ─── V3: Config, Hierarchy, Personas ────────────────────────────────────
 
   /** Development philosophy injected into ALL worker system prompts */
@@ -137,6 +140,41 @@ export interface SwarmConfig {
 
   /** Preferred decomposition order (e.g., ['test', 'implement', 'document']) */
   decompositionPriorities?: string[];
+
+  // ─── V4: Fact System ───────────────────────────────────────────────────
+
+  /** Grounding facts injected into all worker and judge prompts.
+   *  Auto-populated at startup; can be overridden/extended in swarm.yaml. */
+  facts?: SwarmFacts;
+
+  // ─── V6: Per-task-type timeout ──────────────────────────────────────────
+
+  /** Per-task-type timeout overrides in ms (e.g., { research: 300000, code: 120000 }).
+   *  Falls back to workerTimeout when a type is not specified. */
+  taskTypeTimeouts?: Partial<Record<SubtaskType, number>>;
+
+  /** Fraction of dependencies that must succeed for a dependent task to still run (default: 0.5).
+   *  When a task's completed deps / total deps >= this threshold, the task runs with partial context
+   *  instead of being cascade-skipped. Set to 1.0 for strict all-or-nothing behavior. */
+  partialDependencyThreshold?: number;
+}
+
+/**
+ * Grounding facts for temporal/project context.
+ * Prevents workers from hallucinating dates or ignoring the real environment.
+ */
+export interface SwarmFacts {
+  /** Current date in YYYY-MM-DD format (auto-populated from Date.now()) */
+  currentDate?: string;
+
+  /** Current year as number (auto-populated) */
+  currentYear?: number;
+
+  /** Working directory of the swarm (auto-populated from cwd) */
+  workingDirectory?: string;
+
+  /** Custom facts from swarm.yaml — free-form lines injected verbatim */
+  custom?: string[];
 }
 
 /**
@@ -167,12 +205,17 @@ export const DEFAULT_SWARM_CONFIG: Omit<SwarmConfig, 'orchestratorModel' | 'work
   enableModelFailover: true,
   maxVerificationRetries: 2,
   rateLimitRetries: 3,
+  taskTypeTimeouts: {
+    research: 300_000,  // 5 min for research (web searches take time)
+    analysis: 300_000,
+    merge: 180_000,     // 3 min for synthesis
+  },
 };
 
 // ─── Worker Specification ──────────────────────────────────────────────────
 
 /** Capability categories for worker models */
-export type WorkerCapability = 'code' | 'research' | 'review' | 'test' | 'document';
+export type WorkerCapability = 'code' | 'research' | 'review' | 'test' | 'document' | 'write';
 
 /**
  * Definition for a swarm worker model.
@@ -257,6 +300,13 @@ export interface SwarmTask {
 
   /** Aggregated outputs from completed dependencies */
   dependencyContext?: string;
+
+  /** Context from previous failed attempt (quality rejection or error) for retry prompts */
+  retryContext?: { previousFeedback: string; previousScore: number; attempt: number };
+
+  /** Partial dependency context when some deps failed but threshold met.
+   *  Lists which deps succeeded and which failed so the worker can adapt. */
+  partialContext?: { succeeded: string[]; failed: string[]; ratio: number };
 
   /** Original SmartSubtask for reference */
   originalSubtask?: SmartSubtask;
@@ -565,7 +615,7 @@ export const SUBTASK_TO_CAPABILITY: Record<SubtaskType, WorkerCapability> = {
   document: 'document',
   integrate: 'code',
   deploy: 'code',
-  merge: 'code',
+  merge: 'write',
 };
 
 /**

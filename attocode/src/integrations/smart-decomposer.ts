@@ -208,6 +208,7 @@ export type SmartDecomposerEvent =
   | { type: 'decomposition.started'; task: string }
   | { type: 'decomposition.completed'; result: SmartDecompositionResult }
   | { type: 'llm.called'; task: string }
+  | { type: 'llm.fallback'; reason: string; task: string }
   | { type: 'conflict.detected'; conflict: ResourceConflict }
   | { type: 'cycle.detected'; cycle: string[] };
 
@@ -294,31 +295,38 @@ export class SmartDecomposer {
   ): Promise<SmartDecompositionResult> {
     this.emit({ type: 'decomposition.started', task });
 
-    let subtasks: SmartSubtask[];
-    let strategy: DecompositionStrategy;
+    let subtasks: SmartSubtask[] = [];
+    let strategy: DecompositionStrategy = this.config.defaultStrategy;
     let llmAssisted = false;
 
-    // Try LLM-assisted decomposition first
+    // Try LLM-assisted decomposition first (with 1 retry before heuristic fallback)
     if (this.config.useLLM && this.config.llmProvider) {
-      try {
-        this.emit({ type: 'llm.called', task });
-        const llmResult = await this.config.llmProvider(task, context);
-        subtasks = this.convertLLMResult(llmResult);
-        strategy = llmResult.strategy;
-        llmAssisted = true;
-
-        // C2: Fall back to heuristic if LLM returned 0 subtasks
-        if (subtasks.length === 0) {
-          const heuristicResult = this.decomposeHeuristic(task, context);
-          subtasks = heuristicResult.subtasks;
-          strategy = heuristicResult.strategy;
-          llmAssisted = false;
+      const maxLLMAttempts = 2;
+      for (let attempt = 0; attempt < maxLLMAttempts; attempt++) {
+        try {
+          this.emit({ type: 'llm.called', task });
+          const llmResult = await this.config.llmProvider(task, context);
+          subtasks = this.convertLLMResult(llmResult);
+          strategy = llmResult.strategy;
+          llmAssisted = true;
+          if (subtasks.length > 0) break; // Success
+          // 0 subtasks on first attempt → retry
+          if (attempt === 0) {
+            this.emit({ type: 'llm.fallback', reason: 'LLM returned 0 subtasks, retrying...', task });
+            continue;
+          }
+        } catch (error) {
+          if (attempt === 0) {
+            this.emit({ type: 'llm.fallback', reason: `${(error as Error).message}, retrying...`, task });
+            continue;
+          }
         }
-      } catch {
-        // Fall back to heuristic decomposition
+        // Both attempts failed → fall back to heuristic
+        this.emit({ type: 'llm.fallback', reason: 'LLM failed after 2 attempts', task });
         const heuristicResult = this.decomposeHeuristic(task, context);
         subtasks = heuristicResult.subtasks;
         strategy = heuristicResult.strategy;
+        llmAssisted = false;
       }
     } else {
       // Use heuristic decomposition
@@ -389,11 +397,15 @@ export class SmartDecomposer {
   private convertLLMResult(llmResult: LLMDecomposeResult): SmartSubtask[] {
     const idMap = new Map<string, string>();
 
-    // First pass: create IDs
-    return llmResult.subtasks.map((s, index) => {
+    // First pass: create IDs and populate lookup map with common LLM reference patterns
+    const subtasks = llmResult.subtasks.map((s, index) => {
       const id = `task-${++this.taskCounter}`;
       idMap.set(s.description, id);
       idMap.set(String(index), id);
+      // Common LLM reference patterns
+      idMap.set(`task-${index}`, id);
+      idMap.set(`subtask-${index}`, id);
+      idMap.set(`st-${index}`, id);
 
       return {
         id,
@@ -406,12 +418,25 @@ export class SmartDecomposer {
         relevantFiles: s.relevantFiles,
         suggestedRole: s.suggestedRole,
       };
-    }).map((subtask, index) => {
-      // Second pass: resolve dependencies
+    });
+
+    // Build set of all valid task IDs for strict filtering
+    const validTaskIds = new Set(idMap.values());
+
+    // Second pass: resolve dependencies with strict filtering
+    return subtasks.map((subtask, index) => {
       const original = llmResult.subtasks[index];
       subtask.dependencies = original.dependencies
-        .map((dep) => idMap.get(dep) ?? dep)
-        .filter((dep) => dep !== subtask.id);
+        .map((dep) => {
+          const key = typeof dep === 'number' ? String(dep) : dep;
+          return idMap.get(key) ?? idMap.get(key.trim()) ?? null;
+        })
+        .filter((dep): dep is string => {
+          if (dep === null) return false;
+          if (dep === subtask.id) return false;
+          if (!validTaskIds.has(dep)) return false;
+          return true;
+        });
 
       // Update status based on dependencies
       subtask.status = subtask.dependencies.length > 0 ? 'blocked' : 'ready';
@@ -523,7 +548,7 @@ export class SmartDecomposer {
         return 'parallel';
       case 'implement':
       case 'refactor':
-        return 'sequential';
+        return 'adaptive';
       default:
         return 'adaptive';
     }
@@ -1208,12 +1233,12 @@ export function parseDecompositionResponse(response: string): LLMDecomposeResult
       strategy: parsed.strategy || 'adaptive',
       reasoning: parsed.reasoning || '',
     };
-  } catch {
-    // Return default if parsing fails
+  } catch (error) {
+    // Return default if parsing fails — preserve error info for diagnostics
     return {
       subtasks: [],
       strategy: 'adaptive',
-      reasoning: 'Failed to parse LLM response',
+      reasoning: `Failed to parse LLM response: ${(error as Error).message}`,
     };
   }
 }

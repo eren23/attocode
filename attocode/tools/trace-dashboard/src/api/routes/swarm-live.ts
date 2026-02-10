@@ -8,16 +8,29 @@ import { Hono } from 'hono';
 import { streamSSE } from 'hono/streaming';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
-import { SwarmFileWatcher, findSwarmLiveDir } from '../swarm-watcher.js';
+import { SwarmFileWatcher, findAllSwarmLiveDirs, resolveSwarmDir } from '../swarm-watcher.js';
 
 export const swarmLiveRoutes = new Hono();
 
 /**
- * GET /state — Read current state.json
+ * GET /dirs — List all discovered swarm-live directories
+ */
+swarmLiveRoutes.get('/dirs', (c) => {
+  try {
+    const dirs = findAllSwarmLiveDirs();
+    return c.json({ success: true, data: dirs });
+  } catch (err) {
+    console.error('Failed to list swarm dirs:', err);
+    return c.json({ success: false, error: 'Failed to list swarm dirs' }, 500);
+  }
+});
+
+/**
+ * GET /state?dir= — Read current state.json
  */
 swarmLiveRoutes.get('/state', (c) => {
   try {
-    const dir = findSwarmLiveDir();
+    const dir = resolveSwarmDir(c.req.query('dir'));
     if (!dir) {
       return c.json({ success: true, data: null });
     }
@@ -37,7 +50,7 @@ swarmLiveRoutes.get('/state', (c) => {
 });
 
 /**
- * GET /stream?since=<seq> — SSE endpoint for live events
+ * GET /stream?since=<seq>&dir= — SSE endpoint for live events
  *
  * When the swarm-live directory doesn't exist yet, sends an idle state
  * and polls for directory creation instead of returning a 404.
@@ -45,10 +58,11 @@ swarmLiveRoutes.get('/state', (c) => {
 swarmLiveRoutes.get('/stream', (c) => {
   const sinceStr = c.req.query('since');
   const sinceSeq = sinceStr ? parseInt(sinceStr, 10) : undefined;
+  const dirParam = c.req.query('dir');
 
   return streamSSE(c, async (stream) => {
     let eventId = 0;
-    let dir = findSwarmLiveDir();
+    let dir = resolveSwarmDir(dirParam);
 
     // If no directory found, send idle state and poll for creation
     if (!dir) {
@@ -60,7 +74,7 @@ swarmLiveRoutes.get('/stream', (c) => {
 
       // Poll for directory creation every 3 seconds
       const dirPoll = setInterval(() => {
-        const found = findSwarmLiveDir();
+        const found = resolveSwarmDir(dirParam);
         if (found) {
           dir = found;
           clearInterval(dirPoll);
@@ -165,11 +179,11 @@ swarmLiveRoutes.get('/stream', (c) => {
 });
 
 /**
- * GET /tasks — Return task list with dependency edges
+ * GET /tasks?dir= — Return task list with dependency edges
  */
 swarmLiveRoutes.get('/tasks', (c) => {
   try {
-    const dir = findSwarmLiveDir();
+    const dir = resolveSwarmDir(c.req.query('dir'));
     if (!dir) {
       return c.json({ success: true, data: { tasks: [], edges: [] } });
     }
@@ -195,11 +209,36 @@ swarmLiveRoutes.get('/tasks', (c) => {
 });
 
 /**
- * GET /history — List archived swarm event logs
+ * GET /task/:taskId?dir= — Read detailed task output (worker output, quality feedback, closure report)
+ */
+swarmLiveRoutes.get('/task/:taskId', (c) => {
+  try {
+    const dir = resolveSwarmDir(c.req.query('dir'));
+    if (!dir) {
+      return c.json({ success: true, data: null });
+    }
+
+    const taskId = c.req.param('taskId');
+    const taskFile = path.join(dir, 'tasks', `${taskId}.json`);
+    if (!fs.existsSync(taskFile)) {
+      return c.json({ success: true, data: null });
+    }
+
+    const content = fs.readFileSync(taskFile, 'utf-8');
+    const detail = JSON.parse(content);
+    return c.json({ success: true, data: detail });
+  } catch (err) {
+    console.error('Failed to read task detail:', err);
+    return c.json({ success: false, error: 'Failed to read task detail' }, 500);
+  }
+});
+
+/**
+ * GET /history?dir= — List archived swarm event logs
  */
 swarmLiveRoutes.get('/history', (c) => {
   try {
-    const dir = findSwarmLiveDir();
+    const dir = resolveSwarmDir(c.req.query('dir'));
     if (!dir || !fs.existsSync(dir)) {
       return c.json({ success: true, data: [] });
     }

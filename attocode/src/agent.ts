@@ -128,6 +128,8 @@ import {
   createSharedFileCache,
   SharedBudgetPool,
   createBudgetPool,
+  DynamicBudgetPool,
+  createDynamicBudgetPool,
   type ApprovalScope,
   PendingPlanManager,
   createPendingPlanManager,
@@ -175,6 +177,33 @@ import {
   // Verification Gate (opt-in completion verification)
   VerificationGate,
   createVerificationGate,
+  // Phase 2: Orchestration
+  classifyComplexity,
+  getScalingGuidance,
+  type ComplexityAssessment,
+  buildDelegationPrompt,
+  createMinimalDelegationSpec,
+  getSubagentQualityPrompt,
+  ToolRecommendationEngine,
+  createToolRecommendationEngine,
+  InjectionBudgetManager,
+  createInjectionBudgetManager,
+  type InjectionSlot,
+  // Phase 3: Advanced
+  getThinkingSystemPrompt,
+  SelfImprovementProtocol,
+  createSelfImprovementProtocol,
+  SubagentOutputStore,
+  createSubagentOutputStore,
+  type SubagentOutput,
+  createSerperSearchTool,
+  getEnvironmentFacts,
+  formatFactsBlock,
+  AutoCheckpointManager,
+  createAutoCheckpointManager,
+  SubagentSupervisor,
+  createSubagentSupervisor,
+  createSubagentHandle,
 } from './integrations/index.js';
 
 // Lesson 26: Tracing & Evaluation integration
@@ -212,34 +241,113 @@ export const PARALLELIZABLE_TOOLS = new Set([
 ]);
 
 /**
- * Groups consecutive tool calls into batches for parallel/sequential execution.
- * Consecutive parallelizable tools form a single parallel batch.
- * Non-parallelizable tools break the sequence, starting a new batch.
+ * Tools that can run in parallel IF they target different files.
+ * write_file and edit_file on different paths are safe to parallelize.
+ */
+export const CONDITIONALLY_PARALLEL_TOOLS = new Set([
+  'write_file', 'edit_file',
+]);
+
+/**
+ * Extract the target file path from a tool call's arguments.
+ * Returns null if no file path can be determined.
+ */
+export function extractToolFilePath(toolCall: { name: string; [key: string]: unknown }): string | null {
+  // Check common argument patterns
+  const args = (toolCall as Record<string, unknown>);
+  for (const key of ['path', 'file_path', 'filename', 'file']) {
+    if (typeof args[key] === 'string') return args[key] as string;
+  }
+  // Check nested args object
+  if (args.args && typeof args.args === 'object') {
+    const nested = args.args as Record<string, unknown>;
+    for (const key of ['path', 'file_path', 'filename', 'file']) {
+      if (typeof nested[key] === 'string') return nested[key] as string;
+    }
+  }
+  // Check input object (common in structured tool calls)
+  if (args.input && typeof args.input === 'object') {
+    const input = args.input as Record<string, unknown>;
+    for (const key of ['path', 'file_path', 'filename', 'file']) {
+      if (typeof input[key] === 'string') return input[key] as string;
+    }
+  }
+  return null;
+}
+
+/**
+ * Check if a conditionally-parallel tool call conflicts with any tool
+ * in the current accumulator (same file path).
+ */
+function hasFileConflict<T extends { name: string }>(
+  toolCall: T,
+  accumulator: T[],
+): boolean {
+  const path = extractToolFilePath(toolCall as T & Record<string, unknown>);
+  if (!path) return true; // Can't determine path → assume conflict
+
+  for (const existing of accumulator) {
+    const existingPath = extractToolFilePath(existing as T & Record<string, unknown>);
+    if (existingPath === path) return true; // Same file → conflict
+  }
+
+  return false;
+}
+
+/**
+ * Groups tool calls into batches for parallel/sequential execution.
+ * Uses accumulate-and-flush: parallelizable tools accumulate until a
+ * non-parallelizable tool flushes them as a batch. This produces optimal
+ * batching even for non-consecutive parallelizable tools.
+ *
+ * Enhanced with conditional parallelism: write_file/edit_file on
+ * DIFFERENT files can be batched together for parallel execution.
+ *
+ * Example: [read1, read2, write, read3, grep] → [[read1, read2], [write], [read3, grep]]
+ * (Previous algorithm produced 4 batches; this produces 3)
+ *
+ * Enhanced: [write_a, write_b, write_a] → [[write_a, write_b], [write_a]]
+ * (Different files parallelized, same file sequential)
  */
 export function groupToolCallsIntoBatches<T extends { name: string }>(
   toolCalls: T[],
   isParallelizable: (tc: T) => boolean = (tc) => PARALLELIZABLE_TOOLS.has(tc.name),
+  isConditionallyParallel: (tc: T) => boolean = (tc) => CONDITIONALLY_PARALLEL_TOOLS.has(tc.name),
 ): T[][] {
+  if (toolCalls.length === 0) return [];
+
   const batches: T[][] = [];
-  let currentBatch: T[] = [];
-  let currentIsParallel = false;
+  let parallelAccum: T[] = [];
 
   for (const toolCall of toolCalls) {
-    const isParallel = isParallelizable(toolCall);
-
-    if (batches.length === 0 && currentBatch.length === 0) {
-      currentBatch.push(toolCall);
-      currentIsParallel = isParallel;
-    } else if (isParallel && currentIsParallel) {
-      currentBatch.push(toolCall);
+    if (isParallelizable(toolCall)) {
+      parallelAccum.push(toolCall);
+    } else if (isConditionallyParallel(toolCall)) {
+      // Can parallelize if no file conflict with existing accumulator
+      if (!hasFileConflict(toolCall, parallelAccum)) {
+        parallelAccum.push(toolCall);
+      } else {
+        // Conflict: flush current batch, start new one with this tool
+        if (parallelAccum.length > 0) {
+          batches.push(parallelAccum);
+          parallelAccum = [];
+        }
+        parallelAccum.push(toolCall);
+      }
     } else {
-      batches.push(currentBatch);
-      currentBatch = [toolCall];
-      currentIsParallel = isParallel;
+      // Flush any accumulated parallel tools as a single batch
+      if (parallelAccum.length > 0) {
+        batches.push(parallelAccum);
+        parallelAccum = [];
+      }
+      // Non-parallelizable tool gets its own batch
+      batches.push([toolCall]);
     }
   }
-  if (currentBatch.length > 0) {
-    batches.push(currentBatch);
+
+  // Flush remaining parallel tools
+  if (parallelAccum.length > 0) {
+    batches.push(parallelAccum);
   }
 
   return batches;
@@ -294,6 +402,14 @@ export class ProductionAgent {
   private swarmOrchestrator: SwarmOrchestrator | null = null;
   private workLog: WorkLog | null = null;
   private verificationGate: VerificationGate | null = null;
+
+  // Phase 2-4 integration modules
+  private injectionBudget: InjectionBudgetManager | null = null;
+  private selfImprovement: SelfImprovementProtocol | null = null;
+  private subagentOutputStore: SubagentOutputStore | null = null;
+  private autoCheckpointManager: AutoCheckpointManager | null = null;
+  private toolRecommendation: ToolRecommendationEngine | null = null;
+  private lastComplexityAssessment: ComplexityAssessment | null = null;
 
   // Duplicate spawn prevention - tracks recently spawned tasks to prevent doom loops
   // Map<taskKey, { timestamp: number; result: string; queuedChanges: number }>
@@ -533,6 +649,13 @@ export class ProductionAgent {
       this.verificationGate = createVerificationGate(this.config.verificationCriteria);
     }
 
+    // Phase 2-4: Orchestration & Advanced modules (always enabled, lightweight)
+    this.injectionBudget = createInjectionBudgetManager();
+    this.selfImprovement = createSelfImprovementProtocol(undefined, this.learningStore ?? undefined);
+    this.subagentOutputStore = createSubagentOutputStore({ persistToFile: false });
+    this.autoCheckpointManager = createAutoCheckpointManager({ enabled: true });
+    this.toolRecommendation = createToolRecommendationEngine();
+
     // Agent Registry - always enabled for subagent support
     this.agentRegistry = new AgentRegistry();
     // Load user agents asynchronously - tracked for ensureReady()
@@ -573,6 +696,16 @@ export class ProductionAgent {
     for (const tool of taskTools) {
       this.tools.set(tool.name, tool);
     }
+
+    // Built-in web search (Serper API) — gracefully handles missing API key
+    const serperCustomTool = createSerperSearchTool();
+    this.tools.set('web_search', {
+      name: serperCustomTool.name,
+      description: serperCustomTool.description,
+      parameters: serperCustomTool.inputSchema,
+      execute: serperCustomTool.execute,
+      dangerLevel: 'safe',
+    });
 
     // Swarm Mode (experimental)
     if (this.config.swarm) {
@@ -1125,6 +1258,11 @@ export class ProductionAgent {
       // Check for cancellation before starting
       cancellationToken?.throwIfCancellationRequested();
 
+      // Classify task complexity for scaling guidance
+      this.lastComplexityAssessment = classifyComplexity(task, {
+        hasActivePlan: !!this.state.plan,
+      });
+
       // Check if swarm mode should handle this task
       if (this.swarmOrchestrator) {
         const swarmResult = await this.runSwarm(task);
@@ -1653,6 +1791,36 @@ export class ProductionAgent {
                 role: 'system',
                 content: failureContext,
               });
+            }
+          }
+        }
+
+        // =====================================================================
+        // INJECTION BUDGET ANALYSIS (Phase 2 - monitoring mode)
+        // Collects stats on context injections without gating; logs when
+        // budget would have dropped items. Validates system before enabling gating.
+        // =====================================================================
+        if (this.injectionBudget) {
+          const proposals: InjectionSlot[] = [];
+          if (budgetInjectedPrompt) {
+            proposals.push({ name: 'budget_warning', priority: 0, maxTokens: 500, content: budgetInjectedPrompt });
+          }
+          // Approximate recitation content (actual injection handled above)
+          if (this.contextEngineering) {
+            const failureCtx = this.contextEngineering.getFailureContext(5);
+            if (failureCtx) {
+              proposals.push({ name: 'failure_context', priority: 2, maxTokens: 300, content: failureCtx });
+            }
+          }
+          if (proposals.length > 0) {
+            const accepted = this.injectionBudget.allocate(proposals);
+            const stats = this.injectionBudget.getLastStats();
+            if (stats && stats.droppedNames.length > 0 && process.env.DEBUG) {
+              console.log(`[injection-budget] Would drop: ${stats.droppedNames.join(', ')} (${stats.proposedTokens} proposed, ${stats.acceptedTokens} accepted)`);
+            }
+            // Log total injection overhead for observability
+            if (stats && process.env.DEBUG_LLM) {
+              console.log(`[injection-budget] Iteration ${this.state.iteration}: ${accepted.length}/${proposals.length} injections, ~${stats.acceptedTokens} tokens`);
             }
           }
         }
@@ -2338,12 +2506,27 @@ export class ProductionAgent {
     }
 
     // Build system prompt using cache-aware builder if available (Trick P)
-    // Combine memory, learnings, and codebase context
-    const combinedContext = [
+    // Combine memory, learnings, codebase context, and environment facts
+    const combinedContextParts = [
+      // Environment facts — temporal/platform grounding (prevents stale date hallucinations)
+      formatFactsBlock(getEnvironmentFacts()),
       ...(memoryContext.length > 0 ? memoryContext : []),
       ...(learningsContext ? [learningsContext] : []),
       ...(codebaseContextStr ? [`\n## Relevant Code\n${codebaseContextStr}`] : []),
-    ].join('\n');
+    ];
+
+    // Inject thinking directives and scaling guidance for non-simple tasks
+    if (this.lastComplexityAssessment) {
+      const thinkingPrompt = getThinkingSystemPrompt(this.lastComplexityAssessment.tier);
+      if (thinkingPrompt) {
+        combinedContextParts.push(thinkingPrompt);
+      }
+      if (this.lastComplexityAssessment.tier !== 'simple') {
+        combinedContextParts.push(getScalingGuidance(this.lastComplexityAssessment));
+      }
+    }
+
+    const combinedContext = combinedContextParts.join('\n');
 
     const promptOptions = {
       rules: rulesContent + (skillsPrompt ? '\n\n' + skillsPrompt : ''),
@@ -2495,6 +2678,9 @@ export class ProductionAgent {
         },
       },
     });
+
+    // Pause duration budget during LLM call - network time shouldn't count against agent
+    this.economics?.pauseDuration();
 
     try {
       let response: ChatResponse;
@@ -2652,6 +2838,9 @@ export class ProductionAgent {
       this.observability?.tracer?.recordError(error);
       this.observability?.tracer?.endSpan(spanId);
       throw error;
+    } finally {
+      // Resume duration budget after LLM call completes (success or failure)
+      this.economics?.resumeDuration();
     }
   }
 
@@ -3046,6 +3235,13 @@ export class ProductionAgent {
           }
         }
 
+        // Self-improvement: record success pattern
+        this.selfImprovement?.recordSuccess(
+          toolCall.name,
+          toolCall.arguments as Record<string, unknown>,
+          typeof result === 'string' ? result.slice(0, 200) : JSON.stringify(result).slice(0, 200),
+        );
+
         this.observability?.tracer?.endSpan(spanId);
         return { callId: toolCall.id, result };
       } catch (err) {
@@ -3075,6 +3271,15 @@ export class ProductionAgent {
           error,
           intent: `Execute tool ${toolCall.name}`,
         });
+
+        // Self-improvement: enhance error message with diagnosis for better LLM recovery
+        if (this.selfImprovement) {
+          const enhanced = this.selfImprovement.enhanceErrorMessage(
+            toolCall.name, error.message, toolCall.arguments as Record<string, unknown>
+          );
+          this.emit({ type: 'tool.blocked', tool: toolCall.name, reason: enhanced });
+          return { callId: toolCall.id, result: `Error: ${enhanced}`, error: enhanced };
+        }
 
         this.emit({ type: 'tool.blocked', tool: toolCall.name, reason: error.message });
         return { callId: toolCall.id, result: `Error: ${error.message}`, error: error.message };
@@ -4313,6 +4518,20 @@ export class ProductionAgent {
 
     // Create the checkpoint
     const label = `auto-iter-${this.state.iteration}`;
+
+    // Supplementary: also save to AutoCheckpointManager (file-based)
+    if (this.autoCheckpointManager) {
+      try {
+        this.autoCheckpointManager.save({
+          label,
+          sessionId: this.agentId,
+          iteration: this.state.iteration,
+        });
+      } catch {
+        // Non-critical — don't fail the main checkpoint path
+      }
+    }
+
     return this.createCheckpoint(label);
   }
 
@@ -4488,7 +4707,23 @@ export class ProductionAgent {
 
     try {
       // Filter tools for this agent
-      const agentTools = filterToolsForAgent(agentDef, Array.from(this.tools.values()));
+      let agentTools = filterToolsForAgent(agentDef, Array.from(this.tools.values()));
+
+      // Apply tool recommendations to improve subagent focus (only for large tool sets)
+      if (this.toolRecommendation && agentTools.length > 15) {
+        const taskType = ToolRecommendationEngine.inferTaskType(agentName);
+        const recommendations = this.toolRecommendation.recommendTools(
+          task, taskType, agentTools.map(t => t.name)
+        );
+        if (recommendations.length > 0) {
+          const recommendedNames = new Set(recommendations.map(r => r.toolName));
+          // Always keep spawn tools even if not recommended
+          const alwaysKeep = new Set(['spawn_agent', 'spawn_agents_parallel']);
+          agentTools = agentTools.filter(t =>
+            recommendedNames.has(t.name) || alwaysKeep.has(t.name)
+          );
+        }
+      }
 
       // Resolve model - abstract tiers (fast/balanced/quality) should use parent's model
       // Only use agentDef.model if it's an actual model ID (contains '/')
@@ -4598,16 +4833,34 @@ export class ProductionAgent {
       // BUDGET AWARENESS: Always inject so subagent understands its limits
       const subagentBudgetTokens = constraints?.maxTokens ?? SUBAGENT_BUDGET.maxTokens ?? 100000;
       const subagentBudgetMinutes = Math.round((SUBAGENT_BUDGET.maxDuration ?? 240000) / 60000);
-      constraintParts.push(
-        `**RESOURCE AWARENESS (CRITICAL):**\n` +
-        `- Token budget: ~${(subagentBudgetTokens / 1000).toFixed(0)}k tokens\n` +
-        `- Time limit: ~${subagentBudgetMinutes} minutes\n` +
-        `- You will receive warnings at 70% usage. When warned, WRAP UP immediately.\n` +
-        `- Do not explore indefinitely - be focused and efficient.\n` +
-        `- If approaching limits, summarize findings and return.\n` +
-        `- **STRUCTURED WRAPUP:** When told to wrap up, respond with ONLY this JSON (no tool calls):\n` +
-        `  {"findings":[...], "actionsTaken":[...], "failures":[...], "remainingWork":[...], "suggestedNextSteps":[...]}`
-      );
+
+      if (isSwarmWorker) {
+        // V6: Calmer resource awareness for swarm workers — prevents weaker models
+        // from confabulating budget warnings and wrapping up without doing work
+        constraintParts.push(
+          `**Resource Info:**\n` +
+          `- Token budget: ~${(subagentBudgetTokens / 1000).toFixed(0)}k tokens (you have plenty)\n` +
+          `- Time limit: ~${subagentBudgetMinutes} minutes\n` +
+          `- Focus on completing your task. Do NOT wrap up prematurely.\n` +
+          `- You will receive a system warning IF you approach budget limits. Until then, work normally.\n` +
+          `- **IMPORTANT:** Budget warnings come from the SYSTEM, not from your own assessment. ` +
+          `Do not preemptively claim budget issues.\n` +
+          `- **STRUCTURED WRAPUP:** When told to wrap up, respond with ONLY this JSON (no tool calls):\n` +
+          `  {"findings":[...], "actionsTaken":[...], "failures":[...], "remainingWork":[...], "suggestedNextSteps":[...]}`
+        );
+      } else {
+        // Original RESOURCE AWARENESS text for regular subagents
+        constraintParts.push(
+          `**RESOURCE AWARENESS (CRITICAL):**\n` +
+          `- Token budget: ~${(subagentBudgetTokens / 1000).toFixed(0)}k tokens\n` +
+          `- Time limit: ~${subagentBudgetMinutes} minutes\n` +
+          `- You will receive warnings at 70% usage. When warned, WRAP UP immediately.\n` +
+          `- Do not explore indefinitely - be focused and efficient.\n` +
+          `- If approaching limits, summarize findings and return.\n` +
+          `- **STRUCTURED WRAPUP:** When told to wrap up, respond with ONLY this JSON (no tool calls):\n` +
+          `  {"findings":[...], "actionsTaken":[...], "failures":[...], "remainingWork":[...], "suggestedNextSteps":[...]}`
+        );
+      }
 
       if (constraints) {
         if (constraints.focusAreas && constraints.focusAreas.length > 0) {
@@ -4629,11 +4882,21 @@ export class ProductionAgent {
 
       const constraintContext = `\n\n**EXECUTION CONSTRAINTS:**\n${constraintParts.join('\n\n')}\n`;
 
+      // Build delegation-enhanced system prompt
+      let delegationContext = '';
+      if (this.lastComplexityAssessment && this.lastComplexityAssessment.tier !== 'simple') {
+        const spec = createMinimalDelegationSpec(task, agentName);
+        delegationContext = '\n\n' + buildDelegationPrompt(spec);
+      }
+
+      // Quality self-assessment prompt for subagent
+      const qualityPrompt = '\n\n' + getSubagentQualityPrompt();
+
       // Build subagent system prompt with subagent-specific plan mode addition
       const parentMode = this.getMode();
       const subagentSystemPrompt = parentMode === 'plan'
-        ? `${agentDef.systemPrompt}\n\n${SUBAGENT_PLAN_MODE_ADDITION}${blackboardContext}${constraintContext}`
-        : `${agentDef.systemPrompt}${blackboardContext}${constraintContext}`;
+        ? `${agentDef.systemPrompt}\n\n${SUBAGENT_PLAN_MODE_ADDITION}${blackboardContext}${constraintContext}${delegationContext}${qualityPrompt}`
+        : `${agentDef.systemPrompt}${blackboardContext}${constraintContext}${delegationContext}${qualityPrompt}`;
 
       // Allocate budget from pool (or use default) — track allocation ID for release later
       const pooledBudget = this.getSubagentBudget(agentName, constraints);
@@ -4880,6 +5143,26 @@ export class ProductionAgent {
           },
           structured,
         };
+
+        // Save full output to subagent output store (avoids telephone problem)
+        if (this.subagentOutputStore) {
+          const outputEntry: SubagentOutput = {
+            id: agentId,
+            agentId,
+            agentName,
+            task,
+            fullOutput: finalOutput,
+            structured,
+            filesModified: [],
+            filesCreated: [],
+            timestamp: new Date(),
+            tokensUsed: result.metrics.totalTokens,
+            durationMs: duration,
+          };
+          const storeId = this.subagentOutputStore.save(outputEntry);
+          // Attach reference so downstream consumers can retrieve full output
+          spawnResultFinal.outputStoreId = storeId;
+        }
 
         if (workerResultId && this.store?.hasWorkerResultsFeature()) {
           try {
@@ -5224,22 +5507,42 @@ export class ProductionAgent {
       agents: tasks.map(t => t.agent),
     });
 
-    // Pre-divide budget pool equally to prevent first-come starvation.
-    // Temporarily lower maxPerChild so each spawnAgent's normal reserve() call
-    // gets an equal share instead of racing for the full maxPerChild allocation.
+    // Use DynamicBudgetPool for parallel spawns (prevents child starvation,
+    // enables priority-based allocation). Falls back to regular pool for single tasks.
     let settled: PromiseSettledResult<SpawnResult>[];
+    const originalPool = this.budgetPool;
+
+    // SubagentSupervisor for unified monitoring of concurrent subagents
+    const supervisor = tasks.length > 1 ? createSubagentSupervisor() : null;
+
     if (this.budgetPool && tasks.length > 1) {
+      // Swap to DynamicBudgetPool for this parallel batch
       const poolStats = this.budgetPool.getStats();
-      // equalShare is always ≤ remaining ≤ totalTokens ≤ originalMaxPerChild
-      // (guaranteed by createBudgetPool capping maxPerChild to poolTokens)
-      // so we don't need Math.min(equalShare, originalMaxPerChild) here.
-      const equalShare = Math.floor(poolStats.tokensRemaining / tasks.length);
-      this.budgetPool.setMaxPerChild(equalShare);
+      const dynamicPool = createDynamicBudgetPool(poolStats.tokensRemaining, 0.1);
+      dynamicPool.setExpectedChildren(tasks.length);
+
+      // Temporarily replace the budget pool so spawnAgent's reserve() uses the dynamic one
+      this.budgetPool = dynamicPool;
       try {
-        const promises = tasks.map(({ agent, task }) => this.spawnAgent(agent, task));
+        const promises = tasks.map(({ agent, task }) => {
+          const spawnPromise = this.spawnAgent(agent, task);
+          // Register with supervisor for monitoring
+          if (supervisor) {
+            const handle = createSubagentHandle(
+              `parallel-${agent}-${Date.now()}`,
+              agent,
+              task,
+              spawnPromise,
+              {},
+            );
+            supervisor.add(handle);
+          }
+          return spawnPromise;
+        });
         settled = await Promise.allSettled(promises);
       } finally {
-        this.budgetPool.resetMaxPerChild();
+        this.budgetPool = originalPool;
+        supervisor?.stop();
       }
     } else {
       // Single task or no pool - use standard sequential allocation
@@ -6086,8 +6389,18 @@ If the task is a simple question or doesn't need specialized handling, set bestA
     // Flush trace collector before cleanup
     await this.traceCollector?.flush();
 
-    // Clear blackboard (releases file claim locks)
-    this.blackboard?.clear();
+    // Per-agent blackboard cleanup: release only this agent's claims and subscriptions
+    // so parallel siblings don't lose their data. Only root agent clears everything.
+    if (this.blackboard) {
+      if (this.parentIterations > 0 && this.agentId) {
+        // Subagent: release only our claims and subscriptions
+        this.blackboard.releaseAll(this.agentId);
+        this.blackboard.unsubscribeAgent(this.agentId);
+      } else {
+        // Root agent: full clear
+        this.blackboard.clear();
+      }
+    }
 
     // Wait for any pending init before cleanup
     if (this.initPromises.length > 0) {

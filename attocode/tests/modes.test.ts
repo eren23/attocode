@@ -15,6 +15,7 @@ import {
   ALL_TOOLS,
   calculateTaskSimilarity,
   areTasksSimilar,
+  isBashSafeCommand,
 } from '../src/modes.js';
 import type { ToolDefinition } from '../src/types.js';
 
@@ -440,5 +441,143 @@ describe('areTasksSimilar', () => {
 
     // Should not be considered similar
     expect(areTasksSimilar(taskA, taskB, 0.5)).toBe(false);
+  });
+});
+
+// =============================================================================
+// PLAN MODE BASH ALLOWLIST TESTS
+// =============================================================================
+
+describe('isBashSafeCommand', () => {
+  describe('safe commands (should pass through)', () => {
+    it('should allow ls', () => {
+      expect(isBashSafeCommand('ls -la')).toBe(true);
+    });
+
+    it('should allow cat', () => {
+      expect(isBashSafeCommand('cat foo.txt')).toBe(true);
+    });
+
+    it('should allow grep', () => {
+      expect(isBashSafeCommand('grep -r "pattern" .')).toBe(true);
+    });
+
+    it('should allow git status', () => {
+      expect(isBashSafeCommand('git status')).toBe(true);
+    });
+
+    it('should allow git log', () => {
+      expect(isBashSafeCommand('git log --oneline')).toBe(true);
+    });
+
+    it('should allow git diff', () => {
+      expect(isBashSafeCommand('git diff HEAD~1')).toBe(true);
+    });
+
+    it('should allow npm list', () => {
+      expect(isBashSafeCommand('npm list --depth=0')).toBe(true);
+    });
+
+    it('should allow find without dangerous flags', () => {
+      expect(isBashSafeCommand('find . -name "*.ts"')).toBe(true);
+    });
+
+    it('should allow wc', () => {
+      expect(isBashSafeCommand('wc -l src/agent.ts')).toBe(true);
+    });
+
+    it('should allow node --version', () => {
+      expect(isBashSafeCommand('node --version')).toBe(true);
+    });
+
+    it('should allow jq', () => {
+      expect(isBashSafeCommand('jq ".name" package.json')).toBe(true);
+    });
+  });
+
+  describe('dangerous commands (should be intercepted)', () => {
+    it('should intercept rm', () => {
+      expect(isBashSafeCommand('rm -rf node_modules')).toBe(false);
+    });
+
+    it('should intercept curl', () => {
+      expect(isBashSafeCommand('curl -X POST https://example.com')).toBe(false);
+    });
+
+    it('should intercept docker rm', () => {
+      expect(isBashSafeCommand('docker rm container')).toBe(false);
+    });
+
+    it('should intercept npm install', () => {
+      expect(isBashSafeCommand('npm install lodash')).toBe(false);
+    });
+
+    it('should intercept git push', () => {
+      expect(isBashSafeCommand('git push origin main')).toBe(false);
+    });
+
+    it('should intercept git commit', () => {
+      expect(isBashSafeCommand('git commit -m "message"')).toBe(false);
+    });
+
+    it('should intercept unknown commands', () => {
+      expect(isBashSafeCommand('some_custom_script.sh')).toBe(false);
+    });
+
+    it('should intercept python scripts', () => {
+      expect(isBashSafeCommand('python deploy.py')).toBe(false);
+    });
+  });
+
+  describe('dangerous suffixes on safe commands', () => {
+    it('should intercept cat with redirect', () => {
+      expect(isBashSafeCommand('cat foo.txt > bar.txt')).toBe(false);
+    });
+
+    it('should intercept echo with redirect', () => {
+      expect(isBashSafeCommand('echo "data" > output.txt')).toBe(false);
+    });
+
+    it('should intercept find with -exec', () => {
+      expect(isBashSafeCommand('find . -name "*.tmp" -exec rm {} ;')).toBe(false);
+    });
+
+    it('should intercept find with -delete', () => {
+      expect(isBashSafeCommand('find . -name "*.tmp" -delete')).toBe(false);
+    });
+
+    it('should intercept pipe to rm', () => {
+      expect(isBashSafeCommand('ls | rm')).toBe(false);
+    });
+
+    it('should intercept pipe to tee', () => {
+      expect(isBashSafeCommand('cat file.txt | tee output.txt')).toBe(false);
+    });
+
+    it('should intercept append redirect', () => {
+      expect(isBashSafeCommand('echo "line" >> output.txt')).toBe(false);
+    });
+  });
+
+  describe('plan mode shouldInterceptTool integration', () => {
+    it('should intercept destructive bash in plan mode', () => {
+      const manager = createModeManager(mockTools);
+      manager.setMode('plan');
+
+      // Destructive commands should be intercepted
+      expect(manager.shouldInterceptTool('bash', { command: 'rm -rf /' })).toBe(true);
+      expect(manager.shouldInterceptTool('bash', { command: 'npm install lodash' })).toBe(true);
+      expect(manager.shouldInterceptTool('bash', { command: 'curl -X POST api.com' })).toBe(true);
+    });
+
+    it('should allow safe bash in plan mode', () => {
+      const manager = createModeManager(mockTools);
+      manager.setMode('plan');
+
+      // Safe commands should pass through
+      expect(manager.shouldInterceptTool('bash', { command: 'ls -la' })).toBe(false);
+      expect(manager.shouldInterceptTool('bash', { command: 'git status' })).toBe(false);
+      expect(manager.shouldInterceptTool('bash', { command: 'cat package.json' })).toBe(false);
+    });
   });
 });
