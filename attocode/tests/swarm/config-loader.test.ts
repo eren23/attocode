@@ -2,7 +2,7 @@
  * Tests for swarm YAML config loader
  */
 import { describe, it, expect } from 'vitest';
-import { parseSwarmYaml, yamlToSwarmConfig, mergeSwarmConfigs } from '../../src/integrations/swarm/swarm-config-loader.js';
+import { parseSwarmYaml, yamlToSwarmConfig, mergeSwarmConfigs, normalizeCapabilities } from '../../src/integrations/swarm/swarm-config-loader.js';
 import { DEFAULT_SWARM_CONFIG } from '../../src/integrations/swarm/types.js';
 
 // Helper to access nested yaml result properties
@@ -52,7 +52,22 @@ workers:
 `;
     const config = yamlToSwarmConfig(parseSwarmYaml(yaml), 'test/orch');
     expect(config.workers).toHaveLength(1);
-    expect(config.workers![0].capabilities).toEqual(['code', 'refactor']);
+    // 'refactor' is normalized to 'code', deduped
+    expect(config.workers![0].capabilities).toEqual(['code']);
+  });
+
+  it('should normalize write capability from yaml', () => {
+    const yaml = `
+workers:
+  - name: synthesizer
+    model: test/model
+    capabilities: [write, refactor]
+`;
+    const config = yamlToSwarmConfig(parseSwarmYaml(yaml), 'test/orch');
+    expect(config.workers).toHaveLength(1);
+    // 'write' passes through, 'refactor' → 'code'
+    expect(config.workers![0].capabilities).toContain('write');
+    expect(config.workers![0].capabilities).toContain('code');
   });
 
   it('should parse hierarchy section', () => {
@@ -190,6 +205,28 @@ describe('mergeSwarmConfigs', () => {
     expect(result.paidOnly).toBe(true);
   });
 
+  it('should let CLI orchestratorModel override YAML when explicitly set', () => {
+    const yamlPartial = {
+      orchestratorModel: 'yaml/model',
+    };
+    const result = mergeSwarmConfigs(DEFAULT_SWARM_CONFIG, yamlPartial, {
+      orchestratorModel: 'cli/model',
+      orchestratorModelExplicit: true,
+    });
+    expect(result.orchestratorModel).toBe('cli/model');
+  });
+
+  it('should keep YAML orchestrator when CLI model is not explicit', () => {
+    const yamlPartial = {
+      orchestratorModel: 'yaml/model',
+    };
+    const result = mergeSwarmConfigs(DEFAULT_SWARM_CONFIG, yamlPartial, {
+      orchestratorModel: 'default/model',
+      orchestratorModelExplicit: false,
+    });
+    expect(result.orchestratorModel).toBe('yaml/model');
+  });
+
   it('should merge hierarchy from yaml', () => {
     const yamlPartial = {
       hierarchy: {
@@ -203,5 +240,107 @@ describe('mergeSwarmConfigs', () => {
     expect(result.hierarchy?.manager?.model).toBe('premium/model');
     expect(result.hierarchy?.manager?.persona).toBe('strict');
     expect(result.hierarchy?.judge?.model).toBe('flash/model');
+  });
+});
+
+describe('yamlToSwarmConfig snake_case features', () => {
+  it('should load wave_review (snake_case) from features', () => {
+    const yaml = parseSwarmYaml(`
+features:
+  wave_review: true
+  verification: false
+`);
+    const config = yamlToSwarmConfig(yaml, 'test/orch');
+    expect(config.enableWaveReview).toBe(true);
+    expect(config.enableVerification).toBe(false);
+  });
+
+  it('should load waveReview (camelCase) from features', () => {
+    const yaml = parseSwarmYaml(`
+features:
+  waveReview: true
+`);
+    const config = yamlToSwarmConfig(yaml, 'test/orch');
+    expect(config.enableWaveReview).toBe(true);
+  });
+
+  it('should load dispatch_stagger_ms (snake_case) from budget', () => {
+    const yaml = parseSwarmYaml(`
+budget:
+  dispatch_stagger_ms: 250
+`);
+    const config = yamlToSwarmConfig(yaml, 'test/orch');
+    expect(config.dispatchStaggerMs).toBe(250);
+  });
+
+  it('should load dispatchStaggerMs (camelCase) from budget', () => {
+    const yaml = parseSwarmYaml(`
+budget:
+  dispatchStaggerMs: 500
+`);
+    const config = yamlToSwarmConfig(yaml, 'test/orch');
+    expect(config.dispatchStaggerMs).toBe(500);
+  });
+
+  it('should load orchestrator model from models section', () => {
+    const yaml = parseSwarmYaml(`
+models:
+  orchestrator: anthropic/claude-sonnet-4
+  quality_gate: google/gemini-2.0-flash-001
+`);
+    const config = yamlToSwarmConfig(yaml, 'test/orch');
+    expect(config.orchestratorModel).toBe('anthropic/claude-sonnet-4');
+    expect(config.qualityGateModel).toBe('google/gemini-2.0-flash-001');
+  });
+
+  it('should load quality_gate (snake_case) from models section', () => {
+    const yaml = parseSwarmYaml(`
+models:
+  quality_gate: test/gate-model
+`);
+    const config = yamlToSwarmConfig(yaml, 'test/orch');
+    expect(config.qualityGateModel).toBe('test/gate-model');
+  });
+});
+
+describe('normalizeCapabilities', () => {
+  it('should pass valid capabilities through', () => {
+    expect(normalizeCapabilities(['code', 'research', 'write'])).toEqual(['code', 'research', 'write']);
+  });
+
+  it('should map refactor to code', () => {
+    expect(normalizeCapabilities(['refactor'])).toEqual(['code']);
+  });
+
+  it('should map implement to code', () => {
+    expect(normalizeCapabilities(['implement'])).toEqual(['code']);
+  });
+
+  it('should map writing/synthesis/merge to write', () => {
+    expect(normalizeCapabilities(['writing'])).toEqual(['write']);
+    expect(normalizeCapabilities(['synthesis'])).toEqual(['write']);
+    expect(normalizeCapabilities(['merge'])).toEqual(['write']);
+  });
+
+  it('should map docs/documentation to document', () => {
+    expect(normalizeCapabilities(['docs'])).toEqual(['document']);
+    expect(normalizeCapabilities(['documentation'])).toEqual(['document']);
+  });
+
+  it('should drop unknown capabilities', () => {
+    expect(normalizeCapabilities(['code', 'teleport', 'fly'])).toEqual(['code']);
+  });
+
+  it('should deduplicate capabilities', () => {
+    expect(normalizeCapabilities(['code', 'refactor', 'implement'])).toEqual(['code']);
+  });
+
+  it('should fall back to code when empty after filtering', () => {
+    expect(normalizeCapabilities(['unknown', 'invalid'])).toEqual(['code']);
+    expect(normalizeCapabilities([])).toEqual(['code']);
+  });
+
+  it('should handle case insensitivity', () => {
+    expect(normalizeCapabilities(['Code', 'RESEARCH'])).toEqual(['code', 'research']);
   });
 });

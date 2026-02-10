@@ -25,6 +25,31 @@ philosophy: |
 
 Workers receive the philosophy before their individual persona, so team-wide standards come first.
 
+## Facts
+
+**What it does**: Injects temporal and project facts into all worker system prompts. Prevents LLM training data staleness (e.g., writing "as of 2024" when it's 2026).
+
+**Default**: Auto-detected (current date, Node version, OS).
+
+```yaml
+facts:
+  custom:
+    - "Today is February 2026. ALL research must target 2025-2026 data."
+    - "Claude model family is now 4.x. GPT is 4.5/o3/o4-mini."
+    - "Report files go in report/ directory."
+```
+
+Custom facts appear before the worker persona in the system prompt. Use this for:
+- **Temporal grounding** — "The current date is..." prevents workers from citing outdated information
+- **Project conventions** — "Files go in X directory" keeps outputs organized
+- **Domain knowledge** — Facts the LLM's training data may lack or get wrong
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `currentDate` | `string` | Override auto-detected date (rarely needed) |
+| `currentYear` | `number` | Override auto-detected year (rarely needed) |
+| `custom` | `string[]` | List of fact strings injected into every worker prompt |
+
 ## Models
 
 **What it does**: Controls model assignments for the orchestrator and worker auto-detection.
@@ -73,7 +98,7 @@ workers:
 |-------|----------|-------------|
 | `name` | Yes | Human-readable name (e.g., `coder`, `researcher`) |
 | `model` | Yes | OpenRouter model ID |
-| `capabilities` | Yes | What this worker can do: `code`, `research`, `review`, `test`, `document` |
+| `capabilities` | Yes | What this worker can do: `code`, `research`, `review`, `test`, `document`, `write` |
 | `persona` | No | Per-worker behavioral instructions appended to system prompt |
 | `contextWindow` | No | Context window size for compaction tuning |
 | `maxTokens` | No | Per-worker token limit override |
@@ -81,13 +106,18 @@ workers:
 | `deniedTools` | No | Blacklist of tools this worker cannot use |
 | `role` | No | Hierarchical role: `executor` (default), `manager`, or `judge` |
 
+### Capability Normalization
+
+Capabilities are normalized automatically: aliases like `refactor`→`code`, `implement`→`code`, `coding`→`code`, `writing`/`synthesis`/`synthesize`/`merge`→`write`, `docs`/`documentation`→`document`, `testing`→`test` are resolved. Unknown values are silently dropped. If all capabilities are dropped, the worker falls back to `['code']`.
+
 ### Capability Mapping
 
 Tasks are matched to workers by capability:
 
 | Task Type | Required Capability |
 |-----------|-------------------|
-| `implement`, `refactor`, `integrate`, `deploy`, `merge` | `code` |
+| `implement`, `refactor`, `integrate`, `deploy` | `code` |
+| `merge` | `write` (falls back to `code` if no `write`-capable worker) |
 | `research`, `analysis`, `design` | `research` |
 | `test` | `test` |
 | `review` | `review` |
@@ -137,6 +167,8 @@ budget:
 | `worker_timeout` | `120,000` (2 min) | Increase for complex subtasks |
 | `dispatch_stagger_ms` | `1,500` | Decrease for paid models, increase for free tier |
 
+> **Note:** The `budget:` section accepts both camelCase and snake_case (e.g., `dispatch_stagger_ms` or `dispatchStaggerMs`). All other sections (communication, resilience) require camelCase.
+
 ### Budget Split
 
 The orchestrator reserves a fraction of the total budget (default: 15%) for its own work (decomposition, planning, quality gates, synthesis). The remaining 85% is shared among workers.
@@ -169,15 +201,17 @@ Quality gates automatically skip when under rate limit pressure (to avoid compou
 ```yaml
 communication:
   blackboard: true                      # Shared state between workers
-  dependency_context_max_length: 2000   # Max chars of dependency output to include
-  include_file_list: true               # Include workspace file listing
+  dependencyContextMaxLength: 2000      # Max chars of dependency output to include
+  includeFileList: true                 # Include workspace file listing
 ```
+
+> **Note:** The `communication:` section requires camelCase field names. Snake_case variants (`dependency_context_max_length`, `include_file_list`) are **not recognized** and will be silently ignored.
 
 | Field | Default | When to change |
 |-------|---------|----------------|
 | `blackboard` | `true` | Workers post findings to a shared blackboard for others to read |
-| `dependency_context_max_length` | `2000` | Increase if workers need more context from dependencies |
-| `include_file_list` | `true` | Set `false` for large repos where the file list is too long |
+| `dependencyContextMaxLength` | `2000` | Increase if workers need more context from dependencies |
+| `includeFileList` | `true` | Set `false` for large repos where the file list is too long |
 
 ## Resilience
 
@@ -185,16 +219,18 @@ communication:
 
 ```yaml
 resilience:
-  worker_retries: 2           # Retries for failed workers
-  rate_limit_retries: 3       # Extra retries specifically for 429/402 errors
-  model_failover: true        # Switch models on rate limit errors
+  workerRetries: 2            # Retries for failed workers
+  rateLimitRetries: 3         # Extra retries specifically for 429/402 errors
+  modelFailover: true         # Switch models on rate limit errors
 ```
+
+> **Note:** The `resilience:` section requires camelCase field names. Snake_case variants (`worker_retries`, `rate_limit_retries`, `model_failover`) are **not recognized** and will be silently ignored.
 
 | Field | Default | When to change |
 |-------|---------|----------------|
-| `worker_retries` | `2` | Increase for unreliable models |
-| `rate_limit_retries` | `3` | Increase for free models with strict limits |
-| `model_failover` | `true` | Set `false` if you want to stick with assigned models |
+| `workerRetries` | `2` | Increase for unreliable models |
+| `rateLimitRetries` | `3` | Increase for free models with strict limits |
+| `modelFailover` | `true` | Set `false` if you want to stick with assigned models |
 
 ### Circuit Breaker
 
@@ -290,6 +326,10 @@ philosophy: |
   Write clean, tested TypeScript with strict types.
   Follow existing patterns. Run tests after changes.
 
+facts:
+  custom:
+    - "Today is February 2026. Target 2025-2026 libraries and APIs."
+
 models:
   paid_only: true
 
@@ -298,6 +338,10 @@ workers:
     model: anthropic/claude-sonnet-4
     capabilities: [code, refactor]
     persona: "Senior TypeScript developer. Write clean, efficient code."
+  - name: synthesizer
+    model: anthropic/claude-sonnet-4
+    capabilities: [write]
+    persona: "Integration specialist. Merge research and code into coherent outputs."
   - name: tester
     model: google/gemini-2.0-flash-001
     capabilities: [test]
@@ -325,12 +369,13 @@ quality:
 
 communication:
   blackboard: true
-  dependency_context_max_length: 3000
+  dependencyContextMaxLength: 3000
+  includeFileList: true
 
 resilience:
-  worker_retries: 2
-  rate_limit_retries: 3
-  model_failover: true
+  workerRetries: 2
+  rateLimitRetries: 3
+  modelFailover: true
 
 features:
   planning: true

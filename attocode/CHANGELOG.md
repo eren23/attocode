@@ -5,6 +5,93 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.2] - 2026-02-10
+
+### Added
+
+#### Swarm Hollow Completion Fix & Dashboard Improvements
+
+- **Phase progress events** — Swarm orchestrator now emits `swarm.phase.progress` events during decomposition, scheduling, and planning phases, making the 4-5 minute pre-execution delay visible in the dashboard instead of a silent wait.
+- **`write` worker capability** — New capability type for synthesis/merge tasks. Merge subtasks now map to `write` instead of `code`, enabling dedicated synthesizer workers. Falls back to `code` workers when no `write`-capable worker exists.
+- **Capability normalization** — YAML configs now accept aliases: `refactor`→`code`, `writing`/`synthesis`/`merge`→`write`, `docs`→`document`, etc. Unknown capabilities are silently dropped with fallback to `['code']`.
+- **Task-type system prompts** — Workers receive role-appropriate instructions: research tasks get "RESEARCH TASK RULES" (no coding, use web_search), merge tasks get "SYNTHESIS TASK RULES" (no re-research, work with given material), document tasks get "DOCUMENTATION TASK RULES". Code/test/refactor tasks preserve the original ANTI-LOOP RULES unchanged.
+- **Flat-DAG detection** — Orchestrator logs a warning when decomposition produces zero dependency edges across 3+ tasks, helping diagnose ordering issues.
+- **Model failover write fallback** — `selectAlternativeModel()` now falls back to code workers for `write` capability, matching the happy-path fallback in `selectWorkerForCapability()`.
+- **Tool call count in task events** — `swarm.task.completed` events now include `toolCalls` count, persisted in per-task detail files for dashboard drill-down.
+
+### Fixed
+
+- **Hollow completion check no longer kills research tasks** — `isHollowCompletion()` is now task-type-aware: research, analysis, and design tasks with 0 tool calls but substantial text output (200+ chars) are treated as valid completions instead of being rejected and retried with contradictory "You MUST use tools" feedback.
+- **Dependency resolution** — `convertLLMResult()` now resolves multiple LLM reference patterns (integer indices, `task-N`, `subtask-N`, `st-N`, descriptions). Invalid/unresolvable references are filtered instead of kept as dangling strings. Self-dependencies are removed.
+- **Decomposition prompt** — Rewritten to mandate integer indices for dependencies, includes 2 concrete examples (parallel research + merge, sequential chain), and explicitly instructs LLMs to create merge tasks for independent subtasks.
+
+### Improved
+
+- **Dashboard event feed auto-scroll** — Auto-scroll now detects when user has scrolled up and pauses, resuming when scrolled back to bottom. Stable event keys prevent DOM thrashing.
+- **Dashboard worker timeline** — Now shows dispatched (in-progress) tasks with estimated elapsed time, not just completed tasks.
+- **Dashboard task inspector** — Shows tool call count from worker output. Auto-loads detail for failed tasks so users can immediately see what went wrong. Load button available for both completed and failed tasks.
+
+### Tests
+
+- 3 new/modified test files with 16+ new tests:
+  - `tests/smart-decomposer-deps.test.ts` (7 tests) — dependency resolution patterns
+  - `tests/swarm/worker-prompts.test.ts` (6 tests) — task-type prompt branching
+  - `tests/swarm/model-failover.test.ts` (3 tests) — write capability failover
+  - `tests/swarm/swarm-hollow-completion.test.ts` — 5 new tests for research/analysis/design task exemption
+  - Updated: `types.test.ts`, `model-selector.test.ts`, `config-loader.test.ts`
+
+#### Phase 1: Bug Fixes & Hardening
+
+- **Enhanced tool batching algorithm** (`src/agent.ts`) — Replaced consecutive-grouping with accumulate-and-flush pattern. Parallelizable tools now accumulate until a non-parallelizable tool flushes them as a batch. Example: `[read1, read2, write, read3, grep]` produces 3 batches instead of 4, reducing sequential overhead.
+- **Conditional parallel writes** (`src/agent.ts`) — `write_file` and `edit_file` on different files can now execute in parallel. File-path conflict detection prevents concurrent writes to the same file. Safe MCP tools (`dangerLevel: 'safe'`) are auto-added to the parallel set.
+- **Fuzzy doom loop detection** (`src/integrations/economics.ts`) — New `computeToolFingerprint()` extracts primary arguments (path, command, pattern) for fingerprint-based similarity detection. Catches near-identical tool calls (e.g., same file with minor arg variations) at threshold+1 (4 instead of 3) to avoid false positives.
+- **Plan mode bash allowlist** (`src/modes.ts`) — Replaced blocklist approach with a strict allowlist for bash commands in plan mode. Defines `SAFE_BASH_PATTERNS` (ls, cat, grep, git status, etc.) and `DANGEROUS_SUFFIXES` (pipes to rm, redirects, -exec). Only commands matching safe patterns AND not matching dangerous suffixes pass through.
+- **Duration budget network fix** (`src/agent.ts`) — LLM API call time no longer counts against the agent's duration budget. `economics.pauseDuration()` before provider calls and `resumeDuration()` after, so only agent "thinking time" is measured.
+
+#### Phase 2: Orchestration Enhancements
+
+- **Structured delegation protocol** (`src/integrations/delegation-protocol.ts`) — New `DelegationSpec` interface with `objective`, `context`, `outputFormat`, `toolGuidance`, `boundaries`, `successCriteria`, and `siblingContext` fields. `buildDelegationPrompt()` converts specs into structured subagent prompts. `createMinimalDelegationSpec()` for quick delegation. `DELEGATION_INSTRUCTIONS` constant for orchestrator system prompts. `getDefaultToolsForAgent()` maps agent types to recommended tool sets.
+- **Complexity classifier** (`src/integrations/complexity-classifier.ts`) — Heuristic task complexity assessment using 6 weighted signals: task length (0.15), complex keywords (0.25), simple keywords (0.2), dependency patterns (0.2), question vs action (0.1), scope indicators (0.1). Classifies into `simple`, `medium`, `complex`, or `deep_research` tiers. `getScalingGuidance()` returns execution recommendations (agent count, tool budget, swarm eligibility).
+- **Tool recommendation engine** (`src/integrations/tool-recommendation.ts`) — `ToolRecommendationEngine` class with task-type to tool-category mapping via `TASK_TYPE_TOOL_MAP`. Supports MCP keyword matching (`MCP_KEYWORD_PATTERNS`) for playwright, sqlite, context7, serper, and github tools. Static `inferTaskType()` maps agent names to task types. `getToolFilterForAgent()` provides filtered tool sets per agent.
+- **Injection budget manager** (`src/integrations/injection-budget.ts`) — Priority-based budget allocation for context injections. Default 1500-token budget with 8 priority levels: `budget_warning`(0), `timeout_wrapup`(0), `doom_loop`(1), `failure_context`(2), `learning_context`(2), `recitation`(3), `exploration_nudge`(4), `phase_guidance`(4). Partial truncation for partially-fitting proposals (>100 tokens remaining). Stats tracking with `getLastStats()`.
+
+#### Phase 3: Advanced Capabilities
+
+- **Thinking/reflection strategy** (`src/integrations/thinking-strategy.ts`) — Prompt engineering directives for strategic thinking. `generateThinkingDirectives()` produces pre-action, post-tool, and quality-check prompts based on complexity tier. `getThinkingSystemPrompt()` for parent agents, `getSubagentQualityPrompt()` for child agents. Configurable `minComplexityTier` (default: `medium`).
+- **Subagent output store** (`src/integrations/subagent-output-store.ts`) — Filesystem + memory store for subagent outputs, bypassing the coordinator "telephone problem." Full outputs saved to `.agent/subagent-outputs/{id}.json` + `.md`. Parent receives lightweight summaries + references instead of full output. Auto-cleanup when store exceeds `maxOutputs` (default 100). `getSummary()` includes structured report data (findings, actions, failures).
+- **Self-improvement protocol** (`src/integrations/self-improvement.ts`) — Error pattern matching with 7 categories: `file_not_found`, `permission`, `timeout`, `syntax_error`, `missing_args`, `wrong_args`, `state_error`. `diagnoseToolFailure()` returns structured diagnosis with suggested fixes. `enhanceErrorMessage()` adds contextual diagnosis and repeated-failure warnings. Persists to LearningStore after 3+ failures of same tool.
+- **MCP tool validator** (`src/integrations/mcp-tool-validator.ts`) — Quality scoring (0-100) for MCP tool descriptions with 6 checks: description exists, is informative (not restated name), has property descriptions, specifies required params, includes examples, follows naming conventions. `validateAllTools()` sorts by score. `formatValidationSummary()` for human-readable reports. Default pass threshold: 40.
+- **MCP custom tools** (`src/integrations/mcp-custom-tools.ts`) — Factory for standalone API wrapper tools. `createSerperSearchTool()` for web search via SerperAPI (env: `SERPER_API_KEY`) with abort controller timeout. Generic `createCustomTool()` factory for any HTTP API with retry support. `createCustomTools()` for batch creation. `customToolToRegistryFormat()` for tool registry integration.
+
+#### Phase 4: Future Architecture (Standalone Modules)
+
+- **Async subagent execution** (`src/integrations/async-subagent.ts`) — `createSubagentHandle()` wraps spawn promises with `isRunning()`, `requestWrapup()`, `cancel()`, `getProgress()`, and `onProgress()`. `SubagentSupervisor` class manages multiple concurrent handles: `add()`, `remove()`, `getActive()`, `getCompleted()`, `waitAll()`, `waitAny()`, `cancelAll()`, `stop()`. Periodic `checkAgents()` enforces `maxDurationMs` and token budget wrapup thresholds.
+- **Auto-checkpoint resumption** (`src/integrations/auto-checkpoint.ts`) — `AutoCheckpointManager` with filesystem persistence to `.agent/checkpoints/{sessionId}/`. `save()` respects `minInterval` (30s default), strips messages to keep checkpoints small. `findResumeCandidates(maxAgeMs)` detects recent sessions (default 5min). `cleanupAll()` respects `maxAge` (1hr default) and `maxPerSession` limits.
+- **Dynamic budget rebalancing** (`src/integrations/dynamic-budget.ts`) — `DynamicBudgetPool` extends `SharedBudgetPool` with starvation prevention. Priority multipliers: `low`(0.5x), `normal`(1.0x), `high`(1.5x), `critical`(2.0x). `reserveDynamic()` caps at 60% of remaining budget and reserves for expected children. `setExpectedChildren()` enables fair allocation. `releaseDynamic()` returns unused budget. `createDynamicBudgetPool()` factory with configurable parent reserve ratio (default 25%).
+
+#### Tests
+
+- **13 new/modified test files** with 240 tests covering all Phase 2-4 modules:
+  - `tests/delegation-protocol.test.ts` (29 tests) — prompt building, minimal specs, delegation instructions, integration
+  - `tests/complexity-classifier.test.ts` (37 tests) — classification, signals, recommendations, scaling guidance, edge cases
+  - `tests/thinking-strategy.test.ts` (27 tests) — directives, system prompts, quality prompts, tier ordering
+  - `tests/tool-recommendation.test.ts` (16 tests) — task-type recommendations, MCP matching, sorting, inferTaskType
+  - `tests/injection-budget.test.ts` (13 tests) — allocation, priority sorting, truncation, stats, budget updates
+  - `tests/self-improvement.test.ts` (18 tests) — all 7 failure categories, tracking, caching, enhancement
+  - `tests/mcp-tool-validator.test.ts` (12 tests) — quality checks, scoring, validation summary
+  - `tests/mcp-custom-tools.test.ts` (11 tests) — serper tool, custom tools, registry conversion
+  - `tests/subagent-output-store.test.ts` (12 tests) — save/load, filtering, summaries, auto-cleanup
+  - `tests/async-subagent.test.ts` (16 tests) — handles, supervisor, waitAll/waitAny, cancellation
+  - `tests/auto-checkpoint.test.ts` (13 tests) — save/load, interval throttling, resume candidates, cleanup
+  - `tests/dynamic-budget.test.ts` (14 tests) — allocation, caps, priority, release, stats, factory
+
+### Changed
+- **Integrations barrel** (`src/integrations/index.ts`) — New exports for all Phase 2-4 modules: delegation protocol, complexity classifier, tool recommendation, injection budget, thinking strategy, subagent output store, self-improvement, MCP tool validator, MCP custom tools, async subagent, auto-checkpoint, dynamic budget.
+- **Tool batching** (`src/agent.ts`) — `groupToolCallsIntoBatches()` rewritten with accumulate-and-flush algorithm and file-path conflict detection for conditional parallelism.
+- **Doom loop detection** (`src/integrations/economics.ts`) — `updateDoomLoopState()` now uses fingerprint-based fuzzy matching in addition to exact-match detection.
+- **Plan mode security** (`src/modes.ts`) — `shouldInterceptTool()` switched from blocklist to allowlist for bash commands.
+
+
 ## [0.2.1] - 2026-02-08
 
 ### Added
@@ -332,7 +419,8 @@ A new execution mode where one orchestrator model decomposes tasks into subtask 
 - Sandbox execution for bash commands (macOS Seatbelt)
 - Dangerous operation blocking in strict mode
 
-[Unreleased]: https://github.com/eren23/attocode/compare/v0.2.1...HEAD
+[Unreleased]: https://github.com/eren23/attocode/compare/v0.2.2...HEAD
+[0.2.2]: https://github.com/eren23/attocode/compare/v0.2.1...v0.2.2
 [0.2.1]: https://github.com/eren23/attocode/compare/v0.2.0...v0.2.1
 [0.2.0]: https://github.com/eren23/attocode/compare/v0.1.9...v0.2.0
 [0.1.9]: https://github.com/eren23/attocode/compare/v0.1.8...v0.1.9

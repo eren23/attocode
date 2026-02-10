@@ -12,6 +12,9 @@ philosophy: |
 
 # Paid models only — skip free tier entirely
 models:
+  orchestrator: anthropic/claude-sonnet-4
+  quality_gate: anthropic/claude-sonnet-4
+  planner: anthropic/claude-sonnet-4
   paid_only: true
 
 # Paid-tier throttle (5 concurrent, 2 req/s, 200ms spacing)
@@ -31,15 +34,15 @@ quality:
 
 # Minimal retries since paid models are reliable
 resilience:
-  worker_retries: 1
-  rate_limit_retries: 2
-  model_failover: true
+  workerRetries: 1
+  rateLimitRetries: 2
+  modelFailover: true
 
 # Full communication
 communication:
   blackboard: true
-  dependency_context_max_length: 4000
-  include_file_list: true
+  dependencyContextMaxLength: 4000
+  includeFileList: true
 
 # All features enabled
 features:

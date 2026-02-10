@@ -11,6 +11,12 @@ philosophy: |
   All changes must have tests. Handle edge cases explicitly.
   Follow SOLID principles and existing patterns.
 
+# Smart model with quality gate on a capable model
+models:
+  orchestrator: anthropic/claude-sonnet-4
+  quality_gate: anthropic/claude-sonnet-4
+  planner: anthropic/claude-sonnet-4
+
 # Explicit worker definitions for control over model assignments
 workers:
   - name: coder
@@ -53,15 +59,15 @@ quality:
 
 # Allow retries since quality gates may reject first attempts
 resilience:
-  worker_retries: 2
-  rate_limit_retries: 3
-  model_failover: true
+  workerRetries: 2
+  rateLimitRetries: 3
+  modelFailover: true
 
 # Full context sharing for quality
 communication:
   blackboard: true
-  dependency_context_max_length: 4000
-  include_file_list: true
+  dependencyContextMaxLength: 4000
+  includeFileList: true
 
 # All verification features enabled
 features:

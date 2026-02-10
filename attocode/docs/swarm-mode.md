@@ -50,12 +50,20 @@ models:
   orchestrator: google/gemini-2.0-flash-001
   paid_only: false    # Set true to exclude free-tier models
 
-# Worker definitions
+# Facts — temporal grounding and project conventions for workers
+facts:
+  custom:
+    - "Today is February 2026. Target 2025-2026 data."
+
+# Worker definitions (capabilities: code, research, review, test, document, write)
 workers:
   - name: coder
     model: google/gemini-2.0-flash-001
-    capabilities: [code, refactor]
+    capabilities: [code, refactor]     # 'refactor' normalizes to 'code'
     persona: "You are a senior TypeScript developer."
+  - name: synthesizer
+    model: google/gemini-2.0-flash-001
+    capabilities: [write]              # Handles merge tasks
   - name: researcher
     model: google/gemini-2.0-flash-001
     capabilities: [research, analysis]
@@ -72,7 +80,7 @@ hierarchy:
     model: google/gemini-2.0-flash-001
     persona: "You are a quality assurance expert."
 
-# Token and cost budgets
+# Token and cost budgets (accepts both camelCase and snake_case)
 budget:
   total_tokens: 2000000
   max_cost: 1.00
@@ -80,21 +88,19 @@ budget:
 
 # Quality gates
 quality:
-  gates: true
-  gate_model: google/gemini-2.0-flash-001
+  enabled: true
 
-# Inter-worker communication
+# Inter-worker communication (camelCase required)
 communication:
   blackboard: true                      # Shared state between workers
-  dependency_context_max_length: 2000   # Max chars of dependency output to include
-  include_file_list: true               # Include workspace file listing
+  dependencyContextMaxLength: 2000      # Max chars of dependency output to include
+  includeFileList: true                 # Include workspace file listing
 
-# Resilience and rate limiting
+# Resilience and rate limiting (camelCase required)
 resilience:
-  max_concurrency: 5
-  worker_retries: 2
-  rate_limit_retries: 3
-  dispatch_stagger_ms: 500
+  workerRetries: 2
+  rateLimitRetries: 3
+  modelFailover: true
 
 # Permission settings (see "Permission Modes" section below)
 # permissions:
@@ -205,14 +211,16 @@ Swarm mode includes proactive rate limit handling:
 
 2. **Dispatch staggering** — Workers are dispatched with configurable delays (`dispatch_stagger_ms`, default: 500ms) to avoid bursting.
 
-3. **Automatic retries** — Rate-limited requests (429/402) are retried with exponential backoff up to `rate_limit_retries` times (default: 3).
+3. **Automatic retries** — Rate-limited requests (429/402) are retried with exponential backoff up to `rateLimitRetries` times (default: 3).
 
 4. **Model failover** — When a model is rate-limited, the orchestrator can switch to an alternative model (`enableModelFailover: true`, default).
 
 ```yaml
+budget:
+  dispatch_stagger_ms: 1000   # 1s between dispatches (budget section, accepts snake_case)
+
 resilience:
-  dispatch_stagger_ms: 1000   # 1s between dispatches
-  rate_limit_retries: 5       # More retries for rate limits
+  rateLimitRetries: 5         # More retries for rate limits (camelCase required)
 ```
 
 ## Dashboard
@@ -259,7 +267,7 @@ Budget is tracked across waves — if early waves consume less than expected, la
 
 ### Quality gates rejecting everything
 - The default quality threshold may be too strict for your use case
-- Try setting a specific `gate_model` that's good at evaluation
+- Try setting `models.qualityGate` to a model that's good at evaluation
 - Add a judge persona that matches your project's quality standards
 
 ### Workers not using tools
@@ -270,7 +278,7 @@ Budget is tracked across waves — if early waves consume less than expected, la
 ### Rate limits exhausted
 - Add `--paid-only` to use models with higher rate limits
 - Increase `dispatch_stagger_ms` and reduce `max_concurrency`
-- Set `rate_limit_retries` higher for transient 429 errors
+- Set `rateLimitRetries` higher for transient 429 errors
 
 ### Resuming failed runs
 - Swarm state is checkpointed after each wave (when `enablePersistence: true`)

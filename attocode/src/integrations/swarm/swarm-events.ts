@@ -15,7 +15,7 @@ export type SwarmEvent =
   | { type: 'swarm.wave.start'; wave: number; totalWaves: number; taskCount: number }
   | { type: 'swarm.wave.complete'; wave: number; totalWaves: number; completed: number; failed: number; skipped: number }
   | { type: 'swarm.task.dispatched'; taskId: string; description: string; model: string; workerName: string }
-  | { type: 'swarm.task.completed'; taskId: string; success: boolean; tokensUsed: number; costUsed: number; durationMs: number; qualityScore?: number }
+  | { type: 'swarm.task.completed'; taskId: string; success: boolean; tokensUsed: number; costUsed: number; durationMs: number; qualityScore?: number; qualityFeedback?: string; output?: string; closureReport?: import('../agent-registry.js').StructuredClosureReport; toolCalls?: number }
   | { type: 'swarm.task.failed'; taskId: string; error: string; attempt: number; maxAttempts: number; willRetry: boolean }
   | { type: 'swarm.task.skipped'; taskId: string; reason: string }
   | { type: 'swarm.quality.rejected'; taskId: string; score: number; feedback: string }
@@ -40,7 +40,11 @@ export type SwarmEvent =
   | { type: 'swarm.circuit.open'; recentCount: number; pauseMs: number }
   | { type: 'swarm.circuit.closed' }
   // V3: Hierarchy role events
-  | { type: 'swarm.role.action'; role: WorkerRole; action: 'review' | 'quality-gate' | 'verify' | 'plan'; model: string; taskId?: string; wave?: number };
+  | { type: 'swarm.role.action'; role: WorkerRole; action: 'review' | 'quality-gate' | 'verify' | 'plan'; model: string; taskId?: string; wave?: number }
+  // V8: Wave failure recovery
+  | { type: 'swarm.wave.allFailed'; wave: number }
+  // V9: Phase progress for dashboard visibility during decomposition/planning
+  | { type: 'swarm.phase.progress'; phase: 'decomposing' | 'planning' | 'scheduling'; message: string };
 
 /**
  * Type guard for swarm events.
@@ -115,5 +119,9 @@ export function formatSwarmEvent(event: SwarmEvent): string {
       const roleLabel = event.role.charAt(0).toUpperCase() + event.role.slice(1);
       return `${roleLabel} ${event.action}: ${event.model.split('/').pop() ?? event.model}${event.taskId ? ` (task ${event.taskId})` : ''}`;
     }
+    case 'swarm.wave.allFailed':
+      return `Wave ${event.wave}: ALL tasks failed — attempting recovery`;
+    case 'swarm.phase.progress':
+      return `[${event.phase}] ${event.message}`;
   }
 }

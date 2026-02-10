@@ -33,7 +33,7 @@ interface OpenRouterModelsResponse {
 
 // ─── Hardcoded Fallbacks ───────────────────────────────────────────────────
 
-const FALLBACK_WORKERS: SwarmWorkerSpec[] = [
+export const FALLBACK_WORKERS: SwarmWorkerSpec[] = [
   // ── Coders (3 models, provider-diverse paid models for independent rate limit pools) ──
   {
     name: 'coder',
@@ -333,6 +333,14 @@ export function selectWorkerForCapability(
     }
   }
 
+  // Fallback: write capability falls back to code workers (merge/synthesis tasks)
+  if (capability === 'write') {
+    const codeWorkers = workers.filter(w => w.capabilities.includes('code'));
+    if (codeWorkers.length > 0) {
+      return codeWorkers[(taskIndex ?? 0) % codeWorkers.length];
+    }
+  }
+
   // Last resort: first worker
   return workers[0];
 }
@@ -437,10 +445,45 @@ export function selectAlternativeModel(
   );
   if (alternatives.length > 0) return alternatives[0];
 
-  // If no healthy alternatives, try any different model
+  // If no healthy alternatives, try any different model with same capability
   const anyAlternative = workers.filter(w =>
     w.model !== failedModel &&
     w.capabilities.includes(capability),
   );
-  return anyAlternative[0];
+  if (anyAlternative.length > 0) return anyAlternative[0];
+
+  // Fallback: write capability falls back to code workers (merge/synthesis tasks)
+  if (capability === 'write') {
+    const codeAlternatives = workers.filter(w =>
+      w.model !== failedModel &&
+      w.capabilities.includes('code') &&
+      healthTracker.isHealthy(w.model),
+    );
+    if (codeAlternatives.length > 0) return codeAlternatives[0];
+
+    const anyCodeAlt = workers.filter(w =>
+      w.model !== failedModel &&
+      w.capabilities.includes('code'),
+    );
+    if (anyCodeAlt.length > 0) return anyCodeAlt[0];
+  }
+
+  // Last resort: check FALLBACK_WORKERS for the needed capability.
+  // This handles the case where all config workers share the same model
+  // and no alternative exists within the user's config.
+  const fallbackAlts = FALLBACK_WORKERS.filter(w =>
+    w.model !== failedModel &&
+    w.capabilities.includes(capability) &&
+    healthTracker.isHealthy(w.model),
+  );
+  if (fallbackAlts.length > 0) return fallbackAlts[0];
+
+  // Even unhealthy fallbacks are better than nothing
+  const anyFallback = FALLBACK_WORKERS.filter(w =>
+    w.model !== failedModel &&
+    w.capabilities.includes(capability),
+  );
+  if (anyFallback.length > 0) return anyFallback[0];
+
+  return undefined;
 }

@@ -74,4 +74,4 @@ export type { SwarmLiveState, TimestampedSwarmEvent, SwarmEventBridgeOptions } f
 export { SwarmStateStore } from './swarm-state-store.js';
 
 // Config Loader (V3: YAML support)
-export { loadSwarmYamlConfig, mergeSwarmConfigs, parseSwarmYaml, yamlToSwarmConfig } from './swarm-config-loader.js';
+export { loadSwarmYamlConfig, mergeSwarmConfigs, parseSwarmYaml, yamlToSwarmConfig, normalizeCapabilities } from './swarm-config-loader.js';

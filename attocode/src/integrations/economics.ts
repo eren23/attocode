@@ -74,6 +74,8 @@ export interface LoopDetectionState {
   consecutiveCount: number;
   /** Threshold for doom loop detection (default: 3) */
   threshold: number;
+  /** Threshold for fuzzy doom loop detection (default: threshold + 1) */
+  fuzzyThreshold: number;
   /** Timestamp of last doom loop warning */
   lastWarningTime: number;
 }
@@ -238,6 +240,40 @@ const VERIFICATION_RESERVE_PROMPT =
 Do not make more edits until you've confirmed whether the current fix works.`;
 
 /**
+ * Primary argument keys that identify the *target* of a tool call.
+ * Used for fuzzy doom loop detection — ignoring secondary/optional args.
+ */
+const PRIMARY_KEYS = ['path', 'file_path', 'command', 'pattern', 'query', 'url', 'content', 'filename'];
+
+/**
+ * Compute a structural fingerprint for a tool call.
+ * Extracts only the primary argument (path, command, pattern, query) and ignores
+ * secondary arguments (encoding, timeout, flags). This catches near-identical calls
+ * that differ only in optional parameters.
+ */
+export function computeToolFingerprint(toolName: string, argsStr: string): string {
+  try {
+    const args = JSON.parse(argsStr || '{}') as Record<string, unknown>;
+    const primaryArgs: Record<string, unknown> = {};
+    for (const key of PRIMARY_KEYS) {
+      if (key in args) {
+        primaryArgs[key] = args[key];
+      }
+    }
+
+    // If no primary keys found, fall back to full args
+    if (Object.keys(primaryArgs).length === 0) {
+      return `${toolName}:${stableStringify(args)}`;
+    }
+
+    return `${toolName}:${stableStringify(primaryArgs)}`;
+  } catch {
+    // If args can't be parsed, use raw string
+    return `${toolName}:${argsStr}`;
+  }
+}
+
+/**
  * ExecutionEconomicsManager handles budget tracking and progress detection.
  */
 export class ExecutionEconomicsManager {
@@ -296,6 +332,7 @@ export class ExecutionEconomicsManager {
       lastTool: null,
       consecutiveCount: 0,
       threshold: 3,
+      fuzzyThreshold: 4,
       lastWarningTime: 0,
     };
 
@@ -494,13 +531,15 @@ export class ExecutionEconomicsManager {
 
   /**
    * Update doom loop detection state.
-   * Detects when the same tool+args are called consecutively.
+   * Uses two-tier detection:
+   * 1. Exact match: same tool+args string (threshold: 3)
+   * 2. Fuzzy match: same tool + same primary args, ignoring optional params (threshold: 4)
    */
   private updateDoomLoopState(toolName: string, argsStr: string): void {
     const currentCall = `${toolName}:${argsStr}`;
     const recentCalls = this.progress.recentToolCalls;
 
-    // Count consecutive identical calls from the end
+    // === EXACT MATCH: Count consecutive identical calls from the end ===
     let consecutiveCount = 0;
     for (let i = recentCalls.length - 1; i >= 0; i--) {
       const call = recentCalls[i];
@@ -508,6 +547,26 @@ export class ExecutionEconomicsManager {
         consecutiveCount++;
       } else {
         break;
+      }
+    }
+
+    // === FUZZY MATCH: Catches near-identical calls that differ only in optional params ===
+    // Only check if exact match didn't already trigger
+    if (consecutiveCount < this.loopState.threshold) {
+      const currentFingerprint = computeToolFingerprint(toolName, argsStr);
+      let fuzzyCount = 0;
+      for (let i = recentCalls.length - 1; i >= 0; i--) {
+        const call = recentCalls[i];
+        const callFingerprint = computeToolFingerprint(call.tool, call.args);
+        if (callFingerprint === currentFingerprint) {
+          fuzzyCount++;
+        } else {
+          break;
+        }
+      }
+      // Use fuzzy count if it exceeds the fuzzy threshold
+      if (fuzzyCount >= this.loopState.fuzzyThreshold) {
+        consecutiveCount = Math.max(consecutiveCount, fuzzyCount);
       }
     }
 
@@ -1030,6 +1089,7 @@ export class ExecutionEconomicsManager {
       lastTool: null,
       consecutiveCount: 0,
       threshold: 3,
+      fuzzyThreshold: 4,
       lastWarningTime: 0,
     };
 

@@ -44,6 +44,22 @@ import { evaluateWorkerOutput, type QualityGateConfig } from './swarm-quality-ga
 import { ModelHealthTracker, selectAlternativeModel } from './model-selector.js';
 import { SwarmStateStore } from './swarm-state-store.js';
 import type { SwarmEvent } from './swarm-events.js';
+import type { SpawnResult } from '../agent-registry.js';
+
+// ─── Hollow Completion Detection ──────────────────────────────────────────
+
+/**
+ * V10: Minimal hollow completion detection — let the quality gate judge everything else.
+ * Only catches truly empty completions: zero tool calls AND trivial output (<50 chars).
+ * No task-type lists, no closure report checks, no hardcoded thresholds beyond the bare minimum.
+ */
+export function isHollowCompletion(spawnResult: SpawnResult): boolean {
+  // Timeout uses toolCalls === -1, not hollow
+  if (spawnResult.metrics.toolCalls === -1) return false;
+  // Only catch truly empty completions: zero tools AND trivial output
+  return spawnResult.metrics.toolCalls === 0
+    && (spawnResult.output?.trim().length ?? 0) < 50;
+}
 
 // ─── Event Emitter ─────────────────────────────────────────────────────────
 
@@ -93,6 +109,11 @@ export class SwarmOrchestrator {
   private static readonly CIRCUIT_BREAKER_THRESHOLD = 3;
   private static readonly CIRCUIT_BREAKER_PAUSE_MS = 15_000;
 
+  // Quality gate circuit breaker: disable quality gates after too many consecutive rejections
+  private consecutiveQualityRejections = 0;
+  private qualityGateDisabled = false;
+  private static readonly QUALITY_CIRCUIT_BREAKER_THRESHOLD = 8;
+
   constructor(
     config: SwarmConfig,
     provider: LLMProvider,
@@ -127,6 +148,8 @@ export class SwarmOrchestrator {
     const llmDecompose: LLMDecomposeFunction = async (task, _context) => {
       const systemPrompt = `You are a task decomposition expert. Break down the given task into well-defined subtasks with clear dependencies.
 
+CRITICAL: Dependencies MUST use zero-based integer indices referring to other subtasks in the array.
+
 Respond with valid JSON matching this exact schema:
 {
   "subtasks": [
@@ -134,7 +157,7 @@ Respond with valid JSON matching this exact schema:
       "description": "Clear description of what this subtask does",
       "type": "implement" | "research" | "analysis" | "design" | "test" | "refactor" | "review" | "document" | "integrate" | "deploy" | "merge",
       "complexity": 1-10,
-      "dependencies": ["description of dependency task or index like '0'"],
+      "dependencies": [0, 1],
       "parallelizable": true | false,
       "relevantFiles": ["src/path/to/file.ts"]
     }
@@ -143,10 +166,34 @@ Respond with valid JSON matching this exact schema:
   "reasoning": "Brief explanation of why this decomposition was chosen"
 }
 
+EXAMPLE 1 — Research task (3 parallel research + 1 merge):
+{
+  "subtasks": [
+    { "description": "Research React state management", "type": "research", "complexity": 3, "dependencies": [], "parallelizable": true },
+    { "description": "Research routing options", "type": "research", "complexity": 3, "dependencies": [], "parallelizable": true },
+    { "description": "Research testing frameworks", "type": "research", "complexity": 2, "dependencies": [], "parallelizable": true },
+    { "description": "Synthesize findings into recommendation", "type": "merge", "complexity": 4, "dependencies": [0, 1, 2], "parallelizable": false }
+  ],
+  "strategy": "parallel",
+  "reasoning": "Independent research tasks feed into a single merge"
+}
+
+EXAMPLE 2 — Implementation task (sequential chain):
+{
+  "subtasks": [
+    { "description": "Design API schema", "type": "design", "complexity": 4, "dependencies": [], "parallelizable": false },
+    { "description": "Implement API endpoints", "type": "implement", "complexity": 6, "dependencies": [0], "parallelizable": false },
+    { "description": "Write integration tests", "type": "test", "complexity": 3, "dependencies": [1], "parallelizable": false }
+  ],
+  "strategy": "sequential",
+  "reasoning": "Each step depends on the previous"
+}
+
 Rules:
+- Dependencies MUST be integer indices (e.g., [0, 1]), NOT descriptions or strings
 - Each subtask must have a clear, actionable description
-- Dependencies reference other subtask descriptions or zero-based indices
 - Mark subtasks as parallelizable: true if they don't depend on each other
+- If there are multiple independent subtasks, ALWAYS create a final merge task that depends on ALL of them
 - Complexity 1-3: simple, 4-6: moderate, 7-10: complex
 - Return at least 2 subtasks for non-trivial tasks`;
 
@@ -233,6 +280,7 @@ Rules:
 
       // Phase 1: Decompose
       this.currentPhase = 'decomposing';
+      this.emit({ type: 'swarm.phase.progress', phase: 'decomposing', message: 'Decomposing task into subtasks...' });
       const decomposition = await this.decompose(task);
       if (!decomposition) {
         this.currentPhase = 'failed';
@@ -241,13 +289,25 @@ Rules:
 
       // Phase 2: Schedule into waves
       this.currentPhase = 'scheduling';
+      this.emit({ type: 'swarm.phase.progress', phase: 'scheduling', message: `Scheduling ${decomposition.subtasks.length} subtasks into waves...` });
       this.taskQueue.loadFromDecomposition(decomposition, this.config);
-      const stats = this.taskQueue.getStats();
 
-      // V2: Phase 2.5: Plan execution (acceptance criteria)
+      // Emit skip events when tasks are cascade-skipped due to dependency failures
+      this.taskQueue.setOnCascadeSkip((skippedTaskId, reason) => {
+        this.emit({ type: 'swarm.task.skipped', taskId: skippedTaskId, reason });
+      });
+
+      const stats = this.taskQueue.getStats();
+      this.emit({ type: 'swarm.phase.progress', phase: 'scheduling', message: `Scheduled ${stats.total} tasks in ${this.taskQueue.getTotalWaves()} waves` });
+
+      // V2: Phase 2.5: Plan execution — fire in background, don't block waves
+      let planPromise: Promise<void> | undefined;
       if (this.config.enablePlanning) {
         this.currentPhase = 'planning';
-        await this.planExecution(task, decomposition);
+        this.emit({ type: 'swarm.phase.progress', phase: 'planning', message: 'Creating acceptance criteria...' });
+        planPromise = this.planExecution(task, decomposition).catch(err => {
+          this.logDecision('planning', 'Planning failed (non-fatal)', (err as Error).message);
+        });
       }
 
       this.emit({
@@ -268,9 +328,12 @@ Rules:
         tasks: this.taskQueue.getAllTasks(),
       });
 
-      // Phase 3: Execute waves (V2: with review after each wave)
+      // Phase 3: Execute waves (planning runs concurrently)
       this.currentPhase = 'executing';
       await this.executeWaves();
+
+      // Ensure planning completed before verification/synthesis
+      if (planPromise) await planPromise;
 
       // V2: Phase 3.5: Verify integration
       if (this.config.enableVerification && this.plan?.integrationTestPlan) {
@@ -327,6 +390,22 @@ Rules:
       if (result.subtasks.length < 2) {
         // Too simple for swarm mode
         return null;
+      }
+
+      // Reject heuristic fallback — the generic 3-task chain is worse than aborting
+      if (!result.metadata.llmAssisted) {
+        this.logDecision('decomposition',
+          'Rejected heuristic fallback DAG',
+          'LLM decomposition failed after retries. Heuristic DAG is not useful.');
+        return null;
+      }
+
+      // Flat-DAG detection: warn when all tasks land in wave 0 with no dependencies
+      const hasAnyDependency = result.subtasks.some(s => s.dependencies.length > 0);
+      if (!hasAnyDependency && result.subtasks.length >= 3) {
+        this.logDecision('decomposition',
+          `Flat DAG: ${result.subtasks.length} tasks, zero dependencies`,
+          'All tasks will execute in wave 0 without ordering');
       }
 
       return result;
@@ -504,6 +583,11 @@ Respond with valid JSON:
 
         if (fixupTasks.length > 0) {
           this.taskQueue.addFixupTasks(fixupTasks);
+          // V5: Re-emit full task list so dashboard picks up fixup tasks + edges
+          this.emit({
+            type: 'swarm.tasks.loaded',
+            tasks: this.taskQueue.getAllTasks(),
+          });
         }
       }
 
@@ -634,6 +718,11 @@ Respond with JSON: { "fixups": [{ "description": "what to fix", "type": "impleme
           }));
 
           this.taskQueue.addFixupTasks(fixupTasks);
+          // V5: Re-emit full task list so dashboard picks up verification fixup tasks
+          this.emit({
+            type: 'swarm.tasks.loaded',
+            tasks: this.taskQueue.getAllTasks(),
+          });
 
           // Execute fix-up wave
           this.currentPhase = 'executing';
@@ -687,6 +776,20 @@ Respond with JSON: { "fixups": [{ "description": "what to fix", "type": "impleme
       waves: checkpoint.waves,
       currentWave: checkpoint.currentWave,
     });
+
+    // Reset orphaned dispatched tasks — their workers died with the previous process
+    let resetCount = 0;
+    for (const task of this.taskQueue.getAllTasks()) {
+      if (task.status === 'dispatched') {
+        task.status = 'ready';
+        // Preserve at least 1 retry attempt
+        task.attempts = Math.min(task.attempts, Math.max(0, this.config.workerRetries - 1));
+        resetCount++;
+      }
+    }
+    if (resetCount > 0) {
+      this.logDecision('resume', `Reset ${resetCount} orphaned dispatched tasks to ready`, 'Workers died with previous process');
+    }
 
     // Continue from where we left off
     this.currentPhase = 'executing';
@@ -757,11 +860,56 @@ Respond with JSON: { "fixups": [{ "description": "what to fix", "type": "impleme
         skipped: waveSkipped,
       });
 
+      // Wave failure recovery: if ALL tasks in a wave failed, retry with adapted context
+      if (waveCompleted === 0 && waveFailed > 0 && readyTasks.length > 0) {
+        this.emit({ type: 'swarm.wave.allFailed', wave: waveIndex + 1 });
+        this.logDecision('wave-recovery',
+          `Entire wave ${waveIndex + 1} failed (${waveFailed} tasks)`,
+          'Checking if budget allows retry with adapted strategy');
+
+        // Re-queue failed tasks with retry context if budget allows
+        const budgetRemaining = this.budgetPool.hasCapacity();
+        const failedWaveTasks = readyTasks.filter(t => {
+          const task = this.taskQueue.getTask(t.id);
+          return task && task.status === 'failed' && task.attempts < (this.config.workerRetries + 1);
+        });
+
+        if (budgetRemaining && failedWaveTasks.length > 0) {
+          for (const t of failedWaveTasks) {
+            const task = this.taskQueue.getTask(t.id);
+            if (!task) continue;
+            task.status = 'ready';
+            task.retryContext = {
+              previousFeedback: 'All tasks in this batch failed. Try a fundamentally different approach — the previous strategy did not work.',
+              previousScore: 0,
+              attempt: task.attempts,
+            };
+          }
+          this.logDecision('wave-recovery',
+            `Re-queued ${failedWaveTasks.length} tasks with adapted retry context`,
+            'Budget allows retry');
+          // Re-execute the wave with adapted tasks
+          await this.executeWave(failedWaveTasks.map(t => this.taskQueue.getTask(t.id)!).filter(t => t.status === 'ready'));
+        }
+      }
+
       // V2: Review wave outputs
       const review = await this.reviewWave(waveIndex);
       if (review && review.fixupTasks.length > 0) {
         // Execute fix-up tasks immediately
         await this.executeWave(review.fixupTasks);
+      }
+
+      // Reset quality circuit breaker at wave boundary — each wave gets a fresh chance.
+      // Within a wave, rejections accumulate properly so the breaker can trip.
+      // Between waves, we reset so each wave gets a fresh quality evaluation window.
+      // (The within-wave reset at quality-gate-passed is kept — that's correct.)
+      if (this.qualityGateDisabled) {
+        this.qualityGateDisabled = false;
+        this.consecutiveQualityRejections = 0;
+        this.logDecision('quality-circuit-breaker',
+          `Re-enabled quality gates at wave ${waveIndex + 1} boundary`,
+          'Each wave gets a fresh quality evaluation window');
       }
 
       // V2: Checkpoint after each wave
@@ -843,6 +991,7 @@ Respond with JSON: { "fixups": [{ "description": "what to fix", "type": "impleme
 
   /**
    * Dispatch a single task to a worker.
+   * Selects the worker once and passes it through to avoid double-selection.
    */
   private async dispatchTask(task: SwarmTask): Promise<void> {
     const worker = this.workerPool.selectWorker(task);
@@ -862,7 +1011,8 @@ Respond with JSON: { "fixups": [{ "description": "what to fix", "type": "impleme
 
     try {
       this.taskQueue.markDispatched(task.id, worker.model);
-      await this.workerPool.dispatch(task);
+      // Pass the pre-selected worker to avoid double-selection in dispatch()
+      await this.workerPool.dispatch(task, worker);
 
       this.emit({
         type: 'swarm.task.dispatched',
@@ -893,9 +1043,12 @@ Respond with JSON: { "fixups": [{ "description": "what to fix", "type": "impleme
   /**
    * Handle a completed task: quality gate, bookkeeping, retry logic, model health, failover.
    */
-  private async handleTaskCompletion(taskId: string, spawnResult: import('../agent-registry.js').SpawnResult, startedAt: number): Promise<void> {
+  private async handleTaskCompletion(taskId: string, spawnResult: SpawnResult, startedAt: number): Promise<void> {
     const task = this.taskQueue.getTask(taskId);
     if (!task) return;
+
+    // Guard: task was cascade-skipped while its worker was running — ignore the result
+    if (task.status === 'skipped' || task.status === 'failed') return;
 
     const durationMs = Date.now() - startedAt;
     const taskResult = this.workerPool.toTaskResult(spawnResult, task, durationMs);
@@ -942,6 +1095,20 @@ Respond with JSON: { "fixups": [{ "description": "what to fix", "type": "impleme
         }
       }
 
+      // V5/V7: Store error context so retry gets different prompt
+      if (!(is429 || is402)) {
+        // V7: Timeout-specific feedback — the worker WAS working, just ran out of time
+        const isTimeout = spawnResult.metrics.toolCalls === -1;
+        const timeoutSeconds = isTimeout ? Math.round(durationMs / 1000) : 0;
+        task.retryContext = {
+          previousFeedback: isTimeout
+            ? `Previous attempt timed out after ${timeoutSeconds}s. You must complete this task more efficiently — work faster, use fewer tool calls, and produce your result sooner.`
+            : spawnResult.output.slice(0, 500),
+          previousScore: 0,
+          attempt: task.attempts,
+        };
+      }
+
       // Worker failed — use higher retry limit for rate limit errors
       const retryLimit = (is429 || is402)
         ? (this.config.rateLimitRetries ?? 3)
@@ -969,13 +1136,60 @@ Respond with JSON: { "fixups": [{ "description": "what to fix", "type": "impleme
       return;
     }
 
-    // V2: Record model health on success
+    // V6: Hollow completion detection — workers that "succeed" without doing any work
+    // Must check BEFORE recording success, otherwise hollow completions inflate health scores
+    if (isHollowCompletion(spawnResult)) {
+      // Record health failure so hollow-prone models accumulate failure records
+      // and eventually trigger failover via selectAlternativeModel
+      this.healthTracker.recordFailure(model, 'error');
+
+      task.retryContext = {
+        previousFeedback: 'Previous attempt produced no meaningful output. Try again with a concrete approach.',
+        previousScore: 1,
+        attempt: task.attempts,
+      };
+
+      // Model failover for hollow completions — same pattern as quality failover
+      if (this.config.enableModelFailover) {
+        const capability: WorkerCapability = SUBTASK_TO_CAPABILITY[task.type] ?? 'code';
+        const alternative = selectAlternativeModel(this.config.workers, model, capability, this.healthTracker);
+        if (alternative) {
+          this.emit({
+            type: 'swarm.model.failover',
+            taskId,
+            fromModel: model,
+            toModel: alternative.model,
+            reason: 'hollow-completion',
+          });
+          task.assignedModel = alternative.model;
+          this.logDecision('failover', `Hollow failover ${taskId}: ${model} → ${alternative.model}`, 'Model produced hollow completion');
+        }
+      }
+
+      const canRetry = this.taskQueue.markFailed(taskId, this.config.workerRetries);
+      if (canRetry) this.retries++;
+      this.emit({
+        type: 'swarm.task.failed',
+        taskId,
+        error: 'Hollow completion: worker used no tools',
+        attempt: task.attempts,
+        maxAttempts: 1 + this.config.workerRetries,
+        willRetry: canRetry,
+      });
+      this.logDecision('hollow-completion', `${taskId}: worker completed with 0 tool calls`, 'Marking as failed for retry');
+      return;
+    }
+
+    // Record model health on success (only for non-hollow completions)
     this.healthTracker.recordSuccess(model, durationMs);
 
-    // Run quality gate if enabled — skip under API pressure or on retried tasks
+    // Run quality gate if enabled — skip under API pressure, skip if circuit breaker tripped,
+    // and let the final attempt through without quality gate (so tasks produce *something*)
     const recentRLCount = this.recentRateLimits.filter(t => t > Date.now() - 30_000).length;
+    const isLastAttempt = task.attempts >= (this.config.workerRetries + 1);
     const shouldRunQualityGate = this.config.qualityGates
-      && task.attempts <= 1
+      && !this.qualityGateDisabled
+      && !isLastAttempt
       && Date.now() >= this.circuitBreakerUntil
       && recentRLCount < 2;
 
@@ -996,6 +1210,7 @@ Respond with JSON: { "fixups": [{ "description": "what to fix", "type": "impleme
         task,
         taskResult,
         judgeConfig,
+        this.config.qualityThreshold ?? 3,
       );
 
       taskResult.qualityScore = quality.score;
@@ -1003,6 +1218,40 @@ Respond with JSON: { "fixups": [{ "description": "what to fix", "type": "impleme
 
       if (!quality.passed) {
         this.qualityRejections++;
+        this.consecutiveQualityRejections++;
+
+        // Quality circuit breaker: disable gates after too many consecutive rejections
+        if (this.consecutiveQualityRejections >= SwarmOrchestrator.QUALITY_CIRCUIT_BREAKER_THRESHOLD) {
+          this.qualityGateDisabled = true;
+          this.logDecision('quality-circuit-breaker',
+            `Disabled quality gates after ${this.consecutiveQualityRejections} consecutive rejections`,
+            'Workers cannot meet quality threshold — letting remaining tasks through');
+        }
+
+        // V5: Attach feedback so retry prompt includes it
+        task.retryContext = {
+          previousFeedback: quality.feedback,
+          previousScore: quality.score,
+          attempt: task.attempts,
+        };
+
+        // V5: Model failover on severe quality rejection — but NOT on artifact auto-fails
+        if (quality.score <= 1 && this.config.enableModelFailover && !quality.artifactAutoFail) {
+          const capability: WorkerCapability = SUBTASK_TO_CAPABILITY[task.type] ?? 'code';
+          const alternative = selectAlternativeModel(this.config.workers, model, capability, this.healthTracker);
+          if (alternative) {
+            this.emit({
+              type: 'swarm.model.failover',
+              taskId,
+              fromModel: model,
+              toModel: alternative.model,
+              reason: `quality-score-${quality.score}`,
+            });
+            task.assignedModel = alternative.model;
+            this.logDecision('failover', `Quality failover ${taskId}: ${model} → ${alternative.model}`, `Score ${quality.score}/5`);
+          }
+        }
+
         const canRetry = this.taskQueue.markFailed(taskId, this.config.workerRetries);
         if (canRetry) {
           this.retries++;
@@ -1017,6 +1266,9 @@ Respond with JSON: { "fixups": [{ "description": "what to fix", "type": "impleme
         });
         return;
       }
+
+      // Quality passed — reset consecutive rejection counter
+      this.consecutiveQualityRejections = 0;
     }
 
     // Task passed — mark completed
@@ -1054,6 +1306,10 @@ Respond with JSON: { "fixups": [{ "description": "what to fix", "type": "impleme
       costUsed: taskResult.costUsed,
       durationMs: taskResult.durationMs,
       qualityScore: taskResult.qualityScore,
+      qualityFeedback: taskResult.qualityFeedback,
+      output: taskResult.output,
+      closureReport: taskResult.closureReport,
+      toolCalls: spawnResult.metrics.toolCalls,
     });
   }
 

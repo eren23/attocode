@@ -190,6 +190,9 @@ export async function getSessions(basePath?: string): Promise<SessionListItem[]>
     try {
       const session = await parseSession(filePath);
 
+      // Skip files with invalid timestamps (e.g. eval prediction JSONL files)
+      if (isNaN(session.startTime.getTime())) continue;
+
       // Determine if this is a terminal session (multiple tasks) or single-task session
       const isTerminalSession = session.tasks && session.tasks.length > 0;
       const taskCount = isTerminalSession ? session.tasks.length : 1;

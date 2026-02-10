@@ -2,7 +2,7 @@
  * EventFeedPanel - Scrolling event log with filters
  */
 
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useCallback } from 'react';
 import type { TimestampedSwarmEvent, SwarmEventType } from '../../lib/swarm-types';
 import { EventRow } from './EventRow';
 import { cn } from '../../lib/utils';
@@ -15,7 +15,7 @@ type FilterCategory = 'task' | 'wave' | 'quality' | 'error' | 'budget';
 
 const CATEGORY_TYPES: Record<FilterCategory, SwarmEventType[]> = {
   task: ['swarm.task.dispatched', 'swarm.task.completed', 'swarm.task.failed', 'swarm.task.skipped'],
-  wave: ['swarm.wave.start', 'swarm.wave.complete', 'swarm.start', 'swarm.complete'],
+  wave: ['swarm.wave.start', 'swarm.wave.complete', 'swarm.start', 'swarm.complete', 'swarm.phase.progress' as SwarmEventType],
   quality: ['swarm.quality.rejected'],
   error: ['swarm.error', 'swarm.task.failed'],
   budget: ['swarm.budget.update'],
@@ -40,6 +40,14 @@ export function EventFeedPanel({ events }: EventFeedPanelProps) {
     });
   };
 
+  // Detect if user has scrolled up (disable auto-scroll)
+  const handleScroll = useCallback(() => {
+    if (!scrollRef.current) return;
+    const { scrollTop, scrollHeight, clientHeight } = scrollRef.current;
+    const atBottom = scrollHeight - scrollTop - clientHeight < 40;
+    setAutoScroll(atBottom);
+  }, []);
+
   // Compute allowed event types from active filters
   const allowedTypes = new Set<string>();
   for (const cat of filters) {
@@ -50,7 +58,7 @@ export function EventFeedPanel({ events }: EventFeedPanelProps) {
 
   const filteredEvents = events.filter((e) => allowedTypes.has(e.event.type));
 
-  // Auto-scroll to bottom on new events
+  // Auto-scroll to bottom on new events (only when user hasn't scrolled up)
   useEffect(() => {
     if (autoScroll && scrollRef.current) {
       scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
@@ -92,6 +100,7 @@ export function EventFeedPanel({ events }: EventFeedPanelProps) {
 
       <div
         ref={scrollRef}
+        onScroll={handleScroll}
         className="flex-1 overflow-y-auto min-h-0 max-h-64 space-y-0"
       >
         {filteredEvents.length === 0 ? (
@@ -99,8 +108,8 @@ export function EventFeedPanel({ events }: EventFeedPanelProps) {
             No events yet
           </div>
         ) : (
-          filteredEvents.map((event, i) => (
-            <EventRow key={`${event.seq}-${i}`} event={event} />
+          filteredEvents.map((event) => (
+            <EventRow key={event.seq} event={event} />
           ))
         )}
       </div>

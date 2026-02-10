@@ -153,7 +153,7 @@ export class SwarmEventBridge {
     const immediateTriggers = ['swarm.complete', 'swarm.plan.complete', 'swarm.review.complete', 'swarm.verify.complete', 'swarm.state.checkpoint'];
     const debouncedTriggers = [
       'swarm.task.dispatched', 'swarm.task.completed', 'swarm.task.failed', 'swarm.task.skipped',
-      'swarm.budget.update', 'swarm.wave.start', 'swarm.wave.complete',
+      'swarm.budget.update', 'swarm.wave.start', 'swarm.wave.complete', 'swarm.phase.progress',
     ];
     if (immediateTriggers.includes(event.type)) {
       this.writeStateDebouncedOrImmediate(true);
@@ -198,17 +198,19 @@ export class SwarmEventBridge {
         });
         break;
 
-      case 'swarm.task.completed':
+      case 'swarm.task.completed': {
+        const existingTask = this.tasks.get(event.taskId);
         this.updateTask(event.taskId, {
           status: 'completed',
           result: {
             success: event.success,
-            output: '',
+            output: event.output ?? '',
             tokensUsed: event.tokensUsed,
             costUsed: event.costUsed,
             durationMs: event.durationMs,
             qualityScore: event.qualityScore,
-            model: '',
+            qualityFeedback: event.qualityFeedback,
+            model: existingTask?.assignedModel ?? '',
           },
         });
         this.timeline.push({
@@ -220,7 +222,25 @@ export class SwarmEventBridge {
           completedCount: (this.lastStatus?.queue.completed ?? 0) + 1,
           failedCount: this.lastStatus?.queue.failed ?? 0,
         });
+        // V5: Write per-task detail file for drill-down in dashboard
+        if (event.output) {
+          try {
+            const tasksDir = path.join(this.outputDir, 'tasks');
+            fs.mkdirSync(tasksDir, { recursive: true });
+            const taskFile = path.join(tasksDir, `${event.taskId}.json`);
+            fs.writeFileSync(taskFile, JSON.stringify({
+              taskId: event.taskId,
+              output: event.output,
+              qualityFeedback: event.qualityFeedback,
+              closureReport: event.closureReport,
+              toolCalls: event.toolCalls,
+            }));
+          } catch {
+            // Best effort — don't crash the bridge
+          }
+        }
         break;
+      }
 
       case 'swarm.task.failed':
         if (!event.willRetry) {
@@ -340,6 +360,7 @@ export class SwarmEventBridge {
         });
         break;
 
+      case 'swarm.phase.progress':
       case 'swarm.fixup.spawned':
       case 'swarm.worker.stuck':
       case 'swarm.state.checkpoint':

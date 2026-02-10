@@ -231,4 +231,365 @@ describe('Worker prompts', () => {
     expect(registered).toBeDefined();
     expect(registered!.systemPrompt).toContain('(executor)');
   });
+
+  it('should use RESEARCH TASK RULES for research tasks', async () => {
+    registeredAgents.clear();
+
+    const config: SwarmConfig = {
+      ...DEFAULT_SWARM_CONFIG,
+      orchestratorModel: 'test/model',
+      workers: [
+        { name: 'researcher', model: 'test/researcher', capabilities: ['research'] },
+      ],
+    };
+
+    const pool = new SwarmWorkerPool(config, mockAgentRegistry, mockSpawnAgent, mockBudgetPool);
+
+    const task: SwarmTask = {
+      id: 'test-research',
+      description: 'Research React state management options',
+      type: 'research',
+      dependencies: [],
+      status: 'ready',
+      complexity: 3,
+      wave: 0,
+      attempts: 0,
+    };
+
+    await pool.dispatch(task);
+
+    const registered = registeredAgents.get('swarm-researcher-test-research');
+    expect(registered).toBeDefined();
+    expect(registered!.systemPrompt).toContain('RESEARCH TASK RULES');
+    expect(registered!.systemPrompt).toContain('You are NOT expected to write or edit code files');
+    expect(registered!.systemPrompt).not.toContain('START CODING IMMEDIATELY');
+    expect(registered!.systemPrompt).not.toContain('ANTI-LOOP RULES');
+  });
+
+  it('should use RESEARCH TASK RULES for analysis tasks', async () => {
+    registeredAgents.clear();
+
+    const config: SwarmConfig = {
+      ...DEFAULT_SWARM_CONFIG,
+      orchestratorModel: 'test/model',
+      workers: [
+        { name: 'analyst', model: 'test/analyst', capabilities: ['research'] },
+      ],
+    };
+
+    const pool = new SwarmWorkerPool(config, mockAgentRegistry, mockSpawnAgent, mockBudgetPool);
+
+    const task: SwarmTask = {
+      id: 'test-analysis',
+      description: 'Analyze codebase architecture',
+      type: 'analysis',
+      dependencies: [],
+      status: 'ready',
+      complexity: 4,
+      wave: 0,
+      attempts: 0,
+    };
+
+    await pool.dispatch(task);
+
+    const registered = registeredAgents.get('swarm-analyst-test-analysis');
+    expect(registered).toBeDefined();
+    expect(registered!.systemPrompt).toContain('RESEARCH TASK RULES');
+  });
+
+  it('should use SYNTHESIS TASK RULES for merge tasks', async () => {
+    registeredAgents.clear();
+
+    const config: SwarmConfig = {
+      ...DEFAULT_SWARM_CONFIG,
+      orchestratorModel: 'test/model',
+      workers: [
+        { name: 'synthesizer', model: 'test/synthesizer', capabilities: ['write', 'code'] },
+      ],
+    };
+
+    const pool = new SwarmWorkerPool(config, mockAgentRegistry, mockSpawnAgent, mockBudgetPool);
+
+    const task: SwarmTask = {
+      id: 'test-merge',
+      description: 'Synthesize research findings into recommendation',
+      type: 'merge',
+      dependencies: ['task-1', 'task-2'],
+      status: 'ready',
+      complexity: 4,
+      wave: 1,
+      attempts: 0,
+    };
+
+    await pool.dispatch(task);
+
+    const registered = registeredAgents.get('swarm-synthesizer-test-merge');
+    expect(registered).toBeDefined();
+    expect(registered!.systemPrompt).toContain('SYNTHESIS TASK RULES');
+    expect(registered!.systemPrompt).toContain('Do NOT re-research');
+    expect(registered!.systemPrompt).toContain('Do NOT run web_search');
+    expect(registered!.systemPrompt).not.toContain('START CODING IMMEDIATELY');
+    expect(registered!.systemPrompt).not.toContain('ANTI-LOOP RULES');
+  });
+
+  it('should use DOCUMENTATION TASK RULES for document tasks', async () => {
+    registeredAgents.clear();
+
+    const config: SwarmConfig = {
+      ...DEFAULT_SWARM_CONFIG,
+      orchestratorModel: 'test/model',
+      workers: [
+        { name: 'documenter', model: 'test/documenter', capabilities: ['document'] },
+      ],
+    };
+
+    const pool = new SwarmWorkerPool(config, mockAgentRegistry, mockSpawnAgent, mockBudgetPool);
+
+    const task: SwarmTask = {
+      id: 'test-doc',
+      description: 'Write API documentation',
+      type: 'document',
+      dependencies: [],
+      status: 'ready',
+      complexity: 3,
+      wave: 0,
+      attempts: 0,
+    };
+
+    await pool.dispatch(task);
+
+    const registered = registeredAgents.get('swarm-documenter-test-doc');
+    expect(registered).toBeDefined();
+    expect(registered!.systemPrompt).toContain('DOCUMENTATION TASK RULES');
+    expect(registered!.systemPrompt).not.toContain('START CODING IMMEDIATELY');
+  });
+
+  it('should preserve original ANTI-LOOP RULES for code tasks', async () => {
+    registeredAgents.clear();
+
+    const config: SwarmConfig = {
+      ...DEFAULT_SWARM_CONFIG,
+      orchestratorModel: 'test/model',
+      workers: [
+        { name: 'coder', model: 'test/coder', capabilities: ['code'] },
+      ],
+    };
+
+    const pool = new SwarmWorkerPool(config, mockAgentRegistry, mockSpawnAgent, mockBudgetPool);
+
+    const task: SwarmTask = {
+      id: 'test-code',
+      description: 'Implement feature X',
+      type: 'implement',
+      dependencies: [],
+      status: 'ready',
+      complexity: 5,
+      wave: 0,
+      attempts: 0,
+    };
+
+    await pool.dispatch(task);
+
+    const registered = registeredAgents.get('swarm-coder-test-code');
+    expect(registered).toBeDefined();
+    expect(registered!.systemPrompt).toContain('ANTI-LOOP RULES');
+    expect(registered!.systemPrompt).toContain('START CODING IMMEDIATELY');
+  });
+
+  // ─── V7: Prompt Tier Tests ──────────────────────────────────────────────
+
+  it('should include delegation spec and quality prompt on first attempt (full tier)', async () => {
+    registeredAgents.clear();
+
+    const config: SwarmConfig = {
+      ...DEFAULT_SWARM_CONFIG,
+      orchestratorModel: 'test/model',
+      workers: [
+        { name: 'coder', model: 'test/coder', capabilities: ['code'] },
+      ],
+    };
+
+    const pool = new SwarmWorkerPool(config, mockAgentRegistry, mockSpawnAgent, mockBudgetPool);
+
+    const task: SwarmTask = {
+      id: 'test-full-tier',
+      description: 'Implement feature',
+      type: 'implement',
+      dependencies: [],
+      status: 'ready',
+      complexity: 5,
+      wave: 0,
+      attempts: 0,
+    };
+
+    await pool.dispatch(task);
+
+    const registered = registeredAgents.get('swarm-coder-test-full-tier');
+    expect(registered).toBeDefined();
+    expect(registered!.systemPrompt).toContain('DELEGATION SPEC');
+    expect(registered!.systemPrompt).toContain('ENVIRONMENT FACTS');
+  });
+
+  it('should skip delegation spec for research tasks even on first attempt', async () => {
+    registeredAgents.clear();
+
+    const config: SwarmConfig = {
+      ...DEFAULT_SWARM_CONFIG,
+      orchestratorModel: 'test/model',
+      workers: [
+        { name: 'researcher', model: 'test/researcher', capabilities: ['research'] },
+      ],
+    };
+
+    const pool = new SwarmWorkerPool(config, mockAgentRegistry, mockSpawnAgent, mockBudgetPool);
+
+    const task: SwarmTask = {
+      id: 'test-research-no-delegation',
+      description: 'Research best practices',
+      type: 'research',
+      dependencies: [],
+      status: 'ready',
+      complexity: 3,
+      wave: 0,
+      attempts: 0,
+    };
+
+    await pool.dispatch(task);
+
+    const registered = registeredAgents.get('swarm-researcher-test-research-no-delegation');
+    expect(registered).toBeDefined();
+    expect(registered!.systemPrompt).toContain('RESEARCH TASK RULES');
+    // Research tasks should NOT get delegation spec (redundant)
+    expect(registered!.systemPrompt).not.toContain('DELEGATION SPEC');
+  });
+
+  it('should use compact facts and skip delegation on retry (reduced tier)', async () => {
+    registeredAgents.clear();
+
+    const config: SwarmConfig = {
+      ...DEFAULT_SWARM_CONFIG,
+      orchestratorModel: 'test/model',
+      philosophy: 'Keep it simple.',
+      workers: [
+        { name: 'coder', model: 'test/coder', capabilities: ['code'] },
+      ],
+    };
+
+    const pool = new SwarmWorkerPool(config, mockAgentRegistry, mockSpawnAgent, mockBudgetPool);
+
+    const task: SwarmTask = {
+      id: 'test-reduced-tier',
+      description: 'Implement feature',
+      type: 'implement',
+      dependencies: [],
+      status: 'ready',
+      complexity: 5,
+      wave: 0,
+      attempts: 1, // First retry → reduced tier
+      retryContext: {
+        previousFeedback: 'No tool calls',
+        previousScore: 0,
+        attempt: 0,
+      },
+    };
+
+    await pool.dispatch(task);
+
+    const registered = registeredAgents.get('swarm-coder-test-reduced-tier');
+    expect(registered).toBeDefined();
+    const prompt = registered!.systemPrompt!;
+    // Reduced tier: compact facts (one-liner), no delegation spec, no quality prompt
+    expect(prompt).toContain('Current date:'); // compact format
+    expect(prompt).not.toContain('ENVIRONMENT FACTS'); // not the full block
+    expect(prompt).not.toContain('DELEGATION SPEC');
+    expect(prompt).toContain('RETRY CONTEXT'); // retry context is always included
+    expect(prompt).toContain('PHILOSOPHY'); // philosophy still included at reduced tier
+  });
+
+  it('should use minimal prompt on 2nd+ retry (minimal tier)', async () => {
+    registeredAgents.clear();
+
+    const config: SwarmConfig = {
+      ...DEFAULT_SWARM_CONFIG,
+      orchestratorModel: 'test/model',
+      philosophy: 'Be efficient',
+      workers: [
+        { name: 'coder', model: 'test/coder', capabilities: ['code'] },
+      ],
+    };
+
+    const pool = new SwarmWorkerPool(config, mockAgentRegistry, mockSpawnAgent, mockBudgetPool);
+
+    const task: SwarmTask = {
+      id: 'test-minimal-tier',
+      description: 'Implement feature',
+      type: 'implement',
+      dependencies: [],
+      status: 'ready',
+      complexity: 5,
+      wave: 0,
+      attempts: 2, // 2nd retry → minimal tier
+      retryContext: {
+        previousFeedback: 'Still no tool calls',
+        previousScore: 0,
+        attempt: 1,
+      },
+    };
+
+    await pool.dispatch(task);
+
+    const registered = registeredAgents.get('swarm-coder-test-minimal-tier');
+    expect(registered).toBeDefined();
+    const prompt = registered!.systemPrompt!;
+    // Minimal tier: no facts, no delegation, no quality, no philosophy
+    expect(prompt).not.toContain('ENVIRONMENT FACTS');
+    expect(prompt).not.toContain('Current date:');
+    expect(prompt).not.toContain('DELEGATION SPEC');
+    expect(prompt).not.toContain('PHILOSOPHY');
+    // But still has: worker intro, task rules, retry context
+    expect(prompt).toContain('You are a coder worker');
+    expect(prompt).toContain('ANTI-LOOP RULES');
+    expect(prompt).toContain('RETRY CONTEXT');
+  });
+
+  it('should produce shorter prompts on each retry tier', async () => {
+    const config: SwarmConfig = {
+      ...DEFAULT_SWARM_CONFIG,
+      orchestratorModel: 'test/model',
+      philosophy: 'Write clean code.',
+      workers: [
+        { name: 'coder', model: 'test/coder', capabilities: ['code'] },
+      ],
+    };
+
+    const lengths: number[] = [];
+    for (const attempts of [0, 1, 2]) {
+      registeredAgents.clear();
+      const pool = new SwarmWorkerPool(config, mockAgentRegistry, mockSpawnAgent, mockBudgetPool);
+
+      const task: SwarmTask = {
+        id: `test-tier-${attempts}`,
+        description: 'Implement feature',
+        type: 'implement',
+        dependencies: [],
+        status: 'ready',
+        complexity: 5,
+        wave: 0,
+        attempts,
+        retryContext: attempts > 0 ? {
+          previousFeedback: 'Failed',
+          previousScore: 0,
+          attempt: attempts - 1,
+        } : undefined,
+      };
+
+      await pool.dispatch(task);
+      const registered = registeredAgents.get(`swarm-coder-test-tier-${attempts}`);
+      lengths.push(registered!.systemPrompt!.length);
+    }
+
+    // Each tier should be shorter than the previous
+    expect(lengths[0]).toBeGreaterThan(lengths[1]);
+    expect(lengths[1]).toBeGreaterThan(lengths[2]);
+  });
 });

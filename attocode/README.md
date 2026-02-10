@@ -273,6 +273,11 @@ Options:
   --legacy                Force legacy readline mode
   --trace                 Enable trace capture to .traces/
   --debug                 Enable debug logging
+  --swarm [CONFIG]        Enable swarm mode (optional config path)
+  --swarm-resume ID       Resume a previous swarm session
+  --paid-only             Use only paid models in swarm auto-detection
+  --theme THEME           UI theme: dark, light, auto
+  --yolo                  Shorthand for --permission yolo
 ```
 
 ## Tracing & Performance Analysis
@@ -372,6 +377,8 @@ See [docs/architecture.md](docs/architecture.md) for the complete architecture d
 | [Extending](docs/extending.md) | Adding providers, tools, integrations |
 | [Skills & Agents](docs/skills-and-agents-guide.md) | Custom skills and agents |
 | [Tracing](docs/tracing-guide.md) | Performance analysis |
+| [Modes Guide](docs/modes-guide.md) | TUI, REPL, plan, subagent, and swarm modes |
+| [Swarm Mode](docs/swarm/README.md) | Multi-model parallel orchestration |
 | [Troubleshooting](docs/troubleshooting.md) | Common issues and solutions |
 
 ## Contributing

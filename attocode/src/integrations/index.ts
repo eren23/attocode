@@ -41,6 +41,7 @@ export {
 export {
   ExecutionEconomicsManager,
   createEconomicsManager,
+  computeToolFingerprint,
   QUICK_BUDGET,
   STANDARD_BUDGET,
   SUBAGENT_BUDGET,
@@ -55,6 +56,7 @@ export {
   type ExtensionRequest,
   type EconomicsEvent,
   type EconomicsEventListener,
+  type LoopDetectionState,
   type PhaseBudgetConfig,
 } from './economics.js';
 
@@ -858,3 +860,135 @@ export {
   type ThrottleConfig,
   type ThrottleStats,
 } from './swarm/index.js';
+
+// Delegation Protocol (structured subagent delegation)
+export {
+  buildDelegationPrompt,
+  createMinimalDelegationSpec,
+  DELEGATION_INSTRUCTIONS,
+  type DelegationSpec,
+  type OutputFormatSpec,
+  type ToolGuidance,
+  type TaskBoundaries,
+  type SiblingContext,
+} from './delegation-protocol.js';
+
+// Complexity Classifier (task complexity heuristics)
+export {
+  classifyComplexity,
+  getScalingGuidance,
+  createComplexityClassifier,
+  type ComplexityTier,
+  type ComplexityAssessment,
+  type ExecutionRecommendation,
+  type ComplexitySignal,
+  type ClassificationContext,
+} from './complexity-classifier.js';
+
+// Tool Recommendation Engine (task-type to tool mapping)
+export {
+  ToolRecommendationEngine,
+  createToolRecommendationEngine,
+  type ToolRecommendation,
+  type ToolRecommendationConfig,
+  type ToolCategory,
+} from './tool-recommendation.js';
+
+// Injection Budget Manager (context window health)
+export {
+  InjectionBudgetManager,
+  createInjectionBudgetManager,
+  type InjectionSlot,
+  type InjectionBudgetConfig,
+  type InjectionBudgetStats,
+} from './injection-budget.js';
+
+// Thinking/Reflection Strategy (prompt engineering for reasoning)
+export {
+  generateThinkingDirectives,
+  getThinkingSystemPrompt,
+  getSubagentQualityPrompt,
+  createThinkingStrategy,
+  type ThinkingDirective,
+  type ThinkingConfig,
+} from './thinking-strategy.js';
+
+// Subagent Output Store (bypass coordinator pattern)
+export {
+  SubagentOutputStore,
+  createSubagentOutputStore,
+  type SubagentOutput,
+  type SubagentOutputStoreConfig,
+} from './subagent-output-store.js';
+
+// Self-Improvement Protocol (tool failure diagnosis)
+export {
+  SelfImprovementProtocol,
+  createSelfImprovementProtocol,
+  type ToolCallDiagnosis,
+  type FailureCategory as SelfImprovementFailureCategory,
+  type SelfImprovementConfig,
+  type SuccessPattern,
+} from './self-improvement.js';
+
+// MCP Tool Validator (description quality checks)
+export {
+  validateToolDescription,
+  validateAllTools,
+  formatValidationSummary,
+  createToolValidator,
+  type ToolValidationResult,
+  type ToolValidationConfig,
+} from './mcp-tool-validator.js';
+
+// MCP Custom Tools (API wrapper factory)
+export {
+  createSerperSearchTool,
+  createCustomTool,
+  createCustomTools,
+  customToolToRegistryFormat,
+  type CustomToolDefinition,
+  type CustomToolResult,
+  type CustomToolConfig,
+  type SerperSearchConfig,
+  type GenericToolSpec,
+} from './mcp-custom-tools.js';
+
+// Async Subagent Execution (non-blocking subagent handles)
+export {
+  createSubagentHandle,
+  SubagentSupervisor,
+  createSubagentSupervisor,
+  type SubagentHandle,
+  type SubagentProgress,
+  type ProgressCallback,
+  type AsyncSubagentConfig,
+  type SubagentSupervisorConfig,
+} from './async-subagent.js';
+
+// Auto-Checkpoint Resumption (crash recovery)
+export {
+  AutoCheckpointManager,
+  createAutoCheckpointManager,
+  type Checkpoint as AutoCheckpoint,
+  type AutoCheckpointConfig,
+  type ResumeCandidate,
+} from './auto-checkpoint.js';
+
+// Dynamic Budget Rebalancing (starvation prevention)
+export {
+  DynamicBudgetPool,
+  createDynamicBudgetPool,
+  type DynamicBudgetConfig,
+  type ChildPriority,
+  type RebalanceResult,
+} from './dynamic-budget.js';
+
+// Environment Facts (temporal/platform grounding for all agents)
+export {
+  getEnvironmentFacts,
+  refreshEnvironmentFacts,
+  formatFactsBlock,
+  formatFactsCompact,
+  type EnvironmentFacts,
+} from './environment-facts.js';

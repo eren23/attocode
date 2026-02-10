@@ -15,6 +15,11 @@ philosophy: |
   Make incremental, safe changes. Ensure each change is independently valid.
   Run tests after every modification. Prefer small, focused commits.
 
+# Free-friendly orchestrator (override with --model for paid)
+models:
+  orchestrator: google/gemini-2.0-flash-001
+  quality_gate: google/gemini-2.0-flash-001
+
 # Conservative settings to avoid rate limit interruptions
 throttle: free
 
@@ -31,14 +36,14 @@ quality:
 
 # Extra retries to handle transient failures without needing a resume
 resilience:
-  worker_retries: 3
-  rate_limit_retries: 5
-  model_failover: true
+  workerRetries: 3
+  rateLimitRetries: 5
+  modelFailover: true
 
 communication:
   blackboard: true
-  dependency_context_max_length: 3000
-  include_file_list: true
+  dependencyContextMaxLength: 3000
+  includeFileList: true
 
 # Persistence is the key feature here
 features:

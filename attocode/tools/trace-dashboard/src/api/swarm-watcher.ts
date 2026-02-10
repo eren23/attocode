@@ -214,3 +214,91 @@ export function findSwarmLiveDir(): string | null {
 
   return null;
 }
+
+/**
+ * Discover ALL swarm-live directories (not just the first match).
+ * Returns an array of { path, label } where label is a human-friendly project name.
+ * Also checks SWARM_EXTRA_DIRS env var (colon-separated absolute paths).
+ */
+export function findAllSwarmLiveDirs(): Array<{ path: string; label: string }> {
+  const found = new Map<string, string>(); // resolved path → label
+
+  // Helper to add a candidate if it exists
+  const tryAdd = (candidate: string, labelOverride?: string) => {
+    const resolved = path.resolve(candidate);
+    if (found.has(resolved)) return;
+    if (fs.existsSync(resolved)) {
+      const label = labelOverride ?? labelFromPath(resolved);
+      found.set(resolved, label);
+    }
+  };
+
+  // Env var override paths
+  if (process.env.SWARM_LIVE_DIR) {
+    tryAdd(process.env.SWARM_LIVE_DIR);
+  }
+
+  // Extra dirs from env (colon-separated)
+  if (process.env.SWARM_EXTRA_DIRS) {
+    for (const dir of process.env.SWARM_EXTRA_DIRS.split(':').filter(Boolean)) {
+      tryAdd(dir.trim());
+    }
+  }
+
+  // Static candidates
+  const candidates = [
+    path.join(process.cwd(), '.agent/swarm-live'),
+    '.agent/swarm-live',
+    '../../.agent/swarm-live',
+    '../../../.agent/swarm-live',
+    '../../../../.agent/swarm-live',
+  ];
+  for (const c of candidates) tryAdd(c);
+
+  // Scan sibling project directories at multiple ancestor levels
+  const ancestorLevels = ['../../..', '../../../..'];
+  for (const level of ancestorLevels) {
+    try {
+      const ancestor = path.resolve(level);
+      const entries = fs.readdirSync(ancestor, { withFileTypes: true });
+      for (const entry of entries) {
+        if (entry.isDirectory() && !entry.name.startsWith('.')) {
+          tryAdd(path.join(ancestor, entry.name, '.agent/swarm-live'));
+        }
+      }
+    } catch { /* ignore read errors */ }
+  }
+
+  return Array.from(found.entries()).map(([p, label]) => ({ path: p, label }));
+}
+
+/**
+ * Derive a human-friendly label from a swarm-live directory path.
+ * Takes the project directory name (parent of .agent/).
+ */
+function labelFromPath(swarmLivePath: string): string {
+  // swarmLivePath is like /foo/bar/project-name/.agent/swarm-live
+  const parts = swarmLivePath.split(path.sep);
+  // Find '.agent' and take the segment before it
+  const agentIdx = parts.lastIndexOf('.agent');
+  if (agentIdx > 0) {
+    return parts[agentIdx - 1];
+  }
+  // Fallback: last 2 meaningful segments
+  return parts.filter(Boolean).slice(-3, -1).join('/');
+}
+
+/**
+ * Validate and resolve a user-provided swarm-live directory path.
+ * If dir is provided and valid, returns it. Otherwise falls back to findSwarmLiveDir().
+ */
+export function resolveSwarmDir(dir?: string): string | null {
+  if (dir) {
+    const resolved = path.resolve(dir);
+    if (fs.existsSync(resolved) && fs.statSync(resolved).isDirectory()) {
+      return resolved;
+    }
+    // Invalid path — fall through to default
+  }
+  return findSwarmLiveDir();
+}

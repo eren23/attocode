@@ -17,6 +17,8 @@ export class SwarmTaskQueue {
   private waves: string[][] = [];
   private conflicts: ResourceConflict[] = [];
   private currentWave = 0;
+  private onCascadeSkipCallback?: (taskId: string, reason: string) => void;
+  private partialDependencyThreshold = 0.5;
 
   /**
    * Load tasks from a SmartDecompositionResult.
@@ -27,6 +29,7 @@ export class SwarmTaskQueue {
     this.tasks.clear();
     this.waves = [];
     this.conflicts = result.conflicts;
+    this.partialDependencyThreshold = config.partialDependencyThreshold ?? 0.5;
 
     const { subtasks, dependencyGraph } = result;
     const parallelGroups = dependencyGraph.parallelGroups;
@@ -95,36 +98,87 @@ export class SwarmTaskQueue {
 
   /**
    * Update task ready status based on dependency completion.
+   * Supports partial dependency tolerance: if enough deps succeeded (>= threshold),
+   * the task runs with partial context instead of being cascade-skipped.
    */
   private updateReadyStatus(): void {
     for (const [, task] of this.tasks) {
       if (task.status !== 'pending') continue;
 
-      const allDepsComplete = task.dependencies.every(depId => {
-        const dep = this.tasks.get(depId);
-        return dep && (dep.status === 'completed' || dep.status === 'skipped');
-      });
-
-      const anyDepFailed = task.dependencies.some(depId => {
-        const dep = this.tasks.get(depId);
-        return dep && dep.status === 'failed';
-      });
-
-      if (anyDepFailed) {
-        task.status = 'skipped';
-      } else if (allDepsComplete) {
+      if (task.dependencies.length === 0) {
         task.status = 'ready';
-        // Build dependency context from completed deps
+        continue;
+      }
+
+      let completedCount = 0;
+      let failedCount = 0;
+      let resolvedCount = 0;
+      const succeededDeps: string[] = [];
+      const failedDeps: string[] = [];
+
+      for (const depId of task.dependencies) {
+        const dep = this.tasks.get(depId);
+        if (!dep) continue;
+
+        if (dep.status === 'completed') {
+          completedCount++;
+          resolvedCount++;
+          succeededDeps.push(dep.description);
+        } else if (dep.status === 'failed') {
+          failedCount++;
+          resolvedCount++;
+          failedDeps.push(dep.description);
+        } else if (dep.status === 'skipped') {
+          resolvedCount++;
+          failedDeps.push(dep.description);
+        }
+      }
+
+      const allResolved = resolvedCount === task.dependencies.length;
+      if (!allResolved) continue;
+
+      const noFailures = failedCount === 0 && failedDeps.length === 0;
+
+      if (noFailures) {
+        // All deps succeeded — standard path
+        task.status = 'ready';
         task.dependencyContext = this.buildDependencyContext(task);
+      } else {
+        // Some deps failed — check partial threshold
+        const ratio = completedCount / task.dependencies.length;
+        if (ratio >= this.partialDependencyThreshold) {
+          // Enough succeeded — dispatch with partial context
+          task.status = 'ready';
+          task.partialContext = { succeeded: succeededDeps, failed: failedDeps, ratio };
+          task.dependencyContext = this.buildDependencyContext(task);
+        } else {
+          // Too many failures — skip
+          task.status = 'skipped';
+          this.onCascadeSkipCallback?.(task.id,
+            `${failedDeps.length}/${task.dependencies.length} dependencies failed (ratio ${ratio.toFixed(2)} < threshold ${this.partialDependencyThreshold})`);
+        }
       }
     }
   }
 
   /**
    * Build context string from completed dependency outputs.
+   * Includes partial dependency warnings when some deps failed.
    */
   private buildDependencyContext(task: SwarmTask): string {
     const parts: string[] = [];
+    const emptyDeps: string[] = [];
+
+    // Add partial dependency warning if applicable
+    if (task.partialContext) {
+      const { succeeded, failed, ratio } = task.partialContext;
+      parts.push(
+        `WARNING: ${succeeded.length}/${succeeded.length + failed.length} dependency tasks completed (${(ratio * 100).toFixed(0)}%).`,
+        `Missing data from: ${failed.join(', ')}.`,
+        'Synthesize from available results only — do not attempt to fill gaps with speculation.',
+        '',
+      );
+    }
 
     for (const depId of task.dependencies) {
       const dep = this.tasks.get(depId);
@@ -134,7 +188,20 @@ export class SwarmTaskQueue {
         ? dep.result.closureReport.findings.join('\n') + '\n' + dep.result.closureReport.actionsTaken.join('\n')
         : dep.result.output.slice(0, 500);
 
-      parts.push(`[Dependency: ${dep.description}]\n${summary}`);
+      // V6: Detect hollow dependency output — both conditions must be true:
+      // short output AND budget/unable failures (so legitimate short completions pass through)
+      const isHollow = summary.trim().length < 100 &&
+        (dep.result.closureReport?.failures?.some(f => /budget|unable|not completed/i.test(f)) ?? false);
+
+      if (isHollow) {
+        emptyDeps.push(dep.description);
+      } else {
+        parts.push(`[Dependency: ${dep.description}]\n${summary}`);
+      }
+    }
+
+    if (emptyDeps.length > 0) {
+      parts.unshift(`WARNING: ${emptyDeps.length} dependencies completed without meaningful output: ${emptyDeps.join(', ')}. You may need to do additional research to compensate.`);
     }
 
     return parts.length > 0 ? parts.join('\n\n') : '';
@@ -184,6 +251,13 @@ export class SwarmTaskQueue {
   }
 
   /**
+   * Register a callback invoked for each task cascade-skipped due to a dependency failure.
+   */
+  setOnCascadeSkip(callback: (taskId: string, reason: string) => void): void {
+    this.onCascadeSkipCallback = callback;
+  }
+
+  /**
    * Mark a task as dispatched.
    */
   markDispatched(taskId: string, model: string): void {
@@ -200,6 +274,8 @@ export class SwarmTaskQueue {
   markCompleted(taskId: string, result: SwarmTaskResult): void {
     const task = this.tasks.get(taskId);
     if (!task) return;
+    // Don't overwrite terminal states (task may have been cascade-skipped while worker was running)
+    if (task.status === 'skipped' || task.status === 'failed') return;
     task.status = 'completed';
     task.result = result;
 
@@ -229,16 +305,54 @@ export class SwarmTaskQueue {
   }
 
   /**
-   * Skip all tasks that depend (transitively) on a failed task.
+   * Cascade failure to dependent tasks, respecting partial dependency threshold.
+   * Tasks with enough successful deps are kept ready/pending rather than skipped.
    */
   private cascadeSkip(failedTaskId: string): void {
     for (const [, task] of this.tasks) {
       // H5: Also skip dispatched tasks whose dependency failed
       if (task.status !== 'pending' && task.status !== 'ready' && task.status !== 'dispatched') continue;
 
-      if (this.dependsOn(task.id, failedTaskId)) {
-        task.status = 'skipped';
+      // Only consider direct dependents — transitive deps are handled recursively
+      // when a direct dependent gets skipped (it will trigger another cascadeSkip)
+      if (!this.dependsOn(task.id, failedTaskId)) continue;
+
+      // Check partial dependency threshold
+      if (task.dependencies.length > 1) {
+        let completedCount = 0;
+        let failedOrSkippedCount = 0;
+
+        for (const depId of task.dependencies) {
+          const dep = this.tasks.get(depId);
+          if (!dep) continue;
+          if (dep.status === 'completed') completedCount++;
+          if (dep.status === 'failed' || dep.status === 'skipped') failedOrSkippedCount++;
+        }
+
+        // Not all deps resolved yet — don't skip prematurely, updateReadyStatus will handle it
+        const resolvedCount = completedCount + failedOrSkippedCount;
+        if (resolvedCount < task.dependencies.length) continue;
+
+        const ratio = completedCount / task.dependencies.length;
+        if (ratio >= this.partialDependencyThreshold) {
+          // Enough deps succeeded — mark ready with partial context instead of skipping
+          const succeededDeps: string[] = [];
+          const failedDeps: string[] = [];
+          for (const depId of task.dependencies) {
+            const dep = this.tasks.get(depId);
+            if (!dep) continue;
+            if (dep.status === 'completed') succeededDeps.push(dep.description);
+            else failedDeps.push(dep.description);
+          }
+          task.status = 'ready';
+          task.partialContext = { succeeded: succeededDeps, failed: failedDeps, ratio };
+          task.dependencyContext = this.buildDependencyContext(task);
+          continue;
+        }
       }
+
+      task.status = 'skipped';
+      this.onCascadeSkipCallback?.(task.id, `dependency ${failedTaskId} failed`);
     }
   }
 
