@@ -17,6 +17,8 @@
  * - Orchestrator decision logging
  */
 
+import * as fs from 'node:fs';
+import * as path from 'node:path';
 import type { LLMProvider } from '../../providers/types.js';
 import type { AgentRegistry } from '../agent-registry.js';
 import type { SharedBlackboard } from '../shared-blackboard.js';
@@ -49,16 +51,45 @@ import type { SpawnResult } from '../agent-registry.js';
 // ─── Hollow Completion Detection ──────────────────────────────────────────
 
 /**
- * V10: Minimal hollow completion detection — let the quality gate judge everything else.
- * Only catches truly empty completions: zero tool calls AND trivial output (<50 chars).
- * No task-type lists, no closure report checks, no hardcoded thresholds beyond the bare minimum.
+ * V11: Hollow completion detection — catches empty completions AND "success" with failure language.
+ * Zero tool calls AND trivial output is always hollow.
+ * Additionally, success=true but output containing failure admissions is also hollow —
+ * this catches workers that report success but actually did no useful work.
  */
-export function isHollowCompletion(spawnResult: SpawnResult): boolean {
+const FAILURE_INDICATORS = [
+  'budget exhausted', 'unable to complete', 'could not complete',
+  'ran out of budget', 'no changes were made', 'no files were modified',
+  'no files were created', 'failed to complete', 'before research could begin',
+  'i was unable to', 'i could not', 'unfortunately i',
+];
+
+export function isHollowCompletion(spawnResult: SpawnResult, taskType?: string): boolean {
   // Timeout uses toolCalls === -1, not hollow
   if (spawnResult.metrics.toolCalls === -1) return false;
-  // Only catch truly empty completions: zero tools AND trivial output
-  return spawnResult.metrics.toolCalls === 0
-    && (spawnResult.output?.trim().length ?? 0) < 50;
+
+  // Truly empty completions: zero tools AND trivial output
+  if (spawnResult.metrics.toolCalls === 0
+    && (spawnResult.output?.trim().length ?? 0) < 50) {
+    return true;
+  }
+
+  // "Success" that admits failure: worker claims success but output contains failure language
+  if (spawnResult.success) {
+    const outputLower = (spawnResult.output ?? '').toLowerCase();
+    if (FAILURE_INDICATORS.some(f => outputLower.includes(f))) {
+      return true;
+    }
+  }
+
+  // V8: For implementation-oriented tasks, zero tool calls is ALWAYS hollow.
+  // A worker that makes 0 tool calls on an implement/test/refactor task did no work.
+  if (taskType && ['implement', 'test', 'refactor', 'integrate', 'deploy'].includes(taskType)) {
+    if (spawnResult.metrics.toolCalls === 0) {
+      return true;
+    }
+  }
+
+  return false;
 }
 
 // ─── Event Emitter ─────────────────────────────────────────────────────────
@@ -92,6 +123,11 @@ export class SwarmOrchestrator {
   private retries = 0;
   private startTime = 0;
   private modelUsage = new Map<string, { tasks: number; tokens: number; cost: number }>();
+
+  // Orchestrator's own LLM usage (separate from worker usage)
+  private orchestratorTokens = 0;
+  private orchestratorCost = 0;
+  private orchestratorCalls = 0;
 
   // V2: Planning, review, verification, health, persistence
   private plan?: SwarmPlan;
@@ -209,6 +245,8 @@ Rules:
         },
       );
 
+      this.trackOrchestratorUsage(response as any, 'decompose');
+
       // Use parseDecompositionResponse which handles markdown code blocks and edge cases
       return parseDecompositionResponse(response.content);
     };
@@ -256,6 +294,26 @@ Rules:
   }
 
   /**
+   * Track token usage from an orchestrator LLM call.
+   */
+  private trackOrchestratorUsage(response: { usage?: { total_tokens?: number; prompt_tokens?: number; completion_tokens?: number } }, purpose: string): void {
+    if (!response.usage) return;
+    const tokens = response.usage.total_tokens ?? ((response.usage.prompt_tokens ?? 0) + (response.usage.completion_tokens ?? 0));
+    const cost = tokens * 0.000015; // ~$15/M tokens average for orchestrator models
+    this.orchestratorTokens += tokens;
+    this.orchestratorCost += cost;
+    this.orchestratorCalls++;
+
+    this.emit({
+      type: 'swarm.orchestrator.llm' as any,
+      model: this.config.orchestratorModel,
+      purpose,
+      tokens,
+      cost,
+    });
+  }
+
+  /**
    * Execute the full swarm pipeline for a task.
    *
    * V2 pipeline:
@@ -291,6 +349,11 @@ Rules:
       this.currentPhase = 'scheduling';
       this.emit({ type: 'swarm.phase.progress', phase: 'scheduling', message: `Scheduling ${decomposition.subtasks.length} subtasks into waves...` });
       this.taskQueue.loadFromDecomposition(decomposition, this.config);
+
+      // Foundation task detection: tasks that are the sole dependency of 3+ downstream
+      // tasks are critical — if they fail, the entire swarm cascade-skips.
+      // Give them extra retries and timeout scaling.
+      this.detectFoundationTasks();
 
       // Emit skip events when tasks are cascade-skipped due to dependency failures
       this.taskQueue.setOnCascadeSkip((skippedTaskId, reason) => {
@@ -474,6 +537,8 @@ Respond with valid JSON:
         },
       );
 
+      this.trackOrchestratorUsage(response as any, 'plan');
+
       const parsed = this.parseJSON(response.content);
       if (parsed) {
         this.plan = {
@@ -555,6 +620,8 @@ Respond with valid JSON:
         ],
         { model: reviewModel, maxTokens: 2000, temperature: 0.3 },
       );
+
+      this.trackOrchestratorUsage(response as any, 'review');
 
       const parsed = this.parseJSON(response.content);
       if (!parsed) return null;
@@ -701,6 +768,8 @@ Respond with JSON: { "fixups": [{ "description": "what to fix", "type": "impleme
           ],
           { model: this.config.plannerModel ?? this.config.orchestratorModel, maxTokens: 1500, temperature: 0.3 },
         );
+
+        this.trackOrchestratorUsage(response as any, 'verification-fixup');
 
         const parsed = this.parseJSON(response.content);
         if (parsed?.fixups && parsed.fixups.length > 0) {
@@ -883,6 +952,7 @@ Respond with JSON: { "fixups": [{ "description": "what to fix", "type": "impleme
               previousFeedback: 'All tasks in this batch failed. Try a fundamentally different approach — the previous strategy did not work.',
               previousScore: 0,
               attempt: task.attempts,
+              previousModel: task.assignedModel,
             };
           }
           this.logDecision('wave-recovery',
@@ -1010,7 +1080,15 @@ Respond with JSON: { "fixups": [{ "description": "what to fix", "type": "impleme
     }
 
     try {
-      this.taskQueue.markDispatched(task.id, worker.model);
+      const dispatchedModel = task.assignedModel ?? worker.model;
+      this.taskQueue.markDispatched(task.id, dispatchedModel);
+      if (task.assignedModel && task.assignedModel !== worker.model) {
+        this.logDecision(
+          'failover',
+          `Dispatching ${task.id} with failover model ${task.assignedModel} (worker default: ${worker.model})`,
+          'Retry model override is active',
+        );
+      }
       // Pass the pre-selected worker to avoid double-selection in dispatch()
       await this.workerPool.dispatch(task, worker);
 
@@ -1018,8 +1096,12 @@ Respond with JSON: { "fixups": [{ "description": "what to fix", "type": "impleme
         type: 'swarm.task.dispatched',
         taskId: task.id,
         description: task.description,
-        model: worker.model,
+        model: dispatchedModel,
         workerName: worker.name,
+        toolCount: worker.allowedTools?.length ?? -1,  // -1 = all tools
+        tools: worker.allowedTools,
+        retryContext: task.retryContext,
+        fromModel: task.retryContext ? task.retryContext.previousModel : undefined,
       });
     } catch (error) {
       this.errors.push({
@@ -1106,13 +1188,17 @@ Respond with JSON: { "fixups": [{ "description": "what to fix", "type": "impleme
             : spawnResult.output.slice(0, 500),
           previousScore: 0,
           attempt: task.attempts,
+          previousModel: model,
+          previousFiles: taskResult.filesModified,
         };
       }
 
-      // Worker failed — use higher retry limit for rate limit errors
+      // Worker failed — use higher retry limit for rate limit errors.
+      // Foundation tasks get +1 retry to reduce cascade failure risk.
+      const baseRetries = task.isFoundation ? this.config.workerRetries + 1 : this.config.workerRetries;
       const retryLimit = (is429 || is402)
         ? (this.config.rateLimitRetries ?? 3)
-        : this.config.workerRetries;
+        : baseRetries;
       const canRetry = this.taskQueue.markFailed(taskId, retryLimit);
       if (canRetry) {
         this.retries++;
@@ -1132,21 +1218,28 @@ Respond with JSON: { "fixups": [{ "description": "what to fix", "type": "impleme
         attempt: task.attempts,
         maxAttempts: 1 + this.config.workerRetries,
         willRetry: canRetry,
+        toolCalls: spawnResult.metrics.toolCalls,
+        failoverModel: task.assignedModel !== model ? task.assignedModel : undefined,
       });
       return;
     }
 
     // V6: Hollow completion detection — workers that "succeed" without doing any work
     // Must check BEFORE recording success, otherwise hollow completions inflate health scores
-    if (isHollowCompletion(spawnResult)) {
+    if (isHollowCompletion(spawnResult, task.type)) {
       // Record health failure so hollow-prone models accumulate failure records
       // and eventually trigger failover via selectAlternativeModel
       this.healthTracker.recordFailure(model, 'error');
 
+      const admitsFailure = spawnResult.success && FAILURE_INDICATORS.some(f => (spawnResult.output ?? '').toLowerCase().includes(f));
       task.retryContext = {
-        previousFeedback: 'Previous attempt produced no meaningful output. Try again with a concrete approach.',
+        previousFeedback: admitsFailure
+          ? 'Previous attempt reported success but admitted failure (e.g., "budget exhausted", "unable to complete"). You MUST execute tool calls and produce concrete output this time.'
+          : 'Previous attempt produced no meaningful output. Try again with a concrete approach.',
         previousScore: 1,
         attempt: task.attempts,
+        previousModel: model,
+        previousFiles: taskResult.filesModified,
       };
 
       // Model failover for hollow completions — same pattern as quality failover
@@ -1166,7 +1259,8 @@ Respond with JSON: { "fixups": [{ "description": "what to fix", "type": "impleme
         }
       }
 
-      const canRetry = this.taskQueue.markFailed(taskId, this.config.workerRetries);
+      const hollowRetries = task.isFoundation ? this.config.workerRetries + 1 : this.config.workerRetries;
+      const canRetry = this.taskQueue.markFailed(taskId, hollowRetries);
       if (canRetry) this.retries++;
       this.emit({
         type: 'swarm.task.failed',
@@ -1175,6 +1269,8 @@ Respond with JSON: { "fixups": [{ "description": "what to fix", "type": "impleme
         attempt: task.attempts,
         maxAttempts: 1 + this.config.workerRetries,
         willRetry: canRetry,
+        toolCalls: spawnResult.metrics.toolCalls,
+        failoverModel: task.assignedModel !== model ? task.assignedModel : undefined,
       });
       this.logDecision('hollow-completion', `${taskId}: worker completed with 0 tool calls`, 'Marking as failed for retry');
       return;
@@ -1185,8 +1281,10 @@ Respond with JSON: { "fixups": [{ "description": "what to fix", "type": "impleme
 
     // Run quality gate if enabled — skip under API pressure, skip if circuit breaker tripped,
     // and let the final attempt through without quality gate (so tasks produce *something*)
+    // Foundation tasks get +1 retry to reduce cascade failure risk.
+    const effectiveRetries = task.isFoundation ? this.config.workerRetries + 1 : this.config.workerRetries;
     const recentRLCount = this.recentRateLimits.filter(t => t > Date.now() - 30_000).length;
-    const isLastAttempt = task.attempts >= (this.config.workerRetries + 1);
+    const isLastAttempt = task.attempts >= (effectiveRetries + 1);
     const shouldRunQualityGate = this.config.qualityGates
       && !this.qualityGateDisabled
       && !isLastAttempt
@@ -1204,13 +1302,25 @@ Respond with JSON: { "fixups": [{ "description": "what to fix", "type": "impleme
 
       this.emit({ type: 'swarm.role.action', role: 'judge', action: 'quality-gate', model: judgeModel, taskId });
 
+      // Extract file artifacts from worker output for quality gate visibility.
+      // When workers create files via write_file/edit_file, the judge needs to see
+      // the actual content — not just the worker's text claims about what was created.
+      const fileArtifacts = this.extractFileArtifacts(task, taskResult);
+
+      // Foundation tasks get a relaxed quality threshold (threshold - 1, min 2)
+      // to reduce the chance of cascade-skipping the entire swarm.
+      const baseThreshold = this.config.qualityThreshold ?? 3;
+      const qualityThreshold = task.isFoundation ? Math.max(2, baseThreshold - 1) : baseThreshold;
+
       const quality = await evaluateWorkerOutput(
         this.provider,
         judgeModel,
         task,
         taskResult,
         judgeConfig,
-        this.config.qualityThreshold ?? 3,
+        qualityThreshold,
+        (resp, purpose) => this.trackOrchestratorUsage(resp, purpose),
+        fileArtifacts,
       );
 
       taskResult.qualityScore = quality.score;
@@ -1218,7 +1328,13 @@ Respond with JSON: { "fixups": [{ "description": "what to fix", "type": "impleme
 
       if (!quality.passed) {
         this.qualityRejections++;
-        this.consecutiveQualityRejections++;
+
+        // Only count LLM-judged rejections toward circuit breaker, not pre-flight auto-rejects.
+        // Pre-flight rejects (empty artifacts, zero tool calls, closure-report failures)
+        // indicate worker problems, not quality gate over-sensitivity.
+        if (!quality.preFlightReject) {
+          this.consecutiveQualityRejections++;
+        }
 
         // Quality circuit breaker: disable gates after too many consecutive rejections
         if (this.consecutiveQualityRejections >= SwarmOrchestrator.QUALITY_CIRCUIT_BREAKER_THRESHOLD) {
@@ -1233,6 +1349,8 @@ Respond with JSON: { "fixups": [{ "description": "what to fix", "type": "impleme
           previousFeedback: quality.feedback,
           previousScore: quality.score,
           attempt: task.attempts,
+          previousModel: model,
+          previousFiles: taskResult.filesModified,
         };
 
         // V5: Model failover on severe quality rejection — but NOT on artifact auto-fails
@@ -1252,7 +1370,7 @@ Respond with JSON: { "fixups": [{ "description": "what to fix", "type": "impleme
           }
         }
 
-        const canRetry = this.taskQueue.markFailed(taskId, this.config.workerRetries);
+        const canRetry = this.taskQueue.markFailed(taskId, effectiveRetries);
         if (canRetry) {
           this.retries++;
         }
@@ -1263,6 +1381,9 @@ Respond with JSON: { "fixups": [{ "description": "what to fix", "type": "impleme
           taskId,
           score: quality.score,
           feedback: quality.feedback,
+          artifactCount: fileArtifacts.length,
+          outputLength: taskResult.output.length,
+          preFlightReject: quality.preFlightReject,
         });
         return;
       }
@@ -1352,10 +1473,16 @@ Respond with JSON: { "fixups": [{ "description": "what to fix", "type": "impleme
       activeWorkers: this.workerPool.getActiveWorkerStatus(),
       queue: stats,
       budget: {
-        tokensUsed: this.totalTokens,
+        tokensUsed: this.totalTokens + this.orchestratorTokens,
         tokensTotal: this.config.totalBudget,
-        costUsed: this.totalCost,
+        costUsed: this.totalCost + this.orchestratorCost,
         costTotal: this.config.maxCost,
+      },
+      orchestrator: {
+        tokens: this.orchestratorTokens,
+        cost: this.orchestratorCost,
+        calls: this.orchestratorCalls,
+        model: this.config.orchestratorModel,
       },
     };
   }
@@ -1438,8 +1565,8 @@ Respond with JSON: { "fixups": [{ "description": "what to fix", "type": "impleme
         waves: queueState.waves,
         currentWave: queueState.currentWave,
         stats: {
-          totalTokens: this.totalTokens,
-          totalCost: this.totalCost,
+          totalTokens: this.totalTokens + this.orchestratorTokens,
+          totalCost: this.totalCost + this.orchestratorCost,
           qualityRejections: this.qualityRejections,
           retries: this.retries,
         },
@@ -1467,9 +1594,9 @@ Respond with JSON: { "fixups": [{ "description": "what to fix", "type": "impleme
   private emitBudgetUpdate(): void {
     this.emit({
       type: 'swarm.budget.update',
-      tokensUsed: this.totalTokens,
+      tokensUsed: this.totalTokens + this.orchestratorTokens,
       tokensTotal: this.config.totalBudget,
-      costUsed: this.totalCost,
+      costUsed: this.totalCost + this.orchestratorCost,
       costTotal: this.config.maxCost,
     });
   }
@@ -1486,8 +1613,8 @@ Respond with JSON: { "fixups": [{ "description": "what to fix", "type": "impleme
       failedTasks: queueStats.failed,
       skippedTasks: queueStats.skipped,
       totalWaves: this.taskQueue.getTotalWaves(),
-      totalTokens: this.totalTokens,
-      totalCost: this.totalCost,
+      totalTokens: this.totalTokens + this.orchestratorTokens,
+      totalCost: this.totalCost + this.orchestratorCost,
       totalDurationMs: Date.now() - this.startTime,
       qualityRejections: this.qualityRejections,
       retries: this.retries,
@@ -1541,6 +1668,87 @@ Respond with JSON: { "fixups": [{ "description": "what to fix", "type": "impleme
     } catch {
       return null;
     }
+  }
+
+  /**
+   * Detect foundation tasks: tasks that are the sole dependency of 3+ downstream tasks.
+   * These are critical single-points-of-failure — mark them for extra resilience.
+   */
+  private detectFoundationTasks(): void {
+    const allTasks = this.taskQueue.getAllTasks();
+    const dependentCounts = new Map<string, number>();
+
+    for (const task of allTasks) {
+      for (const depId of task.dependencies) {
+        dependentCounts.set(depId, (dependentCounts.get(depId) ?? 0) + 1);
+      }
+    }
+
+    for (const task of allTasks) {
+      const dependentCount = dependentCounts.get(task.id) ?? 0;
+      if (dependentCount >= 3) {
+        task.isFoundation = true;
+        this.logDecision('scheduling',
+          `Foundation task: ${task.id} (${dependentCount} dependents)`,
+          'Extra retries and relaxed quality threshold applied');
+      }
+    }
+  }
+
+  /**
+   * Extract file artifacts from a worker's output for quality gate visibility.
+   * Reads actual file content from disk so the judge can verify real work,
+   * not just text claims about what was created.
+   */
+  private extractFileArtifacts(task: SwarmTask, taskResult: import('./types.js').SwarmTaskResult): Array<{ path: string; preview: string }> {
+    const artifacts: Array<{ path: string; preview: string }> = [];
+    const seen = new Set<string>();
+
+    // Collect file paths from multiple sources
+    const candidatePaths: string[] = [];
+
+    // 1. filesModified from structured closure report
+    if (taskResult.filesModified) {
+      candidatePaths.push(...taskResult.filesModified);
+    }
+
+    // 2. targetFiles from task definition
+    if (task.targetFiles) {
+      candidatePaths.push(...task.targetFiles);
+    }
+
+    // 3. Extract file paths mentioned in worker output (e.g., "Created src/foo.ts")
+    const filePathPattern = /(?:created|wrote|modified|edited|updated)\s+["`']?([^\s"`',]+\.\w+)/gi;
+    let match;
+    while ((match = filePathPattern.exec(taskResult.output)) !== null) {
+      candidatePaths.push(match[1]);
+    }
+
+    // Resolve against the target project directory, not CWD
+    const baseDir = this.config.facts?.workingDirectory ?? process.cwd();
+
+    // Read previews from disk
+    for (const filePath of candidatePaths) {
+      if (seen.has(filePath)) continue;
+      seen.add(filePath);
+
+      try {
+        const resolved = path.resolve(baseDir, filePath);
+        if (fs.existsSync(resolved)) {
+          const content = fs.readFileSync(resolved, 'utf-8');
+          if (content.length > 0) {
+            artifacts.push({ path: filePath, preview: content.slice(0, 500) });
+          }
+        }
+      } catch {
+        // Skip unreadable files
+      }
+
+      // Limit to 10 files to keep prompt size reasonable
+      if (artifacts.length >= 10) break;
+    }
+
+    return artifacts;
   }
 
   /** Get a model health summary for emitting events. */

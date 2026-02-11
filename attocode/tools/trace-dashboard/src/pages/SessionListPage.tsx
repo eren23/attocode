@@ -267,7 +267,14 @@ export function SessionListPage() {
                     to={`/session/${encodeURIComponent(session.filePath)}`}
                     className="text-blue-400 hover:text-blue-300 hover:underline"
                   >
-                    <span className="block max-w-md truncate">{session.task}</span>
+                    <span className="flex items-center gap-2 max-w-md">
+                      <span className="truncate">{session.task}</span>
+                      {session.isSwarm && (
+                        <span className="flex-shrink-0 inline-flex items-center px-1.5 py-0.5 text-xs font-medium rounded bg-purple-500/20 text-purple-400 border border-purple-500/30">
+                          Swarm
+                        </span>
+                      )}
+                    </span>
                   </Link>
                   <span className="text-xs text-gray-500 font-mono">{session.id}</span>
                 </td>

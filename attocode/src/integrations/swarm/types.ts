@@ -9,6 +9,7 @@ import type { SubtaskType, SmartSubtask } from '../smart-decomposer.js';
 import type { AgentOutput, SynthesisResult } from '../result-synthesizer.js';
 import type { StructuredClosureReport } from '../agent-registry.js';
 import type { ThrottleConfig } from './request-throttle.js';
+import type { PolicyProfile } from '../../types.js';
 
 // ─── Worker Roles ─────────────────────────────────────────────────────────
 
@@ -96,7 +97,7 @@ export interface SwarmConfig {
   /** Session ID to resume from (set by --swarm-resume) */
   resumeSessionId?: string;
 
-  /** Tool access mode: 'whitelist' uses worker.allowedTools, 'all' gives all tools including MCP (default: 'all') */
+  /** Tool access mode: 'whitelist' uses worker.allowedTools, 'all' gives all tools including MCP (default: 'whitelist') */
   toolAccessMode?: 'whitelist' | 'all';
 
   /** Tools to deny when toolAccessMode is 'all' */
@@ -157,6 +158,23 @@ export interface SwarmConfig {
    *  When a task's completed deps / total deps >= this threshold, the task runs with partial context
    *  instead of being cascade-skipped. Set to 1.0 for strict all-or-nothing behavior. */
   partialDependencyThreshold?: number;
+
+  /** Permission overrides for swarm workers (loaded from swarm.yaml permissions:) */
+  permissions?: {
+    /** Permission mode override for workers */
+    mode?: 'auto-safe' | 'interactive' | 'strict' | 'yolo';
+    /** Tools to auto-approve for all workers */
+    autoApprove?: string[];
+    /** Scoped approvals (tool -> { paths: string[] }) */
+    scopedApprove?: Record<string, { paths: string[] }>;
+    /** Tools requiring explicit approval */
+    requireApproval?: string[];
+    /** Additional commands to allow in sandbox */
+    additionalAllowedCommands?: string[];
+  };
+
+  /** Named policy profiles for workers (overrides global defaults by name) */
+  policyProfiles?: Record<string, PolicyProfile>;
 }
 
 /**
@@ -206,9 +224,17 @@ export const DEFAULT_SWARM_CONFIG: Omit<SwarmConfig, 'orchestratorModel' | 'work
   maxVerificationRetries: 2,
   rateLimitRetries: 3,
   taskTypeTimeouts: {
-    research: 300_000,  // 5 min for research (web searches take time)
+    research: 300_000,      // 5 min for research (web searches take time)
     analysis: 300_000,
-    merge: 180_000,     // 3 min for synthesis
+    design: 300_000,        // 5 min for design tasks
+    merge: 180_000,         // 3 min for synthesis
+    implement: 300_000,     // 5 min for implementation
+    test: 240_000,          // 4 min for test writing
+    refactor: 240_000,      // 4 min for refactoring
+    integrate: 300_000,     // 5 min for integration
+    deploy: 240_000,        // 4 min for deploy tasks
+    document: 240_000,      // 4 min for documentation
+    review: 240_000,        // 4 min for code review
   },
 };
 
@@ -244,6 +270,9 @@ export interface SwarmWorkerSpec {
 
   /** Per-worker behavioral instructions for system prompt */
   persona?: string;
+
+  /** Optional named policy profile (resolved against policyProfiles/defaults) */
+  policyProfile?: string;
 
   /** Hierarchical role (default: 'executor') */
   role?: WorkerRole;
@@ -302,11 +331,21 @@ export interface SwarmTask {
   dependencyContext?: string;
 
   /** Context from previous failed attempt (quality rejection or error) for retry prompts */
-  retryContext?: { previousFeedback: string; previousScore: number; attempt: number };
+  retryContext?: { previousFeedback: string; previousScore: number; attempt: number; previousModel?: string; previousFiles?: string[] };
 
   /** Partial dependency context when some deps failed but threshold met.
    *  Lists which deps succeeded and which failed so the worker can adapt. */
   partialContext?: { succeeded: string[]; failed: string[]; ratio: number };
+
+  /** Whether this is a foundation task (sole dependency of 3+ downstream tasks).
+   *  Foundation tasks get extra retries, relaxed quality gates, and timeout scaling. */
+  isFoundation?: boolean;
+
+  /** Number of tools available to the worker (-1 = all tools) */
+  toolCount?: number;
+
+  /** List of tool names available to the worker */
+  tools?: string[];
 
   /** Original SmartSubtask for reference */
   originalSubtask?: SmartSubtask;
@@ -345,6 +384,9 @@ export interface SwarmTaskResult {
 
   /** Findings posted to blackboard */
   findings?: string[];
+
+  /** Number of tool calls made by the worker */
+  toolCalls?: number;
 
   /** Model that executed this task */
   model: string;
@@ -467,6 +509,14 @@ export interface SwarmStatus {
     tokensTotal: number;
     costUsed: number;
     costTotal: number;
+  };
+
+  /** Orchestrator's own LLM usage (separate from worker usage) */
+  orchestrator?: {
+    tokens: number;
+    cost: number;
+    calls: number;
+    model: string;
   };
 }
 

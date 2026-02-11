@@ -301,6 +301,45 @@ models:
     const config = yamlToSwarmConfig(yaml, 'test/orch');
     expect(config.qualityGateModel).toBe('test/gate-model');
   });
+
+  it('should load quality gates from quality.gates and quality.gate_model', () => {
+    const yaml = parseSwarmYaml(`
+quality:
+  gates: true
+  gate_model: test/quality-model
+`);
+    const config = yamlToSwarmConfig(yaml, 'test/orch');
+    expect(config.qualityGates).toBe(true);
+    expect(config.qualityGateModel).toBe('test/quality-model');
+  });
+
+  it('should load resilience snake_case aliases', () => {
+    const yaml = parseSwarmYaml(`
+resilience:
+  max_concurrency: 4
+  worker_retries: 3
+  rate_limit_retries: 5
+  dispatch_stagger_ms: 250
+  model_failover: false
+`);
+    const config = yamlToSwarmConfig(yaml, 'test/orch');
+    expect(config.maxConcurrency).toBe(4);
+    expect(config.workerRetries).toBe(3);
+    expect(config.rateLimitRetries).toBe(5);
+    expect(config.dispatchStaggerMs).toBe(250);
+    expect(config.enableModelFailover).toBe(false);
+  });
+
+  it('should load communication snake_case aliases', () => {
+    const yaml = parseSwarmYaml(`
+communication:
+  dependency_context_max_length: 3000
+  include_file_list: false
+`);
+    const config = yamlToSwarmConfig(yaml, 'test/orch');
+    expect(config.communication?.dependencyContextMaxLength).toBe(3000);
+    expect(config.communication?.includeFileList).toBe(false);
+  });
 });
 
 describe('normalizeCapabilities', () => {

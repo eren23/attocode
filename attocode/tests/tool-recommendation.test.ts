@@ -130,6 +130,17 @@ describe('inferTaskType', () => {
   it('should default to research for unknown agent', () => {
     expect(ToolRecommendationEngine.inferTaskType('unknown')).toBe('research');
   });
+
+  it('should map dynamic swarm worker names by role token', () => {
+    expect(ToolRecommendationEngine.inferTaskType('swarm-coder-task-1')).toBe('implement');
+    expect(ToolRecommendationEngine.inferTaskType('swarm-tester-task-2')).toBe('test');
+    expect(ToolRecommendationEngine.inferTaskType('swarm-reviewer-task-3')).toBe('review');
+    expect(ToolRecommendationEngine.inferTaskType('swarm-researcher-task-4')).toBe('research');
+  });
+
+  it('should default unknown swarm workers to implement', () => {
+    expect(ToolRecommendationEngine.inferTaskType('swarm-foo-task-9')).toBe('implement');
+  });
 });
 
 describe('createToolRecommendationEngine', () => {

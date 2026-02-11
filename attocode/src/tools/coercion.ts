@@ -22,3 +22,17 @@ export function coerceBoolean() {
     return val;
   }, z.boolean());
 }
+
+/**
+ * A string schema that accepts arrays by joining elements with newlines.
+ * Weaker models (GLM-4, Qwen, etc.) sometimes send file content as an array
+ * of lines instead of a single string. This coerces arrays into proper strings.
+ */
+export function coerceString() {
+  return z.preprocess((val) => {
+    if (Array.isArray(val)) {
+      return val.map(item => String(item)).join('\n');
+    }
+    return val;
+  }, z.string());
+}

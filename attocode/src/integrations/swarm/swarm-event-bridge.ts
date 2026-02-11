@@ -153,6 +153,7 @@ export class SwarmEventBridge {
     const immediateTriggers = ['swarm.complete', 'swarm.plan.complete', 'swarm.review.complete', 'swarm.verify.complete', 'swarm.state.checkpoint'];
     const debouncedTriggers = [
       'swarm.task.dispatched', 'swarm.task.completed', 'swarm.task.failed', 'swarm.task.skipped',
+      'swarm.quality.rejected',
       'swarm.budget.update', 'swarm.wave.start', 'swarm.wave.complete', 'swarm.phase.progress',
     ];
     if (immediateTriggers.includes(event.type)) {
@@ -183,6 +184,9 @@ export class SwarmEventBridge {
           status: 'dispatched',
           assignedModel: event.model,
           description: event.description,
+          toolCount: event.toolCount,
+          tools: event.tools,
+          retryContext: event.retryContext,
         });
         if (!this.config.workerModels.includes(event.model)) {
           this.config.workerModels.push(event.model);
@@ -223,29 +227,26 @@ export class SwarmEventBridge {
           failedCount: this.lastStatus?.queue.failed ?? 0,
         });
         // V5: Write per-task detail file for drill-down in dashboard
-        if (event.output) {
-          try {
-            const tasksDir = path.join(this.outputDir, 'tasks');
-            fs.mkdirSync(tasksDir, { recursive: true });
-            const taskFile = path.join(tasksDir, `${event.taskId}.json`);
-            fs.writeFileSync(taskFile, JSON.stringify({
-              taskId: event.taskId,
-              output: event.output,
-              qualityFeedback: event.qualityFeedback,
-              closureReport: event.closureReport,
-              toolCalls: event.toolCalls,
-            }));
-          } catch {
-            // Best effort — don't crash the bridge
-          }
-        }
+        // Always write — even if output is empty, we still have quality/closure data
+        this.writeTaskDetail(event.taskId, {
+          taskId: event.taskId,
+          output: event.output ?? '',
+          qualityFeedback: event.qualityFeedback,
+          closureReport: event.closureReport,
+          toolCalls: event.toolCalls,
+        });
         break;
       }
 
       case 'swarm.task.failed':
-        if (!event.willRetry) {
-          this.updateTask(event.taskId, { status: 'failed' });
-        }
+        this.updateTask(event.taskId, { status: event.willRetry ? 'ready' : 'failed' });
+        // Write detail file for failed tasks too
+        this.writeTaskDetail(event.taskId, {
+          taskId: event.taskId,
+          output: `FAILED (attempt ${event.attempt}/${event.maxAttempts}): ${event.error}`,
+          toolCalls: event.toolCalls ?? -1,
+          failoverModel: event.failoverModel,
+        });
         this.errors.push({
           ts,
           taskId: event.taskId,
@@ -259,11 +260,12 @@ export class SwarmEventBridge {
         break;
 
       case 'swarm.quality.rejected':
+        this.updateTask(event.taskId, { status: 'failed' });
         this.errors.push({
           ts,
           taskId: event.taskId,
           phase: 'quality-gate',
-          message: `Score ${event.score}/5: ${event.feedback}`,
+          message: `Score ${event.score}/5: ${event.feedback} [artifacts: ${event.artifactCount}, output: ${event.outputLength} chars${event.preFlightReject ? ', pre-flight reject' : ''}]`,
         });
         break;
 
@@ -289,7 +291,10 @@ export class SwarmEventBridge {
         break;
 
       case 'swarm.complete':
-        // Mark remaining pending tasks
+        // Update phase to completed in the last status so state.json reflects final state
+        if (this.lastStatus) {
+          this.lastStatus = { ...this.lastStatus, phase: 'completed' };
+        }
         break;
 
       // V2 events
@@ -400,6 +405,20 @@ export class SwarmEventBridge {
   }
 
   /**
+   * Write a per-task detail JSON file for dashboard drill-down.
+   */
+  private writeTaskDetail(taskId: string, detail: Record<string, unknown>): void {
+    try {
+      const tasksDir = path.join(this.outputDir, 'tasks');
+      fs.mkdirSync(tasksDir, { recursive: true });
+      const taskFile = path.join(tasksDir, `${taskId}.json`);
+      fs.writeFileSync(taskFile, JSON.stringify(detail));
+    } catch {
+      // Best effort — don't crash the bridge
+    }
+  }
+
+  /**
    * Build the current SwarmLiveState snapshot.
    */
   private buildState(): SwarmLiveState {
@@ -496,6 +515,12 @@ export class SwarmEventBridge {
     const state = this.buildState();
 
     if (immediate) {
+      // Cancel any pending debounced write — the immediate write supersedes it
+      if (this.stateWriteTimer) {
+        clearTimeout(this.stateWriteTimer);
+        this.stateWriteTimer = null;
+        this.pendingState = null;
+      }
       this.writeStateSync(state);
       return;
     }

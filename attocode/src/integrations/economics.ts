@@ -108,6 +108,8 @@ export interface PhaseState {
   consecutiveTestFailures: number;
   /** Whether agent is in a test-fix cycle */
   inTestFixCycle: boolean;
+  /** Consecutive bash command failures (any command, not just tests) */
+  consecutiveBashFailures: number;
 }
 
 /**
@@ -228,6 +230,13 @@ Do not retry the same fix. Try a new approach.`;
 /**
  * Phase budget exploration exceeded prompt.
  */
+const BASH_FAILURE_CASCADE_PROMPT = (failures: number) =>
+`[System] ${failures} consecutive bash commands have failed. STOP and explain:
+1. What are you trying to accomplish?
+2. Why are the commands failing?
+3. What is your alternative approach?
+Do not run another bash command until you've explained the issue.`;
+
 const EXPLORATION_BUDGET_EXCEEDED_PROMPT = (pct: number) =>
 `[System] You've spent ${pct}% of your iterations in exploration. Start making edits NOW.
 Do not read more files. Use what you know to make the fix.`;
@@ -238,6 +247,25 @@ Do not read more files. Use what you know to make the fix.`;
 const VERIFICATION_RESERVE_PROMPT =
 `[System] You are running low on iterations. Run your tests NOW to verify your changes.
 Do not make more edits until you've confirmed whether the current fix works.`;
+
+/**
+ * Extract success and output from a bash tool result.
+ * In production, bash results are objects `{ success, output, metadata }`.
+ * Tests may pass strings directly. This normalizes both.
+ */
+export function extractBashResult(result: unknown): { success: boolean; output: string } {
+  if (result && typeof result === 'object') {
+    const obj = result as Record<string, unknown>;
+    return {
+      success: obj.success !== false,
+      output: typeof obj.output === 'string' ? obj.output : '',
+    };
+  }
+  if (typeof result === 'string') {
+    return { success: true, output: result };
+  }
+  return { success: true, output: '' };
+}
 
 /**
  * Primary argument keys that identify the *target* of a tool call.
@@ -350,6 +378,7 @@ export class ExecutionEconomicsManager {
       lastTestPassed: null,
       consecutiveTestFailures: 0,
       inTestFixCycle: false,
+      consecutiveBashFailures: 0,
     };
 
     this.startTime = Date.now();
@@ -497,6 +526,18 @@ export class ExecutionEconomicsManager {
       this.progress.lastMeaningfulProgress = now;
       this.progress.stuckCount = 0;
 
+      // Extract result from bash tool output (object or string)
+      const bashResult = extractBashResult(_result);
+
+      // Track consecutive bash failures (any bash command, not just tests)
+      if (_result !== undefined) {
+        if (!bashResult.success) {
+          this.phaseState.consecutiveBashFailures++;
+        } else {
+          this.phaseState.consecutiveBashFailures = 0;
+        }
+      }
+
       // Detect test runs and track outcomes
       if (command.includes('test') || command.includes('pytest') || command.includes('npm test') || command.includes('jest')) {
         this.phaseState.testsRun++;
@@ -505,10 +546,9 @@ export class ExecutionEconomicsManager {
           this.transitionPhase('verifying', 'Tests run after edits');
         }
 
-        // Track test pass/fail from result if available
-        if (_result !== undefined) {
-          const resultStr = typeof _result === 'string' ? _result : '';
-          this.parseTestOutcome(command, resultStr);
+        // Fix: extract output from result object, not treat as string
+        if (bashResult.output) {
+          this.parseTestOutcome(command, bashResult.output);
         }
       }
     }
@@ -772,6 +812,22 @@ export class ExecutionEconomicsManager {
     }
 
     // =========================================================================
+    // BASH FAILURE CASCADE - Strong intervention after 3+ consecutive failures
+    // =========================================================================
+    if (this.phaseState.consecutiveBashFailures >= 3) {
+      return {
+        canContinue: true,
+        reason: `${this.phaseState.consecutiveBashFailures} consecutive bash failures`,
+        budgetType: 'iterations',
+        isHardLimit: false,
+        isSoftLimit: true,
+        percentUsed: (this.usage.iterations / this.budget.targetIterations) * 100,
+        suggestedAction: 'warn',
+        injectedPrompt: BASH_FAILURE_CASCADE_PROMPT(this.phaseState.consecutiveBashFailures),
+      };
+    }
+
+    // =========================================================================
     // PHASE-AWARE BUDGET ALLOCATION (opt-in, used in eval mode)
     // =========================================================================
     if (this.phaseBudget?.enabled) {
@@ -1014,6 +1070,13 @@ export class ExecutionEconomicsManager {
   }
 
   /**
+   * Get actual file paths modified during this session.
+   */
+  getModifiedFilePaths(): string[] {
+    return [...this.progress.filesModified];
+  }
+
+  /**
    * Get doom loop detection state.
    */
   getLoopState(): LoopDetectionState {
@@ -1034,6 +1097,7 @@ export class ExecutionEconomicsManager {
     lastTestPassed: boolean | null;
     consecutiveTestFailures: number;
     inTestFixCycle: boolean;
+    consecutiveBashFailures: number;
   } {
     return {
       phase: this.phaseState.phase,
@@ -1046,6 +1110,7 @@ export class ExecutionEconomicsManager {
       lastTestPassed: this.phaseState.lastTestPassed,
       consecutiveTestFailures: this.phaseState.consecutiveTestFailures,
       inTestFixCycle: this.phaseState.inTestFixCycle,
+      consecutiveBashFailures: this.phaseState.consecutiveBashFailures,
     };
   }
 
@@ -1107,6 +1172,7 @@ export class ExecutionEconomicsManager {
       lastTestPassed: null,
       consecutiveTestFailures: 0,
       inTestFixCycle: false,
+      consecutiveBashFailures: 0,
     };
 
     this.startTime = Date.now();

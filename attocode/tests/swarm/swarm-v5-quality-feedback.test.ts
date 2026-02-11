@@ -336,7 +336,7 @@ describe('V5: Event bridge writes per-task detail files', () => {
     }
   });
 
-  it('should NOT write task detail file when output is missing', async () => {
+  it('should write task detail file even when output is missing', async () => {
     const fs = await import('node:fs');
     const path = await import('node:path');
     const os = await import('node:os');
@@ -379,9 +379,13 @@ describe('V5: Event bridge writes per-task detail files', () => {
       // Small delay to let write stream fully close
       await new Promise(resolve => setTimeout(resolve, 50));
 
-      // Should not write task file when no output
+      // Should still write task detail file even when output is empty
+      // (the file contains quality/closure metadata useful for dashboard)
       const taskFile = path.join(tmpDir, 'tasks', 'st-1.json');
-      expect(fs.existsSync(taskFile)).toBe(false);
+      expect(fs.existsSync(taskFile)).toBe(true);
+      const detail = JSON.parse(fs.readFileSync(taskFile, 'utf-8'));
+      expect(detail.taskId).toBe('st-1');
+      expect(detail.output).toBe('');
     } finally {
       fs.rmSync(tmpDir, { recursive: true, force: true });
     }

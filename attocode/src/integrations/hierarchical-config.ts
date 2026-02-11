@@ -571,7 +571,13 @@ export function getSampleGlobalConfig(): Record<string, unknown> {
     // Safety settings
     sandbox: {
       enabled: true,
+      // Operational sandbox limits (low-level)
       allowedCommands: ['node', 'npm', 'npx', 'git', 'ls', 'cat'],
+    },
+    // Preferred policy model (high-level behavior)
+    policyEngine: {
+      enabled: true,
+      defaultProfile: 'code-full',
     },
     humanInLoop: { enabled: true, riskThreshold: 'high' },
 
@@ -595,6 +601,17 @@ export function getSampleWorkspaceConfig(): Record<string, unknown> {
     sandbox: {
       allowedPaths: ['.', './src', './tests'],
       allowedCommands: ['npm', 'npx', 'node', 'tsc', 'eslint', 'prettier'],
+    },
+    policyEngine: {
+      profiles: {
+        'project-safe': {
+          toolAccessMode: 'whitelist',
+          allowedTools: ['read_file', 'write_file', 'edit_file', 'glob', 'grep', 'bash'],
+          bashMode: 'read_only',
+          bashWriteProtection: 'block_file_mutation',
+        },
+      },
+      defaultProfile: 'project-safe',
     },
 
     // Project context

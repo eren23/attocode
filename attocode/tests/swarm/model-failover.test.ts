@@ -94,13 +94,12 @@ describe('selectAlternativeModel', () => {
     expect(alt!.model).toBe('model/b');
   });
 
-  it('should fall back to FALLBACK_WORKERS when no config alternatives exist', () => {
+  it('should return undefined when no config alternatives exist (no ghost models)', () => {
     const tracker = new ModelHealthTracker();
     const alt = selectAlternativeModel(workers, 'model/c', 'research', tracker);
-    // V7: No config worker alternative, but FALLBACK_WORKERS has a researcher
-    expect(alt).toBeDefined();
-    expect(alt!.model).not.toBe('model/c');
-    expect(alt!.capabilities).toContain('research');
+    // No configured worker has 'research' capability — return undefined instead of
+    // injecting unconfigured ghost models from FALLBACK_WORKERS
+    expect(alt).toBeUndefined();
   });
 
   it('should fall back to code workers when write capability has no match', () => {

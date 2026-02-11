@@ -39,6 +39,10 @@ export interface AgentDefinition {
   tags?: string[];               // Additional tags for discovery
   /** Control MCP tool access: true = all MCP tools (default), false = none, string[] = specific names */
   allowMcpTools?: boolean | string[];
+  /** Optional named policy profile */
+  policyProfile?: string;
+  /** Optional explicit task type hint for policy/tool resolution */
+  taskType?: import('./smart-decomposer.js').SubtaskType;
 }
 
 /**
@@ -80,6 +84,8 @@ export interface SpawnResult {
   structured?: StructuredClosureReport;
   /** Reference ID in SubagentOutputStore for retrieving full output */
   outputStoreId?: string;
+  /** Actual file paths modified by the subagent (from economics tracker) */
+  filesModified?: string[];
 }
 
 /**

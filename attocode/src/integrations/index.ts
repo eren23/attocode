@@ -23,6 +23,25 @@ export {
   type ApprovalScope,
 } from './safety.js';
 export { RoutingManager, createRoutingManager } from './routing.js';
+export {
+  DEFAULT_POLICY_PROFILES,
+  DEFAULT_POLICY_ENGINE_CONFIG,
+  resolvePolicyProfile,
+  isToolAllowedByProfile,
+  evaluateBashCommandByProfile,
+  mergeApprovalScopeWithProfile,
+  type ResolvePolicyProfileOptions,
+  type ResolvedPolicyProfile,
+} from './policy-engine.js';
+export {
+  detectFileMutationViaBash,
+  evaluateBashPolicy,
+  isReadOnlyBashCommand,
+  isWriteLikeBashCommand,
+  type BashMode,
+  type BashWriteProtection,
+  type BashPolicyDecision,
+} from './bash-policy.js';
 
 // Rules system (from Lesson 12)
 export {
@@ -498,6 +517,7 @@ export {
   CodebaseContextManager,
   createCodebaseContext,
   buildContextFromChunks,
+  generateLightweightRepoMap,
   summarizeRepoStructure,
   type CodeChunk,
   type MinimalCodeChunk,

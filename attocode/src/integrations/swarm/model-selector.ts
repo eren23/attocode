@@ -41,6 +41,7 @@ export const FALLBACK_WORKERS: SwarmWorkerSpec[] = [
     capabilities: ['code', 'test'],
     contextWindow: 262144,
     allowedTools: ['read_file', 'write_file', 'edit_file', 'glob', 'grep', 'bash'],
+    policyProfile: 'code-strict-bash',
   },
   {
     name: 'coder-alt',
@@ -48,6 +49,7 @@ export const FALLBACK_WORKERS: SwarmWorkerSpec[] = [
     capabilities: ['code', 'test'],
     contextWindow: 202000,
     allowedTools: ['read_file', 'write_file', 'edit_file', 'glob', 'grep', 'bash'],
+    policyProfile: 'code-strict-bash',
   },
   {
     name: 'coder-alt2',
@@ -55,6 +57,7 @@ export const FALLBACK_WORKERS: SwarmWorkerSpec[] = [
     capabilities: ['code', 'test'],
     contextWindow: 65536,
     allowedTools: ['read_file', 'write_file', 'edit_file', 'glob', 'grep', 'bash'],
+    policyProfile: 'code-strict-bash',
   },
   // ── Researcher (separate provider from all coders) ──
   {
@@ -63,6 +66,7 @@ export const FALLBACK_WORKERS: SwarmWorkerSpec[] = [
     capabilities: ['research', 'review'],
     contextWindow: 262144,
     allowedTools: ['read_file', 'list_files', 'glob', 'grep'],
+    policyProfile: 'research-safe',
   },
   // ── Documenter (cheap, shares Mistral pool but low usage) ──
   {
@@ -71,6 +75,7 @@ export const FALLBACK_WORKERS: SwarmWorkerSpec[] = [
     capabilities: ['document'],
     contextWindow: 262144,
     allowedTools: ['read_file', 'write_file', 'glob'],
+    policyProfile: 'code-strict-bash',
   },
 ];
 
@@ -217,6 +222,7 @@ export async function autoDetectWorkerModels(options: ModelSelectorOptions): Pro
         capabilities: ['code', 'test'],
         contextWindow: m.context_length,
         allowedTools: ['read_file', 'write_file', 'edit_file', 'glob', 'grep', 'bash'],
+        policyProfile: 'code-strict-bash',
       });
     }
 
@@ -232,6 +238,7 @@ export async function autoDetectWorkerModels(options: ModelSelectorOptions): Pro
         capabilities: ['research', 'review'],
         contextWindow: m.context_length,
         allowedTools: ['read_file', 'list_files', 'glob', 'grep'],
+        policyProfile: 'research-safe',
       });
     }
 
@@ -244,6 +251,7 @@ export async function autoDetectWorkerModels(options: ModelSelectorOptions): Pro
         capabilities: ['document'],
         contextWindow: docModels[0].context_length,
         allowedTools: ['read_file', 'write_file', 'glob'],
+        policyProfile: 'code-strict-bash',
       });
     }
 
@@ -289,6 +297,7 @@ async function fetchOpenRouterModels(apiKey: string): Promise<OpenRouterModel[]>
  * Get fallback worker specs when API detection fails.
  */
 function getFallbackWorkers(orchestratorModel: string): SwarmWorkerSpec[] {
+  console.warn('[swarm] Using hardcoded fallback workers — no workers configured or API detection failed');
   return [
     ...FALLBACK_WORKERS,
     {
@@ -468,22 +477,8 @@ export function selectAlternativeModel(
     if (anyCodeAlt.length > 0) return anyCodeAlt[0];
   }
 
-  // Last resort: check FALLBACK_WORKERS for the needed capability.
-  // This handles the case where all config workers share the same model
-  // and no alternative exists within the user's config.
-  const fallbackAlts = FALLBACK_WORKERS.filter(w =>
-    w.model !== failedModel &&
-    w.capabilities.includes(capability) &&
-    healthTracker.isHealthy(w.model),
-  );
-  if (fallbackAlts.length > 0) return fallbackAlts[0];
-
-  // Even unhealthy fallbacks are better than nothing
-  const anyFallback = FALLBACK_WORKERS.filter(w =>
-    w.model !== failedModel &&
-    w.capabilities.includes(capability),
-  );
-  if (anyFallback.length > 0) return anyFallback[0];
-
+  // No alternative found within configured workers — return undefined.
+  // Do NOT fall through to FALLBACK_WORKERS; injecting unconfigured models
+  // ("ghost models") causes hollow completions and wasted budget.
   return undefined;
 }

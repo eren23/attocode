@@ -67,6 +67,16 @@ import type {
   DecisionEntry,
   IterationWrapperEntry,
   EnhancedTraceConfig,
+  // Swarm trace types
+  SwarmStartEntry,
+  SwarmDecompositionEntry,
+  SwarmWaveEntry,
+  SwarmTaskEntry,
+  SwarmQualityEntry,
+  SwarmBudgetEntry,
+  SwarmVerificationEntry,
+  SwarmCompleteEntry,
+  ContextCompactionEntry,
 } from './types.js';
 import { DEFAULT_TRACE_CONFIG, DEFAULT_ENHANCED_TRACE_CONFIG } from './types.js';
 import type { AgentMetrics, Span } from '../observability/types.js';
@@ -91,7 +101,139 @@ export type TraceEvent =
   | { type: 'plan.evolution'; data: PlanEvolutionData }
   | { type: 'subagent.link'; data: SubagentLinkData }
   | { type: 'decision'; data: DecisionData }
-  | { type: 'error'; data: ErrorData };
+  | { type: 'error'; data: ErrorData }
+  // Swarm events
+  | { type: 'swarm.start'; data: SwarmStartData }
+  | { type: 'swarm.decomposition'; data: SwarmDecompositionData }
+  | { type: 'swarm.wave'; data: SwarmWaveData }
+  | { type: 'swarm.task'; data: SwarmTaskData }
+  | { type: 'swarm.quality'; data: SwarmQualityData }
+  | { type: 'swarm.budget'; data: SwarmBudgetData }
+  | { type: 'swarm.verification'; data: SwarmVerificationData }
+  | { type: 'swarm.complete'; data: SwarmCompleteData }
+  | { type: 'swarm.orchestrator.llm'; data: SwarmOrchestratorLLMData }
+  | { type: 'swarm.wave.allFailed'; data: SwarmWaveAllFailedData }
+  | { type: 'swarm.phase.progress'; data: SwarmPhaseProgressData }
+  | { type: 'context.compacted'; data: ContextCompactionData };
+
+/**
+ * Swarm start data.
+ */
+export interface SwarmStartData {
+  taskCount: number;
+  config: { maxConcurrency: number; totalBudget: number; maxCost: number };
+}
+
+/**
+ * Swarm decomposition data.
+ */
+export interface SwarmDecompositionData {
+  tasks: Array<{ id: string; description: string; type: string; wave: number; deps: string[] }>;
+  totalWaves: number;
+}
+
+/**
+ * Swarm wave data.
+ */
+export interface SwarmWaveData {
+  phase: 'start' | 'complete';
+  wave: number;
+  taskCount: number;
+  completed?: number;
+  failed?: number;
+}
+
+/**
+ * Swarm task data.
+ */
+export interface SwarmTaskData {
+  phase: 'dispatched' | 'completed' | 'failed' | 'skipped';
+  taskId: string;
+  model?: string;
+  tokensUsed?: number;
+  costUsed?: number;
+  qualityScore?: number;
+  error?: string;
+  reason?: string;
+}
+
+/**
+ * Swarm quality data.
+ */
+export interface SwarmQualityData {
+  taskId: string;
+  score: number;
+  feedback: string;
+}
+
+/**
+ * Swarm budget data.
+ */
+export interface SwarmBudgetData {
+  tokensUsed: number;
+  tokensTotal: number;
+  costUsed: number;
+  costTotal: number;
+}
+
+/**
+ * Swarm verification data.
+ */
+export interface SwarmVerificationData {
+  phase: 'start' | 'step' | 'complete';
+  stepIndex?: number;
+  description?: string;
+  passed?: boolean;
+  summary?: string;
+}
+
+/**
+ * Swarm complete data.
+ */
+export interface SwarmCompleteData {
+  stats: {
+    totalTasks: number;
+    completedTasks: number;
+    failedTasks: number;
+    totalTokens: number;
+    totalCost: number;
+    totalDuration: number;
+  };
+}
+
+/**
+ * Swarm orchestrator LLM call data.
+ */
+export interface SwarmOrchestratorLLMData {
+  model: string;
+  purpose: string;
+  tokens: number;
+  cost: number;
+}
+
+/**
+ * Swarm wave all-failed data.
+ */
+export interface SwarmWaveAllFailedData {
+  wave: number;
+}
+
+/**
+ * Swarm phase progress data.
+ */
+export interface SwarmPhaseProgressData {
+  phase: 'decomposing' | 'planning' | 'scheduling';
+  message: string;
+}
+
+/**
+ * Context compaction data.
+ */
+export interface ContextCompactionData {
+  tokensBefore: number;
+  tokensAfter: number;
+  recoveryInjected: boolean;
+}
 
 /**
  * LLM request data.
@@ -740,6 +882,34 @@ export class TraceCollector {
       case 'error':
         await this.recordError(event.data);
         break;
+      // Swarm events
+      case 'swarm.start':
+        await this.recordSwarmStart(event.data);
+        break;
+      case 'swarm.decomposition':
+        await this.recordSwarmDecomposition(event.data);
+        break;
+      case 'swarm.wave':
+        await this.recordSwarmWave(event.data);
+        break;
+      case 'swarm.task':
+        await this.recordSwarmTask(event.data);
+        break;
+      case 'swarm.quality':
+        await this.recordSwarmQuality(event.data);
+        break;
+      case 'swarm.budget':
+        await this.recordSwarmBudget(event.data);
+        break;
+      case 'swarm.verification':
+        await this.recordSwarmVerification(event.data);
+        break;
+      case 'swarm.complete':
+        await this.recordSwarmComplete(event.data);
+        break;
+      case 'context.compacted':
+        await this.recordContextCompaction(event.data);
+        break;
     }
   }
 
@@ -1220,6 +1390,126 @@ export class TraceCollector {
       traceId: this.traceId!,
       decision,
     } as DecisionEntry);
+  }
+
+  // ===========================================================================
+  // SWARM TRACE RECORDING
+  // ===========================================================================
+
+  /** Budget event counter for sampling (only record every 5th). */
+  private swarmBudgetCounter: number = 0;
+
+  private async recordSwarmStart(data: SwarmStartData): Promise<void> {
+    await this.writeEntry({
+      _type: 'swarm.start',
+      _ts: new Date().toISOString(),
+      traceId: this.traceId!,
+      taskCount: data.taskCount,
+      config: data.config,
+    } as SwarmStartEntry);
+  }
+
+  private async recordSwarmDecomposition(data: SwarmDecompositionData): Promise<void> {
+    await this.writeEntry({
+      _type: 'swarm.decomposition',
+      _ts: new Date().toISOString(),
+      traceId: this.traceId!,
+      tasks: data.tasks,
+      totalWaves: data.totalWaves,
+    } as SwarmDecompositionEntry);
+  }
+
+  private async recordSwarmWave(data: SwarmWaveData): Promise<void> {
+    await this.writeEntry({
+      _type: 'swarm.wave',
+      _ts: new Date().toISOString(),
+      traceId: this.traceId!,
+      phase: data.phase,
+      wave: data.wave,
+      taskCount: data.taskCount,
+      completed: data.completed,
+      failed: data.failed,
+    } as SwarmWaveEntry);
+  }
+
+  private async recordSwarmTask(data: SwarmTaskData): Promise<void> {
+    await this.writeEntry({
+      _type: 'swarm.task',
+      _ts: new Date().toISOString(),
+      traceId: this.traceId!,
+      phase: data.phase,
+      taskId: data.taskId,
+      model: data.model,
+      tokensUsed: data.tokensUsed,
+      costUsed: data.costUsed,
+      qualityScore: data.qualityScore,
+      error: data.error,
+      reason: data.reason,
+    } as SwarmTaskEntry);
+  }
+
+  private async recordSwarmQuality(data: SwarmQualityData): Promise<void> {
+    await this.writeEntry({
+      _type: 'swarm.quality',
+      _ts: new Date().toISOString(),
+      traceId: this.traceId!,
+      taskId: data.taskId,
+      score: data.score,
+      feedback: data.feedback.slice(0, 500), // Truncate feedback
+    } as SwarmQualityEntry);
+  }
+
+  private async recordSwarmBudget(data: SwarmBudgetData): Promise<void> {
+    // Only record every 5th budget event to avoid flooding
+    this.swarmBudgetCounter++;
+    if (this.swarmBudgetCounter % 5 !== 0) return;
+
+    await this.writeEntry({
+      _type: 'swarm.budget',
+      _ts: new Date().toISOString(),
+      traceId: this.traceId!,
+      tokensUsed: data.tokensUsed,
+      tokensTotal: data.tokensTotal,
+      costUsed: data.costUsed,
+      costTotal: data.costTotal,
+    } as SwarmBudgetEntry);
+  }
+
+  private async recordSwarmVerification(data: SwarmVerificationData): Promise<void> {
+    await this.writeEntry({
+      _type: 'swarm.verification',
+      _ts: new Date().toISOString(),
+      traceId: this.traceId!,
+      phase: data.phase,
+      stepIndex: data.stepIndex,
+      description: data.description,
+      passed: data.passed,
+      summary: data.summary,
+    } as SwarmVerificationEntry);
+  }
+
+  private async recordSwarmComplete(data: SwarmCompleteData): Promise<void> {
+    this.swarmBudgetCounter = 0; // Reset budget counter
+    await this.writeEntry({
+      _type: 'swarm.complete',
+      _ts: new Date().toISOString(),
+      traceId: this.traceId!,
+      stats: data.stats,
+    } as SwarmCompleteEntry);
+  }
+
+  /**
+   * Record a context compaction event.
+   */
+  private async recordContextCompaction(data: ContextCompactionData): Promise<void> {
+    await this.writeEntry({
+      _type: 'context.compacted',
+      _ts: new Date().toISOString(),
+      traceId: this.traceId!,
+      tokensBefore: data.tokensBefore,
+      tokensAfter: data.tokensAfter,
+      recoveryInjected: data.recoveryInjected,
+    } as ContextCompactionEntry);
   }
 
   // ===========================================================================

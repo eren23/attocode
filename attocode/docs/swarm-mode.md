@@ -271,8 +271,9 @@ Budget is tracked across waves — if early waves consume less than expected, la
 - Add a judge persona that matches your project's quality standards
 
 ### Workers not using tools
-- Check `toolAccessMode` — default is `'all'`, which gives workers access to all tools
-- If using `'whitelist'` mode, ensure each worker's `allowedTools` includes what they need
+- Check `toolAccessMode` — default is `'whitelist'` in swarm config
+- Prefer `policyProfiles` + `workers[].policyProfile` for stable tool behavior
+- `allowedTools`/`deniedTools` are legacy compatibility fields; keep them only when migrating older configs
 - Verify MCP servers are connected if workers need external tools
 
 ### Rate limits exhausted

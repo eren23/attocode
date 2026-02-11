@@ -78,6 +78,7 @@ workers:
   - name: coder
     model: google/gemini-2.0-flash-001
     capabilities: [code, refactor]
+    policyProfile: code-strict-bash
     persona: "You are a senior TypeScript developer."
     maxTokens: 30000
   - name: researcher
@@ -92,6 +93,33 @@ workers:
     capabilities: [document]
 ```
 
+### Policy Profiles (Recommended)
+
+Use `policyProfile` for worker behavior and tool constraints instead of hardcoding `allowedTools`/`deniedTools` on each worker.
+
+```yaml
+policyProfiles:
+  code-strict-bash:
+    toolAccessMode: whitelist
+    allowedTools: [read_file, write_file, edit_file, list_files, glob, grep, bash]
+    bashMode: strict
+    bashWriteProtection: block_file_mutation
+  research-safe:
+    toolAccessMode: whitelist
+    allowedTools: [read_file, list_files, glob, grep]
+    deniedTools: [bash, write_file, edit_file, delete_file]
+
+workers:
+  - name: coder
+    model: anthropic/claude-sonnet-4
+    capabilities: [code]
+    policyProfile: code-strict-bash
+  - name: researcher
+    model: google/gemini-2.0-flash-001
+    capabilities: [research]
+    policyProfile: research-safe
+```
+
 ### Worker Fields
 
 | Field | Required | Description |
@@ -102,8 +130,9 @@ workers:
 | `persona` | No | Per-worker behavioral instructions appended to system prompt |
 | `contextWindow` | No | Context window size for compaction tuning |
 | `maxTokens` | No | Per-worker token limit override |
-| `allowedTools` | No | Whitelist of tools this worker can use |
-| `deniedTools` | No | Blacklist of tools this worker cannot use |
+| `policyProfile` | No | Named profile from `policyProfiles` or built-in defaults (`code-strict-bash`, `code-full`, `research-safe`) |
+| `allowedTools` | No | Legacy compatibility whitelist (prefer `policyProfile`) |
+| `deniedTools` | No | Legacy compatibility denylist (prefer `policyProfile`) |
 | `role` | No | Hierarchical role: `executor` (default), `manager`, or `judge` |
 
 ### Capability Normalization

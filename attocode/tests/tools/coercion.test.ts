@@ -6,7 +6,7 @@
  */
 
 import { describe, it, expect } from 'vitest';
-import { coerceBoolean } from '../../src/tools/coercion.js';
+import { coerceBoolean, coerceString } from '../../src/tools/coercion.js';
 
 describe('coerceBoolean', () => {
   const schema = coerceBoolean();
@@ -113,5 +113,31 @@ describe('coerceBoolean', () => {
     it('should reject object', () => {
       expect(() => schema.parse({})).toThrow();
     });
+  });
+});
+
+describe('coerceString', () => {
+  const schema = coerceString();
+
+  it('passes strings through unchanged', () => {
+    expect(schema.parse('hello world')).toBe('hello world');
+  });
+
+  it('joins string arrays with newlines', () => {
+    expect(schema.parse(['line1', 'line2', 'line3'])).toBe('line1\nline2\nline3');
+  });
+
+  it('coerces mixed-type arrays to string', () => {
+    expect(schema.parse(['text', 42, true])).toBe('text\n42\ntrue');
+  });
+
+  it('coerces empty array to empty string', () => {
+    expect(schema.parse([])).toBe('');
+  });
+
+  it('rejects non-string non-array values', () => {
+    expect(() => schema.parse(123)).toThrow();
+    expect(() => schema.parse(null)).toThrow();
+    expect(() => schema.parse(undefined)).toThrow();
   });
 });

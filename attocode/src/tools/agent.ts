@@ -192,15 +192,21 @@ export function createBoundSpawnAgentTool(spawnFn: SpawnFunction): ToolDefinitio
             ? `Next steps: ${result.structured.suggestedNextSteps.join('; ')}\n` : '')
         : '';
 
+      // Include output store reference so parent can retrieve full output if truncated
+      const storeRef = result.outputStoreId
+        ? `\n\n[Full output saved to: ${result.outputStoreId}.md — use read_file to retrieve if needed]`
+        : '';
+
       return {
         success: result.success,
-        output: result.output + structuredSummary,
+        output: result.output + structuredSummary + storeRef,
         metadata: {
           agent: input.agent,
           task: input.task,
           constraints: input.constraints,
           metrics: result.metrics,
           structured: result.structured,
+          outputStoreId: result.outputStoreId,
         },
       };
     },
@@ -334,7 +340,10 @@ export function createBoundSpawnAgentsParallelTool(
 
       const outputs = results.map((r, i) => {
         const task = input.tasks[i];
-        return `## ${task.agent} (${r.success ? '✓' : '✗'})\n${r.output}`;
+        const storeRef = r.outputStoreId
+          ? `\n[Full output saved to: ${r.outputStoreId}.md — use read_file to retrieve if needed]`
+          : '';
+        return `## ${task.agent} (${r.success ? '✓' : '✗'})\n${r.output}${storeRef}`;
       }).join('\n\n');
 
       return {
@@ -348,6 +357,7 @@ export function createBoundSpawnAgentsParallelTool(
             wallClockDuration: totalDuration,
             successRate: successCount / results.length,
           },
+          outputStoreIds: results.map(r => r.outputStoreId).filter(Boolean),
         },
       };
     },

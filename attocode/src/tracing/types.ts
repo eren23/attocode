@@ -558,6 +558,113 @@ export interface ErrorEntry extends BaseJSONLEntry {
   recoverable: boolean;
 }
 
+// =============================================================================
+// SWARM TRACE ENTRY TYPES
+// =============================================================================
+
+/**
+ * Swarm start entry - emitted when swarm execution begins.
+ */
+export interface SwarmStartEntry extends BaseJSONLEntry {
+  _type: 'swarm.start';
+  taskCount: number;
+  config: { maxConcurrency: number; totalBudget: number; maxCost: number };
+}
+
+/**
+ * Swarm decomposition entry - emitted after task decomposition.
+ */
+export interface SwarmDecompositionEntry extends BaseJSONLEntry {
+  _type: 'swarm.decomposition';
+  tasks: Array<{ id: string; description: string; type: string; wave: number; deps: string[] }>;
+  totalWaves: number;
+}
+
+/**
+ * Swarm wave entry - emitted at wave start/complete.
+ */
+export interface SwarmWaveEntry extends BaseJSONLEntry {
+  _type: 'swarm.wave';
+  phase: 'start' | 'complete';
+  wave: number;
+  taskCount: number;
+  completed?: number;
+  failed?: number;
+}
+
+/**
+ * Swarm task entry - emitted for individual task lifecycle events.
+ */
+export interface SwarmTaskEntry extends BaseJSONLEntry {
+  _type: 'swarm.task';
+  phase: 'dispatched' | 'completed' | 'failed' | 'skipped';
+  taskId: string;
+  model?: string;
+  tokensUsed?: number;
+  costUsed?: number;
+  qualityScore?: number;
+  error?: string;
+  reason?: string;
+}
+
+/**
+ * Swarm quality gate entry - emitted when a task is quality-rejected.
+ */
+export interface SwarmQualityEntry extends BaseJSONLEntry {
+  _type: 'swarm.quality';
+  taskId: string;
+  score: number;
+  feedback: string;
+}
+
+/**
+ * Swarm budget snapshot entry - sampled periodically.
+ */
+export interface SwarmBudgetEntry extends BaseJSONLEntry {
+  _type: 'swarm.budget';
+  tokensUsed: number;
+  tokensTotal: number;
+  costUsed: number;
+  costTotal: number;
+}
+
+/**
+ * Swarm verification entry - emitted during integration verification.
+ */
+export interface SwarmVerificationEntry extends BaseJSONLEntry {
+  _type: 'swarm.verification';
+  phase: 'start' | 'step' | 'complete';
+  stepIndex?: number;
+  description?: string;
+  passed?: boolean;
+  summary?: string;
+}
+
+/**
+ * Swarm complete entry - emitted when swarm execution finishes.
+ */
+export interface SwarmCompleteEntry extends BaseJSONLEntry {
+  _type: 'swarm.complete';
+  stats: {
+    totalTasks: number;
+    completedTasks: number;
+    failedTasks: number;
+    totalTokens: number;
+    totalCost: number;
+    totalDuration: number;
+  };
+}
+
+/**
+ * Context compaction entry - emitted when context is compacted.
+ */
+export interface ContextCompactionEntry extends BaseJSONLEntry {
+  _type: 'context.compacted';
+  tokensBefore: number;
+  tokensAfter: number;
+  recoveryInjected: boolean;
+}
+
 /**
  * Union of all JSONL entry types.
  */
@@ -575,7 +682,16 @@ export type JSONLEntry =
   | PlanEvolutionEntry
   | SubagentLinkEntry
   | DecisionEntry
-  | IterationWrapperEntry;
+  | IterationWrapperEntry
+  | SwarmStartEntry
+  | SwarmDecompositionEntry
+  | SwarmWaveEntry
+  | SwarmTaskEntry
+  | SwarmQualityEntry
+  | SwarmBudgetEntry
+  | SwarmVerificationEntry
+  | SwarmCompleteEntry
+  | ContextCompactionEntry;
 
 // =============================================================================
 // ENHANCED TRACE TYPES (Maximum Interpretability)

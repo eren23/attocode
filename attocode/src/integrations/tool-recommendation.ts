@@ -260,7 +260,26 @@ export class ToolRecommendationEngine {
       documenter: 'document',
     };
 
-    return nameToType[agentName.toLowerCase()] || 'research';
+    const lower = agentName.toLowerCase();
+    if (nameToType[lower]) {
+      return nameToType[lower];
+    }
+
+    // Dynamic swarm names like "swarm-coder-task-1" should resolve by role token.
+    const tokens = lower.split(/[^a-z0-9]+/).filter(Boolean);
+    for (const token of tokens) {
+      if (nameToType[token]) {
+        return nameToType[token];
+      }
+    }
+
+    // For swarm workers, default to implementation rather than research so
+    // write-capable profiles are selected unless explicitly constrained.
+    if (lower.startsWith('swarm-')) {
+      return 'implement';
+    }
+
+    return 'research';
   }
 }
 

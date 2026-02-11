@@ -1,0 +1,27 @@
+{
+  "$schema": "../../schemas/config.schema.json",
+  "maxIterations": 30,
+  "planning": {
+    "enabled": true,
+    "autoplan": true,
+    "complexityThreshold": 6
+  },
+  "memory": {
+    "enabled": true,
+    "types": {
+      "episodic": true,
+      "semantic": true,
+      "working": true
+    }
+  },
+  "codebaseContext": {
+    "enabled": true,
+    "excludePatterns": [
+      "**/node_modules/**",
+      "**/dist/**",
+      "**/build/**",
+      "**/.git/**",
+      "**/coverage/**"
+    ]
+  }
+}

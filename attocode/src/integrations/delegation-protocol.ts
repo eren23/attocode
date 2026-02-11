@@ -173,13 +173,13 @@ function getDefaultToolsForAgent(agentType?: string): string[] {
     case 'researcher':
       return ['read_file', 'glob', 'grep', 'list_files'];
     case 'coder':
-      return ['read_file', 'write_file', 'edit_file', 'bash', 'glob', 'grep'];
+      return ['write_file', 'edit_file', 'read_file', 'glob', 'grep', 'bash'];
     case 'reviewer':
       return ['read_file', 'glob', 'grep'];
     case 'architect':
       return ['read_file', 'glob', 'grep', 'list_files'];
     case 'debugger':
-      return ['read_file', 'bash', 'glob', 'grep', 'edit_file'];
+      return ['read_file', 'edit_file', 'glob', 'grep', 'bash'];
     default:
       return ['read_file', 'glob', 'grep'];
   }

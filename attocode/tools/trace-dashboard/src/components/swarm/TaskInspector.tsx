@@ -54,10 +54,10 @@ export function TaskInspector({ task, onClose, dir }: TaskInspectorProps) {
 
   // V9: Auto-load detail for failed tasks (so users can see what went wrong)
   useEffect(() => {
-    if (task && task.status === 'failed' && !detail && !detailLoading) {
+    if (task && task.status === 'failed' && !detail && !detailLoading && !detailError) {
       loadDetail();
     }
-  }, [task, task?.status, detail, detailLoading, loadDetail]);
+  }, [task, task?.status, detail, detailLoading, detailError, loadDetail]);
 
   if (!task) return null;
 
@@ -119,6 +119,25 @@ export function TaskInspector({ task, onClose, dir }: TaskInspectorProps) {
           )}
         </div>
 
+        {/* Tools Available */}
+        {task.toolCount !== undefined && (
+          <div className="border-t border-gray-800 pt-3">
+            <h4 className="text-xs font-medium text-gray-400 mb-1">Tools Available</h4>
+            <span className="text-sm text-white">
+              {task.toolCount === -1 ? 'All tools' : `${task.toolCount} tools`}
+            </span>
+            {task.tools && task.tools.length > 0 && (
+              <div className="flex flex-wrap gap-1 mt-1">
+                {task.tools.map((tool) => (
+                  <span key={tool} className="px-1.5 py-0.5 text-xs bg-gray-800 rounded text-blue-400 font-mono">
+                    {tool}
+                  </span>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+
         {/* Retry Context / Quality Rejection History */}
         {task.retryContext && (
           <div className="border-t border-gray-800 pt-3">
@@ -132,6 +151,12 @@ export function TaskInspector({ task, onClose, dir }: TaskInspectorProps) {
                   {task.retryContext.previousScore === 0 ? 'FAILED' : `${task.retryContext.previousScore}/5`}
                 </span>
               </div>
+              {task.retryContext.previousModel && (
+                <div className="flex items-center gap-2 mb-1">
+                  <span className="text-xs text-gray-400">Previous Model:</span>
+                  <span className="text-xs text-gray-300 font-mono">{task.retryContext.previousModel.split('/').pop()}</span>
+                </div>
+              )}
               <p className="text-xs text-gray-300 whitespace-pre-wrap">
                 {task.retryContext.previousFeedback}
               </p>
@@ -249,6 +274,14 @@ export function TaskInspector({ task, onClose, dir }: TaskInspectorProps) {
                 <span className={`text-xs font-medium ${detail.toolCalls === 0 ? 'text-red-400' : 'text-green-400'}`}>
                   {detail.toolCalls === -1 ? 'Timeout' : detail.toolCalls}
                 </span>
+              </div>
+            )}
+
+            {/* Failover model (shown when task was retried on a different model) */}
+            {detail.failoverModel && (
+              <div className="flex items-center gap-2">
+                <span className="text-xs text-gray-400">Failover Model:</span>
+                <span className="text-xs text-yellow-400 font-mono">{detail.failoverModel.split('/').pop()}</span>
               </div>
             )}
 

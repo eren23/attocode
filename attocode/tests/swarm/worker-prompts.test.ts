@@ -133,6 +133,70 @@ describe('Worker prompts', () => {
     expect(registered!.tools).toEqual(['read_file', 'write_file']);
   });
 
+  it('should honor task.assignedModel failover override when registering worker agent', async () => {
+    registeredAgents.clear();
+
+    const config: SwarmConfig = {
+      ...DEFAULT_SWARM_CONFIG,
+      orchestratorModel: 'test/model',
+      workers: [
+        { name: 'coder', model: 'test/coder', capabilities: ['code'] },
+      ],
+    };
+
+    const pool = new SwarmWorkerPool(config, mockAgentRegistry, mockSpawnAgent, mockBudgetPool);
+
+    const task: SwarmTask = {
+      id: 'test-3b',
+      description: 'Implement parser',
+      type: 'implement',
+      dependencies: [],
+      status: 'ready',
+      complexity: 5,
+      wave: 0,
+      attempts: 1,
+      assignedModel: 'failover/model',
+    };
+
+    await pool.dispatch(task);
+
+    const registered = registeredAgents.get('swarm-coder-test-3b');
+    expect(registered).toBeDefined();
+    expect(registered!.model).toBe('failover/model');
+    expect(registered!.taskType).toBe('implement');
+  });
+
+  it('should pin resolved policy profile for design tasks on coder workers', async () => {
+    registeredAgents.clear();
+
+    const config: SwarmConfig = {
+      ...DEFAULT_SWARM_CONFIG,
+      orchestratorModel: 'test/model',
+      workers: [
+        { name: 'coder', model: 'test/coder', capabilities: ['code'] },
+      ],
+    };
+
+    const pool = new SwarmWorkerPool(config, mockAgentRegistry, mockSpawnAgent, mockBudgetPool);
+
+    const task: SwarmTask = {
+      id: 'test-3c',
+      description: 'Design project structure and shared types',
+      type: 'design',
+      dependencies: [],
+      status: 'ready',
+      complexity: 5,
+      wave: 0,
+      attempts: 0,
+    };
+
+    await pool.dispatch(task);
+
+    const registered = registeredAgents.get('swarm-coder-test-3c');
+    expect(registered).toBeDefined();
+    expect(registered!.policyProfile).toBe('code-strict-bash');
+  });
+
   it('should inject worker persona into system prompt', async () => {
     registeredAgents.clear();
 

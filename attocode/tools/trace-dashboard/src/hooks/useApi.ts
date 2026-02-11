@@ -5,7 +5,7 @@
  */
 
 import { useState, useEffect, useCallback } from 'react';
-import type { TimelineEntry, TreeNode } from '../lib/types';
+import type { TimelineEntry, TreeNode, SwarmActivityData } from '../lib/types';
 import type { SessionListItem } from '../api/trace-service';
 import type { TraceSummary } from '../lib/output/json-exporter';
 import type { TokenFlowViewData } from '../lib/views/token-flow-view';
@@ -124,6 +124,10 @@ export function useIssues(id: string | undefined) {
   return useApi<Array<{ id: string; type: string; severity: string; description: string; evidence: string }>>(
     id ? `/sessions/${encodeURIComponent(id)}/issues` : null
   );
+}
+
+export function useSwarmData(id: string | undefined) {
+  return useApi<SwarmActivityData>(id ? `/sessions/${encodeURIComponent(id)}/swarm` : null);
 }
 
 export function useCompare(idA: string | undefined, idB: string | undefined) {

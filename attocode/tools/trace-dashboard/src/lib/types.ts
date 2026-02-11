@@ -181,6 +181,121 @@ export interface ParsedSession {
   }>;
   /** Aggregated metrics */
   metrics: SessionMetrics;
+  /** Context compaction events */
+  compactionEvents: Array<{
+    timestamp: Date;
+    tokensBefore: number;
+    tokensAfter: number;
+    recoveryInjected: boolean;
+  }>;
+  /** Swarm activity data (present only for swarm sessions) */
+  swarmData?: SwarmActivityData;
+}
+
+// =============================================================================
+// SWARM ACTIVITY TYPES
+// =============================================================================
+
+/**
+ * Swarm task entry as parsed from trace.
+ */
+export interface SwarmTaskInfo {
+  id: string;
+  description: string;
+  type: string;
+  wave: number;
+  deps: string[];
+  status?: 'dispatched' | 'completed' | 'failed' | 'skipped';
+  model?: string;
+  tokensUsed?: number;
+  costUsed?: number;
+  qualityScore?: number;
+  error?: string;
+  reason?: string;
+}
+
+/**
+ * Swarm budget snapshot.
+ */
+export interface SwarmBudgetSnapshot {
+  timestamp: Date;
+  tokensUsed: number;
+  tokensTotal: number;
+  costUsed: number;
+  costTotal: number;
+}
+
+/**
+ * Swarm verification step result.
+ */
+export interface SwarmVerificationStep {
+  stepIndex: number;
+  description: string;
+  passed: boolean;
+}
+
+/**
+ * Swarm quality rejection.
+ */
+export interface SwarmQualityRejection {
+  taskId: string;
+  score: number;
+  feedback: string;
+  timestamp: Date;
+}
+
+/**
+ * Aggregated swarm activity data parsed from trace JSONL.
+ */
+export interface SwarmActivityData {
+  /** Swarm config from swarm.start */
+  config?: { maxConcurrency: number; totalBudget: number; maxCost: number };
+  /** Total waves */
+  totalWaves: number;
+  /** All decomposed tasks */
+  tasks: SwarmTaskInfo[];
+  /** Wave events */
+  waves: Array<{
+    wave: number;
+    phase: 'start' | 'complete';
+    taskCount: number;
+    completed?: number;
+    failed?: number;
+    allFailed?: boolean;
+    timestamp: Date;
+  }>;
+  /** Budget snapshots over time */
+  budgetSnapshots: SwarmBudgetSnapshot[];
+  /** Verification result */
+  verification?: {
+    passed: boolean;
+    summary: string;
+    steps: SwarmVerificationStep[];
+  };
+  /** Quality rejections */
+  qualityRejections: SwarmQualityRejection[];
+  /** Phase progress events (decomposing, planning, scheduling) */
+  phases?: Array<{
+    phase: 'decomposing' | 'planning' | 'scheduling';
+    message: string;
+    timestamp: Date;
+  }>;
+  /** Final stats from swarm.complete */
+  stats?: {
+    totalTasks: number;
+    completedTasks: number;
+    failedTasks: number;
+    totalTokens: number;
+    totalCost: number;
+    totalDuration: number;
+  };
+  /** Orchestrator LLM usage (decomposition, review, verification calls) */
+  orchestrator?: {
+    tokens: number;
+    cost: number;
+    calls: number;
+    model: string;
+  };
 }
 
 /**
@@ -215,6 +330,8 @@ export interface SessionMetrics {
   subagentSpawns: number;
   /** Decision count */
   decisions: number;
+  /** Whether this is a swarm session */
+  isSwarm?: boolean;
 }
 
 // =============================================================================

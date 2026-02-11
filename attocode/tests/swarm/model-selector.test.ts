@@ -133,52 +133,37 @@ describe('selectAlternativeModel', () => {
     expect(alt?.model).toBe('model/b');
   });
 
-  it('should fall back to FALLBACK_WORKERS when config workers all share same model', () => {
+  it('should return undefined when config workers all share same model (no ghost models)', () => {
     const workers: SwarmWorkerSpec[] = [
       { name: 'researcher-a', model: 'same/model', capabilities: ['research'] },
       { name: 'researcher-b', model: 'same/model', capabilities: ['research'] },
     ];
     const tracker = new ModelHealthTracker();
     const alt = selectAlternativeModel(workers, 'same/model', 'research', tracker);
-    // Should find a fallback worker with research capability and different model
-    expect(alt).toBeDefined();
-    expect(alt!.model).not.toBe('same/model');
-    expect(alt!.capabilities).toContain('research');
+    // No configured alternative with a different model — return undefined
+    // instead of injecting unconfigured ghost models from FALLBACK_WORKERS
+    expect(alt).toBeUndefined();
   });
 
-  it('should return undefined when no alternative exists anywhere', () => {
+  it('should return undefined when sole config worker is the failed model', () => {
     const workers: SwarmWorkerSpec[] = [
       { name: 'researcher', model: 'unique/model', capabilities: ['research'] },
     ];
     const tracker = new ModelHealthTracker();
-    // Use a model that doesn't exist in FALLBACK_WORKERS or config workers
-    // and a capability that doesn't exist in fallback
     const alt = selectAlternativeModel(workers, 'unique/model', 'research', tracker);
-    // Fallback has 'moonshotai/kimi-k2.5-0127' with research capability,
-    // so this should find something
-    expect(alt).toBeDefined();
-    expect(alt!.model).not.toBe('unique/model');
+    // Only configured worker IS the failed model — return undefined
+    expect(alt).toBeUndefined();
   });
 
-  it('should prefer healthy fallback workers', () => {
+  it('should return undefined when no healthy config alternative exists (no ghost fallbacks)', () => {
     const workers: SwarmWorkerSpec[] = [
       { name: 'researcher', model: 'same/model', capabilities: ['research'] },
     ];
     const tracker = new ModelHealthTracker();
-    // Mark the first matching fallback model as unhealthy
-    const firstFallbackResearcher = FALLBACK_WORKERS.find(w =>
-      w.model !== 'same/model' && w.capabilities.includes('research'),
-    );
-    if (firstFallbackResearcher) {
-      tracker.recordFailure(firstFallbackResearcher.model, 'error');
-      tracker.recordFailure(firstFallbackResearcher.model, 'error');
-      tracker.recordFailure(firstFallbackResearcher.model, 'error');
-    }
 
     const alt = selectAlternativeModel(workers, 'same/model', 'research', tracker);
-    // Should still find something (unhealthy fallback as last resort)
-    expect(alt).toBeDefined();
-    expect(alt!.model).not.toBe('same/model');
+    // No configured alternative — return undefined instead of ghost models
+    expect(alt).toBeUndefined();
   });
 });
 

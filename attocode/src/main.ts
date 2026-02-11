@@ -337,6 +337,10 @@ async function main(): Promise<void> {
       model: resolvedModel,
       maxIterations: args.maxIterations,
       humanInLoop: false, // Disable for non-interactive
+      codebaseContext: {
+        enabled: true,
+        root: process.cwd(),
+      },
       swarm: swarmConfig || false,
       observability: args.trace ? {
         enabled: true,

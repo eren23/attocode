@@ -522,9 +522,13 @@ export class AutoCompactionManager {
     }
 
     // Add a marker message about the truncation
+    const removedCount = messagesBefore - preservedMessages.length - (systemMessage ? 1 : 0);
     truncatedMessages.push({
       role: 'system',
-      content: `[CONTEXT TRUNCATED: ${messagesBefore - preservedMessages.length - (systemMessage ? 1 : 0)} messages were removed due to compaction failure. The conversation continues from the most recent ${preservedMessages.length} messages.]`,
+      content: `[CONTEXT REDUCED - Emergency truncation]\n\nPrevious context was truncated to stay within token limits.\n` +
+        `${removedCount} messages were removed. ` +
+        `Continue working from the preserved messages below. ` +
+        `If you need context from earlier in the conversation, check your goals and work log.`,
     });
 
     truncatedMessages.push(...preservedMessages);

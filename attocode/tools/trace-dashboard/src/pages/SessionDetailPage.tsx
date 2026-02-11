@@ -6,7 +6,7 @@
 
 import { useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
-import { useSession, useTimeline, useTree, useTokens, useIssues } from '../hooks/useApi';
+import { useSession, useTimeline, useTree, useTokens, useIssues, useSwarmData } from '../hooks/useApi';
 import { LoadingSpinner } from '../components/LoadingSpinner';
 import { MetricCard } from '../components/MetricCard';
 import { StatusBadge } from '../components/StatusBadge';
@@ -14,6 +14,7 @@ import { IssueCard } from '../components/IssueCard';
 import { TokenFlowChart, CostBreakdownChart } from '../components/TokenFlowChart';
 import { Timeline } from '../components/Timeline';
 import { TreeView } from '../components/TreeView';
+import { SwarmActivityView } from '../components/SwarmActivityView';
 import {
   formatTokens,
   formatCost,
@@ -23,7 +24,7 @@ import {
 } from '../lib/utils';
 import { ExportDropdown } from '../components/ExportDropdown';
 
-type TabId = 'summary' | 'timeline' | 'tree' | 'tokens' | 'issues';
+type TabId = 'summary' | 'timeline' | 'tree' | 'tokens' | 'issues' | 'swarm';
 
 interface Tab {
   id: TabId;
@@ -31,7 +32,7 @@ interface Tab {
   icon: JSX.Element;
 }
 
-const tabs: Tab[] = [
+const baseTabs: Tab[] = [
   {
     id: 'summary',
     label: 'Summary',
@@ -79,6 +80,16 @@ const tabs: Tab[] = [
   },
 ];
 
+const swarmTab: Tab = {
+  id: 'swarm',
+  label: 'Swarm',
+  icon: (
+    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
+    </svg>
+  ),
+};
+
 export function SessionDetailPage() {
   const { id } = useParams<{ id: string }>();
   const [activeTab, setActiveTab] = useState<TabId>('summary');
@@ -88,6 +99,7 @@ export function SessionDetailPage() {
   const { data: tree } = useTree(activeTab === 'tree' ? id : undefined);
   const { data: tokens } = useTokens(activeTab === 'tokens' || activeTab === 'summary' ? id : undefined);
   const { data: issues } = useIssues(activeTab === 'issues' || activeTab === 'summary' ? id : undefined);
+  const { data: swarmData } = useSwarmData(activeTab === 'swarm' ? id : undefined);
 
   if (loading) {
     return <LoadingSpinner size="lg" text="Loading session..." />;
@@ -301,13 +313,23 @@ export function SessionDetailPage() {
     );
   };
 
+  const renderSwarm = () => {
+    if (!swarmData) return <LoadingSpinner text="Loading swarm data..." />;
+    return <SwarmActivityView data={swarmData} />;
+  };
+
   const tabContent: Record<TabId, () => JSX.Element> = {
     summary: renderSummary,
     timeline: renderTimeline,
     tree: renderTree,
     tokens: renderTokens,
     issues: renderIssues,
+    swarm: renderSwarm,
   };
+
+  // Conditionally include swarm tab when session has swarm data
+  const isSwarm = (session as unknown as Record<string, unknown>).isSwarm === true;
+  const tabs: Tab[] = isSwarm ? [...baseTabs, swarmTab] : baseTabs;
 
   return (
     <div>

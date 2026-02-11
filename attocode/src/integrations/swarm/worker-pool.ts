@@ -14,6 +14,17 @@ import { buildDelegationPrompt, createMinimalDelegationSpec } from '../delegatio
 import { getSubagentQualityPrompt } from '../thinking-strategy.js';
 import { getEnvironmentFacts, formatFactsBlock, formatFactsCompact } from '../environment-facts.js';
 import { calculateCost, isModelCacheInitialized } from '../openrouter-pricing.js';
+import { resolvePolicyProfile } from '../policy-engine.js';
+
+// ─── Worker Timeout Error ──────────────────────────────────────────────────
+
+/** Typed error for worker timeouts, used to distinguish timeouts from hollow completions. */
+export class WorkerTimeoutError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'WorkerTimeoutError';
+  }
+}
 
 // ─── Types ─────────────────────────────────────────────────────────────────
 
@@ -102,22 +113,43 @@ export class SwarmWorkerPool {
     // Create a unique agent name for this worker instance
     const agentName = `swarm-${worker.name}-${task.id}`;
 
-    // Register dynamic agent definition
-    // V2: toolAccessMode 'all' gives workers all tools (including MCP) by setting tools to undefined.
-    // This leverages existing behavior in agent-registry.ts:filterToolsForAgent() which returns
-    // all tools when agent.tools is undefined.
-    const tools = this.config.toolAccessMode === 'all'
+    const requestedProfile = worker.policyProfile;
+    const policyResolution = resolvePolicyProfile({
+      isSwarmWorker: true,
+      requestedProfile,
+      swarmConfig: this.config,
+      worker,
+      taskType: task.type,
+      legacyAllowedTools: this.config.toolAccessMode === 'whitelist' ? worker.allowedTools : undefined,
+      legacyDeniedTools: worker.deniedTools,
+      globalDeniedTools: this.config.globalDeniedTools,
+    });
+    const { profile } = policyResolution;
+
+    // If profile requires whitelist, expose only allowed tools to this worker.
+    const tools = (this.config.toolAccessMode === 'all' && !requestedProfile)
       ? undefined
-      : worker.allowedTools;
+      : (profile.toolAccessMode === 'whitelist'
+        ? profile.allowedTools
+        : worker.allowedTools);
+
+    // V9: Scale resources by task complexity (1-10 scale → 0.6x-1.5x multiplier)
+    const complexityMultiplier = 0.5 + (task.complexity ?? 5) * 0.1;
+    const baseTokenBudget = worker.maxTokens ?? this.config.maxTokensPerWorker;
+    const baseMaxIterations = this.config.workerMaxIterations;
 
     const agentDef: AgentDefinition = {
       name: agentName,
       description: `Swarm worker (${worker.name}) for: ${task.description.slice(0, 100)}`,
       systemPrompt: this.buildWorkerSystemPrompt(task, worker),
       tools,
-      model: worker.model,
-      maxTokenBudget: worker.maxTokens ?? this.config.maxTokensPerWorker,
-      maxIterations: this.config.workerMaxIterations,
+      // Pin the resolved profile so spawnAgent does not re-infer a different one.
+      policyProfile: policyResolution.profileName,
+      // Respect failover-assigned model on retries.
+      model: task.assignedModel ?? worker.model,
+      taskType: task.type,
+      maxTokenBudget: Math.round(baseTokenBudget * complexityMultiplier),
+      maxIterations: Math.round(baseMaxIterations * complexityMultiplier),
       capabilities: worker.capabilities,
     };
 
@@ -130,14 +162,22 @@ export class SwarmWorkerPool {
     // Create the promise that tracks execution
     const startedAt = Date.now();
     // V6: Per-task-type timeout — research/analysis tasks get more time by default
+    // V9: Scale timeout by complexity multiplier
     const typeTimeout = this.config.taskTypeTimeouts?.[task.type];
-    const timeoutMs = typeTimeout ?? this.config.workerTimeout;
+    // Use type-specific timeout, or fall back to max(workerTimeout, 240s) for unknown types
+    const baseTimeoutMs = typeTimeout ?? Math.max(this.config.workerTimeout, 240_000);
+    // Foundation tasks (3+ dependents) get 1.5x timeout to reduce cascade failure risk
+    const adjustedTimeoutMs = task.isFoundation ? Math.round(baseTimeoutMs * 1.5) : baseTimeoutMs;
+    const timeoutMs = Math.round(adjustedTimeoutMs * complexityMultiplier);
 
-    // H3: Wrap spawn with timeout enforcement
+    // V8: Worker pool timeout is a backstop AFTER the agent's graceful timeout.
+    // The agent's graceful timeout (in spawnAgent) provides a wrapup window before hard kill.
+    // This backstop fires 60s later to catch cases where graceful timeout fails.
+    const backstopTimeoutMs = timeoutMs + 60_000;
     const spawnPromise = this.spawnAgent(agentName, taskPrompt);
     let timeoutHandle: ReturnType<typeof setTimeout>;
     const timeoutPromise = new Promise<never>((_, reject) => {
-      timeoutHandle = setTimeout(() => reject(new Error(`Worker timeout after ${timeoutMs}ms`)), timeoutMs);
+      timeoutHandle = setTimeout(() => reject(new WorkerTimeoutError(`Worker timeout after ${backstopTimeoutMs}ms (base: ${timeoutMs}ms + 60s backstop)`)), backstopTimeoutMs);
     });
     const promise = Promise.race([spawnPromise, timeoutPromise]).then(result => {
       clearTimeout(timeoutHandle);
@@ -179,8 +219,9 @@ export class SwarmWorkerPool {
             duration: Date.now() - worker.startedAt,
             // V7: Use -1 for timeout errors so the orchestrator can distinguish
             // timeouts (worker was working but ran out of time) from hollow completions
-            // (worker produced no tool calls at all)
-            toolCalls: (error as Error).message.includes('timeout') ? -1 : 0,
+            // (worker produced no tool calls at all).
+            // Uses instanceof check instead of fragile string matching.
+            toolCalls: (error instanceof WorkerTimeoutError) ? -1 : 0,
           },
         },
         startedAt: worker.startedAt,
@@ -235,10 +276,9 @@ export class SwarmWorkerPool {
       costUsed: estimatedCost,
       durationMs,
       model: task.assignedModel ?? 'unknown',
-      filesModified: spawnResult.structured?.actionsTaken
-        ?.filter((a: string) => a.includes('file') || a.includes('wrote') || a.includes('created'))
-        ?? [],
+      filesModified: spawnResult.filesModified ?? [],
       findings: spawnResult.structured?.findings,
+      toolCalls: spawnResult.metrics.toolCalls,
     };
   }
 
@@ -391,6 +431,13 @@ export class SwarmWorkerPool {
         `- You have ${this.config.workerMaxIterations} max iterations and a limited token budget.`,
         '- Read files for context, then write documentation.',
         '',
+        'TOOL USAGE:',
+        '- To CREATE a new file: use write_file (NOT bash with cat/echo/heredoc)',
+        '- To MODIFY an existing file: use edit_file (NOT bash with sed/awk)',
+        '- To READ a file: use read_file (NOT bash with cat/head/tail)',
+        '- Use bash ONLY for: running commands (npm, node, git, tsc, tests, etc.)',
+        '- NEVER send file contents as a bash command argument',
+        '',
         'OUTPUT FORMAT — When finished, summarize:',
         '1. Documentation files created/modified',
         '2. Key sections documented',
@@ -413,10 +460,38 @@ export class SwarmWorkerPool {
         '- Read files only when you need specific content. Prefer grep over reading entire files.',
         '- Make changes incrementally — edit one file, verify, move on.',
         '',
+        'TOOL USAGE:',
+        '- To CREATE a new file: use write_file (NOT bash with cat/echo/heredoc)',
+        '- To MODIFY an existing file: use edit_file (NOT bash with sed/awk)',
+        '- To READ a file: use read_file (NOT bash with cat/head/tail)',
+        '- To SEARCH for files: use glob (NOT bash with find/ls)',
+        '- To SEARCH file contents: use grep (NOT bash with grep/rg)',
+        '- Use bash ONLY for: running commands (npm, node, git, tsc, tests, etc.)',
+        '- NEVER send file contents as a bash command argument',
+        '',
         'OUTPUT FORMAT — When finished, summarize:',
         '1. What you accomplished (files created/modified)',
         '2. Key decisions made',
         '3. Any issues encountered or unresolved items',
+      );
+    }
+
+    // Inject available tool names so the model knows exactly what it can call
+    if (worker.allowedTools && worker.allowedTools.length > 0) {
+      parts.push('', `AVAILABLE TOOLS: ${worker.allowedTools.join(', ')}`);
+    } else {
+      parts.push('', 'You have access to ALL tools including: write_file, edit_file, read_file, glob, grep, bash, web_search');
+    }
+
+    // V9: Action-orientation reinforcement for task types that MUST produce file changes
+    if (taskType === 'implement' || taskType === 'test' || taskType === 'refactor') {
+      parts.push(
+        '',
+        '═══ ACTION ORIENTATION ═══',
+        '',
+        'You are judged by actual file changes and tool usage, not by the quality of your written analysis.',
+        'If your task type is implement, test, or refactor, you MUST make file changes.',
+        'A response with zero tool calls is an automatic failure.',
       );
     }
 
@@ -433,6 +508,7 @@ export class SwarmWorkerPool {
           task.retryContext.previousFeedback,
           '',
           'Diagnose what went wrong and try a completely different approach.',
+          'REMINDER: Use write_file to create files and edit_file to modify them. Do NOT use bash for file operations.',
         );
       } else {
         parts.push(
@@ -443,6 +519,18 @@ export class SwarmWorkerPool {
           'Focus specifically on what the judge flagged as wrong.',
         );
       }
+    }
+
+    if (task.retryContext?.previousFiles?.length) {
+      parts.push(
+        '',
+        '═══ FILES FROM PREVIOUS ATTEMPT ═══',
+        '',
+        'These files ALREADY EXIST on disk from the previous attempt:',
+        ...task.retryContext.previousFiles.map(f => `  - ${f}`),
+        '',
+        'DO NOT recreate these with write_file. Use edit_file to fix issues, or read_file to check state.',
+      );
     }
 
     if (task.targetFiles && task.targetFiles.length > 0) {

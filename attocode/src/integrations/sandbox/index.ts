@@ -67,6 +67,15 @@ export interface SandboxOptions {
 
   /** Blocked commands (for basic sandbox) */
   blockedCommands?: string[];
+
+  /** Bash policy mode */
+  bashMode?: 'disabled' | 'read_only' | 'task_scoped' | 'full';
+
+  /** Bash write protection behavior */
+  bashWriteProtection?: 'off' | 'block_file_mutation';
+
+  /** Legacy compatibility flag */
+  blockFileCreationViaBash?: boolean;
 }
 
 /**
@@ -152,6 +161,9 @@ const DEFAULT_OPTIONS: Required<SandboxOptions> = {
     'mkfs',
     'dd if=/dev/zero',
   ],
+  bashMode: 'full',
+  bashWriteProtection: 'off',
+  blockFileCreationViaBash: false,
 };
 
 // =============================================================================

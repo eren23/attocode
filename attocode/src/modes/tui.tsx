@@ -224,6 +224,11 @@ export async function startTUIMode(
       observability: trace
         ? { enabled: true, traceCapture: { enabled: true, outputDir: '.traces' }, logging: { enabled: false } }
         : undefined,
+      // Codebase context: lazy analysis on first prompt, ready by second turn
+      codebaseContext: {
+        enabled: true,
+        root: process.cwd(),
+      },
       // Swarm mode (experimental)
       swarm: swarm || false,
       // Hooks: Only enable console output in debug mode

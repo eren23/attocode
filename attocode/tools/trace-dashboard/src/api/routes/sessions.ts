@@ -12,6 +12,7 @@ import {
   getSessionIssues,
   getSessionRaw,
   getSessionParsed,
+  getSessionSwarmData,
   uploadTrace,
   uploadTraceInMemory,
   getUploadedTraces,
@@ -140,11 +141,15 @@ sessionsRoutes.get('/export/batch', async (c) => {
 sessionsRoutes.get('/:id', async (c) => {
   try {
     const id = c.req.param('id');
-    const summary = await getSessionSummary(decodeURIComponent(id));
+    const decodedId = decodeURIComponent(id);
+    const summary = await getSessionSummary(decodedId);
     if (!summary) {
       return c.json({ success: false, error: 'Session not found' }, 404);
     }
-    return c.json({ success: true, data: summary });
+    // Check if this is a swarm session and annotate
+    const swarmData = await getSessionSwarmData(decodedId);
+    const data = swarmData ? { ...summary, isSwarm: true } : summary;
+    return c.json({ success: true, data });
   } catch (err) {
     console.error('Failed to get session:', err);
     return c.json({ success: false, error: 'Failed to get session' }, 500);
@@ -208,6 +213,21 @@ sessionsRoutes.get('/:id/issues', async (c) => {
   } catch (err) {
     console.error('Failed to get issues:', err);
     return c.json({ success: false, error: 'Failed to get issues' }, 500);
+  }
+});
+
+// Get session swarm data
+sessionsRoutes.get('/:id/swarm', async (c) => {
+  try {
+    const id = c.req.param('id');
+    const swarmData = await getSessionSwarmData(decodeURIComponent(id));
+    if (!swarmData) {
+      return c.json({ success: false, error: 'No swarm data found' }, 404);
+    }
+    return c.json({ success: true, data: swarmData });
+  } catch (err) {
+    console.error('Failed to get swarm data:', err);
+    return c.json({ success: false, error: 'Failed to get swarm data' }, 500);
   }
 });
 

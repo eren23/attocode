@@ -12,7 +12,12 @@ import {
   BasicSandbox,
   type SandboxOptions,
 } from '../src/integrations/sandbox/index.js';
-import { isCommandSafe, sanitizeArgument, buildSafeCommand } from '../src/integrations/sandbox/basic.js';
+import {
+  detectFileCreationViaBash,
+  isCommandSafe,
+  sanitizeArgument,
+  buildSafeCommand,
+} from '../src/integrations/sandbox/basic.js';
 
 describe('BasicSandbox', () => {
   let sandbox: BasicSandbox;
@@ -69,7 +74,7 @@ describe('BasicSandbox', () => {
       const result = await sandbox.execute('wget http://example.com');
 
       expect(result.exitCode).toBe(1);
-      expect(result.error).toContain('not in allowlist');
+      expect(result.error).toContain('not in the sandbox allowlist');
     });
 
     it('should timeout long-running commands', async () => {
@@ -128,6 +133,41 @@ describe('BasicSandbox', () => {
         allowedCommands: ['wget', 'bash'],
       });
       expect(result.allowed).toBe(false);
+    });
+
+    it('should block heredoc file creation when enabled', () => {
+      const result = sandbox.validateCommand(`cat > out.txt << 'EOF'\nhello\nEOF`, {
+        ...defaultOptions,
+        blockFileCreationViaBash: true,
+      });
+      expect(result.allowed).toBe(false);
+      expect(result.reason).toContain('File creation/modification via bash');
+    });
+
+    it('should block output redirects when enabled', () => {
+      const result = sandbox.validateCommand(`echo "x" > out.txt`, {
+        ...defaultOptions,
+        blockFileCreationViaBash: true,
+      });
+      expect(result.allowed).toBe(false);
+    });
+
+    it('should allow read-only bash in read_only mode', () => {
+      const result = sandbox.validateCommand('cat file.txt', {
+        ...defaultOptions,
+        bashMode: 'read_only',
+      });
+      expect(result.allowed).toBe(true);
+    });
+
+    it('should block mutating bash in read_only mode', () => {
+      const result = sandbox.validateCommand('mkdir tmp-dir', {
+        ...defaultOptions,
+        bashMode: 'read_only',
+        allowedCommands: ['mkdir'],
+      });
+      expect(result.allowed).toBe(false);
+      expect(result.reason).toContain('read-only bash commands');
     });
   });
 });
@@ -249,6 +289,28 @@ describe('SandboxManager', () => {
 });
 
 describe('Utility functions', () => {
+  describe('detectFileCreationViaBash', () => {
+    it('should detect heredoc usage', () => {
+      const check = detectFileCreationViaBash(`cat > file.txt << EOF\nx\nEOF`);
+      expect(check.detected).toBe(true);
+    });
+
+    it('should detect redirect usage', () => {
+      const check = detectFileCreationViaBash(`printf "x" > file.txt`);
+      expect(check.detected).toBe(true);
+    });
+
+    it('should detect tee usage', () => {
+      const check = detectFileCreationViaBash(`echo "x" | tee file.txt`);
+      expect(check.detected).toBe(true);
+    });
+
+    it('should not detect read-only command', () => {
+      const check = detectFileCreationViaBash(`cat file.txt`);
+      expect(check.detected).toBe(false);
+    });
+  });
+
   describe('isCommandSafe', () => {
     it('should return safe for normal commands', () => {
       expect(isCommandSafe('ls -la').safe).toBe(true);

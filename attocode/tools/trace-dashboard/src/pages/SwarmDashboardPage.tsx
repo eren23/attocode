@@ -292,6 +292,7 @@ export function SwarmDashboardPage() {
           <TaskDAGPanel
             tasks={state?.tasks ?? []}
             edges={state?.edges ?? []}
+            dir={selectedDir}
           />
         </ExpandablePanel>
         <ExpandablePanel title="Worker Timeline">

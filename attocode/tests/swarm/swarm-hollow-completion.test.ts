@@ -203,6 +203,46 @@ describe('isHollowCompletion', () => {
     // >= 50 chars → not hollow
     expect(isHollowCompletion(spawnResult)).toBe(false);
   });
+
+  // ─── Failure-language hollow detection ───────────────────────────────────
+
+  it('returns true for success=true with "budget exhausted" in output', () => {
+    const spawnResult: SpawnResult = {
+      success: true,
+      output: 'I attempted the task but budget exhausted before I could finish the research.',
+      metrics: { tokens: 500, duration: 5000, toolCalls: 3 },
+    };
+    expect(isHollowCompletion(spawnResult)).toBe(true);
+  });
+
+  it('returns true for success=true with "unable to complete" in output', () => {
+    const spawnResult: SpawnResult = {
+      success: true,
+      output: 'I was unable to complete the requested changes due to context limitations.',
+      metrics: { tokens: 1000, duration: 10000, toolCalls: 5 },
+    };
+    expect(isHollowCompletion(spawnResult)).toBe(true);
+  });
+
+  it('does not false-positive on success=true with legitimate output mentioning budget', () => {
+    const spawnResult: SpawnResult = {
+      success: true,
+      output: 'Implemented the budget tracking feature. Added new Budget class with methods for allocation and reporting.',
+      metrics: { tokens: 2000, duration: 20000, toolCalls: 8 },
+    };
+    // "budget" appears but not as a failure indicator phrase
+    expect(isHollowCompletion(spawnResult)).toBe(false);
+  });
+
+  it('does not trigger failure-language check on success=false', () => {
+    const spawnResult: SpawnResult = {
+      success: false,
+      output: 'Unable to complete the task due to errors.',
+      metrics: { tokens: 200, duration: 3000, toolCalls: 1 },
+    };
+    // success=false — failure language check only runs when success=true
+    expect(isHollowCompletion(spawnResult)).toBe(false);
+  });
 });
 
 // ─── Quality gate closure report pre-check ──────────────────────────────────

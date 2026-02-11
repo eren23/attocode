@@ -183,6 +183,9 @@ export interface ProductionAgentConfig {
   /** Execution policy configuration (from Lesson 23) */
   executionPolicy?: ExecutionPolicyConfig | false;
 
+  /** Unified policy engine configuration */
+  policyEngine?: PolicyEngineConfig | false;
+
   /** Thread management configuration (from Lesson 24) */
   threads?: ThreadsConfig | false;
 
@@ -570,6 +573,45 @@ export interface RoutingContext {
 }
 
 /**
+ * Unified policy profile for tool and bash behavior.
+ */
+export interface PolicyProfile {
+  /** Tool access behavior */
+  toolAccessMode?: 'all' | 'whitelist' | 'denylist';
+  /** Explicitly allowed tools (for whitelist mode) */
+  allowedTools?: string[];
+  /** Explicitly denied tools */
+  deniedTools?: string[];
+  /** Bash policy mode */
+  bashMode?: 'disabled' | 'read_only' | 'task_scoped' | 'full';
+  /** Additional bash write protections */
+  bashWriteProtection?: 'off' | 'block_file_mutation';
+  /** Approval behavior overrides */
+  approval?: {
+    autoApprove?: string[];
+    scopedApprove?: Record<string, { paths: string[] }>;
+    requireApproval?: string[];
+  };
+}
+
+/**
+ * Policy engine configuration.
+ * Provides unified and configurable enforcement across agent paths.
+ */
+export interface PolicyEngineConfig {
+  /** Enable/disable unified policy engine */
+  enabled?: boolean;
+  /** Keep legacy checks as fallback while migrating */
+  legacyFallback?: boolean;
+  /** Named policy profiles */
+  profiles?: Record<string, PolicyProfile>;
+  /** Default profile for root agents */
+  defaultProfile?: string;
+  /** Default profile for swarm workers */
+  defaultSwarmProfile?: string;
+}
+
+/**
  * Sandbox configuration (Lesson 20).
  */
 export interface SandboxConfig {
@@ -607,6 +649,15 @@ export interface SandboxConfig {
 
   /** Docker image to use (for docker mode) */
   dockerImage?: string;
+
+  /** Legacy compatibility flag: block shell file creation patterns */
+  blockFileCreationViaBash?: boolean;
+
+  /** Optional per-agent bash policy mode */
+  bashMode?: PolicyProfile['bashMode'];
+
+  /** Optional per-agent bash write protection behavior */
+  bashWriteProtection?: PolicyProfile['bashWriteProtection'];
 }
 
 /**
@@ -1239,6 +1290,10 @@ export type AgentEvent =
   | { type: 'intent.classified'; tool: string; intent: string; confidence: number }
   | { type: 'grant.created'; grantId: string; tool: string }
   | { type: 'grant.used'; grantId: string }
+  | { type: 'policy.profile.resolved'; profile: string; context: 'root' | 'subagent' | 'swarm'; selectionSource?: 'explicit' | 'worker-capability' | 'task-type' | 'default'; usedLegacyMappings: boolean; legacySources?: string[] }
+  | { type: 'policy.legacy.fallback.used'; profile: string; sources: string[]; warnings: string[] }
+  | { type: 'policy.tool.blocked'; tool: string; profile?: string; phase?: 'precheck' | 'enforced'; reason: string }
+  | { type: 'policy.bash.blocked'; command: string; profile?: string; phase?: 'precheck' | 'enforced'; reason: string }
   // Thread events (Lesson 24)
   | { type: 'thread.forked'; threadId: string; parentId: string }
   | { type: 'thread.switched'; fromId: string; toId: string }

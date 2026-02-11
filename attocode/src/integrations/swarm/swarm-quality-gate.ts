@@ -39,6 +39,10 @@ export interface QualityGateResult {
 
   /** True when rejected due to missing/empty target files (not a model problem) */
   artifactAutoFail?: boolean;
+
+  /** True when rejection is a pre-flight auto-reject (no LLM judge call made).
+   *  Pre-flight rejects should NOT count toward the circuit breaker counter. */
+  preFlightReject?: boolean;
 }
 
 /**
@@ -53,6 +57,8 @@ export async function evaluateWorkerOutput(
   result: SwarmTaskResult,
   judgeConfig?: QualityGateConfig,
   qualityThreshold: number = 3,
+  onUsage?: (response: { usage?: { total_tokens?: number; prompt_tokens?: number; completion_tokens?: number } }, purpose: string) => void,
+  fileArtifacts?: Array<{ path: string; preview: string }>,
 ): Promise<QualityGateResult> {
   // V4: Pre-flight artifact check — if task has target files, verify they exist
   const artifactReport = checkArtifacts(task);
@@ -64,6 +70,19 @@ export async function evaluateWorkerOutput(
       feedback: `Target files are empty or missing: ${artifactReport.summary}`,
       passed: false,
       artifactAutoFail: true,
+      preFlightReject: true,
+    };
+  }
+
+  // V9: Tool-call pre-check for action-oriented task types.
+  // If the task requires file changes and the worker made zero tool calls, auto-reject.
+  const actionTaskTypes = new Set(['implement', 'test', 'refactor', 'integrate', 'deploy']);
+  if (actionTaskTypes.has(task.type) && result.toolCalls === 0) {
+    return {
+      score: 0,
+      feedback: 'No tool calls made — no work was done.',
+      passed: false,
+      preFlightReject: true,
     };
   }
 
@@ -83,11 +102,12 @@ export async function evaluateWorkerOutput(
         feedback: `Worker admitted failure in closure report: ${cr.failures[0]}`,
         passed: false,
         artifactAutoFail: false,
+        preFlightReject: true,
       };
     }
   }
 
-  const prompt = buildQualityPrompt(task, result, artifactReport);
+  const prompt = buildQualityPrompt(task, result, artifactReport, fileArtifacts);
   const model = judgeConfig?.model ?? orchestratorModel;
 
   const facts = formatFactsCompact(getEnvironmentFacts());
@@ -107,6 +127,9 @@ export async function evaluateWorkerOutput(
         temperature: 0.1,
       },
     );
+
+    // Track quality gate LLM usage for orchestrator stats
+    onUsage?.(response as any, 'quality-gate');
 
     const parsed = parseQualityResponse(response.content);
     // Apply configurable threshold
@@ -189,8 +212,8 @@ function checkArtifacts(task: SwarmTask): ArtifactReport {
  * Build the quality evaluation prompt.
  * V4: Includes artifact verification data and temporal anchoring.
  */
-function buildQualityPrompt(task: SwarmTask, result: SwarmTaskResult, artifacts: ArtifactReport): string {
-  const output = result.output.slice(0, 2000); // Truncate long outputs
+function buildQualityPrompt(task: SwarmTask, result: SwarmTaskResult, artifacts: ArtifactReport, fileArtifacts?: Array<{ path: string; preview: string }>): string {
+  const output = result.output.slice(0, 8000); // Truncate long outputs (8K gives judge enough evidence for multi-file tasks)
   const facts = getEnvironmentFacts();
 
   let artifactSection = '';
@@ -213,6 +236,21 @@ CRITICAL: If target files are EMPTY (0 bytes) or MISSING, the task FAILED regard
 of what the worker claims. An empty file is NOT an acceptable artifact. Score <= 2.`;
   }
 
+  // Build file artifacts section from worker tool calls (write_file/edit_file results)
+  let fileArtifactsSection = '';
+  if (fileArtifacts && fileArtifacts.length > 0) {
+    const artifactDetails = fileArtifacts
+      .slice(0, 10) // Limit to 10 files
+      .map(f => `  ${f.path}:\n    ${f.preview.slice(0, 300)}`)
+      .join('\n');
+    fileArtifactsSection = `
+FILES CREATED/MODIFIED BY WORKER (from tool call results — ground truth):
+${artifactDetails}
+
+NOTE: These are actual file contents extracted from write_file/edit_file tool calls.
+They prove the worker did real work beyond just text claims.`;
+  }
+
   return `Evaluate this worker's output for the given task.
 
 TASK: ${task.description}
@@ -229,6 +267,7 @@ ${result.closureReport ? `STRUCTURED REPORT:
 - Failures: ${result.closureReport.failures.join('; ')}
 - Remaining: ${result.closureReport.remainingWork.join('; ')}` : ''}
 ${artifactSection}
+${fileArtifactsSection}
 
 Rate the output 1-5:
 1 = Completely wrong, empty artifacts, or no meaningful work done

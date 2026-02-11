@@ -186,6 +186,87 @@ export class TimelineView {
       });
     }
 
+    // Swarm events
+    if (this.session.swarmData) {
+      const swarm = this.session.swarmData;
+
+      // Swarm start
+      if (swarm.config) {
+        entries.push({
+          timestamp: startTime,
+          relativeMs: 0,
+          type: 'swarm.start',
+          description: `Swarm started: ${swarm.tasks.length} tasks, max ${swarm.config.maxConcurrency} concurrent`,
+          importance: 'high',
+          details: { config: swarm.config },
+        });
+      }
+
+      // Wave events
+      for (const wave of swarm.waves) {
+        const relativeMs = wave.timestamp.getTime() - startTime.getTime();
+        if (wave.phase === 'start') {
+          entries.push({
+            timestamp: wave.timestamp,
+            relativeMs,
+            type: 'swarm.wave.start',
+            description: `Wave ${wave.wave}: dispatching ${wave.taskCount} tasks`,
+            importance: 'normal',
+            details: { wave: wave.wave, taskCount: wave.taskCount },
+          });
+        } else {
+          entries.push({
+            timestamp: wave.timestamp,
+            relativeMs,
+            type: 'swarm.wave.complete',
+            description: `Wave ${wave.wave} complete: ${wave.completed ?? 0} done, ${wave.failed ?? 0} failed`,
+            importance: wave.failed ? 'high' : 'normal',
+            details: { wave: wave.wave, completed: wave.completed, failed: wave.failed },
+          });
+        }
+      }
+
+      // Quality rejections
+      for (const rejection of swarm.qualityRejections) {
+        const relativeMs = rejection.timestamp.getTime() - startTime.getTime();
+        entries.push({
+          timestamp: rejection.timestamp,
+          relativeMs,
+          type: 'swarm.quality',
+          description: `Task ${rejection.taskId} rejected (score ${rejection.score}/5)`,
+          importance: 'high',
+          details: { taskId: rejection.taskId, score: rejection.score, feedback: rejection.feedback },
+        });
+      }
+
+      // Verification
+      if (swarm.verification) {
+        entries.push({
+          timestamp: this.session.endTime || startTime,
+          relativeMs: this.session.durationMs || 0,
+          type: 'swarm.verification',
+          description: `Verification ${swarm.verification.passed ? 'PASSED' : 'FAILED'}: ${swarm.verification.summary}`,
+          importance: 'high',
+          details: {
+            passed: swarm.verification.passed,
+            steps: swarm.verification.steps.length,
+          },
+        });
+      }
+
+      // Swarm complete
+      if (swarm.stats) {
+        entries.push({
+          timestamp: this.session.endTime || startTime,
+          relativeMs: this.session.durationMs || 0,
+          type: 'swarm.complete',
+          description: `Swarm complete: ${swarm.stats.completedTasks}/${swarm.stats.totalTasks} tasks, ${(swarm.stats.totalTokens / 1000).toFixed(0)}k tokens`,
+          importance: 'high',
+          details: { stats: swarm.stats },
+        });
+      }
+    }
+
     // Session end
     if (this.session.endTime) {
       entries.push({
