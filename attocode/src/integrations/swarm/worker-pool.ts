@@ -7,14 +7,22 @@
 
 import type { AgentRegistry, AgentDefinition, SpawnResult } from '../agent-registry.js';
 import type { SwarmConfig, SwarmTask, SwarmTaskResult, SwarmWorkerSpec, SwarmWorkerStatus } from './types.js';
-import { SUBTASK_TO_CAPABILITY, type WorkerCapability } from './types.js';
-import { selectWorkerForCapability } from './model-selector.js';
+import { getTaskTypeConfig, type WorkerCapability } from './types.js';
+import { selectWorkerForCapability, type ModelHealthTracker } from './model-selector.js';
 import type { SwarmBudgetPool } from './swarm-budget.js';
 import { buildDelegationPrompt, createMinimalDelegationSpec } from '../delegation-protocol.js';
 import { getSubagentQualityPrompt } from '../thinking-strategy.js';
 import { getEnvironmentFacts, formatFactsBlock, formatFactsCompact } from '../environment-facts.js';
 import { calculateCost, isModelCacheInitialized } from '../openrouter-pricing.js';
 import { resolvePolicyProfile } from '../policy-engine.js';
+
+// ─── D2: Lightweight Model Detection ───────────────────────────────────────
+
+/** D2: Detect cheap/weak models that benefit from minimal prompts. */
+export function isLightweightModel(model: string): boolean {
+  const lower = model.toLowerCase();
+  return /\b(mini|micro|small|nano|tiny|lite|glm|phi|gemma-2b|qwen.*0\.5|qwen.*1\.5)\b/.test(lower);
+}
 
 // ─── Worker Timeout Error ──────────────────────────────────────────────────
 
@@ -49,6 +57,7 @@ export class SwarmWorkerPool {
   private spawnAgent: SpawnAgentFn;
   private budgetPool: SwarmBudgetPool;
   private workers: SwarmWorkerSpec[];
+  private healthTracker?: ModelHealthTracker;
 
   private activeWorkers: Map<string, ActiveWorker> = new Map();
   private registeredAgentNames: Set<string> = new Set();
@@ -59,12 +68,14 @@ export class SwarmWorkerPool {
     agentRegistry: AgentRegistry,
     spawnAgent: SpawnAgentFn,
     budgetPool: SwarmBudgetPool,
+    healthTracker?: ModelHealthTracker,
   ) {
     this.config = config;
     this.agentRegistry = agentRegistry;
     this.spawnAgent = spawnAgent;
     this.budgetPool = budgetPool;
     this.workers = config.workers;
+    this.healthTracker = healthTracker;
   }
 
   /**
@@ -85,8 +96,8 @@ export class SwarmWorkerPool {
    * Select the best worker spec for a task based on capability matching.
    */
   selectWorker(task: SwarmTask): SwarmWorkerSpec | undefined {
-    const capability: WorkerCapability = SUBTASK_TO_CAPABILITY[task.type] ?? 'code';
-    return selectWorkerForCapability(this.workers, capability, this.dispatchCount++);
+    const capability: WorkerCapability = getTaskTypeConfig(task.type, this.config).capability ?? 'code';
+    return selectWorkerForCapability(this.workers, capability, this.dispatchCount++, this.healthTracker);
   }
 
   /**
@@ -133,10 +144,46 @@ export class SwarmWorkerPool {
         ? profile.allowedTools
         : worker.allowedTools);
 
-    // V9: Scale resources by task complexity (1-10 scale → 0.6x-1.5x multiplier)
-    const complexityMultiplier = 0.5 + (task.complexity ?? 5) * 0.1;
-    const baseTokenBudget = worker.maxTokens ?? this.config.maxTokensPerWorker;
-    const baseMaxIterations = this.config.workerMaxIterations;
+    // V7: Get effective per-type config (user overrides > builtin defaults > fallback)
+    const typeConfig = getTaskTypeConfig(task.type, this.config);
+
+    // F3: Wider complexity scaling: 0.3 + complexity * 0.14 (range 0.44x-1.7x)
+    // Previously 0.5 + complexity * 0.1 (range 0.6x-1.5x) — too narrow for diverse tasks.
+    const complexityMultiplier = 0.3 + (task.complexity ?? 5) * 0.14;
+    // Escalating retry budget — if a worker ran out on the first attempt,
+    // giving it the same budget will produce the same result.
+    // 1st retry: 1.3x, 2nd: 1.6x, 3rd+: 2.0x (double budget).
+    const retryMultiplier = task.attempts === 0 ? 1.0
+      : task.attempts === 1 ? 1.3
+      : task.attempts === 2 ? 1.6
+      : 2.0;
+
+    // F3: Task-aware budget using tokenBudgetRange from TaskTypeConfig.
+    // Foundation tasks get max budget, leaf tasks get proportional to complexity.
+    let baseTokenBudget: number;
+    if (typeConfig.tokenBudgetRange) {
+      const { min, max } = typeConfig.tokenBudgetRange;
+      if (task.isFoundation) {
+        baseTokenBudget = max;
+      } else {
+        // Scale linearly: complexity 1 → min, complexity 10 → max
+        const ratio = Math.min(1, Math.max(0, ((task.complexity ?? 5) - 1) / 9));
+        baseTokenBudget = Math.round(min + ratio * (max - min));
+      }
+    } else {
+      baseTokenBudget = typeConfig.tokenBudget ?? worker.maxTokens ?? this.config.maxTokensPerWorker;
+    }
+    const baseMaxIterations = typeConfig.maxIterations ?? this.config.workerMaxIterations;
+    // 2nd+ retries get 50% more iterations — more turns to complete the task
+    const iterationMultiplier = task.attempts >= 2 ? 1.5 : 1.0;
+
+    // V7: Per-task-type timeout from TaskTypeConfig, with backward compat to taskTypeTimeouts
+    // Computed before agentDef so we can pass it through to spawnAgent's timeout chain
+    const baseTimeoutMs = typeConfig.timeout ?? this.config.taskTypeTimeouts?.[task.type] ?? Math.max(this.config.workerTimeout, 240_000);
+    // Foundation tasks (3+ dependents) get 2.5x timeout to reduce cascade failure risk
+    const adjustedTimeoutMs = task.isFoundation ? Math.round(baseTimeoutMs * 2.5) : baseTimeoutMs;
+    // Apply both complexity and retry multipliers — retries get more wall-clock time too
+    const timeoutMs = Math.round(adjustedTimeoutMs * complexityMultiplier * retryMultiplier);
 
     const agentDef: AgentDefinition = {
       name: agentName,
@@ -148,9 +195,22 @@ export class SwarmWorkerPool {
       // Respect failover-assigned model on retries.
       model: task.assignedModel ?? worker.model,
       taskType: task.type,
-      maxTokenBudget: Math.round(baseTokenBudget * complexityMultiplier),
-      maxIterations: Math.round(baseMaxIterations * complexityMultiplier),
+      maxTokenBudget: Math.round(baseTokenBudget * complexityMultiplier * retryMultiplier),
+      maxIterations: Math.round(baseMaxIterations * complexityMultiplier * retryMultiplier * iterationMultiplier),
+      timeout: timeoutMs,  // Pass calculated timeout through to spawnAgent (highest priority in timeout chain)
+      idleTimeout: typeConfig.idleTimeout,  // V7: Configurable idle timeout (for long-running tasks)
       capabilities: worker.capabilities,
+      // W3: Swarm workers get tighter economics thresholds by default
+      // These can be overridden via swarmConfig.economicsTuning
+      economicsTuning: {
+        doomLoopThreshold: 2,
+        doomLoopFuzzyThreshold: 3,
+        explorationFileThreshold: 5,
+        explorationIterThreshold: 3,
+        zeroProgressThreshold: 3,
+        progressCheckpoint: 3,
+        ...(this.config.economicsTuning ?? {}),
+      },
     };
 
     this.agentRegistry.registerAgent(agentDef);
@@ -161,14 +221,6 @@ export class SwarmWorkerPool {
 
     // Create the promise that tracks execution
     const startedAt = Date.now();
-    // V6: Per-task-type timeout — research/analysis tasks get more time by default
-    // V9: Scale timeout by complexity multiplier
-    const typeTimeout = this.config.taskTypeTimeouts?.[task.type];
-    // Use type-specific timeout, or fall back to max(workerTimeout, 240s) for unknown types
-    const baseTimeoutMs = typeTimeout ?? Math.max(this.config.workerTimeout, 240_000);
-    // Foundation tasks (3+ dependents) get 1.5x timeout to reduce cascade failure risk
-    const adjustedTimeoutMs = task.isFoundation ? Math.round(baseTimeoutMs * 1.5) : baseTimeoutMs;
-    const timeoutMs = Math.round(adjustedTimeoutMs * complexityMultiplier);
 
     // V8: Worker pool timeout is a backstop AFTER the agent's graceful timeout.
     // The agent's graceful timeout (in spawnAgent) provides a wrapup window before hard kill.
@@ -331,18 +383,59 @@ export class SwarmWorkerPool {
    *
    * Prompt tiers based on attempt number:
    *   attempt 0: 'full'    — all additions (delegation, env facts block, quality self-assessment)
-   *   attempt 1: 'reduced' — compact facts, skip delegation for research/analysis tasks
-   *   attempt 2+: 'minimal' — only persona + task description + type rules + retry context
+   *   attempt 1+: 'reduced' — compact facts, skip delegation for research/analysis tasks
    */
   private buildWorkerSystemPrompt(task: SwarmTask, worker: SwarmWorkerSpec): string {
     const stuckThreshold = this.config.workerStuckThreshold ?? 3;
     const parts: string[] = [];
 
-    // Determine prompt tier based on attempt number
+    // D2: Determine prompt tier — explicit override > retry detection > model detection > full
     const promptTier: 'full' | 'reduced' | 'minimal' =
-      task.attempts === 0 ? 'full'
-      : task.attempts === 1 ? 'reduced'
-      : 'minimal';
+      worker.promptTier ??
+      (task.attempts > 0 ? 'reduced' :
+       isLightweightModel(task.assignedModel ?? worker.model) ? 'reduced' : 'full');
+
+    // D2: Minimal prompt tier for cheap/weak models — drastically reduced prompt
+    if (promptTier === 'minimal') {
+      parts.push(
+        `You are a ${worker.name} worker. Your task: ${task.description}`,
+        '',
+        '═══ RULES ═══',
+        '',
+        'CRITICAL:',
+        '- Use tools to do your work. A response with zero tool calls is failure.',
+        '- Use read_file/grep to read code. Use write_file/edit_file to modify code.',
+        '- Do NOT use bash for file reading (no cat/head/tail). Use read_file instead.',
+        `- You have ${this.config.workerMaxIterations} max iterations. Work fast.`,
+        '',
+        `AVAILABLE TOOLS: ${(worker.allowedTools ?? ['write_file', 'edit_file', 'read_file', 'glob', 'grep', 'bash']).join(', ')}`,
+      );
+
+      if (task.targetFiles && task.targetFiles.length > 0) {
+        parts.push('', `TARGET FILES: ${task.targetFiles.join(', ')}`);
+      }
+      if (task.readFiles && task.readFiles.length > 0) {
+        parts.push('', `REFERENCE FILES: ${task.readFiles.join(', ')}`);
+      }
+      if (task.attempts > 0 && task.retryContext) {
+        parts.push(
+          '',
+          `RETRY #${task.attempts}: Previous score ${task.retryContext.previousScore}/5. Fix: ${task.retryContext.previousFeedback}`,
+        );
+        // F12: Hollow completion — prescribe exact first action
+        if (task.retryContext.previousScore <= 1) {
+          const firstTarget = task.targetFiles?.[0] ?? task.readFiles?.[0];
+          parts.push(
+            '',
+            '⚠ YOUR PREVIOUS ATTEMPT HAD ZERO TOOL CALLS — THIS IS AN AUTOMATIC FAILURE.',
+            firstTarget
+              ? `YOUR VERY FIRST ACTION: Call ${task.targetFiles?.[0] ? 'write_file' : 'read_file'} on "${firstTarget}".`
+              : 'YOUR VERY FIRST ACTION: Call read_file or write_file. Text-only responses = failure.',
+          );
+        }
+      }
+      return parts.join('\n');
+    }
 
     // V3: Inject worker persona if configured
     if (worker.persona) {
@@ -359,21 +452,22 @@ export class SwarmWorkerPool {
     const customFacts = this.config.facts?.custom ?? [];
     if (promptTier === 'full') {
       parts.push(formatFactsBlock(getEnvironmentFacts(customFacts)), '');
-    } else if (promptTier === 'reduced') {
+    } else {
       parts.push(formatFactsCompact(getEnvironmentFacts(customFacts)), '');
     }
-    // 'minimal' tier: skip environment facts entirely
 
-    // V3: Inject philosophy if configured (skip on minimal tier)
-    if (this.config.philosophy && promptTier !== 'minimal') {
+    // V3: Inject philosophy if configured
+    if (this.config.philosophy) {
       parts.push('═══ PHILOSOPHY ═══', '', this.config.philosophy, '');
     }
 
-    // Task-type-specific rules: research/analysis/design get research rules,
-    // merge gets synthesis rules, document gets doc rules, everything else gets code rules
+    // V7: Use promptTemplate from TaskTypeConfig for dispatching prompt rules.
+    // Built-in templates: 'research', 'synthesis', 'document', 'code' (default).
+    const typeConfig = getTaskTypeConfig(task.type, this.config);
+    const promptTemplate = typeConfig.promptTemplate ?? 'code';
     const taskType = task.type;
 
-    if (taskType === 'research' || taskType === 'analysis' || taskType === 'design') {
+    if (promptTemplate === 'research') {
       parts.push(
         '═══ RESEARCH TASK RULES ═══',
         '',
@@ -395,7 +489,7 @@ export class SwarmWorkerPool {
         '2. Sources consulted (files read, searches performed)',
         '3. Any gaps or areas needing further investigation',
       );
-    } else if (taskType === 'merge') {
+    } else if (promptTemplate === 'synthesis') {
       parts.push(
         '═══ SYNTHESIS TASK RULES ═══',
         '',
@@ -416,7 +510,7 @@ export class SwarmWorkerPool {
         '2. Key themes or patterns across inputs',
         '3. Any conflicts or gaps between inputs',
       );
-    } else if (taskType === 'document') {
+    } else if (promptTemplate === 'document') {
       parts.push(
         '═══ DOCUMENTATION TASK RULES ═══',
         '',
@@ -497,6 +591,16 @@ export class SwarmWorkerPool {
 
     // V5: Retry context — inject previous feedback so worker doesn't repeat mistakes
     if (task.attempts > 0 && task.retryContext) {
+      // F22: Include swarm progress so retrying workers know what's been accomplished
+      if (task.retryContext.swarmProgress) {
+        parts.push(
+          '',
+          '═══ SWARM PROGRESS ═══',
+          '',
+          task.retryContext.swarmProgress,
+        );
+      }
+
       parts.push(
         '',
         '═══ RETRY CONTEXT (THIS IS YOUR 2ND+ ATTEMPT) ═══',
@@ -517,6 +621,17 @@ export class SwarmWorkerPool {
           '',
           'You MUST address the feedback above. Try a DIFFERENT approach from your previous attempt.',
           'Focus specifically on what the judge flagged as wrong.',
+        );
+      }
+      // F12: Hollow completion — prescribe exact first action
+      if (task.retryContext.previousScore <= 1) {
+        const firstTarget = task.targetFiles?.[0] ?? task.readFiles?.[0];
+        parts.push(
+          '',
+          '⚠ YOUR PREVIOUS ATTEMPT HAD ZERO TOOL CALLS — THIS IS AN AUTOMATIC FAILURE.',
+          firstTarget
+            ? `YOUR VERY FIRST ACTION: Call ${task.targetFiles?.[0] ? 'write_file' : 'read_file'} on "${firstTarget}".`
+            : 'YOUR VERY FIRST ACTION: Call read_file or write_file. Text-only responses = failure.',
         );
       }
     }
@@ -594,6 +709,7 @@ export function createSwarmWorkerPool(
   agentRegistry: AgentRegistry,
   spawnAgent: SpawnAgentFn,
   budgetPool: SwarmBudgetPool,
+  healthTracker?: ModelHealthTracker,
 ): SwarmWorkerPool {
-  return new SwarmWorkerPool(config, agentRegistry, spawnAgent, budgetPool);
+  return new SwarmWorkerPool(config, agentRegistry, spawnAgent, budgetPool, healthTracker);
 }

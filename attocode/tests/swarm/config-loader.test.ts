@@ -383,3 +383,57 @@ describe('normalizeCapabilities', () => {
     expect(normalizeCapabilities(['Code', 'RESEARCH'])).toEqual(['code', 'research']);
   });
 });
+
+describe('extraTools and profileExtensions parsing', () => {
+  it('should parse worker extraTools from YAML (inline syntax)', () => {
+    const yaml = `
+workers:
+  - name: researcher
+    model: test/model
+    capabilities: [research]
+    extraTools: [web_search, custom_mcp_tool]
+`;
+    const parsed = parseSwarmYaml(yaml);
+    const config = yamlToSwarmConfig(parsed, 'test/model');
+    expect(config.workers).toHaveLength(1);
+    expect(config.workers![0].extraTools).toEqual(['web_search', 'custom_mcp_tool']);
+  });
+
+  it('should parse profileExtensions with addTools', () => {
+    const yaml = `
+profileExtensions:
+  research-safe:
+    addTools:
+      - custom_tool
+      - web_search
+`;
+    const parsed = parseSwarmYaml(yaml);
+    const config = yamlToSwarmConfig(parsed, 'test/model');
+    expect(config.profileExtensions).toBeDefined();
+    expect(config.profileExtensions!['research-safe'].addTools).toEqual(['custom_tool', 'web_search']);
+  });
+
+  it('should parse profileExtensions with removeTools', () => {
+    const yaml = `
+profileExtensions:
+  research-safe:
+    removeTools:
+      - grep
+`;
+    const parsed = parseSwarmYaml(yaml);
+    const config = yamlToSwarmConfig(parsed, 'test/model');
+    expect(config.profileExtensions!['research-safe'].removeTools).toEqual(['grep']);
+  });
+
+  it('should parse snake_case profile_extensions alias', () => {
+    const yaml = `
+profile_extensions:
+  code-strict-bash:
+    add_tools:
+      - custom_tool
+`;
+    const parsed = parseSwarmYaml(yaml);
+    const config = yamlToSwarmConfig(parsed, 'test/model');
+    expect(config.profileExtensions!['code-strict-bash'].addTools).toEqual(['custom_tool']);
+  });
+});

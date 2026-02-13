@@ -10,11 +10,78 @@ import type { AgentOutput, SynthesisResult } from '../result-synthesizer.js';
 import type { StructuredClosureReport } from '../agent-registry.js';
 import type { ThrottleConfig } from './request-throttle.js';
 import type { PolicyProfile } from '../../types.js';
+import type { EconomicsTuning } from '../economics.js';
 
 // ─── Worker Roles ─────────────────────────────────────────────────────────
 
 /** Hierarchical role for authority separation. */
 export type WorkerRole = 'executor' | 'manager' | 'judge';
+
+// ─── Worker Capability (hoisted for TaskTypeConfig) ──────────────────────
+
+/** Capability categories for worker models */
+export type WorkerCapability = 'code' | 'research' | 'review' | 'test' | 'document' | 'write';
+
+// ─── Task Type Configuration ─────────────────────────────────────────────
+
+/**
+ * Per-task-type configuration. Everything is optional — omitted fields
+ * fall back to built-in defaults or sensible fallbacks.
+ */
+export interface TaskTypeConfig {
+  /** Timeout in ms (default: from taskTypeTimeouts or 300_000) */
+  timeout?: number;
+  /** Max iterations per worker (default: workerMaxIterations) */
+  maxIterations?: number;
+  /** Idle timeout in ms — time without tool calls before kill (default: 120_000) */
+  idleTimeout?: number;
+  /** Named policy profile (default: inferred from capability) */
+  policyProfile?: string;
+  /** Worker capability for task-worker matching (default: 'code') */
+  capability?: WorkerCapability;
+  /** Whether zero tool calls = hollow completion (default: true for action types) */
+  requiresToolCalls?: boolean;
+  /** Prompt template key: 'code' | 'research' | 'synthesis' | 'document' | custom (default: 'code') */
+  promptTemplate?: string;
+  /** Tool whitelist override */
+  tools?: string[];
+  /** Retry count override (default: workerRetries) */
+  retries?: number;
+  /** Token budget override per worker (default: maxTokensPerWorker) */
+  tokenBudget?: number;
+  /** F3: Token budget range — foundation tasks get max, leaf tasks get proportional.
+   *  Falls back to tokenBudget or maxTokensPerWorker when not set. */
+  tokenBudgetRange?: { min: number; max: number };
+}
+
+/**
+ * Built-in task type configurations with sensible defaults.
+ * Custom types that aren't in this map fall back to the 'implement' config.
+ */
+export const BUILTIN_TASK_TYPE_CONFIGS: Record<string, TaskTypeConfig> = {
+  research:  { timeout: 300_000, capability: 'research', requiresToolCalls: false, promptTemplate: 'research', policyProfile: 'research-safe',     tokenBudgetRange: { min: 20_000, max: 80_000 } },
+  analysis:  { timeout: 300_000, capability: 'research', requiresToolCalls: false, promptTemplate: 'research', policyProfile: 'research-safe',     tokenBudgetRange: { min: 20_000, max: 80_000 } },
+  design:    { timeout: 300_000, capability: 'research', requiresToolCalls: false, promptTemplate: 'research', policyProfile: 'code-strict-bash',  tokenBudgetRange: { min: 20_000, max: 80_000 } },
+  implement: { timeout: 300_000, capability: 'code',     requiresToolCalls: true,  promptTemplate: 'code',     policyProfile: 'code-strict-bash',  tokenBudgetRange: { min: 40_000, max: 150_000 } },
+  test:      { timeout: 240_000, capability: 'test',     requiresToolCalls: true,  promptTemplate: 'code',     policyProfile: 'code-strict-bash',  tokenBudgetRange: { min: 20_000, max: 60_000 } },
+  refactor:  { timeout: 240_000, capability: 'code',     requiresToolCalls: true,  promptTemplate: 'code',     policyProfile: 'code-strict-bash',  tokenBudgetRange: { min: 30_000, max: 100_000 } },
+  review:    { timeout: 240_000, capability: 'review',   requiresToolCalls: false, promptTemplate: 'research', policyProfile: 'review-safe',       tokenBudgetRange: { min: 15_000, max: 50_000 } },
+  document:  { timeout: 240_000, capability: 'document', requiresToolCalls: true,  promptTemplate: 'document', policyProfile: 'code-strict-bash',  tokenBudgetRange: { min: 15_000, max: 50_000 } },
+  integrate: { timeout: 300_000, capability: 'code',     requiresToolCalls: true,  promptTemplate: 'code',     policyProfile: 'code-strict-bash',  tokenBudgetRange: { min: 40_000, max: 150_000 } },
+  deploy:    { timeout: 240_000, capability: 'code',     requiresToolCalls: true,  promptTemplate: 'code',     policyProfile: 'code-strict-bash',  tokenBudgetRange: { min: 20_000, max: 60_000 } },
+  merge:     { timeout: 180_000, capability: 'write',    requiresToolCalls: false, promptTemplate: 'synthesis', policyProfile: 'research-safe',    tokenBudgetRange: { min: 10_000, max: 30_000 } },
+};
+
+/**
+ * Get the effective TaskTypeConfig for a task type, merging:
+ *   user overrides (from swarmConfig.taskTypes) > built-in defaults > fallback
+ */
+export function getTaskTypeConfig(type: string, config?: SwarmConfig): TaskTypeConfig {
+  const userConfig = config?.taskTypes?.[type] ?? {};
+  const builtinConfig = BUILTIN_TASK_TYPE_CONFIGS[type] ?? {};
+  const fallback = BUILTIN_TASK_TYPE_CONFIGS['implement']!;
+  return { ...fallback, ...builtinConfig, ...userConfig };
+}
 
 // ─── Swarm Configuration ───────────────────────────────────────────────────
 
@@ -118,6 +185,9 @@ export interface SwarmConfig {
   /** Minimum quality score to pass (default: 3, range 1-5) */
   qualityThreshold?: number;
 
+  /** F2: Enable concrete output validation (syntax checks on modified files). Default: true */
+  enableConcreteValidation?: boolean;
+
   // ─── V3: Config, Hierarchy, Personas ────────────────────────────────────
 
   /** Development philosophy injected into ALL worker system prompts */
@@ -151,8 +221,9 @@ export interface SwarmConfig {
   // ─── V6: Per-task-type timeout ──────────────────────────────────────────
 
   /** Per-task-type timeout overrides in ms (e.g., { research: 300000, code: 120000 }).
-   *  Falls back to workerTimeout when a type is not specified. */
-  taskTypeTimeouts?: Partial<Record<SubtaskType, number>>;
+   *  Falls back to workerTimeout when a type is not specified.
+   *  @deprecated Use taskTypes[type].timeout instead. Still works for backward compat. */
+  taskTypeTimeouts?: Record<string, number>;
 
   /** Fraction of dependencies that must succeed for a dependent task to still run (default: 0.5).
    *  When a task's completed deps / total deps >= this threshold, the task runs with partial context
@@ -175,6 +246,81 @@ export interface SwarmConfig {
 
   /** Named policy profiles for workers (overrides global defaults by name) */
   policyProfiles?: Record<string, PolicyProfile>;
+
+  /** Additive extensions to built-in or named profiles (merge, not override) */
+  profileExtensions?: Record<string, { addTools?: string[]; removeTools?: string[] }>;
+
+  // ─── V7: Reliability & Custom Task Types ──────────────────────────────
+
+  /** Hard cap on dispatch attempts per task, including retries (default: 5).
+   *  Prevents any single task from burning budget with infinite retries. */
+  maxDispatchesPerTask?: number;
+
+  /** F25: Max consecutive timeouts per task before early-fail or model failover (default: 3).
+   *  After this many consecutive timeouts, the orchestrator attempts model failover.
+   *  If no alternative model is available, the task fails immediately instead of retrying. */
+  consecutiveTimeoutLimit?: number;
+
+  /** Fraction of total dispatches that are hollow before terminating (default: 0.7).
+   *  Works across all models (unlike hollowStreak which only works for single-model swarms). */
+  hollowTerminationRatio?: number;
+
+  /** Minimum total dispatches before hollow ratio termination activates (default: 8). */
+  hollowTerminationMinDispatches?: number;
+
+  /** Character threshold for hollow completion detection (default: 120).
+   *  Outputs shorter than this with 0 tool calls are considered hollow. */
+  hollowOutputThreshold?: number;
+
+  /** Per-task-type configuration (timeout, iterations, tools, prompt template, etc.).
+   *  Keys are task type names — built-in types get defaults, custom types are first-class. */
+  taskTypes?: Record<string, TaskTypeConfig>;
+
+  /** Economics tuning overrides for all swarm workers (doom loop, exploration, zero-progress thresholds).
+   *  Merged into each worker's AgentDefinition at dispatch time. */
+  economicsTuning?: EconomicsTuning;
+
+  /** D3: Whether to probe models for tool-calling capability before dispatch (default: true).
+   *  Sends a cheap probe to each unique model; incapable models are marked unhealthy. */
+  probeModels?: boolean;
+
+  /** F15: When true, proceed with swarm even if all models fail capability probes.
+   *  Default: false (abort swarm when zero models are healthy).
+   *  @deprecated Use probeFailureStrategy: 'warn-and-try' instead. Still works for backward compat. */
+  ignoreProbeFailures?: boolean;
+
+  /** F23: Strategy when all models fail capability probes.
+   *  - 'abort': Hard abort, no tasks dispatched (default for ignoreProbeFailures=false)
+   *  - 'warn-and-try': Log warning, reset health, let real tasks prove/disprove capability
+   *  Default: 'warn-and-try' */
+  probeFailureStrategy?: 'abort' | 'warn-and-try';
+
+  /** Timeout in ms for each model's capability probe (default: 60000).
+   *  Increase for slow models or poor network conditions. */
+  probeTimeoutMs?: number;
+
+  /** Whether to check for filesystem artifacts before cascade-skipping dependent tasks (default: true).
+   *  When a task "fails" but its targetFiles exist on disk with content, dependent tasks
+   *  are kept ready instead of being cascade-skipped. */
+  artifactAwareSkip?: boolean;
+
+  /** If true, hollow streaks/ratio can terminate the swarm (skipRemainingTasks). Default: false.
+   *  When false (default), hollow streaks enter stall mode instead of killing the swarm. */
+  enableHollowTermination?: boolean;
+
+  /** Pre-dispatch auto-split for critical-path bottleneck tasks.
+   *  Proactively splits high-complexity foundation tasks before dispatch,
+   *  using heuristic pre-filtering + LLM judgment. */
+  autoSplit?: {
+    /** Enable auto-split (default: true) */
+    enabled?: boolean;
+    /** Minimum complexity to consider for splitting (default: 6) */
+    complexityFloor?: number;
+    /** Max subtasks per split (default: 4) */
+    maxSubtasks?: number;
+    /** Task types eligible for splitting (default: ['implement', 'refactor', 'test']) */
+    splittableTypes?: string[];
+  };
 }
 
 /**
@@ -240,9 +386,6 @@ export const DEFAULT_SWARM_CONFIG: Omit<SwarmConfig, 'orchestratorModel' | 'work
 
 // ─── Worker Specification ──────────────────────────────────────────────────
 
-/** Capability categories for worker models */
-export type WorkerCapability = 'code' | 'research' | 'review' | 'test' | 'document' | 'write';
-
 /**
  * Definition for a swarm worker model.
  */
@@ -271,17 +414,27 @@ export interface SwarmWorkerSpec {
   /** Per-worker behavioral instructions for system prompt */
   persona?: string;
 
+  /** Additional tools to add to the resolved profile whitelist (merged, not override) */
+  extraTools?: string[];
+
   /** Optional named policy profile (resolved against policyProfiles/defaults) */
   policyProfile?: string;
 
   /** Hierarchical role (default: 'executor') */
   role?: WorkerRole;
+
+  /** D2: Override the prompt tier for this worker ('full' | 'reduced' | 'minimal').
+   *  'minimal' is ideal for cheap/weak models — strips philosophy, delegation, quality self-assessment. */
+  promptTier?: 'full' | 'reduced' | 'minimal';
 }
 
 // ─── Swarm Task ────────────────────────────────────────────────────────────
 
+/** P6: Categorizes how a task failed, for failure-mode-aware cascade thresholds. */
+export type TaskFailureMode = 'timeout' | 'rate-limit' | 'error' | 'quality' | 'hollow' | 'cascade';
+
 /** Status of a swarm task */
-export type SwarmTaskStatus = 'pending' | 'ready' | 'dispatched' | 'completed' | 'failed' | 'skipped';
+export type SwarmTaskStatus = 'pending' | 'ready' | 'dispatched' | 'completed' | 'failed' | 'skipped' | 'decomposed';
 
 /**
  * A task within the swarm execution pipeline.
@@ -331,7 +484,7 @@ export interface SwarmTask {
   dependencyContext?: string;
 
   /** Context from previous failed attempt (quality rejection or error) for retry prompts */
-  retryContext?: { previousFeedback: string; previousScore: number; attempt: number; previousModel?: string; previousFiles?: string[] };
+  retryContext?: { previousFeedback: string; previousScore: number; attempt: number; previousModel?: string; previousFiles?: string[]; swarmProgress?: string };
 
   /** Partial dependency context when some deps failed but threshold met.
    *  Lists which deps succeeded and which failed so the worker can adapt. */
@@ -349,6 +502,27 @@ export interface SwarmTask {
 
   /** Original SmartSubtask for reference */
   originalSubtask?: SmartSubtask;
+
+  /** P6: How this task failed (used for failure-mode-aware cascade thresholds) */
+  failureMode?: TaskFailureMode;
+
+  /** F4: Set when a dependency fails while this task is dispatched.
+   *  Instead of immediately skipping, the task's result is evaluated first.
+   *  Good results are kept; hollow/garbage results honor the cascade skip. */
+  pendingCascadeSkip?: boolean;
+
+  /** Whether this task was accepted with degraded quality (partial work exists on disk
+   *  but quality gate failed or hollow completion detected). Dependents get a warning. */
+  degraded?: boolean;
+
+  /** Context explaining why a cascade-skipped task was rescued and allowed to run. */
+  rescueContext?: string;
+
+  /** ID of the parent task that was micro-decomposed into this subtask. */
+  parentTaskId?: string;
+
+  /** IDs of subtasks created when this task was micro-decomposed. */
+  subtaskIds?: string[];
 }
 
 /**
@@ -390,6 +564,31 @@ export interface SwarmTaskResult {
 
   /** Model that executed this task */
   model: string;
+
+  /** Whether this result was accepted with degraded quality (partial work, not full pass). */
+  degraded?: boolean;
+}
+
+// ─── Artifact Inventory ─────────────────────────────────────────────────────
+
+/** A single file artifact discovered on disk after swarm execution. */
+export interface ArtifactEntry {
+  /** Relative file path (as declared in task targetFiles/readFiles) */
+  path: string;
+  /** File size in bytes */
+  sizeBytes: number;
+  /** Whether the file exists on disk */
+  exists: true;
+}
+
+/** Inventory of filesystem artifacts produced during swarm execution. */
+export interface ArtifactInventory {
+  /** Files found on disk with non-zero content */
+  files: ArtifactEntry[];
+  /** Total number of artifact files */
+  totalFiles: number;
+  /** Total size in bytes */
+  totalBytes: number;
 }
 
 // ─── Swarm Execution ───────────────────────────────────────────────────────
@@ -398,11 +597,20 @@ export interface SwarmTaskResult {
  * Overall result of a swarm execution.
  */
 export interface SwarmExecutionResult {
-  /** Whether the swarm completed successfully */
+  /** Whether the swarm produced usable output (at least one task completed) */
   success: boolean;
+
+  /** Whether no tasks completed but filesystem artifacts exist (workers produced files despite failing quality/timeout) */
+  partialSuccess?: boolean;
+
+  /** Whether some tasks failed despite overall success (partial results) */
+  partialFailure?: boolean;
 
   /** Synthesized output from all workers */
   synthesisResult?: SynthesisResult;
+
+  /** Filesystem artifacts found on disk after execution (files created by workers regardless of task status) */
+  artifactInventory?: ArtifactInventory;
 
   /** Summary of what was accomplished */
   summary: string;
@@ -616,6 +824,9 @@ export interface ModelHealthRecord {
   lastRateLimit?: number;
   averageLatencyMs: number;
   healthy: boolean;
+  qualityRejections?: number;
+  /** Success rate (0.0-1.0) computed from successes/(successes+failures) */
+  successRate?: number;
 }
 
 /** Serializable swarm state for persistence/resume. */
@@ -631,6 +842,8 @@ export interface SwarmCheckpoint {
   modelHealth: ModelHealthRecord[];
   decisions: OrchestratorDecision[];
   errors: SwarmError[];
+  /** Original task prompt for re-planning on resume */
+  originalPrompt?: string;
 }
 
 /** Logged orchestrator decision with reasoning. */
@@ -652,9 +865,10 @@ export interface WorkerConversationEntry {
 // ─── Utility Types ─────────────────────────────────────────────────────────
 
 /**
- * Maps SubtaskType to WorkerCapability for task-worker matching.
+ * Maps known SubtaskTypes to WorkerCapability for task-worker matching.
+ * Custom types not in this map use getTaskTypeConfig() for capability lookup.
  */
-export const SUBTASK_TO_CAPABILITY: Record<SubtaskType, WorkerCapability> = {
+export const SUBTASK_TO_CAPABILITY: Record<string, WorkerCapability> = {
   research: 'research',
   analysis: 'research',
   design: 'research',
@@ -690,18 +904,37 @@ export function subtaskToSwarmTask(subtask: SmartSubtask, wave: number): SwarmTa
 /**
  * Convert a SwarmTaskResult to an AgentOutput for ResultSynthesizer.
  */
-export function taskResultToAgentOutput(task: SwarmTask): AgentOutput | null {
+/**
+ * Map a WorkerCapability to the AgentOutput 'type' field.
+ * Uses configurable task type config instead of hardcoded type lists.
+ */
+function capabilityToOutputType(capability: WorkerCapability): 'code' | 'research' | 'review' | 'documentation' | 'mixed' {
+  switch (capability) {
+    case 'code':
+    case 'test':
+      return 'code';
+    case 'research':
+      return 'research';
+    case 'review':
+      return 'review';
+    case 'document':
+      return 'documentation';
+    case 'write':
+    default:
+      return 'mixed';
+  }
+}
+
+export function taskResultToAgentOutput(task: SwarmTask, swarmConfig?: SwarmConfig): AgentOutput | null {
   if (!task.result || !task.result.success) return null;
+
+  const typeConfig = getTaskTypeConfig(task.type, swarmConfig);
+  const outputType = capabilityToOutputType(typeConfig.capability ?? 'code');
 
   return {
     agentId: `swarm-worker-${task.id}`,
     content: task.result.output,
-    type: task.type === 'implement' || task.type === 'refactor' ? 'code'
-      : task.type === 'research' || task.type === 'analysis' ? 'research'
-      : task.type === 'review' ? 'review'
-      : task.type === 'document' ? 'documentation'
-      : task.type === 'test' ? 'code'
-      : 'mixed',
+    type: outputType,
     confidence: task.result.qualityScore ? task.result.qualityScore / 5 : 0.7,
     findings: task.result.findings,
     metadata: {

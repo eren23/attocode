@@ -182,3 +182,128 @@ describe('FALLBACK_WORKERS', () => {
     expect(researchers.length).toBeGreaterThan(0);
   });
 });
+
+describe('Per-model hollow tracking', () => {
+  it('recordHollow increments hollow count and records failure', () => {
+    const tracker = new ModelHealthTracker();
+    tracker.recordHollow('model-a');
+    expect(tracker.getHollowCount('model-a')).toBe(1);
+    const records = tracker.getAllRecords();
+    const record = records.find(r => r.model === 'model-a')!;
+    expect(record.failures).toBe(1);
+  });
+
+  it('recordHollow accumulates across multiple calls', () => {
+    const tracker = new ModelHealthTracker();
+    tracker.recordHollow('model-a');
+    tracker.recordHollow('model-a');
+    tracker.recordHollow('model-a');
+    expect(tracker.getHollowCount('model-a')).toBe(3);
+    const records = tracker.getAllRecords();
+    const record = records.find(r => r.model === 'model-a')!;
+    expect(record.failures).toBe(3);
+  });
+
+  it('getHollowRate computes correct ratio', () => {
+    const tracker = new ModelHealthTracker();
+    tracker.recordSuccess('model-a', 1000);
+    tracker.recordSuccess('model-a', 1000);
+    tracker.recordHollow('model-a');
+    // 3 total attempts (2 success + 1 failure from hollow), 1 hollow
+    expect(tracker.getHollowRate('model-a')).toBeCloseTo(1 / 3, 2);
+  });
+
+  it('getHollowRate returns 0 for unknown model', () => {
+    const tracker = new ModelHealthTracker();
+    expect(tracker.getHollowRate('unknown-model')).toBe(0);
+  });
+
+  it('getHollowCount returns 0 for unknown model', () => {
+    const tracker = new ModelHealthTracker();
+    expect(tracker.getHollowCount('unknown-model')).toBe(0);
+  });
+
+  it('models with high hollow rate are deprioritized in selection', () => {
+    const workers: SwarmWorkerSpec[] = [
+      { name: 'hollow-prone', model: 'model/hollow', capabilities: ['code'] },
+      { name: 'reliable', model: 'model/reliable', capabilities: ['code'] },
+    ];
+    const tracker = new ModelHealthTracker();
+
+    // model/hollow: 5 successes, 5 hollows → 50% hollow rate
+    for (let i = 0; i < 5; i++) tracker.recordSuccess('model/hollow', 1000);
+    for (let i = 0; i < 5; i++) tracker.recordHollow('model/hollow');
+
+    // model/reliable: 8 successes, 1 failure → 0% hollow rate
+    for (let i = 0; i < 8; i++) tracker.recordSuccess('model/reliable', 1000);
+    tracker.recordFailure('model/reliable', 'error');
+
+    // Reliable should be preferred despite both having similar health status
+    const selected = selectWorkerForCapability(workers, 'code', 0, tracker);
+    expect(selected?.name).toBe('reliable');
+  });
+
+  it('hollow rate below 15% difference does not affect ordering', () => {
+    const workers: SwarmWorkerSpec[] = [
+      { name: 'slightly-hollow', model: 'model/a', capabilities: ['code'] },
+      { name: 'clean', model: 'model/b', capabilities: ['code'] },
+    ];
+    const tracker = new ModelHealthTracker();
+
+    // Both have similar profiles — one hollow shouldn't dominate
+    for (let i = 0; i < 10; i++) tracker.recordSuccess('model/a', 1000);
+    tracker.recordHollow('model/a'); // 1/11 ≈ 9% hollow rate
+
+    for (let i = 0; i < 10; i++) tracker.recordSuccess('model/b', 1000);
+    // 0% hollow rate, difference is ~9% which is < 15%
+
+    // Both should be in the top tier — ordering determined by success rate
+    const selected0 = selectWorkerForCapability(workers, 'code', 0, tracker);
+    const selected1 = selectWorkerForCapability(workers, 'code', 1, tracker);
+    // Both should be selectable (round-robin)
+    expect(selected0).toBeDefined();
+    expect(selected1).toBeDefined();
+  });
+});
+
+describe('P1: recordQualityRejection', () => {
+  it('undoes premature recordSuccess', () => {
+    const tracker = new ModelHealthTracker();
+    tracker.recordSuccess('model-a', 1000);
+    tracker.recordQualityRejection('model-a', 2);
+    const records = tracker.getAllRecords();
+    const record = records.find(r => r.model === 'model-a')!;
+    expect(record.successes).toBe(0);
+    expect(record.failures).toBe(1);
+  });
+
+  it('marks unhealthy after 3 quality rejections', () => {
+    const tracker = new ModelHealthTracker();
+    tracker.recordSuccess('model-a', 1000);
+    tracker.recordQualityRejection('model-a', 2);
+    tracker.recordSuccess('model-a', 1000);
+    tracker.recordQualityRejection('model-a', 2);
+    tracker.recordSuccess('model-a', 1000);
+    tracker.recordQualityRejection('model-a', 2);
+    expect(tracker.isHealthy('model-a')).toBe(false);
+  });
+
+  it('tracks qualityRejections count', () => {
+    const tracker = new ModelHealthTracker();
+    tracker.recordQualityRejection('model-a', 2);
+    tracker.recordQualityRejection('model-a', 1);
+    const records = tracker.getAllRecords();
+    const record = records.find(r => r.model === 'model-a')!;
+    expect(record.qualityRejections).toBe(2);
+  });
+
+  it('does not go below 0 successes', () => {
+    const tracker = new ModelHealthTracker();
+    // No prior success — rejection should still work
+    tracker.recordQualityRejection('model-a', 2);
+    const records = tracker.getAllRecords();
+    const record = records.find(r => r.model === 'model-a')!;
+    expect(record.successes).toBe(0);
+    expect(record.failures).toBe(1);
+  });
+});

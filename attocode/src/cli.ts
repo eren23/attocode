@@ -104,8 +104,24 @@ export function parseArgs(): CLIArgs {
         result.swarm = true;
       }
     } else if (arg === '--swarm-resume') {
-      result.swarmResume = args[++i];
+      const nextArg = args[i + 1];
+      if (nextArg && !nextArg.startsWith('--')) {
+        result.swarmResume = nextArg;
+        i++;
+      } else {
+        result.swarmResume = 'latest';
+      }
       // Implicitly enable swarm mode
+      if (!result.swarm) result.swarm = true;
+    } else if (arg === '--resume') {
+      // Shorthand for --swarm-resume
+      const nextArg = args[i + 1];
+      if (nextArg && !nextArg.startsWith('--')) {
+        result.swarmResume = nextArg;
+        i++;
+      } else {
+        result.swarmResume = 'latest';
+      }
       if (!result.swarm) result.swarm = true;
     } else if (arg === '--paid-only') {
       result.paidOnly = true;
@@ -157,7 +173,8 @@ ${c('OPTIONS:', 'bold')}
   --swarm [CONFIG]        Swarm mode: orchestrator + worker models
                             Without arg: auto-detect worker models
                             With path: load .attocode/swarm.yaml
-  --swarm-resume ID       Resume a swarm session from checkpoint
+  --swarm-resume [ID]     Resume a swarm session (omit ID for latest)
+  --resume [ID]           Shorthand for --swarm-resume
   --paid-only             Use only paid models in swarm (no free tier)
 
 ${c('INTERFACE OPTIONS:', 'bold')}

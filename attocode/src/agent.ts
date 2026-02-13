@@ -5040,22 +5040,9 @@ export class ProductionAgent {
       // Filter tools for this agent
       let agentTools = filterToolsForAgent(agentDef, Array.from(this.tools.values()));
 
-      // Apply tool recommendations to improve subagent focus (only for large tool sets)
-      if (this.toolRecommendation && agentTools.length > 15) {
-        const taskType = ToolRecommendationEngine.inferTaskType(agentName);
-        const recommendations = this.toolRecommendation.recommendTools(
-          task, taskType, agentTools.map(t => t.name)
-        );
-        if (recommendations.length > 0) {
-          const recommendedNames = new Set(recommendations.map(r => r.toolName));
-          // Always keep spawn tools even if not recommended
-          const alwaysKeep = new Set(['spawn_agent', 'spawn_agents_parallel']);
-          agentTools = agentTools.filter(t =>
-            recommendedNames.has(t.name) || alwaysKeep.has(t.name)
-          );
-        }
-      }
-
+      // Resolve policy profile FIRST so we know which tools the policy allows.
+      // This must happen before the recommendation filter so policy-allowed tools
+      // are preserved through the recommendation pruning step.
       const inferredTaskType = agentDef.taskType ?? ToolRecommendationEngine.inferTaskType(agentName);
       const policyResolution = resolvePolicyProfile({
         policyEngine: this.config.policyEngine,
@@ -5089,6 +5076,28 @@ export class ProductionAgent {
           profile: policyResolution.profileName,
           sources: policyResolution.metadata.legacyMappingSources,
         });
+      }
+
+      // Apply tool recommendations to improve subagent focus (only for large tool sets)
+      if (this.toolRecommendation && agentTools.length > 15) {
+        const taskType = ToolRecommendationEngine.inferTaskType(agentName);
+        const recommendations = this.toolRecommendation.recommendTools(
+          task, taskType, agentTools.map(t => t.name)
+        );
+        if (recommendations.length > 0) {
+          const recommendedNames = new Set(recommendations.map(r => r.toolName));
+          // Always keep spawn tools even if not recommended
+          const alwaysKeep = new Set(['spawn_agent', 'spawn_agents_parallel']);
+          // Also keep tools that the resolved policy profile explicitly allows.
+          // This prevents the recommendation engine from stripping tools that the
+          // security policy says the worker should have.
+          if (policyResolution.profile.allowedTools) {
+            for (const t of policyResolution.profile.allowedTools) alwaysKeep.add(t);
+          }
+          agentTools = agentTools.filter(t =>
+            recommendedNames.has(t.name) || alwaysKeep.has(t.name)
+          );
+        }
       }
 
       // Enforce unified tool policy at spawn-time so denied tools are never exposed.
@@ -5133,7 +5142,8 @@ export class ProductionAgent {
       const subagentConfig = this.config.subagent;
       const hasSubagentConfig = subagentConfig !== false && subagentConfig !== undefined;
 
-      // Timeout precedence: per-type config override > agent-type default > global config default
+      // Timeout precedence: agentDef.timeout > per-type config > agent-type default > global config default
+      // agentDef.timeout is set by worker-pool for swarm workers, giving them precise timeout control
       const agentTypeTimeout = getSubagentTimeout(agentName);
       const rawPerTypeTimeout = hasSubagentConfig
         ? (subagentConfig as { timeouts?: Record<string, number> }).timeouts?.[agentName]
@@ -5144,9 +5154,10 @@ export class ProductionAgent {
       // Validate: reject negative, NaN, or non-finite timeout values
       const isValidTimeout = (v: number | undefined): v is number =>
         v !== undefined && Number.isFinite(v) && v > 0;
+      const agentDefTimeout = isValidTimeout(agentDef.timeout) ? agentDef.timeout : undefined;
       const perTypeConfigTimeout = isValidTimeout(rawPerTypeTimeout) ? rawPerTypeTimeout : undefined;
       const globalConfigTimeout = isValidTimeout(rawGlobalTimeout) ? rawGlobalTimeout : undefined;
-      const subagentTimeout = perTypeConfigTimeout ?? agentTypeTimeout ?? globalConfigTimeout ?? 300000;
+      const subagentTimeout = agentDefTimeout ?? perTypeConfigTimeout ?? agentTypeTimeout ?? globalConfigTimeout ?? 300000;
 
       // Iteration precedence: per-type config override > agent-type default > global config default
       const agentTypeMaxIter = getSubagentMaxIterations(agentName);
@@ -5393,7 +5404,10 @@ export class ProductionAgent {
         fileCache: this.fileCache || undefined,
         // CONSTRAINED BUDGET: Use pooled budget when available, falling back to SUBAGENT_BUDGET
         // Pooled budget ensures total tree cost stays bounded by parent's budget
-        budget: pooledBudget.budget,
+        // Merge economicsTuning from agent definition so swarm workers get custom thresholds
+        budget: agentDef.economicsTuning
+          ? { ...pooledBudget.budget, tuning: agentDef.economicsTuning }
+          : pooledBudget.budget,
       });
 
       // CRITICAL: Subagent inherits parent's mode
@@ -5462,7 +5476,7 @@ export class ProductionAgent {
       // 1. Normal operation: progress extends idle timer
       // 2. Wrapup phase: 30s before hard kill, wrapup callback fires → forceTextOnly
       // 3. Hard kill: race() throws CancellationError after wrapup window
-      const IDLE_TIMEOUT = 120000; // 2 minutes without progress = timeout
+      const IDLE_TIMEOUT = agentDef.idleTimeout ?? 120000; // Configurable idle timeout (default: 2 min)
       let WRAPUP_WINDOW = 30000;
       let IDLE_CHECK_INTERVAL = 5000;
       if (this.config.subagent) {

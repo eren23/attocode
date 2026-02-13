@@ -118,7 +118,7 @@ export async function autoDetectWorkerModels(options: ModelSelectorOptions): Pro
     }
 
     // Filter for usable models
-    const minContext = options.minContextWindow ?? 8192;
+    const minContext = options.minContextWindow ?? 32768;
     const maxCost = options.maxCostPerMillion ?? 5.0;
 
     const usable = models.filter(m => {
@@ -323,14 +323,31 @@ export function selectWorkerForCapability(
   const matches = workers.filter(w => w.capabilities.includes(capability));
 
   if (matches.length > 0) {
-    // If health tracker provided, prefer healthy models
     if (healthTracker) {
-      const healthy = matches.filter(w => healthTracker.isHealthy(w.model));
-      if (healthy.length > 0) {
-        return healthy[(taskIndex ?? 0) % healthy.length];
-      }
+      // F1: Rank by success rate (descending), deprioritize hollow-prone models, then round-robin among top tier
+      const ranked = [...matches].sort((a, b) => {
+        const healthyA = healthTracker.isHealthy(a.model) ? 1 : 0;
+        const healthyB = healthTracker.isHealthy(b.model) ? 1 : 0;
+        if (healthyA !== healthyB) return healthyB - healthyA;
+        // Deprioritize models with high hollow rates (>15% difference)
+        const hollowA = healthTracker.getHollowRate(a.model);
+        const hollowB = healthTracker.getHollowRate(b.model);
+        if (Math.abs(hollowA - hollowB) > 0.15) return hollowA - hollowB;
+        const rateA = healthTracker.getSuccessRate(a.model);
+        const rateB = healthTracker.getSuccessRate(b.model);
+        return rateB - rateA;
+      });
+      // Round-robin among top-tier models (same health status and similar success rate)
+      const topRate = healthTracker.getSuccessRate(ranked[0].model);
+      const topHealthy = healthTracker.isHealthy(ranked[0].model);
+      const topTier = ranked.filter(w => {
+        const rate = healthTracker.getSuccessRate(w.model);
+        return healthTracker.isHealthy(w.model) === topHealthy
+          && Math.abs(rate - topRate) < 0.2;
+      });
+      return topTier[(taskIndex ?? 0) % topTier.length];
     }
-    // Round-robin across matching workers
+    // No health tracker — simple round-robin
     return matches[(taskIndex ?? 0) % matches.length];
   }
 
@@ -360,6 +377,7 @@ export function selectWorkerForCapability(
 export class ModelHealthTracker {
   private records = new Map<string, ModelHealthRecord>();
   private recentRateLimits = new Map<string, number[]>(); // model → timestamps
+  private hollowCounts = new Map<string, number>(); // model → hollow completion count
 
   private getOrCreate(model: string): ModelHealthRecord {
     let record = this.records.get(model);
@@ -371,10 +389,17 @@ export class ModelHealthTracker {
         rateLimits: 0,
         averageLatencyMs: 0,
         healthy: true,
+        successRate: 1.0,
       };
       this.records.set(model, record);
     }
     return record;
+  }
+
+  /** Recompute successRate from current successes/failures. */
+  private updateSuccessRate(record: ModelHealthRecord): void {
+    const total = record.successes + record.failures;
+    record.successRate = total > 0 ? record.successes / total : 1.0;
   }
 
   recordSuccess(model: string, latencyMs: number): void {
@@ -385,6 +410,7 @@ export class ModelHealthTracker {
       ? latencyMs
       : record.averageLatencyMs * 0.7 + latencyMs * 0.3;
     record.healthy = true;
+    this.updateSuccessRate(record);
   }
 
   recordFailure(model: string, errorType: '429' | '402' | 'timeout' | 'error'): void {
@@ -413,11 +439,66 @@ export class ModelHealthTracker {
     if (total >= 3 && record.failures / total > 0.5) {
       record.healthy = false;
     }
+    this.updateSuccessRate(record);
+  }
+
+  /** F19: Directly mark a model as unhealthy (e.g., after probe failure).
+   *  Bypasses the statistical threshold — used when we have definitive evidence. */
+  markUnhealthy(model: string): void {
+    const record = this.getOrCreate(model);
+    record.healthy = false;
+    this.updateSuccessRate(record);
+  }
+
+  recordQualityRejection(model: string, _score: number): void {
+    const record = this.getOrCreate(model);
+    // Undo premature recordSuccess() that was called before quality gate ran
+    if (record.successes > 0) record.successes--;
+    record.failures++;
+    // Track quality-specific rejections
+    record.qualityRejections = (record.qualityRejections ?? 0) + 1;
+    // Mark unhealthy at 3 quality rejections or >50% failure rate
+    if ((record.qualityRejections ?? 0) >= 3) {
+      record.healthy = false;
+    }
+    const total = record.successes + record.failures;
+    if (total >= 3 && record.failures / total > 0.5) {
+      record.healthy = false;
+    }
+    this.updateSuccessRate(record);
+  }
+
+  /** Record a hollow completion (worker returned without doing real work).
+   *  Also records as a generic failure to preserve existing health logic. */
+  recordHollow(model: string): void {
+    const count = (this.hollowCounts.get(model) ?? 0) + 1;
+    this.hollowCounts.set(model, count);
+    // Also record as failure (existing behavior preserved)
+    this.recordFailure(model, 'error');
+  }
+
+  /** Get the hollow completion rate for a model (0.0-1.0). */
+  getHollowRate(model: string): number {
+    const record = this.records.get(model);
+    if (!record) return 0;
+    const total = record.successes + record.failures;
+    if (total === 0) return 0;
+    return (this.hollowCounts.get(model) ?? 0) / total;
+  }
+
+  /** Get the raw hollow completion count for a model. */
+  getHollowCount(model: string): number {
+    return this.hollowCounts.get(model) ?? 0;
   }
 
   isHealthy(model: string): boolean {
     const record = this.records.get(model);
     return record?.healthy ?? true; // Unknown models assumed healthy
+  }
+
+  getSuccessRate(model: string): number {
+    const record = this.records.get(model);
+    return record?.successRate ?? 1.0;
   }
 
   getHealthy(models: string[]): string[] {
@@ -431,6 +512,7 @@ export class ModelHealthTracker {
   restore(records: ModelHealthRecord[]): void {
     this.records.clear();
     this.recentRateLimits.clear();
+    this.hollowCounts.clear();
     for (const record of records) {
       this.records.set(record.model, { ...record });
     }

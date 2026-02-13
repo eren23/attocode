@@ -111,12 +111,32 @@ async function buildSwarmConfig(
     }
   }
 
+  // Resolve 'latest' session ID before merge
+  let resolvedResumeId = resumeSessionId;
+  if (resolvedResumeId === 'latest') {
+    try {
+      const { SwarmStateStore } = await import('./integrations/swarm/swarm-state-store.js');
+      const stateDir = '.agent/swarm-state';
+      const sessions = SwarmStateStore.listSessions(stateDir);
+      if (sessions.length > 0) {
+        resolvedResumeId = sessions[0].sessionId;
+        console.log(`[Swarm] Resuming latest session: ${resolvedResumeId}`);
+      } else {
+        console.warn('[Swarm] No previous sessions found to resume — starting fresh');
+        resolvedResumeId = undefined;
+      }
+    } catch {
+      console.warn('[Swarm] Could not list sessions — starting fresh');
+      resolvedResumeId = undefined;
+    }
+  }
+
   // Merge: DEFAULT < yaml < CLI
   const config = mergeSwarmConfigs(DEFAULT_SWARM_CONFIG, yamlConfig, {
     paidOnly,
     orchestratorModel,
     orchestratorModelExplicit,
-    resumeSessionId,
+    resumeSessionId: resolvedResumeId,
   });
 
   // V3: Pre-flight key check for rate limit awareness

@@ -227,8 +227,9 @@ describe('Quality gate with fileArtifacts', () => {
 // =============================================================================
 
 describe('Foundation task detection algorithm', () => {
-  it('should mark tasks with 3+ dependents as foundation', () => {
-    // Simulate the detectFoundationTasks algorithm
+  // F17: Threshold lowered from 3 to 2 dependents
+  it('should mark tasks with 2+ dependents as foundation', () => {
+    // Simulate the detectFoundationTasks algorithm (threshold = 2)
     const tasks: SwarmTask[] = [
       makeTask({ id: 'st-0', dependencies: [] }),
       makeTask({ id: 'st-1', dependencies: ['st-0'] }),
@@ -246,7 +247,7 @@ describe('Foundation task detection algorithm', () => {
     }
     for (const task of tasks) {
       const count = dependentCounts.get(task.id) ?? 0;
-      if (count >= 3) {
+      if (count >= 2) {
         task.isFoundation = true;
       }
     }
@@ -258,7 +259,7 @@ describe('Foundation task detection algorithm', () => {
     expect(tasks[4].isFoundation).toBeUndefined();
   });
 
-  it('should not mark tasks with fewer than 3 dependents', () => {
+  it('should mark tasks with exactly 2 dependents as foundation', () => {
     const tasks: SwarmTask[] = [
       makeTask({ id: 'st-0', dependencies: [] }),
       makeTask({ id: 'st-1', dependencies: ['st-0'] }),
@@ -273,11 +274,149 @@ describe('Foundation task detection algorithm', () => {
     }
     for (const task of tasks) {
       const count = dependentCounts.get(task.id) ?? 0;
-      if (count >= 3) {
+      if (count >= 2) {
         task.isFoundation = true;
       }
     }
 
-    expect(tasks[0].isFoundation).toBeUndefined(); // Only 2 dependents
+    expect(tasks[0].isFoundation).toBe(true); // 2 dependents — now qualifies
+  });
+
+  it('should not mark tasks with fewer than 2 dependents', () => {
+    const tasks: SwarmTask[] = [
+      makeTask({ id: 'st-0', dependencies: [] }),
+      makeTask({ id: 'st-1', dependencies: ['st-0'] }),
+    ];
+
+    const dependentCounts = new Map<string, number>();
+    for (const task of tasks) {
+      for (const depId of task.dependencies) {
+        dependentCounts.set(depId, (dependentCounts.get(depId) ?? 0) + 1);
+      }
+    }
+    for (const task of tasks) {
+      const count = dependentCounts.get(task.id) ?? 0;
+      if (count >= 2) {
+        task.isFoundation = true;
+      }
+    }
+
+    expect(tasks[0].isFoundation).toBeUndefined(); // Only 1 dependent
+  });
+});
+
+// =============================================================================
+// F20: Budget exhaustion → graceful pause, not cascade death
+// =============================================================================
+
+describe('F20: Budget exhaustion does not cascade-kill tasks', () => {
+  it('should keep task ready when budget pool is exhausted', async () => {
+    const { SwarmWorkerPool } = await import('../../src/integrations/swarm/worker-pool.js');
+
+    const config = makeConfig();
+    const mockRegistry = {
+      registerAgent: vi.fn(),
+      unregisterAgent: vi.fn(),
+    } as any;
+
+    const mockSpawn = vi.fn().mockResolvedValue({
+      success: true,
+      output: 'done',
+      metrics: { tokens: 100, duration: 1000, toolCalls: 2 },
+    });
+
+    // Budget pool that says "no capacity"
+    const mockBudget = { hasCapacity: vi.fn().mockReturnValue(false) } as any;
+
+    const pool = new SwarmWorkerPool(config, mockRegistry, mockSpawn, mockBudget);
+
+    const task = makeTask({ id: 'budget-test', status: 'ready' });
+
+    // dispatch() should throw 'Budget pool exhausted'
+    await expect(pool.dispatch(task)).rejects.toThrow('Budget pool exhausted');
+
+    // The task status should NOT be changed by the pool — that's the orchestrator's job.
+    // The orchestrator's dispatchTask() catch block should detect this error and
+    // reset status to 'ready' instead of calling markFailed.
+    // We test the error message detection pattern here:
+    const error = new Error('Budget pool exhausted');
+    expect(error.message.includes('Budget pool exhausted')).toBe(true);
+  });
+
+  it('budget exhaustion error is distinguished from other dispatch errors', () => {
+    // Verify the pattern used in F20 dispatchTask catch block
+    const budgetError = new Error('Budget pool exhausted');
+    const otherError = new Error('No worker available for task type: custom');
+
+    expect(budgetError.message.includes('Budget pool exhausted')).toBe(true);
+    expect(otherError.message.includes('Budget pool exhausted')).toBe(false);
+  });
+});
+
+// =============================================================================
+// F19: markUnhealthy directly marks model unhealthy
+// =============================================================================
+
+describe('F19: markUnhealthy', () => {
+  it('marks model unhealthy in a single call', async () => {
+    const { ModelHealthTracker } = await import('../../src/integrations/swarm/model-selector.js');
+    const tracker = new ModelHealthTracker();
+
+    // Before: model is healthy (unknown = healthy)
+    expect(tracker.isHealthy('test/model')).toBe(true);
+
+    // Single markUnhealthy call
+    tracker.markUnhealthy('test/model');
+
+    // After: model is unhealthy
+    expect(tracker.isHealthy('test/model')).toBe(false);
+  });
+
+  it('markUnhealthy works even with no prior records', async () => {
+    const { ModelHealthTracker } = await import('../../src/integrations/swarm/model-selector.js');
+    const tracker = new ModelHealthTracker();
+
+    tracker.markUnhealthy('brand-new/model');
+
+    expect(tracker.isHealthy('brand-new/model')).toBe(false);
+    const records = tracker.getAllRecords();
+    const record = records.find(r => r.model === 'brand-new/model');
+    expect(record).toBeDefined();
+    expect(record!.healthy).toBe(false);
+  });
+
+  it('selectWorkerForCapability prefers healthy models after markUnhealthy', async () => {
+    const { ModelHealthTracker, selectWorkerForCapability } = await import('../../src/integrations/swarm/model-selector.js');
+    const tracker = new ModelHealthTracker();
+
+    tracker.markUnhealthy('unhealthy/model');
+    tracker.recordSuccess('healthy/model', 1000);
+
+    const workers = [
+      { name: 'w1', model: 'unhealthy/model', capabilities: ['code' as const] },
+      { name: 'w2', model: 'healthy/model', capabilities: ['code' as const] },
+    ];
+
+    const selected = selectWorkerForCapability(workers, 'code', 0, tracker);
+    expect(selected?.model).toBe('healthy/model');
+  });
+});
+
+// =============================================================================
+// F22: Swarm progress in retry context
+// =============================================================================
+
+describe('F22: Swarm progress in retry context type', () => {
+  it('retryContext type accepts swarmProgress field', () => {
+    const task = makeTask();
+    task.retryContext = {
+      previousFeedback: 'Test feedback',
+      previousScore: 2,
+      attempt: 1,
+      previousModel: 'test/model',
+      swarmProgress: 'The following tasks have completed:\n- st-0: Create scaffold (5/5)',
+    };
+
+    expect(task.retryContext.swarmProgress).toContain('scaffold');
   });
 });

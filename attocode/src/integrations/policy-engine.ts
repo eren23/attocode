@@ -7,20 +7,21 @@
 
 import type { PolicyEngineConfig, PolicyProfile, SandboxConfig } from '../types.js';
 import type { SwarmConfig, SwarmWorkerSpec } from './swarm/types.js';
+import { getTaskTypeConfig } from './swarm/types.js';
 import { evaluateBashPolicy } from './bash-policy.js';
 
 export const DEFAULT_POLICY_PROFILES: Record<string, PolicyProfile> = {
   'research-safe': {
     toolAccessMode: 'whitelist',
-    allowedTools: ['read_file', 'list_files', 'glob', 'grep'],
-    deniedTools: ['write_file', 'edit_file', 'delete_file', 'bash'],
-    bashMode: 'disabled',
+    allowedTools: ['read_file', 'list_files', 'glob', 'grep', 'web_search', 'write_file', 'bash', 'task_get', 'task_list'],
+    deniedTools: ['delete_file'],
+    bashMode: 'read_only',
     bashWriteProtection: 'block_file_mutation',
   },
   'code-strict-bash': {
     toolAccessMode: 'whitelist',
-    allowedTools: ['read_file', 'write_file', 'edit_file', 'list_files', 'glob', 'grep', 'bash'],
-    bashMode: 'read_only',
+    allowedTools: ['read_file', 'write_file', 'edit_file', 'list_files', 'glob', 'grep', 'bash', 'web_search', 'task_create', 'task_update', 'task_get', 'task_list'],
+    bashMode: 'full',
     bashWriteProtection: 'block_file_mutation',
   },
   'code-full': {
@@ -30,7 +31,7 @@ export const DEFAULT_POLICY_PROFILES: Record<string, PolicyProfile> = {
   },
   'review-safe': {
     toolAccessMode: 'whitelist',
-    allowedTools: ['read_file', 'list_files', 'glob', 'grep'],
+    allowedTools: ['read_file', 'list_files', 'glob', 'grep', 'web_search', 'task_get', 'task_list'],
     deniedTools: ['write_file', 'edit_file', 'delete_file', 'bash'],
     bashMode: 'disabled',
     bashWriteProtection: 'block_file_mutation',
@@ -90,15 +91,11 @@ function mergeProfiles(...profiles: Array<PolicyProfile | undefined>): PolicyPro
   return merged;
 }
 
-function inferSwarmProfileForTask(taskType?: string): string {
+function inferSwarmProfileForTask(taskType?: string, swarmConfig?: SwarmConfig): string {
   if (!taskType) return 'code-strict-bash';
-  if (['research', 'analysis', 'review', 'merge'].includes(taskType)) {
-    return 'research-safe';
-  }
-  if (['design', 'document'].includes(taskType)) {
-    return 'code-strict-bash';
-  }
-  return 'code-strict-bash';
+  // V7: Use configurable policyProfile from TaskTypeConfig
+  const typeConfig = getTaskTypeConfig(taskType, swarmConfig);
+  return typeConfig.policyProfile ?? 'code-strict-bash';
 }
 
 function inferSwarmProfileForWorker(worker?: SwarmWorkerSpec): string | undefined {
@@ -194,6 +191,29 @@ export function resolvePolicyProfile(options: ResolvePolicyProfileOptions): Reso
     ...(options.swarmConfig?.policyProfiles ?? {}),
   };
 
+  // Apply profileExtensions (additive patches from YAML)
+  const extensions = options.swarmConfig?.profileExtensions;
+  if (extensions) {
+    for (const [profileName, ext] of Object.entries(extensions)) {
+      const target = mergedProfiles[profileName];
+      if (!target) continue;
+      if (ext.addTools?.length && target.allowedTools) {
+        target.allowedTools = [...new Set([...target.allowedTools, ...ext.addTools])];
+        // If you explicitly add a tool, remove it from deniedTools so it actually works
+        if (target.deniedTools) {
+          target.deniedTools = target.deniedTools.filter(t => !ext.addTools!.includes(t));
+        }
+      }
+      if (ext.removeTools?.length) {
+        if (target.allowedTools) {
+          target.allowedTools = target.allowedTools.filter(t => !ext.removeTools!.includes(t));
+        }
+        // Also add removed tools to deniedTools for belt-and-suspenders
+        target.deniedTools = [...new Set([...(target.deniedTools ?? []), ...ext.removeTools])];
+      }
+    }
+  }
+
   const defaultProfileName = options.isSwarmWorker
     ? (policyEngine?.defaultSwarmProfile ?? DEFAULT_POLICY_ENGINE_CONFIG.defaultSwarmProfile)
     : (policyEngine?.defaultProfile ?? DEFAULT_POLICY_ENGINE_CONFIG.defaultProfile);
@@ -210,7 +230,7 @@ export function resolvePolicyProfile(options: ResolvePolicyProfileOptions): Reso
       requestedProfile = workerInferred;
       selectionSource = 'worker-capability';
     } else if (options.taskType) {
-      requestedProfile = inferSwarmProfileForTask(options.taskType);
+      requestedProfile = inferSwarmProfileForTask(options.taskType, options.swarmConfig);
       selectionSource = 'task-type';
     } else {
       requestedProfile = defaultProfileName;
@@ -233,6 +253,15 @@ export function resolvePolicyProfile(options: ResolvePolicyProfileOptions): Reso
           warnings: [],
         },
       };
+
+  // Merge worker.extraTools into the profile whitelist (additive, overrides deniedTools)
+  if (options.worker?.extraTools?.length && effective.toolAccessMode === 'whitelist' && effective.allowedTools) {
+    effective.allowedTools = [...new Set([...effective.allowedTools, ...options.worker.extraTools])];
+    // If you explicitly add a tool via extraTools, remove it from deniedTools so it actually works
+    if (effective.deniedTools) {
+      effective.deniedTools = effective.deniedTools.filter(t => !options.worker!.extraTools!.includes(t));
+    }
+  }
 
   return {
     profileName: requestedProfile,

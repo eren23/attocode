@@ -35,6 +35,7 @@ export interface AgentDefinition {
   model?: 'fast' | 'balanced' | 'quality' | string;
   maxTokenBudget?: number;
   maxIterations?: number;
+  timeout?: number;              // Timeout in ms (passed to spawnAgent, highest priority)
   capabilities?: string[];       // Used for NL matching
   tags?: string[];               // Additional tags for discovery
   /** Control MCP tool access: true = all MCP tools (default), false = none, string[] = specific names */
@@ -42,7 +43,11 @@ export interface AgentDefinition {
   /** Optional named policy profile */
   policyProfile?: string;
   /** Optional explicit task type hint for policy/tool resolution */
-  taskType?: import('./smart-decomposer.js').SubtaskType;
+  taskType?: string;
+  /** Optional idle timeout override in ms (time without tool calls before kill) */
+  idleTimeout?: number;
+  /** Optional economics tuning overrides for doom loop/exploration thresholds */
+  economicsTuning?: import('./economics.js').EconomicsTuning;
 }
 
 /**

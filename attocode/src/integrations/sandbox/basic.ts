@@ -16,7 +16,7 @@
 
 import { spawn } from 'child_process';
 import type { Sandbox, SandboxMode, SandboxOptions, ExecResult } from './index.js';
-import { detectFileMutationViaBash, evaluateBashPolicy } from '../bash-policy.js';
+import { detectFileMutationViaBash, evaluateBashPolicy, stripCdPrefix } from '../bash-policy.js';
 
 // =============================================================================
 // DANGEROUS PATTERNS
@@ -249,8 +249,10 @@ export class BasicSandbox implements Sandbox {
    * Extract the base command from a command string.
    */
   private extractBaseCommand(command: string): string {
+    // Strip cd prefix — "cd /path && npm test" → "npm test"
+    const stripped = stripCdPrefix(command);
     // Handle pipes and redirects
-    const firstPart = command.split(/[|;&]/)[0].trim();
+    const firstPart = stripped.split(/[|;&]/)[0].trim();
 
     // Handle env vars and other prefixes
     const parts = firstPart.split(/\s+/);

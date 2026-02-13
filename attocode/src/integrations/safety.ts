@@ -20,6 +20,7 @@ import {
   isToolAllowedByProfile,
   resolvePolicyProfile,
 } from './policy-engine.js';
+import { stripCdPrefix } from './bash-policy.js';
 
 // =============================================================================
 // SANDBOX MANAGER
@@ -60,7 +61,8 @@ export class SandboxManager {
 
     // Check allowed commands
     const allowedCommands = this.config.allowedCommands || [];
-    const commandBase = command.split(' ')[0];
+    const effective = stripCdPrefix(command);
+    const commandBase = effective.split(' ')[0];
 
     if (allowedCommands.length > 0 && !allowedCommands.includes(commandBase)) {
       const suggestions = allowedCommands.slice(0, 10).join(', ');

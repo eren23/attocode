@@ -61,7 +61,8 @@ export type SubtaskStatus =
   | 'failed'       // Failed
   | 'skipped';     // Skipped (e.g., deemed unnecessary)
 
-export type SubtaskType =
+/** Known built-in task types (for autocomplete + defaults) */
+export type BuiltinSubtaskType =
   | 'research'     // Gather information
   | 'analysis'     // Analyze existing code/data
   | 'design'       // Design/plan implementation
@@ -73,6 +74,9 @@ export type SubtaskType =
   | 'integrate'    // Integrate components
   | 'deploy'       // Deploy/release
   | 'merge';       // Combine results
+
+/** Any string is valid — custom types are first-class citizens. */
+export type SubtaskType = BuiltinSubtaskType | (string & {});
 
 /**
  * A dependency graph for subtasks.
@@ -407,6 +411,10 @@ export class SmartDecomposer {
       idMap.set(`subtask-${index}`, id);
       idMap.set(`st-${index}`, id);
 
+      // F14: Populate modifies/reads from relevantFiles so downstream consumers
+      // (F12 hollow retry prompts, quality gate) get concrete file targets.
+      const isModifyType = ['implement', 'fix', 'refactor', 'integrate', 'test', 'deploy'].includes(s.type);
+
       return {
         id,
         description: s.description,
@@ -416,6 +424,8 @@ export class SmartDecomposer {
         type: s.type,
         parallelizable: s.parallelizable,
         relevantFiles: s.relevantFiles,
+        modifies: isModifyType ? s.relevantFiles : undefined,
+        reads: s.relevantFiles,
         suggestedRole: s.suggestedRole,
       };
     });
@@ -1129,6 +1139,89 @@ export class SmartDecomposer {
       }
     }
   }
+}
+
+// =============================================================================
+// F5: DECOMPOSITION VALIDATION
+// =============================================================================
+
+export interface DecompositionValidationResult {
+  valid: boolean;
+  issues: string[];
+  warnings: string[];
+}
+
+/**
+ * F5: Validate a decomposition result for structural correctness, feasibility, and granularity.
+ *
+ * Checks:
+ * 1. Structural: no cycles, valid dependency refs, each subtask has description
+ * 2. Feasibility: referenced files exist (warning only)
+ * 3. Granularity: no subtask complexity > 7 (should split further)
+ */
+export function validateDecomposition(result: SmartDecompositionResult): DecompositionValidationResult {
+  const issues: string[] = [];
+  const warnings: string[] = [];
+  const taskIds = new Set(result.subtasks.map(s => s.id));
+
+  // 1. Structural checks
+  // Cycle detection
+  if (result.dependencyGraph.cycles.length > 0) {
+    for (const cycle of result.dependencyGraph.cycles) {
+      issues.push(`Dependency cycle detected: ${cycle.join(' → ')}`);
+    }
+  }
+
+  // Valid dependency references
+  for (const subtask of result.subtasks) {
+    for (const dep of subtask.dependencies) {
+      if (!taskIds.has(dep)) {
+        issues.push(`Task ${subtask.id} references non-existent dependency: ${dep}`);
+      }
+      if (dep === subtask.id) {
+        issues.push(`Task ${subtask.id} depends on itself`);
+      }
+    }
+    // Each subtask must have a meaningful description
+    if (!subtask.description || subtask.description.trim().length < 5) {
+      issues.push(`Task ${subtask.id} has empty or trivial description`);
+    }
+  }
+
+  // 2. Feasibility: check if referenced files exist (warnings only — files may be created by earlier tasks)
+  for (const subtask of result.subtasks) {
+    if (subtask.relevantFiles) {
+      for (const file of subtask.relevantFiles) {
+        try {
+          const fs = require('node:fs');
+          const path = require('node:path');
+          if (!fs.existsSync(path.resolve(file))) {
+            warnings.push(`Task ${subtask.id} references non-existent file: ${file}`);
+          }
+        } catch {
+          // Can't check — skip
+        }
+      }
+    }
+  }
+
+  // 3. Granularity: flag overly complex subtasks
+  for (const subtask of result.subtasks) {
+    if (subtask.complexity > 7) {
+      warnings.push(`Task ${subtask.id} has complexity ${subtask.complexity} (>7) — consider splitting further`);
+    }
+  }
+
+  // Additional structural check: at least 2 subtasks
+  if (result.subtasks.length < 2) {
+    issues.push(`Decomposition produced only ${result.subtasks.length} subtask(s) — too few for swarm mode`);
+  }
+
+  return {
+    valid: issues.length === 0,
+    issues,
+    warnings,
+  };
 }
 
 // =============================================================================

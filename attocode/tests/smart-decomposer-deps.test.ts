@@ -223,3 +223,129 @@ describe('SmartDecomposer dependency resolution', () => {
     expect(readyTasks.length).toBeGreaterThanOrEqual(2);
   });
 });
+
+// ─── F14: Populate modifies/reads from relevantFiles ──────────────────────────
+
+describe('F14: modifies/reads population from relevantFiles', () => {
+  it('should populate modifies for implement tasks with relevantFiles', async () => {
+    const llmResult: LLMDecomposeResult = {
+      subtasks: [
+        {
+          description: 'Implement hash function',
+          type: 'implement',
+          complexity: 5,
+          dependencies: [],
+          parallelizable: false,
+          relevantFiles: ['src/flags/hash.ts', 'src/flags/types.ts'],
+        },
+      ],
+      strategy: 'sequential',
+      reasoning: 'test',
+    };
+
+    const decomposer = createSmartDecomposer({
+      useLLM: true,
+      llmProvider: async () => llmResult,
+    });
+
+    const result = await decomposer.decompose('Implement hash function');
+    const task = result.subtasks[0];
+
+    expect(task.modifies).toEqual(['src/flags/hash.ts', 'src/flags/types.ts']);
+    expect(task.reads).toEqual(['src/flags/hash.ts', 'src/flags/types.ts']);
+  });
+
+  it('should NOT populate modifies for research tasks', async () => {
+    const llmResult: LLMDecomposeResult = {
+      subtasks: [
+        {
+          description: 'Research best practices',
+          type: 'research',
+          complexity: 3,
+          dependencies: [],
+          parallelizable: true,
+          relevantFiles: ['docs/architecture.md'],
+        },
+      ],
+      strategy: 'sequential',
+      reasoning: 'test',
+    };
+
+    const decomposer = createSmartDecomposer({
+      useLLM: true,
+      llmProvider: async () => llmResult,
+    });
+
+    const result = await decomposer.decompose('Research best practices');
+    const task = result.subtasks[0];
+
+    expect(task.modifies).toBeUndefined();
+    expect(task.reads).toEqual(['docs/architecture.md']);
+  });
+
+  it('should populate modifies for refactor and test types', async () => {
+    const llmResult: LLMDecomposeResult = {
+      subtasks: [
+        {
+          description: 'Refactor module',
+          type: 'refactor',
+          complexity: 4,
+          dependencies: [],
+          parallelizable: false,
+          relevantFiles: ['src/parser.ts'],
+        },
+        {
+          description: 'Write tests',
+          type: 'test',
+          complexity: 3,
+          dependencies: ['0'],
+          parallelizable: false,
+          relevantFiles: ['tests/parser.test.ts'],
+        },
+      ],
+      strategy: 'sequential',
+      reasoning: 'test',
+    };
+
+    const decomposer = createSmartDecomposer({
+      useLLM: true,
+      llmProvider: async () => llmResult,
+    });
+
+    const result = await decomposer.decompose('Refactor parser');
+
+    expect(result.subtasks[0].modifies).toEqual(['src/parser.ts']);
+    expect(result.subtasks[1].modifies).toEqual(['tests/parser.test.ts']);
+  });
+
+  it('should result in targetFiles being set via subtaskToSwarmTask', async () => {
+    // Integration: verify the full chain from LLM result → SwarmTask.targetFiles
+    const { subtaskToSwarmTask } = await import('../src/integrations/swarm/types.js');
+
+    const llmResult: LLMDecomposeResult = {
+      subtasks: [
+        {
+          description: 'Implement feature',
+          type: 'implement',
+          complexity: 5,
+          dependencies: [],
+          parallelizable: false,
+          relevantFiles: ['src/feature.ts'],
+        },
+      ],
+      strategy: 'sequential',
+      reasoning: 'test',
+    };
+
+    const decomposer = createSmartDecomposer({
+      useLLM: true,
+      llmProvider: async () => llmResult,
+    });
+
+    const result = await decomposer.decompose('Implement feature');
+    const swarmTask = subtaskToSwarmTask(result.subtasks[0], 0);
+
+    expect(swarmTask.targetFiles).toEqual(['src/feature.ts']);
+    expect(swarmTask.readFiles).toEqual(['src/feature.ts']);
+  });
+});

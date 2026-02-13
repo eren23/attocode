@@ -307,7 +307,7 @@ The throttle wraps the LLM provider with a token bucket algorithm. It automatica
 ```yaml
 permissions:
   mode: auto-safe
-  auto_approve: [read_file, glob, grep, list_files, search]
+  auto_approve: [read_file, glob, grep, list_files, web_search, task_get, task_list]
   scoped_approve:
     write_file: { paths: ["src/", "tests/"] }
     bash: { paths: ["src/", "tests/"] }

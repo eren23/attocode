@@ -2,7 +2,7 @@
  * Tests for enhanced worker prompts and tool access
  */
 import { describe, it, expect, vi } from 'vitest';
-import { SwarmWorkerPool } from '../../src/integrations/swarm/worker-pool.js';
+import { SwarmWorkerPool, isLightweightModel } from '../../src/integrations/swarm/worker-pool.js';
 import { DEFAULT_SWARM_CONFIG } from '../../src/integrations/swarm/types.js';
 import type { SwarmConfig, SwarmTask } from '../../src/integrations/swarm/types.js';
 import type { AgentRegistry, AgentDefinition } from '../../src/integrations/agent-registry.js';
@@ -570,7 +570,7 @@ describe('Worker prompts', () => {
     expect(prompt).toContain('PHILOSOPHY'); // philosophy still included at reduced tier
   });
 
-  it('should use minimal prompt on 2nd+ retry (minimal tier)', async () => {
+  it('should use reduced prompt on 2nd+ retry (no minimal tier)', async () => {
     registeredAgents.clear();
 
     const config: SwarmConfig = {
@@ -585,14 +585,14 @@ describe('Worker prompts', () => {
     const pool = new SwarmWorkerPool(config, mockAgentRegistry, mockSpawnAgent, mockBudgetPool);
 
     const task: SwarmTask = {
-      id: 'test-minimal-tier',
+      id: 'test-reduced-2nd-retry',
       description: 'Implement feature',
       type: 'implement',
       dependencies: [],
       status: 'ready',
       complexity: 5,
       wave: 0,
-      attempts: 2, // 2nd retry → minimal tier
+      attempts: 2, // 2nd retry → reduced tier (not minimal)
       retryContext: {
         previousFeedback: 'Still no tool calls',
         previousScore: 0,
@@ -602,21 +602,21 @@ describe('Worker prompts', () => {
 
     await pool.dispatch(task);
 
-    const registered = registeredAgents.get('swarm-coder-test-minimal-tier');
+    const registered = registeredAgents.get('swarm-coder-test-reduced-2nd-retry');
     expect(registered).toBeDefined();
     const prompt = registered!.systemPrompt!;
-    // Minimal tier: no facts, no delegation, no quality, no philosophy
-    expect(prompt).not.toContain('ENVIRONMENT FACTS');
-    expect(prompt).not.toContain('Current date:');
+    // Reduced tier: compact facts + philosophy still present (retries need context, not less)
+    expect(prompt).toContain('Current date:');
+    expect(prompt).toContain('PHILOSOPHY');
+    // No delegation or quality self-assessment on retries
     expect(prompt).not.toContain('DELEGATION SPEC');
-    expect(prompt).not.toContain('PHILOSOPHY');
     // But still has: worker intro, task rules, retry context
     expect(prompt).toContain('You are a coder worker');
     expect(prompt).toContain('ANTI-LOOP RULES');
     expect(prompt).toContain('RETRY CONTEXT');
   });
 
-  it('should produce shorter prompts on each retry tier', async () => {
+  it('should produce shorter prompts on retry (full > reduced)', async () => {
     const config: SwarmConfig = {
       ...DEFAULT_SWARM_CONFIG,
       orchestratorModel: 'test/model',
@@ -627,7 +627,7 @@ describe('Worker prompts', () => {
     };
 
     const lengths: number[] = [];
-    for (const attempts of [0, 1, 2]) {
+    for (const attempts of [0, 1]) {
       registeredAgents.clear();
       const pool = new SwarmWorkerPool(config, mockAgentRegistry, mockSpawnAgent, mockBudgetPool);
 
@@ -652,8 +652,152 @@ describe('Worker prompts', () => {
       lengths.push(registered!.systemPrompt!.length);
     }
 
-    // Each tier should be shorter than the previous
+    // Full tier should be longer than reduced tier
     expect(lengths[0]).toBeGreaterThan(lengths[1]);
-    expect(lengths[1]).toBeGreaterThan(lengths[2]);
+  });
+});
+
+// ─── F12: Hollow Retry Prompt Enhancement ──────────────────────────────────
+
+describe('F12: hollow retry prompt includes first-tool instruction', () => {
+  it('includes ZERO TOOL CALLS warning for score <= 1 on full/reduced tier', async () => {
+    registeredAgents.clear();
+
+    const config: SwarmConfig = {
+      ...DEFAULT_SWARM_CONFIG,
+      orchestratorModel: 'test/model',
+      workers: [
+        { name: 'coder', model: 'test/coder', capabilities: ['code'] },
+      ],
+    };
+
+    const pool = new SwarmWorkerPool(config, mockAgentRegistry, mockSpawnAgent, mockBudgetPool);
+
+    const task: SwarmTask = {
+      id: 'test-f12-hollow',
+      description: 'Implement feature',
+      type: 'implement',
+      dependencies: [],
+      status: 'ready',
+      complexity: 5,
+      wave: 0,
+      attempts: 1,
+      targetFiles: ['src/feature.ts'],
+      retryContext: {
+        previousFeedback: 'No tool calls made — no work was done.',
+        previousScore: 0,
+        attempt: 0,
+      },
+    };
+
+    await pool.dispatch(task);
+
+    const registered = registeredAgents.get('swarm-coder-test-f12-hollow');
+    expect(registered).toBeDefined();
+    const prompt = registered!.systemPrompt!;
+    expect(prompt).toContain('ZERO TOOL CALLS');
+    expect(prompt).toContain('YOUR VERY FIRST ACTION');
+    expect(prompt).toContain('write_file');
+    expect(prompt).toContain('src/feature.ts');
+  });
+
+  it('includes read_file instruction when only readFiles are available', async () => {
+    registeredAgents.clear();
+
+    const config: SwarmConfig = {
+      ...DEFAULT_SWARM_CONFIG,
+      orchestratorModel: 'test/model',
+      workers: [
+        { name: 'coder', model: 'test/coder', capabilities: ['code'] },
+      ],
+    };
+
+    const pool = new SwarmWorkerPool(config, mockAgentRegistry, mockSpawnAgent, mockBudgetPool);
+
+    const task: SwarmTask = {
+      id: 'test-f12-read',
+      description: 'Analyze codebase',
+      type: 'implement',
+      dependencies: [],
+      status: 'ready',
+      complexity: 3,
+      wave: 0,
+      attempts: 1,
+      readFiles: ['src/utils.ts'],
+      retryContext: {
+        previousFeedback: 'No tool calls',
+        previousScore: 1,
+        attempt: 0,
+      },
+    };
+
+    await pool.dispatch(task);
+
+    const registered = registeredAgents.get('swarm-coder-test-f12-read');
+    expect(registered).toBeDefined();
+    const prompt = registered!.systemPrompt!;
+    expect(prompt).toContain('ZERO TOOL CALLS');
+    expect(prompt).toContain('read_file');
+    expect(prompt).toContain('src/utils.ts');
+  });
+
+  it('does NOT include hollow warning for score > 1', async () => {
+    registeredAgents.clear();
+
+    const config: SwarmConfig = {
+      ...DEFAULT_SWARM_CONFIG,
+      orchestratorModel: 'test/model',
+      workers: [
+        { name: 'coder', model: 'test/coder', capabilities: ['code'] },
+      ],
+    };
+
+    const pool = new SwarmWorkerPool(config, mockAgentRegistry, mockSpawnAgent, mockBudgetPool);
+
+    const task: SwarmTask = {
+      id: 'test-f12-notwarn',
+      description: 'Implement feature',
+      type: 'implement',
+      dependencies: [],
+      status: 'ready',
+      complexity: 5,
+      wave: 0,
+      attempts: 1,
+      retryContext: {
+        previousFeedback: 'Incomplete implementation',
+        previousScore: 2,
+        attempt: 0,
+      },
+    };
+
+    await pool.dispatch(task);
+
+    const registered = registeredAgents.get('swarm-coder-test-f12-notwarn');
+    expect(registered).toBeDefined();
+    const prompt = registered!.systemPrompt!;
+    expect(prompt).not.toContain('ZERO TOOL CALLS');
+    expect(prompt).toContain('RETRY CONTEXT');
+  });
+});
+
+describe('D2: isLightweightModel', () => {
+  it('detects GLM models', () => {
+    expect(isLightweightModel('z-ai/glm-5')).toBe(true);
+  });
+
+  it('detects mini models', () => {
+    expect(isLightweightModel('openai/gpt-4o-mini')).toBe(true);
+  });
+
+  it('detects phi models', () => {
+    expect(isLightweightModel('microsoft/phi-3-medium')).toBe(true);
+  });
+
+  it('does not flag large models', () => {
+    expect(isLightweightModel('anthropic/claude-sonnet-4-5-20250929')).toBe(false);
+  });
+
+  it('does not flag standard coder models', () => {
+    expect(isLightweightModel('qwen/qwen-2.5-coder-32b-instruct')).toBe(false);
   });
 });

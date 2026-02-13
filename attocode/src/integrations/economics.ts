@@ -17,6 +17,25 @@ import { getModelPricing, calculateCost } from './openrouter-pricing.js';
 // =============================================================================
 
 /**
+ * Configurable economics thresholds for tuning doom loop and exploration detection.
+ * Passed via ExecutionBudget.tuning; defaults are used when omitted.
+ */
+export interface EconomicsTuning {
+  /** Threshold for exact doom loop detection (default: 3) */
+  doomLoopThreshold?: number;
+  /** Threshold for fuzzy doom loop detection (default: doomLoopThreshold + 1) */
+  doomLoopFuzzyThreshold?: number;
+  /** Unique files read before exploration saturation warning (default: 10) */
+  explorationFileThreshold?: number;
+  /** Iterations in exploration with diminishing returns before warning (default: 5) */
+  explorationIterThreshold?: number;
+  /** Iterations with zero tool calls before forceTextOnly (default: 5) */
+  zeroProgressThreshold?: number;
+  /** Iteration checkpoint for adaptive budget reduction (default: 5) */
+  progressCheckpoint?: number;
+}
+
+/**
  * Execution budget configuration.
  */
 export interface ExecutionBudget {
@@ -33,6 +52,9 @@ export interface ExecutionBudget {
   // Iteration is now soft guidance (not hard limit)
   targetIterations: number;    // e.g., 20 (advisory)
   maxIterations: number;       // e.g., 100 (absolute safety cap)
+
+  /** Configurable thresholds for economics behavior tuning */
+  tuning?: EconomicsTuning;
 }
 
 /**
@@ -268,6 +290,23 @@ export function extractBashResult(result: unknown): { success: boolean; output: 
 }
 
 /**
+ * Regex for common bash file-read commands (simple, no pipes/redirects).
+ * Captures the file path for normalized doom loop fingerprinting.
+ */
+const BASH_FILE_READ_RE = /^\s*(cat|head|tail|wc|less|more|file|stat|md5sum|sha256sum)\b(?:\s+-[^\s]+)*\s+((?:\/|\.\/|\.\.\/)[\w.\/\-@]+|[\w.\-@][\w.\/\-@]*)\s*$/;
+
+/**
+ * Extract the file target from a simple bash file-read command.
+ * Returns null for complex commands (pipes, redirects, non-file-read commands).
+ * Used to normalize doom loop fingerprints across cat/head/tail/wc targeting the same file.
+ */
+export function extractBashFileTarget(command: string): string | null {
+  if (/[|;&<>]/.test(command)) return null; // pipes/redirects = complex, skip
+  const match = command.match(BASH_FILE_READ_RE);
+  return match ? match[2] : null;
+}
+
+/**
  * Primary argument keys that identify the *target* of a tool call.
  * Used for fuzzy doom loop detection — ignoring secondary/optional args.
  */
@@ -282,6 +321,14 @@ const PRIMARY_KEYS = ['path', 'file_path', 'command', 'pattern', 'query', 'url',
 export function computeToolFingerprint(toolName: string, argsStr: string): string {
   try {
     const args = JSON.parse(argsStr || '{}') as Record<string, unknown>;
+
+    // W1: Normalize bash file-read commands so cat/head/tail/wc targeting the same file
+    // produce the same fingerprint, triggering doom loop detection.
+    if (toolName === 'bash' && typeof args.command === 'string') {
+      const fileTarget = extractBashFileTarget(args.command);
+      if (fileTarget) return `bash:file_read:${fileTarget}`;
+    }
+
     const primaryArgs: Record<string, unknown> = {};
     for (const key of PRIMARY_KEYS) {
       if (key in args) {
@@ -318,6 +365,8 @@ export class ExecutionEconomicsManager {
   private extensionHandler?: (request: ExtensionRequest) => Promise<Partial<ExecutionBudget> | null>;
 
   constructor(budget?: Partial<ExecutionBudget>) {
+    const tuning = budget?.tuning;
+
     this.budget = {
       // Hard limits
       maxTokens: budget?.maxTokens ?? 200000,
@@ -332,6 +381,9 @@ export class ExecutionEconomicsManager {
       // Iteration guidance
       targetIterations: budget?.targetIterations ?? 20,
       maxIterations: budget?.maxIterations ?? 100,
+
+      // Tuning
+      tuning,
     };
 
     this.usage = {
@@ -354,13 +406,13 @@ export class ExecutionEconomicsManager {
       stuckCount: 0,
     };
 
-    // Initialize doom loop detection state
+    // Initialize doom loop detection state (thresholds configurable via tuning)
     this.loopState = {
       doomLoopDetected: false,
       lastTool: null,
       consecutiveCount: 0,
-      threshold: 3,
-      fuzzyThreshold: 4,
+      threshold: tuning?.doomLoopThreshold ?? 3,
+      fuzzyThreshold: tuning?.doomLoopFuzzyThreshold ?? (tuning?.doomLoopThreshold ? tuning.doomLoopThreshold + 1 : 4),
       lastWarningTime: 0,
     };
 
@@ -674,8 +726,9 @@ export class ExecutionEconomicsManager {
       return;
     }
 
-    // After reading 10+ unique files without edits, suggest transition
-    if (uniqueFilesRead.size >= 10 && filesModified.size === 0) {
+    // After N+ unique files without edits, suggest transition (configurable, default: 10)
+    const fileThreshold = this.budget.tuning?.explorationFileThreshold ?? 10;
+    if (uniqueFilesRead.size >= fileThreshold && filesModified.size === 0) {
       this.phaseState.shouldTransition = true;
       this.emit({
         type: 'exploration.saturation',
@@ -685,8 +738,9 @@ export class ExecutionEconomicsManager {
       return;
     }
 
-    // After 5+ iterations in exploration with diminishing returns (< 2 new files)
-    if (iterationsInPhase >= 5 && recentNewFiles < 2 && filesModified.size === 0) {
+    // After N+ iterations in exploration with diminishing returns (configurable, default: 5)
+    const iterThreshold = this.budget.tuning?.explorationIterThreshold ?? 5;
+    if (iterationsInPhase >= iterThreshold && recentNewFiles < 2 && filesModified.size === 0) {
       this.phaseState.shouldTransition = true;
       this.emit({
         type: 'exploration.saturation',
@@ -758,6 +812,38 @@ export class ExecutionEconomicsManager {
         forceTextOnly: true,  // No more tool calls
         injectedPrompt: MAX_STEPS_PROMPT,
       };
+    }
+
+    // =========================================================================
+    // ZERO PROGRESS DETECTION — early termination for workers making no tool calls (D1)
+    // =========================================================================
+    const zeroProgressThreshold = this.budget.tuning?.zeroProgressThreshold ?? 5;
+    if (this.usage.iterations >= zeroProgressThreshold && this.usage.toolCalls === 0) {
+      return {
+        canContinue: true,
+        reason: `Zero tool calls in ${this.usage.iterations} iterations`,
+        budgetType: 'iterations',
+        isHardLimit: false,
+        isSoftLimit: true,
+        percentUsed: (this.usage.iterations / this.budget.maxIterations) * 100,
+        suggestedAction: 'stop',
+        forceTextOnly: true,
+        injectedPrompt: `[System] CRITICAL: You have completed ${this.usage.iterations} iterations without making a single tool call. ` +
+          `This means you are NOT doing any work. You MUST use your tools (read_file, write_file, grep, bash, etc.) ` +
+          `to accomplish your task. If you cannot use tools, explain what is blocking you and exit. ` +
+          `Do NOT continue without tool usage.`,
+      };
+    }
+
+    // =========================================================================
+    // ADAPTIVE ITERATION BUDGET — reduce max iterations if no progress at checkpoint (D4)
+    // =========================================================================
+    const checkpoint = this.budget.tuning?.progressCheckpoint ?? 5;
+    if (this.usage.iterations === checkpoint && this.usage.toolCalls === 0) {
+      const reducedMax = checkpoint + 3; // give 3 more iterations with warning
+      if (this.budget.maxIterations > reducedMax) {
+        this.budget.maxIterations = reducedMax;
+      }
     }
 
     // =========================================================================
@@ -1148,13 +1234,14 @@ export class ExecutionEconomicsManager {
       stuckCount: 0,
     };
 
-    // Reset loop detection state
+    // Reset loop detection state (preserve tuning thresholds)
+    const tuning = this.budget.tuning;
     this.loopState = {
       doomLoopDetected: false,
       lastTool: null,
       consecutiveCount: 0,
-      threshold: 3,
-      fuzzyThreshold: 4,
+      threshold: tuning?.doomLoopThreshold ?? 3,
+      fuzzyThreshold: tuning?.doomLoopFuzzyThreshold ?? (tuning?.doomLoopThreshold ? tuning.doomLoopThreshold + 1 : 4),
       lastWarningTime: 0,
     };
 

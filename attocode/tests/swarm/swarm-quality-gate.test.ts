@@ -9,7 +9,7 @@ import { describe, it, expect, vi } from 'vitest';
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
-import { evaluateWorkerOutput } from '../../src/integrations/swarm/swarm-quality-gate.js';
+import { evaluateWorkerOutput, runPreFlightChecks, runConcreteChecks, checkArtifacts } from '../../src/integrations/swarm/swarm-quality-gate.js';
 import type { SwarmTask, SwarmTaskResult } from '../../src/integrations/swarm/types.js';
 import type { LLMProvider } from '../../src/providers/types.js';
 
@@ -54,6 +54,7 @@ function makeResult(overrides: Partial<SwarmTaskResult> = {}): SwarmTaskResult {
     costUsed: 0.01,
     durationMs: 5000,
     model: 'test-model',
+    toolCalls: 5,
     ...overrides,
   };
 }
@@ -307,7 +308,7 @@ describe('configurable qualityThreshold', () => {
 // =============================================================================
 
 describe('evaluateWorkerOutput error handling', () => {
-  it('LLM provider throws → default pass score 3', async () => {
+  it('F7: LLM provider throws → default FAIL score 3 with gateError flag', async () => {
     const provider = {
       chat: vi.fn().mockRejectedValue(new Error('API timeout')),
       name: 'mock',
@@ -319,7 +320,9 @@ describe('evaluateWorkerOutput error handling', () => {
     const result = await evaluateWorkerOutput(provider, 'test-model', makeTask(), makeResult());
 
     expect(result.score).toBe(3);
-    expect(result.passed).toBe(true);
+    expect(result.passed).toBe(false);  // F7: was true, now false
+    expect(result.gateError).toBe(true);
+    expect(result.gateErrorMessage).toContain('API timeout');
     expect(result.feedback).toContain('failed');
   });
 });
@@ -400,5 +403,237 @@ describe('buildQualityPrompt', () => {
 
     const systemMessage = chatCall[0].find((m: { role: string }) => m.role === 'system');
     expect(systemMessage.content).toContain('strict code reviewer');
+  });
+});
+
+// =============================================================================
+// runPreFlightChecks (direct tests)
+// =============================================================================
+
+describe('runPreFlightChecks', () => {
+  it('returns null when all checks pass (no target files, has tool calls)', () => {
+    const task = makeTask({ targetFiles: undefined });
+    const result = makeResult({ toolCalls: 5 });
+    expect(runPreFlightChecks(task, result)).toBeNull();
+  });
+
+  it('V4: rejects when all target files are missing', () => {
+    const task = makeTask({
+      targetFiles: ['/tmp/nonexistent-preflight-test-12345.ts'],
+    });
+    const result = makeResult();
+    const preflight = runPreFlightChecks(task, result);
+
+    expect(preflight).not.toBeNull();
+    expect(preflight!.passed).toBe(false);
+    expect(preflight!.score).toBe(1);
+    expect(preflight!.preFlightReject).toBe(true);
+    expect(preflight!.artifactAutoFail).toBe(true);
+  });
+
+  it('V9: rejects action task with zero tool calls', () => {
+    const task = makeTask({ type: 'implement' });
+    const result = makeResult({ toolCalls: 0 });
+    const preflight = runPreFlightChecks(task, result);
+
+    expect(preflight).not.toBeNull();
+    expect(preflight!.passed).toBe(false);
+    expect(preflight!.score).toBe(0);
+    expect(preflight!.preFlightReject).toBe(true);
+  });
+
+  it('V9: passes non-action task with zero tool calls', () => {
+    const task = makeTask({ type: 'research' });
+    const result = makeResult({ toolCalls: 0 });
+    expect(runPreFlightChecks(task, result)).toBeNull();
+  });
+
+  it('V10: rejects file-creation intent with no files and no tool calls', () => {
+    const task = makeTask({
+      type: 'research',
+      description: 'Write to report/analysis.md',
+    });
+    const result = makeResult({ toolCalls: 0, filesModified: [] });
+    const preflight = runPreFlightChecks(task, result);
+
+    expect(preflight).not.toBeNull();
+    expect(preflight!.passed).toBe(false);
+    expect(preflight!.score).toBe(1);
+    expect(preflight!.artifactAutoFail).toBe(true);
+  });
+
+  it('V6: rejects when closure report admits failure', () => {
+    const task = makeTask({ type: 'research' });
+    const result = makeResult({
+      toolCalls: 3,
+      closureReport: {
+        findings: ['Unable to complete due to budget constraint'],
+        actionsTaken: [],
+        failures: ['no search performed'],
+        remainingWork: [],
+        exitReason: 'budget_exceeded',
+        suggestedNextSteps: [],
+      },
+    });
+    const preflight = runPreFlightChecks(task, result);
+
+    expect(preflight).not.toBeNull();
+    expect(preflight!.passed).toBe(false);
+    expect(preflight!.score).toBe(1);
+    expect(preflight!.preFlightReject).toBe(true);
+  });
+});
+
+// =============================================================================
+// F2: runConcreteChecks
+// =============================================================================
+
+describe('F2: runConcreteChecks', () => {
+  it('passes when no files modified', () => {
+    const task = makeTask({ type: 'implement' });
+    const result = makeResult({ filesModified: [] });
+    const concrete = runConcreteChecks(task, result);
+    expect(concrete.passed).toBe(true);
+    expect(concrete.issues).toHaveLength(0);
+  });
+
+  it('passes when modified files exist and are valid', () => {
+    const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'concrete-test-'));
+    const tsFile = path.join(tmpDir, 'valid.ts');
+    fs.writeFileSync(tsFile, 'export const x = 1;\nfunction foo() {\n  return x;\n}\n');
+
+    try {
+      const task = makeTask({ type: 'implement' });
+      const result = makeResult({ filesModified: [tsFile] });
+      const concrete = runConcreteChecks(task, result);
+      expect(concrete.passed).toBe(true);
+    } finally {
+      fs.rmSync(tmpDir, { recursive: true });
+    }
+  });
+
+  it('fails when modified file is missing', () => {
+    const task = makeTask({ type: 'implement' });
+    const result = makeResult({ filesModified: ['/tmp/nonexistent-concrete-test-99999.ts'] });
+    const concrete = runConcreteChecks(task, result);
+    expect(concrete.passed).toBe(false);
+    expect(concrete.issues[0]).toContain('missing');
+  });
+
+  it('fails when modified file is empty', () => {
+    const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'concrete-test-'));
+    const emptyFile = path.join(tmpDir, 'empty.ts');
+    fs.writeFileSync(emptyFile, '');
+
+    try {
+      const task = makeTask({ type: 'implement' });
+      const result = makeResult({ filesModified: [emptyFile] });
+      const concrete = runConcreteChecks(task, result);
+      expect(concrete.passed).toBe(false);
+      expect(concrete.issues[0]).toContain('empty');
+    } finally {
+      fs.rmSync(tmpDir, { recursive: true });
+    }
+  });
+
+  it('fails when JSON file has invalid syntax', () => {
+    const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'concrete-test-'));
+    const jsonFile = path.join(tmpDir, 'bad.json');
+    fs.writeFileSync(jsonFile, '{ invalid json }');
+
+    try {
+      const task = makeTask({ type: 'implement' });
+      const result = makeResult({ filesModified: [jsonFile] });
+      const concrete = runConcreteChecks(task, result);
+      expect(concrete.passed).toBe(false);
+      expect(concrete.issues[0]).toContain('Invalid JSON');
+    } finally {
+      fs.rmSync(tmpDir, { recursive: true });
+    }
+  });
+
+  it('fails when TS file has grossly unbalanced braces', () => {
+    const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'concrete-test-'));
+    const tsFile = path.join(tmpDir, 'unbalanced.ts');
+    fs.writeFileSync(tsFile, 'function foo() {\n  if (true) {\n    if (false) {\n      if (true) {\n');
+
+    try {
+      const task = makeTask({ type: 'implement' });
+      const result = makeResult({ filesModified: [tsFile] });
+      const concrete = runConcreteChecks(task, result);
+      expect(concrete.passed).toBe(false);
+      expect(concrete.issues[0]).toContain('Unbalanced braces');
+    } finally {
+      fs.rmSync(tmpDir, { recursive: true });
+    }
+  });
+
+  it('skips concrete checks for non-code task types', () => {
+    const task = makeTask({ type: 'research' });
+    const result = makeResult({ filesModified: ['/tmp/nonexistent-concrete-test-99999.ts'] });
+    const concrete = runConcreteChecks(task, result);
+    // Research tasks don't check file syntax
+    expect(concrete.passed).toBe(true);
+  });
+});
+
+// =============================================================================
+// F9: checkArtifacts returns 2000-char previews
+// =============================================================================
+
+describe('F9: checkArtifacts preview length', () => {
+  it('returns up to 2000 chars in preview for large files', () => {
+    const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'f9-test-'));
+    const largeFile = path.join(tmpDir, 'large.ts');
+    // Create a file with 3000 chars of content
+    const content = 'x'.repeat(3000);
+    fs.writeFileSync(largeFile, content);
+
+    try {
+      const task = makeTask({ targetFiles: [largeFile] });
+      const report = checkArtifacts(task);
+
+      expect(report.files).toHaveLength(1);
+      expect(report.files[0].preview.length).toBe(2000);
+      expect(report.allEmpty).toBe(false);
+    } finally {
+      fs.rmSync(tmpDir, { recursive: true });
+    }
+  });
+
+  it('returns full content when file is smaller than 2000 chars', () => {
+    const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'f9-test-'));
+    const smallFile = path.join(tmpDir, 'small.ts');
+    const content = 'export const x = 1;';
+    fs.writeFileSync(smallFile, content);
+
+    try {
+      const task = makeTask({ targetFiles: [smallFile] });
+      const report = checkArtifacts(task);
+
+      expect(report.files).toHaveLength(1);
+      expect(report.files[0].preview).toBe(content);
+    } finally {
+      fs.rmSync(tmpDir, { recursive: true });
+    }
+  });
+
+  it('judge prompt says "First 2000 chars" not "First 500 chars"', async () => {
+    const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'f9-prompt-'));
+    const file = path.join(tmpDir, 'impl.ts');
+    fs.writeFileSync(file, 'export const x = 1;');
+
+    try {
+      const provider = createMockProvider('SCORE: 4\nFEEDBACK: Good');
+      const task = makeTask({ targetFiles: [file] });
+      await evaluateWorkerOutput(provider, 'test-model', task, makeResult());
+
+      const chatCall = (provider.chat as ReturnType<typeof vi.fn>).mock.calls[0];
+      const userMessage = chatCall[0].find((m: { role: string }) => m.role === 'user');
+      expect(userMessage.content).toContain('First 2000 chars');
+      expect(userMessage.content).not.toContain('First 500 chars');
+    } finally {
+      fs.rmSync(tmpDir, { recursive: true });
+    }
   });
 });

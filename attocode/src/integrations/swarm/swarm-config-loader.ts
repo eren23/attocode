@@ -283,6 +283,13 @@ export function yamlToSwarmConfig(yaml: SwarmYamlConfig, orchestratorModel: stri
       if (w.deniedTools && Array.isArray(w.deniedTools)) {
         spec.deniedTools = w.deniedTools.map(String);
       }
+      if (w.extraTools) {
+        spec.extraTools = Array.isArray(w.extraTools)
+          ? w.extraTools.map(String)
+          : typeof w.extraTools === 'string'
+            ? (w.extraTools as string).replace(/^\[|\]$/g, '').split(',').map((s: string) => s.trim()).filter(Boolean)
+            : undefined;
+      }
       return spec;
     });
   }
@@ -337,6 +344,44 @@ export function yamlToSwarmConfig(yaml: SwarmYamlConfig, orchestratorModel: stri
       config.qualityGateModel = String(quality.gateModel ?? quality.gate_model);
     }
     // minScore, skipOnRetry, skipUnderPressure not in SwarmConfig yet, but could be added
+  }
+
+  // reliability — dispatch cap + hollow termination
+  const reliability = yaml.reliability as Record<string, unknown> | undefined;
+  if (reliability) {
+    if (reliability.maxDispatchesPerTask !== undefined || reliability.max_dispatches_per_task !== undefined) {
+      config.maxDispatchesPerTask = Number(reliability.maxDispatchesPerTask ?? reliability.max_dispatches_per_task);
+    }
+    if (reliability.hollowTerminationRatio !== undefined || reliability.hollow_termination_ratio !== undefined) {
+      config.hollowTerminationRatio = Number(reliability.hollowTerminationRatio ?? reliability.hollow_termination_ratio);
+    }
+    if (reliability.hollowTerminationMinDispatches !== undefined || reliability.hollow_termination_min_dispatches !== undefined) {
+      config.hollowTerminationMinDispatches = Number(reliability.hollowTerminationMinDispatches ?? reliability.hollow_termination_min_dispatches);
+    }
+    if (reliability.enableHollowTermination !== undefined || reliability.enable_hollow_termination !== undefined) {
+      config.enableHollowTermination = Boolean(reliability.enableHollowTermination ?? reliability.enable_hollow_termination);
+    }
+  }
+
+  // taskTypes — per-task-type configuration
+  const taskTypes = yaml.taskTypes as Record<string, Record<string, unknown>> | undefined;
+  if (taskTypes && typeof taskTypes === 'object') {
+    config.taskTypes = {};
+    for (const [typeName, typeConfig] of Object.entries(taskTypes)) {
+      if (!typeConfig || typeof typeConfig !== 'object') continue;
+      const parsed: Record<string, unknown> = {};
+      if (typeConfig.timeout !== undefined) parsed.timeout = Number(typeConfig.timeout);
+      if (typeConfig.maxIterations !== undefined) parsed.maxIterations = Number(typeConfig.maxIterations);
+      if (typeConfig.idleTimeout !== undefined) parsed.idleTimeout = Number(typeConfig.idleTimeout);
+      if (typeConfig.policyProfile !== undefined) parsed.policyProfile = String(typeConfig.policyProfile);
+      if (typeConfig.capability !== undefined) parsed.capability = String(typeConfig.capability);
+      if (typeConfig.requiresToolCalls !== undefined) parsed.requiresToolCalls = Boolean(typeConfig.requiresToolCalls);
+      if (typeConfig.promptTemplate !== undefined) parsed.promptTemplate = String(typeConfig.promptTemplate);
+      if (typeConfig.tools && Array.isArray(typeConfig.tools)) parsed.tools = typeConfig.tools.map(String);
+      if (typeConfig.retries !== undefined) parsed.retries = Number(typeConfig.retries);
+      if (typeConfig.tokenBudget !== undefined) parsed.tokenBudget = Number(typeConfig.tokenBudget);
+      config.taskTypes[typeName] = parsed as import('./types.js').TaskTypeConfig;
+    }
   }
 
   // resilience
@@ -423,6 +468,43 @@ export function yamlToSwarmConfig(yaml: SwarmYamlConfig, orchestratorModel: stri
   const policyProfiles = yaml.policyProfiles as Record<string, unknown> | undefined;
   if (policyProfiles && typeof policyProfiles === 'object') {
     config.policyProfiles = policyProfiles as SwarmConfig['policyProfiles'];
+  }
+
+  // profileExtensions — additive tool patches for built-in or named profiles
+  const profileExtensions = (yaml.profileExtensions ?? yaml.profile_extensions) as Record<string, Record<string, unknown>> | undefined;
+  if (profileExtensions && typeof profileExtensions === 'object') {
+    config.profileExtensions = {};
+    for (const [profileName, ext] of Object.entries(profileExtensions)) {
+      if (!ext || typeof ext !== 'object') continue;
+      const entry: { addTools?: string[]; removeTools?: string[] } = {};
+      if (ext.addTools && Array.isArray(ext.addTools)) {
+        entry.addTools = ext.addTools.map(String);
+      }
+      if (ext.add_tools && Array.isArray(ext.add_tools)) {
+        entry.addTools = (ext.add_tools as unknown[]).map(String);
+      }
+      if (ext.removeTools && Array.isArray(ext.removeTools)) {
+        entry.removeTools = ext.removeTools.map(String);
+      }
+      if (ext.remove_tools && Array.isArray(ext.remove_tools)) {
+        entry.removeTools = (ext.remove_tools as unknown[]).map(String);
+      }
+      if (entry.addTools || entry.removeTools) {
+        config.profileExtensions[profileName] = entry;
+      }
+    }
+  }
+
+  // autoSplit — pre-dispatch auto-split configuration
+  const autoSplit = yaml.autoSplit as Record<string, unknown> | undefined;
+  if (autoSplit) {
+    config.autoSplit = {};
+    if (autoSplit.enabled !== undefined) config.autoSplit.enabled = Boolean(autoSplit.enabled);
+    if (autoSplit.complexityFloor !== undefined) config.autoSplit.complexityFloor = Number(autoSplit.complexityFloor);
+    if (autoSplit.maxSubtasks !== undefined) config.autoSplit.maxSubtasks = Number(autoSplit.maxSubtasks);
+    if (autoSplit.splittableTypes && Array.isArray(autoSplit.splittableTypes)) {
+      config.autoSplit.splittableTypes = autoSplit.splittableTypes.map(String);
+    }
   }
 
   // facts — user-configurable grounding facts

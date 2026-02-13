@@ -15,7 +15,8 @@ export interface BashPolicyDecision {
   category: 'disabled' | 'read' | 'write' | 'blocked';
 }
 
-const READ_ONLY_PATTERNS: RegExp[] = [
+/** F6: Exported as single source of truth for read-only bash command patterns. */
+export const READ_ONLY_PATTERNS: RegExp[] = [
   /^\s*ls\b/,
   /^\s*cat\b/,
   /^\s*head\b/,
@@ -58,7 +59,8 @@ const READ_ONLY_PATTERNS: RegExp[] = [
   /^\s*pytest\b/,
 ];
 
-const WRITE_COMMAND_PATTERNS: RegExp[] = [
+/** F6: Exported as single source of truth for write command patterns. */
+export const WRITE_COMMAND_PATTERNS: RegExp[] = [
   /\brm\b/,
   /\bmv\b/,
   /\bcp\b/,
@@ -73,11 +75,12 @@ const WRITE_COMMAND_PATTERNS: RegExp[] = [
   /\b(npm|yarn|pnpm)\s+(install|add|remove|uninstall)\b/i,
 ];
 
-const FILE_MUTATION_PATTERNS: Array<{ pattern: RegExp; reason: string }> = [
+/** F6: Exported as single source of truth for file mutation patterns. */
+export const FILE_MUTATION_PATTERNS: Array<{ pattern: RegExp; reason: string }> = [
   { pattern: /<<-?\s*['"]?[A-Za-z_][\w-]*/m, reason: 'heredoc (<<)' },
-  { pattern: /(^|[^<])>>\s*(?!\/dev\/null)\S/m, reason: 'append redirect (>>)' },
-  { pattern: /(^|[^>])>\s*(?!\/dev\/null)\S/m, reason: 'output redirect (>)' },
-  { pattern: /\|\s*tee\b(?![^|;]*\/dev\/null)/m, reason: 'pipe to tee' },
+  { pattern: /(^|[^<])>>(?!&)\s*(?!\/dev\/null)\S/m, reason: 'append redirect (>>)' },
+  { pattern: /(^|[^>])>(?!&)\s*(?!\/dev\/null)\S/m, reason: 'output redirect (>)' },
+  { pattern: /\|\s*tee\b\s+(?:-[aip]\s+)*(?!\/dev\/null\b)(?!\||;|$)[^\s|;]/m, reason: 'pipe to tee' },
   { pattern: /\bsed\b[^|;]*\s-i(\b|['"])/m, reason: 'in-place sed edit' },
   { pattern: /\bperl\b[^|;]*\s-i(\b|['"])/m, reason: 'in-place perl edit' },
   { pattern: /\bawk\b[^|;]*-i\s*(inplace|in_place)?/mi, reason: 'in-place awk edit' },
@@ -95,9 +98,15 @@ export function detectFileMutationViaBash(command: string): { detected: boolean;
   return { detected: false };
 }
 
+/** Strip leading `cd <dir> &&` prefixes from a command for pattern matching. */
+export function stripCdPrefix(command: string): string {
+  return command.replace(/^(\s*cd\s+\S+\s*&&\s*)+/, '').trim();
+}
+
 export function isReadOnlyBashCommand(command: string): boolean {
   const trimmed = command.trim();
-  if (!READ_ONLY_PATTERNS.some(p => p.test(trimmed))) {
+  const effective = stripCdPrefix(trimmed);
+  if (!READ_ONLY_PATTERNS.some(p => p.test(effective))) {
     return false;
   }
   if (WRITE_COMMAND_PATTERNS.some(p => p.test(trimmed))) {

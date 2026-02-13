@@ -28,6 +28,11 @@ export interface SwarmBudgetPool {
 
   /** Check if there's budget remaining for more workers */
   hasCapacity(): boolean;
+
+  /** F3: Reallocate unused tokens from completed wave back to pool.
+   *  This is a no-op on SharedBudgetPool since release() already handles it,
+   *  but explicitly logs the reallocation for observability. */
+  reallocateUnused(unusedTokens: number): void;
 }
 
 /**
@@ -63,6 +68,13 @@ export function createSwarmBudgetPool(config: SwarmConfig): SwarmBudgetPool {
 
     hasCapacity(): boolean {
       return pool.hasCapacity();
+    },
+
+    reallocateUnused(unusedTokens: number): void {
+      // F3: SharedBudgetPool already handles reallocation via release().
+      // This method exists for observability — the orchestrator logs it.
+      // No additional action needed since release() adjusts totalTokensReserved.
+      void unusedTokens;
     },
   };
 }
