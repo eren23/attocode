@@ -348,7 +348,11 @@ export {
   type ResourceEventListener,
 } from './resources.js';
 
-// Hierarchical configuration
+/**
+ * Hierarchical configuration.
+ * @deprecated Use `loadConfig()` from `../config/index.js` instead.
+ * This module is unused and will be removed in a future release.
+ */
 export {
   HierarchicalConfigManager,
   createHierarchicalConfig,

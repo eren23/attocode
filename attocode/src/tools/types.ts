@@ -18,6 +18,7 @@ export type ParameterSchema = z.ZodTypeAny;
 
 /**
  * Retry configuration for a tool.
+ * @see RetryConfig in config/base-types.ts for the shared base pattern.
  */
 export interface ToolRetryConfig {
   /** Maximum retry attempts (including initial). Set to 1 to disable retry. */

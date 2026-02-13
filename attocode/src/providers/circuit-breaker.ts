@@ -53,6 +53,7 @@ export type CircuitState = 'CLOSED' | 'OPEN' | 'HALF_OPEN';
 
 /**
  * Configuration for the circuit breaker.
+ * @see RetryConfig in config/base-types.ts for the shared retry pattern.
  */
 export interface CircuitBreakerConfig {
   /** Number of failures before opening circuit (default: 5) */

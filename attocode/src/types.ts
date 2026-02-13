@@ -809,6 +809,7 @@ export interface ThreadsConfig {
 
 /**
  * Cancellation configuration.
+ * @see TimeoutConfig in config/base-types.ts for the shared timeout pattern.
  */
 export interface CancellationConfig {
   /** Enable/disable cancellation support */
@@ -823,6 +824,7 @@ export interface CancellationConfig {
 
 /**
  * Resource monitoring configuration.
+ * @see BudgetConfig in config/base-types.ts for the shared budget pattern.
  */
 export interface ResourceConfig {
   /** Enable/disable resource monitoring */
@@ -869,6 +871,7 @@ export interface LSPAgentConfig {
 /**
  * Semantic cache configuration.
  * Caches LLM responses based on query similarity to avoid redundant calls.
+ * @see BudgetConfig in config/base-types.ts for the shared budget pattern.
  */
 export interface SemanticCacheAgentConfig {
   /** Enable/disable semantic caching */
@@ -1070,6 +1073,7 @@ export interface FileChangeTrackerAgentConfig {
 /**
  * Subagent configuration.
  * Controls timeout and iteration limits for spawned subagents.
+ * @see TimeoutConfig in config/base-types.ts for the shared timeout pattern.
  */
 export interface SubagentConfig {
   /** Enable/disable subagent spawning */

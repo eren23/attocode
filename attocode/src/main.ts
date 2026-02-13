@@ -44,7 +44,7 @@ import { createStandardRegistry } from './tools/standard.js';
 
 // CLI and configuration
 import { parseArgs, showHelp, shouldUseTUI, VERSION } from './cli.js';
-import { loadUserConfig } from './config.js';
+import { loadConfig } from './config/index.js';
 
 // First-run and init command
 import { runInit } from './commands/init.js';
@@ -229,8 +229,11 @@ async function main(): Promise<void> {
 
   const useTUI = shouldUseTUI(args);
 
-  // Load user config from ~/.config/attocode/config.json
-  const userConfig = loadUserConfig();
+  // Load user config (user-level + project-level, validated)
+  const { config: userConfig, warnings: configWarnings } = loadConfig();
+  for (const warn of configWarnings) {
+    logger.warn(`[Config] ${warn}`);
+  }
 
   // eslint-disable-next-line no-console
   console.log('Detecting LLM provider...');
