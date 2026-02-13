@@ -13,6 +13,9 @@ import type {
   ParsedSession,
   ParsedTask,
   SessionMetrics,
+  SwarmActivityData,
+  SwarmTaskInfo,
+  SwarmVerificationStep,
 } from '../types.js';
 
 // =============================================================================
@@ -169,6 +172,102 @@ interface ErrorEntry extends BaseJSONLEntry {
   recoverable: boolean;
 }
 
+// Swarm entry types
+interface SwarmStartEntry extends BaseJSONLEntry {
+  _type: 'swarm.start';
+  taskCount: number;
+  config: { maxConcurrency: number; totalBudget: number; maxCost: number };
+}
+
+interface SwarmDecompositionEntry extends BaseJSONLEntry {
+  _type: 'swarm.decomposition';
+  tasks: Array<{ id: string; description: string; type: string; wave: number; deps: string[] }>;
+  totalWaves: number;
+}
+
+interface SwarmWaveEntry extends BaseJSONLEntry {
+  _type: 'swarm.wave';
+  phase: 'start' | 'complete';
+  wave: number;
+  taskCount: number;
+  completed?: number;
+  failed?: number;
+}
+
+interface SwarmTaskEntry extends BaseJSONLEntry {
+  _type: 'swarm.task';
+  phase: 'dispatched' | 'completed' | 'failed' | 'skipped';
+  taskId: string;
+  model?: string;
+  tokensUsed?: number;
+  costUsed?: number;
+  qualityScore?: number;
+  error?: string;
+  reason?: string;
+}
+
+interface SwarmQualityEntry extends BaseJSONLEntry {
+  _type: 'swarm.quality';
+  taskId: string;
+  score: number;
+  feedback: string;
+}
+
+interface SwarmBudgetEntry extends BaseJSONLEntry {
+  _type: 'swarm.budget';
+  tokensUsed: number;
+  tokensTotal: number;
+  costUsed: number;
+  costTotal: number;
+}
+
+interface SwarmVerificationEntry extends BaseJSONLEntry {
+  _type: 'swarm.verification';
+  phase: 'start' | 'step' | 'complete';
+  stepIndex?: number;
+  description?: string;
+  passed?: boolean;
+  summary?: string;
+}
+
+interface SwarmOrchestratorLLMEntry extends BaseJSONLEntry {
+  _type: 'swarm.orchestrator.llm';
+  model: string;
+  purpose: string;
+  tokens: number;
+  cost: number;
+}
+
+interface SwarmWaveAllFailedEntry extends BaseJSONLEntry {
+  _type: 'swarm.wave.allFailed';
+  wave: number;
+}
+
+interface SwarmPhaseProgressEntry extends BaseJSONLEntry {
+  _type: 'swarm.phase.progress';
+  phase: 'decomposing' | 'planning' | 'scheduling';
+  message: string;
+}
+
+interface SwarmCompleteEntry extends BaseJSONLEntry {
+  _type: 'swarm.complete';
+  stats: {
+    totalTasks: number;
+    completedTasks: number;
+    failedTasks: number;
+    totalTokens: number;
+    totalCost: number;
+    totalDuration: number;
+  };
+}
+
+interface ContextCompactedEntry extends BaseJSONLEntry {
+  _type: 'context.compacted';
+  tokensBefore: number;
+  tokensAfter: number;
+  recoveryInjected: boolean;
+}
+
 type TraceEntry =
   | SessionStartEntry
   | SessionEndEntry
@@ -181,7 +280,19 @@ type TraceEntry =
   | DecisionEntry
   | SubagentLinkEntry
   | IterationWrapperEntry
-  | ErrorEntry;
+  | ErrorEntry
+  | SwarmStartEntry
+  | SwarmDecompositionEntry
+  | SwarmWaveEntry
+  | SwarmTaskEntry
+  | SwarmQualityEntry
+  | SwarmBudgetEntry
+  | SwarmVerificationEntry
+  | SwarmOrchestratorLLMEntry
+  | SwarmWaveAllFailedEntry
+  | SwarmPhaseProgressEntry
+  | SwarmCompleteEntry
+  | ContextCompactedEntry;
 
 // =============================================================================
 // PARSER CLASS
@@ -299,8 +410,24 @@ export class JSONLParser {
         timestamp: new Date(e._ts),
       }));
 
+    // Extract context compaction events
+    const compactionEvents = this.rawEntries
+      .filter((e): e is ContextCompactedEntry => e._type === 'context.compacted')
+      .map(e => ({
+        timestamp: new Date(e._ts),
+        tokensBefore: e.tokensBefore,
+        tokensAfter: e.tokensAfter,
+        recoveryInjected: e.recoveryInjected,
+      }));
+
     // Calculate metrics from all iterations
     const metrics = this.calculateMetrics(iterations);
+
+    // Parse swarm data if present
+    const swarmData = this.buildSwarmData();
+    if (swarmData) {
+      metrics.isSwarm = true;
+    }
 
     const startTime = sessionStart
       ? new Date(sessionStart._ts)
@@ -326,6 +453,8 @@ export class JSONLParser {
       planEvolutions: [], // TODO: Parse plan.evolution events
       errors,
       metrics,
+      compactionEvents,
+      swarmData: swarmData ?? undefined,
     };
   }
 
@@ -389,6 +518,164 @@ export class JSONLParser {
     }
 
     return tasks;
+  }
+
+  /**
+   * Build swarm activity data from swarm.* entries.
+   * Returns null if no swarm entries are present.
+   */
+  private buildSwarmData(): SwarmActivityData | null {
+    const swarmEntries = this.rawEntries.filter(e => e._type?.startsWith('swarm.'));
+    if (swarmEntries.length === 0) return null;
+
+    const data: SwarmActivityData = {
+      totalWaves: 0,
+      tasks: [],
+      waves: [],
+      budgetSnapshots: [],
+      qualityRejections: [],
+    };
+
+    // Track tasks by ID for status updates
+    const taskMap = new Map<string, SwarmTaskInfo>();
+
+    // Check session metadata for swarm flag
+    const sessionStart = this.rawEntries.find(e => e._type === 'session.start') as SessionStartEntry | undefined;
+    const isSwarmFromMetadata = sessionStart?.metadata?.swarm === true;
+    if (!isSwarmFromMetadata && swarmEntries.length === 0) return null;
+
+    // Verification state
+    const verificationSteps: SwarmVerificationStep[] = [];
+
+    for (const entry of swarmEntries) {
+      switch (entry._type) {
+        case 'swarm.start': {
+          const e = entry as SwarmStartEntry;
+          data.config = e.config;
+          break;
+        }
+        case 'swarm.decomposition': {
+          const e = entry as SwarmDecompositionEntry;
+          data.totalWaves = e.totalWaves;
+          for (const t of e.tasks) {
+            const task: SwarmTaskInfo = {
+              id: t.id,
+              description: t.description,
+              type: t.type,
+              wave: t.wave,
+              deps: t.deps,
+            };
+            taskMap.set(t.id, task);
+          }
+          break;
+        }
+        case 'swarm.wave': {
+          const e = entry as SwarmWaveEntry;
+          data.waves.push({
+            wave: e.wave,
+            phase: e.phase,
+            taskCount: e.taskCount,
+            completed: e.completed,
+            failed: e.failed,
+            timestamp: new Date(e._ts),
+          });
+          break;
+        }
+        case 'swarm.task': {
+          const e = entry as SwarmTaskEntry;
+          const task = taskMap.get(e.taskId);
+          if (task) {
+            task.status = e.phase;
+            if (e.model) task.model = e.model;
+            if (e.tokensUsed !== undefined) task.tokensUsed = e.tokensUsed;
+            if (e.costUsed !== undefined) task.costUsed = e.costUsed;
+            if (e.qualityScore !== undefined) task.qualityScore = e.qualityScore;
+            if (e.error) task.error = e.error;
+            if (e.reason) task.reason = e.reason;
+          }
+          break;
+        }
+        case 'swarm.quality': {
+          const e = entry as SwarmQualityEntry;
+          data.qualityRejections.push({
+            taskId: e.taskId,
+            score: e.score,
+            feedback: e.feedback,
+            timestamp: new Date(e._ts),
+          });
+          break;
+        }
+        case 'swarm.budget': {
+          const e = entry as SwarmBudgetEntry;
+          data.budgetSnapshots.push({
+            timestamp: new Date(e._ts),
+            tokensUsed: e.tokensUsed,
+            tokensTotal: e.tokensTotal,
+            costUsed: e.costUsed,
+            costTotal: e.costTotal,
+          });
+          break;
+        }
+        case 'swarm.verification': {
+          const e = entry as SwarmVerificationEntry;
+          if (e.phase === 'step' && e.stepIndex !== undefined) {
+            verificationSteps.push({
+              stepIndex: e.stepIndex,
+              description: e.description || '',
+              passed: e.passed ?? false,
+            });
+          } else if (e.phase === 'complete') {
+            data.verification = {
+              passed: e.passed ?? false,
+              summary: e.summary || '',
+              steps: verificationSteps,
+            };
+          }
+          break;
+        }
+        case 'swarm.orchestrator.llm': {
+          const e = entry as SwarmOrchestratorLLMEntry;
+          if (!data.orchestrator) {
+            data.orchestrator = { tokens: 0, cost: 0, calls: 0, model: e.model };
+          }
+          data.orchestrator.tokens += e.tokens;
+          data.orchestrator.cost += e.cost;
+          data.orchestrator.calls++;
+          // Keep the most recent model name (they should all be the same)
+          data.orchestrator.model = e.model;
+          break;
+        }
+        case 'swarm.wave.allFailed': {
+          const e = entry as SwarmWaveAllFailedEntry;
+          // Mark the affected wave as allFailed
+          const affectedWave = data.waves.find(w => w.wave === e.wave);
+          if (affectedWave) {
+            affectedWave.allFailed = true;
+          }
+          break;
+        }
+        case 'swarm.phase.progress': {
+          const e = entry as SwarmPhaseProgressEntry;
+          if (!data.phases) {
+            data.phases = [];
+          }
+          data.phases.push({
+            phase: e.phase,
+            message: e.message,
+            timestamp: new Date(e._ts),
+          });
+          break;
+        }
+        case 'swarm.complete': {
+          const e = entry as SwarmCompleteEntry;
+          data.stats = e.stats;
+          break;
+        }
+      }
+    }
+
+    data.tasks = Array.from(taskMap.values());
+    return data;
   }
 
   /**

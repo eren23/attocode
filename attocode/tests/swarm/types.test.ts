@@ -154,4 +154,10 @@ describe('DEFAULT_SWARM_CONFIG V2 fields', () => {
     expect(DEFAULT_SWARM_CONFIG.enableModelFailover).toBe(true);
     expect(DEFAULT_SWARM_CONFIG.maxVerificationRetries).toBe(2);
   });
+
+  it('F13: maxDispatchesPerTask defaults to undefined (runtime fallback is 5)', () => {
+    // The default config does not set maxDispatchesPerTask;
+    // the orchestrator uses `?? 5` at the call site.
+    expect(DEFAULT_SWARM_CONFIG.maxDispatchesPerTask).toBeUndefined();
+  });
 });

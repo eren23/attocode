@@ -46,7 +46,9 @@ export class SwarmFileWatcher {
    * Start watching files. Reads any existing content first.
    */
   start(sinceSeq?: number): void {
-    // Read existing events to find offset
+    // Read existing events to find offset.
+    // When sinceSeq is 0 or undefined, replay ALL existing events so the dashboard
+    // shows the full event feed (not just events arriving after connection).
     if (fs.existsSync(this.eventsPath)) {
       if (sinceSeq !== undefined && sinceSeq > 0) {
         // Read all lines, find the offset after the requested seq
@@ -69,9 +71,9 @@ export class SwarmFileWatcher {
         }
         this.eventsOffset = targetOffset;
       } else {
-        // Start from the end (only get new events)
-        const stats = fs.statSync(this.eventsPath);
-        this.eventsOffset = stats.size;
+        // Start from the beginning — replay all existing events
+        // so the Event Feed and Worker Timeline get the full history
+        this.eventsOffset = 0;
       }
     }
 

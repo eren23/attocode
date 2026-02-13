@@ -5,6 +5,10 @@ name: example-agent
 description: A template for creating new agents. Agents are autonomous workers that can be spawned to handle specific tasks.
 model: balanced  # fast (haiku) | balanced (sonnet) | quality (opus)
 
+# Optional policy profile (recommended)
+# Examples: code-full, code-strict-bash, research-safe, review-safe
+policyProfile: code-strict-bash
+
 # Resource limits
 maxIterations: 30
 maxTokenBudget: 80000
@@ -18,6 +22,7 @@ capabilities:
 
 # Tool whitelist (omit to allow all tools)
 # Common tools: read_file, write_file, edit_file, list_files, glob, grep, bash
+# NOTE: Prefer policyProfile for behavioral control. The tools list is a legacy/compatibility gate.
 tools:
   - read_file
   - list_files

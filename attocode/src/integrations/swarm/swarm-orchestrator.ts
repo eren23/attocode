@@ -17,10 +17,12 @@
  * - Orchestrator decision logging
  */
 
-import type { LLMProvider } from '../../providers/types.js';
+import * as fs from 'node:fs';
+import * as path from 'node:path';
+import type { LLMProvider, LLMProviderWithTools, ToolDefinitionSchema } from '../../providers/types.js';
 import type { AgentRegistry } from '../agent-registry.js';
 import type { SharedBlackboard } from '../shared-blackboard.js';
-import { createSmartDecomposer, parseDecompositionResponse, type LLMDecomposeFunction } from '../smart-decomposer.js';
+import { createSmartDecomposer, parseDecompositionResponse, validateDecomposition, type LLMDecomposeFunction } from '../smart-decomposer.js';
 import { createResultSynthesizer } from '../result-synthesizer.js';
 import type {
   SwarmConfig,
@@ -29,18 +31,21 @@ import type {
   SwarmError,
   SwarmStatus,
   SwarmTask,
+  SwarmTaskResult,
   SwarmPlan,
   WaveReviewResult,
   VerificationResult,
   FixupTask,
   OrchestratorDecision,
   WorkerCapability,
+  ArtifactInventory,
+  ArtifactEntry,
 } from './types.js';
-import { taskResultToAgentOutput, DEFAULT_SWARM_CONFIG, SUBTASK_TO_CAPABILITY } from './types.js';
+import { taskResultToAgentOutput, DEFAULT_SWARM_CONFIG, getTaskTypeConfig } from './types.js';
 import { SwarmTaskQueue, createSwarmTaskQueue } from './task-queue.js';
 import { createSwarmBudgetPool, type SwarmBudgetPool } from './swarm-budget.js';
 import { SwarmWorkerPool, createSwarmWorkerPool, type SpawnAgentFn } from './worker-pool.js';
-import { evaluateWorkerOutput, type QualityGateConfig } from './swarm-quality-gate.js';
+import { evaluateWorkerOutput, runPreFlightChecks, checkArtifacts, checkArtifactsEnhanced, runConcreteChecks, type QualityGateConfig } from './swarm-quality-gate.js';
 import { ModelHealthTracker, selectAlternativeModel } from './model-selector.js';
 import { SwarmStateStore } from './swarm-state-store.js';
 import type { SwarmEvent } from './swarm-events.js';
@@ -49,16 +54,64 @@ import type { SpawnResult } from '../agent-registry.js';
 // ─── Hollow Completion Detection ──────────────────────────────────────────
 
 /**
- * V10: Minimal hollow completion detection — let the quality gate judge everything else.
- * Only catches truly empty completions: zero tool calls AND trivial output (<50 chars).
- * No task-type lists, no closure report checks, no hardcoded thresholds beyond the bare minimum.
+ * V11: Hollow completion detection — catches empty completions AND "success" with failure language.
+ * Zero tool calls AND trivial output is always hollow.
+ * Additionally, success=true but output containing failure admissions is also hollow —
+ * this catches workers that report success but actually did no useful work.
  */
-export function isHollowCompletion(spawnResult: SpawnResult): boolean {
+const FAILURE_INDICATORS = [
+  'budget exhausted', 'unable to complete', 'could not complete',
+  'ran out of budget', 'no changes were made', 'no files were modified',
+  'no files were created', 'failed to complete', 'before research could begin',
+  'i was unable to', 'i could not', 'unfortunately i',
+];
+
+const BOILERPLATE_INDICATORS = [
+  'task completed successfully', 'i have completed the task',
+  'the task has been completed', 'done', 'completed', 'finished',
+  'no issues found', 'everything looks good', 'all tasks completed',
+];
+
+export function isHollowCompletion(spawnResult: SpawnResult, taskType?: string, swarmConfig?: import('./types.js').SwarmConfig): boolean {
   // Timeout uses toolCalls === -1, not hollow
-  if (spawnResult.metrics.toolCalls === -1) return false;
-  // Only catch truly empty completions: zero tools AND trivial output
-  return spawnResult.metrics.toolCalls === 0
-    && (spawnResult.output?.trim().length ?? 0) < 50;
+  if ((spawnResult.metrics.toolCalls ?? 0) === -1) return false;
+
+  const toolCalls = spawnResult.metrics.toolCalls ?? 0;
+
+  // Truly empty completions: zero tools AND trivial output
+  // P4: Higher threshold (120 chars) + configurable via SwarmConfig
+  const hollowThreshold = swarmConfig?.hollowOutputThreshold ?? 120;
+  if (toolCalls === 0
+    && (spawnResult.output?.trim().length ?? 0) < hollowThreshold) {
+    return true;
+  }
+
+  // P4: Boilerplate detection — zero tools AND short output that's just boilerplate
+  if (toolCalls === 0 && (spawnResult.output?.trim().length ?? 0) < 300) {
+    const outputLower = (spawnResult.output ?? '').toLowerCase().trim();
+    if (BOILERPLATE_INDICATORS.some(b => outputLower.includes(b))) {
+      return true;
+    }
+  }
+
+  // "Success" that admits failure: worker claims success but output contains failure language
+  if (spawnResult.success) {
+    const outputLower = (spawnResult.output ?? '').toLowerCase();
+    if (FAILURE_INDICATORS.some(f => outputLower.includes(f))) {
+      return true;
+    }
+  }
+
+  // V7: Use configurable requiresToolCalls from TaskTypeConfig.
+  // For action-oriented tasks (implement/test/refactor/etc), zero tool calls is ALWAYS hollow.
+  if (taskType) {
+    const typeConfig = getTaskTypeConfig(taskType, swarmConfig);
+    if (typeConfig.requiresToolCalls && toolCalls === 0) {
+      return true;
+    }
+  }
+
+  return false;
 }
 
 // ─── Event Emitter ─────────────────────────────────────────────────────────
@@ -93,10 +146,16 @@ export class SwarmOrchestrator {
   private startTime = 0;
   private modelUsage = new Map<string, { tasks: number; tokens: number; cost: number }>();
 
+  // Orchestrator's own LLM usage (separate from worker usage)
+  private orchestratorTokens = 0;
+  private orchestratorCost = 0;
+  private orchestratorCalls = 0;
+
   // V2: Planning, review, verification, health, persistence
   private plan?: SwarmPlan;
   private waveReviews: WaveReviewResult[] = [];
   private verificationResult?: VerificationResult;
+  private artifactInventory?: ArtifactInventory;
   private orchestratorDecisions: OrchestratorDecision[] = [];
   private healthTracker: ModelHealthTracker;
   private stateStore?: SwarmStateStore;
@@ -109,10 +168,33 @@ export class SwarmOrchestrator {
   private static readonly CIRCUIT_BREAKER_THRESHOLD = 3;
   private static readonly CIRCUIT_BREAKER_PAUSE_MS = 15_000;
 
-  // Quality gate circuit breaker: disable quality gates after too many consecutive rejections
-  private consecutiveQualityRejections = 0;
-  private qualityGateDisabled = false;
-  private static readonly QUALITY_CIRCUIT_BREAKER_THRESHOLD = 8;
+  // P3: Per-model quality gate circuit breaker (replaces global circuit breaker)
+  private perModelQualityRejections = new Map<string, number>();
+  private qualityGateDisabledModels = new Set<string>();
+  private static readonly QUALITY_CIRCUIT_BREAKER_THRESHOLD = 5;
+
+  // Hollow completion streak: early termination when single-model swarm produces only hollows
+  private hollowStreak = 0;
+  private static readonly HOLLOW_STREAK_THRESHOLD = 3;
+
+  // V7: Global dispatch + hollow ratio tracking for multi-model termination
+  private totalDispatches = 0;
+  private totalHollows = 0;
+
+  // Hollow ratio warning (fired once, then suppressed to avoid log spam)
+  private hollowRatioWarned = false;
+
+  // P7: Adaptive dispatch stagger — increases on rate limits, decreases on success
+  private adaptiveStaggerMs: number = 0; // Initialized from config in constructor
+
+  // F25: Consecutive timeout tracking per task — early-fail after limit
+  private taskTimeoutCounts = new Map<string, number>();
+
+  // Original prompt for re-planning on resume
+  private originalPrompt = '';
+
+  // Mid-swarm re-planning: only once per swarm execution
+  private hasReplanned = false;
 
   constructor(
     config: SwarmConfig,
@@ -126,6 +208,7 @@ export class SwarmOrchestrator {
     this.blackboard = blackboard;
     this.spawnAgentFn = spawnAgentFn;
     this.healthTracker = new ModelHealthTracker();
+    this.adaptiveStaggerMs = this.getStaggerMs();
 
     this.taskQueue = createSwarmTaskQueue();
     this.budgetPool = createSwarmBudgetPool(this.config);
@@ -134,6 +217,7 @@ export class SwarmOrchestrator {
       agentRegistry,
       spawnAgentFn,
       this.budgetPool,
+      this.healthTracker,
     );
 
     // Initialize state store if persistence enabled
@@ -146,6 +230,26 @@ export class SwarmOrchestrator {
 
     // C1: Build LLM decompose function with explicit JSON schema
     const llmDecompose: LLMDecomposeFunction = async (task, _context) => {
+      // V7: Dynamically build the allowed type list from built-in + user-defined types
+      const builtinTypes = ['research', 'analysis', 'design', 'implement', 'test', 'refactor', 'review', 'document', 'integrate', 'deploy', 'merge'];
+      const customTypes = Object.keys(this.config.taskTypes ?? {}).filter(t => !builtinTypes.includes(t));
+      const allTypes = [...builtinTypes, ...customTypes];
+      const typeListStr = allTypes.map(t => `"${t}"`).join(' | ');
+
+      // Build custom type descriptions so the LLM knows when to use them
+      let customTypeSection = '';
+      if (customTypes.length > 0) {
+        const descriptions = customTypes.map(t => {
+          const cfg = this.config.taskTypes![t];
+          const parts = [`  - "${t}"`];
+          if (cfg.capability) parts.push(`(capability: ${cfg.capability})`);
+          if (cfg.promptTemplate) parts.push(`— uses ${cfg.promptTemplate} workflow`);
+          if (cfg.timeout) parts.push(`— timeout: ${Math.round(cfg.timeout / 60000)}min`);
+          return parts.join(' ');
+        }).join('\n');
+        customTypeSection = `\n\nCustom task types available:\n${descriptions}\nUse these when their description matches the subtask's purpose.`;
+      }
+
       const systemPrompt = `You are a task decomposition expert. Break down the given task into well-defined subtasks with clear dependencies.
 
 CRITICAL: Dependencies MUST use zero-based integer indices referring to other subtasks in the array.
@@ -155,7 +259,7 @@ Respond with valid JSON matching this exact schema:
   "subtasks": [
     {
       "description": "Clear description of what this subtask does",
-      "type": "implement" | "research" | "analysis" | "design" | "test" | "refactor" | "review" | "document" | "integrate" | "deploy" | "merge",
+      "type": ${typeListStr},
       "complexity": 1-10,
       "dependencies": [0, 1],
       "parallelizable": true | false,
@@ -164,7 +268,7 @@ Respond with valid JSON matching this exact schema:
   ],
   "strategy": "sequential" | "parallel" | "hierarchical" | "adaptive" | "pipeline",
   "reasoning": "Brief explanation of why this decomposition was chosen"
-}
+}${customTypeSection}
 
 EXAMPLE 1 — Research task (3 parallel research + 1 merge):
 {
@@ -208,6 +312,8 @@ Rules:
           temperature: 0.3,
         },
       );
+
+      this.trackOrchestratorUsage(response as any, 'decompose');
 
       // Use parseDecompositionResponse which handles markdown code blocks and edge cases
       return parseDecompositionResponse(response.content);
@@ -256,6 +362,26 @@ Rules:
   }
 
   /**
+   * Track token usage from an orchestrator LLM call.
+   */
+  private trackOrchestratorUsage(response: { usage?: { total_tokens?: number; prompt_tokens?: number; completion_tokens?: number } }, purpose: string): void {
+    if (!response.usage) return;
+    const tokens = response.usage.total_tokens ?? ((response.usage.prompt_tokens ?? 0) + (response.usage.completion_tokens ?? 0));
+    const cost = tokens * 0.000015; // ~$15/M tokens average for orchestrator models
+    this.orchestratorTokens += tokens;
+    this.orchestratorCost += cost;
+    this.orchestratorCalls++;
+
+    this.emit({
+      type: 'swarm.orchestrator.llm' as any,
+      model: this.config.orchestratorModel,
+      purpose,
+      tokens,
+      cost,
+    });
+  }
+
+  /**
    * Execute the full swarm pipeline for a task.
    *
    * V2 pipeline:
@@ -271,6 +397,7 @@ Rules:
    */
   async execute(task: string): Promise<SwarmExecutionResult> {
     this.startTime = Date.now();
+    this.originalPrompt = task;
 
     try {
       // V2: Check for resume
@@ -281,16 +408,103 @@ Rules:
       // Phase 1: Decompose
       this.currentPhase = 'decomposing';
       this.emit({ type: 'swarm.phase.progress', phase: 'decomposing', message: 'Decomposing task into subtasks...' });
-      const decomposition = await this.decompose(task);
+      let decomposition = await this.decompose(task);
       if (!decomposition) {
         this.currentPhase = 'failed';
         return this.buildErrorResult('Decomposition failed — task may be too simple for swarm mode');
+      }
+
+      // F5: Validate decomposition — check for cycles, invalid deps, granularity
+      const validation = validateDecomposition(decomposition);
+      if (validation.warnings.length > 0) {
+        this.logDecision('decomposition-validation',
+          `Warnings: ${validation.warnings.join('; ')}`, '');
+      }
+      if (!validation.valid) {
+        this.logDecision('decomposition-validation',
+          `Invalid decomposition: ${validation.issues.join('; ')}`, 'Retrying...');
+        // Retry decomposition once with feedback
+        decomposition = await this.decompose(
+          `${task}\n\nIMPORTANT: Previous decomposition was invalid: ${validation.issues.join('. ')}. Fix these issues.`,
+        );
+        if (!decomposition) {
+          this.currentPhase = 'failed';
+          return this.buildErrorResult(`Decomposition validation failed: ${validation.issues.join('; ')}`);
+        }
+        const retryValidation = validateDecomposition(decomposition);
+        if (!retryValidation.valid) {
+          this.logDecision('decomposition-validation',
+            `Retry still invalid: ${retryValidation.issues.join('; ')}`, 'Proceeding anyway');
+        }
       }
 
       // Phase 2: Schedule into waves
       this.currentPhase = 'scheduling';
       this.emit({ type: 'swarm.phase.progress', phase: 'scheduling', message: `Scheduling ${decomposition.subtasks.length} subtasks into waves...` });
       this.taskQueue.loadFromDecomposition(decomposition, this.config);
+
+      // F3: Dynamic orchestrator reserve scaling based on subtask count.
+      // More subtasks = more quality gate calls, synthesis work, and review overhead.
+      // Formula: max(configured ratio, 5% per subtask), capped at 40%.
+      const subtaskCount = decomposition.subtasks.length;
+      const dynamicReserveRatio = Math.min(0.40, Math.max(
+        this.config.orchestratorReserveRatio,
+        subtaskCount * 0.05,
+      ));
+      if (dynamicReserveRatio > this.config.orchestratorReserveRatio) {
+        this.logDecision('budget-scaling',
+          `Scaled orchestrator reserve from ${(this.config.orchestratorReserveRatio * 100).toFixed(0)}% to ${(dynamicReserveRatio * 100).toFixed(0)}% for ${subtaskCount} subtasks`,
+          '');
+      }
+
+      // Foundation task detection: tasks that are the sole dependency of 3+ downstream
+      // tasks are critical — if they fail, the entire swarm cascade-skips.
+      // Give them extra retries and timeout scaling.
+      this.detectFoundationTasks();
+
+      // D3/F1: Probe model capability before dispatch (default: true)
+      if (this.config.probeModels !== false) {
+        await this.probeModelCapability();
+
+        // F15/F23: Handle all-models-failed probe scenario
+        // Resolve strategy: explicit probeFailureStrategy > legacy ignoreProbeFailures > default 'warn-and-try'
+        const probeStrategy = this.config.probeFailureStrategy
+          ?? (this.config.ignoreProbeFailures ? 'warn-and-try' : 'warn-and-try');
+        const uniqueModels = [...new Set(this.config.workers.map(w => w.model))];
+        const healthyModels = this.healthTracker.getHealthy(uniqueModels);
+
+        if (healthyModels.length === 0 && uniqueModels.length > 0) {
+          if (probeStrategy === 'abort') {
+            // Hard abort — no tasks dispatched
+            const reason = `All ${uniqueModels.length} worker model(s) failed capability probes — no model can make tool calls. Aborting swarm to prevent budget waste. Fix model configuration and retry.`;
+            this.logDecision('probe-abort', reason, `Models tested: ${uniqueModels.join(', ')}`);
+            this.emit({ type: 'swarm.abort', reason });
+            this.skipRemainingTasks(reason);
+            const totalTasks = this.taskQueue.getStats().total;
+            const abortStats: SwarmExecutionStats = {
+              completedTasks: 0, failedTasks: 0, skippedTasks: totalTasks,
+              totalTasks, totalWaves: 0, totalTokens: 0, totalCost: 0,
+              totalDurationMs: Date.now() - this.startTime,
+              qualityRejections: 0, retries: 0,
+              modelUsage: new Map(),
+            };
+            this.emit({ type: 'swarm.complete', stats: abortStats, errors: this.errors });
+            return {
+              success: false, summary: reason,
+              tasks: this.taskQueue.getAllTasks(), stats: abortStats, errors: this.errors,
+            };
+          } else {
+            // F23: warn-and-try — log warning, reset health, let real tasks prove capability
+            this.logDecision('probe-warning',
+              `All ${uniqueModels.length} model(s) failed probe — continuing anyway (strategy: warn-and-try)`,
+              'Will abort after first real task failure if model cannot use tools');
+            // Reset health so dispatch doesn't skip all models
+            for (const model of uniqueModels) {
+              this.healthTracker.recordSuccess(model, 0);
+            }
+          }
+        }
+      }
 
       // Emit skip events when tasks are cascade-skipped due to dependency failures
       this.taskQueue.setOnCascadeSkip((skippedTaskId, reason) => {
@@ -332,8 +546,14 @@ Rules:
       this.currentPhase = 'executing';
       await this.executeWaves();
 
+      // V10: Final rescue pass — attempt to recover cascade-skipped tasks with lenient mode
+      if (!this.cancelled) await this.finalRescuePass();
+
       // Ensure planning completed before verification/synthesis
       if (planPromise) await planPromise;
+
+      // Post-wave artifact audit: scan filesystem for files created by workers
+      this.artifactInventory = this.buildArtifactInventory();
 
       // V2: Phase 3.5: Verify integration
       if (this.config.enableVerification && this.plan?.integrationTestPlan) {
@@ -355,11 +575,15 @@ Rules:
       // V2: Final checkpoint
       this.checkpoint('final');
 
-      this.emit({ type: 'swarm.complete', stats: executionStats, errors: this.errors });
+      const hasArtifacts = (this.artifactInventory?.totalFiles ?? 0) > 0;
+      this.emit({ type: 'swarm.complete', stats: executionStats, errors: this.errors, artifactInventory: this.artifactInventory });
 
       return {
         success: executionStats.completedTasks > 0,
+        partialSuccess: !executionStats.completedTasks && hasArtifacts,
+        partialFailure: executionStats.failedTasks > 0,
         synthesisResult: synthesisResult ?? undefined,
+        artifactInventory: this.artifactInventory,
         summary: this.buildSummary(executionStats),
         tasks: this.taskQueue.getAllTasks(),
         stats: executionStats,
@@ -474,6 +698,8 @@ Respond with valid JSON:
         },
       );
 
+      this.trackOrchestratorUsage(response as any, 'plan');
+
       const parsed = this.parseJSON(response.content);
       if (parsed) {
         this.plan = {
@@ -555,6 +781,8 @@ Respond with valid JSON:
         ],
         { model: reviewModel, maxTokens: 2000, temperature: 0.3 },
       );
+
+      this.trackOrchestratorUsage(response as any, 'review');
 
       const parsed = this.parseJSON(response.content);
       if (!parsed) return null;
@@ -702,6 +930,8 @@ Respond with JSON: { "fixups": [{ "description": "what to fix", "type": "impleme
           { model: this.config.plannerModel ?? this.config.orchestratorModel, maxTokens: 1500, temperature: 0.3 },
         );
 
+        this.trackOrchestratorUsage(response as any, 'verification-fixup');
+
         const parsed = this.parseJSON(response.content);
         if (parsed?.fixups && parsed.fixups.length > 0) {
           const fixupTasks: FixupTask[] = parsed.fixups.map((f: { description: string; type?: string }, i: number) => ({
@@ -761,6 +991,7 @@ Respond with JSON: { "fixups": [{ "description": "what to fix", "type": "impleme
     this.emit({ type: 'swarm.state.resume', sessionId: checkpoint.sessionId, fromWave: checkpoint.currentWave });
 
     // Restore state
+    if (checkpoint.originalPrompt) this.originalPrompt = checkpoint.originalPrompt;
     if (checkpoint.plan) this.plan = checkpoint.plan;
     if (checkpoint.modelHealth.length > 0) this.healthTracker.restore(checkpoint.modelHealth);
     this.orchestratorDecisions = checkpoint.decisions ?? [];
@@ -791,9 +1022,54 @@ Respond with JSON: { "fixups": [{ "description": "what to fix", "type": "impleme
       this.logDecision('resume', `Reset ${resetCount} orphaned dispatched tasks to ready`, 'Workers died with previous process');
     }
 
+    // Reset skipped tasks whose dependencies are now satisfied
+    let unskippedCount = 0;
+    for (const task of this.taskQueue.getAllTasks()) {
+      if (task.status === 'skipped') {
+        const deps = task.dependencies.map(id => this.taskQueue.getTask(id));
+        const allDepsSatisfied = deps.every(d =>
+          d && (d.status === 'completed' || d.status === 'decomposed'),
+        );
+        if (allDepsSatisfied) {
+          task.status = 'ready';
+          task.attempts = 0;
+          task.rescueContext = 'Recovered on resume — dependencies now satisfied';
+          unskippedCount++;
+        }
+      }
+    }
+    // Also reset failed tasks that have retry budget
+    for (const task of this.taskQueue.getAllTasks()) {
+      if (task.status === 'failed') {
+        task.status = 'ready';
+        task.attempts = Math.min(task.attempts, Math.max(0, this.config.workerRetries - 1));
+        unskippedCount++;
+      }
+    }
+    if (unskippedCount > 0) {
+      this.logDecision('resume', `Recovered ${unskippedCount} skipped/failed tasks`, 'Fresh retry on resume');
+    }
+
+    // If many tasks are still stuck after un-skip, trigger re-plan
+    const resumeStats = this.taskQueue.getStats();
+    const stuckCount = resumeStats.failed + resumeStats.skipped;
+    const totalAttempted = resumeStats.completed + stuckCount;
+    if (totalAttempted > 0 && stuckCount / totalAttempted > 0.4) {
+      this.logDecision('resume-replan',
+        `${stuckCount}/${totalAttempted} tasks still stuck after resume — triggering re-plan`, '');
+      this.hasReplanned = false; // Allow re-plan on resume
+      await this.midSwarmReplan();
+    }
+
     // Continue from where we left off
     this.currentPhase = 'executing';
     await this.executeWaves();
+
+    // V10: Final rescue pass — attempt to recover cascade-skipped tasks with lenient mode
+    if (!this.cancelled) await this.finalRescuePass();
+
+    // Post-wave artifact audit
+    this.artifactInventory = this.buildArtifactInventory();
 
     // Continue with verification and synthesis as normal
     if (this.config.enableVerification && this.plan?.integrationTestPlan) {
@@ -810,11 +1086,16 @@ Respond with JSON: { "fixups": [{ "description": "what to fix", "type": "impleme
     this.currentPhase = 'completed';
     const executionStats = this.buildStats();
     this.checkpoint('final');
-    this.emit({ type: 'swarm.complete', stats: executionStats, errors: this.errors });
+
+    const hasArtifacts = (this.artifactInventory?.totalFiles ?? 0) > 0;
+    this.emit({ type: 'swarm.complete', stats: executionStats, errors: this.errors, artifactInventory: this.artifactInventory });
 
     return {
       success: executionStats.completedTasks > 0,
+      partialSuccess: !executionStats.completedTasks && hasArtifacts,
+      partialFailure: executionStats.failedTasks > 0,
       synthesisResult: synthesisResult ?? undefined,
+      artifactInventory: this.artifactInventory,
       summary: this.buildSummary(executionStats),
       tasks: this.taskQueue.getAllTasks(),
       stats: executionStats,
@@ -834,6 +1115,16 @@ Respond with JSON: { "fixups": [{ "description": "what to fix", "type": "impleme
     while (waveIndex < totalWaves && !this.cancelled) {
       const readyTasks = this.taskQueue.getReadyTasks();
       const queueStats = this.taskQueue.getStats();
+
+      // F18: Skip empty waves — if no tasks are ready and none are running,
+      // remaining tasks are all blocked/failed/skipped. Break instead of
+      // running useless review cycles.
+      if (readyTasks.length === 0 && queueStats.running === 0 && queueStats.ready === 0) {
+        this.logDecision('wave-skip',
+          `Skipping waves ${waveIndex + 1}-${totalWaves}: no dispatchable tasks remain`,
+          `Stats: ${queueStats.completed} completed, ${queueStats.failed} failed, ${queueStats.skipped} skipped`);
+        break;
+      }
 
       this.emit({
         type: 'swarm.wave.start',
@@ -883,6 +1174,8 @@ Respond with JSON: { "fixups": [{ "description": "what to fix", "type": "impleme
               previousFeedback: 'All tasks in this batch failed. Try a fundamentally different approach — the previous strategy did not work.',
               previousScore: 0,
               attempt: task.attempts,
+              previousModel: task.assignedModel,
+              swarmProgress: this.getSwarmProgressSummary(),
             };
           }
           this.logDecision('wave-recovery',
@@ -893,6 +1186,18 @@ Respond with JSON: { "fixups": [{ "description": "what to fix", "type": "impleme
         }
       }
 
+      // F5: Adaptive re-decomposition — if < 50% of wave tasks succeeded,
+      // the decomposition may be structurally flawed. Log for observability.
+      // (Full re-decomposition of remaining work would require re-architecting the queue,
+      // so we log the signal and let wave retry + fixup handle recovery.)
+      const waveTotal = waveCompleted + waveFailed + waveSkipped;
+      const waveSuccessRate = waveTotal > 0 ? waveCompleted / waveTotal : 0;
+      if (waveSuccessRate < 0.5 && waveTotal >= 2) {
+        this.logDecision('decomposition-quality',
+          `Wave ${waveIndex + 1} success rate ${(waveSuccessRate * 100).toFixed(0)}% (${waveCompleted}/${waveTotal})`,
+          'Low success rate may indicate decomposition quality issues');
+      }
+
       // V2: Review wave outputs
       const review = await this.reviewWave(waveIndex);
       if (review && review.fixupTasks.length > 0) {
@@ -900,17 +1205,40 @@ Respond with JSON: { "fixups": [{ "description": "what to fix", "type": "impleme
         await this.executeWave(review.fixupTasks);
       }
 
+      // Rescue cascade-skipped tasks that can still run
+      // (after wave review + fixup, some skipped tasks may now be viable)
+      const rescued = this.rescueCascadeSkipped();
+      if (rescued.length > 0) {
+        this.logDecision('cascade-rescue',
+          `Rescued ${rescued.length} cascade-skipped tasks after wave ${waveIndex + 1}`,
+          rescued.map(t => t.id).join(', '));
+        await this.executeWave(rescued);
+      }
+
       // Reset quality circuit breaker at wave boundary — each wave gets a fresh chance.
       // Within a wave, rejections accumulate properly so the breaker can trip.
       // Between waves, we reset so each wave gets a fresh quality evaluation window.
       // (The within-wave reset at quality-gate-passed is kept — that's correct.)
-      if (this.qualityGateDisabled) {
-        this.qualityGateDisabled = false;
-        this.consecutiveQualityRejections = 0;
+      if (this.qualityGateDisabledModels.size > 0) {
+        this.qualityGateDisabledModels.clear();
+        this.perModelQualityRejections.clear();
         this.logDecision('quality-circuit-breaker',
-          `Re-enabled quality gates at wave ${waveIndex + 1} boundary`,
+          `Re-enabled quality gates for all models at wave ${waveIndex + 1} boundary`,
           'Each wave gets a fresh quality evaluation window');
       }
+
+      // F3: Log budget reallocation after wave completion.
+      // SharedBudgetPool already returns unused tokens via release(), but we log it
+      // for observability so operators can see how budget flows between waves.
+      const budgetStats = this.budgetPool.getStats();
+      this.logDecision('budget-reallocation',
+        `After wave ${waveIndex + 1}: ${budgetStats.tokensRemaining} tokens remaining (${(budgetStats.utilization * 100).toFixed(0)}% utilized)`,
+        '');
+      this.budgetPool.reallocateUnused(budgetStats.tokensRemaining);
+
+      // F21: Mid-swarm situational assessment — evaluate success rate and budget health,
+      // optionally triage low-priority tasks to conserve budget for critical path.
+      await this.assessAndAdapt(waveIndex);
 
       // V2: Checkpoint after each wave
       this.checkpoint(`wave-${waveIndex}`);
@@ -941,7 +1269,7 @@ Respond with JSON: { "fixups": [{ "description": "what to fix", "type": "impleme
 
       // Stagger dispatches to avoid rate limit storms
       if (taskIndex < tasks.length && this.workerPool.availableSlots > 0) {
-        await new Promise(resolve => setTimeout(resolve, this.config.dispatchStaggerMs ?? 500));
+        await new Promise(resolve => setTimeout(resolve, this.getStaggerMs()));
       }
     }
 
@@ -966,7 +1294,7 @@ Respond with JSON: { "fixups": [{ "description": "what to fix", "type": "impleme
           await this.dispatchTask(task);
           // Stagger dispatches to avoid rate limit storms
           if (taskIndex + 1 < tasks.length && this.workerPool.availableSlots > 0) {
-            await new Promise(resolve => setTimeout(resolve, this.config.dispatchStaggerMs ?? 500));
+            await new Promise(resolve => setTimeout(resolve, this.getStaggerMs()));
           }
         }
         taskIndex++;
@@ -982,8 +1310,39 @@ Respond with JSON: { "fixups": [{ "description": "what to fix", "type": "impleme
           await this.dispatchTask(moreReady[i]);
           // Stagger dispatches to avoid rate limit storms
           if (i + 1 < moreReady.length && this.workerPool.availableSlots > 0) {
-            await new Promise(resolve => setTimeout(resolve, this.config.dispatchStaggerMs ?? 500));
+            await new Promise(resolve => setTimeout(resolve, this.getStaggerMs()));
           }
+        }
+      }
+    }
+
+    // F20: Re-dispatch pass — after all workers finish, budget may have been freed
+    // by completed tasks. Try to dispatch any still-ready tasks (e.g., those paused
+    // by budget exhaustion earlier).
+    if (!this.cancelled && this.budgetPool.hasCapacity()) {
+      const stillReady = this.taskQueue.getAllReadyTasks()
+        .filter(t => !this.workerPool.getActiveWorkerStatus().some(w => w.taskId === t.id));
+
+      if (stillReady.length > 0) {
+        this.logDecision('budget-redispatch',
+          `Budget freed after wave — re-dispatching ${stillReady.length} ready task(s)`,
+          `Budget: ${JSON.stringify(this.budgetPool.getStats())}`);
+
+        for (const task of stillReady) {
+          if (this.workerPool.availableSlots <= 0 || !this.budgetPool.hasCapacity()) break;
+          await this.dispatchTask(task);
+          if (this.workerPool.availableSlots > 0) {
+            await new Promise(resolve => setTimeout(resolve, this.getStaggerMs()));
+          }
+        }
+
+        // Wait for these re-dispatched tasks to complete
+        while (this.workerPool.activeCount > 0 && !this.cancelled) {
+          const completed = await this.workerPool.waitForAny();
+          if (!completed) break;
+          await this.handleTaskCompletion(completed.taskId, completed.result, completed.startedAt);
+          this.emitBudgetUpdate();
+          this.emitStatusUpdate();
         }
       }
     }
@@ -997,20 +1356,64 @@ Respond with JSON: { "fixups": [{ "description": "what to fix", "type": "impleme
     const worker = this.workerPool.selectWorker(task);
     if (!worker) {
       // M2: Emit error and mark task failed instead of silently returning
-      this.taskQueue.markFailed(task.id, 0);
+      // V10: Try resilience recovery if task had previous attempts (prior worker may have produced artifacts)
+      this.logDecision('no-worker', `${task.id}: no worker for type ${task.type}`, '');
+      if (task.attempts > 0) {
+        const syntheticTaskResult: SwarmTaskResult = { success: false, output: '', tokensUsed: 0, costUsed: 0, durationMs: 0, model: 'none' };
+        const syntheticSpawn: SpawnResult = { success: false, output: '', metrics: { tokens: 0, duration: 0, toolCalls: 0 } };
+        if (await this.tryResilienceRecovery(task, task.id, syntheticTaskResult, syntheticSpawn)) {
+          return;
+        }
+      }
+      this.taskQueue.markFailedWithoutCascade(task.id, 0);
+      this.taskQueue.triggerCascadeSkip(task.id);
       this.emit({
         type: 'swarm.task.failed',
         taskId: task.id,
         error: `No worker available for task type: ${task.type}`,
-        attempt: 0,
+        attempt: task.attempts,
         maxAttempts: 0,
         willRetry: false,
+        failureMode: 'error',
       });
       return;
     }
 
     try {
-      this.taskQueue.markDispatched(task.id, worker.model);
+      // Pre-dispatch auto-split for critical-path bottlenecks
+      if (this.shouldAutoSplit(task)) {
+        try {
+          const splitResult = await this.judgeSplit(task);
+          if (splitResult.shouldSplit && splitResult.subtasks) {
+            task.status = 'dispatched'; // Required for replaceWithSubtasks
+            this.taskQueue.replaceWithSubtasks(task.id, splitResult.subtasks);
+            this.emit({
+              type: 'swarm.task.resilience',
+              taskId: task.id,
+              strategy: 'auto-split',
+              succeeded: true,
+              reason: `Pre-dispatch split into ${splitResult.subtasks.length} parallel subtasks`,
+              artifactsFound: 0,
+              toolCalls: 0,
+            });
+            return; // Subtasks now in queue, will be dispatched this wave
+          }
+        } catch (err) {
+          this.logDecision('auto-split', `${task.id}: split judge failed — ${(err as Error).message}`, '');
+          // Fall through to normal dispatch
+        }
+      }
+
+      this.totalDispatches++;
+      const dispatchedModel = task.assignedModel ?? worker.model;
+      this.taskQueue.markDispatched(task.id, dispatchedModel);
+      if (task.assignedModel && task.assignedModel !== worker.model) {
+        this.logDecision(
+          'failover',
+          `Dispatching ${task.id} with failover model ${task.assignedModel} (worker default: ${worker.model})`,
+          'Retry model override is active',
+        );
+      }
       // Pass the pre-selected worker to avoid double-selection in dispatch()
       await this.workerPool.dispatch(task, worker);
 
@@ -1018,25 +1421,57 @@ Respond with JSON: { "fixups": [{ "description": "what to fix", "type": "impleme
         type: 'swarm.task.dispatched',
         taskId: task.id,
         description: task.description,
-        model: worker.model,
+        model: dispatchedModel,
         workerName: worker.name,
+        toolCount: worker.allowedTools?.length ?? -1,  // -1 = all tools
+        tools: worker.allowedTools,
+        retryContext: task.retryContext,
+        fromModel: task.retryContext ? task.retryContext.previousModel : undefined,
+        attempts: task.attempts,
       });
     } catch (error) {
+      const errorMsg = (error as Error).message;
+
+      // F20: Budget exhaustion is NOT a task failure — the task is fine, we just ran out of money.
+      // Reset status to ready so it can be picked up if budget becomes available
+      // (e.g., after tokens are released from completing tasks).
+      if (errorMsg.includes('Budget pool exhausted')) {
+        task.status = 'ready';
+        this.logDecision('budget-pause',
+          `Cannot dispatch ${task.id}: budget exhausted — task kept ready for potential re-dispatch`,
+          `Budget stats: ${JSON.stringify(this.budgetPool.getStats())}`);
+        return;
+      }
+
       this.errors.push({
         taskId: task.id,
         phase: 'dispatch',
-        message: (error as Error).message,
+        message: errorMsg,
         recovered: false,
       });
+      this.logDecision('dispatch-error', `${task.id}: dispatch failed: ${errorMsg.slice(0, 100)}`, `attempts: ${task.attempts}`);
+
+      // V10: Try resilience recovery if task had previous attempts (prior worker may have produced artifacts)
+      if (task.attempts > 0) {
+        const syntheticTaskResult: SwarmTaskResult = { success: false, output: '', tokensUsed: 0, costUsed: 0, durationMs: 0, model: 'none' };
+        const syntheticSpawn: SpawnResult = { success: false, output: '', metrics: { tokens: 0, duration: 0, toolCalls: 0 } };
+        if (await this.tryResilienceRecovery(task, task.id, syntheticTaskResult, syntheticSpawn)) {
+          this.errors[this.errors.length - 1].recovered = true;
+          return;
+        }
+      }
+
+      this.taskQueue.markFailedWithoutCascade(task.id, 0);
+      this.taskQueue.triggerCascadeSkip(task.id);
       this.emit({
         type: 'swarm.task.failed',
         taskId: task.id,
-        error: (error as Error).message,
+        error: errorMsg,
         attempt: task.attempts,
         maxAttempts: 1 + this.config.workerRetries,
         willRetry: false,
+        failureMode: 'error',
       });
-      this.taskQueue.markFailed(task.id, 0);
     }
   }
 
@@ -1047,8 +1482,38 @@ Respond with JSON: { "fixups": [{ "description": "what to fix", "type": "impleme
     const task = this.taskQueue.getTask(taskId);
     if (!task) return;
 
-    // Guard: task was cascade-skipped while its worker was running — ignore the result
-    if (task.status === 'skipped' || task.status === 'failed') return;
+    // Guard: task was terminally resolved while its worker was running — ignore the result
+    // F4: But NOT if pendingCascadeSkip — those results are evaluated below
+    if ((task.status === 'skipped' || task.status === 'failed') && !task.pendingCascadeSkip) return;
+
+    // V7: Global dispatch cap — prevent any single task from burning budget.
+    // Try resilience recovery (micro-decompose, degraded acceptance) before hard-failing.
+    const maxDispatches = this.config.maxDispatchesPerTask ?? 5;
+    if (task.attempts >= maxDispatches) {
+      const durationMs = Date.now() - startedAt;
+      const taskResult = this.workerPool.toTaskResult(spawnResult, task, durationMs);
+      this.totalTokens += taskResult.tokensUsed;
+      this.totalCost += taskResult.costUsed;
+
+      // Try resilience recovery before hard fail
+      if (await this.tryResilienceRecovery(task, taskId, taskResult, spawnResult)) {
+        return;
+      }
+
+      this.taskQueue.markFailedWithoutCascade(taskId, 0);
+      this.taskQueue.triggerCascadeSkip(taskId);
+      this.emit({
+        type: 'swarm.task.failed',
+        taskId,
+        error: `Dispatch cap reached (${maxDispatches} attempts)`,
+        attempt: task.attempts,
+        maxAttempts: maxDispatches,
+        willRetry: false,
+        failureMode: task.failureMode,
+      });
+      this.logDecision('dispatch-cap', `${taskId}: hard cap reached (${task.attempts}/${maxDispatches})`, 'No more retries — resilience recovery also failed');
+      return;
+    }
 
     const durationMs = Date.now() - startedAt;
     const taskResult = this.workerPool.toTaskResult(spawnResult, task, durationMs);
@@ -1064,23 +1529,101 @@ Respond with JSON: { "fixups": [{ "description": "what to fix", "type": "impleme
     this.totalTokens += taskResult.tokensUsed;
     this.totalCost += taskResult.costUsed;
 
+    // V10: Emit per-attempt event for full decision traceability
+    this.emit({
+      type: 'swarm.task.attempt',
+      taskId,
+      attempt: task.attempts,
+      model,
+      success: spawnResult.success,
+      durationMs,
+      toolCalls: spawnResult.metrics.toolCalls ?? 0,
+      failureMode: !spawnResult.success ? task.failureMode : undefined,
+      qualityScore: taskResult.qualityScore,
+      output: taskResult.output.slice(0, 500),
+    });
+
     if (!spawnResult.success) {
       // V2: Record model health
       const errorMsg = spawnResult.output.toLowerCase();
       const is429 = errorMsg.includes('429') || errorMsg.includes('rate');
       const is402 = errorMsg.includes('402') || errorMsg.includes('spend limit');
-      const errorType = is429 ? '429' : is402 ? '402' : 'error';
-      this.healthTracker.recordFailure(model, errorType as '429' | '402' | 'error');
+      const isTimeout = spawnResult.metrics.toolCalls === -1;
+      // F25: Use 'timeout' errorType for timeouts (was 'error')
+      const errorType = is429 ? '429' : is402 ? '402' : isTimeout ? 'timeout' : 'error';
+      this.healthTracker.recordFailure(model, errorType as '429' | '402' | 'timeout' | 'error');
       this.emit({ type: 'swarm.model.health', record: { model, ...this.getModelHealthSummary(model) } });
+
+      // P6: Tag failure mode for cascade threshold awareness
+      task.failureMode = (is429 || is402) ? 'rate-limit' : (spawnResult.metrics.toolCalls === -1 ? 'timeout' : 'error');
 
       // Feed circuit breaker
       if (is429 || is402) {
         this.recordRateLimit();
       }
 
+      // F25a: Consecutive timeout tracking — early-fail after N consecutive timeouts
+      if (isTimeout) {
+        const count = (this.taskTimeoutCounts.get(taskId) ?? 0) + 1;
+        this.taskTimeoutCounts.set(taskId, count);
+        const timeoutLimit = this.config.consecutiveTimeoutLimit ?? 3;
+        this.logDecision('timeout-tracking', `${taskId}: consecutive timeout ${count}/${timeoutLimit}`, '');
+
+        if (count >= timeoutLimit) {
+          // F25b: Try model failover before giving up
+          let failoverSucceeded = false;
+          if (this.config.enableModelFailover) {
+            const capability: WorkerCapability = getTaskTypeConfig(task.type, this.config).capability ?? 'code';
+            const alternative = selectAlternativeModel(this.config.workers, model, capability, this.healthTracker);
+            if (alternative) {
+              this.emit({
+                type: 'swarm.model.failover',
+                taskId,
+                fromModel: model,
+                toModel: alternative.model,
+                reason: 'consecutive-timeouts',
+              });
+              task.assignedModel = alternative.model;
+              this.taskTimeoutCounts.set(taskId, 0); // Reset counter for new model
+              this.logDecision('failover', `Timeout failover ${taskId}: ${model} → ${alternative.model}`, `${count} consecutive timeouts`);
+              failoverSucceeded = true;
+            }
+          }
+
+          if (!failoverSucceeded) {
+            // No alternative model — try resilience recovery before hard fail.
+            // Timeouts often produce artifacts (worker WAS working, just ran out of time).
+            task.failureMode = 'timeout';
+            const taskResult = this.workerPool.toTaskResult(spawnResult, task, Date.now() - startedAt);
+            if (await this.tryResilienceRecovery(task, taskId, taskResult, spawnResult)) {
+              this.taskTimeoutCounts.delete(taskId);
+              return;
+            }
+
+            this.taskQueue.markFailedWithoutCascade(taskId, 0);
+            this.taskQueue.triggerCascadeSkip(taskId);
+            this.emit({
+              type: 'swarm.task.failed',
+              taskId,
+              error: `${count} consecutive timeouts — no alternative model available`,
+              attempt: task.attempts,
+              maxAttempts: maxDispatches,
+              willRetry: false,
+              failureMode: 'timeout',
+            });
+            this.logDecision('timeout-early-fail', `${taskId}: ${count} consecutive timeouts, no alt model — resilience recovery also failed`, '');
+            this.taskTimeoutCounts.delete(taskId);
+            return;
+          }
+        }
+      } else {
+        // Non-timeout failure — reset the counter
+        this.taskTimeoutCounts.delete(taskId);
+      }
+
       // V2: Model failover on rate limits
       if ((is429 || is402) && this.config.enableModelFailover) {
-        const capability: WorkerCapability = SUBTASK_TO_CAPABILITY[task.type] ?? 'code';
+        const capability: WorkerCapability = getTaskTypeConfig(task.type, this.config).capability ?? 'code';
         const alternative = selectAlternativeModel(this.config.workers, model, capability, this.healthTracker);
         if (alternative) {
           this.emit({
@@ -1098,22 +1641,29 @@ Respond with JSON: { "fixups": [{ "description": "what to fix", "type": "impleme
       // V5/V7: Store error context so retry gets different prompt
       if (!(is429 || is402)) {
         // V7: Timeout-specific feedback — the worker WAS working, just ran out of time
-        const isTimeout = spawnResult.metrics.toolCalls === -1;
         const timeoutSeconds = isTimeout ? Math.round(durationMs / 1000) : 0;
         task.retryContext = {
           previousFeedback: isTimeout
             ? `Previous attempt timed out after ${timeoutSeconds}s. You must complete this task more efficiently — work faster, use fewer tool calls, and produce your result sooner.`
-            : spawnResult.output.slice(0, 500),
+            : spawnResult.output.slice(0, 2000),
           previousScore: 0,
           attempt: task.attempts,
+          previousModel: model,
+          previousFiles: taskResult.filesModified,
+          swarmProgress: this.getSwarmProgressSummary(),
         };
       }
 
-      // Worker failed — use higher retry limit for rate limit errors
+      // V7: Reset hollow streak on non-hollow failure (error is not a hollow completion)
+      this.hollowStreak = 0;
+
+      // Worker failed — use higher retry limit for rate limit errors.
+      // V7: Fixup tasks get capped retries, foundation tasks get +1.
+      const baseRetries = this.getEffectiveRetries(task);
       const retryLimit = (is429 || is402)
-        ? (this.config.rateLimitRetries ?? 3)
-        : this.config.workerRetries;
-      const canRetry = this.taskQueue.markFailed(taskId, retryLimit);
+        ? Math.min(this.config.rateLimitRetries ?? 3, baseRetries + 1)
+        : baseRetries;
+      const canRetry = this.taskQueue.markFailedWithoutCascade(taskId, retryLimit);
       if (canRetry) {
         this.retries++;
 
@@ -1122,7 +1672,18 @@ Respond with JSON: { "fixups": [{ "description": "what to fix", "type": "impleme
           const baseDelay = this.config.retryBaseDelayMs ?? 5000;
           const cooldownMs = Math.min(baseDelay * Math.pow(2, task.attempts - 1), 30000);
           this.taskQueue.setRetryAfter(taskId, cooldownMs);
+          this.logDecision('rate-limit-cooldown', `${taskId}: ${errorType} cooldown ${cooldownMs}ms, model ${model}`, '');
         }
+      } else if (!(is429 || is402)) {
+        // Resilience recovery for non-rate-limit errors (micro-decompose + degraded acceptance)
+        if (await this.tryResilienceRecovery(task, taskId, taskResult, spawnResult)) {
+          return;
+        }
+        // Recovery failed — NOW trigger cascade
+        this.taskQueue.triggerCascadeSkip(taskId);
+      } else {
+        // Rate-limit exhaustion — trigger cascade
+        this.taskQueue.triggerCascadeSkip(taskId);
       }
 
       this.emit({
@@ -1132,26 +1693,46 @@ Respond with JSON: { "fixups": [{ "description": "what to fix", "type": "impleme
         attempt: task.attempts,
         maxAttempts: 1 + this.config.workerRetries,
         willRetry: canRetry,
+        toolCalls: spawnResult.metrics.toolCalls,
+        failoverModel: task.assignedModel !== model ? task.assignedModel : undefined,
+        failureMode: task.failureMode,
       });
       return;
     }
 
     // V6: Hollow completion detection — workers that "succeed" without doing any work
     // Must check BEFORE recording success, otherwise hollow completions inflate health scores
-    if (isHollowCompletion(spawnResult)) {
-      // Record health failure so hollow-prone models accumulate failure records
-      // and eventually trigger failover via selectAlternativeModel
-      this.healthTracker.recordFailure(model, 'error');
+    if (isHollowCompletion(spawnResult, task.type, this.config)) {
+      // F4: Hollow result + pendingCascadeSkip — honor the skip immediately, no retry
+      if (task.pendingCascadeSkip) {
+        task.pendingCascadeSkip = undefined;
+        task.status = 'skipped';
+        this.totalHollows++;
+        this.logDecision('cascade-skip', `${taskId}: pending cascade skip honored (hollow completion)`, '');
+        this.emit({ type: 'swarm.task.skipped', taskId, reason: 'cascade skip honored — hollow completion' });
+        return;
+      }
+      // P6: Tag failure mode for cascade threshold awareness
+      task.failureMode = 'hollow';
+      // Record hollow completion so hollow-prone models accumulate hollow-specific records
+      // and get deprioritized by the model selector (also records generic failure internally)
+      this.healthTracker.recordHollow(model);
 
+      const admitsFailure = spawnResult.success && FAILURE_INDICATORS.some(f => (spawnResult.output ?? '').toLowerCase().includes(f));
       task.retryContext = {
-        previousFeedback: 'Previous attempt produced no meaningful output. Try again with a concrete approach.',
+        previousFeedback: admitsFailure
+          ? 'Previous attempt reported success but admitted failure (e.g., "budget exhausted", "unable to complete"). You MUST execute tool calls and produce concrete output this time.'
+          : 'Previous attempt produced no meaningful output. Try again with a concrete approach.',
         previousScore: 1,
         attempt: task.attempts,
+        previousModel: model,
+        previousFiles: taskResult.filesModified,
+        swarmProgress: this.getSwarmProgressSummary(),
       };
 
       // Model failover for hollow completions — same pattern as quality failover
       if (this.config.enableModelFailover) {
-        const capability: WorkerCapability = SUBTASK_TO_CAPABILITY[task.type] ?? 'code';
+        const capability: WorkerCapability = getTaskTypeConfig(task.type, this.config).capability ?? 'code';
         const alternative = selectAlternativeModel(this.config.workers, model, capability, this.healthTracker);
         if (alternative) {
           this.emit({
@@ -1166,8 +1747,18 @@ Respond with JSON: { "fixups": [{ "description": "what to fix", "type": "impleme
         }
       }
 
-      const canRetry = this.taskQueue.markFailed(taskId, this.config.workerRetries);
-      if (canRetry) this.retries++;
+      const hollowRetries = this.getEffectiveRetries(task);
+      const canRetry = this.taskQueue.markFailedWithoutCascade(taskId, hollowRetries);
+      if (canRetry) {
+        this.retries++;
+      } else {
+        // Retries exhausted — try shared resilience recovery (micro-decompose, degraded acceptance)
+        if (await this.tryResilienceRecovery(task, taskId, taskResult, spawnResult)) {
+          return;
+        }
+        // Recovery failed — NOW trigger cascade
+        this.taskQueue.triggerCascadeSkip(taskId);
+      }
       this.emit({
         type: 'swarm.task.failed',
         taskId,
@@ -1175,23 +1766,97 @@ Respond with JSON: { "fixups": [{ "description": "what to fix", "type": "impleme
         attempt: task.attempts,
         maxAttempts: 1 + this.config.workerRetries,
         willRetry: canRetry,
+        toolCalls: spawnResult.metrics.toolCalls,
+        failoverModel: task.assignedModel !== model ? task.assignedModel : undefined,
+        failureMode: 'hollow',
       });
-      this.logDecision('hollow-completion', `${taskId}: worker completed with 0 tool calls`, 'Marking as failed for retry');
+      this.hollowStreak++;
+      this.totalHollows++;
+      this.logDecision('hollow-completion', `${taskId}: worker completed with 0 tool calls (streak: ${this.hollowStreak}, total hollows: ${this.totalHollows}/${this.totalDispatches})`, canRetry ? 'Marking as failed for retry' : 'Retries exhausted — hard fail');
+
+      // B2: Hollow streak handling — only terminate if enableHollowTermination is explicitly on
+      if (this.hollowStreak >= SwarmOrchestrator.HOLLOW_STREAK_THRESHOLD) {
+        const uniqueModels = new Set(this.config.workers.map(w => w.model));
+        const singleModel = uniqueModels.size === 1;
+        const onlyModel = [...uniqueModels][0];
+        const modelUnhealthy = singleModel && !this.healthTracker.getAllRecords().find(r => r.model === onlyModel)?.healthy;
+
+        if (singleModel && modelUnhealthy) {
+          if (this.config.enableHollowTermination) {
+            this.logDecision('early-termination',
+              `Terminating swarm: ${this.hollowStreak} consecutive hollow completions on sole model ${onlyModel}`,
+              'Single-model swarm with unhealthy model — enableHollowTermination is on');
+            this.skipRemainingTasks(`Single-model hollow streak (${this.hollowStreak}x on ${onlyModel})`);
+          } else {
+            this.logDecision('stall-mode',
+              `${this.hollowStreak} consecutive hollows on sole model ${onlyModel} — entering stall mode`,
+              'Will attempt model failover or simplified retry on next dispatch');
+            // Reset streak to allow more attempts with adjusted strategy
+            this.hollowStreak = 0;
+          }
+        }
+      }
+
+      // V7: Multi-model hollow ratio — warn but don't terminate unless opt-in
+      const minDispatches = this.config.hollowTerminationMinDispatches ?? 8;
+      const threshold = this.config.hollowTerminationRatio ?? 0.55;
+      if (this.totalDispatches >= minDispatches) {
+        const ratio = this.totalHollows / this.totalDispatches;
+        if (ratio > threshold) {
+          if (this.config.enableHollowTermination) {
+            this.logDecision('early-termination',
+              `Terminating swarm: hollow ratio ${(ratio * 100).toFixed(0)}% (${this.totalHollows}/${this.totalDispatches})`,
+              `Exceeds threshold ${(threshold * 100).toFixed(0)}% after ${minDispatches}+ dispatches — enableHollowTermination is on`);
+            this.skipRemainingTasks(`Hollow ratio ${(ratio * 100).toFixed(0)}% — models cannot execute tasks`);
+          } else if (!this.hollowRatioWarned) {
+            this.hollowRatioWarned = true;
+            this.logDecision('stall-warning',
+              `Hollow ratio ${(ratio * 100).toFixed(0)}% (${this.totalHollows}/${this.totalDispatches})`,
+              'High hollow rate but continuing — tasks may still recover via resilience');
+          }
+        }
+      }
+
       return;
+    }
+
+    // F4: Task had pendingCascadeSkip but produced non-hollow results.
+    // Run pre-flight checks — if the output is good, accept it instead of skipping.
+    if (task.pendingCascadeSkip) {
+      const cachedReport = checkArtifacts(task);
+      const preFlight = runPreFlightChecks(task, taskResult, this.config, cachedReport);
+      if (preFlight && !preFlight.passed) {
+        // Output is garbage — honor the cascade skip
+        task.pendingCascadeSkip = undefined;
+        task.status = 'skipped';
+        this.logDecision('cascade-skip', `${taskId}: pending cascade skip honored (pre-flight failed: ${preFlight.feedback})`, '');
+        this.emit({ type: 'swarm.task.skipped', taskId, reason: `cascade skip honored — output failed pre-flight: ${preFlight.feedback}` });
+        return;
+      }
+      // Output is good — clear the flag and accept the result
+      task.pendingCascadeSkip = undefined;
+      task.status = 'dispatched'; // Reset so markCompleted works
+      this.logDecision('cascade-skip', `${taskId}: pending cascade skip overridden — worker produced valid output`, '');
     }
 
     // Record model health on success (only for non-hollow completions)
     this.healthTracker.recordSuccess(model, durationMs);
+    this.decreaseStagger(); // P7: Speed up on success
 
     // Run quality gate if enabled — skip under API pressure, skip if circuit breaker tripped,
     // and let the final attempt through without quality gate (so tasks produce *something*)
+    // Foundation tasks get +1 retry to reduce cascade failure risk.
+    const effectiveRetries = this.getEffectiveRetries(task);
     const recentRLCount = this.recentRateLimits.filter(t => t > Date.now() - 30_000).length;
-    const isLastAttempt = task.attempts >= (this.config.workerRetries + 1);
+    const isLastAttempt = task.attempts >= (effectiveRetries + 1);
     const shouldRunQualityGate = this.config.qualityGates
-      && !this.qualityGateDisabled
+      && !this.qualityGateDisabledModels.has(model)
       && !isLastAttempt
       && Date.now() >= this.circuitBreakerUntil
       && recentRLCount < 2;
+
+    // C1: Pre-compute artifact report once — shared by quality gate and pre-flight checks
+    const cachedArtifactReport = checkArtifacts(task);
 
     if (shouldRunQualityGate) {
       // V3: Judge role handles quality gates
@@ -1204,75 +1869,304 @@ Respond with JSON: { "fixups": [{ "description": "what to fix", "type": "impleme
 
       this.emit({ type: 'swarm.role.action', role: 'judge', action: 'quality-gate', model: judgeModel, taskId });
 
+      // Extract file artifacts from worker output for quality gate visibility.
+      // When workers create files via write_file/edit_file, the judge needs to see
+      // the actual content — not just the worker's text claims about what was created.
+      const fileArtifacts = this.extractFileArtifacts(task, taskResult);
+
+      // Foundation tasks get a relaxed quality threshold (threshold - 1, min 2)
+      // to reduce the chance of cascade-skipping the entire swarm.
+      const baseThreshold = this.config.qualityThreshold ?? 3;
+      const qualityThreshold = task.isFoundation ? Math.max(2, baseThreshold - 1) : baseThreshold;
+
       const quality = await evaluateWorkerOutput(
         this.provider,
         judgeModel,
         task,
         taskResult,
         judgeConfig,
-        this.config.qualityThreshold ?? 3,
+        qualityThreshold,
+        (resp, purpose) => this.trackOrchestratorUsage(resp, purpose),
+        fileArtifacts,
+        this.config,
+        cachedArtifactReport,
       );
 
       taskResult.qualityScore = quality.score;
       taskResult.qualityFeedback = quality.feedback;
 
+      // F11: Foundation tasks that barely pass the relaxed threshold get concrete validation.
+      // A 2/5 foundation task with truncated output will cascade-poison all dependents.
+      if (quality.passed && task.isFoundation && quality.score <= baseThreshold - 1) {
+        const concreteResult = runConcreteChecks(task, taskResult);
+        if (!concreteResult.passed) {
+          quality.passed = false;
+          quality.feedback += ` [F11: foundation task barely passed (${quality.score}/${baseThreshold}) but concrete validation failed: ${concreteResult.issues.join('; ')}]`;
+          this.logDecision('foundation-concrete-gate',
+            `${taskId}: foundation task scored ${quality.score} (relaxed threshold ${qualityThreshold}) but concrete checks failed — rejecting`,
+            concreteResult.issues.join('; '));
+        }
+      }
+
       if (!quality.passed) {
-        this.qualityRejections++;
-        this.consecutiveQualityRejections++;
-
-        // Quality circuit breaker: disable gates after too many consecutive rejections
-        if (this.consecutiveQualityRejections >= SwarmOrchestrator.QUALITY_CIRCUIT_BREAKER_THRESHOLD) {
-          this.qualityGateDisabled = true;
-          this.logDecision('quality-circuit-breaker',
-            `Disabled quality gates after ${this.consecutiveQualityRejections} consecutive rejections`,
-            'Workers cannot meet quality threshold — letting remaining tasks through');
-        }
-
-        // V5: Attach feedback so retry prompt includes it
-        task.retryContext = {
-          previousFeedback: quality.feedback,
-          previousScore: quality.score,
-          attempt: task.attempts,
-        };
-
-        // V5: Model failover on severe quality rejection — but NOT on artifact auto-fails
-        if (quality.score <= 1 && this.config.enableModelFailover && !quality.artifactAutoFail) {
-          const capability: WorkerCapability = SUBTASK_TO_CAPABILITY[task.type] ?? 'code';
-          const alternative = selectAlternativeModel(this.config.workers, model, capability, this.healthTracker);
-          if (alternative) {
-            this.emit({
-              type: 'swarm.model.failover',
-              taskId,
-              fromModel: model,
-              toModel: alternative.model,
-              reason: `quality-score-${quality.score}`,
-            });
-            task.assignedModel = alternative.model;
-            this.logDecision('failover', `Quality failover ${taskId}: ${model} → ${alternative.model}`, `Score ${quality.score}/5`);
+        // F7: Gate error fallback — when LLM judge fails, use concrete validation
+        // If concrete checks pass, tentatively accept the result instead of rejecting.
+        if (quality.gateError && (this.config.enableConcreteValidation !== false)) {
+          const concreteResult = runConcreteChecks(task, taskResult);
+          if (concreteResult.passed) {
+            // Concrete validation passed — tentatively accept despite gate error
+            this.logDecision('gate-error-fallback',
+              `${taskId}: gate error but concrete checks passed — tentatively accepting`,
+              quality.gateErrorMessage ?? 'unknown');
+            taskResult.qualityScore = quality.score;
+            taskResult.qualityFeedback = `${quality.feedback} [concrete validation passed — tentative accept]`;
+            // Fall through to success path (don't return)
+          } else {
+            // Both gate and concrete failed — reject
+            this.logDecision('gate-error-fallback',
+              `${taskId}: gate error AND concrete checks failed — rejecting`,
+              `Concrete issues: ${concreteResult.issues.join('; ')}`);
+            // Fall through to normal rejection below
           }
-        }
 
-        const canRetry = this.taskQueue.markFailed(taskId, this.config.workerRetries);
+          // If concrete passed, skip the rejection path
+          if (concreteResult.passed) {
+            this.perModelQualityRejections.delete(model);
+            // Jump to success path below
+          } else {
+            // Proceed with normal rejection
+            this.qualityRejections++;
+            task.failureMode = 'quality';
+            this.healthTracker.recordQualityRejection(model, quality.score);
+            this.emit({ type: 'swarm.model.health', record: { model, ...this.getModelHealthSummary(model) } });
+            this.hollowStreak = 0;
+
+            task.retryContext = {
+              previousFeedback: `Gate error + concrete validation failed: ${concreteResult.issues.join('; ')}`,
+              previousScore: quality.score,
+              attempt: task.attempts,
+              previousModel: model,
+              previousFiles: taskResult.filesModified,
+              swarmProgress: this.getSwarmProgressSummary(),
+            };
+
+            const canRetry = this.taskQueue.markFailedWithoutCascade(taskId, effectiveRetries);
+            if (canRetry) {
+              this.retries++;
+            } else {
+              // Retries exhausted — try resilience recovery before cascade-skip
+              if (await this.tryResilienceRecovery(task, taskId, taskResult, spawnResult)) {
+                return;
+              }
+              // Recovery failed — NOW trigger cascade
+              this.taskQueue.triggerCascadeSkip(taskId);
+            }
+
+            this.emit({
+              type: 'swarm.quality.rejected',
+              taskId,
+              score: quality.score,
+              feedback: quality.feedback,
+              artifactCount: fileArtifacts.length,
+              outputLength: taskResult.output.length,
+              preFlightReject: false,
+              filesOnDisk: checkArtifactsEnhanced(task, taskResult).files.filter(f => f.exists && f.sizeBytes > 0).length,
+            });
+            return;
+          }
+        } else if (!quality.gateError) {
+          // Normal quality rejection (LLM judge rejected, no gate error)
+          this.qualityRejections++;
+          // P6: Tag failure mode for cascade threshold awareness
+          task.failureMode = 'quality';
+          // P1: Quality rejections update model health — undo premature recordSuccess
+          this.healthTracker.recordQualityRejection(model, quality.score);
+          this.emit({ type: 'swarm.model.health', record: { model, ...this.getModelHealthSummary(model) } });
+          // V7: Quality rejection is NOT hollow — worker did work, just poorly
+          this.hollowStreak = 0;
+
+          // F7: Per-model circuit breaker → "pre-flight only mode" instead of fully disabling gates.
+          // After threshold rejections, skip LLM judge but keep pre-flight mandatory.
+          if (!quality.preFlightReject) {
+            const modelRejections = (this.perModelQualityRejections.get(model) ?? 0) + 1;
+            this.perModelQualityRejections.set(model, modelRejections);
+
+            if (modelRejections >= SwarmOrchestrator.QUALITY_CIRCUIT_BREAKER_THRESHOLD) {
+              this.qualityGateDisabledModels.add(model);
+              this.logDecision('quality-circuit-breaker',
+                `Switched model ${model} to pre-flight-only mode after ${modelRejections} rejections`,
+                'Skipping LLM judge but keeping pre-flight checks mandatory');
+            }
+          }
+
+          // V5: Attach feedback so retry prompt includes it
+          task.retryContext = {
+            previousFeedback: quality.feedback,
+            previousScore: quality.score,
+            attempt: task.attempts,
+            previousModel: model,
+            previousFiles: taskResult.filesModified,
+            swarmProgress: this.getSwarmProgressSummary(),
+          };
+
+          // V5: Model failover on quality rejection — but NOT on artifact auto-fails
+          // P1: Widened from score<=1 to score<threshold so failover triggers on any rejection
+          if (quality.score < qualityThreshold && this.config.enableModelFailover && !quality.artifactAutoFail) {
+            const capability: WorkerCapability = getTaskTypeConfig(task.type, this.config).capability ?? 'code';
+            const alternative = selectAlternativeModel(this.config.workers, model, capability, this.healthTracker);
+            if (alternative) {
+              this.emit({
+                type: 'swarm.model.failover',
+                taskId,
+                fromModel: model,
+                toModel: alternative.model,
+                reason: `quality-score-${quality.score}`,
+              });
+              task.assignedModel = alternative.model;
+              this.logDecision('failover', `Quality failover ${taskId}: ${model} → ${alternative.model}`, `Score ${quality.score}/5`);
+            }
+          }
+
+          const canRetry = this.taskQueue.markFailedWithoutCascade(taskId, effectiveRetries);
+          if (canRetry) {
+            this.retries++;
+          } else {
+            // Retries exhausted — try resilience recovery before cascade-skip
+            if (await this.tryResilienceRecovery(task, taskId, taskResult, spawnResult)) {
+              return;
+            }
+            // Recovery failed — NOW trigger cascade
+            this.taskQueue.triggerCascadeSkip(taskId);
+          }
+
+          // M1: Only emit quality.rejected (not duplicate task.failed)
+          this.emit({
+            type: 'swarm.quality.rejected',
+            taskId,
+            score: quality.score,
+            feedback: quality.feedback,
+            artifactCount: fileArtifacts.length,
+            outputLength: taskResult.output.length,
+            preFlightReject: quality.preFlightReject,
+            filesOnDisk: checkArtifactsEnhanced(task, taskResult).files.filter(f => f.exists && f.sizeBytes > 0).length,
+          });
+          return;
+        } else {
+          // gateError=true but concrete validation disabled — reject
+          this.qualityRejections++;
+          task.failureMode = 'quality';
+          this.hollowStreak = 0;
+
+          task.retryContext = {
+            previousFeedback: quality.feedback,
+            previousScore: quality.score,
+            attempt: task.attempts,
+            previousModel: model,
+            previousFiles: taskResult.filesModified,
+            swarmProgress: this.getSwarmProgressSummary(),
+          };
+
+          const canRetry = this.taskQueue.markFailedWithoutCascade(taskId, effectiveRetries);
+          if (canRetry) {
+            this.retries++;
+          } else {
+            // Retries exhausted — try resilience recovery before cascade-skip
+            if (await this.tryResilienceRecovery(task, taskId, taskResult, spawnResult)) {
+              return;
+            }
+            // Recovery failed — NOW trigger cascade
+            this.taskQueue.triggerCascadeSkip(taskId);
+          }
+
+          this.emit({
+            type: 'swarm.quality.rejected',
+            taskId,
+            score: quality.score,
+            feedback: quality.feedback,
+            artifactCount: fileArtifacts.length,
+            outputLength: taskResult.output.length,
+            preFlightReject: false,
+            filesOnDisk: checkArtifactsEnhanced(task, taskResult).files.filter(f => f.exists && f.sizeBytes > 0).length,
+          });
+          return;
+        }
+      }
+
+      // Quality passed — reset per-model rejection counter
+      this.perModelQualityRejections.delete(model);
+    }
+
+    // F7: When quality gate was skipped (last attempt, pre-flight-only mode, API pressure),
+    // still run pre-flight + concrete checks so obviously broken outputs don't slip through.
+    // C1: Use cached artifact report to avoid double filesystem scan.
+    if (!shouldRunQualityGate && this.config.qualityGates) {
+      const preFlight = runPreFlightChecks(task, taskResult, this.config, cachedArtifactReport);
+      if (preFlight && !preFlight.passed) {
+        taskResult.qualityScore = preFlight.score;
+        taskResult.qualityFeedback = preFlight.feedback;
+        this.qualityRejections++;
+        const canRetry = this.taskQueue.markFailedWithoutCascade(taskId, effectiveRetries);
         if (canRetry) {
           this.retries++;
+        } else {
+          // Retries exhausted — try resilience recovery before cascade-skip
+          this.logDecision('preflight-reject', `${taskId}: pre-flight failed: ${preFlight.feedback}`, '');
+          if (await this.tryResilienceRecovery(task, taskId, taskResult, spawnResult)) {
+            return;
+          }
+          // Recovery failed — NOW trigger cascade
+          this.taskQueue.triggerCascadeSkip(taskId);
         }
-
-        // M1: Only emit quality.rejected (not duplicate task.failed)
         this.emit({
           type: 'swarm.quality.rejected',
           taskId,
-          score: quality.score,
-          feedback: quality.feedback,
+          score: preFlight.score,
+          feedback: preFlight.feedback,
+          artifactCount: 0,
+          outputLength: taskResult.output.length,
+          preFlightReject: true,
         });
         return;
       }
 
-      // Quality passed — reset consecutive rejection counter
-      this.consecutiveQualityRejections = 0;
+      // F2: Run concrete validation when pre-flight passes but gate was skipped
+      if (this.config.enableConcreteValidation !== false) {
+        const concreteResult = runConcreteChecks(task, taskResult);
+        if (!concreteResult.passed) {
+          taskResult.qualityScore = 2;
+          taskResult.qualityFeedback = `Concrete validation failed: ${concreteResult.issues.join('; ')}`;
+          this.qualityRejections++;
+          const canRetry = this.taskQueue.markFailedWithoutCascade(taskId, effectiveRetries);
+          if (canRetry) {
+            this.retries++;
+          } else {
+            // Retries exhausted — try resilience recovery before cascade-skip
+            this.logDecision('concrete-reject', `${taskId}: concrete validation failed: ${concreteResult.issues.join('; ')}`, '');
+            if (await this.tryResilienceRecovery(task, taskId, taskResult, spawnResult)) {
+              return;
+            }
+            // Recovery failed — NOW trigger cascade
+            this.taskQueue.triggerCascadeSkip(taskId);
+          }
+          this.emit({
+            type: 'swarm.quality.rejected',
+            taskId,
+            score: 2,
+            feedback: taskResult.qualityFeedback,
+            artifactCount: 0,
+            outputLength: taskResult.output.length,
+            preFlightReject: false,
+          });
+          return;
+        }
+      }
     }
 
     // Task passed — mark completed
     this.taskQueue.markCompleted(taskId, taskResult);
+    this.hollowStreak = 0;
+    // F25: Clear timeout counter on success
+    this.taskTimeoutCounts.delete(taskId);
 
     // H6: Post findings to blackboard with error handling
     if (this.blackboard && taskResult.findings) {
@@ -1320,7 +2214,7 @@ Respond with JSON: { "fixups": [{ "description": "what to fix", "type": "impleme
     const tasks = this.taskQueue.getAllTasks();
     const outputs = tasks
       .filter(t => t.status === 'completed')
-      .map(t => taskResultToAgentOutput(t))
+      .map(t => taskResultToAgentOutput(t, this.config))
       .filter((o): o is NonNullable<typeof o> => o !== null);
 
     if (outputs.length === 0) return null;
@@ -1352,10 +2246,16 @@ Respond with JSON: { "fixups": [{ "description": "what to fix", "type": "impleme
       activeWorkers: this.workerPool.getActiveWorkerStatus(),
       queue: stats,
       budget: {
-        tokensUsed: this.totalTokens,
+        tokensUsed: this.totalTokens + this.orchestratorTokens,
         tokensTotal: this.config.totalBudget,
-        costUsed: this.totalCost,
+        costUsed: this.totalCost + this.orchestratorCost,
         costTotal: this.config.maxCost,
+      },
+      orchestrator: {
+        tokens: this.orchestratorTokens,
+        cost: this.orchestratorCost,
+        calls: this.orchestratorCalls,
+        model: this.config.orchestratorModel,
       },
     };
   }
@@ -1370,6 +2270,82 @@ Respond with JSON: { "fixups": [{ "description": "what to fix", "type": "impleme
     await this.workerPool.cancelAll();
   }
 
+  // ─── D3: Model Capability Probing ─────────────────────────────────────
+
+  /**
+   * D3/F23: Probe each unique model to verify it can make tool calls.
+   * Models that fail the probe are marked unhealthy so they're skipped in dispatch.
+   *
+   * F23 fix: Uses chatWithTools() with actual tool definitions instead of
+   * plain chat() which never included tools in the API request.
+   */
+  private async probeModelCapability(): Promise<void> {
+    const uniqueModels = new Set(this.config.workers.map(w => w.model));
+    this.emit({ type: 'swarm.phase.progress', phase: 'scheduling', message: `Probing ${uniqueModels.size} model(s) for tool-calling capability...` });
+
+    // F23: Check if provider supports native tool calling
+    const supportsTools = 'chatWithTools' in this.provider
+      && typeof (this.provider as LLMProviderWithTools).chatWithTools === 'function';
+
+    if (!supportsTools) {
+      // Provider doesn't support chatWithTools — skip probe entirely.
+      // Workers will rely on text-based tool parsing fallback.
+      this.logDecision('model-probe', 'Provider does not support chatWithTools — skipping probe', '');
+      return;
+    }
+
+    const providerWithTools = this.provider as LLMProviderWithTools;
+    const probeTools: ToolDefinitionSchema[] = [{
+      type: 'function',
+      function: {
+        name: 'read_file',
+        description: 'Read a file from disk',
+        parameters: {
+          type: 'object',
+          properties: { path: { type: 'string', description: 'File path' } },
+          required: ['path'],
+        },
+      },
+    }];
+
+    // F24: Configurable probe timeout — generous default for slow models/connections
+    const probeTimeout = this.config.probeTimeoutMs ?? 60_000;
+
+    for (const model of uniqueModels) {
+      try {
+        const timeoutPromise = new Promise<never>((_, reject) =>
+          setTimeout(() => reject(new Error(`Probe timeout (${probeTimeout}ms)`)), probeTimeout),
+        );
+
+        const response = await Promise.race([
+          providerWithTools.chatWithTools(
+            [
+              { role: 'system', content: 'You are a test probe. Call the read_file tool with path "package.json".' },
+              { role: 'user', content: 'Read package.json.' },
+            ],
+            { model, maxTokens: 200, temperature: 0, tools: probeTools, tool_choice: 'required' },
+          ),
+          timeoutPromise,
+        ]);
+
+        const hasToolCall = (response.toolCalls?.length ?? 0) > 0;
+
+        if (!hasToolCall) {
+          // F19: Directly mark unhealthy — probe failure is definitive evidence
+          this.healthTracker.markUnhealthy(model);
+          this.logDecision('model-probe', `Model ${model} failed probe (no tool calls)`, 'Marked unhealthy');
+        } else {
+          this.healthTracker.recordSuccess(model, 0);
+          this.logDecision('model-probe', `Model ${model} passed probe`, '');
+        }
+      } catch {
+        // F19: Directly mark unhealthy on probe error (includes timeout)
+        this.healthTracker.markUnhealthy(model);
+        this.logDecision('model-probe', `Model ${model} probe errored`, 'Marked unhealthy');
+      }
+    }
+  }
+
   // ─── Circuit Breaker ────────────────────────────────────────────────
 
   /**
@@ -1378,6 +2354,7 @@ Respond with JSON: { "fixups": [{ "description": "what to fix", "type": "impleme
   private recordRateLimit(): void {
     const now = Date.now();
     this.recentRateLimits.push(now);
+    this.increaseStagger(); // P7: Back off on rate limits
 
     // Prune entries older than the window
     const cutoff = now - SwarmOrchestrator.CIRCUIT_BREAKER_WINDOW_MS;
@@ -1409,6 +2386,23 @@ Respond with JSON: { "fixups": [{ "description": "what to fix", "type": "impleme
     return false;
   }
 
+  // ─── P7: Adaptive Stagger ────────────────────────────────────────────
+
+  /** P7: Get current stagger delay (adapts based on rate limit / success signals). */
+  private getStaggerMs(): number {
+    return this.adaptiveStaggerMs;
+  }
+
+  /** P7: Increase stagger on rate limit (×1.5, capped at 10s). */
+  private increaseStagger(): void {
+    this.adaptiveStaggerMs = Math.min(this.adaptiveStaggerMs * 1.5, 10_000);
+  }
+
+  /** P7: Decrease stagger on success (×0.9, floor at 200ms). */
+  private decreaseStagger(): void {
+    this.adaptiveStaggerMs = Math.max(this.adaptiveStaggerMs * 0.9, 200);
+  }
+
   // ─── V2: Decision Logging ─────────────────────────────────────────────
 
   private logDecision(phase: string, decision: string, reasoning: string): void {
@@ -1438,14 +2432,15 @@ Respond with JSON: { "fixups": [{ "description": "what to fix", "type": "impleme
         waves: queueState.waves,
         currentWave: queueState.currentWave,
         stats: {
-          totalTokens: this.totalTokens,
-          totalCost: this.totalCost,
+          totalTokens: this.totalTokens + this.orchestratorTokens,
+          totalCost: this.totalCost + this.orchestratorCost,
           qualityRejections: this.qualityRejections,
           retries: this.retries,
         },
         modelHealth: this.healthTracker.getAllRecords(),
         decisions: this.orchestratorDecisions,
         errors: this.errors,
+        originalPrompt: this.originalPrompt,
       });
 
       this.emit({
@@ -1467,9 +2462,9 @@ Respond with JSON: { "fixups": [{ "description": "what to fix", "type": "impleme
   private emitBudgetUpdate(): void {
     this.emit({
       type: 'swarm.budget.update',
-      tokensUsed: this.totalTokens,
+      tokensUsed: this.totalTokens + this.orchestratorTokens,
       tokensTotal: this.config.totalBudget,
-      costUsed: this.totalCost,
+      costUsed: this.totalCost + this.orchestratorCost,
       costTotal: this.config.maxCost,
     });
   }
@@ -1486,8 +2481,8 @@ Respond with JSON: { "fixups": [{ "description": "what to fix", "type": "impleme
       failedTasks: queueStats.failed,
       skippedTasks: queueStats.skipped,
       totalWaves: this.taskQueue.getTotalWaves(),
-      totalTokens: this.totalTokens,
-      totalCost: this.totalCost,
+      totalTokens: this.totalTokens + this.orchestratorTokens,
+      totalCost: this.totalCost + this.orchestratorCost,
       totalDurationMs: Date.now() - this.startTime,
       qualityRejections: this.qualityRejections,
       retries: this.retries,
@@ -1513,6 +2508,17 @@ Respond with JSON: { "fixups": [{ "description": "what to fix", "type": "impleme
     }
     if (this.verificationResult) {
       parts.push(`  Verification: ${this.verificationResult.passed ? 'PASSED' : 'FAILED'}`);
+    }
+
+    // Artifact inventory: show what files actually exist on disk regardless of task status
+    if (this.artifactInventory && this.artifactInventory.totalFiles > 0) {
+      parts.push(`  Files on disk: ${this.artifactInventory.totalFiles} files (${(this.artifactInventory.totalBytes / 1024).toFixed(1)}KB)`);
+      for (const f of this.artifactInventory.files.slice(0, 15)) {
+        parts.push(`    ${f.path}: ${f.sizeBytes}B`);
+      }
+      if (this.artifactInventory.files.length > 15) {
+        parts.push(`    ... and ${this.artifactInventory.files.length - 15} more`);
+      }
     }
 
     return parts.join('\n');
@@ -1541,6 +2547,782 @@ Respond with JSON: { "fixups": [{ "description": "what to fix", "type": "impleme
     } catch {
       return null;
     }
+  }
+
+  /**
+   * Detect foundation tasks: tasks that are a dependency of 2+ downstream tasks.
+   * These are critical single-points-of-failure — mark them for extra resilience.
+   */
+  private detectFoundationTasks(): void {
+    const allTasks = this.taskQueue.getAllTasks();
+    const dependentCounts = new Map<string, number>();
+
+    for (const task of allTasks) {
+      for (const depId of task.dependencies) {
+        dependentCounts.set(depId, (dependentCounts.get(depId) ?? 0) + 1);
+      }
+    }
+
+    for (const task of allTasks) {
+      const dependentCount = dependentCounts.get(task.id) ?? 0;
+      if (dependentCount >= 2) {
+        task.isFoundation = true;
+        this.logDecision('scheduling',
+          `Foundation task: ${task.id} (${dependentCount} dependents)`,
+          'Extra retries and relaxed quality threshold applied');
+      }
+    }
+  }
+
+  /**
+   * Extract file artifacts from a worker's output for quality gate visibility.
+   * Reads actual file content from disk so the judge can verify real work,
+   * not just text claims about what was created.
+   */
+  private extractFileArtifacts(task: SwarmTask, taskResult: import('./types.js').SwarmTaskResult): Array<{ path: string; preview: string }> {
+    const artifacts: Array<{ path: string; preview: string }> = [];
+    const seen = new Set<string>();
+
+    // Collect file paths from multiple sources
+    const candidatePaths: string[] = [];
+
+    // 1. filesModified from structured closure report
+    if (taskResult.filesModified) {
+      candidatePaths.push(...taskResult.filesModified);
+    }
+
+    // 2. targetFiles from task definition
+    if (task.targetFiles) {
+      candidatePaths.push(...task.targetFiles);
+    }
+
+    // 3. Extract file paths mentioned in worker output (e.g., "Created src/foo.ts")
+    const filePathPattern = /(?:created|wrote|modified|edited|updated)\s+["`']?([^\s"`',]+\.\w+)/gi;
+    let match;
+    while ((match = filePathPattern.exec(taskResult.output)) !== null) {
+      candidatePaths.push(match[1]);
+    }
+
+    // Resolve against the target project directory, not CWD
+    const baseDir = this.config.facts?.workingDirectory ?? process.cwd();
+
+    // Read previews from disk
+    for (const filePath of candidatePaths) {
+      if (seen.has(filePath)) continue;
+      seen.add(filePath);
+
+      try {
+        const resolved = path.resolve(baseDir, filePath);
+        if (fs.existsSync(resolved)) {
+          const content = fs.readFileSync(resolved, 'utf-8');
+          if (content.length > 0) {
+            artifacts.push({ path: filePath, preview: content.slice(0, 2000) });
+          }
+        }
+      } catch {
+        // Skip unreadable files
+      }
+
+      // Limit to 10 files to keep prompt size reasonable
+      if (artifacts.length >= 10) break;
+    }
+
+    return artifacts;
+  }
+
+  /**
+   * Build an inventory of filesystem artifacts produced during swarm execution.
+   * Scans all tasks' targetFiles and readFiles to check what actually exists on disk.
+   * This reveals work done by workers even when tasks "failed" (timeout, quality gate, etc.).
+   */
+  private buildArtifactInventory(): ArtifactInventory {
+    const allFiles = new Set<string>();
+    for (const task of this.taskQueue.getAllTasks()) {
+      for (const f of (task.targetFiles ?? [])) allFiles.add(f);
+      for (const f of (task.readFiles ?? [])) allFiles.add(f);
+    }
+
+    const baseDir = this.config.facts?.workingDirectory ?? process.cwd();
+    const artifacts: ArtifactEntry[] = [];
+
+    for (const filePath of allFiles) {
+      try {
+        const resolved = path.resolve(baseDir, filePath);
+        if (fs.existsSync(resolved)) {
+          const stats = fs.statSync(resolved);
+          if (stats.isFile() && stats.size > 0) {
+            artifacts.push({ path: filePath, sizeBytes: stats.size, exists: true });
+          }
+        }
+      } catch { /* skip unreadable files */ }
+    }
+
+    return {
+      files: artifacts,
+      totalFiles: artifacts.length,
+      totalBytes: artifacts.reduce((s, a) => s + a.sizeBytes, 0),
+    };
+  }
+
+  /**
+   * Skip all remaining pending/ready tasks (used for early termination).
+   */
+  private skipRemainingTasks(reason: string): void {
+    for (const task of this.taskQueue.getAllTasks()) {
+      if (task.status === 'pending' || task.status === 'ready') {
+        task.status = 'skipped';
+        this.emit({ type: 'swarm.task.skipped', taskId: task.id, reason });
+      }
+    }
+  }
+
+  /**
+   * F21: Mid-swarm situational assessment after each wave.
+   * Evaluates success rate and budget health, triages low-priority tasks when budget is tight.
+   * Also detects stalled progress and triggers mid-swarm re-planning.
+   */
+  private async assessAndAdapt(waveIndex: number): Promise<void> {
+    const stats = this.taskQueue.getStats();
+    const budgetStats = this.budgetPool.getStats();
+
+    // 1. Calculate success rate for this swarm run
+    const successRate = stats.completed / Math.max(1, stats.completed + stats.failed + stats.skipped);
+
+    // 2. Budget efficiency: tokens spent per completed task
+    const tokensPerTask = stats.completed > 0
+      ? (this.totalTokens / stats.completed)
+      : Infinity;
+
+    // 3. Remaining budget vs remaining tasks
+    const remainingTasks = stats.total - stats.completed - stats.failed - stats.skipped;
+    const estimatedTokensNeeded = remainingTasks * tokensPerTask;
+    const budgetSufficient = budgetStats.tokensRemaining > estimatedTokensNeeded * 0.5;
+
+    // Log the assessment for observability
+    this.logDecision('mid-swarm-assessment',
+      `After wave ${waveIndex + 1}: ${stats.completed}/${stats.total} completed (${(successRate * 100).toFixed(0)}%), ` +
+      `${remainingTasks} remaining, ${budgetStats.tokensRemaining} tokens left`,
+      budgetSufficient ? 'Budget looks sufficient' : 'Budget may be insufficient for remaining tasks');
+
+    // 4. If budget is tight, prioritize: skip low-value remaining tasks
+    // Only triage if we have actual data (at least one completion to estimate from)
+    if (!budgetSufficient && remainingTasks > 1 && stats.completed > 0) {
+      // Prefer pausing over skipping: if workers are still running, wait for budget release
+      const runningCount = stats.running ?? 0;
+      if (runningCount > 0) {
+        this.logDecision('budget-wait',
+          'Budget tight but workers still running — waiting for budget release',
+          `${runningCount} workers active, ${budgetStats.tokensRemaining} tokens remaining`);
+        return;
+      }
+
+      const expendableTasks = this.findExpendableTasks();
+      // Hard cap: never skip more than 20% of remaining tasks in one triage pass
+      const maxSkips = Math.max(1, Math.floor(remainingTasks * 0.2));
+      if (expendableTasks.length > 0) {
+        let currentEstimate = estimatedTokensNeeded;
+        let skipped = 0;
+        for (const task of expendableTasks) {
+          if (skipped >= maxSkips) break;
+          // Stop trimming once we're within budget
+          if (currentEstimate * 0.7 <= budgetStats.tokensRemaining) break;
+          task.status = 'skipped';
+          skipped++;
+          this.emit({ type: 'swarm.task.skipped', taskId: task.id,
+            reason: 'Budget conservation: skipping low-priority task to protect critical path' });
+          this.logDecision('budget-triage',
+            `Skipping ${task.id} (${task.type}, complexity ${task.complexity}) to conserve budget`,
+            `${remainingTasks} tasks remain, ${budgetStats.tokensRemaining} tokens`);
+          currentEstimate -= tokensPerTask;
+        }
+      }
+    }
+
+    // 5. Stall detection: if progress ratio is too low, trigger re-plan
+    const attemptedTasks = stats.completed + stats.failed + stats.skipped;
+    if (attemptedTasks >= 5) {
+      const progressRatio = stats.completed / Math.max(1, attemptedTasks);
+      if (progressRatio < 0.4) {
+        this.logDecision('stall-detected',
+          `Progress stalled: ${stats.completed}/${attemptedTasks} tasks succeeded (${(progressRatio * 100).toFixed(0)}%)`,
+          'Triggering mid-swarm re-plan');
+        this.emit({
+          type: 'swarm.stall',
+          progressRatio,
+          attempted: attemptedTasks,
+          completed: stats.completed,
+        });
+        await this.midSwarmReplan();
+      }
+    }
+  }
+
+  /**
+   * F21: Find expendable tasks — leaf tasks (no dependents) with lowest complexity.
+   * These are the safest to skip when budget is tight.
+   * Only tasks with complexity <= 2 are considered expendable.
+   */
+  private findExpendableTasks(): SwarmTask[] {
+    const allTasks = this.taskQueue.getAllTasks();
+
+    // Build reverse dependency map: which tasks depend on each task?
+    const dependentCounts = new Map<string, number>();
+    for (const task of allTasks) {
+      for (const depId of task.dependencies) {
+        dependentCounts.set(depId, (dependentCounts.get(depId) ?? 0) + 1);
+      }
+    }
+
+    // Expendable = pending/ready, never attempted, no dependents, not foundation,
+    // complexity <= 2 (simple leaf tasks only), lowest complexity first
+    return allTasks
+      .filter(t =>
+        (t.status === 'pending' || t.status === 'ready') &&
+        t.attempts === 0 &&
+        !t.isFoundation &&
+        (t.complexity ?? 5) <= 2 &&
+        (dependentCounts.get(t.id) ?? 0) === 0,
+      )
+      .sort((a, b) => (a.complexity ?? 5) - (b.complexity ?? 5));
+  }
+
+  /**
+   * Mid-swarm re-planning: when progress stalls, ask LLM to re-plan remaining work.
+   * Creates simpler replacement tasks for stuck/failed work, building on what's already done.
+   * Only triggers once per swarm execution to avoid infinite re-planning loops.
+   */
+  private async midSwarmReplan(): Promise<void> {
+    if (this.hasReplanned) return;
+    this.hasReplanned = true;
+
+    const allTasks = this.taskQueue.getAllTasks();
+    const completed = allTasks.filter(t => t.status === 'completed' || t.status === 'decomposed');
+    const stuck = allTasks.filter(t => t.status === 'failed' || t.status === 'skipped');
+
+    if (stuck.length === 0) return;
+
+    const completedSummary = completed.map(t =>
+      `- ${t.description} [${t.type}] → completed${t.degraded ? ' (degraded)' : ''}`,
+    ).join('\n') || '(none)';
+    const stuckSummary = stuck.map(t =>
+      `- ${t.description} [${t.type}] → ${t.status} (${t.failureMode ?? 'unknown'})`,
+    ).join('\n');
+    const artifactInventory = this.buildArtifactInventory();
+    const artifactSummary = artifactInventory.files.map(f => `- ${f.path} (${f.sizeBytes}B)`).join('\n') || '(none)';
+
+    const replanPrompt = `The swarm is stalled. Here's the situation:
+
+COMPLETED WORK:
+${completedSummary}
+
+FILES ON DISK:
+${artifactSummary}
+
+STUCK TASKS (failed or skipped):
+${stuckSummary}
+
+Re-plan the remaining work. Create new subtasks that:
+1. Build on what's already completed (don't redo work)
+2. Are more focused in scope (but assign realistic complexity for the work involved — don't underestimate)
+3. Can succeed independently (minimize dependencies)
+
+Return JSON: { "subtasks": [{ "description": "...", "type": "implement|test|research|review|document|refactor", "complexity": 1-5, "dependencies": [], "relevantFiles": [] }] }
+Return ONLY the JSON object, no other text.`;
+
+    try {
+      const response = await this.provider.chat([{ role: 'user', content: replanPrompt }]);
+      this.trackOrchestratorUsage(response as any, 'mid-swarm-replan');
+
+      const content = response.content ?? '';
+      const jsonMatch = content.match(/\{[\s\S]*"subtasks"[\s\S]*\}/);
+      if (!jsonMatch) {
+        this.logDecision('replan-failed', 'LLM produced no parseable re-plan JSON', content.slice(0, 200));
+        return;
+      }
+
+      const parsed = JSON.parse(jsonMatch[0]) as { subtasks: Array<{ description: string; type: string; complexity: number; dependencies: string[]; relevantFiles?: string[] }> };
+      if (!parsed.subtasks || parsed.subtasks.length === 0) {
+        this.logDecision('replan-failed', 'LLM produced empty subtask list', '');
+        return;
+      }
+
+      // Add new tasks from re-plan into current wave
+      const newTasks = this.taskQueue.addReplanTasks(parsed.subtasks, this.taskQueue.getCurrentWave());
+      this.logDecision('replan-success',
+        `Re-planned ${stuck.length} stuck tasks into ${newTasks.length} new tasks`,
+        newTasks.map(t => t.description).join('; '));
+
+      this.emit({
+        type: 'swarm.replan',
+        stuckCount: stuck.length,
+        newTaskCount: newTasks.length,
+      });
+
+      this.emit({
+        type: 'swarm.orchestrator.decision',
+        decision: {
+          timestamp: Date.now(),
+          phase: 'replan',
+          decision: `Re-planned ${stuck.length} stuck tasks into ${newTasks.length} new tasks`,
+          reasoning: newTasks.map(t => `${t.id}: ${t.description}`).join('; '),
+        },
+      });
+    } catch (error) {
+      this.logDecision('replan-failed', `Re-plan LLM call failed: ${(error as Error).message}`, '');
+    }
+  }
+
+  /**
+   * Rescue cascade-skipped tasks that can still run.
+   * After cascade-skip fires, assess whether skipped tasks can still be attempted:
+   * - If all OTHER dependencies completed and the failed dep's artifacts exist on disk → un-skip
+   * - If the task has no strict data dependency on the failed task (different file targets) → un-skip with warning
+   */
+  private rescueCascadeSkipped(lenient = false): SwarmTask[] {
+    const skippedTasks = this.taskQueue.getSkippedTasks();
+    const rescued: SwarmTask[] = [];
+
+    for (const task of skippedTasks) {
+      if (task.dependencies.length === 0) continue;
+
+      let completedDeps = 0;
+      let failedDepsWithArtifacts = 0;
+      let failedDepsWithoutArtifacts = 0;
+      let skippedDepsBlockedBySkipped = 0;
+      let totalDeps = 0;
+      const failedDepDescriptions: string[] = [];
+
+      for (const depId of task.dependencies) {
+        const dep = this.taskQueue.getTask(depId);
+        if (!dep) continue;
+        totalDeps++;
+
+        if (dep.status === 'completed' || dep.status === 'decomposed') {
+          completedDeps++;
+        } else if (dep.status === 'failed' || dep.status === 'skipped') {
+          // V10: In lenient mode, use checkArtifactsEnhanced for broader detection
+          const artifactReport = lenient ? checkArtifactsEnhanced(dep) : checkArtifacts(dep);
+          if (artifactReport && artifactReport.files.filter(f => f.exists && f.sizeBytes > 0).length > 0) {
+            failedDepsWithArtifacts++;
+            failedDepDescriptions.push(`${dep.description} (failed but ${artifactReport.files.filter(f => f.exists && f.sizeBytes > 0).length} artifacts exist)`);
+          } else {
+            // Check if this dep's target files exist on disk (may have been created by earlier attempt)
+            const targetFiles = dep.targetFiles ?? [];
+            const existingFiles = targetFiles.filter(f => {
+              try {
+                const resolved = path.resolve(this.config.facts?.workingDirectory ?? process.cwd(), f);
+                return fs.statSync(resolved).size > 0;
+              } catch { return false; }
+            });
+            if (existingFiles.length > 0) {
+              failedDepsWithArtifacts++;
+              failedDepDescriptions.push(`${dep.description} (failed but ${existingFiles.length}/${targetFiles.length} target files exist)`);
+            } else {
+              // Check if skipped task's targets don't overlap with the failed dep's targets
+              const taskTargets = new Set(task.targetFiles ?? []);
+              const depTargets = new Set(dep.targetFiles ?? []);
+              const hasOverlap = [...taskTargets].some(f => depTargets.has(f));
+              if (!hasOverlap && taskTargets.size > 0) {
+                // Different file targets — task probably doesn't need the failed dep's output
+                failedDepsWithArtifacts++;
+                failedDepDescriptions.push(`${dep.description} (failed, no file overlap — likely independent)`);
+              } else if (lenient && dep.status === 'skipped') {
+                // V10: In lenient mode, count skipped-by-skipped deps separately
+                // (transitive cascade — the dep itself was a victim, not truly broken)
+                skippedDepsBlockedBySkipped++;
+                failedDepDescriptions.push(`${dep.description} (skipped — transitive cascade victim)`);
+              } else {
+                failedDepsWithoutArtifacts++;
+              }
+            }
+          }
+        }
+      }
+
+      // Rescue condition:
+      // Normal: all failed deps have artifacts or are independent, AND at least some deps completed
+      // Lenient: tolerate up to 1 truly-missing dep, and count transitive cascade victims as recoverable
+      const effectiveWithout = failedDepsWithoutArtifacts;
+      const maxMissing = lenient ? 1 : 0;
+      const hasEnoughContext = lenient ? (completedDeps + failedDepsWithArtifacts + skippedDepsBlockedBySkipped > 0) : (completedDeps > 0);
+
+      if (totalDeps > 0 && effectiveWithout <= maxMissing && hasEnoughContext) {
+        const rescueContext = `Rescued from cascade-skip${lenient ? ' (lenient)' : ''}: ${completedDeps}/${totalDeps} deps completed, ` +
+          `${failedDepsWithArtifacts} failed deps have artifacts${skippedDepsBlockedBySkipped > 0 ? `, ${skippedDepsBlockedBySkipped} transitive cascade victims` : ''}. ${failedDepDescriptions.join('; ')}`;
+        this.taskQueue.rescueTask(task.id, rescueContext);
+        rescued.push(task);
+        this.logDecision('cascade-rescue',
+          `${task.id}: rescued from cascade-skip${lenient ? ' (lenient)' : ''}`,
+          rescueContext);
+      }
+    }
+
+    return rescued;
+  }
+
+  /**
+   * Final rescue pass — runs after executeWaves() finishes.
+   * Uses lenient mode to rescue cascade-skipped tasks that have partial context.
+   * Re-dispatches rescued tasks in a final wave.
+   */
+  private async finalRescuePass(): Promise<void> {
+    const skipped = this.taskQueue.getSkippedTasks();
+    if (skipped.length === 0) return;
+
+    this.logDecision('final-rescue', `${skipped.length} skipped tasks — running final rescue pass`, '');
+    const rescued = this.rescueCascadeSkipped(true); // lenient=true
+    if (rescued.length > 0) {
+      this.logDecision('final-rescue', `Rescued ${rescued.length} tasks`, rescued.map(t => t.id).join(', '));
+      await this.executeWave(rescued);
+    }
+  }
+
+  /**
+   * Try resilience recovery strategies before hard-failing a task.
+   * Called from dispatch-cap, timeout, hollow, and error paths to avoid bypassing resilience.
+   *
+   * Strategies (in order):
+   * 1. Micro-decomposition — break complex failing tasks into subtasks
+   * 2. Degraded acceptance — accept partial work if artifacts exist on disk
+   *
+   * Returns true if recovery succeeded (caller should return), false if hard-fail should proceed.
+   */
+  private async tryResilienceRecovery(
+    task: SwarmTask, taskId: string,
+    taskResult: SwarmTaskResult, spawnResult: SpawnResult,
+  ): Promise<boolean> {
+    // Strategy 1: Micro-decompose complex tasks into smaller subtasks
+    // V10: Lowered threshold from >= 6 to >= 4 so moderately complex tasks can be recovered
+    if ((task.complexity ?? 0) >= 4 && task.attempts >= 2 && this.budgetPool.hasCapacity()) {
+      const subtasks = await this.microDecompose(task);
+      if (subtasks && subtasks.length >= 2) {
+        // Reset task status so replaceWithSubtasks can mark it as decomposed
+        task.status = 'dispatched';
+        this.taskQueue.replaceWithSubtasks(taskId, subtasks);
+        this.logDecision('micro-decompose',
+          `${taskId}: decomposed into ${subtasks.length} subtasks after ${task.attempts} failures`,
+          subtasks.map(s => `${s.id}: ${s.description.slice(0, 60)}`).join('; '));
+        this.emit({
+          type: 'swarm.task.failed',
+          taskId,
+          error: `Micro-decomposed into ${subtasks.length} subtasks`,
+          attempt: task.attempts,
+          maxAttempts: this.config.maxDispatchesPerTask ?? 5,
+          willRetry: false,
+          toolCalls: spawnResult.metrics.toolCalls,
+          failureMode: task.failureMode,
+        });
+        this.emit({
+          type: 'swarm.task.resilience',
+          taskId,
+          strategy: 'micro-decompose',
+          succeeded: true,
+          reason: `Decomposed into ${subtasks.length} subtasks after ${task.attempts} failures`,
+          artifactsFound: 0,
+          toolCalls: spawnResult.metrics.toolCalls ?? 0,
+        });
+        return true;
+      }
+      // Micro-decompose was attempted but didn't produce usable subtasks
+      if ((task.complexity ?? 0) < 4) {
+        this.logDecision('resilience-skip', `${taskId}: skipped micro-decompose — complexity ${task.complexity} < 4`, '');
+      }
+    }
+
+    // Strategy 2: Degraded acceptance — check if any attempt produced files on disk.
+    // V10: Use checkArtifactsEnhanced for broader detection (filesModified, closureReport, output)
+    const artifactReport = checkArtifactsEnhanced(task, taskResult);
+    const existingArtifacts = artifactReport.files.filter(f => f.exists && f.sizeBytes > 0);
+    const hasArtifacts = existingArtifacts.length > 0;
+    // V10: Fix timeout detection — toolCalls=-1 means timeout (worker WAS working)
+    const toolCalls = spawnResult.metrics.toolCalls ?? 0;
+    const hadToolCalls = toolCalls > 0 || toolCalls === -1
+      || (taskResult.filesModified && taskResult.filesModified.length > 0);
+
+    if (hasArtifacts || hadToolCalls) {
+      // Accept with degraded flag — prevents cascade-skip of dependents
+      taskResult.success = true;
+      taskResult.degraded = true;
+      taskResult.qualityScore = 2; // Capped at low quality
+      taskResult.qualityFeedback = 'Degraded acceptance: retries exhausted but filesystem artifacts exist';
+      task.degraded = true;
+      // Reset status so markCompleted works (markFailed may have set it to 'failed')
+      task.status = 'dispatched';
+      this.taskQueue.markCompleted(taskId, taskResult);
+      this.hollowStreak = 0;
+      this.logDecision('degraded-acceptance',
+        `${taskId}: accepted as degraded — ${existingArtifacts.length} artifacts on disk, ${toolCalls} tool calls`,
+        'Prevents cascade-skip of dependent tasks');
+      this.emit({
+        type: 'swarm.task.completed',
+        taskId,
+        success: true,
+        tokensUsed: taskResult.tokensUsed,
+        costUsed: taskResult.costUsed,
+        durationMs: taskResult.durationMs,
+        qualityScore: 2,
+        qualityFeedback: 'Degraded acceptance',
+        output: taskResult.output,
+        toolCalls: spawnResult.metrics.toolCalls,
+      });
+      this.emit({
+        type: 'swarm.task.resilience',
+        taskId,
+        strategy: 'degraded-acceptance',
+        succeeded: true,
+        reason: `${existingArtifacts.length} artifacts on disk, ${toolCalls} tool calls`,
+        artifactsFound: existingArtifacts.length,
+        toolCalls,
+      });
+      return true;
+    }
+
+    // Both strategies failed — log exhaustion for traceability
+    this.logDecision('resilience-exhausted',
+      `${taskId}: no recovery — artifacts: ${existingArtifacts.length}, toolCalls: ${toolCalls}, filesModified: ${taskResult.filesModified?.length ?? 0}`,
+      '');
+    this.emit({
+      type: 'swarm.task.resilience',
+      taskId,
+      strategy: 'none',
+      succeeded: false,
+      reason: `No artifacts found, toolCalls=${toolCalls}, filesModified=${taskResult.filesModified?.length ?? 0}`,
+      artifactsFound: existingArtifacts.length,
+      toolCalls,
+    });
+    return false;
+  }
+
+  /**
+   * Micro-decompose a complex task into 2-3 smaller subtasks using the LLM.
+   * Called when a complex task (complexity >= 6) fails 2+ times with the same failure mode.
+   * Returns null if decomposition doesn't make sense or LLM can't produce valid subtasks.
+   */
+  private async microDecompose(task: SwarmTask): Promise<SwarmTask[] | null> {
+    if ((task.complexity ?? 0) < 4) return null;
+
+    try {
+      const prompt = `Task "${task.description}" failed ${task.attempts} times on model ${task.assignedModel ?? 'unknown'}.
+The task has complexity ${task.complexity}/10 and type "${task.type}".
+${task.targetFiles?.length ? `Target files: ${task.targetFiles.join(', ')}` : ''}
+
+Break this task into 2-3 smaller, independent subtasks that each handle a portion of the work.
+Each subtask MUST be simpler (complexity <= ${Math.ceil(task.complexity / 2)}).
+Each subtask should be self-contained and produce concrete file changes.
+
+Return JSON ONLY (no markdown, no explanation):
+{
+  "subtasks": [
+    { "description": "...", "type": "${task.type}", "targetFiles": ["..."], "complexity": <number> }
+  ]
+}`;
+
+      const response = await this.provider.chat(
+        [
+          { role: 'system', content: 'You are a task decomposition assistant. Return only valid JSON.' },
+          { role: 'user', content: prompt },
+        ],
+        {
+          model: this.config.orchestratorModel,
+          maxTokens: 2000,
+          temperature: 0.3,
+        },
+      );
+
+      this.trackOrchestratorUsage(response as any, 'micro-decompose');
+
+      // Parse response — handle markdown code blocks
+      let jsonStr = response.content.trim();
+      const codeBlockMatch = jsonStr.match(/```(?:json)?\s*([\s\S]*?)```/);
+      if (codeBlockMatch) jsonStr = codeBlockMatch[1].trim();
+
+      const parsed = JSON.parse(jsonStr);
+      if (!parsed.subtasks || !Array.isArray(parsed.subtasks) || parsed.subtasks.length < 2) {
+        return null;
+      }
+
+      const subtasks: SwarmTask[] = parsed.subtasks.map((sub: any, idx: number) => ({
+        id: `${task.id}-sub${idx + 1}`,
+        description: sub.description,
+        type: sub.type ?? task.type,
+        dependencies: [],  // Will be set by replaceWithSubtasks
+        status: 'ready' as const,
+        complexity: Math.min(sub.complexity ?? Math.ceil(task.complexity / 2), task.complexity - 1),
+        wave: task.wave,
+        targetFiles: sub.targetFiles ?? [],
+        readFiles: task.readFiles,
+        attempts: 0,
+      }));
+
+      return subtasks;
+    } catch (error) {
+      this.logDecision('micro-decompose',
+        `${task.id}: micro-decomposition failed — ${(error as Error).message}`,
+        'Falling through to normal failure path');
+      return null;
+    }
+  }
+
+  // ─── Pre-Dispatch Auto-Split ──────────────────────────────────────────────
+
+  /**
+   * Heuristic pre-filter: should this task be considered for auto-split?
+   * Cheap check — no LLM call. Returns true if all conditions are met.
+   */
+  private shouldAutoSplit(task: SwarmTask): boolean {
+    const cfg = this.config.autoSplit;
+    if (cfg?.enabled === false) return false;
+
+    const floor = cfg?.complexityFloor ?? 6;
+    const splittable = cfg?.splittableTypes ?? ['implement', 'refactor', 'test'];
+
+    // Only first attempts — retries use micro-decompose
+    if (task.attempts > 0) return false;
+    // Complexity check
+    if ((task.complexity ?? 0) < floor) return false;
+    // Type check
+    if (!splittable.includes(task.type)) return false;
+    // Must be on critical path (foundation task)
+    if (!task.isFoundation) return false;
+    // Budget capacity check
+    if (!this.budgetPool.hasCapacity()) return false;
+
+    return true;
+  }
+
+  /**
+   * LLM judge call: ask the orchestrator model whether and how to split a task.
+   * Returns { shouldSplit: false } or { shouldSplit: true, subtasks: [...] }.
+   */
+  private async judgeSplit(task: SwarmTask): Promise<{ shouldSplit: boolean; subtasks?: SwarmTask[] }> {
+    const maxSubs = this.config.autoSplit?.maxSubtasks ?? 4;
+
+    const prompt = `You are evaluating whether a task should be split into parallel subtasks before dispatch.
+
+TASK: "${task.description}"
+TYPE: ${task.type}
+COMPLEXITY: ${task.complexity}/10
+TARGET FILES: ${task.targetFiles?.join(', ') || 'none specified'}
+DOWNSTREAM DEPENDENTS: This is a foundation task — other tasks are waiting on it.
+
+Should this task be split into 2-${maxSubs} parallel subtasks that different workers can execute simultaneously?
+
+SPLIT if:
+- The task involves multiple independent pieces of work (e.g., different files, different functions, different concerns)
+- Parallel execution would meaningfully reduce wall-clock time
+- The subtasks can produce useful output independently
+
+DO NOT SPLIT if:
+- The work is conceptually atomic (one function, one algorithm, tightly coupled logic)
+- The subtasks would need to coordinate on the same files/functions
+- Splitting would add more overhead than it saves
+
+Return JSON ONLY:
+{
+  "shouldSplit": true/false,
+  "reason": "brief explanation",
+  "subtasks": [
+    { "description": "...", "type": "${task.type}", "targetFiles": ["..."], "complexity": <number 1-10> }
+  ]
+}
+If shouldSplit is false, omit subtasks.`;
+
+    const response = await this.provider.chat(
+      [
+        { role: 'system', content: 'You are a task planning judge. Return only valid JSON.' },
+        { role: 'user', content: prompt },
+      ],
+      {
+        model: this.config.orchestratorModel,
+        maxTokens: 1500,
+        temperature: 0.2,
+      },
+    );
+    this.trackOrchestratorUsage(response as any, 'auto-split-judge');
+
+    // Parse response — reuse markdown code block stripping from microDecompose
+    let jsonStr = response.content.trim();
+    const codeBlockMatch = jsonStr.match(/```(?:json)?\s*([\s\S]*?)```/);
+    if (codeBlockMatch) jsonStr = codeBlockMatch[1].trim();
+
+    const parsed = JSON.parse(jsonStr);
+    if (!parsed.shouldSplit) {
+      this.logDecision('auto-split', `${task.id}: judge says no split — ${parsed.reason}`, '');
+      return { shouldSplit: false };
+    }
+    if (!parsed.subtasks || !Array.isArray(parsed.subtasks) || parsed.subtasks.length < 2) {
+      return { shouldSplit: false };
+    }
+
+    // Build SwarmTask[] from judge output (same pattern as microDecompose)
+    const subtasks: SwarmTask[] = parsed.subtasks.slice(0, maxSubs).map((sub: any, idx: number) => ({
+      id: `${task.id}-split${idx + 1}`,
+      description: sub.description,
+      type: sub.type ?? task.type,
+      dependencies: [],
+      status: 'ready' as const,
+      complexity: Math.max(3, Math.min(sub.complexity ?? Math.ceil(task.complexity / 2), task.complexity - 1)),
+      wave: task.wave,
+      targetFiles: sub.targetFiles ?? [],
+      readFiles: task.readFiles,
+      attempts: 0,
+      rescueContext: `Auto-split from ${task.id} (original complexity ${task.complexity})`,
+    }));
+
+    this.logDecision('auto-split',
+      `${task.id}: split into ${subtasks.length} subtasks — ${parsed.reason}`,
+      subtasks.map(s => `${s.id}: ${s.description.slice(0, 60)}`).join('; '));
+
+    return { shouldSplit: true, subtasks };
+  }
+
+  /**
+   * V7: Compute effective retry limit for a task.
+   * F10: Fixup tasks get max 2 retries (3 attempts total) — one full model-failover cycle.
+   * Foundation tasks get +1 retry to reduce cascade failure risk.
+   */
+  private getEffectiveRetries(task: SwarmTask): number {
+    const isFixup = 'fixesTaskId' in task;
+    if (isFixup) return 2; // Fixup tasks: 2 retries max (3 attempts total)
+    return task.isFoundation ? this.config.workerRetries + 1 : this.config.workerRetries;
+  }
+
+  /**
+   * F22: Build a brief summary of swarm progress for retry context.
+   * Helps retrying workers understand what the swarm has already accomplished.
+   */
+  private getSwarmProgressSummary(): string {
+    const allTasks = this.taskQueue.getAllTasks();
+    const completed = allTasks.filter(t => t.status === 'completed');
+
+    if (completed.length === 0) return '';
+
+    const lines: string[] = [];
+    for (const task of completed) {
+      const score = task.result?.qualityScore ? ` (${task.result.qualityScore}/5)` : '';
+      lines.push(`- ${task.id}: ${task.description.slice(0, 80)}${score}`);
+    }
+
+    // Collect files created by completed tasks
+    const files = new Set<string>();
+    const baseDir = this.config.facts?.workingDirectory ?? process.cwd();
+    for (const task of completed) {
+      for (const f of (task.result?.filesModified ?? [])) files.add(f);
+      for (const f of (task.targetFiles ?? [])) {
+        try {
+          const resolved = path.resolve(baseDir, f);
+          if (fs.existsSync(resolved)) files.add(f);
+        } catch { /* skip */ }
+      }
+    }
+
+    const parts = [`The following tasks have completed successfully:\n${lines.join('\n')}`];
+    if (files.size > 0) {
+      parts.push(`Files already created/modified: ${[...files].slice(0, 20).join(', ')}`);
+      parts.push('You can build on these existing files.');
+    }
+
+    return parts.join('\n');
   }
 
   /** Get a model health summary for emitting events. */

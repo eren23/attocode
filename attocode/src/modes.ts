@@ -14,6 +14,7 @@
  */
 
 import type { ToolDefinition } from './types.js';
+import { evaluateBashPolicy, isWriteLikeBashCommand } from './integrations/bash-policy.js';
 
 // =============================================================================
 // TYPES
@@ -128,26 +129,7 @@ export function isWriteTool(toolName: string): boolean {
  * Returns true for commands that modify state.
  */
 export function isBashWriteCommand(command: string): boolean {
-  const writePatterns = [
-    /\brm\b/,           // Remove files
-    /\bmv\b/,           // Move/rename files
-    /\bcp\b/,           // Copy files
-    /\bmkdir\b/,        // Create directories
-    /\btouch\b/,        // Create/modify files
-    /\bchmod\b/,        // Change permissions
-    /\bchown\b/,        // Change ownership
-    /\b(npm|yarn|pnpm)\s+(install|add|remove|uninstall)/i,  // Package managers
-    /\bgit\s+(add|commit|push|pull|merge|rebase|reset|checkout)/i, // Git write ops
-    /\becho\b.*>/,      // Redirect to file
-    /\bcat\b.*>/,       // Redirect to file
-    /\btee\b/,          // Write to file
-    /\bsed\b.*-i/,      // In-place edit
-    /\bawk\b.*-i/,      // In-place edit
-    />\s*\S/,           // Any redirect
-    /\|\s*tee\b/,       // Pipe to tee
-  ];
-
-  return writePatterns.some(pattern => pattern.test(command));
+  return isWriteLikeBashCommand(command);
 }
 
 /**
@@ -214,15 +196,8 @@ const DANGEROUS_SUFFIXES = [
  * Returns true if the command is safe, false if it should be intercepted.
  */
 export function isBashSafeCommand(command: string): boolean {
-  const trimmed = command.trim();
-
-  // Check if command matches any safe pattern
-  const matchesSafe = SAFE_BASH_PATTERNS.some(p => p.test(trimmed));
-  if (!matchesSafe) return false;
-
-  // Even if "safe" base command, check for dangerous suffixes
-  const hasDanger = DANGEROUS_SUFFIXES.some(p => p.test(trimmed));
-  return !hasDanger;
+  const decision = evaluateBashPolicy(command, 'read_only', 'block_file_mutation');
+  return decision.allowed;
 }
 
 // =============================================================================

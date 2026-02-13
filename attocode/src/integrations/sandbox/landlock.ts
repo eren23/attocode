@@ -126,6 +126,9 @@ export class LandlockSandbox implements Sandbox {
       maxCpuSeconds: defaults.maxCpuSeconds ?? 30,
       allowedCommands: defaults.allowedCommands ?? [],
       blockedCommands: defaults.blockedCommands ?? [],
+      bashMode: defaults.bashMode ?? 'full',
+      bashWriteProtection: defaults.bashWriteProtection ?? 'off',
+      blockFileCreationViaBash: defaults.blockFileCreationViaBash ?? false,
     };
   }
 

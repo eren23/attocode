@@ -21,6 +21,7 @@
 
 import type {
   ProductionAgentConfig,
+  SandboxConfig,
   LLMProvider,
   Message,
   ToolCall,
@@ -108,6 +109,7 @@ import {
   CodebaseContextManager,
   createCodebaseContext,
   buildContextFromChunks,
+  generateLightweightRepoMap,
   type ExecutionBudget,
   type AgentRole,
   type TeamTask,
@@ -205,6 +207,10 @@ import {
   createSubagentSupervisor,
   createSubagentHandle,
 } from './integrations/index.js';
+import {
+  mergeApprovalScopeWithProfile,
+  resolvePolicyProfile,
+} from './integrations/policy-engine.js';
 
 // Lesson 26: Tracing & Evaluation integration
 import { TraceCollector, createTraceCollector } from './tracing/trace-collector.js';
@@ -382,6 +388,7 @@ export class ProductionAgent {
   private skillManager: SkillManager | null = null;
   private contextEngineering: ContextEngineeringManager | null = null;
   private codebaseContext: CodebaseContextManager | null = null;
+  private codebaseAnalysisTriggered = false;
   private traceCollector: TraceCollector | null = null;
   private modeManager: ModeManager;
   private pendingPlanManager: PendingPlanManager;
@@ -430,6 +437,10 @@ export class ProductionAgent {
   // Cacheable system prompt blocks for prompt caching (Improvement P1)
   // When set, callLLM() will inject these as structured content with cache_control markers
   private cacheableSystemBlocks: CacheableContentBlock[] | null = null;
+
+  // Pre-compaction agentic turn: when true, the agent gets one more LLM turn
+  // to summarize its state before compaction clears the context.
+  private compactionPending = false;
 
   // Initialization tracking
   private initPromises: Promise<void>[] = [];
@@ -568,8 +579,32 @@ export class ProductionAgent {
     if (isFeatureEnabled(this.config.sandbox) || isFeatureEnabled(this.config.humanInLoop)) {
       this.safety = new SafetyManager(
         isFeatureEnabled(this.config.sandbox) ? this.config.sandbox : false,
-        isFeatureEnabled(this.config.humanInLoop) ? this.config.humanInLoop : false
+        isFeatureEnabled(this.config.humanInLoop) ? this.config.humanInLoop : false,
+        isFeatureEnabled(this.config.policyEngine) ? this.config.policyEngine : false,
       );
+    }
+
+    if (isFeatureEnabled(this.config.policyEngine)) {
+      const rootPolicy = resolvePolicyProfile({
+        policyEngine: this.config.policyEngine,
+        sandboxConfig: isFeatureEnabled(this.config.sandbox) ? this.config.sandbox : undefined,
+      });
+      this.emit({
+        type: 'policy.profile.resolved',
+        profile: rootPolicy.profileName,
+        context: 'root',
+        selectionSource: rootPolicy.metadata.selectionSource,
+        usedLegacyMappings: rootPolicy.metadata.usedLegacyMappings,
+        legacySources: rootPolicy.metadata.legacyMappingSources,
+      });
+      if (rootPolicy.metadata.usedLegacyMappings) {
+        this.emit({
+          type: 'policy.legacy.fallback.used',
+          profile: rootPolicy.profileName,
+          sources: rootPolicy.metadata.legacyMappingSources,
+          warnings: rootPolicy.metadata.warnings,
+        });
+      }
     }
 
     // Routing
@@ -1251,7 +1286,11 @@ export class ProductionAgent {
     } else {
       // Single-task mode (backward compatibility) - start session with task
       const traceSessionId = `session-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
-      await this.traceCollector?.startSession(traceSessionId, task, this.config.model || 'default', {});
+      const sessionMetadata: Record<string, unknown> = {};
+      if (this.swarmOrchestrator) {
+        sessionMetadata.swarm = true;
+      }
+      await this.traceCollector?.startSession(traceSessionId, task, this.config.model || 'default', sessionMetadata);
     }
 
     try {
@@ -1431,6 +1470,162 @@ export class ProductionAgent {
     const bridge = new SwarmEventBridge({ outputDir: '.agent/swarm-live' });
     const unsubBridge = bridge.attach(this.swarmOrchestrator);
 
+    // Bridge swarm events into JSONL trace pipeline
+    const traceCollector = this.traceCollector;
+    let unsubTrace: (() => void) | undefined;
+    if (traceCollector) {
+      unsubTrace = this.swarmOrchestrator.subscribe(event => {
+        switch (event.type) {
+          case 'swarm.start':
+            traceCollector.record({
+              type: 'swarm.start',
+              data: { taskCount: event.taskCount, config: event.config },
+            });
+            break;
+          case 'swarm.tasks.loaded':
+            traceCollector.record({
+              type: 'swarm.decomposition',
+              data: {
+                tasks: event.tasks.map(t => ({
+                  id: t.id,
+                  description: t.description.slice(0, 200),
+                  type: t.type,
+                  wave: t.wave,
+                  deps: t.dependencies,
+                })),
+                totalWaves: Math.max(...event.tasks.map(t => t.wave), 0) + 1,
+              },
+            });
+            break;
+          case 'swarm.wave.start':
+            traceCollector.record({
+              type: 'swarm.wave',
+              data: { phase: 'start', wave: event.wave, taskCount: event.taskCount },
+            });
+            break;
+          case 'swarm.wave.complete':
+            traceCollector.record({
+              type: 'swarm.wave',
+              data: {
+                phase: 'complete',
+                wave: event.wave,
+                taskCount: event.completed + event.failed + (event.skipped ?? 0),
+                completed: event.completed,
+                failed: event.failed,
+              },
+            });
+            break;
+          case 'swarm.task.dispatched':
+            traceCollector.record({
+              type: 'swarm.task',
+              data: { phase: 'dispatched', taskId: event.taskId, model: event.model },
+            });
+            break;
+          case 'swarm.task.completed':
+            traceCollector.record({
+              type: 'swarm.task',
+              data: {
+                phase: 'completed',
+                taskId: event.taskId,
+                tokensUsed: event.tokensUsed,
+                costUsed: event.costUsed,
+                qualityScore: event.qualityScore,
+              },
+            });
+            break;
+          case 'swarm.task.failed':
+            traceCollector.record({
+              type: 'swarm.task',
+              data: { phase: 'failed', taskId: event.taskId, error: event.error },
+            });
+            break;
+          case 'swarm.task.skipped':
+            traceCollector.record({
+              type: 'swarm.task',
+              data: { phase: 'skipped', taskId: event.taskId, reason: event.reason },
+            });
+            break;
+          case 'swarm.quality.rejected':
+            traceCollector.record({
+              type: 'swarm.quality',
+              data: { taskId: event.taskId, score: event.score, feedback: event.feedback },
+            });
+            break;
+          case 'swarm.budget.update':
+            traceCollector.record({
+              type: 'swarm.budget',
+              data: {
+                tokensUsed: event.tokensUsed,
+                tokensTotal: event.tokensTotal,
+                costUsed: event.costUsed,
+                costTotal: event.costTotal,
+              },
+            });
+            break;
+          case 'swarm.verify.start':
+            traceCollector.record({
+              type: 'swarm.verification',
+              data: { phase: 'start', description: `${event.stepCount} verification steps` },
+            });
+            break;
+          case 'swarm.verify.step':
+            traceCollector.record({
+              type: 'swarm.verification',
+              data: {
+                phase: 'step',
+                stepIndex: event.stepIndex,
+                description: event.description,
+                passed: event.passed,
+              },
+            });
+            break;
+          case 'swarm.verify.complete':
+            traceCollector.record({
+              type: 'swarm.verification',
+              data: {
+                phase: 'complete',
+                passed: event.result.passed,
+                summary: event.result.summary,
+              },
+            });
+            break;
+          case 'swarm.orchestrator.llm':
+            traceCollector.record({
+              type: 'swarm.orchestrator.llm',
+              data: { model: event.model, purpose: event.purpose, tokens: event.tokens, cost: event.cost },
+            });
+            break;
+          case 'swarm.wave.allFailed':
+            traceCollector.record({
+              type: 'swarm.wave.allFailed',
+              data: { wave: event.wave },
+            });
+            break;
+          case 'swarm.phase.progress':
+            traceCollector.record({
+              type: 'swarm.phase.progress',
+              data: { phase: event.phase, message: event.message },
+            });
+            break;
+          case 'swarm.complete':
+            traceCollector.record({
+              type: 'swarm.complete',
+              data: {
+                stats: {
+                  totalTasks: event.stats.totalTasks,
+                  completedTasks: event.stats.completedTasks,
+                  failedTasks: event.stats.failedTasks,
+                  totalTokens: event.stats.totalTokens,
+                  totalCost: event.stats.totalCost,
+                  totalDuration: event.stats.totalDurationMs,
+                },
+              },
+            });
+            break;
+        }
+      });
+    }
+
     try {
       const result = await this.swarmOrchestrator.execute(task);
 
@@ -1447,6 +1642,7 @@ export class ProductionAgent {
 
       return result;
     } finally {
+      unsubTrace?.();
       unsubBridge();
       bridge.close();
       unsubSwarm();
@@ -2275,20 +2471,108 @@ export class ProductionAgent {
 
           // Handle compaction result
           if (compactionResult.status === 'compacted' && compactionResult.compactedMessages) {
-            // Replace messages with compacted version
-            messages.length = 0;
-            messages.push(...compactionResult.compactedMessages);
-            this.state.messages.length = 0;
-            this.state.messages.push(...compactionResult.compactedMessages);
-
-            // Inject work log after compaction to prevent amnesia
-            if (this.workLog?.hasContent()) {
-              const workLogMessage: Message = {
+            // ─── Pre-compaction agentic turn ───────────────────────────────
+            // Give the agent one LLM turn to summarize critical state before
+            // compaction clears the context. On the first trigger we inject a
+            // system message and skip compaction; on the next trigger (the
+            // agent has already responded) we proceed with actual compaction.
+            if (!this.compactionPending) {
+              this.compactionPending = true;
+              const preCompactionMsg: Message = {
                 role: 'user',
-                content: this.workLog.toCompactString(),
+                content: '[SYSTEM] Context compaction is imminent. Summarize your current progress, key findings, and next steps into a single concise message. This will be preserved after compaction.',
               };
-              messages.push(workLogMessage);
-              this.state.messages.push(workLogMessage);
+              messages.push(preCompactionMsg);
+              this.state.messages.push(preCompactionMsg);
+
+              this.observability?.logger?.info('Pre-compaction agentic turn: injected summary request');
+              // Skip compaction this iteration — let the agent respond first
+              // (continue to tool result processing below)
+            } else {
+              // Agent has had its chance to summarize — now compact for real
+              this.compactionPending = false;
+
+              // Pre-compaction checkpoint: save full state before discarding
+              try {
+                this.autoCheckpoint(true); // force=true bypasses frequency check
+              } catch {
+                // Non-critical — don't block compaction
+              }
+
+              // Replace messages with compacted version
+              messages.length = 0;
+              messages.push(...compactionResult.compactedMessages);
+              this.state.messages.length = 0;
+              this.state.messages.push(...compactionResult.compactedMessages);
+
+              // Inject work log after compaction to prevent amnesia
+              if (this.workLog?.hasContent()) {
+                const workLogMessage: Message = {
+                  role: 'user',
+                  content: this.workLog.toCompactString(),
+                };
+                messages.push(workLogMessage);
+                this.state.messages.push(workLogMessage);
+              }
+
+              // Context recovery: re-inject critical state after compaction
+              const recoveryParts: string[] = [];
+
+              // Goals
+              if (this.store) {
+                const goalsSummary = this.store.getGoalsSummary();
+                if (goalsSummary && goalsSummary !== 'No active goals.' && goalsSummary !== 'Goals feature not available.') {
+                  recoveryParts.push(goalsSummary);
+                }
+              }
+
+              // Junctures (last 5 key moments)
+              if (this.store) {
+                const juncturesSummary = this.store.getJuncturesSummary(undefined, 5);
+                if (juncturesSummary) {
+                  recoveryParts.push(juncturesSummary);
+                }
+              }
+
+              // Learnings from past patterns
+              if (this.learningStore) {
+                const learnings = this.learningStore.getLearningContext({ maxLearnings: 3 });
+                if (learnings) {
+                  recoveryParts.push(learnings);
+                }
+              }
+
+              if (recoveryParts.length > 0) {
+                const recoveryMessage: Message = {
+                  role: 'user',
+                  content: `[CONTEXT RECOVERY — Re-injected after compaction]\n\n${recoveryParts.join('\n\n')}`,
+                };
+                messages.push(recoveryMessage);
+                this.state.messages.push(recoveryMessage);
+              }
+
+              // Emit compaction event for observability
+              const compactionTokensAfter = this.estimateContextTokens(messages);
+              const compactionRecoveryInjected = recoveryParts.length > 0;
+              const compactionEvent = {
+                type: 'context.compacted',
+                tokensBefore: currentContextTokens,
+                tokensAfter: compactionTokensAfter,
+                recoveryInjected: compactionRecoveryInjected,
+              };
+              this.emit(compactionEvent as any);
+
+              // Record to trace collector for JSONL output
+              if (this.traceCollector) {
+                this.traceCollector.record({
+                  type: 'context.compacted',
+                  data: {
+                    tokensBefore: currentContextTokens,
+                    tokensAfter: compactionTokensAfter,
+                    recoveryInjected: compactionRecoveryInjected,
+                  },
+                });
+              }
             }
           } else if (compactionResult.status === 'hard_limit') {
             // Hard limit reached - this is serious, emit error
@@ -2311,6 +2595,14 @@ export class ProductionAgent {
               currentTokens: currentUsage.tokens,
               maxTokens: budget.maxTokens,
             });
+
+            // Also checkpoint before fallback compaction
+            try {
+              this.autoCheckpoint(true);
+            } catch {
+              // Non-critical
+            }
+
             this.compactToolOutputs();
           }
         }
@@ -2323,8 +2615,10 @@ export class ProductionAgent {
           const isExpensiveResult = sourceToolName === 'spawn_agent' || sourceToolName === 'spawn_agents_parallel';
 
           // Truncate long outputs to save context
-          if (content.length > MAX_TOOL_OUTPUT_CHARS) {
-            content = content.slice(0, MAX_TOOL_OUTPUT_CHARS) + `\n\n... [truncated ${content.length - MAX_TOOL_OUTPUT_CHARS} chars]`;
+          // Use larger limit for subagent results to preserve critical context
+          const effectiveMaxChars = isExpensiveResult ? MAX_TOOL_OUTPUT_CHARS * 2 : MAX_TOOL_OUTPUT_CHARS;
+          if (content.length > effectiveMaxChars) {
+            content = content.slice(0, effectiveMaxChars) + `\n\n... [truncated ${content.length - effectiveMaxChars} chars]`;
           }
 
           // =======================================================================
@@ -2465,10 +2759,16 @@ export class ProductionAgent {
       const maxContextTokens = (this.config.maxContextTokens ?? 80000) - reservedTokens;
       const codebaseBudget = Math.min(maxContextTokens * 0.3, 15000); // Up to 30% or 15K tokens
 
-      try {
-        // Use synchronous cache if available, otherwise skip
-        const repoMap = this.codebaseContext.getRepoMap();
-        if (repoMap) {
+      const repoMap = this.codebaseContext.getRepoMap();
+
+      // Lazy: trigger analysis on first system prompt build, ready by next turn
+      if (!repoMap && !this.codebaseAnalysisTriggered) {
+        this.codebaseAnalysisTriggered = true;
+        this.codebaseContext.analyze().catch(() => { /* non-fatal */ });
+      }
+
+      if (repoMap) {
+        try {
           const selection = this.selectRelevantCodeSync(task, codebaseBudget);
           if (selection.chunks.length > 0) {
             codebaseContextStr = buildContextFromChunks(selection.chunks, {
@@ -2476,10 +2776,13 @@ export class ProductionAgent {
               includeSeparators: true,
               maxTotalTokens: codebaseBudget,
             });
+          } else {
+            // Fallback: lightweight repo map when task-specific selection finds nothing
+            codebaseContextStr = generateLightweightRepoMap(repoMap, codebaseBudget);
           }
+        } catch {
+          // Selection error — skip
         }
-      } catch {
-        // Codebase analysis not ready yet - skip for this call
       }
     }
 
@@ -3019,6 +3322,12 @@ export class ProductionAgent {
 
           // Handle forbidden policy - always block
           if (evaluation.policy === 'forbidden') {
+            this.emit({
+              type: 'policy.tool.blocked',
+              tool: toolCall.name,
+              phase: 'enforced',
+              reason: `Forbidden by execution policy: ${evaluation.reason}`,
+            });
             throw new Error(`Forbidden by policy: ${evaluation.reason}`);
           }
 
@@ -3077,6 +3386,21 @@ export class ProductionAgent {
           );
 
           if (!validation.allowed) {
+            this.emit({
+              type: 'policy.tool.blocked',
+              tool: toolCall.name,
+              phase: 'enforced',
+              reason: validation.reason || 'Blocked by safety manager',
+            });
+            if (toolCall.name === 'bash') {
+              const args = toolCall.arguments as Record<string, unknown>;
+              this.emit({
+                type: 'policy.bash.blocked',
+                phase: 'enforced',
+                command: String(args.command || args.cmd || ''),
+                reason: validation.reason || 'Blocked by safety manager',
+              });
+            }
             throw new Error(`Tool call blocked: ${validation.reason}`);
           }
         }
@@ -4350,6 +4674,13 @@ export class ProductionAgent {
   }
 
   /**
+   * Get actual file paths modified during this agent's session.
+   */
+  getModifiedFilePaths(): string[] {
+    return this.economics?.getModifiedFilePaths() ?? [];
+  }
+
+  /**
    * Extend the budget limits.
    */
   extendBudget(extension: Partial<ExecutionBudget>): void {
@@ -4709,6 +5040,44 @@ export class ProductionAgent {
       // Filter tools for this agent
       let agentTools = filterToolsForAgent(agentDef, Array.from(this.tools.values()));
 
+      // Resolve policy profile FIRST so we know which tools the policy allows.
+      // This must happen before the recommendation filter so policy-allowed tools
+      // are preserved through the recommendation pruning step.
+      const inferredTaskType = agentDef.taskType ?? ToolRecommendationEngine.inferTaskType(agentName);
+      const policyResolution = resolvePolicyProfile({
+        policyEngine: this.config.policyEngine,
+        requestedProfile: agentDef.policyProfile,
+        swarmConfig: isSwarmWorker && this.config.swarm && typeof this.config.swarm === 'object'
+          ? this.config.swarm as SwarmConfig
+          : undefined,
+        taskType: inferredTaskType,
+        isSwarmWorker,
+        sandboxConfig: this.config.sandbox && typeof this.config.sandbox === 'object'
+          ? this.config.sandbox
+          : undefined,
+      });
+      this.emit({
+        type: 'policy.profile.resolved',
+        profile: policyResolution.profileName,
+        context: isSwarmWorker ? 'swarm' : 'subagent',
+        selectionSource: policyResolution.metadata.selectionSource,
+        usedLegacyMappings: policyResolution.metadata.usedLegacyMappings,
+        legacySources: policyResolution.metadata.legacyMappingSources,
+      });
+      if (policyResolution.metadata.usedLegacyMappings) {
+        this.emit({
+          type: 'policy.legacy.fallback.used',
+          profile: policyResolution.profileName,
+          sources: policyResolution.metadata.legacyMappingSources,
+          warnings: policyResolution.metadata.warnings,
+        });
+        this.observability?.logger?.warn('Policy legacy mappings used', {
+          agent: agentName,
+          profile: policyResolution.profileName,
+          sources: policyResolution.metadata.legacyMappingSources,
+        });
+      }
+
       // Apply tool recommendations to improve subagent focus (only for large tool sets)
       if (this.toolRecommendation && agentTools.length > 15) {
         const taskType = ToolRecommendationEngine.inferTaskType(agentName);
@@ -4719,10 +5088,30 @@ export class ProductionAgent {
           const recommendedNames = new Set(recommendations.map(r => r.toolName));
           // Always keep spawn tools even if not recommended
           const alwaysKeep = new Set(['spawn_agent', 'spawn_agents_parallel']);
+          // Also keep tools that the resolved policy profile explicitly allows.
+          // This prevents the recommendation engine from stripping tools that the
+          // security policy says the worker should have.
+          if (policyResolution.profile.allowedTools) {
+            for (const t of policyResolution.profile.allowedTools) alwaysKeep.add(t);
+          }
           agentTools = agentTools.filter(t =>
             recommendedNames.has(t.name) || alwaysKeep.has(t.name)
           );
         }
+      }
+
+      // Enforce unified tool policy at spawn-time so denied tools are never exposed.
+      if (policyResolution.profile.toolAccessMode === 'whitelist' && policyResolution.profile.allowedTools) {
+        const allowed = new Set(policyResolution.profile.allowedTools);
+        agentTools = agentTools.filter(t => allowed.has(t.name));
+      } else if (policyResolution.profile.deniedTools && policyResolution.profile.deniedTools.length > 0) {
+        const denied = new Set(policyResolution.profile.deniedTools);
+        agentTools = agentTools.filter(t => !denied.has(t.name));
+      }
+
+      // Fail fast if tool filtering resulted in zero tools — the worker can't do anything
+      if (agentTools.length === 0) {
+        throw new Error(`Worker '${agentName}' has zero available tools after filtering. Check toolAccessMode and policy profile '${policyResolution.profileName}'.`);
       }
 
       // Resolve model - abstract tiers (fast/balanced/quality) should use parent's model
@@ -4753,7 +5142,8 @@ export class ProductionAgent {
       const subagentConfig = this.config.subagent;
       const hasSubagentConfig = subagentConfig !== false && subagentConfig !== undefined;
 
-      // Timeout precedence: per-type config override > agent-type default > global config default
+      // Timeout precedence: agentDef.timeout > per-type config > agent-type default > global config default
+      // agentDef.timeout is set by worker-pool for swarm workers, giving them precise timeout control
       const agentTypeTimeout = getSubagentTimeout(agentName);
       const rawPerTypeTimeout = hasSubagentConfig
         ? (subagentConfig as { timeouts?: Record<string, number> }).timeouts?.[agentName]
@@ -4764,9 +5154,10 @@ export class ProductionAgent {
       // Validate: reject negative, NaN, or non-finite timeout values
       const isValidTimeout = (v: number | undefined): v is number =>
         v !== undefined && Number.isFinite(v) && v > 0;
+      const agentDefTimeout = isValidTimeout(agentDef.timeout) ? agentDef.timeout : undefined;
       const perTypeConfigTimeout = isValidTimeout(rawPerTypeTimeout) ? rawPerTypeTimeout : undefined;
       const globalConfigTimeout = isValidTimeout(rawGlobalTimeout) ? rawGlobalTimeout : undefined;
-      const subagentTimeout = perTypeConfigTimeout ?? agentTypeTimeout ?? globalConfigTimeout ?? 300000;
+      const subagentTimeout = agentDefTimeout ?? perTypeConfigTimeout ?? agentTypeTimeout ?? globalConfigTimeout ?? 300000;
 
       // Iteration precedence: per-type config override > agent-type default > global config default
       const agentTypeMaxIter = getSubagentMaxIterations(agentName);
@@ -4835,18 +5226,17 @@ export class ProductionAgent {
       const subagentBudgetMinutes = Math.round((SUBAGENT_BUDGET.maxDuration ?? 240000) / 60000);
 
       if (isSwarmWorker) {
-        // V6: Calmer resource awareness for swarm workers — prevents weaker models
-        // from confabulating budget warnings and wrapping up without doing work
+        // V8: Minimal resource awareness for swarm workers — removes budget/time
+        // messaging entirely to prevent cheap models from bail-out anxiety.
+        // The economics system handles budget warnings via system messages when needed.
+        // Wrapup JSON format is ONLY injected when requestWrapup() is called.
         constraintParts.push(
-          `**Resource Info:**\n` +
-          `- Token budget: ~${(subagentBudgetTokens / 1000).toFixed(0)}k tokens (you have plenty)\n` +
-          `- Time limit: ~${subagentBudgetMinutes} minutes\n` +
-          `- Focus on completing your task. Do NOT wrap up prematurely.\n` +
-          `- You will receive a system warning IF you approach budget limits. Until then, work normally.\n` +
-          `- **IMPORTANT:** Budget warnings come from the SYSTEM, not from your own assessment. ` +
-          `Do not preemptively claim budget issues.\n` +
-          `- **STRUCTURED WRAPUP:** When told to wrap up, respond with ONLY this JSON (no tool calls):\n` +
-          `  {"findings":[...], "actionsTaken":[...], "failures":[...], "remainingWork":[...], "suggestedNextSteps":[...]}`
+          `**Execution Mode:** You are a focused worker agent.\n` +
+          `- Complete your assigned task using tool calls.\n` +
+          `- Your FIRST action must be a tool call (read_file, write_file, edit_file, grep, glob, etc.).\n` +
+          `- To create files use write_file. To modify files use edit_file. Do NOT use bash for file operations.\n` +
+          `- You will receive a system message if you need to wrap up. Until then, work normally.\n` +
+          `- Do NOT produce summaries or reports — produce CODE and FILE CHANGES.`
         );
       } else {
         // Original RESOURCE AWARENESS text for regular subagents
@@ -4902,6 +5292,21 @@ export class ProductionAgent {
       const pooledBudget = this.getSubagentBudget(agentName, constraints);
       const poolAllocationId = pooledBudget.allocationId;
 
+      const deniedByProfile = new Set(policyResolution.profile.deniedTools ?? []);
+      const policyToolPolicies: Record<string, { policy: 'allow' | 'prompt' | 'forbidden'; reason?: string }> = {};
+      for (const toolName of deniedByProfile) {
+        policyToolPolicies[toolName] = {
+          policy: 'forbidden',
+          reason: `Denied by policy profile '${policyResolution.profileName}'`,
+        };
+      }
+      if ((policyResolution.profile.bashMode ?? 'full') === 'disabled') {
+        policyToolPolicies.bash = {
+          policy: 'forbidden',
+          reason: `Bash is disabled by policy profile '${policyResolution.profileName}'`,
+        };
+      }
+
       // Create a sub-agent with the agent's config
       // Use SUBAGENT_BUDGET to constrain resource usage (prevents runaway token consumption)
       const subAgent = new ProductionAgent({
@@ -4933,14 +5338,57 @@ export class ProductionAgent {
         // Lower context window for subagents so percentage-based compaction triggers earlier
         maxContextTokens: 80000,
         observability: this.config.observability,
-        sandbox: this.config.sandbox,
+        sandbox: (() => {
+          const swarm = this.config.swarm;
+          const extraCmds = swarm && typeof swarm === 'object' && swarm.permissions?.additionalAllowedCommands;
+          const baseSbx = this.config.sandbox;
+          if (baseSbx && typeof baseSbx === 'object') {
+            const sbx = baseSbx as SandboxConfig;
+            const allowedCommands = extraCmds
+              ? [...(sbx.allowedCommands || []), ...extraCmds]
+              : sbx.allowedCommands;
+            return {
+              ...sbx,
+              allowedCommands,
+              bashMode: policyResolution.profile.bashMode ?? sbx.bashMode,
+              bashWriteProtection: policyResolution.profile.bashWriteProtection ?? sbx.bashWriteProtection,
+              blockFileCreationViaBash:
+                (policyResolution.profile.bashWriteProtection ?? 'off') === 'block_file_mutation'
+                  ? true
+                  : sbx.blockFileCreationViaBash,
+            };
+          }
+          return baseSbx;
+        })(),
         humanInLoop: this.config.humanInLoop,
         // Subagents get 'allow' as default policy since they're already
         // constrained to their registered tool set. The parent's 'prompt'
         // policy can't work without humanInLoop.
-        executionPolicy: this.config.executionPolicy
-          ? { ...this.config.executionPolicy, defaultPolicy: 'allow' as const }
-          : this.config.executionPolicy,
+        executionPolicy: (() => {
+          const hasPolicyOverrides = Object.keys(policyToolPolicies).length > 0;
+          if (this.config.executionPolicy) {
+            return {
+              ...this.config.executionPolicy,
+              defaultPolicy: 'allow' as const,
+              toolPolicies: {
+                ...(this.config.executionPolicy.toolPolicies ?? {}),
+                ...policyToolPolicies,
+              },
+            };
+          }
+          if (hasPolicyOverrides) {
+            return {
+              enabled: true,
+              defaultPolicy: 'allow' as const,
+              toolPolicies: policyToolPolicies,
+              intentAware: false,
+            };
+          }
+          return this.config.executionPolicy;
+        })(),
+        policyEngine: this.config.policyEngine
+          ? { ...this.config.policyEngine, defaultProfile: policyResolution.profileName }
+          : this.config.policyEngine,
         threads: false,
         // Disable hooks console output in subagents - parent handles event display
         hooks: this.config.hooks === false ? false : {
@@ -4956,7 +5404,10 @@ export class ProductionAgent {
         fileCache: this.fileCache || undefined,
         // CONSTRAINED BUDGET: Use pooled budget when available, falling back to SUBAGENT_BUDGET
         // Pooled budget ensures total tree cost stays bounded by parent's budget
-        budget: pooledBudget.budget,
+        // Merge economicsTuning from agent definition so swarm workers get custom thresholds
+        budget: agentDef.economicsTuning
+          ? { ...pooledBudget.budget, tuning: agentDef.economicsTuning }
+          : pooledBudget.budget,
       });
 
       // CRITICAL: Subagent inherits parent's mode
@@ -4971,14 +5422,37 @@ export class ProductionAgent {
       // APPROVAL BATCHING (Improvement P6): Set approval scope for subagents
       // Read-only tools are auto-approved; write tools get scoped approval
       // This reduces interruptions from ~8 per session to ~1-2
-      subAgent.setApprovalScope({
-        autoApprove: ['read_file', 'list_files', 'glob', 'grep', 'show_file_history', 'show_session_changes'],
-        scopedApprove: {
-          write_file: { paths: ['src/', 'tests/', 'tools/'] },
-          edit_file: { paths: ['src/', 'tests/', 'tools/'] },
-        },
-        requireApproval: ['bash', 'delete_file'],
-      });
+      // Swarm permissions from config override defaults when present
+      const swarmPerms = this.config.swarm && typeof this.config.swarm === 'object'
+        ? (this.config.swarm as SwarmConfig).permissions : undefined;
+
+      const baseAutoApprove = ['read_file', 'list_files', 'glob', 'grep', 'show_file_history', 'show_session_changes'];
+      const baseScopedApprove: Record<string, { paths: string[] }> = isSwarmWorker
+        ? {
+            write_file: { paths: ['src/', 'tests/', 'tools/'] },
+            edit_file: { paths: ['src/', 'tests/', 'tools/'] },
+            bash: { paths: ['src/', 'tests/', 'tools/'] },
+          }
+        : {
+            write_file: { paths: ['src/', 'tests/', 'tools/'] },
+            edit_file: { paths: ['src/', 'tests/', 'tools/'] },
+          };
+      const baseRequireApproval = isSwarmWorker ? ['delete_file'] : ['bash', 'delete_file'];
+      const mergedScope = mergeApprovalScopeWithProfile({
+        autoApprove: swarmPerms?.autoApprove
+          ? [...new Set([...baseAutoApprove, ...swarmPerms.autoApprove])]
+          : baseAutoApprove,
+        scopedApprove: swarmPerms?.scopedApprove
+          ? { ...baseScopedApprove, ...swarmPerms.scopedApprove }
+          : baseScopedApprove,
+        // requireApproval: full replacement (not merge) — user may want to REMOVE
+        // tools like 'bash' to let workers run freely
+        requireApproval: swarmPerms?.requireApproval
+          ? swarmPerms.requireApproval
+          : baseRequireApproval,
+      }, policyResolution.profile);
+
+      subAgent.setApprovalScope(mergedScope);
 
       // Pass parent's iteration count to subagent for accurate budget tracking
       // This prevents subagents from consuming excessive iterations when parent already used many
@@ -5002,7 +5476,7 @@ export class ProductionAgent {
       // 1. Normal operation: progress extends idle timer
       // 2. Wrapup phase: 30s before hard kill, wrapup callback fires → forceTextOnly
       // 3. Hard kill: race() throws CancellationError after wrapup window
-      const IDLE_TIMEOUT = 120000; // 2 minutes without progress = timeout
+      const IDLE_TIMEOUT = agentDef.idleTimeout ?? 120000; // Configurable idle timeout (default: 2 min)
       let WRAPUP_WINDOW = 30000;
       let IDLE_CHECK_INTERVAL = 5000;
       if (this.config.subagent) {
@@ -5133,6 +5607,9 @@ export class ProductionAgent {
           'completed'
         );
 
+        // Extract real file paths from subagent's economics tracker (before cleanup)
+        const subagentFilePaths = subAgent.getModifiedFilePaths();
+
         const spawnResultFinal: SpawnResult = {
           success: result.success,
           output: finalOutput,
@@ -5142,6 +5619,7 @@ export class ProductionAgent {
             toolCalls: result.metrics.toolCalls,
           },
           structured,
+          filesModified: subagentFilePaths,
         };
 
         // Save full output to subagent output store (avoids telephone problem)
@@ -5153,7 +5631,7 @@ export class ProductionAgent {
             task,
             fullOutput: finalOutput,
             structured,
-            filesModified: [],
+            filesModified: subagentFilePaths,
             filesCreated: [],
             timestamp: new Date(),
             tokensUsed: result.metrics.totalTokens,
@@ -5321,6 +5799,9 @@ export class ProductionAgent {
             }
           }
 
+          // Extract real file paths from subagent's economics tracker (before cleanup)
+          const subagentFilePaths = subAgent.getModifiedFilePaths();
+
           // Unsubscribe from subagent events and cleanup gracefully
           unsubSubAgent();
           try {
@@ -5396,6 +5877,7 @@ export class ProductionAgent {
               toolCalls: subagentMetrics.toolCalls,
             },
             structured,
+            filesModified: subagentFilePaths,
           };
         }
         throw err; // Re-throw non-cancellation errors

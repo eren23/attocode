@@ -5,7 +5,7 @@
  * These events are emitted through the existing agent event system.
  */
 
-import type { SwarmStatus, SwarmExecutionStats, SwarmError, SwarmTask, OrchestratorDecision, ModelHealthRecord, VerificationResult, WaveReviewResult, WorkerRole } from './types.js';
+import type { SwarmStatus, SwarmExecutionStats, SwarmError, SwarmTask, OrchestratorDecision, ModelHealthRecord, VerificationResult, WaveReviewResult, WorkerRole, ArtifactInventory } from './types.js';
 
 // ─── Swarm Events ──────────────────────────────────────────────────────────
 
@@ -14,14 +14,14 @@ export type SwarmEvent =
   | { type: 'swarm.tasks.loaded'; tasks: SwarmTask[] }
   | { type: 'swarm.wave.start'; wave: number; totalWaves: number; taskCount: number }
   | { type: 'swarm.wave.complete'; wave: number; totalWaves: number; completed: number; failed: number; skipped: number }
-  | { type: 'swarm.task.dispatched'; taskId: string; description: string; model: string; workerName: string }
+  | { type: 'swarm.task.dispatched'; taskId: string; description: string; model: string; workerName: string; toolCount: number; tools?: string[]; retryContext?: { previousScore: number; previousFeedback: string; attempt: number }; fromModel?: string; attempts?: number }
   | { type: 'swarm.task.completed'; taskId: string; success: boolean; tokensUsed: number; costUsed: number; durationMs: number; qualityScore?: number; qualityFeedback?: string; output?: string; closureReport?: import('../agent-registry.js').StructuredClosureReport; toolCalls?: number }
-  | { type: 'swarm.task.failed'; taskId: string; error: string; attempt: number; maxAttempts: number; willRetry: boolean }
+  | { type: 'swarm.task.failed'; taskId: string; error: string; attempt: number; maxAttempts: number; willRetry: boolean; toolCalls?: number; failoverModel?: string; failureMode?: string }
   | { type: 'swarm.task.skipped'; taskId: string; reason: string }
-  | { type: 'swarm.quality.rejected'; taskId: string; score: number; feedback: string }
+  | { type: 'swarm.quality.rejected'; taskId: string; score: number; feedback: string; artifactCount: number; outputLength: number; preFlightReject?: boolean; filesOnDisk?: number }
   | { type: 'swarm.budget.update'; tokensUsed: number; tokensTotal: number; costUsed: number; costTotal: number }
   | { type: 'swarm.status'; status: SwarmStatus }
-  | { type: 'swarm.complete'; stats: SwarmExecutionStats; errors: SwarmError[] }
+  | { type: 'swarm.complete'; stats: SwarmExecutionStats; errors: SwarmError[]; artifactInventory?: ArtifactInventory }
   | { type: 'swarm.error'; error: string; phase: string; taskId?: string }
   // V2: Planning, review, verification events
   | { type: 'swarm.plan.complete'; criteriaCount: number; hasIntegrationPlan: boolean }
@@ -44,7 +44,22 @@ export type SwarmEvent =
   // V8: Wave failure recovery
   | { type: 'swarm.wave.allFailed'; wave: number }
   // V9: Phase progress for dashboard visibility during decomposition/planning
-  | { type: 'swarm.phase.progress'; phase: 'decomposing' | 'planning' | 'scheduling'; message: string };
+  | { type: 'swarm.phase.progress'; phase: 'decomposing' | 'planning' | 'scheduling'; message: string }
+  // V8: Orchestrator LLM call tracking
+  | { type: 'swarm.orchestrator.llm'; model: string; purpose: string; tokens: number; cost: number }
+  // V10: Per-attempt record for full decision traceability
+  | { type: 'swarm.task.attempt'; taskId: string; attempt: number; model: string;
+      success: boolean; durationMs: number; toolCalls: number;
+      failureMode?: string; qualityScore?: number; output?: string }
+  // V10: Resilience recovery attempt record
+  | { type: 'swarm.task.resilience'; taskId: string;
+      strategy: 'micro-decompose' | 'degraded-acceptance' | 'auto-split' | 'none';
+      succeeded: boolean; reason: string; artifactsFound: number; toolCalls: number }
+  // F15: All-probe-failure abort
+  | { type: 'swarm.abort'; reason: string }
+  // Mid-swarm re-planning and stall detection
+  | { type: 'swarm.replan'; stuckCount: number; newTaskCount: number }
+  | { type: 'swarm.stall'; progressRatio: number; attempted: number; completed: number };
 
 /**
  * Type guard for swarm events.
@@ -67,19 +82,24 @@ export function formatSwarmEvent(event: SwarmEvent): string {
     case 'swarm.wave.complete':
       return `Wave ${event.wave}/${event.totalWaves} complete: ${event.completed} done, ${event.failed} failed, ${event.skipped} skipped`;
     case 'swarm.task.dispatched':
-      return `Task ${event.taskId} → ${event.workerName} (${event.model}): ${event.description.slice(0, 80)}`;
+      return `Task ${event.taskId} → ${event.workerName} (${event.model}${event.fromModel ? `, was ${event.fromModel}` : ''}): ${event.description.slice(0, 80)}${event.toolCount >= 0 ? ` [${event.toolCount} tools]` : ''}`;
     case 'swarm.task.completed':
       return `Task ${event.taskId} ${event.success ? 'completed' : 'failed'} (${event.tokensUsed} tokens, $${event.costUsed.toFixed(4)}, ${(event.durationMs / 1000).toFixed(1)}s)`;
     case 'swarm.task.failed':
-      return `Task ${event.taskId} failed (attempt ${event.attempt}/${event.maxAttempts}): ${event.error}${event.willRetry ? ' — will retry' : ''}`;
+      return `Task ${event.taskId} failed (attempt ${event.attempt}/${event.maxAttempts}): ${event.error}${event.willRetry ? ' — will retry' : ''}${event.toolCalls !== undefined ? ` [${event.toolCalls === -1 ? 'timeout' : event.toolCalls + ' tools'}]` : ''}`;
     case 'swarm.task.skipped':
       return `Task ${event.taskId} skipped: ${event.reason}`;
     case 'swarm.quality.rejected':
-      return `Task ${event.taskId} rejected (score ${event.score}/5): ${event.feedback}`;
+      return `Task ${event.taskId} rejected (score ${event.score}/5): ${event.feedback} [artifacts: ${event.artifactCount}, output: ${event.outputLength} chars${event.preFlightReject ? ', pre-flight' : ''}]`;
     case 'swarm.budget.update':
       return `Budget: ${(event.tokensUsed / 1000).toFixed(0)}k/${(event.tokensTotal / 1000).toFixed(0)}k tokens, $${event.costUsed.toFixed(4)}/$${event.costTotal.toFixed(2)}`;
-    case 'swarm.complete':
-      return `Swarm complete: ${event.stats.completedTasks}/${event.stats.totalTasks} tasks, ${(event.stats.totalTokens / 1000).toFixed(0)}k tokens, $${event.stats.totalCost.toFixed(4)}`;
+    case 'swarm.complete': {
+      const base = `Swarm complete: ${event.stats.completedTasks}/${event.stats.totalTasks} tasks, ${(event.stats.totalTokens / 1000).toFixed(0)}k tokens, $${event.stats.totalCost.toFixed(4)}`;
+      const artifacts = event.artifactInventory?.totalFiles
+        ? `, ${event.artifactInventory.totalFiles} files on disk (${(event.artifactInventory.totalBytes / 1024).toFixed(1)}KB)`
+        : '';
+      return base + artifacts;
+    }
     case 'swarm.status':
       return `Swarm: wave ${event.status.currentWave}/${event.status.totalWaves}, ${event.status.activeWorkers.length} workers active`;
     case 'swarm.error':
@@ -123,5 +143,17 @@ export function formatSwarmEvent(event: SwarmEvent): string {
       return `Wave ${event.wave}: ALL tasks failed — attempting recovery`;
     case 'swarm.phase.progress':
       return `[${event.phase}] ${event.message}`;
+    case 'swarm.orchestrator.llm':
+      return `Orchestrator LLM (${event.purpose}): ${event.model.split('/').pop() ?? event.model}, ${event.tokens} tokens, $${event.cost.toFixed(4)}`;
+    case 'swarm.task.attempt':
+      return `Task ${event.taskId} attempt ${event.attempt}: ${event.success ? 'success' : 'failed'} (${event.model.split('/').pop() ?? event.model}, ${(event.durationMs / 1000).toFixed(1)}s, ${event.toolCalls === -1 ? 'timeout' : event.toolCalls + ' tools'}${event.failureMode ? `, ${event.failureMode}` : ''})`;
+    case 'swarm.task.resilience':
+      return `Task ${event.taskId} resilience: ${event.strategy} — ${event.succeeded ? 'recovered' : 'failed'} (${event.reason}, ${event.artifactsFound} artifacts, ${event.toolCalls} tools)`;
+    case 'swarm.abort':
+      return `Swarm ABORTED: ${event.reason}`;
+    case 'swarm.replan':
+      return `Swarm re-planned: ${event.stuckCount} stuck tasks → ${event.newTaskCount} new tasks`;
+    case 'swarm.stall':
+      return `Swarm stalled: ${event.completed}/${event.attempted} tasks succeeded (${(event.progressRatio * 100).toFixed(0)}%)`;
   }
 }

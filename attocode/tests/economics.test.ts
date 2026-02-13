@@ -9,6 +9,7 @@
 import { describe, it, expect, vi } from 'vitest';
 import {
   createEconomicsManager,
+  extractBashFileTarget,
   QUICK_BUDGET,
   STANDARD_BUDGET,
   SUBAGENT_BUDGET,
@@ -712,5 +713,35 @@ describe('Utility Methods', () => {
     expect(result.isHardLimit).toBe(false);
     expect(result.isSoftLimit).toBe(false);
     expect(result.suggestedAction).toBe('continue');
+  });
+});
+
+// =============================================================================
+// extractBashFileTarget (W1)
+// =============================================================================
+
+describe('W1: extractBashFileTarget', () => {
+  it('extracts path from cat command', () => {
+    expect(extractBashFileTarget('cat /src/foo.ts')).toBe('/src/foo.ts');
+  });
+
+  it('extracts path from head with flags', () => {
+    expect(extractBashFileTarget('head -20 /src/foo.ts')).toBe('/src/foo.ts');
+  });
+
+  it('extracts path from tail command', () => {
+    expect(extractBashFileTarget('tail -200 src/agent.ts')).toBe('src/agent.ts');
+  });
+
+  it('returns null for piped commands', () => {
+    expect(extractBashFileTarget('cat foo.ts | grep test')).toBe(null);
+  });
+
+  it('returns null for non-file-read commands', () => {
+    expect(extractBashFileTarget('npm test')).toBe(null);
+  });
+
+  it('returns null for commands with redirects', () => {
+    expect(extractBashFileTarget('cat foo.ts > out.txt')).toBe(null);
   });
 });

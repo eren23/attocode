@@ -11,22 +11,39 @@ import {
 const ALL_TOOLS = [
   'read_file', 'write_file', 'edit_file', 'bash',
   'glob', 'grep', 'list_files', 'search_files', 'search_code',
-  'get_file_info', 'spawn_agent',
+  'get_file_info', 'spawn_agent', 'web_search',
+  'task_create', 'task_update', 'task_get', 'task_list',
   'mcp_playwright_navigate', 'mcp_playwright_click',
   'mcp_serper_search',
   'mcp_context7_query',
 ];
 
 describe('ToolRecommendationEngine', () => {
-  it('should recommend read-only tools for research tasks', () => {
+  it('should recommend read and write tools for research tasks', () => {
     const engine = new ToolRecommendationEngine();
     const recs = engine.recommendTools('analyze code patterns', 'research', ALL_TOOLS);
     const names = recs.map(r => r.toolName);
     expect(names).toContain('read_file');
     expect(names).toContain('glob');
     expect(names).toContain('grep');
-    expect(names).not.toContain('write_file');
-    expect(names).not.toContain('edit_file');
+    // Research tasks now include write tools so workers can produce report files
+    expect(names).toContain('write_file');
+    expect(names).toContain('edit_file');
+  });
+
+  it('should recommend web_search for research tasks', () => {
+    const engine = new ToolRecommendationEngine();
+    const recs = engine.recommendTools('research market trends', 'research', ALL_TOOLS);
+    const names = recs.map(r => r.toolName);
+    expect(names).toContain('web_search');
+  });
+
+  it('should recommend task coordination tools for implement tasks', () => {
+    const engine = new ToolRecommendationEngine();
+    const recs = engine.recommendTools('implement feature', 'implement', ALL_TOOLS);
+    const names = recs.map(r => r.toolName);
+    expect(names).toContain('task_create');
+    expect(names).toContain('task_update');
   });
 
   it('should recommend write tools for implement tasks', () => {
@@ -125,10 +142,26 @@ describe('inferTaskType', () => {
     expect(ToolRecommendationEngine.inferTaskType('debugger')).toBe('analysis');
     expect(ToolRecommendationEngine.inferTaskType('tester')).toBe('test');
     expect(ToolRecommendationEngine.inferTaskType('documenter')).toBe('document');
+    expect(ToolRecommendationEngine.inferTaskType('synthesizer')).toBe('merge');
+    expect(ToolRecommendationEngine.inferTaskType('writer')).toBe('document');
+    expect(ToolRecommendationEngine.inferTaskType('merger')).toBe('merge');
   });
 
   it('should default to research for unknown agent', () => {
     expect(ToolRecommendationEngine.inferTaskType('unknown')).toBe('research');
+  });
+
+  it('should map dynamic swarm worker names by role token', () => {
+    expect(ToolRecommendationEngine.inferTaskType('swarm-coder-task-1')).toBe('implement');
+    expect(ToolRecommendationEngine.inferTaskType('swarm-tester-task-2')).toBe('test');
+    expect(ToolRecommendationEngine.inferTaskType('swarm-reviewer-task-3')).toBe('review');
+    expect(ToolRecommendationEngine.inferTaskType('swarm-researcher-task-4')).toBe('research');
+    expect(ToolRecommendationEngine.inferTaskType('swarm-synthesizer-task-5')).toBe('merge');
+    expect(ToolRecommendationEngine.inferTaskType('swarm-writer-task-6')).toBe('document');
+  });
+
+  it('should default unknown swarm workers to implement', () => {
+    expect(ToolRecommendationEngine.inferTaskType('swarm-foo-task-9')).toBe('implement');
   });
 });
 

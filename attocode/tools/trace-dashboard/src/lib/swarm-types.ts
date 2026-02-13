@@ -65,7 +65,11 @@ export interface SwarmTask {
   assignedModel?: string;
   result?: SwarmTaskResult;
   attempts: number;
-  retryContext?: { previousFeedback: string; previousScore: number; attempt: number };
+  retryContext?: { previousFeedback: string; previousScore: number; attempt: number; previousModel?: string };
+  /** Number of tools available to the worker (-1 = all tools) */
+  toolCount?: number;
+  /** List of tool names available to the worker */
+  tools?: string[];
   /** Timestamp when this task was dispatched to a worker */
   dispatchedAt?: number;
 }
@@ -82,6 +86,7 @@ export interface TaskDetail {
     remainingWork?: string[];
   };
   toolCalls?: number;
+  failoverModel?: string;
 }
 
 export interface SwarmStatus {
@@ -103,14 +108,22 @@ export interface SwarmStatus {
     costUsed: number;
     costTotal: number;
   };
+  orchestrator?: {
+    tokens: number;
+    cost: number;
+    calls: number;
+    model: string;
+  };
 }
 
 // ─── Event Types ──────────────────────────────────────────────────────────────
 
 export type SwarmEventType =
   | 'swarm.start'
+  | 'swarm.tasks.loaded'
   | 'swarm.wave.start'
   | 'swarm.wave.complete'
+  | 'swarm.wave.allFailed'
   | 'swarm.task.dispatched'
   | 'swarm.task.completed'
   | 'swarm.task.failed'
@@ -130,9 +143,13 @@ export type SwarmEventType =
   | 'swarm.model.failover'
   | 'swarm.model.health'
   | 'swarm.orchestrator.decision'
+  | 'swarm.orchestrator.llm'
   | 'swarm.fixup.spawned'
   | 'swarm.circuit.open'
   | 'swarm.circuit.closed'
+  | 'swarm.state.checkpoint'
+  | 'swarm.state.resume'
+  | 'swarm.worker.stuck'
   // V3: Hierarchy role events
   | 'swarm.role.action'
   // V9: Phase progress

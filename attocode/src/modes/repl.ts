@@ -27,6 +27,10 @@ import {
   type DeadLetterQueue,
 } from '../integrations/index.js';
 import { initModelCache } from '../integrations/openrouter-pricing.js';
+import {
+  DEFAULT_POLICY_ENGINE_CONFIG,
+  DEFAULT_SANDBOX_CONFIG,
+} from '../defaults.js';
 
 import {
   persistenceDebug,
@@ -155,12 +159,17 @@ export async function startProductionREPL(
       } : undefined,
     },
     sandbox: {
+      ...DEFAULT_SANDBOX_CONFIG,
       enabled: true,
-      isolation: 'process',
-      allowedCommands: ['node', 'npm', 'npx', 'yarn', 'git', 'ls', 'cat', 'head', 'tail', 'grep', 'find', 'echo', 'pwd'],
-      blockedCommands: ['rm -rf /', 'sudo', 'chmod 777'],
-      resourceLimits: { timeout: 60000 },
+      resourceLimits: {
+        ...DEFAULT_SANDBOX_CONFIG.resourceLimits,
+        timeout: 60000,
+      },
       allowedPaths: [process.cwd(), process.env.HOME || '/Users', '/tmp'],
+    },
+    policyEngine: {
+      ...DEFAULT_POLICY_ENGINE_CONFIG,
+      enabled: true,
     },
     humanInLoop: {
       enabled: permissionMode === 'interactive',

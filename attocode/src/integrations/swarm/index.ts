@@ -31,6 +31,8 @@ export type {
   SwarmCheckpoint,
   OrchestratorDecision,
   WorkerConversationEntry,
+  ArtifactEntry,
+  ArtifactInventory,
 } from './types.js';
 export { DEFAULT_SWARM_CONFIG, subtaskToSwarmTask, taskResultToAgentOutput, SUBTASK_TO_CAPABILITY } from './types.js';
 

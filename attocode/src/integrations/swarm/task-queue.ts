@@ -6,9 +6,36 @@
  * manages status transitions, and builds dependency context for workers.
  */
 
+import * as fs from 'node:fs';
+import * as path from 'node:path';
 import type { SmartDecompositionResult, ResourceConflict } from '../smart-decomposer.js';
-import type { SwarmTask, SwarmTaskResult, SwarmConfig, FixupTask, SwarmCheckpoint } from './types.js';
+import type { SwarmTask, SwarmTaskResult, SwarmConfig, FixupTask, SwarmCheckpoint, TaskFailureMode } from './types.js';
 import { subtaskToSwarmTask } from './types.js';
+
+/** P6: Failure-mode-specific thresholds — more lenient for external failures, stricter for quality. */
+const FAILURE_MODE_THRESHOLDS: Record<TaskFailureMode, number> = {
+  'timeout': 0.3,
+  'rate-limit': 0.3,
+  'error': 0.5,
+  'quality': 0.7,
+  'hollow': 0.7,
+  'cascade': 0.8,
+};
+
+/** P6: Get the effective threshold for a task based on its failed dependencies' failure modes.
+ *  Uses the most lenient (lowest) threshold among failed deps, since that indicates
+ *  the least fault in the workers. Falls back to the configured threshold. */
+function getEffectiveThreshold(failedDeps: SwarmTask[], configuredThreshold: number): number {
+  if (failedDeps.length === 0) return configuredThreshold;
+  let minThreshold = configuredThreshold;
+  for (const dep of failedDeps) {
+    if (dep.failureMode) {
+      const modeThreshold = FAILURE_MODE_THRESHOLDS[dep.failureMode];
+      if (modeThreshold < minThreshold) minThreshold = modeThreshold;
+    }
+  }
+  return minThreshold;
+}
 
 // ─── Task Queue ────────────────────────────────────────────────────────────
 
@@ -19,6 +46,8 @@ export class SwarmTaskQueue {
   private currentWave = 0;
   private onCascadeSkipCallback?: (taskId: string, reason: string) => void;
   private partialDependencyThreshold = 0.5;
+  private artifactAwareSkip = true;
+  private workingDirectory = process.cwd();
 
   /**
    * Load tasks from a SmartDecompositionResult.
@@ -30,6 +59,8 @@ export class SwarmTaskQueue {
     this.waves = [];
     this.conflicts = result.conflicts;
     this.partialDependencyThreshold = config.partialDependencyThreshold ?? 0.5;
+    this.artifactAwareSkip = config.artifactAwareSkip ?? true;
+    if (config.facts?.workingDirectory) this.workingDirectory = config.facts.workingDirectory;
 
     const { subtasks, dependencyGraph } = result;
     const parallelGroups = dependencyGraph.parallelGroups;
@@ -120,7 +151,7 @@ export class SwarmTaskQueue {
         const dep = this.tasks.get(depId);
         if (!dep) continue;
 
-        if (dep.status === 'completed') {
+        if (dep.status === 'completed' || dep.status === 'decomposed') {
           completedCount++;
           resolvedCount++;
           succeededDeps.push(dep.description);
@@ -144,9 +175,13 @@ export class SwarmTaskQueue {
         task.status = 'ready';
         task.dependencyContext = this.buildDependencyContext(task);
       } else {
-        // Some deps failed — check partial threshold
+        // P6: Some deps failed — check failure-mode-aware threshold
+        const failedDepTasks = task.dependencies
+          .map(id => this.tasks.get(id))
+          .filter((d): d is SwarmTask => !!d && (d.status === 'failed' || d.status === 'skipped'));
+        const effectiveThreshold = getEffectiveThreshold(failedDepTasks, this.partialDependencyThreshold);
         const ratio = completedCount / task.dependencies.length;
-        if (ratio >= this.partialDependencyThreshold) {
+        if (ratio >= effectiveThreshold) {
           // Enough succeeded — dispatch with partial context
           task.status = 'ready';
           task.partialContext = { succeeded: succeededDeps, failed: failedDeps, ratio };
@@ -155,7 +190,7 @@ export class SwarmTaskQueue {
           // Too many failures — skip
           task.status = 'skipped';
           this.onCascadeSkipCallback?.(task.id,
-            `${failedDeps.length}/${task.dependencies.length} dependencies failed (ratio ${ratio.toFixed(2)} < threshold ${this.partialDependencyThreshold})`);
+            `${failedDeps.length}/${task.dependencies.length} dependencies failed (ratio ${ratio.toFixed(2)} < threshold ${effectiveThreshold.toFixed(2)})`);
         }
       }
     }
@@ -168,6 +203,15 @@ export class SwarmTaskQueue {
   private buildDependencyContext(task: SwarmTask): string {
     const parts: string[] = [];
     const emptyDeps: string[] = [];
+
+    // Add rescue context warning if this task was un-skipped
+    if (task.rescueContext) {
+      parts.push(
+        `⚠ RESCUED TASK: ${task.rescueContext}`,
+        'Some dependencies may be missing or degraded. Check file artifacts on disk before assuming output exists.',
+        '',
+      );
+    }
 
     // Add partial dependency warning if applicable
     if (task.partialContext) {
@@ -188,6 +232,16 @@ export class SwarmTaskQueue {
         ? dep.result.closureReport.findings.join('\n') + '\n' + dep.result.closureReport.actionsTaken.join('\n')
         : dep.result.output.slice(0, 500);
 
+      // F24b: Append files created/modified by this dependency
+      const fileList = dep.result.filesModified?.length
+        ? `\nFiles created/modified: ${dep.result.filesModified.join(', ')}`
+        : '';
+
+      // Degraded dependency warning — task completed but quality was low
+      const degradedWarning = dep.degraded
+        ? '\n⚠ DEGRADED: This dependency was accepted with partial/low-quality output. Verify its artifacts before relying on them.'
+        : '';
+
       // V6: Detect hollow dependency output — both conditions must be true:
       // short output AND budget/unable failures (so legitimate short completions pass through)
       const isHollow = summary.trim().length < 100 &&
@@ -196,7 +250,7 @@ export class SwarmTaskQueue {
       if (isHollow) {
         emptyDeps.push(dep.description);
       } else {
-        parts.push(`[Dependency: ${dep.description}]\n${summary}`);
+        parts.push(`[Dependency: ${dep.description}]${degradedWarning}\n${summary}${fileList}`);
       }
     }
 
@@ -274,10 +328,12 @@ export class SwarmTaskQueue {
   markCompleted(taskId: string, result: SwarmTaskResult): void {
     const task = this.tasks.get(taskId);
     if (!task) return;
-    // Don't overwrite terminal states (task may have been cascade-skipped while worker was running)
+    // Don't overwrite terminal states (unless pendingCascadeSkip — see F4)
     if (task.status === 'skipped' || task.status === 'failed') return;
     task.status = 'completed';
     task.result = result;
+    // F4: Clear pendingCascadeSkip since we accepted the result
+    task.pendingCascadeSkip = undefined;
 
     // Update dependent tasks' ready status
     this.updateReadyStatus();
@@ -305,17 +361,98 @@ export class SwarmTaskQueue {
   }
 
   /**
+   * Mark a task as failed WITHOUT triggering cascade skip.
+   * Returns true if the task can be retried (attempts < maxAttempts).
+   * Caller is responsible for calling triggerCascadeSkip() if recovery fails.
+   */
+  markFailedWithoutCascade(taskId: string, maxRetries: number): boolean {
+    const task = this.tasks.get(taskId);
+    if (!task) return false;
+
+    if (task.attempts <= maxRetries) {
+      task.status = 'ready';
+      return true;
+    }
+
+    task.status = 'failed';
+    // Do NOT call cascadeSkip — caller will trigger it manually after recovery attempt
+    return false;
+  }
+
+  /**
+   * Manually trigger cascade skip for a failed task's dependents.
+   * Call this after resilience recovery has been attempted and failed.
+   */
+  triggerCascadeSkip(taskId: string): void {
+    this.cascadeSkip(taskId);
+  }
+
+  /**
+   * Un-skip dependents of a task that was recovered (e.g., via resilience recovery).
+   * Checks if all dependencies are now satisfied and restores skipped tasks to ready.
+   */
+  unSkipDependents(taskId: string): void {
+    for (const [, task] of this.tasks) {
+      if (task.status === 'skipped' && task.dependencies.includes(taskId)) {
+        const allDepsSatisfied = task.dependencies.every(depId => {
+          const dep = this.tasks.get(depId);
+          return dep && (dep.status === 'completed' || dep.status === 'decomposed');
+        });
+        if (allDepsSatisfied) {
+          task.status = 'ready';
+          task.dependencyContext = this.buildDependencyContext(task);
+        }
+      }
+    }
+  }
+
+  /**
    * Cascade failure to dependent tasks, respecting partial dependency threshold.
    * Tasks with enough successful deps are kept ready/pending rather than skipped.
    */
   private cascadeSkip(failedTaskId: string): void {
     for (const [, task] of this.tasks) {
-      // H5: Also skip dispatched tasks whose dependency failed
+      // H5: Also handle dispatched tasks whose dependency failed
       if (task.status !== 'pending' && task.status !== 'ready' && task.status !== 'dispatched') continue;
 
       // Only consider direct dependents — transitive deps are handled recursively
       // when a direct dependent gets skipped (it will trigger another cascadeSkip)
       if (!this.dependsOn(task.id, failedTaskId)) continue;
+
+      // Artifact-aware skip: before cascade-skipping, check if the failed dependency's
+      // target files already exist on disk with content. If they do, the worker DID produce
+      // the files even though the task "failed" (timeout, quality gate, etc.).
+      if (this.artifactAwareSkip) {
+        const failedTask = this.tasks.get(failedTaskId);
+        const targetFiles = failedTask?.targetFiles ?? [];
+        if (targetFiles.length > 0) {
+          const existingCount = targetFiles.filter(f => {
+            try {
+              const resolved = path.resolve(this.workingDirectory, f);
+              return fs.statSync(resolved).size > 0;
+            } catch { return false; }
+          }).length;
+          if (existingCount >= targetFiles.length * 0.5) {
+            // Most target files exist — treat failure as less severe, keep dependent ready
+            const succeededDeps: string[] = [];
+            const failedDeps: string[] = [];
+            for (const depId of task.dependencies) {
+              const dep = this.tasks.get(depId);
+              if (!dep) continue;
+              if (dep.status === 'completed') succeededDeps.push(dep.description);
+              else failedDeps.push(`${dep.description} (failed but ${existingCount}/${targetFiles.length} files exist)`);
+            }
+            task.status = 'ready';
+            task.partialContext = {
+              succeeded: succeededDeps,
+              failed: failedDeps,
+              ratio: succeededDeps.length / task.dependencies.length,
+            };
+            task.dependencyContext = this.buildDependencyContext(task);
+            continue;
+          }
+        }
+      }
 
       // Check partial dependency threshold
       if (task.dependencies.length > 1) {
@@ -333,8 +470,12 @@ export class SwarmTaskQueue {
         const resolvedCount = completedCount + failedOrSkippedCount;
         if (resolvedCount < task.dependencies.length) continue;
 
+        const failedDepTasks = task.dependencies
+          .map(id => this.tasks.get(id))
+          .filter((d): d is SwarmTask => !!d && (d.status === 'failed' || d.status === 'skipped'));
+        const effectiveThreshold = getEffectiveThreshold(failedDepTasks, this.partialDependencyThreshold);
         const ratio = completedCount / task.dependencies.length;
-        if (ratio >= this.partialDependencyThreshold) {
+        if (ratio >= effectiveThreshold) {
           // Enough deps succeeded — mark ready with partial context instead of skipping
           const succeededDeps: string[] = [];
           const failedDeps: string[] = [];
@@ -351,8 +492,47 @@ export class SwarmTaskQueue {
         }
       }
 
-      task.status = 'skipped';
-      this.onCascadeSkipCallback?.(task.id, `dependency ${failedTaskId} failed`);
+      // F25c: Timeout-lenient cascade — when a dependency failed due to timeout,
+      // don't cascade-skip dependents. Instead mark them ready with partial context.
+      // Timeouts mean the worker was working but ran out of time — the dependent
+      // worker can discover what files actually exist and compensate.
+      const failedTask = this.tasks.get(failedTaskId);
+      if (failedTask?.failureMode === 'timeout') {
+        if (task.status === 'dispatched') {
+          // Already running — don't interfere
+          this.onCascadeSkipCallback?.(task.id,
+            `dependency ${failedTaskId} timed out — dispatched task allowed to complete`);
+          continue;
+        }
+        const succeededDeps: string[] = [];
+        const failedDeps: string[] = [];
+        for (const depId of task.dependencies) {
+          const dep = this.tasks.get(depId);
+          if (!dep) continue;
+          if (dep.status === 'completed') succeededDeps.push(dep.description);
+          else failedDeps.push(`${dep.description} (timed out — output may be incomplete)`);
+        }
+        task.status = 'ready';
+        task.partialContext = {
+          succeeded: succeededDeps,
+          failed: failedDeps,
+          ratio: succeededDeps.length / task.dependencies.length,
+        };
+        task.dependencyContext = this.buildDependencyContext(task);
+        this.onCascadeSkipCallback?.(task.id,
+          `dependency ${failedTaskId} timed out — proceeding with partial context`);
+        continue;
+      }
+
+      // F4: For dispatched tasks (worker still running), set pendingCascadeSkip
+      // instead of immediately skipping. The result will be evaluated when it arrives.
+      if (task.status === 'dispatched') {
+        task.pendingCascadeSkip = true;
+        this.onCascadeSkipCallback?.(task.id, `dependency ${failedTaskId} failed (pending — worker still running)`);
+      } else {
+        task.status = 'skipped';
+        this.onCascadeSkipCallback?.(task.id, `dependency ${failedTaskId} failed`);
+      }
     }
   }
 
@@ -380,7 +560,7 @@ export class SwarmTaskQueue {
     const waveTaskIds = this.waves[this.currentWave];
     return waveTaskIds.every(id => {
       const task = this.tasks.get(id);
-      return task && (task.status === 'completed' || task.status === 'failed' || task.status === 'skipped');
+      return task && (task.status === 'completed' || task.status === 'failed' || task.status === 'skipped' || task.status === 'decomposed');
     });
   }
 
@@ -406,6 +586,65 @@ export class SwarmTaskQueue {
       }
     }
     return true;
+  }
+
+  /**
+   * Replace a task with subtasks from micro-decomposition.
+   * Marks original task as 'decomposed', inserts subtasks into its wave,
+   * and updates dependency graph so anything depending on the original
+   * now depends on ALL subtasks.
+   */
+  replaceWithSubtasks(originalTaskId: string, subtasks: SwarmTask[]): void {
+    const original = this.tasks.get(originalTaskId);
+    if (!original) return;
+
+    original.status = 'decomposed';
+    original.subtaskIds = subtasks.map(s => s.id);
+
+    // Insert subtasks
+    for (const sub of subtasks) {
+      sub.parentTaskId = originalTaskId;
+      // Subtasks inherit the original's dependencies
+      sub.dependencies = [...original.dependencies];
+      sub.wave = original.wave;
+      this.tasks.set(sub.id, sub);
+    }
+
+    // Update dependency graph: anything that depended on original now depends on ALL subtasks
+    for (const [, task] of this.tasks) {
+      if (task.id === originalTaskId) continue;
+      if (task.subtaskIds?.length) continue; // Skip the original itself
+      const depIndex = task.dependencies.indexOf(originalTaskId);
+      if (depIndex !== -1) {
+        task.dependencies.splice(depIndex, 1, ...subtasks.map(s => s.id));
+      }
+    }
+
+    // Add subtask IDs to the wave
+    const waveIdx = original.wave;
+    if (waveIdx < this.waves.length) {
+      this.waves[waveIdx].push(...subtasks.map(s => s.id));
+    }
+
+    this.updateReadyStatus();
+  }
+
+  /**
+   * Get all tasks that were cascade-skipped.
+   */
+  getSkippedTasks(): SwarmTask[] {
+    return [...this.tasks.values()].filter(t => t.status === 'skipped');
+  }
+
+  /**
+   * Un-skip a task, setting it to 'ready' with rescue context.
+   */
+  rescueTask(taskId: string, rescueContext: string): void {
+    const task = this.tasks.get(taskId);
+    if (!task || task.status !== 'skipped') return;
+    task.status = 'ready';
+    task.rescueContext = rescueContext;
+    task.dependencyContext = this.buildDependencyContext(task);
   }
 
   /**
@@ -449,6 +688,7 @@ export class SwarmTaskQueue {
         case 'completed': completed++; break;
         case 'failed': failed++; break;
         case 'skipped': skipped++; break;
+        case 'decomposed': completed++; break; // Decomposed tasks count as completed (replaced by subtasks)
       }
     }
 
@@ -501,6 +741,35 @@ export class SwarmTaskQueue {
         task.assignedModel = ts.assignedModel;
       }
     }
+  }
+
+  /**
+   * Add re-planned tasks from mid-swarm re-planning.
+   * Inserts new tasks into the specified wave and marks them ready.
+   */
+  addReplanTasks(subtasks: Array<{ description: string; type: string; complexity: number; dependencies: string[]; relevantFiles?: string[] }>, wave: number): SwarmTask[] {
+    const newTasks: SwarmTask[] = [];
+    for (const st of subtasks) {
+      const id = `replan-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+      const task: SwarmTask = {
+        id,
+        description: st.description,
+        type: st.type as SwarmTask['type'],
+        dependencies: st.dependencies,
+        status: 'ready',
+        complexity: Math.max(3, st.complexity),
+        wave,
+        targetFiles: st.relevantFiles,
+        attempts: 1,
+        rescueContext: 'Re-planned from stalled swarm',
+      };
+      this.tasks.set(id, task);
+      newTasks.push(task);
+    }
+    // Add to wave
+    if (!this.waves[wave]) this.waves[wave] = [];
+    this.waves[wave].push(...newTasks.map(t => t.id));
+    return newTasks;
   }
 
   /**

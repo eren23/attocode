@@ -35,10 +35,19 @@ export interface AgentDefinition {
   model?: 'fast' | 'balanced' | 'quality' | string;
   maxTokenBudget?: number;
   maxIterations?: number;
+  timeout?: number;              // Timeout in ms (passed to spawnAgent, highest priority)
   capabilities?: string[];       // Used for NL matching
   tags?: string[];               // Additional tags for discovery
   /** Control MCP tool access: true = all MCP tools (default), false = none, string[] = specific names */
   allowMcpTools?: boolean | string[];
+  /** Optional named policy profile */
+  policyProfile?: string;
+  /** Optional explicit task type hint for policy/tool resolution */
+  taskType?: string;
+  /** Optional idle timeout override in ms (time without tool calls before kill) */
+  idleTimeout?: number;
+  /** Optional economics tuning overrides for doom loop/exploration thresholds */
+  economicsTuning?: import('./economics.js').EconomicsTuning;
 }
 
 /**
@@ -80,6 +89,8 @@ export interface SpawnResult {
   structured?: StructuredClosureReport;
   /** Reference ID in SubagentOutputStore for retrieving full output */
   outputStoreId?: string;
+  /** Actual file paths modified by the subagent (from economics tracker) */
+  filesModified?: string[];
 }
 
 /**

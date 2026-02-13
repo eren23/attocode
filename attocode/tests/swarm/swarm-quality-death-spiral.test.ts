@@ -82,7 +82,7 @@ function makeMockRegistry() {
 
 describe('Quality circuit breaker', () => {
   it('should disable quality gates after 8 consecutive rejections', async () => {
-    const config = makeConfig({ qualityGates: true, workerRetries: 2, maxConcurrency: 5, dispatchStaggerMs: 0 });
+    const config = makeConfig({ qualityGates: true, workerRetries: 2, maxConcurrency: 5, dispatchStaggerMs: 0, probeModels: false });
 
     // Need enough tasks × attempts to reach 8 consecutive rejections.
     // With workerRetries=2: each task gets 2 quality-gated attempts (3rd skips gate).
@@ -184,6 +184,7 @@ describe('Artifact auto-fail and model failover', () => {
     const config = makeConfig({
       qualityGates: true,
       workerRetries: 0, // no retries to simplify
+      probeModels: false, // Skip probe — this test is about artifact auto-fail, not probe behavior
     });
 
     // The quality gate will auto-fail because target files don't exist,

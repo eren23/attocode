@@ -276,11 +276,19 @@ export function yamlToSwarmConfig(yaml: SwarmYamlConfig, orchestratorModel: stri
       if (w.persona) spec.persona = String(w.persona);
       if (w.role) spec.role = String(w.role) as SwarmWorkerSpec['role'];
       if (w.maxTokens) spec.maxTokens = Number(w.maxTokens);
+      if (w.policyProfile) spec.policyProfile = String(w.policyProfile);
       if (w.allowedTools && Array.isArray(w.allowedTools)) {
         spec.allowedTools = w.allowedTools.map(String);
       }
       if (w.deniedTools && Array.isArray(w.deniedTools)) {
         spec.deniedTools = w.deniedTools.map(String);
+      }
+      if (w.extraTools) {
+        spec.extraTools = Array.isArray(w.extraTools)
+          ? w.extraTools.map(String)
+          : typeof w.extraTools === 'string'
+            ? (w.extraTools as string).replace(/^\[|\]$/g, '').split(',').map((s: string) => s.trim()).filter(Boolean)
+            : undefined;
       }
       return spec;
     });
@@ -294,9 +302,10 @@ export function yamlToSwarmConfig(yaml: SwarmYamlConfig, orchestratorModel: stri
   if (comm) {
     config.communication = {
       blackboard: comm.blackboard !== undefined ? Boolean(comm.blackboard) : undefined,
-      dependencyContextMaxLength: comm.dependencyContextMaxLength
-        ? Number(comm.dependencyContextMaxLength) : undefined,
-      includeFileList: comm.includeFileList !== undefined ? Boolean(comm.includeFileList) : undefined,
+      dependencyContextMaxLength: (comm.dependencyContextMaxLength ?? comm.dependency_context_max_length)
+        ? Number(comm.dependencyContextMaxLength ?? comm.dependency_context_max_length) : undefined,
+      includeFileList: (comm.includeFileList ?? comm.include_file_list) !== undefined
+        ? Boolean(comm.includeFileList ?? comm.include_file_list) : undefined,
     };
   }
 
@@ -330,15 +339,68 @@ export function yamlToSwarmConfig(yaml: SwarmYamlConfig, orchestratorModel: stri
   const quality = yaml.quality as Record<string, unknown> | undefined;
   if (quality) {
     if (quality.enabled !== undefined) config.qualityGates = Boolean(quality.enabled);
+    if (quality.gates !== undefined) config.qualityGates = Boolean(quality.gates);
+    if (quality.gateModel || quality.gate_model) {
+      config.qualityGateModel = String(quality.gateModel ?? quality.gate_model);
+    }
     // minScore, skipOnRetry, skipUnderPressure not in SwarmConfig yet, but could be added
+  }
+
+  // reliability — dispatch cap + hollow termination
+  const reliability = yaml.reliability as Record<string, unknown> | undefined;
+  if (reliability) {
+    if (reliability.maxDispatchesPerTask !== undefined || reliability.max_dispatches_per_task !== undefined) {
+      config.maxDispatchesPerTask = Number(reliability.maxDispatchesPerTask ?? reliability.max_dispatches_per_task);
+    }
+    if (reliability.hollowTerminationRatio !== undefined || reliability.hollow_termination_ratio !== undefined) {
+      config.hollowTerminationRatio = Number(reliability.hollowTerminationRatio ?? reliability.hollow_termination_ratio);
+    }
+    if (reliability.hollowTerminationMinDispatches !== undefined || reliability.hollow_termination_min_dispatches !== undefined) {
+      config.hollowTerminationMinDispatches = Number(reliability.hollowTerminationMinDispatches ?? reliability.hollow_termination_min_dispatches);
+    }
+    if (reliability.enableHollowTermination !== undefined || reliability.enable_hollow_termination !== undefined) {
+      config.enableHollowTermination = Boolean(reliability.enableHollowTermination ?? reliability.enable_hollow_termination);
+    }
+  }
+
+  // taskTypes — per-task-type configuration
+  const taskTypes = yaml.taskTypes as Record<string, Record<string, unknown>> | undefined;
+  if (taskTypes && typeof taskTypes === 'object') {
+    config.taskTypes = {};
+    for (const [typeName, typeConfig] of Object.entries(taskTypes)) {
+      if (!typeConfig || typeof typeConfig !== 'object') continue;
+      const parsed: Record<string, unknown> = {};
+      if (typeConfig.timeout !== undefined) parsed.timeout = Number(typeConfig.timeout);
+      if (typeConfig.maxIterations !== undefined) parsed.maxIterations = Number(typeConfig.maxIterations);
+      if (typeConfig.idleTimeout !== undefined) parsed.idleTimeout = Number(typeConfig.idleTimeout);
+      if (typeConfig.policyProfile !== undefined) parsed.policyProfile = String(typeConfig.policyProfile);
+      if (typeConfig.capability !== undefined) parsed.capability = String(typeConfig.capability);
+      if (typeConfig.requiresToolCalls !== undefined) parsed.requiresToolCalls = Boolean(typeConfig.requiresToolCalls);
+      if (typeConfig.promptTemplate !== undefined) parsed.promptTemplate = String(typeConfig.promptTemplate);
+      if (typeConfig.tools && Array.isArray(typeConfig.tools)) parsed.tools = typeConfig.tools.map(String);
+      if (typeConfig.retries !== undefined) parsed.retries = Number(typeConfig.retries);
+      if (typeConfig.tokenBudget !== undefined) parsed.tokenBudget = Number(typeConfig.tokenBudget);
+      config.taskTypes[typeName] = parsed as import('./types.js').TaskTypeConfig;
+    }
   }
 
   // resilience
   const resilience = yaml.resilience as Record<string, unknown> | undefined;
   if (resilience) {
-    if (resilience.workerRetries !== undefined) config.workerRetries = Number(resilience.workerRetries);
-    if (resilience.rateLimitRetries !== undefined) config.rateLimitRetries = Number(resilience.rateLimitRetries);
+    if (resilience.maxConcurrency !== undefined || resilience.max_concurrency !== undefined) {
+      config.maxConcurrency = Number(resilience.maxConcurrency ?? resilience.max_concurrency);
+    }
+    if (resilience.dispatchStaggerMs !== undefined || resilience.dispatch_stagger_ms !== undefined) {
+      config.dispatchStaggerMs = Number(resilience.dispatchStaggerMs ?? resilience.dispatch_stagger_ms);
+    }
+    if (resilience.workerRetries !== undefined || resilience.worker_retries !== undefined) {
+      config.workerRetries = Number(resilience.workerRetries ?? resilience.worker_retries);
+    }
+    if (resilience.rateLimitRetries !== undefined || resilience.rate_limit_retries !== undefined) {
+      config.rateLimitRetries = Number(resilience.rateLimitRetries ?? resilience.rate_limit_retries);
+    }
     if (resilience.modelFailover !== undefined) config.enableModelFailover = Boolean(resilience.modelFailover);
+    if (resilience.model_failover !== undefined) config.enableModelFailover = Boolean(resilience.model_failover);
   }
 
   // hierarchy
@@ -369,6 +431,80 @@ export function yamlToSwarmConfig(yaml: SwarmYamlConfig, orchestratorModel: stri
     if (features.wave_review !== undefined) config.enableWaveReview = Boolean(features.wave_review);
     if (features.verification !== undefined) config.enableVerification = Boolean(features.verification);
     if (features.persistence !== undefined) config.enablePersistence = Boolean(features.persistence);
+  }
+
+  // permissions — sandbox and approval overrides for swarm workers
+  const permissions = yaml.permissions as Record<string, unknown> | undefined;
+  if (permissions) {
+    config.permissions = {};
+    if (permissions.mode) config.permissions.mode = String(permissions.mode) as 'auto-safe' | 'interactive' | 'strict' | 'yolo';
+    if (permissions.auto_approve && Array.isArray(permissions.auto_approve)) {
+      config.permissions.autoApprove = permissions.auto_approve.map(String);
+    }
+    if (permissions.autoApprove && Array.isArray(permissions.autoApprove)) {
+      config.permissions.autoApprove = (permissions.autoApprove as unknown[]).map(String);
+    }
+    if (permissions.scoped_approve) {
+      config.permissions.scopedApprove = permissions.scoped_approve as Record<string, { paths: string[] }>;
+    }
+    if (permissions.scopedApprove) {
+      config.permissions.scopedApprove = permissions.scopedApprove as Record<string, { paths: string[] }>;
+    }
+    if (permissions.require_approval && Array.isArray(permissions.require_approval)) {
+      config.permissions.requireApproval = permissions.require_approval.map(String);
+    }
+    if (permissions.requireApproval && Array.isArray(permissions.requireApproval)) {
+      config.permissions.requireApproval = (permissions.requireApproval as unknown[]).map(String);
+    }
+    if (permissions.allowed_commands && Array.isArray(permissions.allowed_commands)) {
+      config.permissions.additionalAllowedCommands = permissions.allowed_commands.map(String);
+    }
+    if (permissions.additionalAllowedCommands && Array.isArray(permissions.additionalAllowedCommands)) {
+      config.permissions.additionalAllowedCommands = (permissions.additionalAllowedCommands as unknown[]).map(String);
+    }
+  }
+
+  // policyProfiles — named policy profile definitions
+  const policyProfiles = yaml.policyProfiles as Record<string, unknown> | undefined;
+  if (policyProfiles && typeof policyProfiles === 'object') {
+    config.policyProfiles = policyProfiles as SwarmConfig['policyProfiles'];
+  }
+
+  // profileExtensions — additive tool patches for built-in or named profiles
+  const profileExtensions = (yaml.profileExtensions ?? yaml.profile_extensions) as Record<string, Record<string, unknown>> | undefined;
+  if (profileExtensions && typeof profileExtensions === 'object') {
+    config.profileExtensions = {};
+    for (const [profileName, ext] of Object.entries(profileExtensions)) {
+      if (!ext || typeof ext !== 'object') continue;
+      const entry: { addTools?: string[]; removeTools?: string[] } = {};
+      if (ext.addTools && Array.isArray(ext.addTools)) {
+        entry.addTools = ext.addTools.map(String);
+      }
+      if (ext.add_tools && Array.isArray(ext.add_tools)) {
+        entry.addTools = (ext.add_tools as unknown[]).map(String);
+      }
+      if (ext.removeTools && Array.isArray(ext.removeTools)) {
+        entry.removeTools = ext.removeTools.map(String);
+      }
+      if (ext.remove_tools && Array.isArray(ext.remove_tools)) {
+        entry.removeTools = (ext.remove_tools as unknown[]).map(String);
+      }
+      if (entry.addTools || entry.removeTools) {
+        config.profileExtensions[profileName] = entry;
+      }
+    }
+  }
+
+  // autoSplit — pre-dispatch auto-split configuration
+  const autoSplit = yaml.autoSplit as Record<string, unknown> | undefined;
+  if (autoSplit) {
+    config.autoSplit = {};
+    if (autoSplit.enabled !== undefined) config.autoSplit.enabled = Boolean(autoSplit.enabled);
+    if (autoSplit.complexityFloor !== undefined) config.autoSplit.complexityFloor = Number(autoSplit.complexityFloor);
+    if (autoSplit.maxSubtasks !== undefined) config.autoSplit.maxSubtasks = Number(autoSplit.maxSubtasks);
+    if (autoSplit.splittableTypes && Array.isArray(autoSplit.splittableTypes)) {
+      config.autoSplit.splittableTypes = autoSplit.splittableTypes.map(String);
+    }
   }
 
   // facts — user-configurable grounding facts

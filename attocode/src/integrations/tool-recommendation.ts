@@ -9,9 +9,10 @@
  * - Static task-type → tool-category mappings (no LLM call needed)
  * - Keyword analysis for MCP tool preloading
  * - Tool filtering for subagent specialization
+ * - Custom task types fall back to a known type's tools based on capability
  */
 
-import type { SubtaskType } from './smart-decomposer.js';
+import type { WorkerCapability } from './swarm/types.js';
 
 // =============================================================================
 // TYPES
@@ -47,14 +48,18 @@ export interface ToolCategory {
  * Static mapping from subtask types to tool categories.
  * Core heuristic: task type determines which tools are most useful.
  */
-const TASK_TYPE_TOOL_MAP: Record<SubtaskType, ToolCategory[]> = {
+const TASK_TYPE_TOOL_MAP: Record<string, ToolCategory[]> = {
   research: [
     { name: 'file_reading', tools: ['read_file', 'glob', 'grep', 'list_files', 'search_files', 'search_code', 'get_file_info'], relevance: 1.0 },
+    { name: 'web', tools: ['web_search'], relevance: 0.8 },
+    { name: 'file_writing', tools: ['write_file', 'edit_file'], relevance: 0.6 },
     { name: 'bash_readonly', tools: ['bash'], relevance: 0.5 },
+    { name: 'task_coordination', tools: ['task_get', 'task_list'], relevance: 0.3 },
   ],
   analysis: [
     { name: 'file_reading', tools: ['read_file', 'glob', 'grep', 'list_files', 'search_files', 'search_code'], relevance: 1.0 },
     { name: 'bash_readonly', tools: ['bash'], relevance: 0.6 },
+    { name: 'web', tools: ['web_search'], relevance: 0.5 },
   ],
   design: [
     { name: 'file_reading', tools: ['read_file', 'glob', 'grep', 'list_files'], relevance: 0.9 },
@@ -64,6 +69,7 @@ const TASK_TYPE_TOOL_MAP: Record<SubtaskType, ToolCategory[]> = {
     { name: 'file_reading', tools: ['read_file', 'glob', 'grep', 'list_files'], relevance: 0.8 },
     { name: 'file_writing', tools: ['write_file', 'edit_file'], relevance: 1.0 },
     { name: 'execution', tools: ['bash'], relevance: 0.7 },
+    { name: 'task_coordination', tools: ['task_create', 'task_update', 'task_get', 'task_list'], relevance: 0.3 },
   ],
   test: [
     { name: 'execution', tools: ['bash'], relevance: 1.0 },
@@ -77,6 +83,7 @@ const TASK_TYPE_TOOL_MAP: Record<SubtaskType, ToolCategory[]> = {
   ],
   review: [
     { name: 'file_reading', tools: ['read_file', 'glob', 'grep', 'list_files', 'search_files'], relevance: 1.0 },
+    { name: 'file_writing', tools: ['write_file', 'edit_file'], relevance: 0.4 },
     { name: 'bash_readonly', tools: ['bash'], relevance: 0.3 },
   ],
   document: [
@@ -97,7 +104,21 @@ const TASK_TYPE_TOOL_MAP: Record<SubtaskType, ToolCategory[]> = {
     { name: 'file_reading', tools: ['read_file', 'glob', 'grep'], relevance: 0.9 },
     { name: 'file_writing', tools: ['write_file', 'edit_file'], relevance: 1.0 },
     { name: 'execution', tools: ['bash'], relevance: 0.5 },
+    { name: 'task_coordination', tools: ['task_get', 'task_list'], relevance: 0.3 },
   ],
+};
+
+/**
+ * Map a WorkerCapability to the closest built-in task type for tool recommendations.
+ * Used as a fallback when a custom task type isn't in TASK_TYPE_TOOL_MAP.
+ */
+const CAPABILITY_TO_TOOL_MAP_KEY: Record<WorkerCapability, string> = {
+  code: 'implement',
+  research: 'research',
+  review: 'review',
+  test: 'test',
+  document: 'document',
+  write: 'merge',
 };
 
 /**
@@ -152,19 +173,32 @@ export class ToolRecommendationEngine {
 
   /**
    * Recommend tools for a task based on type and description.
+   * Custom task types not in TASK_TYPE_TOOL_MAP fall back to a known type
+   * based on the custom type's capability (via TaskTypeConfig).
    */
   recommendTools(
     taskDescription: string,
-    taskType: SubtaskType,
+    taskType: string,
     availableToolNames: string[],
+    capability?: WorkerCapability,
   ): ToolRecommendation[] {
     const recommendations: Map<string, ToolRecommendation> = new Map();
     const availableSet = new Set(availableToolNames);
 
     // Phase 1: Task-type based recommendations
-    const categories = this.config.taskToolOverrides[taskType]
-      ? [{ name: 'override', tools: this.config.taskToolOverrides[taskType], relevance: 1.0 }]
-      : (TASK_TYPE_TOOL_MAP[taskType] || []);
+    // For custom types not in the map, fall back to a known type via capability
+    let categories: ToolCategory[];
+    if (this.config.taskToolOverrides[taskType]) {
+      categories = [{ name: 'override', tools: this.config.taskToolOverrides[taskType], relevance: 1.0 }];
+    } else if (TASK_TYPE_TOOL_MAP[taskType]) {
+      categories = TASK_TYPE_TOOL_MAP[taskType];
+    } else {
+      // Custom type fallback: use capability to find closest built-in tool map
+      const fallbackType = capability
+        ? CAPABILITY_TO_TOOL_MAP_KEY[capability] ?? 'implement'
+        : 'implement';
+      categories = TASK_TYPE_TOOL_MAP[fallbackType] ?? [];
+    }
 
     for (const category of categories) {
       for (const toolName of category.tools) {
@@ -239,7 +273,7 @@ export class ToolRecommendationEngine {
    * Returns tool names that should be available to the agent.
    */
   getToolFilterForTaskType(
-    taskType: SubtaskType,
+    taskType: string,
     availableToolNames: string[],
   ): string[] {
     const recommendations = this.recommendTools('', taskType, availableToolNames);
@@ -249,8 +283,8 @@ export class ToolRecommendationEngine {
   /**
    * Infer a SubtaskType from an agent name.
    */
-  static inferTaskType(agentName: string): SubtaskType {
-    const nameToType: Record<string, SubtaskType> = {
+  static inferTaskType(agentName: string): string {
+    const nameToType: Record<string, string> = {
       researcher: 'research',
       coder: 'implement',
       reviewer: 'review',
@@ -258,9 +292,31 @@ export class ToolRecommendationEngine {
       debugger: 'analysis',
       tester: 'test',
       documenter: 'document',
+      synthesizer: 'merge',
+      writer: 'document',
+      merger: 'merge',
     };
 
-    return nameToType[agentName.toLowerCase()] || 'research';
+    const lower = agentName.toLowerCase();
+    if (nameToType[lower]) {
+      return nameToType[lower];
+    }
+
+    // Dynamic swarm names like "swarm-coder-task-1" should resolve by role token.
+    const tokens = lower.split(/[^a-z0-9]+/).filter(Boolean);
+    for (const token of tokens) {
+      if (nameToType[token]) {
+        return nameToType[token];
+      }
+    }
+
+    // For swarm workers, default to implementation rather than research so
+    // write-capable profiles are selected unless explicitly constrained.
+    if (lower.startsWith('swarm-')) {
+      return 'implement';
+    }
+
+    return 'research';
   }
 }
 

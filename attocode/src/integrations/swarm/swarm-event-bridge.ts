@@ -10,7 +10,7 @@ import * as fs from 'node:fs';
 import * as path from 'node:path';
 import type { SwarmOrchestrator } from './swarm-orchestrator.js';
 import type { SwarmEvent } from './swarm-events.js';
-import type { SwarmStatus, SwarmTask, OrchestratorDecision, ModelHealthRecord, VerificationResult, SwarmPlan } from './types.js';
+import type { SwarmStatus, SwarmTask, OrchestratorDecision, ModelHealthRecord, VerificationResult, SwarmPlan, ArtifactInventory } from './types.js';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -60,6 +60,7 @@ export interface SwarmLiveState {
   verification?: VerificationResult;
   modelHealth: ModelHealthRecord[];
   workerLogFiles: string[];
+  artifactInventory?: ArtifactInventory;
 }
 
 export interface SwarmEventBridgeOptions {
@@ -99,6 +100,7 @@ export class SwarmEventBridge {
   private verification?: VerificationResult;
   private modelHealth: ModelHealthRecord[] = [];
   private workerLogFiles: string[] = [];
+  private artifactInventory?: ArtifactInventory;
 
   constructor(options: SwarmEventBridgeOptions = {}) {
     this.outputDir = options.outputDir ?? '.agent/swarm-live';
@@ -152,8 +154,16 @@ export class SwarmEventBridge {
     // Write state snapshot (debounced for status/task events, immediate for milestones)
     const immediateTriggers = ['swarm.complete', 'swarm.plan.complete', 'swarm.review.complete', 'swarm.verify.complete', 'swarm.state.checkpoint'];
     const debouncedTriggers = [
+      'swarm.start',
       'swarm.task.dispatched', 'swarm.task.completed', 'swarm.task.failed', 'swarm.task.skipped',
-      'swarm.budget.update', 'swarm.wave.start', 'swarm.wave.complete', 'swarm.phase.progress',
+      'swarm.task.attempt', 'swarm.task.resilience',
+      'swarm.quality.rejected',
+      'swarm.budget.update', 'swarm.wave.start', 'swarm.wave.complete', 'swarm.wave.allFailed',
+      'swarm.phase.progress',
+      'swarm.circuit.open', 'swarm.circuit.closed',
+      'swarm.model.health', 'swarm.model.failover',
+      'swarm.orchestrator.llm', 'swarm.orchestrator.decision',
+      'swarm.fixup.spawned',
     ];
     if (immediateTriggers.includes(event.type)) {
       this.writeStateDebouncedOrImmediate(true);
@@ -167,6 +177,16 @@ export class SwarmEventBridge {
    */
   private updateAccumulatedState(event: SwarmEvent, ts: string): void {
     switch (event.type) {
+      case 'swarm.start':
+        this.timeline.push({
+          ts, seq: this.seq, type: 'swarm.start',
+          tokensUsed: 0,
+          costUsed: 0,
+          completedCount: 0,
+          failedCount: 0,
+        });
+        break;
+
       case 'swarm.status':
         this.lastStatus = event.status;
         // Extract tasks from status if we have them via the queue
@@ -183,6 +203,10 @@ export class SwarmEventBridge {
           status: 'dispatched',
           assignedModel: event.model,
           description: event.description,
+          toolCount: event.toolCount,
+          tools: event.tools,
+          retryContext: event.retryContext,
+          ...(event.attempts !== undefined ? { attempts: event.attempts } : {}),
         });
         if (!this.config.workerModels.includes(event.model)) {
           this.config.workerModels.push(event.model);
@@ -223,29 +247,26 @@ export class SwarmEventBridge {
           failedCount: this.lastStatus?.queue.failed ?? 0,
         });
         // V5: Write per-task detail file for drill-down in dashboard
-        if (event.output) {
-          try {
-            const tasksDir = path.join(this.outputDir, 'tasks');
-            fs.mkdirSync(tasksDir, { recursive: true });
-            const taskFile = path.join(tasksDir, `${event.taskId}.json`);
-            fs.writeFileSync(taskFile, JSON.stringify({
-              taskId: event.taskId,
-              output: event.output,
-              qualityFeedback: event.qualityFeedback,
-              closureReport: event.closureReport,
-              toolCalls: event.toolCalls,
-            }));
-          } catch {
-            // Best effort — don't crash the bridge
-          }
-        }
+        // Always write — even if output is empty, we still have quality/closure data
+        this.writeTaskDetail(event.taskId, {
+          taskId: event.taskId,
+          output: event.output ?? '',
+          qualityFeedback: event.qualityFeedback,
+          closureReport: event.closureReport,
+          toolCalls: event.toolCalls,
+        });
         break;
       }
 
       case 'swarm.task.failed':
-        if (!event.willRetry) {
-          this.updateTask(event.taskId, { status: 'failed' });
-        }
+        this.updateTask(event.taskId, { status: event.willRetry ? 'ready' : 'failed' });
+        // Write detail file for failed tasks too
+        this.writeTaskDetail(event.taskId, {
+          taskId: event.taskId,
+          output: `FAILED (attempt ${event.attempt}/${event.maxAttempts}): ${event.error}`,
+          toolCalls: event.toolCalls ?? -1,
+          failoverModel: event.failoverModel,
+        });
         this.errors.push({
           ts,
           taskId: event.taskId,
@@ -259,11 +280,12 @@ export class SwarmEventBridge {
         break;
 
       case 'swarm.quality.rejected':
+        this.updateTask(event.taskId, { status: 'failed' });
         this.errors.push({
           ts,
           taskId: event.taskId,
           phase: 'quality-gate',
-          message: `Score ${event.score}/5: ${event.feedback}`,
+          message: `Score ${event.score}/5: ${event.feedback} [artifacts: ${event.artifactCount}, output: ${event.outputLength} chars${event.preFlightReject ? ', pre-flight reject' : ''}]`,
         });
         break;
 
@@ -289,7 +311,14 @@ export class SwarmEventBridge {
         break;
 
       case 'swarm.complete':
-        // Mark remaining pending tasks
+        // Update phase to completed in the last status so state.json reflects final state
+        if (this.lastStatus) {
+          this.lastStatus = { ...this.lastStatus, phase: 'completed' };
+        }
+        // Store artifact inventory from the completion event
+        if (event.artifactInventory) {
+          this.artifactInventory = event.artifactInventory;
+        }
         break;
 
       // V2 events
@@ -345,6 +374,76 @@ export class SwarmEventBridge {
         });
         break;
 
+      case 'swarm.wave.start':
+        this.timeline.push({
+          ts, seq: this.seq, type: `wave.start`,
+          tokensUsed: this.lastStatus?.budget.tokensUsed ?? 0,
+          costUsed: this.lastStatus?.budget.costUsed ?? 0,
+          completedCount: this.lastStatus?.queue.completed ?? 0,
+          failedCount: this.lastStatus?.queue.failed ?? 0,
+        });
+        break;
+
+      case 'swarm.wave.complete':
+        this.timeline.push({
+          ts, seq: this.seq, type: `wave.complete`,
+          tokensUsed: this.lastStatus?.budget.tokensUsed ?? 0,
+          costUsed: this.lastStatus?.budget.costUsed ?? 0,
+          completedCount: event.completed,
+          failedCount: event.failed,
+        });
+        break;
+
+      case 'swarm.wave.allFailed':
+        this.timeline.push({
+          ts, seq: this.seq, type: 'wave.allFailed',
+          tokensUsed: this.lastStatus?.budget.tokensUsed ?? 0,
+          costUsed: this.lastStatus?.budget.costUsed ?? 0,
+          completedCount: this.lastStatus?.queue.completed ?? 0,
+          failedCount: this.lastStatus?.queue.failed ?? 0,
+        });
+        this.errors.push({
+          ts,
+          phase: 'wave',
+          message: `Wave ${event.wave}: all tasks failed`,
+        });
+        break;
+
+      case 'swarm.circuit.open':
+        this.timeline.push({
+          ts, seq: this.seq, type: 'circuit.open',
+          tokensUsed: this.lastStatus?.budget.tokensUsed ?? 0,
+          costUsed: this.lastStatus?.budget.costUsed ?? 0,
+          completedCount: this.lastStatus?.queue.completed ?? 0,
+          failedCount: this.lastStatus?.queue.failed ?? 0,
+        });
+        this.errors.push({
+          ts,
+          phase: 'circuit-breaker',
+          message: `Circuit breaker opened: ${event.recentCount} rate limits, pausing ${(event.pauseMs / 1000).toFixed(0)}s`,
+        });
+        break;
+
+      case 'swarm.circuit.closed':
+        this.timeline.push({
+          ts, seq: this.seq, type: 'circuit.closed',
+          tokensUsed: this.lastStatus?.budget.tokensUsed ?? 0,
+          costUsed: this.lastStatus?.budget.costUsed ?? 0,
+          completedCount: this.lastStatus?.queue.completed ?? 0,
+          failedCount: this.lastStatus?.queue.failed ?? 0,
+        });
+        break;
+
+      case 'swarm.orchestrator.llm':
+        this.timeline.push({
+          ts, seq: this.seq, type: 'orchestrator.llm',
+          tokensUsed: this.lastStatus?.budget.tokensUsed ?? 0,
+          costUsed: this.lastStatus?.budget.costUsed ?? 0,
+          completedCount: this.lastStatus?.queue.completed ?? 0,
+          failedCount: this.lastStatus?.queue.failed ?? 0,
+        });
+        break;
+
       case 'swarm.orchestrator.decision':
         this.decisions.push(event.decision);
         break;
@@ -368,6 +467,29 @@ export class SwarmEventBridge {
         // Record in timeline
         this.timeline.push({
           ts, seq: this.seq, type: event.type.replace('swarm.', ''),
+          tokensUsed: this.lastStatus?.budget.tokensUsed ?? 0,
+          costUsed: this.lastStatus?.budget.costUsed ?? 0,
+          completedCount: this.lastStatus?.queue.completed ?? 0,
+          failedCount: this.lastStatus?.queue.failed ?? 0,
+        });
+        break;
+
+      // V10: Per-attempt and resilience events — append to per-task JSONL for traceability
+      case 'swarm.task.attempt':
+        this.appendTaskAttempt(event.taskId, { ...event, timestamp: ts });
+        this.timeline.push({
+          ts, seq: this.seq, type: 'task.attempt',
+          tokensUsed: this.lastStatus?.budget.tokensUsed ?? 0,
+          costUsed: this.lastStatus?.budget.costUsed ?? 0,
+          completedCount: this.lastStatus?.queue.completed ?? 0,
+          failedCount: this.lastStatus?.queue.failed ?? 0,
+        });
+        break;
+
+      case 'swarm.task.resilience':
+        this.appendTaskAttempt(event.taskId, { ...event, recordType: 'resilience', timestamp: ts });
+        this.timeline.push({
+          ts, seq: this.seq, type: 'task.resilience',
           tokensUsed: this.lastStatus?.budget.tokensUsed ?? 0,
           costUsed: this.lastStatus?.budget.costUsed ?? 0,
           completedCount: this.lastStatus?.queue.completed ?? 0,
@@ -400,6 +522,35 @@ export class SwarmEventBridge {
   }
 
   /**
+   * Write a per-task detail JSON file for dashboard drill-down.
+   */
+  private writeTaskDetail(taskId: string, detail: Record<string, unknown>): void {
+    try {
+      const tasksDir = path.join(this.outputDir, 'tasks');
+      fs.mkdirSync(tasksDir, { recursive: true });
+      const taskFile = path.join(tasksDir, `${taskId}.json`);
+      fs.writeFileSync(taskFile, JSON.stringify(detail));
+    } catch {
+      // Best effort — don't crash the bridge
+    }
+  }
+
+  /**
+   * Append a record to the per-task append-only attempt JSONL file.
+   * Used for swarm.task.attempt and swarm.task.resilience events.
+   */
+  private appendTaskAttempt(taskId: string, record: Record<string, unknown>): void {
+    try {
+      const tasksDir = path.join(this.outputDir, 'tasks');
+      fs.mkdirSync(tasksDir, { recursive: true });
+      const attemptFile = path.join(tasksDir, `${taskId}-attempts.jsonl`);
+      fs.appendFileSync(attemptFile, JSON.stringify(record) + '\n');
+    } catch {
+      // Best effort — don't crash the bridge
+    }
+  }
+
+  /**
    * Build the current SwarmLiveState snapshot.
    */
   private buildState(): SwarmLiveState {
@@ -419,6 +570,7 @@ export class SwarmEventBridge {
       verification: this.verification,
       modelHealth: this.modelHealth,
       workerLogFiles: this.workerLogFiles,
+      artifactInventory: this.artifactInventory,
     };
   }
 
@@ -496,6 +648,12 @@ export class SwarmEventBridge {
     const state = this.buildState();
 
     if (immediate) {
+      // Cancel any pending debounced write — the immediate write supersedes it
+      if (this.stateWriteTimer) {
+        clearTimeout(this.stateWriteTimer);
+        this.stateWriteTimer = null;
+        this.pendingState = null;
+      }
       this.writeStateSync(state);
       return;
     }

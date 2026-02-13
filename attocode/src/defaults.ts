@@ -19,6 +19,7 @@ import type {
   MultiAgentConfig,
   ReActPatternConfig,
   ExecutionPolicyConfig,
+  PolicyEngineConfig,
   ThreadsConfig,
   CancellationConfig,
   ResourceConfig,
@@ -156,10 +157,30 @@ export const DEFAULT_SANDBOX_CONFIG: SandboxConfig = {
   isolation: 'process',
   mode: 'auto', // Auto-detect best sandbox (seatbelt on macOS, docker on Linux, basic fallback)
   allowedCommands: [
+    // JS/TS toolchain
     'node', 'npm', 'npx', 'yarn', 'pnpm', 'bun',
-    'git', 'ls', 'cat', 'head', 'tail', 'grep', 'find', 'wc',
-    'echo', 'pwd', 'which', 'env', 'mkdir', 'cp', 'mv', 'touch',
     'tsc', 'eslint', 'prettier', 'jest', 'vitest', 'mocha',
+    // Git
+    'git',
+    // File inspection
+    'ls', 'cat', 'head', 'tail', 'grep', 'find', 'wc',
+    'echo', 'pwd', 'which', 'env',
+    // File manipulation
+    'mkdir', 'cp', 'mv', 'touch', 'rm', 'rmdir', 'chmod', 'ln',
+    // Text processing
+    'sed', 'awk', 'sort', 'tr', 'cut', 'uniq', 'diff', 'xargs',
+    // Path utilities
+    'basename', 'dirname', 'realpath', 'readlink',
+    // Archive / compression
+    'tar', 'gzip', 'gunzip', 'zip', 'unzip',
+    // System info
+    'date', 'uname',
+    // Other languages & tools
+    'python', 'python3', 'pip', 'pip3',
+    'curl', 'wget',
+    'make', 'jq',
+    'docker', 'docker-compose',
+    'cargo', 'go', 'java', 'mvn', 'gradle',
   ],
   blockedCommands: [
     'rm -rf /',
@@ -240,6 +261,18 @@ export const DEFAULT_EXECUTION_POLICY_CONFIG: ExecutionPolicyConfig = {
   intentAware: true,
   intentConfidenceThreshold: 0.7,
   preset: 'balanced',
+};
+
+/**
+ * Default unified policy engine configuration.
+ * Guarded default-on with legacy fallback for one release.
+ */
+export const DEFAULT_POLICY_ENGINE_CONFIG: PolicyEngineConfig = {
+  enabled: true,
+  legacyFallback: true,
+  defaultProfile: 'code-full',
+  defaultSwarmProfile: 'code-strict-bash',
+  profiles: {},
 };
 
 /**
@@ -550,6 +583,7 @@ export function buildConfig(
     multiAgent: mergeConfig(DEFAULT_MULTI_AGENT_CONFIG, userConfig.multiAgent),
     react: mergeConfig(DEFAULT_REACT_CONFIG, userConfig.react),
     executionPolicy: mergeConfig(DEFAULT_EXECUTION_POLICY_CONFIG, userConfig.executionPolicy),
+    policyEngine: mergeConfig(DEFAULT_POLICY_ENGINE_CONFIG, userConfig.policyEngine),
     threads: mergeConfig(DEFAULT_THREADS_CONFIG, userConfig.threads),
     cancellation: mergeConfig(DEFAULT_CANCELLATION_CONFIG, userConfig.cancellation),
     resources: mergeConfig(DEFAULT_RESOURCE_CONFIG, userConfig.resources),
@@ -665,6 +699,7 @@ export function getEnabledFeatures(config: ReturnType<typeof buildConfig>): stri
   if (isFeatureEnabled(config.multiAgent)) features.push('multiAgent');
   if (isFeatureEnabled(config.react)) features.push('react');
   if (isFeatureEnabled(config.executionPolicy)) features.push('executionPolicy');
+  if (isFeatureEnabled(config.policyEngine)) features.push('policyEngine');
   if (isFeatureEnabled(config.threads)) features.push('threads');
   if (isFeatureEnabled(config.cancellation)) features.push('cancellation');
   if (isFeatureEnabled(config.resources)) features.push('resources');

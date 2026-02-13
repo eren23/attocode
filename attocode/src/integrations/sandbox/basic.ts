@@ -16,6 +16,7 @@
 
 import { spawn } from 'child_process';
 import type { Sandbox, SandboxMode, SandboxOptions, ExecResult } from './index.js';
+import { detectFileMutationViaBash, evaluateBashPolicy, stripCdPrefix } from '../bash-policy.js';
 
 // =============================================================================
 // DANGEROUS PATTERNS
@@ -76,6 +77,22 @@ const BLOCKED_COMMANDS = [
   'iptables',
   'firewall-cmd',
 ];
+
+/**
+ * Legacy compatibility shim used by older call sites/tests.
+ */
+export function detectFileCreationViaBash(command: string): { detected: boolean; reason?: string } {
+  const detected = detectFileMutationViaBash(command);
+  if (!detected.detected) {
+    return { detected: false };
+  }
+  return {
+    detected: true,
+    reason:
+      `File creation/modification via bash blocked (${detected.reason}). ` +
+      'Use write_file to create files and edit_file to modify them.',
+  };
+}
 
 // =============================================================================
 // BASIC SANDBOX
@@ -195,6 +212,15 @@ export class BasicSandbox implements Sandbox {
       }
     }
 
+    const writeProtection = options.blockFileCreationViaBash
+      ? 'block_file_mutation'
+      : (options.bashWriteProtection ?? 'off');
+
+    const bashPolicy = evaluateBashPolicy(command, options.bashMode ?? 'full', writeProtection);
+    if (!bashPolicy.allowed) {
+      return { allowed: false, reason: bashPolicy.reason };
+    }
+
     // Extract the base command
     const baseCommand = this.extractBaseCommand(command);
 
@@ -202,9 +228,10 @@ export class BasicSandbox implements Sandbox {
     const allowedCommands = options.allowedCommands;
     if (allowedCommands && allowedCommands.length > 0) {
       if (!allowedCommands.includes(baseCommand)) {
+        const suggestions = allowedCommands.slice(0, 10).join(', ');
         return {
           allowed: false,
-          reason: `Command '${baseCommand}' not in allowlist`,
+          reason: `Command '${baseCommand}' is not in the sandbox allowlist.\nIMPORTANT: Do NOT use bash for file creation. Use the write_file tool to create files and edit_file to modify them.\nUse bash ONLY for running commands like: ${suggestions}...`,
         };
       }
     }
@@ -222,8 +249,10 @@ export class BasicSandbox implements Sandbox {
    * Extract the base command from a command string.
    */
   private extractBaseCommand(command: string): string {
+    // Strip cd prefix — "cd /path && npm test" → "npm test"
+    const stripped = stripCdPrefix(command);
     // Handle pipes and redirects
-    const firstPart = command.split(/[|;&]/)[0].trim();
+    const firstPart = stripped.split(/[|;&]/)[0].trim();
 
     // Handle env vars and other prefixes
     const parts = firstPart.split(/\s+/);

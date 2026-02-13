@@ -8,7 +8,7 @@ import { z } from 'zod';
 import * as fs from 'node:fs/promises';
 import * as path from 'node:path';
 import { defineTool } from './registry.js';
-import { coerceBoolean } from './coercion.js';
+import { coerceBoolean, coerceString } from './coercion.js';
 import type { ToolResult } from './types.js';
 import { FileOperationError, ErrorCategory } from '../errors/index.js';
 import { generateDiff } from '../integrations/diff-utils.js';
@@ -97,7 +97,7 @@ async function writeFileAtomic(filePath: string, content: string): Promise<void>
 
 const writeFileSchema = z.object({
   path: z.string().describe('Path to the file to write'),
-  content: z.string().describe('Content to write to the file'),
+  content: coerceString().describe('Content to write to the file'),
 });
 
 export const writeFileTool = defineTool(

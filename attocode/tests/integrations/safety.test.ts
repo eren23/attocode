@@ -45,7 +45,7 @@ describe('SandboxManager', () => {
     it('should block commands not in allowlist', () => {
       const result = manager.isCommandAllowed('wget http://example.com');
       expect(result.allowed).toBe(false);
-      expect(result.reason).toContain('not in allowlist');
+      expect(result.reason).toContain('not in the sandbox allowlist');
     });
 
     it('should allow any command when allowlist is empty', () => {
@@ -56,6 +56,28 @@ describe('SandboxManager', () => {
 
       const result = openManager.isCommandAllowed('any-command');
       expect(result.allowed).toBe(true);
+    });
+
+    it('should block file mutation patterns when compatibility flag is on', () => {
+      const strict = new SandboxManager({
+        ...config,
+        blockFileCreationViaBash: true,
+        allowedCommands: ['cat', 'echo', 'printf'],
+      });
+      const result = strict.isCommandAllowed(`cat > out.txt << 'EOF'\nhello\nEOF`);
+      expect(result.allowed).toBe(false);
+      expect(result.reason).toContain('File creation/modification via bash');
+    });
+
+    it('should enforce read_only bash mode', () => {
+      const strict = new SandboxManager({
+        ...config,
+        bashMode: 'read_only',
+        allowedCommands: ['mkdir'],
+      });
+      const result = strict.isCommandAllowed('mkdir tmp');
+      expect(result.allowed).toBe(false);
+      expect(result.reason).toContain('read-only bash commands');
     });
   });
 
@@ -261,6 +283,34 @@ describe('SandboxManager', () => {
 
       const result = manager.validateToolCall(toolCall);
       expect(result.valid).toBe(true);
+    });
+
+    it('should block denied tools via policy profile', () => {
+      const policyManager = new SandboxManager(
+        {
+          enabled: true,
+          allowedCommands: ['echo'],
+          blockedCommands: ['rm -rf', 'sudo'],
+          allowedPaths: ['.'],
+        },
+        {
+          enabled: true,
+          defaultProfile: 'deny-bash',
+          profiles: {
+            'deny-bash': {
+              deniedTools: ['bash'],
+            },
+          },
+        },
+      );
+
+      const result = policyManager.validateToolCall({
+        id: 'call-7',
+        name: 'bash',
+        arguments: { command: 'echo hello' },
+      });
+      expect(result.valid).toBe(false);
+      expect(result.reason).toContain('denied');
     });
   });
 

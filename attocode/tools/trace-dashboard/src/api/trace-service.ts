@@ -70,6 +70,8 @@ export interface SessionListItem {
   taskCount: number;
   /** Whether this is a terminal session (multiple tasks) or single-task session */
   isTerminalSession: boolean;
+  /** Whether this session used swarm mode */
+  isSwarm: boolean;
   metrics: {
     iterations: number;
     totalTokens: number;
@@ -211,6 +213,7 @@ export async function getSessions(basePath?: string): Promise<SessionListItem[]>
         durationMs: session.durationMs,
         taskCount,
         isTerminalSession,
+        isSwarm: session.metrics.isSwarm === true || session.swarmData !== undefined,
         metrics: {
           iterations: session.metrics.iterations,
           totalTokens: session.metrics.inputTokens + session.metrics.outputTokens,
@@ -398,6 +401,15 @@ export async function compareSessions(idA: string, idB: string) {
     improvements,
     assessment,
   };
+}
+
+/**
+ * Get swarm activity data for a session
+ */
+export async function getSessionSwarmData(idOrPath: string) {
+  const session = await getSession(idOrPath);
+  if (!session) return null;
+  return session.swarmData ?? null;
 }
 
 /**

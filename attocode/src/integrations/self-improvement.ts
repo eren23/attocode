@@ -125,6 +125,18 @@ const ERROR_PATTERNS: Array<{
     diagnosis: 'The expected content was not found (file may have changed)',
     fix: 'Re-read the file to get current content before editing',
   },
+  {
+    pattern: /not in.*allowlist|Command.*blocked/i,
+    category: 'permission',
+    diagnosis: 'The command is not in the sandbox allowlist',
+    fix: 'Use built-in tools instead: read_file, write_file, edit_file, glob, grep. These bypass the sandbox allowlist.',
+  },
+  {
+    pattern: /Expected string, received (array|object)/i,
+    category: 'wrong_args',
+    diagnosis: 'The content argument must be a single string, not an array or object',
+    fix: 'content must be a single string. Join lines with newlines (\\n), not an array of strings.',
+  },
 ];
 
 // =============================================================================

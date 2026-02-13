@@ -1734,3 +1734,37 @@ export function summarizeRepoStructure(repoMap: RepoMap): string {
 
   return lines.join('\n');
 }
+
+/**
+ * Generate an aider-style lightweight repo map: file tree with key symbols.
+ * Used as fallback when task-specific selection returns nothing.
+ */
+export function generateLightweightRepoMap(repoMap: RepoMap, maxTokens: number = 10000): string {
+  const lines: string[] = ['## Repository Map\n'];
+  const byDir = new Map<string, CodeChunk[]>();
+  for (const chunk of repoMap.chunks.values()) {
+    const dir = path.dirname(chunk.filePath);
+    if (!byDir.has(dir)) byDir.set(dir, []);
+    byDir.get(dir)!.push(chunk);
+  }
+
+  let tokenEstimate = 0;
+  for (const [dir, chunks] of [...byDir].sort((a, b) => a[0].localeCompare(b[0]))) {
+    const dirLine = `${dir}/`;
+    lines.push(dirLine);
+    tokenEstimate += dirLine.length * 0.25;
+
+    for (const chunk of chunks.sort((a, b) => b.importance - a.importance)) {
+      const symbols = chunk.symbols.slice(0, 5).join(', ');
+      const fileLine = `  ${path.basename(chunk.filePath)}${symbols ? ` (${symbols})` : ''}`;
+      lines.push(fileLine);
+      tokenEstimate += fileLine.length * 0.25;
+      if (tokenEstimate > maxTokens) break;
+    }
+    if (tokenEstimate > maxTokens) {
+      lines.push('  ... (truncated)');
+      break;
+    }
+  }
+  return lines.join('\n');
+}

@@ -14,6 +14,7 @@ import { TaskInspector } from './TaskInspector';
 interface TaskDAGPanelProps {
   tasks: SwarmTask[];
   edges: [string, string][];
+  dir?: string;
 }
 
 // Layout constants
@@ -54,7 +55,7 @@ function computeLayout(tasks: SwarmTask[]): NodePosition[] {
   return positions;
 }
 
-export function TaskDAGPanel({ tasks, edges }: TaskDAGPanelProps) {
+export function TaskDAGPanel({ tasks, edges, dir }: TaskDAGPanelProps) {
   const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
 
   const positions = useMemo(() => computeLayout(tasks), [tasks]);
@@ -178,7 +179,7 @@ export function TaskDAGPanel({ tasks, edges }: TaskDAGPanelProps) {
       </div>
 
       {/* Task Inspector slide-out */}
-      <TaskInspector task={selectedTask} onClose={() => setSelectedTaskId(null)} />
+      <TaskInspector task={selectedTask} onClose={() => setSelectedTaskId(null)} dir={dir} />
     </div>
   );
 }

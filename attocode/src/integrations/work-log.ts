@@ -54,7 +54,7 @@ export class WorkLog {
   constructor(config: WorkLogConfig = {}) {
     this.config = {
       maxEntriesPerCategory: config.maxEntriesPerCategory ?? 30,
-      maxCompactTokens: config.maxCompactTokens ?? 500,
+      maxCompactTokens: config.maxCompactTokens ?? 1500,
     };
   }
 
@@ -235,17 +235,17 @@ export class WorkLog {
     if (this.filesRead.size > 0) {
       const fileEntries = Array.from(this.filesRead.entries())
         .filter(([k]) => !k.startsWith('search:'))
-        .slice(-5)
+        .slice(-10)
         .map(([path, summary]) => `  ${path}: ${summary}`)
         .join('\n');
       if (fileEntries) {
-        sections.push(`Files read (${this.filesRead.size} total, showing last 5):\n${fileEntries}`);
+        sections.push(`Files read (${this.filesRead.size} total, showing last 10):\n${fileEntries}`);
       }
     }
 
     // Test results (last 3)
     if (this.testResults.length > 0) {
-      const recentTests = this.testResults.slice(-3);
+      const recentTests = this.testResults.slice(-5);
       const testLines = recentTests.map(t =>
         `  ${t.passed ? 'PASS' : 'FAIL'}: ${t.test}${t.error ? ` (${t.error.slice(0, 80)})` : ''}`
       ).join('\n');

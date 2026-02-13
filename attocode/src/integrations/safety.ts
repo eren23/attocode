@@ -9,11 +9,18 @@ import { resolve, isAbsolute, dirname } from 'node:path';
 import { realpathSync, existsSync, lstatSync } from 'node:fs';
 import type {
   SandboxConfig,
+  PolicyEngineConfig,
   HumanInLoopConfig,
   ToolCall,
   ToolResult,
   ApprovalRequest,
 } from '../types.js';
+import {
+  evaluateBashCommandByProfile,
+  isToolAllowedByProfile,
+  resolvePolicyProfile,
+} from './policy-engine.js';
+import { stripCdPrefix } from './bash-policy.js';
 
 // =============================================================================
 // SANDBOX MANAGER
@@ -24,15 +31,27 @@ import type {
  */
 export class SandboxManager {
   private config: SandboxConfig;
+  private policyEngineConfig?: PolicyEngineConfig;
 
-  constructor(config: SandboxConfig) {
+  constructor(config: SandboxConfig, policyEngineConfig?: PolicyEngineConfig | false) {
     this.config = config;
+    this.policyEngineConfig = policyEngineConfig || undefined;
   }
 
   /**
    * Check if a command is allowed.
    */
   isCommandAllowed(command: string): { allowed: boolean; reason?: string } {
+    const { profile } = resolvePolicyProfile({
+      policyEngine: this.policyEngineConfig,
+      sandboxConfig: this.config,
+    });
+
+    const policyDecision = evaluateBashCommandByProfile(command, profile);
+    if (!policyDecision.allowed) {
+      return { allowed: false, reason: policyDecision.reason };
+    }
+
     // Check blocked patterns first
     for (const blocked of this.config.blockedCommands || []) {
       if (command.includes(blocked)) {
@@ -42,10 +61,15 @@ export class SandboxManager {
 
     // Check allowed commands
     const allowedCommands = this.config.allowedCommands || [];
-    const commandBase = command.split(' ')[0];
+    const effective = stripCdPrefix(command);
+    const commandBase = effective.split(' ')[0];
 
     if (allowedCommands.length > 0 && !allowedCommands.includes(commandBase)) {
-      return { allowed: false, reason: `Command not in allowlist: ${commandBase}` };
+      const suggestions = allowedCommands.slice(0, 10).join(', ');
+      return {
+        allowed: false,
+        reason: `Command '${commandBase}' is not in the sandbox allowlist. Use built-in tools (read_file, write_file, edit_file, glob, grep) instead, or use bash with an allowed command: ${suggestions}...`,
+      };
     }
 
     return { allowed: true };
@@ -157,6 +181,15 @@ export class SandboxManager {
    */
   validateToolCall(toolCall: ToolCall): { valid: boolean; reason?: string } {
     const args = toolCall.arguments as Record<string, unknown>;
+    const { profile } = resolvePolicyProfile({
+      policyEngine: this.policyEngineConfig,
+      sandboxConfig: this.config,
+    });
+
+    const toolDecision = isToolAllowedByProfile(toolCall.name, profile);
+    if (!toolDecision.allowed) {
+      return { valid: false, reason: toolDecision.reason };
+    }
 
     // Check for command execution tools
     if (toolCall.name === 'bash' || toolCall.name === 'shell' || toolCall.name === 'execute') {
@@ -480,9 +513,13 @@ export class SafetyManager {
   public sandbox: SandboxManager | null = null;
   public humanInLoop: HumanInLoopManager | null = null;
 
-  constructor(sandboxConfig: SandboxConfig | false, hilConfig: HumanInLoopConfig | false) {
+  constructor(
+    sandboxConfig: SandboxConfig | false,
+    hilConfig: HumanInLoopConfig | false,
+    policyEngineConfig?: PolicyEngineConfig | false,
+  ) {
     if (sandboxConfig && sandboxConfig.enabled !== false) {
-      this.sandbox = new SandboxManager(sandboxConfig);
+      this.sandbox = new SandboxManager(sandboxConfig, policyEngineConfig);
     }
 
     if (hilConfig && hilConfig.enabled !== false) {
@@ -613,7 +650,8 @@ interface AuditSummary {
 
 export function createSafetyManager(
   sandboxConfig: SandboxConfig | false,
-  hilConfig: HumanInLoopConfig | false
+  hilConfig: HumanInLoopConfig | false,
+  policyEngineConfig?: PolicyEngineConfig | false,
 ): SafetyManager {
-  return new SafetyManager(sandboxConfig, hilConfig);
+  return new SafetyManager(sandboxConfig, hilConfig, policyEngineConfig);
 }

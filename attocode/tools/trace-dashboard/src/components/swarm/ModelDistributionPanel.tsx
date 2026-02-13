@@ -22,6 +22,8 @@ function shortModelName(model: string): string {
 }
 
 export function ModelDistributionPanel({ state }: ModelDistributionPanelProps) {
+  const orchestrator = state?.status?.orchestrator;
+
   const modelUsage = useMemo((): ModelUsageEntry[] => {
     if (!state?.tasks) return [];
 
@@ -45,6 +47,23 @@ export function ModelDistributionPanel({ state }: ModelDistributionPanelProps) {
       }
     }
 
+    // Include orchestrator model usage if available
+    if (orchestrator && orchestrator.model) {
+      const existing = map.get(orchestrator.model);
+      if (existing) {
+        // Orchestrator uses the same model as some workers - merge tokens/cost
+        existing.tokens += orchestrator.tokens;
+        existing.cost += orchestrator.cost;
+      } else {
+        map.set(orchestrator.model, {
+          tasks: orchestrator.calls,
+          tokens: orchestrator.tokens,
+          cost: orchestrator.cost,
+          qualityScores: [],
+        });
+      }
+    }
+
     return Array.from(map.entries()).map(([model, data]) => ({
       model,
       tasks: data.tasks,
@@ -55,7 +74,7 @@ export function ModelDistributionPanel({ state }: ModelDistributionPanelProps) {
           ? data.qualityScores.reduce((a, b) => a + b, 0) / data.qualityScores.length
           : null,
     }));
-  }, [state?.tasks]);
+  }, [state?.tasks, orchestrator]);
 
   const pieData = modelUsage.map((m) => ({
     name: shortModelName(m.model),

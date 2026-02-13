@@ -5,6 +5,107 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.3] - 2026-02-13
+
+### Added
+
+#### Pre-Dispatch Auto-Split
+- **Pre-dispatch auto-split** — Proactively splits high-complexity foundation tasks before dispatch using heuristic pre-filtering + LLM judgment (`shouldAutoSplit`, `judgeSplit` in orchestrator, `autoSplit` config in types)
+
+#### Per-Model Hollow Tracking
+- **Per-model hollow tracking** — Separate hollow completion tracking per model (`recordHollow`, `getHollowRate`, `getHollowCount` in `ModelHealthTracker`), hollow-aware worker selection sorting
+
+#### Unified Policy Engine
+- **Unified policy engine** (`policy-engine.ts`, 334 lines) — Centralized permission resolution for all tool and bash operations, merges built-in defaults with user/project overrides, supports per-task-type policy profiles
+
+#### Bash Policy Module
+- **Bash policy module** (`bash-policy.ts`, 168 lines) — Single source of truth for bash command classification (read-only, write, file mutation patterns), replaces scattered inline regex
+
+#### Per-Task-Type Configuration
+- **Per-task-type configuration** — `BUILTIN_TASK_TYPE_CONFIGS` with type-specific timeouts, budgets, tool requirements, and policy profiles for implement/test/refactor/research/review/document tasks
+
+#### Resilience & Recovery
+- **Artifact-aware cascade skip** — Tasks with failed dependencies check for on-disk artifacts before skipping; partial results from failed predecessors are reused
+- **Artifact inventory** — Post-swarm disk scan (`collectArtifactInventory`) that reports total files, bytes, and per-task file lists in `swarm.complete` event
+- **Mid-swarm re-planning** — Stall detection (`swarm.stall` event) with progress ratio monitoring; automatic re-planning (`swarm.replan`) that generates replacement tasks for stuck work
+- **All-probe-failure abort** — `swarm.abort` event when all probe models fail, preventing infinite retry loops
+- **Wave-level all-failed recovery** — `swarm.wave.allFailed` event and recovery path when every task in a wave fails
+- **Circuit breaker for rate limits** — `swarm.circuit.open`/`closed` events with configurable pause duration
+
+#### Decision Traceability
+- **Decision traceability** — Full per-attempt event records (`swarm.task.attempt`) with model, duration, tool calls, failure mode; plus `swarm.task.resilience` events for recovery strategies
+
+#### Foundation Task Detection
+- **Foundation task detection** — Tasks with 3+ dependents auto-tagged `isFoundation`, receive extra retries (+1) and relaxed quality thresholds (-1)
+
+#### Quality Gate Enhancements
+- **Quality gate enhancements** — `recordQualityRejection` on `ModelHealthTracker` undoes premature `recordSuccess`; pre-flight rejection tracking; file artifact passing to quality judge
+
+#### Swarm Events & Observability
+- **Swarm phase progress events** — `swarm.phase.progress` for decomposing/planning/scheduling visibility in dashboard
+- **Orchestrator LLM call tracking** — `swarm.orchestrator.llm` events for all orchestrator-level LLM calls with token/cost tracking
+
+#### Other Additions
+- **Smart decomposer dependency mapping** — Improved smart-decomposer with proper 0-based task ID mapping for dependency references
+- **Model selector write capability** — `selectWorkerForCapability` now handles `'write'` capability with fallback to code workers
+- **Swarm config YAML loader enhancements** — Extended YAML config support for all new config fields (`autoSplit`, `hollowTermination`, `probeModels`, `artifactAwareSkip`, `permissions`, `policyProfiles`, `taskTypeConfigs`)
+
+### Fixed
+
+- **SwarmFileWatcher replay bug** — When `sinceSeq=0`, watcher incorrectly skipped to end of `events.jsonl` producing empty Event Feed; fixed to replay from offset 0
+- **Worker-pool double-selection** — `dispatch()` now accepts optional pre-selected worker to avoid selecting a different worker than intended
+- **toolAccessMode default** — Reverted from `'whitelist'` to `'all'` (whitelist broke swarms without explicit `allowedTools`)
+- **swarm-event-bridge completion** — `swarm.complete` now correctly updates `lastStatus.phase` to `'completed'` and cancels pending debounced writes
+- **Hollow recording specificity** — Changed generic `recordFailure(model, 'error')` to `recordHollow(model)` for hollow completions, preserving failure tracking while adding hollow-specific metrics
+- **selectAlternativeModel ghost models** — Returns `undefined` when no configured alternative exists instead of injecting unconfigured fallback workers
+- **Subagent cleanup** — Per-agent blackboard cleanup (`releaseAll` + `unsubscribeAgent`) for subagents, full `clear()` for root
+- **DynamicBudgetPool parallel spawns** — Temporarily swapped in for parallel spawn operations
+- **Quality gate file artifacts** — `evaluateWorkerOutput` accepts optional `fileArtifacts` param for passing actual file contents to judge
+
+### Improved
+
+- **Agent.ts** — +582 lines of improvements including enhanced subagent lifecycle, better cancellation handling, improved spawn orchestration
+- **Swarm orchestrator** — +1,984 lines with comprehensive resilience, traceability, and recovery improvements
+- **Task queue** — +293 lines with `partialDependencyThreshold` support, improved wave scheduling
+- **Worker pool** — +282 lines with better dispatch logic, worker selection improvements
+- **Quality gate** — +356 lines with enhanced evaluation, pre-flight checks, artifact awareness
+- **Economics** — +181 lines with improved budget tracking and doom loop detection
+- **Safety module** — Enhanced safety checks and policy integration
+- **CLI** — Updated CLI with new command support and configuration options
+
+### Tests
+
+#### New Test Files (~6,391 lines)
+- `tests/swarm/auto-split.test.ts` — Pre-dispatch auto-split heuristics, LLM judge parsing, config defaults (11 tests)
+- `tests/swarm/anti-death.test.ts` — Death spiral prevention, hollow termination, probe model fallback
+- `tests/swarm/artifact-inventory.test.ts` — Post-swarm artifact collection and reporting
+- `tests/swarm/cascade-timing.test.ts` — Cascade skip timing, artifact-aware skip, partial dependency threshold
+- `tests/swarm/decision-traceability.test.ts` — Per-attempt records, resilience events, decision logging
+- `tests/swarm/resilience-all-paths.test.ts` — All resilience recovery paths (micro-decompose, degraded acceptance, auto-split)
+- `tests/swarm/resume-recovery.test.ts` — Session resume, checkpoint restore, wave recovery
+- `tests/swarm/swarm-orchestrator-resilience.test.ts` — Orchestrator-level resilience integration tests
+- `tests/integrations/bash-policy.test.ts` — Bash command classification, read-only detection, mutation patterns
+- `tests/integrations/policy-engine.test.ts` — Policy resolution, profile merging, override precedence
+
+#### Modified Test Files
+- `tests/swarm/model-selector.test.ts` — Added 7 new tests for hollow tracking, quality rejection, write capability
+- `tests/swarm/swarm-quality-gate.test.ts` — Enhanced quality gate test coverage
+- `tests/swarm/swarm-quality-death-spiral.test.ts` — Death spiral detection improvements
+- `tests/swarm/swarm-hollow-completion.test.ts` — Hollow completion handling updates
+- `tests/swarm/foundation-and-gaps.test.ts` — Foundation task detection tests
+- `tests/swarm/config-loader.test.ts` — Extended config loading tests
+- `tests/swarm/types.test.ts` — New type validation tests
+- `tests/swarm/worker-prompts.test.ts` — Worker prompt generation tests
+- `tests/economics.test.ts` — Economics system test updates
+- `tests/smart-decomposer-deps.test.ts` — Decomposer dependency mapping tests
+- `tests/tool-recommendation.test.ts` — Tool recommendation test updates
+
+### Documentation
+
+- `docs/swarm-mode.md` — Updated swarm mode documentation
+- `docs/swarm/configuration-guide.md` — Extended configuration guide with new options
+- `docs/swarm/examples/quality-focused.yaml` — Quality-focused swarm configuration example
+
 ## [0.2.2] - 2026-02-10
 
 ### Added
@@ -419,7 +520,8 @@ A new execution mode where one orchestrator model decomposes tasks into subtask 
 - Sandbox execution for bash commands (macOS Seatbelt)
 - Dangerous operation blocking in strict mode
 
-[Unreleased]: https://github.com/eren23/attocode/compare/v0.2.2...HEAD
+[Unreleased]: https://github.com/eren23/attocode/compare/v0.2.3...HEAD
+[0.2.3]: https://github.com/eren23/attocode/compare/v0.2.2...v0.2.3
 [0.2.2]: https://github.com/eren23/attocode/compare/v0.2.1...v0.2.2
 [0.2.1]: https://github.com/eren23/attocode/compare/v0.2.0...v0.2.1
 [0.2.0]: https://github.com/eren23/attocode/compare/v0.1.9...v0.2.0

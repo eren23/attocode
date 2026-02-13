@@ -17,6 +17,25 @@ import { getModelPricing, calculateCost } from './openrouter-pricing.js';
 // =============================================================================
 
 /**
+ * Configurable economics thresholds for tuning doom loop and exploration detection.
+ * Passed via ExecutionBudget.tuning; defaults are used when omitted.
+ */
+export interface EconomicsTuning {
+  /** Threshold for exact doom loop detection (default: 3) */
+  doomLoopThreshold?: number;
+  /** Threshold for fuzzy doom loop detection (default: doomLoopThreshold + 1) */
+  doomLoopFuzzyThreshold?: number;
+  /** Unique files read before exploration saturation warning (default: 10) */
+  explorationFileThreshold?: number;
+  /** Iterations in exploration with diminishing returns before warning (default: 5) */
+  explorationIterThreshold?: number;
+  /** Iterations with zero tool calls before forceTextOnly (default: 5) */
+  zeroProgressThreshold?: number;
+  /** Iteration checkpoint for adaptive budget reduction (default: 5) */
+  progressCheckpoint?: number;
+}
+
+/**
  * Execution budget configuration.
  */
 export interface ExecutionBudget {
@@ -33,6 +52,9 @@ export interface ExecutionBudget {
   // Iteration is now soft guidance (not hard limit)
   targetIterations: number;    // e.g., 20 (advisory)
   maxIterations: number;       // e.g., 100 (absolute safety cap)
+
+  /** Configurable thresholds for economics behavior tuning */
+  tuning?: EconomicsTuning;
 }
 
 /**
@@ -108,6 +130,8 @@ export interface PhaseState {
   consecutiveTestFailures: number;
   /** Whether agent is in a test-fix cycle */
   inTestFixCycle: boolean;
+  /** Consecutive bash command failures (any command, not just tests) */
+  consecutiveBashFailures: number;
 }
 
 /**
@@ -228,6 +252,13 @@ Do not retry the same fix. Try a new approach.`;
 /**
  * Phase budget exploration exceeded prompt.
  */
+const BASH_FAILURE_CASCADE_PROMPT = (failures: number) =>
+`[System] ${failures} consecutive bash commands have failed. STOP and explain:
+1. What are you trying to accomplish?
+2. Why are the commands failing?
+3. What is your alternative approach?
+Do not run another bash command until you've explained the issue.`;
+
 const EXPLORATION_BUDGET_EXCEEDED_PROMPT = (pct: number) =>
 `[System] You've spent ${pct}% of your iterations in exploration. Start making edits NOW.
 Do not read more files. Use what you know to make the fix.`;
@@ -238,6 +269,42 @@ Do not read more files. Use what you know to make the fix.`;
 const VERIFICATION_RESERVE_PROMPT =
 `[System] You are running low on iterations. Run your tests NOW to verify your changes.
 Do not make more edits until you've confirmed whether the current fix works.`;
+
+/**
+ * Extract success and output from a bash tool result.
+ * In production, bash results are objects `{ success, output, metadata }`.
+ * Tests may pass strings directly. This normalizes both.
+ */
+export function extractBashResult(result: unknown): { success: boolean; output: string } {
+  if (result && typeof result === 'object') {
+    const obj = result as Record<string, unknown>;
+    return {
+      success: obj.success !== false,
+      output: typeof obj.output === 'string' ? obj.output : '',
+    };
+  }
+  if (typeof result === 'string') {
+    return { success: true, output: result };
+  }
+  return { success: true, output: '' };
+}
+
+/**
+ * Regex for common bash file-read commands (simple, no pipes/redirects).
+ * Captures the file path for normalized doom loop fingerprinting.
+ */
+const BASH_FILE_READ_RE = /^\s*(cat|head|tail|wc|less|more|file|stat|md5sum|sha256sum)\b(?:\s+-[^\s]+)*\s+((?:\/|\.\/|\.\.\/)[\w.\/\-@]+|[\w.\-@][\w.\/\-@]*)\s*$/;
+
+/**
+ * Extract the file target from a simple bash file-read command.
+ * Returns null for complex commands (pipes, redirects, non-file-read commands).
+ * Used to normalize doom loop fingerprints across cat/head/tail/wc targeting the same file.
+ */
+export function extractBashFileTarget(command: string): string | null {
+  if (/[|;&<>]/.test(command)) return null; // pipes/redirects = complex, skip
+  const match = command.match(BASH_FILE_READ_RE);
+  return match ? match[2] : null;
+}
 
 /**
  * Primary argument keys that identify the *target* of a tool call.
@@ -254,6 +321,14 @@ const PRIMARY_KEYS = ['path', 'file_path', 'command', 'pattern', 'query', 'url',
 export function computeToolFingerprint(toolName: string, argsStr: string): string {
   try {
     const args = JSON.parse(argsStr || '{}') as Record<string, unknown>;
+
+    // W1: Normalize bash file-read commands so cat/head/tail/wc targeting the same file
+    // produce the same fingerprint, triggering doom loop detection.
+    if (toolName === 'bash' && typeof args.command === 'string') {
+      const fileTarget = extractBashFileTarget(args.command);
+      if (fileTarget) return `bash:file_read:${fileTarget}`;
+    }
+
     const primaryArgs: Record<string, unknown> = {};
     for (const key of PRIMARY_KEYS) {
       if (key in args) {
@@ -290,6 +365,8 @@ export class ExecutionEconomicsManager {
   private extensionHandler?: (request: ExtensionRequest) => Promise<Partial<ExecutionBudget> | null>;
 
   constructor(budget?: Partial<ExecutionBudget>) {
+    const tuning = budget?.tuning;
+
     this.budget = {
       // Hard limits
       maxTokens: budget?.maxTokens ?? 200000,
@@ -304,6 +381,9 @@ export class ExecutionEconomicsManager {
       // Iteration guidance
       targetIterations: budget?.targetIterations ?? 20,
       maxIterations: budget?.maxIterations ?? 100,
+
+      // Tuning
+      tuning,
     };
 
     this.usage = {
@@ -326,13 +406,13 @@ export class ExecutionEconomicsManager {
       stuckCount: 0,
     };
 
-    // Initialize doom loop detection state
+    // Initialize doom loop detection state (thresholds configurable via tuning)
     this.loopState = {
       doomLoopDetected: false,
       lastTool: null,
       consecutiveCount: 0,
-      threshold: 3,
-      fuzzyThreshold: 4,
+      threshold: tuning?.doomLoopThreshold ?? 3,
+      fuzzyThreshold: tuning?.doomLoopFuzzyThreshold ?? (tuning?.doomLoopThreshold ? tuning.doomLoopThreshold + 1 : 4),
       lastWarningTime: 0,
     };
 
@@ -350,6 +430,7 @@ export class ExecutionEconomicsManager {
       lastTestPassed: null,
       consecutiveTestFailures: 0,
       inTestFixCycle: false,
+      consecutiveBashFailures: 0,
     };
 
     this.startTime = Date.now();
@@ -497,6 +578,18 @@ export class ExecutionEconomicsManager {
       this.progress.lastMeaningfulProgress = now;
       this.progress.stuckCount = 0;
 
+      // Extract result from bash tool output (object or string)
+      const bashResult = extractBashResult(_result);
+
+      // Track consecutive bash failures (any bash command, not just tests)
+      if (_result !== undefined) {
+        if (!bashResult.success) {
+          this.phaseState.consecutiveBashFailures++;
+        } else {
+          this.phaseState.consecutiveBashFailures = 0;
+        }
+      }
+
       // Detect test runs and track outcomes
       if (command.includes('test') || command.includes('pytest') || command.includes('npm test') || command.includes('jest')) {
         this.phaseState.testsRun++;
@@ -505,10 +598,9 @@ export class ExecutionEconomicsManager {
           this.transitionPhase('verifying', 'Tests run after edits');
         }
 
-        // Track test pass/fail from result if available
-        if (_result !== undefined) {
-          const resultStr = typeof _result === 'string' ? _result : '';
-          this.parseTestOutcome(command, resultStr);
+        // Fix: extract output from result object, not treat as string
+        if (bashResult.output) {
+          this.parseTestOutcome(command, bashResult.output);
         }
       }
     }
@@ -634,8 +726,9 @@ export class ExecutionEconomicsManager {
       return;
     }
 
-    // After reading 10+ unique files without edits, suggest transition
-    if (uniqueFilesRead.size >= 10 && filesModified.size === 0) {
+    // After N+ unique files without edits, suggest transition (configurable, default: 10)
+    const fileThreshold = this.budget.tuning?.explorationFileThreshold ?? 10;
+    if (uniqueFilesRead.size >= fileThreshold && filesModified.size === 0) {
       this.phaseState.shouldTransition = true;
       this.emit({
         type: 'exploration.saturation',
@@ -645,8 +738,9 @@ export class ExecutionEconomicsManager {
       return;
     }
 
-    // After 5+ iterations in exploration with diminishing returns (< 2 new files)
-    if (iterationsInPhase >= 5 && recentNewFiles < 2 && filesModified.size === 0) {
+    // After N+ iterations in exploration with diminishing returns (configurable, default: 5)
+    const iterThreshold = this.budget.tuning?.explorationIterThreshold ?? 5;
+    if (iterationsInPhase >= iterThreshold && recentNewFiles < 2 && filesModified.size === 0) {
       this.phaseState.shouldTransition = true;
       this.emit({
         type: 'exploration.saturation',
@@ -721,6 +815,38 @@ export class ExecutionEconomicsManager {
     }
 
     // =========================================================================
+    // ZERO PROGRESS DETECTION — early termination for workers making no tool calls (D1)
+    // =========================================================================
+    const zeroProgressThreshold = this.budget.tuning?.zeroProgressThreshold ?? 5;
+    if (this.usage.iterations >= zeroProgressThreshold && this.usage.toolCalls === 0) {
+      return {
+        canContinue: true,
+        reason: `Zero tool calls in ${this.usage.iterations} iterations`,
+        budgetType: 'iterations',
+        isHardLimit: false,
+        isSoftLimit: true,
+        percentUsed: (this.usage.iterations / this.budget.maxIterations) * 100,
+        suggestedAction: 'stop',
+        forceTextOnly: true,
+        injectedPrompt: `[System] CRITICAL: You have completed ${this.usage.iterations} iterations without making a single tool call. ` +
+          `This means you are NOT doing any work. You MUST use your tools (read_file, write_file, grep, bash, etc.) ` +
+          `to accomplish your task. If you cannot use tools, explain what is blocking you and exit. ` +
+          `Do NOT continue without tool usage.`,
+      };
+    }
+
+    // =========================================================================
+    // ADAPTIVE ITERATION BUDGET — reduce max iterations if no progress at checkpoint (D4)
+    // =========================================================================
+    const checkpoint = this.budget.tuning?.progressCheckpoint ?? 5;
+    if (this.usage.iterations === checkpoint && this.usage.toolCalls === 0) {
+      const reducedMax = checkpoint + 3; // give 3 more iterations with warning
+      if (this.budget.maxIterations > reducedMax) {
+        this.budget.maxIterations = reducedMax;
+      }
+    }
+
+    // =========================================================================
     // DOOM LOOP DETECTION - Strong intervention
     // =========================================================================
     if (this.loopState.doomLoopDetected) {
@@ -768,6 +894,22 @@ export class ExecutionEconomicsManager {
         percentUsed: (this.usage.iterations / this.budget.targetIterations) * 100,
         suggestedAction: 'warn',
         injectedPrompt: TEST_FIX_RETHINK_PROMPT(this.phaseState.consecutiveTestFailures),
+      };
+    }
+
+    // =========================================================================
+    // BASH FAILURE CASCADE - Strong intervention after 3+ consecutive failures
+    // =========================================================================
+    if (this.phaseState.consecutiveBashFailures >= 3) {
+      return {
+        canContinue: true,
+        reason: `${this.phaseState.consecutiveBashFailures} consecutive bash failures`,
+        budgetType: 'iterations',
+        isHardLimit: false,
+        isSoftLimit: true,
+        percentUsed: (this.usage.iterations / this.budget.targetIterations) * 100,
+        suggestedAction: 'warn',
+        injectedPrompt: BASH_FAILURE_CASCADE_PROMPT(this.phaseState.consecutiveBashFailures),
       };
     }
 
@@ -1014,6 +1156,13 @@ export class ExecutionEconomicsManager {
   }
 
   /**
+   * Get actual file paths modified during this session.
+   */
+  getModifiedFilePaths(): string[] {
+    return [...this.progress.filesModified];
+  }
+
+  /**
    * Get doom loop detection state.
    */
   getLoopState(): LoopDetectionState {
@@ -1034,6 +1183,7 @@ export class ExecutionEconomicsManager {
     lastTestPassed: boolean | null;
     consecutiveTestFailures: number;
     inTestFixCycle: boolean;
+    consecutiveBashFailures: number;
   } {
     return {
       phase: this.phaseState.phase,
@@ -1046,6 +1196,7 @@ export class ExecutionEconomicsManager {
       lastTestPassed: this.phaseState.lastTestPassed,
       consecutiveTestFailures: this.phaseState.consecutiveTestFailures,
       inTestFixCycle: this.phaseState.inTestFixCycle,
+      consecutiveBashFailures: this.phaseState.consecutiveBashFailures,
     };
   }
 
@@ -1083,13 +1234,14 @@ export class ExecutionEconomicsManager {
       stuckCount: 0,
     };
 
-    // Reset loop detection state
+    // Reset loop detection state (preserve tuning thresholds)
+    const tuning = this.budget.tuning;
     this.loopState = {
       doomLoopDetected: false,
       lastTool: null,
       consecutiveCount: 0,
-      threshold: 3,
-      fuzzyThreshold: 4,
+      threshold: tuning?.doomLoopThreshold ?? 3,
+      fuzzyThreshold: tuning?.doomLoopFuzzyThreshold ?? (tuning?.doomLoopThreshold ? tuning.doomLoopThreshold + 1 : 4),
       lastWarningTime: 0,
     };
 
@@ -1107,6 +1259,7 @@ export class ExecutionEconomicsManager {
       lastTestPassed: null,
       consecutiveTestFailures: 0,
       inTestFixCycle: false,
+      consecutiveBashFailures: 0,
     };
 
     this.startTime = Date.now();
