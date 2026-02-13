@@ -10,6 +10,7 @@ import { defineTool } from './registry.js';
 import { classifyCommand, classifyBashCommandDangerLevel } from './permission.js';
 import { coerceBoolean } from './coercion.js';
 import type { ToolResult, DangerLevel } from './types.js';
+import { logger } from '../integrations/logger.js';
 
 // =============================================================================
 // BASH COMMAND TOOL
@@ -83,7 +84,7 @@ export const bashTool = defineTool(
             // Verify termination after SIGKILL, attempt process group kill if needed
             setTimeout(() => {
               if (!proc.killed && proc.pid) {
-                console.warn(`[Bash] Process ${proc.pid} may be zombie after SIGKILL, attempting process group kill`);
+                logger.warn(`[Bash] Process ${proc.pid} may be zombie after SIGKILL, attempting process group kill`);
                 try {
                   // Try to kill the entire process group (negative PID)
                   process.kill(-proc.pid, 'SIGKILL');

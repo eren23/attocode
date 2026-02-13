@@ -21,6 +21,7 @@ import {
   resolvePolicyProfile,
 } from './policy-engine.js';
 import { stripCdPrefix } from './bash-policy.js';
+import { logger } from './logger.js';
 
 // =============================================================================
 // SANDBOX MANAGER
@@ -399,21 +400,15 @@ export class HumanInLoopManager {
     context: string,
     risk: RiskLevel
   ): Promise<ApprovalResult> {
-    console.log('\n┌─────────────────────────────────────────────────┐');
-    console.log('│           APPROVAL REQUIRED                      │');
-    console.log('├─────────────────────────────────────────────────┤');
-    console.log(`│ Tool: ${toolCall.name.padEnd(42)}│`);
-    console.log(`│ Risk: ${risk.toUpperCase().padEnd(42)}│`);
-    console.log('├─────────────────────────────────────────────────┤');
-    console.log('│ Arguments:                                       │');
-    console.log(`│ ${JSON.stringify(toolCall.arguments).slice(0, 47).padEnd(47)}│`);
-    console.log('├─────────────────────────────────────────────────┤');
-    console.log('│ Context:                                         │');
-    console.log(`│ ${context.slice(0, 47).padEnd(47)}│`);
-    console.log('└─────────────────────────────────────────────────┘');
+    logger.info('Approval required', {
+      tool: toolCall.name,
+      risk: risk.toUpperCase(),
+      arguments: JSON.stringify(toolCall.arguments).slice(0, 47),
+      context: context.slice(0, 47),
+    });
 
     // In non-interactive mode, auto-approve for demo
-    console.log('[Demo mode: Auto-approving]');
+    logger.debug('Demo mode: Auto-approving');
     this.logAction(toolCall, true, 'demo', risk);
     return { approved: true, approver: 'demo' };
   }

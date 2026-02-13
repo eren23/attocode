@@ -22,7 +22,7 @@ import * as path from 'node:path';
 import type { LLMProvider, LLMProviderWithTools, ToolDefinitionSchema } from '../../providers/types.js';
 import type { AgentRegistry } from '../agent-registry.js';
 import type { SharedBlackboard } from '../shared-blackboard.js';
-import { createSmartDecomposer, parseDecompositionResponse, validateDecomposition, type LLMDecomposeFunction } from '../smart-decomposer.js';
+import { createSmartDecomposer, parseDecompositionResponse, validateDecomposition, type LLMDecomposeFunction, type SmartDecompositionResult } from '../smart-decomposer.js';
 import { createResultSynthesizer } from '../result-synthesizer.js';
 import type {
   SwarmConfig,
@@ -308,7 +308,7 @@ Rules:
         ],
         {
           model: this.config.orchestratorModel,
-          maxTokens: 4000,
+          maxTokens: 16000,
           temperature: 0.3,
         },
       );
@@ -316,7 +316,54 @@ Rules:
       this.trackOrchestratorUsage(response as any, 'decompose');
 
       // Use parseDecompositionResponse which handles markdown code blocks and edge cases
-      return parseDecompositionResponse(response.content);
+      const result = parseDecompositionResponse(response.content);
+
+      // If decomposition returned 0 subtasks, log diagnostics and retry with explicit JSON instruction
+      if (result.subtasks.length === 0) {
+        const snippet = response.content?.slice(0, 500) ?? '(empty response)';
+        const parseError = result.parseError ?? 'unknown';
+        this.errors.push({
+          phase: 'decomposition',
+          message: `LLM returned no subtasks. Parse error: ${parseError}. Response preview: ${snippet}`,
+          recovered: true,
+        });
+        this.emit({
+          type: 'swarm.orchestrator.decision' as any,
+          decision: {
+            timestamp: Date.now(),
+            phase: 'decomposition',
+            decision: `Empty decomposition — retrying with explicit JSON instruction`,
+            reasoning: `Parse error: ${parseError}. Response preview (first 500 chars): ${snippet}`,
+          },
+        });
+
+        // Retry with explicit JSON instruction — don't include previous truncated response (wastes input tokens)
+        const retryResponse = await this.provider.chat(
+          [
+            { role: 'system', content: systemPrompt },
+            { role: 'user', content: `${task}\n\nIMPORTANT: Your previous attempt was truncated or could not be parsed (${parseError}). Return ONLY a raw JSON object with NO markdown formatting, NO explanation text, NO code fences. The JSON must have a "subtasks" array with at least 2 entries matching the schema above. Keep subtask descriptions concise to avoid truncation.` },
+          ],
+          {
+            model: this.config.orchestratorModel,
+            maxTokens: 16000,
+            temperature: 0.2,
+          },
+        );
+        this.trackOrchestratorUsage(retryResponse as any, 'decompose-retry');
+
+        const retryResult = parseDecompositionResponse(retryResponse.content);
+        if (retryResult.subtasks.length === 0) {
+          const retrySnippet = retryResponse.content?.slice(0, 500) ?? '(empty response)';
+          this.errors.push({
+            phase: 'decomposition',
+            message: `Retry also returned no subtasks. Response preview: ${retrySnippet}`,
+            recovered: false,
+          });
+        }
+        return retryResult;
+      }
+
+      return result;
     };
 
     // Configure decomposer for swarm use
@@ -364,10 +411,14 @@ Rules:
   /**
    * Track token usage from an orchestrator LLM call.
    */
-  private trackOrchestratorUsage(response: { usage?: { total_tokens?: number; prompt_tokens?: number; completion_tokens?: number } }, purpose: string): void {
+  private trackOrchestratorUsage(response: { usage?: { total_tokens?: number; prompt_tokens?: number; completion_tokens?: number; inputTokens?: number; outputTokens?: number; cost?: number } }, purpose: string): void {
     if (!response.usage) return;
-    const tokens = response.usage.total_tokens ?? ((response.usage.prompt_tokens ?? 0) + (response.usage.completion_tokens ?? 0));
-    const cost = tokens * 0.000015; // ~$15/M tokens average for orchestrator models
+    // Handle both raw API fields (total_tokens, prompt_tokens, completion_tokens)
+    // and ChatResponse fields (inputTokens, outputTokens)
+    const input = response.usage.prompt_tokens ?? response.usage.inputTokens ?? 0;
+    const output = response.usage.completion_tokens ?? response.usage.outputTokens ?? 0;
+    const tokens = response.usage.total_tokens ?? (input + output);
+    const cost = response.usage.cost ?? tokens * 0.000015; // ~$15/M tokens average for orchestrator models
     this.orchestratorTokens += tokens;
     this.orchestratorCost += cost;
     this.orchestratorCalls++;
@@ -408,11 +459,12 @@ Rules:
       // Phase 1: Decompose
       this.currentPhase = 'decomposing';
       this.emit({ type: 'swarm.phase.progress', phase: 'decomposing', message: 'Decomposing task into subtasks...' });
-      let decomposition = await this.decompose(task);
-      if (!decomposition) {
+      let decomposeOutcome = await this.decompose(task);
+      if (!decomposeOutcome.result) {
         this.currentPhase = 'failed';
-        return this.buildErrorResult('Decomposition failed — task may be too simple for swarm mode');
+        return this.buildErrorResult(`Decomposition failed: ${decomposeOutcome.failureReason}`);
       }
+      let decomposition = decomposeOutcome.result;
 
       // F5: Validate decomposition — check for cycles, invalid deps, granularity
       const validation = validateDecomposition(decomposition);
@@ -424,13 +476,14 @@ Rules:
         this.logDecision('decomposition-validation',
           `Invalid decomposition: ${validation.issues.join('; ')}`, 'Retrying...');
         // Retry decomposition once with feedback
-        decomposition = await this.decompose(
+        const retryOutcome = await this.decompose(
           `${task}\n\nIMPORTANT: Previous decomposition was invalid: ${validation.issues.join('. ')}. Fix these issues.`,
         );
-        if (!decomposition) {
+        if (!retryOutcome.result) {
           this.currentPhase = 'failed';
           return this.buildErrorResult(`Decomposition validation failed: ${validation.issues.join('; ')}`);
         }
+        decomposition = retryOutcome.result;
         const retryValidation = validateDecomposition(decomposition);
         if (!retryValidation.valid) {
           this.logDecision('decomposition-validation',
@@ -607,21 +660,24 @@ Rules:
   /**
    * Phase 1: Decompose the task into subtasks.
    */
-  private async decompose(task: string) {
+  private async decompose(task: string): Promise<{ result: SmartDecompositionResult; failureReason?: undefined } | { result: null; failureReason: string }> {
     try {
       const result = await this._decomposer.decompose(task);
 
       if (result.subtasks.length < 2) {
-        // Too simple for swarm mode
-        return null;
+        const reason = result.subtasks.length === 0
+          ? `LLM decomposition produced 0 subtasks (model: ${this.config.orchestratorModel}). Check errors above for response details.`
+          : `Decomposition produced only ${result.subtasks.length} subtask — too few for swarm mode.`;
+        this.logDecision('decomposition', `Insufficient subtasks: ${result.subtasks.length}`, reason);
+        return { result: null, failureReason: reason };
       }
 
       // Reject heuristic fallback — the generic 3-task chain is worse than aborting
       if (!result.metadata.llmAssisted) {
+        const reason = `LLM decomposition failed (model: ${this.config.orchestratorModel}), and heuristic fallback DAG was rejected as not useful.`;
         this.logDecision('decomposition',
-          'Rejected heuristic fallback DAG',
-          'LLM decomposition failed after retries. Heuristic DAG is not useful.');
-        return null;
+          'Rejected heuristic fallback DAG', reason);
+        return { result: null, failureReason: reason };
       }
 
       // Flat-DAG detection: warn when all tasks land in wave 0 with no dependencies
@@ -632,15 +688,16 @@ Rules:
           'All tasks will execute in wave 0 without ordering');
       }
 
-      return result;
+      return { result };
     } catch (error) {
+      const message = (error as Error).message;
       this.errors.push({
         phase: 'decomposition',
-        message: (error as Error).message,
+        message,
         recovered: false,
       });
-      this.emit({ type: 'swarm.error', error: (error as Error).message, phase: 'decomposition' });
-      return null;
+      this.emit({ type: 'swarm.error', error: message, phase: 'decomposition' });
+      return { result: null, failureReason: `Decomposition threw an error: ${message}` };
     }
   }
 

@@ -6,6 +6,7 @@
 
 import type { LLMProvider, ProviderConfig } from './types.js';
 import { ProviderError } from './types.js';
+import { logger } from '../integrations/logger.js';
 
 // =============================================================================
 // PROVIDER REGISTRY
@@ -68,7 +69,7 @@ export async function getProvider(preferred?: string): Promise<LLMProvider> {
 
   for (const [name, registry] of sorted) {
     if (registry.detect()) {
-      console.log(`🔌 Using provider: ${name}`);
+      logger.info(`Using provider: ${name}`);
       return registry.create();
     }
   }

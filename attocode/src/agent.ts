@@ -222,6 +222,9 @@ import type { MessageWithContent } from './providers/types.js';
 import { modelRegistry } from './costs/index.js';
 import { getModelContextLength } from './integrations/openrouter-pricing.js';
 
+// Structured logging
+import { logger, createComponentLogger } from './integrations/logger.js';
+
 // Spawn agent tools for LLM-driven subagent delegation
 import {
   createBoundSpawnAgentTool,
@@ -241,6 +244,8 @@ import {
  * Tools that are safe to execute in parallel (read-only, no side effects).
  * These tools don't modify state, so running them concurrently is safe.
  */
+const log = createComponentLogger('ProductionAgent');
+
 export const PARALLELIZABLE_TOOLS = new Set([
   'read_file', 'glob', 'grep', 'list_files', 'search_files',
   'search_code', 'get_file_info',
@@ -538,7 +543,7 @@ export class ProductionAgent {
     // Debug output only when DEBUG env var is set
     if (process.env.DEBUG) {
       const features = getEnabledFeatures(this.config);
-      console.log(`[ProductionAgent] Initializing with features: ${features.join(', ')}`);
+      log.debug('Initializing with features', { features: features.join(', ') });
     }
 
     // Hooks & Plugins
@@ -660,7 +665,7 @@ export class ProductionAgent {
       // Load rules asynchronously - tracked for ensureReady()
       this.initPromises.push(
         this.rules.loadRules().catch(err => {
-          console.warn('[ProductionAgent] Failed to load rules:', err);
+          log.warn('Failed to load rules', { error: String(err) });
         })
       );
     }
@@ -696,7 +701,7 @@ export class ProductionAgent {
     // Load user agents asynchronously - tracked for ensureReady()
     this.initPromises.push(
       this.agentRegistry.loadUserAgents().catch(err => {
-        console.warn('[ProductionAgent] Failed to load user agents:', err);
+        log.warn('Failed to load user agents', { error: String(err) });
       })
     );
 
@@ -844,7 +849,7 @@ export class ProductionAgent {
         this.skillManager.loadSkills()
           .then(() => {}) // Convert to void
           .catch(err => {
-            console.warn('[ProductionAgent] Failed to load skills:', err);
+            log.warn('Failed to load skills', { error: String(err) });
           })
       );
     }
@@ -1925,7 +1930,7 @@ export class ProductionAgent {
         // =======================================================================
         if (this.contextEngineering) {
           if (process.env.DEBUG_LLM) {
-            if (process.env.DEBUG) console.log(`[recitation] Before: ${messages.length} messages`);
+            if (process.env.DEBUG) log.debug('Recitation before', { messageCount: messages.length });
           }
 
           const enrichedMessages = this.contextEngineering.injectRecitation(
@@ -1949,7 +1954,7 @@ export class ProductionAgent {
           );
 
           if (process.env.DEBUG_LLM) {
-            if (process.env.DEBUG) console.log(`[recitation] After: ${enrichedMessages?.length ?? 'null/undefined'} messages`);
+            if (process.env.DEBUG) log.debug('Recitation after', { messageCount: enrichedMessages?.length ?? 'null/undefined' });
           }
 
           // Only replace if we got a DIFFERENT array back (avoid clearing same reference)
@@ -1958,7 +1963,7 @@ export class ProductionAgent {
             messages.length = 0;
             messages.push(...enrichedMessages);
           } else if (!enrichedMessages || enrichedMessages.length === 0) {
-            console.warn('[executeDirectly] Recitation returned empty/null messages, keeping original');
+            log.warn('Recitation returned empty/null messages, keeping original');
           }
           // If enrichedMessages === messages, we don't need to do anything (same reference)
 
@@ -2012,11 +2017,11 @@ export class ProductionAgent {
             const accepted = this.injectionBudget.allocate(proposals);
             const stats = this.injectionBudget.getLastStats();
             if (stats && stats.droppedNames.length > 0 && process.env.DEBUG) {
-              console.log(`[injection-budget] Would drop: ${stats.droppedNames.join(', ')} (${stats.proposedTokens} proposed, ${stats.acceptedTokens} accepted)`);
+              log.debug('Injection budget dropped items', { droppedNames: stats.droppedNames.join(', '), proposedTokens: stats.proposedTokens, acceptedTokens: stats.acceptedTokens });
             }
             // Log total injection overhead for observability
             if (stats && process.env.DEBUG_LLM) {
-              console.log(`[injection-budget] Iteration ${this.state.iteration}: ${accepted.length}/${proposals.length} injections, ~${stats.acceptedTokens} tokens`);
+              log.debug('Injection budget summary', { iteration: this.state.iteration, accepted: accepted.length, total: proposals.length, tokens: stats.acceptedTokens });
             }
           }
         }
@@ -2872,7 +2877,7 @@ export class ProductionAgent {
 
       // Safety check: ensure system prompt is not empty
       if (!systemPrompt || systemPrompt.trim().length === 0) {
-        console.warn('[buildMessages] Warning: Empty system prompt detected, using fallback');
+        log.warn('Empty system prompt detected, using fallback');
         systemPrompt = this.config.systemPrompt || 'You are a helpful AI assistant.';
       }
 
@@ -2940,9 +2945,9 @@ export class ProductionAgent {
 
     // Debug: Log message count and structure (helps diagnose API errors)
     if (process.env.DEBUG_LLM) {
-      console.log(`[callLLM] Sending ${messages.length} messages:`);
+      log.debug('Sending messages to LLM', { messageCount: messages.length });
       messages.forEach((m, i) => {
-        console.log(`  [${i}] ${m.role}: ${m.content?.slice(0, 50)}...`);
+        log.debug('Message detail', { index: i, role: m.role, preview: m.content?.slice(0, 50) });
       });
     }
 
@@ -3061,7 +3066,7 @@ export class ProductionAgent {
         const cw = response.usage?.cacheWriteTokens ?? 0;
         const inp = response.usage?.inputTokens ?? 0;
         const hitRate = inp > 0 ? ((cr / inp) * 100).toFixed(1) : '0.0';
-        console.log(`[Cache] model=${actualModel} read=${cr} write=${cw} input=${inp} hit=${hitRate}%`);
+        log.debug('Cache stats', { model: actualModel, read: cr, write: cw, input: inp, hitRate: `${hitRate}%` });
       }
 
       // Lesson 26: Record LLM response for tracing
@@ -3414,7 +3419,7 @@ export class ProductionAgent {
           if (resolved) {
             this.addTool(resolved);
             tool = resolved;
-            if (process.env.DEBUG) console.log(`  🔄 Auto-loaded MCP tool: ${toolCall.name}`);
+            if (process.env.DEBUG) log.debug('Auto-loaded MCP tool', { tool: toolCall.name });
             this.observability?.logger?.info('Tool auto-loaded', { tool: toolCall.name });
           }
         }
@@ -3423,7 +3428,7 @@ export class ProductionAgent {
         }
         // Log whether tool was pre-loaded or auto-loaded (for MCP tools)
         if (process.env.DEBUG && toolCall.name.startsWith('mcp_') && wasPreloaded) {
-          console.log(`  ✓ Using pre-loaded MCP tool: ${toolCall.name}`);
+          log.debug('Using pre-loaded MCP tool', { tool: toolCall.name });
         }
 
         // =====================================================================
@@ -4241,7 +4246,7 @@ export class ProductionAgent {
 
     // Log warnings
     for (const warning of validation.warnings) {
-      console.warn(`[Checkpoint] Warning: ${warning}`);
+      log.warn('Checkpoint validation warning', { warning });
       this.observability?.logger?.warn('Checkpoint validation warning', { warning });
     }
 
@@ -4358,7 +4363,7 @@ export class ProductionAgent {
     }
 
     if (compactedCount > 0 && process.env.DEBUG) {
-      console.log(`  📦 Compacted ${compactedCount} tool outputs (saved ~${Math.round(savedChars / 4)} tokens)`);
+      log.debug('Compacted tool outputs', { compactedCount, savedTokens: Math.round(savedChars / 4) });
     }
   }
 
@@ -6277,7 +6282,7 @@ If the task is a simple question or doesn't need specialized handling, set bestA
    */
   cancel(reason?: string): void {
     if (!this.cancellation) {
-      console.warn('[ProductionAgent] Cancellation not enabled');
+      log.warn('Cancellation not enabled');
       return;
     }
 
@@ -6405,7 +6410,7 @@ If the task is a simple question or doesn't need specialized handling, set bestA
    */
   enableLSPFileTools(options?: Partial<Omit<LSPFileToolsConfig, 'lspManager'>>): void {
     if (!this.lspManager) {
-      console.warn('[ProductionAgent] LSP not enabled, cannot enable LSP file tools');
+      log.warn('LSP not enabled, cannot enable LSP file tools');
       return;
     }
 

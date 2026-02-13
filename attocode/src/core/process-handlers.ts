@@ -5,6 +5,11 @@
  * and resource registration for the application.
  */
 
+// NOTE: All console.error calls in this file are intentionally kept as-is
+// (not migrated to the structured logger) because they run inside signal
+// handlers, crash handlers, or cleanup paths where the logger itself may
+// be unavailable or in a broken state.
+
 // =============================================================================
 // CLEANUP RESOURCES
 // =============================================================================
@@ -34,10 +39,12 @@ export async function gracefulCleanup(reason: string): Promise<void> {
   }
   isCleaningUp = true;
 
+  // eslint-disable-next-line no-console -- crash/cleanup handler; logger may be unavailable
   console.error(`\n[CLEANUP] Starting graceful cleanup (reason: ${reason})...`);
 
   // Set a hard timeout to prevent hanging
   const forceExitTimeout = setTimeout(() => {
+    // eslint-disable-next-line no-console -- crash/cleanup handler; logger may be unavailable
     console.error('[CLEANUP] Timeout reached, forcing exit');
     process.exit(1);
   }, 5000);
@@ -49,6 +56,7 @@ export async function gracefulCleanup(reason: string): Promise<void> {
       try {
         cleanupResources.tui.cleanup();
       } catch (e) {
+        // eslint-disable-next-line no-console -- crash/cleanup handler; logger may be unavailable
         console.error('[CLEANUP] TUI cleanup error:', e);
       }
     }
@@ -58,6 +66,7 @@ export async function gracefulCleanup(reason: string): Promise<void> {
       try {
         cleanupResources.rl.close();
       } catch (e) {
+        // eslint-disable-next-line no-console -- crash/cleanup handler; logger may be unavailable
         console.error('[CLEANUP] Readline cleanup error:', e);
       }
     }
@@ -67,6 +76,7 @@ export async function gracefulCleanup(reason: string): Promise<void> {
       try {
         await cleanupResources.agent.cleanup();
       } catch (e) {
+        // eslint-disable-next-line no-console -- crash/cleanup handler; logger may be unavailable
         console.error('[CLEANUP] Agent cleanup error:', e);
       }
     }
@@ -76,10 +86,12 @@ export async function gracefulCleanup(reason: string): Promise<void> {
       try {
         await cleanupResources.mcpClient.cleanup();
       } catch (e) {
+        // eslint-disable-next-line no-console -- crash/cleanup handler; logger may be unavailable
         console.error('[CLEANUP] MCP cleanup error:', e);
       }
     }
 
+    // eslint-disable-next-line no-console -- crash/cleanup handler; logger may be unavailable
     console.error('[CLEANUP] Cleanup completed');
   } finally {
     clearTimeout(forceExitTimeout);
@@ -115,9 +127,12 @@ export function resetCleanupState(): void {
 export function installProcessHandlers(): void {
   // Handle unhandled promise rejections
   process.on('unhandledRejection', async (reason, _promise) => {
+    // eslint-disable-next-line no-console -- crash handler; logger may be unavailable
     console.error('\n[FATAL] Unhandled Promise Rejection:');
+    // eslint-disable-next-line no-console -- crash handler; logger may be unavailable
     console.error('  Reason:', reason);
     if (reason instanceof Error && reason.stack) {
+      // eslint-disable-next-line no-console -- crash handler; logger may be unavailable
       console.error('  Stack:', reason.stack.split('\n').slice(0, 5).join('\n'));
     }
     await gracefulCleanup('unhandled rejection');
@@ -126,9 +141,12 @@ export function installProcessHandlers(): void {
 
   // Handle uncaught exceptions
   process.on('uncaughtException', async (error, origin) => {
+    // eslint-disable-next-line no-console -- crash handler; logger may be unavailable
     console.error(`\n[FATAL] Uncaught Exception (${origin}):`);
+    // eslint-disable-next-line no-console -- crash handler; logger may be unavailable
     console.error('  Error:', error.message);
     if (error.stack) {
+      // eslint-disable-next-line no-console -- crash handler; logger may be unavailable
       console.error('  Stack:', error.stack.split('\n').slice(0, 5).join('\n'));
     }
     await gracefulCleanup('uncaught exception');
@@ -137,6 +155,7 @@ export function installProcessHandlers(): void {
 
   // Handle SIGTERM for graceful shutdown (e.g., container orchestration)
   process.on('SIGTERM', async () => {
+    // eslint-disable-next-line no-console -- signal handler; logger may be unavailable
     console.error('\n[INFO] Received SIGTERM signal');
     await gracefulCleanup('SIGTERM');
     process.exit(0);

@@ -5,6 +5,8 @@
  * for accurate cost estimation.
  */
 
+import { logger } from './logger.js';
+
 // =============================================================================
 // TYPES
 // =============================================================================
@@ -77,7 +79,7 @@ export async function fetchOpenRouterModels(): Promise<OpenRouterModelData> {
   const apiKey = process.env.OPENROUTER_API_KEY;
 
   if (!apiKey) {
-    console.log('⚠️  No OPENROUTER_API_KEY - using default estimates');
+    logger.info('⚠️  No OPENROUTER_API_KEY - using default estimates');
     return { pricing: new Map(), contextLengths: new Map() };
   }
 
@@ -113,7 +115,7 @@ export async function fetchOpenRouterModels(): Promise<OpenRouterModelData> {
 
     return { pricing, contextLengths };
   } catch (error) {
-    console.log(`⚠️  Failed to fetch OpenRouter models: ${(error as Error).message}`);
+    logger.info(`⚠️  Failed to fetch OpenRouter models: ${(error as Error).message}`);
     return { pricing: new Map(), contextLengths: new Map() };
   }
 }
@@ -142,7 +144,7 @@ export async function initModelCache(): Promise<void> {
     pricingCache = pricing;
     contextLengthCache = contextLengths;
     cacheTimestamp = now;
-    console.log(`💰 Loaded ${pricing.size} models from OpenRouter (pricing + context limits)`);
+    logger.info(`💰 Loaded ${pricing.size} models from OpenRouter (pricing + context limits)`);
   }
 }
 

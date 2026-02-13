@@ -42,6 +42,7 @@ import { showSessionPicker, showQuickPicker, formatSessionsTable } from '../sess
 import { createLSPManager } from '../integrations/lsp.js';
 import { createLSPFileTools } from '../agent-tools/lsp-file-tools.js';
 import { initPricingCache } from '../integrations/openrouter-pricing.js';
+import { logger } from '../integrations/logger.js';
 
 // Import TUI components and utilities
 import { TUIApp, type TUIAppProps, checkTUICapabilities } from '../tui/index.js';
@@ -80,6 +81,7 @@ export async function startTUIMode(
     const capabilities = await checkTUICapabilities();
 
     if (!capabilities.inkAvailable) {
+      // eslint-disable-next-line no-console
       console.log('! TUI not available. Falling back to legacy mode.');
       return startProductionREPL(provider, options);
     }
@@ -104,6 +106,7 @@ export async function startTUIMode(
         const stats = sqliteStore.getStats();
         persistenceDebug.log('[TUI] SQLite store initialized!', { sessions: stats.sessionCount, checkpoints: stats.checkpointCount });
       }
+      // eslint-disable-next-line no-console
       console.log('+ SQLite session store initialized');
 
       // Initialize DLQ with SQLite store's database
@@ -114,6 +117,7 @@ export async function startTUIMode(
       if (dlq.isAvailable()) {
         const pending = dlq.getPending({ limit: 10 });
         if (pending.length > 0) {
+          // eslint-disable-next-line no-console
           console.log(`[DLQ] ${pending.length} failed operation(s) pending retry`);
         }
       }
@@ -122,7 +126,9 @@ export async function startTUIMode(
       if (persistenceDebug.isEnabled()) {
         process.stderr.write(`[DEBUG] [TUI] SQLite FAILED: ${errMsg}\n`);
       }
+      // eslint-disable-next-line no-console
       console.log('! SQLite unavailable, using JSONL fallback');
+      // eslint-disable-next-line no-console
       console.log(`   Error: ${errMsg}`);
       sessionStore = await createSessionStore({ baseDir: '.agent/sessions' });
       // DLQ stays null - not available without SQLite
@@ -174,13 +180,16 @@ export async function startTUIMode(
     try {
       lspServers = await lspManager.autoStart(process.cwd());
       if (lspServers.length > 0) {
+        // eslint-disable-next-line no-console
         console.log(`@ LSP: Started ${lspServers.join(', ')} language server(s)`);
       } else {
+        // eslint-disable-next-line no-console
         console.log(`* LSP: No language servers found (optional)`);
+        // eslint-disable-next-line no-console
         console.log(`   For inline diagnostics: npm i -g typescript-language-server typescript`);
       }
     } catch (err) {
-      console.log(`! LSP: Could not start language servers (${(err as Error).message})`);
+      logger.warn('LSP: Could not start language servers', { error: String((err as Error).message) });
     }
 
     // Create LSP-enhanced file tools (replaces standard edit_file/write_file)
@@ -267,6 +276,7 @@ export async function startTUIMode(
           currentSessionId = fullResult.sessionId;
           resumedSession = true;
         } else if (fullResult.action === 'cancel') {
+          // eslint-disable-next-line no-console
           console.log('Goodbye!');
           await mcpClient.cleanup();
           await agent.cleanup();
@@ -320,6 +330,7 @@ export async function startTUIMode(
           plan: sessionState.plan as any,
           memoryContext: sessionState.memoryContext,
         });
+        // eslint-disable-next-line no-console
         console.log(`+ Resumed ${sessionState.messages.length} messages from session`);
       }
     }
@@ -337,9 +348,10 @@ export async function startTUIMode(
 
     // Render TUI (don't clear in debug mode so we can see initialization messages)
     if (!persistenceDebug.isEnabled()) {
+      // eslint-disable-next-line no-console
       console.clear();
     } else {
-      console.log('\n--- TUI Starting (debug mode - console not cleared) ---\n');
+      logger.debug('TUI Starting (debug mode - console not cleared)');
     }
 
     // Start trace session for the entire terminal session (if tracing enabled)
@@ -401,7 +413,8 @@ export async function startTUIMode(
     }
 
   } catch (error) {
-    console.error('! TUI failed:', (error as Error).message);
+    logger.error('TUI failed', { error: String((error as Error).message) });
+    // eslint-disable-next-line no-console
     console.log('   Falling back to legacy mode.');
     return startProductionREPL(provider, options);
   }

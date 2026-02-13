@@ -17,6 +17,7 @@ import { join, dirname } from 'node:path';
 import { mkdir } from 'node:fs/promises';
 import { existsSync, readFileSync, mkdirSync } from 'node:fs';
 import type { Message, ToolCall } from '../types.js';
+import { logger } from './logger.js';
 import type {
   SessionEntry,
   SessionEntryType,
@@ -1921,12 +1922,12 @@ export class SQLiteStore {
 
           migrated++;
         } catch (err) {
-          console.error(`Failed to migrate session ${meta.id}:`, err);
+          logger.error(`Failed to migrate session ${meta.id}:`, { error: err });
           failed++;
         }
       }
     } catch (err) {
-      console.error('Failed to read JSONL index:', err);
+      logger.error('Failed to read JSONL index:', { error: err });
     }
 
     return { migrated, failed };

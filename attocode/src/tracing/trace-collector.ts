@@ -31,6 +31,7 @@
 
 import { mkdir, appendFile } from 'fs/promises';
 import { join } from 'path';
+import { logger } from '../integrations/logger.js';
 import { Tracer, createTracer } from '../observability/tracer.js';
 import { CacheBoundaryTracker, createCacheBoundaryTracker } from './cache-boundary-tracker.js';
 import type {
@@ -965,7 +966,7 @@ export class TraceCollector {
   private async recordLLMResponse(data: LLMResponseData): Promise<void> {
     const pending = this.pendingRequests.get(data.requestId);
     if (!pending) {
-      console.warn(`No pending request found for ${data.requestId}`);
+      logger.warn(`No pending request found for ${data.requestId}`);
       return;
     }
 
@@ -1094,7 +1095,7 @@ export class TraceCollector {
   private async recordToolEnd(data: ToolEndData): Promise<void> {
     const pending = this.pendingTools.get(data.executionId);
     if (!pending) {
-      console.warn(`No pending tool execution found for ${data.executionId}`);
+      logger.warn(`No pending tool execution found for ${data.executionId}`);
       return;
     }
 
@@ -1645,7 +1646,7 @@ export class TraceCollector {
       try {
         await appendFile(this.outputPath!, JSON.stringify(enrichedEntry) + '\n');
       } catch (err) {
-        console.error('Failed to write trace entry:', err);
+        logger.error('Failed to write trace entry', { error: String(err) });
       }
     });
   }
@@ -1661,7 +1662,7 @@ export class TraceCollector {
       try {
         await appendFile(this.outputPath!, JSON.stringify(entry) + '\n');
       } catch (err) {
-        console.error('Failed to write trace entry:', err);
+        logger.error('Failed to write trace entry', { error: String(err) });
       }
     });
   }

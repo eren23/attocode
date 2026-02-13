@@ -16,6 +16,7 @@ import type {
   AgentEvent,
   AgentEventListener,
 } from '../types.js';
+import { logger } from './logger.js';
 
 // =============================================================================
 // HOOK MANAGER
@@ -68,7 +69,7 @@ export class HookManager {
         event: 'llm.before',
         handler: (data) => {
           const d = data as { model?: string };
-          console.log(`[Hook] LLM call starting (model: ${d.model || 'unknown'})`);
+          logger.debug('Hook: LLM call starting', { model: d.model || 'unknown' });
         },
         priority: 100,
       });
@@ -77,7 +78,7 @@ export class HookManager {
         event: 'tool.before',
         handler: (data) => {
           const d = data as { tool?: string };
-          console.log(`[Hook] Tool call: ${d.tool || 'unknown'}`);
+          logger.debug('Hook: Tool call', { tool: d.tool || 'unknown' });
         },
         priority: 100,
       });
@@ -99,7 +100,7 @@ export class HookManager {
         handler: () => {
           const start = startTimes.get('llm');
           if (start) {
-            console.log(`[Hook] LLM call took ${Date.now() - start}ms`);
+            logger.debug('Hook: LLM call completed', { durationMs: Date.now() - start });
             startTimes.delete('llm');
           }
         },
@@ -121,11 +122,11 @@ export class HookManager {
 
     // Check for duplicate by ID or handler reference
     if (hook.id && existing.some((h) => h.id === hook.id)) {
-      console.warn(`[Hook] Hook "${hook.id}" already registered for ${hook.event}`);
+      logger.warn('Hook already registered', { hookId: hook.id, event: hook.event });
       return;
     }
     if (existing.some((h) => h.handler === hook.handler)) {
-      console.warn(`[Hook] Duplicate handler already registered for ${hook.event}`);
+      logger.warn('Duplicate handler already registered', { event: hook.event });
       return;
     }
 
@@ -157,7 +158,7 @@ export class HookManager {
       try {
         await hook.handler(data);
       } catch (err) {
-        console.error(`[Hook] Error in ${event} hook:`, err);
+        logger.error('Hook execution error', { event, error: String(err) });
       }
     }
   }
@@ -167,7 +168,7 @@ export class HookManager {
    */
   async loadPlugin(plugin: Plugin): Promise<void> {
     if (this.plugins.has(plugin.name)) {
-      console.warn(`[Plugin] ${plugin.name} already loaded`);
+      logger.warn('Plugin already loaded', { plugin: plugin.name });
       return;
     }
 
@@ -179,16 +180,16 @@ export class HookManager {
         return undefined as T;
       },
       log: (level, message) => {
-        console.log(`[Plugin:${plugin.name}] [${level}] ${message}`);
+        logger.info('Plugin log', { plugin: plugin.name, level, message });
       },
     };
 
     try {
       await plugin.initialize(context);
       this.plugins.set(plugin.name, plugin);
-      console.log(`[Plugin] Loaded: ${plugin.name} v${plugin.version}`);
+      logger.info('Plugin loaded', { plugin: plugin.name, version: plugin.version });
     } catch (err) {
-      console.error(`[Plugin] Failed to load ${plugin.name}:`, err);
+      logger.error('Failed to load plugin', { plugin: plugin.name, error: String(err) });
       throw err;
     }
   }
@@ -205,7 +206,7 @@ export class HookManager {
     }
 
     this.plugins.delete(name);
-    console.log(`[Plugin] Unloaded: ${name}`);
+    logger.info('Plugin unloaded', { plugin: name });
   }
 
   /**
@@ -234,7 +235,7 @@ export class HookManager {
       try {
         listener(event);
       } catch (err) {
-        console.error('[Hook] Event listener error:', err);
+        logger.error('Event listener error', { error: String(err) });
       }
     }
 
@@ -259,7 +260,7 @@ export class HookManager {
       try {
         listener(event);
       } catch (err) {
-        console.error('[Hook] Event listener error:', err);
+        logger.error('Event listener error', { error: String(err) });
       }
     }
 
@@ -308,8 +309,8 @@ export class HookManager {
       }
     }
 
-    // Always log to console for visibility
-    console.error(`[Hook] Error in ${event} hook:`, hookError.error.message);
+    // Always log for visibility
+    logger.error('Hook error', { event, error: hookError.error.message });
   }
 
   /**

@@ -24,6 +24,7 @@ import { formatSessionsTable } from '../session-picker.js';
 import { handleSkillsCommand } from './skills-commands.js';
 import { handleAgentsCommand } from './agents-commands.js';
 import { handleInitCommand } from './init-commands.js';
+import { logger } from '../integrations/logger.js';
 
 // =============================================================================
 // ANSI COLOR UTILITIES
@@ -1827,8 +1828,8 @@ ${c('Feedback Loop Summary:', 'bold')}
  */
 export function createConsoleOutput(): import('./types.js').CommandOutput {
   return {
-    log: (message: string) => console.log(message),
-    error: (message: string) => console.error(message),
+    log: (message: string) => logger.info(message),
+    error: (message: string) => logger.error(message),
     clear: () => console.clear(),
   };
 }

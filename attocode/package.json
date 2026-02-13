@@ -39,7 +39,12 @@
     "eval": "tsx tools/eval/src/cli.ts",
     "eval:golden": "tsx tools/eval/src/cli.ts run -d golden --parallelism 3 --isolation worktree",
     "eval:bench": "./scripts/eval-bench.sh",
-    "eval:docker": "./scripts/eval-docker.sh"
+    "eval:docker": "./scripts/eval-docker.sh",
+    "lint": "eslint src/",
+    "lint:fix": "eslint src/ --fix",
+    "format": "prettier --write 'src/**/*.{ts,tsx}'",
+    "format:check": "prettier --check 'src/**/*.{ts,tsx}'",
+    "check-deps": "madge --circular --extensions ts,tsx src/"
   },
   "dependencies": {
     "better-sqlite3": "^12.6.2",
@@ -55,13 +60,20 @@
     "zod": "^3.22.4"
   },
   "devDependencies": {
+    "@eslint/js": "^9.39.2",
     "@types/better-sqlite3": "^7.6.13",
     "@types/diff": "^8.0.0",
     "@types/node": "^20.10.0",
     "@types/react": "^18.2.0",
     "@vitest/coverage-v8": "^1.6.1",
+    "eslint": "^9.39.2",
+    "eslint-config-prettier": "^10.1.8",
+    "eslint-plugin-import-x": "^4.16.1",
+    "madge": "^8.0.0",
+    "prettier": "^3.8.1",
     "tsx": "^4.6.0",
     "typescript": "^5.9.3",
+    "typescript-eslint": "^8.55.0",
     "vitest": "^1.0.0"
   },
   "peerDependencies": {

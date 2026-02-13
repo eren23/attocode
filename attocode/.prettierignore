@@ -1,0 +1,9 @@
+dist/
+node_modules/
+coverage/
+tools/trace-dashboard/
+*.jsonl
+*.json
+!.prettierrc.json
+!package.json
+!tsconfig.json

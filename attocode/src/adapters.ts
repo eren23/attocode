@@ -24,6 +24,7 @@ import type { ToolDescription } from './tools/types.js';
 import type { ToolRegistry } from './tools/registry.js';
 
 import { safeParseJson } from './tricks/json-utils.js';
+import { logger } from './integrations/logger.js';
 
 // =============================================================================
 // PROVIDER ADAPTER
@@ -97,11 +98,12 @@ export class ProviderAdapter implements ProductionLLMProvider {
             context: `tool ${tc.function.name}`,
           });
           if (!result.success) {
-            console.warn(
-              `[ProviderAdapter] Failed to parse tool call arguments for ${tc.function.name}: ${result.error}. ` +
-              `First 100 chars: ${tc.function.arguments.slice(0, 100)}... ` +
-              `Last 50 chars: ...${tc.function.arguments.slice(-50)}`
-            );
+            logger.warn('Failed to parse tool call arguments', {
+              tool: tc.function.name,
+              error: result.error,
+              firstChars: tc.function.arguments.slice(0, 100),
+              lastChars: tc.function.arguments.slice(-50),
+            });
             parseError = `Failed to parse arguments as JSON. Raw text (first 200 chars): ${tc.function.arguments.slice(0, 200)}`;
           }
           args = result.success && result.value ? result.value : {};
@@ -213,16 +215,16 @@ export function createInteractiveApprovalHandler(
       dim: '\x1b[2m',
     };
 
-    console.log(`\n${colors.yellow}⚠️  Approval Required${colors.reset}`);
-    console.log(`${colors.cyan}Action:${colors.reset} ${request.action}`);
+    logger.info(`\n${colors.yellow}⚠️  Approval Required${colors.reset}`);
+    logger.info(`${colors.cyan}Action:${colors.reset} ${request.action}`);
     if (request.tool) {
-      console.log(`${colors.cyan}Tool:${colors.reset} ${request.tool}`);
+      logger.info(`${colors.cyan}Tool:${colors.reset} ${request.tool}`);
     }
     if (request.args) {
-      console.log(`${colors.cyan}Args:${colors.reset} ${JSON.stringify(request.args, null, 2)}`);
+      logger.info(`${colors.cyan}Args:${colors.reset} ${JSON.stringify(request.args, null, 2)}`);
     }
-    console.log(`${colors.cyan}Risk:${colors.reset} ${request.risk}`);
-    console.log(`${colors.dim}${request.context}${colors.reset}`);
+    logger.info(`${colors.cyan}Risk:${colors.reset} ${request.risk}`);
+    logger.info(`${colors.dim}${request.context}${colors.reset}`);
 
     const answer = await rl.question(`\n${colors.yellow}Approve? (y/n/reason): ${colors.reset}`);
     const trimmed = answer.trim().toLowerCase();
@@ -332,7 +334,7 @@ export function createTUIApprovalBridge(config: TUIApprovalBridgeConfig = {}): T
         // Set up timeout - deny if not resolved within the timeout period
         pendingTimeoutId = setTimeout(() => {
           if (pendingResolve) {
-            console.warn(`[TUI Approval] Timeout after ${timeoutMs}ms - denying operation for safety`);
+            logger.warn('TUI approval timeout - denying operation for safety', { timeoutMs });
             config.onTimeout?.(request);
             pendingResolve({
               approved: false,
@@ -345,7 +347,7 @@ export function createTUIApprovalBridge(config: TUIApprovalBridgeConfig = {}): T
       } else {
         // TUI not connected yet - BLOCK dangerous operations instead of auto-approving
         // This is a safety fallback to prevent operations when the approval system isn't ready
-        console.warn('[TUI Approval] No TUI connected - blocking operation for safety');
+        logger.warn('No TUI connected - blocking operation for safety');
         resolve({ approved: false, reason: 'Approval system not ready - TUI not connected' });
         pendingResolve = null;
       }

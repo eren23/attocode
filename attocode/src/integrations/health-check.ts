@@ -23,6 +23,8 @@
  * ```
  */
 
+import { logger } from './logger.js';
+
 // =============================================================================
 // TYPES
 // =============================================================================
@@ -306,13 +308,13 @@ export class HealthChecker {
     this.stopPeriodicChecks();
     this.periodicInterval = setInterval(() => {
       this.checkAll().catch(err => {
-        console.error('[HealthChecker] Periodic check failed:', err);
+        logger.error('Periodic health check failed', { error: String(err) });
       });
     }, intervalMs);
 
     // Run initial check
     this.checkAll().catch(err => {
-      console.error('[HealthChecker] Initial check failed:', err);
+      logger.error('Initial health check failed', { error: String(err) });
     });
   }
 

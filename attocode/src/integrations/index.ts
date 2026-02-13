@@ -1004,6 +1004,21 @@ export {
   type RebalanceResult,
 } from './dynamic-budget.js';
 
+// Structured Logger (leveled logging with trace IDs and multiple sinks)
+export {
+  StructuredLogger,
+  ConsoleSink,
+  MemorySink,
+  FileSink,
+  logger,
+  configureLogger,
+  createComponentLogger,
+  type LogLevel,
+  type LogEntry,
+  type LogSink,
+  type LoggerConfig,
+} from './logger.js';
+
 // Environment Facts (temporal/platform grounding for all agents)
 export {
   getEnvironmentFacts,

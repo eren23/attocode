@@ -203,6 +203,8 @@ export interface LLMDecomposeResult {
   strategy: DecompositionStrategy;
   /** Reasoning for the decomposition */
   reasoning: string;
+  /** Parse error details when decomposition fails (undefined on success) */
+  parseError?: string;
 }
 
 /**
@@ -1305,16 +1307,58 @@ export function createDecompositionPrompt(
  */
 export function parseDecompositionResponse(response: string): LLMDecomposeResult {
   try {
-    // Try to extract JSON from the response
-    const jsonMatch = response.match(/\{[\s\S]*\}/);
-    if (!jsonMatch) {
-      throw new Error('No JSON found in response');
+    if (!response || response.trim().length === 0) {
+      return {
+        subtasks: [],
+        strategy: 'adaptive',
+        reasoning: '',
+        parseError: 'Empty response from LLM',
+      };
     }
 
-    const parsed = JSON.parse(jsonMatch[0]);
+    // Try markdown code block extraction first (```json ... ``` or ``` ... ```)
+    let jsonStr: string | undefined;
+    const codeBlockMatch = response.match(/```(?:json)?\s*\n?([\s\S]*?)```/);
+    if (codeBlockMatch) {
+      jsonStr = codeBlockMatch[1].trim();
+    }
+
+    // Fall back to raw JSON object extraction
+    if (!jsonStr) {
+      const jsonMatch = response.match(/\{[\s\S]*\}/);
+      if (!jsonMatch) {
+        return {
+          subtasks: [],
+          strategy: 'adaptive',
+          reasoning: '',
+          parseError: `No JSON found in response. First 200 chars: ${response.slice(0, 200)}`,
+        };
+      }
+      jsonStr = jsonMatch[0];
+    }
+
+    const parsed = JSON.parse(jsonStr);
+
+    if (!parsed.subtasks || !Array.isArray(parsed.subtasks)) {
+      return {
+        subtasks: [],
+        strategy: parsed.strategy || 'adaptive',
+        reasoning: parsed.reasoning || '',
+        parseError: `JSON parsed but missing "subtasks" array. Keys found: ${Object.keys(parsed).join(', ')}`,
+      };
+    }
+
+    if (parsed.subtasks.length === 0) {
+      return {
+        subtasks: [],
+        strategy: parsed.strategy || 'adaptive',
+        reasoning: parsed.reasoning || '',
+        parseError: 'JSON parsed with empty subtasks array',
+      };
+    }
 
     return {
-      subtasks: (parsed.subtasks || []).map((s: any) => ({
+      subtasks: parsed.subtasks.map((s: any) => ({
         description: s.description || '',
         type: s.type || 'implement',
         complexity: s.complexity || 3,
@@ -1327,11 +1371,117 @@ export function parseDecompositionResponse(response: string): LLMDecomposeResult
       reasoning: parsed.reasoning || '',
     };
   } catch (error) {
+    // Try to recover truncated JSON before giving up
+    const recovered = tryRecoverTruncatedJSON(response);
+    if (recovered) {
+      try {
+        const parsed = JSON.parse(recovered);
+        if (parsed.subtasks && Array.isArray(parsed.subtasks) && parsed.subtasks.length > 0) {
+          return {
+            subtasks: parsed.subtasks.map((s: any) => ({
+              description: s.description || '',
+              type: s.type || 'implement',
+              complexity: s.complexity || 3,
+              dependencies: s.dependencies || [],
+              parallelizable: s.parallelizable ?? true,
+              relevantFiles: s.relevantFiles,
+              suggestedRole: s.suggestedRole,
+            })),
+            strategy: parsed.strategy || 'adaptive',
+            reasoning: parsed.reasoning || '(recovered from truncated response)',
+          };
+        }
+      } catch {
+        // Recovery also failed — fall through to error return
+      }
+    }
+
     // Return default if parsing fails — preserve error info for diagnostics
     return {
       subtasks: [],
       strategy: 'adaptive',
-      reasoning: `Failed to parse LLM response: ${(error as Error).message}`,
+      reasoning: '',
+      parseError: `JSON parse failed: ${(error as Error).message}. First 200 chars: ${response?.slice(0, 200) ?? '(null)'}`,
     };
   }
+}
+
+/**
+ * Attempt to recover a truncated JSON response by trimming incomplete trailing
+ * content and adding missing closing brackets/braces.
+ *
+ * Works for the common case where the LLM output was cut off mid-JSON-array,
+ * e.g.: `{"subtasks": [ {...}, {...}, {"desc` → trim last incomplete object → close array & object.
+ */
+function tryRecoverTruncatedJSON(response: string): string | null {
+  // Extract JSON portion (from code block or raw)
+  let jsonStr: string | undefined;
+  const codeBlockMatch = response.match(/```(?:json)?\s*\n?([\s\S]*)/);
+  if (codeBlockMatch) {
+    // No closing ``` required — that's the truncation
+    jsonStr = codeBlockMatch[1].replace(/```\s*$/, '').trim();
+  }
+  if (!jsonStr) {
+    const jsonMatch = response.match(/\{[\s\S]*/);
+    if (jsonMatch) jsonStr = jsonMatch[0].trim();
+  }
+  if (!jsonStr) return null;
+
+  // Find the last complete JSON object in the subtasks array.
+  // Strategy: find last `}` that closes a complete array element, trim there, close brackets.
+  // We search backwards for `},` or `}\n` patterns that likely end a complete subtask object.
+  let lastGoodPos = -1;
+  let braceDepth = 0;
+  let bracketDepth = 0;
+  let inString = false;
+  let escape = false;
+
+  for (let i = 0; i < jsonStr.length; i++) {
+    const ch = jsonStr[i];
+    if (escape) { escape = false; continue; }
+    if (ch === '\\' && inString) { escape = true; continue; }
+    if (ch === '"') { inString = !inString; continue; }
+    if (inString) continue;
+
+    if (ch === '{') braceDepth++;
+    else if (ch === '}') {
+      braceDepth--;
+      // When we close an object at brace depth 1 (inside the top-level object),
+      // this is likely a complete subtask object inside the array
+      if (braceDepth === 1 && bracketDepth === 1) {
+        lastGoodPos = i;
+      }
+    } else if (ch === '[') bracketDepth++;
+    else if (ch === ']') bracketDepth--;
+  }
+
+  if (lastGoodPos === -1) return null;
+
+  // Trim to last complete subtask object, then close the JSON structure
+  let trimmed = jsonStr.slice(0, lastGoodPos + 1);
+  // Remove trailing comma if present
+  trimmed = trimmed.replace(/,\s*$/, '');
+  // Close open brackets: we need to close the subtasks array and the root object
+  // Count what's still open
+  let openBraces = 0;
+  let openBrackets = 0;
+  inString = false;
+  escape = false;
+  for (let i = 0; i < trimmed.length; i++) {
+    const ch = trimmed[i];
+    if (escape) { escape = false; continue; }
+    if (ch === '\\' && inString) { escape = true; continue; }
+    if (ch === '"') { inString = !inString; continue; }
+    if (inString) continue;
+    if (ch === '{') openBraces++;
+    else if (ch === '}') openBraces--;
+    else if (ch === '[') openBrackets++;
+    else if (ch === ']') openBrackets--;
+  }
+
+  // Close remaining open structures
+  for (let i = 0; i < openBrackets; i++) trimmed += ']';
+  for (let i = 0; i < openBraces; i++) trimmed += '}';
+
+  return trimmed;
 }
