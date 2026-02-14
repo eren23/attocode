@@ -11,6 +11,7 @@
 
 import { stableStringify } from './context-engineering.js';
 import { getModelPricing, calculateCost } from './openrouter-pricing.js';
+import type { SharedEconomicsState } from '../shared/shared-economics-state.js';
 
 // =============================================================================
 // TYPES
@@ -364,7 +365,13 @@ export class ExecutionEconomicsManager {
   private listeners: EconomicsEventListener[] = [];
   private extensionHandler?: (request: ExtensionRequest) => Promise<Partial<ExecutionBudget> | null>;
 
-  constructor(budget?: Partial<ExecutionBudget>) {
+  // Shared economics state for cross-worker doom loop aggregation
+  private sharedEconomics: SharedEconomicsState | null;
+  private workerId: string;
+
+  constructor(budget?: Partial<ExecutionBudget>, sharedEconomics?: SharedEconomicsState, workerId?: string) {
+    this.sharedEconomics = sharedEconomics ?? null;
+    this.workerId = workerId ?? 'root';
     const tuning = budget?.tuning;
 
     this.budget = {
@@ -529,6 +536,12 @@ export class ExecutionEconomicsManager {
     // DOOM LOOP DETECTION (OpenCode pattern)
     // =========================================================================
     this.updateDoomLoopState(toolName, argsStr);
+
+    // Report to shared economics for cross-worker doom loop aggregation
+    if (this.sharedEconomics) {
+      const fingerprint = computeToolFingerprint(toolName, argsStr);
+      this.sharedEconomics.recordToolCall(this.workerId, fingerprint);
+    }
 
     // =========================================================================
     // PHASE TRACKING

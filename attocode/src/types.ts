@@ -316,6 +316,20 @@ export interface ProductionAgentConfig {
     targetIterations?: number;
     maxIterations?: number;
   };
+
+  /**
+   * Shared context state for cross-worker failure learning and reference pooling.
+   * Created by SwarmOrchestrator, inherited by workers.
+   * @internal Used for swarm worker coordination
+   */
+  sharedContextState?: unknown; // SharedContextState — using unknown to avoid circular import
+
+  /**
+   * Shared economics state for cross-worker doom loop aggregation.
+   * Created by SwarmOrchestrator, inherited by workers.
+   * @internal Used for swarm worker coordination
+   */
+  sharedEconomicsState?: unknown; // SharedEconomicsState — using unknown to avoid circular import
 }
 
 // =============================================================================

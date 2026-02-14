@@ -161,6 +161,8 @@ import {
   resolvePolicyProfile,
 } from './integrations/policy-engine.js';
 
+import type { SharedContextState } from './shared/shared-context-state.js';
+import type { SharedEconomicsState } from './shared/shared-economics-state.js';
 import { TraceCollector, createTraceCollector } from './tracing/trace-collector.js';
 import { modelRegistry } from './costs/index.js';
 import { getModelContextLength } from './integrations/openrouter-pricing.js';
@@ -251,6 +253,8 @@ export class ProductionAgent {
   private agentId!: string;
   private blackboard: SharedBlackboard | null = null;
   private fileCache: SharedFileCache | null = null;
+  private _sharedContextState: SharedContextState | null = null;
+  private _sharedEconomicsState: SharedEconomicsState | null = null;
   private budgetPool: SharedBudgetPool | null = null;
   private taskManager: TaskManager | null = null;
   private store: SQLiteStore | null = null;
@@ -375,6 +379,10 @@ export class ProductionAgent {
       const parentBudgetTokens = baseBudget.maxTokens ?? STANDARD_BUDGET.maxTokens ?? 200000;
       this.budgetPool = createBudgetPool(parentBudgetTokens, 0.25, 100000);
     }
+
+    // Shared state for swarm workers (passed from orchestrator via config)
+    this._sharedContextState = (userConfig as any).sharedContextState ?? null;
+    this._sharedEconomicsState = (userConfig as any).sharedEconomicsState ?? null;
 
     // Initialize enabled features
     this.initializeFeatures();
@@ -517,12 +525,16 @@ export class ProductionAgent {
     // Economics System (Token Budget) - always enabled
     // Use custom budget if provided (subagents use SUBAGENT_BUDGET), otherwise STANDARD_BUDGET
     const baseBudget = this.config.budget ?? STANDARD_BUDGET;
-    this.economics = new ExecutionEconomicsManager({
-      ...baseBudget,
-      // Use maxIterations from config as absolute safety cap
-      maxIterations: this.config.maxIterations,
-      targetIterations: Math.min(baseBudget.targetIterations ?? 20, this.config.maxIterations),
-    });
+    this.economics = new ExecutionEconomicsManager(
+      {
+        ...baseBudget,
+        // Use maxIterations from config as absolute safety cap
+        maxIterations: this.config.maxIterations,
+        targetIterations: Math.min(baseBudget.targetIterations ?? 20, this.config.maxIterations),
+      },
+      this._sharedEconomicsState ?? undefined,
+      this.agentId,
+    );
 
     // Phase 2.2: Agent State Machine - formalizes phase tracking
     // Always enabled - provides structured phase transitions with metrics
@@ -640,6 +652,10 @@ export class ProductionAgent {
       // allocates from the swarm budget (e.g. 10M tokens) instead of the parent's
       // generic pool (200K tokens). Without this, workers get 5K emergency budget.
       this.budgetPool = this.swarmOrchestrator.getBudgetPool().pool;
+
+      // Phase 3.1+3.2: Set shared state so workers inherit it via buildContext()
+      this._sharedContextState = this.swarmOrchestrator.getSharedContextState();
+      this._sharedEconomicsState = this.swarmOrchestrator.getSharedEconomicsState();
     }
 
     // Cancellation Support
@@ -729,6 +745,11 @@ export class ProductionAgent {
       maxFailures: 30,
       maxReferences: 50,
     });
+
+    // Bind shared context state for cross-worker failure learning (swarm workers only)
+    if (this._sharedContextState) {
+      this.contextEngineering.setSharedState(this._sharedContextState);
+    }
 
     // Codebase Context - intelligent code selection for context management
     // Analyzes repo structure and selects relevant code within token budgets
@@ -1721,6 +1742,8 @@ export class ProductionAgent {
       externalCancellationToken: this.externalCancellationToken,
       wrapupRequested: this.wrapupRequested, wrapupReason: this.wrapupReason,
       compactionPending: this.compactionPending,
+      sharedContextState: this._sharedContextState,
+      sharedEconomicsState: this._sharedEconomicsState,
       spawnedTasks: this.spawnedTasks, toolResolver: this.toolResolver,
       emit: (event) => this.emit(event),
       addTool: (tool) => this.addTool(tool),

@@ -585,6 +585,8 @@ export async function spawnAgent(
       budget: agentDef.economicsTuning
         ? { ...pooledBudget.budget, tuning: agentDef.economicsTuning }
         : pooledBudget.budget,
+      sharedContextState: ctx.sharedContextState || undefined,
+      sharedEconomicsState: ctx.sharedEconomicsState || undefined,
     });
 
     // Inherit parent's mode

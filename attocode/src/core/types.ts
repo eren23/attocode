@@ -156,6 +156,10 @@ export interface AgentContext {
   readonly wrapupReason: string | null;
   readonly compactionPending: boolean;
 
+  // --- Shared swarm state ---
+  readonly sharedContextState: import('../shared/index.js').SharedContextState | null;
+  readonly sharedEconomicsState: import('../shared/index.js').SharedEconomicsState | null;
+
   // --- Spawn dedup tracking ---
   readonly spawnedTasks: Map<string, { timestamp: number; result: string; queuedChanges: number }>;
 

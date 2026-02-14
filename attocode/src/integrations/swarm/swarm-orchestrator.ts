@@ -50,6 +50,8 @@ import { ModelHealthTracker, selectAlternativeModel } from './model-selector.js'
 import { SwarmStateStore } from './swarm-state-store.js';
 import type { SwarmEvent } from './swarm-events.js';
 import type { SpawnResult } from '../agent-registry.js';
+import { createSharedContextState, type SharedContextState } from '../../shared/shared-context-state.js';
+import { createSharedEconomicsState, type SharedEconomicsState } from '../../shared/shared-economics-state.js';
 
 // ─── Hollow Completion Detection ──────────────────────────────────────────
 
@@ -124,6 +126,10 @@ export class SwarmOrchestrator {
   private config: SwarmConfig;
   private provider: LLMProvider;
   private blackboard?: SharedBlackboard;
+
+  // Phase 3.1+3.2: Shared state for cross-worker learning
+  private sharedContextState!: SharedContextState;
+  private sharedEconomicsState!: SharedEconomicsState;
 
   private taskQueue: SwarmTaskQueue;
   private budgetPool: SwarmBudgetPool;
@@ -209,6 +215,16 @@ export class SwarmOrchestrator {
     this.spawnAgentFn = spawnAgentFn;
     this.healthTracker = new ModelHealthTracker();
     this.adaptiveStaggerMs = this.getStaggerMs();
+
+    // Phase 3.1+3.2: Shared context & economics for cross-worker learning
+    this.sharedContextState = createSharedContextState({
+      staticPrefix: 'You are a swarm worker agent.',
+      maxFailures: 100,
+      maxReferences: 200,
+    });
+    this.sharedEconomicsState = createSharedEconomicsState({
+      globalDoomLoopThreshold: 10,
+    });
 
     this.taskQueue = createSwarmTaskQueue();
     this.budgetPool = createSwarmBudgetPool(this.config);
@@ -382,6 +398,16 @@ Rules:
    */
   getBudgetPool(): SwarmBudgetPool {
     return this.budgetPool;
+  }
+
+  /** Get shared context state for cross-worker failure learning. */
+  getSharedContextState(): SharedContextState {
+    return this.sharedContextState;
+  }
+
+  /** Get shared economics state for cross-worker doom loop aggregation. */
+  getSharedEconomicsState(): SharedEconomicsState {
+    return this.sharedEconomicsState;
   }
 
   /**

@@ -50,6 +50,8 @@ import {
   type DiversityStats,
 } from '../tricks/serialization-diversity.js';
 
+import type { SharedContextState } from '../shared/shared-context-state.js';
+
 // =============================================================================
 // TYPES
 // =============================================================================
@@ -153,6 +155,9 @@ export class ContextEngineeringManager {
   private failureTracker?: FailureTracker;
   private serializer?: DiverseSerializer;
 
+  // Shared state (optional, injected for swarm workers)
+  private sharedState: SharedContextState | null = null;
+
   // State
   private iteration = 0;
   private recitationInjections = 0;
@@ -230,6 +235,20 @@ export class ContextEngineeringManager {
         varyKeyOrder: true,
         varyIndentation: true,
       });
+    }
+  }
+
+  /**
+   * Bind to shared state for cross-worker failure learning and reference pooling.
+   * Called after construction when a worker joins a swarm.
+   * Replaces the local failure tracker with the shared one.
+   */
+  setSharedState(shared: SharedContextState): void {
+    this.sharedState = shared;
+    // Replace local failure tracker with shared one so all workers
+    // read/write to the same tracker
+    if (this.failureTracker) {
+      this.failureTracker = shared.getFailureTracker();
     }
   }
 
@@ -364,6 +383,11 @@ export class ContextEngineeringManager {
     }
 
     const result = await this.compactor.compact(messages, { summarize });
+
+    // Push references to shared pool for cross-worker access
+    if (this.sharedState && result.references.length > 0) {
+      this.sharedState.addReferences(result.references);
+    }
 
     this.emit({
       type: 'compaction.completed',

@@ -562,7 +562,7 @@ export const DEFAULT_PROVIDER_RESILIENCE_CONFIG: ProviderResilienceConfig = {
  */
 export function buildConfig(
   userConfig: Partial<ProductionAgentConfig>
-): Required<Omit<ProductionAgentConfig, 'provider' | 'tools' | 'toolResolver' | 'mcpToolSummaries' | 'maxContextTokens' | 'blackboard' | 'fileCache' | 'budget' | 'agentId' | 'workingDirectory' | 'verificationCriteria'>> & Pick<ProductionAgentConfig, 'provider' | 'tools' | 'toolResolver' | 'mcpToolSummaries' | 'maxContextTokens' | 'blackboard' | 'fileCache' | 'budget' | 'agentId' | 'workingDirectory' | 'verificationCriteria'> {
+): Required<Omit<ProductionAgentConfig, 'provider' | 'tools' | 'toolResolver' | 'mcpToolSummaries' | 'maxContextTokens' | 'blackboard' | 'fileCache' | 'budget' | 'agentId' | 'workingDirectory' | 'verificationCriteria' | 'sharedContextState' | 'sharedEconomicsState'>> & Pick<ProductionAgentConfig, 'provider' | 'tools' | 'toolResolver' | 'mcpToolSummaries' | 'maxContextTokens' | 'blackboard' | 'fileCache' | 'budget' | 'agentId' | 'workingDirectory' | 'verificationCriteria' | 'sharedContextState' | 'sharedEconomicsState'> {
   return {
     provider: userConfig.provider!,
     tools: userConfig.tools || [],
@@ -608,6 +608,8 @@ export function buildConfig(
     budget: userConfig.budget, // Optional: custom budget for subagents
     workingDirectory: userConfig.workingDirectory, // Optional: base path for tool operations
     verificationCriteria: userConfig.verificationCriteria, // Optional: completion verification
+    sharedContextState: userConfig.sharedContextState, // Optional: shared context for swarm workers
+    sharedEconomicsState: userConfig.sharedEconomicsState, // Optional: shared economics for swarm workers
   };
 }
 
