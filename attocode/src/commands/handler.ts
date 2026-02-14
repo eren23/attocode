@@ -284,7 +284,13 @@ ${c('Outcomes:', 'bold')}
   Success:         ${metrics.successCount ?? 0}
   Failed:          ${metrics.failureCount ?? 0}
   Cancelled:       ${metrics.cancelCount ?? 0}
-${goalsSummary}`);
+${(() => {
+  const shared = agent.getSharedStats();
+  if (!shared) return '';
+  return `\n${c('Shared State:', 'bold')}
+  Context:         ${shared.context.failures} failures, ${shared.context.references} refs
+  Economics:       ${shared.economics.fingerprints} fingerprints, ${shared.economics.globalLoops.length} doom loops`;
+})()}${goalsSummary}`);
       break;
     }
 

@@ -10,6 +10,8 @@ import type { SwarmConfig, SwarmTask, SwarmTaskResult, SwarmWorkerSpec, SwarmWor
 import { getTaskTypeConfig, type WorkerCapability } from './types.js';
 import { selectWorkerForCapability, type ModelHealthTracker } from './model-selector.js';
 import type { SwarmBudgetPool } from './swarm-budget.js';
+import type { SharedContextEngine } from '../../shared/context-engine.js';
+import { WorkerBudgetTracker, createWorkerBudgetTracker } from '../../shared/budget-tracker.js';
 import { buildDelegationPrompt, createMinimalDelegationSpec } from '../delegation-protocol.js';
 import { getSubagentQualityPrompt } from '../thinking-strategy.js';
 import { getEnvironmentFacts, formatFactsBlock, formatFactsCompact } from '../environment-facts.js';
@@ -46,6 +48,7 @@ interface ActiveWorker {
   workerName: string;
   model: string;
   startedAt: number;
+  budgetTracker: WorkerBudgetTracker;
   promise: Promise<{ taskId: string; result: SpawnResult; startedAt: number }>;
 }
 
@@ -58,8 +61,10 @@ export class SwarmWorkerPool {
   private budgetPool: SwarmBudgetPool;
   private workers: SwarmWorkerSpec[];
   private healthTracker?: ModelHealthTracker;
+  private sharedContextEngine?: SharedContextEngine;
 
   private activeWorkers: Map<string, ActiveWorker> = new Map();
+  private completedTrackers: Map<string, WorkerBudgetTracker> = new Map();
   private registeredAgentNames: Set<string> = new Set();
   private dispatchCount = 0;
 
@@ -69,6 +74,7 @@ export class SwarmWorkerPool {
     spawnAgent: SpawnAgentFn,
     budgetPool: SwarmBudgetPool,
     healthTracker?: ModelHealthTracker,
+    sharedContextEngine?: SharedContextEngine,
   ) {
     this.config = config;
     this.agentRegistry = agentRegistry;
@@ -76,6 +82,7 @@ export class SwarmWorkerPool {
     this.budgetPool = budgetPool;
     this.workers = config.workers;
     this.healthTracker = healthTracker;
+    this.sharedContextEngine = sharedContextEngine;
   }
 
   /**
@@ -236,6 +243,14 @@ export class SwarmWorkerPool {
       return { taskId: task.id, result, startedAt };
     });
 
+    // Create per-worker budget tracker (orchestrator-side visibility)
+    const budgetTracker = createWorkerBudgetTracker({
+      workerId: task.id,
+      maxTokens: agentDef.maxTokenBudget!,
+      maxIterations: agentDef.maxIterations!,
+      doomLoopThreshold: agentDef.economicsTuning?.doomLoopThreshold ?? 3,
+    });
+
     // Track active worker
     this.activeWorkers.set(task.id, {
       taskId: task.id,
@@ -243,6 +258,7 @@ export class SwarmWorkerPool {
       workerName: worker.name,
       model: worker.model,
       startedAt,
+      budgetTracker,
       promise,
     });
   }
@@ -282,9 +298,18 @@ export class SwarmWorkerPool {
 
     const completed = await Promise.race(wrappedPromises);
 
-    // Clean up the completed worker
+    // Clean up the completed worker and populate budget tracker
     const worker = this.activeWorkers.get(completed.taskId);
     if (worker) {
+      // Populate budget tracker with actual usage from SpawnResult
+      const tokens = completed.result.metrics.tokens;
+      worker.budgetTracker.recordLLMUsage(
+        Math.floor(tokens * 0.6),  // estimate input
+        Math.floor(tokens * 0.4),  // estimate output
+      );
+      // Store tracker for utilization lookup before removing active worker
+      this.completedTrackers.set(completed.taskId, worker.budgetTracker);
+
       this.activeWorkers.delete(completed.taskId);
       const agentName = `swarm-${worker.workerName}-${completed.taskId}`;
       this.agentRegistry.unregisterAgent(agentName);
@@ -320,6 +345,10 @@ export class SwarmWorkerPool {
       ? calculateCost(model, Math.floor(tokens * 0.6), Math.floor(tokens * 0.4))
       : tokens * 0.0000005;
 
+    // Look up per-worker budget utilization from completed tracker
+    const tracker = this.completedTrackers.get(task.id);
+    const budgetUtilization = tracker ? tracker.getUtilization() : undefined;
+
     return {
       success: spawnResult.success,
       output: spawnResult.output,
@@ -331,7 +360,15 @@ export class SwarmWorkerPool {
       filesModified: spawnResult.filesModified ?? [],
       findings: spawnResult.structured?.findings,
       toolCalls: spawnResult.metrics.toolCalls,
+      budgetUtilization,
     };
+  }
+
+  /**
+   * Get budget utilization for a completed worker.
+   */
+  getWorkerUtilization(taskId: string): { tokenPercent: number; iterationPercent: number } | undefined {
+    return this.completedTrackers.get(taskId)?.getUtilization();
   }
 
   /**
@@ -374,6 +411,7 @@ export class SwarmWorkerPool {
     }
     this.registeredAgentNames.clear();
     this.activeWorkers.clear();
+    this.completedTrackers.clear();
   }
 
   /**
@@ -668,6 +706,20 @@ export class SwarmWorkerPool {
       parts.push('', getSubagentQualityPrompt());
     }
 
+    // Phase 3.1: Cross-worker failure learning via SharedContextEngine
+    if (this.sharedContextEngine) {
+      const failureGuidance = this.sharedContextEngine.getFailureGuidance();
+      if (failureGuidance) {
+        parts.push('', '═══ CROSS-WORKER FAILURE LEARNING ═══', '', failureGuidance);
+      }
+      // Goal recitation only on full prompts (not reduced/minimal)
+      if (promptTier === 'full') {
+        const workerTask = { id: task.id, description: task.description, goal: task.description, dependencies: task.dependencies };
+        const goalRecitation = this.sharedContextEngine.getGoalRecitation(workerTask);
+        if (goalRecitation) parts.push('', goalRecitation);
+      }
+    }
+
     return parts.join('\n');
   }
 
@@ -710,6 +762,7 @@ export function createSwarmWorkerPool(
   spawnAgent: SpawnAgentFn,
   budgetPool: SwarmBudgetPool,
   healthTracker?: ModelHealthTracker,
+  sharedContextEngine?: SharedContextEngine,
 ): SwarmWorkerPool {
-  return new SwarmWorkerPool(config, agentRegistry, spawnAgent, budgetPool, healthTracker);
+  return new SwarmWorkerPool(config, agentRegistry, spawnAgent, budgetPool, healthTracker, sharedContextEngine);
 }

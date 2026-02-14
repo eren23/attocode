@@ -174,6 +174,70 @@ describe('SharedContextState', () => {
     });
   });
 
+  describe('serialization (toJSON / restoreFrom)', () => {
+    it('toJSON returns correct structure', () => {
+      shared.recordFailure('worker-1', { action: 'bash', error: 'fail' });
+      shared.addReferences([
+        { id: 'r1', type: 'file', value: '/src/a.ts', timestamp: new Date().toISOString() },
+      ]);
+
+      const json = shared.toJSON();
+      expect(json.staticPrefix).toBe('Test prefix');
+      expect(json.failures.length).toBe(1);
+      expect(json.failures[0].action).toContain('bash');
+      expect(json.references.length).toBe(1);
+      expect(json.references[0][1].value).toBe('/src/a.ts');
+    });
+
+    it('restoreFrom replays failures and references', () => {
+      // Set up source state
+      shared.recordFailure('w1', { action: 'read_file', error: 'not found' });
+      shared.recordFailure('w2', { action: 'write_file', error: 'permission denied' });
+      shared.addReferences([
+        { id: 'r1', type: 'file', value: '/src/x.ts', timestamp: new Date().toISOString() },
+      ]);
+
+      const json = shared.toJSON();
+
+      // Restore into a fresh instance
+      const restored = createSharedContextState({ staticPrefix: 'Test prefix' });
+      restored.restoreFrom(json);
+
+      // Failures are replayed (each original failure is re-recorded, so counts may differ)
+      expect(restored.getStats().failures).toBeGreaterThanOrEqual(2);
+      expect(restored.getStats().references).toBe(1);
+    });
+
+    it('round-trip: state → toJSON → new state → restoreFrom → same data', () => {
+      shared.recordFailure('w1', { action: 'bash', error: 'exit code 1' });
+      shared.addReferences([
+        { id: 'r1', type: 'function', value: 'handleAuth', timestamp: new Date().toISOString() },
+        { id: 'r2', type: 'file', value: '/index.ts', timestamp: new Date().toISOString() },
+      ]);
+
+      const json = shared.toJSON();
+      const restored = createSharedContextState({ staticPrefix: 'Test prefix' });
+      restored.restoreFrom(json);
+
+      // References match
+      const refs = restored.searchReferences('Auth');
+      expect(refs.length).toBe(1);
+      expect(refs[0].value).toBe('handleAuth');
+
+      // Failure context contains the original failure
+      const ctx = restored.getFailureContext();
+      expect(ctx).toContain('bash');
+    });
+
+    it('restoreFrom with empty data is a no-op', () => {
+      shared.recordFailure('w1', { action: 'test', error: 'err' });
+      const beforeStats = shared.getStats();
+
+      shared.restoreFrom({});
+      expect(shared.getStats()).toEqual(beforeStats);
+    });
+  });
+
   describe('multi-worker integration', () => {
     it('worker A failure is visible to worker B via shared tracker', () => {
       // Simulate: worker A records a failure

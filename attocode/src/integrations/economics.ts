@@ -232,6 +232,15 @@ const DOOM_LOOP_PROMPT = (tool: string, count: number) =>
 3. If the task is complete, say so explicitly`;
 
 /**
+ * Global doom loop prompt - injected when the same tool call is repeated across multiple workers.
+ */
+const GLOBAL_DOOM_LOOP_PROMPT = (tool: string, workerCount: number, totalCalls: number) =>
+  `[System] GLOBAL DOOM LOOP: ${totalCalls} calls to ${tool} across ${workerCount} workers. The entire swarm is stuck on this approach.
+1. Try a fundamentally different strategy
+2. Do NOT retry the same tool/parameters
+3. Consider whether the task goal itself needs re-evaluation`;
+
+/**
  * Exploration saturation prompt - gentle nudge to start making edits.
  */
 const EXPLORATION_NUDGE_PROMPT = (filesRead: number, iterations: number) =>
@@ -873,6 +882,31 @@ export class ExecutionEconomicsManager {
         suggestedAction: 'warn',
         injectedPrompt: DOOM_LOOP_PROMPT(this.loopState.lastTool || 'unknown', this.loopState.consecutiveCount),
       };
+    }
+
+    // =========================================================================
+    // GLOBAL DOOM LOOP DETECTION - Cross-worker stuck pattern
+    // =========================================================================
+    if (this.sharedEconomics && this.progress.recentToolCalls.length > 0) {
+      const lastCall = this.progress.recentToolCalls[this.progress.recentToolCalls.length - 1];
+      const fingerprint = computeToolFingerprint(lastCall.tool, lastCall.args);
+      if (this.sharedEconomics.isGlobalDoomLoop(fingerprint)) {
+        const info = this.sharedEconomics.getGlobalLoopInfo(fingerprint);
+        return {
+          canContinue: true,
+          reason: `Global doom loop: ${lastCall.tool} repeated across ${info?.workerCount ?? 0} workers`,
+          budgetType: 'iterations',
+          isHardLimit: false,
+          isSoftLimit: true,
+          percentUsed: (this.usage.iterations / this.budget.targetIterations) * 100,
+          suggestedAction: 'warn',
+          injectedPrompt: GLOBAL_DOOM_LOOP_PROMPT(
+            lastCall.tool,
+            info?.workerCount ?? 0,
+            info?.count ?? 0,
+          ),
+        };
+      }
     }
 
     // =========================================================================

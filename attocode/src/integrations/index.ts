@@ -539,6 +539,14 @@ export {
   type ScoredChunk,
 } from './codebase-context.js';
 
+// Edit Validator (Phase 5.1)
+export {
+  validateSyntax,
+  validateEdit,
+  type ValidationResult,
+  type SyntaxError,
+} from './edit-validator.js';
+
 // Shared Blackboard (subagent coordination)
 export {
   SharedBlackboard,

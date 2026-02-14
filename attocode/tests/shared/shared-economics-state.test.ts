@@ -139,6 +139,82 @@ describe('SharedEconomicsState', () => {
     });
   });
 
+  describe('serialization (toJSON / restoreFrom)', () => {
+    it('toJSON returns correct fingerprint structure', () => {
+      shared.recordToolCall('w1', 'fp1');
+      shared.recordToolCall('w2', 'fp1');
+      shared.recordToolCall('w1', 'fp2');
+
+      const json = shared.toJSON();
+      expect(json.fingerprints.length).toBe(2);
+
+      const fp1Entry = json.fingerprints.find(e => e.fingerprint === 'fp1');
+      expect(fp1Entry).toBeDefined();
+      expect(fp1Entry!.count).toBe(2);
+      expect(fp1Entry!.workers).toContain('w1');
+      expect(fp1Entry!.workers).toContain('w2');
+    });
+
+    it('restoreFrom restores counts and workers', () => {
+      shared.recordToolCall('w1', 'fp1');
+      shared.recordToolCall('w2', 'fp1');
+      shared.recordToolCall('w3', 'fp1');
+
+      const json = shared.toJSON();
+
+      const restored = createSharedEconomicsState({ globalDoomLoopThreshold: 5 });
+      restored.restoreFrom(json);
+
+      const info = restored.getGlobalLoopInfo('fp1');
+      expect(info).not.toBeNull();
+      expect(info!.count).toBe(3);
+      expect(info!.workerCount).toBe(3);
+    });
+
+    it('restored state triggers doom loop detection correctly', () => {
+      // Build state with 4 calls
+      shared.recordToolCall('w1', 'fp-doom');
+      shared.recordToolCall('w2', 'fp-doom');
+      shared.recordToolCall('w3', 'fp-doom');
+      shared.recordToolCall('w4', 'fp-doom');
+
+      const json = shared.toJSON();
+
+      // Restore into new instance (threshold: 5)
+      const restored = createSharedEconomicsState({ globalDoomLoopThreshold: 5 });
+      restored.restoreFrom(json);
+
+      // Not yet at threshold
+      expect(restored.isGlobalDoomLoop('fp-doom')).toBe(false);
+
+      // One more call pushes past threshold
+      restored.recordToolCall('w5', 'fp-doom');
+      expect(restored.isGlobalDoomLoop('fp-doom')).toBe(true);
+    });
+
+    it('round-trip preserves all data', () => {
+      shared.recordToolCall('w1', 'a');
+      shared.recordToolCall('w2', 'b');
+      shared.recordToolCall('w1', 'a');
+
+      const json = shared.toJSON();
+      const restored = createSharedEconomicsState({ globalDoomLoopThreshold: 5 });
+      restored.restoreFrom(json);
+
+      expect(restored.getStats().fingerprints).toBe(2);
+      expect(restored.getGlobalLoopInfo('a')!.count).toBe(2);
+      expect(restored.getGlobalLoopInfo('b')!.count).toBe(1);
+    });
+
+    it('restoreFrom with empty data is a no-op', () => {
+      shared.recordToolCall('w1', 'fp');
+      const before = shared.getStats();
+
+      shared.restoreFrom({});
+      expect(shared.getStats()).toEqual(before);
+    });
+  });
+
   describe('multi-worker doom loop scenario', () => {
     it('detects swarm-wide stuck pattern across 3 workers', () => {
       const swarmShared = createSharedEconomicsState({ globalDoomLoopThreshold: 6 });

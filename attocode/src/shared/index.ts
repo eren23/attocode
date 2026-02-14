@@ -16,3 +16,24 @@ export {
   createSharedEconomicsState,
   type SharedEconomicsConfig,
 } from './shared-economics-state.js';
+
+export {
+  type PersistenceAdapter,
+  JSONFilePersistenceAdapter,
+  SQLitePersistenceAdapter,
+  createPersistenceAdapter,
+} from './persistence.js';
+
+export {
+  SharedContextEngine,
+  createSharedContextEngine,
+  type SharedContextEngineConfig,
+  type WorkerTask,
+} from './context-engine.js';
+
+export {
+  WorkerBudgetTracker,
+  createWorkerBudgetTracker,
+  type WorkerBudgetConfig,
+  type WorkerBudgetCheckResult,
+} from './budget-tracker.js';

@@ -1176,14 +1176,20 @@ export function TUIApp({
       case 'stats': {
         const metrics = agent.getMetrics();
         const agentState = agent.getState();
-        addMessage('system', [
+        const lines = [
           `Session Status:`,
           `  Status: ${agentState.status} | Iteration: ${agentState.iteration}`,
           `  Messages: ${agentState.messages.length}`,
           `  Tokens: ${metrics.totalTokens.toLocaleString()} (${metrics.inputTokens} in / ${metrics.outputTokens} out)`,
           `  LLM Calls: ${metrics.llmCalls} | Tool Calls: ${metrics.toolCalls}`,
           `  Cost: $${metrics.estimatedCost.toFixed(4)}`,
-        ].join('\n'));
+        ];
+        const shared = agent.getSharedStats();
+        if (shared) {
+          lines.push(`  Shared Context: ${shared.context.failures} failures, ${shared.context.references} refs`);
+          lines.push(`  Shared Economics: ${shared.economics.fingerprints} fingerprints, ${shared.economics.globalLoops.length} doom loops`);
+        }
+        addMessage('system', lines.join('\n'));
         return;
       }
 

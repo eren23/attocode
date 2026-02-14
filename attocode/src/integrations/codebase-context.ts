@@ -17,6 +17,7 @@
 import * as fs from 'fs/promises';
 import * as path from 'path';
 import type { LSPManager, LSPLocation } from './lsp.js';
+import { isASTSupported, extractSymbolsAST, extractDependenciesAST } from './codebase-ast.js';
 
 // =============================================================================
 // TYPES
@@ -502,7 +503,7 @@ export class CodebaseContextManager {
       const tokenCount = Math.ceil(content.length * this.config.tokensPerChar);
       const type = this.determineChunkType(relativePath, content);
       const symbols = this.extractSymbols(content, relativePath);
-      const dependencies = this.extractDependencyNames(content);
+      const dependencies = this.extractDependencyNames(content, relativePath);
 
       // Calculate base importance
       const importance = this.calculateBaseImportance(type, relativePath);
@@ -615,8 +616,18 @@ export class CodebaseContextManager {
 
   /**
    * Extract exported symbols from code.
+   * Uses AST-based extraction when available, with regex fallback.
    */
   private extractSymbols(content: string, filePath: string): string[] {
+    // Try AST-based extraction first
+    if (isASTSupported(filePath)) {
+      const astSymbols = extractSymbolsAST(content, filePath);
+      if (astSymbols.length > 0) {
+        return astSymbols.map(s => s.name);
+      }
+    }
+
+    // Fallback to regex extraction
     const symbols: string[] = [];
     const ext = path.extname(filePath);
 
@@ -659,25 +670,40 @@ export class CodebaseContextManager {
 
   /**
    * Extract dependency file paths from imports.
+   * Uses AST-based extraction when available, with regex fallback.
    */
   private extractDependencies(content: string, currentFile: string): Set<string> {
+    // Try AST-based extraction first
+    if (isASTSupported(currentFile)) {
+      const astDeps = extractDependenciesAST(content, currentFile);
+      const deps = new Set<string>();
+      const dir = path.dirname(currentFile);
+      for (const dep of astDeps) {
+        if (dep.isRelative) {
+          const resolved = path.normalize(path.join(dir, dep.source));
+          for (const tryExt of ['', '.ts', '.tsx', '.js', '.jsx', '/index.ts', '/index.js']) {
+            deps.add(resolved + tryExt);
+          }
+        }
+      }
+      if (deps.size > 0) return deps;
+    }
+
+    // Fallback to regex extraction
     const deps = new Set<string>();
     const ext = path.extname(currentFile);
     const dir = path.dirname(currentFile);
 
     if (['.ts', '.tsx', '.js', '.jsx'].includes(ext)) {
-      // Match import statements
       const importPattern = /import\s+.*?\s+from\s+['"]([^'"]+)['"]/g;
       let match;
 
       while ((match = importPattern.exec(content)) !== null) {
         const importPath = match[1];
 
-        // Only track relative imports
         if (importPath.startsWith('.')) {
           const resolved = path.normalize(path.join(dir, importPath));
 
-          // Add possible extensions
           for (const tryExt of ['', '.ts', '.tsx', '.js', '.jsx', '/index.ts', '/index.js']) {
             const tryPath = resolved + tryExt;
             deps.add(tryPath);
@@ -691,11 +717,24 @@ export class CodebaseContextManager {
 
   /**
    * Extract dependency names (for symbol matching).
+   * Uses AST-based extraction when available, with regex fallback.
    */
-  private extractDependencyNames(content: string): string[] {
+  private extractDependencyNames(content: string, filePath?: string): string[] {
+    // Try AST-based extraction first
+    if (filePath && isASTSupported(filePath)) {
+      const astDeps = extractDependenciesAST(content, filePath);
+      if (astDeps.length > 0) {
+        const names: string[] = [];
+        for (const dep of astDeps) {
+          names.push(...dep.names.filter(n => !n.startsWith('* as ')));
+        }
+        if (names.length > 0) return names;
+      }
+    }
+
+    // Fallback to regex extraction
     const deps: string[] = [];
 
-    // Extract imported names
     const patterns = [
       /import\s+\{\s*([^}]+)\s*\}\s+from/g,
       /import\s+(\w+)\s+from/g,

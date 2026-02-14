@@ -52,6 +52,7 @@ import type { SwarmEvent } from './swarm-events.js';
 import type { SpawnResult } from '../agent-registry.js';
 import { createSharedContextState, type SharedContextState } from '../../shared/shared-context-state.js';
 import { createSharedEconomicsState, type SharedEconomicsState } from '../../shared/shared-economics-state.js';
+import { createSharedContextEngine, type SharedContextEngine } from '../../shared/context-engine.js';
 
 // ─── Hollow Completion Detection ──────────────────────────────────────────
 
@@ -130,6 +131,7 @@ export class SwarmOrchestrator {
   // Phase 3.1+3.2: Shared state for cross-worker learning
   private sharedContextState!: SharedContextState;
   private sharedEconomicsState!: SharedEconomicsState;
+  private sharedContextEngine!: SharedContextEngine;
 
   private taskQueue: SwarmTaskQueue;
   private budgetPool: SwarmBudgetPool;
@@ -225,6 +227,10 @@ export class SwarmOrchestrator {
     this.sharedEconomicsState = createSharedEconomicsState({
       globalDoomLoopThreshold: 10,
     });
+    this.sharedContextEngine = createSharedContextEngine(this.sharedContextState, {
+      maxFailuresInPrompt: 5,
+      includeInsights: true,
+    });
 
     this.taskQueue = createSwarmTaskQueue();
     this.budgetPool = createSwarmBudgetPool(this.config);
@@ -234,6 +240,7 @@ export class SwarmOrchestrator {
       spawnAgentFn,
       this.budgetPool,
       this.healthTracker,
+      this.sharedContextEngine,
     );
 
     // Initialize state store if persistence enabled
@@ -408,6 +415,11 @@ Rules:
   /** Get shared economics state for cross-worker doom loop aggregation. */
   getSharedEconomicsState(): SharedEconomicsState {
     return this.sharedEconomicsState;
+  }
+
+  /** Get shared context engine for cross-worker failure learning. */
+  getSharedContextEngine(): SharedContextEngine {
+    return this.sharedContextEngine;
   }
 
   /**
@@ -1084,6 +1096,14 @@ Respond with JSON: { "fixups": [{ "description": "what to fix", "type": "impleme
     this.qualityRejections = checkpoint.stats.qualityRejections;
     this.retries = checkpoint.stats.retries;
 
+    // Restore shared context & economics state from checkpoint
+    if (checkpoint.sharedContext) {
+      this.sharedContextState.restoreFrom(checkpoint.sharedContext as Parameters<typeof this.sharedContextState.restoreFrom>[0]);
+    }
+    if (checkpoint.sharedEconomics) {
+      this.sharedEconomicsState.restoreFrom(checkpoint.sharedEconomics);
+    }
+
     // Restore task queue
     this.taskQueue.restoreFromCheckpoint({
       taskStates: checkpoint.taskStates,
@@ -1612,6 +1632,11 @@ Respond with JSON: { "fixups": [{ "description": "what to fix", "type": "impleme
     this.totalTokens += taskResult.tokensUsed;
     this.totalCost += taskResult.costUsed;
 
+    // Log per-worker budget utilization for orchestrator visibility
+    if (taskResult.budgetUtilization) {
+      this.logDecision('budget-utilization', `${taskId}: token ${taskResult.budgetUtilization.tokenPercent}%, iter ${taskResult.budgetUtilization.iterationPercent}%`, `model=${model}, tokens=${taskResult.tokensUsed}, duration=${durationMs}ms`);
+    }
+
     // V10: Emit per-attempt event for full decision traceability
     this.emit({
       type: 'swarm.task.attempt',
@@ -1735,6 +1760,11 @@ Respond with JSON: { "fixups": [{ "description": "what to fix", "type": "impleme
           previousFiles: taskResult.filesModified,
           swarmProgress: this.getSwarmProgressSummary(),
         };
+        // Phase 3.1: Report failure to shared context engine for cross-worker learning
+        this.sharedContextEngine.reportFailure(taskId, {
+          action: task.description.slice(0, 200),
+          error: spawnResult.output.slice(0, 500),
+        });
       }
 
       // V7: Reset hollow streak on non-hollow failure (error is not a hollow completion)
@@ -1812,6 +1842,11 @@ Respond with JSON: { "fixups": [{ "description": "what to fix", "type": "impleme
         previousFiles: taskResult.filesModified,
         swarmProgress: this.getSwarmProgressSummary(),
       };
+      // Phase 3.1: Report hollow completion to shared context engine
+      this.sharedContextEngine.reportFailure(taskId, {
+        action: task.description.slice(0, 200),
+        error: 'Hollow completion: worker produced no meaningful output',
+      });
 
       // Model failover for hollow completions — same pattern as quality failover
       if (this.config.enableModelFailover) {
@@ -2091,6 +2126,11 @@ Respond with JSON: { "fixups": [{ "description": "what to fix", "type": "impleme
             previousFiles: taskResult.filesModified,
             swarmProgress: this.getSwarmProgressSummary(),
           };
+          // Phase 3.1: Report quality rejection to shared context engine
+          this.sharedContextEngine.reportFailure(taskId, {
+            action: task.description.slice(0, 200),
+            error: `Quality gate rejection (score ${quality.score}): ${quality.feedback.slice(0, 300)}`,
+          });
 
           // V5: Model failover on quality rejection — but NOT on artifact auto-fails
           // P1: Widened from score<=1 to score<threshold so failover triggers on any rejection
@@ -2524,6 +2564,8 @@ Respond with JSON: { "fixups": [{ "description": "what to fix", "type": "impleme
         decisions: this.orchestratorDecisions,
         errors: this.errors,
         originalPrompt: this.originalPrompt,
+        sharedContext: this.sharedContextState.toJSON(),
+        sharedEconomics: this.sharedEconomicsState.toJSON(),
       });
 
       this.emit({

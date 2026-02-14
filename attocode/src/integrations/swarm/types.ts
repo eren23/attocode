@@ -567,6 +567,9 @@ export interface SwarmTaskResult {
 
   /** Whether this result was accepted with degraded quality (partial work, not full pass). */
   degraded?: boolean;
+
+  /** Per-worker budget utilization from WorkerBudgetTracker (orchestrator-side tracking). */
+  budgetUtilization?: { tokenPercent: number; iterationPercent: number };
 }
 
 // ─── Artifact Inventory ─────────────────────────────────────────────────────
@@ -844,6 +847,10 @@ export interface SwarmCheckpoint {
   errors: SwarmError[];
   /** Original task prompt for re-planning on resume */
   originalPrompt?: string;
+  /** Cross-worker failure learning state (Phase 3.1) */
+  sharedContext?: { failures: unknown[]; references: [string, unknown][]; staticPrefix: string };
+  /** Cross-worker doom loop aggregation state (Phase 3.2) */
+  sharedEconomics?: { fingerprints: Array<{ fingerprint: string; count: number; workers: string[] }> };
 }
 
 /** Logged orchestrator decision with reasoning. */

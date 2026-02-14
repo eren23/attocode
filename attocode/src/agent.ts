@@ -1974,6 +1974,18 @@ export class ProductionAgent {
   }
 
   /**
+   * Get shared state stats for TUI visibility.
+   * Returns null when not in a swarm context.
+   */
+  getSharedStats(): { context: { failures: number; references: number }; economics: { fingerprints: number; globalLoops: string[] } } | null {
+    if (!this._sharedContextState) return null;
+    return {
+      context: this._sharedContextState.getStats(),
+      economics: this._sharedEconomicsState?.getStats() ?? { fingerprints: 0, globalLoops: [] },
+    };
+  }
+
+  /**
    * Get the maximum context tokens for this agent's model.
    * Priority: user config > OpenRouter API > hardcoded ModelRegistry > 200K default
    */

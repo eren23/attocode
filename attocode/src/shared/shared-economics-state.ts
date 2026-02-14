@@ -81,6 +81,31 @@ export class SharedEconomicsState {
     return loops;
   }
 
+  // ---------------------------------------------------------------------------
+  // Serialization (for checkpoint persistence)
+  // ---------------------------------------------------------------------------
+
+  /** Serialize state for checkpoint persistence. */
+  toJSON(): { fingerprints: Array<{ fingerprint: string; count: number; workers: string[] }> } {
+    const entries: Array<{ fingerprint: string; count: number; workers: string[] }> = [];
+    for (const [fp, entry] of this.toolFingerprints) {
+      entries.push({ fingerprint: fp, count: entry.count, workers: Array.from(entry.workers) });
+    }
+    return { fingerprints: entries };
+  }
+
+  /** Restore state from checkpoint data. */
+  restoreFrom(data: { fingerprints?: Array<{ fingerprint: string; count: number; workers: string[] }> }): void {
+    if (data.fingerprints) {
+      for (const entry of data.fingerprints) {
+        this.toolFingerprints.set(entry.fingerprint, {
+          count: entry.count,
+          workers: new Set(entry.workers),
+        });
+      }
+    }
+  }
+
   getStats(): { fingerprints: number; globalLoops: string[] } {
     return {
       fingerprints: this.toolFingerprints.size,

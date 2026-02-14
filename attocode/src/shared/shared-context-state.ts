@@ -164,6 +164,41 @@ export class SharedContextState {
   }
 
   // ---------------------------------------------------------------------------
+  // Serialization (for checkpoint persistence)
+  // ---------------------------------------------------------------------------
+
+  /** Serialize state for checkpoint persistence. */
+  toJSON(): { failures: Failure[]; references: [string, Reference][]; staticPrefix: string } {
+    return {
+      failures: this.failureTracker.getUnresolvedFailures(),
+      references: Array.from(this.references.entries()),
+      staticPrefix: this.staticPrefix,
+    };
+  }
+
+  /** Restore state from checkpoint data. */
+  restoreFrom(data: { failures?: Failure[]; references?: [string, Reference][] }): void {
+    // Replay failures into the tracker
+    if (data.failures) {
+      for (const f of data.failures) {
+        this.failureTracker.recordFailure({
+          action: f.action,
+          error: f.error,
+          args: f.args,
+          category: f.category,
+          intent: f.intent,
+        });
+      }
+    }
+    // Restore references
+    if (data.references) {
+      for (const [key, ref] of data.references) {
+        this.references.set(key, ref);
+      }
+    }
+  }
+
+  // ---------------------------------------------------------------------------
   // Stats & cleanup
   // ---------------------------------------------------------------------------
 

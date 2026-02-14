@@ -25,6 +25,8 @@ import {
 } from '../integrations/index.js';
 
 import { createComponentLogger } from '../integrations/logger.js';
+import { validateSyntax } from '../integrations/edit-validator.js';
+import * as fs from 'node:fs';
 
 const log = createComponentLogger('ExecutionLoop');
 
@@ -878,6 +880,28 @@ export async function executeDirectly(
           }
           if (['write_file', 'edit_file'].includes(toolCall.name)) {
             ctx.verificationGate.recordFileChange();
+          }
+        }
+
+        // Phase 5.1: Post-edit syntax validation
+        if (['write_file', 'edit_file'].includes(toolCall.name) && result?.result && (result.result as any).success) {
+          const filePath = String(toolCall.arguments.path || '');
+          if (filePath) {
+            try {
+              const content = toolCall.name === 'write_file'
+                ? String(toolCall.arguments.content || '')
+                : await fs.promises.readFile(filePath, 'utf-8');
+              const validation = validateSyntax(content, filePath);
+              if (!validation.valid && result.result && typeof result.result === 'object') {
+                const errorSummary = validation.errors
+                  .slice(0, 3)
+                  .map(e => `  L${e.line}:${e.column}: ${e.message}`)
+                  .join('\n');
+                (result.result as any).output += `\n\n⚠ Syntax validation warning:\n${errorSummary}`;
+              }
+            } catch {
+              // Validation failure is non-blocking
+            }
           }
         }
       }
