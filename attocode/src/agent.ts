@@ -1193,8 +1193,14 @@ export class ProductionAgent {
       // Check if swarm mode should handle this task
       if (this.swarmOrchestrator) {
         const swarmResult = await this.runSwarm(task);
-        // Store swarm summary as an assistant message for the response
-        this.state.messages.push({ role: 'assistant', content: swarmResult.summary });
+        if (!swarmResult.success && swarmResult.summary.includes('Decomposition failed')) {
+          // Fallback: execute directly when decomposition fails
+          this.observability?.logger?.warn('Swarm decomposition failed, falling back to direct execution');
+          await this.executeDirectly(task);
+        } else {
+          // Store swarm summary as an assistant message for the response
+          this.state.messages.push({ role: 'assistant', content: swarmResult.summary });
+        }
       } else if (this.planning?.shouldPlan(task)) {
         // Check if planning is needed
         await this.createAndExecutePlan(task);

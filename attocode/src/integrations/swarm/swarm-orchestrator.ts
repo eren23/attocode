@@ -710,11 +710,29 @@ Rules:
         return { result: null, failureReason: reason };
       }
 
-      // Reject heuristic fallback — the generic 3-task chain is worse than aborting
+      // Non-LLM results (heuristic fallback) are always rejected —
+      // try one last-resort LLM call with a simplified prompt instead
       if (!result.metadata.llmAssisted) {
-        const reason = `LLM decomposition failed (model: ${this.config.orchestratorModel}), and heuristic fallback DAG was rejected as not useful.`;
         this.logDecision('decomposition',
-          'Rejected heuristic fallback DAG', reason);
+          'Rejected heuristic fallback — attempting last-resort simplified LLM decomposition',
+          `Model: ${this.config.orchestratorModel}`);
+
+        try {
+          const lastResortResult = await this.lastResortDecompose(task);
+          if (lastResortResult && lastResortResult.subtasks.length >= 2) {
+            this.logDecision('decomposition',
+              `Last-resort decomposition succeeded: ${lastResortResult.subtasks.length} subtasks`,
+              'Simplified prompt worked');
+            return { result: lastResortResult };
+          }
+        } catch (error) {
+          this.logDecision('decomposition',
+            'Last-resort decomposition also failed',
+            (error as Error).message);
+        }
+
+        const reason = `LLM decomposition failed after all attempts (model: ${this.config.orchestratorModel}). Heuristic fallback rejected.`;
+        this.logDecision('decomposition', 'All decomposition attempts exhausted', reason);
         return { result: null, failureReason: reason };
       }
 
@@ -737,6 +755,69 @@ Rules:
       this.emit({ type: 'swarm.error', error: message, phase: 'decomposition' });
       return { result: null, failureReason: `Decomposition threw an error: ${message}` };
     }
+  }
+
+  /**
+   * Last-resort decomposition: radically simplified prompt that even weak models can handle.
+   * Uses shorter context, no examples, minimal schema, and lower maxTokens to avoid truncation.
+   */
+  private async lastResortDecompose(task: string): Promise<SmartDecompositionResult | null> {
+    const simplifiedPrompt = `Break this task into 2-6 subtasks. Return ONLY raw JSON, no markdown.
+
+{"subtasks":[{"description":"...","type":"implement","complexity":3,"dependencies":[],"parallelizable":true}],"strategy":"adaptive","reasoning":"..."}
+
+Rules:
+- dependencies: integer indices (e.g. [0] means depends on first subtask)
+- type: one of research/implement/test/design/refactor/integrate/merge
+- At least 2 subtasks`;
+
+    const response = await this.provider.chat(
+      [
+        { role: 'system', content: simplifiedPrompt },
+        { role: 'user', content: task },
+      ],
+      {
+        model: this.config.orchestratorModel,
+        maxTokens: 4096,  // Short — avoids truncation
+        temperature: 0.1,  // Very deterministic
+      },
+    );
+    this.trackOrchestratorUsage(response as any, 'decompose-last-resort');
+
+    const parsed = parseDecompositionResponse(response.content);
+    if (parsed.subtasks.length < 2) return null;
+
+    // Build a proper SmartDecompositionResult from the parsed LLM output
+    const decomposer = createSmartDecomposer({ detectConflicts: true });
+    const subtasks = parsed.subtasks.map((s, index) => ({
+      id: `task-lr-${index}`,
+      description: s.description,
+      status: (s.dependencies.length > 0 ? 'blocked' : 'ready') as import('../smart-decomposer.js').SubtaskStatus,
+      dependencies: s.dependencies.map((d: number | string) => `task-lr-${d}`),
+      complexity: s.complexity,
+      type: s.type,
+      parallelizable: s.parallelizable,
+      relevantFiles: s.relevantFiles,
+      suggestedRole: s.suggestedRole,
+    }));
+
+    const dependencyGraph = decomposer.buildDependencyGraph(subtasks);
+    const conflicts = decomposer.detectConflicts(subtasks);
+
+    return {
+      originalTask: task,
+      subtasks,
+      dependencyGraph,
+      conflicts,
+      strategy: parsed.strategy,
+      totalComplexity: subtasks.reduce((sum, t) => sum + t.complexity, 0),
+      totalEstimatedTokens: subtasks.length * 5000,
+      metadata: {
+        decomposedAt: new Date(),
+        codebaseAware: false,
+        llmAssisted: true,  // This IS LLM-assisted, just simplified
+      },
+    };
   }
 
   // ─── V2: Planning Phase ───────────────────────────────────────────────

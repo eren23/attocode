@@ -187,7 +187,7 @@ describe('SmartDecomposer dependency resolution', () => {
     // 2 events: first retry attempt, then final heuristic fallback
     expect(fallbackEvents).toHaveLength(2);
     expect(fallbackEvents[0].type === 'llm.fallback' && fallbackEvents[0].reason).toBe('LLM returned 0 subtasks, retrying...');
-    expect(fallbackEvents[1].type === 'llm.fallback' && fallbackEvents[1].reason).toBe('LLM failed after 2 attempts');
+    expect(fallbackEvents[1].type === 'llm.fallback' && fallbackEvents[1].reason).toBe('LLM failed after 2 attempts — skipping heuristic');
   });
 
   it('should emit llm.fallback events when LLM throws (retry + final)', async () => {
@@ -201,10 +201,10 @@ describe('SmartDecomposer dependency resolution', () => {
     await decomposer.decompose('Build a feature');
 
     const fallbackEvents = events.filter((e) => e.type === 'llm.fallback');
-    // 2 events: first retry attempt, then final heuristic fallback
+    // 2 events: first retry attempt, then final skipping heuristic
     expect(fallbackEvents).toHaveLength(2);
     expect(fallbackEvents[0].type === 'llm.fallback' && fallbackEvents[0].reason).toBe('LLM connection timeout, retrying...');
-    expect(fallbackEvents[1].type === 'llm.fallback' && fallbackEvents[1].reason).toBe('LLM failed after 2 attempts');
+    expect(fallbackEvents[1].type === 'llm.fallback' && fallbackEvents[1].reason).toBe('LLM failed after 2 attempts — skipping heuristic');
   });
 
   it('should use adaptive strategy for implement tasks by default (not sequential)', async () => {
@@ -386,14 +386,16 @@ describe('parseDecompositionResponse truncated JSON recovery', () => {
     expect(result.subtasks[1].description).toBe('Implement endpoints');
   });
 
-  it('should return empty subtasks when no complete objects exist', () => {
+  it('should fall back to mega-task when no complete JSON objects exist', () => {
     const truncated = `\`\`\`json
 {
   "subtasks": [
     { "desc`;
 
     const result = parseDecompositionResponse(truncated);
-    expect(result.subtasks).toHaveLength(0);
-    expect(result.parseError).toBeDefined();
+    // With the robust parser, incomplete JSON triggers mega-task fallback
+    // rather than returning empty — having something is better than aborting
+    expect(result.subtasks).toHaveLength(1);
+    expect(result.reasoning).toContain('mega-task');
   });
 });

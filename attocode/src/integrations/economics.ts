@@ -34,6 +34,10 @@ export interface EconomicsTuning {
   zeroProgressThreshold?: number;
   /** Iteration checkpoint for adaptive budget reduction (default: 5) */
   progressCheckpoint?: number;
+  /** Max tool calls to execute from a single LLM response (default: 25) */
+  maxToolCallsPerResponse?: number;
+  /** Max consecutive tool failures before circuit breaker trips (default: 5) */
+  circuitBreakerFailureThreshold?: number;
 }
 
 /**
@@ -133,6 +137,8 @@ export interface PhaseState {
   inTestFixCycle: boolean;
   /** Consecutive bash command failures (any command, not just tests) */
   consecutiveBashFailures: number;
+  /** Consecutive turns where LLM produced text only (no tool calls) */
+  consecutiveTextOnlyTurns: number;
 }
 
 /**
@@ -262,12 +268,34 @@ Do not retry the same fix. Try a new approach.`;
 /**
  * Phase budget exploration exceeded prompt.
  */
-const BASH_FAILURE_CASCADE_PROMPT = (failures: number) =>
-`[System] ${failures} consecutive bash commands have failed. STOP and explain:
-1. What are you trying to accomplish?
-2. Why are the commands failing?
-3. What is your alternative approach?
-Do not run another bash command until you've explained the issue.`;
+/** Detect bash commands that are doing file write operations (write/append/redirect/heredoc). */
+const BASH_FILE_WRITE_RE = /^\s*(cat|echo|printf)\b.*(?:>>?|<<)\s*/;
+
+/** Check whether a bash command is attempting file operations that should use dedicated tools. */
+function isBashFileOperation(command: string): boolean {
+  return BASH_FILE_READ_RE.test(command) || BASH_FILE_WRITE_RE.test(command) || /heredoc|EOF/i.test(command);
+}
+
+const BASH_FAILURE_CASCADE_PROMPT = (failures: number, lastCommand?: string) => {
+  const isFileOp = lastCommand && isBashFileOperation(lastCommand);
+  if (isFileOp) {
+    return `[System] ${failures} consecutive bash commands have failed trying to do file operations.
+STOP using bash for file operations. Use the correct tool:
+- To CREATE a file: write_file (not cat/echo with redirect)
+- To MODIFY a file: edit_file (not sed/awk)
+- To READ a file: read_file (not cat/head/tail)
+Switch to the correct tool NOW.`;
+  }
+  return `[System] ${failures} consecutive bash commands have failed. STOP and:
+1. Explain what you're trying to accomplish
+2. Try a DIFFERENT approach or tool
+3. Do not run another bash command with the same pattern`;
+};
+
+const SUMMARY_LOOP_PROMPT =
+`[System] You've produced text-only responses without using tools. You should be DOING work, not summarizing it.
+Pick the most important remaining task and start working on it NOW using your tools (write_file, edit_file, bash, etc.).
+Do NOT output another status summary or task list.`;
 
 const EXPLORATION_BUDGET_EXCEEDED_PROMPT = (pct: number) =>
 `[System] You've spent ${pct}% of your iterations in exploration. Start making edits NOW.
@@ -447,6 +475,7 @@ export class ExecutionEconomicsManager {
       consecutiveTestFailures: 0,
       inTestFixCycle: false,
       consecutiveBashFailures: 0,
+      consecutiveTextOnlyTurns: 0,
     };
 
     this.startTime = Date.now();
@@ -524,11 +553,22 @@ export class ExecutionEconomicsManager {
   }
 
   /**
+   * Record a text-only turn (LLM response with no tool calls).
+   * Increments the consecutive text-only turn counter for summary-loop detection.
+   */
+  recordTextOnlyTurn(): void {
+    this.phaseState.consecutiveTextOnlyTurns++;
+  }
+
+  /**
    * Record a tool call for progress tracking and loop detection.
    */
   recordToolCall(toolName: string, args: Record<string, unknown>, _result?: unknown): void {
     this.usage.toolCalls++;
     this.usage.iterations++;
+
+    // Any tool call resets the text-only turn counter
+    this.phaseState.consecutiveTextOnlyTurns = 0;
 
     const now = Date.now();
 
@@ -948,6 +988,17 @@ export class ExecutionEconomicsManager {
     // BASH FAILURE CASCADE - Strong intervention after 3+ consecutive failures
     // =========================================================================
     if (this.phaseState.consecutiveBashFailures >= 3) {
+      // Extract last bash command for tool-aware remediation
+      let lastBashCommand: string | undefined;
+      for (let i = this.progress.recentToolCalls.length - 1; i >= 0; i--) {
+        if (this.progress.recentToolCalls[i].tool === 'bash') {
+          try {
+            const parsed = JSON.parse(this.progress.recentToolCalls[i].args);
+            lastBashCommand = parsed.command;
+          } catch { /* ignore parse errors */ }
+          break;
+        }
+      }
       return {
         canContinue: true,
         reason: `${this.phaseState.consecutiveBashFailures} consecutive bash failures`,
@@ -956,7 +1007,23 @@ export class ExecutionEconomicsManager {
         isSoftLimit: true,
         percentUsed: (this.usage.iterations / this.budget.targetIterations) * 100,
         suggestedAction: 'warn',
-        injectedPrompt: BASH_FAILURE_CASCADE_PROMPT(this.phaseState.consecutiveBashFailures),
+        injectedPrompt: BASH_FAILURE_CASCADE_PROMPT(this.phaseState.consecutiveBashFailures, lastBashCommand),
+      };
+    }
+
+    // =========================================================================
+    // SUMMARY LOOP DETECTION - Nudge after 2+ consecutive text-only turns
+    // =========================================================================
+    if (this.phaseState.consecutiveTextOnlyTurns >= 2) {
+      return {
+        canContinue: true,
+        reason: `${this.phaseState.consecutiveTextOnlyTurns} consecutive text-only turns (summary loop)`,
+        budgetType: 'iterations',
+        isHardLimit: false,
+        isSoftLimit: true,
+        percentUsed: (this.usage.iterations / this.budget.targetIterations) * 100,
+        suggestedAction: 'warn',
+        injectedPrompt: SUMMARY_LOOP_PROMPT,
       };
     }
 
@@ -1307,6 +1374,7 @@ export class ExecutionEconomicsManager {
       consecutiveTestFailures: 0,
       inTestFixCycle: false,
       consecutiveBashFailures: 0,
+      consecutiveTextOnlyTurns: 0,
     };
 
     this.startTime = Date.now();
@@ -1424,13 +1492,13 @@ export const STANDARD_BUDGET: Partial<ExecutionBudget> = {
  * and other parallel subagents.
  */
 export const SUBAGENT_BUDGET: Partial<ExecutionBudget> = {
-  maxTokens: 150000,       // 150k tokens (research agents need more room)
-  softTokenLimit: 100000,  // Warn at 100k
-  maxCost: 0.50,           // Match standard budget
-  maxDuration: 360000,     // 6 minutes
-  softDurationLimit: 300000, // Warn at 5 minutes
-  targetIterations: 20,
-  maxIterations: 40,
+  maxTokens: 250000,        // 250k tokens — coders need room for explore + code
+  softTokenLimit: 180000,   // Warn at 180k
+  maxCost: 0.75,            // Increased ceiling for heavier workloads
+  maxDuration: 480000,      // 8 minutes
+  softDurationLimit: 420000, // Warn at 7 minutes
+  targetIterations: 30,
+  maxIterations: 60,
 };
 
 /**

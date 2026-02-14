@@ -135,30 +135,110 @@ export async function executeToolCalls(
 ): Promise<ToolResult[]> {
   const results: ToolResult[] = [];
 
+  // Circuit breaker state
+  const circuitBreakerThreshold = ctx.economics?.getBudget()?.tuning?.circuitBreakerFailureThreshold ?? 5;
+  let consecutiveFailures = 0;
+  let circuitBroken = false;
+
   // Group consecutive parallelizable tool calls into batches
   const batches = groupToolCallsIntoBatches(toolCalls);
 
   // Execute batches: parallel batches use Promise.allSettled, sequential execute one-by-one
   for (const batch of batches) {
+    // SAFEGUARD: Circuit breaker — skip remaining batches with stub results
+    if (circuitBroken) {
+      for (const tc of batch) {
+        results.push({
+          callId: tc.id,
+          result: `Error: Skipped — circuit breaker tripped after ${circuitBreakerThreshold} consecutive failures`,
+          error: `Circuit breaker tripped after ${circuitBreakerThreshold} consecutive failures`,
+        });
+      }
+      continue;
+    }
+
     if (batch.length > 1 && PARALLELIZABLE_TOOLS.has(batch[0].name)) {
       // Execute parallelizable batch concurrently
       const batchResults = await Promise.allSettled(
         batch.map(tc => executeSingleToolCall(tc, ctx))
       );
+      let batchFailures = 0;
       for (const result of batchResults) {
         if (result.status === 'fulfilled') {
           results.push(result.value);
+          if (result.value.error) {
+            batchFailures++;
+          }
         } else {
-          // Should not happen since executeSingleToolCall catches errors internally
           const error = result.reason instanceof Error ? result.reason.message : String(result.reason);
           results.push({ callId: 'unknown', result: `Error: ${error}`, error });
+          batchFailures++;
         }
+      }
+      // If entire parallel batch failed, add to consecutive failures; any success resets
+      if (batchFailures === batchResults.length) {
+        consecutiveFailures += batchFailures;
+      } else {
+        consecutiveFailures = 0;
       }
     } else {
       // Execute sequentially
       for (const tc of batch) {
-        results.push(await executeSingleToolCall(tc, ctx));
+        if (circuitBroken) {
+          results.push({
+            callId: tc.id,
+            result: `Error: Skipped — circuit breaker tripped after ${circuitBreakerThreshold} consecutive failures`,
+            error: `Circuit breaker tripped after ${circuitBreakerThreshold} consecutive failures`,
+          });
+          continue;
+        }
+
+        const result = await executeSingleToolCall(tc, ctx);
+        results.push(result);
+
+        if (result.error) {
+          consecutiveFailures++;
+        } else {
+          consecutiveFailures = 0;
+        }
+
+        if (consecutiveFailures >= circuitBreakerThreshold) {
+          circuitBroken = true;
+          const skipped = toolCalls.length - results.length;
+          log.warn('Circuit breaker tripped — stopping tool execution', {
+            totalInBatch: toolCalls.length,
+            failures: consecutiveFailures,
+            threshold: circuitBreakerThreshold,
+            skipped,
+          });
+          ctx.emit({
+            type: 'safeguard.circuit_breaker',
+            totalInBatch: toolCalls.length,
+            failures: consecutiveFailures,
+            threshold: circuitBreakerThreshold,
+            skipped,
+          });
+        }
       }
+    }
+
+    // Check circuit breaker after parallel batches too
+    if (!circuitBroken && consecutiveFailures >= circuitBreakerThreshold) {
+      circuitBroken = true;
+      const skipped = toolCalls.length - results.length;
+      log.warn('Circuit breaker tripped — stopping tool execution', {
+        totalInBatch: toolCalls.length,
+        failures: consecutiveFailures,
+        threshold: circuitBreakerThreshold,
+        skipped,
+      });
+      ctx.emit({
+        type: 'safeguard.circuit_breaker',
+        totalInBatch: toolCalls.length,
+        failures: consecutiveFailures,
+        threshold: circuitBreakerThreshold,
+        skipped,
+      });
     }
   }
 
@@ -325,7 +405,13 @@ export async function executeSingleToolCall(
             maxUsages: 5,
           });
         } else {
-          throw new Error(`Policy requires approval but no approval handler available: ${evaluation.reason}`);
+          // No approval handler — auto-allow with warning (defense-in-depth)
+          ctx.emit({
+            type: 'policy.tool.auto-allowed',
+            tool: toolCall.name,
+            reason: `No approval handler — auto-allowing (policy: ${evaluation.reason})`,
+          });
+          policyApprovedByUser = true;
         }
       }
 

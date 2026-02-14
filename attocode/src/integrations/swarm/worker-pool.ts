@@ -250,6 +250,9 @@ export class SwarmWorkerPool {
       maxIterations: agentDef.maxIterations!,
       doomLoopThreshold: agentDef.economicsTuning?.doomLoopThreshold ?? 3,
     });
+    if (process.env.DEBUG) {
+      console.log(`[WorkerBudgetTracker] Created for ${task.id}: maxTokens=${agentDef.maxTokenBudget}, maxIter=${agentDef.maxIterations}`);
+    }
 
     // Track active worker
     this.activeWorkers.set(task.id, {
@@ -348,6 +351,9 @@ export class SwarmWorkerPool {
     // Look up per-worker budget utilization from completed tracker
     const tracker = this.completedTrackers.get(task.id);
     const budgetUtilization = tracker ? tracker.getUtilization() : undefined;
+    if (process.env.DEBUG && budgetUtilization) {
+      console.log(`[WorkerBudgetTracker] ${task.id}: token=${budgetUtilization.tokenPercent}%, iter=${budgetUtilization.iterationPercent}%`);
+    }
 
     return {
       success: spawnResult.success,

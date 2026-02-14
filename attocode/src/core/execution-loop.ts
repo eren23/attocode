@@ -455,6 +455,19 @@ export async function executeDirectly(
       }
 
       // =======================================================================
+      // RESUME ORIENTATION — after compaction, nudge the agent to act, not re-summarize
+      // =======================================================================
+      const hasCompactionSummary = messages.some(m =>
+        m.role === 'system' && typeof m.content === 'string' && m.content.includes('[Conversation Summary')
+      );
+      if (hasCompactionSummary && ctx.state.iteration <= 2) {
+        messages.push({
+          role: 'user',
+          content: `[System] Context was compacted. Review the summary above for what's been done and what remains. Do NOT repeat the summary — start working on the next task immediately using your tools.`,
+        });
+      }
+
+      // =======================================================================
       // INJECTION BUDGET ANALYSIS (Phase 2 - monitoring mode)
       // =======================================================================
       if (ctx.injectionBudget) {
@@ -498,9 +511,12 @@ export async function executeDirectly(
       // PRE-FLIGHT BUDGET CHECK
       if (ctx.economics && !forceTextOnly) {
         const estimatedInputTokens = estimateContextTokens(messages);
-        const estimatedOutputTokens = 4096;
         const currentUsage = ctx.economics.getUsage();
         const budget = ctx.economics.getBudget();
+        // Use proportional output estimate: 10% of remaining budget, capped at 4096, floored at 512.
+        // The old hardcoded 4096 caused premature wrapup for subagents with smaller budgets.
+        const remainingTokens = budget.maxTokens - currentUsage.tokens - estimatedInputTokens;
+        const estimatedOutputTokens = Math.min(4096, Math.max(512, Math.floor(remainingTokens * 0.1)));
         const projectedTotal = currentUsage.tokens + estimatedInputTokens + estimatedOutputTokens;
 
         if (projectedTotal > budget.maxTokens) {
@@ -731,6 +747,11 @@ export async function executeDirectly(
           });
         }
 
+        // Track text-only turns for summary-loop detection (skip forceTextOnly — that's expected)
+        if (!hasToolCalls && !forceTextOnly) {
+          ctx.economics?.recordTextOnlyTurn();
+        }
+
         const incompleteAction = detectIncompleteActionResponse(response.content || '');
         const missingRequiredArtifact = ENFORCE_REQUESTED_ARTIFACTS
           ? isRequestedArtifactMissing(requestedArtifact, executedToolNames)
@@ -845,6 +866,24 @@ export async function executeDirectly(
 
       // Execute tool calls
       const toolCalls = response.toolCalls!;
+
+      // SAFEGUARD: Hard cap on tool calls per LLM response
+      const maxToolCallsPerResponse = ctx.economics?.getBudget()?.tuning?.maxToolCallsPerResponse ?? 25;
+      if (toolCalls.length > maxToolCallsPerResponse) {
+        log.warn('Tool call explosion detected — capping', {
+          requested: toolCalls.length,
+          cap: maxToolCallsPerResponse,
+          toolNames: [...new Set(toolCalls.map(tc => tc.name))],
+        });
+        ctx.emit({
+          type: 'safeguard.tool_call_cap',
+          requested: toolCalls.length,
+          cap: maxToolCallsPerResponse,
+          droppedCount: toolCalls.length - maxToolCallsPerResponse,
+        });
+        toolCalls.splice(maxToolCallsPerResponse);
+      }
+
       const toolResults = await executeToolCalls(toolCalls, ctx);
 
       // Record tool calls for economics/progress tracking + work log
@@ -1028,6 +1067,52 @@ export async function executeDirectly(
           });
 
           compactToolOutputs(ctx.state.messages);
+        }
+      }
+
+      // SAFEGUARD: Aggregate context guard — prevent mass small results from overflowing
+      if (ctx.economics && toolResults.length > 10) {
+        const preAccumTokens = estimateContextTokens(messages);
+        const budget = ctx.economics.getBudget();
+        const availableTokens = budget.maxTokens * 0.90 - preAccumTokens;
+
+        // Estimate total result tokens
+        let totalResultTokens = 0;
+        for (const r of toolResults) {
+          const c = typeof r.result === 'string' ? r.result : stableStringify(r.result);
+          totalResultTokens += Math.ceil(Math.min(c.length, MAX_TOOL_OUTPUT_CHARS) / 4);
+        }
+
+        if (totalResultTokens > availableTokens && availableTokens > 0) {
+          log.warn('Tool results would exceed context budget — truncating batch', {
+            resultCount: toolResults.length,
+            estimatedTokens: totalResultTokens,
+            availableTokens: Math.round(availableTokens),
+          });
+          let tokenBudget = availableTokens;
+          for (let i = 0; i < toolResults.length; i++) {
+            const c = typeof toolResults[i].result === 'string'
+              ? toolResults[i].result as string
+              : stableStringify(toolResults[i].result);
+            const tokens = Math.ceil(Math.min(c.length, MAX_TOOL_OUTPUT_CHARS) / 4);
+            if (tokens > tokenBudget) {
+              const skipped = toolResults.length - i;
+              for (let j = i; j < toolResults.length; j++) {
+                toolResults[j] = {
+                  callId: toolResults[j].callId,
+                  result: `[Result omitted: context overflow guard — ${skipped} of ${toolResults.length} results skipped]`,
+                };
+              }
+              ctx.emit({
+                type: 'safeguard.context_overflow_guard',
+                estimatedTokens: totalResultTokens,
+                maxTokens: budget.maxTokens,
+                toolResultsSkipped: skipped,
+              });
+              break;
+            }
+            tokenBudget -= tokens;
+          }
         }
       }
 

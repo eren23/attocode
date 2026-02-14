@@ -372,6 +372,7 @@ async function main(): Promise<void> {
       model: resolvedModel,
       maxIterations: args.maxIterations,
       humanInLoop: false, // Disable for non-interactive
+      executionPolicy: { defaultPolicy: 'allow' }, // No user to prompt in non-interactive mode
       codebaseContext: {
         enabled: true,
         root: process.cwd(),

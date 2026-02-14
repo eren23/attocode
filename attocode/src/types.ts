@@ -1310,6 +1310,7 @@ export type AgentEvent =
   | { type: 'grant.used'; grantId: string }
   | { type: 'policy.profile.resolved'; profile: string; context: 'root' | 'subagent' | 'swarm'; selectionSource?: 'explicit' | 'worker-capability' | 'task-type' | 'default'; usedLegacyMappings: boolean; legacySources?: string[] }
   | { type: 'policy.legacy.fallback.used'; profile: string; sources: string[]; warnings: string[] }
+  | { type: 'policy.tool.auto-allowed'; tool: string; reason: string }
   | { type: 'policy.tool.blocked'; tool: string; profile?: string; phase?: 'precheck' | 'enforced'; reason: string }
   | { type: 'policy.bash.blocked'; command: string; profile?: string; phase?: 'precheck' | 'enforced'; reason: string }
   // Thread events (Lesson 24)
@@ -1381,6 +1382,10 @@ export type AgentEvent =
   | { type: 'task.created'; task: { id: string; subject: string; status: string } }
   | { type: 'task.updated'; task: { id: string; subject: string; status: string } }
   | { type: 'task.deleted'; taskId: string }
+  // Safeguard events (tool call explosion defense)
+  | { type: 'safeguard.tool_call_cap'; requested: number; cap: number; droppedCount: number }
+  | { type: 'safeguard.circuit_breaker'; totalInBatch: number; failures: number; threshold: number; skipped: number }
+  | { type: 'safeguard.context_overflow_guard'; estimatedTokens: number; maxTokens: number; toolResultsSkipped: number }
   // Swarm mode events (M8: use union with canonical SwarmEvent type)
   | import('./integrations/swarm/swarm-events.js').SwarmEvent;
 

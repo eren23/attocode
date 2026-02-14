@@ -547,7 +547,15 @@ export async function spawnAgent(
         }
         return baseSbx;
       })(),
-      humanInLoop: ctx.config.humanInLoop,
+      // Subagents: raise riskThreshold to 'high' so moderate-risk tools (write_file, edit_file)
+      // pass without approval dialogs. High-risk tools (delete_file) still require approval.
+      // The scopedApprove paths still constrain WHERE subagents can write.
+      humanInLoop: ctx.config.humanInLoop
+        ? {
+            ...ctx.config.humanInLoop,
+            riskThreshold: 'high' as const,
+          }
+        : ctx.config.humanInLoop,
       executionPolicy: (() => {
         const hasPolicyOverrides = Object.keys(policyToolPolicies).length > 0;
         if (ctx.config.executionPolicy) {
@@ -568,7 +576,7 @@ export async function spawnAgent(
             intentAware: false,
           };
         }
-        return ctx.config.executionPolicy;
+        return { enabled: true, defaultPolicy: 'allow' as const, toolPolicies: {}, intentAware: false };
       })(),
       policyEngine: ctx.config.policyEngine
         ? { ...ctx.config.policyEngine, defaultProfile: policyResolution.profileName }
