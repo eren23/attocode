@@ -237,11 +237,71 @@ Config file: `~/.config/attocode/config.json`
   "model": "anthropic/claude-sonnet-4",
   "maxIterations": 50,
   "timeout": 300000,
-  "features": {
-    "memory": true,
-    "planning": true,
-    "sandbox": true
+  "memory": { "enabled": true },
+  "planning": { "enabled": true },
+  "sandbox": { "enabled": true },
+  "resilience": {
+    "incompleteActionAutoLoop": true,
+    "maxIncompleteAutoLoops": 2,
+    "autoLoopPromptStyle": "strict",
+    "taskLeaseStaleMs": 300000
+  },
+  "hooks": {
+    "enabled": true,
+    "shell": {
+      "enabled": false,
+      "defaultTimeoutMs": 5000,
+      "envAllowlist": ["SLACK_WEBHOOK_URL"],
+      "commands": [
+        {
+          "id": "notify-on-complete",
+          "event": "run.after",
+          "command": "node",
+          "args": ["./scripts/hook-notify.js"],
+          "timeoutMs": 3000
+        }
+      ]
+    }
   }
+}
+```
+
+### Behavior Tuning (Incomplete Recovery)
+
+These settings control what happens when the model replies with "I'll do X" but has not executed the action yet:
+
+- `resilience.incompleteActionAutoLoop`: Automatically retry incomplete runs in TUI.
+- `resilience.maxIncompleteAutoLoops`: Maximum retry runs before terminal `[INCOMPLETE]`.
+- `resilience.autoLoopPromptStyle`: Guidance style for retries (`strict` or `concise`).
+- `resilience.taskLeaseStaleMs`: Requeue stale `in_progress` tasks to `pending` at run boundaries.
+
+For swarm runs, `resilience.dispatchLeaseStaleMs` in swarm config controls stale `dispatched` task recovery back to `ready`.
+
+### Branch Change Highlights
+
+- Added bounded incomplete-action recovery (`future_intent` / `incomplete_action`) in TUI.
+- Added run-boundary stale task lease recovery in core task manager.
+- Added stale dispatched-task recovery in swarm queue/orchestrator.
+- Added lifecycle shell-hook coverage for completion/recovery/run phases.
+
+### Lifecycle Hooks (Trigger External Automations)
+
+You can trigger scripts on lifecycle events (for notifications, logging, CI checks, policy alerts).
+
+Common lifecycle events:
+- `run.before`, `run.after`
+- `iteration.before`, `iteration.after`
+- `completion.before`, `completion.after`
+- `recovery.before`, `recovery.after`
+- `llm.before`, `llm.after`
+- `tool.before`, `tool.after`
+
+Shell hooks receive JSON on stdin:
+
+```json
+{
+  "event": "run.after",
+  "payload": { "...": "event-specific data" }
 }
 ```
 

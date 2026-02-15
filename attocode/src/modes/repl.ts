@@ -46,6 +46,7 @@ import { showSessionPicker, showQuickPicker } from '../session-picker.js';
 import { registerCleanupResource } from '../core/process-handlers.js';
 import { handleCommand, createConsoleOutput } from '../commands/handler.js';
 import { logger } from '../integrations/logger.js';
+import { TUI_ROOT_BUDGET } from '../integrations/economics.js';
 
 // ANSI color helper
 const colors = {
@@ -127,6 +128,7 @@ export async function startProductionREPL(
     tools,
     model,
     maxIterations,
+    budget: TUI_ROOT_BUDGET,
     memory: {
       enabled: true,
       types: { episodic: true, semantic: true, working: true },
@@ -403,6 +405,8 @@ ${c('----------------------------------------------------------------------', 'd
     // eslint-disable-next-line no-console
     console.log(c(`Trace session started: ${terminalSessionId}`, 'dim'));
   }
+  let hadRunFailure = false;
+  let lastFailureReason: string | undefined;
 
   try {
     while (true) {
@@ -452,6 +456,8 @@ ${c('----------------------------------------------------------------------', 'd
           // eslint-disable-next-line no-console
           console.log(c('-----------------', 'magenta'));
         } else {
+          hadRunFailure = true;
+          lastFailureReason = result.error || result.response || 'Task incomplete';
           // eslint-disable-next-line no-console
           console.log(c('\n! Task incomplete:', 'yellow'));
           tui.showError(result.error || result.response);
@@ -512,6 +518,8 @@ ${c('----------------------------------------------------------------------', 'd
         }
 
       } catch (error) {
+        hadRunFailure = true;
+        lastFailureReason = (error as Error).message;
         tui.showError((error as Error).message);
       }
 
@@ -522,7 +530,11 @@ ${c('----------------------------------------------------------------------', 'd
     // End trace session for the terminal session
     if (trace && traceCollector?.isSessionActive()) {
       try {
-        await traceCollector.endSession({ success: true });
+        await traceCollector.endSession(
+          hadRunFailure
+            ? { success: false, failureReason: lastFailureReason ?? 'At least one task failed during this terminal session' }
+            : { success: true }
+        );
         // eslint-disable-next-line no-console
         console.log(c(`\nTrace session ended -> .traces/`, 'dim'));
       } catch (err) {

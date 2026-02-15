@@ -518,6 +518,7 @@ export class OpenRouterProvider implements LLMProvider, LLMProviderWithTools {
 
     if (status === 401) code = 'AUTHENTICATION_FAILED';
     else if (status === 429) code = 'RATE_LIMITED';
+    else if (status === 402) code = 'RATE_LIMITED';
     else if (status === 400) {
       if (body.includes('context_length')) {
         code = 'CONTEXT_LENGTH_EXCEEDED';

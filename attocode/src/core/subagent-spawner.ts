@@ -386,6 +386,7 @@ export async function spawnAgent(
 
     // BLACKBOARD CONTEXT INJECTION
     let blackboardContext = '';
+    let blackboardFindingsCount = 0;
     const parentAgentId = `parent-${Date.now()}`;
 
     if (ctx.blackboard) {
@@ -403,6 +404,7 @@ export async function spawnAgent(
         minConfidence: 0.7,
       });
 
+      blackboardFindingsCount = recentFindings.length;
       if (recentFindings.length > 0) {
         const findingsSummary = recentFindings
           .map(f => `- [${f.agentId}] ${f.topic}: ${f.content.slice(0, 150)}${f.content.length > 150 ? '...' : ''}`)
@@ -478,11 +480,47 @@ export async function spawnAgent(
 
     const qualityPrompt = '\n\n' + getSubagentQualityPrompt();
 
+    // REPO CONTEXT INJECTION — give subagents a lightweight file structure map
+    let repoContextStr = '';
+    if (ctx.codebaseContext) {
+      const repoMap = ctx.codebaseContext.getRepoMap();
+      if (repoMap) {
+        // Lightweight repo map: file tree with key symbols (capped at 3000 tokens)
+        const { generateLightweightRepoMap } = await import('../integrations/codebase-context.js');
+        repoContextStr = '\n\n**REPOSITORY STRUCTURE:**\n' + generateLightweightRepoMap(repoMap, 3000);
+      }
+    }
+    // Inject parent's recently modified files so subagent knows the working context
+    let recentFilesStr = '';
+    let modifiedFilesList: string[] = [];
+    if (ctx.economics) {
+      const modifiedPaths = ctx.economics.getModifiedFilePaths();
+      modifiedFilesList = modifiedPaths.slice(0, 15);
+      if (modifiedPaths.length > 0) {
+        recentFilesStr = '\n\n**RECENTLY MODIFIED FILES (by parent agent):**\n' +
+          modifiedPaths.slice(0, 15).map(f => `- ${f}`).join('\n');
+      }
+    }
+
     // Build subagent system prompt
     const parentMode = ctx.modeManager.getMode();
     const subagentSystemPrompt = parentMode === 'plan'
-      ? `${agentDef.systemPrompt}\n\n${SUBAGENT_PLAN_MODE_ADDITION}${blackboardContext}${constraintContext}${delegationContext}${qualityPrompt}`
-      : `${agentDef.systemPrompt}${blackboardContext}${constraintContext}${delegationContext}${qualityPrompt}`;
+      ? `${agentDef.systemPrompt}\n\n${SUBAGENT_PLAN_MODE_ADDITION}${blackboardContext}${repoContextStr}${recentFilesStr}${constraintContext}${delegationContext}${qualityPrompt}`
+      : `${agentDef.systemPrompt}${blackboardContext}${repoContextStr}${recentFilesStr}${constraintContext}${delegationContext}${qualityPrompt}`;
+
+    // Trace context injection for subagent prompt
+    ctx.traceCollector?.record({
+      type: 'context.injection',
+      data: {
+        agentId: agentName,
+        parentAgentId: ctx.traceCollector.getSessionId() || 'unknown',
+        repoMapTokens: Math.ceil(repoContextStr.length / 4),
+        blackboardFindings: blackboardFindingsCount,
+        modifiedFiles: modifiedFilesList,
+        toolCount: agentTools.length,
+        model: resolvedModel || 'default',
+      },
+    });
 
     // Allocate budget
     const pooledBudget = getSubagentBudget(ctx, agentName, constraints);

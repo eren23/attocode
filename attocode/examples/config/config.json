@@ -23,5 +23,29 @@
       "**/.git/**",
       "**/coverage/**"
     ]
+  },
+  "resilience": {
+    "incompleteActionAutoLoop": true,
+    "maxIncompleteAutoLoops": 2,
+    "autoLoopPromptStyle": "strict",
+    "taskLeaseStaleMs": 300000
+  },
+  "hooks": {
+    "enabled": true,
+    "shell": {
+      "enabled": false,
+      "defaultTimeoutMs": 5000,
+      "envAllowlist": [],
+      "commands": [
+        {
+          "id": "notify-on-run-after",
+          "event": "run.after",
+          "command": "node",
+          "args": [
+            "./scripts/hook-run-after.js"
+          ]
+        }
+      ]
+    }
   }
 }

@@ -10,6 +10,7 @@ import type {
   PluginsConfig,
   Hook,
   HookEvent,
+  ShellHookCommand,
   Plugin,
   PluginContext,
   ToolDefinition,
@@ -17,6 +18,7 @@ import type {
   AgentEventListener,
 } from '../types.js';
 import { logger } from './logger.js';
+import { spawn } from 'node:child_process';
 
 // =============================================================================
 // HOOK MANAGER
@@ -112,6 +114,82 @@ export class HookManager {
     for (const hook of this.config.hooks.custom || []) {
       this.registerHook(hook);
     }
+
+    this.registerShellHooks();
+  }
+
+  private registerShellHooks(): void {
+    const shellCfg = this.config.hooks.shell;
+    if (!shellCfg?.enabled || !shellCfg.commands?.length) {
+      return;
+    }
+
+    for (const cmd of shellCfg.commands) {
+      this.registerHook({
+        id: cmd.id || `shell:${cmd.event}:${cmd.command}`,
+        event: cmd.event,
+        priority: cmd.priority ?? 60,
+        handler: (data) => this.executeShellHook(cmd, data),
+      });
+    }
+  }
+
+  private executeShellHook(commandConfig: ShellHookCommand, data: unknown): Promise<void> {
+    return new Promise((resolve, reject) => {
+      const shellCfg = this.config.hooks.shell || {};
+      const timeoutMs = commandConfig.timeoutMs ?? shellCfg.defaultTimeoutMs ?? 5000;
+
+      const baseEnvKeys = ['PATH', 'HOME', 'SHELL', 'TMPDIR', 'USER'];
+      const env: Record<string, string> = {};
+      for (const key of baseEnvKeys) {
+        const value = process.env[key];
+        if (typeof value === 'string') {
+          env[key] = value;
+        }
+      }
+      for (const key of shellCfg.envAllowlist || []) {
+        const value = process.env[key];
+        if (typeof value === 'string') {
+          env[key] = value;
+        }
+      }
+
+      const child = spawn(commandConfig.command, commandConfig.args || [], {
+        stdio: ['pipe', 'pipe', 'pipe'],
+        env,
+      });
+
+      const timer = setTimeout(() => {
+        child.kill('SIGTERM');
+        reject(new Error(`Shell hook timed out after ${timeoutMs}ms (${commandConfig.command})`));
+      }, timeoutMs);
+
+      let stderr = '';
+      child.stderr.on('data', chunk => {
+        stderr += String(chunk);
+      });
+
+      child.on('error', err => {
+        clearTimeout(timer);
+        reject(err);
+      });
+
+      child.on('exit', code => {
+        clearTimeout(timer);
+        if (code === 0) {
+          resolve();
+          return;
+        }
+        reject(new Error(`Shell hook failed (${commandConfig.command}) exit=${code}${stderr ? `: ${stderr.trim()}` : ''}`));
+      });
+
+      try {
+        child.stdin.write(JSON.stringify({ event: commandConfig.event, payload: data }));
+      } catch {
+        // Non-serializable payloads are best-effort only.
+      }
+      child.stdin.end();
+    });
   }
 
   /**
@@ -341,6 +419,22 @@ export class HookManager {
    */
   private mapToHookEvent(event: AgentEvent): HookEvent | null {
     switch (event.type) {
+      case 'run.before':
+        return 'run.before';
+      case 'run.after':
+        return 'run.after';
+      case 'iteration.before':
+        return 'iteration.before';
+      case 'iteration.after':
+        return 'iteration.after';
+      case 'completion.before':
+        return 'completion.before';
+      case 'completion.after':
+        return 'completion.after';
+      case 'recovery.before':
+        return 'recovery.before';
+      case 'recovery.after':
+        return 'recovery.after';
       case 'start':
         return 'agent.start';
       case 'complete':

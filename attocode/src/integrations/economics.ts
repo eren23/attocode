@@ -44,6 +44,9 @@ export interface EconomicsTuning {
  * Execution budget configuration.
  */
 export interface ExecutionBudget {
+  /** Enforcement policy for hard token/cost/duration limits. */
+  enforcementMode?: 'strict' | 'doomloop_only';
+
   // Hard limits (will force stop)
   maxTokens: number;           // e.g., 200000
   maxCost: number;             // e.g., 0.50 USD
@@ -308,6 +311,9 @@ const VERIFICATION_RESERVE_PROMPT =
 `[System] You are running low on iterations. Run your tests NOW to verify your changes.
 Do not make more edits until you've confirmed whether the current fix works.`;
 
+const BUDGET_ADVISORY_PROMPT = (reason: string) =>
+`[System] Budget advisory (${reason}) detected. Continue execution and focus on concrete tool actions to complete the task.`;
+
 /**
  * Extract success and output from a bash tool result.
  * In production, bash results are objects `{ success, output, metadata }`.
@@ -406,12 +412,16 @@ export class ExecutionEconomicsManager {
   private sharedEconomics: SharedEconomicsState | null;
   private workerId: string;
 
+  // Adaptive budget: stores original maxIterations for reversible reduction
+  private originalMaxIterations: number | null = null;
+
   constructor(budget?: Partial<ExecutionBudget>, sharedEconomics?: SharedEconomicsState, workerId?: string) {
     this.sharedEconomics = sharedEconomics ?? null;
     this.workerId = workerId ?? 'root';
     const tuning = budget?.tuning;
 
     this.budget = {
+      enforcementMode: budget?.enforcementMode ?? 'strict',
       // Hard limits
       maxTokens: budget?.maxTokens ?? 200000,
       maxCost: budget?.maxCost ?? 1.00,
@@ -800,8 +810,8 @@ export class ExecutionEconomicsManager {
       return;
     }
 
-    // After N+ iterations in exploration with diminishing returns (configurable, default: 5)
-    const iterThreshold = this.budget.tuning?.explorationIterThreshold ?? 5;
+    // After N+ iterations in exploration with diminishing returns (configurable, default: 15)
+    const iterThreshold = this.budget.tuning?.explorationIterThreshold ?? 15;
     if (iterationsInPhase >= iterThreshold && recentNewFiles < 2 && filesModified.size === 0) {
       this.phaseState.shouldTransition = true;
       this.emit({
@@ -820,10 +830,23 @@ export class ExecutionEconomicsManager {
    */
   checkBudget(): BudgetCheckResult {
     this.usage.duration = this.getEffectiveDuration();
+    const strictBudgetEnforcement = (this.budget.enforcementMode ?? 'strict') === 'strict';
 
     // Check hard limits first
     if (this.usage.tokens >= this.budget.maxTokens) {
       this.emit({ type: 'budget.exceeded', budgetType: 'tokens', limit: this.budget.maxTokens, actual: this.usage.tokens });
+      if (!strictBudgetEnforcement) {
+        return {
+          canContinue: true,
+          reason: `Token budget exceeded (${this.usage.tokens.toLocaleString()} / ${this.budget.maxTokens.toLocaleString()})`,
+          budgetType: 'tokens',
+          isHardLimit: false,
+          isSoftLimit: true,
+          percentUsed: (this.usage.tokens / this.budget.maxTokens) * 100,
+          suggestedAction: 'warn',
+          injectedPrompt: BUDGET_ADVISORY_PROMPT('tokens'),
+        };
+      }
       return {
         canContinue: false,
         reason: `Token budget exceeded (${this.usage.tokens.toLocaleString()} / ${this.budget.maxTokens.toLocaleString()})`,
@@ -837,6 +860,18 @@ export class ExecutionEconomicsManager {
 
     if (this.usage.cost >= this.budget.maxCost) {
       this.emit({ type: 'budget.exceeded', budgetType: 'cost', limit: this.budget.maxCost, actual: this.usage.cost });
+      if (!strictBudgetEnforcement) {
+        return {
+          canContinue: true,
+          reason: `Cost budget exceeded ($${this.usage.cost.toFixed(2)} / $${this.budget.maxCost.toFixed(2)})`,
+          budgetType: 'cost',
+          isHardLimit: false,
+          isSoftLimit: true,
+          percentUsed: (this.usage.cost / this.budget.maxCost) * 100,
+          suggestedAction: 'warn',
+          injectedPrompt: BUDGET_ADVISORY_PROMPT('cost'),
+        };
+      }
       return {
         canContinue: false,
         reason: `Cost budget exceeded ($${this.usage.cost.toFixed(2)} / $${this.budget.maxCost.toFixed(2)})`,
@@ -850,6 +885,18 @@ export class ExecutionEconomicsManager {
 
     if (this.usage.duration >= this.budget.maxDuration) {
       this.emit({ type: 'budget.exceeded', budgetType: 'duration', limit: this.budget.maxDuration, actual: this.usage.duration });
+      if (!strictBudgetEnforcement) {
+        return {
+          canContinue: true,
+          reason: `Duration limit exceeded (${Math.round(this.usage.duration / 1000)}s / ${Math.round(this.budget.maxDuration / 1000)}s)`,
+          budgetType: 'duration',
+          isHardLimit: false,
+          isSoftLimit: true,
+          percentUsed: (this.usage.duration / this.budget.maxDuration) * 100,
+          suggestedAction: 'warn',
+          injectedPrompt: BUDGET_ADVISORY_PROMPT('duration'),
+        };
+      }
       return {
         canContinue: false,
         reason: `Duration limit exceeded (${Math.round(this.usage.duration / 1000)}s / ${Math.round(this.budget.maxDuration / 1000)}s)`,
@@ -861,10 +908,13 @@ export class ExecutionEconomicsManager {
       };
     }
 
-    // Max iterations reached - allow one more turn for summary (forceTextOnly)
+    // Max iterations reached — allow exactly ONE more turn for summary, then terminate.
+    // First time at maxIterations: canContinue=true + forceTextOnly for a clean summary.
+    // Beyond maxIterations: canContinue=false to stop the loop.
     if (this.usage.iterations >= this.budget.maxIterations) {
+      const isFirstOverage = this.usage.iterations === this.budget.maxIterations;
       return {
-        canContinue: true,  // Allow one more turn for summary
+        canContinue: isFirstOverage,  // Only allow one summary turn
         reason: `Maximum iterations reached (${this.usage.iterations} / ${this.budget.maxIterations})`,
         budgetType: 'iterations',
         isHardLimit: true,
@@ -877,10 +927,15 @@ export class ExecutionEconomicsManager {
     }
 
     // =========================================================================
-    // ZERO PROGRESS DETECTION — early termination for workers making no tool calls (D1)
+    // ZERO PROGRESS DETECTION — nudge workers making no tool calls (D1)
+    // Raised threshold to 10 (from 5) to give agents more time to plan.
+    // No longer forces text-only — instead injects a strong nudge while
+    // still allowing tool calls so the agent can recover.
     // =========================================================================
-    const zeroProgressThreshold = this.budget.tuning?.zeroProgressThreshold ?? 5;
+    const zeroProgressThreshold = this.budget.tuning?.zeroProgressThreshold ?? 10;
     if (this.usage.iterations >= zeroProgressThreshold && this.usage.toolCalls === 0) {
+      // Only force text-only after 2x the threshold (complete stall)
+      const isCompleteStall = this.usage.iterations >= zeroProgressThreshold * 2;
       return {
         canContinue: true,
         reason: `Zero tool calls in ${this.usage.iterations} iterations`,
@@ -888,24 +943,33 @@ export class ExecutionEconomicsManager {
         isHardLimit: false,
         isSoftLimit: true,
         percentUsed: (this.usage.iterations / this.budget.maxIterations) * 100,
-        suggestedAction: 'stop',
-        forceTextOnly: true,
-        injectedPrompt: `[System] CRITICAL: You have completed ${this.usage.iterations} iterations without making a single tool call. ` +
-          `This means you are NOT doing any work. You MUST use your tools (read_file, write_file, grep, bash, etc.) ` +
-          `to accomplish your task. If you cannot use tools, explain what is blocking you and exit. ` +
-          `Do NOT continue without tool usage.`,
+        suggestedAction: isCompleteStall ? 'stop' : 'warn',
+        forceTextOnly: isCompleteStall,
+        injectedPrompt: `[System] WARNING: You have completed ${this.usage.iterations} iterations without making a single tool call. ` +
+          `You MUST use your tools (read_file, write_file, grep, bash, etc.) to accomplish your task. ` +
+          `Start by reading a relevant file or running a command NOW.` +
+          (isCompleteStall ? ` This is your LAST chance — respond with a summary if you cannot proceed.` : ''),
       };
     }
 
     // =========================================================================
-    // ADAPTIVE ITERATION BUDGET — reduce max iterations if no progress at checkpoint (D4)
+    // ADAPTIVE ITERATION BUDGET — reversible reduction at checkpoint (D4)
+    // Stores original maxIterations so it can be restored if tools resume.
     // =========================================================================
-    const checkpoint = this.budget.tuning?.progressCheckpoint ?? 5;
+    const checkpoint = this.budget.tuning?.progressCheckpoint ?? 10;
     if (this.usage.iterations === checkpoint && this.usage.toolCalls === 0) {
-      const reducedMax = checkpoint + 3; // give 3 more iterations with warning
+      if (!this.originalMaxIterations) {
+        this.originalMaxIterations = this.budget.maxIterations;
+      }
+      const reducedMax = checkpoint + 5; // give 5 more iterations (up from 3)
       if (this.budget.maxIterations > reducedMax) {
         this.budget.maxIterations = reducedMax;
       }
+    }
+    // Restore original maxIterations if tools start being used after reduction
+    if (this.originalMaxIterations && this.usage.toolCalls > 0 && this.budget.maxIterations < this.originalMaxIterations) {
+      this.budget.maxIterations = this.originalMaxIterations;
+      this.originalMaxIterations = null;
     }
 
     // =========================================================================
@@ -1013,18 +1077,24 @@ export class ExecutionEconomicsManager {
 
     // =========================================================================
     // SUMMARY LOOP DETECTION - Nudge after 2+ consecutive text-only turns
+    // Skip when close to budget limit — the agent can't "start working" if
+    // forceTextOnly would be set on the next check (contradictory nudge).
     // =========================================================================
     if (this.phaseState.consecutiveTextOnlyTurns >= 2) {
-      return {
-        canContinue: true,
-        reason: `${this.phaseState.consecutiveTextOnlyTurns} consecutive text-only turns (summary loop)`,
-        budgetType: 'iterations',
-        isHardLimit: false,
-        isSoftLimit: true,
-        percentUsed: (this.usage.iterations / this.budget.targetIterations) * 100,
-        suggestedAction: 'warn',
-        injectedPrompt: SUMMARY_LOOP_PROMPT,
-      };
+      const nearBudgetLimit = this.usage.iterations >= this.budget.maxIterations - 1;
+      if (!nearBudgetLimit) {
+        return {
+          canContinue: true,
+          reason: `${this.phaseState.consecutiveTextOnlyTurns} consecutive text-only turns (summary loop)`,
+          budgetType: 'iterations',
+          isHardLimit: false,
+          isSoftLimit: true,
+          percentUsed: (this.usage.iterations / this.budget.targetIterations) * 100,
+          suggestedAction: 'warn',
+          injectedPrompt: SUMMARY_LOOP_PROMPT,
+        };
+      }
+      // Near budget limit: skip nudge, let MAX_STEPS_PROMPT handle it next turn
     }
 
     // =========================================================================
@@ -1215,7 +1285,9 @@ export class ExecutionEconomicsManager {
 
     const tokenPct = Math.round((usage.tokens / budget.maxTokens) * 100);
     const remainingTokens = budget.maxTokens - usage.tokens;
-    const remainingSec = Math.max(0, Math.round((budget.maxDuration - usage.duration) / 1000));
+    const remainingSec = budget.maxDuration === Infinity
+      ? Infinity
+      : Math.max(0, Math.round((budget.maxDuration - usage.duration) / 1000));
 
     // Determine urgency level
     let urgency = '';
@@ -1225,7 +1297,8 @@ export class ExecutionEconomicsManager {
       urgency = '⚡ WARNING: ';
     }
 
-    return `${urgency}Budget: ${usage.tokens.toLocaleString()}/${budget.maxTokens.toLocaleString()} tokens (${tokenPct}%), ~${remainingSec}s remaining. ${
+    const timeStr = remainingSec === Infinity ? 'no time limit' : `~${remainingSec}s remaining`;
+    return `${urgency}Budget: ${usage.tokens.toLocaleString()}/${budget.maxTokens.toLocaleString()} tokens (${tokenPct}%), ${timeStr}. ${
       tokenPct >= 70 ? 'Wrap up soon!' : ''
     }`.trim();
   }
@@ -1380,6 +1453,7 @@ export class ExecutionEconomicsManager {
     this.startTime = Date.now();
     this.pausedDuration = 0;
     this.pauseStart = null;
+    this.originalMaxIterations = null;
   }
 
   // -------------------------------------------------------------------------
@@ -1513,6 +1587,24 @@ export const LARGE_BUDGET: Partial<ExecutionBudget> = {
 };
 
 /**
+ * TUI root agent budget - no time limit, high iteration cap.
+ * The TUI root agent must be able to run as long as needed (swarm tasks,
+ * multi-step workflows). Duration is effectively unlimited; token/cost
+ * limits still apply as a safety net.
+ */
+export const TUI_ROOT_BUDGET: Partial<ExecutionBudget> = {
+  enforcementMode: 'doomloop_only',
+  maxTokens: 500000,
+  softTokenLimit: 400000,
+  maxCost: 5.00,
+  softCostLimit: 4.00,
+  maxDuration: Infinity,      // No time limit — run as long as tasks remain
+  softDurationLimit: Infinity,
+  targetIterations: 100,
+  maxIterations: 500,
+};
+
+/**
  * Unlimited budget - no limits (use with caution).
  */
 export const UNLIMITED_BUDGET: Partial<ExecutionBudget> = {
@@ -1528,13 +1620,13 @@ export const UNLIMITED_BUDGET: Partial<ExecutionBudget> = {
  * Each worker gets a small slice of the total swarm budget.
  */
 export const SWARM_WORKER_BUDGET: Partial<ExecutionBudget> = {
-  maxTokens: 20000,
-  softTokenLimit: 15000,
-  maxCost: 0.05,
-  maxDuration: 120000,     // 2 minutes
-  softDurationLimit: 90000, // Warn at 90s
-  targetIterations: 10,
-  maxIterations: 15,
+  maxTokens: 30000,
+  softTokenLimit: 25000,
+  maxCost: 0.08,
+  maxDuration: 180000,      // 3 minutes
+  softDurationLimit: 150000, // Warn at 2.5 min
+  targetIterations: 15,
+  maxIterations: 25,
 };
 
 /**

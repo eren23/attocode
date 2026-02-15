@@ -75,7 +75,7 @@ import { logger, configureLogger, ConsoleSink, MemorySink } from './integrations
 
 // Swarm mode support
 import { DEFAULT_SWARM_CONFIG, autoDetectWorkerModels, type SwarmConfig } from './integrations/swarm/index.js';
-import { loadSwarmYamlConfig, parseSwarmYaml, yamlToSwarmConfig, mergeSwarmConfigs } from './integrations/swarm/swarm-config-loader.js';
+import { loadSwarmYamlConfig, parseSwarmYaml, yamlToSwarmConfig, mergeSwarmConfigs, normalizeSwarmModelConfig } from './integrations/swarm/swarm-config-loader.js';
 import { readFileSync } from 'node:fs';
 
 /**
@@ -142,13 +142,36 @@ async function buildSwarmConfig(
     resumeSessionId: resolvedResumeId,
   });
 
+  // Normalize malformed model IDs (e.g. anthropic/z-ai/glm-5 -> z-ai/glm-5).
+  const normalized = normalizeSwarmModelConfig(config);
+  if (normalized.warnings.length > 0) {
+    const mode = config.modelValidation?.mode ?? 'autocorrect';
+    const onInvalid = config.modelValidation?.onInvalid ?? 'warn';
+    if (mode === 'strict' || onInvalid === 'fail') {
+      throw new Error(
+        `Invalid swarm model configuration:\n${normalized.warnings.join('\n')}`
+      );
+    }
+    for (const warning of normalized.warnings) {
+      logger.warn('[Swarm] Model config adjusted', { warning });
+    }
+  }
+  const finalConfig = normalized.config;
+
   // V3: Pre-flight key check for rate limit awareness
   const apiKey = process.env.OPENROUTER_API_KEY;
   if (apiKey) {
     try {
       const { OpenRouterProvider } = await import('./providers/adapters/openrouter.js');
       const keyInfo = await OpenRouterProvider.checkKeyInfo(apiKey);
-      if (keyInfo.isPaid === false && !config.paidOnly) {
+      if (!yamlConfig && paidOnly === undefined && keyInfo.isPaid === true) {
+        finalConfig.paidOnly = true;
+        if (!finalConfig.throttle) {
+          finalConfig.throttle = 'paid';
+        }
+        logger.info('[Swarm] No swarm config found; defaulting to paid-only worker model selection for paid-tier key');
+      }
+      if (keyInfo.isPaid === false && !finalConfig.paidOnly) {
         logger.info('[Swarm] Free-tier API key detected — throttle will auto-adjust.');
       }
       if (keyInfo.creditsRemaining !== undefined && keyInfo.creditsRemaining < 0.5) {
@@ -160,13 +183,13 @@ async function buildSwarmConfig(
   }
 
   // Auto-detect workers if none configured
-  if (config.workers.length === 0) {
+  if (finalConfig.workers.length === 0) {
     if (apiKey) {
       try {
-        config.workers = await autoDetectWorkerModels({
+        finalConfig.workers = await autoDetectWorkerModels({
           apiKey,
           orchestratorModel,
-          paidOnly: config.paidOnly,
+          paidOnly: finalConfig.paidOnly,
         });
       } catch {
         // Fall through to hardcoded fallback
@@ -174,16 +197,26 @@ async function buildSwarmConfig(
     }
 
     // If still no workers, use hardcoded fallback
-    if (config.workers.length === 0) {
-      config.workers = await autoDetectWorkerModels({
+    if (finalConfig.workers.length === 0) {
+      finalConfig.workers = await autoDetectWorkerModels({
         apiKey: '',
         orchestratorModel,
-        paidOnly: config.paidOnly,
+        paidOnly: finalConfig.paidOnly,
       });
     }
   }
 
-  return config;
+  logger.info('[Swarm] Resolved config', {
+    orchestratorModel: finalConfig.orchestratorModel,
+    workerCount: finalConfig.workers.length,
+    workerModels: finalConfig.workers.map(w => w.model),
+    paidOnly: finalConfig.paidOnly ?? false,
+    throttle: finalConfig.throttle ?? false,
+    totalBudget: finalConfig.totalBudget,
+    maxCost: finalConfig.maxCost,
+  });
+
+  return finalConfig;
 }
 
 // =============================================================================

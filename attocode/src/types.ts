@@ -352,6 +352,9 @@ export interface HooksConfig {
 
   /** Custom hooks */
   custom?: Hook[];
+
+  /** Optional shell hook runner configuration */
+  shell?: HookShellConfig;
 }
 
 export interface Hook {
@@ -362,7 +365,38 @@ export interface Hook {
   priority?: number;
 }
 
+export interface HookShellConfig {
+  /** Enable shell hooks */
+  enabled?: boolean;
+
+  /** Default timeout for shell hooks in ms (default: 5000) */
+  defaultTimeoutMs?: number;
+
+  /** Environment variables allowed to pass through from process.env */
+  envAllowlist?: string[];
+
+  /** Declared shell hooks */
+  commands?: ShellHookCommand[];
+}
+
+export interface ShellHookCommand {
+  id?: string;
+  event: HookEvent;
+  command: string;
+  args?: string[];
+  timeoutMs?: number;
+  priority?: number;
+}
+
 export type HookEvent =
+  | 'run.before'
+  | 'run.after'
+  | 'iteration.before'
+  | 'iteration.after'
+  | 'completion.before'
+  | 'completion.after'
+  | 'recovery.before'
+  | 'recovery.after'
   | 'agent.start'
   | 'agent.end'
   | 'llm.before'
@@ -1070,6 +1104,31 @@ export interface LLMResilienceAgentConfig {
    * When enabled, completion is blocked until required write tools run.
    */
   enforceRequestedArtifacts?: boolean;
+
+  /**
+   * Auto-run bounded follow-up attempts after incomplete_action/future_intent.
+   * Default: true.
+   */
+  incompleteActionAutoLoop?: boolean;
+
+  /**
+   * Max number of run-level auto-loop attempts for incomplete outcomes.
+   * Default: 2.
+   */
+  maxIncompleteAutoLoops?: number;
+
+  /**
+   * Prompt style for auto-loop guidance.
+   * Default: strict.
+   */
+  autoLoopPromptStyle?: 'strict' | 'concise';
+
+  /**
+   * Staleness threshold for task leases in ms.
+   * In-progress tasks older than this may be requeued to pending at run boundaries.
+   * Default: 300000 (5 minutes).
+   */
+  taskLeaseStaleMs?: number;
 }
 
 /**
@@ -1241,6 +1300,37 @@ export interface AgentMetrics {
   retryCount?: number;
 }
 
+export interface OpenTaskSummary {
+  pending: number;
+  inProgress: number;
+  blocked: number;
+}
+
+export interface AgentCompletionStatus {
+  success: boolean;
+  reason:
+    | 'completed'
+    | 'resource_limit'
+    | 'budget_limit'
+    | 'max_iterations'
+    | 'hard_context_limit'
+    | 'incomplete_action'
+    | 'open_tasks'
+    | 'future_intent'
+    | 'swarm_failure'
+    | 'error'
+    | 'cancelled';
+  details?: string;
+  openTasks?: OpenTaskSummary;
+  futureIntentDetected?: boolean;
+  recovery?: {
+    intraRunRetries: number;
+    autoLoopRuns: number;
+    terminal: boolean;
+    reasonChain: string[];
+  };
+}
+
 /**
  * Agent run result.
  */
@@ -1265,6 +1355,9 @@ export interface AgentResult {
 
   /** Plan that was executed (if planning enabled) */
   plan?: AgentPlan;
+
+  /** Structured completion status used by UI and tracing */
+  completion: AgentCompletionStatus;
 }
 
 // =============================================================================
@@ -1275,6 +1368,15 @@ export interface AgentResult {
  * Events emitted during agent execution.
  */
 export type AgentEvent =
+  // Lifecycle hooks
+  | { type: 'run.before'; task: string }
+  | { type: 'run.after'; success: boolean; reason: AgentCompletionStatus['reason']; details?: string }
+  | { type: 'iteration.before'; iteration: number }
+  | { type: 'iteration.after'; iteration: number; hadToolCalls: boolean; completionCandidate: boolean }
+  | { type: 'completion.before'; reason: string; attempt?: number; maxAttempts?: number }
+  | { type: 'completion.after'; success: boolean; reason: AgentCompletionStatus['reason']; details?: string }
+  | { type: 'recovery.before'; reason: string; attempt: number; maxAttempts: number }
+  | { type: 'recovery.after'; reason: string; recovered: boolean; attempts: number }
   // Core events
   | { type: 'start'; task: string; traceId: string }
   | { type: 'planning'; plan: AgentPlan }
@@ -1292,6 +1394,7 @@ export type AgentEvent =
   | { type: 'memory.retrieved'; count: number }
   | { type: 'memory.stored'; memoryType: string }
   | { type: 'error'; error: string; subagent?: string }
+  | { type: 'completion.blocked'; reasons: string[]; openTasks?: OpenTaskSummary }
   | { type: 'complete'; result: AgentResult }
   // ReAct events (Lesson 18)
   | { type: 'react.thought'; step: number; thought: string }

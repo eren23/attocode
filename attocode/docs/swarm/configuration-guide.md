@@ -196,7 +196,7 @@ budget:
 | `worker_timeout` | `120,000` (2 min) | Increase for complex subtasks |
 | `dispatch_stagger_ms` | `1,500` | Decrease for paid models, increase for free tier |
 
-> **Note:** The `budget:` section accepts both camelCase and snake_case (e.g., `dispatch_stagger_ms` or `dispatchStaggerMs`). All other sections (communication, resilience) require camelCase.
+> **Note:** `budget`, `communication`, and `resilience` accept both camelCase and snake_case aliases.
 
 ### Budget Split
 
@@ -234,7 +234,7 @@ communication:
   includeFileList: true                 # Include workspace file listing
 ```
 
-> **Note:** The `communication:` section requires camelCase field names. Snake_case variants (`dependency_context_max_length`, `include_file_list`) are **not recognized** and will be silently ignored.
+> **Note:** `communication` accepts both camelCase and snake_case keys (`dependencyContextMaxLength` / `dependency_context_max_length`, `includeFileList` / `include_file_list`).
 
 | Field | Default | When to change |
 |-------|---------|----------------|
@@ -251,15 +251,17 @@ resilience:
   workerRetries: 2            # Retries for failed workers
   rateLimitRetries: 3         # Extra retries specifically for 429/402 errors
   modelFailover: true         # Switch models on rate limit errors
+  dispatchLeaseStaleMs: 300000 # Requeue stale dispatched tasks when worker ownership is lost
 ```
 
-> **Note:** The `resilience:` section requires camelCase field names. Snake_case variants (`worker_retries`, `rate_limit_retries`, `model_failover`) are **not recognized** and will be silently ignored.
+> **Note:** `resilience` accepts both camelCase and snake_case aliases (for example `workerRetries` / `worker_retries` and `dispatchLeaseStaleMs` / `dispatch_lease_stale_ms`).
 
 | Field | Default | When to change |
 |-------|---------|----------------|
 | `workerRetries` | `2` | Increase for unreliable models |
 | `rateLimitRetries` | `3` | Increase for free models with strict limits |
 | `modelFailover` | `true` | Set `false` if you want to stick with assigned models |
+| `dispatchLeaseStaleMs` | `300000` | Lower for faster stale-dispatch recovery, raise for long worker runs |
 
 ### Circuit Breaker
 

@@ -13,6 +13,8 @@
  * - Query interface: Search findings by topic, agent, or content
  */
 
+import type { TraceCollector } from '../tracing/trace-collector.js';
+
 // =============================================================================
 // TYPES
 // =============================================================================
@@ -216,6 +218,9 @@ export class SharedBlackboard {
   private findingCounter = 0;
   private subscriptionCounter = 0;
 
+  /** Optional trace collector for emitting blackboard.event trace events. */
+  traceCollector?: TraceCollector;
+
   constructor(config: BlackboardConfig = {}) {
     this.config = {
       maxFindings: config.maxFindings ?? 1000,
@@ -274,6 +279,20 @@ export class SharedBlackboard {
     this.findings.set(finding.id, finding);
     this.emit({ type: 'finding.posted', finding });
 
+    // Emit trace event for finding posted
+    this.traceCollector?.record({
+      type: 'blackboard.event',
+      data: {
+        action: 'finding.posted',
+        agentId: finding.agentId,
+        topic: finding.topic,
+        content: finding.content.slice(0, 200),
+        confidence: finding.confidence,
+        findingType: finding.type,
+        relatedFiles: finding.relatedFiles,
+      },
+    });
+
     // Notify subscribers
     this.notifySubscribers(finding);
 
@@ -294,6 +313,20 @@ export class SharedBlackboard {
 
     this.findings.set(findingId, updated);
     this.emit({ type: 'finding.updated', finding: updated });
+
+    // Emit trace event for finding updated
+    this.traceCollector?.record({
+      type: 'blackboard.event',
+      data: {
+        action: 'finding.updated',
+        agentId: updated.agentId,
+        topic: updated.topic,
+        content: updated.content.slice(0, 200),
+        confidence: updated.confidence,
+        findingType: updated.type,
+        relatedFiles: updated.relatedFiles,
+      },
+    });
 
     return updated;
   }
@@ -599,6 +632,17 @@ export class SharedBlackboard {
     this.claims.set(resource, claim);
     this.emit({ type: 'claim.acquired', claim });
 
+    // Emit trace event for claim acquired
+    this.traceCollector?.record({
+      type: 'blackboard.event',
+      data: {
+        action: 'claim.acquired',
+        agentId: claim.agentId,
+        resource: claim.resource,
+        claimType: claim.type,
+      },
+    });
+
     return true;
   }
 
@@ -614,6 +658,16 @@ export class SharedBlackboard {
 
     this.claims.delete(resource);
     this.emit({ type: 'claim.released', resource, agentId });
+
+    // Emit trace event for claim released
+    this.traceCollector?.record({
+      type: 'blackboard.event',
+      data: {
+        action: 'claim.released',
+        agentId,
+        resource,
+      },
+    });
 
     return true;
   }

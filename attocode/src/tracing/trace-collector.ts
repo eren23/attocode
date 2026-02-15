@@ -78,6 +78,12 @@ import type {
   SwarmVerificationEntry,
   SwarmCompleteEntry,
   ContextCompactionEntry,
+  // Observability visualization types
+  CodebaseMapEntry,
+  BlackboardEventEntry,
+  BudgetPoolEntry,
+  FileCacheEventEntry,
+  ContextInjectionEntry,
 } from './types.js';
 import { DEFAULT_TRACE_CONFIG, DEFAULT_ENHANCED_TRACE_CONFIG } from './types.js';
 import type { AgentMetrics, Span } from '../observability/types.js';
@@ -115,7 +121,13 @@ export type TraceEvent =
   | { type: 'swarm.orchestrator.llm'; data: SwarmOrchestratorLLMData }
   | { type: 'swarm.wave.allFailed'; data: SwarmWaveAllFailedData }
   | { type: 'swarm.phase.progress'; data: SwarmPhaseProgressData }
-  | { type: 'context.compacted'; data: ContextCompactionData };
+  | { type: 'context.compacted'; data: ContextCompactionData }
+  // Observability visualization events
+  | { type: 'codebase.map'; data: CodebaseMapData }
+  | { type: 'blackboard.event'; data: BlackboardEventData }
+  | { type: 'budget.pool'; data: BudgetPoolData }
+  | { type: 'filecache.event'; data: FileCacheEventData }
+  | { type: 'context.injection'; data: ContextInjectionData };
 
 /**
  * Swarm start data.
@@ -234,6 +246,91 @@ export interface ContextCompactionData {
   tokensBefore: number;
   tokensAfter: number;
   recoveryInjected: boolean;
+}
+
+// =============================================================================
+// OBSERVABILITY VISUALIZATION DATA TYPES
+// =============================================================================
+
+/**
+ * Codebase map data - emitted after repo analysis.
+ */
+export interface CodebaseMapData {
+  totalFiles: number;
+  totalTokens: number;
+  entryPoints: string[];
+  coreModules: string[];
+  dependencyEdges: { file: string; imports: string[] }[];
+  files?: {
+    filePath: string;
+    directory: string;
+    fileName: string;
+    tokenCount: number;
+    importance: number;
+    type: string;
+    symbols: { name: string; kind: string; exported: boolean; line: number }[];
+    inDegree: number;
+    outDegree: number;
+  }[];
+  topChunks: {
+    filePath: string;
+    tokenCount: number;
+    importance: number;
+    type: string;
+    symbols: { name: string; kind: string; exported: boolean; line: number }[];
+    dependencies: string[];
+  }[];
+}
+
+/**
+ * Blackboard event data.
+ */
+export interface BlackboardEventData {
+  action: 'finding.posted' | 'finding.updated' | 'claim.acquired' | 'claim.released';
+  agentId: string;
+  topic?: string;
+  content?: string;
+  confidence?: number;
+  findingType?: string;
+  relatedFiles?: string[];
+  resource?: string;
+  claimType?: string;
+}
+
+/**
+ * Budget pool event data.
+ */
+export interface BudgetPoolData {
+  action: 'allocate' | 'consume' | 'release';
+  agentId: string;
+  tokensAllocated?: number;
+  tokensUsed?: number;
+  poolRemaining: number;
+  poolTotal: number;
+}
+
+/**
+ * File cache event data.
+ */
+export interface FileCacheEventData {
+  action: 'hit' | 'miss' | 'set' | 'invalidate';
+  filePath: string;
+  agentId?: string;
+  currentEntries: number;
+  currentBytes: number;
+}
+
+/**
+ * Context injection data - emitted when building subagent context.
+ */
+export interface ContextInjectionData {
+  agentId: string;
+  parentAgentId: string;
+  repoMapTokens: number;
+  blackboardFindings: number;
+  modifiedFiles: string[];
+  toolCount: number;
+  model: string;
 }
 
 /**
@@ -499,6 +596,7 @@ export class TraceCollector {
   // JSONL output
   private outputPath: string | null = null;
   private writeQueue: Promise<void> = Promise.resolve();
+  private subagentSequence: number = 0;
 
   // Subagent context (set when this collector is shared with a subagent)
   private subagentContext: SubagentContext | null = null;
@@ -518,7 +616,9 @@ export class TraceCollector {
    * with the subagent context for proper aggregation.
    */
   createSubagentView(context: Omit<SubagentContext, 'subagentId'>): TraceCollector {
-    const subagentId = `${context.agentType}-${context.spawnedAtIteration}`;
+    const idOwner = this.parentCollector ?? this;
+    idOwner.subagentSequence += 1;
+    const subagentId = `${context.agentType}-${context.spawnedAtIteration}-${idOwner.subagentSequence}`;
     const view = new TraceCollector(this.config);
 
     // Share the same output file and session state
@@ -910,6 +1010,22 @@ export class TraceCollector {
         break;
       case 'context.compacted':
         await this.recordContextCompaction(event.data);
+        break;
+      // Observability visualization events
+      case 'codebase.map':
+        await this.recordCodebaseMap(event.data);
+        break;
+      case 'blackboard.event':
+        await this.recordBlackboardEvent(event.data);
+        break;
+      case 'budget.pool':
+        await this.recordBudgetPool(event.data);
+        break;
+      case 'filecache.event':
+        await this.recordFileCacheEvent(event.data);
+        break;
+      case 'context.injection':
+        await this.recordContextInjection(event.data);
         break;
     }
   }
@@ -1511,6 +1627,99 @@ export class TraceCollector {
       tokensAfter: data.tokensAfter,
       recoveryInjected: data.recoveryInjected,
     } as ContextCompactionEntry);
+  }
+
+  // ===========================================================================
+  // OBSERVABILITY VISUALIZATION RECORDING
+  // ===========================================================================
+
+  /**
+   * Record codebase map after analysis.
+   */
+  private async recordCodebaseMap(data: CodebaseMapData): Promise<void> {
+    await this.writeEntry({
+      _type: 'codebase.map',
+      _ts: new Date().toISOString(),
+      traceId: this.traceId!,
+      totalFiles: data.totalFiles,
+      totalTokens: data.totalTokens,
+      entryPoints: data.entryPoints,
+      coreModules: data.coreModules,
+      dependencyEdges: data.dependencyEdges,
+      files: data.files,
+      topChunks: data.topChunks,
+    } as CodebaseMapEntry);
+  }
+
+  /**
+   * Record a blackboard finding/claim event.
+   */
+  private async recordBlackboardEvent(data: BlackboardEventData): Promise<void> {
+    await this.writeEntry({
+      _type: 'blackboard.event',
+      _ts: new Date().toISOString(),
+      traceId: this.traceId!,
+      action: data.action,
+      agentId: data.agentId,
+      topic: data.topic,
+      content: data.content ? data.content.slice(0, 500) : undefined,
+      confidence: data.confidence,
+      findingType: data.findingType,
+      relatedFiles: data.relatedFiles,
+      resource: data.resource,
+      claimType: data.claimType,
+    } as BlackboardEventEntry);
+  }
+
+  /**
+   * Record a budget pool allocation/consumption/release.
+   */
+  private async recordBudgetPool(data: BudgetPoolData): Promise<void> {
+    await this.writeEntry({
+      _type: 'budget.pool',
+      _ts: new Date().toISOString(),
+      traceId: this.traceId!,
+      action: data.action,
+      agentId: data.agentId,
+      tokensAllocated: data.tokensAllocated,
+      tokensUsed: data.tokensUsed,
+      poolRemaining: data.poolRemaining,
+      poolTotal: data.poolTotal,
+    } as BudgetPoolEntry);
+  }
+
+  /**
+   * Record a file cache hit/miss/set/invalidate event.
+   */
+  private async recordFileCacheEvent(data: FileCacheEventData): Promise<void> {
+    await this.writeEntry({
+      _type: 'filecache.event',
+      _ts: new Date().toISOString(),
+      traceId: this.traceId!,
+      action: data.action,
+      filePath: data.filePath,
+      agentId: data.agentId,
+      currentEntries: data.currentEntries,
+      currentBytes: data.currentBytes,
+    } as FileCacheEventEntry);
+  }
+
+  /**
+   * Record context injection into a subagent.
+   */
+  private async recordContextInjection(data: ContextInjectionData): Promise<void> {
+    await this.writeEntry({
+      _type: 'context.injection',
+      _ts: new Date().toISOString(),
+      traceId: this.traceId!,
+      agentId: data.agentId,
+      parentAgentId: data.parentAgentId,
+      repoMapTokens: data.repoMapTokens,
+      blackboardFindings: data.blackboardFindings,
+      modifiedFiles: data.modifiedFiles,
+      toolCount: data.toolCount,
+      model: data.model,
+    } as ContextInjectionEntry);
   }
 
   // ===========================================================================

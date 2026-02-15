@@ -19,6 +19,8 @@
  * - Thread Management (Lesson 24)
  */
 
+import * as path from 'node:path';
+
 import type {
   ProductionAgentConfig,
   LLMProvider,
@@ -32,6 +34,8 @@ import type {
   AgentEventListener,
   AgentRoleConfig,
   MultiAgentConfig,
+  AgentCompletionStatus,
+  OpenTaskSummary,
 } from './types.js';
 
 import {
@@ -208,6 +212,7 @@ import {
 
 // Phase 2.2: Agent State Machine
 import { type AgentStateMachine, createAgentStateMachine } from './core/agent-state-machine.js';
+import { detectIncompleteActionResponse } from './core/completion-analyzer.js';
 
 /**
  * Production-ready agent that composes all features.
@@ -270,6 +275,7 @@ export class ProductionAgent {
   private toolRecommendation: ToolRecommendationEngine | null = null;
   private stateMachine: AgentStateMachine | null = null;
   private lastComplexityAssessment: ComplexityAssessment | null = null;
+  private lastSystemPromptLength = 0;
 
   // Duplicate spawn prevention - tracks recently spawned tasks to prevent doom loops
   // Map<taskKey, { timestamp: number; result: string; queuedChanges: number }>
@@ -640,6 +646,9 @@ export class ProductionAgent {
         ) as any;
       }
 
+      // Pass codebaseContext so the decomposer can ground tasks in actual project files
+      swarmConfig.codebaseContext = this.codebaseContext ?? undefined;
+
       this.swarmOrchestrator = createSwarmOrchestrator(
         swarmConfig,
         this.provider as unknown as import('./providers/types.js').LLMProvider,
@@ -767,6 +776,11 @@ export class ProductionAgent {
         cacheResults: true,
         cacheTTL: 5 * 60 * 1000, // 5 minutes
       });
+
+      // Forward trace collector so codebase analysis can emit codebase.map entries.
+      if (this.traceCollector) {
+        this.codebaseContext.traceCollector = this.traceCollector;
+      }
 
       // Connect LSP manager to codebase context for enhanced code selection
       // This enables LSP-based relevance boosting (Phase 4.1)
@@ -1150,6 +1164,7 @@ export class ProductionAgent {
   async run(task: string): Promise<AgentResult> {
     // Ensure all integrations are ready before running
     await this.ensureReady();
+    this.reconcileStaleTasks('run_start');
 
     const startTime = Date.now();
 
@@ -1162,6 +1177,7 @@ export class ProductionAgent {
     // Start tracing
     const traceId = this.observability?.tracer?.startTrace('agent.run') || `trace-${Date.now()}`;
     this.emit({ type: 'start', task, traceId });
+    this.emit({ type: 'run.before', task });
     this.observability?.logger?.info('Agent started', { task });
 
     // Lesson 26: Start trace capture
@@ -1182,6 +1198,13 @@ export class ProductionAgent {
     }
 
     try {
+      let runSuccess = true;
+      let runFailureReason: string | undefined;
+      let completion: AgentCompletionStatus = {
+        success: true,
+        reason: 'completed',
+      };
+
       // Check for cancellation before starting
       cancellationToken?.throwIfCancellationRequested();
 
@@ -1193,19 +1216,44 @@ export class ProductionAgent {
       // Check if swarm mode should handle this task
       if (this.swarmOrchestrator) {
         const swarmResult = await this.runSwarm(task);
-        if (!swarmResult.success && swarmResult.summary.includes('Decomposition failed')) {
-          // Fallback: execute directly when decomposition fails
-          this.observability?.logger?.warn('Swarm decomposition failed, falling back to direct execution');
-          await this.executeDirectly(task);
-        } else {
-          // Store swarm summary as an assistant message for the response
-          this.state.messages.push({ role: 'assistant', content: swarmResult.summary });
+        if (!swarmResult.success) {
+          runSuccess = false;
+          runFailureReason = swarmResult.summary || 'Swarm reported unsuccessful execution';
+          completion = {
+            success: false,
+            reason: 'swarm_failure',
+            details: runFailureReason,
+          };
         }
+        // Guard against summaries that still indicate pending work.
+        if (detectIncompleteActionResponse(swarmResult.summary || '')) {
+          this.emit({ type: 'completion.before', reason: 'future_intent' });
+          runSuccess = false;
+          runFailureReason = 'Swarm summary indicates pending, unexecuted work';
+          completion = {
+            success: false,
+            reason: 'future_intent',
+            details: runFailureReason,
+            futureIntentDetected: true,
+          };
+        }
+        // Store swarm summary as an assistant message for the response
+        this.state.messages.push({ role: 'assistant', content: swarmResult.summary });
       } else if (this.planning?.shouldPlan(task)) {
         // Check if planning is needed
         await this.createAndExecutePlan(task);
       } else {
-        await this.executeDirectly(task);
+        const directResult = await this.executeDirectly(task);
+        if (!directResult.success) {
+          runSuccess = false;
+          runFailureReason = directResult.failureReason || directResult.terminationReason;
+        }
+        completion = {
+          success: directResult.success,
+          reason: directResult.terminationReason,
+          ...(directResult.failureReason ? { details: directResult.failureReason } : {}),
+          ...(directResult.openTasks ? { openTasks: directResult.openTasks } : {}),
+        };
       }
 
       // Get final response - find the LAST assistant message (not just check if last message is assistant)
@@ -1215,31 +1263,104 @@ export class ProductionAgent {
         ? lastAssistantMessage.content
         : '';
 
+      // Final guardrail: never mark a run successful if the final answer is "I'll do X".
+      if (runSuccess && detectIncompleteActionResponse(response)) {
+        this.emit({ type: 'completion.before', reason: 'future_intent' });
+        runSuccess = false;
+        runFailureReason = 'Final response indicates pending, unexecuted work';
+        completion = {
+          success: false,
+          reason: 'future_intent',
+          details: runFailureReason,
+          futureIntentDetected: true,
+        };
+      }
+
+      if (runSuccess) {
+        this.reconcileStaleTasks('run_end');
+        const openTasks = this.getOpenTasksSummary();
+        if (openTasks && (openTasks.inProgress > 0 || openTasks.pending > 0)) {
+          this.emit({ type: 'completion.before', reason: 'open_tasks' });
+          runSuccess = false;
+          runFailureReason = `Open tasks remain: ${openTasks.pending} pending, ${openTasks.inProgress} in_progress`;
+          completion = {
+            success: false,
+            reason: 'open_tasks',
+            details: runFailureReason,
+            openTasks,
+          };
+          this.emit({
+            type: 'completion.blocked',
+            reasons: [
+              runFailureReason,
+              openTasks.blocked > 0 ? `${openTasks.blocked} pending tasks are blocked` : '',
+            ].filter(Boolean),
+            openTasks,
+          });
+        }
+      }
+
       // Finalize
       const duration = Date.now() - startTime;
       this.state.metrics.duration = duration;
-      this.state.metrics.successCount = (this.state.metrics.successCount ?? 0) + 1;
+      if (runSuccess) {
+        this.state.metrics.successCount = (this.state.metrics.successCount ?? 0) + 1;
+      } else {
+        this.state.metrics.failureCount = (this.state.metrics.failureCount ?? 0) + 1;
+      }
 
       await this.observability?.tracer?.endTrace();
 
       const result: AgentResult = {
-        success: true,
+        success: runSuccess,
         response,
+        ...(runSuccess ? {} : { error: runFailureReason ?? 'Task failed' }),
         metrics: this.getMetrics(),
         messages: this.state.messages,
         traceId,
         plan: this.state.plan,
+        completion,
+      };
+      result.completion.recovery = {
+        intraRunRetries: this.state.metrics.retryCount ?? 0,
+        autoLoopRuns: 0,
+        terminal: !runSuccess,
+        reasonChain: [completion.reason],
       };
 
       this.emit({ type: 'complete', result });
-      this.observability?.logger?.info('Agent completed', { duration, success: true });
+      this.emit({
+        type: 'completion.after',
+        success: runSuccess,
+        reason: completion.reason,
+        ...(completion.details ? { details: completion.details } : {}),
+      });
+      this.emit({
+        type: 'run.after',
+        success: runSuccess,
+        reason: completion.reason,
+        ...(completion.details ? { details: completion.details } : {}),
+      });
+      this.observability?.logger?.info('Agent completed', {
+        duration,
+        success: runSuccess,
+        ...(runFailureReason ? { failureReason: runFailureReason } : {}),
+      });
 
       // Lesson 26: End trace capture
       // If task is active (REPL mode), end the task. Otherwise end the session (single-task mode).
       if (this.traceCollector?.isTaskActive()) {
-        await this.traceCollector.endTask({ success: true, output: response });
+        await this.traceCollector.endTask(
+          runSuccess
+            ? { success: true, output: response }
+            : { success: false, failureReason: runFailureReason ?? 'Task failed', output: response },
+        );
       } else if (this.traceCollector?.isSessionActive()) {
-        await this.traceCollector.endSession({ success: true, output: response });
+        await this.traceCollector.endSession(
+          runSuccess
+            ? { success: true, output: response }
+            : { success: false, failureReason: runFailureReason ?? 'Task failed', output: response },
+        );
       }
 
       return result;
@@ -1263,6 +1384,19 @@ export class ProductionAgent {
           await this.traceCollector.endSession({ success: false, failureReason: `Cancelled: ${error.message}` });
         }
 
+        this.emit({
+          type: 'completion.after',
+          success: false,
+          reason: 'cancelled',
+          details: `Cancelled: ${error.message}`,
+        });
+        this.emit({
+          type: 'run.after',
+          success: false,
+          reason: 'cancelled',
+          details: `Cancelled: ${error.message}`,
+        });
+
         return {
           success: false,
           response: '',
@@ -1270,6 +1404,11 @@ export class ProductionAgent {
           metrics: this.getMetrics(),
           messages: this.state.messages,
           traceId,
+          completion: {
+            success: false,
+            reason: 'cancelled',
+            details: `Cancelled: ${error.message}`,
+          },
         };
       }
 
@@ -1279,6 +1418,9 @@ export class ProductionAgent {
 
       this.emit({ type: 'error', error: error.message });
       this.observability?.logger?.error('Agent failed', { error: error.message });
+      const completionReason = error.message.includes('failed to complete requested action')
+        ? 'incomplete_action' as const
+        : 'error' as const;
 
       // Lesson 26: End trace capture on error
       if (this.traceCollector?.isTaskActive()) {
@@ -1287,14 +1429,26 @@ export class ProductionAgent {
         await this.traceCollector.endSession({ success: false, failureReason: error.message });
       }
 
-      return {
+      const errorResult = {
         success: false,
         response: '',
         error: error.message,
         metrics: this.getMetrics(),
         messages: this.state.messages,
         traceId,
+        completion: {
+          success: false,
+          reason: completionReason,
+          details: error.message,
+        },
       };
+      this.emit({
+        type: 'run.after',
+        success: false,
+        reason: completionReason,
+        details: error.message,
+      });
+      return errorResult;
     } finally {
       // Dispose cancellation context on completion
       this.cancellation?.disposeContext();
@@ -1324,7 +1478,7 @@ export class ProductionAgent {
         await this.executeDirectly(currentTask.description);
         this.planning!.completeTask(currentTask.id);
         this.emit({ type: 'task.complete', task: currentTask });
-      } catch (err) {
+      } catch (_err) {
         this.planning!.failTask(currentTask.id);
         this.observability?.logger?.warn('Plan task failed', { taskId: currentTask.id });
         // Continue with other tasks if possible
@@ -1363,6 +1517,135 @@ export class ProductionAgent {
     const { SwarmEventBridge } = await import('./integrations/swarm/swarm-event-bridge.js');
     const bridge = new SwarmEventBridge({ outputDir: '.agent/swarm-live' });
     const unsubBridge = bridge.attach(this.swarmOrchestrator);
+
+    const writeCodeMapSnapshot = (): void => {
+      if (!this.codebaseContext) {
+        return;
+      }
+      const repoMap = this.codebaseContext.getRepoMap();
+      if (!repoMap) {
+        return;
+      }
+
+      // Build dependency edges from the dependency graph
+      const depEdges: { file: string; imports: string[] }[] = [];
+      for (const [file, deps] of repoMap.dependencyGraph) {
+        depEdges.push({ file, imports: Array.from(deps) });
+      }
+
+      // Build top chunks sorted by importance
+      const chunks = Array.from(repoMap.chunks.values());
+      const topChunks = chunks
+        .sort((a, b) => b.importance - a.importance)
+        .slice(0, 100)
+        .map(c => ({
+          filePath: c.filePath,
+          tokenCount: c.tokenCount,
+          importance: c.importance,
+          type: c.type,
+          symbols: c.symbolDetails,
+        }));
+      const files = chunks.map((chunk) => ({
+        filePath: chunk.filePath,
+        directory: path.dirname(chunk.filePath) === '.' ? '' : path.dirname(chunk.filePath),
+        fileName: path.basename(chunk.filePath),
+        tokenCount: chunk.tokenCount,
+        importance: chunk.importance,
+        type: chunk.type,
+        symbols: chunk.symbolDetails,
+        inDegree: repoMap.reverseDependencyGraph.get(chunk.filePath)?.size ?? 0,
+        outDegree: repoMap.dependencyGraph.get(chunk.filePath)?.size ?? 0,
+      }));
+
+      bridge.writeCodeMapSnapshot({
+        totalFiles: repoMap.chunks.size,
+        totalTokens: repoMap.totalTokens,
+        entryPoints: repoMap.entryPoints,
+        coreModules: repoMap.coreModules,
+        dependencyEdges: depEdges,
+        files,
+        topChunks,
+      });
+    };
+    let codeMapRefreshInFlight = false;
+    let codeMapRefreshTimer: ReturnType<typeof setTimeout> | null = null;
+    const refreshAndWriteCodeMapSnapshot = async (): Promise<void> => {
+      if (!this.codebaseContext || codeMapRefreshInFlight) {
+        return;
+      }
+      codeMapRefreshInFlight = true;
+      try {
+        // Re-analyze from disk so snapshots include newly created files during swarm execution.
+        this.codebaseContext.clearCache();
+        await this.codebaseContext.analyze();
+        writeCodeMapSnapshot();
+      } catch {
+        // Best effort
+      } finally {
+        codeMapRefreshInFlight = false;
+      }
+    };
+
+    // Write observability snapshots to swarm-live/ on relevant events
+    const unsubSnapshots = this.swarmOrchestrator.subscribe(event => {
+      // Write codemap snapshot when tasks are loaded.
+      if (event.type === 'swarm.tasks.loaded' && this.codebaseContext) {
+        try {
+          writeCodeMapSnapshot();
+        } catch {
+          // Best effort — don't crash the swarm
+        }
+      }
+      // Refresh codemap after each completed wave to avoid stale 0-file snapshots.
+      if (event.type === 'swarm.wave.complete' && this.codebaseContext) {
+        void refreshAndWriteCodeMapSnapshot();
+      }
+      if (event.type === 'swarm.task.completed' && this.codebaseContext) {
+        if (codeMapRefreshTimer) {
+          clearTimeout(codeMapRefreshTimer);
+        }
+        codeMapRefreshTimer = setTimeout(() => {
+          void refreshAndWriteCodeMapSnapshot();
+        }, 1200);
+      }
+
+      // Write blackboard.json on wave completion or task completion
+      if ((event.type === 'swarm.wave.complete' || event.type === 'swarm.task.completed') && this.blackboard) {
+        try {
+          const findings = this.blackboard.getAllFindings();
+          bridge.writeBlackboardSnapshot({
+            findings: findings.map(f => ({
+              id: f.id ?? '',
+              topic: f.topic ?? '',
+              type: f.type ?? '',
+              agentId: f.agentId ?? '',
+              confidence: f.confidence ?? 0,
+              content: (f.content ?? '').slice(0, 500),
+            })),
+            claims: [],
+            updatedAt: new Date().toISOString(),
+          });
+        } catch {
+          // Best effort
+        }
+      }
+
+      // Write budget-pool.json on budget updates
+      if (event.type === 'swarm.budget.update' && this.budgetPool) {
+        try {
+          const stats = this.budgetPool.getStats();
+          bridge.writeBudgetPoolSnapshot({
+            poolTotal: stats.totalTokens,
+            poolUsed: stats.tokensUsed,
+            poolRemaining: stats.tokensRemaining,
+            allocations: [],
+            updatedAt: new Date().toISOString(),
+          });
+        } catch {
+          // Best effort
+        }
+      }
+    });
 
     // Bridge swarm events into JSONL trace pipeline
     const traceCollector = this.traceCollector;
@@ -1521,6 +1804,22 @@ export class ProductionAgent {
     }
 
     try {
+      // Ensure codebase context is analyzed before decomposition so repo map is available
+      if (this.codebaseContext && !this.codebaseContext.getRepoMap()) {
+        try {
+          await this.codebaseContext.analyze();
+        } catch {
+          // non-fatal — decomposer will work without codebase context
+        }
+      }
+
+      // Write codemap snapshot immediately so dashboard can render even if decomposition fails.
+      try {
+        writeCodeMapSnapshot();
+      } catch {
+        // Best effort
+      }
+
       const result = await this.swarmOrchestrator.execute(task);
 
       // Populate task DAG for dashboard after execution
@@ -1536,7 +1835,11 @@ export class ProductionAgent {
 
       return result;
     } finally {
+      if (codeMapRefreshTimer) {
+        clearTimeout(codeMapRefreshTimer);
+      }
       unsubTrace?.();
+      unsubSnapshots();
       unsubBridge();
       bridge.close();
       unsubSwarm();
@@ -1546,8 +1849,8 @@ export class ProductionAgent {
   /**
    * Execute a task directly without planning (delegates to core/execution-loop).
    */
-  private async executeDirectly(task: string): Promise<void> {
-    const messages = this.buildMessages(task);
+  private async executeDirectly(task: string): Promise<Awaited<ReturnType<typeof coreExecuteDirectly>>> {
+    const messages = await this.buildMessages(task);
     const ctx = this.buildContext();
     const mutators = this.buildMutators();
     return coreExecuteDirectly(task, messages, ctx, mutators);
@@ -1559,7 +1862,7 @@ export class ProductionAgent {
    * Uses cache-aware system prompt building (Trick P) when contextEngineering
    * is available, ensuring static content is ordered for optimal KV-cache reuse.
    */
-  private buildMessages(task: string): Message[] {
+  private async buildMessages(task: string): Promise<Message[]> {
     const messages: Message[] = [];
 
     // Gather all context components
@@ -1582,14 +1885,18 @@ export class ProductionAgent {
       const maxContextTokens = (this.config.maxContextTokens ?? 80000) - reservedTokens;
       const codebaseBudget = Math.min(maxContextTokens * 0.3, 15000); // Up to 30% or 15K tokens
 
-      const repoMap = this.codebaseContext.getRepoMap();
-
-      // Lazy: trigger analysis on first system prompt build, ready by next turn
-      if (!repoMap && !this.codebaseAnalysisTriggered) {
+      // Synchronous analysis on first system prompt build so context is available immediately
+      if (!this.codebaseContext.getRepoMap() && !this.codebaseAnalysisTriggered) {
         this.codebaseAnalysisTriggered = true;
-        this.codebaseContext.analyze().catch(() => { /* non-fatal */ });
+        try {
+          await this.codebaseContext.analyze();
+        } catch {
+          // non-fatal — agent can still work without codebase context
+        }
       }
 
+      // Get repo map AFTER analysis so we have fresh data on first prompt
+      const repoMap = this.codebaseContext.getRepoMap();
       if (repoMap) {
         try {
           const selection = this.selectRelevantCodeSync(task, codebaseBudget);
@@ -1711,6 +2018,13 @@ export class ProductionAgent {
 
     // Add current task
     messages.push({ role: 'user', content: task });
+
+    // Track system prompt length for context % estimation
+    const sysMsg = messages.find(m => m.role === 'system');
+    if (sysMsg) {
+      const content = typeof sysMsg.content === 'string' ? sysMsg.content : JSON.stringify(sysMsg.content);
+      this.lastSystemPromptLength = content.length;
+    }
 
     return messages;
   }
@@ -1972,6 +2286,10 @@ export class ProductionAgent {
     return this.state.metrics;
   }
 
+  getResilienceConfig(): ProductionAgentConfig['resilience'] {
+    return this.config.resilience;
+  }
+
   /**
    * Get current state.
    */
@@ -2014,6 +2332,17 @@ export class ProductionAgent {
   }
 
   /**
+   * Estimate tokens used by the system prompt (codebase context, tools, rules).
+   * Used by TUI to display accurate context % that includes system overhead.
+   */
+  getSystemPromptTokenEstimate(): number {
+    if (this.lastSystemPromptLength > 0) {
+      return Math.ceil(this.lastSystemPromptLength / 3.2);
+    }
+    return 0;
+  }
+
+  /**
    * Get the trace collector (Lesson 26).
    * Returns null if trace capture is not enabled.
    */
@@ -2027,6 +2356,9 @@ export class ProductionAgent {
    */
   setTraceCollector(collector: TraceCollector): void {
     this.traceCollector = collector;
+    if (this.codebaseContext) {
+      this.codebaseContext.traceCollector = collector;
+    }
   }
 
   /**
@@ -2461,25 +2793,32 @@ export class ProductionAgent {
     return !artifactWriteTools.some(toolName => executedToolNames.has(toolName));
   }
 
-  /**
-   * Detect "future-intent" responses that imply the model has not completed work.
-   */
-  private detectIncompleteActionResponse(content: string): boolean {
-    const trimmed = content.trim();
-    if (!trimmed) {
-      return false;
+  private getOpenTasksSummary(): OpenTaskSummary | undefined {
+    if (!this.taskManager) {
+      return undefined;
     }
+    const tasks = this.taskManager.list();
+    const pending = tasks.filter(t => t.status === 'pending').length;
+    const inProgress = tasks.filter(t => t.status === 'in_progress').length;
+    const blocked = tasks.filter(t => t.status === 'pending' && this.taskManager?.isBlocked(t.id)).length;
+    return { pending, inProgress, blocked };
+  }
 
-    const lower = trimmed.toLowerCase();
-    const futureIntentPatterns: RegExp[] = [
-      /^(now|next|then)\s+(i\s+will|i'll|let me)\b/,
-      /^i\s+(will|am going to|can)\b/,
-      /^(let me|i'll|i will)\s+(create|write|save|do|make|generate|start)\b/,
-      /^(now|next|then)\s+i(?:'ll| will)\b/,
-    ];
-    const completionSignals = /\b(done|completed|finished|here is|created|saved|wrote)\b/;
-
-    return futureIntentPatterns.some(pattern => pattern.test(lower)) && !completionSignals.test(lower);
+  private reconcileStaleTasks(reason: string): void {
+    if (!this.taskManager) return;
+    const staleAfterMs = typeof this.config.resilience === 'object'
+      ? (this.config.resilience.taskLeaseStaleMs ?? 5 * 60 * 1000)
+      : 5 * 60 * 1000;
+    const recovered = this.taskManager.reconcileStaleInProgress({
+      staleAfterMs,
+      reason,
+    });
+    if (recovered.reconciled > 0) {
+      this.observability?.logger?.info('Recovered stale task leases', {
+        reason,
+        recovered: recovered.reconciled,
+      });
+    }
   }
 
   /**

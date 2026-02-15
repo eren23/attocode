@@ -149,6 +149,69 @@ const CompactionSchema = z
   })
   .strict();
 
+const ResilienceSchema = z
+  .object({
+    enabled: z.boolean().optional(),
+    maxEmptyRetries: z.number().int().nonnegative().optional(),
+    maxContinuations: z.number().int().nonnegative().optional(),
+    autoContinue: z.boolean().optional(),
+    minContentLength: z.number().int().nonnegative().optional(),
+    incompleteActionRecovery: z.boolean().optional(),
+    maxIncompleteActionRetries: z.number().int().nonnegative().optional(),
+    enforceRequestedArtifacts: z.boolean().optional(),
+    incompleteActionAutoLoop: z.boolean().optional(),
+    maxIncompleteAutoLoops: z.number().int().nonnegative().optional(),
+    autoLoopPromptStyle: z.enum(['strict', 'concise']).optional(),
+    taskLeaseStaleMs: z.number().int().positive().optional(),
+  })
+  .strict();
+
+const HooksSchema = z
+  .object({
+    enabled: z.boolean().optional(),
+    builtIn: z
+      .object({
+        logging: z.boolean().optional(),
+        metrics: z.boolean().optional(),
+        timing: z.boolean().optional(),
+      })
+      .optional(),
+    shell: z
+      .object({
+        enabled: z.boolean().optional(),
+        defaultTimeoutMs: z.number().int().positive().optional(),
+        envAllowlist: z.array(z.string()).optional(),
+        commands: z.array(
+          z.object({
+            id: z.string().optional(),
+            event: z.enum([
+              'run.before',
+              'run.after',
+              'iteration.before',
+              'iteration.after',
+              'completion.before',
+              'completion.after',
+              'recovery.before',
+              'recovery.after',
+              'agent.start',
+              'agent.end',
+              'llm.before',
+              'llm.after',
+              'tool.before',
+              'tool.after',
+              'error',
+            ]),
+            command: z.string(),
+            args: z.array(z.string()).optional(),
+            timeoutMs: z.number().int().positive().optional(),
+            priority: z.number().int().optional(),
+          }).strict(),
+        ).optional(),
+      })
+      .optional(),
+  })
+  .strict();
+
 // =============================================================================
 // PROVIDER RESILIENCE
 // =============================================================================
@@ -223,6 +286,8 @@ export const UserConfigSchema = z
     cancellation: featureSection(CancellationSchema.shape).optional(),
     resources: featureSection(ResourcesSchema.shape).optional(),
     compaction: featureSection(CompactionSchema.shape).optional(),
+    resilience: featureSection(ResilienceSchema.shape).optional(),
+    hooks: featureSection(HooksSchema.shape).optional(),
   })
   .passthrough();
 

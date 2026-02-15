@@ -17,7 +17,8 @@
 import * as fs from 'fs/promises';
 import * as path from 'path';
 import type { LSPManager, LSPLocation } from './lsp.js';
-import { isASTSupported, extractSymbolsAST, extractDependenciesAST } from './codebase-ast.js';
+import { isASTSupported, extractSymbolsAST, extractDependenciesAST, type ASTSymbol } from './codebase-ast.js';
+import type { TraceCollector } from '../tracing/trace-collector.js';
 
 // =============================================================================
 // TYPES
@@ -41,6 +42,8 @@ export interface CodeChunk {
   type: CodeChunkType;
   /** Symbols defined in this chunk */
   symbols: string[];
+  /** Structured symbols for visualization and tracing */
+  symbolDetails: Array<{ name: string; kind: string; exported: boolean; line: number }>;
   /** Symbols imported/used by this chunk */
   dependencies: string[];
   /** Last modified timestamp */
@@ -280,6 +283,17 @@ const DEFAULT_CONFIG: Required<CodebaseContextConfig> = {
   cacheTTL: 5 * 60 * 1000, // 5 minutes
 };
 
+const ALWAYS_EXCLUDED_DIRS = new Set([
+  'node_modules',
+  '.git',
+  'dist',
+  'build',
+  'coverage',
+  '.next',
+  'target',
+  'vendor',
+]);
+
 // =============================================================================
 // CODEBASE CONTEXT MANAGER
 // =============================================================================
@@ -311,6 +325,9 @@ export class CodebaseContextManager {
   private cache: Map<string, { map: RepoMap; expires: number }> = new Map();
   private listeners: CodebaseContextEventListener[] = [];
   private lspManager: LSPManager | null = null;
+
+  /** Optional trace collector for emitting codebase analysis events. */
+  traceCollector?: TraceCollector;
 
   constructor(config: CodebaseContextConfig = {}) {
     this.config = { ...DEFAULT_CONFIG, ...config };
@@ -446,6 +463,43 @@ export class CodebaseContextManager {
         totalTokens,
       });
 
+      // Emit trace event with full codebase map data
+      this.traceCollector?.record({
+        type: 'codebase.map',
+        data: {
+          totalFiles: chunks.size,
+          totalTokens,
+          entryPoints,
+          coreModules,
+          dependencyEdges: Array.from(dependencyGraph.entries()).map(([file, imports]) => ({
+            file,
+            imports: Array.from(imports),
+          })),
+          topChunks: Array.from(chunks.values())
+            .sort((a, b) => b.importance - a.importance)
+            .slice(0, 50)
+            .map(chunk => ({
+              filePath: chunk.filePath,
+              tokenCount: chunk.tokenCount,
+              importance: chunk.importance,
+              type: chunk.type,
+              symbols: chunk.symbolDetails,
+              dependencies: chunk.dependencies,
+            })),
+          files: Array.from(chunks.values()).map((chunk) => ({
+            filePath: chunk.filePath,
+            directory: path.dirname(chunk.filePath) === '.' ? '' : path.dirname(chunk.filePath),
+            fileName: path.basename(chunk.filePath),
+            tokenCount: chunk.tokenCount,
+            importance: chunk.importance,
+            type: chunk.type,
+            symbols: chunk.symbolDetails,
+            inDegree: reverseDependencyGraph.get(chunk.filePath)?.size ?? 0,
+            outDegree: dependencyGraph.get(chunk.filePath)?.size ?? 0,
+          })),
+        },
+      });
+
       return repoMap;
     } catch (error) {
       this.emit({ type: 'analysis.error', error: error as Error });
@@ -464,9 +518,12 @@ export class CodebaseContextManager {
 
       for (const entry of entries) {
         const fullPath = path.join(dir, entry.name);
-        const relativePath = path.relative(root, fullPath);
+        const relativePath = this.normalizePath(path.relative(root, fullPath));
 
         // Check exclusions first
+        if (entry.isDirectory() && ALWAYS_EXCLUDED_DIRS.has(entry.name)) {
+          continue;
+        }
         if (this.matchesPatterns(relativePath, this.config.excludePatterns)) {
           continue;
         }
@@ -502,7 +559,10 @@ export class CodebaseContextManager {
       const content = await fs.readFile(fullPath, 'utf-8');
       const tokenCount = Math.ceil(content.length * this.config.tokensPerChar);
       const type = this.determineChunkType(relativePath, content);
-      const symbols = this.extractSymbols(content, relativePath);
+      const symbolDetails = this.extractSymbolDetails(content, relativePath);
+      const symbols = symbolDetails.length > 0
+        ? symbolDetails.map((s) => s.name)
+        : this.extractSymbols(content, relativePath);
       const dependencies = this.extractDependencyNames(content, relativePath);
 
       // Calculate base importance
@@ -516,6 +576,7 @@ export class CodebaseContextManager {
         importance,
         type,
         symbols,
+        symbolDetails,
         dependencies,
         lastModified: stat.mtime,
       };
@@ -669,6 +730,64 @@ export class CodebaseContextManager {
   }
 
   /**
+   * Extract structured symbols from code.
+   */
+  private extractSymbolDetails(
+    content: string,
+    filePath: string,
+  ): Array<{ name: string; kind: string; exported: boolean; line: number }> {
+    if (isASTSupported(filePath)) {
+      const astSymbols = extractSymbolsAST(content, filePath);
+      if (astSymbols.length > 0) {
+        return astSymbols.map((s: ASTSymbol) => ({
+          name: s.name,
+          kind: s.kind,
+          exported: s.exported,
+          line: s.line,
+        }));
+      }
+    }
+
+    const details: Array<{ name: string; kind: string; exported: boolean; line: number }> = [];
+    const ext = path.extname(filePath);
+
+    if (['.ts', '.tsx', '.js', '.jsx'].includes(ext)) {
+      const addMatches = (kind: string, exported: boolean, pattern: RegExp) => {
+        let match: RegExpExecArray | null;
+        while ((match = pattern.exec(content)) !== null) {
+          details.push({ name: match[1], kind, exported, line: 0 });
+        }
+      };
+      addMatches('function', true, /export\s+(?:default\s+)?function\s+(\w+)/g);
+      addMatches('class', true, /export\s+(?:default\s+)?class\s+(\w+)/g);
+      addMatches('interface', true, /export\s+interface\s+(\w+)/g);
+      addMatches('type', true, /export\s+type\s+(\w+)/g);
+      addMatches('enum', true, /export\s+enum\s+(\w+)/g);
+      addMatches('variable', true, /export\s+(?:const|let|var)\s+(\w+)/g);
+      addMatches('function', false, /(?:^|\n)\s*function\s+(\w+)/g);
+      addMatches('class', false, /(?:^|\n)\s*class\s+(\w+)/g);
+    } else if (ext === '.py') {
+      let match: RegExpExecArray | null;
+      const classPattern = /^class\s+(\w+)/gm;
+      while ((match = classPattern.exec(content)) !== null) {
+        details.push({ name: match[1], kind: 'class', exported: true, line: 0 });
+      }
+      const fnPattern = /^def\s+(\w+)/gm;
+      while ((match = fnPattern.exec(content)) !== null) {
+        details.push({ name: match[1], kind: 'function', exported: true, line: 0 });
+      }
+    }
+
+    const seen = new Set<string>();
+    return details.filter((d) => {
+      const key = `${d.kind}:${d.name}`;
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
+  }
+
+  /**
    * Extract dependency file paths from imports.
    * Uses AST-based extraction when available, with regex fallback.
    */
@@ -780,8 +899,9 @@ export class CodebaseContextManager {
    * Check if a path matches any of the given patterns.
    */
   private matchesPatterns(filePath: string, patterns: string[]): boolean {
+    const normalizedPath = this.normalizePath(filePath);
     for (const pattern of patterns) {
-      if (this.matchesGlob(filePath, pattern)) {
+      if (this.matchesGlob(normalizedPath, pattern)) {
         return true;
       }
     }
@@ -792,15 +912,52 @@ export class CodebaseContextManager {
    * Simple glob matching (supports * and **).
    */
   private matchesGlob(filePath: string, pattern: string): boolean {
-    // Convert glob to regex
-    const regexStr = pattern
-      .replace(/\*\*/g, '<<<DOUBLESTAR>>>')
-      .replace(/\*/g, '[^/]*')
-      .replace(/<<<DOUBLESTAR>>>/g, '.*')
-      .replace(/\?/g, '.');
+    const normalizedPath = this.normalizePath(filePath);
+    const normalizedPattern = this.normalizePath(pattern).replace(/^\.\/+/, '');
+    const pathSegments = normalizedPath.split('/').filter(Boolean);
+    const patternSegments = normalizedPattern.split('/').filter(Boolean);
 
-    const regex = new RegExp(`^${regexStr}$`);
-    return regex.test(filePath);
+    const matchSegment = (segment: string, segmentPattern: string): boolean => {
+      if (segmentPattern === '*') return true;
+      const escaped = segmentPattern
+        .replace(/[.+^${}()|[\]\\]/g, '\\$&')
+        .replace(/\*/g, '.*')
+        .replace(/\?/g, '.');
+      return new RegExp(`^${escaped}$`).test(segment);
+    };
+
+    const matchFrom = (pathIndex: number, patternIndex: number): boolean => {
+      if (patternIndex >= patternSegments.length) {
+        return pathIndex >= pathSegments.length;
+      }
+
+      const part = patternSegments[patternIndex];
+      if (part === '**') {
+        for (let i = pathIndex; i <= pathSegments.length; i++) {
+          if (matchFrom(i, patternIndex + 1)) {
+            return true;
+          }
+        }
+        return false;
+      }
+
+      if (pathIndex >= pathSegments.length) {
+        return false;
+      }
+      if (!matchSegment(pathSegments[pathIndex], part)) {
+        return false;
+      }
+      return matchFrom(pathIndex + 1, patternIndex + 1);
+    };
+
+    return matchFrom(0, 0);
+  }
+
+  private normalizePath(value: string): string {
+    return value
+      .replaceAll('\\', '/')
+      .replace(/^\.\/+/, '')
+      .replace(/\/{2,}/g, '/');
   }
 
   // ===========================================================================

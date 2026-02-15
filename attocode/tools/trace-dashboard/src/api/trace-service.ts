@@ -6,7 +6,7 @@
  */
 
 import { readdir, stat, writeFile, mkdir } from 'node:fs/promises';
-import { join } from 'node:path';
+import { basename, dirname, join } from 'node:path';
 import {
   createJSONLParser,
   createJSONExporter,
@@ -489,4 +489,370 @@ export async function getUploadedSession(id: string): Promise<ParsedSession | nu
 
   const parser = createJSONLParser();
   return parser.parseString(uploaded.content);
+}
+
+// =============================================================================
+// OBSERVABILITY VISUALIZATION DATA
+// =============================================================================
+
+import type { CodeMapData, CodeMapFile } from '../lib/codemap-types.js';
+import type { AgentGraphData, AgentNode, DataFlow } from '../lib/agent-graph-types.js';
+
+function inferFileType(filePath: string, entryPoints: string[], coreModules: string[]): CodeMapFile['type'] {
+  if (entryPoints.some(ep => filePath.includes(ep))) return 'entry_point';
+  if (coreModules.some(cm => filePath.includes(cm))) return 'core_module';
+  if (filePath.includes('.test.') || filePath.includes('.spec.') || filePath.includes('/test/')) return 'test';
+  if (filePath.includes('/types') || filePath.endsWith('.d.ts')) return 'types';
+  if (filePath.includes('config') || filePath.includes('.env')) return 'config';
+  if (filePath.includes('/utils/') || filePath.includes('/helpers/')) return 'utility';
+  return 'other';
+}
+
+function normalizePathCandidate(value: unknown): string | null {
+  if (typeof value !== 'string') return null;
+  const v = value.replaceAll('\\', '/').trim();
+  if (!v) return null;
+  const cleaned = v.replace(/\/{2,}/g, '/');
+  if (!cleaned.includes('/') && !cleaned.includes('.')) return null;
+  if (cleaned.length > 400) return null;
+  if (cleaned.startsWith('-')) return null;
+  if (cleaned === '/' || cleaned === '.') return null;
+  if (!/[A-Za-z0-9]/.test(cleaned)) return null;
+  return cleaned;
+}
+
+function extractFilePathsFromUnknown(value: unknown, out: Map<string, number>): void {
+  if (!value) return;
+
+  if (Array.isArray(value)) {
+    for (const item of value) extractFilePathsFromUnknown(item, out);
+    return;
+  }
+
+  if (typeof value === 'object') {
+    for (const [k, v] of Object.entries(value as Record<string, unknown>)) {
+      if (k.toLowerCase().includes('path') || k === 'file' || k === 'files' || k === 'cwd') {
+        const normalized = normalizePathCandidate(v);
+        if (normalized) out.set(normalized, (out.get(normalized) ?? 0) + 1);
+      }
+      extractFilePathsFromUnknown(v, out);
+    }
+    return;
+  }
+
+  if (typeof value === 'string') {
+    // Best-effort path extraction from shell commands.
+    const matches = value.match(/(?:\/|\.{1,2}\/)[A-Za-z0-9_./\-]+(?:\.[A-Za-z0-9]+)?/g) ?? [];
+    for (const m of matches) {
+      const normalized = normalizePathCandidate(m);
+      if (normalized) out.set(normalized, (out.get(normalized) ?? 0) + 1);
+    }
+  }
+}
+
+function buildFallbackCodeMapFromTrace(rawEntries: Array<Record<string, unknown>>): CodeMapData | null {
+  const pathCounts = new Map<string, number>();
+
+  for (const entry of rawEntries) {
+    if (entry._type !== 'tool.execution') continue;
+    extractFilePathsFromUnknown(entry.input, pathCounts);
+  }
+
+  if (pathCounts.size === 0) return null;
+
+  const sorted = Array.from(pathCounts.entries())
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 400);
+
+  const fileLike = sorted.filter(([p]) => {
+    const name = basename(p);
+    return name.includes('.');
+  });
+  const candidates = fileLike.length >= 8 ? fileLike : sorted;
+
+  const files: CodeMapFile[] = candidates.map(([filePath, hits]) => {
+    const directory = dirname(filePath);
+    return {
+      filePath,
+      directory: directory === '.' ? '' : directory,
+      fileName: basename(filePath),
+      tokenCount: 0,
+      importance: hits,
+      type: inferFileType(filePath, [], []),
+      symbols: [],
+      inDegree: 0,
+      outDegree: 0,
+    };
+  });
+
+  const root = files
+    .map(f => f.directory)
+    .filter(Boolean)
+    .sort((a, b) => a.length - b.length)[0] ?? '';
+
+  return {
+    root,
+    totalFiles: files.length,
+    totalTokens: 0,
+    files,
+    dependencyEdges: [],
+    entryPoints: [],
+    coreModules: [],
+  };
+}
+
+/**
+ * Extract code map data from a session's trace entries.
+ */
+export async function getSessionCodeMap(idOrPath: string): Promise<CodeMapData | null> {
+  const session = await getSession(idOrPath);
+  if (!session) return null;
+
+  // Find codebase.map entries
+  const mapEntries = session.rawEntries?.filter((e: Record<string, unknown>) => e._type === 'codebase.map') ?? [];
+
+  if (mapEntries.length === 0) {
+    // Backward-compatible fallback for traces created before codebase.map emission was wired.
+    return buildFallbackCodeMapFromTrace(session.rawEntries ?? []);
+  }
+
+  // Use the last (most complete) map entry
+  const rawEntry = mapEntries[mapEntries.length - 1];
+  const entry = (rawEntry.data as Record<string, unknown> | undefined) ?? rawEntry;
+
+  const topChunks = (entry.topChunks as Array<Record<string, unknown>>) ?? [];
+  const entryFiles = (entry.files as Array<Record<string, unknown>>) ?? [];
+  const depEdges = (entry.dependencyEdges as Array<{ file: string; imports: string[] }>) ?? [];
+
+  const entryPoints = (entry.entryPoints as string[]) ?? [];
+  const coreModules = (entry.coreModules as string[]) ?? [];
+  const normalizeSymbols = (raw: unknown): CodeMapFile['symbols'] =>
+    ((raw as unknown[]) ?? []).map((s) => {
+      if (typeof s === 'string') {
+        return { name: s, kind: 'symbol', exported: false, line: 0 };
+      }
+      const sym = (s as Record<string, unknown>) ?? {};
+      return {
+        name: (sym.name as string) ?? '',
+        kind: (sym.kind as string) ?? 'symbol',
+        exported: (sym.exported as boolean) ?? false,
+        line: (sym.line as number) ?? 0,
+      };
+    });
+
+  const toFile = (chunk: Record<string, unknown>): CodeMapFile => {
+    const filePath = (chunk.filePath as string) ?? '';
+    const parts = filePath.split('/');
+    const fileName = parts[parts.length - 1] ?? filePath;
+    const directory = parts.slice(0, -1).join('/');
+
+    const outDegree = (chunk.outDegree as number) ?? depEdges.find(e => e.file === filePath)?.imports.length ?? 0;
+    const inDegree = (chunk.inDegree as number) ?? depEdges.filter(e => e.imports.includes(filePath)).length;
+    const rawType = (chunk.type as string | undefined) ?? inferFileType(filePath, entryPoints, coreModules);
+    const type: CodeMapFile['type'] = (
+      rawType === 'entry_point' ||
+      rawType === 'core_module' ||
+      rawType === 'types' ||
+      rawType === 'test' ||
+      rawType === 'utility' ||
+      rawType === 'config' ||
+      rawType === 'other'
+    ) ? rawType : 'other';
+
+    return {
+      filePath,
+      directory,
+      fileName,
+      tokenCount: (chunk.tokenCount as number) ?? 0,
+      importance: (chunk.importance as number) ?? 0,
+      type,
+      symbols: normalizeSymbols(chunk.symbols),
+      inDegree,
+      outDegree,
+    };
+  };
+
+  // Prefer full files array when available; fallback to legacy topChunks.
+  const files: CodeMapFile[] = (entryFiles.length > 0 ? entryFiles : topChunks).map(toFile);
+
+  // Build normalized dependency edges
+  const normalizedEdges = depEdges.flatMap(edge =>
+    edge.imports.map(imp => ({
+      source: edge.file,
+      target: imp,
+      importedNames: [] as string[],
+    }))
+  );
+
+  return {
+    root: '',
+    totalFiles: (entry.totalFiles as number) ?? files.length,
+    totalTokens: (entry.totalTokens as number) ?? 0,
+    files,
+    dependencyEdges: normalizedEdges,
+    entryPoints,
+    coreModules,
+  };
+}
+
+/**
+ * Build agent graph data from a session's trace entries.
+ */
+export async function getSessionAgentGraph(idOrPath: string): Promise<AgentGraphData | null> {
+  const session = await getSession(idOrPath);
+  if (!session) return null;
+
+  const rawEntries = session.rawEntries ?? [];
+
+  const agentMap = new Map<string, AgentNode>();
+  const dataFlows: DataFlow[] = [];
+  let flowIdCounter = 0;
+
+  // Process subagent.link entries to build agent hierarchy
+  const linkEntries = rawEntries.filter(e => e._type === 'subagent.link');
+  for (const entry of linkEntries) {
+    const link = entry.link as Record<string, unknown> | undefined;
+    if (!link) continue;
+
+    const childConfig = (link.childConfig as Record<string, unknown>) ?? {};
+    const childSessionId = (link.childSessionId as string) ?? '';
+    const parentSessionId = (link.parentSessionId as string) ?? '';
+    const result = link.result as Record<string, unknown> | undefined;
+
+    // Ensure parent exists
+    if (!agentMap.has(parentSessionId)) {
+      agentMap.set(parentSessionId, {
+        id: parentSessionId,
+        label: 'Root Agent',
+        model: (entry as Record<string, unknown>).model as string ?? '',
+        type: 'root',
+        status: 'completed',
+        tokensUsed: 0,
+        costUsed: 0,
+        filesAccessed: [],
+        findingsPosted: 0,
+      });
+    }
+
+    // Add child agent
+    const agentType = (childConfig.agentType as string) ?? 'subagent';
+    let nodeType: AgentNode['type'] = 'subagent';
+    if (agentType.includes('orchestrator')) nodeType = 'orchestrator';
+    else if (agentType.includes('worker')) nodeType = 'worker';
+    else if (agentType.includes('judge')) nodeType = 'judge';
+    else if (agentType.includes('manager')) nodeType = 'manager';
+
+    agentMap.set(childSessionId, {
+      id: childSessionId,
+      label: agentType,
+      model: (childConfig.model as string) ?? '',
+      type: nodeType,
+      status: result ? ((result.success as boolean) ? 'completed' : 'failed') : 'running',
+      parentId: parentSessionId,
+      tokensUsed: (result?.tokensUsed as number) ?? 0,
+      costUsed: 0,
+      filesAccessed: [],
+      findingsPosted: 0,
+    });
+
+    // Create context injection flow
+    dataFlows.push({
+      id: `flow-${flowIdCounter++}`,
+      timestamp: new Date((entry._ts as string) ?? '').getTime(),
+      sourceAgentId: parentSessionId,
+      targetAgentId: childSessionId,
+      type: 'task_assignment',
+      payload: {
+        summary: (childConfig.task as string)?.slice(0, 200) ?? 'Task assigned',
+      },
+    });
+
+    // Create result return flow if completed
+    if (result) {
+      dataFlows.push({
+        id: `flow-${flowIdCounter++}`,
+        timestamp: new Date((entry._ts as string) ?? '').getTime() + 1,
+        sourceAgentId: childSessionId,
+        targetAgentId: parentSessionId,
+        type: 'result_return',
+        payload: {
+          summary: (result.summary as string)?.slice(0, 200) ?? 'Result returned',
+          size: result.tokensUsed as number,
+        },
+      });
+    }
+  }
+
+  // Process context.injection entries
+  const injectionEntries = rawEntries.filter(e => e._type === 'context.injection');
+  for (const entry of injectionEntries) {
+    dataFlows.push({
+      id: `flow-${flowIdCounter++}`,
+      timestamp: new Date((entry._ts as string) ?? '').getTime(),
+      sourceAgentId: (entry.parentAgentId as string) ?? 'root',
+      targetAgentId: (entry.agentId as string) ?? '',
+      type: 'context_injection',
+      payload: {
+        summary: `Injected repo map (${entry.repoMapTokens}tok), ${entry.blackboardFindings} findings, ${(entry.modifiedFiles as string[])?.length ?? 0} files`,
+        size: (entry.repoMapTokens as number) ?? 0,
+      },
+    });
+  }
+
+  // Process blackboard.event entries
+  const bbEntries = rawEntries.filter(e => e._type === 'blackboard.event');
+  for (const entry of bbEntries) {
+    if (entry.action === 'finding.posted') {
+      dataFlows.push({
+        id: `flow-${flowIdCounter++}`,
+        timestamp: new Date((entry._ts as string) ?? '').getTime(),
+        sourceAgentId: (entry.agentId as string) ?? '',
+        targetAgentId: 'blackboard',
+        type: 'finding',
+        payload: {
+          summary: (entry.topic as string) ?? 'Finding posted',
+          topic: entry.topic as string,
+          confidence: entry.confidence as number,
+        },
+      });
+    }
+  }
+
+  // Process budget.pool entries
+  const budgetEntries = rawEntries.filter(e => e._type === 'budget.pool');
+  for (const entry of budgetEntries) {
+    if (entry.action === 'allocate') {
+      dataFlows.push({
+        id: `flow-${flowIdCounter++}`,
+        timestamp: new Date((entry._ts as string) ?? '').getTime(),
+        sourceAgentId: 'budget-pool',
+        targetAgentId: (entry.agentId as string) ?? '',
+        type: 'budget_transfer',
+        payload: {
+          summary: `Allocated ${entry.tokensAllocated} tokens`,
+          size: entry.tokensAllocated as number,
+        },
+      });
+    }
+  }
+
+  // If no agents found, create a root from session info
+  if (agentMap.size === 0) {
+    agentMap.set('root', {
+      id: 'root',
+      label: 'Root Agent',
+      model: session.model,
+      type: 'root',
+      status: session.status === 'completed' ? 'completed' : session.status === 'failed' ? 'failed' : 'running',
+      tokensUsed: session.metrics.inputTokens + session.metrics.outputTokens,
+      costUsed: session.metrics.totalCost,
+      filesAccessed: [],
+      findingsPosted: 0,
+    });
+  }
+
+  return {
+    agents: Array.from(agentMap.values()),
+    dataFlows: dataFlows.sort((a, b) => a.timestamp - b.timestamp),
+  };
 }

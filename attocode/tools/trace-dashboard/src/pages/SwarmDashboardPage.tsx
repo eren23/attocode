@@ -3,6 +3,7 @@
  */
 
 import { useState, useEffect, useCallback } from 'react';
+import { Link } from 'react-router-dom';
 import { useSwarmStream } from '../hooks/useSwarmStream';
 import { LoadingSpinner } from '../components/LoadingSpinner';
 import { ExportDropdown } from '../components/ExportDropdown';
@@ -195,7 +196,7 @@ function SwarmDirPicker({
 
 export function SwarmDashboardPage() {
   const [selectedDir, setSelectedDir] = useState<string | undefined>(undefined);
-  const { connected, idle, state, recentEvents, error, reconnect } = useSwarmStream(selectedDir);
+  const { connected, idle, state, recentEvents, codeMap, error, reconnect } = useSwarmStream(selectedDir);
 
   // Still loading initial state
   if (!state && !error && !idle) {
@@ -239,6 +240,22 @@ export function SwarmDashboardPage() {
         <div className="flex-1">
           <SwarmHeader state={state} connected={connected} />
         </div>
+        <Link
+          to={selectedDir
+            ? `/topology?swarm=1&dir=${encodeURIComponent(selectedDir)}`
+            : '/topology?swarm=1'}
+          className="px-3 py-1.5 text-xs font-medium text-gray-300 bg-gray-800 border border-gray-700 rounded-lg hover:bg-gray-700 hover:text-white transition-colors"
+        >
+          Live Topology
+        </Link>
+        <Link
+          to={selectedDir
+            ? `/codemap?swarm=1&dir=${encodeURIComponent(selectedDir)}`
+            : '/codemap?swarm=1'}
+          className="px-3 py-1.5 text-xs font-medium text-gray-300 bg-gray-800 border border-gray-700 rounded-lg hover:bg-gray-700 hover:text-white transition-colors"
+        >
+          Live Code Map
+        </Link>
         <ExportDropdown
           options={[
             {
@@ -313,6 +330,38 @@ export function SwarmDashboardPage() {
         </ExpandablePanel>
         <ExpandablePanel title="Event Feed">
           <EventFeedPanel events={recentEvents} />
+        </ExpandablePanel>
+
+        {/* Row 4: Code Map Snapshot */}
+        <ExpandablePanel title="Code Map Snapshot">
+          {!codeMap ? (
+            <div className="text-xs text-gray-500">No codemap snapshot yet.</div>
+          ) : (
+            <div className="space-y-3">
+              <div className="grid grid-cols-3 gap-2 text-xs">
+                <div className="rounded bg-gray-800/50 px-2 py-1">
+                  <div className="text-gray-500">Files</div>
+                  <div className="text-gray-200">{codeMap.totalFiles}</div>
+                </div>
+                <div className="rounded bg-gray-800/50 px-2 py-1">
+                  <div className="text-gray-500">Tokens</div>
+                  <div className="text-gray-200">{codeMap.totalTokens.toLocaleString()}</div>
+                </div>
+                <div className="rounded bg-gray-800/50 px-2 py-1">
+                  <div className="text-gray-500">Edges</div>
+                  <div className="text-gray-200">{codeMap.dependencyEdges.length}</div>
+                </div>
+              </div>
+              <div className="space-y-1 max-h-48 overflow-y-auto text-xs">
+                {(codeMap.files?.slice(0, 20) ?? codeMap.topChunks.slice(0, 20)).map((f) => (
+                  <div key={f.filePath} className="flex items-center justify-between gap-2 rounded bg-gray-800/30 px-2 py-1">
+                    <div className="font-mono text-gray-300 truncate">{f.filePath}</div>
+                    <div className="text-gray-500">{Math.round((f.importance ?? 0) * 100)}%</div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
         </ExpandablePanel>
       </div>
 

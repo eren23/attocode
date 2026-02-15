@@ -37,6 +37,12 @@ function getEffectiveThreshold(failedDeps: SwarmTask[], configuredThreshold: num
   return minThreshold;
 }
 
+export interface ReconcileStaleDispatchedOptions {
+  staleAfterMs: number;
+  now?: number;
+  activeTaskIds?: Set<string>;
+}
+
 // ─── Task Queue ────────────────────────────────────────────────────────────
 
 export class SwarmTaskQueue {
@@ -63,7 +69,13 @@ export class SwarmTaskQueue {
     if (config.facts?.workingDirectory) this.workingDirectory = config.facts.workingDirectory;
 
     const { subtasks, dependencyGraph } = result;
-    const parallelGroups = dependencyGraph.parallelGroups;
+    let parallelGroups = dependencyGraph.parallelGroups;
+
+    // Defensive: if parallelGroups is empty but subtasks exist, fall back to
+    // single-wave scheduling so tasks aren't silently dropped.
+    if (parallelGroups.length === 0 && subtasks.length > 0) {
+      parallelGroups = [subtasks.map(s => s.id)];
+    }
 
     // Map subtask IDs to wave numbers
     const taskWaveMap = new Map<string, number>();
@@ -320,6 +332,7 @@ export class SwarmTaskQueue {
     task.status = 'dispatched';
     task.assignedModel = model;
     task.attempts++;
+    task.dispatchedAt = Date.now();
   }
 
   /**
@@ -331,6 +344,7 @@ export class SwarmTaskQueue {
     // Don't overwrite terminal states (unless pendingCascadeSkip — see F4)
     if (task.status === 'skipped' || task.status === 'failed') return;
     task.status = 'completed';
+    task.dispatchedAt = undefined;
     task.result = result;
     // F4: Clear pendingCascadeSkip since we accepted the result
     task.pendingCascadeSkip = undefined;
@@ -350,10 +364,12 @@ export class SwarmTaskQueue {
     if (task.attempts <= maxRetries) {
       // Reset to ready for retry
       task.status = 'ready';
+      task.dispatchedAt = undefined;
       return true;
     }
 
     task.status = 'failed';
+    task.dispatchedAt = undefined;
 
     // Cascade: skip all dependents of a failed task
     this.cascadeSkip(taskId);
@@ -371,12 +387,36 @@ export class SwarmTaskQueue {
 
     if (task.attempts <= maxRetries) {
       task.status = 'ready';
+      task.dispatchedAt = undefined;
       return true;
     }
 
     task.status = 'failed';
+    task.dispatchedAt = undefined;
     // Do NOT call cascadeSkip — caller will trigger it manually after recovery attempt
     return false;
+  }
+
+  /**
+   * Requeue stale dispatched tasks back to ready when no active worker owns them.
+   * Returns recovered task IDs.
+   */
+  reconcileStaleDispatched(options: ReconcileStaleDispatchedOptions): string[] {
+    const now = options.now ?? Date.now();
+    const active = options.activeTaskIds ?? new Set<string>();
+    const recovered: string[] = [];
+
+    for (const task of this.tasks.values()) {
+      if (task.status !== 'dispatched') continue;
+      if (active.has(task.id)) continue;
+      const dispatchedAt = task.dispatchedAt ?? 0;
+      if (dispatchedAt <= 0 || now - dispatchedAt < options.staleAfterMs) continue;
+      task.status = 'ready';
+      task.dispatchedAt = undefined;
+      recovered.push(task.id);
+    }
+
+    return recovered;
   }
 
   /**
@@ -715,6 +755,7 @@ export class SwarmTaskQueue {
       attempts: t.attempts,
       wave: t.wave,
       assignedModel: t.assignedModel,
+      dispatchedAt: t.dispatchedAt,
     }));
 
     return {
@@ -739,6 +780,7 @@ export class SwarmTaskQueue {
         task.attempts = ts.attempts;
         task.wave = ts.wave;
         task.assignedModel = ts.assignedModel;
+        task.dispatchedAt = ts.dispatchedAt;
       }
     }
   }

@@ -396,6 +396,9 @@ export function yamlToSwarmConfig(yaml: SwarmYamlConfig, orchestratorModel: stri
     if (resilience.workerRetries !== undefined || resilience.worker_retries !== undefined) {
       config.workerRetries = Number(resilience.workerRetries ?? resilience.worker_retries);
     }
+    if (resilience.dispatchLeaseStaleMs !== undefined || resilience.dispatch_lease_stale_ms !== undefined) {
+      config.dispatchLeaseStaleMs = Number(resilience.dispatchLeaseStaleMs ?? resilience.dispatch_lease_stale_ms);
+    }
     if (resilience.rateLimitRetries !== undefined || resilience.rate_limit_retries !== undefined) {
       config.rateLimitRetries = Number(resilience.rateLimitRetries ?? resilience.rate_limit_retries);
     }
@@ -568,6 +571,124 @@ export function mergeSwarmConfigs(
   }
 
   return merged;
+}
+
+// ─── Model ID Normalization ──────────────────────────────────────────────────
+
+const KNOWN_MODEL_PROVIDERS = new Set([
+  'openai',
+  'anthropic',
+  'google',
+  'meta-llama',
+  'mistralai',
+  'deepseek',
+  'qwen',
+  'z-ai',
+  'moonshotai',
+  'x-ai',
+  'cohere',
+  'openrouter',
+  'perplexity',
+  'microsoft',
+  'nvidia',
+  'amazon',
+  'alibaba',
+  'allenai',
+]);
+
+function normalizeSingleModelId(raw: string | undefined, fallback: string): { model: string; changed: boolean; valid: boolean } {
+  const value = (raw ?? '').trim();
+  if (!value) {
+    return { model: fallback, changed: true, valid: false };
+  }
+
+  const parts = value.split('/').map(p => p.trim()).filter(Boolean);
+  if (parts.length === 2) {
+    return { model: value, changed: false, valid: true };
+  }
+
+  // Common malformed shape: "anthropic/z-ai/glm-5" -> "z-ai/glm-5"
+  if (parts.length >= 3 && KNOWN_MODEL_PROVIDERS.has(parts[0]) && KNOWN_MODEL_PROVIDERS.has(parts[1])) {
+    const normalized = `${parts[1]}/${parts.slice(2).join('/')}`;
+    return { model: normalized, changed: normalized !== value, valid: true };
+  }
+
+  return { model: fallback, changed: fallback !== value, valid: false };
+}
+
+/**
+ * Normalize and validate model IDs in swarm config.
+ * Auto-corrects common malformed IDs and falls back to orchestrator model on invalid values.
+ */
+export function normalizeSwarmModelConfig(config: SwarmConfig): { config: SwarmConfig; warnings: string[] } {
+  const warnings: string[] = [];
+  const normalized: SwarmConfig = { ...config };
+  normalized.workers = config.workers.map(w => ({ ...w }));
+  if (config.hierarchy) {
+    normalized.hierarchy = {
+      manager: config.hierarchy.manager ? { ...config.hierarchy.manager } : undefined,
+      judge: config.hierarchy.judge ? { ...config.hierarchy.judge } : undefined,
+    };
+  }
+
+  // Normalize workers first so orchestrator can use a known-good fallback if needed.
+  for (let i = 0; i < normalized.workers.length; i++) {
+    const worker = normalized.workers[i];
+    const result = normalizeSingleModelId(worker.model, config.orchestratorModel);
+    if (result.changed || !result.valid) {
+      warnings.push(
+        `[workers.${i}.model] "${worker.model}" -> "${result.model}"${result.valid ? ' (autocorrected)' : ' (fallback applied)'}`
+      );
+      worker.model = result.model;
+    }
+  }
+
+  const fallbackModel = normalized.workers[0]?.model || config.orchestratorModel;
+  const orchestrator = normalizeSingleModelId(config.orchestratorModel, fallbackModel);
+  if (orchestrator.changed || !orchestrator.valid) {
+    warnings.push(
+      `[orchestratorModel] "${config.orchestratorModel}" -> "${orchestrator.model}"${orchestrator.valid ? ' (autocorrected)' : ' (fallback applied)'}`
+    );
+    normalized.orchestratorModel = orchestrator.model;
+  }
+
+  const planner = normalizeSingleModelId(config.plannerModel, normalized.orchestratorModel);
+  if (config.plannerModel && (planner.changed || !planner.valid)) {
+    warnings.push(
+      `[plannerModel] "${config.plannerModel}" -> "${planner.model}"${planner.valid ? ' (autocorrected)' : ' (fallback applied)'}`
+    );
+    normalized.plannerModel = planner.model;
+  }
+
+  const quality = normalizeSingleModelId(config.qualityGateModel, normalized.orchestratorModel);
+  if (config.qualityGateModel && (quality.changed || !quality.valid)) {
+    warnings.push(
+      `[qualityGateModel] "${config.qualityGateModel}" -> "${quality.model}"${quality.valid ? ' (autocorrected)' : ' (fallback applied)'}`
+    );
+    normalized.qualityGateModel = quality.model;
+  }
+
+  if (normalized.hierarchy?.manager?.model) {
+    const manager = normalizeSingleModelId(normalized.hierarchy.manager.model, normalized.orchestratorModel);
+    if (manager.changed || !manager.valid) {
+      warnings.push(
+        `[hierarchy.manager.model] "${normalized.hierarchy.manager.model}" -> "${manager.model}"${manager.valid ? ' (autocorrected)' : ' (fallback applied)'}`
+      );
+      normalized.hierarchy.manager.model = manager.model;
+    }
+  }
+
+  if (normalized.hierarchy?.judge?.model) {
+    const judge = normalizeSingleModelId(normalized.hierarchy.judge.model, normalized.orchestratorModel);
+    if (judge.changed || !judge.valid) {
+      warnings.push(
+        `[hierarchy.judge.model] "${normalized.hierarchy.judge.model}" -> "${judge.model}"${judge.valid ? ' (autocorrected)' : ' (fallback applied)'}`
+      );
+      normalized.hierarchy.judge.model = judge.model;
+    }
+  }
+
+  return { config: normalized, warnings };
 }
 
 // ─── Capability Normalization ────────────────────────────────────────────────

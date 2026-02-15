@@ -302,6 +302,12 @@ export class HumanInLoopManager {
       }
     }
 
+    // Internal bookkeeping tools are always low risk regardless of name patterns
+    const internalTools = ['task_create', 'task_update', 'task_get', 'task_list'];
+    if (internalTools.includes(toolName)) {
+      return 'low';
+    }
+
     // Heuristic risk assessment
     const highRiskPatterns = ['delete', 'remove', 'drop', 'truncate', 'wipe', 'destroy'];
     for (const pattern of highRiskPatterns) {

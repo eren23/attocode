@@ -15,6 +15,8 @@
  * bounded by the parent's budget.
  */
 
+import type { TraceCollector } from '../tracing/trace-collector.js';
+
 // =============================================================================
 // TYPES
 // =============================================================================
@@ -70,9 +72,20 @@ export class SharedBudgetPool {
   private totalTokensReserved = 0;
   private totalCostReserved = 0;
 
+  /** Optional trace collector for emitting budget.pool events */
+  traceCollector?: TraceCollector;
+
   constructor(config: BudgetPoolConfig) {
     this.config = config;
     this.originalMaxPerChild = config.maxPerChild;
+  }
+
+  /**
+   * Get pool remaining tokens (accounts for both used and reserved).
+   */
+  private getPoolRemaining(): number {
+    const committed = Math.max(this.totalTokensUsed, this.totalTokensReserved);
+    return Math.max(0, this.config.totalTokens - committed);
   }
 
   /**
@@ -116,6 +129,19 @@ export class SharedBudgetPool {
     this.totalTokensReserved += tokenBudget;
     this.totalCostReserved += costBudget;
     this.allocations.set(childId, allocation);
+
+    // Emit trace event for budget allocation
+    this.traceCollector?.record({
+      type: 'budget.pool',
+      data: {
+        action: 'allocate',
+        agentId: childId,
+        tokensAllocated: tokenBudget,
+        poolRemaining: this.getPoolRemaining(),
+        poolTotal: this.config.totalTokens,
+      },
+    });
+
     return allocation;
   }
 
@@ -134,6 +160,18 @@ export class SharedBudgetPool {
     this.totalTokensUsed += tokens;
     this.totalCostUsed += cost;
 
+    // Emit trace event for budget consumption
+    this.traceCollector?.record({
+      type: 'budget.pool',
+      data: {
+        action: 'consume',
+        agentId: childId,
+        tokensUsed: tokens,
+        poolRemaining: this.getPoolRemaining(),
+        poolTotal: this.config.totalTokens,
+      },
+    });
+
     return allocation.tokensUsed <= allocation.tokenBudget;
   }
 
@@ -148,6 +186,19 @@ export class SharedBudgetPool {
       this.totalTokensReserved -= allocation.tokenBudget;
       this.totalCostReserved -= allocation.costBudget;
       this.allocations.delete(childId);
+
+      // Emit trace event for budget release
+      this.traceCollector?.record({
+        type: 'budget.pool',
+        data: {
+          action: 'release',
+          agentId: childId,
+          tokensAllocated: allocation.tokenBudget,
+          tokensUsed: allocation.tokensUsed,
+          poolRemaining: this.getPoolRemaining(),
+          poolTotal: this.config.totalTokens,
+        },
+      });
     }
   }
 

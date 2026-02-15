@@ -6,6 +6,7 @@ import { generateLightweightRepoMap, type RepoMap, type CodeChunk } from '../src
 
 function createMockChunk(overrides: Partial<CodeChunk> = {}): CodeChunk {
   const filePath = overrides.filePath || 'src/index.ts';
+  const symbols = overrides.symbols ?? ['default'];
   return {
     id: filePath,
     filePath,
@@ -13,7 +14,8 @@ function createMockChunk(overrides: Partial<CodeChunk> = {}): CodeChunk {
     tokenCount: 100,
     importance: 0.5,
     type: 'core_module',
-    symbols: ['default'],
+    symbols,
+    symbolDetails: symbols.map((name) => ({ name, kind: 'symbol', exported: true, line: 0 })),
     dependencies: [],
     ...overrides,
   };

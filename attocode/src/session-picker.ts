@@ -7,6 +7,7 @@
 
 import type { SessionMetadata } from './integrations/session-store.js';
 import { logger } from './integrations/logger.js';
+import { resolve } from 'node:path';
 
 // =============================================================================
 // RAW INPUT HELPER
@@ -181,6 +182,15 @@ function getSessionDisplayName(session: SessionMetadata): string {
   return formatSessionId(session.id);
 }
 
+function isWorkspaceMismatch(session: SessionMetadata): boolean {
+  if (!session.workspacePath) return false;
+  try {
+    return resolve(session.workspacePath) !== resolve(process.cwd());
+  } catch {
+    return false;
+  }
+}
+
 // =============================================================================
 // SESSION PICKER
 // =============================================================================
@@ -279,14 +289,27 @@ export async function showQuickPicker(
 
   // eslint-disable-next-line no-console
   console.log(`\nMost recent: "${name}" (${mostRecent.messageCount} msgs, ${time})`);
+  const workspaceMismatch = isWorkspaceMismatch(mostRecent);
+  if (workspaceMismatch) {
+    // eslint-disable-next-line no-console
+    console.log(`Workspace mismatch: session=${mostRecent.workspacePath} current=${process.cwd()}`);
+  }
 
   // Use raw input to avoid conflicts with other readline instances
   // Enable debug logging to diagnose double character issue
-  const answer = await readLineRaw('Resume? [Y/n/list]: ', true);
+  const answer = await readLineRaw(workspaceMismatch ? 'Resume? [force/n/list]: ' : 'Resume? [Y/n/list]: ', true);
   const trimmed = answer.trim().toLowerCase();
 
-  if (trimmed === '' || trimmed === 'y' || trimmed === 'yes') {
+  if (!workspaceMismatch && (trimmed === '' || trimmed === 'y' || trimmed === 'yes')) {
     return { action: 'resume', sessionId: mostRecent.id };
+  }
+  if (workspaceMismatch && (trimmed === 'force' || trimmed === 'f')) {
+    return { action: 'resume', sessionId: mostRecent.id };
+  }
+  if (workspaceMismatch && (trimmed === '' || trimmed === 'y' || trimmed === 'yes')) {
+    // eslint-disable-next-line no-console
+    console.log('Starting new session (resume blocked by workspace mismatch; use "force" to override).');
+    return { action: 'new' };
   }
 
   if (trimmed === 'n' || trimmed === 'no') {

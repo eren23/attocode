@@ -1007,7 +1007,14 @@ export class SmartDecomposer {
       }
 
       if (group.length === 0) {
-        // No progress - likely a cycle, break to avoid infinite loop
+        // No progress — circular dependency detected.
+        // Force remaining tasks into sequential single-task groups
+        // so they still reach the task queue instead of silently vanishing.
+        for (const id of remaining) {
+          groups.push([id]);
+          completed.add(id);
+        }
+        remaining.clear();
         break;
       }
 

@@ -8,7 +8,8 @@ This guide covers how to extend attocode with custom tools, providers, and conte
 2. [Adding a New Provider](#adding-a-new-provider)
 3. [Adding Context Engineering Tricks](#adding-context-engineering-tricks)
 4. [Adding Integration Modules](#adding-integration-modules)
-5. [Testing Your Extensions](#testing-your-extensions)
+5. [Automating with Lifecycle Hooks](#automating-with-lifecycle-hooks)
+6. [Testing Your Extensions](#testing-your-extensions)
 
 ## Adding a New Tool
 
@@ -607,6 +608,113 @@ export interface ProductionAgentConfig {
   myIntegration?: MyIntegrationConfig | false;
 }
 ```
+
+## Automating with Lifecycle Hooks
+
+Lifecycle hooks let you trigger external actions (notifications, checks, logging) when key agent phases occur.
+
+Supported hook events include:
+
+- `run.before`, `run.after`
+- `iteration.before`, `iteration.after`
+- `completion.before`, `completion.after`
+- `recovery.before`, `recovery.after`
+- `llm.before`, `llm.after`
+- `tool.before`, `tool.after`
+
+### Hook shell config shape
+
+```json
+{
+  "hooks": {
+    "shell": {
+      "enabled": true,
+      "defaultTimeoutMs": 5000,
+      "envAllowlist": ["SLACK_WEBHOOK_URL"],
+      "commands": [
+        {
+          "id": "hook-id",
+          "event": "run.after",
+          "command": "node",
+          "args": ["./scripts/hook.js"],
+          "timeoutMs": 3000
+        }
+      ]
+    }
+  }
+}
+```
+
+Shell hooks receive JSON from stdin:
+
+```json
+{
+  "event": "run.after",
+  "payload": { "...": "event payload" }
+}
+```
+
+For `run.after`, payload includes completion fields like `success`, `reason`, and optional `details`.
+
+### Recipe 1: Notify on run completion
+
+Use `run.after` to send a webhook when runs fail:
+
+```json
+{
+  "hooks": {
+    "shell": {
+      "enabled": true,
+      "envAllowlist": ["SLACK_WEBHOOK_URL"],
+      "commands": [
+        { "event": "run.after", "command": "node", "args": ["./scripts/notify-run.js"] }
+      ]
+    }
+  }
+}
+```
+
+### Recipe 2: Trigger tests after edit tools
+
+Use `tool.after` and inspect `payload.tool` to only run tests after `write_file` / `edit_file`.
+
+```json
+{
+  "hooks": {
+    "shell": {
+      "enabled": true,
+      "commands": [
+        { "event": "tool.after", "command": "node", "args": ["./scripts/post-edit-check.js"] }
+      ]
+    }
+  }
+}
+```
+
+### Recipe 3: Alert on repeated recovery
+
+Use `recovery.before` / `recovery.after` to raise alerts when incomplete-action recovery repeats:
+
+```json
+{
+  "hooks": {
+    "shell": {
+      "enabled": true,
+      "commands": [
+        { "event": "recovery.before", "command": "node", "args": ["./scripts/recovery-alert.js"] },
+        { "event": "recovery.after", "command": "node", "args": ["./scripts/recovery-alert.js"] }
+      ]
+    }
+  }
+}
+```
+
+### Operational notes
+
+- Hook failures/timeouts do not crash the run.
+- Keep scripts fast and bounded with `timeoutMs`.
+- Use `envAllowlist` for secrets instead of broad environment exposure.
+- Match event names exactly (`run.after`, `completion.after`, `recovery.before`, etc.).
 
 ## Testing Your Extensions
 

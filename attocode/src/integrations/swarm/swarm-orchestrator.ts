@@ -22,7 +22,7 @@ import * as path from 'node:path';
 import type { LLMProvider, LLMProviderWithTools, ToolDefinitionSchema } from '../../providers/types.js';
 import type { AgentRegistry } from '../agent-registry.js';
 import type { SharedBlackboard } from '../shared-blackboard.js';
-import { createSmartDecomposer, parseDecompositionResponse, validateDecomposition, type LLMDecomposeFunction, type SmartDecompositionResult } from '../smart-decomposer.js';
+import { createSmartDecomposer, parseDecompositionResponse, validateDecomposition, type LLMDecomposeFunction, type SmartDecompositionResult, type SmartSubtask } from '../smart-decomposer.js';
 import { createResultSynthesizer } from '../result-synthesizer.js';
 import type {
   SwarmConfig,
@@ -53,6 +53,7 @@ import type { SpawnResult } from '../agent-registry.js';
 import { createSharedContextState, type SharedContextState } from '../../shared/shared-context-state.js';
 import { createSharedEconomicsState, type SharedEconomicsState } from '../../shared/shared-economics-state.js';
 import { createSharedContextEngine, type SharedContextEngine } from '../../shared/context-engine.js';
+import { classifySwarmFailure } from './failure-classifier.js';
 
 // ─── Hollow Completion Detection ──────────────────────────────────────────
 
@@ -74,6 +75,34 @@ const BOILERPLATE_INDICATORS = [
   'the task has been completed', 'done', 'completed', 'finished',
   'no issues found', 'everything looks good', 'all tasks completed',
 ];
+
+function hasFutureIntentLanguage(content: string): boolean {
+  const trimmed = content.trim();
+  if (!trimmed) return false;
+  const lower = trimmed.toLowerCase();
+  const completionSignals = /\b(done|completed|finished|created|saved|wrote|implemented|fixed|updated|added)\b/;
+  if (completionSignals.test(lower)) return false;
+  const futureIntentPatterns: RegExp[] = [
+    /\b(i\s+will|i'll|let me)\s+(create|write|save|update|modify|fix|add|edit|implement|change|run|execute|build|continue)\b/,
+    /\b(i\s+need to|i\s+should|i\s+can)\s+(create|write|update|modify|fix|add|edit|implement|continue)\b/,
+    /\b(next step|remaining work|still need|to be done)\b/,
+    /\b(i am going to|i'm going to)\b/,
+  ];
+  return futureIntentPatterns.some(p => p.test(lower));
+}
+
+function repoLooksUnscaffolded(baseDir: string): boolean {
+  try {
+    const packageJson = path.join(baseDir, 'package.json');
+    const srcDir = path.join(baseDir, 'src');
+    if (!fs.existsSync(packageJson) && !fs.existsSync(srcDir)) {
+      return true;
+    }
+  } catch {
+    return false;
+  }
+  return false;
+}
 
 export function isHollowCompletion(spawnResult: SpawnResult, taskType?: string, swarmConfig?: import('./types.js').SwarmConfig): boolean {
   // Timeout uses toolCalls === -1, not hollow
@@ -252,7 +281,7 @@ export class SwarmOrchestrator {
     }
 
     // C1: Build LLM decompose function with explicit JSON schema
-    const llmDecompose: LLMDecomposeFunction = async (task, _context) => {
+    const llmDecompose: LLMDecomposeFunction = async (task, context) => {
       // V7: Dynamically build the allowed type list from built-in + user-defined types
       const builtinTypes = ['research', 'analysis', 'design', 'implement', 'test', 'refactor', 'review', 'document', 'integrate', 'deploy', 'merge'];
       const customTypes = Object.keys(this.config.taskTypes ?? {}).filter(t => !builtinTypes.includes(t));
@@ -273,6 +302,28 @@ export class SwarmOrchestrator {
         customTypeSection = `\n\nCustom task types available:\n${descriptions}\nUse these when their description matches the subtask's purpose.`;
       }
 
+      // Build codebase context section from repo map if available
+      let codebaseSection = '';
+      if (context.repoMap) {
+        const map = context.repoMap;
+        const topFiles = Array.from(map.chunks.values())
+          .sort((a, b) => b.importance - a.importance)
+          .slice(0, 30)
+          .map(c => `  - ${c.filePath} (${c.type}, ${c.tokenCount} tokens, importance: ${c.importance.toFixed(2)})`);
+
+        codebaseSection = `
+
+CODEBASE STRUCTURE (${map.chunks.size} files, ${map.totalTokens} total tokens):
+Entry points: ${map.entryPoints.slice(0, 5).join(', ')}
+Core modules: ${map.coreModules.slice(0, 5).join(', ')}
+Key files:
+${topFiles.join('\n')}
+
+CRITICAL: Your subtasks MUST reference actual files from this codebase.
+Do NOT invent new project scaffolding or create files that don't relate to the existing codebase.
+Decompose the work based on what ALREADY EXISTS in the project.`;
+      }
+
       const systemPrompt = `You are a task decomposition expert. Break down the given task into well-defined subtasks with clear dependencies.
 
 CRITICAL: Dependencies MUST use zero-based integer indices referring to other subtasks in the array.
@@ -291,7 +342,7 @@ Respond with valid JSON matching this exact schema:
   ],
   "strategy": "sequential" | "parallel" | "hierarchical" | "adaptive" | "pipeline",
   "reasoning": "Brief explanation of why this decomposition was chosen"
-}${customTypeSection}
+}${customTypeSection}${codebaseSection}
 
 EXAMPLE 1 — Research task (3 parallel research + 1 merge):
 {
@@ -440,8 +491,12 @@ Rules:
     for (const listener of this.listeners) {
       try {
         listener(event);
-      } catch {
-        // Don't let listener errors break the orchestrator
+      } catch (err) {
+        // Don't let listener errors break the orchestrator, but log for debugging
+        const msg = err instanceof Error ? err.message : String(err);
+        if (process.env.DEBUG) {
+          console.error(`[SwarmOrchestrator] Listener error on ${event.type}: ${msg}`);
+        }
       }
     }
   }
@@ -497,12 +552,33 @@ Rules:
       // Phase 1: Decompose
       this.currentPhase = 'decomposing';
       this.emit({ type: 'swarm.phase.progress', phase: 'decomposing', message: 'Decomposing task into subtasks...' });
-      let decomposeOutcome = await this.decompose(task);
+      const decomposeOutcome = await this.decompose(task);
       if (!decomposeOutcome.result) {
         this.currentPhase = 'failed';
         return this.buildErrorResult(`Decomposition failed: ${decomposeOutcome.failureReason}`);
       }
       let decomposition = decomposeOutcome.result;
+
+      // If repository is mostly empty, force a scaffold-first dependency chain
+      // so implementation tasks don't immediately fail on missing files.
+      if (repoLooksUnscaffolded(this.config.facts?.workingDirectory ?? process.cwd())) {
+        const scaffoldTask = decomposition.subtasks.find(st =>
+          /\b(scaffold|bootstrap|initialize|setup|set up|project scaffold)\b/i.test(st.description)
+        );
+        if (scaffoldTask) {
+          for (const subtask of decomposition.subtasks) {
+            if (subtask.id === scaffoldTask.id) continue;
+            if (!subtask.dependencies.includes(scaffoldTask.id)) {
+              subtask.dependencies.push(scaffoldTask.id);
+            }
+          }
+          this.logDecision(
+            'scaffold-first',
+            `Repo appears unscaffolded; enforcing scaffold task ${scaffoldTask.id} as prerequisite`,
+            ''
+          );
+        }
+      }
 
       // F5: Validate decomposition — check for cycles, invalid deps, granularity
       const validation = validateDecomposition(decomposition);
@@ -669,9 +745,16 @@ Rules:
       const hasArtifacts = (this.artifactInventory?.totalFiles ?? 0) > 0;
       this.emit({ type: 'swarm.complete', stats: executionStats, errors: this.errors, artifactInventory: this.artifactInventory });
 
+      // Success requires completing at least 70% of tasks (not just > 0)
+      const completionRatio = executionStats.totalTasks > 0
+        ? executionStats.completedTasks / executionStats.totalTasks
+        : 0;
+      const isSuccess = completionRatio >= 0.7;
+      const isPartialSuccess = !isSuccess && executionStats.completedTasks > 0;
+
       return {
-        success: executionStats.completedTasks > 0,
-        partialSuccess: !executionStats.completedTasks && hasArtifacts,
+        success: isSuccess,
+        partialSuccess: isPartialSuccess || (!executionStats.completedTasks && hasArtifacts),
         partialFailure: executionStats.failedTasks > 0,
         synthesisResult: synthesisResult ?? undefined,
         artifactInventory: this.artifactInventory,
@@ -700,21 +783,48 @@ Rules:
    */
   private async decompose(task: string): Promise<{ result: SmartDecompositionResult; failureReason?: undefined } | { result: null; failureReason: string }> {
     try {
-      const result = await this._decomposer.decompose(task);
+      const repoMap = this.config.codebaseContext?.getRepoMap() ?? undefined;
+      const result = await this._decomposer.decompose(task, {
+        repoMap,
+      });
 
       if (result.subtasks.length < 2) {
         const reason = result.subtasks.length === 0
-          ? `LLM decomposition produced 0 subtasks (model: ${this.config.orchestratorModel}). Check errors above for response details.`
+          ? `Decomposition produced 0 subtasks (model: ${this.config.orchestratorModel}).`
           : `Decomposition produced only ${result.subtasks.length} subtask — too few for swarm mode.`;
         this.logDecision('decomposition', `Insufficient subtasks: ${result.subtasks.length}`, reason);
-        return { result: null, failureReason: reason };
+
+        try {
+          const lastResortResult = await this.lastResortDecompose(task);
+          if (lastResortResult && lastResortResult.subtasks.length >= 2) {
+            this.logDecision('decomposition',
+              `Last-resort decomposition succeeded: ${lastResortResult.subtasks.length} subtasks`,
+              'Recovered from insufficient primary decomposition');
+            return { result: lastResortResult };
+          }
+        } catch (error) {
+          this.logDecision('decomposition',
+            'Last-resort decomposition failed after insufficient primary decomposition',
+            (error as Error).message);
+        }
+
+        const fallback = this.buildEmergencyDecomposition(task, reason);
+        this.emit({
+          type: 'swarm.phase.progress',
+          phase: 'decomposing',
+          message: `Using emergency decomposition fallback (${this.classifyDecompositionFailure(reason)})`,
+        });
+        this.logDecision('decomposition',
+          `Using emergency scaffold decomposition: ${fallback.subtasks.length} subtasks`,
+          'Swarm will continue with deterministic fallback tasks');
+        return { result: fallback };
       }
 
-      // Non-LLM results (heuristic fallback) are always rejected —
-      // try one last-resort LLM call with a simplified prompt instead
+      // Non-LLM result means decomposer fell back to heuristic mode.
+      // Prefer a simplified LLM decomposition, but continue with heuristic fallback when needed.
       if (!result.metadata.llmAssisted) {
         this.logDecision('decomposition',
-          'Rejected heuristic fallback — attempting last-resort simplified LLM decomposition',
+          'Heuristic decomposition detected — attempting last-resort simplified LLM decomposition',
           `Model: ${this.config.orchestratorModel}`);
 
         try {
@@ -731,9 +841,15 @@ Rules:
             (error as Error).message);
         }
 
-        const reason = `LLM decomposition failed after all attempts (model: ${this.config.orchestratorModel}). Heuristic fallback rejected.`;
-        this.logDecision('decomposition', 'All decomposition attempts exhausted', reason);
-        return { result: null, failureReason: reason };
+        this.logDecision('decomposition',
+          `Continuing with heuristic decomposition: ${result.subtasks.length} subtasks`,
+          'Fallback is acceptable; do not abort swarm');
+        this.emit({
+          type: 'swarm.phase.progress',
+          phase: 'decomposing',
+          message: `Continuing with heuristic decomposition (${this.classifyDecompositionFailure('heuristic fallback')})`,
+        });
+        return { result };
       }
 
       // Flat-DAG detection: warn when all tasks land in wave 0 with no dependencies
@@ -750,11 +866,113 @@ Rules:
       this.errors.push({
         phase: 'decomposition',
         message,
-        recovered: false,
+        recovered: true,
       });
-      this.emit({ type: 'swarm.error', error: message, phase: 'decomposition' });
-      return { result: null, failureReason: `Decomposition threw an error: ${message}` };
+      const fallback = this.buildEmergencyDecomposition(task, `Decomposition threw an error: ${message}`);
+      this.emit({
+        type: 'swarm.phase.progress',
+        phase: 'decomposing',
+        message: `Decomposition fallback due to ${this.classifyDecompositionFailure(message)}`,
+      });
+      this.logDecision('decomposition',
+        `Decomposition threw error; using emergency scaffold decomposition (${fallback.subtasks.length} subtasks)`,
+        message);
+      return { result: fallback };
     }
+  }
+
+  private classifyDecompositionFailure(message: string): 'rate_limit' | 'provider_budget_limit' | 'parse_failure' | 'validation_failure' | 'other' {
+    const m = message.toLowerCase();
+    if (m.includes('429') || m.includes('too many requests') || m.includes('rate limit')) {
+      return 'rate_limit';
+    }
+    if (m.includes('402') || m.includes('spend limit') || m.includes('key limit exceeded') || m.includes('insufficient credits')) {
+      return 'provider_budget_limit';
+    }
+    if (m.includes('parse') || m.includes('json') || m.includes('subtasks')) {
+      return 'parse_failure';
+    }
+    if (m.includes('invalid') || m.includes('validation')) {
+      return 'validation_failure';
+    }
+    return 'other';
+  }
+
+  /**
+   * Deterministic decomposition fallback when all LLM decomposition paths fail.
+   * Keeps swarm mode alive with visible scaffolding tasks instead of aborting.
+   */
+  private buildEmergencyDecomposition(task: string, reason: string): SmartDecompositionResult {
+    const normalizer = createSmartDecomposer({ detectConflicts: true });
+    const taskLabel = task.trim().slice(0, 140) || 'requested task';
+    const repoMap = this.config.codebaseContext?.getRepoMap();
+    const topFiles = repoMap
+      ? Array.from(repoMap.chunks.values())
+        .sort((a, b) => b.importance - a.importance)
+        .slice(0, 10)
+        .map(c => c.filePath)
+      : [];
+
+    const subtasks: SmartSubtask[] = [
+      {
+        id: 'task-fb-0',
+        description: `Scaffold implementation plan and identify target files for: ${taskLabel}`,
+        status: 'ready',
+        dependencies: [],
+        complexity: 2,
+        type: 'design',
+        parallelizable: true,
+        relevantFiles: topFiles.slice(0, 5),
+      },
+      {
+        id: 'task-fb-1',
+        description: `Implement core code changes for: ${taskLabel}`,
+        status: 'blocked',
+        dependencies: ['task-fb-0'],
+        complexity: 5,
+        type: 'implement',
+        parallelizable: false,
+        relevantFiles: topFiles.slice(0, 8),
+      },
+      {
+        id: 'task-fb-2',
+        description: `Add or update tests and run validation for: ${taskLabel}`,
+        status: 'blocked',
+        dependencies: ['task-fb-1'],
+        complexity: 3,
+        type: 'test',
+        parallelizable: false,
+        relevantFiles: topFiles.slice(0, 8),
+      },
+      {
+        id: 'task-fb-3',
+        description: `Integrate results and produce final summary for: ${taskLabel}`,
+        status: 'blocked',
+        dependencies: ['task-fb-1', 'task-fb-2'],
+        complexity: 2,
+        type: 'integrate',
+        parallelizable: false,
+        relevantFiles: topFiles.slice(0, 5),
+      },
+    ];
+
+    const dependencyGraph = normalizer.buildDependencyGraph(subtasks);
+    const conflicts = normalizer.detectConflicts(subtasks);
+
+    return {
+      originalTask: task,
+      subtasks,
+      dependencyGraph,
+      conflicts,
+      strategy: 'adaptive',
+      totalComplexity: subtasks.reduce((sum, s) => sum + s.complexity, 0),
+      totalEstimatedTokens: subtasks.length * 4000,
+      metadata: {
+        decomposedAt: new Date(),
+        codebaseAware: !!repoMap,
+        llmAssisted: false,
+      },
+    };
   }
 
   /**
@@ -762,14 +980,25 @@ Rules:
    * Uses shorter context, no examples, minimal schema, and lower maxTokens to avoid truncation.
    */
   private async lastResortDecompose(task: string): Promise<SmartDecompositionResult | null> {
+    // Include codebase grounding if repo map is available
+    let codebaseHint = '';
+    const repoMap = this.config.codebaseContext?.getRepoMap();
+    if (repoMap) {
+      const topFiles = Array.from(repoMap.chunks.values())
+        .sort((a, b) => b.importance - a.importance)
+        .slice(0, 10)
+        .map(c => c.filePath);
+      codebaseHint = `\nKey project files: ${topFiles.join(', ')}\nReference actual files in subtask descriptions.`;
+    }
+
     const simplifiedPrompt = `Break this task into 2-6 subtasks. Return ONLY raw JSON, no markdown.
 
-{"subtasks":[{"description":"...","type":"implement","complexity":3,"dependencies":[],"parallelizable":true}],"strategy":"adaptive","reasoning":"..."}
+{"subtasks":[{"description":"...","type":"implement","complexity":3,"dependencies":[],"parallelizable":true,"relevantFiles":["src/..."]}],"strategy":"adaptive","reasoning":"..."}
 
 Rules:
 - dependencies: integer indices (e.g. [0] means depends on first subtask)
 - type: one of research/implement/test/design/refactor/integrate/merge
-- At least 2 subtasks`;
+- At least 2 subtasks${codebaseHint}`;
 
     const response = await this.provider.chat(
       [
@@ -1193,14 +1422,16 @@ Respond with JSON: { "fixups": [{ "description": "what to fix", "type": "impleme
     });
 
     // Reset orphaned dispatched tasks — their workers died with the previous process
-    let resetCount = 0;
-    for (const task of this.taskQueue.getAllTasks()) {
-      if (task.status === 'dispatched') {
-        task.status = 'ready';
-        // Preserve at least 1 retry attempt
-        task.attempts = Math.min(task.attempts, Math.max(0, this.config.workerRetries - 1));
-        resetCount++;
-      }
+    const resetIds = this.taskQueue.reconcileStaleDispatched({
+      staleAfterMs: 0,
+      activeTaskIds: new Set<string>(),
+    });
+    const resetCount = resetIds.length;
+    for (const taskId of resetIds) {
+      const task = this.taskQueue.getTask(taskId);
+      if (!task) continue;
+      // Preserve at least 1 retry attempt
+      task.attempts = Math.min(task.attempts, Math.max(0, this.config.workerRetries - 1));
     }
     if (resetCount > 0) {
       this.logDecision('resume', `Reset ${resetCount} orphaned dispatched tasks to ready`, 'Workers died with previous process');
@@ -1274,9 +1505,16 @@ Respond with JSON: { "fixups": [{ "description": "what to fix", "type": "impleme
     const hasArtifacts = (this.artifactInventory?.totalFiles ?? 0) > 0;
     this.emit({ type: 'swarm.complete', stats: executionStats, errors: this.errors, artifactInventory: this.artifactInventory });
 
+    // Success requires completing at least 70% of tasks (not just > 0)
+    const completionRatio = executionStats.totalTasks > 0
+      ? executionStats.completedTasks / executionStats.totalTasks
+      : 0;
+    const isSuccess = completionRatio >= 0.7;
+    const isPartialSuccess = !isSuccess && executionStats.completedTasks > 0;
+
     return {
-      success: executionStats.completedTasks > 0,
-      partialSuccess: !executionStats.completedTasks && hasArtifacts,
+      success: isSuccess,
+      partialSuccess: isPartialSuccess || (!executionStats.completedTasks && hasArtifacts),
       partialFailure: executionStats.failedTasks > 0,
       synthesisResult: synthesisResult ?? undefined,
       artifactInventory: this.artifactInventory,
@@ -1295,8 +1533,21 @@ Respond with JSON: { "fixups": [{ "description": "what to fix", "type": "impleme
   private async executeWaves(): Promise<void> {
     let waveIndex = this.taskQueue.getCurrentWave();
     const totalWaves = this.taskQueue.getTotalWaves();
+    const dispatchLeaseStaleMs = this.config.dispatchLeaseStaleMs ?? 5 * 60 * 1000;
 
     while (waveIndex < totalWaves && !this.cancelled) {
+      const activeTaskIds = new Set(this.workerPool.getActiveWorkerStatus().map(w => w.taskId));
+      const recovered = this.taskQueue.reconcileStaleDispatched({
+        staleAfterMs: dispatchLeaseStaleMs,
+        activeTaskIds,
+      });
+      if (recovered.length > 0) {
+        this.logDecision(
+          'lease-recovery',
+          `Recovered ${recovered.length} stale dispatched task(s)`,
+          recovered.join(', '),
+        );
+      }
       const readyTasks = this.taskQueue.getReadyTasks();
       const queueStats = this.taskQueue.getStats();
 
@@ -1734,20 +1985,20 @@ Respond with JSON: { "fixups": [{ "description": "what to fix", "type": "impleme
 
     if (!spawnResult.success) {
       // V2: Record model health
-      const errorMsg = spawnResult.output.toLowerCase();
-      const is429 = errorMsg.includes('429') || errorMsg.includes('rate');
-      const is402 = errorMsg.includes('402') || errorMsg.includes('spend limit');
-      const isTimeout = spawnResult.metrics.toolCalls === -1;
-      // F25: Use 'timeout' errorType for timeouts (was 'error')
-      const errorType = is429 ? '429' : is402 ? '402' : isTimeout ? 'timeout' : 'error';
-      this.healthTracker.recordFailure(model, errorType as '429' | '402' | 'timeout' | 'error');
+      const failure = classifySwarmFailure(spawnResult.output, spawnResult.metrics.toolCalls);
+      const { failureClass, retryable, errorType, failureMode, reason } = failure;
+      const isTimeout = failureMode === 'timeout';
+      const isRateLimited = failureClass === 'rate_limited';
+      const isSpendLimit = failureClass === 'provider_spend_limit';
+      const isNonRetryable = !retryable;
+      this.healthTracker.recordFailure(model, errorType);
       this.emit({ type: 'swarm.model.health', record: { model, ...this.getModelHealthSummary(model) } });
 
       // P6: Tag failure mode for cascade threshold awareness
-      task.failureMode = (is429 || is402) ? 'rate-limit' : (spawnResult.metrics.toolCalls === -1 ? 'timeout' : 'error');
+      task.failureMode = failureMode;
 
-      // Feed circuit breaker
-      if (is429 || is402) {
+      // Feed circuit breaker only for retryable rate limiting
+      if (isRateLimited) {
         this.recordRateLimit();
       }
 
@@ -1799,6 +2050,9 @@ Respond with JSON: { "fixups": [{ "description": "what to fix", "type": "impleme
               maxAttempts: maxDispatches,
               willRetry: false,
               failureMode: 'timeout',
+              failureClass: 'timeout',
+              retrySuppressed: true,
+              retryReason: 'Consecutive timeout limit reached with no alternative model',
             });
             this.logDecision('timeout-early-fail', `${taskId}: ${count} consecutive timeouts, no alt model — resilience recovery also failed`, '');
             this.taskTimeoutCounts.delete(taskId);
@@ -1810,8 +2064,8 @@ Respond with JSON: { "fixups": [{ "description": "what to fix", "type": "impleme
         this.taskTimeoutCounts.delete(taskId);
       }
 
-      // V2: Model failover on rate limits
-      if ((is429 || is402) && this.config.enableModelFailover) {
+      // V2: Model failover on retryable rate limits
+      if (isRateLimited && this.config.enableModelFailover) {
         const capability: WorkerCapability = getTaskTypeConfig(task.type, this.config).capability ?? 'code';
         const alternative = selectAlternativeModel(this.config.workers, model, capability, this.healthTracker);
         if (alternative) {
@@ -1828,7 +2082,7 @@ Respond with JSON: { "fixups": [{ "description": "what to fix", "type": "impleme
       }
 
       // V5/V7: Store error context so retry gets different prompt
-      if (!(is429 || is402)) {
+      if (!(isRateLimited || isSpendLimit)) {
         // V7: Timeout-specific feedback — the worker WAS working, just ran out of time
         const timeoutSeconds = isTimeout ? Math.round(durationMs / 1000) : 0;
         task.retryContext = {
@@ -1854,21 +2108,26 @@ Respond with JSON: { "fixups": [{ "description": "what to fix", "type": "impleme
       // Worker failed — use higher retry limit for rate limit errors.
       // V7: Fixup tasks get capped retries, foundation tasks get +1.
       const baseRetries = this.getEffectiveRetries(task);
-      const retryLimit = (is429 || is402)
+      const retryLimit = isNonRetryable
+        ? 0
+        : isRateLimited
         ? Math.min(this.config.rateLimitRetries ?? 3, baseRetries + 1)
         : baseRetries;
       const canRetry = this.taskQueue.markFailedWithoutCascade(taskId, retryLimit);
+      if (isNonRetryable) {
+        this.logDecision('retry-suppressed', `${taskId}: ${failureClass}`, reason);
+      }
       if (canRetry) {
         this.retries++;
 
         // Non-blocking cooldown: set retryAfter timestamp instead of blocking
-        if (is429 || is402) {
+        if (isRateLimited) {
           const baseDelay = this.config.retryBaseDelayMs ?? 5000;
           const cooldownMs = Math.min(baseDelay * Math.pow(2, task.attempts - 1), 30000);
           this.taskQueue.setRetryAfter(taskId, cooldownMs);
           this.logDecision('rate-limit-cooldown', `${taskId}: ${errorType} cooldown ${cooldownMs}ms, model ${model}`, '');
         }
-      } else if (!(is429 || is402)) {
+      } else if (!isRateLimited) {
         // Resilience recovery for non-rate-limit errors (micro-decompose + degraded acceptance)
         if (await this.tryResilienceRecovery(task, taskId, taskResult, spawnResult)) {
           return;
@@ -1890,6 +2149,9 @@ Respond with JSON: { "fixups": [{ "description": "what to fix", "type": "impleme
         toolCalls: spawnResult.metrics.toolCalls,
         failoverModel: task.assignedModel !== model ? task.assignedModel : undefined,
         failureMode: task.failureMode,
+        failureClass,
+        retrySuppressed: isNonRetryable,
+        retryReason: reason,
       });
       return;
     }
@@ -2364,6 +2626,66 @@ Respond with JSON: { "fixups": [{ "description": "what to fix", "type": "impleme
           return;
         }
       }
+    }
+
+    // Final completion guard: block "narrative success" for action tasks.
+    const completionGuard = this.config.completionGuard ?? {};
+    const rejectFutureIntentOutputs = completionGuard.rejectFutureIntentOutputs ?? true;
+    const requireConcreteArtifactsForActionTasks = completionGuard.requireConcreteArtifactsForActionTasks ?? true;
+    const typeConfig = getTaskTypeConfig(task.type, this.config);
+    const artifactReport = checkArtifactsEnhanced(task, taskResult);
+    const filesOnDisk = artifactReport.files.filter(f => f.exists && f.sizeBytes > 0).length;
+    const hasConcreteArtifacts = filesOnDisk > 0 || (taskResult.filesModified?.length ?? 0) > 0;
+    const isActionTask = !!typeConfig.requiresToolCalls;
+
+    if (rejectFutureIntentOutputs && hasFutureIntentLanguage(taskResult.output ?? '')) {
+      taskResult.qualityScore = 1;
+      taskResult.qualityFeedback = 'Completion rejected: output indicates pending, unexecuted work';
+      const canRetry = this.taskQueue.markFailedWithoutCascade(taskId, effectiveRetries);
+      if (canRetry) {
+        this.retries++;
+      } else {
+        if (await this.tryResilienceRecovery(task, taskId, taskResult, spawnResult)) {
+          return;
+        }
+        this.taskQueue.triggerCascadeSkip(taskId);
+      }
+      this.emit({
+        type: 'swarm.quality.rejected',
+        taskId,
+        score: 1,
+        feedback: taskResult.qualityFeedback,
+        artifactCount: filesOnDisk,
+        outputLength: taskResult.output.length,
+        preFlightReject: true,
+        filesOnDisk,
+      });
+      return;
+    }
+
+    if (requireConcreteArtifactsForActionTasks && isActionTask && !hasConcreteArtifacts) {
+      taskResult.qualityScore = 1;
+      taskResult.qualityFeedback = 'Completion rejected: action task produced no concrete artifacts';
+      const canRetry = this.taskQueue.markFailedWithoutCascade(taskId, effectiveRetries);
+      if (canRetry) {
+        this.retries++;
+      } else {
+        if (await this.tryResilienceRecovery(task, taskId, taskResult, spawnResult)) {
+          return;
+        }
+        this.taskQueue.triggerCascadeSkip(taskId);
+      }
+      this.emit({
+        type: 'swarm.quality.rejected',
+        taskId,
+        score: 1,
+        feedback: taskResult.qualityFeedback,
+        artifactCount: filesOnDisk,
+        outputLength: taskResult.output.length,
+        preFlightReject: true,
+        filesOnDisk,
+      });
+      return;
     }
 
     // Task passed — mark completed
@@ -3245,7 +3567,13 @@ Return ONLY the JSON object, no other text.`;
     const hadToolCalls = toolCalls > 0 || toolCalls === -1
       || (taskResult.filesModified && taskResult.filesModified.length > 0);
 
-    if (hasArtifacts || hadToolCalls) {
+    const isNarrativeOnly = hasFutureIntentLanguage(taskResult.output ?? '');
+    const typeConfig = getTaskTypeConfig(task.type, this.config);
+    const actionTaskNeedsArtifacts = (this.config.completionGuard?.requireConcreteArtifactsForActionTasks ?? true)
+      && !!typeConfig.requiresToolCalls;
+    const allowDegradedWithoutArtifacts = !actionTaskNeedsArtifacts && hadToolCalls && !isNarrativeOnly;
+
+    if (hasArtifacts || allowDegradedWithoutArtifacts) {
       // Accept with degraded flag — prevents cascade-skip of dependents
       taskResult.success = true;
       taskResult.degraded = true;

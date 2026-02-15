@@ -28,6 +28,7 @@ import { createComponentLogger } from '../integrations/logger.js';
 export const PARALLELIZABLE_TOOLS = new Set([
   'read_file', 'glob', 'grep', 'list_files', 'search_files',
   'search_code', 'get_file_info',
+  'task_create', 'task_update', 'task_get', 'task_list',
 ]);
 
 /**
@@ -637,6 +638,15 @@ export async function executeSingleToolCall(
       error,
       intent: `Execute tool ${toolCall.name}`,
     });
+
+    // FILE CACHE INVALIDATION ON FAILURE — ensure stale cache doesn't cause repeated failures
+    if (ctx.fileCache && ['write_file', 'edit_file'].includes(toolCall.name)) {
+      const args = toolCall.arguments as Record<string, unknown>;
+      const filePath = String(args.path || args.file_path || '');
+      if (filePath) {
+        ctx.fileCache.invalidate(filePath);
+      }
+    }
 
     // Self-improvement: enhance error message with diagnosis
     if (ctx.selfImprovement) {

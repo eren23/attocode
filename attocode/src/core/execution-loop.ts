@@ -10,6 +10,7 @@
 
 import type {
   Message,
+  OpenTaskSummary,
 } from '../types.js';
 
 import { isFeatureEnabled } from '../defaults.js';
@@ -23,12 +24,31 @@ import {
   stableStringify,
   type InjectionSlot,
 } from '../integrations/index.js';
+import { detectIncompleteActionResponse } from './completion-analyzer.js';
+export { detectIncompleteActionResponse } from './completion-analyzer.js';
 
 import { createComponentLogger } from '../integrations/logger.js';
 import { validateSyntax } from '../integrations/edit-validator.js';
 import * as fs from 'node:fs';
 
 const log = createComponentLogger('ExecutionLoop');
+
+export type ExecutionTerminationReason =
+  | 'completed'
+  | 'resource_limit'
+  | 'budget_limit'
+  | 'max_iterations'
+  | 'hard_context_limit'
+  | 'incomplete_action'
+  | 'open_tasks'
+  | 'error';
+
+export interface ExecutionLoopResult {
+  success: boolean;
+  terminationReason: ExecutionTerminationReason;
+  failureReason?: string;
+  openTasks?: OpenTaskSummary;
+}
 
 // =============================================================================
 // HELPER FUNCTIONS (extracted from ProductionAgent private methods)
@@ -112,23 +132,13 @@ export function isRequestedArtifactMissing(
   return !artifactWriteTools.some(toolName => executedToolNames.has(toolName));
 }
 
-/**
- * Detect "future-intent" responses that imply the model has not completed work.
- */
-export function detectIncompleteActionResponse(content: string): boolean {
-  const trimmed = content.trim();
-  if (!trimmed) return false;
-
-  const lower = trimmed.toLowerCase();
-  const futureIntentPatterns: RegExp[] = [
-    /^(now|next|then)\s+(i\s+will|i'll|let me)\b/,
-    /^i\s+(will|am going to|can)\b/,
-    /^(let me|i'll|i will)\s+(create|write|save|do|make|generate|start)\b/,
-    /^(now|next|then)\s+i(?:'ll| will)\b/,
-  ];
-  const completionSignals = /\b(done|completed|finished|here is|created|saved|wrote)\b/;
-
-  return futureIntentPatterns.some(pattern => pattern.test(lower)) && !completionSignals.test(lower);
+function getOpenTaskSummary(ctx: AgentContext): OpenTaskSummary | undefined {
+  if (!ctx.taskManager) return undefined;
+  const tasks = ctx.taskManager.list();
+  const pending = tasks.filter(t => t.status === 'pending').length;
+  const inProgress = tasks.filter(t => t.status === 'in_progress').length;
+  const blocked = tasks.filter(t => t.status === 'pending' && ctx.taskManager?.isBlocked(t.id)).length;
+  return { pending, inProgress, blocked };
 }
 
 // =============================================================================
@@ -148,9 +158,25 @@ export async function executeDirectly(
   messages: Message[],
   ctx: AgentContext,
   mutators: AgentContextMutators,
-): Promise<void> {
+): Promise<ExecutionLoopResult> {
   // Reset economics for new task
   ctx.economics?.reset();
+  const taskLeaseStaleMs = typeof ctx.config.resilience === 'object'
+    ? (ctx.config.resilience.taskLeaseStaleMs ?? 5 * 60 * 1000)
+    : 5 * 60 * 1000;
+
+  // Recover orphaned in-progress tasks left behind by interrupted runs.
+  if (ctx.taskManager) {
+    const recovered = ctx.taskManager.reconcileStaleInProgress({
+      staleAfterMs: taskLeaseStaleMs,
+      reason: 'execution_loop_start',
+    });
+    if (recovered.reconciled > 0) {
+      log.info('Recovered stale in-progress tasks at execution start', {
+        recovered: recovered.reconciled,
+      });
+    }
+  }
 
   // Reflection configuration
   const reflectionConfig = ctx.config.reflection;
@@ -168,6 +194,10 @@ export async function executeDirectly(
   let incompleteActionRetries = 0;
   const requestedArtifact = extractRequestedArtifact(task);
   const executedToolNames = new Set<string>();
+  let result: ExecutionLoopResult = {
+    success: true,
+    terminationReason: 'completed',
+  };
 
   // Outer loop for reflection (if enabled)
   while (reflectionAttempt < maxReflectionAttempts) {
@@ -176,6 +206,7 @@ export async function executeDirectly(
     // Agent loop - uses economics-based budget checking
     while (true) {
       ctx.state.iteration++;
+      ctx.emit({ type: 'iteration.before', iteration: ctx.state.iteration });
 
       // Record iteration start for tracing
       ctx.traceCollector?.record({
@@ -201,7 +232,13 @@ export async function executeDirectly(
             status: resourceCheck.status,
             message: resourceCheck.message,
           });
-          ctx.emit({ type: 'error', error: resourceCheck.message || 'Resource limit exceeded' });
+          const reason = resourceCheck.message || 'Resource limit exceeded';
+          ctx.emit({ type: 'error', error: reason });
+          result = {
+            success: false,
+            terminationReason: 'resource_limit',
+            failureReason: reason,
+          };
           break;
         }
 
@@ -324,9 +361,21 @@ export async function executeDirectly(
             const iterMsg = ctx.parentIterations > 0
               ? `${ctx.state.iteration} + ${ctx.parentIterations} parent = ${totalIter}`
               : `${ctx.state.iteration}`;
-            ctx.emit({ type: 'error', error: `Max iterations reached (${iterMsg})` });
+            const reason = `Max iterations reached (${iterMsg})`;
+            ctx.emit({ type: 'error', error: reason });
+            result = {
+              success: false,
+              terminationReason: 'max_iterations',
+              failureReason: reason,
+            };
           } else {
-            ctx.emit({ type: 'error', error: budgetCheck.reason || 'Budget exceeded' });
+            const reason = budgetCheck.reason || 'Budget exceeded';
+            ctx.emit({ type: 'error', error: reason });
+            result = {
+              success: false,
+              terminationReason: 'budget_limit',
+              failureReason: reason,
+            };
           }
           break;
         }
@@ -341,11 +390,19 @@ export async function executeDirectly(
       } else {
         // Fallback to simple iteration check
         if (ctx.getTotalIterations() >= ctx.config.maxIterations) {
+          const totalIter = ctx.getTotalIterations();
+          const reason = `Max iterations reached (${totalIter})`;
           ctx.observability?.logger?.warn('Max iterations reached', {
             iteration: ctx.state.iteration,
             parentIterations: ctx.parentIterations,
-            total: ctx.getTotalIterations(),
+            total: totalIter,
           });
+          ctx.emit({ type: 'error', error: reason });
+          result = {
+            success: false,
+            terminationReason: 'max_iterations',
+            failureReason: reason,
+          };
           break;
         }
       }
@@ -762,11 +819,25 @@ export async function executeDirectly(
           && (incompleteAction || missingRequiredArtifact);
 
         if (shouldRecoverIncompleteAction) {
+          ctx.emit({
+            type: 'completion.before',
+            reason: missingRequiredArtifact && requestedArtifact
+              ? `missing_requested_artifact:${requestedArtifact}`
+              : 'future_intent_without_action',
+            attempt: incompleteActionRetries + 1,
+            maxAttempts: MAX_INCOMPLETE_ACTION_RETRIES,
+          });
           if (incompleteActionRetries < MAX_INCOMPLETE_ACTION_RETRIES) {
             incompleteActionRetries++;
             const reason = missingRequiredArtifact && requestedArtifact
               ? `missing_requested_artifact:${requestedArtifact}`
               : 'future_intent_without_action';
+            ctx.emit({
+              type: 'recovery.before',
+              reason,
+              attempt: incompleteActionRetries,
+              maxAttempts: MAX_INCOMPLETE_ACTION_RETRIES,
+            });
             ctx.emit({
               type: 'resilience.incomplete_action_detected',
               reason,
@@ -788,6 +859,12 @@ export async function executeDirectly(
             };
             messages.push(nudgeMessage);
             ctx.state.messages.push(nudgeMessage);
+            ctx.emit({
+              type: 'iteration.after',
+              iteration: ctx.state.iteration,
+              hadToolCalls: false,
+              completionCandidate: false,
+            });
             continue;
           }
 
@@ -800,13 +877,37 @@ export async function executeDirectly(
             attempts: incompleteActionRetries,
             maxAttempts: MAX_INCOMPLETE_ACTION_RETRIES,
           });
-          throw new Error(`LLM failed to complete requested action after ${incompleteActionRetries} retries (${failureReason})`);
+          ctx.emit({
+            type: 'recovery.after',
+            reason: failureReason,
+            recovered: false,
+            attempts: incompleteActionRetries,
+          });
+          const reason = `LLM failed to complete requested action after ${incompleteActionRetries} retries (${failureReason})`;
+          result = {
+            success: false,
+            terminationReason: 'incomplete_action',
+            failureReason: reason,
+          };
+          ctx.emit({
+            type: 'completion.after',
+            success: false,
+            reason: 'incomplete_action',
+            details: reason,
+          });
+          throw new Error(reason);
         }
 
         if (incompleteActionRetries > 0) {
           ctx.emit({
             type: 'resilience.incomplete_action_recovered',
             reason: 'incomplete_action',
+            attempts: incompleteActionRetries,
+          });
+          ctx.emit({
+            type: 'recovery.after',
+            reason: 'incomplete_action',
+            recovered: true,
             attempts: incompleteActionRetries,
           });
           incompleteActionRetries = 0;
@@ -825,6 +926,12 @@ export async function executeDirectly(
             ctx.observability?.logger?.info('Verification gate nudge', {
               missing: vResult.missing,
               nudgeCount: ctx.verificationGate.getState().nudgeCount,
+            });
+            ctx.emit({
+              type: 'iteration.after',
+              iteration: ctx.state.iteration,
+              hadToolCalls: false,
+              completionCandidate: false,
             });
             continue;
           }
@@ -855,12 +962,75 @@ export async function executeDirectly(
             continuations,
           });
         }
+        ctx.emit({
+          type: 'completion.after',
+          success: true,
+          reason: 'completed',
+        });
+        ctx.emit({
+          type: 'iteration.after',
+          iteration: ctx.state.iteration,
+          hadToolCalls: false,
+          completionCandidate: true,
+        });
 
         // Record iteration end for tracing (no tool calls case)
         ctx.traceCollector?.record({
           type: 'iteration.end',
           data: { iterationNumber: ctx.state.iteration },
         });
+
+        // =====================================================================
+        // TASK EXECUTION LOOP — pick up next available task before exiting
+        // =====================================================================
+        if (ctx.taskManager && !forceTextOnly) {
+          // Reconcile stale in-progress tasks before deciding there is no more work.
+          ctx.taskManager.reconcileStaleInProgress({
+            staleAfterMs: taskLeaseStaleMs,
+            reason: 'completion_gate',
+          });
+          const availableTasks = ctx.taskManager.getAvailableTasks();
+          if (availableTasks.length > 0) {
+            const nextTask = availableTasks[0];
+            ctx.taskManager.claim(nextTask.id, ctx.agentId);
+            log.info('Picking up next task from task list', {
+              taskId: nextTask.id,
+              subject: nextTask.subject,
+            });
+            const taskPrompt: Message = {
+              role: 'user',
+              content: `[System] Previous work is done. Now work on the next task:\n\n**Task ${nextTask.id}: ${nextTask.subject}**\n${nextTask.description}\n\nStart working on this task now using your tools.`,
+            };
+            messages.push(taskPrompt);
+            ctx.state.messages.push(taskPrompt);
+            ctx.emit({
+              type: 'iteration.after',
+              iteration: ctx.state.iteration,
+              hadToolCalls: false,
+              completionCandidate: false,
+            });
+            continue; // Re-enter the main loop for the next task
+          }
+          const openTasks = getOpenTaskSummary(ctx);
+          if (openTasks && (openTasks.inProgress > 0 || openTasks.pending > 0)) {
+            const reasons = [
+              `Open tasks remain: ${openTasks.pending} pending, ${openTasks.inProgress} in_progress`,
+              openTasks.blocked > 0 ? `${openTasks.blocked} pending tasks are currently blocked` : '',
+            ].filter(Boolean);
+            ctx.emit({
+              type: 'completion.blocked',
+              reasons,
+              openTasks,
+            });
+            result = {
+              success: false,
+              terminationReason: 'open_tasks',
+              failureReason: reasons.join('; '),
+              openTasks,
+            };
+          }
+        }
+
         break;
       }
 
@@ -885,6 +1055,12 @@ export async function executeDirectly(
       }
 
       const toolResults = await executeToolCalls(toolCalls, ctx);
+      ctx.emit({
+        type: 'iteration.after',
+        iteration: ctx.state.iteration,
+        hadToolCalls: true,
+        completionCandidate: false,
+      });
 
       // Record tool calls for economics/progress tracking + work log
       for (let i = 0; i < toolCalls.length; i++) {
@@ -892,6 +1068,7 @@ export async function executeDirectly(
         const result = toolResults[i];
         executedToolNames.add(toolCall.name);
         ctx.economics?.recordToolCall(toolCall.name, toolCall.arguments, result?.result);
+        ctx.stateMachine?.recordToolCall(toolCall.name, toolCall.arguments as Record<string, unknown>, result?.result);
         // Record in work log
         const toolOutput = result?.result && typeof result.result === 'object' && 'output' in (result.result as any)
           ? String((result.result as any).output)
@@ -1047,10 +1224,13 @@ export async function executeDirectly(
             }
           }
         } else if (compactionResult.status === 'hard_limit') {
-          ctx.emit({
-            type: 'error',
-            error: `Context hard limit reached (${Math.round(compactionResult.ratio * 100)}% of max tokens)`,
-          });
+          const reason = `Context hard limit reached (${Math.round(compactionResult.ratio * 100)}% of max tokens)`;
+          ctx.emit({ type: 'error', error: reason });
+          result = {
+            success: false,
+            terminationReason: 'hard_context_limit',
+            failureReason: reason,
+          };
           break;
         }
       } else if (ctx.economics) {
@@ -1197,6 +1377,10 @@ export async function executeDirectly(
     // =======================================================================
     // REFLECTION (Lesson 16)
     // =======================================================================
+    if (!result.success) {
+      break;
+    }
+
     if (autoReflect && ctx.planning && reflectionAttempt < maxReflectionAttempts) {
       ctx.emit({ type: 'reflection', attempt: reflectionAttempt, satisfied: false });
 
@@ -1229,4 +1413,5 @@ export async function executeDirectly(
   ctx.memory?.storeConversation(ctx.state.messages);
   // Memory stats update (hook point)
   ctx.memory?.getStats();
+  return result;
 }

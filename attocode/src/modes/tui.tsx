@@ -39,6 +39,7 @@ import {
 
 import { getMCPConfigPaths } from '../paths.js';
 import { showSessionPicker, showQuickPicker, formatSessionsTable } from '../session-picker.js';
+import { TUI_ROOT_BUDGET } from '../integrations/economics.js';
 import { createLSPManager } from '../integrations/lsp.js';
 import { createLSPFileTools } from '../agent-tools/lsp-file-tools.js';
 import { initPricingCache } from '../integrations/openrouter-pricing.js';
@@ -69,7 +70,7 @@ export async function startTUIMode(
 ): Promise<void> {
   const {
     permissionMode = 'interactive',
-    maxIterations = 50,
+    maxIterations = 500,
     model,
     trace = false,
     theme = 'auto',
@@ -208,6 +209,7 @@ export async function startTUIMode(
       tools: allTools,
       model,
       maxIterations,
+      budget: TUI_ROOT_BUDGET,
       memory: { enabled: true, types: { episodic: true, semantic: true, working: true } },
       planning: { enabled: true, autoplan: true, complexityThreshold: 6 },
       // Thread management with auto-checkpoints (same as REPL mode)
@@ -224,7 +226,7 @@ export async function startTUIMode(
             enabled: true,
             riskThreshold: 'moderate',  // Require approval for moderate+ risk tools
             alwaysApprove: [],  // Don't auto-approve anything, show dialog
-            neverApprove: ['read_file', 'list_files', 'glob', 'grep'],  // Safe read tools
+            neverApprove: ['read_file', 'list_files', 'glob', 'grep', 'task_create', 'task_update', 'task_get', 'task_list'],  // Safe read + task tools
             approvalHandler: approvalBridge!.handler,  // TUI approval handler
             auditLog: true,
           }
@@ -250,6 +252,17 @@ export async function startTUIMode(
         },
         custom: [],
       },
+    });
+    let hadRunFailure = false;
+    let lastFailureReason: string | undefined;
+    const unsubAgentOutcome = agent.subscribe((event) => {
+      if (event.type === 'complete' && !event.result.success) {
+        hadRunFailure = true;
+        lastFailureReason = event.result.error || 'At least one task failed during this terminal session';
+      } else if (event.type === 'error') {
+        hadRunFailure = true;
+        lastFailureReason = event.error || 'Agent reported an error';
+      }
     });
 
     // Session store was already initialized at the top
@@ -401,12 +414,17 @@ export async function startTUIMode(
       // End trace session for the terminal session
       if (trace && traceCollector?.isSessionActive()) {
         try {
-          await traceCollector.endSession({ success: true });
+          await traceCollector.endSession(
+            hadRunFailure
+              ? { success: false, failureReason: lastFailureReason ?? 'At least one task failed during this terminal session' }
+              : { success: true }
+          );
           persistenceDebug.log(`[TUI] Trace session ended -> .traces/`);
         } catch (err) {
           persistenceDebug.error(`[TUI] Failed to end trace session`, err);
         }
       }
+      unsubAgentOutcome();
       await agent.cleanup();
       await mcpClient.cleanup();
       await lspManager.cleanup();
