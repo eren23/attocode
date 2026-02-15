@@ -15,6 +15,7 @@
 
 import React, { Component, type ReactNode, type ErrorInfo } from 'react';
 import { Box, Text } from 'ink';
+import { logger } from '../../integrations/logger.js';
 
 interface ErrorBoundaryProps {
   /** Name for logging/display purposes */
@@ -60,8 +61,8 @@ export class TUIErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundar
     this.setState({ errorInfo });
 
     // Log error for debugging
-    console.error(`[TUIErrorBoundary:${this.props.name}] Component error:`, error);
-    console.error(`[TUIErrorBoundary:${this.props.name}] Component stack:`, errorInfo.componentStack);
+    logger.error(`[TUIErrorBoundary:${this.props.name}] Component error:`, { error: error.message, stack: error.stack });
+    logger.error(`[TUIErrorBoundary:${this.props.name}] Component stack:`, { componentStack: errorInfo.componentStack ?? undefined });
 
     // Call optional error handler
     this.props.onError?.(error, errorInfo);

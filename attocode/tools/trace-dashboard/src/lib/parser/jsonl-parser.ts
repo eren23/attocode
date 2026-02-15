@@ -455,6 +455,7 @@ export class JSONLParser {
       metrics,
       compactionEvents,
       swarmData: swarmData ?? undefined,
+      rawEntries: this.rawEntries as unknown as Array<Record<string, unknown>>,
     };
   }
 

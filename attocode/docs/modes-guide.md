@@ -53,6 +53,24 @@ attocode --tui        # Explicitly force TUI mode
 - **Parallel task execution** — Use swarm mode for that
 - **Resume across restarts** — Use `/save` to persist, `/load` to restore
 
+### Incomplete Recovery Behavior (TUI)
+
+When a run ends with `future_intent` / `incomplete_action` (for example: "I will fix this next"), TUI can auto-retry with a bounded loop instead of stopping immediately.
+
+Config keys:
+
+- `resilience.incompleteActionAutoLoop` (default: `true`)
+- `resilience.maxIncompleteAutoLoops` (default: `2`)
+- `resilience.autoLoopPromptStyle` (`strict` or `concise`)
+- `resilience.taskLeaseStaleMs` (default: `300000`)
+
+UI indicators:
+
+- Status mode shows `recovering X/Y`
+- System message: `[AUTO-LOOP] Retrying incomplete run (X/Y)`
+- After cap reached, run remains terminal `[INCOMPLETE]`
+- Recovery chain in result metadata tracks transitions (example: `future_intent -> completed`)
+
 ---
 
 ## 2. Legacy / REPL Mode

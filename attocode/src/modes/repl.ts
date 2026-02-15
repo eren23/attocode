@@ -45,6 +45,8 @@ import { getMCPConfigPaths } from '../paths.js';
 import { showSessionPicker, showQuickPicker } from '../session-picker.js';
 import { registerCleanupResource } from '../core/process-handlers.js';
 import { handleCommand, createConsoleOutput } from '../commands/handler.js';
+import { logger } from '../integrations/logger.js';
+import { TUI_ROOT_BUDGET } from '../integrations/economics.js';
 
 // ANSI color helper
 const colors = {
@@ -126,6 +128,7 @@ export async function startProductionREPL(
     tools,
     model,
     maxIterations,
+    budget: TUI_ROOT_BUDGET,
     memory: {
       enabled: true,
       types: { episodic: true, semantic: true, working: true },
@@ -225,6 +228,7 @@ export async function startProductionREPL(
   try {
     sessionStore = await createSQLiteStore({ baseDir: '.agent/sessions' });
     persistenceDebug.log('SQLite store created successfully');
+    // eslint-disable-next-line no-console
     console.log(c('+ SQLite session store initialized', 'green'));
 
     if (persistenceDebug.isEnabled()) {
@@ -236,7 +240,9 @@ export async function startProductionREPL(
     agent.subscribe(createJunctureLogger(sessionStore as SQLiteStore));
   } catch (sqliteError) {
     persistenceDebug.error('SQLite initialization failed', sqliteError);
+    // eslint-disable-next-line no-console
     console.log(c('! SQLite unavailable, using JSONL fallback', 'yellow'));
+    // eslint-disable-next-line no-console
     console.log(c(`   Error: ${(sqliteError as Error).message}`, 'dim'));
     sessionStore = await createSessionStore({ baseDir: '.agent/sessions' });
     persistenceDebug.log('JSONL store created as fallback');
@@ -269,7 +275,7 @@ export async function startProductionREPL(
       for (const tool of loadedTools) {
         agent.addTool(tool);
       }
-      console.log(c(`  + Dynamically loaded ${loadedTools.length} MCP tool(s)`, 'dim'));
+      logger.debug('Dynamically loaded MCP tools', { count: loadedTools.length });
     },
   });
 
@@ -280,9 +286,11 @@ export async function startProductionREPL(
   // Show MCP status
   const mcpServers = mcpClient.listServers();
   if (mcpServers.length > 0) {
+    // eslint-disable-next-line no-console
     console.log(c(`MCP Servers: ${mcpServers.length} configured`, 'dim'));
     for (const srv of mcpServers) {
       const icon = srv.status === 'connected' ? '+' : srv.status === 'error' ? 'x' : 'o';
+      // eslint-disable-next-line no-console
       console.log(c(`  ${icon} ${srv.name} (${srv.status})${srv.toolCount > 0 ? ` - ${srv.toolCount} tools` : ''}`, 'dim'));
     }
   }
@@ -304,6 +312,7 @@ export async function startProductionREPL(
         sessionId = fullResult.sessionId;
         resumedSession = true;
       } else if (fullResult.action === 'cancel') {
+        // eslint-disable-next-line no-console
         console.log(c('Goodbye!', 'cyan'));
         await mcpClient.cleanup();
         await agent.cleanup();
@@ -338,6 +347,7 @@ export async function startProductionREPL(
     if (dlq.isAvailable()) {
       const pending = dlq.getPending({ limit: 10 });
       if (pending.length > 0) {
+        // eslint-disable-next-line no-console
         console.log(c(`[DLQ] ${pending.length} failed operation(s) pending retry`, 'yellow'));
       }
       // Wire DLQ to registry and MCP client
@@ -357,19 +367,25 @@ export async function startProductionREPL(
         plan: sessionState.plan as any,
         memoryContext: sessionState.memoryContext,
       });
+      // eslint-disable-next-line no-console
       console.log(c(`+ Resumed ${sessionState.messages.length} messages from session`, 'green'));
     }
   }
 
   // Welcome banner
+  // eslint-disable-next-line no-console
   console.log(`
 ${c('----------------------------------------------------------------------', 'dim')}
 ${c('                    ATTOCODE - PRODUCTION CODING AGENT', 'bold')}
 ${c('----------------------------------------------------------------------', 'dim')}
 `);
+  // eslint-disable-next-line no-console
   console.log(c(`Session: ${sessionId}${resumedSession ? ' (resumed)' : ''}`, 'dim'));
+  // eslint-disable-next-line no-console
   console.log(c(`Model: ${model || provider.defaultModel}`, 'dim'));
+  // eslint-disable-next-line no-console
   console.log(c(`Permission mode: ${permissionMode}`, 'dim'));
+  // eslint-disable-next-line no-console
   console.log(c('\nType your request, or /help for commands.\n', 'dim'));
 
   // Create command context
@@ -386,8 +402,11 @@ ${c('----------------------------------------------------------------------', 'd
       model || provider.defaultModel,
       { type: 'repl', permissionMode }
     );
+    // eslint-disable-next-line no-console
     console.log(c(`Trace session started: ${terminalSessionId}`, 'dim'));
   }
+  let hadRunFailure = false;
+  let lastFailureReason: string | undefined;
 
   try {
     while (true) {
@@ -419,6 +438,7 @@ ${c('----------------------------------------------------------------------', 'd
           rl,
         });
         if (result === 'quit') {
+          // eslint-disable-next-line no-console
           console.log(c('Goodbye!', 'cyan'));
           break;
         }
@@ -430,24 +450,32 @@ ${c('----------------------------------------------------------------------', 'd
         const result = await agent.run(trimmed);
 
         if (result.success) {
+          // eslint-disable-next-line no-console
           console.log(c('\n--- Assistant ---', 'magenta'));
           tui.renderAssistantMessage(result.response);
+          // eslint-disable-next-line no-console
           console.log(c('-----------------', 'magenta'));
         } else {
+          hadRunFailure = true;
+          lastFailureReason = result.error || result.response || 'Task incomplete';
+          // eslint-disable-next-line no-console
           console.log(c('\n! Task incomplete:', 'yellow'));
           tui.showError(result.error || result.response);
         }
 
         if (trace && agent.getTraceCollector()) {
-          console.log(c('Trace captured -> .traces/', 'dim'));
+          logger.debug('Trace captured', { outputDir: '.traces/' });
         }
 
         const metrics = result.metrics;
+        // eslint-disable-next-line no-console
         console.log(c(`\nTokens: ${metrics.inputTokens} in / ${metrics.outputTokens} out | Tools: ${metrics.toolCalls} | Duration: ${metrics.duration}ms`, 'dim'));
 
         if (agent.hasPendingPlan()) {
           const changeCount = agent.getPendingChangeCount();
+          // eslint-disable-next-line no-console
           console.log(c(`\nPlan Mode: ${changeCount} change(s) queued for approval`, 'yellow'));
+          // eslint-disable-next-line no-console
           console.log(c('   Use /show-plan to review, /approve to execute, /reject to discard', 'dim'));
         }
 
@@ -455,7 +483,7 @@ ${c('----------------------------------------------------------------------', 'd
         persistenceDebug.log('Attempting auto-checkpoint');
         const checkpoint = agent.autoCheckpoint(true);
         if (checkpoint) {
-          console.log(c(`Auto-checkpoint: ${checkpoint.id}`, 'dim'));
+          logger.debug('Auto-checkpoint created', { checkpointId: checkpoint.id });
           persistenceDebug.log('Auto-checkpoint created in agent', {
             id: checkpoint.id,
             label: checkpoint.label,
@@ -483,28 +511,34 @@ ${c('----------------------------------------------------------------------', 'd
             }
           } catch (err) {
             persistenceDebug.error('Failed to persist checkpoint to store', err);
-            if (persistenceDebug.isEnabled()) {
-              console.log(c(`! Checkpoint persistence failed: ${(err as Error).message}`, 'yellow'));
-            }
+            logger.error('Checkpoint persistence failed', { error: String(err) });
           }
         } else {
           persistenceDebug.log('No checkpoint created (autoCheckpoint returned null)');
         }
 
       } catch (error) {
+        hadRunFailure = true;
+        lastFailureReason = (error as Error).message;
         tui.showError((error as Error).message);
       }
 
+      // eslint-disable-next-line no-console
       console.log();
     }
   } finally {
     // End trace session for the terminal session
     if (trace && traceCollector?.isSessionActive()) {
       try {
-        await traceCollector.endSession({ success: true });
+        await traceCollector.endSession(
+          hadRunFailure
+            ? { success: false, failureReason: lastFailureReason ?? 'At least one task failed during this terminal session' }
+            : { success: true }
+        );
+        // eslint-disable-next-line no-console
         console.log(c(`\nTrace session ended -> .traces/`, 'dim'));
       } catch (err) {
-        console.log(c(`! Failed to end trace session: ${(err as Error).message}`, 'yellow'));
+        logger.error('Failed to end trace session', { error: String(err) });
       }
     }
 

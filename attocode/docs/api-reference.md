@@ -210,6 +210,68 @@ const config = {
 };
 ```
 
+### Resilience config (`resilience`)
+
+```typescript
+interface LLMResilienceAgentConfig {
+  enabled?: boolean;
+  maxEmptyRetries?: number;
+  maxContinuations?: number;
+  autoContinue?: boolean;
+  minContentLength?: number;
+  incompleteActionRecovery?: boolean;
+  maxIncompleteActionRetries?: number;
+  enforceRequestedArtifacts?: boolean;
+  incompleteActionAutoLoop?: boolean;
+  maxIncompleteAutoLoops?: number;
+  autoLoopPromptStyle?: 'strict' | 'concise';
+  taskLeaseStaleMs?: number;
+}
+```
+
+### Swarm resilience config (`swarm.yaml -> resilience`)
+
+```yaml
+resilience:
+  workerRetries: 2
+  rateLimitRetries: 3
+  modelFailover: true
+  dispatchLeaseStaleMs: 300000
+```
+
+`dispatchLeaseStaleMs` controls when stale `dispatched` tasks are reset to `ready` if no active worker owns them.
+
+### Hook config (`hooks`)
+
+```typescript
+interface HooksConfig {
+  enabled?: boolean;
+  builtIn?: {
+    logging?: boolean;
+    metrics?: boolean;
+    timing?: boolean;
+  };
+  custom?: Hook[];
+  shell?: HookShellConfig;
+}
+
+interface HookShellConfig {
+  enabled?: boolean;
+  defaultTimeoutMs?: number;
+  envAllowlist?: string[];
+  commands?: ShellHookCommand[];
+}
+
+interface ShellHookCommand {
+  id?: string;
+  event: HookEvent;
+  command: string;
+  args?: string[];
+  timeoutMs?: number;
+  priority?: number;
+}
+```
+
 ## Events
 
 The agent emits events for observability:
@@ -238,12 +300,29 @@ agent.on((event: AgentEvent) => {
 
 **Event types:**
 - `start` - Agent run started
+- `run.before`, `run.after` - run lifecycle boundaries
 - `planning` - Planning phase
+- `iteration.before`, `iteration.after` - per-iteration lifecycle
 - `llm.start`, `llm.complete` - LLM request lifecycle
 - `tool.start`, `tool.complete` - Tool execution lifecycle
-- `approval.request`, `approval.response` - Permission requests
+- `completion.before`, `completion.after` - completion decision lifecycle
+- `recovery.before`, `recovery.after` - incomplete-action recovery lifecycle
+- `approval.required`, `approval.received` - Permission requests
 - `complete` - Agent run finished
 - `error` - Error occurred
+
+### Lifecycle hook events
+
+The following `HookEvent` values can be attached to custom/shell hooks:
+
+- `run.before`, `run.after`
+- `iteration.before`, `iteration.after`
+- `completion.before`, `completion.after`
+- `recovery.before`, `recovery.after`
+- `agent.start`, `agent.end`
+- `llm.before`, `llm.after`
+- `tool.before`, `tool.after`
+- `error`
 
 ## See Also
 

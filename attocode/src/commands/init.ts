@@ -8,6 +8,7 @@ import { createInterface } from 'readline';
 import { writeFileSync, existsSync } from 'fs';
 import { getConfigPath, ensureDirectories } from '../paths.js';
 import { detectProviders } from '../first-run.js';
+import { logger } from '../integrations/logger.js';
 
 const rl = createInterface({
   input: process.stdin,
@@ -22,7 +23,9 @@ function question(prompt: string): Promise<string> {
 
 function select(prompt: string, options: string[]): Promise<number> {
   return new Promise(async resolve => {
+    // eslint-disable-next-line no-console
     console.log(prompt);
+    // eslint-disable-next-line no-console
     options.forEach((opt, i) => console.log(`  ${i + 1}) ${opt}`));
     const answer = await question('Choice: ');
     const choice = parseInt(answer, 10);
@@ -35,13 +38,19 @@ function select(prompt: string, options: string[]): Promise<number> {
 }
 
 export async function runInit(): Promise<void> {
+  logger.debug('Starting interactive init setup');
+  // eslint-disable-next-line no-console
   console.log('\n🚀 Attocode Setup\n');
 
   // Check existing config
   if (existsSync(getConfigPath())) {
+    logger.debug('Existing config found', { path: getConfigPath() });
+    // eslint-disable-next-line no-console
     console.log(`Config already exists at ${getConfigPath()}`);
     const overwrite = await question('Overwrite? (y/N): ');
     if (overwrite.toLowerCase() !== 'y') {
+      logger.info('Init setup cancelled by user');
+      // eslint-disable-next-line no-console
       console.log('Setup cancelled.');
       rl.close();
       return;
@@ -51,8 +60,12 @@ export async function runInit(): Promise<void> {
   // Detect existing providers
   const detected = detectProviders();
   if (detected.length > 0) {
+    logger.debug('Detected providers from environment', { providers: detected.map(p => p.name) });
+    // eslint-disable-next-line no-console
     console.log('✓ Detected API keys from environment:');
+    // eslint-disable-next-line no-console
     detected.forEach(p => console.log(`  - ${p.name.toUpperCase()}`));
+    // eslint-disable-next-line no-console
     console.log('');
   }
 
@@ -75,8 +88,12 @@ export async function runInit(): Promise<void> {
 
   const envVar = envVars[provider];
   if (!process.env[envVar]) {
+    logger.warn('API key not found in environment', { envVar, provider });
+    // eslint-disable-next-line no-console
     console.log(`\n⚠️  No ${envVar} found in environment.`);
+    // eslint-disable-next-line no-console
     console.log(`Set it before running attocode:`);
+    // eslint-disable-next-line no-console
     console.log(`  export ${envVar}="your-api-key-here"\n`);
   }
 
@@ -107,10 +124,13 @@ export async function runInit(): Promise<void> {
   const models = suggestedModels[provider];
   const modelOptions = [...models.map(m => m.name), '✏️  Enter custom model'];
 
+  // eslint-disable-next-line no-console
   console.log('\nSelect model:');
+  // eslint-disable-next-line no-console
   modelOptions.forEach((opt, i) => console.log(`  ${i + 1}) ${opt}`));
 
   if (provider === 'openrouter') {
+    // eslint-disable-next-line no-console
     console.log('\n  💡 Browse all models: https://openrouter.ai/models');
   }
 
@@ -130,9 +150,13 @@ export async function runInit(): Promise<void> {
   } else {
     // Default to first option
     model = models[0].id;
+    logger.debug('Defaulting to first model option', { model });
+    // eslint-disable-next-line no-console
     console.log(`Using default: ${model}`);
   }
 
+  logger.info('Model selected for init', { provider, model });
+  // eslint-disable-next-line no-console
   console.log(`\n✓ Selected model: ${model}`);
 
   // Create config
@@ -155,16 +179,23 @@ export async function runInit(): Promise<void> {
   };
 
   writeFileSync(getConfigPath(), JSON.stringify(config, null, 2));
+  logger.info('Config saved', { path: getConfigPath(), provider, model });
+  // eslint-disable-next-line no-console
   console.log(`✓ Config saved to ${getConfigPath()}`);
 
   // Show next steps
+  // eslint-disable-next-line no-console
   console.log('\n📋 Next steps:');
   if (!process.env[envVar]) {
+    // eslint-disable-next-line no-console
     console.log(`  1. Set your API key: export ${envVar}="..."`);
+    // eslint-disable-next-line no-console
     console.log('  2. Run: attocode');
   } else {
+    // eslint-disable-next-line no-console
     console.log('  Run: attocode');
   }
+  // eslint-disable-next-line no-console
   console.log('');
 
   rl.close();

@@ -34,6 +34,8 @@ export interface Task {
   status: TaskStatus;
   /** Agent ID that owns this task */
   owner?: string;
+  /** Last heartbeat for the in-progress lease */
+  leaseHeartbeatAt?: number;
   /** Task IDs that must complete before this task can start */
   blockedBy: string[];
   /** Task IDs that are waiting on this task to complete */
@@ -72,6 +74,22 @@ export interface TaskSummary {
   blockedBy: string[];
 }
 
+export interface ReconcileStaleInProgressOptions {
+  /** Mark in-progress tasks stale after this many ms (default: 5 minutes) */
+  staleAfterMs?: number;
+  /** Override clock for deterministic tests */
+  now?: number;
+  /** Optional reason stored in task metadata for observability */
+  reason?: string;
+  /** Owners currently active in-process and therefore exempt from recovery */
+  activeOwners?: string[];
+}
+
+export interface ReconcileResult {
+  reconciled: number;
+  taskIds: string[];
+}
+
 // =============================================================================
 // TASK MANAGER
 // =============================================================================
@@ -79,6 +97,20 @@ export interface TaskSummary {
 export class TaskManager extends EventEmitter {
   private tasks = new Map<string, Task>();
   private nextId = 1;
+  private static readonly DEFAULT_STALE_AFTER_MS = 5 * 60 * 1000;
+
+  /**
+   * Normalize ownership invariants:
+   * only in_progress tasks may retain owner/lease metadata.
+   */
+  private normalizeTaskOwnershipInvariants(): void {
+    for (const task of this.tasks.values()) {
+      if (task.status !== 'in_progress') {
+        delete task.owner;
+        delete task.leaseHeartbeatAt;
+      }
+    }
+  }
 
   constructor() {
     super();
@@ -138,8 +170,20 @@ export class TaskManager extends EventEmitter {
     if (updates.subject !== undefined) task.subject = updates.subject;
     if (updates.description !== undefined) task.description = updates.description;
     if (updates.activeForm !== undefined) task.activeForm = updates.activeForm;
-    if (updates.status !== undefined) task.status = updates.status;
-    if (updates.owner !== undefined) task.owner = updates.owner;
+    if (updates.status !== undefined) {
+      task.status = updates.status;
+      if (updates.status === 'in_progress') {
+        task.leaseHeartbeatAt = Date.now();
+      } else {
+        delete task.leaseHeartbeatAt;
+        if (updates.owner === undefined) {
+          delete task.owner;
+        }
+      }
+    }
+    if (updates.owner !== undefined) {
+      task.owner = updates.owner;
+    }
 
     // Add dependencies
     if (updates.addBlockedBy) {
@@ -200,6 +244,7 @@ export class TaskManager extends EventEmitter {
    * List all tasks (excluding deleted).
    */
   list(): Task[] {
+    this.normalizeTaskOwnershipInvariants();
     return Array.from(this.tasks.values())
       .filter(t => t.status !== 'deleted')
       .sort((a, b) => {
@@ -252,12 +297,13 @@ export class TaskManager extends EventEmitter {
 
   /**
    * Get tasks that are available to work on.
-   * Available = pending, no owner, not blocked.
+   * Available = pending, not blocked.
+   * Ownership is only authoritative while in_progress.
    */
   getAvailableTasks(): Task[] {
+    this.normalizeTaskOwnershipInvariants();
     return this.list().filter(t =>
       t.status === 'pending' &&
-      !t.owner &&
       !this.isBlocked(t.id)
     );
   }
@@ -267,6 +313,54 @@ export class TaskManager extends EventEmitter {
    */
   claim(taskId: string, owner: string): Task | undefined {
     return this.update(taskId, { owner, status: 'in_progress' });
+  }
+
+  /**
+   * Refresh lease heartbeat for an in-progress task.
+   */
+  heartbeat(taskIdRaw: string, owner?: string): Task | undefined {
+    const taskId = taskIdRaw.startsWith('task-') ? taskIdRaw : `task-${taskIdRaw}`;
+    const task = this.tasks.get(taskId);
+    if (!task || task.status !== 'in_progress') return undefined;
+    if (owner && task.owner && owner !== task.owner) return undefined;
+    const now = Date.now();
+    task.leaseHeartbeatAt = now;
+    task.updatedAt = now;
+    this.emit('task.updated', { task });
+    return task;
+  }
+
+  /**
+   * Requeue stale in-progress tasks back to pending.
+   * Used to recover orphaned task ownership across interrupted runs.
+   */
+  reconcileStaleInProgress(options: ReconcileStaleInProgressOptions = {}): ReconcileResult {
+    const now = options.now ?? Date.now();
+    const staleAfterMs = options.staleAfterMs ?? TaskManager.DEFAULT_STALE_AFTER_MS;
+    const activeOwners = new Set(options.activeOwners ?? []);
+    const taskIds: string[] = [];
+
+    for (const task of this.tasks.values()) {
+      if (task.status !== 'in_progress') continue;
+      if (task.owner && activeOwners.has(task.owner)) continue;
+
+      const lastTouched = task.leaseHeartbeatAt ?? task.updatedAt ?? task.createdAt;
+      if (now - lastTouched < staleAfterMs) continue;
+
+      task.status = 'pending';
+      delete task.owner;
+      delete task.leaseHeartbeatAt;
+      task.updatedAt = now;
+      task.metadata.recoveredFromStaleInProgressAt = new Date(now).toISOString();
+      if (options.reason) {
+        task.metadata.recoveryReason = options.reason;
+      }
+      taskIds.push(task.id);
+      this.emit('task.updated', { task });
+      this.emit('task.recovered', { taskId: task.id, from: 'in_progress', to: 'pending', reason: options.reason });
+    }
+
+    return { reconciled: taskIds.length, taskIds };
   }
 
   /**
@@ -364,6 +458,8 @@ export class TaskManager extends EventEmitter {
         this.nextId = idNum + 1;
       }
     }
+
+    this.normalizeTaskOwnershipInvariants();
 
     this.emit('tasks.hydrated', { count: this.tasks.size });
   }

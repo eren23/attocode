@@ -1,6 +1,9 @@
 /**
  * Hierarchical Configuration Integration
  *
+ * @deprecated Use `loadConfig()` from `../config/index.js` instead.
+ * This module is unused and will be removed in a future release.
+ *
  * Manages configuration that cascades from global to local levels:
  * - Default (built-in defaults from defaults.ts)
  * - Global (~/.agent/config.json)

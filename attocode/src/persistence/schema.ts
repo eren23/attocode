@@ -344,6 +344,17 @@ export const MIGRATIONS: Migration[] = [
       CREATE INDEX IF NOT EXISTS idx_remembered_permissions_tool ON remembered_permissions(tool_name);
     `,
   },
+  {
+    version: 11,
+    name: 'session_workspace_metadata',
+    sql: `
+      -- Workspace metadata for safer cross-repo resume behavior
+      ALTER TABLE sessions ADD COLUMN workspace_path TEXT;
+      ALTER TABLE sessions ADD COLUMN workspace_fingerprint TEXT;
+
+      CREATE INDEX IF NOT EXISTS idx_sessions_workspace_path ON sessions(workspace_path);
+    `,
+  },
 ];
 
 // =============================================================================

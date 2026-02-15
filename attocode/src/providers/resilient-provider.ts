@@ -31,6 +31,7 @@ import {
   type ProviderHealth,
 } from './fallback-chain.js';
 import type { LLMProvider, LLMProviderWithTools } from './types.js';
+import { logger } from '../integrations/logger.js';
 
 // =============================================================================
 // TYPES
@@ -253,7 +254,7 @@ export async function createResilientFallbackChain(
       });
     } catch (error) {
       // Skip providers that fail to initialize
-      console.warn(`[ResilientProvider] Failed to initialize ${name}:`, error);
+      logger.warn('Failed to initialize resilient provider', { provider: name, error: String(error) });
     }
   }
 

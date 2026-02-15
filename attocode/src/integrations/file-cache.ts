@@ -18,6 +18,7 @@
  */
 
 import { resolve } from 'node:path';
+import type { TraceCollector } from '../tracing/trace-collector.js';
 
 // =============================================================================
 // TYPES
@@ -38,6 +39,10 @@ export interface FileCacheConfig {
   ttlMs?: number;
   /** Whether to enable cache statistics tracking */
   trackStats?: boolean;
+  /** Optional trace collector for emitting filecache.event trace events */
+  traceCollector?: TraceCollector;
+  /** Agent ID to include in trace events */
+  agentId?: string;
 }
 
 export interface FileCacheStats {
@@ -69,6 +74,8 @@ export class SharedFileCache {
   private readonly maxCacheBytes: number;
   private readonly ttlMs: number;
   private readonly trackStats: boolean;
+  private readonly traceCollector?: TraceCollector;
+  private readonly agentId?: string;
 
   // Statistics
   private hits = 0;
@@ -80,6 +87,8 @@ export class SharedFileCache {
     this.maxCacheBytes = config.maxCacheBytes ?? 5 * 1024 * 1024; // 5MB
     this.ttlMs = config.ttlMs ?? 5 * 60 * 1000; // 5 minutes
     this.trackStats = config.trackStats ?? true;
+    this.traceCollector = config.traceCollector;
+    this.agentId = config.agentId;
   }
 
   /** Normalize path to ensure consistent cache keys across agents */
@@ -97,6 +106,16 @@ export class SharedFileCache {
 
     if (!entry) {
       if (this.trackStats) this.misses++;
+      this.traceCollector?.record({
+        type: 'filecache.event',
+        data: {
+          action: 'miss',
+          filePath,
+          agentId: this.agentId,
+          currentEntries: this.cache.size,
+          currentBytes: this.currentBytes,
+        },
+      });
       return undefined;
     }
 
@@ -104,6 +123,16 @@ export class SharedFileCache {
     if (Date.now() - entry.timestamp > this.ttlMs) {
       this.delete(filePath);
       if (this.trackStats) this.misses++;
+      this.traceCollector?.record({
+        type: 'filecache.event',
+        data: {
+          action: 'miss',
+          filePath,
+          agentId: this.agentId,
+          currentEntries: this.cache.size,
+          currentBytes: this.currentBytes,
+        },
+      });
       return undefined;
     }
 
@@ -113,6 +142,17 @@ export class SharedFileCache {
     // Track hit
     entry.hits++;
     if (this.trackStats) this.hits++;
+
+    this.traceCollector?.record({
+      type: 'filecache.event',
+      data: {
+        action: 'hit',
+        filePath,
+        agentId: this.agentId,
+        currentEntries: this.cache.size,
+        currentBytes: this.currentBytes,
+      },
+    });
 
     return entry.content;
   }
@@ -151,6 +191,17 @@ export class SharedFileCache {
     });
     this.currentBytes += size;
     this.accessOrder.push(filePath);
+
+    this.traceCollector?.record({
+      type: 'filecache.event',
+      data: {
+        action: 'set',
+        filePath,
+        agentId: this.agentId,
+        currentEntries: this.cache.size,
+        currentBytes: this.currentBytes,
+      },
+    });
   }
 
   /**
@@ -161,6 +212,16 @@ export class SharedFileCache {
     if (this.cache.has(filePath)) {
       this.delete(filePath);
       if (this.trackStats) this.invalidations++;
+      this.traceCollector?.record({
+        type: 'filecache.event',
+        data: {
+          action: 'invalidate',
+          filePath,
+          agentId: this.agentId,
+          currentEntries: this.cache.size,
+          currentBytes: this.currentBytes,
+        },
+      });
     }
   }
 

@@ -5,6 +5,71 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.4] - 2026-02-15
+
+### Added
+
+#### ESLint 9 and Prettier
+- **ESLint 9 and Prettier** — Add eslint.config.js with TypeScript and import-x rules; .prettierrc.json and .prettierignore; lint, lint:fix, format, format:check scripts; CI workflow updates; formatting and lint fixes across src and tests
+
+#### Config Module
+- **Config module with schema** — New `attocode/src/config` (index, config-manager, schema, base-types); `loadConfig()` supports hierarchical sources; legacy `config.ts` delegates to it; deprecate `loadUserConfig()` for backward compatibility; wire main.ts and integrations to use `loadConfig` from config/index; tests for config schema and config manager (`tests/config/`)
+
+#### Agent Architecture Refactor
+- **Agent state machine** — New `AgentStateMachine` for formalized phase tracking with typed transitions and metrics
+- **Base manager pattern** — New `BaseManager` class for consistent lifecycle management across managers
+- **Execution loop extraction** — Extracted execution loop, response handling, and tool execution into dedicated modules (`execution-loop.ts`, `response-handler.ts`, `tool-executor.ts`, `subagent-spawner.ts`) for improved organization; tool execution enhanced with batching and policy enforcement
+- **Core module exports** — Updated core index with new module structure and exports
+
+#### Swarm Shared State
+- **SharedContextState** — Cross-worker failure learning and reference pooling among swarm workers
+- **SharedEconomicsState** — Doom loop aggregation and shared insights across workers; methods for recording failures and tool calls
+- **ProductionAgent integration** — Updated agent and related modules to utilize shared states for coordination and resource management
+- **Tests** — `shared-context-state.test.ts`, `shared-economics-state.test.ts`
+
+#### Tree-sitter AST
+- **AST-based symbol and dependency extraction** — Tree-sitter integration for Python and TypeScript; improved codebase context analysis
+- **Edit validator** — Post-edit syntax validation using tree-sitter; execution loop runs syntax validation after file edits
+- **Swarm worker budget** — Per-worker utilization metrics in swarm worker budget tracking
+- **Tests** — `codebase-ast.test.ts`, `edit-validator.test.ts`
+
+#### Agent Execution and Safety
+- **Swarm decomposition fallback** — ProductionAgent falls back to direct execution when swarm decomposition fails
+- **Strict tool usage** — Defaults enforce strict tool usage rules for file operations
+- **Execution policy** — Improved settings for non-interactive modes and subagent risk management
+- **Safeguards** — Tool call limits and context overflow prevention in execution loops
+- **Tests** — `execution-loop.test.ts`, `tool-executor.test.ts`, `economics-global-doom.test.ts`
+
+#### Task Management and Diagnostics
+- **Completion event diagnostics** — ProductionAgent completion event now includes insights on available tasks and pending tasks with owners
+- **`countPendingTasksWithOwners()`** — New function for task management accuracy
+- **Task ownership normalization** — Only in-progress tasks retain ownership metadata; enhances task dispatchability
+- **TUI diagnostics** — Display additional diagnostic info when task completion is blocked; improved user feedback
+- **Tests** — Task ownership normalization and scenario validation in `task-manager.test.ts`
+
+#### Other
+- **package-lock.json** — Lockfile for consistent installations
+- **Lifecycle hooks** — Document payload/event usage and operational notes in API reference
+- **Trace dashboard** — Agent topology page, code map, session detail enhancements, swarm dashboard improvements
+
+### Changed
+
+- **Legacy config** — `loadUserConfig()` in config.ts deprecated; use `loadConfig()` from config/index
+- **Agent structure** — ~3.4K lines extracted from agent.ts into core modules; cleaner separation of concerns
+
+### Documentation
+
+- **README** — Branch change highlights, resilience tuning
+- **TUI/modes guide** — Bounded incomplete-action auto-loop behavior
+- **Troubleshooting** — New guide: `open_tasks` stale leases, swarm `dispatchLeaseStaleMs` stale dispatched recovery
+- **API/config** — Document `resilience.taskLeaseStaleMs`, swarm `resilience.dispatchLeaseStaleMs`
+- **Swarm configuration guide** — Clarify camelCase/snake_case alias support in budget, communication, resilience
+- **examples/config/config.json** — Add `taskLeaseStaleMs`
+
+### Fixed
+
+- Trivial `let` → `const`; rename unused catch param to `_err`
+
 ## [0.2.3] - 2026-02-13
 
 ### Added
@@ -520,7 +585,8 @@ A new execution mode where one orchestrator model decomposes tasks into subtask 
 - Sandbox execution for bash commands (macOS Seatbelt)
 - Dangerous operation blocking in strict mode
 
-[Unreleased]: https://github.com/eren23/attocode/compare/v0.2.3...HEAD
+[Unreleased]: https://github.com/eren23/attocode/compare/v0.2.4...HEAD
+[0.2.4]: https://github.com/eren23/attocode/compare/v0.2.3...v0.2.4
 [0.2.3]: https://github.com/eren23/attocode/compare/v0.2.2...v0.2.3
 [0.2.2]: https://github.com/eren23/attocode/compare/v0.2.1...v0.2.2
 [0.2.1]: https://github.com/eren23/attocode/compare/v0.2.0...v0.2.1

@@ -15,6 +15,7 @@ import type {
 } from './types.js';
 import { DANGEROUS_PATTERNS } from './types.js';
 import { isReadOnlyBashCommand } from '../integrations/bash-policy.js';
+import { logger } from '../integrations/logger.js';
 
 // =============================================================================
 // PERMISSION CHECKER IMPLEMENTATIONS
@@ -60,10 +61,10 @@ class InteractivePermissionChecker implements PermissionChecker {
     const emoji = request.dangerLevel === 'critical' ? '🚨' : 
                   request.dangerLevel === 'dangerous' ? '⚠️' : '⚡';
     
-    console.log(`\n${emoji} Permission required (${request.dangerLevel}):`);
-    console.log(`   Tool: ${request.tool}`);
-    console.log(`   Operation: ${request.operation}`);
-    console.log(`   Target: ${request.target}`);
+    logger.info(`\n${emoji} Permission required (${request.dangerLevel}):`);
+    logger.info(`   Tool: ${request.tool}`);
+    logger.info(`   Operation: ${request.operation}`);
+    logger.info(`   Target: ${request.target}`);
     
     const answer = await this.prompt('Allow? (y/n/always/never): ');
     
@@ -148,7 +149,7 @@ export function createPermissionChecker(mode?: PermissionMode): PermissionChecke
     case 'auto-safe':
       return new AutoSafePermissionChecker();
     case 'yolo':
-      console.warn('⚠️  YOLO mode enabled - all operations will be auto-approved');
+      logger.warn('YOLO mode enabled - all operations will be auto-approved');
       return new YoloPermissionChecker();
     default:
       return new InteractivePermissionChecker();

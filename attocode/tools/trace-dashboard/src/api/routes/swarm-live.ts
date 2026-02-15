@@ -149,6 +149,27 @@ swarmLiveRoutes.get('/stream', (c) => {
             watcher.close();
           });
         },
+        onBlackboard: (data) => {
+          stream.writeSSE({
+            event: 'swarm-blackboard',
+            data: JSON.stringify(data),
+            id: String(++eventId),
+          }).catch(() => { watcher.close(); });
+        },
+        onCodeMap: (data) => {
+          stream.writeSSE({
+            event: 'swarm-codemap',
+            data: JSON.stringify(data),
+            id: String(++eventId),
+          }).catch(() => { watcher.close(); });
+        },
+        onBudgetPool: (data) => {
+          stream.writeSSE({
+            event: 'swarm-budget-pool',
+            data: JSON.stringify(data),
+            id: String(++eventId),
+          }).catch(() => { watcher.close(); });
+        },
       });
 
       watcher.start(sinceSeq);
@@ -260,5 +281,72 @@ swarmLiveRoutes.get('/history', (c) => {
   } catch (err) {
     console.error('Failed to list swarm history:', err);
     return c.json({ success: false, error: 'Failed to list history' }, 500);
+  }
+});
+
+// =============================================================================
+// OBSERVABILITY SNAPSHOT ENDPOINTS
+// =============================================================================
+
+/**
+ * GET /codemap?dir= — Read codemap.json snapshot
+ */
+swarmLiveRoutes.get('/codemap', (c) => {
+  try {
+    const dir = resolveSwarmDir(c.req.query('dir'));
+    if (!dir) {
+      return c.json({ success: false, error: 'No swarm-live directory found' }, 404);
+    }
+    const filePath = path.join(dir, 'codemap.json');
+    if (!fs.existsSync(filePath)) {
+      return c.json({ success: false, error: 'No codemap.json found' }, 404);
+    }
+    const data = JSON.parse(fs.readFileSync(filePath, 'utf-8'));
+    return c.json({ success: true, data });
+  } catch (err) {
+    console.error('Failed to read codemap:', err);
+    return c.json({ success: false, error: 'Failed to read codemap' }, 500);
+  }
+});
+
+/**
+ * GET /blackboard?dir= — Read blackboard.json snapshot
+ */
+swarmLiveRoutes.get('/blackboard', (c) => {
+  try {
+    const dir = resolveSwarmDir(c.req.query('dir'));
+    if (!dir) {
+      return c.json({ success: false, error: 'No swarm-live directory found' }, 404);
+    }
+    const filePath = path.join(dir, 'blackboard.json');
+    if (!fs.existsSync(filePath)) {
+      return c.json({ success: false, error: 'No blackboard.json found' }, 404);
+    }
+    const data = JSON.parse(fs.readFileSync(filePath, 'utf-8'));
+    return c.json({ success: true, data });
+  } catch (err) {
+    console.error('Failed to read blackboard:', err);
+    return c.json({ success: false, error: 'Failed to read blackboard' }, 500);
+  }
+});
+
+/**
+ * GET /budget-pool?dir= — Read budget-pool.json snapshot
+ */
+swarmLiveRoutes.get('/budget-pool', (c) => {
+  try {
+    const dir = resolveSwarmDir(c.req.query('dir'));
+    if (!dir) {
+      return c.json({ success: false, error: 'No swarm-live directory found' }, 404);
+    }
+    const filePath = path.join(dir, 'budget-pool.json');
+    if (!fs.existsSync(filePath)) {
+      return c.json({ success: false, error: 'No budget-pool.json found' }, 404);
+    }
+    const data = JSON.parse(fs.readFileSync(filePath, 'utf-8'));
+    return c.json({ success: true, data });
+  } catch (err) {
+    console.error('Failed to read budget-pool:', err);
+    return c.json({ success: false, error: 'Failed to read budget-pool' }, 500);
   }
 });

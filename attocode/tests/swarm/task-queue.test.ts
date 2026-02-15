@@ -652,4 +652,46 @@ describe('SwarmTaskQueue', () => {
     // Dispatched status is preserved — orchestrator's resume logic resets it
     expect(queue2.getTask('a')?.status).toBe('dispatched');
   });
+
+  it('reconciles stale dispatched tasks back to ready when no worker is active', () => {
+    const queue = createSwarmTaskQueue();
+    const decomp = makeDecomposition(
+      [makeSubtask({ id: 'a', description: 'Task A' })],
+      [['a']],
+    );
+
+    queue.loadFromDecomposition(decomp, config);
+    queue.markDispatched('a', 'test-model');
+    const dispatchedAt = queue.getTask('a')?.dispatchedAt ?? 0;
+
+    const recovered = queue.reconcileStaleDispatched({
+      staleAfterMs: 100,
+      now: dispatchedAt + 500,
+      activeTaskIds: new Set<string>(),
+    });
+
+    expect(recovered).toEqual(['a']);
+    expect(queue.getTask('a')?.status).toBe('ready');
+  });
+
+  it('does not reconcile dispatched task when worker is still active', () => {
+    const queue = createSwarmTaskQueue();
+    const decomp = makeDecomposition(
+      [makeSubtask({ id: 'a', description: 'Task A' })],
+      [['a']],
+    );
+
+    queue.loadFromDecomposition(decomp, config);
+    queue.markDispatched('a', 'test-model');
+    const dispatchedAt = queue.getTask('a')?.dispatchedAt ?? 0;
+
+    const recovered = queue.reconcileStaleDispatched({
+      staleAfterMs: 100,
+      now: dispatchedAt + 500,
+      activeTaskIds: new Set(['a']),
+    });
+
+    expect(recovered).toEqual([]);
+    expect(queue.getTask('a')?.status).toBe('dispatched');
+  });
 });

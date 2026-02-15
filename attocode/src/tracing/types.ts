@@ -665,6 +665,97 @@ export interface ContextCompactionEntry extends BaseJSONLEntry {
   recoveryInjected: boolean;
 }
 
+// =============================================================================
+// OBSERVABILITY VISUALIZATION ENTRY TYPES
+// =============================================================================
+
+/**
+ * Codebase map entry - emitted after repository analysis completes.
+ * Captures the full code map with file nodes, dependencies, and symbols.
+ */
+export interface CodebaseMapEntry extends BaseJSONLEntry {
+  _type: 'codebase.map';
+  totalFiles: number;
+  totalTokens: number;
+  entryPoints: string[];
+  coreModules: string[];
+  dependencyEdges: { file: string; imports: string[] }[];
+  files?: {
+    filePath: string;
+    directory: string;
+    fileName: string;
+    tokenCount: number;
+    importance: number;
+    type: string;
+    symbols: { name: string; kind: string; exported: boolean; line: number }[];
+    inDegree: number;
+    outDegree: number;
+  }[];
+  topChunks: {
+    filePath: string;
+    tokenCount: number;
+    importance: number;
+    type: string;
+    symbols: { name: string; kind: string; exported: boolean; line: number }[];
+    dependencies: string[];
+  }[];
+}
+
+/**
+ * Blackboard event entry - emitted on finding/claim operations.
+ */
+export interface BlackboardEventEntry extends BaseJSONLEntry {
+  _type: 'blackboard.event';
+  action: 'finding.posted' | 'finding.updated' | 'claim.acquired' | 'claim.released';
+  agentId: string;
+  topic?: string;
+  content?: string;
+  confidence?: number;
+  findingType?: string;
+  relatedFiles?: string[];
+  resource?: string;
+  claimType?: string;
+}
+
+/**
+ * Budget pool entry - emitted on budget allocation/consumption/release.
+ */
+export interface BudgetPoolEntry extends BaseJSONLEntry {
+  _type: 'budget.pool';
+  action: 'allocate' | 'consume' | 'release';
+  agentId: string;
+  tokensAllocated?: number;
+  tokensUsed?: number;
+  poolRemaining: number;
+  poolTotal: number;
+}
+
+/**
+ * File cache event entry - emitted on cache hit/miss/set/invalidate.
+ */
+export interface FileCacheEventEntry extends BaseJSONLEntry {
+  _type: 'filecache.event';
+  action: 'hit' | 'miss' | 'set' | 'invalidate';
+  filePath: string;
+  agentId?: string;
+  currentEntries: number;
+  currentBytes: number;
+}
+
+/**
+ * Context injection entry - emitted when building a subagent's context.
+ */
+export interface ContextInjectionEntry extends BaseJSONLEntry {
+  _type: 'context.injection';
+  agentId: string;
+  parentAgentId: string;
+  repoMapTokens: number;
+  blackboardFindings: number;
+  modifiedFiles: string[];
+  toolCount: number;
+  model: string;
+}
+
 /**
  * Union of all JSONL entry types.
  */
@@ -691,7 +782,12 @@ export type JSONLEntry =
   | SwarmBudgetEntry
   | SwarmVerificationEntry
   | SwarmCompleteEntry
-  | ContextCompactionEntry;
+  | ContextCompactionEntry
+  | CodebaseMapEntry
+  | BlackboardEventEntry
+  | BudgetPoolEntry
+  | FileCacheEventEntry
+  | ContextInjectionEntry;
 
 // =============================================================================
 // ENHANCED TRACE TYPES (Maximum Interpretability)

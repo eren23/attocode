@@ -124,6 +124,93 @@ export GITHUB_TOKEN="your-token"
 - iTerm2 with "Option as Meta" enabled
 - Or use the command equivalents instead
 
+### Run shows `[INCOMPLETE]` or stops early
+
+**Symptoms:** You see `[INCOMPLETE]` / `[RUN FAILED]` after model says "I will fix this..." without actually doing it.
+
+**How it works:**
+- TUI can auto-retry these outcomes with bounded loops.
+- After retry cap, terminal incomplete is expected.
+
+**Config keys:**
+
+```json
+{
+  "resilience": {
+    "incompleteActionAutoLoop": true,
+    "maxIncompleteAutoLoops": 2,
+    "autoLoopPromptStyle": "strict"
+  }
+}
+```
+
+Increase `maxIncompleteAutoLoops` for more retries, or disable `incompleteActionAutoLoop` for immediate manual control.
+
+### Run fails with open tasks (`open_tasks`)
+
+**Symptoms:** Run ends with open pending/in-progress tasks even though no visible worker is active.
+
+**What happens now:**
+- Core run boundaries reconcile stale `in_progress` tasks back to `pending`.
+- This prevents orphaned ownership from permanently blocking completion.
+
+**Tuning key:**
+
+```json
+{
+  "resilience": {
+    "taskLeaseStaleMs": 300000
+  }
+}
+```
+
+Lower `taskLeaseStaleMs` to recover faster, raise it for longer-running tasks.
+
+### Swarm appears stalled with dispatched tasks
+
+**Symptoms:** Swarm has tasks in `dispatched` but no active workers after interruption/retry.
+
+**What happens now:**
+- Swarm reconciles stale `dispatched` tasks back to `ready` when no active worker owns them.
+
+**Tuning key (`swarm.yaml`):**
+
+```yaml
+resilience:
+  dispatchLeaseStaleMs: 300000
+```
+
+### Hook scripts fail or time out
+
+**Symptoms:** Expected automation does not trigger, or logs mention hook execution errors.
+
+**Checks:**
+
+1. Verify command exists and is executable.
+2. Keep hook scripts under `timeoutMs`.
+3. Ensure required env vars are listed in `hooks.shell.envAllowlist`.
+4. Test script manually:
+   ```bash
+   echo '{"event":"run.after","payload":{}}' | node ./scripts/hook.js
+   ```
+
+**Minimal hook config:**
+
+```json
+{
+  "hooks": {
+    "shell": {
+      "enabled": true,
+      "defaultTimeoutMs": 5000,
+      "envAllowlist": ["SLACK_WEBHOOK_URL"],
+      "commands": [
+        { "event": "run.after", "command": "node", "args": ["./scripts/hook.js"] }
+      ]
+    }
+  }
+}
+```
+
 ## Build Issues
 
 ### TypeScript compilation errors

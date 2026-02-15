@@ -40,7 +40,22 @@ const DEFAULT_CONFIG = `{
   "contextWindow": 100000,
   "autoCompact": true,
   "skillsEnabled": true,
-  "agentsEnabled": true
+  "agentsEnabled": true,
+  "resilience": {
+    "incompleteActionAutoLoop": true,
+    "maxIncompleteAutoLoops": 2,
+    "autoLoopPromptStyle": "strict"
+  },
+  "hooks": {
+    "builtIn": {
+      "metrics": true
+    },
+    "shell": {
+      "enabled": false,
+      "defaultTimeoutMs": 5000,
+      "commands": []
+    }
+  }
 }
 `;
 

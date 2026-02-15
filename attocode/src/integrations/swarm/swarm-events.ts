@@ -16,7 +16,7 @@ export type SwarmEvent =
   | { type: 'swarm.wave.complete'; wave: number; totalWaves: number; completed: number; failed: number; skipped: number }
   | { type: 'swarm.task.dispatched'; taskId: string; description: string; model: string; workerName: string; toolCount: number; tools?: string[]; retryContext?: { previousScore: number; previousFeedback: string; attempt: number }; fromModel?: string; attempts?: number }
   | { type: 'swarm.task.completed'; taskId: string; success: boolean; tokensUsed: number; costUsed: number; durationMs: number; qualityScore?: number; qualityFeedback?: string; output?: string; closureReport?: import('../agent-registry.js').StructuredClosureReport; toolCalls?: number }
-  | { type: 'swarm.task.failed'; taskId: string; error: string; attempt: number; maxAttempts: number; willRetry: boolean; toolCalls?: number; failoverModel?: string; failureMode?: string }
+  | { type: 'swarm.task.failed'; taskId: string; error: string; attempt: number; maxAttempts: number; willRetry: boolean; toolCalls?: number; failoverModel?: string; failureMode?: string; failureClass?: string; retrySuppressed?: boolean; retryReason?: string }
   | { type: 'swarm.task.skipped'; taskId: string; reason: string }
   | { type: 'swarm.quality.rejected'; taskId: string; score: number; feedback: string; artifactCount: number; outputLength: number; preFlightReject?: boolean; filesOnDisk?: number }
   | { type: 'swarm.budget.update'; tokensUsed: number; tokensTotal: number; costUsed: number; costTotal: number }
@@ -86,7 +86,7 @@ export function formatSwarmEvent(event: SwarmEvent): string {
     case 'swarm.task.completed':
       return `Task ${event.taskId} ${event.success ? 'completed' : 'failed'} (${event.tokensUsed} tokens, $${event.costUsed.toFixed(4)}, ${(event.durationMs / 1000).toFixed(1)}s)`;
     case 'swarm.task.failed':
-      return `Task ${event.taskId} failed (attempt ${event.attempt}/${event.maxAttempts}): ${event.error}${event.willRetry ? ' — will retry' : ''}${event.toolCalls !== undefined ? ` [${event.toolCalls === -1 ? 'timeout' : event.toolCalls + ' tools'}]` : ''}`;
+      return `Task ${event.taskId} failed (attempt ${event.attempt}/${event.maxAttempts}): ${event.error}${event.failureClass ? ` [${event.failureClass}]` : ''}${event.retrySuppressed ? ` — retry suppressed${event.retryReason ? ` (${event.retryReason})` : ''}` : (event.willRetry ? ' — will retry' : '')}${event.toolCalls !== undefined ? ` [${event.toolCalls === -1 ? 'timeout' : event.toolCalls + ' tools'}]` : ''}`;
     case 'swarm.task.skipped':
       return `Task ${event.taskId} skipped: ${event.reason}`;
     case 'swarm.quality.rejected':

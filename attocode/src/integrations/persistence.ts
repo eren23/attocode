@@ -5,6 +5,7 @@
  */
 
 import type { SQLiteStore, SessionStore } from './index.js';
+import { logger } from './logger.js';
 
 // Session store type that works with both SQLite and JSONL
 export type AnySessionStore = SQLiteStore | SessionStore;
@@ -53,8 +54,8 @@ export class PersistenceDebugger {
       this.buffer.push(logLine);
       if (dataLine) this.buffer.push(dataLine);
     } else {
-      console.log(logLine);
-      if (dataLine) console.log(dataLine);
+      logger.debug(logLine);
+      if (dataLine) logger.debug(dataLine);
     }
   }
 
@@ -76,8 +77,8 @@ export class PersistenceDebugger {
       this.buffer.push(errLine);
       this.buffer.push(details);
     } else {
-      console.error(errLine);
-      console.error(details);
+      logger.error(errLine);
+      logger.error(details);
     }
   }
 

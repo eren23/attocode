@@ -188,6 +188,105 @@ describe('ProductionAgent', () => {
       const state = agent.getState();
       expect(state.messages.length).toBeGreaterThan(0);
     });
+
+    it('should fail completion when response remains future-intent without action', async () => {
+      const provider = createMockProvider([
+        "I'll fix this now.",
+        "I'll fix this now.",
+        "I'll fix this now.",
+        "I'll fix this now.",
+        "I'll fix this now.",
+      ]);
+
+      const intentAgent = new ProductionAgent({
+        provider,
+        tools: mockTools,
+        maxIterations: 10,
+        memory: false,
+        planning: false,
+        reflection: false,
+        observability: false,
+        sandbox: false,
+        humanInLoop: false,
+        routing: false,
+        multiAgent: false,
+        react: false,
+        executionPolicy: false,
+        threads: false,
+        rules: false,
+        hooks: false,
+        plugins: false,
+        cancellation: false,
+        resources: false,
+        lsp: false,
+        semanticCache: false,
+      });
+
+      const result = await intentAgent.run('Fix the failing code and explain what changed.');
+      expect(result.success).toBe(false);
+      expect(['incomplete_action', 'future_intent']).toContain(result.completion.reason);
+
+      await intentAgent.cleanup();
+    });
+
+    it('should block completion when tasks remain in_progress', async () => {
+      const provider = createMockProviderWithTools([
+        {
+          content: '',
+          toolCalls: [{
+            id: 'task-create-1',
+            name: 'task_create',
+            arguments: {
+              subject: 'Fix compile errors',
+              description: 'Fix remaining compile errors',
+            },
+          }],
+        },
+        {
+          content: '',
+          toolCalls: [{
+            id: 'task-update-1',
+            name: 'task_update',
+            arguments: {
+              taskId: '1',
+              status: 'in_progress',
+            },
+          }],
+        },
+        { content: 'Done.', toolCalls: [] },
+      ]);
+
+      const taskAgent = new ProductionAgent({
+        provider,
+        tools: mockTools,
+        maxIterations: 10,
+        memory: false,
+        planning: false,
+        reflection: false,
+        observability: false,
+        sandbox: false,
+        humanInLoop: false,
+        routing: false,
+        multiAgent: false,
+        react: false,
+        executionPolicy: false,
+        threads: false,
+        rules: false,
+        hooks: false,
+        plugins: false,
+        cancellation: false,
+        resources: false,
+        lsp: false,
+        semanticCache: false,
+      });
+
+      const result = await taskAgent.run('Fix the codebase issues.');
+      expect(result.success).toBe(false);
+      expect(result.completion.reason).toBe('open_tasks');
+      expect(result.completion.openTasks?.inProgress).toBeGreaterThan(0);
+
+      await taskAgent.cleanup();
+    });
   });
 
   describe('tool execution', () => {

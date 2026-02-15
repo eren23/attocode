@@ -19,13 +19,12 @@
  * - Thread Management (Lesson 24)
  */
 
+import * as path from 'node:path';
+
 import type {
   ProductionAgentConfig,
-  SandboxConfig,
   LLMProvider,
   Message,
-  ToolCall,
-  ToolResult,
   ToolDefinition,
   AgentState,
   AgentMetrics,
@@ -34,16 +33,15 @@ import type {
   AgentEvent,
   AgentEventListener,
   AgentRoleConfig,
-  ChatResponse,
   MultiAgentConfig,
+  AgentCompletionStatus,
+  OpenTaskSummary,
 } from './types.js';
 
 import {
   buildConfig,
   isFeatureEnabled,
   getEnabledFeatures,
-  getSubagentTimeout,
-  getSubagentMaxIterations,
 } from './defaults.js';
 
 import {
@@ -51,10 +49,6 @@ import {
   createModeManager,
   formatModeList,
   parseMode,
-  isWriteTool,
-  isBashWriteCommand,
-  calculateTaskSimilarity,
-  SUBAGENT_PLAN_MODE_ADDITION,
   type AgentMode,
 } from './modes.js';
 
@@ -78,24 +72,13 @@ import {
   DEFAULT_RULE_SOURCES,
   ExecutionEconomicsManager,
   STANDARD_BUDGET,
-  SUBAGENT_BUDGET,
-  TIMEOUT_WRAPUP_PROMPT,
   AgentRegistry,
-  createAgentRegistry,
-  filterToolsForAgent,
   formatAgentList,
   CancellationManager,
   createCancellationManager,
   isCancellationError,
-  CancellationError,
-  createTimeoutToken,
-  createLinkedToken,
-  createGracefulTimeout,
-  race,
   ResourceManager,
   createResourceManager,
-  combinedShouldContinue,
-  isResourceLimitError,
   LSPManager,
   createLSPManager,
   SemanticCacheManager,
@@ -105,7 +88,6 @@ import {
   formatSkillList,
   ContextEngineeringManager,
   createContextEngineering,
-  stableStringify,
   CodebaseContextManager,
   createCodebaseContext,
   buildContextFromChunks,
@@ -119,53 +101,37 @@ import {
   type AgentDefinition,
   type LoadedAgent,
   type SpawnResult,
-  type StructuredClosureReport,
   type CancellationTokenType,
   type Skill,
-  type ContextEngineeringConfig,
-  type CodebaseContextConfig,
-  type SelectionOptions,
   type CacheableContentBlock,
   SharedFileCache,
   createSharedFileCache,
   SharedBudgetPool,
   createBudgetPool,
-  DynamicBudgetPool,
-  createDynamicBudgetPool,
   type ApprovalScope,
   PendingPlanManager,
   createPendingPlanManager,
   type PendingPlan,
-  // Interactive Planning
   InteractivePlanner,
   createInteractivePlanner,
-  // Recursive Context (RLM)
   RecursiveContextManager,
   createRecursiveContext,
-  // Learning Store (cross-session learning)
   LearningStore,
   createLearningStore,
-  // Compaction
   Compactor,
   createCompactor,
-  // Auto-Compaction Manager
   AutoCompactionManager,
   createAutoCompactionManager,
   type AutoCompactionEvent,
-  // File Change Tracker (undo capability)
   FileChangeTracker,
   createFileChangeTracker,
-  // Capabilities Registry (unified discovery)
   CapabilitiesRegistry,
   createCapabilitiesRegistry,
-  // Shared Blackboard (subagent coordination)
   SharedBlackboard,
   createSharedBlackboard,
-  // Task Management
   TaskManager,
   createTaskManager,
   type SQLiteStore,
-  // Swarm Mode
   SwarmOrchestrator,
   createSwarmOrchestrator,
   createThrottledProvider,
@@ -173,59 +139,44 @@ import {
   PAID_TIER_THROTTLE,
   type SwarmConfig,
   type SwarmExecutionResult,
-  // Work Log (compaction-resilient summary)
   WorkLog,
   createWorkLog,
-  // Verification Gate (opt-in completion verification)
   VerificationGate,
   createVerificationGate,
-  // Phase 2: Orchestration
   classifyComplexity,
   getScalingGuidance,
   type ComplexityAssessment,
-  buildDelegationPrompt,
-  createMinimalDelegationSpec,
-  getSubagentQualityPrompt,
   ToolRecommendationEngine,
   createToolRecommendationEngine,
   InjectionBudgetManager,
   createInjectionBudgetManager,
-  type InjectionSlot,
-  // Phase 3: Advanced
   getThinkingSystemPrompt,
   SelfImprovementProtocol,
   createSelfImprovementProtocol,
   SubagentOutputStore,
   createSubagentOutputStore,
-  type SubagentOutput,
   createSerperSearchTool,
   getEnvironmentFacts,
   formatFactsBlock,
   AutoCheckpointManager,
   createAutoCheckpointManager,
-  SubagentSupervisor,
-  createSubagentSupervisor,
-  createSubagentHandle,
 } from './integrations/index.js';
 import {
-  mergeApprovalScopeWithProfile,
   resolvePolicyProfile,
 } from './integrations/policy-engine.js';
 
-// Lesson 26: Tracing & Evaluation integration
+import type { SharedContextState } from './shared/shared-context-state.js';
+import type { SharedEconomicsState } from './shared/shared-economics-state.js';
 import { TraceCollector, createTraceCollector } from './tracing/trace-collector.js';
-
-// Provider types for cache-aware messages
-import type { MessageWithContent } from './providers/types.js';
-
-// Model registry for context window limits
 import { modelRegistry } from './costs/index.js';
 import { getModelContextLength } from './integrations/openrouter-pricing.js';
+import { createComponentLogger } from './integrations/logger.js';
 
 // Spawn agent tools for LLM-driven subagent delegation
 import {
   createBoundSpawnAgentTool,
   createBoundSpawnAgentsParallelTool,
+  type SpawnConstraints,
 } from './tools/agent.js';
 
 // Task tools for Claude Code-style task management
@@ -241,123 +192,27 @@ import {
  * Tools that are safe to execute in parallel (read-only, no side effects).
  * These tools don't modify state, so running them concurrently is safe.
  */
-export const PARALLELIZABLE_TOOLS = new Set([
-  'read_file', 'glob', 'grep', 'list_files', 'search_files',
-  'search_code', 'get_file_info',
-]);
+const log = createComponentLogger('ProductionAgent');
 
-/**
- * Tools that can run in parallel IF they target different files.
- * write_file and edit_file on different paths are safe to parallelize.
- */
-export const CONDITIONALLY_PARALLEL_TOOLS = new Set([
-  'write_file', 'edit_file',
-]);
+// Tool-batching constants (canonical home: core/tool-executor.ts)
+import {
+  PARALLELIZABLE_TOOLS,
+  CONDITIONALLY_PARALLEL_TOOLS,
+  extractToolFilePath,
+  groupToolCallsIntoBatches,
+} from './core/index.js';
+export { PARALLELIZABLE_TOOLS, CONDITIONALLY_PARALLEL_TOOLS, extractToolFilePath, groupToolCallsIntoBatches };
 
-/**
- * Extract the target file path from a tool call's arguments.
- * Returns null if no file path can be determined.
- */
-export function extractToolFilePath(toolCall: { name: string; [key: string]: unknown }): string | null {
-  // Check common argument patterns
-  const args = (toolCall as Record<string, unknown>);
-  for (const key of ['path', 'file_path', 'filename', 'file']) {
-    if (typeof args[key] === 'string') return args[key] as string;
-  }
-  // Check nested args object
-  if (args.args && typeof args.args === 'object') {
-    const nested = args.args as Record<string, unknown>;
-    for (const key of ['path', 'file_path', 'filename', 'file']) {
-      if (typeof nested[key] === 'string') return nested[key] as string;
-    }
-  }
-  // Check input object (common in structured tool calls)
-  if (args.input && typeof args.input === 'object') {
-    const input = args.input as Record<string, unknown>;
-    for (const key of ['path', 'file_path', 'filename', 'file']) {
-      if (typeof input[key] === 'string') return input[key] as string;
-    }
-  }
-  return null;
-}
+// Extracted core modules (Phase 2.1 — thin orchestrator delegates)
+import {
+  executeDirectly as coreExecuteDirectly,
+  spawnAgent as coreSpawnAgent,
+  spawnAgentsParallel as coreSpawnAgentsParallel,
+} from './core/index.js';
 
-/**
- * Check if a conditionally-parallel tool call conflicts with any tool
- * in the current accumulator (same file path).
- */
-function hasFileConflict<T extends { name: string }>(
-  toolCall: T,
-  accumulator: T[],
-): boolean {
-  const path = extractToolFilePath(toolCall as T & Record<string, unknown>);
-  if (!path) return true; // Can't determine path → assume conflict
-
-  for (const existing of accumulator) {
-    const existingPath = extractToolFilePath(existing as T & Record<string, unknown>);
-    if (existingPath === path) return true; // Same file → conflict
-  }
-
-  return false;
-}
-
-/**
- * Groups tool calls into batches for parallel/sequential execution.
- * Uses accumulate-and-flush: parallelizable tools accumulate until a
- * non-parallelizable tool flushes them as a batch. This produces optimal
- * batching even for non-consecutive parallelizable tools.
- *
- * Enhanced with conditional parallelism: write_file/edit_file on
- * DIFFERENT files can be batched together for parallel execution.
- *
- * Example: [read1, read2, write, read3, grep] → [[read1, read2], [write], [read3, grep]]
- * (Previous algorithm produced 4 batches; this produces 3)
- *
- * Enhanced: [write_a, write_b, write_a] → [[write_a, write_b], [write_a]]
- * (Different files parallelized, same file sequential)
- */
-export function groupToolCallsIntoBatches<T extends { name: string }>(
-  toolCalls: T[],
-  isParallelizable: (tc: T) => boolean = (tc) => PARALLELIZABLE_TOOLS.has(tc.name),
-  isConditionallyParallel: (tc: T) => boolean = (tc) => CONDITIONALLY_PARALLEL_TOOLS.has(tc.name),
-): T[][] {
-  if (toolCalls.length === 0) return [];
-
-  const batches: T[][] = [];
-  let parallelAccum: T[] = [];
-
-  for (const toolCall of toolCalls) {
-    if (isParallelizable(toolCall)) {
-      parallelAccum.push(toolCall);
-    } else if (isConditionallyParallel(toolCall)) {
-      // Can parallelize if no file conflict with existing accumulator
-      if (!hasFileConflict(toolCall, parallelAccum)) {
-        parallelAccum.push(toolCall);
-      } else {
-        // Conflict: flush current batch, start new one with this tool
-        if (parallelAccum.length > 0) {
-          batches.push(parallelAccum);
-          parallelAccum = [];
-        }
-        parallelAccum.push(toolCall);
-      }
-    } else {
-      // Flush any accumulated parallel tools as a single batch
-      if (parallelAccum.length > 0) {
-        batches.push(parallelAccum);
-        parallelAccum = [];
-      }
-      // Non-parallelizable tool gets its own batch
-      batches.push([toolCall]);
-    }
-  }
-
-  // Flush remaining parallel tools
-  if (parallelAccum.length > 0) {
-    batches.push(parallelAccum);
-  }
-
-  return batches;
-}
+// Phase 2.2: Agent State Machine
+import { type AgentStateMachine, createAgentStateMachine } from './core/agent-state-machine.js';
+import { detectIncompleteActionResponse } from './core/completion-analyzer.js';
 
 /**
  * Production-ready agent that composes all features.
@@ -403,6 +258,8 @@ export class ProductionAgent {
   private agentId!: string;
   private blackboard: SharedBlackboard | null = null;
   private fileCache: SharedFileCache | null = null;
+  private _sharedContextState: SharedContextState | null = null;
+  private _sharedEconomicsState: SharedEconomicsState | null = null;
   private budgetPool: SharedBudgetPool | null = null;
   private taskManager: TaskManager | null = null;
   private store: SQLiteStore | null = null;
@@ -416,12 +273,14 @@ export class ProductionAgent {
   private subagentOutputStore: SubagentOutputStore | null = null;
   private autoCheckpointManager: AutoCheckpointManager | null = null;
   private toolRecommendation: ToolRecommendationEngine | null = null;
+  private stateMachine: AgentStateMachine | null = null;
   private lastComplexityAssessment: ComplexityAssessment | null = null;
+  private lastSystemPromptLength = 0;
 
   // Duplicate spawn prevention - tracks recently spawned tasks to prevent doom loops
   // Map<taskKey, { timestamp: number; result: string; queuedChanges: number }>
   private spawnedTasks = new Map<string, { timestamp: number; result: string; queuedChanges: number }>();
-  private static readonly SPAWN_DEDUP_WINDOW_MS = 60000; // 60 seconds
+  // SPAWN_DEDUP_WINDOW_MS moved to core/subagent-spawner.ts
 
   // Parent iteration tracking for total budget calculation
   private parentIterations = 0;
@@ -527,6 +386,10 @@ export class ProductionAgent {
       this.budgetPool = createBudgetPool(parentBudgetTokens, 0.25, 100000);
     }
 
+    // Shared state for swarm workers (passed from orchestrator via config)
+    this._sharedContextState = (userConfig as any).sharedContextState ?? null;
+    this._sharedEconomicsState = (userConfig as any).sharedEconomicsState ?? null;
+
     // Initialize enabled features
     this.initializeFeatures();
   }
@@ -538,7 +401,7 @@ export class ProductionAgent {
     // Debug output only when DEBUG env var is set
     if (process.env.DEBUG) {
       const features = getEnabledFeatures(this.config);
-      console.log(`[ProductionAgent] Initializing with features: ${features.join(', ')}`);
+      log.debug('Initializing with features', { features: features.join(', ') });
     }
 
     // Hooks & Plugins
@@ -660,7 +523,7 @@ export class ProductionAgent {
       // Load rules asynchronously - tracked for ensureReady()
       this.initPromises.push(
         this.rules.loadRules().catch(err => {
-          console.warn('[ProductionAgent] Failed to load rules:', err);
+          log.warn('Failed to load rules', { error: String(err) });
         })
       );
     }
@@ -668,12 +531,34 @@ export class ProductionAgent {
     // Economics System (Token Budget) - always enabled
     // Use custom budget if provided (subagents use SUBAGENT_BUDGET), otherwise STANDARD_BUDGET
     const baseBudget = this.config.budget ?? STANDARD_BUDGET;
-    this.economics = new ExecutionEconomicsManager({
-      ...baseBudget,
-      // Use maxIterations from config as absolute safety cap
-      maxIterations: this.config.maxIterations,
-      targetIterations: Math.min(baseBudget.targetIterations ?? 20, this.config.maxIterations),
+    this.economics = new ExecutionEconomicsManager(
+      {
+        ...baseBudget,
+        // Use maxIterations from config as absolute safety cap
+        maxIterations: this.config.maxIterations,
+        targetIterations: Math.min(baseBudget.targetIterations ?? 20, this.config.maxIterations),
+      },
+      this._sharedEconomicsState ?? undefined,
+      this.agentId,
+    );
+
+    // Phase 2.2: Agent State Machine - formalizes phase tracking
+    // Always enabled - provides structured phase transitions with metrics
+    this.stateMachine = createAgentStateMachine();
+    // Forward state machine phase transitions as subagent.phase events
+    const phaseMap: Record<string, 'exploring' | 'planning' | 'executing' | 'completing'> = {
+      exploring: 'exploring', planning: 'planning', acting: 'executing', verifying: 'completing',
+    };
+    const unsubStateMachine = this.stateMachine.subscribe(event => {
+      if (event.type === 'phase.changed') {
+        this.emit({
+          type: 'subagent.phase',
+          agentId: this.agentId,
+          phase: phaseMap[event.transition.to] ?? 'exploring',
+        });
+      }
     });
+    this.unsubscribers.push(unsubStateMachine);
 
     // Work Log - compaction-resilient summary of agent work
     // Always enabled - minimal overhead and critical for long-running tasks
@@ -696,7 +581,7 @@ export class ProductionAgent {
     // Load user agents asynchronously - tracked for ensureReady()
     this.initPromises.push(
       this.agentRegistry.loadUserAgents().catch(err => {
-        console.warn('[ProductionAgent] Failed to load user agents:', err);
+        log.warn('Failed to load user agents', { error: String(err) });
       })
     );
 
@@ -761,6 +646,9 @@ export class ProductionAgent {
         ) as any;
       }
 
+      // Pass codebaseContext so the decomposer can ground tasks in actual project files
+      swarmConfig.codebaseContext = this.codebaseContext ?? undefined;
+
       this.swarmOrchestrator = createSwarmOrchestrator(
         swarmConfig,
         this.provider as unknown as import('./providers/types.js').LLMProvider,
@@ -773,6 +661,10 @@ export class ProductionAgent {
       // allocates from the swarm budget (e.g. 10M tokens) instead of the parent's
       // generic pool (200K tokens). Without this, workers get 5K emergency budget.
       this.budgetPool = this.swarmOrchestrator.getBudgetPool().pool;
+
+      // Phase 3.1+3.2: Set shared state so workers inherit it via buildContext()
+      this._sharedContextState = this.swarmOrchestrator.getSharedContextState();
+      this._sharedEconomicsState = this.swarmOrchestrator.getSharedEconomicsState();
     }
 
     // Cancellation Support
@@ -844,7 +736,7 @@ export class ProductionAgent {
         this.skillManager.loadSkills()
           .then(() => {}) // Convert to void
           .catch(err => {
-            console.warn('[ProductionAgent] Failed to load skills:', err);
+            log.warn('Failed to load skills', { error: String(err) });
           })
       );
     }
@@ -863,6 +755,11 @@ export class ProductionAgent {
       maxReferences: 50,
     });
 
+    // Bind shared context state for cross-worker failure learning (swarm workers only)
+    if (this._sharedContextState) {
+      this.contextEngineering.setSharedState(this._sharedContextState);
+    }
+
     // Codebase Context - intelligent code selection for context management
     // Analyzes repo structure and selects relevant code within token budgets
     if (this.config.codebaseContext !== false) {
@@ -879,6 +776,11 @@ export class ProductionAgent {
         cacheResults: true,
         cacheTTL: 5 * 60 * 1000, // 5 minutes
       });
+
+      // Forward trace collector so codebase analysis can emit codebase.map entries.
+      if (this.traceCollector) {
+        this.codebaseContext.traceCollector = this.traceCollector;
+      }
 
       // Connect LSP manager to codebase context for enhanced code selection
       // This enables LSP-based relevance boosting (Phase 4.1)
@@ -1262,6 +1164,7 @@ export class ProductionAgent {
   async run(task: string): Promise<AgentResult> {
     // Ensure all integrations are ready before running
     await this.ensureReady();
+    this.reconcileStaleTasks('run_start');
 
     const startTime = Date.now();
 
@@ -1274,6 +1177,7 @@ export class ProductionAgent {
     // Start tracing
     const traceId = this.observability?.tracer?.startTrace('agent.run') || `trace-${Date.now()}`;
     this.emit({ type: 'start', task, traceId });
+    this.emit({ type: 'run.before', task });
     this.observability?.logger?.info('Agent started', { task });
 
     // Lesson 26: Start trace capture
@@ -1294,6 +1198,13 @@ export class ProductionAgent {
     }
 
     try {
+      let runSuccess = true;
+      let runFailureReason: string | undefined;
+      let completion: AgentCompletionStatus = {
+        success: true,
+        reason: 'completed',
+      };
+
       // Check for cancellation before starting
       cancellationToken?.throwIfCancellationRequested();
 
@@ -1305,13 +1216,44 @@ export class ProductionAgent {
       // Check if swarm mode should handle this task
       if (this.swarmOrchestrator) {
         const swarmResult = await this.runSwarm(task);
+        if (!swarmResult.success) {
+          runSuccess = false;
+          runFailureReason = swarmResult.summary || 'Swarm reported unsuccessful execution';
+          completion = {
+            success: false,
+            reason: 'swarm_failure',
+            details: runFailureReason,
+          };
+        }
+        // Guard against summaries that still indicate pending work.
+        if (detectIncompleteActionResponse(swarmResult.summary || '')) {
+          this.emit({ type: 'completion.before', reason: 'future_intent' });
+          runSuccess = false;
+          runFailureReason = 'Swarm summary indicates pending, unexecuted work';
+          completion = {
+            success: false,
+            reason: 'future_intent',
+            details: runFailureReason,
+            futureIntentDetected: true,
+          };
+        }
         // Store swarm summary as an assistant message for the response
         this.state.messages.push({ role: 'assistant', content: swarmResult.summary });
       } else if (this.planning?.shouldPlan(task)) {
         // Check if planning is needed
         await this.createAndExecutePlan(task);
       } else {
-        await this.executeDirectly(task);
+        const directResult = await this.executeDirectly(task);
+        if (!directResult.success) {
+          runSuccess = false;
+          runFailureReason = directResult.failureReason || directResult.terminationReason;
+        }
+        completion = {
+          success: directResult.success,
+          reason: directResult.terminationReason,
+          ...(directResult.failureReason ? { details: directResult.failureReason } : {}),
+          ...(directResult.openTasks ? { openTasks: directResult.openTasks } : {}),
+        };
       }
 
       // Get final response - find the LAST assistant message (not just check if last message is assistant)
@@ -1321,31 +1263,109 @@ export class ProductionAgent {
         ? lastAssistantMessage.content
         : '';
 
+      // Final guardrail: never mark a run successful if the final answer is "I'll do X".
+      if (runSuccess && detectIncompleteActionResponse(response)) {
+        this.emit({ type: 'completion.before', reason: 'future_intent' });
+        runSuccess = false;
+        runFailureReason = 'Final response indicates pending, unexecuted work';
+        completion = {
+          success: false,
+          reason: 'future_intent',
+          details: runFailureReason,
+          futureIntentDetected: true,
+        };
+      }
+
+      if (runSuccess && completion.reason === 'completed') {
+        this.reconcileStaleTasks('run_end');
+        const openTasks = this.getOpenTasksSummary();
+        if (openTasks && (openTasks.inProgress > 0 || openTasks.pending > 0)) {
+          this.emit({ type: 'completion.before', reason: 'open_tasks' });
+          runSuccess = false;
+          runFailureReason = `Open tasks remain: ${openTasks.pending} pending, ${openTasks.inProgress} in_progress`;
+          completion = {
+            success: false,
+            reason: 'open_tasks',
+            details: runFailureReason,
+            openTasks,
+          };
+          this.emit({
+            type: 'completion.blocked',
+            reasons: [
+              runFailureReason,
+              openTasks.blocked > 0 ? `${openTasks.blocked} pending tasks are blocked` : '',
+            ].filter(Boolean),
+            openTasks,
+            diagnostics: {
+              forceTextOnly: false,
+              availableTasks: this.taskManager?.getAvailableTasks().length ?? 0,
+              pendingWithOwner: 0,
+            },
+          });
+        }
+      }
+
       // Finalize
       const duration = Date.now() - startTime;
       this.state.metrics.duration = duration;
-      this.state.metrics.successCount = (this.state.metrics.successCount ?? 0) + 1;
+      if (runSuccess) {
+        this.state.metrics.successCount = (this.state.metrics.successCount ?? 0) + 1;
+      } else {
+        this.state.metrics.failureCount = (this.state.metrics.failureCount ?? 0) + 1;
+      }
 
       await this.observability?.tracer?.endTrace();
 
       const result: AgentResult = {
-        success: true,
+        success: runSuccess,
         response,
+        ...(runSuccess ? {} : { error: runFailureReason ?? 'Task failed' }),
         metrics: this.getMetrics(),
         messages: this.state.messages,
         traceId,
         plan: this.state.plan,
+        completion,
+      };
+      result.completion.recovery = {
+        intraRunRetries: this.state.metrics.retryCount ?? 0,
+        autoLoopRuns: 0,
+        terminal: !runSuccess,
+        reasonChain: [completion.reason],
       };
 
       this.emit({ type: 'complete', result });
-      this.observability?.logger?.info('Agent completed', { duration, success: true });
+      this.emit({
+        type: 'completion.after',
+        success: runSuccess,
+        reason: completion.reason,
+        ...(completion.details ? { details: completion.details } : {}),
+      });
+      this.emit({
+        type: 'run.after',
+        success: runSuccess,
+        reason: completion.reason,
+        ...(completion.details ? { details: completion.details } : {}),
+      });
+      this.observability?.logger?.info('Agent completed', {
+        duration,
+        success: runSuccess,
+        ...(runFailureReason ? { failureReason: runFailureReason } : {}),
+      });
 
       // Lesson 26: End trace capture
       // If task is active (REPL mode), end the task. Otherwise end the session (single-task mode).
       if (this.traceCollector?.isTaskActive()) {
-        await this.traceCollector.endTask({ success: true, output: response });
+        await this.traceCollector.endTask(
+          runSuccess
+            ? { success: true, output: response }
+            : { success: false, failureReason: runFailureReason ?? 'Task failed', output: response },
+        );
       } else if (this.traceCollector?.isSessionActive()) {
-        await this.traceCollector.endSession({ success: true, output: response });
+        await this.traceCollector.endSession(
+          runSuccess
+            ? { success: true, output: response }
+            : { success: false, failureReason: runFailureReason ?? 'Task failed', output: response },
+        );
       }
 
       return result;
@@ -1369,6 +1389,19 @@ export class ProductionAgent {
           await this.traceCollector.endSession({ success: false, failureReason: `Cancelled: ${error.message}` });
         }
 
+        this.emit({
+          type: 'completion.after',
+          success: false,
+          reason: 'cancelled',
+          details: `Cancelled: ${error.message}`,
+        });
+        this.emit({
+          type: 'run.after',
+          success: false,
+          reason: 'cancelled',
+          details: `Cancelled: ${error.message}`,
+        });
+
         return {
           success: false,
           response: '',
@@ -1376,6 +1409,11 @@ export class ProductionAgent {
           metrics: this.getMetrics(),
           messages: this.state.messages,
           traceId,
+          completion: {
+            success: false,
+            reason: 'cancelled',
+            details: `Cancelled: ${error.message}`,
+          },
         };
       }
 
@@ -1385,6 +1423,9 @@ export class ProductionAgent {
 
       this.emit({ type: 'error', error: error.message });
       this.observability?.logger?.error('Agent failed', { error: error.message });
+      const completionReason = error.message.includes('failed to complete requested action')
+        ? 'incomplete_action' as const
+        : 'error' as const;
 
       // Lesson 26: End trace capture on error
       if (this.traceCollector?.isTaskActive()) {
@@ -1393,14 +1434,26 @@ export class ProductionAgent {
         await this.traceCollector.endSession({ success: false, failureReason: error.message });
       }
 
-      return {
+      const errorResult = {
         success: false,
         response: '',
         error: error.message,
         metrics: this.getMetrics(),
         messages: this.state.messages,
         traceId,
+        completion: {
+          success: false,
+          reason: completionReason,
+          details: error.message,
+        },
       };
+      this.emit({
+        type: 'run.after',
+        success: false,
+        reason: completionReason,
+        details: error.message,
+      });
+      return errorResult;
     } finally {
       // Dispose cancellation context on completion
       this.cancellation?.disposeContext();
@@ -1430,7 +1483,7 @@ export class ProductionAgent {
         await this.executeDirectly(currentTask.description);
         this.planning!.completeTask(currentTask.id);
         this.emit({ type: 'task.complete', task: currentTask });
-      } catch (err) {
+      } catch (_err) {
         this.planning!.failTask(currentTask.id);
         this.observability?.logger?.warn('Plan task failed', { taskId: currentTask.id });
         // Continue with other tasks if possible
@@ -1469,6 +1522,135 @@ export class ProductionAgent {
     const { SwarmEventBridge } = await import('./integrations/swarm/swarm-event-bridge.js');
     const bridge = new SwarmEventBridge({ outputDir: '.agent/swarm-live' });
     const unsubBridge = bridge.attach(this.swarmOrchestrator);
+
+    const writeCodeMapSnapshot = (): void => {
+      if (!this.codebaseContext) {
+        return;
+      }
+      const repoMap = this.codebaseContext.getRepoMap();
+      if (!repoMap) {
+        return;
+      }
+
+      // Build dependency edges from the dependency graph
+      const depEdges: { file: string; imports: string[] }[] = [];
+      for (const [file, deps] of repoMap.dependencyGraph) {
+        depEdges.push({ file, imports: Array.from(deps) });
+      }
+
+      // Build top chunks sorted by importance
+      const chunks = Array.from(repoMap.chunks.values());
+      const topChunks = chunks
+        .sort((a, b) => b.importance - a.importance)
+        .slice(0, 100)
+        .map(c => ({
+          filePath: c.filePath,
+          tokenCount: c.tokenCount,
+          importance: c.importance,
+          type: c.type,
+          symbols: c.symbolDetails,
+        }));
+      const files = chunks.map((chunk) => ({
+        filePath: chunk.filePath,
+        directory: path.dirname(chunk.filePath) === '.' ? '' : path.dirname(chunk.filePath),
+        fileName: path.basename(chunk.filePath),
+        tokenCount: chunk.tokenCount,
+        importance: chunk.importance,
+        type: chunk.type,
+        symbols: chunk.symbolDetails,
+        inDegree: repoMap.reverseDependencyGraph.get(chunk.filePath)?.size ?? 0,
+        outDegree: repoMap.dependencyGraph.get(chunk.filePath)?.size ?? 0,
+      }));
+
+      bridge.writeCodeMapSnapshot({
+        totalFiles: repoMap.chunks.size,
+        totalTokens: repoMap.totalTokens,
+        entryPoints: repoMap.entryPoints,
+        coreModules: repoMap.coreModules,
+        dependencyEdges: depEdges,
+        files,
+        topChunks,
+      });
+    };
+    let codeMapRefreshInFlight = false;
+    let codeMapRefreshTimer: ReturnType<typeof setTimeout> | null = null;
+    const refreshAndWriteCodeMapSnapshot = async (): Promise<void> => {
+      if (!this.codebaseContext || codeMapRefreshInFlight) {
+        return;
+      }
+      codeMapRefreshInFlight = true;
+      try {
+        // Re-analyze from disk so snapshots include newly created files during swarm execution.
+        this.codebaseContext.clearCache();
+        await this.codebaseContext.analyze();
+        writeCodeMapSnapshot();
+      } catch {
+        // Best effort
+      } finally {
+        codeMapRefreshInFlight = false;
+      }
+    };
+
+    // Write observability snapshots to swarm-live/ on relevant events
+    const unsubSnapshots = this.swarmOrchestrator.subscribe(event => {
+      // Write codemap snapshot when tasks are loaded.
+      if (event.type === 'swarm.tasks.loaded' && this.codebaseContext) {
+        try {
+          writeCodeMapSnapshot();
+        } catch {
+          // Best effort — don't crash the swarm
+        }
+      }
+      // Refresh codemap after each completed wave to avoid stale 0-file snapshots.
+      if (event.type === 'swarm.wave.complete' && this.codebaseContext) {
+        void refreshAndWriteCodeMapSnapshot();
+      }
+      if (event.type === 'swarm.task.completed' && this.codebaseContext) {
+        if (codeMapRefreshTimer) {
+          clearTimeout(codeMapRefreshTimer);
+        }
+        codeMapRefreshTimer = setTimeout(() => {
+          void refreshAndWriteCodeMapSnapshot();
+        }, 1200);
+      }
+
+      // Write blackboard.json on wave completion or task completion
+      if ((event.type === 'swarm.wave.complete' || event.type === 'swarm.task.completed') && this.blackboard) {
+        try {
+          const findings = this.blackboard.getAllFindings();
+          bridge.writeBlackboardSnapshot({
+            findings: findings.map(f => ({
+              id: f.id ?? '',
+              topic: f.topic ?? '',
+              type: f.type ?? '',
+              agentId: f.agentId ?? '',
+              confidence: f.confidence ?? 0,
+              content: (f.content ?? '').slice(0, 500),
+            })),
+            claims: [],
+            updatedAt: new Date().toISOString(),
+          });
+        } catch {
+          // Best effort
+        }
+      }
+
+      // Write budget-pool.json on budget updates
+      if (event.type === 'swarm.budget.update' && this.budgetPool) {
+        try {
+          const stats = this.budgetPool.getStats();
+          bridge.writeBudgetPoolSnapshot({
+            poolTotal: stats.totalTokens,
+            poolUsed: stats.tokensUsed,
+            poolRemaining: stats.tokensRemaining,
+            allocations: [],
+            updatedAt: new Date().toISOString(),
+          });
+        } catch {
+          // Best effort
+        }
+      }
+    });
 
     // Bridge swarm events into JSONL trace pipeline
     const traceCollector = this.traceCollector;
@@ -1627,6 +1809,22 @@ export class ProductionAgent {
     }
 
     try {
+      // Ensure codebase context is analyzed before decomposition so repo map is available
+      if (this.codebaseContext && !this.codebaseContext.getRepoMap()) {
+        try {
+          await this.codebaseContext.analyze();
+        } catch {
+          // non-fatal — decomposer will work without codebase context
+        }
+      }
+
+      // Write codemap snapshot immediately so dashboard can render even if decomposition fails.
+      try {
+        writeCodeMapSnapshot();
+      } catch {
+        // Best effort
+      }
+
       const result = await this.swarmOrchestrator.execute(task);
 
       // Populate task DAG for dashboard after execution
@@ -1642,7 +1840,11 @@ export class ProductionAgent {
 
       return result;
     } finally {
+      if (codeMapRefreshTimer) {
+        clearTimeout(codeMapRefreshTimer);
+      }
       unsubTrace?.();
+      unsubSnapshots();
       unsubBridge();
       bridge.close();
       unsubSwarm();
@@ -1650,1084 +1852,13 @@ export class ProductionAgent {
   }
 
   /**
-   * Execute a task directly without planning.
+   * Execute a task directly without planning (delegates to core/execution-loop).
    */
-  private async executeDirectly(task: string): Promise<void> {
-    // Build messages
-    const messages = this.buildMessages(task);
-
-    // Reset economics for new task
-    this.economics?.reset();
-
-    // Reflection configuration
-    const reflectionConfig = this.config.reflection;
-    const reflectionEnabled = isFeatureEnabled(reflectionConfig);
-    const autoReflect = reflectionEnabled && reflectionConfig.autoReflect;
-    const maxReflectionAttempts = reflectionEnabled
-      ? (reflectionConfig.maxAttempts || 3)
-      : 1;
-    const confidenceThreshold = reflectionEnabled
-      ? (reflectionConfig.confidenceThreshold || 0.8)
-      : 0.8;
-
-    let reflectionAttempt = 0;
-    let lastResponse = '';
-    let incompleteActionRetries = 0;
-    const requestedArtifact = this.extractRequestedArtifact(task);
-    const executedToolNames = new Set<string>();
-
-    // Outer loop for reflection (if enabled)
-    while (reflectionAttempt < maxReflectionAttempts) {
-      reflectionAttempt++;
-
-      // Agent loop - now uses economics-based budget checking
-      while (true) {
-        this.state.iteration++;
-
-        // Record iteration start for tracing
-        this.traceCollector?.record({
-          type: 'iteration.start',
-          data: { iterationNumber: this.state.iteration },
-        });
-
-        // =======================================================================
-        // CANCELLATION CHECK
-        // Checks internal cancellation (ESC key) — always immediate.
-        // External cancellation (parent timeout) is checked after economics
-        // to allow graceful wrapup when wrapup has been requested.
-        // =======================================================================
-        if (this.cancellation?.isCancelled) {
-          this.cancellation.token.throwIfCancellationRequested();
-        }
-
-        // =======================================================================
-        // RESOURCE CHECK - system resource limits
-        // =======================================================================
-        if (this.resourceManager) {
-          const resourceCheck = this.resourceManager.check();
-
-          if (!resourceCheck.canContinue) {
-            this.observability?.logger?.warn('Resource limit reached', {
-              status: resourceCheck.status,
-              message: resourceCheck.message,
-            });
-            this.emit({ type: 'error', error: resourceCheck.message || 'Resource limit exceeded' });
-            break;
-          }
-
-          // Log warnings for elevated usage
-          if (resourceCheck.status === 'warning' || resourceCheck.status === 'critical') {
-            this.observability?.logger?.info(`Resource status: ${resourceCheck.status}`, {
-              message: resourceCheck.message,
-            });
-          }
-        }
-
-        // =======================================================================
-        // ECONOMICS CHECK (Token Budget) - replaces hard iteration limit
-        // With recovery: try compaction before giving up on token limits
-        // =======================================================================
-        let forceTextOnly = false;  // Track if we should skip tool execution
-        let budgetInjectedPrompt: string | undefined;
-
-        if (this.economics) {
-          const budgetCheck = this.economics.checkBudget();
-
-          // Capture forceTextOnly and injectedPrompt for later use
-          forceTextOnly = budgetCheck.forceTextOnly ?? false;
-          budgetInjectedPrompt = budgetCheck.injectedPrompt;
-
-          if (!budgetCheck.canContinue) {
-            // ===================================================================
-            // RECOVERY ATTEMPT: Try emergency context reduction before giving up
-            // Only for token-based limits, not iteration limits
-            // ===================================================================
-            const isTokenLimit = budgetCheck.budgetType === 'tokens' || budgetCheck.budgetType === 'cost';
-            const alreadyTriedRecovery = (this.state as { _recoveryAttempted?: boolean })._recoveryAttempted === true;
-
-            if (isTokenLimit && !alreadyTriedRecovery) {
-              this.observability?.logger?.info('Budget limit reached, attempting recovery via context reduction', {
-                reason: budgetCheck.reason,
-                percentUsed: budgetCheck.percentUsed,
-              });
-
-              this.emit({
-                type: 'resilience.retry',
-                reason: 'budget_limit_compaction',
-                attempt: 1,
-                maxAttempts: 1,
-              });
-              this.state.metrics.retryCount = (this.state.metrics.retryCount ?? 0) + 1;
-
-              // Mark that we've attempted recovery to prevent infinite loops
-              (this.state as { _recoveryAttempted?: boolean })._recoveryAttempted = true;
-
-              const tokensBefore = this.estimateContextTokens(messages);
-
-              // Step 1: Compact tool outputs aggressively
-              this.compactToolOutputs();
-
-              // Step 2: Emergency truncation - keep system + last N messages
-              const PRESERVE_RECENT = 10;
-              if (messages.length > PRESERVE_RECENT + 2) {
-                const systemMessage = messages.find(m => m.role === 'system');
-                const recentMessages = messages.slice(-(PRESERVE_RECENT));
-
-                // Rebuild message array
-                messages.length = 0;
-                if (systemMessage) {
-                  messages.push(systemMessage);
-                }
-                messages.push({
-                  role: 'system',
-                  content: `[CONTEXT REDUCED: Earlier messages were removed to stay within budget. Conversation continues from recent context.]`,
-                });
-                messages.push(...recentMessages);
-
-                // Inject work log after emergency truncation to prevent amnesia
-                if (this.workLog?.hasContent()) {
-                  const workLogMessage: Message = {
-                    role: 'user',
-                    content: this.workLog.toCompactString(),
-                  };
-                  messages.push(workLogMessage);
-                }
-
-                // Update state messages too
-                this.state.messages.length = 0;
-                this.state.messages.push(...messages);
-              }
-
-              const tokensAfter = this.estimateContextTokens(messages);
-              const reduction = Math.round((1 - tokensAfter / tokensBefore) * 100);
-
-              if (tokensAfter < tokensBefore * 0.8) {
-                // Significant reduction achieved
-                this.observability?.logger?.info('Context reduction successful, continuing execution', {
-                  tokensBefore,
-                  tokensAfter,
-                  reduction,
-                });
-
-                this.emit({
-                  type: 'resilience.recovered',
-                  reason: 'budget_limit_compaction',
-                  attempts: 1,
-                });
-
-                this.emit({
-                  type: 'compaction.auto',
-                  tokensBefore,
-                  tokensAfter,
-                  messagesCompacted: tokensBefore - tokensAfter,
-                });
-
-                // Continue execution instead of breaking
-                continue;
-              }
-
-              this.observability?.logger?.warn('Context reduction insufficient', {
-                tokensBefore,
-                tokensAfter,
-                reduction,
-              });
-            }
-
-            // Hard limit reached and recovery failed (or not applicable)
-            this.observability?.logger?.warn('Budget limit reached', {
-              reason: budgetCheck.reason,
-              budgetType: budgetCheck.budgetType,
-            });
-
-            // Emit appropriate event
-            if (budgetCheck.budgetType === 'iterations') {
-              const totalIter = this.getTotalIterations();
-              const iterMsg = this.parentIterations > 0
-                ? `${this.state.iteration} + ${this.parentIterations} parent = ${totalIter}`
-                : `${this.state.iteration}`;
-              this.emit({ type: 'error', error: `Max iterations reached (${iterMsg})` });
-            } else {
-              this.emit({ type: 'error', error: budgetCheck.reason || 'Budget exceeded' });
-            }
-            break;
-          }
-
-          // Check for soft limits and potential extension
-          if (budgetCheck.isSoftLimit && budgetCheck.suggestedAction === 'request_extension') {
-            this.observability?.logger?.info('Approaching budget limit', {
-              reason: budgetCheck.reason,
-              percentUsed: budgetCheck.percentUsed,
-            });
-            // Could request extension here if handler is set
-          }
-        } else {
-          // Fallback to simple iteration check if economics not available
-          // Use getTotalIterations() to account for parent iterations (subagent hierarchy)
-          if (this.getTotalIterations() >= this.config.maxIterations) {
-            this.observability?.logger?.warn('Max iterations reached', {
-              iteration: this.state.iteration,
-              parentIterations: this.parentIterations,
-              total: this.getTotalIterations(),
-            });
-            break;
-          }
-        }
-
-        // =======================================================================
-        // GRACEFUL WRAPUP CHECK
-        // If a wrapup has been requested (e.g., timeout approaching), convert
-        // to forceTextOnly + inject wrapup prompt for structured summary.
-        // Must come after economics check (which may also set forceTextOnly).
-        // =======================================================================
-        if (this.wrapupRequested && !forceTextOnly) {
-          forceTextOnly = true;
-          budgetInjectedPrompt = TIMEOUT_WRAPUP_PROMPT;
-          this.wrapupRequested = false;
-        }
-
-        // =======================================================================
-        // EXTERNAL CANCELLATION CHECK (deferred from above)
-        // Checked after wrapup so that graceful wrapup can intercept the timeout.
-        // If wrapup was already requested and converted to forceTextOnly above,
-        // we skip throwing here to allow one more text-only turn for the summary.
-        // =======================================================================
-        if (this.externalCancellationToken?.isCancellationRequested && !forceTextOnly) {
-          this.externalCancellationToken.throwIfCancellationRequested();
-        }
-
-        // =======================================================================
-        // INTELLIGENT LOOP DETECTION & NUDGE INJECTION
-        // Uses economics system for doom loops, exploration saturation, etc.
-        // =======================================================================
-        if (this.economics && budgetInjectedPrompt) {
-          // Inject contextual guidance from economics system
-          messages.push({
-            role: 'user',
-            content: budgetInjectedPrompt,
-          });
-
-          const loopState = this.economics.getLoopState();
-          const phaseState = this.economics.getPhaseState();
-
-          this.observability?.logger?.info('Loop detection - injecting guidance', {
-            iteration: this.state.iteration,
-            doomLoop: loopState.doomLoopDetected,
-            phase: phaseState.phase,
-            filesRead: phaseState.uniqueFilesRead,
-            filesModified: phaseState.filesModified,
-            shouldTransition: phaseState.shouldTransition,
-            forceTextOnly,
-          });
-        }
-
-        // =======================================================================
-        // RECITATION INJECTION (Trick Q) - Combat "lost in middle" attention
-        // =======================================================================
-        if (this.contextEngineering) {
-          if (process.env.DEBUG_LLM) {
-            if (process.env.DEBUG) console.log(`[recitation] Before: ${messages.length} messages`);
-          }
-
-          const enrichedMessages = this.contextEngineering.injectRecitation(
-            messages as Array<{ role: 'system' | 'user' | 'assistant' | 'tool'; content: string }>,
-            {
-              goal: task,
-              plan: this.state.plan ? {
-                description: this.state.plan.goal || task,
-                tasks: this.state.plan.tasks.map(t => ({
-                  id: t.id,
-                  description: t.description,
-                  status: t.status,
-                })),
-                currentTaskIndex: this.state.plan.tasks.findIndex(t => t.status === 'in_progress'),
-              } : undefined,
-              activeFiles: this.economics?.getProgress().filesModified
-                ? [`${this.economics.getProgress().filesModified} files modified`]
-                : undefined,
-              recentErrors: this.contextEngineering.getFailureInsights().slice(0, 2),
-            }
-          );
-
-          if (process.env.DEBUG_LLM) {
-            if (process.env.DEBUG) console.log(`[recitation] After: ${enrichedMessages?.length ?? 'null/undefined'} messages`);
-          }
-
-          // Only replace if we got a DIFFERENT array back (avoid clearing same reference)
-          // When no injection needed, injectRecitation returns the same array reference
-          if (enrichedMessages && enrichedMessages !== messages && enrichedMessages.length > 0) {
-            messages.length = 0;
-            messages.push(...enrichedMessages);
-          } else if (!enrichedMessages || enrichedMessages.length === 0) {
-            console.warn('[executeDirectly] Recitation returned empty/null messages, keeping original');
-          }
-          // If enrichedMessages === messages, we don't need to do anything (same reference)
-
-          // Update recitation frequency based on context size
-          const contextTokens = messages.reduce((sum, m) => sum + (m.content?.length || 0) / 4, 0);
-          this.contextEngineering.updateRecitationFrequency(contextTokens);
-        }
-
-        // =======================================================================
-        // FAILURE CONTEXT INJECTION (Trick S) - Learn from mistakes
-        // =======================================================================
-        if (this.contextEngineering) {
-          const failureContext = this.contextEngineering.getFailureContext(5);
-          if (failureContext) {
-            // Insert failure context before the last user message
-            // (Using reverse iteration for ES2022 compatibility)
-            let lastUserIdx = -1;
-            for (let i = messages.length - 1; i >= 0; i--) {
-              if (messages[i].role === 'user') {
-                lastUserIdx = i;
-                break;
-              }
-            }
-            if (lastUserIdx > 0) {
-              messages.splice(lastUserIdx, 0, {
-                role: 'system',
-                content: failureContext,
-              });
-            }
-          }
-        }
-
-        // =====================================================================
-        // INJECTION BUDGET ANALYSIS (Phase 2 - monitoring mode)
-        // Collects stats on context injections without gating; logs when
-        // budget would have dropped items. Validates system before enabling gating.
-        // =====================================================================
-        if (this.injectionBudget) {
-          const proposals: InjectionSlot[] = [];
-          if (budgetInjectedPrompt) {
-            proposals.push({ name: 'budget_warning', priority: 0, maxTokens: 500, content: budgetInjectedPrompt });
-          }
-          // Approximate recitation content (actual injection handled above)
-          if (this.contextEngineering) {
-            const failureCtx = this.contextEngineering.getFailureContext(5);
-            if (failureCtx) {
-              proposals.push({ name: 'failure_context', priority: 2, maxTokens: 300, content: failureCtx });
-            }
-          }
-          if (proposals.length > 0) {
-            const accepted = this.injectionBudget.allocate(proposals);
-            const stats = this.injectionBudget.getLastStats();
-            if (stats && stats.droppedNames.length > 0 && process.env.DEBUG) {
-              console.log(`[injection-budget] Would drop: ${stats.droppedNames.join(', ')} (${stats.proposedTokens} proposed, ${stats.acceptedTokens} accepted)`);
-            }
-            // Log total injection overhead for observability
-            if (stats && process.env.DEBUG_LLM) {
-              console.log(`[injection-budget] Iteration ${this.state.iteration}: ${accepted.length}/${proposals.length} injections, ~${stats.acceptedTokens} tokens`);
-            }
-          }
-        }
-
-        // =====================================================================
-        // RESILIENT LLM CALL: Empty response retries + max_tokens continuation
-        // =====================================================================
-        // Get resilience config
-        const resilienceConfig = typeof this.config.resilience === 'object'
-          ? this.config.resilience
-          : {};
-        const resilienceEnabled = isFeatureEnabled(this.config.resilience);
-        const MAX_EMPTY_RETRIES = resilienceConfig.maxEmptyRetries ?? 2;
-        const MAX_CONTINUATIONS = resilienceConfig.maxContinuations ?? 3;
-        const AUTO_CONTINUE = resilienceConfig.autoContinue ?? true;
-        const MIN_CONTENT_LENGTH = resilienceConfig.minContentLength ?? 1;
-        const INCOMPLETE_ACTION_RECOVERY = resilienceConfig.incompleteActionRecovery ?? true;
-        const MAX_INCOMPLETE_ACTION_RETRIES = resilienceConfig.maxIncompleteActionRetries ?? 2;
-        const ENFORCE_REQUESTED_ARTIFACTS = resilienceConfig.enforceRequestedArtifacts ?? true;
-
-        // =================================================================
-        // PRE-FLIGHT BUDGET CHECK: Estimate if LLM call would exceed budget
-        // Catches cases where we're at e.g. 120k and next call adds ~35k
-        // =================================================================
-        if (this.economics && !forceTextOnly) {
-          const estimatedInputTokens = this.estimateContextTokens(messages);
-          const estimatedOutputTokens = 4096; // Conservative output estimate
-          const currentUsage = this.economics.getUsage();
-          const budget = this.economics.getBudget();
-          const projectedTotal = currentUsage.tokens + estimatedInputTokens + estimatedOutputTokens;
-
-          if (projectedTotal > budget.maxTokens) {
-            this.observability?.logger?.warn('Pre-flight budget check: projected overshoot', {
-              currentTokens: currentUsage.tokens,
-              estimatedInput: estimatedInputTokens,
-              projectedTotal,
-              maxTokens: budget.maxTokens,
-            });
-
-            // Inject wrap-up prompt if not already injected
-            if (!budgetInjectedPrompt) {
-              messages.push({
-                role: 'user',
-                content: '[System] BUDGET CRITICAL: This is your LAST response. Summarize findings concisely and stop. Do NOT call tools.',
-              });
-              this.state.messages.push({
-                role: 'user',
-                content: '[System] BUDGET CRITICAL: This is your LAST response. Summarize findings concisely and stop. Do NOT call tools.',
-              });
-            }
-            forceTextOnly = true;
-          }
-        }
-
-        let response = await this.callLLM(messages);
-        let emptyRetries = 0;
-        let continuations = 0;
-
-        // Phase 1: Handle empty responses with retry (if resilience enabled)
-        while (resilienceEnabled && emptyRetries < MAX_EMPTY_RETRIES) {
-          const hasContent = response.content && response.content.length >= MIN_CONTENT_LENGTH;
-          const hasToolCalls = response.toolCalls && response.toolCalls.length > 0;
-          const hasThinking = response.thinking && response.thinking.length > 0;
-
-          if (hasContent || hasToolCalls) {
-            // Valid visible response
-            if (emptyRetries > 0) {
-              this.emit({
-                type: 'resilience.recovered',
-                reason: 'empty_response',
-                attempts: emptyRetries,
-              });
-              this.observability?.logger?.info('Recovered from empty response', {
-                retries: emptyRetries,
-              });
-            }
-            break;
-          }
-
-          if (hasThinking && !hasContent && !hasToolCalls) {
-            // Model produced reasoning but no visible output (e.g., DeepSeek-R1, GLM-4, QwQ).
-            // Give ONE targeted nudge, then accept thinking as content.
-            if (emptyRetries === 0) {
-              emptyRetries++;
-              this.emit({
-                type: 'resilience.retry',
-                reason: 'thinking_only_response',
-                attempt: emptyRetries,
-                maxAttempts: MAX_EMPTY_RETRIES,
-              });
-              this.state.metrics.retryCount = (this.state.metrics.retryCount ?? 0) + 1;
-              this.observability?.logger?.warn('Thinking-only response (no visible content), nudging', {
-                thinkingLength: response.thinking!.length,
-              });
-
-              const thinkingNudge: Message = {
-                role: 'user',
-                content: '[System: You produced reasoning but no visible response. Please provide your answer based on your analysis.]',
-              };
-              messages.push(thinkingNudge);
-              this.state.messages.push(thinkingNudge);
-              response = await this.callLLM(messages);
-              continue;
-            }
-            // Second attempt also thinking-only → accept thinking as content
-            this.observability?.logger?.info('Accepting thinking as content after nudge failed', {
-              thinkingLength: response.thinking!.length,
-            });
-            response = { ...response, content: response.thinking! };
-            break;
-          }
-
-          // Truly empty (no content, no tools, no thinking) — existing retry logic
-          emptyRetries++;
-          this.emit({
-            type: 'resilience.retry',
-            reason: 'empty_response',
-            attempt: emptyRetries,
-            maxAttempts: MAX_EMPTY_RETRIES,
-          });
-          this.state.metrics.retryCount = (this.state.metrics.retryCount ?? 0) + 1;
-          this.observability?.logger?.warn('Empty LLM response, retrying', {
-            attempt: emptyRetries,
-            maxAttempts: MAX_EMPTY_RETRIES,
-          });
-
-          // Add gentle nudge and retry
-          const nudgeMessage: Message = {
-            role: 'user',
-            content: '[System: Your previous response was empty. Please provide a response or use a tool.]',
-          };
-          messages.push(nudgeMessage);
-          this.state.messages.push(nudgeMessage);
-
-          response = await this.callLLM(messages);
-        }
-
-        // Phase 2: Handle max_tokens truncation with continuation (if enabled)
-        if (resilienceEnabled && AUTO_CONTINUE && response.stopReason === 'max_tokens' && !response.toolCalls?.length) {
-          let accumulatedContent = response.content || '';
-
-          while (continuations < MAX_CONTINUATIONS && response.stopReason === 'max_tokens') {
-            continuations++;
-            this.emit({
-              type: 'resilience.continue',
-              reason: 'max_tokens',
-              continuation: continuations,
-              maxContinuations: MAX_CONTINUATIONS,
-              accumulatedLength: accumulatedContent.length,
-            });
-            this.observability?.logger?.info('Response truncated at max_tokens, continuing', {
-              continuation: continuations,
-              accumulatedLength: accumulatedContent.length,
-            });
-
-            // Add continuation request
-            const continuationMessage: Message = {
-              role: 'assistant',
-              content: accumulatedContent,
-            };
-            const continueRequest: Message = {
-              role: 'user',
-              content: '[System: Please continue from where you left off. Do not repeat what you already said.]',
-            };
-            messages.push(continuationMessage, continueRequest);
-            this.state.messages.push(continuationMessage, continueRequest);
-
-            response = await this.callLLM(messages);
-
-            // Accumulate content
-            if (response.content) {
-              accumulatedContent += response.content;
-            }
-          }
-
-          // Update response with accumulated content
-          if (continuations > 0) {
-            response = { ...response, content: accumulatedContent };
-            this.emit({
-              type: 'resilience.completed',
-              reason: 'max_tokens_continuation',
-              continuations,
-              finalLength: accumulatedContent.length,
-            });
-          }
-        }
-
-        // Phase 2b: Handle truncated tool calls (stopReason=max_tokens with tool calls present)
-        // When a model hits max_tokens mid-tool-call, the JSON arguments are truncated and unparseable.
-        // Instead of executing broken tool calls, strip them and ask the LLM to retry smaller.
-        if (resilienceEnabled && response.stopReason === 'max_tokens' && response.toolCalls?.length) {
-          this.emit({
-            type: 'resilience.truncated_tool_call',
-            toolNames: response.toolCalls.map(tc => tc.name),
-          });
-          this.observability?.logger?.warn('Tool call truncated at max_tokens', {
-            toolNames: response.toolCalls.map(tc => tc.name),
-            outputTokens: response.usage?.outputTokens,
-          });
-
-          // Strip truncated tool calls, inject recovery message
-          const truncatedResponse = response;
-          response = { ...response, toolCalls: undefined };
-          const recoveryMessage: Message = {
-            role: 'user',
-            content: '[System: Your previous tool call was truncated because the output exceeded the token limit. ' +
-              'The tool call arguments were cut off and could not be parsed. ' +
-              'Please retry with a smaller approach: for write_file, break the content into smaller chunks ' +
-              'or use edit_file for targeted changes instead of rewriting entire files.]',
-          };
-          messages.push({ role: 'assistant', content: truncatedResponse.content || '' });
-          messages.push(recoveryMessage);
-          this.state.messages.push({ role: 'assistant', content: truncatedResponse.content || '' });
-          this.state.messages.push(recoveryMessage);
-
-          response = await this.callLLM(messages);
-        }
-
-        // Record LLM usage for economics
-        if (this.economics && response.usage) {
-          this.economics.recordLLMUsage(
-            response.usage.inputTokens,
-            response.usage.outputTokens,
-            this.config.model,
-            response.usage.cost  // Use actual cost from provider when available
-          );
-
-          // =================================================================
-          // POST-LLM BUDGET CHECK: Prevent tool execution if over budget
-          // A single LLM call can push us over - catch it before running tools
-          // =================================================================
-          if (!forceTextOnly) {
-            const postCheck = this.economics.checkBudget();
-            if (!postCheck.canContinue) {
-              this.observability?.logger?.warn('Budget exceeded after LLM call, skipping tool execution', {
-                reason: postCheck.reason,
-              });
-              forceTextOnly = true;
-            }
-          }
-        }
-
-        // Add assistant message
-        const assistantMessage: Message = {
-          role: 'assistant',
-          content: response.content,
-          toolCalls: response.toolCalls,
-          ...(response.thinking ? { metadata: { thinking: response.thinking } } : {}),
-        };
-        messages.push(assistantMessage);
-        this.state.messages.push(assistantMessage);
-        lastResponse = response.content || (response.thinking ? response.thinking : '');
-
-        // In plan mode: capture exploration findings as we go (not just at the end)
-        // This ensures we collect context from exploration iterations before writes are queued
-        if (this.modeManager.getMode() === 'plan' && response.content && response.content.length > 50) {
-          const hasReadOnlyTools = response.toolCalls?.every(tc =>
-            ['read_file', 'list_files', 'glob', 'grep', 'search', 'mcp_'].some(prefix =>
-              tc.name.startsWith(prefix) || tc.name === prefix
-            )
-          );
-          // Capture substantive exploration content (not just "let me read..." responses)
-          if (hasReadOnlyTools && !response.content.match(/^(Let me|I'll|I will|I need to|First,)/i)) {
-            this.pendingPlanManager.appendExplorationFinding(response.content.slice(0, 1000));
-          }
-        }
-
-        // Check for tool calls
-        // When forceTextOnly is set (max iterations reached), ignore any tool calls
-        const hasToolCalls = response.toolCalls && response.toolCalls.length > 0;
-        if (!hasToolCalls || forceTextOnly) {
-          // Log if we're ignoring tool calls due to forceTextOnly
-          if (forceTextOnly && hasToolCalls) {
-            this.observability?.logger?.info('Ignoring tool calls due to forceTextOnly (max steps reached)', {
-              toolCallCount: response.toolCalls?.length,
-              iteration: this.state.iteration,
-            });
-          }
-
-          const incompleteAction = this.detectIncompleteActionResponse(response.content || '');
-          const missingRequiredArtifact = ENFORCE_REQUESTED_ARTIFACTS
-            ? this.isRequestedArtifactMissing(requestedArtifact, executedToolNames)
-            : false;
-          const shouldRecoverIncompleteAction = resilienceEnabled
-            && INCOMPLETE_ACTION_RECOVERY
-            && !forceTextOnly
-            && (incompleteAction || missingRequiredArtifact);
-
-          if (shouldRecoverIncompleteAction) {
-            if (incompleteActionRetries < MAX_INCOMPLETE_ACTION_RETRIES) {
-              incompleteActionRetries++;
-              const reason = missingRequiredArtifact && requestedArtifact
-                ? `missing_requested_artifact:${requestedArtifact}`
-                : 'future_intent_without_action';
-              this.emit({
-                type: 'resilience.incomplete_action_detected',
-                reason,
-                attempt: incompleteActionRetries,
-                maxAttempts: MAX_INCOMPLETE_ACTION_RETRIES,
-                requiresArtifact: missingRequiredArtifact,
-              });
-              this.observability?.logger?.warn('Incomplete action detected, retrying with nudge', {
-                reason,
-                attempt: incompleteActionRetries,
-                maxAttempts: MAX_INCOMPLETE_ACTION_RETRIES,
-              });
-
-              const nudgeMessage: Message = {
-                role: 'user',
-                content: missingRequiredArtifact && requestedArtifact
-                  ? `[System: You said you would complete the next action, but no tool call was made. The task requires creating or updating "${requestedArtifact}". Execute the required tool now, or explicitly explain why it cannot be produced.]`
-                  : '[System: You described a next action but did not execute it. If work remains, call the required tool now. If the task is complete, provide a final answer with no pending action language.]',
-              };
-              messages.push(nudgeMessage);
-              this.state.messages.push(nudgeMessage);
-              continue;
-            }
-
-            const failureReason = missingRequiredArtifact && requestedArtifact
-              ? `incomplete_action_missing_artifact:${requestedArtifact}`
-              : 'incomplete_action_unresolved';
-            this.emit({
-              type: 'resilience.incomplete_action_failed',
-              reason: failureReason,
-              attempts: incompleteActionRetries,
-              maxAttempts: MAX_INCOMPLETE_ACTION_RETRIES,
-            });
-            throw new Error(`LLM failed to complete requested action after ${incompleteActionRetries} retries (${failureReason})`);
-          }
-
-          if (incompleteActionRetries > 0) {
-            this.emit({
-              type: 'resilience.incomplete_action_recovered',
-              reason: 'incomplete_action',
-              attempts: incompleteActionRetries,
-            });
-            incompleteActionRetries = 0;
-          }
-
-          // Verification gate: if criteria not met, nudge agent to verify before completing
-          if (this.verificationGate && !forceTextOnly) {
-            const vResult = this.verificationGate.check();
-            if (!vResult.satisfied && !vResult.forceAllow && vResult.nudge) {
-              // Inject nudge and continue the loop
-              const nudgeMessage: Message = {
-                role: 'user',
-                content: vResult.nudge,
-              };
-              messages.push(nudgeMessage);
-              this.state.messages.push(nudgeMessage);
-              this.observability?.logger?.info('Verification gate nudge', {
-                missing: vResult.missing,
-                nudgeCount: this.verificationGate.getState().nudgeCount,
-              });
-              continue;
-            }
-          }
-
-          // No tool calls (or forced to ignore), agent is done - compact tool outputs to save context
-          // The model has "consumed" the tool outputs and produced a response,
-          // so we can replace verbose outputs with compact summaries
-          this.compactToolOutputs();
-
-          // In plan mode: capture exploration summary from the final response
-          // This provides context for what was learned during exploration before proposing changes
-          if (this.modeManager.getMode() === 'plan' && this.pendingPlanManager.hasPendingPlan()) {
-            const explorationContent = response.content || '';
-            if (explorationContent.length > 0) {
-              this.pendingPlanManager.setExplorationSummary(explorationContent);
-            }
-          }
-
-          // Final validation: warn if response is still empty after all retries
-          if (!response.content || response.content.length === 0) {
-            this.observability?.logger?.error('Agent finished with empty response after all retries', {
-              emptyRetries,
-              continuations,
-              iteration: this.state.iteration,
-            });
-            this.emit({
-              type: 'resilience.failed',
-              reason: 'empty_final_response',
-              emptyRetries,
-              continuations,
-            });
-          }
-
-          // Record iteration end for tracing (no tool calls case)
-          this.traceCollector?.record({
-            type: 'iteration.end',
-            data: { iterationNumber: this.state.iteration },
-          });
-          break;
-        }
-
-        // Execute tool calls (we know toolCalls is defined here due to the check above)
-        const toolCalls = response.toolCalls!;
-        const toolResults = await this.executeToolCalls(toolCalls);
-
-        // Record tool calls for economics/progress tracking + work log
-        for (let i = 0; i < toolCalls.length; i++) {
-          const toolCall = toolCalls[i];
-          const result = toolResults[i];
-          executedToolNames.add(toolCall.name);
-          this.economics?.recordToolCall(toolCall.name, toolCall.arguments, result?.result);
-          // Record in work log for compaction resilience
-          const toolOutput = result?.result && typeof result.result === 'object' && 'output' in (result.result as any)
-            ? String((result.result as any).output)
-            : typeof result?.result === 'string' ? result.result : undefined;
-          this.workLog?.recordToolExecution(
-            toolCall.name,
-            toolCall.arguments,
-            toolOutput,
-          );
-          // Record in verification gate
-          if (this.verificationGate) {
-            if (toolCall.name === 'bash') {
-              const toolRes = result?.result as any;
-              const output = toolRes && typeof toolRes === 'object' && 'output' in toolRes
-                ? String(toolRes.output)
-                : typeof toolRes === 'string' ? toolRes : '';
-              const exitCode = toolRes && typeof toolRes === 'object' && toolRes.metadata
-                ? (toolRes.metadata as any).exitCode ?? null
-                : null;
-              this.verificationGate.recordBashExecution(
-                String(toolCall.arguments.command || ''),
-                output,
-                exitCode,
-              );
-            }
-            if (['write_file', 'edit_file'].includes(toolCall.name)) {
-              this.verificationGate.recordFileChange();
-            }
-          }
-        }
-
-        // Add tool results to messages (with truncation and proactive budget management)
-        const MAX_TOOL_OUTPUT_CHARS = 8000; // ~2000 tokens max per tool output
-
-        // =======================================================================
-        // PROACTIVE BUDGET CHECK - compact BEFORE we overflow, not after
-        // Uses AutoCompactionManager if available for sophisticated compaction
-        // =======================================================================
-        const currentContextTokens = this.estimateContextTokens(messages);
-
-        if (this.autoCompactionManager) {
-          // Use the AutoCompactionManager for threshold-based compaction
-          const compactionResult = await this.autoCompactionManager.checkAndMaybeCompact({
-            currentTokens: currentContextTokens,
-            messages: messages,
-          });
-
-          // Handle compaction result
-          if (compactionResult.status === 'compacted' && compactionResult.compactedMessages) {
-            // ─── Pre-compaction agentic turn ───────────────────────────────
-            // Give the agent one LLM turn to summarize critical state before
-            // compaction clears the context. On the first trigger we inject a
-            // system message and skip compaction; on the next trigger (the
-            // agent has already responded) we proceed with actual compaction.
-            if (!this.compactionPending) {
-              this.compactionPending = true;
-              const preCompactionMsg: Message = {
-                role: 'user',
-                content: '[SYSTEM] Context compaction is imminent. Summarize your current progress, key findings, and next steps into a single concise message. This will be preserved after compaction.',
-              };
-              messages.push(preCompactionMsg);
-              this.state.messages.push(preCompactionMsg);
-
-              this.observability?.logger?.info('Pre-compaction agentic turn: injected summary request');
-              // Skip compaction this iteration — let the agent respond first
-              // (continue to tool result processing below)
-            } else {
-              // Agent has had its chance to summarize — now compact for real
-              this.compactionPending = false;
-
-              // Pre-compaction checkpoint: save full state before discarding
-              try {
-                this.autoCheckpoint(true); // force=true bypasses frequency check
-              } catch {
-                // Non-critical — don't block compaction
-              }
-
-              // Replace messages with compacted version
-              messages.length = 0;
-              messages.push(...compactionResult.compactedMessages);
-              this.state.messages.length = 0;
-              this.state.messages.push(...compactionResult.compactedMessages);
-
-              // Inject work log after compaction to prevent amnesia
-              if (this.workLog?.hasContent()) {
-                const workLogMessage: Message = {
-                  role: 'user',
-                  content: this.workLog.toCompactString(),
-                };
-                messages.push(workLogMessage);
-                this.state.messages.push(workLogMessage);
-              }
-
-              // Context recovery: re-inject critical state after compaction
-              const recoveryParts: string[] = [];
-
-              // Goals
-              if (this.store) {
-                const goalsSummary = this.store.getGoalsSummary();
-                if (goalsSummary && goalsSummary !== 'No active goals.' && goalsSummary !== 'Goals feature not available.') {
-                  recoveryParts.push(goalsSummary);
-                }
-              }
-
-              // Junctures (last 5 key moments)
-              if (this.store) {
-                const juncturesSummary = this.store.getJuncturesSummary(undefined, 5);
-                if (juncturesSummary) {
-                  recoveryParts.push(juncturesSummary);
-                }
-              }
-
-              // Learnings from past patterns
-              if (this.learningStore) {
-                const learnings = this.learningStore.getLearningContext({ maxLearnings: 3 });
-                if (learnings) {
-                  recoveryParts.push(learnings);
-                }
-              }
-
-              if (recoveryParts.length > 0) {
-                const recoveryMessage: Message = {
-                  role: 'user',
-                  content: `[CONTEXT RECOVERY — Re-injected after compaction]\n\n${recoveryParts.join('\n\n')}`,
-                };
-                messages.push(recoveryMessage);
-                this.state.messages.push(recoveryMessage);
-              }
-
-              // Emit compaction event for observability
-              const compactionTokensAfter = this.estimateContextTokens(messages);
-              const compactionRecoveryInjected = recoveryParts.length > 0;
-              const compactionEvent = {
-                type: 'context.compacted',
-                tokensBefore: currentContextTokens,
-                tokensAfter: compactionTokensAfter,
-                recoveryInjected: compactionRecoveryInjected,
-              };
-              this.emit(compactionEvent as any);
-
-              // Record to trace collector for JSONL output
-              if (this.traceCollector) {
-                this.traceCollector.record({
-                  type: 'context.compacted',
-                  data: {
-                    tokensBefore: currentContextTokens,
-                    tokensAfter: compactionTokensAfter,
-                    recoveryInjected: compactionRecoveryInjected,
-                  },
-                });
-              }
-            }
-          } else if (compactionResult.status === 'hard_limit') {
-            // Hard limit reached - this is serious, emit error
-            this.emit({
-              type: 'error',
-              error: `Context hard limit reached (${Math.round(compactionResult.ratio * 100)}% of max tokens)`,
-            });
-            break;
-          }
-        } else if (this.economics) {
-          // Fallback to simple compaction
-          const currentUsage = this.economics.getUsage();
-          const budget = this.economics.getBudget();
-          const percentUsed = (currentUsage.tokens / budget.maxTokens) * 100;
-
-          // If we're at 70%+ of budget, proactively compact to make room
-          if (percentUsed >= 70) {
-            this.observability?.logger?.info('Proactive compaction triggered', {
-              percentUsed: Math.round(percentUsed),
-              currentTokens: currentUsage.tokens,
-              maxTokens: budget.maxTokens,
-            });
-
-            // Also checkpoint before fallback compaction
-            try {
-              this.autoCheckpoint(true);
-            } catch {
-              // Non-critical
-            }
-
-            this.compactToolOutputs();
-          }
-        }
-
-        const toolCallNameById = new Map(toolCalls.map(tc => [tc.id, tc.name]));
-
-        for (const result of toolResults) {
-          let content = typeof result.result === 'string' ? result.result : stableStringify(result.result);
-          const sourceToolName = toolCallNameById.get(result.callId);
-          const isExpensiveResult = sourceToolName === 'spawn_agent' || sourceToolName === 'spawn_agents_parallel';
-
-          // Truncate long outputs to save context
-          // Use larger limit for subagent results to preserve critical context
-          const effectiveMaxChars = isExpensiveResult ? MAX_TOOL_OUTPUT_CHARS * 2 : MAX_TOOL_OUTPUT_CHARS;
-          if (content.length > effectiveMaxChars) {
-            content = content.slice(0, effectiveMaxChars) + `\n\n... [truncated ${content.length - effectiveMaxChars} chars]`;
-          }
-
-          // =======================================================================
-          // ESTIMATE if adding this result would exceed budget
-          // =======================================================================
-          if (this.economics) {
-            const estimatedNewTokens = Math.ceil(content.length / 4); // ~4 chars per token
-            const currentContextTokens = this.estimateContextTokens(messages);
-            const budget = this.economics.getBudget();
-
-            // Check if adding this would push us over the hard limit
-            if (currentContextTokens + estimatedNewTokens > budget.maxTokens * 0.95) {
-              this.observability?.logger?.warn('Skipping tool result to stay within budget', {
-                toolCallId: result.callId,
-                estimatedTokens: estimatedNewTokens,
-                currentContext: currentContextTokens,
-                limit: budget.maxTokens,
-              });
-
-              // Add a truncated placeholder instead
-              const toolMessage: Message = {
-                role: 'tool',
-                content: `[Result omitted to stay within token budget. Original size: ${content.length} chars]`,
-                toolCallId: result.callId,
-              };
-              messages.push(toolMessage);
-              this.state.messages.push(toolMessage);
-              continue;
-            }
-          }
-
-          const toolMessage: Message = {
-            role: 'tool',
-            content,
-            toolCallId: result.callId,
-            ...(isExpensiveResult
-              ? {
-                  metadata: {
-                    preserveFromCompaction: true,
-                    costToRegenerate: 'high',
-                    source: sourceToolName,
-                  },
-                }
-              : {}),
-          };
-          messages.push(toolMessage);
-          this.state.messages.push(toolMessage);
-        }
-
-        // Emit context health after adding tool results
-        const currentTokenEstimate = this.estimateContextTokens(messages);
-        const contextLimit = this.getMaxContextTokens();
-        const percentUsed = Math.round((currentTokenEstimate / contextLimit) * 100);
-        const avgTokensPerExchange = currentTokenEstimate / Math.max(1, this.state.iteration);
-        const remainingTokens = contextLimit - currentTokenEstimate;
-        const estimatedExchanges = Math.floor(remainingTokens / Math.max(1, avgTokensPerExchange));
-
-        this.emit({
-          type: 'context.health',
-          currentTokens: currentTokenEstimate,
-          maxTokens: contextLimit,
-          estimatedExchanges,
-          percentUsed,
-        });
-
-        // Record iteration end for tracing (after tool execution)
-        this.traceCollector?.record({
-          type: 'iteration.end',
-          data: { iterationNumber: this.state.iteration },
-        });
-      }
-
-      // =======================================================================
-      // REFLECTION (Lesson 16)
-      // =======================================================================
-      if (autoReflect && this.planning && reflectionAttempt < maxReflectionAttempts) {
-        this.emit({ type: 'reflection', attempt: reflectionAttempt, satisfied: false });
-
-        const reflectionResult = await this.planning.reflect(task, lastResponse, this.provider);
-        this.state.metrics.reflectionAttempts = reflectionAttempt;
-
-        if (reflectionResult.satisfied && reflectionResult.confidence >= confidenceThreshold) {
-          // Output is satisfactory
-          this.emit({ type: 'reflection', attempt: reflectionAttempt, satisfied: true });
-          break;
-        }
-
-        // Not satisfied - add feedback and continue
-        const feedbackMessage: Message = {
-          role: 'user',
-          content: `[Reflection feedback]\nThe previous output needs improvement:\n- Critique: ${reflectionResult.critique}\n- Suggestions: ${reflectionResult.suggestions.join(', ')}\n\nPlease improve the output.`,
-        };
-        messages.push(feedbackMessage);
-        this.state.messages.push(feedbackMessage);
-
-        this.observability?.logger?.info('Reflection not satisfied, retrying', {
-          attempt: reflectionAttempt,
-          confidence: reflectionResult.confidence,
-          critique: reflectionResult.critique,
-        });
-      } else {
-        // No reflection or already satisfied
-        break;
-      }
-    }
-
-    // Store conversation in memory
-    this.memory?.storeConversation(this.state.messages);
-    this.updateMemoryStats();
+  private async executeDirectly(task: string): Promise<Awaited<ReturnType<typeof coreExecuteDirectly>>> {
+    const messages = await this.buildMessages(task);
+    const ctx = this.buildContext();
+    const mutators = this.buildMutators();
+    return coreExecuteDirectly(task, messages, ctx, mutators);
   }
 
   /**
@@ -2736,7 +1867,7 @@ export class ProductionAgent {
    * Uses cache-aware system prompt building (Trick P) when contextEngineering
    * is available, ensuring static content is ordered for optimal KV-cache reuse.
    */
-  private buildMessages(task: string): Message[] {
+  private async buildMessages(task: string): Promise<Message[]> {
     const messages: Message[] = [];
 
     // Gather all context components
@@ -2759,14 +1890,18 @@ export class ProductionAgent {
       const maxContextTokens = (this.config.maxContextTokens ?? 80000) - reservedTokens;
       const codebaseBudget = Math.min(maxContextTokens * 0.3, 15000); // Up to 30% or 15K tokens
 
-      const repoMap = this.codebaseContext.getRepoMap();
-
-      // Lazy: trigger analysis on first system prompt build, ready by next turn
-      if (!repoMap && !this.codebaseAnalysisTriggered) {
+      // Synchronous analysis on first system prompt build so context is available immediately
+      if (!this.codebaseContext.getRepoMap() && !this.codebaseAnalysisTriggered) {
         this.codebaseAnalysisTriggered = true;
-        this.codebaseContext.analyze().catch(() => { /* non-fatal */ });
+        try {
+          await this.codebaseContext.analyze();
+        } catch {
+          // non-fatal — agent can still work without codebase context
+        }
       }
 
+      // Get repo map AFTER analysis so we have fresh data on first prompt
+      const repoMap = this.codebaseContext.getRepoMap();
       if (repoMap) {
         try {
           const selection = this.selectRelevantCodeSync(task, codebaseBudget);
@@ -2872,7 +2007,7 @@ export class ProductionAgent {
 
       // Safety check: ensure system prompt is not empty
       if (!systemPrompt || systemPrompt.trim().length === 0) {
-        console.warn('[buildMessages] Warning: Empty system prompt detected, using fallback');
+        log.warn('Empty system prompt detected, using fallback');
         systemPrompt = this.config.systemPrompt || 'You are a helpful AI assistant.';
       }
 
@@ -2889,262 +2024,72 @@ export class ProductionAgent {
     // Add current task
     messages.push({ role: 'user', content: task });
 
+    // Track system prompt length for context % estimation
+    const sysMsg = messages.find(m => m.role === 'system');
+    if (sysMsg) {
+      const content = typeof sysMsg.content === 'string' ? sysMsg.content : JSON.stringify(sysMsg.content);
+      this.lastSystemPromptLength = content.length;
+    }
+
     return messages;
   }
 
-  /**
-   * Call the LLM with routing and observability.
-   */
-  private async callLLM(messages: Message[]): Promise<ChatResponse> {
-    const spanId = this.observability?.tracer?.startSpan('llm.call');
+  // ===========================================================================
+  // CONTEXT BUILDERS — Bridge private fields to extracted core modules
+  // ===========================================================================
 
-    this.emit({ type: 'llm.start', model: this.config.model || 'default' });
+  private buildContext(): import('./core/types.js').AgentContext {
+    return {
+      config: this.config, agentId: this.agentId, provider: this.provider,
+      tools: this.tools, state: this.state,
+      modeManager: this.modeManager, pendingPlanManager: this.pendingPlanManager,
+      hooks: this.hooks, economics: this.economics, cancellation: this.cancellation,
+      resourceManager: this.resourceManager, safety: this.safety,
+      observability: this.observability, contextEngineering: this.contextEngineering,
+      traceCollector: this.traceCollector, executionPolicy: this.executionPolicy,
+      routing: this.routing, planning: this.planning, memory: this.memory,
+      react: this.react, blackboard: this.blackboard, fileCache: this.fileCache,
+      budgetPool: this.budgetPool, taskManager: this.taskManager, store: this.store,
+      codebaseContext: this.codebaseContext, learningStore: this.learningStore,
+      compactor: this.compactor, autoCompactionManager: this.autoCompactionManager,
+      workLog: this.workLog, verificationGate: this.verificationGate,
+      agentRegistry: this.agentRegistry, toolRecommendation: this.toolRecommendation,
+      selfImprovement: this.selfImprovement, subagentOutputStore: this.subagentOutputStore,
+      autoCheckpointManager: this.autoCheckpointManager, injectionBudget: this.injectionBudget,
+      skillManager: this.skillManager, semanticCache: this.semanticCache,
+      lspManager: this.lspManager, threadManager: this.threadManager,
+      interactivePlanner: this.interactivePlanner, recursiveContext: this.recursiveContext,
+      fileChangeTracker: this.fileChangeTracker, capabilitiesRegistry: this.capabilitiesRegistry,
+      rules: this.rules, stateMachine: this.stateMachine,
+      lastComplexityAssessment: this.lastComplexityAssessment,
+      cacheableSystemBlocks: this.cacheableSystemBlocks,
+      parentIterations: this.parentIterations,
+      externalCancellationToken: this.externalCancellationToken,
+      wrapupRequested: this.wrapupRequested, wrapupReason: this.wrapupReason,
+      compactionPending: this.compactionPending,
+      sharedContextState: this._sharedContextState,
+      sharedEconomicsState: this._sharedEconomicsState,
+      spawnedTasks: this.spawnedTasks, toolResolver: this.toolResolver,
+      emit: (event) => this.emit(event),
+      addTool: (tool) => this.addTool(tool),
+      getMaxContextTokens: () => this.getMaxContextTokens(),
+      getTotalIterations: () => this.getTotalIterations(),
+    };
+  }
 
-    // Prompt caching (Improvement P1): Replace the system message with structured content
-    // that includes cache_control markers, enabling 60-70% cache hit rates.
-    // Only use structured cache_control markers for Anthropic models — other providers
-    // (DeepSeek, Grok, etc.) use automatic prefix-based caching and don't understand these markers.
-    const configModel = this.config.model || 'default';
-    const isAnthropicModel = configModel.startsWith('anthropic/') || configModel.startsWith('claude-');
-    let providerMessages: (Message | MessageWithContent)[] = messages;
-    if (isAnthropicModel && this.cacheableSystemBlocks && this.cacheableSystemBlocks.length > 0) {
-      providerMessages = messages.map((m, i) => {
-        if (i === 0 && m.role === 'system') {
-          // Replace system message with structured cacheable content
-          return {
-            role: 'system' as const,
-            content: this.cacheableSystemBlocks!,
-          } as MessageWithContent;
-        }
-        return m;
-      });
-    }
+  private buildMutators(): import('./core/types.js').AgentContextMutators {
+    return {
+      setBudgetPool: (pool) => { this.budgetPool = pool; },
+      setCacheableSystemBlocks: (blocks) => { this.cacheableSystemBlocks = blocks; },
+      setCompactionPending: (pending) => { this.compactionPending = pending; },
+      setWrapupRequested: (requested) => { this.wrapupRequested = requested; },
+      setLastComplexityAssessment: (a) => { this.lastComplexityAssessment = a; },
+      setExternalCancellationToken: (t) => { this.externalCancellationToken = t; },
+    };
+  }
 
-    // Emit context insight for verbose feedback
-    const estimatedTokens = messages.reduce((sum, m) => {
-      const content = typeof m.content === 'string' ? m.content : JSON.stringify(m.content);
-      return sum + Math.ceil(content.length / 3.5); // ~3.5 chars per token estimate
-    }, 0);
-    // Use context window size, not output token limit
-    const contextLimit = this.getMaxContextTokens();
-    this.emit({
-      type: 'insight.context',
-      currentTokens: estimatedTokens,
-      maxTokens: contextLimit,
-      messageCount: messages.length,
-      percentUsed: Math.round((estimatedTokens / contextLimit) * 100),
-    });
-
-    const startTime = Date.now();
-    const requestId = `req-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
-
-    // Debug: Log message count and structure (helps diagnose API errors)
-    if (process.env.DEBUG_LLM) {
-      console.log(`[callLLM] Sending ${messages.length} messages:`);
-      messages.forEach((m, i) => {
-        console.log(`  [${i}] ${m.role}: ${m.content?.slice(0, 50)}...`);
-      });
-    }
-
-    // Validate messages are not empty
-    if (!messages || messages.length === 0) {
-      throw new Error('No messages to send to LLM');
-    }
-
-    // Lesson 26: Record LLM request for tracing
-    const model = this.config.model || 'default';
-    const provider = (this.config.provider as { name?: string })?.name || 'unknown';
-    this.traceCollector?.record({
-      type: 'llm.request',
-      data: {
-        requestId,
-        model,
-        provider,
-        messages: messages.map(m => ({
-          role: m.role as 'system' | 'user' | 'assistant' | 'tool',
-          content: m.content,
-          toolCallId: m.toolCallId,
-          toolCalls: m.toolCalls?.map(tc => ({
-            id: tc.id,
-            name: tc.name,
-            arguments: tc.arguments,
-          })),
-        })),
-        tools: Array.from(this.tools.values()).map(t => ({
-          name: t.name,
-          description: t.description,
-          parametersSchema: t.parameters,
-        })),
-        parameters: {
-          maxTokens: this.config.maxTokens,
-          temperature: this.config.temperature,
-        },
-      },
-    });
-
-    // Pause duration budget during LLM call - network time shouldn't count against agent
-    this.economics?.pauseDuration();
-
-    try {
-      let response: ChatResponse;
-      let actualModel = model;
-
-      // Use routing if enabled
-      if (this.routing) {
-        const complexity = this.routing.estimateComplexity(messages[messages.length - 1]?.content || '');
-        const context = {
-          task: messages[messages.length - 1]?.content || '',
-          complexity,
-          hasTools: this.tools.size > 0,
-          hasImages: false,
-          taskType: 'general',
-          estimatedTokens: messages.reduce((sum, m) => sum + m.content.length / 4, 0),
-        };
-
-        const result = await this.routing.executeWithFallback(providerMessages, context);
-        response = result.response;
-        actualModel = result.model;
-
-        // Emit routing insight
-        this.emit({
-          type: 'insight.routing',
-          model: actualModel,
-          reason: actualModel !== model ? 'Routed based on complexity' : 'Default model',
-          complexity: complexity <= 0.3 ? 'low' : complexity <= 0.7 ? 'medium' : 'high',
-        });
-
-        // Emit decision transparency event
-        this.emit({
-          type: 'decision.routing',
-          model: actualModel,
-          reason: actualModel !== model
-            ? `Complexity ${(complexity * 100).toFixed(0)}% - using ${actualModel}`
-            : 'Default model for current task',
-          alternatives: actualModel !== model
-            ? [{ model, rejected: 'complexity threshold exceeded' }]
-            : undefined,
-        });
-
-        // Enhanced tracing: Record routing decision
-        this.traceCollector?.record({
-          type: 'decision',
-          data: {
-            type: 'routing',
-            decision: `Selected model: ${actualModel}`,
-            outcome: 'allowed',
-            reasoning: actualModel !== model
-              ? `Task complexity ${(complexity * 100).toFixed(0)}% exceeded threshold - routed to ${actualModel}`
-              : `Default model ${model} suitable for task complexity ${(complexity * 100).toFixed(0)}%`,
-            factors: [
-              { name: 'complexity', value: complexity, weight: 0.8 },
-              { name: 'hasTools', value: context.hasTools, weight: 0.1 },
-              { name: 'taskType', value: context.taskType, weight: 0.1 },
-            ],
-            alternatives: actualModel !== model
-              ? [{ option: model, reason: 'complexity threshold exceeded', rejected: true }]
-              : undefined,
-            confidence: 0.9,
-          },
-        });
-      } else {
-        response = await this.provider.chat(providerMessages, {
-          model: this.config.model,
-          tools: Array.from(this.tools.values()),
-        });
-      }
-
-      const duration = Date.now() - startTime;
-
-      // Debug cache stats when DEBUG_CACHE is set
-      if (process.env.DEBUG_CACHE) {
-        const cr = response.usage?.cacheReadTokens ?? 0;
-        const cw = response.usage?.cacheWriteTokens ?? 0;
-        const inp = response.usage?.inputTokens ?? 0;
-        const hitRate = inp > 0 ? ((cr / inp) * 100).toFixed(1) : '0.0';
-        console.log(`[Cache] model=${actualModel} read=${cr} write=${cw} input=${inp} hit=${hitRate}%`);
-      }
-
-      // Lesson 26: Record LLM response for tracing
-      this.traceCollector?.record({
-        type: 'llm.response',
-        data: {
-          requestId,
-          content: response.content || '',
-          toolCalls: response.toolCalls?.map(tc => ({
-            id: tc.id,
-            name: tc.name,
-            arguments: tc.arguments,
-          })),
-          stopReason: response.stopReason === 'end_turn' ? 'end_turn'
-            : response.stopReason === 'tool_use' ? 'tool_use'
-            : response.stopReason === 'max_tokens' ? 'max_tokens'
-            : 'stop_sequence',
-          usage: {
-            inputTokens: response.usage?.inputTokens || 0,
-            outputTokens: response.usage?.outputTokens || 0,
-            cacheReadTokens: response.usage?.cacheReadTokens,
-            cacheWriteTokens: response.usage?.cacheWriteTokens,
-            cost: response.usage?.cost,  // Actual cost from provider (e.g., OpenRouter)
-          },
-          durationMs: duration,
-        },
-      });
-
-      // Enhanced tracing: Record thinking/reasoning blocks if present
-      if (response.thinking) {
-        this.traceCollector?.record({
-          type: 'llm.thinking',
-          data: {
-            requestId,
-            content: response.thinking,
-            summarized: response.thinking.length > 10000, // Summarize if very long
-            originalLength: response.thinking.length,
-            durationMs: duration,
-          },
-        });
-      }
-
-      // Record metrics
-      this.observability?.metrics?.recordLLMCall(
-        response.usage?.inputTokens || 0,
-        response.usage?.outputTokens || 0,
-        duration,
-        actualModel,
-        response.usage?.cost  // Actual cost from provider (e.g., OpenRouter)
-      );
-
-      this.state.metrics.llmCalls++;
-      this.state.metrics.inputTokens += response.usage?.inputTokens || 0;
-      this.state.metrics.outputTokens += response.usage?.outputTokens || 0;
-      this.state.metrics.totalTokens = this.state.metrics.inputTokens + this.state.metrics.outputTokens;
-
-      this.emit({ type: 'llm.complete', response });
-
-      // Emit token usage insight for verbose feedback
-      if (response.usage) {
-        this.emit({
-          type: 'insight.tokens',
-          inputTokens: response.usage.inputTokens,
-          outputTokens: response.usage.outputTokens,
-          cacheReadTokens: response.usage.cacheReadTokens,
-          cacheWriteTokens: response.usage.cacheWriteTokens,
-          cost: response.usage.cost,
-          model: actualModel,
-        });
-      }
-
-      this.observability?.tracer?.endSpan(spanId);
-
-      return response;
-    } catch (err) {
-      const error = err instanceof Error ? err : new Error(String(err));
-      this.observability?.tracer?.recordError(error);
-      this.observability?.tracer?.endSpan(spanId);
-      throw error;
-    } finally {
-      // Resume duration budget after LLM call completes (success or failure)
-      this.economics?.resumeDuration();
-    }
+  private createSubAgentFactory(): import('./core/types.js').SubAgentFactory {
+    return (config) => new ProductionAgent(config) as unknown as import('./core/types.js').SubAgentInstance;
   }
 
   /**
@@ -3158,456 +2103,6 @@ export class ProductionAgent {
     } finally {
       this.economics?.resumeDuration();
     }
-  }
-
-  /**
-   * Execute tool calls with safety checks and execution policy enforcement.
-   * Parallelizable read-only tools are batched and executed concurrently.
-   */
-  private async executeToolCalls(toolCalls: ToolCall[]): Promise<ToolResult[]> {
-    const results: ToolResult[] = [];
-
-    // Group consecutive parallelizable tool calls into batches
-    const batches = groupToolCallsIntoBatches(toolCalls);
-
-    // Execute batches: parallel batches use Promise.allSettled, sequential execute one-by-one
-    for (const batch of batches) {
-      if (batch.length > 1 && PARALLELIZABLE_TOOLS.has(batch[0].name)) {
-        // Execute parallelizable batch concurrently
-        const batchResults = await Promise.allSettled(
-          batch.map(tc => this.executeSingleToolCall(tc))
-        );
-        for (const result of batchResults) {
-          if (result.status === 'fulfilled') {
-            results.push(result.value);
-          } else {
-            // Should not happen since executeSingleToolCall catches errors internally
-            const error = result.reason instanceof Error ? result.reason.message : String(result.reason);
-            results.push({ callId: 'unknown', result: `Error: ${error}`, error });
-          }
-        }
-      } else {
-        // Execute sequentially
-        for (const tc of batch) {
-          results.push(await this.executeSingleToolCall(tc));
-        }
-      }
-    }
-
-    return results;
-  }
-
-  /**
-   * Execute a single tool call with all safety checks, tracing, and error handling.
-   */
-  private async executeSingleToolCall(toolCall: ToolCall): Promise<ToolResult> {
-      const spanId = this.observability?.tracer?.startSpan(`tool.${toolCall.name}`);
-      const executionId = `exec-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
-
-      this.emit({ type: 'tool.start', tool: toolCall.name, args: toolCall.arguments });
-
-      const startTime = Date.now();
-
-      // Short-circuit if tool call arguments failed to parse
-      if (toolCall.parseError) {
-        const errorMsg = `Tool arguments could not be parsed: ${toolCall.parseError}. Please retry with complete, valid JSON.`;
-        this.emit({ type: 'tool.blocked', tool: toolCall.name, reason: errorMsg });
-        this.traceCollector?.record({
-          type: 'tool.end',
-          data: { executionId, status: 'error', error: new Error(errorMsg), durationMs: Date.now() - startTime },
-        });
-        this.observability?.tracer?.endSpan(spanId);
-        return { callId: toolCall.id, result: `Error: ${errorMsg}`, error: errorMsg };
-      }
-
-      // Lesson 26: Record tool start for tracing
-      this.traceCollector?.record({
-        type: 'tool.start',
-        data: {
-          executionId,
-          toolName: toolCall.name,
-          arguments: toolCall.arguments as Record<string, unknown>,
-        },
-      });
-
-      try {
-        // =====================================================================
-        // PLAN MODE WRITE INTERCEPTION
-        // =====================================================================
-        // In plan mode, intercept write operations and queue them as proposed changes
-        if (this.modeManager.shouldInterceptTool(toolCall.name, toolCall.arguments as Record<string, unknown>)) {
-          // Extract contextual reasoning instead of simple truncation
-          const reason = this.extractChangeReasoning(toolCall, this.state.messages);
-
-          // Start a new plan if needed
-          if (!this.pendingPlanManager.hasPendingPlan()) {
-            const lastUserMsg = [...this.state.messages].reverse().find(m => m.role === 'user');
-            const task = typeof lastUserMsg?.content === 'string' ? lastUserMsg.content : 'Plan';
-            this.pendingPlanManager.startPlan(task);
-          }
-
-          // Queue the write operation
-          const change = this.pendingPlanManager.addProposedChange(
-            toolCall.name,
-            toolCall.arguments as Record<string, unknown>,
-            reason,
-            toolCall.id
-          );
-
-          // Emit event for UI
-          this.emit({
-            type: 'plan.change.queued',
-            tool: toolCall.name,
-            changeId: change?.id,
-            summary: this.formatToolArgsForPlan(toolCall.name, toolCall.arguments as Record<string, unknown>),
-          });
-
-          // Return a message indicating the change was queued
-          const queueMessage = `[PLAN MODE] Change queued for approval:\n` +
-            `Tool: ${toolCall.name}\n` +
-            `${this.formatToolArgsForPlan(toolCall.name, toolCall.arguments as Record<string, unknown>)}\n` +
-            `Use /show-plan to see all pending changes, /approve to execute, /reject to discard.`;
-
-          this.observability?.tracer?.endSpan(spanId);
-          return { callId: toolCall.id, result: queueMessage };
-        }
-        // =====================================================================
-        // EXECUTION POLICY ENFORCEMENT (Lesson 23)
-        // =====================================================================
-        let policyApprovedByUser = false;
-        if (this.executionPolicy) {
-          const policyContext = {
-            messages: this.state.messages,
-            currentMessage: this.state.messages.find(m => m.role === 'user')?.content,
-            previousToolCalls: [],
-          };
-
-          const evaluation = this.executionPolicy.evaluate(toolCall, policyContext);
-
-          // Emit policy event
-          this.emit({
-            type: 'policy.evaluated',
-            tool: toolCall.name,
-            policy: evaluation.policy,
-            reason: evaluation.reason,
-          });
-
-          // Emit decision transparency event
-          this.emit({
-            type: 'decision.tool',
-            tool: toolCall.name,
-            decision: evaluation.policy === 'forbidden' ? 'blocked'
-              : evaluation.policy === 'prompt' ? 'prompted'
-              : 'allowed',
-            policyMatch: evaluation.reason,
-          });
-
-          // Enhanced tracing: Record policy decision
-          this.traceCollector?.record({
-            type: 'decision',
-            data: {
-              type: 'policy',
-              decision: `Tool ${toolCall.name}: ${evaluation.policy}`,
-              outcome: evaluation.policy === 'forbidden' ? 'blocked'
-                : evaluation.policy === 'prompt' ? 'deferred'
-                : 'allowed',
-              reasoning: evaluation.reason,
-              factors: [
-                { name: 'policy', value: evaluation.policy },
-                { name: 'requiresApproval', value: evaluation.requiresApproval ?? false },
-              ],
-              confidence: evaluation.intent?.confidence ?? 0.8,
-            },
-          });
-
-          // Handle forbidden policy - always block
-          if (evaluation.policy === 'forbidden') {
-            this.emit({
-              type: 'policy.tool.blocked',
-              tool: toolCall.name,
-              phase: 'enforced',
-              reason: `Forbidden by execution policy: ${evaluation.reason}`,
-            });
-            throw new Error(`Forbidden by policy: ${evaluation.reason}`);
-          }
-
-          // Handle prompt policy - requires approval
-          if (evaluation.policy === 'prompt' && evaluation.requiresApproval) {
-            // Try to get approval through safety manager's human-in-loop
-            const humanInLoop = this.safety?.humanInLoop;
-            if (humanInLoop) {
-              const approval = await this.withPausedDuration(() =>
-                humanInLoop.requestApproval(
-                  toolCall,
-                  `Policy requires approval: ${evaluation.reason}`
-                )
-              );
-
-              if (!approval.approved) {
-                throw new Error(`Denied by user: ${approval.reason || 'No reason provided'}`);
-              }
-              policyApprovedByUser = true;
-
-              // Create a grant for future similar calls if approved
-              this.executionPolicy.createGrant({
-                toolName: toolCall.name,
-                grantedBy: 'user',
-                reason: 'Approved during execution',
-                maxUsages: 5, // Allow 5 more similar calls
-              });
-            } else {
-              // No approval handler - block by default for safety
-              throw new Error(`Policy requires approval but no approval handler available: ${evaluation.reason}`);
-            }
-          }
-
-          // Log intent classification if available
-          if (evaluation.intent) {
-            this.emit({
-              type: 'intent.classified',
-              tool: toolCall.name,
-              intent: evaluation.intent.type,
-              confidence: evaluation.intent.confidence,
-            });
-          }
-        }
-
-        // =====================================================================
-        // SAFETY VALIDATION (Lesson 20-21)
-        // =====================================================================
-        if (this.safety) {
-          const safety = this.safety;
-          const validation = await this.withPausedDuration(() =>
-            safety.validateAndApprove(
-              toolCall,
-              `Executing tool: ${toolCall.name}`,
-              { skipHumanApproval: policyApprovedByUser }
-            )
-          );
-
-          if (!validation.allowed) {
-            this.emit({
-              type: 'policy.tool.blocked',
-              tool: toolCall.name,
-              phase: 'enforced',
-              reason: validation.reason || 'Blocked by safety manager',
-            });
-            if (toolCall.name === 'bash') {
-              const args = toolCall.arguments as Record<string, unknown>;
-              this.emit({
-                type: 'policy.bash.blocked',
-                phase: 'enforced',
-                command: String(args.command || args.cmd || ''),
-                reason: validation.reason || 'Blocked by safety manager',
-              });
-            }
-            throw new Error(`Tool call blocked: ${validation.reason}`);
-          }
-        }
-
-        // Get tool definition (with lazy-loading support for MCP tools)
-        let tool = this.tools.get(toolCall.name);
-        const wasPreloaded = !!tool;
-        if (!tool && this.toolResolver) {
-          // Try to resolve and load the tool on-demand
-          const resolved = this.toolResolver(toolCall.name);
-          if (resolved) {
-            this.addTool(resolved);
-            tool = resolved;
-            if (process.env.DEBUG) console.log(`  🔄 Auto-loaded MCP tool: ${toolCall.name}`);
-            this.observability?.logger?.info('Tool auto-loaded', { tool: toolCall.name });
-          }
-        }
-        if (!tool) {
-          throw new Error(`Unknown tool: ${toolCall.name}`);
-        }
-        // Log whether tool was pre-loaded or auto-loaded (for MCP tools)
-        if (process.env.DEBUG && toolCall.name.startsWith('mcp_') && wasPreloaded) {
-          console.log(`  ✓ Using pre-loaded MCP tool: ${toolCall.name}`);
-        }
-
-        // =====================================================================
-        // BLACKBOARD FILE COORDINATION (Parallel Subagent Support)
-        // =====================================================================
-        // Claim file resources before write operations to prevent conflicts
-        if (this.blackboard && (toolCall.name === 'write_file' || toolCall.name === 'edit_file')) {
-          const args = toolCall.arguments as Record<string, unknown>;
-          const filePath = String(args.path || args.file_path || '');
-          if (filePath) {
-            const agentId = this.agentId;
-            const claimed = this.blackboard.claim(filePath, agentId, 'write', {
-              ttl: 60000, // 1 minute claim
-              intent: `${toolCall.name}: ${filePath}`,
-            });
-            if (!claimed) {
-              const existingClaim = this.blackboard.getClaim(filePath);
-              throw new Error(
-                `File "${filePath}" is being edited by another agent (${existingClaim?.agentId || 'unknown'}). ` +
-                `Wait for the other agent to complete or choose a different file.`
-              );
-            }
-          }
-        }
-
-        // FILE CACHE: Check cache for read_file operations before executing
-        if (this.fileCache && toolCall.name === 'read_file') {
-          const args = toolCall.arguments as Record<string, unknown>;
-          const readPath = String(args.path || '');
-          if (readPath) {
-            const cached = this.fileCache.get(readPath);
-            if (cached !== undefined) {
-              const lines = cached.split('\n').length;
-              const cacheResult = { success: true, output: cached, metadata: { lines, bytes: cached.length, cached: true } };
-
-              const duration = Date.now() - startTime;
-              this.traceCollector?.record({ type: 'tool.end', data: { executionId, status: 'success', result: cacheResult, durationMs: duration } });
-              this.observability?.metrics?.recordToolCall(toolCall.name, duration, true);
-              this.state.metrics.toolCalls++;
-              this.emit({ type: 'tool.complete', tool: toolCall.name, result: cacheResult });
-
-              this.observability?.tracer?.endSpan(spanId);
-              return {
-                callId: toolCall.id,
-                result: typeof cacheResult === 'string' ? cacheResult : JSON.stringify(cacheResult),
-              };
-            }
-          }
-        }
-
-        // Execute tool (with sandbox if available)
-        let result: unknown;
-        if (this.safety?.sandbox) {
-          // CRITICAL: spawn_agent and spawn_agents_parallel need MUCH longer timeouts
-          // The default 60s sandbox timeout would kill subagents prematurely
-          // Subagents may run for minutes (per their own timeout config)
-          const isSpawnAgent = toolCall.name === 'spawn_agent';
-          const isSpawnParallel = toolCall.name === 'spawn_agents_parallel';
-          const isSubagentTool = isSpawnAgent || isSpawnParallel;
-
-          const subagentConfig = this.config.subagent;
-          const hasSubagentConfig = subagentConfig !== false && subagentConfig !== undefined;
-          const subagentTimeout = hasSubagentConfig
-            ? (subagentConfig as { defaultTimeout?: number }).defaultTimeout ?? 600000 // 10 min default
-            : 600000;
-
-          // Use subagent timeout + buffer for spawn tools, default for others
-          // For spawn_agents_parallel, multiply by number of agents (they run in parallel,
-          // but the total wall-clock time should still allow the slowest agent to complete)
-          const toolTimeout = isSubagentTool ? subagentTimeout + 30000 : undefined;
-
-          result = await this.safety.sandbox.executeWithLimits(
-            () => tool.execute(toolCall.arguments),
-            toolTimeout
-          );
-        } else {
-          result = await tool.execute(toolCall.arguments);
-        }
-
-        const duration = Date.now() - startTime;
-
-        // Lesson 26: Record tool completion for tracing
-        this.traceCollector?.record({
-          type: 'tool.end',
-          data: {
-            executionId,
-            status: 'success',
-            result,
-            durationMs: duration,
-          },
-        });
-
-        // Record metrics
-        this.observability?.metrics?.recordToolCall(toolCall.name, duration, true);
-        this.state.metrics.toolCalls++;
-
-        this.emit({ type: 'tool.complete', tool: toolCall.name, result });
-
-        // FILE CACHE: Store read results and invalidate on writes
-        if (this.fileCache) {
-          const args = toolCall.arguments as Record<string, unknown>;
-          const filePath = String(args.path || args.file_path || '');
-
-          if (toolCall.name === 'read_file' && filePath) {
-            // Cache successful read results
-            const resultObj = result as { success?: boolean; output?: string };
-            if (resultObj?.success && typeof resultObj.output === 'string') {
-              this.fileCache.set(filePath, resultObj.output);
-            }
-          } else if ((toolCall.name === 'write_file' || toolCall.name === 'edit_file' || toolCall.name === 'undo_file_change') && filePath) {
-            // Invalidate cache when files are modified (including undo operations)
-            this.fileCache.invalidate(filePath);
-          }
-        }
-
-        // Emit tool insight with result summary
-        const summary = this.summarizeToolResult(toolCall.name, result);
-        this.emit({
-          type: 'insight.tool',
-          tool: toolCall.name,
-          summary,
-          durationMs: duration,
-          success: true,
-        });
-
-        // Release blackboard claim after successful file write
-        if (this.blackboard && (toolCall.name === 'write_file' || toolCall.name === 'edit_file')) {
-          const args = toolCall.arguments as Record<string, unknown>;
-          const filePath = String(args.path || args.file_path || '');
-          if (filePath) {
-            const agentId = this.agentId;
-            this.blackboard.release(filePath, agentId);
-          }
-        }
-
-        // Self-improvement: record success pattern
-        this.selfImprovement?.recordSuccess(
-          toolCall.name,
-          toolCall.arguments as Record<string, unknown>,
-          typeof result === 'string' ? result.slice(0, 200) : JSON.stringify(result).slice(0, 200),
-        );
-
-        this.observability?.tracer?.endSpan(spanId);
-        return { callId: toolCall.id, result };
-      } catch (err) {
-        const error = err instanceof Error ? err : new Error(String(err));
-        const duration = Date.now() - startTime;
-
-        // Lesson 26: Record tool error for tracing
-        this.traceCollector?.record({
-          type: 'tool.end',
-          data: {
-            executionId,
-            status: error.message.includes('Blocked') || error.message.includes('Policy') ? 'blocked' : 'error',
-            error,
-            durationMs: duration,
-          },
-        });
-
-        this.observability?.metrics?.recordToolCall(toolCall.name, duration, false);
-        this.observability?.tracer?.recordError(error);
-        this.observability?.tracer?.endSpan(spanId);
-
-        // FAILURE EVIDENCE RECORDING (Trick S)
-        // Track failed tool calls to prevent loops and provide context
-        this.contextEngineering?.recordFailure({
-          action: toolCall.name,
-          args: toolCall.arguments as Record<string, unknown>,
-          error,
-          intent: `Execute tool ${toolCall.name}`,
-        });
-
-        // Self-improvement: enhance error message with diagnosis for better LLM recovery
-        if (this.selfImprovement) {
-          const enhanced = this.selfImprovement.enhanceErrorMessage(
-            toolCall.name, error.message, toolCall.arguments as Record<string, unknown>
-          );
-          this.emit({ type: 'tool.blocked', tool: toolCall.name, reason: enhanced });
-          return { callId: toolCall.id, result: `Error: ${enhanced}`, error: enhanced };
-        }
-
-        this.emit({ type: 'tool.blocked', tool: toolCall.name, reason: error.message });
-        return { callId: toolCall.id, result: `Error: ${error.message}`, error: error.message };
-      }
   }
 
   /**
@@ -3768,140 +2263,6 @@ export class ProductionAgent {
     this.hooks?.emit(event);
   }
 
-  /**
-   * Create a brief summary of a tool result for insight display.
-   */
-  private summarizeToolResult(toolName: string, result: unknown): string {
-    if (result === null || result === undefined) {
-      return 'No output';
-    }
-
-    const resultStr = typeof result === 'string' ? result : JSON.stringify(result);
-
-    // Tool-specific summaries
-    if (toolName === 'list_files' || toolName === 'glob') {
-      const lines = resultStr.split('\n').filter(l => l.trim());
-      return `Found ${lines.length} file${lines.length !== 1 ? 's' : ''}`;
-    }
-    if (toolName === 'bash' || toolName === 'execute_command') {
-      const lines = resultStr.split('\n').filter(l => l.trim());
-      if (resultStr.includes('exit code: 0') || !resultStr.includes('exit code:')) {
-        return lines.length > 1 ? `Success (${lines.length} lines)` : 'Success';
-      }
-      return `Failed - ${lines[0]?.slice(0, 50) || 'see output'}`;
-    }
-    if (toolName === 'read_file') {
-      const lines = resultStr.split('\n').length;
-      return `Read ${lines} line${lines !== 1 ? 's' : ''}`;
-    }
-    if (toolName === 'write_file' || toolName === 'edit_file') {
-      return 'File updated';
-    }
-    if (toolName === 'search' || toolName === 'grep') {
-      const matches = (resultStr.match(/\n/g) || []).length;
-      return `${matches} match${matches !== 1 ? 'es' : ''}`;
-    }
-
-    // Generic summary
-    if (resultStr.length <= 50) {
-      return resultStr;
-    }
-    return `${resultStr.slice(0, 47)}...`;
-  }
-
-  /**
-   * Format tool arguments for plan display.
-   */
-  private formatToolArgsForPlan(toolName: string, args: Record<string, unknown>): string {
-    if (toolName === 'write_file') {
-      const path = args.path || args.file_path;
-      const content = String(args.content || '');
-      const preview = content.slice(0, 100).replace(/\n/g, '\\n');
-      return `File: ${path}\nContent preview: ${preview}${content.length > 100 ? '...' : ''}`;
-    }
-    if (toolName === 'edit_file') {
-      const path = args.path || args.file_path;
-      return `File: ${path}\nOld: ${String(args.old_string || args.search || '').slice(0, 50)}...\nNew: ${String(args.new_string || args.replace || '').slice(0, 50)}...`;
-    }
-    if (toolName === 'bash') {
-      return `Command: ${String(args.command || '').slice(0, 100)}`;
-    }
-    if (toolName === 'delete_file') {
-      return `Delete: ${args.path || args.file_path}`;
-    }
-    if (toolName === 'spawn_agent' || toolName === 'researcher') {
-      const task = String(args.task || args.prompt || args.goal || '');
-      const model = args.model ? ` (${args.model})` : '';
-      const firstLine = task.split('\n')[0].slice(0, 100);
-      return `${firstLine}${task.length > 100 ? '...' : ''}${model}`;
-    }
-    // Generic
-    return `Args: ${JSON.stringify(args).slice(0, 100)}...`;
-  }
-
-  /**
-   * Extract contextual reasoning for a proposed change in plan mode.
-   * Looks at recent assistant messages to find relevant explanation.
-   * Returns a more complete reason than simple truncation.
-   */
-  private extractChangeReasoning(
-    toolCall: { name: string; arguments: unknown },
-    messages: Message[]
-  ): string {
-    // Get last few assistant messages (most recent first)
-    const assistantMsgs = messages
-      .filter(m => m.role === 'assistant' && typeof m.content === 'string')
-      .slice(-3)
-      .reverse();
-
-    if (assistantMsgs.length === 0) {
-      return `Proposed change: ${toolCall.name}`;
-    }
-
-    // Use the most recent assistant message
-    const lastMsg = assistantMsgs[0];
-    const content = lastMsg.content as string;
-
-    // For spawn_agent, the task itself is usually the reason
-    if (toolCall.name === 'spawn_agent') {
-      const args = toolCall.arguments as Record<string, unknown>;
-      const task = String(args.task || args.prompt || args.goal || '');
-      if (task.length > 0) {
-        // Use first paragraph or 500 chars of task as reason
-        const firstPara = task.split(/\n\n/)[0];
-        return firstPara.length > 500 ? firstPara.slice(0, 500) + '...' : firstPara;
-      }
-    }
-
-    // For file operations, look for context about the file
-    if (['write_file', 'edit_file'].includes(toolCall.name)) {
-      const args = toolCall.arguments as Record<string, unknown>;
-      const path = String(args.path || args.file_path || '');
-
-      // Look for mentions of this file in the assistant's explanation
-      if (path && content.toLowerCase().includes(path.toLowerCase().split('/').pop() || '')) {
-        // Extract the sentence(s) mentioning this file
-        const sentences = content.split(/[.!?\n]+/).filter(s =>
-          s.toLowerCase().includes(path.toLowerCase().split('/').pop() || '')
-        );
-        if (sentences.length > 0) {
-          const relevant = sentences.slice(0, 2).join('. ').trim();
-          return relevant.length > 500 ? relevant.slice(0, 500) + '...' : relevant;
-        }
-      }
-    }
-
-    // Fallback: use first 500 chars instead of 200
-    // Look for the first meaningful paragraph/section
-    const paragraphs = content.split(/\n\n+/).filter(p => p.trim().length > 20);
-    if (paragraphs.length > 0) {
-      const firstPara = paragraphs[0].trim();
-      return firstPara.length > 500 ? firstPara.slice(0, 500) + '...' : firstPara;
-    }
-
-    // Ultimate fallback
-    return content.length > 500 ? content.slice(0, 500) + '...' : content;
-  }
 
   /**
    * Update memory statistics.
@@ -3930,11 +2291,27 @@ export class ProductionAgent {
     return this.state.metrics;
   }
 
+  getResilienceConfig(): ProductionAgentConfig['resilience'] {
+    return this.config.resilience;
+  }
+
   /**
    * Get current state.
    */
   getState(): AgentState {
     return { ...this.state };
+  }
+
+  /**
+   * Get shared state stats for TUI visibility.
+   * Returns null when not in a swarm context.
+   */
+  getSharedStats(): { context: { failures: number; references: number }; economics: { fingerprints: number; globalLoops: string[] } } | null {
+    if (!this._sharedContextState) return null;
+    return {
+      context: this._sharedContextState.getStats(),
+      economics: this._sharedEconomicsState?.getStats() ?? { fingerprints: 0, globalLoops: [] },
+    };
   }
 
   /**
@@ -3960,6 +2337,17 @@ export class ProductionAgent {
   }
 
   /**
+   * Estimate tokens used by the system prompt (codebase context, tools, rules).
+   * Used by TUI to display accurate context % that includes system overhead.
+   */
+  getSystemPromptTokenEstimate(): number {
+    if (this.lastSystemPromptLength > 0) {
+      return Math.ceil(this.lastSystemPromptLength / 3.2);
+    }
+    return 0;
+  }
+
+  /**
    * Get the trace collector (Lesson 26).
    * Returns null if trace capture is not enabled.
    */
@@ -3973,6 +2361,9 @@ export class ProductionAgent {
    */
   setTraceCollector(collector: TraceCollector): void {
     this.traceCollector = collector;
+    if (this.codebaseContext) {
+      this.codebaseContext.traceCollector = collector;
+    }
   }
 
   /**
@@ -4241,7 +2632,7 @@ export class ProductionAgent {
 
     // Log warnings
     for (const warning of validation.warnings) {
-      console.warn(`[Checkpoint] Warning: ${warning}`);
+      log.warn('Checkpoint validation warning', { warning });
       this.observability?.logger?.warn('Checkpoint validation warning', { warning });
     }
 
@@ -4358,7 +2749,7 @@ export class ProductionAgent {
     }
 
     if (compactedCount > 0 && process.env.DEBUG) {
-      console.log(`  📦 Compacted ${compactedCount} tool outputs (saved ~${Math.round(savedChars / 4)} tokens)`);
+      log.debug('Compacted tool outputs', { compactedCount, savedTokens: Math.round(savedChars / 4) });
     }
   }
 
@@ -4407,25 +2798,32 @@ export class ProductionAgent {
     return !artifactWriteTools.some(toolName => executedToolNames.has(toolName));
   }
 
-  /**
-   * Detect "future-intent" responses that imply the model has not completed work.
-   */
-  private detectIncompleteActionResponse(content: string): boolean {
-    const trimmed = content.trim();
-    if (!trimmed) {
-      return false;
+  private getOpenTasksSummary(): OpenTaskSummary | undefined {
+    if (!this.taskManager) {
+      return undefined;
     }
+    const tasks = this.taskManager.list();
+    const pending = tasks.filter(t => t.status === 'pending').length;
+    const inProgress = tasks.filter(t => t.status === 'in_progress').length;
+    const blocked = tasks.filter(t => t.status === 'pending' && this.taskManager?.isBlocked(t.id)).length;
+    return { pending, inProgress, blocked };
+  }
 
-    const lower = trimmed.toLowerCase();
-    const futureIntentPatterns: RegExp[] = [
-      /^(now|next|then)\s+(i\s+will|i'll|let me)\b/,
-      /^i\s+(will|am going to|can)\b/,
-      /^(let me|i'll|i will)\s+(create|write|save|do|make|generate|start)\b/,
-      /^(now|next|then)\s+i(?:'ll| will)\b/,
-    ];
-    const completionSignals = /\b(done|completed|finished|here is|created|saved|wrote)\b/;
-
-    return futureIntentPatterns.some(pattern => pattern.test(lower)) && !completionSignals.test(lower);
+  private reconcileStaleTasks(reason: string): void {
+    if (!this.taskManager) return;
+    const staleAfterMs = typeof this.config.resilience === 'object'
+      ? (this.config.resilience.taskLeaseStaleMs ?? 5 * 60 * 1000)
+      : 5 * 60 * 1000;
+    const recovered = this.taskManager.reconcileStaleInProgress({
+      staleAfterMs,
+      reason,
+    });
+    if (recovered.reconciled > 0) {
+      this.observability?.logger?.info('Recovered stale task leases', {
+        reason,
+        recovered: recovered.reconciled,
+      });
+    }
   }
 
   /**
@@ -4925,1146 +3323,18 @@ export class ProductionAgent {
   }
 
   /**
-   * Spawn an agent to execute a task.
-   * Returns the result when the agent completes.
-   *
-   * @param agentName - Name of the agent to spawn (researcher, coder, etc.)
-   * @param task - The task description for the agent
-   * @param constraints - Optional constraints to keep the subagent focused
+   * Spawn a subagent (delegates to core/subagent-spawner).
    */
-  async spawnAgent(agentName: string, task: string, constraints?: import('./tools/agent.js').SpawnConstraints): Promise<SpawnResult> {
-    if (!this.agentRegistry) {
-      return {
-        success: false,
-        output: 'Agent registry not initialized',
-        metrics: { tokens: 0, duration: 0, toolCalls: 0 },
-      };
-    }
-
-    const agentDef = this.agentRegistry.getAgent(agentName);
-    if (!agentDef) {
-      return {
-        success: false,
-        output: `Agent not found: ${agentName}`,
-        metrics: { tokens: 0, duration: 0, toolCalls: 0 },
-      };
-    }
-
-    // DUPLICATE SPAWN PREVENTION with SEMANTIC SIMILARITY
-    // Skip for swarm workers — the orchestrator handles retry logic and deduplication
-    // at the task level. Without this bypass, retried swarm tasks return stale results.
-    const isSwarmWorker = agentName.startsWith('swarm-');
-
-    const SEMANTIC_SIMILARITY_THRESHOLD = 0.75; // 75% similarity = duplicate
-    const taskKey = `${agentName}:${task.slice(0, 150).toLowerCase().replace(/\s+/g, ' ').trim()}`;
-    const now = Date.now();
-
-    // Clean up old entries (older than dedup window)
-    for (const [key, entry] of this.spawnedTasks.entries()) {
-      if (now - entry.timestamp > ProductionAgent.SPAWN_DEDUP_WINDOW_MS) {
-        this.spawnedTasks.delete(key);
-      }
-    }
-
-    let existingMatch: { timestamp: number; result: string; queuedChanges: number } | undefined;
-    let matchType: 'exact' | 'semantic' = 'exact';
-
-    if (!isSwarmWorker) {
-      // Check for exact match first
-      existingMatch = this.spawnedTasks.get(taskKey);
-
-      // If no exact match, check for semantic similarity among same agent's tasks
-      if (!existingMatch) {
-        for (const [key, entry] of this.spawnedTasks.entries()) {
-          // Only compare tasks from the same agent type
-          if (!key.startsWith(`${agentName}:`)) continue;
-          if (now - entry.timestamp >= ProductionAgent.SPAWN_DEDUP_WINDOW_MS) continue;
-
-          // Extract the task portion from the key
-          const existingTask = key.slice(agentName.length + 1);
-          const similarity = calculateTaskSimilarity(task, existingTask);
-
-          if (similarity >= SEMANTIC_SIMILARITY_THRESHOLD) {
-            existingMatch = entry;
-            matchType = 'semantic';
-            this.observability?.logger?.debug('Semantic duplicate detected', {
-              agent: agentName,
-              newTask: task.slice(0, 80),
-              existingTask: existingTask.slice(0, 80),
-              similarity: (similarity * 100).toFixed(1) + '%',
-            });
-            break;
-          }
-        }
-      }
-    }
-
-    if (existingMatch && now - existingMatch.timestamp < ProductionAgent.SPAWN_DEDUP_WINDOW_MS) {
-      // Same or semantically similar task spawned within the dedup window
-      this.observability?.logger?.warn('Duplicate spawn prevented', {
-        agent: agentName,
-        task: task.slice(0, 100),
-        matchType,
-        originalTimestamp: existingMatch.timestamp,
-        elapsedMs: now - existingMatch.timestamp,
-      });
-
-      const duplicateMessage = `[DUPLICATE SPAWN PREVENTED${matchType === 'semantic' ? ' - SEMANTIC MATCH' : ''}]\n` +
-        `This task was already spawned ${Math.round((now - existingMatch.timestamp) / 1000)}s ago.\n` +
-        `${existingMatch.queuedChanges > 0
-          ? `The previous spawn queued ${existingMatch.queuedChanges} change(s) to the pending plan.\n` +
-            `These changes are already in your plan - do NOT spawn again.\n`
-          : ''
-        }Previous result summary:\n${existingMatch.result.slice(0, 500)}`;
-
-      return {
-        success: true, // Mark as success since original task completed
-        output: duplicateMessage,
-        metrics: { tokens: 0, duration: 0, toolCalls: 0 },
-      };
-    }
-
-    // Generate a unique ID for this agent instance that will be used consistently
-    // throughout the agent's lifecycle (spawn event, token events, completion events)
-    const agentId = `spawn-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
-
-    this.emit({ type: 'agent.spawn', agentId, name: agentName, task });
-    this.observability?.logger?.info('Spawning agent', { name: agentName, task });
-
-    const startTime = Date.now();
-    const childSessionId = `subagent-${agentName}-${Date.now()}`;
-    const childTraceId = `trace-${childSessionId}`;
-    let workerResultId: string | undefined;
-
-    try {
-      // Filter tools for this agent
-      let agentTools = filterToolsForAgent(agentDef, Array.from(this.tools.values()));
-
-      // Resolve policy profile FIRST so we know which tools the policy allows.
-      // This must happen before the recommendation filter so policy-allowed tools
-      // are preserved through the recommendation pruning step.
-      const inferredTaskType = agentDef.taskType ?? ToolRecommendationEngine.inferTaskType(agentName);
-      const policyResolution = resolvePolicyProfile({
-        policyEngine: this.config.policyEngine,
-        requestedProfile: agentDef.policyProfile,
-        swarmConfig: isSwarmWorker && this.config.swarm && typeof this.config.swarm === 'object'
-          ? this.config.swarm as SwarmConfig
-          : undefined,
-        taskType: inferredTaskType,
-        isSwarmWorker,
-        sandboxConfig: this.config.sandbox && typeof this.config.sandbox === 'object'
-          ? this.config.sandbox
-          : undefined,
-      });
-      this.emit({
-        type: 'policy.profile.resolved',
-        profile: policyResolution.profileName,
-        context: isSwarmWorker ? 'swarm' : 'subagent',
-        selectionSource: policyResolution.metadata.selectionSource,
-        usedLegacyMappings: policyResolution.metadata.usedLegacyMappings,
-        legacySources: policyResolution.metadata.legacyMappingSources,
-      });
-      if (policyResolution.metadata.usedLegacyMappings) {
-        this.emit({
-          type: 'policy.legacy.fallback.used',
-          profile: policyResolution.profileName,
-          sources: policyResolution.metadata.legacyMappingSources,
-          warnings: policyResolution.metadata.warnings,
-        });
-        this.observability?.logger?.warn('Policy legacy mappings used', {
-          agent: agentName,
-          profile: policyResolution.profileName,
-          sources: policyResolution.metadata.legacyMappingSources,
-        });
-      }
-
-      // Apply tool recommendations to improve subagent focus (only for large tool sets)
-      if (this.toolRecommendation && agentTools.length > 15) {
-        const taskType = ToolRecommendationEngine.inferTaskType(agentName);
-        const recommendations = this.toolRecommendation.recommendTools(
-          task, taskType, agentTools.map(t => t.name)
-        );
-        if (recommendations.length > 0) {
-          const recommendedNames = new Set(recommendations.map(r => r.toolName));
-          // Always keep spawn tools even if not recommended
-          const alwaysKeep = new Set(['spawn_agent', 'spawn_agents_parallel']);
-          // Also keep tools that the resolved policy profile explicitly allows.
-          // This prevents the recommendation engine from stripping tools that the
-          // security policy says the worker should have.
-          if (policyResolution.profile.allowedTools) {
-            for (const t of policyResolution.profile.allowedTools) alwaysKeep.add(t);
-          }
-          agentTools = agentTools.filter(t =>
-            recommendedNames.has(t.name) || alwaysKeep.has(t.name)
-          );
-        }
-      }
-
-      // Enforce unified tool policy at spawn-time so denied tools are never exposed.
-      if (policyResolution.profile.toolAccessMode === 'whitelist' && policyResolution.profile.allowedTools) {
-        const allowed = new Set(policyResolution.profile.allowedTools);
-        agentTools = agentTools.filter(t => allowed.has(t.name));
-      } else if (policyResolution.profile.deniedTools && policyResolution.profile.deniedTools.length > 0) {
-        const denied = new Set(policyResolution.profile.deniedTools);
-        agentTools = agentTools.filter(t => !denied.has(t.name));
-      }
-
-      // Fail fast if tool filtering resulted in zero tools — the worker can't do anything
-      if (agentTools.length === 0) {
-        throw new Error(`Worker '${agentName}' has zero available tools after filtering. Check toolAccessMode and policy profile '${policyResolution.profileName}'.`);
-      }
-
-      // Resolve model - abstract tiers (fast/balanced/quality) should use parent's model
-      // Only use agentDef.model if it's an actual model ID (contains '/')
-      const resolvedModel = (agentDef.model && agentDef.model.includes('/'))
-        ? agentDef.model
-        : this.config.model;
-
-      // Persist subagent task lifecycle in durable storage when available
-      if (this.store?.hasWorkerResultsFeature()) {
-        try {
-          workerResultId = this.store.createWorkerResult(
-            agentId,
-            task.slice(0, 500),
-            resolvedModel || 'default'
-          );
-        } catch (storeErr) {
-          this.observability?.logger?.warn('Failed to create worker result record', {
-            agentId,
-            error: (storeErr as Error).message,
-          });
-        }
-      }
-
-      // Get subagent config with agent-type-specific timeouts and iteration limits
-      // Uses dynamic configuration based on agent type (researcher needs more time than reviewer)
-      // Precedence: per-type config > per-type default > global config > hardcoded fallback
-      const subagentConfig = this.config.subagent;
-      const hasSubagentConfig = subagentConfig !== false && subagentConfig !== undefined;
-
-      // Timeout precedence: agentDef.timeout > per-type config > agent-type default > global config default
-      // agentDef.timeout is set by worker-pool for swarm workers, giving them precise timeout control
-      const agentTypeTimeout = getSubagentTimeout(agentName);
-      const rawPerTypeTimeout = hasSubagentConfig
-        ? (subagentConfig as { timeouts?: Record<string, number> }).timeouts?.[agentName]
-        : undefined;
-      const rawGlobalTimeout = hasSubagentConfig
-        ? (subagentConfig as { defaultTimeout?: number }).defaultTimeout
-        : undefined;
-      // Validate: reject negative, NaN, or non-finite timeout values
-      const isValidTimeout = (v: number | undefined): v is number =>
-        v !== undefined && Number.isFinite(v) && v > 0;
-      const agentDefTimeout = isValidTimeout(agentDef.timeout) ? agentDef.timeout : undefined;
-      const perTypeConfigTimeout = isValidTimeout(rawPerTypeTimeout) ? rawPerTypeTimeout : undefined;
-      const globalConfigTimeout = isValidTimeout(rawGlobalTimeout) ? rawGlobalTimeout : undefined;
-      const subagentTimeout = agentDefTimeout ?? perTypeConfigTimeout ?? agentTypeTimeout ?? globalConfigTimeout ?? 300000;
-
-      // Iteration precedence: per-type config override > agent-type default > global config default
-      const agentTypeMaxIter = getSubagentMaxIterations(agentName);
-      const rawPerTypeMaxIter = hasSubagentConfig
-        ? (subagentConfig as { maxIterations?: Record<string, number> }).maxIterations?.[agentName]
-        : undefined;
-      const rawGlobalMaxIter = hasSubagentConfig
-        ? (subagentConfig as { defaultMaxIterations?: number }).defaultMaxIterations
-        : undefined;
-      const isValidIter = (v: number | undefined): v is number =>
-        v !== undefined && Number.isFinite(v) && v > 0 && Number.isInteger(v);
-      const perTypeConfigMaxIter = isValidIter(rawPerTypeMaxIter) ? rawPerTypeMaxIter : undefined;
-      const globalConfigMaxIter = isValidIter(rawGlobalMaxIter) ? rawGlobalMaxIter : undefined;
-      const defaultMaxIterations = agentDef.maxIterations ?? perTypeConfigMaxIter ?? agentTypeMaxIter ?? globalConfigMaxIter ?? 15;
-
-      // BLACKBOARD CONTEXT INJECTION
-      // Gather relevant context from the blackboard for the subagent
-      let blackboardContext = '';
-      const parentAgentId = `parent-${Date.now()}`;
-
-      if (this.blackboard) {
-        // Post parent's exploration context before spawning
-        this.blackboard.post(parentAgentId, {
-          topic: 'spawn.parent_context',
-          content: `Parent spawning ${agentName} for task: ${task.slice(0, 200)}`,
-          type: 'progress',
-          confidence: 1,
-          metadata: { agentName, taskPreview: task.slice(0, 100) },
-        });
-
-        // Gather recent findings that might help the subagent
-        const recentFindings = this.blackboard.query({
-          limit: 5,
-          types: ['discovery', 'analysis', 'progress'],
-          minConfidence: 0.7,
-        });
-
-        if (recentFindings.length > 0) {
-          const findingsSummary = recentFindings
-            .map(f => `- [${f.agentId}] ${f.topic}: ${f.content.slice(0, 150)}${f.content.length > 150 ? '...' : ''}`)
-            .join('\n');
-          blackboardContext = `\n\n**BLACKBOARD CONTEXT (from parent/sibling agents):**\n${findingsSummary}\n`;
-        }
-      }
-
-      // Check for files already being modified in parent's pending plan
-      const currentPlan = this.pendingPlanManager.getPendingPlan();
-      if (currentPlan && currentPlan.proposedChanges.length > 0) {
-        const pendingFiles = currentPlan.proposedChanges
-          .filter((c: { tool: string }) => c.tool === 'write_file' || c.tool === 'edit_file')
-          .map((c: { args: { path?: string; file_path?: string } }) => c.args.path || c.args.file_path)
-          .filter(Boolean) as string[];
-
-        if (pendingFiles.length > 0) {
-          blackboardContext += `\n**FILES ALREADY IN PENDING PLAN (do not duplicate):**\n${pendingFiles.slice(0, 10).join('\n')}\n`;
-        }
-      }
-
-      // CONSTRAINT INJECTION
-      // Add constraints to the subagent's context if provided
-      // Also always include budget awareness so subagents know their limits
-      const constraintParts: string[] = [];
-
-      // BUDGET AWARENESS: Always inject so subagent understands its limits
-      const subagentBudgetTokens = constraints?.maxTokens ?? SUBAGENT_BUDGET.maxTokens ?? 100000;
-      const subagentBudgetMinutes = Math.round((SUBAGENT_BUDGET.maxDuration ?? 240000) / 60000);
-
-      if (isSwarmWorker) {
-        // V8: Minimal resource awareness for swarm workers — removes budget/time
-        // messaging entirely to prevent cheap models from bail-out anxiety.
-        // The economics system handles budget warnings via system messages when needed.
-        // Wrapup JSON format is ONLY injected when requestWrapup() is called.
-        constraintParts.push(
-          `**Execution Mode:** You are a focused worker agent.\n` +
-          `- Complete your assigned task using tool calls.\n` +
-          `- Your FIRST action must be a tool call (read_file, write_file, edit_file, grep, glob, etc.).\n` +
-          `- To create files use write_file. To modify files use edit_file. Do NOT use bash for file operations.\n` +
-          `- You will receive a system message if you need to wrap up. Until then, work normally.\n` +
-          `- Do NOT produce summaries or reports — produce CODE and FILE CHANGES.`
-        );
-      } else {
-        // Original RESOURCE AWARENESS text for regular subagents
-        constraintParts.push(
-          `**RESOURCE AWARENESS (CRITICAL):**\n` +
-          `- Token budget: ~${(subagentBudgetTokens / 1000).toFixed(0)}k tokens\n` +
-          `- Time limit: ~${subagentBudgetMinutes} minutes\n` +
-          `- You will receive warnings at 70% usage. When warned, WRAP UP immediately.\n` +
-          `- Do not explore indefinitely - be focused and efficient.\n` +
-          `- If approaching limits, summarize findings and return.\n` +
-          `- **STRUCTURED WRAPUP:** When told to wrap up, respond with ONLY this JSON (no tool calls):\n` +
-          `  {"findings":[...], "actionsTaken":[...], "failures":[...], "remainingWork":[...], "suggestedNextSteps":[...]}`
-        );
-      }
-
-      if (constraints) {
-        if (constraints.focusAreas && constraints.focusAreas.length > 0) {
-          constraintParts.push(`**FOCUS AREAS (limit exploration to these paths):**\n${constraints.focusAreas.map(a => `  - ${a}`).join('\n')}`);
-        }
-
-        if (constraints.excludeAreas && constraints.excludeAreas.length > 0) {
-          constraintParts.push(`**EXCLUDED AREAS (do NOT explore these):**\n${constraints.excludeAreas.map(a => `  - ${a}`).join('\n')}`);
-        }
-
-        if (constraints.requiredDeliverables && constraints.requiredDeliverables.length > 0) {
-          constraintParts.push(`**REQUIRED DELIVERABLES (you must produce these):**\n${constraints.requiredDeliverables.map(d => `  - ${d}`).join('\n')}`);
-        }
-
-        if (constraints.timeboxMinutes) {
-          constraintParts.push(`**TIME LIMIT:** ${constraints.timeboxMinutes} minutes (soft limit - wrap up if approaching)`);
-        }
-      }
-
-      const constraintContext = `\n\n**EXECUTION CONSTRAINTS:**\n${constraintParts.join('\n\n')}\n`;
-
-      // Build delegation-enhanced system prompt
-      let delegationContext = '';
-      if (this.lastComplexityAssessment && this.lastComplexityAssessment.tier !== 'simple') {
-        const spec = createMinimalDelegationSpec(task, agentName);
-        delegationContext = '\n\n' + buildDelegationPrompt(spec);
-      }
-
-      // Quality self-assessment prompt for subagent
-      const qualityPrompt = '\n\n' + getSubagentQualityPrompt();
-
-      // Build subagent system prompt with subagent-specific plan mode addition
-      const parentMode = this.getMode();
-      const subagentSystemPrompt = parentMode === 'plan'
-        ? `${agentDef.systemPrompt}\n\n${SUBAGENT_PLAN_MODE_ADDITION}${blackboardContext}${constraintContext}${delegationContext}${qualityPrompt}`
-        : `${agentDef.systemPrompt}${blackboardContext}${constraintContext}${delegationContext}${qualityPrompt}`;
-
-      // Allocate budget from pool (or use default) — track allocation ID for release later
-      const pooledBudget = this.getSubagentBudget(agentName, constraints);
-      const poolAllocationId = pooledBudget.allocationId;
-
-      const deniedByProfile = new Set(policyResolution.profile.deniedTools ?? []);
-      const policyToolPolicies: Record<string, { policy: 'allow' | 'prompt' | 'forbidden'; reason?: string }> = {};
-      for (const toolName of deniedByProfile) {
-        policyToolPolicies[toolName] = {
-          policy: 'forbidden',
-          reason: `Denied by policy profile '${policyResolution.profileName}'`,
-        };
-      }
-      if ((policyResolution.profile.bashMode ?? 'full') === 'disabled') {
-        policyToolPolicies.bash = {
-          policy: 'forbidden',
-          reason: `Bash is disabled by policy profile '${policyResolution.profileName}'`,
-        };
-      }
-
-      // Create a sub-agent with the agent's config
-      // Use SUBAGENT_BUDGET to constrain resource usage (prevents runaway token consumption)
-      const subAgent = new ProductionAgent({
-        provider: this.provider,
-        tools: agentTools,
-        // Pass toolResolver so subagent can lazy-load MCP tools
-        toolResolver: this.toolResolver || undefined,
-        // Pass MCP tool summaries so subagent knows what tools are available
-        mcpToolSummaries: this.config.mcpToolSummaries,
-        systemPrompt: subagentSystemPrompt,
-        model: resolvedModel,
-        maxIterations: agentDef.maxIterations || defaultMaxIterations,
-        // Inherit some features but keep subagent simpler
-        memory: false,
-        planning: false,
-        reflection: false,
-        // Enable lightweight compaction for subagents (Improvement P5)
-        // tokenThreshold configures the Compactor's per-pass size limit
-        // maxContextTokens constrains AutoCompactionManager's percentage thresholds
-        // With maxContextTokens=80000 and default 80% threshold, compaction triggers at ~64K
-        compaction: {
-          enabled: true,
-          mode: 'auto',
-          tokenThreshold: 40000, // Compactor summarization size limit per pass
-          preserveRecentCount: 4, // Preserve fewer messages (splits to 2 user + 2 assistant)
-          preserveToolResults: false, // More aggressive — subagents can re-read files
-          summaryMaxTokens: 500,
-        },
-        // Lower context window for subagents so percentage-based compaction triggers earlier
-        maxContextTokens: 80000,
-        observability: this.config.observability,
-        sandbox: (() => {
-          const swarm = this.config.swarm;
-          const extraCmds = swarm && typeof swarm === 'object' && swarm.permissions?.additionalAllowedCommands;
-          const baseSbx = this.config.sandbox;
-          if (baseSbx && typeof baseSbx === 'object') {
-            const sbx = baseSbx as SandboxConfig;
-            const allowedCommands = extraCmds
-              ? [...(sbx.allowedCommands || []), ...extraCmds]
-              : sbx.allowedCommands;
-            return {
-              ...sbx,
-              allowedCommands,
-              bashMode: policyResolution.profile.bashMode ?? sbx.bashMode,
-              bashWriteProtection: policyResolution.profile.bashWriteProtection ?? sbx.bashWriteProtection,
-              blockFileCreationViaBash:
-                (policyResolution.profile.bashWriteProtection ?? 'off') === 'block_file_mutation'
-                  ? true
-                  : sbx.blockFileCreationViaBash,
-            };
-          }
-          return baseSbx;
-        })(),
-        humanInLoop: this.config.humanInLoop,
-        // Subagents get 'allow' as default policy since they're already
-        // constrained to their registered tool set. The parent's 'prompt'
-        // policy can't work without humanInLoop.
-        executionPolicy: (() => {
-          const hasPolicyOverrides = Object.keys(policyToolPolicies).length > 0;
-          if (this.config.executionPolicy) {
-            return {
-              ...this.config.executionPolicy,
-              defaultPolicy: 'allow' as const,
-              toolPolicies: {
-                ...(this.config.executionPolicy.toolPolicies ?? {}),
-                ...policyToolPolicies,
-              },
-            };
-          }
-          if (hasPolicyOverrides) {
-            return {
-              enabled: true,
-              defaultPolicy: 'allow' as const,
-              toolPolicies: policyToolPolicies,
-              intentAware: false,
-            };
-          }
-          return this.config.executionPolicy;
-        })(),
-        policyEngine: this.config.policyEngine
-          ? { ...this.config.policyEngine, defaultProfile: policyResolution.profileName }
-          : this.config.policyEngine,
-        threads: false,
-        // Disable hooks console output in subagents - parent handles event display
-        hooks: this.config.hooks === false ? false : {
-          enabled: true,
-          builtIn: { logging: false, timing: false, metrics: false },
-          custom: [],
-        },
-        // Pass unique agentId for blackboard coordination and tracing
-        agentId,
-        // Share parent's blackboard for coordination between parallel subagents
-        blackboard: this.blackboard || undefined,
-        // Share parent's file cache to eliminate redundant reads across agents
-        fileCache: this.fileCache || undefined,
-        // CONSTRAINED BUDGET: Use pooled budget when available, falling back to SUBAGENT_BUDGET
-        // Pooled budget ensures total tree cost stays bounded by parent's budget
-        // Merge economicsTuning from agent definition so swarm workers get custom thresholds
-        budget: agentDef.economicsTuning
-          ? { ...pooledBudget.budget, tuning: agentDef.economicsTuning }
-          : pooledBudget.budget,
-      });
-
-      // CRITICAL: Subagent inherits parent's mode
-      // This ensures that if parent is in plan mode:
-      // - Subagent's read operations execute immediately (visible exploration)
-      // - Subagent's write operations get queued in the subagent's pending plan
-      // - User maintains control over what actually gets written
-      if (parentMode !== 'build') {
-        subAgent.setMode(parentMode);
-      }
-
-      // APPROVAL BATCHING (Improvement P6): Set approval scope for subagents
-      // Read-only tools are auto-approved; write tools get scoped approval
-      // This reduces interruptions from ~8 per session to ~1-2
-      // Swarm permissions from config override defaults when present
-      const swarmPerms = this.config.swarm && typeof this.config.swarm === 'object'
-        ? (this.config.swarm as SwarmConfig).permissions : undefined;
-
-      const baseAutoApprove = ['read_file', 'list_files', 'glob', 'grep', 'show_file_history', 'show_session_changes'];
-      const baseScopedApprove: Record<string, { paths: string[] }> = isSwarmWorker
-        ? {
-            write_file: { paths: ['src/', 'tests/', 'tools/'] },
-            edit_file: { paths: ['src/', 'tests/', 'tools/'] },
-            bash: { paths: ['src/', 'tests/', 'tools/'] },
-          }
-        : {
-            write_file: { paths: ['src/', 'tests/', 'tools/'] },
-            edit_file: { paths: ['src/', 'tests/', 'tools/'] },
-          };
-      const baseRequireApproval = isSwarmWorker ? ['delete_file'] : ['bash', 'delete_file'];
-      const mergedScope = mergeApprovalScopeWithProfile({
-        autoApprove: swarmPerms?.autoApprove
-          ? [...new Set([...baseAutoApprove, ...swarmPerms.autoApprove])]
-          : baseAutoApprove,
-        scopedApprove: swarmPerms?.scopedApprove
-          ? { ...baseScopedApprove, ...swarmPerms.scopedApprove }
-          : baseScopedApprove,
-        // requireApproval: full replacement (not merge) — user may want to REMOVE
-        // tools like 'bash' to let workers run freely
-        requireApproval: swarmPerms?.requireApproval
-          ? swarmPerms.requireApproval
-          : baseRequireApproval,
-      }, policyResolution.profile);
-
-      subAgent.setApprovalScope(mergedScope);
-
-      // Pass parent's iteration count to subagent for accurate budget tracking
-      // This prevents subagents from consuming excessive iterations when parent already used many
-      subAgent.setParentIterations(this.getTotalIterations());
-
-      // UNIFIED TRACING: Share parent's trace collector with subagent context
-      // This ensures all subagent events are written to the same trace file as the parent,
-      // tagged with subagent context for proper aggregation in /trace output
-      if (this.traceCollector) {
-        const subagentTraceView = this.traceCollector.createSubagentView({
-          parentSessionId: this.traceCollector.getSessionId() || 'unknown',
-          agentType: agentName,
-          spawnedAtIteration: this.state.iteration,
-        });
-        subAgent.setTraceCollector(subagentTraceView);
-      }
-
-      // GRACEFUL TIMEOUT with WRAPUP PHASE
-      // Instead of instant death on timeout, the subagent gets a wrapup window
-      // to produce a structured summary before being killed:
-      // 1. Normal operation: progress extends idle timer
-      // 2. Wrapup phase: 30s before hard kill, wrapup callback fires → forceTextOnly
-      // 3. Hard kill: race() throws CancellationError after wrapup window
-      const IDLE_TIMEOUT = agentDef.idleTimeout ?? 120000; // Configurable idle timeout (default: 2 min)
-      let WRAPUP_WINDOW = 30000;
-      let IDLE_CHECK_INTERVAL = 5000;
-      if (this.config.subagent) {
-        WRAPUP_WINDOW = this.config.subagent.wrapupWindowMs ?? WRAPUP_WINDOW;
-        IDLE_CHECK_INTERVAL = this.config.subagent.idleCheckIntervalMs ?? IDLE_CHECK_INTERVAL;
-      }
-      const progressAwareTimeout = createGracefulTimeout(
-        subagentTimeout,  // Max total time (hard limit from agent type config)
-        IDLE_TIMEOUT,     // Idle timeout (soft limit - no progress triggers this)
-        WRAPUP_WINDOW,    // Wrapup window before hard kill
-        IDLE_CHECK_INTERVAL
-      );
-
-      // Register wrapup callback — fires 30s before hard kill
-      // This triggers the subagent's forceTextOnly path for a structured summary
-      progressAwareTimeout.onWrapupWarning(() => {
-        this.emit({
-          type: 'subagent.wrapup.started',
-          agentId,
-          agentType: agentName,
-          reason: 'Timeout approaching - graceful wrapup window opened',
-          elapsedMs: Date.now() - startTime,
-        });
-        subAgent.requestWrapup('Timeout approaching — produce structured summary');
-      });
-
-      // Forward events from subagent with context (track for cleanup)
-      // Also report progress to the timeout tracker
-      const unsubSubAgent = subAgent.subscribe(event => {
-        // Tag event with subagent source AND unique ID so TUI can properly attribute
-        // events to the specific agent instance (critical for multiple same-type agents)
-        const taggedEvent = { ...event, subagent: agentName, subagentId: agentId };
-        this.emit(taggedEvent);
-
-        // Report progress for timeout extension
-        // Progress events: tool calls, LLM responses, token updates
-        const progressEvents = ['tool.start', 'tool.complete', 'llm.start', 'llm.complete'];
-        if (progressEvents.includes(event.type)) {
-          progressAwareTimeout.reportProgress();
-        }
-      });
-
-      // Link parent's cancellation with progress-aware timeout so ESC propagates to subagents
-      const parentSource = this.cancellation?.getSource();
-      const effectiveSource = parentSource
-        ? createLinkedToken(parentSource, progressAwareTimeout)
-        : progressAwareTimeout;
-
-      // CRITICAL: Pass the cancellation token to the subagent so it can check and stop
-      // gracefully when timeout fires. Without this, the subagent continues running as
-      // a "zombie" even after race() returns with a timeout error.
-      subAgent.setExternalCancellation(effectiveSource.token);
-
-      // Pause parent's duration timer while subagent runs to prevent
-      // the parent from timing out on wall-clock while waiting for subagent
-      this.economics?.pauseDuration();
-
-      try {
-        // Run the task with cancellation propagation from parent
-        const result = await race(subAgent.run(task), effectiveSource.token);
-
-        const duration = Date.now() - startTime;
-
-        // BEFORE cleanup - extract subagent's pending plan and merge into parent's plan
-        // This ensures that when a subagent in plan mode queues writes, they bubble up to the parent
-        let queuedChangeSummary = '';
-        let queuedChangesCount = 0;
-        if (subAgent.hasPendingPlan()) {
-          const subPlan = subAgent.getPendingPlan();
-          if (subPlan && subPlan.proposedChanges.length > 0) {
-            queuedChangesCount = subPlan.proposedChanges.length;
-
-            // Emit event for TUI to display
-            this.emit({
-              type: 'agent.pending_plan',
-              agentId: agentName,
-              changes: subPlan.proposedChanges,
-            });
-
-            // Build detailed summary of what was queued for the return message
-            // This prevents the "doom loop" where parent doesn't know what subagent did
-            const changeSummaries = subPlan.proposedChanges.map(c => {
-              if (c.tool === 'write_file' || c.tool === 'edit_file') {
-                const path = c.args.path || c.args.file_path || '(unknown file)';
-                return `  - [${c.tool}] ${path}: ${c.reason}`;
-              } else if (c.tool === 'bash') {
-                const cmd = String(c.args.command || '').slice(0, 60);
-                return `  - [bash] ${cmd}${String(c.args.command || '').length > 60 ? '...' : ''}: ${c.reason}`;
-              }
-              return `  - [${c.tool}]: ${c.reason}`;
-            });
-
-            queuedChangeSummary = `\n\n[PLAN MODE - CHANGES QUEUED TO PARENT]\n` +
-              `The following ${subPlan.proposedChanges.length} change(s) have been queued in the parent's pending plan:\n` +
-              changeSummaries.join('\n') + '\n' +
-              `\nThese changes are now in YOUR pending plan. The task for this subagent is COMPLETE.\n` +
-              `Do NOT spawn another agent for the same task - the changes are already queued.\n` +
-              `Use /show-plan to see all pending changes, /approve to execute them.`;
-
-            // Merge into parent's pending plan with subagent context
-            for (const change of subPlan.proposedChanges) {
-              this.pendingPlanManager.addProposedChange(
-                change.tool,
-                { ...change.args, _fromSubagent: agentName },
-                `[${agentName}] ${change.reason}`,
-                change.toolCallId
-              );
-            }
-          }
-
-          // Also merge exploration summary if available
-          if (subPlan?.explorationSummary) {
-            this.pendingPlanManager.appendExplorationFinding(
-              `[${agentName}] ${subPlan.explorationSummary}`
-            );
-          }
-        }
-
-        // If subagent queued changes, override output with informative message
-        // This is critical to prevent doom loops where parent doesn't understand what happened
-        const finalOutput = queuedChangeSummary
-          ? (result.response || '') + queuedChangeSummary
-          : (result.response || result.error || '');
-
-        // Parse structured closure report from agent's response (if it produced one)
-        const structured = parseStructuredClosureReport(
-          result.response || '',
-          'completed'
-        );
-
-        // Extract real file paths from subagent's economics tracker (before cleanup)
-        const subagentFilePaths = subAgent.getModifiedFilePaths();
-
-        const spawnResultFinal: SpawnResult = {
-          success: result.success,
-          output: finalOutput,
-          metrics: {
-            tokens: result.metrics.totalTokens,
-            duration,
-            toolCalls: result.metrics.toolCalls,
-          },
-          structured,
-          filesModified: subagentFilePaths,
-        };
-
-        // Save full output to subagent output store (avoids telephone problem)
-        if (this.subagentOutputStore) {
-          const outputEntry: SubagentOutput = {
-            id: agentId,
-            agentId,
-            agentName,
-            task,
-            fullOutput: finalOutput,
-            structured,
-            filesModified: subagentFilePaths,
-            filesCreated: [],
-            timestamp: new Date(),
-            tokensUsed: result.metrics.totalTokens,
-            durationMs: duration,
-          };
-          const storeId = this.subagentOutputStore.save(outputEntry);
-          // Attach reference so downstream consumers can retrieve full output
-          spawnResultFinal.outputStoreId = storeId;
-        }
-
-        if (workerResultId && this.store?.hasWorkerResultsFeature()) {
-          try {
-            this.store.completeWorkerResult(workerResultId, {
-              fullOutput: finalOutput,
-              summary: finalOutput.slice(0, 500),
-              artifacts: structured ? [{ type: 'structured_report', data: structured }] : undefined,
-              metrics: {
-                tokens: result.metrics.totalTokens,
-                duration,
-                toolCalls: result.metrics.toolCalls,
-              },
-            });
-          } catch (storeErr) {
-            this.observability?.logger?.warn('Failed to persist worker result', {
-              agentId,
-              error: (storeErr as Error).message,
-            });
-          }
-        }
-
-        this.emit({
-          type: 'agent.complete',
-          agentId,  // Use unique spawn ID for precise tracking
-          agentType: agentName,  // Keep type for display purposes
-          success: result.success,
-          output: finalOutput.slice(0, 500),  // Include output preview
-        });
-        if (progressAwareTimeout.isInWrapupPhase()) {
-          this.emit({
-            type: 'subagent.wrapup.completed',
-            agentId,
-            agentType: agentName,
-            elapsedMs: Date.now() - startTime,
-          });
-        }
-
-        // Enhanced tracing: Record subagent completion
-        this.traceCollector?.record({
-          type: 'subagent.link',
-          data: {
-            parentSessionId: this.traceCollector.getSessionId() || 'unknown',
-            childSessionId,
-            childTraceId,
-            childConfig: {
-              agentType: agentName,
-              model: resolvedModel || 'default',
-              task,
-              tools: agentTools.map(t => t.name),
-            },
-            spawnContext: {
-              reason: `Delegated task: ${task.slice(0, 100)}`,
-              expectedOutcome: agentDef.description,
-              parentIteration: this.state.iteration,
-            },
-            result: {
-              success: result.success,
-              summary: (result.response || result.error || '').slice(0, 500),
-              tokensUsed: result.metrics.totalTokens,
-              durationMs: duration,
-            },
-          },
-        });
-
-        // Unsubscribe from subagent events before cleanup
-        unsubSubAgent();
-        await subAgent.cleanup();
-
-        // Cache result for duplicate spawn prevention
-        // Use the same taskKey from the dedup check above
-        this.spawnedTasks.set(taskKey, {
-          timestamp: Date.now(),
-          result: finalOutput,
-          queuedChanges: queuedChangesCount,
-        });
-
-        return spawnResultFinal;
-      } catch (err) {
-        // Handle cancellation (user ESC or timeout) for cleaner error messages
-        if (isCancellationError(err)) {
-          const duration = Date.now() - startTime;
-          const isUserCancellation = parentSource?.isCancellationRequested;
-          const reason = isUserCancellation
-            ? 'User cancelled'
-            : (err as CancellationError).reason || `Timed out after ${subagentTimeout}ms`;
-          this.emit({ type: 'agent.error', agentId, agentType: agentName, error: reason });
-          if (!isUserCancellation) {
-            this.emit({
-              type: 'subagent.timeout.hard_kill',
-              agentId,
-              agentType: agentName,
-              reason,
-              elapsedMs: Date.now() - startTime,
-            });
-          }
-
-          // =======================================================================
-          // PRESERVE PARTIAL RESULTS
-          // Instead of discarding all work, capture whatever the subagent produced
-          // before timeout. This prevents the "zombie agent" problem where tokens
-          // are consumed but results are lost.
-          // =======================================================================
-          const subagentState = subAgent.getState();
-          const subagentMetrics = subAgent.getMetrics();
-
-          // Extract partial response from the last assistant message
-          const assistantMessages = subagentState.messages.filter(m => m.role === 'assistant');
-          const lastAssistantMsg = assistantMessages[assistantMessages.length - 1];
-          const partialResponse = typeof lastAssistantMsg?.content === 'string'
-            ? lastAssistantMsg.content
-            : '';
-
-          // Extract pending plan before cleanup (even on cancellation, preserve any queued work)
-          let cancelledQueuedSummary = '';
-          if (subAgent.hasPendingPlan()) {
-            const subPlan = subAgent.getPendingPlan();
-            if (subPlan && subPlan.proposedChanges.length > 0) {
-              this.emit({
-                type: 'agent.pending_plan',
-                agentId: agentName,
-                changes: subPlan.proposedChanges,
-              });
-
-              // Build summary of changes that were queued before cancellation
-              const changeSummaries = subPlan.proposedChanges.map(c => {
-                if (c.tool === 'write_file' || c.tool === 'edit_file') {
-                  const path = c.args.path || c.args.file_path || '(unknown file)';
-                  return `  - [${c.tool}] ${path}: ${c.reason}`;
-                } else if (c.tool === 'bash') {
-                  const cmd = String(c.args.command || '').slice(0, 60);
-                  return `  - [bash] ${cmd}...: ${c.reason}`;
-                }
-                return `  - [${c.tool}]: ${c.reason}`;
-              });
-
-              cancelledQueuedSummary = `\n\n[PLAN MODE - CHANGES QUEUED BEFORE CANCELLATION]\n` +
-                `${subPlan.proposedChanges.length} change(s) were queued to the parent plan:\n` +
-                changeSummaries.join('\n') + '\n' +
-                `These changes are preserved in your pending plan.`;
-
-              for (const change of subPlan.proposedChanges) {
-                this.pendingPlanManager.addProposedChange(
-                  change.tool,
-                  { ...change.args, _fromSubagent: agentName },
-                  `[${agentName}] ${change.reason}`,
-                  change.toolCallId
-                );
-              }
-            }
-
-            // Also preserve exploration summary
-            if (subPlan?.explorationSummary) {
-              this.pendingPlanManager.appendExplorationFinding(
-                `[${agentName}] ${subPlan.explorationSummary}`
-              );
-            }
-          }
-
-          // Extract real file paths from subagent's economics tracker (before cleanup)
-          const subagentFilePaths = subAgent.getModifiedFilePaths();
-
-          // Unsubscribe from subagent events and cleanup gracefully
-          unsubSubAgent();
-          try {
-            await subAgent.cleanup();
-          } catch {
-            // Ignore cleanup errors on cancellation
-          }
-
-          // Build output message with partial results
-          const baseOutput = isUserCancellation
-            ? `Subagent '${agentName}' was cancelled by user.`
-            : `Subagent '${agentName}' timed out after ${Math.round(subagentTimeout / 1000)}s.`;
-
-          // Include partial response if we have one
-          const partialResultSection = partialResponse
-            ? `\n\n[PARTIAL RESULTS BEFORE TIMEOUT]\n${partialResponse.slice(0, 2000)}${partialResponse.length > 2000 ? '...(truncated)' : ''}`
-            : '';
-
-          // Enhanced tracing: Record subagent timeout with partial results
-          this.traceCollector?.record({
-            type: 'subagent.link',
-            data: {
-              parentSessionId: this.traceCollector.getSessionId() || 'unknown',
-              childSessionId,
-              childTraceId,
-              childConfig: {
-                agentType: agentName,
-                model: resolvedModel || 'default',
-                task,
-                tools: agentTools.map(t => t.name),
-              },
-              spawnContext: {
-                reason: `Delegated task: ${task.slice(0, 100)}`,
-                expectedOutcome: agentDef.description,
-                parentIteration: this.state.iteration,
-              },
-              result: {
-                success: false,
-                summary: `[TIMEOUT] ${baseOutput}\n${partialResponse.slice(0, 200)}`,
-                tokensUsed: subagentMetrics.totalTokens,
-                durationMs: duration,
-              },
-            },
-          });
-
-          // Parse structured closure report from partial response
-          const exitReason = isUserCancellation ? 'cancelled' as const : 'timeout_graceful' as const;
-          const structured = parseStructuredClosureReport(
-            partialResponse,
-            exitReason,
-            task
-          );
-
-          if (workerResultId && this.store?.hasWorkerResultsFeature()) {
-            try {
-              this.store.failWorkerResult(workerResultId, reason);
-            } catch (storeErr) {
-              this.observability?.logger?.warn('Failed to mark cancelled worker result as failed', {
-                agentId,
-                error: (storeErr as Error).message,
-              });
-            }
-          }
-
-          return {
-            success: false,
-            output: baseOutput + partialResultSection + cancelledQueuedSummary,
-            // IMPORTANT: Use actual metrics instead of zeros
-            // This ensures accurate token tracking in /trace output
-            metrics: {
-              tokens: subagentMetrics.totalTokens,
-              duration,
-              toolCalls: subagentMetrics.toolCalls,
-            },
-            structured,
-            filesModified: subagentFilePaths,
-          };
-        }
-        throw err; // Re-throw non-cancellation errors
-      } finally {
-        // Resume parent's duration timer now that subagent is done
-        this.economics?.resumeDuration();
-        // Dispose both sources (linked source disposes its internal state, timeout source handles its timer)
-        effectiveSource.dispose();
-        progressAwareTimeout.dispose();
-
-        // BUDGET POOL: Record actual usage and release the allocation
-        // This must happen in finally to ensure cleanup on both success and error paths
-        if (this.budgetPool && poolAllocationId) {
-          const subMetrics = subAgent.getMetrics();
-          this.budgetPool.recordUsage(
-            poolAllocationId,
-            subMetrics.totalTokens,
-            subMetrics.estimatedCost,
-          );
-          this.budgetPool.release(poolAllocationId);
-        }
-      }
-    } catch (err) {
-      const error = err instanceof Error ? err.message : String(err);
-      this.emit({ type: 'agent.error', agentId, agentType: agentName, error });
-
-      if (workerResultId && this.store?.hasWorkerResultsFeature()) {
-        try {
-          this.store.failWorkerResult(workerResultId, error);
-        } catch (storeErr) {
-          this.observability?.logger?.warn('Failed to mark worker result as failed', {
-            agentId,
-            error: (storeErr as Error).message,
-          });
-        }
-      }
-
-      return {
-        success: false,
-        output: `Agent error: ${error}`,
-        metrics: { tokens: 0, duration: Date.now() - startTime, toolCalls: 0 },
-      };
-    }
+  async spawnAgent(agentName: string, task: string, constraints?: SpawnConstraints): Promise<SpawnResult> {
+    return coreSpawnAgent(agentName, task, this.buildContext(), this.createSubAgentFactory(), constraints);
   }
 
-  /**
-   * Spawn multiple agents in parallel to work on independent tasks.
-   * Uses the shared blackboard for coordination and conflict prevention.
-   *
-   * Get budget for a subagent, using the pooled budget when available.
-   * Falls back to the static SUBAGENT_BUDGET if no pool is configured.
-   * Returns both the budget and the pool allocation ID (if any) for tracking.
-   */
-  private getSubagentBudget(
-    agentName: string,
-    constraints?: { maxTokens?: number },
-  ): { budget: Partial<ExecutionBudget>; allocationId: string | null } {
-    // If explicit maxTokens constraint, use that
-    if (constraints?.maxTokens) {
-      return {
-        budget: { ...SUBAGENT_BUDGET, maxTokens: constraints.maxTokens },
-        allocationId: null,
-      };
-    }
-
-    // Try to allocate from the shared budget pool
-    if (this.budgetPool) {
-      const allocationId = `${agentName}-${Date.now()}`;
-      const allocation = this.budgetPool.reserve(allocationId);
-      if (allocation) {
-        return {
-          budget: {
-            ...SUBAGENT_BUDGET,
-            maxTokens: allocation.tokenBudget,
-            softTokenLimit: Math.floor(allocation.tokenBudget * 0.7),
-            maxCost: allocation.costBudget,
-          },
-          allocationId,
-        };
-      }
-      // Pool exhausted — give a tiny emergency budget (just enough to report failure)
-      // This does NOT bypass the pool — it's a fixed small cost for error messaging
-      return {
-        budget: {
-          ...SUBAGENT_BUDGET,
-          maxTokens: 5000,
-          softTokenLimit: 3000,
-          maxCost: 0.01,
-        },
-        allocationId: null,
-      };
-    }
-
-    // No pool — use default subagent budget
-    return { budget: SUBAGENT_BUDGET, allocationId: null };
-  }
 
   /**
-   * Uses Promise.allSettled to handle partial failures gracefully - if one
-   * agent fails or times out, others can still complete successfully.
+   * Spawn multiple subagents in parallel (delegates to core/subagent-spawner).
    */
-  async spawnAgentsParallel(
-    tasks: Array<{ agent: string; task: string }>
-  ): Promise<SpawnResult[]> {
-    // Emit start event for TUI visibility
-    this.emit({
-      type: 'parallel.spawn.start',
-      count: tasks.length,
-      agents: tasks.map(t => t.agent),
-    });
-
-    // Use DynamicBudgetPool for parallel spawns (prevents child starvation,
-    // enables priority-based allocation). Falls back to regular pool for single tasks.
-    let settled: PromiseSettledResult<SpawnResult>[];
-    const originalPool = this.budgetPool;
-
-    // SubagentSupervisor for unified monitoring of concurrent subagents
-    const supervisor = tasks.length > 1 ? createSubagentSupervisor() : null;
-
-    if (this.budgetPool && tasks.length > 1) {
-      // Swap to DynamicBudgetPool for this parallel batch
-      const poolStats = this.budgetPool.getStats();
-      const dynamicPool = createDynamicBudgetPool(poolStats.tokensRemaining, 0.1);
-      dynamicPool.setExpectedChildren(tasks.length);
-
-      // Temporarily replace the budget pool so spawnAgent's reserve() uses the dynamic one
-      this.budgetPool = dynamicPool;
-      try {
-        const promises = tasks.map(({ agent, task }) => {
-          const spawnPromise = this.spawnAgent(agent, task);
-          // Register with supervisor for monitoring
-          if (supervisor) {
-            const handle = createSubagentHandle(
-              `parallel-${agent}-${Date.now()}`,
-              agent,
-              task,
-              spawnPromise,
-              {},
-            );
-            supervisor.add(handle);
-          }
-          return spawnPromise;
-        });
-        settled = await Promise.allSettled(promises);
-      } finally {
-        this.budgetPool = originalPool;
-        supervisor?.stop();
-      }
-    } else {
-      // Single task or no pool - use standard sequential allocation
-      const promises = tasks.map(({ agent, task }) => this.spawnAgent(agent, task));
-      settled = await Promise.allSettled(promises);
-    }
-
-    // Convert settled results to SpawnResult array
-    const results: SpawnResult[] = settled.map((result, i) => {
-      if (result.status === 'fulfilled') {
-        return result.value;
-      }
-      // Handle rejected promises (shouldn't happen since spawnAgent catches errors internally,
-      // but this is a safety net for unexpected failures)
-      const error = result.reason instanceof Error ? result.reason.message : String(result.reason);
-      this.emit({
-        type: 'agent.error',
-        agentId: tasks[i].agent,
-        error: `Unexpected parallel spawn error: ${error}`,
-      });
-      return {
-        success: false,
-        output: `Parallel spawn error: ${error}`,
-        metrics: { tokens: 0, duration: 0, toolCalls: 0 },
-      };
-    });
-
-    // Emit completion event
-    this.emit({
-      type: 'parallel.spawn.complete',
-      count: tasks.length,
-      successCount: results.filter(r => r.success).length,
-      results: results.map((r, i) => ({
-        agent: tasks[i].agent,
-        success: r.success,
-        tokens: r.metrics?.tokens || 0,
-      })),
-    });
-
-    return results;
+  async spawnAgentsParallel(tasks: Array<{ agent: string; task: string }>): Promise<SpawnResult[]> {
+    return coreSpawnAgentsParallel(tasks, this.buildContext(), this.buildMutators(), this.createSubAgentFactory());
   }
 
   /**
@@ -6277,7 +3547,7 @@ If the task is a simple question or doesn't need specialized handling, set bestA
    */
   cancel(reason?: string): void {
     if (!this.cancellation) {
-      console.warn('[ProductionAgent] Cancellation not enabled');
+      log.warn('Cancellation not enabled');
       return;
     }
 
@@ -6405,7 +3675,7 @@ If the task is a simple question or doesn't need specialized handling, set bestA
    */
   enableLSPFileTools(options?: Partial<Omit<LSPFileToolsConfig, 'lspManager'>>): void {
     if (!this.lspManager) {
-      console.warn('[ProductionAgent] LSP not enabled, cannot enable LSP file tools');
+      log.warn('LSP not enabled, cannot enable LSP file tools');
       return;
     }
 
@@ -7132,69 +4402,5 @@ export function buildAgent(): ProductionAgentBuilder {
 }
 
 // =============================================================================
-// STRUCTURED CLOSURE REPORT PARSER
-// =============================================================================
-
-/**
- * Parse a structured closure report from a subagent's text response.
- * The subagent may have produced JSON in response to a TIMEOUT_WRAPUP_PROMPT.
- *
- * @param text - The subagent's last response text
- * @param defaultExitReason - Exit reason to use (completed, timeout_graceful, cancelled, etc.)
- * @param fallbackTask - Original task description for fallback remainingWork
- * @returns Parsed StructuredClosureReport, or undefined if no JSON found and no fallback needed
- */
-export function parseStructuredClosureReport(
-  text: string,
-  defaultExitReason: StructuredClosureReport['exitReason'],
-  fallbackTask?: string,
-): StructuredClosureReport | undefined {
-  if (!text) {
-    // No text at all — create a hard timeout fallback if we have a task
-    if (fallbackTask) {
-      return {
-        findings: [],
-        actionsTaken: [],
-        failures: ['Timeout before producing structured summary'],
-        remainingWork: [fallbackTask],
-        exitReason: 'timeout_hard',
-      };
-    }
-    return undefined;
-  }
-
-  try {
-    // Try to extract JSON from the response
-    const jsonMatch = text.match(/\{[\s\S]*\}/);
-    if (jsonMatch) {
-      const parsed = JSON.parse(jsonMatch[0]);
-      // Validate that it looks like a closure report (has at least one expected field)
-      if (parsed.findings || parsed.actionsTaken || parsed.failures || parsed.remainingWork) {
-        return {
-          findings: Array.isArray(parsed.findings) ? parsed.findings : [],
-          actionsTaken: Array.isArray(parsed.actionsTaken) ? parsed.actionsTaken : [],
-          failures: Array.isArray(parsed.failures) ? parsed.failures : [],
-          remainingWork: Array.isArray(parsed.remainingWork) ? parsed.remainingWork : [],
-          exitReason: defaultExitReason,
-          suggestedNextSteps: Array.isArray(parsed.suggestedNextSteps) ? parsed.suggestedNextSteps : undefined,
-        };
-      }
-    }
-  } catch {
-    // JSON parse failed — fall through to fallback
-  }
-
-  // Fallback: LLM didn't produce valid JSON but we have text
-  if (defaultExitReason !== 'completed') {
-    return {
-      findings: [text.slice(0, 500)],
-      actionsTaken: [],
-      failures: ['Did not produce structured JSON summary'],
-      remainingWork: fallbackTask ? [fallbackTask] : [],
-      exitReason: defaultExitReason === 'timeout_graceful' ? 'timeout_hard' : defaultExitReason,
-    };
-  }
-
-  // For completed agents, don't force a structured report if they didn't produce one
-  return undefined;
-}
+// Re-export from core for backward compatibility
+export { parseStructuredClosureReport } from './core/index.js';

@@ -7,24 +7,7 @@
 
 import type { AgentEvent } from '../types.js';
 import type { SQLiteStore } from '../integrations/index.js';
-
-// ANSI color codes for terminal output
-const colors = {
-  reset: '\x1b[0m',
-  bold: '\x1b[1m',
-  dim: '\x1b[2m',
-  red: '\x1b[31m',
-  green: '\x1b[32m',
-  yellow: '\x1b[33m',
-  blue: '\x1b[34m',
-  magenta: '\x1b[35m',
-  cyan: '\x1b[36m',
-  white: '\x1b[37m',
-};
-
-function c(text: string, color: keyof typeof colors): string {
-  return `${colors[color]}${text}${colors.reset}`;
-}
+import { logger } from '../integrations/logger.js';
 
 /**
  * Create an event display handler for console output.
@@ -34,144 +17,130 @@ export function createEventDisplay() {
   return (event: AgentEvent): void => {
     switch (event.type) {
       case 'start':
-        console.log(c(`\n Starting task...`, 'dim'));
+        logger.debug('Starting task');
         break;
 
       case 'planning':
-        console.log(c(`\n Plan created with ${event.plan.tasks.length} steps:`, 'blue'));
-        event.plan.tasks.forEach((t, i) => {
-          console.log(c(`   ${i + 1}. ${t.description}`, 'dim'));
-        });
+        logger.debug('Plan created', { steps: event.plan.tasks.length, tasks: event.plan.tasks.map((t, i) => `${i + 1}. ${t.description}`) });
         break;
 
       case 'task.start':
-        console.log(c(`\n> Starting: ${event.task.description}`, 'cyan'));
+        logger.debug('Task starting', { description: event.task.description });
         break;
 
       case 'task.complete':
-        console.log(c(`   Completed: ${event.task.description}`, 'green'));
+        logger.debug('Task completed', { description: event.task.description });
         break;
 
       case 'llm.start':
-        console.log(c(`\n Calling LLM (${event.model})...`, 'dim'));
+        logger.debug('Calling LLM', { model: event.model });
         break;
 
       case 'llm.complete':
         if (event.response.usage) {
-          let cacheStr = '';
-          if (event.response.usage.cacheReadTokens && event.response.usage.cacheReadTokens > 0) {
-            cacheStr += ` [cached: ${event.response.usage.cacheReadTokens}]`;
-          }
-          if (event.response.usage.cacheWriteTokens && event.response.usage.cacheWriteTokens > 0) {
-            cacheStr += ` [cache-write: ${event.response.usage.cacheWriteTokens}]`;
-          }
-          console.log(c(
-            `   Tokens: ${event.response.usage.inputTokens} in / ${event.response.usage.outputTokens} out${cacheStr}`,
-            'dim'
-          ));
+          logger.debug('LLM response tokens', {
+            inputTokens: event.response.usage.inputTokens,
+            outputTokens: event.response.usage.outputTokens,
+            cacheReadTokens: event.response.usage.cacheReadTokens || 0,
+            cacheWriteTokens: event.response.usage.cacheWriteTokens || 0,
+          });
         }
         break;
 
       case 'tool.start':
-        console.log(c(`\n Tool: ${event.tool}`, 'cyan'));
-        const argsStr = JSON.stringify(event.args, null, 2).split('\n').join('\n   ');
-        console.log(c(`   Args: ${argsStr}`, 'dim'));
+        logger.debug('Tool invoked', { tool: event.tool, args: event.args });
         break;
 
       case 'tool.complete':
-        const output = String(event.result).split('\n')[0].slice(0, 200);
-        console.log(c(`   ${output}${String(event.result).length > 200 ? '...' : ''}`, 'green'));
+        logger.debug('Tool completed', { result: String(event.result).slice(0, 200) });
         break;
 
       case 'tool.blocked':
-        console.log(c(`   Blocked: ${event.reason}`, 'red'));
+        logger.warn('Tool blocked', { reason: event.reason });
         break;
 
       case 'approval.required':
-        console.log(c(`\n Approval required: ${event.request.action}`, 'yellow'));
+        logger.debug('Approval required', { action: event.request.action });
         break;
 
       case 'reflection':
-        console.log(c(`\n Reflection (attempt ${event.attempt}): ${event.satisfied ? 'satisfied' : 'refining'}`, 'magenta'));
+        logger.debug('Reflection', { attempt: event.attempt, satisfied: event.satisfied });
         break;
 
       case 'memory.retrieved':
-        console.log(c(`\n Retrieved ${event.count} relevant memories`, 'blue'));
+        logger.debug('Memory retrieved', { count: event.count });
         break;
 
       case 'react.thought':
-        console.log(c(`\n Thought ${event.step}: ${event.thought}`, 'cyan'));
+        logger.debug('ReAct thought', { step: event.step, thought: event.thought });
         break;
 
       case 'react.action':
-        console.log(c(`   Action: ${event.action}`, 'yellow'));
+        logger.debug('ReAct action', { action: event.action });
         break;
 
       case 'react.observation':
-        console.log(c(`   Observation: ${event.observation.slice(0, 100)}...`, 'dim'));
+        logger.debug('ReAct observation', { observation: event.observation.slice(0, 100) });
         break;
 
       case 'react.answer':
-        console.log(c(`\n Answer: ${event.answer}`, 'green'));
+        logger.debug('ReAct answer', { answer: event.answer });
         break;
 
       case 'multiagent.spawn':
-        console.log(c(`\n Spawning agent: ${event.role} (${event.agentId})`, 'magenta'));
+        logger.debug('Spawning agent', { role: event.role, agentId: event.agentId });
         break;
 
       case 'multiagent.complete':
-        console.log(c(`   ${event.success ? '+' : 'x'} Agent ${event.agentId} finished`, event.success ? 'green' : 'red'));
+        logger.debug('Agent finished', { agentId: event.agentId, success: event.success });
         break;
 
       case 'agent.spawn':
-        console.log(c(`\n Spawning subagent: ${(event as any).name || event.agentId}`, 'magenta'));
-        if ((event as any).task) {
-          console.log(c(`   Task: ${(event as any).task}`, 'dim'));
-        }
+        logger.debug('Spawning subagent', { name: (event as any).name || event.agentId, task: (event as any).task });
         break;
 
       case 'agent.complete':
-        console.log(c(`   ${event.success ? '+' : 'x'} Subagent ${event.agentId} finished`, event.success ? 'green' : 'red'));
+        logger.debug('Subagent finished', { agentId: event.agentId, success: event.success });
         break;
 
       case 'agent.error':
-        console.log(c(`   Subagent error: ${(event as any).error}`, 'yellow'));
+        logger.error('Subagent error', { error: String((event as any).error) });
         break;
 
       case 'agent.registered':
-        console.log(c(`   Agent registered: ${(event as any).name}`, 'green'));
+        logger.debug('Agent registered', { name: (event as any).name });
         break;
 
       case 'consensus.start':
-        console.log(c(`\n Building consensus (${event.strategy})...`, 'blue'));
+        logger.debug('Building consensus', { strategy: event.strategy });
         break;
 
       case 'consensus.reached':
-        console.log(c(`   ${event.agreed ? '+' : 'x'} Consensus: ${event.result.slice(0, 100)}`, event.agreed ? 'green' : 'yellow'));
+        logger.debug('Consensus reached', { agreed: event.agreed, result: event.result.slice(0, 100) });
         break;
 
       case 'checkpoint.created':
-        console.log(c(`\n Checkpoint: ${event.label || event.checkpointId}`, 'blue'));
+        logger.debug('Checkpoint created', { label: event.label || event.checkpointId });
         break;
 
       case 'checkpoint.restored':
-        console.log(c(`\n Restored checkpoint: ${event.checkpointId}`, 'yellow'));
+        logger.debug('Checkpoint restored', { checkpointId: event.checkpointId });
         break;
 
       case 'rollback':
-        console.log(c(`\n Rolled back ${event.steps} steps`, 'yellow'));
+        logger.debug('Rolled back', { steps: event.steps });
         break;
 
       case 'thread.forked':
-        console.log(c(`\n Forked thread: ${event.threadId}`, 'cyan'));
+        logger.debug('Thread forked', { threadId: event.threadId });
         break;
 
       case 'error':
-        console.log(c(`\n Error: ${event.error}`, 'red'));
+        logger.error('Agent error', { error: String(event.error) });
         break;
 
       case 'complete':
-        console.log(c(`\n Task ${event.result.success ? 'completed' : 'failed'}`, event.result.success ? 'green' : 'red'));
+        logger.debug('Task complete', { success: event.result.success });
         break;
     }
   };

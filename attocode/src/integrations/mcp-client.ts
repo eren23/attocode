@@ -15,6 +15,7 @@ import { withRetry, MCP_RETRY_CONFIG } from './retry.js';
 import { MCPError, isRecoverable } from '../errors/index.js';
 import type { DeadLetterQueue } from './dead-letter-queue.js';
 import { validateAllTools, formatValidationSummary } from './mcp-tool-validator.js';
+import { logger } from './logger.js';
 
 // =============================================================================
 // TYPES
@@ -207,12 +208,12 @@ export class MCPClient {
 
         if (this.config.autoConnect) {
           await this.connectServer(name).catch(err => {
-            console.warn(`[MCP] Failed to connect to ${name}:`, err.message);
+            logger.warn('Failed to connect to MCP server', { server: name, error: String(err.message) });
           });
         }
       }
     } catch (err) {
-      console.warn(`[MCP] Failed to load config from ${path}:`, err);
+      logger.warn('Failed to load MCP config', { path, error: String(err) });
     }
   }
 
@@ -239,7 +240,7 @@ export class MCPClient {
           mergedServers[name] = this.expandEnvVars(serverConfig);
         }
       } catch (err) {
-        console.warn(`[MCP] Failed to load config from ${configPath}:`, err);
+        logger.warn('Failed to load MCP config', { configPath, error: String(err) });
       }
     }
 
@@ -249,7 +250,7 @@ export class MCPClient {
 
       if (this.config.autoConnect) {
         await this.connectServer(name).catch(err => {
-          console.warn(`[MCP] Failed to connect to ${name}:`, err.message);
+          logger.warn('Failed to connect to MCP server', { server: name, error: String(err.message) });
         });
       }
     }
@@ -331,7 +332,7 @@ export class MCPClient {
 
       // Handle errors
       proc.stderr?.on('data', (data) => {
-        console.error(`[MCP ${name}] stderr:`, data.toString());
+        logger.error('MCP server stderr output', { server: name, output: data.toString() });
       });
 
       proc.on('error', (err) => {
@@ -465,7 +466,7 @@ export class MCPClient {
       // Log malformed JSON instead of silently ignoring
       // This helps diagnose protocol desync issues
       const preview = line.length > 100 ? line.substring(0, 100) + '...' : line;
-      console.error(`[MCP ${server.name}] Malformed JSON-RPC message: ${preview}`);
+      logger.error('Malformed JSON-RPC message from MCP server', { server: server.name, preview });
       this.emit({ type: 'server.error', name: server.name, error: 'Protocol error: malformed JSON' });
       return; // Don't crash, just skip this malformed message
     }
@@ -840,7 +841,7 @@ export class MCPClient {
           const results = validateAllTools(tools);
           const poor = results.filter(r => r.score < 50);
           if (poor.length > 0) {
-            console.warn(`[MCP] Tool quality issues (${poor.length}/${tools.length} below threshold):\n${formatValidationSummary(poor)}`);
+            logger.warn('MCP tool quality issues detected', { poorCount: poor.length, totalCount: tools.length, summary: formatValidationSummary(poor) });
           }
         } catch {
           // Validation is optional — don't fail if module has issues

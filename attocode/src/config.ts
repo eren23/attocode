@@ -1,15 +1,16 @@
 /**
  * User Configuration Loading
  *
- * Loads user config from ~/.config/attocode/config.json
+ * @deprecated Use `loadConfig()` from `./config/index.js` instead.
+ * This module is kept for backward compatibility and will be removed in a future release.
  */
 
-import { existsSync, readFileSync } from 'node:fs';
-import { getConfigPath } from './paths.js';
+import { loadConfig } from './config/index.js';
 import type { ProviderResilienceConfig } from './types.js';
 
 /**
  * User configuration structure.
+ * @deprecated Use `ValidatedUserConfig` from `./config/index.js` instead.
  */
 export interface UserConfig {
   providers?: { default?: string };
@@ -23,16 +24,13 @@ export interface UserConfig {
 /**
  * Load user config from ~/.config/attocode/config.json
  * Returns undefined if file doesn't exist or is invalid.
+ * @deprecated Use `loadConfig()` from `./config/index.js` instead.
  */
 export function loadUserConfig(): UserConfig | undefined {
-  try {
-    const configPath = getConfigPath();
-    if (!existsSync(configPath)) {
-      return undefined;
-    }
-    const content = readFileSync(configPath, 'utf-8');
-    return JSON.parse(content) as UserConfig;
-  } catch {
+  const { config, sources } = loadConfig({ skipProject: true });
+  const anyLoaded = sources.some((s) => s.loaded);
+  if (!anyLoaded) {
     return undefined;
   }
+  return config as UserConfig;
 }

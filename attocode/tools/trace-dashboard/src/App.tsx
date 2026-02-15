@@ -4,6 +4,8 @@ import { SessionDetailPage } from './pages/SessionDetailPage';
 import { ComparePage } from './pages/ComparePage';
 import { SwarmDashboardPage } from './pages/SwarmDashboardPage';
 import { SwarmHistoryPage } from './pages/SwarmHistoryPage';
+import { CodeMapPage } from './pages/CodeMapPage';
+import { AgentTopologyPage } from './pages/AgentTopologyPage';
 
 function NavLink({ to, children }: { to: string; children: React.ReactNode }) {
   const location = useLocation();
@@ -51,6 +53,8 @@ function App() {
                 <NavLink to="/">Sessions</NavLink>
                 <NavLink to="/compare">Compare</NavLink>
                 <NavLink to="/swarm">Swarm</NavLink>
+                <NavLink to="/codemap">Code Map</NavLink>
+                <NavLink to="/topology">Topology</NavLink>
               </nav>
             </div>
             <div className="flex items-center space-x-4">
@@ -68,6 +72,10 @@ function App() {
           <Route path="/compare" element={<ComparePage />} />
           <Route path="/swarm" element={<SwarmDashboardPage />} />
           <Route path="/swarm/history" element={<SwarmHistoryPage />} />
+          <Route path="/codemap" element={<CodeMapPage />} />
+          <Route path="/codemap/:id" element={<CodeMapPage />} />
+          <Route path="/topology" element={<AgentTopologyPage />} />
+          <Route path="/topology/:sessionId" element={<AgentTopologyPage />} />
         </Routes>
       </main>
     </div>

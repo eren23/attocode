@@ -15,6 +15,12 @@ export interface SwarmFileWatcherOptions {
   onEvents: (lines: string[]) => void;
   /** Callback when state.json changes */
   onState: (state: unknown) => void;
+  /** Callback when blackboard.json changes */
+  onBlackboard?: (data: unknown) => void;
+  /** Callback when codemap.json changes */
+  onCodeMap?: (data: unknown) => void;
+  /** Callback when budget-pool.json changes */
+  onBudgetPool?: (data: unknown) => void;
   /** Poll interval in ms for checking new lines (default: 200) */
   pollIntervalMs?: number;
 }
@@ -25,6 +31,9 @@ export class SwarmFileWatcher {
   private statePath: string;
   private onEvents: (lines: string[]) => void;
   private onState: (state: unknown) => void;
+  private onBlackboard?: (data: unknown) => void;
+  private onCodeMap?: (data: unknown) => void;
+  private onBudgetPool?: (data: unknown) => void;
   private pollIntervalMs: number;
 
   private eventsOffset = 0;
@@ -39,6 +48,9 @@ export class SwarmFileWatcher {
     this.statePath = path.join(options.dir, 'state.json');
     this.onEvents = options.onEvents;
     this.onState = options.onState;
+    this.onBlackboard = options.onBlackboard;
+    this.onCodeMap = options.onCodeMap;
+    this.onBudgetPool = options.onBudgetPool;
     this.pollIntervalMs = options.pollIntervalMs ?? 200;
   }
 
@@ -86,6 +98,12 @@ export class SwarmFileWatcher {
             this.readNewEvents();
           } else if (filename === 'state.json') {
             this.readState();
+          } else if (filename === 'blackboard.json') {
+            this.readJsonFile('blackboard.json', this.onBlackboard);
+          } else if (filename === 'codemap.json') {
+            this.readJsonFile('codemap.json', this.onCodeMap);
+          } else if (filename === 'budget-pool.json') {
+            this.readJsonFile('budget-pool.json', this.onBudgetPool);
           }
         });
         this.watcher.on('error', () => {
@@ -102,8 +120,11 @@ export class SwarmFileWatcher {
       this.readNewEvents();
     }, this.pollIntervalMs);
 
-    // Read initial state
+    // Read initial state and snapshots
     this.readState();
+    this.readJsonFile('blackboard.json', this.onBlackboard);
+    this.readJsonFile('codemap.json', this.onCodeMap);
+    this.readJsonFile('budget-pool.json', this.onBudgetPool);
   }
 
   /**
@@ -150,6 +171,22 @@ export class SwarmFileWatcher {
   }
 
   /**
+   * Read a JSON snapshot file and invoke its callback.
+   */
+  private readJsonFile(filename: string, callback?: (data: unknown) => void): void {
+    if (!callback) return;
+    try {
+      const filePath = path.join(this.dir, filename);
+      if (!fs.existsSync(filePath)) return;
+      const content = fs.readFileSync(filePath, 'utf-8');
+      const data = JSON.parse(content);
+      callback(data);
+    } catch {
+      // File may be in mid-write; retry on next change
+    }
+  }
+
+  /**
    * Stop watching and clean up.
    */
   close(): void {
@@ -182,7 +219,7 @@ export function findSwarmLiveDir(): string | null {
     if (fs.existsSync(envDir)) return envDir;
   }
 
-  const candidates = [
+  const candidates: string[] = [
     path.join(process.cwd(), '.agent/swarm-live'),  // explicit CWD
     '.agent/swarm-live',                             // relative CWD
     '../../.agent/swarm-live',                       // attocode root from tools/trace-dashboard
@@ -207,14 +244,41 @@ export function findSwarmLiveDir(): string | null {
     } catch { /* ignore read errors */ }
   }
 
-  for (const candidate of candidates) {
-    const resolved = path.resolve(candidate);
-    if (fs.existsSync(resolved)) {
-      return resolved;
-    }
-  }
+  const existing = candidates
+    .map(candidate => path.resolve(candidate))
+    .filter((resolved, idx, arr) => arr.indexOf(resolved) === idx)
+    .filter(resolved => fs.existsSync(resolved));
 
-  return null;
+  if (existing.length === 0) return null;
+
+  // Prefer the most recently-updated swarm state to avoid stale project auto-selection.
+  const ranked = existing
+    .map((dirPath) => {
+      const statePath = path.join(dirPath, 'state.json');
+      let score = 0;
+      try {
+        if (fs.existsSync(statePath)) {
+          const stateRaw = fs.readFileSync(statePath, 'utf-8');
+          const state = JSON.parse(stateRaw) as { updatedAt?: string; active?: boolean; lastSeq?: number };
+          if (state.updatedAt) {
+            const ts = Date.parse(state.updatedAt);
+            if (!Number.isNaN(ts)) score = ts;
+          } else {
+            score = fs.statSync(statePath).mtimeMs;
+          }
+          if (state.active) score += 10_000;
+          if ((state.lastSeq ?? 0) > 0) score += Math.min(5_000, state.lastSeq ?? 0);
+        } else {
+          score = fs.statSync(dirPath).mtimeMs;
+        }
+      } catch {
+        score = 0;
+      }
+      return { dirPath, score };
+    })
+    .sort((a, b) => b.score - a.score);
+
+  return ranked[0]?.dirPath ?? null;
 }
 
 /**
@@ -271,7 +335,30 @@ export function findAllSwarmLiveDirs(): Array<{ path: string; label: string }> {
     } catch { /* ignore read errors */ }
   }
 
-  return Array.from(found.entries()).map(([p, label]) => ({ path: p, label }));
+  return Array.from(found.entries())
+    .map(([p, label]) => {
+      let updatedAtMs = 0;
+      try {
+        const statePath = path.join(p, 'state.json');
+        if (fs.existsSync(statePath)) {
+          const raw = fs.readFileSync(statePath, 'utf-8');
+          const state = JSON.parse(raw) as { updatedAt?: string };
+          if (state.updatedAt) {
+            const parsed = Date.parse(state.updatedAt);
+            if (!Number.isNaN(parsed)) updatedAtMs = parsed;
+          } else {
+            updatedAtMs = fs.statSync(statePath).mtimeMs;
+          }
+        } else {
+          updatedAtMs = fs.statSync(p).mtimeMs;
+        }
+      } catch {
+        updatedAtMs = 0;
+      }
+      return { path: p, label, updatedAtMs };
+    })
+    .sort((a, b) => b.updatedAtMs - a.updatedAtMs)
+    .map(({ path, label }) => ({ path, label }));
 }
 
 /**

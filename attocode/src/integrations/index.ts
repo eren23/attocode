@@ -348,7 +348,11 @@ export {
   type ResourceEventListener,
 } from './resources.js';
 
-// Hierarchical configuration
+/**
+ * Hierarchical configuration.
+ * @deprecated Use `loadConfig()` from `../config/index.js` instead.
+ * This module is unused and will be removed in a future release.
+ */
 export {
   HierarchicalConfigManager,
   createHierarchicalConfig,
@@ -534,6 +538,14 @@ export {
   type RankedSearchOptions,
   type ScoredChunk,
 } from './codebase-context.js';
+
+// Edit Validator (Phase 5.1)
+export {
+  validateSyntax,
+  validateEdit,
+  type ValidationResult,
+  type SyntaxError,
+} from './edit-validator.js';
 
 // Shared Blackboard (subagent coordination)
 export {
@@ -1003,6 +1015,21 @@ export {
   type ChildPriority,
   type RebalanceResult,
 } from './dynamic-budget.js';
+
+// Structured Logger (leveled logging with trace IDs and multiple sinks)
+export {
+  StructuredLogger,
+  ConsoleSink,
+  MemorySink,
+  FileSink,
+  logger,
+  configureLogger,
+  createComponentLogger,
+  type LogLevel,
+  type LogEntry,
+  type LogSink,
+  type LoggerConfig,
+} from './logger.js';
 
 // Environment Facts (temporal/platform grounding for all agents)
 export {

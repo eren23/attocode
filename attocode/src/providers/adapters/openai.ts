@@ -21,6 +21,7 @@ import type {
 import { ProviderError } from '../types.js';
 import { registerProvider, hasEnv, requireEnv } from '../provider.js';
 import { resilientFetch, type NetworkConfig } from '../resilient-fetch.js';
+import { logger } from '../../integrations/logger.js';
 
 // =============================================================================
 // OPENAI API TYPES
@@ -139,7 +140,7 @@ export class OpenAIProvider implements LLMProvider, LLMProviderWithTools {
         providerName: this.name,
         networkConfig: this.networkConfig,
         onRetry: (attempt, delay, error) => {
-          console.warn(`[OpenAI] Retry attempt ${attempt} after ${delay}ms: ${error.message}`);
+          logger.warn('OpenAI retry attempt', { attempt, delayMs: delay, error: error.message });
         },
       });
 
@@ -209,7 +210,7 @@ export class OpenAIProvider implements LLMProvider, LLMProviderWithTools {
         providerName: this.name,
         networkConfig: this.networkConfig,
         onRetry: (attempt, delay, error) => {
-          console.warn(`[OpenAI] Retry attempt ${attempt} after ${delay}ms: ${error.message}`);
+          logger.warn('OpenAI retry attempt', { attempt, delayMs: delay, error: error.message });
         },
       });
 
