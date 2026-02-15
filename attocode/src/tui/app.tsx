@@ -1025,12 +1025,19 @@ export function TUIApp({
       return;
     }
     if (event.type === 'completion.blocked') {
-      const e = event as { reasons: string[]; openTasks?: { pending: number; inProgress: number; blocked: number } };
+      const e = event as {
+        reasons: string[];
+        openTasks?: { pending: number; inProgress: number; blocked: number };
+        diagnostics?: { forceTextOnly?: boolean; availableTasks?: number; pendingWithOwner?: number };
+      };
       const details = e.reasons?.length ? e.reasons.join('\n') : 'Completion blocked by unresolved work.';
       const openTasksLine = e.openTasks
         ? `Open tasks: ${e.openTasks.pending} pending, ${e.openTasks.inProgress} in_progress, ${e.openTasks.blocked} blocked`
         : '';
-      addMessage('system', `[INCOMPLETE]\n${details}${openTasksLine ? `\n${openTasksLine}` : ''}`);
+      const constrainedLine = e.diagnostics?.forceTextOnly
+        ? 'Task continuation is currently suppressed by budget/wrapup force-text mode.'
+        : '';
+      addMessage('system', `[INCOMPLETE]\n${details}${openTasksLine ? `\n${openTasksLine}` : ''}${constrainedLine ? `\n${constrainedLine}` : ''}`);
       setStatus(s => ({ ...s, mode: 'incomplete' }));
       return;
     }

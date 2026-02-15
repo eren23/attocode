@@ -141,6 +141,11 @@ function getOpenTaskSummary(ctx: AgentContext): OpenTaskSummary | undefined {
   return { pending, inProgress, blocked };
 }
 
+function getPendingWithOwnerCount(ctx: AgentContext): number {
+  if (!ctx.taskManager) return 0;
+  return ctx.taskManager.list().filter(t => t.status === 'pending' && !!t.owner).length;
+}
+
 // =============================================================================
 // MAIN EXECUTION LOOP
 // =============================================================================
@@ -983,14 +988,15 @@ export async function executeDirectly(
         // =====================================================================
         // TASK EXECUTION LOOP — pick up next available task before exiting
         // =====================================================================
-        if (ctx.taskManager && !forceTextOnly) {
+        if (ctx.taskManager) {
           // Reconcile stale in-progress tasks before deciding there is no more work.
           ctx.taskManager.reconcileStaleInProgress({
             staleAfterMs: taskLeaseStaleMs,
             reason: 'completion_gate',
           });
+          const pendingWithOwner = getPendingWithOwnerCount(ctx);
           const availableTasks = ctx.taskManager.getAvailableTasks();
-          if (availableTasks.length > 0) {
+          if (!forceTextOnly && availableTasks.length > 0) {
             const nextTask = availableTasks[0];
             ctx.taskManager.claim(nextTask.id, ctx.agentId);
             log.info('Picking up next task from task list', {
@@ -1013,6 +1019,26 @@ export async function executeDirectly(
           }
           const openTasks = getOpenTaskSummary(ctx);
           if (openTasks && (openTasks.inProgress > 0 || openTasks.pending > 0)) {
+            if (forceTextOnly) {
+              const reason = `Task continuation suppressed by forceTextOnly mode: ${openTasks.pending} pending, ${openTasks.inProgress} in_progress`;
+              ctx.emit({
+                type: 'completion.blocked',
+                reasons: [reason],
+                openTasks,
+                diagnostics: {
+                  forceTextOnly: true,
+                  availableTasks: availableTasks.length,
+                  pendingWithOwner,
+                },
+              });
+              result = {
+                success: false,
+                terminationReason: 'budget_limit',
+                failureReason: reason,
+                openTasks,
+              };
+              break;
+            }
             const reasons = [
               `Open tasks remain: ${openTasks.pending} pending, ${openTasks.inProgress} in_progress`,
               openTasks.blocked > 0 ? `${openTasks.blocked} pending tasks are currently blocked` : '',
@@ -1021,6 +1047,11 @@ export async function executeDirectly(
               type: 'completion.blocked',
               reasons,
               openTasks,
+              diagnostics: {
+                forceTextOnly: false,
+                availableTasks: availableTasks.length,
+                pendingWithOwner,
+              },
             });
             result = {
               success: false,

@@ -99,6 +99,19 @@ export class TaskManager extends EventEmitter {
   private nextId = 1;
   private static readonly DEFAULT_STALE_AFTER_MS = 5 * 60 * 1000;
 
+  /**
+   * Normalize ownership invariants:
+   * only in_progress tasks may retain owner/lease metadata.
+   */
+  private normalizeTaskOwnershipInvariants(): void {
+    for (const task of this.tasks.values()) {
+      if (task.status !== 'in_progress') {
+        delete task.owner;
+        delete task.leaseHeartbeatAt;
+      }
+    }
+  }
+
   constructor() {
     super();
   }
@@ -231,6 +244,7 @@ export class TaskManager extends EventEmitter {
    * List all tasks (excluding deleted).
    */
   list(): Task[] {
+    this.normalizeTaskOwnershipInvariants();
     return Array.from(this.tasks.values())
       .filter(t => t.status !== 'deleted')
       .sort((a, b) => {
@@ -283,12 +297,13 @@ export class TaskManager extends EventEmitter {
 
   /**
    * Get tasks that are available to work on.
-   * Available = pending, no owner, not blocked.
+   * Available = pending, not blocked.
+   * Ownership is only authoritative while in_progress.
    */
   getAvailableTasks(): Task[] {
+    this.normalizeTaskOwnershipInvariants();
     return this.list().filter(t =>
       t.status === 'pending' &&
-      !t.owner &&
       !this.isBlocked(t.id)
     );
   }
@@ -443,6 +458,8 @@ export class TaskManager extends EventEmitter {
         this.nextId = idNum + 1;
       }
     }
+
+    this.normalizeTaskOwnershipInvariants();
 
     this.emit('tasks.hydrated', { count: this.tasks.size });
   }

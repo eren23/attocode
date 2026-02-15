@@ -1394,7 +1394,16 @@ export type AgentEvent =
   | { type: 'memory.retrieved'; count: number }
   | { type: 'memory.stored'; memoryType: string }
   | { type: 'error'; error: string; subagent?: string }
-  | { type: 'completion.blocked'; reasons: string[]; openTasks?: OpenTaskSummary }
+  | {
+      type: 'completion.blocked';
+      reasons: string[];
+      openTasks?: OpenTaskSummary;
+      diagnostics?: {
+        forceTextOnly?: boolean;
+        availableTasks?: number;
+        pendingWithOwner?: number;
+      };
+    }
   | { type: 'complete'; result: AgentResult }
   // ReAct events (Lesson 18)
   | { type: 'react.thought'; step: number; thought: string }

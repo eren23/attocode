@@ -1276,7 +1276,7 @@ export class ProductionAgent {
         };
       }
 
-      if (runSuccess) {
+      if (runSuccess && completion.reason === 'completed') {
         this.reconcileStaleTasks('run_end');
         const openTasks = this.getOpenTasksSummary();
         if (openTasks && (openTasks.inProgress > 0 || openTasks.pending > 0)) {
@@ -1296,6 +1296,11 @@ export class ProductionAgent {
               openTasks.blocked > 0 ? `${openTasks.blocked} pending tasks are blocked` : '',
             ].filter(Boolean),
             openTasks,
+            diagnostics: {
+              forceTextOnly: false,
+              availableTasks: this.taskManager?.getAvailableTasks().length ?? 0,
+              pendingWithOwner: 0,
+            },
           });
         }
       }

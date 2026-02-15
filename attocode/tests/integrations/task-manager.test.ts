@@ -291,4 +291,33 @@ Did something`;
       expect(taskManager.get(task.id)?.status).toBe('in_progress');
     });
   });
+
+  describe('ownership invariants', () => {
+    it('normalizes pending owner and keeps task dispatchable', () => {
+      const task = taskManager.create({ subject: 'T1', description: 'D1' });
+      taskManager.update(task.id, { owner: 'agent-a', status: 'pending' });
+
+      const available = taskManager.getAvailableTasks();
+      expect(available.map(t => t.id)).toContain(task.id);
+      expect(taskManager.get(task.id)?.owner).toBeUndefined();
+    });
+
+    it('normalizes hydrated pending owner from markdown', () => {
+      const markdown = `# Tasks
+
+## [ ] task-1: Stale owner task
+
+**Status:** pending
+**Owner:** dead-agent
+
+**Description:**
+Needs execution`;
+
+      taskManager.fromMarkdown(markdown);
+      const task = taskManager.get('task-1');
+      expect(task?.status).toBe('pending');
+      expect(task?.owner).toBeUndefined();
+      expect(taskManager.getAvailableTasks().map(t => t.id)).toContain('task-1');
+    });
+  });
 });
