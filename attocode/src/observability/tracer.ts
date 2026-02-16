@@ -8,6 +8,7 @@
 import { webcrypto } from 'node:crypto';
 // Use webcrypto directly - it's compatible with Web Crypto API
 const crypto = webcrypto;
+import { logger } from '../integrations/logger.js';
 
 import type {
   Span,
@@ -348,7 +349,7 @@ export class Tracer {
       try {
         listener(event);
       } catch (err) {
-        console.error('Error in tracer listener:', err);
+        logger.error('Error in tracer listener', { error: String(err) });
       }
     }
   }

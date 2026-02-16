@@ -13,6 +13,8 @@ import {
   getSessionRaw,
   getSessionParsed,
   getSessionSwarmData,
+  getSessionCodeMap,
+  getSessionAgentGraph,
   uploadTrace,
   uploadTraceInMemory,
   getUploadedTraces,
@@ -279,6 +281,95 @@ sessionsRoutes.get('/:id/export/csv', async (c) => {
   } catch (err) {
     console.error('Failed to export CSV:', err);
     return c.json({ success: false, error: 'Failed to export CSV' }, 500);
+  }
+});
+
+// Get session code map
+sessionsRoutes.get('/:id/codemap', async (c) => {
+  try {
+    const id = c.req.param('id');
+    const data = await getSessionCodeMap(decodeURIComponent(id));
+    if (!data) {
+      return c.json({ success: false, error: 'No code map data for this session' }, 404);
+    }
+
+    // Smart subset defaults for very large traces.
+    const limitRaw = c.req.query('limit');
+    const includeAll = c.req.query('all') === '1';
+    const excludeRaw = c.req.query('exclude');
+    const limit = includeAll
+      ? Number.POSITIVE_INFINITY
+      : Math.max(1, Number.parseInt(limitRaw ?? '350', 10) || 350);
+    const excludeDirs = (excludeRaw ?? 'node_modules,dist,.next,build,coverage')
+      .split(',')
+      .map(s => s.trim())
+      .filter(Boolean);
+
+    if (!Number.isFinite(limit) || data.files.length <= limit) {
+      return c.json({ success: true, data });
+    }
+
+    const isExcludedPath = (filePath: string): boolean =>
+      excludeDirs.some(dir => filePath === dir || filePath.startsWith(`${dir}/`) || filePath.includes(`/${dir}/`));
+
+    const filteredFiles = data.files.filter(f => !isExcludedPath(f.filePath));
+    const ranked = [...filteredFiles].sort((a, b) => {
+      const scoreA = (a.importance * 3) + a.inDegree + a.outDegree + Math.log10(Math.max(1, a.tokenCount));
+      const scoreB = (b.importance * 3) + b.inDegree + b.outDegree + Math.log10(Math.max(1, b.tokenCount));
+      return scoreB - scoreA;
+    });
+    const selectedFiles = ranked.slice(0, limit);
+    const selectedSet = new Set(selectedFiles.map(f => f.filePath));
+    const selectedEdges = data.dependencyEdges.filter(e => selectedSet.has(e.source) && selectedSet.has(e.target));
+
+    return c.json({
+      success: true,
+      data: {
+        ...data,
+        files: selectedFiles,
+        totalFiles: selectedFiles.length,
+        dependencyEdges: selectedEdges,
+        selectionMeta: {
+          selected: selectedFiles.length,
+          original: data.files.length,
+          excludedDirs: excludeDirs,
+          limit,
+        },
+      },
+    });
+  } catch (err) {
+    console.error('Failed to get code map:', err);
+    return c.json({ success: false, error: 'Failed to get code map' }, 500);
+  }
+});
+
+// Get session agent graph (agent topology + data flows)
+sessionsRoutes.get('/:id/agents', async (c) => {
+  try {
+    const id = c.req.param('id');
+    const data = await getSessionAgentGraph(decodeURIComponent(id));
+    if (!data) {
+      return c.json({ success: false, error: 'No agent graph data for this session' }, 404);
+    }
+    return c.json({ success: true, data });
+  } catch (err) {
+    console.error('Failed to get agent graph:', err);
+    return c.json({ success: false, error: 'Failed to get agent graph' }, 500);
+  }
+});
+
+// Get session data flows (chronological)
+sessionsRoutes.get('/:id/dataflow', async (c) => {
+  try {
+    const id = c.req.param('id');
+    const data = await getSessionAgentGraph(decodeURIComponent(id));
+    if (!data) {
+      return c.json({ success: false, error: 'No data flow data for this session' }, 404);
+    }
+    return c.json({ success: true, data: data.dataFlows });
+  } catch (err) {
+    console.error('Failed to get data flows:', err);
+    return c.json({ success: false, error: 'Failed to get data flows' }, 500);
   }
 });
 

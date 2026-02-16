@@ -35,6 +35,8 @@
  * ```
  */
 
+import { logger } from '../integrations/logger.js';
+
 // =============================================================================
 // TYPES
 // =============================================================================
@@ -391,7 +393,7 @@ export class FailureTracker {
       const evicted = this.failures.shift()!;
 
       // Log warning about eviction
-      console.warn(`[FailureTracker] Evicted failure due to limit (${this.config.maxFailures}): ${evicted.action} - ${evicted.error.slice(0, 50)}`);
+      logger.warn(`[FailureTracker] Evicted failure due to limit (${this.config.maxFailures}): ${evicted.action} - ${evicted.error.slice(0, 50)}`);
 
       // Emit eviction event for observability
       this.emit({

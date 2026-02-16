@@ -7,6 +7,8 @@
 
 import { useState, useEffect, useCallback, useRef } from 'react';
 import type { SwarmLiveState, TimestampedSwarmEvent } from '../lib/swarm-types';
+import type { BlackboardSnapshot, BudgetPoolSnapshot } from '../lib/agent-graph-types';
+import type { CodeMapSnapshot } from '../lib/codemap-types';
 
 const MAX_RECENT_EVENTS = 200;
 const RECONNECT_BASE_MS = 1000;
@@ -18,6 +20,9 @@ export interface UseSwarmStreamResult {
   idle: boolean;
   state: SwarmLiveState | null;
   recentEvents: TimestampedSwarmEvent[];
+  blackboard: BlackboardSnapshot | null;
+  codeMap: CodeMapSnapshot | null;
+  budgetPool: BudgetPoolSnapshot | null;
   error: Error | null;
   reconnect: () => void;
 }
@@ -34,6 +39,9 @@ export function useSwarmStream(dir?: string): UseSwarmStreamResult {
   const [connected, setConnected] = useState(false);
   const [state, setState] = useState<SwarmLiveState | null>(null);
   const [recentEvents, setRecentEvents] = useState<TimestampedSwarmEvent[]>([]);
+  const [blackboard, setBlackboard] = useState<BlackboardSnapshot | null>(null);
+  const [codeMap, setCodeMap] = useState<CodeMapSnapshot | null>(null);
+  const [budgetPool, setBudgetPool] = useState<BudgetPoolSnapshot | null>(null);
   const [error, setError] = useState<Error | null>(null);
   const [initialFetchDone, setInitialFetchDone] = useState(false);
 
@@ -104,6 +112,18 @@ export function useSwarmStream(dir?: string): UseSwarmStreamResult {
       // Keep-alive, no action needed
     });
 
+    es.addEventListener('swarm-blackboard', (e) => {
+      try { setBlackboard(JSON.parse(e.data) as BlackboardSnapshot); } catch { /* malformed */ }
+    });
+
+    es.addEventListener('swarm-codemap', (e) => {
+      try { setCodeMap(JSON.parse(e.data) as CodeMapSnapshot); } catch { /* malformed */ }
+    });
+
+    es.addEventListener('swarm-budget-pool', (e) => {
+      try { setBudgetPool(JSON.parse(e.data) as BudgetPoolSnapshot); } catch { /* malformed */ }
+    });
+
     es.onerror = () => {
       setConnected(false);
       es.close();
@@ -130,6 +150,21 @@ export function useSwarmStream(dir?: string): UseSwarmStreamResult {
     connect();
   }, [connect]);
 
+  // Initial fetch of codemap snapshot so swarm codemap page works even before SSE codemap events
+  useEffect(() => {
+    const codemapUrl = buildUrl('/api/swarm/codemap', { dir });
+    fetch(codemapUrl)
+      .then((res) => res.json())
+      .then((data) => {
+        if (data.success && data.data) {
+          setCodeMap(data.data as CodeMapSnapshot);
+        }
+      })
+      .catch(() => {
+        // no snapshot yet
+      });
+  }, [dir]);
+
   // Initial fetch of state (in case SSE hasn't connected yet)
   useEffect(() => {
     const stateUrl = buildUrl('/api/swarm/state', { dir });
@@ -155,6 +190,9 @@ export function useSwarmStream(dir?: string): UseSwarmStreamResult {
     // Reset state when dir changes
     setState(null);
     setRecentEvents([]);
+    setBlackboard(null);
+    setCodeMap(null);
+    setBudgetPool(null);
     setError(null);
     setInitialFetchDone(false);
     lastSeqRef.current = 0;
@@ -182,6 +220,9 @@ export function useSwarmStream(dir?: string): UseSwarmStreamResult {
     idle,
     state,
     recentEvents,
+    blackboard,
+    codeMap,
+    budgetPool,
     error,
     reconnect,
   };

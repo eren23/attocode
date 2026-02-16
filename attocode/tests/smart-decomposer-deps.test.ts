@@ -5,7 +5,7 @@
  * LLM dependency reference formats and filters invalid ones.
  */
 import { describe, it, expect } from 'vitest';
-import { createSmartDecomposer } from '../src/integrations/smart-decomposer.js';
+import { createSmartDecomposer, parseDecompositionResponse } from '../src/integrations/smart-decomposer.js';
 import type { LLMDecomposeResult, SmartDecomposerEvent } from '../src/integrations/smart-decomposer.js';
 
 describe('SmartDecomposer dependency resolution', () => {
@@ -187,7 +187,7 @@ describe('SmartDecomposer dependency resolution', () => {
     // 2 events: first retry attempt, then final heuristic fallback
     expect(fallbackEvents).toHaveLength(2);
     expect(fallbackEvents[0].type === 'llm.fallback' && fallbackEvents[0].reason).toBe('LLM returned 0 subtasks, retrying...');
-    expect(fallbackEvents[1].type === 'llm.fallback' && fallbackEvents[1].reason).toBe('LLM failed after 2 attempts');
+    expect(fallbackEvents[1].type === 'llm.fallback' && fallbackEvents[1].reason).toBe('LLM failed after 2 attempts — skipping heuristic');
   });
 
   it('should emit llm.fallback events when LLM throws (retry + final)', async () => {
@@ -201,10 +201,10 @@ describe('SmartDecomposer dependency resolution', () => {
     await decomposer.decompose('Build a feature');
 
     const fallbackEvents = events.filter((e) => e.type === 'llm.fallback');
-    // 2 events: first retry attempt, then final heuristic fallback
+    // 2 events: first retry attempt, then final skipping heuristic
     expect(fallbackEvents).toHaveLength(2);
     expect(fallbackEvents[0].type === 'llm.fallback' && fallbackEvents[0].reason).toBe('LLM connection timeout, retrying...');
-    expect(fallbackEvents[1].type === 'llm.fallback' && fallbackEvents[1].reason).toBe('LLM failed after 2 attempts');
+    expect(fallbackEvents[1].type === 'llm.fallback' && fallbackEvents[1].reason).toBe('LLM failed after 2 attempts — skipping heuristic');
   });
 
   it('should use adaptive strategy for implement tasks by default (not sequential)', async () => {
@@ -347,5 +347,55 @@ describe('F14: modifies/reads population from relevantFiles', () => {
 
     expect(swarmTask.targetFiles).toEqual(['src/feature.ts']);
     expect(swarmTask.readFiles).toEqual(['src/feature.ts']);
+  });
+});
+
+// ─── Truncated JSON recovery ─────────────────────────────────────────────────
+
+describe('parseDecompositionResponse truncated JSON recovery', () => {
+  it('should recover subtasks from truncated JSON in code block', () => {
+    // Simulate LLM output cut off mid-JSON inside a ```json block (no closing ```)
+    const truncated = `I'll decompose this project into subtasks.
+
+\`\`\`json
+{
+  "subtasks": [
+    { "description": "Create project scaffold", "type": "implement", "complexity": 3, "dependencies": [], "parallelizable": false },
+    { "description": "Build expression engine", "type": "implement", "complexity": 7, "dependencies": [0], "parallelizable": false },
+    { "description": "Implement DAG scheduler", "type": "implement", "complexity": 8, "dependencies": [0], "parallelizable": true },
+    { "description": "Build step executors", "type": "implement", "complexity": 6, "dependencies": [`;
+
+    const result = parseDecompositionResponse(truncated);
+    // Should recover the 3 complete subtasks
+    expect(result.subtasks.length).toBe(3);
+    expect(result.subtasks[0].description).toBe('Create project scaffold');
+    expect(result.subtasks[2].description).toBe('Implement DAG scheduler');
+    expect(result.parseError).toBeUndefined();
+  });
+
+  it('should recover subtasks from truncated raw JSON (no code block)', () => {
+    const truncated = `{
+  "subtasks": [
+    { "description": "Design API", "type": "design", "complexity": 4, "dependencies": [], "parallelizable": false },
+    { "description": "Implement endpoints", "type": "implement", "complexity": 6, "dependencies": [0], "parallelizable": false },
+    { "description": "Write te`;
+
+    const result = parseDecompositionResponse(truncated);
+    expect(result.subtasks.length).toBe(2);
+    expect(result.subtasks[0].description).toBe('Design API');
+    expect(result.subtasks[1].description).toBe('Implement endpoints');
+  });
+
+  it('should fall back to mega-task when no complete JSON objects exist', () => {
+    const truncated = `\`\`\`json
+{
+  "subtasks": [
+    { "desc`;
+
+    const result = parseDecompositionResponse(truncated);
+    // With the robust parser, incomplete JSON triggers mega-task fallback
+    // rather than returning empty — having something is better than aborting
+    expect(result.subtasks).toHaveLength(1);
+    expect(result.reasoning).toContain('mega-task');
   });
 });

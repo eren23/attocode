@@ -10,12 +10,15 @@ import type {
   PluginsConfig,
   Hook,
   HookEvent,
+  ShellHookCommand,
   Plugin,
   PluginContext,
   ToolDefinition,
   AgentEvent,
   AgentEventListener,
 } from '../types.js';
+import { logger } from './logger.js';
+import { spawn } from 'node:child_process';
 
 // =============================================================================
 // HOOK MANAGER
@@ -68,7 +71,7 @@ export class HookManager {
         event: 'llm.before',
         handler: (data) => {
           const d = data as { model?: string };
-          console.log(`[Hook] LLM call starting (model: ${d.model || 'unknown'})`);
+          logger.debug('Hook: LLM call starting', { model: d.model || 'unknown' });
         },
         priority: 100,
       });
@@ -77,7 +80,7 @@ export class HookManager {
         event: 'tool.before',
         handler: (data) => {
           const d = data as { tool?: string };
-          console.log(`[Hook] Tool call: ${d.tool || 'unknown'}`);
+          logger.debug('Hook: Tool call', { tool: d.tool || 'unknown' });
         },
         priority: 100,
       });
@@ -99,7 +102,7 @@ export class HookManager {
         handler: () => {
           const start = startTimes.get('llm');
           if (start) {
-            console.log(`[Hook] LLM call took ${Date.now() - start}ms`);
+            logger.debug('Hook: LLM call completed', { durationMs: Date.now() - start });
             startTimes.delete('llm');
           }
         },
@@ -111,6 +114,82 @@ export class HookManager {
     for (const hook of this.config.hooks.custom || []) {
       this.registerHook(hook);
     }
+
+    this.registerShellHooks();
+  }
+
+  private registerShellHooks(): void {
+    const shellCfg = this.config.hooks.shell;
+    if (!shellCfg?.enabled || !shellCfg.commands?.length) {
+      return;
+    }
+
+    for (const cmd of shellCfg.commands) {
+      this.registerHook({
+        id: cmd.id || `shell:${cmd.event}:${cmd.command}`,
+        event: cmd.event,
+        priority: cmd.priority ?? 60,
+        handler: (data) => this.executeShellHook(cmd, data),
+      });
+    }
+  }
+
+  private executeShellHook(commandConfig: ShellHookCommand, data: unknown): Promise<void> {
+    return new Promise((resolve, reject) => {
+      const shellCfg = this.config.hooks.shell || {};
+      const timeoutMs = commandConfig.timeoutMs ?? shellCfg.defaultTimeoutMs ?? 5000;
+
+      const baseEnvKeys = ['PATH', 'HOME', 'SHELL', 'TMPDIR', 'USER'];
+      const env: Record<string, string> = {};
+      for (const key of baseEnvKeys) {
+        const value = process.env[key];
+        if (typeof value === 'string') {
+          env[key] = value;
+        }
+      }
+      for (const key of shellCfg.envAllowlist || []) {
+        const value = process.env[key];
+        if (typeof value === 'string') {
+          env[key] = value;
+        }
+      }
+
+      const child = spawn(commandConfig.command, commandConfig.args || [], {
+        stdio: ['pipe', 'pipe', 'pipe'],
+        env,
+      });
+
+      const timer = setTimeout(() => {
+        child.kill('SIGTERM');
+        reject(new Error(`Shell hook timed out after ${timeoutMs}ms (${commandConfig.command})`));
+      }, timeoutMs);
+
+      let stderr = '';
+      child.stderr.on('data', chunk => {
+        stderr += String(chunk);
+      });
+
+      child.on('error', err => {
+        clearTimeout(timer);
+        reject(err);
+      });
+
+      child.on('exit', code => {
+        clearTimeout(timer);
+        if (code === 0) {
+          resolve();
+          return;
+        }
+        reject(new Error(`Shell hook failed (${commandConfig.command}) exit=${code}${stderr ? `: ${stderr.trim()}` : ''}`));
+      });
+
+      try {
+        child.stdin.write(JSON.stringify({ event: commandConfig.event, payload: data }));
+      } catch {
+        // Non-serializable payloads are best-effort only.
+      }
+      child.stdin.end();
+    });
   }
 
   /**
@@ -121,11 +200,11 @@ export class HookManager {
 
     // Check for duplicate by ID or handler reference
     if (hook.id && existing.some((h) => h.id === hook.id)) {
-      console.warn(`[Hook] Hook "${hook.id}" already registered for ${hook.event}`);
+      logger.warn('Hook already registered', { hookId: hook.id, event: hook.event });
       return;
     }
     if (existing.some((h) => h.handler === hook.handler)) {
-      console.warn(`[Hook] Duplicate handler already registered for ${hook.event}`);
+      logger.warn('Duplicate handler already registered', { event: hook.event });
       return;
     }
 
@@ -157,7 +236,7 @@ export class HookManager {
       try {
         await hook.handler(data);
       } catch (err) {
-        console.error(`[Hook] Error in ${event} hook:`, err);
+        logger.error('Hook execution error', { event, error: String(err) });
       }
     }
   }
@@ -167,7 +246,7 @@ export class HookManager {
    */
   async loadPlugin(plugin: Plugin): Promise<void> {
     if (this.plugins.has(plugin.name)) {
-      console.warn(`[Plugin] ${plugin.name} already loaded`);
+      logger.warn('Plugin already loaded', { plugin: plugin.name });
       return;
     }
 
@@ -179,16 +258,16 @@ export class HookManager {
         return undefined as T;
       },
       log: (level, message) => {
-        console.log(`[Plugin:${plugin.name}] [${level}] ${message}`);
+        logger.info('Plugin log', { plugin: plugin.name, level, message });
       },
     };
 
     try {
       await plugin.initialize(context);
       this.plugins.set(plugin.name, plugin);
-      console.log(`[Plugin] Loaded: ${plugin.name} v${plugin.version}`);
+      logger.info('Plugin loaded', { plugin: plugin.name, version: plugin.version });
     } catch (err) {
-      console.error(`[Plugin] Failed to load ${plugin.name}:`, err);
+      logger.error('Failed to load plugin', { plugin: plugin.name, error: String(err) });
       throw err;
     }
   }
@@ -205,7 +284,7 @@ export class HookManager {
     }
 
     this.plugins.delete(name);
-    console.log(`[Plugin] Unloaded: ${name}`);
+    logger.info('Plugin unloaded', { plugin: name });
   }
 
   /**
@@ -234,7 +313,7 @@ export class HookManager {
       try {
         listener(event);
       } catch (err) {
-        console.error('[Hook] Event listener error:', err);
+        logger.error('Event listener error', { error: String(err) });
       }
     }
 
@@ -259,7 +338,7 @@ export class HookManager {
       try {
         listener(event);
       } catch (err) {
-        console.error('[Hook] Event listener error:', err);
+        logger.error('Event listener error', { error: String(err) });
       }
     }
 
@@ -308,8 +387,8 @@ export class HookManager {
       }
     }
 
-    // Always log to console for visibility
-    console.error(`[Hook] Error in ${event} hook:`, hookError.error.message);
+    // Always log for visibility
+    logger.error('Hook error', { event, error: hookError.error.message });
   }
 
   /**
@@ -340,6 +419,22 @@ export class HookManager {
    */
   private mapToHookEvent(event: AgentEvent): HookEvent | null {
     switch (event.type) {
+      case 'run.before':
+        return 'run.before';
+      case 'run.after':
+        return 'run.after';
+      case 'iteration.before':
+        return 'iteration.before';
+      case 'iteration.after':
+        return 'iteration.after';
+      case 'completion.before':
+        return 'completion.before';
+      case 'completion.after':
+        return 'completion.after';
+      case 'recovery.before':
+        return 'recovery.before';
+      case 'recovery.after':
+        return 'recovery.after';
       case 'start':
         return 'agent.start';
       case 'complete':

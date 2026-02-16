@@ -15,6 +15,7 @@ import { TokenFlowChart, CostBreakdownChart } from '../components/TokenFlowChart
 import { Timeline } from '../components/Timeline';
 import { TreeView } from '../components/TreeView';
 import { SwarmActivityView } from '../components/SwarmActivityView';
+import { OverviewTab } from '../components/overview';
 import {
   formatTokens,
   formatCost,
@@ -24,7 +25,7 @@ import {
 } from '../lib/utils';
 import { ExportDropdown } from '../components/ExportDropdown';
 
-type TabId = 'summary' | 'timeline' | 'tree' | 'tokens' | 'issues' | 'swarm';
+type TabId = 'overview' | 'summary' | 'timeline' | 'tree' | 'tokens' | 'issues' | 'swarm';
 
 interface Tab {
   id: TabId;
@@ -79,6 +80,16 @@ const baseTabs: Tab[] = [
     ),
   },
 ];
+
+const overviewTab: Tab = {
+  id: 'overview',
+  label: 'Overview',
+  icon: (
+    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 5a1 1 0 011-1h14a1 1 0 011 1v2a1 1 0 01-1 1H5a1 1 0 01-1-1V5zM4 13a1 1 0 011-1h6a1 1 0 011 1v6a1 1 0 01-1 1H5a1 1 0 01-1-1v-6zM16 13a1 1 0 011-1h2a1 1 0 011 1v6a1 1 0 01-1 1h-2a1 1 0 01-1-1v-6z" />
+    </svg>
+  ),
+};
 
 const swarmTab: Tab = {
   id: 'swarm',
@@ -318,7 +329,12 @@ export function SessionDetailPage() {
     return <SwarmActivityView data={swarmData} />;
   };
 
+  const renderOverview = () => {
+    return <OverviewTab sessionId={id!} />;
+  };
+
   const tabContent: Record<TabId, () => JSX.Element> = {
+    overview: renderOverview,
     summary: renderSummary,
     timeline: renderTimeline,
     tree: renderTree,
@@ -327,9 +343,11 @@ export function SessionDetailPage() {
     swarm: renderSwarm,
   };
 
-  // Conditionally include swarm tab when session has swarm data
+  // Conditionally include swarm/overview tabs when session has swarm data
   const isSwarm = (session as unknown as Record<string, unknown>).isSwarm === true;
-  const tabs: Tab[] = isSwarm ? [...baseTabs, swarmTab] : baseTabs;
+  const tabs: Tab[] = isSwarm
+    ? [overviewTab, ...baseTabs, swarmTab]
+    : baseTabs;
 
   return (
     <div>
@@ -355,22 +373,36 @@ export function SessionDetailPage() {
               <StatusBadge status={session.meta.status} />
             </div>
           </div>
-          <ExportDropdown
-            options={[
-              {
-                label: 'Download JSON',
-                onClick: () => window.open(`/api/sessions/${encodeURIComponent(id!)}/raw`, '_blank'),
-              },
-              {
-                label: 'Download CSV',
-                onClick: () => window.open(`/api/sessions/${encodeURIComponent(id!)}/export/csv`, '_blank'),
-              },
-              {
-                label: 'Download HTML Report',
-                onClick: () => window.open(`/api/sessions/${encodeURIComponent(id!)}/export/html`, '_blank'),
-              },
-            ]}
-          />
+          <div className="flex items-center gap-2">
+            <Link
+              to={`/codemap/${encodeURIComponent(id!)}`}
+              className="px-3 py-1.5 text-xs font-medium text-gray-300 bg-gray-800 border border-gray-700 rounded-lg hover:bg-gray-700 hover:text-white transition-colors"
+            >
+              Code Map
+            </Link>
+            <Link
+              to={`/topology/${encodeURIComponent(id!)}`}
+              className="px-3 py-1.5 text-xs font-medium text-gray-300 bg-gray-800 border border-gray-700 rounded-lg hover:bg-gray-700 hover:text-white transition-colors"
+            >
+              Topology
+            </Link>
+            <ExportDropdown
+              options={[
+                {
+                  label: 'Download JSON',
+                  onClick: () => window.open(`/api/sessions/${encodeURIComponent(id!)}/raw`, '_blank'),
+                },
+                {
+                  label: 'Download CSV',
+                  onClick: () => window.open(`/api/sessions/${encodeURIComponent(id!)}/export/csv`, '_blank'),
+                },
+                {
+                  label: 'Download HTML Report',
+                  onClick: () => window.open(`/api/sessions/${encodeURIComponent(id!)}/export/html`, '_blank'),
+                },
+              ]}
+            />
+          </div>
         </div>
       </div>
 

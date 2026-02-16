@@ -202,13 +202,21 @@ export class Compactor {
     }).join('\n\n');
 
     const summaryPrompt = `Summarize this conversation concisely, preserving:
-1. Key decisions and actions taken
-2. Important files, paths, or code discussed
-3. Current task/goal being worked on
-4. Any errors or issues encountered
-5. Key findings or conclusions
+1. The CURRENT TASK being worked on and its overall goal
+2. What has been COMPLETED so far (files created/modified, features implemented)
+3. What REMAINS TO BE DONE (specific files to create, changes to make)
+4. The NEXT ACTION the agent should take when resuming
+5. Key errors or blockers encountered
+6. Important file paths and code patterns
 
-Keep the summary structured and under ${this.config.summaryMaxTokens} tokens.
+Structure the summary as:
+## Current Task: [description]
+## Completed: [list]
+## Remaining: [list]
+## Next Action: [specific next step]
+## Notes: [errors, patterns, decisions]
+
+Keep under ${this.config.summaryMaxTokens} tokens.
 
 Conversation to summarize:
 ---

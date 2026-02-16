@@ -17,6 +17,7 @@ import { join, dirname } from 'node:path';
 import { mkdir } from 'node:fs/promises';
 import { existsSync, readFileSync, mkdirSync } from 'node:fs';
 import type { Message, ToolCall } from '../types.js';
+import { logger } from './logger.js';
 import type {
   SessionEntry,
   SessionEntryType,
@@ -75,6 +76,8 @@ export type SessionType = 'main' | 'subagent' | 'branch' | 'fork';
 export interface SessionMetadata {
   id: string;
   name?: string;
+  workspacePath?: string;
+  workspaceFingerprint?: string;
   createdAt: string;
   lastActiveAt: string;
   messageCount: number;
@@ -381,8 +384,8 @@ export class SQLiteStore {
   private prepareStatements(): void {
     this.stmts = {
       insertSession: this.db.prepare(`
-        INSERT INTO sessions (id, name, created_at, last_active_at, message_count, token_count)
-        VALUES (@id, @name, @createdAt, @lastActiveAt, @messageCount, @tokenCount)
+        INSERT INTO sessions (id, name, workspace_path, workspace_fingerprint, created_at, last_active_at, message_count, token_count)
+        VALUES (@id, @name, @workspacePath, @workspaceFingerprint, @createdAt, @lastActiveAt, @messageCount, @tokenCount)
       `),
 
       updateSession: this.db.prepare(`
@@ -399,6 +402,7 @@ export class SQLiteStore {
 
       getSession: this.db.prepare(`
         SELECT id, name, created_at as createdAt,
+               workspace_path as workspacePath, workspace_fingerprint as workspaceFingerprint,
                COALESCE(last_active_at, created_at) as lastActiveAt,
                message_count as messageCount, token_count as tokenCount, summary,
                parent_session_id as parentSessionId, session_type as sessionType,
@@ -409,6 +413,7 @@ export class SQLiteStore {
 
       listSessions: this.db.prepare(`
         SELECT id, name, created_at as createdAt,
+               workspace_path as workspacePath, workspace_fingerprint as workspaceFingerprint,
                COALESCE(last_active_at, created_at) as lastActiveAt,
                message_count as messageCount, token_count as tokenCount, summary,
                parent_session_id as parentSessionId, session_type as sessionType,
@@ -478,12 +483,13 @@ export class SQLiteStore {
 
       // Session hierarchy statements
       insertChildSession: this.db.prepare(`
-        INSERT INTO sessions (id, name, created_at, last_active_at, message_count, token_count, parent_session_id, session_type)
-        VALUES (@id, @name, @createdAt, @lastActiveAt, @messageCount, @tokenCount, @parentSessionId, @sessionType)
+        INSERT INTO sessions (id, name, workspace_path, workspace_fingerprint, created_at, last_active_at, message_count, token_count, parent_session_id, session_type)
+        VALUES (@id, @name, @workspacePath, @workspaceFingerprint, @createdAt, @lastActiveAt, @messageCount, @tokenCount, @parentSessionId, @sessionType)
       `),
 
       getChildSessions: this.db.prepare(`
         SELECT id, name, created_at as createdAt, last_active_at as lastActiveAt,
+               workspace_path as workspacePath, workspace_fingerprint as workspaceFingerprint,
                message_count as messageCount, token_count as tokenCount, summary,
                parent_session_id as parentSessionId, session_type as sessionType,
                prompt_tokens as promptTokens, completion_tokens as completionTokens,
@@ -495,6 +501,7 @@ export class SQLiteStore {
       getSessionTree: this.db.prepare(`
         WITH RECURSIVE session_tree AS (
           SELECT id, name, created_at as createdAt, last_active_at as lastActiveAt,
+                 workspace_path as workspacePath, workspace_fingerprint as workspaceFingerprint,
                  message_count as messageCount, token_count as tokenCount, summary,
                  parent_session_id as parentSessionId, session_type as sessionType,
                  prompt_tokens as promptTokens, completion_tokens as completionTokens,
@@ -502,6 +509,7 @@ export class SQLiteStore {
           FROM sessions WHERE id = ?
           UNION ALL
           SELECT s.id, s.name, s.created_at, s.last_active_at,
+                 s.workspace_path, s.workspace_fingerprint,
                  s.message_count, s.token_count, s.summary,
                  s.parent_session_id, s.session_type,
                  s.prompt_tokens, s.completion_tokens,
@@ -692,6 +700,8 @@ export class SQLiteStore {
     this.stmts.insertSession.run({
       id,
       name: name || null,
+      workspacePath: process.cwd(),
+      workspaceFingerprint: null,
       createdAt: now,
       lastActiveAt: now,
       messageCount: 0,
@@ -1075,6 +1085,8 @@ export class SQLiteStore {
     this.stmts.insertChildSession.run({
       id,
       name: name || null,
+      workspacePath: process.cwd(),
+      workspaceFingerprint: null,
       createdAt: now,
       lastActiveAt: now,
       messageCount: 0,
@@ -1892,6 +1904,8 @@ export class SQLiteStore {
           this.stmts.insertSession.run({
             id: meta.id,
             name: meta.name || null,
+            workspacePath: (meta as SessionMetadata).workspacePath || null,
+            workspaceFingerprint: (meta as SessionMetadata).workspaceFingerprint || null,
             createdAt: meta.createdAt,
             lastActiveAt: meta.lastActiveAt,
             messageCount: meta.messageCount,
@@ -1921,12 +1935,12 @@ export class SQLiteStore {
 
           migrated++;
         } catch (err) {
-          console.error(`Failed to migrate session ${meta.id}:`, err);
+          logger.error(`Failed to migrate session ${meta.id}:`, { error: err });
           failed++;
         }
       }
     } catch (err) {
-      console.error('Failed to read JSONL index:', err);
+      logger.error('Failed to read JSONL index:', { error: err });
     }
 
     return { migrated, failed };

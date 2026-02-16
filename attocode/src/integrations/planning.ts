@@ -13,6 +13,7 @@ import type {
   LLMProvider,
   Message,
 } from '../types.js';
+import { logger } from './logger.js';
 
 // =============================================================================
 // PLANNING MANAGER
@@ -110,7 +111,7 @@ Return ONLY the JSON array, no other text.`;
       return this.currentPlan;
     } catch (err) {
       // Fallback to simple plan
-      console.warn('[Planning] Failed to create detailed plan, using fallback');
+      logger.warn('Failed to create detailed plan, using fallback');
       return this.createFallbackPlan(task);
     }
   }
@@ -175,7 +176,7 @@ Return ONLY the JSON array, no other text.`;
           : [],
       }));
     } catch (err) {
-      console.warn('[Planning] Failed to parse plan:', err);
+      logger.warn('Failed to parse plan', { error: String(err) });
       return this.createFallbackPlan(goal).tasks;
     }
   }
@@ -390,7 +391,7 @@ Return ONLY the JSON, no other text.`;
       const response = await provider.chat(messages);
       return this.parseReflectionResponse(response.content);
     } catch (err) {
-      console.warn('[Reflection] Failed to reflect:', err);
+      logger.warn('Failed to reflect', { error: String(err) });
       return {
         satisfied: true,
         confidence: 0.5,
@@ -462,7 +463,7 @@ Return ONLY the JSON, no other text.`;
       }
 
       if (attempts < maxAttempts) {
-        console.log(`[Reflection] Attempt ${attempts} not satisfactory, retrying...`);
+        logger.info('Reflection attempt not satisfactory, retrying', { attempt: attempts });
       }
     }
 

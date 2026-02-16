@@ -11,6 +11,7 @@
 import type { Message } from '../types.js';
 import type { Compactor, CompactionResult } from './compaction.js';
 import type { Reference } from '../tricks/reversible-compaction.js';
+import { logger } from './logger.js';
 
 // =============================================================================
 // TYPES
@@ -427,7 +428,7 @@ export class AutoCompactionManager {
         references: result.references, // Preserve references from reversible compaction
       };
     } catch (compactionError) {
-      console.error('[AutoCompaction] Custom compaction failed, using emergency truncation:', compactionError);
+      logger.error('[AutoCompaction] Custom compaction failed, using emergency truncation:', { error: compactionError });
       const emergencyResult = this.emergencyTruncate(messages, totalPreserve);
       this.lastCompactionTime = Date.now();
       return emergencyResult;
@@ -456,7 +457,7 @@ export class AutoCompactionManager {
       result = await this.compactor.compact(messages);
     } catch (compactionError) {
       // LLM-based compaction failed - use emergency truncation as fallback
-      console.error('[AutoCompaction] LLM compaction failed, using emergency truncation:', compactionError);
+      logger.error('[AutoCompaction] LLM compaction failed, using emergency truncation:', { error: compactionError });
 
       const emergencyResult = this.emergencyTruncate(messages, totalPreserve);
 

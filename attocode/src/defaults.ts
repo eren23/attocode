@@ -54,6 +54,12 @@ export const DEFAULT_HOOKS_CONFIG: HooksConfig = {
     timing: false,  // Disabled by default - prints [Hook] timing to console
   },
   custom: [],
+  shell: {
+    enabled: false,
+    defaultTimeoutMs: 5000,
+    envAllowlist: [],
+    commands: [],
+  },
 };
 
 /**
@@ -220,6 +226,10 @@ export const DEFAULT_HUMAN_IN_LOOP_CONFIG: HumanInLoopConfig = {
     'read_file',
     'list_directory',
     'search',
+    'task_create',
+    'task_update',
+    'task_get',
+    'task_list',
   ],
   approvalTimeout: 300000, // 5 minutes
   approvalHandler: undefined, // Will use default console prompt
@@ -257,6 +267,10 @@ export const DEFAULT_EXECUTION_POLICY_CONFIG: ExecutionPolicyConfig = {
     read_file: { policy: 'allow' },
     list_directory: { policy: 'allow' },
     search: { policy: 'allow' },
+    task_create: { policy: 'allow' },
+    task_update: { policy: 'allow' },
+    task_get: { policy: 'allow' },
+    task_list: { policy: 'allow' },
   },
   intentAware: true,
   intentConfidenceThreshold: 0.7,
@@ -404,7 +418,7 @@ export function mergeConfig<T extends object>(
  * Default codebase context configuration.
  */
 export const DEFAULT_CODEBASE_CONTEXT_CONFIG: CodebaseContextAgentConfig = {
-  enabled: false, // Disabled by default (optimization, not critical)
+  enabled: true, // Enabled by default — provides repo map, AST symbols, and file structure
   includePatterns: ['**/*.ts', '**/*.tsx', '**/*.js', '**/*.jsx', '**/*.py', '**/*.go', '**/*.rs'],
   excludePatterns: ['**/node_modules/**', '**/dist/**', '**/build/**', '**/.git/**'],
   maxFileSize: 100 * 1024, // 100KB
@@ -459,6 +473,10 @@ export const DEFAULT_LLM_RESILIENCE_CONFIG: LLMResilienceAgentConfig = {
   incompleteActionRecovery: true,
   maxIncompleteActionRetries: 2,
   enforceRequestedArtifacts: true,
+  incompleteActionAutoLoop: true,
+  maxIncompleteAutoLoops: 2,
+  autoLoopPromptStyle: 'strict',
+  taskLeaseStaleMs: 5 * 60 * 1000,
 };
 
 /**
@@ -562,7 +580,7 @@ export const DEFAULT_PROVIDER_RESILIENCE_CONFIG: ProviderResilienceConfig = {
  */
 export function buildConfig(
   userConfig: Partial<ProductionAgentConfig>
-): Required<Omit<ProductionAgentConfig, 'provider' | 'tools' | 'toolResolver' | 'mcpToolSummaries' | 'maxContextTokens' | 'blackboard' | 'fileCache' | 'budget' | 'agentId' | 'workingDirectory' | 'verificationCriteria'>> & Pick<ProductionAgentConfig, 'provider' | 'tools' | 'toolResolver' | 'mcpToolSummaries' | 'maxContextTokens' | 'blackboard' | 'fileCache' | 'budget' | 'agentId' | 'workingDirectory' | 'verificationCriteria'> {
+): Required<Omit<ProductionAgentConfig, 'provider' | 'tools' | 'toolResolver' | 'mcpToolSummaries' | 'maxContextTokens' | 'blackboard' | 'fileCache' | 'budget' | 'agentId' | 'workingDirectory' | 'verificationCriteria' | 'sharedContextState' | 'sharedEconomicsState'>> & Pick<ProductionAgentConfig, 'provider' | 'tools' | 'toolResolver' | 'mcpToolSummaries' | 'maxContextTokens' | 'blackboard' | 'fileCache' | 'budget' | 'agentId' | 'workingDirectory' | 'verificationCriteria' | 'sharedContextState' | 'sharedEconomicsState'> {
   return {
     provider: userConfig.provider!,
     tools: userConfig.tools || [],
@@ -608,6 +626,8 @@ export function buildConfig(
     budget: userConfig.budget, // Optional: custom budget for subagents
     workingDirectory: userConfig.workingDirectory, // Optional: base path for tool operations
     verificationCriteria: userConfig.verificationCriteria, // Optional: completion verification
+    sharedContextState: userConfig.sharedContextState, // Optional: shared context for swarm workers
+    sharedEconomicsState: userConfig.sharedEconomicsState, // Optional: shared economics for swarm workers
   };
 }
 
@@ -639,6 +659,14 @@ export const DEFAULT_SYSTEM_PROMPT = `You are Attocode, a production coding agen
 - Memory system retains information across conversation
 - Checkpoints allow rollback to previous states
 - Context compaction prevents overflow on long sessions
+
+## Tool Rules (CRITICAL)
+- **Creating files:** ALWAYS use write_file. NEVER use bash with cat/heredoc/echo for file creation.
+- **Editing files:** ALWAYS use edit_file. NEVER use bash with sed/awk for file editing.
+- **Reading files:** ALWAYS use read_file. NEVER use bash with cat/head/tail.
+- **Finding files:** ALWAYS use glob. NEVER use bash with find/ls.
+- **Searching code:** ALWAYS use grep. NEVER use bash with grep/rg.
+- **bash is ONLY for:** running commands (npm, git, make, tsc, tests, docker, etc.)
 
 ## Guidelines
 

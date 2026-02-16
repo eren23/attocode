@@ -7,6 +7,7 @@
 
 import type { ObservabilityConfig, Span, SpanExporter, AgentMetrics } from '../types.js';
 import { calculateCost as calculateOpenRouterCost } from './openrouter-pricing.js';
+import { logger } from './logger.js';
 
 // =============================================================================
 // TRACER
@@ -208,7 +209,7 @@ export class Tracer {
       const status = this.spans.get(span.spanId)?.status === 'error' ? '✗' : '✓';
       const prefix = isLast ? '└── ' : '├── ';
 
-      console.log(`${indent}${prefix}${status} ${span.name} (${duration}ms)`);
+      logger.info(`${indent}${prefix}${status} ${span.name} (${duration}ms)`);
 
       const children = spans.filter(
         (s) => this.spans.get(s.spanId)?.parentId === span.spanId
@@ -220,7 +221,7 @@ export class Tracer {
       });
     };
 
-    console.log('\n  Trace tree:');
+    logger.info('\n  Trace tree:');
     printSpan(root, '  ', true);
   }
 
@@ -415,10 +416,10 @@ export class Logger {
     };
 
     if (this.config.structured) {
-      console.log(JSON.stringify(entry));
+      logger.info(JSON.stringify(entry));
     } else {
       const prefix = `[${entry.timestamp}] [${level.toUpperCase()}]`;
-      console.log(`${prefix} ${message}`, data ? data : '');
+      logger.info(`${prefix} ${message}`, data ? data : undefined);
     }
   }
 

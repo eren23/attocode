@@ -16,6 +16,7 @@
 
 import { spawn, execSync } from 'child_process';
 import type { Sandbox, SandboxMode, SandboxOptions, ExecResult } from './index.js';
+import { logger } from '../logger.js';
 
 // =============================================================================
 // DOCKER SANDBOX
@@ -254,7 +255,7 @@ export class DockerSandbox implements Sandbox {
       execSync(`docker image inspect ${this.image}`, { stdio: 'pipe' });
     } catch {
       // Image not found, pull it
-      console.log(`[DockerSandbox] Pulling image: ${this.image}`);
+      logger.info(`[DockerSandbox] Pulling image: ${this.image}`);
       execSync(`docker pull ${this.image}`, { stdio: 'inherit' });
     }
   }

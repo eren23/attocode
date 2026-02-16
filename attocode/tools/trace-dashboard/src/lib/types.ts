@@ -190,6 +190,8 @@ export interface ParsedSession {
   }>;
   /** Swarm activity data (present only for swarm sessions) */
   swarmData?: SwarmActivityData;
+  /** Raw trace entries for visualization (agent graph, code map) */
+  rawEntries?: Array<Record<string, unknown>>;
 }
 
 // =============================================================================

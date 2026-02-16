@@ -8,6 +8,7 @@
 import type { SubtaskType, SmartSubtask } from '../smart-decomposer.js';
 import type { AgentOutput, SynthesisResult } from '../result-synthesizer.js';
 import type { StructuredClosureReport } from '../agent-registry.js';
+import type { CodebaseContextManager } from '../codebase-context.js';
 import type { ThrottleConfig } from './request-throttle.js';
 import type { PolicyProfile } from '../../types.js';
 import type { EconomicsTuning } from '../economics.js';
@@ -230,6 +231,9 @@ export interface SwarmConfig {
    *  instead of being cascade-skipped. Set to 1.0 for strict all-or-nothing behavior. */
   partialDependencyThreshold?: number;
 
+  /** Staleness threshold for dispatched task leases in ms (default: 300000). */
+  dispatchLeaseStaleMs?: number;
+
   /** Permission overrides for swarm workers (loaded from swarm.yaml permissions:) */
   permissions?: {
     /** Permission mode override for workers */
@@ -308,6 +312,25 @@ export interface SwarmConfig {
    *  When false (default), hollow streaks enter stall mode instead of killing the swarm. */
   enableHollowTermination?: boolean;
 
+  /** Completion safeguards to prevent "narrative success" with no concrete outcomes. */
+  completionGuard?: {
+    /** Require concrete filesystem artifacts for action-oriented tasks (default: true). */
+    requireConcreteArtifactsForActionTasks?: boolean;
+    /** Reject outputs that explicitly indicate pending future work (default: true). */
+    rejectFutureIntentOutputs?: boolean;
+  };
+
+  /** Model validation behavior for malformed model IDs in config. */
+  modelValidation?: {
+    /** Auto-correct malformed IDs when possible, otherwise use fallback model (default: 'autocorrect'). */
+    mode?: 'autocorrect' | 'strict';
+    /** Warn or fail when model IDs are invalid (default: 'warn'). */
+    onInvalid?: 'warn' | 'fail';
+  };
+
+  /** Codebase context manager — provides repo map for grounding decomposition in actual files */
+  codebaseContext?: CodebaseContextManager;
+
   /** Pre-dispatch auto-split for critical-path bottleneck tasks.
    *  Proactively splits high-complexity foundation tasks before dispatch,
    *  using heuristic pre-filtering + LLM judgment. */
@@ -357,6 +380,7 @@ export const DEFAULT_SWARM_CONFIG: Omit<SwarmConfig, 'orchestratorModel' | 'work
   workerRetries: 2,
   fileConflictStrategy: 'claim-based',
   dispatchStaggerMs: 1500,
+  dispatchLeaseStaleMs: 5 * 60 * 1000,
   throttle: 'free' as const,
   retryBaseDelayMs: 5000,
   enablePlanning: true,
@@ -381,6 +405,14 @@ export const DEFAULT_SWARM_CONFIG: Omit<SwarmConfig, 'orchestratorModel' | 'work
     deploy: 240_000,        // 4 min for deploy tasks
     document: 240_000,      // 4 min for documentation
     review: 240_000,        // 4 min for code review
+  },
+  completionGuard: {
+    requireConcreteArtifactsForActionTasks: true,
+    rejectFutureIntentOutputs: true,
+  },
+  modelValidation: {
+    mode: 'autocorrect',
+    onInvalid: 'warn',
   },
 };
 
@@ -480,6 +512,9 @@ export interface SwarmTask {
   /** Earliest timestamp when this task can be re-dispatched (non-blocking cooldown) */
   retryAfter?: number;
 
+  /** Timestamp when the task entered dispatched state */
+  dispatchedAt?: number;
+
   /** Aggregated outputs from completed dependencies */
   dependencyContext?: string;
 
@@ -567,6 +602,9 @@ export interface SwarmTaskResult {
 
   /** Whether this result was accepted with degraded quality (partial work, not full pass). */
   degraded?: boolean;
+
+  /** Per-worker budget utilization from WorkerBudgetTracker (orchestrator-side tracking). */
+  budgetUtilization?: { tokenPercent: number; iterationPercent: number };
 }
 
 // ─── Artifact Inventory ─────────────────────────────────────────────────────
@@ -835,7 +873,7 @@ export interface SwarmCheckpoint {
   timestamp: number;
   phase: SwarmStatus['phase'];
   plan?: SwarmPlan;
-  taskStates: Array<{ id: string; status: SwarmTaskStatus; result?: SwarmTaskResult; attempts: number; wave: number; assignedModel?: string }>;
+  taskStates: Array<{ id: string; status: SwarmTaskStatus; result?: SwarmTaskResult; attempts: number; wave: number; assignedModel?: string; dispatchedAt?: number }>;
   waves: string[][];
   currentWave: number;
   stats: { totalTokens: number; totalCost: number; qualityRejections: number; retries: number };
@@ -844,6 +882,10 @@ export interface SwarmCheckpoint {
   errors: SwarmError[];
   /** Original task prompt for re-planning on resume */
   originalPrompt?: string;
+  /** Cross-worker failure learning state (Phase 3.1) */
+  sharedContext?: { failures: unknown[]; references: [string, unknown][]; staticPrefix: string };
+  /** Cross-worker doom loop aggregation state (Phase 3.2) */
+  sharedEconomics?: { fingerprints: Array<{ fingerprint: string; count: number; workers: string[] }> };
 }
 
 /** Logged orchestrator decision with reasoning. */

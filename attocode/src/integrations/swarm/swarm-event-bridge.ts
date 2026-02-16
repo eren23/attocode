@@ -729,4 +729,85 @@ export class SwarmEventBridge {
       }
     }
   }
+
+  // ─── Observability Snapshot Files ───────────────────────────────────────────
+
+  /**
+   * Write codemap.json snapshot (once at swarm start after repo analysis).
+   */
+  writeCodeMapSnapshot(data: {
+    totalFiles: number;
+    totalTokens: number;
+    entryPoints: string[];
+    coreModules: string[];
+    dependencyEdges: { file: string; imports: string[] }[];
+    files?: Array<{
+      filePath: string;
+      directory: string;
+      fileName: string;
+      tokenCount: number;
+      importance: number;
+      type: string;
+      symbols: { name: string; kind: string; exported: boolean; line: number }[];
+      inDegree: number;
+      outDegree: number;
+    }>;
+    topChunks: Array<{
+      filePath: string;
+      tokenCount: number;
+      importance: number;
+      type: string;
+      symbols?: { name: string; kind: string; exported: boolean; line: number }[];
+    }>;
+  }): void {
+    try {
+      fs.mkdirSync(this.outputDir, { recursive: true });
+      fs.writeFileSync(
+        path.join(this.outputDir, 'codemap.json'),
+        JSON.stringify(data, null, 2)
+      );
+    } catch {
+      // Best effort
+    }
+  }
+
+  /**
+   * Write blackboard.json snapshot (periodically during execution).
+   */
+  writeBlackboardSnapshot(data: {
+    findings: Array<{ id: string; topic: string; type: string; agentId: string; confidence: number; content: string }>;
+    claims: Array<{ resource: string; agentId: string; type: string }>;
+    updatedAt: string;
+  }): void {
+    try {
+      fs.mkdirSync(this.outputDir, { recursive: true });
+      fs.writeFileSync(
+        path.join(this.outputDir, 'blackboard.json'),
+        JSON.stringify(data, null, 2)
+      );
+    } catch {
+      // Best effort
+    }
+  }
+
+  /**
+   * Write budget-pool.json snapshot (periodically during execution).
+   */
+  writeBudgetPoolSnapshot(data: {
+    poolTotal: number;
+    poolUsed: number;
+    poolRemaining: number;
+    allocations: Array<{ agentId: string; tokensAllocated: number; tokensUsed: number }>;
+    updatedAt: string;
+  }): void {
+    try {
+      fs.mkdirSync(this.outputDir, { recursive: true });
+      fs.writeFileSync(
+        path.join(this.outputDir, 'budget-pool.json'),
+        JSON.stringify(data, null, 2)
+      );
+    } catch {
+      // Best effort
+    }
+  }
 }

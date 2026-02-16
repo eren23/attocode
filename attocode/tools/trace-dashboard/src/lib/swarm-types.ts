@@ -273,7 +273,7 @@ export function getEventMessage(event: TimestampedSwarmEvent): string {
     case 'swarm.task.completed':
       return `Task ${e.taskId} ${e.success ? 'completed' : 'failed'} (${formatK(e.tokensUsed as number)} tokens)`;
     case 'swarm.task.failed':
-      return `Task ${e.taskId} failed (attempt ${e.attempt}/${e.maxAttempts}): ${truncateText(e.error as string, 60)}`;
+      return `Task ${e.taskId} failed (attempt ${e.attempt}/${e.maxAttempts}): ${truncateText(e.error as string, 60)}${e.failureClass ? ` [${String(e.failureClass)}]` : ''}${e.retrySuppressed ? ` — retry suppressed${e.retryReason ? ` (${truncateText(String(e.retryReason), 40)})` : ''}` : ''}`;
     case 'swarm.task.skipped':
       return `Task ${e.taskId} skipped: ${e.reason}`;
     case 'swarm.quality.rejected':

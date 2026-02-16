@@ -39,9 +39,11 @@ import {
 
 import { getMCPConfigPaths } from '../paths.js';
 import { showSessionPicker, showQuickPicker, formatSessionsTable } from '../session-picker.js';
+import { TUI_ROOT_BUDGET } from '../integrations/economics.js';
 import { createLSPManager } from '../integrations/lsp.js';
 import { createLSPFileTools } from '../agent-tools/lsp-file-tools.js';
 import { initPricingCache } from '../integrations/openrouter-pricing.js';
+import { logger } from '../integrations/logger.js';
 
 // Import TUI components and utilities
 import { TUIApp, type TUIAppProps, checkTUICapabilities } from '../tui/index.js';
@@ -68,7 +70,7 @@ export async function startTUIMode(
 ): Promise<void> {
   const {
     permissionMode = 'interactive',
-    maxIterations = 50,
+    maxIterations = 500,
     model,
     trace = false,
     theme = 'auto',
@@ -80,6 +82,7 @@ export async function startTUIMode(
     const capabilities = await checkTUICapabilities();
 
     if (!capabilities.inkAvailable) {
+      // eslint-disable-next-line no-console
       console.log('! TUI not available. Falling back to legacy mode.');
       return startProductionREPL(provider, options);
     }
@@ -104,6 +107,7 @@ export async function startTUIMode(
         const stats = sqliteStore.getStats();
         persistenceDebug.log('[TUI] SQLite store initialized!', { sessions: stats.sessionCount, checkpoints: stats.checkpointCount });
       }
+      // eslint-disable-next-line no-console
       console.log('+ SQLite session store initialized');
 
       // Initialize DLQ with SQLite store's database
@@ -114,6 +118,7 @@ export async function startTUIMode(
       if (dlq.isAvailable()) {
         const pending = dlq.getPending({ limit: 10 });
         if (pending.length > 0) {
+          // eslint-disable-next-line no-console
           console.log(`[DLQ] ${pending.length} failed operation(s) pending retry`);
         }
       }
@@ -122,7 +127,9 @@ export async function startTUIMode(
       if (persistenceDebug.isEnabled()) {
         process.stderr.write(`[DEBUG] [TUI] SQLite FAILED: ${errMsg}\n`);
       }
+      // eslint-disable-next-line no-console
       console.log('! SQLite unavailable, using JSONL fallback');
+      // eslint-disable-next-line no-console
       console.log(`   Error: ${errMsg}`);
       sessionStore = await createSessionStore({ baseDir: '.agent/sessions' });
       // DLQ stays null - not available without SQLite
@@ -174,13 +181,16 @@ export async function startTUIMode(
     try {
       lspServers = await lspManager.autoStart(process.cwd());
       if (lspServers.length > 0) {
+        // eslint-disable-next-line no-console
         console.log(`@ LSP: Started ${lspServers.join(', ')} language server(s)`);
       } else {
+        // eslint-disable-next-line no-console
         console.log(`* LSP: No language servers found (optional)`);
+        // eslint-disable-next-line no-console
         console.log(`   For inline diagnostics: npm i -g typescript-language-server typescript`);
       }
     } catch (err) {
-      console.log(`! LSP: Could not start language servers (${(err as Error).message})`);
+      logger.warn('LSP: Could not start language servers', { error: String((err as Error).message) });
     }
 
     // Create LSP-enhanced file tools (replaces standard edit_file/write_file)
@@ -199,6 +209,7 @@ export async function startTUIMode(
       tools: allTools,
       model,
       maxIterations,
+      budget: TUI_ROOT_BUDGET,
       memory: { enabled: true, types: { episodic: true, semantic: true, working: true } },
       planning: { enabled: true, autoplan: true, complexityThreshold: 6 },
       // Thread management with auto-checkpoints (same as REPL mode)
@@ -215,7 +226,7 @@ export async function startTUIMode(
             enabled: true,
             riskThreshold: 'moderate',  // Require approval for moderate+ risk tools
             alwaysApprove: [],  // Don't auto-approve anything, show dialog
-            neverApprove: ['read_file', 'list_files', 'glob', 'grep'],  // Safe read tools
+            neverApprove: ['read_file', 'list_files', 'glob', 'grep', 'task_create', 'task_update', 'task_get', 'task_list'],  // Safe read + task tools
             approvalHandler: approvalBridge!.handler,  // TUI approval handler
             auditLog: true,
           }
@@ -242,6 +253,17 @@ export async function startTUIMode(
         custom: [],
       },
     });
+    let hadRunFailure = false;
+    let lastFailureReason: string | undefined;
+    const unsubAgentOutcome = agent.subscribe((event) => {
+      if (event.type === 'complete' && !event.result.success) {
+        hadRunFailure = true;
+        lastFailureReason = event.result.error || 'At least one task failed during this terminal session';
+      } else if (event.type === 'error') {
+        hadRunFailure = true;
+        lastFailureReason = event.error || 'Agent reported an error';
+      }
+    });
 
     // Session store was already initialized at the top
     const compactor = createCompactor(adaptedProvider, {
@@ -267,6 +289,7 @@ export async function startTUIMode(
           currentSessionId = fullResult.sessionId;
           resumedSession = true;
         } else if (fullResult.action === 'cancel') {
+          // eslint-disable-next-line no-console
           console.log('Goodbye!');
           await mcpClient.cleanup();
           await agent.cleanup();
@@ -320,6 +343,7 @@ export async function startTUIMode(
           plan: sessionState.plan as any,
           memoryContext: sessionState.memoryContext,
         });
+        // eslint-disable-next-line no-console
         console.log(`+ Resumed ${sessionState.messages.length} messages from session`);
       }
     }
@@ -337,9 +361,10 @@ export async function startTUIMode(
 
     // Render TUI (don't clear in debug mode so we can see initialization messages)
     if (!persistenceDebug.isEnabled()) {
+      // eslint-disable-next-line no-console
       console.clear();
     } else {
-      console.log('\n--- TUI Starting (debug mode - console not cleared) ---\n');
+      logger.debug('TUI Starting (debug mode - console not cleared)');
     }
 
     // Start trace session for the entire terminal session (if tracing enabled)
@@ -389,19 +414,25 @@ export async function startTUIMode(
       // End trace session for the terminal session
       if (trace && traceCollector?.isSessionActive()) {
         try {
-          await traceCollector.endSession({ success: true });
+          await traceCollector.endSession(
+            hadRunFailure
+              ? { success: false, failureReason: lastFailureReason ?? 'At least one task failed during this terminal session' }
+              : { success: true }
+          );
           persistenceDebug.log(`[TUI] Trace session ended -> .traces/`);
         } catch (err) {
           persistenceDebug.error(`[TUI] Failed to end trace session`, err);
         }
       }
+      unsubAgentOutcome();
       await agent.cleanup();
       await mcpClient.cleanup();
       await lspManager.cleanup();
     }
 
   } catch (error) {
-    console.error('! TUI failed:', (error as Error).message);
+    logger.error('TUI failed', { error: String((error as Error).message) });
+    // eslint-disable-next-line no-console
     console.log('   Falling back to legacy mode.');
     return startProductionREPL(provider, options);
   }

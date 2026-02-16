@@ -23,6 +23,7 @@
 
 /**
  * Configuration for retry behavior.
+ * @see RetryConfig in config/base-types.ts for the shared base pattern.
  */
 export interface RetryConfig {
   /** Maximum number of attempts (including initial) */

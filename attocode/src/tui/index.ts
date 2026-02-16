@@ -13,7 +13,13 @@
  * - Messages render once via <Static>, never re-render
  * - Ref-based callbacks prevent useInput re-subscription
  * - Custom memo comparators for controlled re-rendering
+ *
+ * Note: SimpleTextRenderer uses console.log/error for user-facing terminal output.
+ * These are intentionally kept as console calls (not logger) since they render
+ * visible output in the fallback TUI mode.
  */
+
+import { logger } from '../integrations/logger.js';
 
 // =============================================================================
 // TYPES
@@ -161,6 +167,7 @@ export class SimpleTextRenderer implements TUIRenderer {
   async init(): Promise<void> {}
 
   renderUserMessage(message: string): void {
+    // eslint-disable-next-line no-console
     console.log(`\n\x1b[36m👤 User:\x1b[0m ${message}`);
   }
 
@@ -169,6 +176,7 @@ export class SimpleTextRenderer implements TUIRenderer {
       process.stdout.write(content);
     } else {
       const formatted = formatAssistantContent(content);
+      // eslint-disable-next-line no-console
       console.log(`\n\x1b[32m🤖 Assistant:\x1b[0m ${formatted}`);
     }
   }
@@ -176,9 +184,11 @@ export class SimpleTextRenderer implements TUIRenderer {
   renderToolCall(toolCall: ToolCallDisplay): void {
     if (!this.config.showToolCalls) return;
     const statusEmoji = { pending: '⏳', running: '🔄', success: '✅', error: '❌' }[toolCall.status];
+    // eslint-disable-next-line no-console
     console.log(`\n${statusEmoji} \x1b[33mTool:\x1b[0m ${toolCall.name}`);
     if (Object.keys(toolCall.args).length > 0) {
       const argsStr = JSON.stringify(toolCall.args, null, 2).split('\n').map(line => '    ' + line).join('\n');
+      // eslint-disable-next-line no-console
       console.log(`\x1b[90m${argsStr}\x1b[0m`);
     }
   }
@@ -186,16 +196,19 @@ export class SimpleTextRenderer implements TUIRenderer {
   updateToolCallResult(_id: string, result: unknown, error?: string): void {
     if (!this.config.showToolCalls) return;
     if (error) {
+      // eslint-disable-next-line no-console
       console.log(`\x1b[31m    Error: ${error}\x1b[0m`);
     } else {
       const resultStr = typeof result === 'string' ? result : JSON.stringify(result, null, 2);
       const truncated = resultStr.length > 500 ? resultStr.slice(0, 500) + '...' : resultStr;
+      // eslint-disable-next-line no-console
       console.log(`\x1b[90m    Result: ${truncated}\x1b[0m`);
     }
   }
 
   renderThinking(content: string): void {
     if (!this.config.showThinking) return;
+    // eslint-disable-next-line no-console
     console.log(`\x1b[90m💭 ${content}\x1b[0m`);
   }
 
@@ -206,6 +219,7 @@ export class SimpleTextRenderer implements TUIRenderer {
       `Tokens: ${status.tokens.toLocaleString()}`,
       `Time: ${(status.elapsed / 1000).toFixed(1)}s`,
     ].join(' | ');
+    // eslint-disable-next-line no-console
     console.log(`\x1b[90m[${statusLine}]\x1b[0m`);
   }
 
@@ -239,14 +253,18 @@ export class SimpleTextRenderer implements TUIRenderer {
   }
 
   showError(error: string): void {
+    logger.error('SimpleTextRenderer error displayed', { error });
+    // eslint-disable-next-line no-console
     console.error(`\n\x1b[31m❌ Error: ${error}\x1b[0m`);
   }
 
   showSuccess(message: string): void {
+    // eslint-disable-next-line no-console
     console.log(`\n\x1b[32m✅ ${message}\x1b[0m`);
   }
 
   clear(): void {
+    // eslint-disable-next-line no-console
     console.clear();
   }
 

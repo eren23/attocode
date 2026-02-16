@@ -12,6 +12,7 @@ import type {
   ChatResponse,
 } from '../types.js';
 import type { MessageWithContent } from '../providers/types.js';
+import { logger } from './logger.js';
 
 // =============================================================================
 // MODEL CAPABILITY
@@ -333,7 +334,7 @@ export class RoutingManager {
       } catch (err) {
         lastError = err instanceof Error ? err : new Error(String(err));
         this.recordFailure(modelId, lastError);
-        console.warn(`[Routing] Model ${modelId} failed:`, lastError.message);
+        logger.warn(`[Routing] Model ${modelId} failed:`, { error: lastError.message });
       }
     }
 

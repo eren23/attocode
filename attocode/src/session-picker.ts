@@ -6,6 +6,8 @@
  */
 
 import type { SessionMetadata } from './integrations/session-store.js';
+import { logger } from './integrations/logger.js';
+import { resolve } from 'node:path';
 
 // =============================================================================
 // RAW INPUT HELPER
@@ -28,7 +30,7 @@ async function readLineRaw(prompt: string, debug = false): Promise<string> {
   };
 
   if (debug) {
-    console.error(`[DEBUG] stdin listeners before: data=${savedListeners.data.length}, readable=${savedListeners.readable.length}, keypress=${savedListeners.keypress.length}`);
+    logger.debug('stdin listeners before', { data: savedListeners.data.length, readable: savedListeners.readable.length, keypress: savedListeners.keypress.length });
   }
 
   stdin.removeAllListeners('data');
@@ -40,14 +42,14 @@ async function readLineRaw(prompt: string, debug = false): Promise<string> {
   const wasPaused = stdin.isPaused?.() ?? true;
 
   if (debug) {
-    console.error(`[DEBUG] stdin state before: isRaw=${wasRaw}, isPaused=${wasPaused}, isTTY=${stdin.isTTY}`);
+    logger.debug('stdin state before', { isRaw: wasRaw, isPaused: wasPaused, isTTY: stdin.isTTY });
   }
 
   // Configure stdin for raw character input
   if (stdin.isTTY && typeof stdin.setRawMode === 'function') {
     stdin.setRawMode(true);
     if (debug) {
-      console.error(`[DEBUG] setRawMode(true) called, isRaw now=${stdin.isRaw}`);
+      logger.debug('setRawMode(true) called', { isRaw: stdin.isRaw });
     }
   }
   stdin.resume();
@@ -180,6 +182,15 @@ function getSessionDisplayName(session: SessionMetadata): string {
   return formatSessionId(session.id);
 }
 
+function isWorkspaceMismatch(session: SessionMetadata): boolean {
+  if (!session.workspacePath) return false;
+  try {
+    return resolve(session.workspacePath) !== resolve(process.cwd());
+  } catch {
+    return false;
+  }
+}
+
 // =============================================================================
 // SESSION PICKER
 // =============================================================================
@@ -209,8 +220,11 @@ export async function showSessionPicker(
     return { action: 'new' };
   }
 
+  // eslint-disable-next-line no-console
   console.log('\n┌────────────────────────────────────────────────────────────────────┐');
+  // eslint-disable-next-line no-console
   console.log('│                       Resume Session?                              │');
+  // eslint-disable-next-line no-console
   console.log('├────────────────────────────────────────────────────────────────────┤');
 
   // Display sessions
@@ -220,12 +234,17 @@ export async function showSessionPicker(
     const msgs = `${session.messageCount} msgs`.padEnd(10);
     const time = formatRelativeTime(session.lastActiveAt).padEnd(12);
 
+    // eslint-disable-next-line no-console
     console.log(`│  ${num}) ${name} ${msgs} ${time} │`);
   });
 
+  // eslint-disable-next-line no-console
   console.log('├────────────────────────────────────────────────────────────────────┤');
+  // eslint-disable-next-line no-console
   console.log('│  n)  Start new session                                             │');
+  // eslint-disable-next-line no-console
   console.log('│  q)  Quit                                                          │');
+  // eslint-disable-next-line no-console
   console.log('└────────────────────────────────────────────────────────────────────┘');
 
   // Use raw input to avoid conflicts with other readline instances
@@ -249,6 +268,7 @@ export async function showSessionPicker(
   }
 
   // Default to new session on invalid input
+  // eslint-disable-next-line no-console
   console.log('Starting new session...');
   return { action: 'new' };
 }
@@ -267,15 +287,29 @@ export async function showQuickPicker(
   const name = truncate(getSessionDisplayName(mostRecent), 40);
   const time = formatRelativeTime(mostRecent.lastActiveAt);
 
+  // eslint-disable-next-line no-console
   console.log(`\nMost recent: "${name}" (${mostRecent.messageCount} msgs, ${time})`);
+  const workspaceMismatch = isWorkspaceMismatch(mostRecent);
+  if (workspaceMismatch) {
+    // eslint-disable-next-line no-console
+    console.log(`Workspace mismatch: session=${mostRecent.workspacePath} current=${process.cwd()}`);
+  }
 
   // Use raw input to avoid conflicts with other readline instances
   // Enable debug logging to diagnose double character issue
-  const answer = await readLineRaw('Resume? [Y/n/list]: ', true);
+  const answer = await readLineRaw(workspaceMismatch ? 'Resume? [force/n/list]: ' : 'Resume? [Y/n/list]: ', true);
   const trimmed = answer.trim().toLowerCase();
 
-  if (trimmed === '' || trimmed === 'y' || trimmed === 'yes') {
+  if (!workspaceMismatch && (trimmed === '' || trimmed === 'y' || trimmed === 'yes')) {
     return { action: 'resume', sessionId: mostRecent.id };
+  }
+  if (workspaceMismatch && (trimmed === 'force' || trimmed === 'f')) {
+    return { action: 'resume', sessionId: mostRecent.id };
+  }
+  if (workspaceMismatch && (trimmed === '' || trimmed === 'y' || trimmed === 'yes')) {
+    // eslint-disable-next-line no-console
+    console.log('Starting new session (resume blocked by workspace mismatch; use "force" to override).');
+    return { action: 'new' };
   }
 
   if (trimmed === 'n' || trimmed === 'no') {

@@ -58,6 +58,7 @@ function createMockLSPManager(options: {
  */
 function createMockChunk(overrides: Partial<CodeChunk> = {}): CodeChunk {
   const id = overrides.id ?? 'test-file.ts';
+  const symbols = overrides.symbols ?? ['x'];
   return {
     id,
     filePath: overrides.filePath ?? id,
@@ -65,7 +66,8 @@ function createMockChunk(overrides: Partial<CodeChunk> = {}): CodeChunk {
     tokenCount: overrides.tokenCount ?? 100,
     importance: overrides.importance ?? 0.5,
     type: overrides.type ?? 'core_module',
-    symbols: overrides.symbols ?? ['x'],
+    symbols,
+    symbolDetails: symbols.map((name) => ({ name, kind: 'symbol', exported: true, line: 0 })),
     dependencies: overrides.dependencies ?? [],
     lastModified: overrides.lastModified,
   };

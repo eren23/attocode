@@ -134,6 +134,74 @@ describe('SwarmStateStore', () => {
   });
 });
 
+describe('SwarmCheckpoint with shared state', () => {
+  it('saves and loads checkpoint with sharedContext and sharedEconomics fields', () => {
+    const store = new SwarmStateStore(tmpDir, 'shared-state-session');
+
+    const checkpoint: SwarmCheckpoint = {
+      sessionId: 'shared-state-session',
+      timestamp: Date.now(),
+      phase: 'executing',
+      taskStates: [{ id: 'a', status: 'completed', attempts: 1, wave: 0 }],
+      waves: [['a']],
+      currentWave: 0,
+      stats: { totalTokens: 5000, totalCost: 0.05, qualityRejections: 0, retries: 0 },
+      modelHealth: [],
+      decisions: [],
+      errors: [],
+      sharedContext: {
+        failures: [{ id: 'f1', action: '[w1] bash', error: 'exit 1', timestamp: '2024-01-01', category: 'runtime', resolved: false, repeatCount: 0 }],
+        references: [['file:/src/a.ts', { id: 'r1', type: 'file', value: '/src/a.ts', timestamp: '2024-01-01' }]],
+        staticPrefix: 'You are a swarm worker agent.',
+      },
+      sharedEconomics: {
+        fingerprints: [
+          { fingerprint: 'read_file:/src/a.ts', count: 3, workers: ['w1', 'w2'] },
+          { fingerprint: 'bash:npm test', count: 7, workers: ['w1', 'w2', 'w3'] },
+        ],
+      },
+    };
+
+    store.saveCheckpoint(checkpoint);
+
+    const loaded = SwarmStateStore.loadLatest(tmpDir, 'shared-state-session');
+    expect(loaded).not.toBeNull();
+    expect(loaded!.sharedContext).toBeDefined();
+    expect(loaded!.sharedContext!.failures).toHaveLength(1);
+    expect(loaded!.sharedContext!.references).toHaveLength(1);
+    expect(loaded!.sharedContext!.staticPrefix).toBe('You are a swarm worker agent.');
+    expect(loaded!.sharedEconomics).toBeDefined();
+    expect(loaded!.sharedEconomics!.fingerprints).toHaveLength(2);
+    expect(loaded!.sharedEconomics!.fingerprints[0].fingerprint).toBe('read_file:/src/a.ts');
+    expect(loaded!.sharedEconomics!.fingerprints[1].workers).toEqual(['w1', 'w2', 'w3']);
+  });
+
+  it('backward compatibility: old checkpoint without shared state loads correctly', () => {
+    const store = new SwarmStateStore(tmpDir, 'old-session');
+
+    // Old-style checkpoint without sharedContext or sharedEconomics
+    const checkpoint: SwarmCheckpoint = {
+      sessionId: 'old-session',
+      timestamp: Date.now(),
+      phase: 'completed',
+      taskStates: [],
+      waves: [],
+      currentWave: 0,
+      stats: { totalTokens: 0, totalCost: 0, qualityRejections: 0, retries: 0 },
+      modelHealth: [],
+      decisions: [],
+      errors: [],
+    };
+
+    store.saveCheckpoint(checkpoint);
+
+    const loaded = SwarmStateStore.loadLatest(tmpDir, 'old-session');
+    expect(loaded).not.toBeNull();
+    expect(loaded!.sharedContext).toBeUndefined();
+    expect(loaded!.sharedEconomics).toBeUndefined();
+  });
+});
+
 describe('TaskQueue checkpoint/restore', () => {
   it('should export and restore checkpoint state', () => {
     const queue = createSwarmTaskQueue();

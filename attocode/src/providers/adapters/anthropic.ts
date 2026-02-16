@@ -21,6 +21,7 @@ import type {
 import { ProviderError } from '../types.js';
 import { registerProvider, hasEnv, requireEnv } from '../provider.js';
 import { resilientFetch, type NetworkConfig } from '../resilient-fetch.js';
+import { logger } from '../../integrations/logger.js';
 
 // =============================================================================
 // ANTHROPIC API TYPES
@@ -119,7 +120,7 @@ export class AnthropicProvider implements LLMProvider, LLMProviderWithTools {
         providerName: this.name,
         networkConfig: this.networkConfig,
         onRetry: (attempt, delay, error) => {
-          console.warn(`[Anthropic] Retry attempt ${attempt} after ${delay}ms: ${error.message}`);
+          logger.warn('Anthropic retry attempt', { attempt, delayMs: delay, error: error.message });
         },
       });
 
@@ -238,7 +239,7 @@ export class AnthropicProvider implements LLMProvider, LLMProviderWithTools {
         providerName: this.name,
         networkConfig: this.networkConfig,
         onRetry: (attempt, delay, error) => {
-          console.warn(`[Anthropic] Retry attempt ${attempt} after ${delay}ms: ${error.message}`);
+          logger.warn('Anthropic retry attempt', { attempt, delayMs: delay, error: error.message });
         },
       });
 

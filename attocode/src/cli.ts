@@ -5,6 +5,7 @@
  */
 
 import type { PermissionMode } from './tools/types.js';
+import { logger } from './integrations/logger.js';
 
 // ANSI color codes for terminal output
 const colors = {
@@ -141,7 +142,7 @@ export function parseArgs(): CLIArgs {
  * Display help text.
  */
 export function showHelp(): void {
-  console.log(`
+  logger.info(`
 ${c('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━', 'dim')}
 ${c('                    ATTOCODE - PRODUCTION CODING AGENT', 'bold')}
 ${c('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━', 'dim')}

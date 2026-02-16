@@ -20,6 +20,7 @@ import type { Message, ToolCall } from '../types.js';
 export interface SessionMetadata {
   id: string;
   name?: string;
+  workspacePath?: string;
   createdAt: string;
   lastActiveAt: string;
   messageCount: number;
@@ -143,6 +144,7 @@ export class SessionStore {
     const metadata: SessionMetadata = {
       id,
       name,
+      workspacePath: process.cwd(),
       createdAt: now,
       lastActiveAt: now,
       messageCount: 0,

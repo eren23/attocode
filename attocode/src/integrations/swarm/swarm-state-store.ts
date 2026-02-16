@@ -8,6 +8,7 @@
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import type { SwarmCheckpoint } from './types.js';
+import type { PersistenceAdapter } from '../../shared/persistence.js';
 
 // ─── Map Serialization ───────────────────────────────────────────────────
 
@@ -34,11 +35,13 @@ export class SwarmStateStore {
   private sessionId: string;
   private sessionDir: string;
   private checkpointCount = 0;
+  private adapter?: PersistenceAdapter;
 
-  constructor(stateDir: string, sessionId?: string) {
+  constructor(stateDir: string, sessionId?: string, adapter?: PersistenceAdapter) {
     this.stateDir = stateDir;
     this.sessionId = sessionId ?? `swarm-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
     this.sessionDir = path.join(stateDir, this.sessionId);
+    this.adapter = adapter;
   }
 
   get id(): string {
@@ -47,6 +50,7 @@ export class SwarmStateStore {
 
   /**
    * Save a checkpoint. Writes both a numbered file and latest.json.
+   * When a PersistenceAdapter is configured, also saves via the adapter.
    */
   saveCheckpoint(checkpoint: SwarmCheckpoint): void {
     fs.mkdirSync(this.sessionDir, { recursive: true });
@@ -61,6 +65,11 @@ export class SwarmStateStore {
     // Write latest.json (overwrites)
     const latestPath = path.join(this.sessionDir, 'latest.json');
     fs.writeFileSync(latestPath, data);
+
+    // Also persist via adapter (fire-and-forget, non-blocking)
+    if (this.adapter) {
+      this.adapter.save('swarm-checkpoints', this.sessionId, checkpoint).catch(() => {});
+    }
   }
 
   /**

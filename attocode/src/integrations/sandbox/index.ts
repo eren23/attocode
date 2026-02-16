@@ -17,6 +17,7 @@ import { SeatbeltSandbox } from './seatbelt.js';
 import { DockerSandbox } from './docker.js';
 import { BasicSandbox } from './basic.js';
 import { LandlockSandbox } from './landlock.js';
+import { logger } from '../logger.js';
 
 // =============================================================================
 // TYPES
@@ -389,7 +390,7 @@ export class SandboxManager {
       const seatbelt = new SeatbeltSandbox(this.config.defaults);
       if (await seatbelt.isAvailable()) {
         if (this.config.verbose) {
-          console.log('[Sandbox] Auto-detected: Seatbelt (macOS)');
+          logger.info('[Sandbox] Auto-detected: Seatbelt (macOS)');
         }
         return seatbelt;
       }
@@ -400,7 +401,7 @@ export class SandboxManager {
       const landlock = new LandlockSandbox(this.config.defaults);
       if (await landlock.isAvailable()) {
         if (this.config.verbose) {
-          console.log('[Sandbox] Auto-detected: Landlock (Linux)');
+          logger.info('[Sandbox] Auto-detected: Landlock (Linux)');
         }
         return landlock;
       }
@@ -410,14 +411,14 @@ export class SandboxManager {
     const docker = new DockerSandbox(this.config.defaults, this.config.dockerImage);
     if (await docker.isAvailable()) {
       if (this.config.verbose) {
-        console.log('[Sandbox] Auto-detected: Docker');
+        logger.info('[Sandbox] Auto-detected: Docker');
       }
       return docker;
     }
 
     // Fall back to basic sandbox
     if (this.config.verbose) {
-      console.log('[Sandbox] Auto-detected: Basic (allowlist-based)');
+      logger.info('[Sandbox] Auto-detected: Basic (allowlist-based)');
     }
     return new BasicSandbox(this.config.defaults);
   }

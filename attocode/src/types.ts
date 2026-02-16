@@ -316,6 +316,20 @@ export interface ProductionAgentConfig {
     targetIterations?: number;
     maxIterations?: number;
   };
+
+  /**
+   * Shared context state for cross-worker failure learning and reference pooling.
+   * Created by SwarmOrchestrator, inherited by workers.
+   * @internal Used for swarm worker coordination
+   */
+  sharedContextState?: unknown; // SharedContextState — using unknown to avoid circular import
+
+  /**
+   * Shared economics state for cross-worker doom loop aggregation.
+   * Created by SwarmOrchestrator, inherited by workers.
+   * @internal Used for swarm worker coordination
+   */
+  sharedEconomicsState?: unknown; // SharedEconomicsState — using unknown to avoid circular import
 }
 
 // =============================================================================
@@ -338,6 +352,9 @@ export interface HooksConfig {
 
   /** Custom hooks */
   custom?: Hook[];
+
+  /** Optional shell hook runner configuration */
+  shell?: HookShellConfig;
 }
 
 export interface Hook {
@@ -348,7 +365,38 @@ export interface Hook {
   priority?: number;
 }
 
+export interface HookShellConfig {
+  /** Enable shell hooks */
+  enabled?: boolean;
+
+  /** Default timeout for shell hooks in ms (default: 5000) */
+  defaultTimeoutMs?: number;
+
+  /** Environment variables allowed to pass through from process.env */
+  envAllowlist?: string[];
+
+  /** Declared shell hooks */
+  commands?: ShellHookCommand[];
+}
+
+export interface ShellHookCommand {
+  id?: string;
+  event: HookEvent;
+  command: string;
+  args?: string[];
+  timeoutMs?: number;
+  priority?: number;
+}
+
 export type HookEvent =
+  | 'run.before'
+  | 'run.after'
+  | 'iteration.before'
+  | 'iteration.after'
+  | 'completion.before'
+  | 'completion.after'
+  | 'recovery.before'
+  | 'recovery.after'
   | 'agent.start'
   | 'agent.end'
   | 'llm.before'
@@ -809,6 +857,7 @@ export interface ThreadsConfig {
 
 /**
  * Cancellation configuration.
+ * @see TimeoutConfig in config/base-types.ts for the shared timeout pattern.
  */
 export interface CancellationConfig {
   /** Enable/disable cancellation support */
@@ -823,6 +872,7 @@ export interface CancellationConfig {
 
 /**
  * Resource monitoring configuration.
+ * @see BudgetConfig in config/base-types.ts for the shared budget pattern.
  */
 export interface ResourceConfig {
   /** Enable/disable resource monitoring */
@@ -869,6 +919,7 @@ export interface LSPAgentConfig {
 /**
  * Semantic cache configuration.
  * Caches LLM responses based on query similarity to avoid redundant calls.
+ * @see BudgetConfig in config/base-types.ts for the shared budget pattern.
  */
 export interface SemanticCacheAgentConfig {
   /** Enable/disable semantic caching */
@@ -1053,6 +1104,31 @@ export interface LLMResilienceAgentConfig {
    * When enabled, completion is blocked until required write tools run.
    */
   enforceRequestedArtifacts?: boolean;
+
+  /**
+   * Auto-run bounded follow-up attempts after incomplete_action/future_intent.
+   * Default: true.
+   */
+  incompleteActionAutoLoop?: boolean;
+
+  /**
+   * Max number of run-level auto-loop attempts for incomplete outcomes.
+   * Default: 2.
+   */
+  maxIncompleteAutoLoops?: number;
+
+  /**
+   * Prompt style for auto-loop guidance.
+   * Default: strict.
+   */
+  autoLoopPromptStyle?: 'strict' | 'concise';
+
+  /**
+   * Staleness threshold for task leases in ms.
+   * In-progress tasks older than this may be requeued to pending at run boundaries.
+   * Default: 300000 (5 minutes).
+   */
+  taskLeaseStaleMs?: number;
 }
 
 /**
@@ -1070,6 +1146,7 @@ export interface FileChangeTrackerAgentConfig {
 /**
  * Subagent configuration.
  * Controls timeout and iteration limits for spawned subagents.
+ * @see TimeoutConfig in config/base-types.ts for the shared timeout pattern.
  */
 export interface SubagentConfig {
   /** Enable/disable subagent spawning */
@@ -1223,6 +1300,37 @@ export interface AgentMetrics {
   retryCount?: number;
 }
 
+export interface OpenTaskSummary {
+  pending: number;
+  inProgress: number;
+  blocked: number;
+}
+
+export interface AgentCompletionStatus {
+  success: boolean;
+  reason:
+    | 'completed'
+    | 'resource_limit'
+    | 'budget_limit'
+    | 'max_iterations'
+    | 'hard_context_limit'
+    | 'incomplete_action'
+    | 'open_tasks'
+    | 'future_intent'
+    | 'swarm_failure'
+    | 'error'
+    | 'cancelled';
+  details?: string;
+  openTasks?: OpenTaskSummary;
+  futureIntentDetected?: boolean;
+  recovery?: {
+    intraRunRetries: number;
+    autoLoopRuns: number;
+    terminal: boolean;
+    reasonChain: string[];
+  };
+}
+
 /**
  * Agent run result.
  */
@@ -1247,6 +1355,9 @@ export interface AgentResult {
 
   /** Plan that was executed (if planning enabled) */
   plan?: AgentPlan;
+
+  /** Structured completion status used by UI and tracing */
+  completion: AgentCompletionStatus;
 }
 
 // =============================================================================
@@ -1257,6 +1368,15 @@ export interface AgentResult {
  * Events emitted during agent execution.
  */
 export type AgentEvent =
+  // Lifecycle hooks
+  | { type: 'run.before'; task: string }
+  | { type: 'run.after'; success: boolean; reason: AgentCompletionStatus['reason']; details?: string }
+  | { type: 'iteration.before'; iteration: number }
+  | { type: 'iteration.after'; iteration: number; hadToolCalls: boolean; completionCandidate: boolean }
+  | { type: 'completion.before'; reason: string; attempt?: number; maxAttempts?: number }
+  | { type: 'completion.after'; success: boolean; reason: AgentCompletionStatus['reason']; details?: string }
+  | { type: 'recovery.before'; reason: string; attempt: number; maxAttempts: number }
+  | { type: 'recovery.after'; reason: string; recovered: boolean; attempts: number }
   // Core events
   | { type: 'start'; task: string; traceId: string }
   | { type: 'planning'; plan: AgentPlan }
@@ -1274,6 +1394,16 @@ export type AgentEvent =
   | { type: 'memory.retrieved'; count: number }
   | { type: 'memory.stored'; memoryType: string }
   | { type: 'error'; error: string; subagent?: string }
+  | {
+      type: 'completion.blocked';
+      reasons: string[];
+      openTasks?: OpenTaskSummary;
+      diagnostics?: {
+        forceTextOnly?: boolean;
+        availableTasks?: number;
+        pendingWithOwner?: number;
+      };
+    }
   | { type: 'complete'; result: AgentResult }
   // ReAct events (Lesson 18)
   | { type: 'react.thought'; step: number; thought: string }
@@ -1292,6 +1422,7 @@ export type AgentEvent =
   | { type: 'grant.used'; grantId: string }
   | { type: 'policy.profile.resolved'; profile: string; context: 'root' | 'subagent' | 'swarm'; selectionSource?: 'explicit' | 'worker-capability' | 'task-type' | 'default'; usedLegacyMappings: boolean; legacySources?: string[] }
   | { type: 'policy.legacy.fallback.used'; profile: string; sources: string[]; warnings: string[] }
+  | { type: 'policy.tool.auto-allowed'; tool: string; reason: string }
   | { type: 'policy.tool.blocked'; tool: string; profile?: string; phase?: 'precheck' | 'enforced'; reason: string }
   | { type: 'policy.bash.blocked'; command: string; profile?: string; phase?: 'precheck' | 'enforced'; reason: string }
   // Thread events (Lesson 24)
@@ -1363,6 +1494,10 @@ export type AgentEvent =
   | { type: 'task.created'; task: { id: string; subject: string; status: string } }
   | { type: 'task.updated'; task: { id: string; subject: string; status: string } }
   | { type: 'task.deleted'; taskId: string }
+  // Safeguard events (tool call explosion defense)
+  | { type: 'safeguard.tool_call_cap'; requested: number; cap: number; droppedCount: number }
+  | { type: 'safeguard.circuit_breaker'; totalInBatch: number; failures: number; threshold: number; skipped: number }
+  | { type: 'safeguard.context_overflow_guard'; estimatedTokens: number; maxTokens: number; toolResultsSkipped: number }
   // Swarm mode events (M8: use union with canonical SwarmEvent type)
   | import('./integrations/swarm/swarm-events.js').SwarmEvent;
 

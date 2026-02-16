@@ -66,12 +66,12 @@ describe('Unified Tracing', () => {
 
       // Verify the view has correct context
       expect(subagentView.isSubagentView()).toBe(true);
-      expect(subagentView.getSubagentContext()).toEqual({
-        parentSessionId: 'parent-session-123',
-        agentType: 'researcher',
-        spawnedAtIteration: 3,
-        subagentId: 'researcher-3',
-      });
+      const context = subagentView.getSubagentContext();
+      expect(context).toBeDefined();
+      expect(context!.parentSessionId).toBe('parent-session-123');
+      expect(context!.agentType).toBe('researcher');
+      expect(context!.spawnedAtIteration).toBe(3);
+      expect(context!.subagentId).toMatch(/^researcher-3-\d+$/);
 
       // Verify it shares the same session ID and output path
       expect(subagentView.getSessionId()).toBe('parent-session-123');
@@ -101,9 +101,13 @@ describe('Unified Tracing', () => {
         spawnedAtIteration: 5,
       });
 
-      expect(view1.getSubagentContext()?.subagentId).toBe('researcher-1');
-      expect(view2.getSubagentContext()?.subagentId).toBe('researcher-5');
-      expect(view3.getSubagentContext()?.subagentId).toBe('coder-5');
+      const id1 = view1.getSubagentContext()?.subagentId;
+      const id2 = view2.getSubagentContext()?.subagentId;
+      const id3 = view3.getSubagentContext()?.subagentId;
+      expect(id1).toMatch(/^researcher-1-\d+$/);
+      expect(id2).toMatch(/^researcher-5-\d+$/);
+      expect(id3).toMatch(/^coder-5-\d+$/);
+      expect(new Set([id1, id2, id3]).size).toBe(3);
 
       await collector.endSession({ success: true });
     });
@@ -152,7 +156,7 @@ describe('Unified Tracing', () => {
         .find(entry => entry._type === 'llm.request' && entry.requestId === 'req-sub-1');
 
       expect(subagentEntry).toBeDefined();
-      expect(subagentEntry.subagentId).toBe('researcher-2');
+      expect(subagentEntry.subagentId).toMatch(/^researcher-2-\d+$/);
       expect(subagentEntry.subagentType).toBe('researcher');
       expect(subagentEntry.parentSessionId).toBe('test-session');
       expect(subagentEntry.spawnedAtIteration).toBe(2);
@@ -323,7 +327,7 @@ describe('Unified Tracing', () => {
       // Subagent metrics
       expect(hierarchy!.subagents).toHaveLength(1);
       const sub = hierarchy!.subagents[0];
-      expect(sub.agentId).toBe('researcher-1');
+      expect(sub.agentId).toMatch(/^researcher-1-\d+$/);
       expect(sub.agentType).toBe('researcher');
       expect(sub.inputTokens).toBe(200);
       expect(sub.outputTokens).toBe(100);

@@ -6,6 +6,7 @@
  */
 
 import type { SwarmWorkerSpec, WorkerCapability, ModelHealthRecord } from './types.js';
+import { logger } from '../logger.js';
 
 // ─── OpenRouter Model API Types ────────────────────────────────────────────
 
@@ -297,7 +298,7 @@ async function fetchOpenRouterModels(apiKey: string): Promise<OpenRouterModel[]>
  * Get fallback worker specs when API detection fails.
  */
 function getFallbackWorkers(orchestratorModel: string): SwarmWorkerSpec[] {
-  console.warn('[swarm] Using hardcoded fallback workers — no workers configured or API detection failed');
+  logger.warn('[swarm] Using hardcoded fallback workers — no workers configured or API detection failed');
   return [
     ...FALLBACK_WORKERS,
     {

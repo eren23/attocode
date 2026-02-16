@@ -21,6 +21,7 @@ import type {
 import { ProviderError } from '../types.js';
 import { registerProvider, hasEnv, requireEnv } from '../provider.js';
 import { resilientFetch, type NetworkConfig } from '../resilient-fetch.js';
+import { logger } from '../../integrations/logger.js';
 
 // =============================================================================
 // DEFAULT MODEL SELECTION
@@ -132,7 +133,7 @@ export class OpenRouterProvider implements LLMProvider, LLMProviderWithTools {
         providerName: this.name,
         networkConfig: this.networkConfig,
         onRetry: (attempt, delay, error) => {
-          console.warn(`[OpenRouter] Retry attempt ${attempt} after ${delay}ms: ${error.message}`);
+          logger.warn('OpenRouter retry attempt', { attempt, delay, error: error.message });
         },
       });
 
@@ -304,7 +305,7 @@ export class OpenRouterProvider implements LLMProvider, LLMProviderWithTools {
         providerName: this.name,
         networkConfig: this.networkConfig,
         onRetry: (attempt, delay, error) => {
-          console.warn(`[OpenRouter] Retry attempt ${attempt} after ${delay}ms: ${error.message}`);
+          logger.warn('OpenRouter retry attempt', { attempt, delay, error: error.message });
         },
       });
 
@@ -353,9 +354,7 @@ export class OpenRouterProvider implements LLMProvider, LLMProviderWithTools {
       }
 
       if (process.env.DEBUG_COST) {
-        console.log('[OpenRouter] Response ID:', data.id);
-        console.log('[OpenRouter] Usage:', JSON.stringify(data.usage));
-        console.log('[OpenRouter] Final cost:', cost);
+        logger.debug('OpenRouter response details', { responseId: data.id, usage: data.usage, cost });
       }
 
       // Extract tool calls if present
@@ -421,7 +420,7 @@ export class OpenRouterProvider implements LLMProvider, LLMProviderWithTools {
 
         if (!response.ok) {
           if (process.env.DEBUG_COST) {
-            console.log(`[OpenRouter] Generation query attempt ${attempt + 1} failed:`, response.status);
+            logger.debug('OpenRouter generation query failed', { attempt: attempt + 1, status: response.status });
           }
           continue; // Retry on non-OK response
         }
@@ -437,8 +436,7 @@ export class OpenRouterProvider implements LLMProvider, LLMProviderWithTools {
         const cost = data.data?.total_cost ?? data.data?.usage;
 
         if (process.env.DEBUG_COST) {
-          console.log(`[OpenRouter] Generation attempt ${attempt + 1}:`, JSON.stringify(data.data));
-          console.log('[OpenRouter] Cost from generation:', cost);
+          logger.debug('OpenRouter generation cost query result', { attempt: attempt + 1, data: data.data, cost });
         }
 
         // If we got a valid cost, return it
@@ -448,17 +446,17 @@ export class OpenRouterProvider implements LLMProvider, LLMProviderWithTools {
 
         // Cost not ready yet, continue to retry
         if (process.env.DEBUG_COST) {
-          console.log(`[OpenRouter] Cost not ready, attempt ${attempt + 1}/${maxRetries}`);
+          logger.debug('OpenRouter cost not ready', { attempt: attempt + 1, maxRetries });
         }
       } catch (err) {
         if (process.env.DEBUG_COST) {
-          console.log(`[OpenRouter] Generation query error attempt ${attempt + 1}:`, err);
+          logger.error('OpenRouter generation query error', { attempt: attempt + 1, error: String(err) });
         }
       }
     }
 
     if (process.env.DEBUG_COST) {
-      console.log('[OpenRouter] Failed to get cost after all retries');
+      logger.warn('OpenRouter failed to get cost after all retries', { generationId, maxRetries });
     }
     return undefined;
   }
@@ -520,6 +518,7 @@ export class OpenRouterProvider implements LLMProvider, LLMProviderWithTools {
 
     if (status === 401) code = 'AUTHENTICATION_FAILED';
     else if (status === 429) code = 'RATE_LIMITED';
+    else if (status === 402) code = 'RATE_LIMITED';
     else if (status === 400) {
       if (body.includes('context_length')) {
         code = 'CONTEXT_LENGTH_EXCEEDED';

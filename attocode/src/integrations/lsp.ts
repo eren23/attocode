@@ -14,6 +14,7 @@
 import { spawn, type ChildProcess } from 'child_process';
 import * as fs from 'fs';
 import * as path from 'path';
+import { logger } from './logger.js';
 
 // =============================================================================
 // TYPES
@@ -235,16 +236,16 @@ class LSPClient {
 
     this.process.stderr?.on('data', (data: Buffer) => {
       // Log but don't fail on stderr
-      console.debug(`[LSP ${this.config.languageId}] ${data.toString().trim()}`);
+      logger.debug(`[LSP ${this.config.languageId}] ${data.toString().trim()}`);
     });
 
     this.process.on('exit', (code) => {
       this.initialized = false;
-      console.debug(`[LSP ${this.config.languageId}] exited with code ${code}`);
+      logger.debug(`[LSP ${this.config.languageId}] exited with code ${code}`);
     });
 
     this.process.on('error', (err) => {
-      console.error(`[LSP ${this.config.languageId}] error:`, err.message);
+      logger.error(`[LSP ${this.config.languageId}] error:`, { error: err.message });
     });
 
     // Initialize
@@ -460,7 +461,7 @@ class LSPClient {
         const message = JSON.parse(content) as LSPMessage;
         this.handleMessage(message);
       } catch {
-        console.error('[LSP] Failed to parse message');
+        logger.error('[LSP] Failed to parse message');
       }
     }
   }
