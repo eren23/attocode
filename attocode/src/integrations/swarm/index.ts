@@ -64,9 +64,12 @@ export { SwarmThrottle, ThrottledProvider, createThrottledProvider } from './req
 export type { ThrottleConfig, ThrottleStats } from './request-throttle.js';
 export { FREE_TIER_THROTTLE, PAID_TIER_THROTTLE } from './request-throttle.js';
 
+// Helpers (extracted to break circular dependency)
+export { isHollowCompletion, FAILURE_INDICATORS, hasFutureIntentLanguage, BOILERPLATE_INDICATORS, repoLooksUnscaffolded } from './swarm-helpers.js';
+export type { SwarmEventListener } from './swarm-helpers.js';
+
 // Orchestrator
 export { SwarmOrchestrator, createSwarmOrchestrator } from './swarm-orchestrator.js';
-export type { SwarmEventListener } from './swarm-orchestrator.js';
 
 // Event Bridge (file-based dashboard integration)
 export { SwarmEventBridge } from './swarm-event-bridge.js';

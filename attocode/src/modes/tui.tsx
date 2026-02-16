@@ -13,7 +13,7 @@
  * - Session persistence with checkpoints
  */
 
-import { createProductionAgent } from '../agent.js';
+import { createProductionAgent } from '../agent/index.js';
 import { ProviderAdapter, convertToolsFromRegistry, createTUIApprovalBridge } from '../adapters.js';
 import { createStandardRegistry } from '../tools/standard.js';
 import { TUIPermissionChecker } from '../tools/permission.js';

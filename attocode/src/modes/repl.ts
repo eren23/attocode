@@ -8,7 +8,7 @@
 import * as readline from 'node:readline/promises';
 import { stdin, stdout } from 'node:process';
 
-import { createProductionAgent } from '../agent.js';
+import { createProductionAgent } from '../agent/index.js';
 import { ProviderAdapter, convertToolsFromRegistry, createInteractiveApprovalHandler } from '../adapters.js';
 import { createStandardRegistry } from '../tools/standard.js';
 import type { LLMProviderWithTools } from '../providers/types.js';

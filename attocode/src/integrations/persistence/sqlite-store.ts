@@ -4,6 +4,11 @@
  * Alternative backend for session persistence using SQLite.
  * Provides better query performance and ACID guarantees.
  *
+ * Implementation is split across repository modules:
+ * - session-repository.ts: Session CRUD, checkpoints, costs, hierarchy, plans, permissions, manifest
+ * - goal-repository.ts: Goals + junctures
+ * - worker-repository.ts: Worker results + artifacts
+ *
  * @example
  * ```typescript
  * const store = await createSQLiteStore({ dbPath: '.agent/sessions.db' });
@@ -15,12 +20,10 @@
 import Database from 'better-sqlite3';
 import { join, dirname } from 'node:path';
 import { mkdir } from 'node:fs/promises';
-import { existsSync, readFileSync, mkdirSync } from 'node:fs';
+import { existsSync, mkdirSync } from 'node:fs';
 import type { Message, ToolCall } from '../../types.js';
-import { logger } from '../utilities/logger.js';
 import type {
   SessionEntry,
-  SessionEntryType,
   SessionEvent,
   SessionEventListener,
   SessionStoreConfig,
@@ -31,7 +34,12 @@ import {
   detectFeatures,
   type SchemaFeatures,
 } from '../../persistence/schema.js';
-import type { PendingPlan, ProposedChange } from '../tasks/pending-plan.js';
+import type { PendingPlan } from '../tasks/pending-plan.js';
+
+// Repository modules (extracted implementation)
+import * as sessionRepo from './session-repository.js';
+import * as goalRepo from './goal-repository.js';
+import * as workerRepo from './worker-repository.js';
 
 // =============================================================================
 // TYPES
@@ -233,6 +241,80 @@ export interface SessionManifest {
   };
 }
 
+/**
+ * Dependency interface exposed to repository modules.
+ * Provides access to the DB handle, prepared statements, features,
+ * and shared helpers without exposing the full SQLiteStore class.
+ */
+export interface SQLiteStoreDeps {
+  /** The underlying better-sqlite3 database instance */
+  db: Database.Database;
+  /** Prepared SQL statements */
+  stmts: PreparedStatements;
+  /** Detected schema features */
+  features: SchemaFeatures;
+  /** Store configuration */
+  config: Required<SQLiteStoreConfig>;
+  /** Get the current session ID */
+  getCurrentSessionId(): string | null;
+  /** Set the current session ID (null to clear) */
+  setCurrentSessionId(sessionId: string | null): void;
+  /** Emit an event to listeners */
+  emit(event: SessionEvent): void;
+  /** Ensure a session exists (creates one if needed) */
+  ensureSession(): void;
+}
+
+/**
+ * Prepared SQL statements for the SQLite store.
+ */
+export interface PreparedStatements {
+  // Core statements (always available)
+  insertSession: Database.Statement;
+  updateSession: Database.Statement;
+  deleteSession: Database.Statement;
+  getSession: Database.Statement;
+  listSessions: Database.Statement;
+  insertEntry: Database.Statement;
+  getEntries: Database.Statement;
+  insertToolCall: Database.Statement;
+  updateToolCall: Database.Statement;
+  insertCheckpoint: Database.Statement;
+  getLatestCheckpoint: Database.Statement;
+  // Cost tracking statements
+  insertUsageLog: Database.Statement;
+  updateSessionCosts: Database.Statement;
+  getSessionUsage: Database.Statement;
+  // Session hierarchy statements
+  insertChildSession: Database.Statement;
+  getChildSessions: Database.Statement;
+  getSessionTree: Database.Statement;
+  // Goal integrity statements (optional - only if goals feature available)
+  insertGoal?: Database.Statement;
+  updateGoal?: Database.Statement;
+  getGoal?: Database.Statement;
+  listGoals?: Database.Statement;
+  listActiveGoals?: Database.Statement;
+  insertJuncture?: Database.Statement;
+  listJunctures?: Database.Statement;
+  // Worker result statements (optional - only if workerResults feature available)
+  insertWorkerResult?: Database.Statement;
+  updateWorkerResult?: Database.Statement;
+  getWorkerResult?: Database.Statement;
+  listWorkerResults?: Database.Statement;
+  listPendingWorkerResults?: Database.Statement;
+  // Pending plan statements (optional - only if pendingPlans feature available)
+  insertPendingPlan?: Database.Statement;
+  updatePendingPlan?: Database.Statement;
+  getPendingPlan?: Database.Statement;
+  deletePendingPlan?: Database.Statement;
+  // Remembered permissions statements (optional - only if rememberedPermissions feature available)
+  insertRememberedPermission?: Database.Statement;
+  getRememberedPermission?: Database.Statement;
+  listRememberedPermissions?: Database.Statement;
+  deleteRememberedPermission?: Database.Statement;
+}
+
 // =============================================================================
 // SQLITE STORE
 // =============================================================================
@@ -261,53 +343,7 @@ export class SQLiteStore {
   };
 
   // Prepared statements for performance
-  // Goal-related statements are optional (only prepared if feature is available)
-  private stmts!: {
-    // Core statements (always available)
-    insertSession: Database.Statement;
-    updateSession: Database.Statement;
-    deleteSession: Database.Statement;
-    getSession: Database.Statement;
-    listSessions: Database.Statement;
-    insertEntry: Database.Statement;
-    getEntries: Database.Statement;
-    insertToolCall: Database.Statement;
-    updateToolCall: Database.Statement;
-    insertCheckpoint: Database.Statement;
-    getLatestCheckpoint: Database.Statement;
-    // Cost tracking statements
-    insertUsageLog: Database.Statement;
-    updateSessionCosts: Database.Statement;
-    getSessionUsage: Database.Statement;
-    // Session hierarchy statements
-    insertChildSession: Database.Statement;
-    getChildSessions: Database.Statement;
-    getSessionTree: Database.Statement;
-    // Goal integrity statements (optional - only if goals feature available)
-    insertGoal?: Database.Statement;
-    updateGoal?: Database.Statement;
-    getGoal?: Database.Statement;
-    listGoals?: Database.Statement;
-    listActiveGoals?: Database.Statement;
-    insertJuncture?: Database.Statement;
-    listJunctures?: Database.Statement;
-    // Worker result statements (optional - only if workerResults feature available)
-    insertWorkerResult?: Database.Statement;
-    updateWorkerResult?: Database.Statement;
-    getWorkerResult?: Database.Statement;
-    listWorkerResults?: Database.Statement;
-    listPendingWorkerResults?: Database.Statement;
-    // Pending plan statements (optional - only if pendingPlans feature available)
-    insertPendingPlan?: Database.Statement;
-    updatePendingPlan?: Database.Statement;
-    getPendingPlan?: Database.Statement;
-    deletePendingPlan?: Database.Statement;
-    // Remembered permissions statements (optional - only if rememberedPermissions feature available)
-    insertRememberedPermission?: Database.Statement;
-    getRememberedPermission?: Database.Statement;
-    listRememberedPermissions?: Database.Statement;
-    deleteRememberedPermission?: Database.Statement;
-  };
+  private stmts!: PreparedStatements;
 
   constructor(config: SQLiteStoreConfig = {}) {
     this.config = {
@@ -335,6 +371,22 @@ export class SQLiteStore {
 
     // Enable foreign keys
     this.db.pragma('foreign_keys = ON');
+  }
+
+  /**
+   * Get the deps object for repository modules.
+   */
+  private get deps(): SQLiteStoreDeps {
+    return {
+      db: this.db,
+      stmts: this.stmts,
+      features: this.features,
+      config: this.config,
+      getCurrentSessionId: () => this.currentSessionId,
+      setCurrentSessionId: (id: string | null) => { this.currentSessionId = id; },
+      emit: (event: SessionEvent) => this.emit(event),
+      ensureSession: () => { this.createSession(); },
+    };
   }
 
   /**
@@ -687,322 +739,88 @@ export class SQLiteStore {
   }
 
   // ===========================================================================
-  // SESSION MANAGEMENT (compatible with SessionStore interface)
+  // SESSION MANAGEMENT (delegates to session-repository.ts)
   // ===========================================================================
 
-  /**
-   * Create a new session.
-   */
   createSession(name?: string): string {
-    const id = `session-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`;
-    const now = new Date().toISOString();
-
-    this.stmts.insertSession.run({
-      id,
-      name: name || null,
-      workspacePath: process.cwd(),
-      workspaceFingerprint: null,
-      createdAt: now,
-      lastActiveAt: now,
-      messageCount: 0,
-      tokenCount: 0,
-    });
-
-    this.currentSessionId = id;
-
-    // Prune old sessions
-    this.pruneOldSessions();
-
-    this.emit({ type: 'session.created', sessionId: id });
-    return id;
+    return sessionRepo.createSession(this.deps, name);
   }
 
-  /**
-   * Get current session ID.
-   */
   getCurrentSessionId(): string | null {
     return this.currentSessionId;
   }
 
-  /**
-   * Set current session ID.
-   */
   setCurrentSessionId(sessionId: string): void {
     this.currentSessionId = sessionId;
   }
 
-  /**
-   * Append an entry to the current session.
-   */
   appendEntry(entry: Omit<SessionEntry, 'timestamp'>): void {
-    if (!this.currentSessionId) {
-      this.createSession();
-    }
-
-    const timestamp = new Date().toISOString();
-
-    this.stmts.insertEntry.run({
-      sessionId: this.currentSessionId,
-      timestamp,
-      type: entry.type,
-      data: JSON.stringify(entry.data),
-    });
-
-    // Update session metadata
-    if (entry.type === 'message') {
-      const msg = entry.data as Message;
-
-      // Set summary from first user message (for session picker display)
-      if (msg.role === 'user' && typeof msg.content === 'string') {
-        // Only set if no summary yet
-        const session = this.stmts.getSession.get(this.currentSessionId) as SessionMetadata | undefined;
-        if (session && !session.summary) {
-          // Extract first line or first ~50 chars as summary
-          const firstLine = msg.content.split('\n')[0].trim();
-          const summary = firstLine.length > 60 ? firstLine.slice(0, 57) + '...' : firstLine;
-          this.db.prepare(`UPDATE sessions SET summary = ? WHERE id = ?`).run(summary, this.currentSessionId);
-        }
-      }
-
-      this.db.prepare(`
-        UPDATE sessions SET
-          last_active_at = ?,
-          message_count = message_count + 1
-        WHERE id = ?
-      `).run(timestamp, this.currentSessionId);
-    } else {
-      this.db.prepare(`
-        UPDATE sessions SET last_active_at = ? WHERE id = ?
-      `).run(timestamp, this.currentSessionId);
-    }
-
-    this.emit({ type: 'entry.appended', sessionId: this.currentSessionId!, entryType: entry.type });
+    sessionRepo.appendEntry(this.deps, entry);
   }
 
-  /**
-   * Append a message to the current session.
-   */
   appendMessage(message: Message): void {
-    this.appendEntry({ type: 'message', data: message });
+    sessionRepo.appendMessage(this.deps, message);
   }
 
-  /**
-   * Append a tool call to the current session.
-   */
   appendToolCall(toolCall: ToolCall): void {
-    this.appendEntry({ type: 'tool_call', data: toolCall });
-
-    // Also insert into tool_calls table for fast lookup
-    if ('id' in toolCall && toolCall.id) {
-      this.stmts.insertToolCall.run({
-        id: toolCall.id,
-        sessionId: this.currentSessionId,
-        name: toolCall.name,
-        arguments: JSON.stringify(toolCall.arguments),
-        status: 'pending',
-        createdAt: new Date().toISOString(),
-      });
-    }
+    sessionRepo.appendToolCall(this.deps, toolCall);
   }
 
-  /**
-   * Append a tool result to the current session.
-   */
   appendToolResult(callId: string, result: unknown): void {
-    this.appendEntry({ type: 'tool_result', data: { callId, result } });
-
-    // Update tool_calls table
-    this.stmts.updateToolCall.run({
-      id: callId,
-      status: 'success',
-      result: JSON.stringify(result),
-      error: null,
-      durationMs: null,
-      completedAt: new Date().toISOString(),
-    });
+    sessionRepo.appendToolResult(this.deps, callId, result);
   }
 
-  /**
-   * Append a compaction summary.
-   */
   appendCompaction(summary: string, compactedCount: number): void {
-    this.appendEntry({
-      type: 'compaction',
-      data: { summary, compactedCount, compactedAt: new Date().toISOString() },
-    });
+    sessionRepo.appendCompaction(this.deps, summary, compactedCount);
   }
 
-  /**
-   * Load a session by ID.
-   */
   loadSession(sessionId: string): SessionEntry[] {
-    const rows = this.stmts.getEntries.all(sessionId) as Array<{
-      timestamp: string;
-      type: string;
-      data: string;
-    }>;
-
-    const entries: SessionEntry[] = rows.map(row => ({
-      timestamp: row.timestamp,
-      type: row.type as SessionEntryType,
-      data: JSON.parse(row.data),
-    }));
-
-    this.currentSessionId = sessionId;
-    this.emit({ type: 'session.loaded', sessionId, entryCount: entries.length });
-
-    return entries;
+    return sessionRepo.loadSession(this.deps, sessionId);
   }
 
-  /**
-   * Reconstruct messages from session entries.
-   */
   loadSessionMessages(sessionId: string): Message[] {
-    const entries = this.loadSession(sessionId);
-    const messages: Message[] = [];
-
-    for (const entry of entries) {
-      if (entry.type === 'message') {
-        messages.push(entry.data as Message);
-      } else if (entry.type === 'compaction') {
-        const compaction = entry.data as { summary: string };
-        messages.push({
-          role: 'system',
-          content: `[Previous conversation summary]\n${compaction.summary}`,
-        });
-      }
-    }
-
-    return messages;
+    return sessionRepo.loadSessionMessages(this.deps, sessionId);
   }
 
-  /**
-   * Delete a session.
-   */
   deleteSession(sessionId: string): void {
-    this.stmts.deleteSession.run(sessionId);
-
-    if (this.currentSessionId === sessionId) {
-      this.currentSessionId = null;
-    }
-
-    this.emit({ type: 'session.deleted', sessionId });
+    sessionRepo.deleteSession(this.deps, sessionId);
   }
 
-  /**
-   * List all sessions.
-   */
   listSessions(): SessionMetadata[] {
-    const sessions = this.stmts.listSessions.all() as SessionMetadata[];
-
-    // Check checkpoints for sessions with 0 message count (same pattern as exportSessionManifest)
-    for (const session of sessions) {
-      if (session.messageCount === 0) {
-        const checkpoint = this.loadLatestCheckpoint(session.id);
-        if (checkpoint?.state?.messages && Array.isArray(checkpoint.state.messages)) {
-          session.messageCount = checkpoint.state.messages.length;
-        }
-      }
-    }
-
-    return sessions;
+    return sessionRepo.listSessions(this.deps);
   }
 
-  /**
-   * Get the most recent session.
-   */
   getRecentSession(): SessionMetadata | null {
-    const sessions = this.listSessions();
-    return sessions[0] || null;
+    return sessionRepo.getRecentSession(this.deps);
   }
 
-  /**
-   * Get session metadata by ID.
-   */
   getSessionMetadata(sessionId: string): SessionMetadata | undefined {
-    return this.stmts.getSession.get(sessionId) as SessionMetadata | undefined;
+    return sessionRepo.getSessionMetadata(this.deps, sessionId);
   }
 
-  /**
-   * Update session metadata.
-   */
   updateSessionMetadata(
     sessionId: string,
     updates: Partial<Pick<SessionMetadata, 'name' | 'summary' | 'tokenCount'>>
   ): void {
-    this.stmts.updateSession.run({
-      id: sessionId,
-      name: updates.name || null,
-      lastActiveAt: null,
-      messageCount: null,
-      tokenCount: updates.tokenCount || null,
-      summary: updates.summary || null,
-    });
+    sessionRepo.updateSessionMetadata(this.deps, sessionId, updates);
   }
 
   // ===========================================================================
-  // SQLITE-SPECIFIC FEATURES
+  // SQLITE-SPECIFIC FEATURES (delegates to session-repository.ts)
   // ===========================================================================
 
-  /**
-   * Save a checkpoint for state restoration.
-   */
   saveCheckpoint(state: Record<string, unknown>, description?: string): string {
-    if (!this.currentSessionId) {
-      this.createSession();
-    }
-
-    const id = `ckpt-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`;
-
-    this.stmts.insertCheckpoint.run({
-      id,
-      sessionId: this.currentSessionId,
-      stateJson: JSON.stringify(state),
-      createdAt: new Date().toISOString(),
-      description: description || null,
-    });
-
-    // Update message_count in sessions table to match checkpoint
-    if (state.messages && Array.isArray(state.messages)) {
-      this.db.prepare(`
-        UPDATE sessions SET message_count = ? WHERE id = ?
-      `).run(state.messages.length, this.currentSessionId);
-    }
-
-    return id;
+    return sessionRepo.saveCheckpoint(this.deps, state, description);
   }
 
-  /**
-   * Load the latest checkpoint for a session.
-   */
   loadLatestCheckpoint(sessionId: string): { id: string; state: Record<string, unknown>; createdAt: string; description?: string } | null {
-    const row = this.stmts.getLatestCheckpoint.get(sessionId) as {
-      id: string;
-      stateJson: string;
-      createdAt: string;
-      description: string | null;
-    } | undefined;
-
-    if (!row) return null;
-
-    return {
-      id: row.id,
-      state: JSON.parse(row.stateJson),
-      createdAt: row.createdAt,
-      description: row.description ?? undefined,
-    };
+    return sessionRepo.loadLatestCheckpoint(this.deps, sessionId);
   }
 
-  /**
-   * Query entries with SQL (advanced usage).
-   */
   query<T = unknown>(sql: string, params: unknown[] = []): T[] {
-    return this.db.prepare(sql).all(...params) as T[];
+    return sessionRepo.query<T>(this.deps, sql, params);
   }
 
-  /**
-   * Get database statistics.
-   */
   getStats(): {
     sessionCount: number;
     entryCount: number;
@@ -1010,128 +828,49 @@ export class SQLiteStore {
     checkpointCount: number;
     dbSizeBytes: number;
   } {
-    const sessionCount = (this.db.prepare('SELECT COUNT(*) as count FROM sessions').get() as { count: number }).count;
-    const entryCount = (this.db.prepare('SELECT COUNT(*) as count FROM entries').get() as { count: number }).count;
-    const toolCallCount = (this.db.prepare('SELECT COUNT(*) as count FROM tool_calls').get() as { count: number }).count;
-    const checkpointCount = (this.db.prepare('SELECT COUNT(*) as count FROM checkpoints').get() as { count: number }).count;
-    const dbSizeBytes = (this.db.prepare('SELECT page_count * page_size as size FROM pragma_page_count(), pragma_page_size()').get() as { size: number }).size;
-
-    return { sessionCount, entryCount, toolCallCount, checkpointCount, dbSizeBytes };
+    return sessionRepo.getStats(this.deps);
   }
 
-  /**
-   * Get the underlying database instance.
-   * Useful for integrations that need direct database access (e.g., DeadLetterQueue).
-   */
   getDatabase(): Database.Database {
     return this.db;
   }
 
   // ===========================================================================
-  // COST TRACKING
+  // COST TRACKING (delegates to session-repository.ts)
   // ===========================================================================
 
-  /**
-   * Log API usage for cost tracking.
-   * Inserts a usage log entry and updates session totals atomically.
-   */
   logUsage(usage: UsageLog): void {
-    // Use transaction to ensure atomicity of insert + update
-    this.db.transaction(() => {
-      // Insert into usage_logs table
-      this.stmts.insertUsageLog.run({
-        sessionId: usage.sessionId,
-        modelId: usage.modelId,
-        promptTokens: usage.promptTokens,
-        completionTokens: usage.completionTokens,
-        costUsd: usage.costUsd,
-        timestamp: usage.timestamp,
-      });
-
-      // Update session totals
-      this.stmts.updateSessionCosts.run({
-        sessionId: usage.sessionId,
-        promptTokens: usage.promptTokens,
-        completionTokens: usage.completionTokens,
-        costUsd: usage.costUsd,
-      });
-    })();
+    sessionRepo.logUsage(this.deps, usage);
   }
 
-  /**
-   * Get aggregated usage for a session.
-   */
   getSessionUsage(sessionId: string): { promptTokens: number; completionTokens: number; costUsd: number } {
-    const result = this.stmts.getSessionUsage.get(sessionId) as {
-      promptTokens: number;
-      completionTokens: number;
-      costUsd: number;
-    } | undefined;
-
-    return result || { promptTokens: 0, completionTokens: 0, costUsd: 0 };
+    return sessionRepo.getSessionUsage(this.deps, sessionId);
   }
 
   // ===========================================================================
-  // SESSION HIERARCHY
+  // SESSION HIERARCHY (delegates to session-repository.ts)
   // ===========================================================================
 
-  /**
-   * Create a child session linked to a parent.
-   */
   createChildSession(parentId: string, name?: string, type: SessionType = 'subagent'): string {
-    const id = `session-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`;
-    const now = new Date().toISOString();
-
-    this.stmts.insertChildSession.run({
-      id,
-      name: name || null,
-      workspacePath: process.cwd(),
-      workspaceFingerprint: null,
-      createdAt: now,
-      lastActiveAt: now,
-      messageCount: 0,
-      tokenCount: 0,
-      parentSessionId: parentId,
-      sessionType: type,
-    });
-
-    this.emit({ type: 'session.created', sessionId: id });
-    return id;
+    return sessionRepo.createChildSession(this.deps, parentId, name, type);
   }
 
-  /**
-   * Get all direct child sessions of a parent.
-   */
   getChildSessions(parentId: string): SessionMetadata[] {
-    return this.stmts.getChildSessions.all(parentId) as SessionMetadata[];
+    return sessionRepo.getChildSessions(this.deps, parentId);
   }
 
-  /**
-   * Get the full session tree starting from a root session.
-   * Uses a recursive CTE to traverse the hierarchy.
-   */
   getSessionTree(rootId: string): SessionMetadata[] {
-    const rows = this.stmts.getSessionTree.all(rootId) as Array<SessionMetadata & { depth: number }>;
-    // Remove the depth field from results (used only for ordering)
-    return rows.map(({ depth, ...session }) => session);
+    return sessionRepo.getSessionTree(this.deps, rootId);
   }
 
   // ===========================================================================
-  // GOAL INTEGRITY
+  // GOAL INTEGRITY (delegates to goal-repository.ts)
   // ===========================================================================
 
-  /**
-   * Check if goals feature is available.
-   */
   hasGoalsFeature(): boolean {
     return this.features.goals;
   }
 
-  /**
-   * Create a new goal for the current session.
-   * Goals persist outside of context and survive compaction.
-   * Returns undefined if goals feature is not available.
-   */
   createGoal(
     goalText: string,
     options: {
@@ -1141,37 +880,9 @@ export class SQLiteStore {
       metadata?: Record<string, unknown>;
     } = {}
   ): string | undefined {
-    if (!this.features.goals || !this.stmts.insertGoal) {
-      return undefined;
-    }
-
-    if (!this.currentSessionId) {
-      this.createSession();
-    }
-
-    const id = `goal-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`;
-    const now = new Date().toISOString();
-
-    this.stmts.insertGoal.run({
-      id,
-      sessionId: this.currentSessionId,
-      goalText,
-      status: 'active',
-      priority: options.priority ?? 2,
-      parentGoalId: options.parentGoalId ?? null,
-      progressCurrent: 0,
-      progressTotal: options.progressTotal ?? null,
-      createdAt: now,
-      updatedAt: now,
-      metadata: options.metadata ? JSON.stringify(options.metadata) : null,
-    });
-
-    return id;
+    return goalRepo.createGoal(this.deps, goalText, options);
   }
 
-  /**
-   * Update a goal's status or progress.
-   */
   updateGoal(
     goalId: string,
     updates: {
@@ -1183,95 +894,29 @@ export class SQLiteStore {
       metadata?: Record<string, unknown>;
     }
   ): void {
-    if (!this.features.goals || !this.stmts.updateGoal) {
-      return;
-    }
-
-    const now = new Date().toISOString();
-
-    this.stmts.updateGoal.run({
-      id: goalId,
-      goalText: updates.goalText ?? null,
-      status: updates.status ?? null,
-      priority: updates.priority ?? null,
-      progressCurrent: updates.progressCurrent ?? null,
-      progressTotal: updates.progressTotal ?? null,
-      updatedAt: now,
-      completedAt: updates.status === 'completed' || updates.status === 'abandoned' ? now : null,
-      metadata: updates.metadata ? JSON.stringify(updates.metadata) : null,
-    });
+    goalRepo.updateGoal(this.deps, goalId, updates);
   }
 
-  /**
-   * Mark a goal as completed.
-   */
   completeGoal(goalId: string): void {
-    this.updateGoal(goalId, { status: 'completed' });
+    goalRepo.completeGoal(this.deps, goalId);
   }
 
-  /**
-   * Get a goal by ID.
-   */
   getGoal(goalId: string): Goal | undefined {
-    if (!this.features.goals || !this.stmts.getGoal) {
-      return undefined;
-    }
-    return this.stmts.getGoal.get(goalId) as Goal | undefined;
+    return goalRepo.getGoal(this.deps, goalId);
   }
 
-  /**
-   * List all goals for a session.
-   */
   listGoals(sessionId?: string): Goal[] {
-    if (!this.features.goals || !this.stmts.listGoals) {
-      return [];
-    }
-    const sid = sessionId ?? this.currentSessionId;
-    if (!sid) return [];
-    return this.stmts.listGoals.all(sid) as Goal[];
+    return goalRepo.listGoals(this.deps, sessionId);
   }
 
-  /**
-   * List active goals for a session.
-   */
   listActiveGoals(sessionId?: string): Goal[] {
-    if (!this.features.goals || !this.stmts.listActiveGoals) {
-      return [];
-    }
-    const sid = sessionId ?? this.currentSessionId;
-    if (!sid) return [];
-    return this.stmts.listActiveGoals.all(sid) as Goal[];
+    return goalRepo.listActiveGoals(this.deps, sessionId);
   }
 
-  /**
-   * Get a summary of the current goals for context injection.
-   * This is what gets recited to maintain goal awareness.
-   */
   getGoalsSummary(sessionId?: string): string {
-    if (!this.features.goals) {
-      return 'Goals feature not available.';
-    }
-
-    const goals = this.listActiveGoals(sessionId);
-    if (goals.length === 0) {
-      return 'No active goals.';
-    }
-
-    const lines: string[] = ['Active Goals:'];
-    for (const goal of goals) {
-      const progress = goal.progressTotal
-        ? ` (${goal.progressCurrent}/${goal.progressTotal})`
-        : '';
-      const priority = goal.priority === 1 ? ' [HIGH]' : goal.priority === 3 ? ' [low]' : '';
-      lines.push(`• ${goal.goalText}${progress}${priority}`);
-    }
-    return lines.join('\n');
+    return goalRepo.getGoalsSummary(this.deps, sessionId);
   }
 
-  /**
-   * Log a critical juncture (decision, failure, breakthrough, pivot).
-   * Returns -1 if goals feature is not available.
-   */
   logJuncture(
     type: JunctureType,
     description: string,
@@ -1282,123 +927,33 @@ export class SQLiteStore {
       context?: Record<string, unknown>;
     } = {}
   ): number {
-    if (!this.features.goals || !this.stmts.insertJuncture) {
-      return -1;
-    }
-
-    if (!this.currentSessionId) {
-      this.createSession();
-    }
-
-    const result = this.stmts.insertJuncture.run({
-      sessionId: this.currentSessionId,
-      goalId: options.goalId ?? null,
-      type,
-      description,
-      outcome: options.outcome ?? null,
-      importance: options.importance ?? 2,
-      context: options.context ? JSON.stringify(options.context) : null,
-      createdAt: new Date().toISOString(),
-    });
-
-    return Number(result.lastInsertRowid);
+    return goalRepo.logJuncture(this.deps, type, description, options);
   }
 
-  /**
-   * List junctures for a session.
-   */
   listJunctures(sessionId?: string, limit?: number): Juncture[] {
-    if (!this.features.goals || !this.stmts.listJunctures) {
-      return [];
-    }
-
-    const sid = sessionId ?? this.currentSessionId;
-    if (!sid) return [];
-
-    const junctures = this.stmts.listJunctures.all(sid) as Juncture[];
-    return limit ? junctures.slice(0, limit) : junctures;
+    return goalRepo.listJunctures(this.deps, sessionId, limit);
   }
 
-  /**
-   * Get recent critical junctures for context.
-   */
   getJuncturesSummary(sessionId?: string, limit: number = 5): string {
-    if (!this.features.goals) {
-      return '';
-    }
-
-    const junctures = this.listJunctures(sessionId, limit);
-    if (junctures.length === 0) {
-      return '';
-    }
-
-    const lines: string[] = ['Recent Key Moments:'];
-    for (const j of junctures) {
-      const icon = j.type === 'failure' ? '✗' : j.type === 'breakthrough' ? '★' :
-                   j.type === 'decision' ? '→' : '↻';
-      lines.push(`${icon} [${j.type}] ${j.description}`);
-      if (j.outcome) {
-        lines.push(`  └─ ${j.outcome}`);
-      }
-    }
-    return lines.join('\n');
+    return goalRepo.getJuncturesSummary(this.deps, sessionId, limit);
   }
 
   // ===========================================================================
-  // WORKER RESULTS
+  // WORKER RESULTS (delegates to worker-repository.ts)
   // ===========================================================================
 
-  /**
-   * Check if worker results feature is available.
-   */
   hasWorkerResultsFeature(): boolean {
     return this.features.workerResults;
   }
 
-  /**
-   * Create a pending worker result entry.
-   * Call this when spawning a worker to reserve the result slot.
-   * Returns the result ID for later reference.
-   */
   createWorkerResult(
     workerId: string,
     taskDescription: string,
     modelUsed?: string
   ): string | undefined {
-    if (!this.features.workerResults || !this.stmts.insertWorkerResult) {
-      return undefined;
-    }
-
-    if (!this.currentSessionId) {
-      this.createSession();
-    }
-
-    const id = `wr-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`;
-    const now = new Date().toISOString();
-
-    this.stmts.insertWorkerResult.run({
-      id,
-      sessionId: this.currentSessionId,
-      workerId,
-      taskDescription,
-      modelUsed: modelUsed ?? null,
-      status: 'pending',
-      summary: null,
-      fullOutput: null,
-      artifacts: null,
-      metrics: null,
-      error: null,
-      createdAt: now,
-      completedAt: null,
-    });
-
-    return id;
+    return workerRepo.createWorkerResult(this.deps, workerId, taskDescription, modelUsed);
   }
 
-  /**
-   * Complete a worker result with output.
-   * Stores full output in database, generates summary for context injection.
-   */
   completeWorkerResult(
     resultId: string,
     output: {
@@ -1408,675 +963,129 @@ export class SQLiteStore {
       metrics?: { tokens?: number; duration?: number; toolCalls?: number };
     }
   ): WorkerResultRef | undefined {
-    if (!this.features.workerResults || !this.stmts.updateWorkerResult) {
-      return undefined;
-    }
-
-    const now = new Date().toISOString();
-
-    // Auto-generate summary if not provided (first 200 chars)
-    const summary = output.summary ?? this.generateResultSummary(output.fullOutput);
-
-    this.stmts.updateWorkerResult.run({
-      id: resultId,
-      status: 'success',
-      summary,
-      fullOutput: output.fullOutput,
-      artifacts: output.artifacts ? JSON.stringify(output.artifacts) : null,
-      metrics: output.metrics ? JSON.stringify(output.metrics) : null,
-      error: null,
-      completedAt: now,
-    });
-
-    // Return reference for context injection
-    const result = this.getWorkerResult(resultId);
-    return result ? this.toResultRef(result) : undefined;
+    return workerRepo.completeWorkerResult(this.deps, resultId, output);
   }
 
-  /**
-   * Mark a worker result as failed.
-   */
   failWorkerResult(resultId: string, error: string): void {
-    if (!this.features.workerResults || !this.stmts.updateWorkerResult) {
-      return;
-    }
-
-    this.stmts.updateWorkerResult.run({
-      id: resultId,
-      status: 'error',
-      summary: `Failed: ${error.slice(0, 100)}`,
-      fullOutput: null,
-      artifacts: null,
-      metrics: null,
-      error,
-      completedAt: new Date().toISOString(),
-    });
+    workerRepo.failWorkerResult(this.deps, resultId, error);
   }
 
-  /**
-   * Get a worker result by ID (includes full output).
-   */
   getWorkerResult(resultId: string): WorkerResult | undefined {
-    if (!this.features.workerResults || !this.stmts.getWorkerResult) {
-      return undefined;
-    }
-    return this.stmts.getWorkerResult.get(resultId) as WorkerResult | undefined;
+    return workerRepo.getWorkerResult(this.deps, resultId);
   }
 
-  /**
-   * Get a lightweight reference to a worker result (for context injection).
-   * Does NOT include full output - that stays in database.
-   */
   getWorkerResultRef(resultId: string): WorkerResultRef | undefined {
-    const result = this.getWorkerResult(resultId);
-    return result ? this.toResultRef(result) : undefined;
+    return workerRepo.getWorkerResultRef(this.deps, resultId);
   }
 
-  /**
-   * List all worker results for a session.
-   */
   listWorkerResults(sessionId?: string): WorkerResult[] {
-    if (!this.features.workerResults || !this.stmts.listWorkerResults) {
-      return [];
-    }
-    const sid = sessionId ?? this.currentSessionId;
-    if (!sid) return [];
-    return this.stmts.listWorkerResults.all(sid) as WorkerResult[];
+    return workerRepo.listWorkerResults(this.deps, sessionId);
   }
 
-  /**
-   * List pending worker results (workers still running).
-   */
   listPendingWorkerResults(sessionId?: string): WorkerResult[] {
-    if (!this.features.workerResults || !this.stmts.listPendingWorkerResults) {
-      return [];
-    }
-    const sid = sessionId ?? this.currentSessionId;
-    if (!sid) return [];
-    return this.stmts.listPendingWorkerResults.all(sid) as WorkerResult[];
+    return workerRepo.listPendingWorkerResults(this.deps, sessionId);
   }
 
-  /**
-   * Get a summary of worker results for context injection.
-   * Returns lightweight references, not full outputs.
-   */
   getWorkerResultsSummary(sessionId?: string): string {
-    if (!this.features.workerResults) {
-      return '';
-    }
-
-    const results = this.listWorkerResults(sessionId);
-    if (results.length === 0) {
-      return '';
-    }
-
-    const lines: string[] = ['Worker Results:'];
-    for (const r of results.slice(0, 10)) {
-      const status = r.status === 'success' ? '✓' : r.status === 'error' ? '✗' : '⏳';
-      const task = r.taskDescription.length > 50
-        ? r.taskDescription.slice(0, 47) + '...'
-        : r.taskDescription;
-      lines.push(`${status} [${r.id}] ${task}`);
-      if (r.summary) {
-        lines.push(`  └─ ${r.summary}`);
-      }
-    }
-    if (results.length > 10) {
-      lines.push(`  ... and ${results.length - 10} more`);
-    }
-    return lines.join('\n');
-  }
-
-  /**
-   * Convert a full WorkerResult to a lightweight reference.
-   */
-  private toResultRef(result: WorkerResult): WorkerResultRef {
-    return {
-      id: result.id,
-      workerId: result.workerId,
-      taskDescription: result.taskDescription,
-      status: result.status,
-      summary: result.summary,
-      modelUsed: result.modelUsed,
-      retrievalHint: `Full output available: store.getWorkerResult('${result.id}')`,
-    };
-  }
-
-  /**
-   * Generate a brief summary from full output.
-   */
-  private generateResultSummary(fullOutput: string): string {
-    const firstLine = fullOutput.split('\n')[0].trim();
-    if (firstLine.length <= 150) {
-      return firstLine;
-    }
-    return firstLine.slice(0, 147) + '...';
+    return workerRepo.getWorkerResultsSummary(this.deps, sessionId);
   }
 
   // ===========================================================================
-  // PENDING PLANS (Plan Mode Support)
+  // PENDING PLANS (delegates to session-repository.ts)
   // ===========================================================================
 
-  /**
-   * Check if pending plans feature is available.
-   */
   hasPendingPlansFeature(): boolean {
     return this.features.pendingPlans;
   }
 
-  /**
-   * Save a pending plan to the database.
-   */
   savePendingPlan(plan: PendingPlan, sessionId?: string): void {
-    if (!this.features.pendingPlans || !this.stmts.insertPendingPlan) {
-      return;
-    }
-
-    const sid = sessionId ?? this.currentSessionId;
-    if (!sid) return;
-
-    const now = new Date().toISOString();
-
-    // Check if plan already exists
-    const existing = this.getPendingPlan(sid);
-    if (existing && existing.id === plan.id) {
-      // Update existing plan
-      this.stmts.updatePendingPlan?.run({
-        id: plan.id,
-        proposedChanges: JSON.stringify(plan.proposedChanges),
-        explorationSummary: plan.explorationSummary || null,
-        status: plan.status,
-        updatedAt: now,
-      });
-    } else {
-      // Delete any existing pending plan first
-      if (existing) {
-        this.stmts.deletePendingPlan?.run(existing.id);
-      }
-
-      // Insert new plan
-      this.stmts.insertPendingPlan.run({
-        id: plan.id,
-        sessionId: sid,
-        task: plan.task,
-        proposedChanges: JSON.stringify(plan.proposedChanges),
-        explorationSummary: plan.explorationSummary || null,
-        status: plan.status,
-        createdAt: plan.createdAt,
-        updatedAt: now,
-      });
-    }
+    sessionRepo.savePendingPlan(this.deps, plan, sessionId);
   }
 
-  /**
-   * Get the pending plan for a session.
-   * Returns the most recent pending plan, or null if none.
-   */
   getPendingPlan(sessionId?: string): PendingPlan | null {
-    if (!this.features.pendingPlans || !this.stmts.getPendingPlan) {
-      return null;
-    }
-
-    const sid = sessionId ?? this.currentSessionId;
-    if (!sid) return null;
-
-    const row = this.stmts.getPendingPlan.get(sid) as {
-      id: string;
-      sessionId: string;
-      task: string;
-      proposedChanges: string;
-      explorationSummary: string | null;
-      status: string;
-      createdAt: string;
-      updatedAt: string;
-    } | undefined;
-
-    if (!row) return null;
-
-    return {
-      id: row.id,
-      task: row.task,
-      createdAt: row.createdAt,
-      updatedAt: row.updatedAt,
-      proposedChanges: JSON.parse(row.proposedChanges) as ProposedChange[],
-      explorationSummary: row.explorationSummary || '',
-      status: row.status as PendingPlan['status'],
-      sessionId: row.sessionId,
-    };
+    return sessionRepo.getPendingPlan(this.deps, sessionId);
   }
 
-  /**
-   * Update the status of a pending plan.
-   */
   updatePlanStatus(planId: string, status: 'approved' | 'rejected' | 'partially_approved'): void {
-    if (!this.features.pendingPlans || !this.stmts.updatePendingPlan) {
-      return;
-    }
-
-    const now = new Date().toISOString();
-
-    // We need to get the plan first to preserve other fields
-    // Since we update by id, we do a direct update here
-    this.db.prepare(`
-      UPDATE pending_plans SET status = ?, updated_at = ? WHERE id = ?
-    `).run(status, now, planId);
+    sessionRepo.updatePlanStatus(this.deps, planId, status);
   }
 
-  /**
-   * Delete a pending plan.
-   */
   deletePendingPlan(planId: string): void {
-    if (!this.features.pendingPlans || !this.stmts.deletePendingPlan) {
-      return;
-    }
-    this.stmts.deletePendingPlan.run(planId);
+    sessionRepo.deletePendingPlan(this.deps, planId);
   }
 
   // ===========================================================================
-  // SESSION MANIFEST (Handoff Support)
+  // SESSION MANIFEST (delegates to session-repository.ts)
   // ===========================================================================
 
-  /**
-   * Export a complete session manifest for handoff.
-   * Contains all information needed for another agent/human to pick up the work.
-   */
   exportSessionManifest(sessionId?: string): SessionManifest | undefined {
-    const sid = sessionId ?? this.currentSessionId;
-    if (!sid) return undefined;
+    return sessionRepo.exportSessionManifest(this.deps, this.manifestCallbacks, sessionId);
+  }
 
-    const session = this.getSessionMetadata(sid);
-    if (!session) return undefined;
+  exportSessionMarkdown(sessionId?: string): string {
+    return sessionRepo.exportSessionMarkdown(this.deps, this.manifestCallbacks, sessionId);
+  }
 
-    // Collect all session state
-    const goals = this.listGoals(sid);
-    const activeGoals = goals.filter(g => g.status === 'active');
-    const completedGoals = goals.filter(g => g.status === 'completed');
-    const junctures = this.listJunctures(sid, 20);
-    const workerResults = this.listWorkerResults(sid);
-    const entries = this.loadSession(sid);
-
-    // Count message types from entries
-    let messageCount = entries.filter(e => e.type === 'message').length;
-    const toolCallCount = entries.filter(e => e.type === 'tool_call').length;
-    const compactionCount = entries.filter(e => e.type === 'compaction').length;
-
-    // If no messages in entries, check the latest checkpoint (where messages are actually stored)
-    if (messageCount === 0) {
-      const checkpoint = this.loadLatestCheckpoint(sid);
-      if (checkpoint?.state?.messages && Array.isArray(checkpoint.state.messages)) {
-        messageCount = checkpoint.state.messages.length;
-      }
-    }
-
+  /** Callbacks for manifest export (bridges to goal/worker repositories). */
+  private get manifestCallbacks(): sessionRepo.ManifestCallbacks {
     return {
-      version: '1.0',
-      exportedAt: new Date().toISOString(),
-      session: {
-        id: session.id,
-        name: session.name,
-        createdAt: session.createdAt,
-        lastActiveAt: session.lastActiveAt,
-        summary: session.summary,
-      },
-      state: {
-        messageCount,
-        toolCallCount,
-        compactionCount,
-        tokenCount: session.tokenCount,
-        costUsd: session.costUsd,
-      },
-      goals: {
-        active: activeGoals.map(g => ({
-          id: g.id,
-          text: g.goalText,
-          priority: g.priority,
-          progress: g.progressTotal
-            ? `${g.progressCurrent}/${g.progressTotal}`
-            : undefined,
-        })),
-        completed: completedGoals.map(g => ({
-          id: g.id,
-          text: g.goalText,
-          completedAt: g.completedAt,
-        })),
-      },
-      keyMoments: junctures.map(j => ({
-        type: j.type,
-        description: j.description,
-        outcome: j.outcome,
-        createdAt: j.createdAt,
-      })),
-      workerResults: workerResults.map(r => ({
-        id: r.id,
-        task: r.taskDescription,
-        status: r.status,
-        summary: r.summary,
-        model: r.modelUsed,
-      })),
-      resumption: {
-        currentSessionId: sid,
-        canResume: true,
-        hint: 'Load this session with /load ' + sid.slice(-8),
-      },
+      listGoals: (sid?: string) => this.listGoals(sid),
+      listJunctures: (sid?: string, limit?: number) => this.listJunctures(sid, limit),
+      listWorkerResults: (sid?: string) => this.listWorkerResults(sid),
     };
   }
 
-  /**
-   * Export session as human-readable markdown.
-   * Suitable for printing, sharing, or reviewing offline.
-   */
-  exportSessionMarkdown(sessionId?: string): string {
-    const manifest = this.exportSessionManifest(sessionId);
-    if (!manifest) return '# Session Not Found\n';
-
-    const lines: string[] = [];
-
-    // Header
-    lines.push(`# Session Handoff: ${manifest.session.name || manifest.session.id}`);
-    lines.push('');
-    lines.push(`> Exported: ${manifest.exportedAt}`);
-    lines.push(`> Session ID: \`${manifest.session.id}\``);
-    lines.push('');
-
-    // Summary
-    if (manifest.session.summary) {
-      lines.push('## Summary');
-      lines.push('');
-      lines.push(manifest.session.summary);
-      lines.push('');
-    }
-
-    // State
-    lines.push('## Session State');
-    lines.push('');
-    lines.push(`- Messages: ${manifest.state.messageCount}`);
-    lines.push(`- Tool Calls: ${manifest.state.toolCallCount}`);
-    lines.push(`- Compactions: ${manifest.state.compactionCount}`);
-    lines.push(`- Tokens: ${manifest.state.tokenCount?.toLocaleString() ?? 'N/A'}`);
-    if (manifest.state.costUsd) {
-      lines.push(`- Cost: $${manifest.state.costUsd.toFixed(4)}`);
-    }
-    lines.push('');
-
-    // Active Goals
-    if (manifest.goals.active.length > 0) {
-      lines.push('## Active Goals');
-      lines.push('');
-      for (const goal of manifest.goals.active) {
-        const priority = goal.priority === 1 ? ' **[HIGH]**' : goal.priority === 3 ? ' [low]' : '';
-        const progress = goal.progress ? ` (${goal.progress})` : '';
-        lines.push(`- [ ] ${goal.text}${progress}${priority}`);
-      }
-      lines.push('');
-    }
-
-    // Completed Goals
-    if (manifest.goals.completed.length > 0) {
-      lines.push('## Completed Goals');
-      lines.push('');
-      for (const goal of manifest.goals.completed) {
-        lines.push(`- [x] ${goal.text}`);
-      }
-      lines.push('');
-    }
-
-    // Key Moments
-    if (manifest.keyMoments.length > 0) {
-      lines.push('## Key Moments');
-      lines.push('');
-      for (const moment of manifest.keyMoments) {
-        const icon = moment.type === 'failure' ? '❌' :
-                     moment.type === 'breakthrough' ? '⭐' :
-                     moment.type === 'decision' ? '→' : '↻';
-        lines.push(`### ${icon} ${moment.type.charAt(0).toUpperCase() + moment.type.slice(1)}`);
-        lines.push('');
-        lines.push(moment.description);
-        if (moment.outcome) {
-          lines.push('');
-          lines.push(`**Outcome:** ${moment.outcome}`);
-        }
-        lines.push('');
-      }
-    }
-
-    // Worker Results
-    if (manifest.workerResults.length > 0) {
-      lines.push('## Worker Results');
-      lines.push('');
-      for (const result of manifest.workerResults) {
-        const status = result.status === 'success' ? '✅' :
-                      result.status === 'error' ? '❌' : '⏳';
-        lines.push(`- ${status} **${result.task}**`);
-        if (result.summary) {
-          lines.push(`  - ${result.summary}`);
-        }
-        if (result.model) {
-          lines.push(`  - Model: ${result.model}`);
-        }
-      }
-      lines.push('');
-    }
-
-    // Resumption
-    lines.push('## How to Resume');
-    lines.push('');
-    lines.push('```bash');
-    lines.push(`attocode --load ${manifest.resumption.currentSessionId}`);
-    lines.push('```');
-    lines.push('');
-    lines.push('Or within attocode:');
-    lines.push('```');
-    lines.push(manifest.resumption.hint);
-    lines.push('```');
-
-    return lines.join('\n');
-  }
-
   // ===========================================================================
-  // MIGRATION
+  // MIGRATION (delegates to session-repository.ts)
   // ===========================================================================
 
-  /**
-   * Migrate sessions from JSONL format to SQLite.
-   */
   async migrateFromJSONL(jsonlDir: string): Promise<{ migrated: number; failed: number }> {
-    const indexPath = join(jsonlDir, 'index.json');
-    let migrated = 0;
-    let failed = 0;
-
-    if (!existsSync(indexPath)) {
-      return { migrated: 0, failed: 0 };
-    }
-
-    try {
-      const indexContent = readFileSync(indexPath, 'utf-8');
-      const index = JSON.parse(indexContent) as { sessions: SessionMetadata[] };
-
-      for (const meta of index.sessions) {
-        try {
-          // Check if already migrated
-          const existing = this.getSessionMetadata(meta.id);
-          if (existing) {
-            continue;
-          }
-
-          // Insert session metadata
-          this.stmts.insertSession.run({
-            id: meta.id,
-            name: meta.name || null,
-            workspacePath: (meta as SessionMetadata).workspacePath || null,
-            workspaceFingerprint: (meta as SessionMetadata).workspaceFingerprint || null,
-            createdAt: meta.createdAt,
-            lastActiveAt: meta.lastActiveAt,
-            messageCount: meta.messageCount,
-            tokenCount: meta.tokenCount,
-          });
-
-          // Load and migrate entries
-          const sessionPath = join(jsonlDir, `${meta.id}.jsonl`);
-          if (existsSync(sessionPath)) {
-            const content = readFileSync(sessionPath, 'utf-8');
-            for (const line of content.split('\n')) {
-              if (line.trim()) {
-                try {
-                  const entry = JSON.parse(line) as SessionEntry;
-                  this.stmts.insertEntry.run({
-                    sessionId: meta.id,
-                    timestamp: entry.timestamp,
-                    type: entry.type,
-                    data: JSON.stringify(entry.data),
-                  });
-                } catch {
-                  // Skip corrupted lines
-                }
-              }
-            }
-          }
-
-          migrated++;
-        } catch (err) {
-          logger.error(`Failed to migrate session ${meta.id}:`, { error: err });
-          failed++;
-        }
-      }
-    } catch (err) {
-      logger.error('Failed to read JSONL index:', { error: err });
-    }
-
-    return { migrated, failed };
+    return sessionRepo.migrateFromJSONL(this.deps, jsonlDir);
   }
 
   // ===========================================================================
-  // REMEMBERED PERMISSIONS
+  // REMEMBERED PERMISSIONS (delegates to session-repository.ts)
   // ===========================================================================
 
-  /**
-   * Check if remembered permissions feature is available.
-   */
   hasRememberedPermissionsFeature(): boolean {
     return this.features.rememberedPermissions;
   }
 
-  /**
-   * Remember a permission decision.
-   * @param toolName - The tool name (e.g., 'bash')
-   * @param decision - 'always' or 'never'
-   * @param pattern - Optional command pattern (for bash commands)
-   */
   rememberPermission(
     toolName: string,
     decision: 'always' | 'never',
     pattern?: string
   ): void {
-    if (!this.features.rememberedPermissions || !this.stmts.insertRememberedPermission) {
-      return;
-    }
-
-    this.stmts.insertRememberedPermission.run({
-      toolName,
-      pattern: pattern ?? null,
-      decision,
-      createdAt: new Date().toISOString(),
-    });
+    sessionRepo.rememberPermission(this.deps, toolName, decision, pattern);
   }
 
-  /**
-   * Get a remembered permission decision.
-   * Returns the decision if found, or undefined if no remembered decision.
-   */
   getRememberedPermission(
     toolName: string,
     pattern?: string
   ): { decision: 'always' | 'never'; pattern?: string } | undefined {
-    if (!this.features.rememberedPermissions || !this.stmts.getRememberedPermission) {
-      return undefined;
-    }
-
-    const row = this.stmts.getRememberedPermission.get(toolName, pattern ?? null) as {
-      toolName: string;
-      pattern: string | null;
-      decision: 'always' | 'never';
-      createdAt: string;
-    } | undefined;
-
-    if (!row) return undefined;
-
-    return {
-      decision: row.decision,
-      pattern: row.pattern ?? undefined,
-    };
+    return sessionRepo.getRememberedPermission(this.deps, toolName, pattern);
   }
 
-  /**
-   * List all remembered permission decisions.
-   */
   listRememberedPermissions(): Array<{
     toolName: string;
     pattern?: string;
     decision: 'always' | 'never';
     createdAt: string;
   }> {
-    if (!this.features.rememberedPermissions || !this.stmts.listRememberedPermissions) {
-      return [];
-    }
-
-    const rows = this.stmts.listRememberedPermissions.all() as Array<{
-      toolName: string;
-      pattern: string | null;
-      decision: 'always' | 'never';
-      createdAt: string;
-    }>;
-
-    return rows.map(row => ({
-      toolName: row.toolName,
-      pattern: row.pattern ?? undefined,
-      decision: row.decision,
-      createdAt: row.createdAt,
-    }));
+    return sessionRepo.listRememberedPermissions(this.deps);
   }
 
-  /**
-   * Remove a remembered permission decision.
-   */
   forgetPermission(toolName: string, pattern?: string): void {
-    if (!this.features.rememberedPermissions || !this.stmts.deleteRememberedPermission) {
-      return;
-    }
-
-    this.stmts.deleteRememberedPermission.run(toolName, pattern ?? null, pattern ?? null);
+    sessionRepo.forgetPermission(this.deps, toolName, pattern);
   }
 
-  /**
-   * Clear all remembered permissions for a tool or all tools.
-   */
   clearRememberedPermissions(toolName?: string): void {
-    if (!this.features.rememberedPermissions) {
-      return;
-    }
-
-    if (toolName) {
-      this.db.prepare('DELETE FROM remembered_permissions WHERE tool_name = ?').run(toolName);
-    } else {
-      this.db.prepare('DELETE FROM remembered_permissions').run();
-    }
+    sessionRepo.clearRememberedPermissions(this.deps, toolName);
   }
 
   // ===========================================================================
   // LIFECYCLE
   // ===========================================================================
-
-  /**
-   * Prune old sessions if over limit.
-   */
-  private pruneOldSessions(): void {
-    const sessions = this.listSessions();
-    if (sessions.length > this.config.maxSessions) {
-      const toDelete = sessions.slice(this.config.maxSessions);
-      for (const session of toDelete) {
-        this.stmts.deleteSession.run(session.id);
-      }
-    }
-  }
 
   /**
    * Subscribe to events.

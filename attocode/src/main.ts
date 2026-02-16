@@ -38,7 +38,7 @@ import { DEFAULT_PROVIDER_RESILIENCE_CONFIG } from './defaults.js';
 import type { ProviderResilienceConfig } from './types.js';
 
 // Agent and tools
-import { createProductionAgent } from './agent.js';
+import { createProductionAgent } from './agent/index.js';
 import { ProviderAdapter, convertToolsFromRegistry } from './adapters.js';
 import { createStandardRegistry } from './tools/standard.js';
 

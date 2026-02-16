@@ -4,7 +4,8 @@
  * Debug logging and checkpoint management for session persistence.
  */
 
-import type { SQLiteStore, SessionStore } from '../index.js';
+import type { SQLiteStore } from './sqlite-store.js';
+import type { SessionStore } from './session-store.js';
 import { logger } from '../utilities/logger.js';
 
 // Session store type that works with both SQLite and JSONL

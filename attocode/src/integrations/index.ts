@@ -79,6 +79,19 @@ export {
   type PhaseBudgetConfig,
 } from './budget/economics.js';
 
+// Loop Detector (extracted from economics - doom loop + pattern detection)
+export {
+  LoopDetector,
+  extractBashResult,
+  extractBashFileTarget,
+  type RecentToolCall,
+} from './budget/loop-detector.js';
+
+// Phase Tracker (extracted from economics - phase transitions + nudges)
+export {
+  PhaseTracker,
+} from './budget/phase-tracker.js';
+
 // Work Log (compaction-resilient summary)
 export {
   WorkLog,
