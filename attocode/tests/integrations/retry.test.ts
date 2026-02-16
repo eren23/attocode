@@ -8,7 +8,7 @@ import {
   withRetryResult,
   DEFAULT_RETRYABLE_ERRORS,
   DEFAULT_RETRYABLE_CODES,
-} from '../../src/integrations/retry.js';
+} from '../../src/integrations/utilities/retry.js';
 
 describe('Retry Utility', () => {
   beforeEach(() => {

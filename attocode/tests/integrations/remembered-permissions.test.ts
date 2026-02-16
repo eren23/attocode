@@ -3,7 +3,7 @@
  */
 
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { createSQLiteStore, SQLiteStore } from '../../src/integrations/sqlite-store.js';
+import { createSQLiteStore, SQLiteStore } from '../../src/integrations/persistence/sqlite-store.js';
 import { join } from 'node:path';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';

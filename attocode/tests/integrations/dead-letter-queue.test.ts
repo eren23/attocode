@@ -8,7 +8,7 @@ import {
   DeadLetterQueue,
   createDeadLetterQueue,
   formatDeadLetterStats,
-} from '../../src/integrations/dead-letter-queue.js';
+} from '../../src/integrations/quality/dead-letter-queue.js';
 import { ErrorCategory } from '../../src/errors/index.js';
 
 describe('Dead Letter Queue', () => {

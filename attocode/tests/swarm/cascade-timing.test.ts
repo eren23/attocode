@@ -12,7 +12,7 @@ import { describe, it, expect } from 'vitest';
 import { SwarmTaskQueue, createSwarmTaskQueue } from '../../src/integrations/swarm/task-queue.js';
 import { DEFAULT_SWARM_CONFIG } from '../../src/integrations/swarm/types.js';
 import type { SwarmTask, SwarmConfig } from '../../src/integrations/swarm/types.js';
-import type { SmartDecompositionResult } from '../../src/integrations/smart-decomposer.js';
+import type { SmartDecompositionResult } from '../../src/integrations/tasks/smart-decomposer.js';
 
 // =============================================================================
 // Helpers

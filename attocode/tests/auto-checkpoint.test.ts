@@ -7,7 +7,7 @@ import { existsSync, rmSync } from 'node:fs';
 import {
   AutoCheckpointManager,
   createAutoCheckpointManager,
-} from '../src/integrations/auto-checkpoint.js';
+} from '../src/integrations/quality/auto-checkpoint.js';
 
 const TEST_DIR = '/tmp/attocode-test-checkpoints';
 

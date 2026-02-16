@@ -6,7 +6,7 @@ import { describe, it, expect, beforeEach } from 'vitest';
 import {
   DynamicBudgetPool,
   createDynamicBudgetPool,
-} from '../src/integrations/dynamic-budget.js';
+} from '../src/integrations/budget/dynamic-budget.js';
 
 describe('DynamicBudgetPool', () => {
   let pool: DynamicBudgetPool;

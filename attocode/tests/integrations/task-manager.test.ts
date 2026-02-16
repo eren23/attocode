@@ -7,7 +7,7 @@ import {
   TaskManager,
   createTaskManager,
   type Task,
-} from '../../src/integrations/task-manager.js';
+} from '../../src/integrations/tasks/task-manager.js';
 
 describe('TaskManager', () => {
   let taskManager: TaskManager;

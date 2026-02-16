@@ -10,7 +10,7 @@ import {
   extractSymbolsAST,
   extractDependenciesAST,
   isASTSupported,
-} from '../../src/integrations/codebase-ast.js';
+} from '../../src/integrations/context/codebase-ast.js';
 
 // =============================================================================
 // isASTSupported

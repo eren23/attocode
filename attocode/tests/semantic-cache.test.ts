@@ -12,7 +12,7 @@ import {
   createLenientCache,
   withSemanticCache,
   cosineSimilarity,
-} from '../src/integrations/semantic-cache.js';
+} from '../src/integrations/context/semantic-cache.js';
 
 describe('cosineSimilarity', () => {
   it('should return 1 for identical vectors', () => {

@@ -5,18 +5,18 @@
  * Uses slot-based concurrency control and dynamic agent registration.
  */
 
-import type { AgentRegistry, AgentDefinition, SpawnResult } from '../agent-registry.js';
+import type { AgentRegistry, AgentDefinition, SpawnResult } from '../agents/agent-registry.js';
 import type { SwarmConfig, SwarmTask, SwarmTaskResult, SwarmWorkerSpec, SwarmWorkerStatus } from './types.js';
 import { getTaskTypeConfig, type WorkerCapability } from './types.js';
 import { selectWorkerForCapability, type ModelHealthTracker } from './model-selector.js';
 import type { SwarmBudgetPool } from './swarm-budget.js';
 import type { SharedContextEngine } from '../../shared/context-engine.js';
 import { WorkerBudgetTracker, createWorkerBudgetTracker } from '../../shared/budget-tracker.js';
-import { buildDelegationPrompt, createMinimalDelegationSpec } from '../delegation-protocol.js';
-import { getSubagentQualityPrompt } from '../thinking-strategy.js';
-import { getEnvironmentFacts, formatFactsBlock, formatFactsCompact } from '../environment-facts.js';
-import { calculateCost, isModelCacheInitialized } from '../openrouter-pricing.js';
-import { resolvePolicyProfile } from '../policy-engine.js';
+import { buildDelegationPrompt, createMinimalDelegationSpec } from '../agents/delegation-protocol.js';
+import { getSubagentQualityPrompt } from '../utilities/thinking-strategy.js';
+import { getEnvironmentFacts, formatFactsBlock, formatFactsCompact } from '../utilities/environment-facts.js';
+import { calculateCost, isModelCacheInitialized } from '../utilities/openrouter-pricing.js';
+import { resolvePolicyProfile } from '../safety/policy-engine.js';
 
 // ─── D2: Lightweight Model Detection ───────────────────────────────────────
 

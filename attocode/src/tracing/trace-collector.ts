@@ -31,7 +31,7 @@
 
 import { mkdir, appendFile } from 'fs/promises';
 import { join } from 'path';
-import { logger } from '../integrations/logger.js';
+import { logger } from '../integrations/utilities/logger.js';
 import { Tracer, createTracer } from '../observability/tracer.js';
 import { CacheBoundaryTracker, createCacheBoundaryTracker } from './cache-boundary-tracker.js';
 import type {
@@ -87,7 +87,7 @@ import type {
 } from './types.js';
 import { DEFAULT_TRACE_CONFIG, DEFAULT_ENHANCED_TRACE_CONFIG } from './types.js';
 import type { AgentMetrics, Span } from '../observability/types.js';
-import { calculateCost as calculateOpenRouterCost } from '../integrations/openrouter-pricing.js';
+import { calculateCost as calculateOpenRouterCost } from '../integrations/utilities/openrouter-pricing.js';
 
 // =============================================================================
 // TYPES

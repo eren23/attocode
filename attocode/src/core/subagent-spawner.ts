@@ -51,7 +51,7 @@ import {
 import {
   mergeApprovalScopeWithProfile,
   resolvePolicyProfile,
-} from '../integrations/policy-engine.js';
+} from '../integrations/safety/policy-engine.js';
 
 /** Duplicate spawn prevention window (60 seconds). */
 const SPAWN_DEDUP_WINDOW_MS = 60000;
@@ -486,7 +486,7 @@ export async function spawnAgent(
       const repoMap = ctx.codebaseContext.getRepoMap();
       if (repoMap) {
         // Lightweight repo map: file tree with key symbols (capped at 3000 tokens)
-        const { generateLightweightRepoMap } = await import('../integrations/codebase-context.js');
+        const { generateLightweightRepoMap } = await import('../integrations/context/codebase-context.js');
         repoContextStr = '\n\n**REPOSITORY STRUCTURE:**\n' + generateLightweightRepoMap(repoMap, 3000);
       }
     }

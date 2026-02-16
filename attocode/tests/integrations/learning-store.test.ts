@@ -12,7 +12,7 @@ import {
   formatLearningStats,
   type Learning,
   type LearningStoreEvent,
-} from '../../src/integrations/learning-store.js';
+} from '../../src/integrations/quality/learning-store.js';
 import {
   createFailureTracker,
   type FailureTracker,

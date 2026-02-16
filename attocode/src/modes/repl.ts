@@ -26,7 +26,7 @@ import {
   createDeadLetterQueue,
   type DeadLetterQueue,
 } from '../integrations/index.js';
-import { initModelCache } from '../integrations/openrouter-pricing.js';
+import { initModelCache } from '../integrations/utilities/openrouter-pricing.js';
 import {
   DEFAULT_POLICY_ENGINE_CONFIG,
   DEFAULT_SANDBOX_CONFIG,
@@ -37,7 +37,7 @@ import {
   saveCheckpointToStore,
   loadSessionState,
   type AnySessionStore,
-} from '../integrations/persistence.js';
+} from '../integrations/persistence/persistence.js';
 
 import { createEventDisplay, createJunctureLogger } from '../tui/event-display.js';
 import { createTUIRenderer } from '../tui/index.js';
@@ -45,8 +45,8 @@ import { getMCPConfigPaths } from '../paths.js';
 import { showSessionPicker, showQuickPicker } from '../session-picker.js';
 import { registerCleanupResource } from '../core/process-handlers.js';
 import { handleCommand, createConsoleOutput } from '../commands/handler.js';
-import { logger } from '../integrations/logger.js';
-import { TUI_ROOT_BUDGET } from '../integrations/economics.js';
+import { logger } from '../integrations/utilities/logger.js';
+import { TUI_ROOT_BUDGET } from '../integrations/budget/economics.js';
 
 // ANSI color helper
 const colors = {

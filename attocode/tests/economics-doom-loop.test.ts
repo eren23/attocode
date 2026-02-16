@@ -9,7 +9,7 @@ import {
   computeToolFingerprint,
   createEconomicsManager,
   STANDARD_BUDGET,
-} from '../src/integrations/economics.js';
+} from '../src/integrations/budget/economics.js';
 
 // =============================================================================
 // computeToolFingerprint TESTS

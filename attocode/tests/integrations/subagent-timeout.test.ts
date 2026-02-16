@@ -17,7 +17,7 @@ import {
   type ProgressAwareTimeoutSource,
   type GracefulTimeoutSource,
   type CancellationTokenSource,
-} from '../../src/integrations/cancellation.js';
+} from '../../src/integrations/budget/cancellation.js';
 import { parseStructuredClosureReport } from '../../src/agent.js';
 
 // ---------------------------------------------------------------------------

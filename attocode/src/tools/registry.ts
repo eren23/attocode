@@ -16,7 +16,7 @@ import type {
   DangerLevel
 } from './types.js';
 import { createPermissionChecker } from './permission.js';
-import { withRetry, TOOL_RETRY_CONFIG } from '../integrations/retry.js';
+import { withRetry, TOOL_RETRY_CONFIG } from '../integrations/utilities/retry.js';
 import {
   ToolError,
   ValidationError,
@@ -25,7 +25,7 @@ import {
   isRecoverable,
   formatError,
 } from '../errors/index.js';
-import type { DeadLetterQueue } from '../integrations/dead-letter-queue.js';
+import type { DeadLetterQueue } from '../integrations/quality/dead-letter-queue.js';
 
 // =============================================================================
 // ZOD TO JSON SCHEMA CONVERTER

@@ -2,7 +2,7 @@
  * Tests for VerificationGate - Opt-in Completion Verification
  */
 import { describe, it, expect, beforeEach } from 'vitest';
-import { VerificationGate, createVerificationGate } from '../../src/integrations/verification-gate.js';
+import { VerificationGate, createVerificationGate } from '../../src/integrations/tasks/verification-gate.js';
 
 describe('VerificationGate', () => {
   describe('createVerificationGate', () => {

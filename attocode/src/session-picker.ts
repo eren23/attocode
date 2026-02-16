@@ -5,8 +5,8 @@
  * Works with both SQLite and JSONL session stores.
  */
 
-import type { SessionMetadata } from './integrations/session-store.js';
-import { logger } from './integrations/logger.js';
+import type { SessionMetadata } from './integrations/persistence/session-store.js';
+import { logger } from './integrations/utilities/logger.js';
 import { resolve } from 'node:path';
 
 // =============================================================================

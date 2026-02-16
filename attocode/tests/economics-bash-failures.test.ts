@@ -2,7 +2,7 @@
  * Tests for bash failure cascade detection and production-parity test-fix cycle.
  */
 import { describe, it, expect } from 'vitest';
-import { createEconomicsManager, extractBashResult, STANDARD_BUDGET } from '../src/integrations/economics.js';
+import { createEconomicsManager, extractBashResult, STANDARD_BUDGET } from '../src/integrations/budget/economics.js';
 
 describe('extractBashResult', () => {
   it('extracts success/output from bash tool result object', () => {

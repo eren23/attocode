@@ -15,7 +15,7 @@ import type {
 
 import type { AgentContext } from './types.js';
 
-import { createComponentLogger } from '../integrations/logger.js';
+import { createComponentLogger } from '../integrations/utilities/logger.js';
 
 // =============================================================================
 // TOOL BATCHING CONSTANTS & UTILITIES (moved from agent.ts to break cycle)

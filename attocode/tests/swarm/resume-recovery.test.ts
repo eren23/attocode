@@ -11,7 +11,7 @@ import { parseArgs } from '../../src/cli.js';
 import { createSwarmTaskQueue } from '../../src/integrations/swarm/task-queue.js';
 import { DEFAULT_SWARM_CONFIG } from '../../src/integrations/swarm/types.js';
 import type { SwarmConfig, SwarmTaskResult, SwarmCheckpoint } from '../../src/integrations/swarm/types.js';
-import type { SmartDecompositionResult, SmartSubtask, DependencyGraph } from '../../src/integrations/smart-decomposer.js';
+import type { SmartDecompositionResult, SmartSubtask, DependencyGraph } from '../../src/integrations/tasks/smart-decomposer.js';
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
 

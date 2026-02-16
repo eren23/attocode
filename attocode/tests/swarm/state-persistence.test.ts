@@ -9,7 +9,7 @@ import { SwarmStateStore } from '../../src/integrations/swarm/swarm-state-store.
 import { createSwarmTaskQueue } from '../../src/integrations/swarm/task-queue.js';
 import { DEFAULT_SWARM_CONFIG } from '../../src/integrations/swarm/types.js';
 import type { SwarmCheckpoint, SwarmConfig } from '../../src/integrations/swarm/types.js';
-import type { SmartDecompositionResult, SmartSubtask, DependencyGraph } from '../../src/integrations/smart-decomposer.js';
+import type { SmartDecompositionResult, SmartSubtask, DependencyGraph } from '../../src/integrations/tasks/smart-decomposer.js';
 
 function makeSubtask(overrides: Partial<SmartSubtask> = {}): SmartSubtask {
   return {

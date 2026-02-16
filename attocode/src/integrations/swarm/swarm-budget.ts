@@ -5,7 +5,7 @@
  * budgets across 10-20+ tiny workers.
  */
 
-import { createBudgetPool, type SharedBudgetPool, type BudgetPoolStats } from '../budget-pool.js';
+import { createBudgetPool, type SharedBudgetPool, type BudgetPoolStats } from '../budget/budget-pool.js';
 import type { SwarmConfig } from './types.js';
 
 // ─── Swarm Budget ──────────────────────────────────────────────────────────

@@ -12,21 +12,21 @@ import {
   createSharedBlackboard,
   type Finding,
   type FindingType,
-} from '../src/integrations/shared-blackboard.js';
+} from '../src/integrations/agents/shared-blackboard.js';
 import {
   SmartDecomposer,
   createSmartDecomposer,
   type SmartSubtask,
-} from '../src/integrations/smart-decomposer.js';
+} from '../src/integrations/tasks/smart-decomposer.js';
 import {
   ResultSynthesizer,
   createResultSynthesizer,
   type AgentOutput,
-} from '../src/integrations/result-synthesizer.js';
+} from '../src/integrations/agents/result-synthesizer.js';
 import {
   CodebaseContextManager,
   createCodebaseContext,
-} from '../src/integrations/codebase-context.js';
+} from '../src/integrations/context/codebase-context.js';
 
 // =============================================================================
 // SHARED BLACKBOARD TESTS

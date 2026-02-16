@@ -25,7 +25,7 @@ import {
   getAgentStats,
   type AgentDefinition,
   type LoadedAgent,
-} from '../src/integrations/agent-registry.js';
+} from '../src/integrations/agents/agent-registry.js';
 import type { ToolDefinition } from '../src/types.js';
 
 // Expected built-in agent names

@@ -2,7 +2,7 @@
  * Tests for Edit Validator (Phase 5.1)
  */
 import { describe, it, expect } from 'vitest';
-import { validateSyntax, validateEdit } from '../../src/integrations/edit-validator.js';
+import { validateSyntax, validateEdit } from '../../src/integrations/safety/edit-validator.js';
 
 // Note: These tests work both with and without tree-sitter installed.
 // If tree-sitter is not available, all validations return valid (no-op).

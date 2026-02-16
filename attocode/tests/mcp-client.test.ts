@@ -10,7 +10,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { writeFile, unlink, mkdir, rmdir } from 'node:fs/promises';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
-import { MCPClient, type MCPServerConfig } from '../src/integrations/mcp-client.js';
+import { MCPClient, type MCPServerConfig } from '../src/integrations/mcp/mcp-client.js';
 
 // =============================================================================
 // TEST SETUP
@@ -269,7 +269,7 @@ describe('createMCPClient', () => {
   });
 
   it('should create client from factory', async () => {
-    const { createMCPClient } = await import('../src/integrations/mcp-client.js');
+    const { createMCPClient } = await import('../src/integrations/mcp/mcp-client.js');
     const client = await createMCPClient({ autoConnect: false });
     expect(client).toBeDefined();
     await client.cleanup();
@@ -281,7 +281,7 @@ describe('createMCPClient', () => {
       servers: { 'factory-test': { command: 'test' } },
     }));
 
-    const { createMCPClient } = await import('../src/integrations/mcp-client.js');
+    const { createMCPClient } = await import('../src/integrations/mcp/mcp-client.js');
     const client = await createMCPClient({
       configPaths: [configPath],
       autoConnect: false,

@@ -12,7 +12,7 @@ import {
   generateReverseDiagram,
   createGraphVisualizer,
   type FileDependencyGraph,
-} from '../../src/integrations/graph-visualization.js';
+} from '../../src/integrations/utilities/graph-visualization.js';
 
 // =============================================================================
 // TEST FIXTURES

@@ -57,7 +57,7 @@ import { startTUIMode, startProductionREPL } from './modes/index.js';
 import { createEventDisplay } from './tui/event-display.js';
 
 // Persistence debug for --debug flag
-import { persistenceDebug } from './integrations/persistence.js';
+import { persistenceDebug } from './integrations/persistence/persistence.js';
 
 // Process handlers for graceful shutdown
 import { installProcessHandlers } from './core/process-handlers.js';
@@ -68,10 +68,10 @@ import {
   createFileSystemHealthCheck,
   createNetworkHealthCheck,
   formatHealthReport,
-} from './integrations/health-check.js';
+} from './integrations/quality/health-check.js';
 
 // Structured logger
-import { logger, configureLogger, ConsoleSink, MemorySink } from './integrations/logger.js';
+import { logger, configureLogger, ConsoleSink, MemorySink } from './integrations/utilities/logger.js';
 
 // Swarm mode support
 import { DEFAULT_SWARM_CONFIG, autoDetectWorkerModels, type SwarmConfig } from './integrations/swarm/index.js';

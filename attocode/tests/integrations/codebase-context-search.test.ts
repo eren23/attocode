@@ -10,7 +10,7 @@ import {
   CodebaseContextManager,
   type CodeChunk,
   type RepoMap,
-} from '../../src/integrations/codebase-context.js';
+} from '../../src/integrations/context/codebase-context.js';
 
 // =============================================================================
 // TEST FIXTURES

@@ -6,7 +6,7 @@
  */
 
 import { describe, it, expect } from 'vitest';
-import { ExecutionEconomicsManager } from '../../src/integrations/economics.js';
+import { ExecutionEconomicsManager } from '../../src/integrations/budget/economics.js';
 import { SharedEconomicsState } from '../../src/shared/shared-economics-state.js';
 
 describe('Global doom loop detection in checkBudget()', () => {

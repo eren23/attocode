@@ -20,10 +20,10 @@
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import type { LLMProvider, LLMProviderWithTools, ToolDefinitionSchema } from '../../providers/types.js';
-import type { AgentRegistry } from '../agent-registry.js';
-import type { SharedBlackboard } from '../shared-blackboard.js';
-import { createSmartDecomposer, parseDecompositionResponse, validateDecomposition, type LLMDecomposeFunction, type SmartDecompositionResult, type SmartSubtask } from '../smart-decomposer.js';
-import { createResultSynthesizer } from '../result-synthesizer.js';
+import type { AgentRegistry } from '../agents/agent-registry.js';
+import type { SharedBlackboard } from '../agents/shared-blackboard.js';
+import { createSmartDecomposer, parseDecompositionResponse, validateDecomposition, type LLMDecomposeFunction, type SmartDecompositionResult, type SmartSubtask } from '../tasks/smart-decomposer.js';
+import { createResultSynthesizer } from '../agents/result-synthesizer.js';
 import type {
   SwarmConfig,
   SwarmExecutionResult,
@@ -49,7 +49,7 @@ import { evaluateWorkerOutput, runPreFlightChecks, checkArtifacts, checkArtifact
 import { ModelHealthTracker, selectAlternativeModel } from './model-selector.js';
 import { SwarmStateStore } from './swarm-state-store.js';
 import type { SwarmEvent } from './swarm-events.js';
-import type { SpawnResult } from '../agent-registry.js';
+import type { SpawnResult } from '../agents/agent-registry.js';
 import { createSharedContextState, type SharedContextState } from '../../shared/shared-context-state.js';
 import { createSharedEconomicsState, type SharedEconomicsState } from '../../shared/shared-economics-state.js';
 import { createSharedContextEngine, type SharedContextEngine } from '../../shared/context-engine.js';
@@ -1021,7 +1021,7 @@ Rules:
     const subtasks = parsed.subtasks.map((s, index) => ({
       id: `task-lr-${index}`,
       description: s.description,
-      status: (s.dependencies.length > 0 ? 'blocked' : 'ready') as import('../smart-decomposer.js').SubtaskStatus,
+      status: (s.dependencies.length > 0 ? 'blocked' : 'ready') as import('../tasks/smart-decomposer.js').SubtaskStatus,
       dependencies: s.dependencies.map((d: number | string) => `task-lr-${d}`),
       complexity: s.complexity,
       type: s.type,

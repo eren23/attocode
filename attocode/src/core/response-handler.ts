@@ -14,7 +14,7 @@ import type {
 import type { AgentContext } from './types.js';
 import type { MessageWithContent } from '../providers/types.js';
 
-import { createComponentLogger } from '../integrations/logger.js';
+import { createComponentLogger } from '../integrations/utilities/logger.js';
 
 const log = createComponentLogger('ResponseHandler');
 

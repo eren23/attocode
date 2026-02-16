@@ -5,7 +5,7 @@
  */
 
 import type { PermissionMode } from './tools/types.js';
-import { logger } from './integrations/logger.js';
+import { logger } from './integrations/utilities/logger.js';
 
 // ANSI color codes for terminal output
 const colors = {

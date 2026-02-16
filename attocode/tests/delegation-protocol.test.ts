@@ -11,7 +11,7 @@ import {
   createMinimalDelegationSpec,
   DELEGATION_INSTRUCTIONS,
   type DelegationSpec,
-} from '../src/integrations/delegation-protocol.js';
+} from '../src/integrations/agents/delegation-protocol.js';
 
 // =============================================================================
 // buildDelegationPrompt TESTS

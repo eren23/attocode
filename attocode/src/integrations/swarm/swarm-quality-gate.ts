@@ -14,7 +14,7 @@ import * as path from 'node:path';
 import type { LLMProvider } from '../../providers/types.js';
 import type { SwarmTask, SwarmTaskResult, SwarmConfig } from './types.js';
 import { getTaskTypeConfig } from './types.js';
-import { formatFactsCompact, getEnvironmentFacts } from '../environment-facts.js';
+import { formatFactsCompact, getEnvironmentFacts } from '../utilities/environment-facts.js';
 
 // ─── Quality Gate Config ──────────────────────────────────────────────────
 

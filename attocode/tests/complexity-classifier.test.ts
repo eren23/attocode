@@ -11,7 +11,7 @@ import {
   getScalingGuidance,
   createComplexityClassifier,
   type ComplexityAssessment,
-} from '../src/integrations/complexity-classifier.js';
+} from '../src/integrations/agents/complexity-classifier.js';
 
 // =============================================================================
 // classifyComplexity TESTS

@@ -9,7 +9,7 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { mkdir, rm } from 'node:fs/promises';
-import { SessionStore, createSessionStore } from '../src/integrations/session-store.js';
+import { SessionStore, createSessionStore } from '../src/integrations/persistence/session-store.js';
 
 describe('SessionStore (JSONL)', () => {
   let tempDir: string;

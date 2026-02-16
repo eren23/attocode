@@ -9,7 +9,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import {
   SharedFileCache,
   createSharedFileCache,
-} from '../../src/integrations/file-cache.js';
+} from '../../src/integrations/context/file-cache.js';
 
 describe('SharedFileCache', () => {
   describe('get/set basics', () => {

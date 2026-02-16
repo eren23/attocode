@@ -2,7 +2,7 @@
  * Tests for WorkLog - Compaction-Resilient Structured Summary
  */
 import { describe, it, expect, beforeEach } from 'vitest';
-import { WorkLog, createWorkLog } from '../../src/integrations/work-log.js';
+import { WorkLog, createWorkLog } from '../../src/integrations/tasks/work-log.js';
 
 describe('WorkLog', () => {
   let log: WorkLog;

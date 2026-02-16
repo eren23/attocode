@@ -35,15 +35,15 @@ import {
   saveCheckpointToStore,
   loadSessionState,
   type AnySessionStore,
-} from '../integrations/persistence.js';
+} from '../integrations/persistence/persistence.js';
 
 import { getMCPConfigPaths } from '../paths.js';
 import { showSessionPicker, showQuickPicker, formatSessionsTable } from '../session-picker.js';
-import { TUI_ROOT_BUDGET } from '../integrations/economics.js';
-import { createLSPManager } from '../integrations/lsp.js';
+import { TUI_ROOT_BUDGET } from '../integrations/budget/economics.js';
+import { createLSPManager } from '../integrations/lsp/lsp.js';
 import { createLSPFileTools } from '../agent-tools/lsp-file-tools.js';
-import { initPricingCache } from '../integrations/openrouter-pricing.js';
-import { logger } from '../integrations/logger.js';
+import { initPricingCache } from '../integrations/utilities/openrouter-pricing.js';
+import { logger } from '../integrations/utilities/logger.js';
 
 // Import TUI components and utilities
 import { TUIApp, type TUIAppProps, checkTUICapabilities } from '../tui/index.js';

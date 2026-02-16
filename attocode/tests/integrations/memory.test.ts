@@ -5,7 +5,7 @@
  */
 
 import { describe, it, expect, beforeEach } from 'vitest';
-import { MemoryManager, createMemoryManager } from '../../src/integrations/memory.js';
+import { MemoryManager, createMemoryManager } from '../../src/integrations/utilities/memory.js';
 import type { MemoryConfig } from '../../src/types.js';
 
 describe('MemoryManager', () => {

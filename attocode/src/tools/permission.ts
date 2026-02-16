@@ -14,8 +14,8 @@ import type {
   DangerPattern
 } from './types.js';
 import { DANGEROUS_PATTERNS } from './types.js';
-import { isReadOnlyBashCommand } from '../integrations/bash-policy.js';
-import { logger } from '../integrations/logger.js';
+import { isReadOnlyBashCommand } from '../integrations/safety/bash-policy.js';
+import { logger } from '../integrations/utilities/logger.js';
 
 // =============================================================================
 // PERMISSION CHECKER IMPLEMENTATIONS

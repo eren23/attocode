@@ -12,7 +12,7 @@ import {
   createLinkedToken,
   race,
   CancellationError,
-} from '../../src/integrations/cancellation.js';
+} from '../../src/integrations/budget/cancellation.js';
 
 describe('createProgressAwareTimeout', () => {
   beforeEach(() => {

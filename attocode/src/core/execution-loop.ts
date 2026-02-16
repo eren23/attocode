@@ -27,8 +27,8 @@ import {
 import { detectIncompleteActionResponse } from './completion-analyzer.js';
 export { detectIncompleteActionResponse } from './completion-analyzer.js';
 
-import { createComponentLogger } from '../integrations/logger.js';
-import { validateSyntax } from '../integrations/edit-validator.js';
+import { createComponentLogger } from '../integrations/utilities/logger.js';
+import { validateSyntax } from '../integrations/safety/edit-validator.js';
 import * as fs from 'node:fs';
 
 const log = createComponentLogger('ExecutionLoop');

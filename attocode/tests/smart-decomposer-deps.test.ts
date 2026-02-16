@@ -5,8 +5,8 @@
  * LLM dependency reference formats and filters invalid ones.
  */
 import { describe, it, expect } from 'vitest';
-import { createSmartDecomposer, parseDecompositionResponse } from '../src/integrations/smart-decomposer.js';
-import type { LLMDecomposeResult, SmartDecomposerEvent } from '../src/integrations/smart-decomposer.js';
+import { createSmartDecomposer, parseDecompositionResponse } from '../src/integrations/tasks/smart-decomposer.js';
+import type { LLMDecomposeResult, SmartDecomposerEvent } from '../src/integrations/tasks/smart-decomposer.js';
 
 describe('SmartDecomposer dependency resolution', () => {
   it('should resolve integer index dependencies', async () => {

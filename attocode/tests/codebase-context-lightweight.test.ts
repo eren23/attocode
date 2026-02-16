@@ -2,7 +2,7 @@
  * Tests for generateLightweightRepoMap.
  */
 import { describe, it, expect } from 'vitest';
-import { generateLightweightRepoMap, type RepoMap, type CodeChunk } from '../src/integrations/codebase-context.js';
+import { generateLightweightRepoMap, type RepoMap, type CodeChunk } from '../src/integrations/context/codebase-context.js';
 
 function createMockChunk(overrides: Partial<CodeChunk> = {}): CodeChunk {
   const filePath = overrides.filePath || 'src/index.ts';

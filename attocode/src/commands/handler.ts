@@ -11,7 +11,7 @@ import {
   persistenceDebug,
   saveCheckpointToStore,
   type CheckpointData,
-} from '../integrations/persistence.js';
+} from '../integrations/persistence/persistence.js';
 import {
   formatServerList,
   getContextUsage,
@@ -24,7 +24,7 @@ import { formatSessionsTable } from '../session-picker.js';
 import { handleSkillsCommand } from './skills-commands.js';
 import { handleAgentsCommand } from './agents-commands.js';
 import { handleInitCommand } from './init-commands.js';
-import { logger } from '../integrations/logger.js';
+import { logger } from '../integrations/utilities/logger.js';
 
 // =============================================================================
 // ANSI COLOR UTILITIES
@@ -540,7 +540,7 @@ In Plan Mode:
         const task = args.join(' ');
         output.log(c(`\nRunning with team: ${task}`, 'cyan'));
         try {
-          const { CODER_ROLE, REVIEWER_ROLE, RESEARCHER_ROLE } = await import('../integrations/multi-agent.js');
+          const { CODER_ROLE, REVIEWER_ROLE, RESEARCHER_ROLE } = await import('../integrations/agents/multi-agent.js');
           const result = await agent.runWithTeam(
             { id: `team-${Date.now()}`, goal: task, context: '' },
             [RESEARCHER_ROLE, CODER_ROLE, REVIEWER_ROLE]
@@ -1389,7 +1389,7 @@ ${c('Note:', 'dim')} Theme switching is visual in TUI mode. REPL mode uses fixed
 
     case '/sandbox':
       try {
-        const { createSandboxManager } = await import('../integrations/sandbox/index.js');
+        const { createSandboxManager } = await import('../integrations/safety/sandbox/index.js');
         const sandboxManager = createSandboxManager({ mode: 'auto', verbose: true });
         const available = await sandboxManager.getAvailableSandboxes();
 
@@ -1428,7 +1428,7 @@ ${c('Note:', 'dim')} Theme switching is visual in TUI mode. REPL mode uses fixed
 
     case '/shell':
       try {
-        const { createPTYShell } = await import('../integrations/pty-shell.js');
+        const { createPTYShell } = await import('../integrations/streaming/pty-shell.js');
 
         if (args[0] === 'test') {
           output.log(c('\nTesting persistent PTY shell...', 'cyan'));

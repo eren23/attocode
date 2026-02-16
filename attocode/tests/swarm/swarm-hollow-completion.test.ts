@@ -3,11 +3,11 @@
  * quality gate pre-check, dependency context warnings, and per-task-type timeouts.
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import type { SpawnResult, StructuredClosureReport } from '../../src/integrations/agent-registry.js';
+import type { SpawnResult, StructuredClosureReport } from '../../src/integrations/agents/agent-registry.js';
 import type { SwarmTask, SwarmConfig } from '../../src/integrations/swarm/types.js';
 import { DEFAULT_SWARM_CONFIG } from '../../src/integrations/swarm/types.js';
 import { SwarmWorkerPool } from '../../src/integrations/swarm/worker-pool.js';
-import type { AgentRegistry, AgentDefinition } from '../../src/integrations/agent-registry.js';
+import type { AgentRegistry, AgentDefinition } from '../../src/integrations/agents/agent-registry.js';
 import type { SwarmBudgetPool } from '../../src/integrations/swarm/swarm-budget.js';
 import { isHollowCompletion } from '../../src/integrations/swarm/swarm-orchestrator.js';
 

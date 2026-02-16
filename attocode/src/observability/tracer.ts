@@ -8,7 +8,7 @@
 import { webcrypto } from 'node:crypto';
 // Use webcrypto directly - it's compatible with Web Crypto API
 const crypto = webcrypto;
-import { logger } from '../integrations/logger.js';
+import { logger } from '../integrations/utilities/logger.js';
 
 import type {
   Span,

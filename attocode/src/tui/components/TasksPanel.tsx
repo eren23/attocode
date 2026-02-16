@@ -14,7 +14,7 @@
 import { memo } from 'react';
 import { Box, Text } from 'ink';
 import type { ThemeColors } from '../types.js';
-import type { Task, TaskStatus } from '../../integrations/task-manager.js';
+import type { Task, TaskStatus } from '../../integrations/tasks/task-manager.js';
 
 // =============================================================================
 // TYPES

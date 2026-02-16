@@ -8,7 +8,7 @@
 
 import * as fs from 'node:fs';
 import * as path from 'node:path';
-import type { SmartDecompositionResult, ResourceConflict } from '../smart-decomposer.js';
+import type { SmartDecompositionResult, ResourceConflict } from '../tasks/smart-decomposer.js';
 import type { SwarmTask, SwarmTaskResult, SwarmConfig, FixupTask, SwarmCheckpoint, TaskFailureMode } from './types.js';
 import { subtaskToSwarmTask } from './types.js';
 

@@ -163,14 +163,14 @@ import {
 } from './integrations/index.js';
 import {
   resolvePolicyProfile,
-} from './integrations/policy-engine.js';
+} from './integrations/safety/policy-engine.js';
 
 import type { SharedContextState } from './shared/shared-context-state.js';
 import type { SharedEconomicsState } from './shared/shared-economics-state.js';
 import { TraceCollector, createTraceCollector } from './tracing/trace-collector.js';
 import { modelRegistry } from './costs/index.js';
-import { getModelContextLength } from './integrations/openrouter-pricing.js';
-import { createComponentLogger } from './integrations/logger.js';
+import { getModelContextLength } from './integrations/utilities/openrouter-pricing.js';
+import { createComponentLogger } from './integrations/utilities/logger.js';
 
 // Spawn agent tools for LLM-driven subagent delegation
 import {

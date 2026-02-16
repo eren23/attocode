@@ -9,7 +9,7 @@ import { describe, it, expect } from 'vitest';
 import {
   SharedBudgetPool,
   createBudgetPool,
-} from '../../src/integrations/budget-pool.js';
+} from '../../src/integrations/budget/budget-pool.js';
 
 describe('SharedBudgetPool', () => {
   describe('reserve', () => {

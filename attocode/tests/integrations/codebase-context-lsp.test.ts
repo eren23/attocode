@@ -13,8 +13,8 @@ import {
   CodebaseContextManager,
   type CodeChunk,
   type RepoMap,
-} from '../../src/integrations/codebase-context.js';
-import type { LSPManager, LSPLocation } from '../../src/integrations/lsp.js';
+} from '../../src/integrations/context/codebase-context.js';
+import type { LSPManager, LSPLocation } from '../../src/integrations/lsp/lsp.js';
 
 // =============================================================================
 // MOCK FACTORIES

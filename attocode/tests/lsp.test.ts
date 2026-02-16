@@ -14,7 +14,7 @@ import {
   createLSPManager,
   type LSPConfig,
   type LSPEvent,
-} from '../src/integrations/lsp.js';
+} from '../src/integrations/lsp/lsp.js';
 
 describe('LSPManager', () => {
   let manager: LSPManager;

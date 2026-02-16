@@ -24,7 +24,7 @@ import type { ToolDescription } from './tools/types.js';
 import type { ToolRegistry } from './tools/registry.js';
 
 import { safeParseJson } from './tricks/json-utils.js';
-import { logger } from './integrations/logger.js';
+import { logger } from './integrations/utilities/logger.js';
 
 // =============================================================================
 // PROVIDER ADAPTER

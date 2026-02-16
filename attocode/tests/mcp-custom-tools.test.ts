@@ -9,7 +9,7 @@ import {
   createCustomTools,
   customToolToRegistryFormat,
   type GenericToolSpec,
-} from '../src/integrations/mcp-custom-tools.js';
+} from '../src/integrations/mcp/mcp-custom-tools.js';
 
 describe('createSerperSearchTool', () => {
   it('should create a tool with correct name and description', () => {

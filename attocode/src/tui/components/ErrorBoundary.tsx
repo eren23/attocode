@@ -15,7 +15,7 @@
 
 import React, { Component, type ReactNode, type ErrorInfo } from 'react';
 import { Box, Text } from 'ink';
-import { logger } from '../../integrations/logger.js';
+import { logger } from '../../integrations/utilities/logger.js';
 
 interface ErrorBoundaryProps {
   /** Name for logging/display purposes */

@@ -6,7 +6,7 @@ import { describe, it, expect } from 'vitest';
 import {
   ToolRecommendationEngine,
   createToolRecommendationEngine,
-} from '../src/integrations/tool-recommendation.js';
+} from '../src/integrations/quality/tool-recommendation.js';
 
 const ALL_TOOLS = [
   'read_file', 'write_file', 'edit_file', 'bash',

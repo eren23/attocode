@@ -11,8 +11,8 @@ import {
   getThinkingSystemPrompt,
   getSubagentQualityPrompt,
   createThinkingStrategy,
-} from '../src/integrations/thinking-strategy.js';
-import type { ComplexityTier } from '../src/integrations/complexity-classifier.js';
+} from '../src/integrations/utilities/thinking-strategy.js';
+import type { ComplexityTier } from '../src/integrations/agents/complexity-classifier.js';
 
 // =============================================================================
 // generateThinkingDirectives

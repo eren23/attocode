@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { isToolAllowedByProfile, resolvePolicyProfile, DEFAULT_POLICY_PROFILES } from '../../src/integrations/policy-engine.js';
+import { isToolAllowedByProfile, resolvePolicyProfile, DEFAULT_POLICY_PROFILES } from '../../src/integrations/safety/policy-engine.js';
 import type { SwarmWorkerSpec } from '../../src/integrations/swarm/types.js';
 
 describe('resolvePolicyProfile (swarm inference)', () => {

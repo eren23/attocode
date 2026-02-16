@@ -11,7 +11,7 @@ import { defineTool } from './registry.js';
 import { coerceBoolean, coerceString } from './coercion.js';
 import type { ToolResult } from './types.js';
 import { FileOperationError, ErrorCategory } from '../errors/index.js';
-import { generateDiff } from '../integrations/diff-utils.js';
+import { generateDiff } from '../integrations/utilities/diff-utils.js';
 
 // =============================================================================
 // READ FILE

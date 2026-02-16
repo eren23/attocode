@@ -6,7 +6,7 @@
  */
 
 import { describe, it, expect } from 'vitest';
-import { HumanInLoopManager } from '../../src/integrations/safety.js';
+import { HumanInLoopManager } from '../../src/integrations/safety/safety.js';
 import type { ToolCall } from '../../src/types.js';
 
 function makeToolCall(name: string, args: Record<string, unknown> = {}): ToolCall {

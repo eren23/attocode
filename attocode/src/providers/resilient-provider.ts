@@ -31,7 +31,7 @@ import {
   type ProviderHealth,
 } from './fallback-chain.js';
 import type { LLMProvider, LLMProviderWithTools } from './types.js';
-import { logger } from '../integrations/logger.js';
+import { logger } from '../integrations/utilities/logger.js';
 
 // =============================================================================
 // TYPES

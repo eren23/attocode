@@ -16,11 +16,11 @@ import { SwarmStatusPanel } from './components/SwarmStatusPanel.js';
 import type { SwarmStatus } from '../integrations/swarm/types.js';
 import { ToolCallItem, type ToolCallDisplayItem as ImportedToolCallDisplayItem } from './components/ToolCallItem.js';
 import { DebugPanel, useDebugBuffer } from './components/DebugPanel.js';
-import type { Task } from '../integrations/task-manager.js';
+import type { Task } from '../integrations/tasks/task-manager.js';
 import type { ProductionAgent } from '../agent.js';
-import type { SQLiteStore } from '../integrations/sqlite-store.js';
-import type { MCPClient } from '../integrations/mcp-client.js';
-import type { Compactor } from '../integrations/compaction.js';
+import type { SQLiteStore } from '../integrations/persistence/sqlite-store.js';
+import type { MCPClient } from '../integrations/mcp/mcp-client.js';
+import type { Compactor } from '../integrations/context/compaction.js';
 import type { ThemeColors, CommandPaletteItem } from './types.js';
 import { getTheme, getThemeNames } from './theme/index.js';
 import { ControlledCommandPalette } from './input/CommandPalette.js';
@@ -32,7 +32,7 @@ import { handleSkillsCommand, formatEnhancedSkillList } from '../commands/skills
 import { handleAgentsCommand, formatEnhancedAgentList } from '../commands/agents-commands.js';
 import { handleInitCommand } from '../commands/init-commands.js';
 import type { CommandOutput } from '../commands/types.js';
-import { createHistoryManager, type HistoryManager } from '../integrations/history.js';
+import { createHistoryManager, type HistoryManager } from '../integrations/persistence/history.js';
 import type { AgentResult } from '../types.js';
 
 // =============================================================================

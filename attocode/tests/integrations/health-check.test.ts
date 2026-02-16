@@ -10,7 +10,7 @@ import {
   healthReportToJSON,
   type HealthCheckResult,
   type HealthReport,
-} from '../../src/integrations/health-check.js';
+} from '../../src/integrations/quality/health-check.js';
 
 describe('Health Check System', () => {
   let checker: HealthChecker;

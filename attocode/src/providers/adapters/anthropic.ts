@@ -21,7 +21,7 @@ import type {
 import { ProviderError } from '../types.js';
 import { registerProvider, hasEnv, requireEnv } from '../provider.js';
 import { resilientFetch, type NetworkConfig } from '../resilient-fetch.js';
-import { logger } from '../../integrations/logger.js';
+import { logger } from '../../integrations/utilities/logger.js';
 
 // =============================================================================
 // ANTHROPIC API TYPES

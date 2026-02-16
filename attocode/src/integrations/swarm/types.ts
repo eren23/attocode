@@ -5,13 +5,13 @@
  * coordinates multiple small specialist worker models.
  */
 
-import type { SubtaskType, SmartSubtask } from '../smart-decomposer.js';
-import type { AgentOutput, SynthesisResult } from '../result-synthesizer.js';
-import type { StructuredClosureReport } from '../agent-registry.js';
-import type { CodebaseContextManager } from '../codebase-context.js';
+import type { SubtaskType, SmartSubtask } from '../tasks/smart-decomposer.js';
+import type { AgentOutput, SynthesisResult } from '../agents/result-synthesizer.js';
+import type { StructuredClosureReport } from '../agents/agent-registry.js';
+import type { CodebaseContextManager } from '../context/codebase-context.js';
 import type { ThrottleConfig } from './request-throttle.js';
 import type { PolicyProfile } from '../../types.js';
-import type { EconomicsTuning } from '../economics.js';
+import type { EconomicsTuning } from '../budget/economics.js';
 
 // ─── Worker Roles ─────────────────────────────────────────────────────────
 
