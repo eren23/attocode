@@ -367,10 +367,10 @@ describe('sandboxExec', () => {
     const result = await sandboxExec('echo "quick exec"');
 
     // On some systems (especially CI or restricted environments),
-    // sandbox-exec may not be available or may fail with exit code 65
-    if (result.exitCode === 65) {
-      // Skip test when sandbox isn't available - this is expected in CI
-      console.warn('Sandbox not available (exit code 65), skipping assertion');
+    // sandbox-exec may not be available (exit code 65) or Docker may be
+    // missing (exit code 125). Skip gracefully in these cases.
+    if (result.exitCode === 65 || result.exitCode === 125) {
+      console.warn(`Sandbox not available (exit code ${result.exitCode}), skipping assertion`);
       return;
     }
 
