@@ -6,6 +6,7 @@
  */
 
 import type { LLMProvider, Message } from '../../types.js';
+import { estimateTokenCount } from '../utilities/token-estimate.js';
 
 // =============================================================================
 // TYPES
@@ -84,17 +85,16 @@ export class Compactor {
 
   /**
    * Estimate token count for messages.
-   * Uses a simple heuristic: ~4 characters per token.
    */
   estimateTokens(messages: Message[]): number {
-    let totalChars = 0;
+    let total = 0;
     for (const msg of messages) {
-      totalChars += msg.content.length;
+      total += estimateTokenCount(msg.content);
       if (msg.toolCalls) {
-        totalChars += JSON.stringify(msg.toolCalls).length;
+        total += estimateTokenCount(JSON.stringify(msg.toolCalls));
       }
     }
-    return Math.ceil(totalChars / 4);
+    return total;
   }
 
   /**
@@ -353,7 +353,7 @@ export function getContextUsage(
   messages: Message[],
   threshold: number
 ): { tokens: number; percent: number; shouldCompact: boolean } {
-  const tokens = messages.reduce((sum, m) => sum + Math.ceil(m.content.length / 4), 0);
+  const tokens = messages.reduce((sum, m) => sum + estimateTokenCount(m.content), 0);
   const percent = Math.round((tokens / threshold) * 100);
 
   return {
@@ -430,10 +430,10 @@ export interface MCPBreakdownStats {
 }
 
 /**
- * Estimate tokens for a string using ~4 chars per token heuristic.
+ * Estimate tokens for a string.
  */
 function estimateTokensForString(str: string): number {
-  return Math.ceil(str.length / 4);
+  return estimateTokenCount(str);
 }
 
 /**

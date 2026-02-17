@@ -238,6 +238,7 @@ export class ProductionAgent {
   private swarmOrchestrator: SwarmOrchestrator | null = null;
   private workLog: WorkLog | null = null;
   private verificationGate: VerificationGate | null = null;
+  private typeCheckerState: import('./integrations/safety/type-checker.js').TypeCheckerState | null = null;
 
   // Phase 2-4 integration modules
   private injectionBudget: InjectionBudgetManager | null = null;
@@ -1155,7 +1156,8 @@ export class ProductionAgent {
       skillManager: this.skillManager, semanticCache: this.semanticCache,
       lspManager: this.lspManager, threadManager: this.threadManager,
       interactivePlanner: this.interactivePlanner, recursiveContext: this.recursiveContext,
-      fileChangeTracker: this.fileChangeTracker, capabilitiesRegistry: this.capabilitiesRegistry,
+      fileChangeTracker: this.fileChangeTracker, typeCheckerState: this.typeCheckerState,
+      capabilitiesRegistry: this.capabilitiesRegistry,
       rules: this.rules, stateMachine: this.stateMachine,
       lastComplexityAssessment: this.lastComplexityAssessment,
       cacheableSystemBlocks: this.cacheableSystemBlocks,
@@ -2681,6 +2683,10 @@ If the task is a simple question or doesn't need specialized handling, set bestA
    */
   setStore(store: SQLiteStore): void {
     this.store = store;
+    // Wire persistence to codebase context for warm startup across sessions
+    if (this.codebaseContext) {
+      this.codebaseContext.setPersistenceStore(store);
+    }
   }
 
   /**
@@ -2714,6 +2720,13 @@ If the task is a simple question or doesn't need specialized handling, set bestA
    */
   cycleMode(): AgentMode {
     return this.modeManager.cycleMode();
+  }
+
+  /**
+   * Get type checker state for TUI diagnostics display.
+   */
+  getTypeCheckerState(): import('./integrations/safety/type-checker.js').TypeCheckerState | null {
+    return this.typeCheckerState;
   }
 
   /**

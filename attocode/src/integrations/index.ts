@@ -552,6 +552,11 @@ export {
   type ScoredChunk,
 } from './context/codebase-context.js';
 
+// AST Cache Stats
+export {
+  getASTCacheStats,
+} from './context/codebase-ast.js';
+
 // Edit Validator (Phase 5.1)
 export {
   validateSyntax,
@@ -559,6 +564,18 @@ export {
   type ValidationResult,
   type SyntaxError,
 } from './safety/edit-validator.js';
+
+// TypeScript compilation checker
+export {
+  detectTypeScriptProject,
+  runTypeCheck,
+  parseTypeCheckOutput,
+  formatTypeCheckNudge,
+  createTypeCheckerState,
+  type TypeCheckError,
+  type TypeCheckResult,
+  type TypeCheckerState,
+} from './safety/type-checker.js';
 
 // Shared Blackboard (subagent coordination)
 export {

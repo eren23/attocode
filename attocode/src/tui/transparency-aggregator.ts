@@ -55,6 +55,12 @@ export interface TransparencyState {
   /** Recent decision history (last N decisions) */
   decisionHistory: DecisionRecord[];
 
+  /** Diagnostics state (AST + compilation) */
+  diagnostics: {
+    lastTscResult: { success: boolean; errorCount: number; duration: number } | null;
+    recentSyntaxErrors: Array<{ file: string; line: number; message: string }>;
+  };
+
   /** Count of events processed */
   eventsProcessed: number;
 }
@@ -84,6 +90,7 @@ export class TransparencyAggregator {
     contextHealth: null,
     activeLearnings: [],
     decisionHistory: [],
+    diagnostics: { lastTscResult: null, recentSyntaxErrors: [] },
     eventsProcessed: 0,
   };
 
@@ -184,6 +191,27 @@ export class TransparencyAggregator {
           };
         }
         break;
+
+      case 'diagnostics.tsc-check':
+        this.state.diagnostics.lastTscResult = {
+          success: event.errorCount === 0,
+          errorCount: event.errorCount,
+          duration: event.duration,
+        };
+        break;
+
+      case 'diagnostics.syntax-error':
+        this.state.diagnostics.recentSyntaxErrors.push({
+          file: event.file,
+          line: event.line,
+          message: event.message,
+        });
+        // Keep last 10
+        if (this.state.diagnostics.recentSyntaxErrors.length > 10) {
+          this.state.diagnostics.recentSyntaxErrors =
+            this.state.diagnostics.recentSyntaxErrors.slice(-10);
+        }
+        break;
     }
 
     this.notifyListeners();
@@ -216,6 +244,7 @@ export class TransparencyAggregator {
       contextHealth: null,
       activeLearnings: [],
       decisionHistory: [],
+      diagnostics: { lastTscResult: null, recentSyntaxErrors: [] },
       eventsProcessed: 0,
     };
     this.notifyListeners();

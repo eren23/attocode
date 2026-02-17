@@ -8,7 +8,7 @@
 
 import * as fs from 'fs/promises';
 import * as path from 'path';
-import { isASTSupported, extractSymbolsAST, extractDependenciesAST, type ASTSymbol } from './codebase-ast.js';
+import { isASTSupported, extractSymbolsAST, extractDependenciesAST, parseFile, getCachedParse, type ASTSymbol } from './codebase-ast.js';
 import type { CodeChunk, CodeChunkType, CodebaseContextConfig } from './codebase-context.js';
 
 // =============================================================================
@@ -101,11 +101,18 @@ export async function processFile(
     const content = await fs.readFile(fullPath, 'utf-8');
     const tokenCount = Math.ceil(content.length * deps.config.tokensPerChar);
     const type = determineChunkType(deps, relativePath, content);
-    const symbolDetailsList = extractSymbolDetails(content, relativePath);
+
+    // Use single parseFile() call — parses once, extracts symbols + deps from same tree
+    const parsed = parseFile(content, fullPath);
+    const symbolDetailsList = parsed
+      ? parsed.symbols.map(s => ({ name: s.name, kind: s.kind, exported: s.exported, line: s.line }))
+      : extractSymbolDetails(content, relativePath);
     const symbols = symbolDetailsList.length > 0
       ? symbolDetailsList.map((s) => s.name)
       : extractSymbols(content, relativePath);
-    const dependencies = extractDependencyNames(content, relativePath);
+    const dependencies = parsed
+      ? parsed.dependencies.flatMap(d => d.names.filter(n => !n.startsWith('* as ')))
+      : extractDependencyNames(content, relativePath);
 
     // Calculate base importance
     const importance = calculateBaseImportance(type, relativePath);
@@ -375,9 +382,13 @@ export function extractSymbolDetails(
  * Uses AST-based extraction when available, with regex fallback.
  */
 export function extractDependencies(content: string, currentFile: string): Set<string> {
-  // Try AST-based extraction first
-  if (isASTSupported(currentFile)) {
-    const astDeps = extractDependenciesAST(content, currentFile);
+  // Try cache first (file may have been parsed by processFile already)
+  const cached = getCachedParse(currentFile);
+  const astDeps = cached
+    ? cached.dependencies
+    : isASTSupported(currentFile) ? extractDependenciesAST(content, currentFile) : null;
+
+  if (astDeps) {
     const deps = new Set<string>();
     const dir = path.dirname(currentFile);
     for (const dep of astDeps) {

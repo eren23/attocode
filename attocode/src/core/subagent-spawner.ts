@@ -14,6 +14,7 @@ import type {
 } from '../types.js';
 
 import type { AgentContext, AgentContextMutators, SubAgentFactory } from './types.js';
+import { estimateTokenCount } from '../integrations/utilities/token-estimate.js';
 import type { SpawnConstraints } from '../tools/agent.js';
 
 import {
@@ -514,7 +515,7 @@ export async function spawnAgent(
       data: {
         agentId: agentName,
         parentAgentId: ctx.traceCollector.getSessionId() || 'unknown',
-        repoMapTokens: Math.ceil(repoContextStr.length / 4),
+        repoMapTokens: estimateTokenCount(repoContextStr),
         blackboardFindings: blackboardFindingsCount,
         modifiedFiles: modifiedFilesList,
         toolCount: agentTools.length,

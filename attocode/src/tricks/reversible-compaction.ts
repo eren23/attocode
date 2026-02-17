@@ -31,6 +31,12 @@
  */
 
 // =============================================================================
+// IMPORTS
+// =============================================================================
+
+import { estimateTokenCount } from '../integrations/utilities/token-estimate.js';
+
+// =============================================================================
 // TYPES
 // =============================================================================
 
@@ -454,7 +460,7 @@ export class ReversibleCompactor {
 
     // Calculate original token estimate
     const originalContent = messages.map(m => m.content).join('\n');
-    const originalTokens = Math.ceil(originalContent.length / 4);
+    const originalTokens = estimateTokenCount(originalContent);
 
     // Extract references from all messages
     const allReferences: Reference[] = [];
@@ -498,7 +504,7 @@ export class ReversibleCompactor {
     // Calculate compacted token estimate
     const referenceBlock = this.formatReferencesBlock(processedReferences);
     const compactedContent = summary + '\n\n' + referenceBlock;
-    const compactedTokens = Math.ceil(compactedContent.length / 4);
+    const compactedTokens = estimateTokenCount(compactedContent);
 
     // Store preserved references
     this.preservedReferences = processedReferences;

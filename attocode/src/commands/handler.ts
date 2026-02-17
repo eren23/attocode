@@ -25,6 +25,7 @@ import { handleSkillsCommand } from './skills-commands.js';
 import { handleAgentsCommand } from './agents-commands.js';
 import { handleInitCommand } from './init-commands.js';
 import { logger } from '../integrations/utilities/logger.js';
+import { estimateTokenCount } from '../integrations/utilities/token-estimate.js';
 
 // =============================================================================
 // ANSI COLOR UTILITIES
@@ -1257,7 +1258,7 @@ ${c('Context Status:', 'bold')}
           // Detailed token breakdown
           const mcpStats = mcpClient.getContextStats();
           const systemPrompt = agent.getSystemPromptWithMode();
-          const estimateTokens = (str: string) => Math.ceil(str.length / 3.2);
+          const estimateTokens = (str: string) => estimateTokenCount(str);
 
           const systemTokens = estimateTokens(systemPrompt);
           const mcpTokens = mcpStats.summaryTokens + mcpStats.definitionTokens;
@@ -1288,7 +1289,7 @@ ${c('  Category             Tokens    % of Total', 'dim')}
           // Simple context overview
           const mcpStats = mcpClient.getContextStats();
           const systemPrompt = agent.getSystemPromptWithMode();
-          const estimateTokens = (str: string) => Math.ceil(str.length / 3.2);
+          const estimateTokens = (str: string) => estimateTokenCount(str);
 
           const systemTokens = estimateTokens(systemPrompt);
           const mcpTokens = mcpStats.summaryTokens + mcpStats.definitionTokens;

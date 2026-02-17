@@ -1,9 +1,15 @@
 /**
- * Codebase AST Module (Phase 3.3)
+ * Codebase AST Module
  *
- * Replaces regex-based symbol extraction with tree-sitter AST parsing.
- * Provides accurate symbol and dependency extraction for TypeScript/TSX
- * and Python. Falls back gracefully when tree-sitter is unavailable.
+ * Provides accurate symbol and dependency extraction using tree-sitter AST parsing.
+ * Supports TypeScript/TSX, JavaScript/JSX, Python, and polyglot languages via
+ * pluggable language profiles.
+ *
+ * Key features:
+ * - ASTCache: Parse once per file, extract symbols + dependencies from single tree
+ * - Content-hash invalidation: Detects when file content changes
+ * - Incremental reparse: Leverages tree-sitter's tree.edit() for fast updates
+ * - Polyglot support: Unified LanguageProfile system for adding new languages
  */
 
 import * as path from 'path';
@@ -25,6 +31,20 @@ export interface ASTDependency {
   isRelative: boolean;
 }
 
+/** Cached parse result for a single file. */
+export interface ParsedFile {
+  /** Retained tree-sitter tree (needed for incremental parsing) */
+  tree: Tree;
+  /** Extracted symbols */
+  symbols: ASTSymbol[];
+  /** Extracted dependencies */
+  dependencies: ASTDependency[];
+  /** Content hash for invalidation (djb2) */
+  contentHash: number;
+  /** Timestamp of last parse */
+  parsedAt: number;
+}
+
 // =============================================================================
 // LAZY PARSER INITIALIZATION
 // =============================================================================
@@ -40,19 +60,38 @@ export type SyntaxNode = {
   namedChildren: SyntaxNode[];
 };
 
-export type Tree = { rootNode: SyntaxNode };
+export type Tree = {
+  rootNode: SyntaxNode;
+  /** tree-sitter's edit method for incremental parsing */
+  edit?(input: TreeEdit): void;
+};
+
+export interface TreeEdit {
+  startIndex: number;
+  oldEndIndex: number;
+  newEndIndex: number;
+  startPosition: { row: number; column: number };
+  oldEndPosition: { row: number; column: number };
+  newEndPosition: { row: number; column: number };
+}
 
 export type ParserLike = {
   setLanguage(lang: unknown): void;
-  parse(input: string): Tree;
+  parse(input: string, oldTree?: Tree): Tree;
 };
 
 let tsParser: ParserLike | null = null;
 let tsxParser: ParserLike | null = null;
 let pyParser: ParserLike | null = null;
 let parserInitAttempted = false;
+const parserInitFailed = new Set<string>();
+const parsers = new Map<string, ParserLike>();
 
 export function getParser(ext: string): ParserLike | null {
+  // Check polyglot parser cache first
+  if (parsers.has(ext)) return parsers.get(ext)!;
+  if (parserInitFailed.has(ext)) return null;
+
   if (!parserInitAttempted) {
     parserInitAttempted = true;
     try {
@@ -89,8 +128,157 @@ export function getParser(ext: string): ParserLike | null {
     case '.js': return tsParser;  // TS parser handles JS fine
     case '.jsx': return tsxParser;
     case '.py': return pyParser;
-    default: return null;
+    default: {
+      // Try polyglot language profiles (LANGUAGE_PROFILES defined below, accessed lazily at call time)
+      const profile = getLanguageProfile(ext);
+      if (!profile) return null;
+      return initPolyglotParser(ext, profile);
+    }
   }
+}
+
+// =============================================================================
+// AST CACHE
+// =============================================================================
+
+/** Module-level cache: filePath (absolute) -> ParsedFile */
+const astCache = new Map<string, ParsedFile>();
+
+/** Module-level parse counters for diagnostics visibility. */
+let totalParses = 0;
+let cacheHits = 0;
+
+/** Normalize cache key to absolute path to prevent absolute/relative mismatch. */
+function cacheKey(filePath: string): string {
+  return path.resolve(filePath);
+}
+
+/**
+ * djb2 string hash — fast, non-cryptographic hash for content invalidation.
+ */
+export function djb2Hash(str: string): number {
+  let hash = 5381;
+  for (let i = 0; i < str.length; i++) {
+    hash = ((hash << 5) + hash + str.charCodeAt(i)) | 0;
+  }
+  return hash >>> 0; // Ensure unsigned
+}
+
+/**
+ * Parse a file once and extract symbols + dependencies from the same tree.
+ * Results are cached by filePath + contentHash.
+ */
+export function parseFile(content: string, filePath: string): ParsedFile | null {
+  const ext = path.extname(filePath).toLowerCase();
+  const parser = getParser(ext);
+  if (!parser) return null;
+
+  const hash = djb2Hash(content);
+  const key = cacheKey(filePath);
+
+  // Check cache
+  const cached = astCache.get(key);
+  if (cached && cached.contentHash === hash) {
+    cacheHits++;
+    return cached;
+  }
+
+  try {
+    totalParses++;
+    const tree = parser.parse(content);
+    const symbols = extractSymbolsFromRoot(tree.rootNode, ext);
+    const dependencies = extractDependenciesFromRoot(tree.rootNode, ext);
+
+    const result: ParsedFile = { tree, symbols, dependencies, contentHash: hash, parsedAt: Date.now() };
+    astCache.set(key, result);
+    return result;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Full reparse for write_file (no edit ranges available).
+ * Parses from scratch and caches the result.
+ */
+export function fullReparse(filePath: string, newContent: string): ParsedFile | null {
+  return parseFile(newContent, filePath);
+}
+
+/**
+ * Incremental reparse using tree-sitter's tree.edit() + old tree reference.
+ * Falls back to full reparse if no cached tree is available.
+ */
+export function incrementalReparse(
+  filePath: string,
+  newContent: string,
+  edit: TreeEdit,
+): ParsedFile | null {
+  const key = cacheKey(filePath);
+  const cached = astCache.get(key);
+  const ext = path.extname(filePath).toLowerCase();
+  const parser = getParser(ext);
+  if (!parser) return null;
+
+  try {
+    let newTree: Tree;
+    if (cached?.tree?.edit) {
+      // Incremental: edit old tree, reparse with old tree reference
+      cached.tree.edit(edit);
+      newTree = parser.parse(newContent, cached.tree);
+    } else {
+      // No cached tree — full parse
+      newTree = parser.parse(newContent);
+    }
+
+    const symbols = extractSymbolsFromRoot(newTree.rootNode, ext);
+    const dependencies = extractDependenciesFromRoot(newTree.rootNode, ext);
+
+    const hash = djb2Hash(newContent);
+    const result: ParsedFile = { tree: newTree, symbols, dependencies, contentHash: hash, parsedAt: Date.now() };
+    astCache.set(key, result);
+    return result;
+  } catch {
+    // Fall back to full reparse
+    return parseFile(newContent, filePath);
+  }
+}
+
+/** Remove a single file from the cache. */
+export function invalidateAST(filePath: string): void { astCache.delete(cacheKey(filePath)); }
+
+/** Clear all cached parse results. */
+export function clearASTCache(): void { astCache.clear(); }
+
+/** Get number of cached files. */
+export function getASTCacheSize(): number { return astCache.size; }
+
+/** Get cached parse result without re-parsing. */
+export function getCachedParse(filePath: string): ParsedFile | null { return astCache.get(cacheKey(filePath)) ?? null; }
+
+/** Get AST cache diagnostics stats. */
+export function getASTCacheStats(): {
+  fileCount: number;
+  languages: Record<string, number>;
+  totalParses: number;
+  cacheHits: number;
+} {
+  const languages: Record<string, number> = {};
+  for (const [key] of astCache) {
+    const ext = key.slice(key.lastIndexOf('.')).toLowerCase();
+    const lang = ext === '.ts' || ext === '.tsx' ? 'typescript'
+      : ext === '.js' || ext === '.jsx' ? 'javascript'
+      : ext === '.py' ? 'python'
+      : ext;
+    languages[lang] = (languages[lang] || 0) + 1;
+  }
+  return { fileCount: astCache.size, languages, totalParses, cacheHits };
+}
+
+/** Reset parse counters (for testing). */
+export function resetASTCacheStats(): void {
+  totalParses = 0;
+  cacheHits = 0;
 }
 
 // =============================================================================
@@ -107,40 +295,41 @@ export function isASTSupported(filePath: string): boolean {
 
 /**
  * Extract symbols from source code using tree-sitter AST.
+ * Uses ASTCache — parses once, reuses cached result.
  */
 export function extractSymbolsAST(content: string, filePath: string): ASTSymbol[] {
-  const ext = path.extname(filePath).toLowerCase();
-  const parser = getParser(ext);
-  if (!parser) return [];
-
-  try {
-    const tree = parser.parse(content);
-    if (ext === '.py') {
-      return extractPythonSymbols(tree.rootNode);
-    }
-    return extractTSSymbols(tree.rootNode);
-  } catch {
-    return [];
-  }
+  return parseFile(content, filePath)?.symbols ?? [];
 }
 
 /**
  * Extract dependencies from source code using tree-sitter AST.
+ * Uses ASTCache — parses once, reuses cached result.
  */
 export function extractDependenciesAST(content: string, filePath: string): ASTDependency[] {
-  const ext = path.extname(filePath).toLowerCase();
-  const parser = getParser(ext);
-  if (!parser) return [];
+  return parseFile(content, filePath)?.dependencies ?? [];
+}
 
-  try {
-    const tree = parser.parse(content);
-    if (ext === '.py') {
-      return extractPythonDependencies(tree.rootNode);
-    }
-    return extractTSDependencies(tree.rootNode);
-  } catch {
-    return [];
-  }
+// =============================================================================
+// INTERNAL: Root-level extraction dispatchers
+// =============================================================================
+
+/** Lookup a polyglot language profile by extension. */
+function getLanguageProfile(ext: string): LanguageProfile | undefined {
+  return LANGUAGE_PROFILES.find(p => p.extensions.includes(ext));
+}
+
+function extractSymbolsFromRoot(root: SyntaxNode, ext: string): ASTSymbol[] {
+  if (ext === '.py') return extractPythonSymbols(root);
+  const profile = getLanguageProfile(ext);
+  if (profile) return extractSymbolsGeneric(root, profile);
+  return extractTSSymbols(root);
+}
+
+function extractDependenciesFromRoot(root: SyntaxNode, ext: string): ASTDependency[] {
+  if (ext === '.py') return extractPythonDependencies(root);
+  const profile = getLanguageProfile(ext);
+  if (profile) return extractDependenciesGeneric(root, profile);
+  return extractTSDependencies(root);
 }
 
 // =============================================================================
@@ -515,4 +704,247 @@ function stripQuotes(str: string): string {
     return str.slice(1, -1);
   }
   return str;
+}
+
+// =============================================================================
+// POLYGLOT LANGUAGE PROFILES (Phase 4)
+// =============================================================================
+
+export type ExportDetection = 'visibility' | 'keyword' | 'convention';
+
+export interface LanguageProfile {
+  extensions: string[];
+  grammar: string;
+  symbolNodes: Record<string, ASTSymbol['kind']>;
+  importNodes: string[];
+  exportDetection: ExportDetection;
+  extractImport: (node: SyntaxNode) => ASTDependency[];
+}
+
+export const LANGUAGE_PROFILES: LanguageProfile[] = [
+  {
+    extensions: ['.go'],
+    grammar: 'tree-sitter-go',
+    symbolNodes: {
+      'function_declaration': 'function',
+      'method_declaration': 'method',
+      'type_declaration': 'class',
+    },
+    importNodes: ['import_declaration'],
+    exportDetection: 'convention',
+    extractImport: (node: SyntaxNode): ASTDependency[] => {
+      // Go: import "pkg" or import ( "pkg1"; "pkg2" )
+      const deps: ASTDependency[] = [];
+      const walkImport = (n: SyntaxNode): void => {
+        if (n.type === 'import_spec' || n.type === 'interpreted_string_literal') {
+          const source = stripQuotes(n.text);
+          if (source && !source.startsWith('(')) {
+            deps.push({ source, names: [path.basename(source)], isRelative: source.startsWith('.') });
+          }
+        }
+        for (const child of n.namedChildren) walkImport(child);
+      };
+      walkImport(node);
+      return deps;
+    },
+  },
+  {
+    extensions: ['.rs'],
+    grammar: 'tree-sitter-rust',
+    symbolNodes: {
+      'function_item': 'function',
+      'impl_item': 'class',
+      'struct_item': 'class',
+      'enum_item': 'enum',
+      'trait_item': 'interface',
+      'type_item': 'type',
+    },
+    importNodes: ['use_declaration'],
+    exportDetection: 'keyword',
+    extractImport: (node: SyntaxNode): ASTDependency[] => {
+      const text = node.text;
+      const match = /use\s+(.+?)(?:\s+as\s+\w+)?;/.exec(text);
+      if (match) {
+        const source = match[1].replace(/::/g, '/');
+        return [{ source, names: [path.basename(source)], isRelative: source.startsWith('self') || source.startsWith('super') }];
+      }
+      return [];
+    },
+  },
+  {
+    extensions: ['.java'],
+    grammar: 'tree-sitter-java',
+    symbolNodes: {
+      'class_declaration': 'class',
+      'interface_declaration': 'interface',
+      'method_declaration': 'method',
+      'enum_declaration': 'enum',
+    },
+    importNodes: ['import_declaration'],
+    exportDetection: 'visibility',
+    extractImport: (node: SyntaxNode): ASTDependency[] => {
+      const text = node.text;
+      const match = /import\s+(?:static\s+)?(.+?);/.exec(text);
+      if (match) {
+        const source = match[1];
+        const parts = source.split('.');
+        return [{ source, names: [parts[parts.length - 1]], isRelative: false }];
+      }
+      return [];
+    },
+  },
+  {
+    extensions: ['.c', '.h'],
+    grammar: 'tree-sitter-c',
+    symbolNodes: {
+      'function_definition': 'function',
+      'struct_specifier': 'class',
+      'enum_specifier': 'enum',
+      'type_definition': 'type',
+    },
+    importNodes: ['preproc_include'],
+    exportDetection: 'convention',
+    extractImport: (node: SyntaxNode): ASTDependency[] => {
+      const text = node.text;
+      const match = /#include\s+[<"](.+?)[>"]/.exec(text);
+      if (match) {
+        const source = match[1];
+        return [{ source, names: [path.basename(source)], isRelative: source.includes('/') || text.includes('"') }];
+      }
+      return [];
+    },
+  },
+  {
+    extensions: ['.cpp', '.cc', '.cxx', '.hpp'],
+    grammar: 'tree-sitter-cpp',
+    symbolNodes: {
+      'function_definition': 'function',
+      'class_specifier': 'class',
+      'struct_specifier': 'class',
+      'enum_specifier': 'enum',
+      'namespace_definition': 'variable',
+    },
+    importNodes: ['preproc_include'],
+    exportDetection: 'convention',
+    extractImport: (node: SyntaxNode): ASTDependency[] => {
+      const text = node.text;
+      const match = /#include\s+[<"](.+?)[>"]/.exec(text);
+      if (match) {
+        const source = match[1];
+        return [{ source, names: [path.basename(source)], isRelative: source.includes('/') || text.includes('"') }];
+      }
+      return [];
+    },
+  },
+  {
+    extensions: ['.rb'],
+    grammar: 'tree-sitter-ruby',
+    symbolNodes: {
+      'method': 'function',
+      'singleton_method': 'function',
+      'class': 'class',
+      'module': 'class',
+    },
+    importNodes: ['call'],
+    exportDetection: 'convention',
+    extractImport: (node: SyntaxNode): ASTDependency[] => {
+      const text = node.text;
+      const match = /(?:require|require_relative)\s+['"](.+?)['"]/.exec(text);
+      if (match) {
+        const source = match[1];
+        return [{ source, names: [path.basename(source)], isRelative: text.includes('require_relative') }];
+      }
+      return [];
+    },
+  },
+  {
+    extensions: ['.sh', '.bash'],
+    grammar: 'tree-sitter-bash',
+    symbolNodes: {
+      'function_definition': 'function',
+    },
+    importNodes: ['command'],
+    exportDetection: 'convention',
+    extractImport: (node: SyntaxNode): ASTDependency[] => {
+      const text = node.text;
+      const match = /(?:source|\.)\s+['"]?(.+?)['"]?(?:\s|$)/.exec(text);
+      if (match) {
+        const source = match[1];
+        return [{ source, names: [path.basename(source)], isRelative: source.startsWith('.') || source.startsWith('/') }];
+      }
+      return [];
+    },
+  },
+];
+
+// =============================================================================
+// POLYGLOT: GENERIC EXTRACTORS
+// =============================================================================
+
+function initPolyglotParser(ext: string, profile: LanguageProfile): ParserLike | null {
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const Parser = require('tree-sitter');
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const lang = require(profile.grammar);
+    const parser = new Parser() as ParserLike;
+    parser.setLanguage(lang.default ?? lang);
+    parsers.set(ext, parser);
+    return parser;
+  } catch {
+    parserInitFailed.add(ext);
+    return null;
+  }
+}
+
+function extractSymbolsGeneric(root: SyntaxNode, profile: LanguageProfile): ASTSymbol[] {
+  const symbols: ASTSymbol[] = [];
+  walkTopLevel(root, (node) => {
+    const kind = profile.symbolNodes[node.type];
+    if (kind) {
+      const name = getDeclarationName(node);
+      if (name) {
+        const exported = detectExport(node, name, profile.exportDetection);
+        symbols.push({ name, kind, exported, line: node.startPosition.row + 1 });
+      }
+    }
+  });
+  return symbols;
+}
+
+function extractDependenciesGeneric(root: SyntaxNode, profile: LanguageProfile): ASTDependency[] {
+  const deps: ASTDependency[] = [];
+  walkTopLevel(root, (node) => {
+    if (profile.importNodes.includes(node.type)) {
+      deps.push(...profile.extractImport(node));
+    }
+  });
+  return deps;
+}
+
+function walkTopLevel(root: SyntaxNode, callback: (node: SyntaxNode) => void): void {
+  for (let i = 0; i < root.childCount; i++) {
+    const node = root.child(i);
+    if (node) callback(node);
+  }
+}
+
+function detectExport(node: SyntaxNode, name: string, detection: ExportDetection): boolean {
+  switch (detection) {
+    case 'convention':
+      // Go: uppercase first letter = exported; C/C++/Ruby/Bash: treat all as exported
+      return name.length > 0 && name[0] === name[0].toUpperCase() && name[0] !== name[0].toLowerCase();
+    case 'keyword': {
+      // Rust: check for 'pub' keyword
+      const nodeText = node.text;
+      return nodeText.startsWith('pub ') || nodeText.startsWith('pub(');
+    }
+    case 'visibility': {
+      // Java: check for 'public' modifier
+      const nodeText = node.text;
+      return nodeText.includes('public ');
+    }
+    default:
+      return true;
+  }
 }

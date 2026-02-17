@@ -546,7 +546,16 @@ export async function executeSingleToolCall(
         toolTimeout
       );
     } else {
-      result = await tool.execute(toolCall.arguments);
+      // No sandbox — apply a safety timeout to prevent indefinite hangs
+      const DEFAULT_TOOL_TIMEOUT = 300_000; // 5 minutes
+      result = await Promise.race([
+        tool.execute(toolCall.arguments),
+        new Promise<never>((_, reject) =>
+          setTimeout(() => reject(new Error(
+            `Tool '${toolCall.name}' timed out after ${DEFAULT_TOOL_TIMEOUT / 1000}s (no sandbox)`
+          )), DEFAULT_TOOL_TIMEOUT)
+        ),
+      ]);
     }
 
     const duration = Date.now() - startTime;

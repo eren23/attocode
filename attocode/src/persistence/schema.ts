@@ -355,6 +355,36 @@ export const MIGRATIONS: Migration[] = [
       CREATE INDEX IF NOT EXISTS idx_sessions_workspace_path ON sessions(workspace_path);
     `,
   },
+  {
+    version: 12,
+    name: 'codebase_analysis',
+    sql: `
+      -- Codebase analysis cache for warm startup
+      CREATE TABLE IF NOT EXISTS codebase_chunks (
+        file_path TEXT NOT NULL,
+        workspace_root TEXT NOT NULL,
+        content_hash TEXT NOT NULL,
+        symbols_json TEXT,
+        dependencies_json TEXT,
+        importance REAL DEFAULT 0,
+        chunk_type TEXT,
+        token_count INTEGER DEFAULT 0,
+        analyzed_at INTEGER NOT NULL,
+        PRIMARY KEY (workspace_root, file_path)
+      );
+
+      CREATE TABLE IF NOT EXISTS codebase_deps (
+        workspace_root TEXT NOT NULL,
+        source_file TEXT NOT NULL,
+        target_file TEXT NOT NULL,
+        PRIMARY KEY (workspace_root, source_file, target_file)
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_codebase_chunks_workspace ON codebase_chunks(workspace_root);
+      CREATE INDEX IF NOT EXISTS idx_codebase_deps_workspace ON codebase_deps(workspace_root);
+      CREATE INDEX IF NOT EXISTS idx_codebase_deps_source ON codebase_deps(workspace_root, source_file);
+    `,
+  },
 ];
 
 // =============================================================================
@@ -385,6 +415,8 @@ export interface SchemaFeatures {
   deadLetterQueue: boolean;
   /** Remembered permission decisions for persistent approval */
   rememberedPermissions: boolean;
+  /** Codebase analysis cache for warm startup */
+  codebaseAnalysis: boolean;
 }
 
 /**
@@ -409,6 +441,7 @@ export function detectFeatures(db: Database.Database): SchemaFeatures {
     pendingPlans: tableExists('pending_plans'),
     deadLetterQueue: tableExists('dead_letters'),
     rememberedPermissions: tableExists('remembered_permissions'),
+    codebaseAnalysis: tableExists('codebase_chunks'),
   };
 }
 

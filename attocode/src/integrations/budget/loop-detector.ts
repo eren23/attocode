@@ -32,7 +32,7 @@ const BASH_FILE_WRITE_RE = /^\s*(cat|echo|printf)\b.*(?:>>?|<<)\s*/;
  * Primary argument keys that identify the *target* of a tool call.
  * Used for fuzzy doom loop detection -- ignoring secondary/optional args.
  */
-const PRIMARY_KEYS = ['path', 'file_path', 'command', 'pattern', 'query', 'url', 'content', 'filename'];
+const PRIMARY_KEYS = ['path', 'file_path', 'command', 'pattern', 'query', 'url', 'content', 'filename', 'offset', 'limit'];
 
 // =============================================================================
 // PROMPT TEMPLATES
@@ -41,11 +41,24 @@ const PRIMARY_KEYS = ['path', 'file_path', 'command', 'pattern', 'query', 'url',
 /**
  * Doom loop prompt - injected when same tool called repeatedly.
  */
-export const DOOM_LOOP_PROMPT = (tool: string, count: number) =>
-`[System] You've called ${tool} with the same arguments ${count} times. This indicates a stuck state. Either:
+export const DOOM_LOOP_PROMPT = (tool: string, count: number) => {
+  if (count >= 6) {
+    return `[System] CRITICAL: You've called ${tool} with the same arguments ${count} times. You are in a doom loop. You MUST:
+1. STOP calling ${tool} immediately
+2. Explain what you're stuck on
+3. Try a completely different approach
+Further identical calls will be rejected.`;
+  }
+  if (count >= 4) {
+    return `[System] WARNING: You've called ${tool} ${count} times with identical arguments. This is a stuck state.
+1. Try a DIFFERENT approach or tool
+2. If blocked, explain the blocker`;
+  }
+  return `[System] You've called ${tool} with the same arguments ${count} times. This indicates a stuck state. Either:
 1. Try a DIFFERENT approach or tool
 2. If blocked, explain what's preventing progress
 3. If the task is complete, say so explicitly`;
+};
 
 /**
  * Global doom loop prompt - injected when the same tool call is repeated across multiple workers.

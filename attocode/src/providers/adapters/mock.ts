@@ -13,6 +13,7 @@ import type {
   ChatResponse
 } from '../types.js';
 import { registerProvider } from '../provider.js';
+import { estimateTokenCount } from '../../integrations/utilities/token-estimate.js';
 
 // =============================================================================
 // MOCK RESPONSE PATTERNS
@@ -132,8 +133,8 @@ Is there anything specific you'd like me to clarify?`;
       content: response,
       stopReason: 'end_turn',
       usage: {
-        inputTokens: content.length / 4,
-        outputTokens: response.length / 4,
+        inputTokens: estimateTokenCount(content),
+        outputTokens: estimateTokenCount(response),
       },
     };
   }

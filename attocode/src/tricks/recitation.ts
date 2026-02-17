@@ -27,6 +27,8 @@
  * ```
  */
 
+import { estimateTokenCount } from '../integrations/utilities/token-estimate.js';
+
 // =============================================================================
 // TYPES
 // =============================================================================
@@ -240,7 +242,7 @@ export class RecitationManager {
     const content = parts.join('\n\n');
 
     // Truncate if too long
-    const tokenEstimate = Math.ceil(content.length / 4);
+    const tokenEstimate = estimateTokenCount(content);
     if (tokenEstimate > this.config.maxTokens) {
       const truncated = this.truncateContent(content, this.config.maxTokens);
       this.emit({ type: 'recitation.built', content: truncated, tokenEstimate: this.config.maxTokens });

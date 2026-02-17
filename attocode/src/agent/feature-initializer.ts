@@ -57,6 +57,7 @@ import {
   createWorkLog,
   VerificationGate,
   createVerificationGate,
+  createTypeCheckerState,
   InjectionBudgetManager,
   createInjectionBudgetManager,
   SelfImprovementProtocol,
@@ -167,6 +168,7 @@ export interface AgentInternals {
   swarmOrchestrator: SwarmOrchestrator | null;
   budgetPool: SharedBudgetPool | null;
   blackboard: SharedBlackboard | null;
+  typeCheckerState: import('../integrations/safety/type-checker.js').TypeCheckerState | null;
 
   // Shared state (read/write)
   _sharedContextState: SharedContextState | null;
@@ -361,6 +363,20 @@ export function initializeFeatures(agent: AgentInternals): void {
   // Verification Gate - opt-in completion verification
   if (agent.config.verificationCriteria) {
     agent.verificationGate = createVerificationGate(agent.config.verificationCriteria);
+  }
+
+  // TypeScript compilation checking — auto-detect and enable
+  {
+    const cwd = agent.config.workingDirectory || process.cwd();
+    const tcState = createTypeCheckerState(cwd);
+    agent.typeCheckerState = tcState;
+
+    if (tcState.tsconfigDir && !agent.verificationGate) {
+      agent.verificationGate = createVerificationGate({
+        requireCompilation: true,
+        compilationMaxAttempts: 8,
+      });
+    }
   }
 
   // Phase 2-4: Orchestration & Advanced modules (always enabled, lightweight)

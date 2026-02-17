@@ -10,6 +10,7 @@ import {
   createEconomicsManager,
   STANDARD_BUDGET,
 } from '../src/integrations/budget/economics.js';
+import { DOOM_LOOP_PROMPT } from '../src/integrations/budget/loop-detector.js';
 
 // =============================================================================
 // computeToolFingerprint TESTS
@@ -62,6 +63,24 @@ describe('computeToolFingerprint', () => {
 
     // No primary keys -> falls back to full args (different)
     expect(fp1).not.toBe(fp2);
+  });
+
+  it('should distinguish read_file calls with different offsets', () => {
+    const fp1 = computeToolFingerprint('read_file', JSON.stringify({ file_path: '/big.ts', offset: 0, limit: 100 }));
+    const fp2 = computeToolFingerprint('read_file', JSON.stringify({ file_path: '/big.ts', offset: 100, limit: 100 }));
+    const fp3 = computeToolFingerprint('read_file', JSON.stringify({ file_path: '/big.ts', offset: 200, limit: 100 }));
+
+    // Different offsets -> different fingerprints (no false doom loop)
+    expect(fp1).not.toBe(fp2);
+    expect(fp2).not.toBe(fp3);
+  });
+
+  it('should still match read_file calls with same offset', () => {
+    const fp1 = computeToolFingerprint('read_file', JSON.stringify({ file_path: '/big.ts', offset: 0 }));
+    const fp2 = computeToolFingerprint('read_file', JSON.stringify({ file_path: '/big.ts', offset: 0, encoding: 'utf8' }));
+
+    // Same primary keys (file_path + offset) -> same fingerprint
+    expect(fp1).toBe(fp2);
   });
 });
 
@@ -135,6 +154,18 @@ describe('Doom Loop Detection', () => {
     expect(loopState.doomLoopDetected).toBe(false);
   });
 
+  it('should not trigger doom loop when reading same file with different offsets', () => {
+    const economics = createEconomicsManager(STANDARD_BUDGET);
+
+    // Read a large file in 3 chunks — different offsets each time
+    economics.recordToolCall('read_file', { file_path: '/big.ts', offset: 0, limit: 100 });
+    economics.recordToolCall('read_file', { file_path: '/big.ts', offset: 100, limit: 100 });
+    economics.recordToolCall('read_file', { file_path: '/big.ts', offset: 200, limit: 100 });
+
+    const loopState = economics.getLoopState();
+    expect(loopState.doomLoopDetected).toBe(false);
+  });
+
   it('should emit doom_loop.detected event', () => {
     const economics = createEconomicsManager(STANDARD_BUDGET);
     const events: Array<{ type: string; tool?: string }> = [];
@@ -147,5 +178,39 @@ describe('Doom Loop Detection', () => {
     const doomEvents = events.filter(e => e.type === 'doom_loop.detected');
     expect(doomEvents.length).toBeGreaterThanOrEqual(1);
     expect(doomEvents[0].tool).toBe('bash');
+  });
+});
+
+// =============================================================================
+// DOOM_LOOP_PROMPT Escalation Tests
+// =============================================================================
+
+describe('DOOM_LOOP_PROMPT escalation', () => {
+  it('should return soft warning at count 3', () => {
+    const msg = DOOM_LOOP_PROMPT('grep', 3);
+    expect(msg).toContain('stuck state');
+    expect(msg).not.toContain('CRITICAL');
+    expect(msg).not.toContain('WARNING');
+  });
+
+  it('should return WARNING at count 4', () => {
+    const msg = DOOM_LOOP_PROMPT('grep', 4);
+    expect(msg).toContain('WARNING');
+    expect(msg).not.toContain('CRITICAL');
+  });
+
+  it('should return WARNING at count 5', () => {
+    const msg = DOOM_LOOP_PROMPT('grep', 5);
+    expect(msg).toContain('WARNING');
+  });
+
+  it('should return CRITICAL at count 6+', () => {
+    const msg6 = DOOM_LOOP_PROMPT('bash', 6);
+    expect(msg6).toContain('CRITICAL');
+    expect(msg6).toContain('doom loop');
+    expect(msg6).toContain('rejected');
+
+    const msg10 = DOOM_LOOP_PROMPT('bash', 10);
+    expect(msg10).toContain('CRITICAL');
   });
 });

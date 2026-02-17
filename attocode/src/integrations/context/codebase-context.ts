@@ -33,6 +33,9 @@ import {
   type CodeAnalyzerDeps,
 } from './code-analyzer.js';
 
+import { clearASTCache, fullReparse, djb2Hash } from './codebase-ast.js';
+import type { SavedCodebaseAnalysis } from '../persistence/codebase-repository.js';
+
 // Selector functions (selection, search, ranking, LSP-enhanced context)
 import {
   selectRelevantCode as selectRelevantCodeImpl,
@@ -224,6 +227,27 @@ export type CodebaseContextEvent =
 export type CodebaseContextEventListener = (event: CodebaseContextEvent) => void;
 
 /**
+ * Minimal interface for codebase analysis persistence.
+ * Implemented by SQLiteStore.
+ */
+export interface CodebasePersistenceStore {
+  saveCodebaseAnalysis(
+    root: string,
+    chunks: Iterable<{
+      filePath: string;
+      content: string;
+      symbolDetails: Array<{ name: string; kind: string; exported: boolean; line: number }>;
+      dependencies: string[];
+      importance: number;
+      type: string;
+      tokenCount: number;
+    }>,
+    dependencyGraph: Map<string, Set<string>>,
+  ): void;
+  loadCodebaseAnalysis(root: string): SavedCodebaseAnalysis | null;
+}
+
+/**
  * Position in a source file.
  */
 export interface SourcePosition {
@@ -373,8 +397,19 @@ export class CodebaseContextManager {
   /** Optional trace collector for emitting codebase analysis events. */
   traceCollector?: TraceCollector;
 
+  /** Optional store for persisting codebase analysis across sessions. */
+  private persistenceStore: CodebasePersistenceStore | null = null;
+
   constructor(config: CodebaseContextConfig = {}) {
     this.config = { ...DEFAULT_CONFIG, ...config };
+  }
+
+  /**
+   * Set the persistence store for warm startup across sessions.
+   * Accepts any object implementing saveCodebaseAnalysis/loadCodebaseAnalysis (e.g. SQLiteStore).
+   */
+  setPersistenceStore(store: CodebasePersistenceStore): void {
+    this.persistenceStore = store;
   }
 
   /**
@@ -436,8 +471,16 @@ export class CodebaseContextManager {
       // Discover files
       const files = await discoverFiles(analyzerDeps, repoRoot);
 
-      // Process each file
-      for (const filePath of files) {
+      // Warm startup: try loading persisted analysis and only reprocess changed files
+      const savedAnalysis = this.persistenceStore
+        ? this.persistenceStore.loadCodebaseAnalysis(repoRoot)
+        : null;
+      const filesToProcess = savedAnalysis
+        ? await this.diffAgainstSaved(repoRoot, files, savedAnalysis, chunks)
+        : files;
+
+      // Process each file (only changed/new files when warm-starting)
+      for (const filePath of filesToProcess) {
         const chunk = await processFile(analyzerDeps, repoRoot, filePath);
         if (chunk) {
           chunks.set(chunk.id, chunk);
@@ -449,7 +492,8 @@ export class CodebaseContextManager {
 
           // Build dependency graph
           if (this.config.analyzeDependencies) {
-            const deps = extractDependencies(chunk.content, filePath);
+            const fullPath = path.join(repoRoot, filePath);
+            const deps = extractDependencies(chunk.content, fullPath);
             dependencyGraph.set(filePath, deps);
 
             // Build reverse graph
@@ -459,6 +503,30 @@ export class CodebaseContextManager {
               }
               reverseDependencyGraph.get(dep)!.add(filePath);
             }
+          }
+        }
+      }
+
+      // Restore dependency graph edges for unchanged files from saved analysis
+      if (savedAnalysis && this.config.analyzeDependencies) {
+        for (const [source, targets] of savedAnalysis.deps) {
+          if (!filesToProcess.includes(source) && chunks.has(source)) {
+            dependencyGraph.set(source, targets);
+            for (const dep of targets) {
+              if (!reverseDependencyGraph.has(dep)) {
+                reverseDependencyGraph.set(dep, new Set());
+              }
+              reverseDependencyGraph.get(dep)!.add(source);
+            }
+          }
+        }
+      }
+
+      // Ensure entry points include restored unchanged files
+      if (savedAnalysis) {
+        for (const [filePath, chunk] of chunks) {
+          if (chunk.type === 'entry_point' && !entryPoints.includes(filePath)) {
+            entryPoints.push(filePath);
           }
         }
       }
@@ -502,6 +570,15 @@ export class CodebaseContextManager {
       }
 
       this.repoMap = repoMap;
+
+      // Persist analysis to SQLite for warm startup next session
+      if (this.persistenceStore) {
+        try {
+          this.persistenceStore.saveCodebaseAnalysis(
+            repoRoot, chunks.values(), dependencyGraph,
+          );
+        } catch { /* persistence is non-blocking */ }
+      }
 
       this.emit({
         type: 'analysis.completed',
@@ -657,11 +734,134 @@ export class CodebaseContextManager {
   }
 
   /**
-   * Clear cached data.
+   * Clear cached data (including AST parse cache).
    */
   clearCache(): void {
     this.cache.clear();
     this.repoMap = null;
+    clearASTCache();
+  }
+
+  // ===========================================================================
+  // WARM STARTUP HELPERS (Phase 3)
+  // ===========================================================================
+
+  /**
+   * Diff discovered files against saved analysis.
+   * Reuses saved chunks for unchanged files, returns only files that need reprocessing.
+   */
+  private async diffAgainstSaved(
+    repoRoot: string,
+    files: string[],
+    saved: SavedCodebaseAnalysis,
+    chunks: Map<string, CodeChunk>,
+  ): Promise<string[]> {
+    const { default: fs } = await import('fs/promises');
+    const changedFiles: string[] = [];
+
+    for (const relativePath of files) {
+      const savedChunk = saved.chunks.get(relativePath);
+      if (savedChunk) {
+        // Check if file content has changed by reading + hashing
+        try {
+          const fullPath = path.join(repoRoot, relativePath);
+          const content = await fs.readFile(fullPath, 'utf-8');
+          const currentHash = djb2Hash(content).toString(36);
+          if (currentHash === savedChunk.contentHash) {
+            // Unchanged — restore chunk from saved data
+            const symbolDetails = JSON.parse(savedChunk.symbolsJson || '[]');
+            const dependencies = JSON.parse(savedChunk.dependenciesJson || '[]');
+            chunks.set(relativePath, {
+              id: relativePath,
+              filePath: relativePath,
+              content,
+              tokenCount: savedChunk.tokenCount,
+              importance: savedChunk.importance,
+              type: savedChunk.chunkType as CodeChunkType,
+              symbols: symbolDetails.map((s: { name: string }) => s.name),
+              symbolDetails,
+              dependencies,
+              lastModified: new Date(savedChunk.analyzedAt),
+            });
+            continue;
+          }
+        } catch {
+          // File read failed — treat as changed
+        }
+      }
+      changedFiles.push(relativePath);
+    }
+
+    return changedFiles;
+  }
+
+  // ===========================================================================
+  // INCREMENTAL FILE UPDATES (Phase 2)
+  // ===========================================================================
+
+  /**
+   * Update a single file's chunk in-place after an edit.
+   * Reparses the file, patches the chunk's symbols/deps, and updates dependency graph edges.
+   * Avoids full re-analyze for single-file edits.
+   */
+  async updateFile(filePath: string, newContent: string): Promise<void> {
+    if (!this.repoMap) return;
+
+    const relativePath = path.relative(this.config.root, filePath);
+    const parsed = fullReparse(filePath, newContent);
+    const existingChunk = this.repoMap.chunks.get(relativePath);
+
+    if (existingChunk) {
+      // Patch in-place
+      existingChunk.content = newContent;
+      existingChunk.tokenCount = Math.ceil(newContent.length * this.config.tokensPerChar);
+      existingChunk.lastModified = new Date();
+      if (parsed) {
+        existingChunk.symbols = parsed.symbols.map(s => s.name);
+        existingChunk.symbolDetails = parsed.symbols.map(s => ({
+          name: s.name, kind: s.kind, exported: s.exported, line: s.line,
+        }));
+        existingChunk.dependencies = parsed.dependencies
+          .flatMap(d => d.names.filter(n => !n.startsWith('* as ')));
+      }
+
+      // Update dependency graph edges for this file
+      this.updateDependencyEdges(relativePath, newContent);
+
+      // Recalculate total tokens
+      let totalTokens = 0;
+      for (const chunk of this.repoMap.chunks.values()) {
+        totalTokens += chunk.tokenCount;
+      }
+      this.repoMap.totalTokens = totalTokens;
+    }
+    // New files (not in chunks) require a full re-analyze
+  }
+
+  private updateDependencyEdges(filePath: string, content: string): void {
+    if (!this.repoMap) return;
+    const { dependencyGraph, reverseDependencyGraph } = this.repoMap;
+
+    // Remove old forward edges
+    const oldDeps = dependencyGraph.get(filePath);
+    if (oldDeps) {
+      for (const dep of oldDeps) {
+        reverseDependencyGraph.get(dep)?.delete(filePath);
+      }
+    }
+
+    // Build new forward edges (use absolute path for AST cache lookup)
+    const fullPath = path.join(this.config.root, filePath);
+    const newDeps = extractDependencies(content, fullPath);
+    dependencyGraph.set(filePath, newDeps);
+
+    // Build new reverse edges
+    for (const dep of newDeps) {
+      if (!reverseDependencyGraph.has(dep)) {
+        reverseDependencyGraph.set(dep, new Set());
+      }
+      reverseDependencyGraph.get(dep)!.add(filePath);
+    }
   }
 
   /**

@@ -29,6 +29,7 @@
  * ```
  */
 
+import { estimateTokenCount } from '../integrations/utilities/token-estimate.js';
 import { mkdir, appendFile } from 'fs/promises';
 import { join } from 'path';
 import { logger } from '../integrations/utilities/logger.js';
@@ -1910,7 +1911,7 @@ export class TraceCollector {
    * Estimate tokens from text.
    */
   private estimateTokens(text: string): number {
-    return Math.ceil(text.length / 4);
+    return estimateTokenCount(text);
   }
 
   /**

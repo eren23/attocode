@@ -1498,6 +1498,9 @@ export type AgentEvent =
   | { type: 'safeguard.tool_call_cap'; requested: number; cap: number; droppedCount: number }
   | { type: 'safeguard.circuit_breaker'; totalInBatch: number; failures: number; threshold: number; skipped: number }
   | { type: 'safeguard.context_overflow_guard'; estimatedTokens: number; maxTokens: number; toolResultsSkipped: number }
+  // Diagnostics events (AST + compilation visibility)
+  | { type: 'diagnostics.syntax-error'; file: string; line: number; message: string }
+  | { type: 'diagnostics.tsc-check'; errorCount: number; duration: number; trigger: 'periodic' | 'completion' | 'manual' }
   // Swarm mode events (M8: use union with canonical SwarmEvent type)
   | import('./integrations/swarm/swarm-events.js').SwarmEvent;
 

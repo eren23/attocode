@@ -10,7 +10,7 @@
  */
 
 import * as path from 'path';
-import { getParser, type SyntaxNode } from '../context/codebase-ast.js';
+import { getParser, getCachedParse, type SyntaxNode } from '../context/codebase-ast.js';
 
 // =============================================================================
 // TYPES
@@ -66,7 +66,9 @@ export function validateSyntax(content: string, filePath: string): ValidationRes
   }
 
   try {
-    const tree = parser.parse(content);
+    // Use cached tree if available (file may have just been parsed during analyze)
+    const cached = getCachedParse(filePath);
+    const tree = cached?.tree ?? parser.parse(content);
     const errors: SyntaxError[] = [];
     collectErrors(tree.rootNode, errors);
     return { valid: errors.length === 0, errors };

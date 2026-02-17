@@ -15,6 +15,8 @@
  * 4 - Lowest: exploration nudges
  */
 
+import { estimateTokenCount } from '../utilities/token-estimate.js';
+
 // =============================================================================
 // TYPES
 // =============================================================================
@@ -172,10 +174,10 @@ export class InjectionBudgetManager {
 // =============================================================================
 
 /**
- * Estimate token count from a string (~4 chars per token).
+ * Estimate token count from a string.
  */
 function estimateTokens(text: string): number {
-  return Math.ceil(text.length / 4);
+  return estimateTokenCount(text);
 }
 
 /**

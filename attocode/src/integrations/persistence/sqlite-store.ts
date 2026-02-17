@@ -40,6 +40,7 @@ import type { PendingPlan } from '../tasks/pending-plan.js';
 import * as sessionRepo from './session-repository.js';
 import * as goalRepo from './goal-repository.js';
 import * as workerRepo from './worker-repository.js';
+import * as codebaseRepo from './codebase-repository.js';
 
 // =============================================================================
 // TYPES
@@ -340,6 +341,7 @@ export class SQLiteStore {
     pendingPlans: false,
     deadLetterQueue: false,
     rememberedPermissions: false,
+    codebaseAnalysis: false,
   };
 
   // Prepared statements for performance
@@ -1116,6 +1118,36 @@ export class SQLiteStore {
    */
   close(): void {
     this.db.close();
+  }
+
+  // ===========================================================================
+  // CODEBASE ANALYSIS PERSISTENCE
+  // ===========================================================================
+
+  /**
+   * Save codebase analysis to SQLite for warm startup next session.
+   */
+  saveCodebaseAnalysis(
+    root: string,
+    chunks: Iterable<{
+      filePath: string;
+      content: string;
+      symbolDetails: Array<{ name: string; kind: string; exported: boolean; line: number }>;
+      dependencies: string[];
+      importance: number;
+      type: string;
+      tokenCount: number;
+    }>,
+    dependencyGraph: Map<string, Set<string>>,
+  ): void {
+    codebaseRepo.saveCodebaseAnalysis(this.deps, root, chunks, dependencyGraph);
+  }
+
+  /**
+   * Load persisted codebase analysis from SQLite.
+   */
+  loadCodebaseAnalysis(root: string): codebaseRepo.SavedCodebaseAnalysis | null {
+    return codebaseRepo.loadCodebaseAnalysis(this.deps, root);
   }
 
   /**

@@ -14,6 +14,7 @@ import type {
 } from '../types.js';
 
 import { isFeatureEnabled } from '../defaults.js';
+import { estimateTokenCount } from '../integrations/utilities/token-estimate.js';
 
 import type { AgentContext, AgentContextMutators } from './types.js';
 import { callLLM } from './response-handler.js';
@@ -29,6 +30,8 @@ export { detectIncompleteActionResponse } from './completion-analyzer.js';
 
 import { createComponentLogger } from '../integrations/utilities/logger.js';
 import { validateSyntax } from '../integrations/safety/edit-validator.js';
+import { runTypeCheck, formatTypeCheckNudge } from '../integrations/safety/type-checker.js';
+import { invalidateAST } from '../integrations/context/codebase-ast.js';
 import * as fs from 'node:fs';
 
 const log = createComponentLogger('ExecutionLoop');
@@ -918,6 +921,39 @@ export async function executeDirectly(
           incompleteActionRetries = 0;
         }
 
+        // TypeScript compilation gate — block completion if TS files edited and errors exist
+        if (ctx.typeCheckerState?.tsconfigDir
+            && !forceTextOnly
+            && (ctx.typeCheckerState.tsEditsSinceLastCheck > 0 || !ctx.typeCheckerState.hasRunOnce)) {
+          const tscResult = await runTypeCheck(ctx.typeCheckerState.tsconfigDir);
+          ctx.typeCheckerState.tsEditsSinceLastCheck = 0;
+          ctx.typeCheckerState.lastResult = tscResult;
+          ctx.typeCheckerState.hasRunOnce = true;
+          ctx.verificationGate?.recordCompilationResult(tscResult.success, tscResult.errorCount);
+          ctx.emit({ type: 'diagnostics.tsc-check', errorCount: tscResult.errorCount, duration: tscResult.duration, trigger: 'completion' });
+
+          if (!tscResult.success) {
+            const vState = ctx.verificationGate?.getState();
+            const maxCompNudges = 8;
+            if (!vState || (vState.compilationNudgeCount ?? 0) < maxCompNudges) {
+              const nudge = formatTypeCheckNudge(tscResult);
+              const nudgeMessage: Message = { role: 'user', content: nudge };
+              messages.push(nudgeMessage);
+              ctx.state.messages.push(nudgeMessage);
+              ctx.verificationGate?.incrementCompilationNudge();
+              log.info('Compilation gate blocked completion', { count: tscResult.errorCount, nudgeCount: ctx.verificationGate?.getState().compilationNudgeCount });
+              ctx.emit({
+                type: 'iteration.after',
+                iteration: ctx.state.iteration,
+                hadToolCalls: false,
+                completionCandidate: false,
+              });
+              continue;  // Re-enter main loop — agent must fix errors
+            }
+            // If exceeded max nudges, fall through to verification gate (which will forceAllow)
+          }
+        }
+
         // Verification gate
         if (ctx.verificationGate && !forceTextOnly) {
           const vResult = ctx.verificationGate.check();
@@ -1130,14 +1166,23 @@ export async function executeDirectly(
           }
         }
 
-        // Phase 5.1: Post-edit syntax validation
+        // Phase 5.1: Post-edit syntax validation + AST cache invalidation
         if (['write_file', 'edit_file'].includes(toolCall.name) && result?.result && (result.result as any).success) {
           const filePath = String(toolCall.arguments.path || '');
           if (filePath) {
+            // Invalidate stale AST cache entry so next analysis/validation reparses
+            invalidateAST(filePath);
             try {
               const content = toolCall.name === 'write_file'
                 ? String(toolCall.arguments.content || '')
                 : await fs.promises.readFile(filePath, 'utf-8');
+              // Update codebase context first — fullReparse caches the AST tree,
+              // so validateSyntax below will use the cached tree (no double-parse)
+              if (ctx.codebaseContext) {
+                try {
+                  await ctx.codebaseContext.updateFile(filePath, content);
+                } catch { /* non-blocking */ }
+              }
               const validation = validateSyntax(content, filePath);
               if (!validation.valid && result.result && typeof result.result === 'object') {
                 const errorSummary = validation.errors
@@ -1145,9 +1190,18 @@ export async function executeDirectly(
                   .map(e => `  L${e.line}:${e.column}: ${e.message}`)
                   .join('\n');
                 (result.result as any).output += `\n\n⚠ Syntax validation warning:\n${errorSummary}`;
+                // Emit diagnostic events for each syntax error
+                for (const err of validation.errors.slice(0, 5)) {
+                  ctx.emit({ type: 'diagnostics.syntax-error', file: filePath, line: err.line, message: err.message });
+                }
               }
             } catch {
               // Validation failure is non-blocking
+            }
+
+            // Track .ts/.tsx edits for periodic type checking
+            if (ctx.typeCheckerState?.tsconfigDir && /\.(ts|tsx)$/.test(filePath)) {
+              ctx.typeCheckerState.tsEditsSinceLastCheck++;
             }
           }
         }
@@ -1341,7 +1395,7 @@ export async function executeDirectly(
 
         // Check if adding this result would exceed budget
         if (ctx.economics) {
-          const estimatedNewTokens = Math.ceil(content.length / 4);
+          const estimatedNewTokens = estimateTokenCount(content);
           const currentCtxTokens = estimateContextTokens(messages);
           const budget = ctx.economics.getBudget();
 
@@ -1380,6 +1434,27 @@ export async function executeDirectly(
         };
         messages.push(toolMessage);
         ctx.state.messages.push(toolMessage);
+      }
+
+      // Periodic TypeScript compilation check (every 5 TS edits)
+      const TYPE_CHECK_EDIT_THRESHOLD = 5;
+      if (ctx.typeCheckerState?.tsconfigDir
+          && ctx.typeCheckerState.tsEditsSinceLastCheck >= TYPE_CHECK_EDIT_THRESHOLD
+          && !forceTextOnly) {
+        const tscResult = await runTypeCheck(ctx.typeCheckerState.tsconfigDir);
+        ctx.typeCheckerState.tsEditsSinceLastCheck = 0;
+        ctx.typeCheckerState.lastResult = tscResult;
+        ctx.typeCheckerState.hasRunOnce = true;
+        ctx.verificationGate?.recordCompilationResult(tscResult.success, tscResult.errorCount);
+        ctx.emit({ type: 'diagnostics.tsc-check', errorCount: tscResult.errorCount, duration: tscResult.duration, trigger: 'periodic' });
+
+        if (!tscResult.success) {
+          const nudge = formatTypeCheckNudge(tscResult);
+          const infoMsg: Message = { role: 'user', content: nudge };
+          messages.push(infoMsg);
+          ctx.state.messages.push(infoMsg);
+          log.info('Periodic tsc check found errors', { count: tscResult.errorCount });
+        }
       }
 
       // Emit context health

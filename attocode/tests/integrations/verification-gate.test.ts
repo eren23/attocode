@@ -124,6 +124,37 @@ describe('VerificationGate', () => {
     });
   });
 
+  describe('incrementCompilationNudge', () => {
+    it('should increment compilationNudgeCount', () => {
+      const gate = new VerificationGate({ requireCompilation: true });
+      expect(gate.getState().compilationNudgeCount).toBe(0);
+
+      gate.incrementCompilationNudge();
+      expect(gate.getState().compilationNudgeCount).toBe(1);
+
+      gate.incrementCompilationNudge();
+      gate.incrementCompilationNudge();
+      expect(gate.getState().compilationNudgeCount).toBe(3);
+    });
+
+    it('should cause forceAllow after reaching compilationMaxAttempts', () => {
+      const gate = new VerificationGate({
+        requireCompilation: true,
+        compilationMaxAttempts: 3,
+      });
+      gate.recordCompilationResult(false, 5);
+
+      // Nudge via incrementCompilationNudge (simulating TSC gate path)
+      gate.incrementCompilationNudge();
+      gate.incrementCompilationNudge();
+      gate.incrementCompilationNudge();
+
+      // Now check() should forceAllow since compilationNudgeCount >= 3
+      const result = gate.check();
+      expect(result.forceAllow).toBe(true);
+    });
+  });
+
   describe('reset', () => {
     it('should clear all state', () => {
       const gate = new VerificationGate({

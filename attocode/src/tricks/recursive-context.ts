@@ -36,6 +36,8 @@
  * ```
  */
 
+import { estimateTokenCount } from '../integrations/utilities/token-estimate.js';
+
 // =============================================================================
 // TYPES
 // =============================================================================
@@ -590,8 +592,7 @@ export class RecursiveContextManager {
   }
 
   private estimateTokens(text: string): number {
-    // Rough estimate: ~4 characters per token
-    return Math.ceil(text.length / 4);
+    return estimateTokenCount(text);
   }
 
   private emit(event: RecursiveContextEvent): void {
