@@ -442,15 +442,28 @@ export function createSQLiteHealthCheck(
     timeout: 3000,
     critical: false, // Non-critical - agent can work without persistence
     check: async () => {
-      const { existsSync } = await import('node:fs');
+      const { existsSync, mkdirSync } = await import('node:fs');
       const { access, constants } = await import('node:fs/promises');
+      const { dirname } = await import('node:path');
 
-      if (!existsSync(dbPath)) {
-        return false;
+      // If DB already exists, verify it's accessible
+      if (existsSync(dbPath)) {
+        try {
+          await access(dbPath, constants.R_OK | constants.W_OK);
+          return true;
+        } catch {
+          return false;
+        }
       }
 
+      // DB doesn't exist yet — verify we CAN create it
+      // (directory exists or can be created, and is writable)
+      const dir = dirname(dbPath);
       try {
-        await access(dbPath, constants.R_OK | constants.W_OK);
+        if (!existsSync(dir)) {
+          mkdirSync(dir, { recursive: true });
+        }
+        await access(dir, constants.W_OK);
         return true;
       } catch {
         return false;

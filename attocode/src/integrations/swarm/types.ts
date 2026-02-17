@@ -284,6 +284,13 @@ export interface SwarmConfig {
    *  Merged into each worker's AgentDefinition at dispatch time. */
   economicsTuning?: EconomicsTuning;
 
+  /** Budget enforcement mode for swarm workers (default: 'doomloop_only').
+   *  'doomloop_only': Only enforce doom loop detection, allow soft/hard budget overshoot with warnings.
+   *  'strict': Enforce all budget limits strictly (may cause hollow completions on weak models).
+   *  The swarm's own dispatch cap, timeout, and budget pool are sufficient hard stops,
+   *  so workers default to 'doomloop_only' to avoid premature forceTextOnly. */
+  workerEnforcementMode?: 'strict' | 'doomloop_only';
+
   /** D3: Whether to probe models for tool-calling capability before dispatch (default: true).
    *  Sends a cheap probe to each unique model; incapable models are marked unhealthy. */
   probeModels?: boolean;
@@ -873,7 +880,22 @@ export interface SwarmCheckpoint {
   timestamp: number;
   phase: SwarmStatus['phase'];
   plan?: SwarmPlan;
-  taskStates: Array<{ id: string; status: SwarmTaskStatus; result?: SwarmTaskResult; attempts: number; wave: number; assignedModel?: string; dispatchedAt?: number }>;
+  taskStates: Array<{
+    id: string;
+    status: SwarmTaskStatus;
+    result?: SwarmTaskResult;
+    attempts: number;
+    wave: number;
+    assignedModel?: string;
+    dispatchedAt?: number;
+    // Full task data for resume (without these, restoreFromCheckpoint cannot recreate tasks)
+    description?: string;
+    type?: string;
+    complexity?: number;
+    dependencies?: string[];
+    relevantFiles?: string[];
+    isFoundation?: boolean;
+  }>;
   waves: string[][];
   currentWave: number;
   stats: { totalTokens: number; totalCost: number; qualityRejections: number; retries: number };

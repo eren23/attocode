@@ -333,6 +333,13 @@ export function yamlToSwarmConfig(yaml: SwarmYamlConfig, orchestratorModel: stri
     if (budget.workerTimeout || budget.worker_timeout) config.workerTimeout = Number(budget.workerTimeout ?? budget.worker_timeout);
     if (budget.workerMaxIterations) config.workerMaxIterations = Number(budget.workerMaxIterations);
     if (budget.dispatchStaggerMs || budget.dispatch_stagger_ms) config.dispatchStaggerMs = Number(budget.dispatchStaggerMs ?? budget.dispatch_stagger_ms);
+    const enforcementMode = budget.enforcementMode ?? budget.enforcement_mode;
+    if (enforcementMode !== undefined) {
+      const mode = String(enforcementMode);
+      if (mode === 'strict' || mode === 'doomloop_only') {
+        config.workerEnforcementMode = mode;
+      }
+    }
   }
 
   // quality

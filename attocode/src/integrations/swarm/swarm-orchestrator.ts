@@ -51,6 +51,7 @@ import type { SwarmEvent } from './swarm-events.js';
 import { createSharedContextState, type SharedContextState } from '../../shared/shared-context-state.js';
 import { createSharedEconomicsState, type SharedEconomicsState } from '../../shared/shared-economics-state.js';
 import { createSharedContextEngine, type SharedContextEngine } from '../../shared/context-engine.js';
+import { calculateCost } from '../utilities/openrouter-pricing.js';
 
 // ─── Extracted Module Imports ───────────────────────────────────────────
 
@@ -510,7 +511,7 @@ Rules:
     const input = response.usage.prompt_tokens ?? response.usage.inputTokens ?? 0;
     const output = response.usage.completion_tokens ?? response.usage.outputTokens ?? 0;
     const tokens = response.usage.total_tokens ?? (input + output);
-    const cost = response.usage.cost ?? tokens * 0.000015;
+    const cost = response.usage.cost ?? calculateCost(this.config.orchestratorModel, input, output);
     this.orchestratorTokens += tokens;
     this.orchestratorCost += cost;
     this.orchestratorCalls++;

@@ -756,6 +756,13 @@ export class SwarmTaskQueue {
       wave: t.wave,
       assignedModel: t.assignedModel,
       dispatchedAt: t.dispatchedAt,
+      // Full task data needed for resume (restoreFromCheckpoint recreates tasks from these)
+      description: t.description,
+      type: t.type,
+      complexity: t.complexity,
+      dependencies: t.dependencies,
+      relevantFiles: t.targetFiles,
+      isFoundation: t.isFoundation,
     }));
 
     return {
@@ -773,14 +780,33 @@ export class SwarmTaskQueue {
     this.currentWave = state.currentWave;
 
     for (const ts of state.taskStates) {
-      const task = this.tasks.get(ts.id);
+      let task = this.tasks.get(ts.id);
       if (task) {
+        // Merge into existing task (normal path)
         task.status = ts.status;
         task.result = ts.result;
         task.attempts = ts.attempts;
         task.wave = ts.wave;
         task.assignedModel = ts.assignedModel;
         task.dispatchedAt = ts.dispatchedAt;
+      } else {
+        // Create task from checkpoint data (resume path — task queue is empty)
+        task = {
+          id: ts.id,
+          description: ts.description ?? '',
+          type: (ts.type ?? 'implement') as SwarmTask['type'],
+          complexity: ts.complexity ?? 5,
+          dependencies: ts.dependencies ?? [],
+          targetFiles: ts.relevantFiles,
+          status: ts.status,
+          result: ts.result,
+          attempts: ts.attempts,
+          wave: ts.wave,
+          assignedModel: ts.assignedModel,
+          dispatchedAt: ts.dispatchedAt,
+          isFoundation: ts.isFoundation,
+        };
+        this.tasks.set(ts.id, task);
       }
     }
   }

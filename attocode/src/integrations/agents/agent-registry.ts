@@ -48,6 +48,8 @@ export interface AgentDefinition {
   idleTimeout?: number;
   /** Optional economics tuning overrides for doom loop/exploration thresholds */
   economicsTuning?: import('../budget/economics.js').EconomicsTuning;
+  /** Optional budget enforcement mode override ('strict' | 'doomloop_only') */
+  enforcementMode?: 'strict' | 'doomloop_only';
 }
 
 /**
@@ -82,6 +84,8 @@ export interface SpawnResult {
   output: string;
   metrics: {
     tokens: number;
+    inputTokens?: number;
+    outputTokens?: number;
     duration: number;
     toolCalls: number;
   };

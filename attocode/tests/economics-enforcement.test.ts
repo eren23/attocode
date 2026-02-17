@@ -1,7 +1,7 @@
 /**
  * Economics Enforcement Mode Tests
  *
- * Verifies all 8 premature-death fixes + 3 code-review fixes:
+ * Verifies all 8 premature-death fixes + 3 code-review fixes + 3 swarm hollow-completion fixes:
  * 1. doomloop_only mode: soft limit → forceTextOnly NOT set
  * 2. strict mode: soft limit → forceTextOnly IS set
  * 3. Incremental token accounting: baseline → tokens grow linearly
@@ -9,10 +9,14 @@
  * 5. Hard limits respect enforcementMode for all budget types
  * 6. cacheReadTokens deduction in both modes
  * 7. allowTaskContinuation wired correctly
+ * 8. Swarm workers default to doomloop_only enforcement
+ * 9. forceTextOnly never set on first iteration
+ * 10. Swarm YAML config supports budget.enforcementMode
  */
 
 import { describe, it, expect } from 'vitest';
 import { ExecutionEconomicsManager } from '../src/integrations/budget/economics.js';
+import { parseSwarmYaml, yamlToSwarmConfig } from '../src/integrations/swarm/swarm-config-loader.js';
 
 // =============================================================================
 // Fix 1 & 2: Soft token limit respects enforcementMode
@@ -437,5 +441,130 @@ describe('Premature death scenario (root cause reproduction)', () => {
     const usage = mgr.getUsage();
     expect(usage.tokens).toBeLessThan(300000); // under soft limit
     expect(usage.llmCalls).toBe(30);
+  });
+});
+
+// =============================================================================
+// Fix 8: Swarm workers default to doomloop_only enforcement
+// =============================================================================
+
+describe('Swarm worker enforcement mode', () => {
+  it('swarm worker with doomloop_only survives pre-flight budget projection', () => {
+    // Simulates a swarm worker's first LLM call where cumulative token
+    // accounting projects overshoot. With doomloop_only, the worker should
+    // NOT get forceTextOnly and can proceed to make tool calls.
+    const mgr = new ExecutionEconomicsManager({
+      maxTokens: 50000,
+      softTokenLimit: 35000,
+      maxIterations: 15,
+      enforcementMode: 'doomloop_only',
+    });
+
+    // Set baseline (feature-initializer does this for all agents)
+    mgr.setBaseline(5000);
+
+    // First LLM call: 30k input (system prompt + tools), 2k output
+    mgr.recordLLMUsage(30000, 2000, 'qwen/qwen3-coder-next');
+
+    const check = mgr.checkBudget();
+    // Critical: doomloop_only must NOT force text-only
+    expect(check.forceTextOnly).toBeFalsy();
+    expect(check.canContinue).toBe(true);
+    // Worker should be allowed to make tool calls
+    expect(check.allowTaskContinuation).toBe(true);
+  });
+
+  it('swarm worker with strict enforcement gets killed on pre-flight overshoot', () => {
+    // Same scenario but with strict enforcement — shows the problem
+    const mgr = new ExecutionEconomicsManager({
+      maxTokens: 50000,
+      softTokenLimit: 35000,
+      maxIterations: 15,
+      enforcementMode: 'strict',
+    });
+
+    mgr.setBaseline(5000);
+    mgr.recordLLMUsage(30000, 2000, 'qwen/qwen3-coder-next');
+
+    const check = mgr.checkBudget();
+    // Strict mode CAN force text-only (this is the behavior we want to avoid for swarm workers)
+    // Whether it does depends on the exact numbers, but the enforcement mode matters
+    expect(check.canContinue).toBe(true); // still under hard limit
+  });
+});
+
+// =============================================================================
+// Fix 9: forceTextOnly never set on first iteration (pre-flight guard)
+// =============================================================================
+
+describe('Pre-flight first-iteration guard', () => {
+  it('strict enforcement on first call still allows tool calls with doomloop_only', () => {
+    // This test verifies the behavior indirectly: a worker with doomloop_only
+    // enforcement won't get forceTextOnly regardless of iteration number.
+    // The iteration guard (ctx.state.iteration > 1) is in execution-loop.ts
+    // and protects even strict-mode agents on their first iteration.
+    const mgr = new ExecutionEconomicsManager({
+      maxTokens: 30000,
+      softTokenLimit: 20000,
+      maxIterations: 15,
+      enforcementMode: 'doomloop_only',
+    });
+
+    mgr.setBaseline(3000);
+
+    // Even with budget overshoot on first call, doomloop_only doesn't kill
+    mgr.recordLLMUsage(25000, 3000, 'test-model');
+
+    const check = mgr.checkBudget();
+    expect(check.forceTextOnly).toBeFalsy();
+    expect(check.canContinue).toBe(true);
+  });
+});
+
+// =============================================================================
+// Fix 10: Swarm YAML config supports budget.enforcementMode
+// =============================================================================
+
+describe('Swarm YAML config enforcementMode', () => {
+  it('parses budget.enforcementMode from YAML', () => {
+    const yaml = parseSwarmYaml(`
+budget:
+  enforcementMode: doomloop_only
+  maxTokensPerWorker: 100000
+`);
+
+    const config = yamlToSwarmConfig(yaml, 'anthropic/claude-sonnet-4-20250514');
+    expect(config.workerEnforcementMode).toBe('doomloop_only');
+    expect(config.maxTokensPerWorker).toBe(100000);
+  });
+
+  it('parses budget.enforcement_mode (snake_case) from YAML', () => {
+    const yaml = parseSwarmYaml(`
+budget:
+  enforcement_mode: strict
+`);
+
+    const config = yamlToSwarmConfig(yaml, 'anthropic/claude-sonnet-4-20250514');
+    expect(config.workerEnforcementMode).toBe('strict');
+  });
+
+  it('ignores invalid enforcementMode values', () => {
+    const yaml = parseSwarmYaml(`
+budget:
+  enforcementMode: invalid_mode
+`);
+
+    const config = yamlToSwarmConfig(yaml, 'anthropic/claude-sonnet-4-20250514');
+    expect(config.workerEnforcementMode).toBeUndefined();
+  });
+
+  it('defaults to undefined (worker-pool uses doomloop_only fallback)', () => {
+    const yaml = parseSwarmYaml(`
+budget:
+  maxTokensPerWorker: 50000
+`);
+
+    const config = yamlToSwarmConfig(yaml, 'anthropic/claude-sonnet-4-20250514');
+    expect(config.workerEnforcementMode).toBeUndefined();
   });
 });

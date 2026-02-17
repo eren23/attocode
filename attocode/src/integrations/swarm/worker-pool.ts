@@ -15,7 +15,7 @@ import { WorkerBudgetTracker, createWorkerBudgetTracker } from '../../shared/bud
 import { buildDelegationPrompt, createMinimalDelegationSpec } from '../agents/delegation-protocol.js';
 import { getSubagentQualityPrompt } from '../utilities/thinking-strategy.js';
 import { getEnvironmentFacts, formatFactsBlock, formatFactsCompact } from '../utilities/environment-facts.js';
-import { calculateCost, isModelCacheInitialized } from '../utilities/openrouter-pricing.js';
+import { calculateCost } from '../utilities/openrouter-pricing.js';
 import { resolvePolicyProfile } from '../safety/policy-engine.js';
 
 // ─── D2: Lightweight Model Detection ───────────────────────────────────────
@@ -218,6 +218,10 @@ export class SwarmWorkerPool {
         progressCheckpoint: 3,
         ...(this.config.economicsTuning ?? {}),
       },
+      // Swarm workers default to 'doomloop_only' enforcement to prevent premature
+      // forceTextOnly on the first LLM call. The swarm's own dispatch cap, timeout,
+      // and budget pool provide sufficient hard stops.
+      enforcementMode: this.config.workerEnforcementMode ?? 'doomloop_only',
     };
 
     this.agentRegistry.registerAgent(agentDef);
@@ -343,10 +347,10 @@ export class SwarmWorkerPool {
   toTaskResult(spawnResult: SpawnResult, task: SwarmTask, durationMs: number): SwarmTaskResult {
     const tokens = spawnResult.metrics.tokens;
     const model = task.assignedModel ?? 'unknown';
-    // Use real pricing from OpenRouter when cache is initialized, otherwise fallback
-    const estimatedCost = isModelCacheInitialized()
-      ? calculateCost(model, Math.floor(tokens * 0.6), Math.floor(tokens * 0.4))
-      : tokens * 0.0000005;
+    // Use actual input/output tokens when available, fall back to 70/30 estimate
+    const inputTokens = spawnResult.metrics.inputTokens ?? Math.floor(tokens * 0.7);
+    const outputTokens = spawnResult.metrics.outputTokens ?? Math.floor(tokens * 0.3);
+    const estimatedCost = calculateCost(model, inputTokens, outputTokens);
 
     // Look up per-worker budget utilization from completed tracker
     const tracker = this.completedTrackers.get(task.id);

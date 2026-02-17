@@ -629,9 +629,11 @@ export async function spawnAgent(
       agentId,
       blackboard: ctx.blackboard || undefined,
       fileCache: ctx.fileCache || undefined,
-      budget: agentDef.economicsTuning
-        ? { ...pooledBudget.budget, tuning: agentDef.economicsTuning }
-        : pooledBudget.budget,
+      budget: {
+        ...pooledBudget.budget,
+        ...(agentDef.economicsTuning ? { tuning: agentDef.economicsTuning } : {}),
+        ...(agentDef.enforcementMode ? { enforcementMode: agentDef.enforcementMode } : {}),
+      },
       sharedContextState: ctx.sharedContextState || undefined,
       sharedEconomicsState: ctx.sharedEconomicsState || undefined,
     });
@@ -799,6 +801,8 @@ export async function spawnAgent(
         output: finalOutput,
         metrics: {
           tokens: result.metrics.totalTokens,
+          inputTokens: result.metrics.inputTokens,
+          outputTokens: result.metrics.outputTokens,
           duration,
           toolCalls: result.metrics.toolCalls,
         },
@@ -1036,6 +1040,8 @@ export async function spawnAgent(
           output: baseOutput + partialResultSection + cancelledQueuedSummary,
           metrics: {
             tokens: subagentMetrics.totalTokens,
+            inputTokens: subagentMetrics.inputTokens,
+            outputTokens: subagentMetrics.outputTokens,
             duration,
             toolCalls: subagentMetrics.toolCalls,
           },

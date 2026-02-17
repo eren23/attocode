@@ -619,7 +619,10 @@ export async function executeDirectly(
 
           // Only force text-only in strict mode. In doomloop_only mode,
           // the pre-flight check warns but does not kill the agent.
-          if (isStrictEnforcement) {
+          // NEVER force text-only on the first iteration — an agent that hasn't
+          // made a single tool call yet should always get at least one chance.
+          // This prevents swarm workers from being killed before they can work.
+          if (isStrictEnforcement && ctx.state.iteration > 1) {
             if (!budgetInjectedPrompt) {
               messages.push({
                 role: 'user',
