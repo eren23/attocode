@@ -5,6 +5,60 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.5] - 2026-02-17
+
+### Added
+
+#### Provider & Infrastructure
+- **Azure OpenAI provider** — New Azure provider adapter (`azure.ts`) with separate endpoint/auth handling; `AZURE_OPENAI_*` env config
+- **Streaming support** — `chatWithToolsStream` in Anthropic adapter for SSE streaming; optional streaming support in ProviderAdapter for streaming tool calls
+- **Vision support** — `ImageContentBlock`/`ImageContent` types for vision across providers; filter non-text blocks when building Anthropic system content
+- **Default model update** — OpenAI default model updated from gpt-4-turbo-preview to gpt-4o
+
+#### Economics & Budget
+- **Incremental token accounting** — Baseline estimation and cache-aware tracking for improved budget accuracy
+- **Budget enforcement modes** — New modes (`strict`, `doomloop_only`) to control agent behavior under budget constraints
+- **Budget check tracing** — Monitor economics during execution with key metrics for debugging
+- **Task continuation under budget** — `allowTaskContinuation` and `budgetMode` (`none`|`warn`|`restricted`|`hard`) in BudgetCheckResult
+- **Cache-aware budgeting** — Support `cacheReadTokens` in `recordLLMUsage`; `baselineContextTokens` and `cumulativeInputTokens` in ExecutionUsage
+- **TUI budget indicators** — Real-time budget health UI indicators in the TUI
+- **YAML config** — Budget enforcement modes configurable via `swarm.yaml.example` (orchestration, budget, quality gates, resilience)
+
+#### Dead Letter Queue
+- **DLQ retry system** — `setRetryExecutor`, `processRetries`, `startRetryLoop`, `stopRetryLoop` for failed tool operations
+- **Retry loop** — 2-minute interval; executor re-runs failed tool calls via registry; wired for REPL and TUI modes
+
+#### TypeScript Integration
+- **TypeCheckerState** — Manage TypeScript compilation state within ProductionAgent
+- **Periodic type checking** — Syntax errors and compilation results emitted as diagnostics events
+- **Execution loop integration** — Block completions based on TypeScript errors; improved reliability for code execution
+
+#### Health & Config
+- **Health checks** — `createProviderHealthCheck` and `createSQLiteHealthCheck`; registered in main.ts health checker
+- **swarm.yaml.example** — Comprehensive example with orchestration, budget, quality gates, and resilience config
+
+#### Task Management
+- **Task state metrics** — Additional metrics (`inputTokens`, `outputTokens`) for budget tracking
+- **Swarm worker execution** — Prevent premature termination on first iteration; ensure workers can make tool calls
+
+### Changed
+
+- **Integrations structure** — Reorganized integration modules; logger and policy-engine moved to utilities/safety directory; new agent registry and async subagent modules
+- **Agent architecture** — Extracted feature initialization, message building, session management, agent creation into separate modules; introduced builder pattern for ProductionAgent
+- **Architecture docs** — OpenAI default model documented as gpt-4o in provider-adapters docs
+
+### Fixed
+
+- **Type checking in task management** — Resolved TypeScript type checking bugs in ProductionAgent task management; improved error handling for task ownership and diagnostics
+
+### Tests
+
+- **agents-module.test.ts** — New agents module tests
+- **streaming.test.ts** — ~1053 lines of streaming tests
+- **swarm-integration.test.ts** — ~751 lines of swarm integration tests
+- **Economics enforcement** — Comprehensive tests for enforcement mode behavior and budget limit handling
+- **Codebase context** — Adjusted codebase-context-lsp and codebase-context-search tests; minor fix in modernization.test.ts
+
 ## [0.2.4] - 2026-02-15
 
 ### Added
@@ -585,7 +639,8 @@ A new execution mode where one orchestrator model decomposes tasks into subtask 
 - Sandbox execution for bash commands (macOS Seatbelt)
 - Dangerous operation blocking in strict mode
 
-[Unreleased]: https://github.com/eren23/attocode/compare/v0.2.4...HEAD
+[Unreleased]: https://github.com/eren23/attocode/compare/v0.2.5...HEAD
+[0.2.5]: https://github.com/eren23/attocode/compare/v0.2.4...v0.2.5
 [0.2.4]: https://github.com/eren23/attocode/compare/v0.2.3...v0.2.4
 [0.2.3]: https://github.com/eren23/attocode/compare/v0.2.2...v0.2.3
 [0.2.2]: https://github.com/eren23/attocode/compare/v0.2.1...v0.2.2
