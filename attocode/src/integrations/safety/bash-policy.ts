@@ -57,6 +57,8 @@ export const READ_ONLY_PATTERNS: RegExp[] = [
   /^\s*vitest\b/,
   /^\s*jest\b/,
   /^\s*pytest\b/,
+  /^\s*eslint\b/,
+  /^\s*prettier\s+(--check|-c|--list-different)\b/,
 ];
 
 /** F6: Exported as single source of truth for write command patterns. */

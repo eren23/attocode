@@ -55,13 +55,30 @@ export interface ToolDefinition {
 }
 
 /**
- * Content block with optional cache_control marker for prompt caching.
+ * Text content block with optional cache_control marker for prompt caching.
  */
-export interface ContentBlock {
+export interface TextContentBlock {
   type: 'text';
   text: string;
   cache_control?: { type: 'ephemeral' };
 }
+
+/**
+ * Image content block for vision support.
+ */
+export interface ImageContentBlock {
+  type: 'image';
+  source: {
+    type: 'base64' | 'url';
+    media_type: string;
+    data: string;
+  };
+}
+
+/**
+ * Content block: text or image.
+ */
+export type ContentBlock = TextContentBlock | ImageContentBlock;
 
 /**
  * Message that supports both string and structured content (for prompt caching).

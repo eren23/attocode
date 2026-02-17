@@ -67,6 +67,8 @@ import {
   createHealthChecker,
   createFileSystemHealthCheck,
   createNetworkHealthCheck,
+  createProviderHealthCheck,
+  createSQLiteHealthCheck,
   formatHealthReport,
 } from './integrations/quality/health-check.js';
 
@@ -368,6 +370,14 @@ async function main(): Promise<void> {
   // Network check uses the provider's API endpoint
   const networkCheck = createNetworkHealthCheck('https://api.anthropic.com');
   healthChecker.register(networkCheck.name, networkCheck.check, networkCheck);
+
+  // LLM provider check verifies the provider can respond
+  const providerCheck = createProviderHealthCheck(provider as any, provider.name);
+  healthChecker.register(providerCheck.name, providerCheck.check, providerCheck);
+
+  // SQLite check verifies session persistence database
+  const sqliteCheck = createSQLiteHealthCheck('.agent/sessions/sessions.db');
+  healthChecker.register(sqliteCheck.name, sqliteCheck.check, sqliteCheck);
 
   // Run initial health check (non-blocking)
   healthChecker.checkAll().then(report => {

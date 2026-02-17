@@ -248,7 +248,7 @@ export interface ChatResponseWithTools extends ChatResponse {
 }
 
 /**
- * Message content that supports caching.
+ * Text content that supports caching.
  * Used for OpenRouter's cache_control feature on Anthropic models.
  */
 export interface CacheableContent {
@@ -259,12 +259,29 @@ export interface CacheableContent {
 }
 
 /**
+ * Image content block for vision support.
+ */
+export interface ImageContent {
+  type: 'image';
+  source: {
+    type: 'base64' | 'url';
+    media_type: string;
+    data: string;
+  };
+}
+
+/**
+ * Content part: text (with optional caching) or image.
+ */
+export type ContentPart = CacheableContent | ImageContent;
+
+/**
  * Extended message that supports both string and structured content.
  * Structured content allows for cache control markers.
  */
 export interface MessageWithContent {
   role: 'user' | 'assistant' | 'system' | 'tool';
-  content: string | CacheableContent[];
+  content: string | ContentPart[];
   /** For tool result messages - matches the tool call ID */
   tool_call_id?: string;
   /** For tool result messages - the name of the tool (required for Gemini) */
@@ -286,4 +303,14 @@ export interface LLMProviderWithTools extends LLMProvider {
     messages: (Message | MessageWithContent)[],
     options?: ChatOptionsWithTools
   ): Promise<ChatResponseWithTools>;
+
+  /**
+   * Stream a chat response with tool definitions.
+   * Yields StreamChunk objects as the response arrives.
+   * Optional — callers should check for existence before using.
+   */
+  chatWithToolsStream?(
+    messages: (Message | MessageWithContent)[],
+    options?: ChatOptionsWithTools
+  ): AsyncIterable<import('../integrations/streaming/streaming.js').StreamChunk>;
 }

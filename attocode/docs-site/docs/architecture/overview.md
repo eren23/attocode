@@ -139,7 +139,7 @@ Three provider adapters implement a common `LLMProvider` interface:
 |----------|----------|---------------|-------------|
 | OpenRouter | 0 (highest) | google/gemini-2.0-flash | 100+ models, thinking support |
 | Anthropic | 1 | claude-sonnet-4 | Native tool use, prompt caching |
-| OpenAI | 2 | gpt-4-turbo-preview | Standard function calling |
+| OpenAI | 2 | gpt-4o | Standard function calling |
 | Mock | 100 (lowest) | N/A | 4 predefined test scenarios |
 
 Auto-detection selects the first available provider by priority. Each adapter translates between the unified `Message`/`ChatResponse` types and provider-specific API formats.

@@ -330,6 +330,24 @@ export async function startTUIMode(
     if (dlq) {
       registry.setDeadLetterQueue(dlq, currentSessionId);
       mcpClient.setDeadLetterQueue(dlq, currentSessionId);
+
+      // Set up retry executor for tool operations
+      dlq.setRetryExecutor(async (item) => {
+        const args = JSON.parse(item.args);
+        if (item.operation.startsWith('tool:')) {
+          const toolName = item.operation.slice(5);
+          try {
+            const result = await registry.execute(toolName, args);
+            return result.success;
+          } catch {
+            return false;
+          }
+        }
+        return false;
+      });
+
+      // Start periodic retry loop (every 2 minutes, non-blocking)
+      dlq.startRetryLoop(120000);
     }
 
     // If resuming, load the session state

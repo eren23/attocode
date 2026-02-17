@@ -7,10 +7,14 @@
 
 import type {
   LLMProvider,
+  LLMProviderWithTools,
   Message,
   MessageWithContent,
   ChatOptions,
-  ChatResponse
+  ChatOptionsWithTools,
+  ChatResponse,
+  ChatResponseWithTools,
+  ToolCallResponse,
 } from '../types.js';
 import { registerProvider } from '../provider.js';
 import { estimateTokenCount } from '../../integrations/utilities/token-estimate.js';
@@ -80,13 +84,15 @@ const SCENARIOS: MockScenario[] = [
 // MOCK PROVIDER
 // =============================================================================
 
-export class MockProvider implements LLMProvider {
+export class MockProvider implements LLMProvider, LLMProviderWithTools {
   readonly name = 'mock';
   readonly defaultModel = 'mock-model';
-  
+
   private callCount = 0;
   private currentScenario: MockScenario | null = null;
   private scenarioIndex = 0;
+  private toolResponses: Array<{ content: string; toolCalls?: ToolCallResponse[] }> = [];
+  private toolResponseIndex = 0;
 
   isConfigured(): boolean {
     return true; // Always available
@@ -104,7 +110,7 @@ export class MockProvider implements LLMProvider {
       .find(m => m.role === 'user');
     
     const rawContent = lastUserMessage?.content ?? '';
-    const content = typeof rawContent === 'string' ? rawContent : rawContent.map(c => c.text).join('');
+    const content = typeof rawContent === 'string' ? rawContent : rawContent.map(c => c.type === 'text' ? c.text : '').join('');
     
     // Try to match a scenario
     if (!this.currentScenario || this.scenarioIndex >= this.currentScenario.responses.length) {
@@ -140,12 +146,58 @@ Is there anything specific you'd like me to clarify?`;
   }
 
   /**
+   * Chat with tool use support.
+   * Uses configured tool responses if available, falls back to chat().
+   */
+  async chatWithTools(
+    messages: (Message | MessageWithContent)[],
+    options?: ChatOptionsWithTools
+  ): Promise<ChatResponseWithTools> {
+    // If tool responses are configured, use them
+    if (this.toolResponses.length > 0) {
+      await new Promise(resolve => setTimeout(resolve, 50));
+      this.callCount++;
+
+      const idx = this.toolResponseIndex % this.toolResponses.length;
+      this.toolResponseIndex++;
+      const preset = this.toolResponses[idx];
+
+      return {
+        content: preset.content,
+        stopReason: preset.toolCalls ? 'end_turn' : 'end_turn',
+        usage: {
+          inputTokens: 100,
+          outputTokens: 50,
+        },
+        toolCalls: preset.toolCalls,
+      };
+    }
+
+    // Fall back to basic chat (no tool calls)
+    const chatResponse = await this.chat(messages, options);
+    return {
+      ...chatResponse,
+      toolCalls: undefined,
+    };
+  }
+
+  /**
+   * Configure mock tool responses for testing.
+   */
+  setToolResponses(responses: Array<{ content: string; toolCalls?: ToolCallResponse[] }>): void {
+    this.toolResponses = responses;
+    this.toolResponseIndex = 0;
+  }
+
+  /**
    * Reset the mock state for testing.
    */
   reset(): void {
     this.callCount = 0;
     this.currentScenario = null;
     this.scenarioIndex = 0;
+    this.toolResponses = [];
+    this.toolResponseIndex = 0;
   }
 
   /**

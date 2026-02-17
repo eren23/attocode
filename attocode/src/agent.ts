@@ -3084,3 +3084,4 @@ If the task is a simple question or doesn't need specialized handling, set bestA
 // =============================================================================
 // Re-exports for backward compatibility
 export { parseStructuredClosureReport } from './core/index.js';
+export { buildAgent, ProductionAgentBuilder, createProductionAgent } from './agent/index.js';

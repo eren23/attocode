@@ -605,6 +605,96 @@ export class DeadLetterQueue {
       resolvedAt: row.resolved_at ? new Date(row.resolved_at as string) : undefined,
     };
   }
+
+  // ===========================================================================
+  // RETRY LOOP
+  // ===========================================================================
+
+  private retryTimer: ReturnType<typeof setInterval> | null = null;
+  private retryExecutor: ((item: DeadLetterItem) => Promise<boolean>) | null = null;
+
+  /**
+   * Register a retry executor function that will be called for each pending item.
+   * The executor should attempt to re-execute the operation and return true on success.
+   */
+  setRetryExecutor(executor: (item: DeadLetterItem) => Promise<boolean>): void {
+    this.retryExecutor = executor;
+  }
+
+  /**
+   * Process all pending items that are ready for retry.
+   * Returns the number of items processed (resolved + abandoned).
+   */
+  async processRetries(): Promise<{ resolved: number; failed: number; abandoned: number }> {
+    if (!this.retryExecutor) {
+      return { resolved: 0, failed: 0, abandoned: 0 };
+    }
+
+    const pending = this.getPending({ readyForRetry: true });
+    let resolved = 0;
+    let failed = 0;
+    let abandoned = 0;
+
+    for (const item of pending) {
+      this.markRetrying(item.id);
+      try {
+        const success = await this.retryExecutor(item);
+        if (success) {
+          this.resolve(item.id);
+          resolved++;
+        } else {
+          this.returnToPending(item.id);
+          // Check if returnToPending auto-abandoned it
+          const updated = this.get(item.id);
+          if (updated?.status === 'abandoned') {
+            abandoned++;
+          } else {
+            failed++;
+          }
+        }
+      } catch {
+        this.returnToPending(item.id);
+        const updated = this.get(item.id);
+        if (updated?.status === 'abandoned') {
+          abandoned++;
+        } else {
+          failed++;
+        }
+      }
+    }
+
+    return { resolved, failed, abandoned };
+  }
+
+  /**
+   * Start a periodic retry loop.
+   * @param intervalMs - How often to check for retries (default: 60000ms = 1 minute)
+   */
+  startRetryLoop(intervalMs: number = 60000): void {
+    this.stopRetryLoop();
+    this.retryTimer = setInterval(async () => {
+      try {
+        await this.processRetries();
+      } catch {
+        // Silently swallow errors in the retry loop
+      }
+    }, intervalMs);
+
+    // Don't block process exit
+    if (this.retryTimer && typeof this.retryTimer === 'object' && 'unref' in this.retryTimer) {
+      this.retryTimer.unref();
+    }
+  }
+
+  /**
+   * Stop the periodic retry loop.
+   */
+  stopRetryLoop(): void {
+    if (this.retryTimer) {
+      clearInterval(this.retryTimer);
+      this.retryTimer = null;
+    }
+  }
 }
 
 // =============================================================================

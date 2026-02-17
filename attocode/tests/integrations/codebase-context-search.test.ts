@@ -11,6 +11,7 @@ import {
   type CodeChunk,
   type RepoMap,
 } from '../../src/integrations/context/codebase-context.js';
+import { levenshteinDistance, tokenizeQuery } from '../../src/integrations/context/code-selector.js';
 
 // =============================================================================
 // TEST FIXTURES
@@ -397,14 +398,8 @@ describe('CodebaseContextManager.search - Edge Cases', () => {
 // =============================================================================
 
 describe('CodebaseContextManager - Levenshtein Distance', () => {
-  let manager: CodebaseContextManager;
-
-  beforeEach(() => {
-    manager = new CodebaseContextManager({ root: '/test/project' });
-  });
-
   it('should calculate correct distances', () => {
-    const levenshtein = (manager as any).levenshteinDistance.bind(manager);
+    const levenshtein = levenshteinDistance;
 
     expect(levenshtein('', '')).toBe(0);
     expect(levenshtein('a', '')).toBe(1);
@@ -416,7 +411,7 @@ describe('CodebaseContextManager - Levenshtein Distance', () => {
   });
 
   it('should be symmetric', () => {
-    const levenshtein = (manager as any).levenshteinDistance.bind(manager);
+    const levenshtein = levenshteinDistance;
 
     expect(levenshtein('hello', 'hallo')).toBe(levenshtein('hallo', 'hello'));
     expect(levenshtein('test', 'tent')).toBe(levenshtein('tent', 'test'));
@@ -428,34 +423,28 @@ describe('CodebaseContextManager - Levenshtein Distance', () => {
 // =============================================================================
 
 describe('CodebaseContextManager - Query Tokenization', () => {
-  let manager: CodebaseContextManager;
-
-  beforeEach(() => {
-    manager = new CodebaseContextManager({ root: '/test/project' });
-  });
-
   it('should split on whitespace', () => {
-    const tokenize = (manager as any).tokenizeQuery.bind(manager);
+    const tokenize = tokenizeQuery;
 
     expect(tokenize('foo bar baz')).toEqual(['foo', 'bar', 'baz']);
   });
 
   it('should filter short terms', () => {
-    const tokenize = (manager as any).tokenizeQuery.bind(manager);
+    const tokenize = tokenizeQuery;
 
     // 'a' should be filtered (< 2 chars), 'ab' and 'abc' are kept
     expect(tokenize('a ab abc')).toEqual(['ab', 'abc']);
   });
 
   it('should filter stop words', () => {
-    const tokenize = (manager as any).tokenizeQuery.bind(manager);
+    const tokenize = tokenizeQuery;
 
     expect(tokenize('the quick fox')).toEqual(['quick', 'fox']);
     expect(tokenize('for and with')).toEqual([]);
   });
 
   it('should remove punctuation', () => {
-    const tokenize = (manager as any).tokenizeQuery.bind(manager);
+    const tokenize = tokenizeQuery;
 
     expect(tokenize('hello, world!')).toEqual(['hello', 'world']);
     expect(tokenize('foo.bar')).toEqual(['foobar']);

@@ -21,6 +21,7 @@ import type {
 import { ProviderError } from '../types.js';
 import { registerProvider, hasEnv, requireEnv } from '../provider.js';
 import { resilientFetch, type NetworkConfig } from '../resilient-fetch.js';
+import { adaptOpenRouterStream, type StreamChunk } from '../../integrations/streaming/streaming.js';
 import { logger } from '../../integrations/utilities/logger.js';
 
 // =============================================================================
@@ -231,7 +232,7 @@ export class OpenRouterProvider implements LLMProvider, LLMProviderWithTools {
       if ('tool_call_id' in m && m.role === 'tool') {
         const toolMsg: Record<string, unknown> = {
           role: 'tool' as const,
-          content: typeof m.content === 'string' ? m.content : m.content.map(c => c.text).join(''),
+          content: typeof m.content === 'string' ? m.content : m.content.map(c => c.type === 'text' ? c.text : '').join(''),
           tool_call_id: m.tool_call_id,
         };
         // Include name if present (required for Gemini)
@@ -245,7 +246,7 @@ export class OpenRouterProvider implements LLMProvider, LLMProviderWithTools {
       if ('tool_calls' in m && m.tool_calls) {
         return {
           role: 'assistant' as const,
-          content: typeof m.content === 'string' ? m.content : (m.content.length > 0 ? m.content.map(c => c.text).join('') : null),
+          content: typeof m.content === 'string' ? m.content : (m.content.length > 0 ? m.content.map(c => c.type === 'text' ? c.text : '').join('') : null),
           tool_calls: m.tool_calls,
         };
       }
@@ -395,6 +396,90 @@ export class OpenRouterProvider implements LLMProvider, LLMProviderWithTools {
         error as Error
       );
     }
+  }
+
+  /**
+   * Stream a chat response with tool definitions.
+   * Uses OpenRouter's OpenAI-compatible SSE streaming.
+   */
+  async *chatWithToolsStream(
+    messages: (Message | MessageWithContent)[],
+    options?: ChatOptionsWithTools
+  ): AsyncIterable<StreamChunk> {
+    const model = options?.model ?? this.model;
+
+    const openRouterMessages = messages.map(m => {
+      if ('tool_call_id' in m && m.role === 'tool') {
+        const toolMsg: Record<string, unknown> = {
+          role: 'tool' as const,
+          content: typeof m.content === 'string' ? m.content : m.content.map(c => c.type === 'text' ? c.text : '').join(''),
+          tool_call_id: m.tool_call_id,
+        };
+        if ('name' in m && m.name) {
+          toolMsg.name = m.name;
+        }
+        return toolMsg;
+      }
+
+      if ('tool_calls' in m && m.tool_calls) {
+        return {
+          role: 'assistant' as const,
+          content: typeof m.content === 'string' ? m.content : (m.content.length > 0 ? m.content.map(c => c.type === 'text' ? c.text : '').join('') : null),
+          tool_calls: m.tool_calls,
+        };
+      }
+
+      if (typeof m.content !== 'string') {
+        return { role: m.role, content: m.content };
+      }
+
+      return { role: m.role, content: m.content };
+    });
+
+    const body: Record<string, unknown> = {
+      model,
+      messages: openRouterMessages,
+      max_tokens: options?.maxTokens ?? 16384,
+      temperature: options?.temperature ?? 0.7,
+      stream: true,
+      ...(options?.stopSequences && { stop: options.stopSequences }),
+      usage: { include: true },
+    };
+
+    if (options?.tools && options.tools.length > 0) {
+      body.tools = options.tools;
+      body.tool_choice = options?.tool_choice ?? 'auto';
+    }
+
+    const headers: Record<string, string> = {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${this.apiKey}`,
+    };
+
+    if (this.siteUrl) {
+      headers['HTTP-Referer'] = this.siteUrl;
+    }
+    if (this.siteName) {
+      headers['X-Title'] = this.siteName;
+    }
+
+    const { response } = await resilientFetch({
+      url: `${this.baseUrl}/chat/completions`,
+      init: {
+        method: 'POST',
+        headers,
+        body: JSON.stringify(body),
+      },
+      providerName: this.name,
+      networkConfig: { ...this.networkConfig, maxRetries: 1 },
+    });
+
+    if (!response.ok) {
+      const error = await response.text();
+      throw this.handleError(response.status, error);
+    }
+
+    yield* adaptOpenRouterStream(response);
   }
 
   /**

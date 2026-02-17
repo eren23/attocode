@@ -1,8 +1,8 @@
 /**
- * OpenAI Provider Adapter
+ * Azure OpenAI Provider Adapter
  *
- * Adapts the OpenAI API to our LLMProvider interface.
- * Supports native tool use via the chatWithTools method.
+ * Adapts Azure OpenAI Service to our LLMProvider interface.
+ * Azure uses a different endpoint and auth scheme than standard OpenAI.
  */
 
 import type {
@@ -16,7 +16,7 @@ import type {
   ChatResponseWithTools,
   ToolCallResponse,
   ToolDefinitionSchema,
-  OpenAIConfig,
+  AzureOpenAIConfig,
 } from '../types.js';
 import { ProviderError } from '../types.js';
 import { registerProvider, hasEnv, requireEnv } from '../provider.js';
@@ -24,7 +24,7 @@ import { resilientFetch, type NetworkConfig } from '../resilient-fetch.js';
 import { logger } from '../../integrations/utilities/logger.js';
 
 // =============================================================================
-// OPENAI API TYPES
+// AZURE OPENAI API TYPES (duplicated from openai.ts to avoid coupling)
 // =============================================================================
 
 /** OpenAI message format */
@@ -80,24 +80,28 @@ interface OpenAIChatCompletion {
 }
 
 // =============================================================================
-// OPENAI PROVIDER
+// AZURE OPENAI PROVIDER
 // =============================================================================
 
-export class OpenAIProvider implements LLMProvider, LLMProviderWithTools {
-  readonly name = 'openai';
+export class AzureOpenAIProvider implements LLMProvider, LLMProviderWithTools {
+  readonly name = 'azure';
   readonly defaultModel = 'gpt-4o';
 
   private apiKey: string;
-  private model: string;
-  private baseUrl: string;
-  private organization?: string;
+  private endpoint: string;
+  private deployment: string;
+  private apiVersion: string;
   private networkConfig: NetworkConfig;
 
-  constructor(config?: OpenAIConfig) {
-    this.apiKey = config?.apiKey ?? requireEnv('OPENAI_API_KEY');
-    this.model = config?.model ?? this.defaultModel;
-    this.baseUrl = config?.baseUrl ?? 'https://api.openai.com';
-    this.organization = config?.organization ?? process.env.OPENAI_ORG_ID;
+  constructor(config?: AzureOpenAIConfig) {
+    this.apiKey = config?.apiKey ?? requireEnv('AZURE_OPENAI_API_KEY');
+    this.endpoint = config?.endpoint ?? requireEnv('AZURE_OPENAI_ENDPOINT');
+    this.deployment = config?.deployment ?? process.env.AZURE_OPENAI_DEPLOYMENT ?? 'gpt-4o';
+    this.apiVersion = config?.apiVersion ?? '2024-08-01-preview';
+
+    // Normalize endpoint: strip trailing slash
+    this.endpoint = this.endpoint.replace(/\/+$/, '');
+
     this.networkConfig = {
       timeout: 120000,  // 2 minutes
       maxRetries: 3,
@@ -106,21 +110,25 @@ export class OpenAIProvider implements LLMProvider, LLMProviderWithTools {
   }
 
   isConfigured(): boolean {
-    return hasEnv('OPENAI_API_KEY');
+    return hasEnv('AZURE_OPENAI_API_KEY') && hasEnv('AZURE_OPENAI_ENDPOINT');
+  }
+
+  /**
+   * Build the Azure OpenAI endpoint URL.
+   * Format: https://{endpoint}/openai/deployments/{deployment}/chat/completions?api-version={apiVersion}
+   */
+  private buildUrl(): string {
+    return `${this.endpoint}/openai/deployments/${this.deployment}/chat/completions?api-version=${this.apiVersion}`;
   }
 
   /**
    * Basic chat without tool support.
    */
   async chat(messages: (Message | MessageWithContent)[], options?: ChatOptions): Promise<ChatResponse> {
-    const model = options?.model ?? this.model;
-
-    // Convert to OpenAI message format (flatten structured content to string)
+    // Azure ignores the model field — the deployment determines the model
     const openaiMessages = this.convertMessagesToOpenAIFormat(messages);
 
-    // Build request body
     const body = {
-      model,
       messages: openaiMessages,
       max_tokens: options?.maxTokens ?? 4096,
       temperature: options?.temperature ?? 0.7,
@@ -131,7 +139,7 @@ export class OpenAIProvider implements LLMProvider, LLMProviderWithTools {
 
     try {
       const { response } = await resilientFetch({
-        url: `${this.baseUrl}/v1/chat/completions`,
+        url: this.buildUrl(),
         init: {
           method: 'POST',
           headers,
@@ -140,7 +148,7 @@ export class OpenAIProvider implements LLMProvider, LLMProviderWithTools {
         providerName: this.name,
         networkConfig: this.networkConfig,
         onRetry: (attempt, delay, error) => {
-          logger.warn('OpenAI retry attempt', { attempt, delayMs: delay, error: error.message });
+          logger.warn('Azure OpenAI retry attempt', { attempt, delayMs: delay, error: error.message });
         },
       });
 
@@ -156,7 +164,7 @@ export class OpenAIProvider implements LLMProvider, LLMProviderWithTools {
     } catch (error) {
       if (error instanceof ProviderError) throw error;
       throw new ProviderError(
-        `OpenAI request failed: ${(error as Error).message}`,
+        `Azure OpenAI request failed: ${(error as Error).message}`,
         this.name,
         'NETWORK_ERROR',
         error as Error
@@ -166,23 +174,18 @@ export class OpenAIProvider implements LLMProvider, LLMProviderWithTools {
 
   /**
    * Chat with native tool use support.
-   * OpenAI's tool format is our standard format, so minimal conversion needed.
    */
   async chatWithTools(
     messages: (Message | MessageWithContent)[],
     options?: ChatOptionsWithTools
   ): Promise<ChatResponseWithTools> {
-    const model = options?.model ?? this.model;
-
-    // Convert messages to OpenAI format
     const openaiMessages = this.convertMessagesWithToolsToOpenAIFormat(messages);
 
-    // Convert tool definitions (already in OpenAI format, just ensure structure)
+    // Convert tool definitions
     const tools = options?.tools?.map(this.convertToolDefinition.bind(this));
 
-    // Build request body
+    // Build request body — Azure ignores the model field
     const body: Record<string, unknown> = {
-      model,
       messages: openaiMessages,
       max_tokens: options?.maxTokens ?? 4096,
       temperature: options?.temperature ?? 0.7,
@@ -193,7 +196,6 @@ export class OpenAIProvider implements LLMProvider, LLMProviderWithTools {
     if (tools && tools.length > 0) {
       body.tools = tools;
 
-      // Convert tool_choice
       if (options?.tool_choice) {
         body.tool_choice = this.convertToolChoice(options.tool_choice);
       }
@@ -203,7 +205,7 @@ export class OpenAIProvider implements LLMProvider, LLMProviderWithTools {
 
     try {
       const { response } = await resilientFetch({
-        url: `${this.baseUrl}/v1/chat/completions`,
+        url: this.buildUrl(),
         init: {
           method: 'POST',
           headers,
@@ -212,7 +214,7 @@ export class OpenAIProvider implements LLMProvider, LLMProviderWithTools {
         providerName: this.name,
         networkConfig: this.networkConfig,
         onRetry: (attempt, delay, error) => {
-          logger.warn('OpenAI retry attempt', { attempt, delayMs: delay, error: error.message });
+          logger.warn('Azure OpenAI retry attempt', { attempt, delayMs: delay, error: error.message });
         },
       });
 
@@ -228,7 +230,7 @@ export class OpenAIProvider implements LLMProvider, LLMProviderWithTools {
     } catch (error) {
       if (error instanceof ProviderError) throw error;
       throw new ProviderError(
-        `OpenAI request failed: ${(error as Error).message}`,
+        `Azure OpenAI request failed: ${(error as Error).message}`,
         this.name,
         'NETWORK_ERROR',
         error as Error
@@ -313,7 +315,6 @@ export class OpenAIProvider implements LLMProvider, LLMProviderWithTools {
 
   /**
    * Convert tool definition to OpenAI format.
-   * Our standard format is already OpenAI-compatible.
    */
   private convertToolDefinition(tool: ToolDefinitionSchema): OpenAITool {
     return {
@@ -368,7 +369,6 @@ export class OpenAIProvider implements LLMProvider, LLMProviderWithTools {
   private parseResponseWithTools(data: OpenAIChatCompletion): ChatResponseWithTools {
     const choice = data.choices[0];
 
-    // Convert OpenAI tool_calls to our format
     const toolCalls: ToolCallResponse[] | undefined = choice.message.tool_calls?.map(tc => ({
       id: tc.id,
       type: 'function' as const,
@@ -395,7 +395,7 @@ export class OpenAIProvider implements LLMProvider, LLMProviderWithTools {
 
   /**
    * Extract rate limit info from response headers.
-   * OpenAI returns x-ratelimit-* headers on every response.
+   * Azure OpenAI returns x-ratelimit-* headers similar to OpenAI.
    */
   private extractRateLimitInfo(response: Response): ChatResponse['rateLimitInfo'] {
     const remaining = response.headers.get('x-ratelimit-remaining-requests');
@@ -404,7 +404,7 @@ export class OpenAIProvider implements LLMProvider, LLMProviderWithTools {
 
     if (!remaining && !remainingTokens && !reset) return undefined;
 
-    // Parse reset time (OpenAI sends values like "6m0s" or "2ms")
+    // Parse reset time (values like "6m0s" or "2ms")
     let resetSeconds: number | undefined;
     if (reset) {
       const match = reset.match(/(?:(\d+)h)?(?:(\d+)m)?(?:(\d+)s)?(?:(\d+)ms)?/);
@@ -425,18 +425,13 @@ export class OpenAIProvider implements LLMProvider, LLMProviderWithTools {
 
   /**
    * Build request headers.
+   * Azure uses api-key header instead of Authorization: Bearer.
    */
   private buildHeaders(): Record<string, string> {
-    const headers: Record<string, string> = {
+    return {
       'Content-Type': 'application/json',
-      'Authorization': `Bearer ${this.apiKey}`,
+      'api-key': this.apiKey,
     };
-
-    if (this.organization) {
-      headers['OpenAI-Organization'] = this.organization;
-    }
-
-    return headers;
   }
 
   /**
@@ -458,7 +453,7 @@ export class OpenAIProvider implements LLMProvider, LLMProviderWithTools {
     else if (status >= 500) code = 'SERVER_ERROR';
 
     return new ProviderError(
-      `OpenAI API error (${status}): ${body}`,
+      `Azure OpenAI API error (${status}): ${body}`,
       this.name,
       code
     );
@@ -471,7 +466,7 @@ export class OpenAIProvider implements LLMProvider, LLMProviderWithTools {
     switch (reason) {
       case 'stop': return 'end_turn';
       case 'length': return 'max_tokens';
-      case 'tool_calls': return 'end_turn'; // Tool calls treated as end_turn
+      case 'tool_calls': return 'end_turn';
       case 'content_filter': return 'end_turn';
       default: return 'end_turn';
     }
@@ -482,8 +477,8 @@ export class OpenAIProvider implements LLMProvider, LLMProviderWithTools {
 // REGISTRATION
 // =============================================================================
 
-registerProvider('openai', {
-  priority: 2,
-  detect: () => hasEnv('OPENAI_API_KEY'),
-  create: async () => new OpenAIProvider(),
+registerProvider('azure', {
+  priority: 3,
+  detect: () => hasEnv('AZURE_OPENAI_API_KEY') && hasEnv('AZURE_OPENAI_ENDPOINT'),
+  create: async () => new AzureOpenAIProvider(),
 });

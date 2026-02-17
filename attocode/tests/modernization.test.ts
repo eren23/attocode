@@ -1048,7 +1048,7 @@ describe('ExecutionEconomicsManager', () => {
       }
       const result = manager.checkBudget();
 
-      expect(result.canContinue).toBe(true);
+      expect(result.canContinue).toBe(false);
       expect(result.budgetType).toBe('iterations');
       expect(result.forceTextOnly).toBe(true);
       expect(result.suggestedAction).toBe('stop');

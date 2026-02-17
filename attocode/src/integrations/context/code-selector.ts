@@ -368,7 +368,7 @@ async function gatherLSPEnhancements(
 /**
  * Convert LSP URI to file path.
  */
-function uriToPath(uri: string): string | null {
+export function uriToPath(uri: string): string | null {
   if (uri.startsWith('file://')) {
     return uri.slice(7);
   }
@@ -378,7 +378,7 @@ function uriToPath(uri: string): string | null {
 /**
  * Extract symbol name from hover text.
  */
-function extractSymbolName(hover: string): string | null {
+export function extractSymbolName(hover: string): string | null {
   // Try to extract function/variable name from hover text
   // Common patterns: "function foo(...)", "const bar", "class Baz"
   const patterns = [

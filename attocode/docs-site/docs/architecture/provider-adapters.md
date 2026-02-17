@@ -125,7 +125,7 @@ registerProvider('mock', {
 |----------|----------|-------------|---------------|
 | 0 | OpenRouter | `OPENROUTER_API_KEY` | google/gemini-2.0-flash |
 | 1 | Anthropic | `ANTHROPIC_API_KEY` | claude-sonnet-4-20250514 |
-| 2 | OpenAI | `OPENAI_API_KEY` | gpt-4-turbo-preview |
+| 2 | OpenAI | `OPENAI_API_KEY` | gpt-4o |
 | 100 | Mock | (always available) | N/A |
 
 ## Anthropic Provider
@@ -153,7 +153,7 @@ registerProvider('mock', {
 
 `src/providers/adapters/openai.ts` implements the OpenAI Chat Completions API:
 
-- **Default model**: `gpt-4-turbo-preview`
+- **Default model**: `gpt-4o`
 - **Tool format**: OpenAI function calling format with `tool_calls` in the response
 - **Organization header**: Supports `organization` in config for multi-org accounts
 - **Message translation**: Converts between the unified `Message` format and OpenAI's `{ role, content, tool_calls, tool_call_id }` format

@@ -110,6 +110,10 @@ export interface ExecutionUsage {
   iterations: number;
   toolCalls: number;
   llmCalls: number;
+  /** Baseline context tokens (not counted toward budget) */
+  baselineContextTokens: number;
+  /** Running total of all input tokens across all LLM calls (for debugging) */
+  cumulativeInputTokens: number;
 }
 
 /**
@@ -205,6 +209,10 @@ export interface BudgetCheckResult {
   forceTextOnly?: boolean;
   /** Prompt to inject for contextual guidance */
   injectedPrompt?: string;
+  /** Graduated budget severity level */
+  budgetMode?: 'none' | 'warn' | 'restricted' | 'hard';
+  /** Whether task-switching is allowed (false only at hard limits) */
+  allowTaskContinuation?: boolean;
 }
 
 /**
@@ -296,6 +304,10 @@ export class ExecutionEconomicsManager {
   // Adaptive budget: stores original maxIterations for reversible reduction
   private originalMaxIterations: number | null = null;
 
+  // Incremental token accounting
+  private baseline = 0;
+  private lastInputTokens = 0;
+
   constructor(budget?: Partial<ExecutionBudget>, sharedEconomics?: SharedEconomicsState, workerId?: string) {
     this.sharedEconomics = sharedEconomics ?? null;
     this.workerId = workerId ?? 'root';
@@ -330,6 +342,8 @@ export class ExecutionEconomicsManager {
       iterations: 0,
       toolCalls: 0,
       llmCalls: 0,
+      baselineContextTokens: 0,
+      cumulativeInputTokens: 0,
     };
 
     this.progress = {
@@ -386,6 +400,39 @@ export class ExecutionEconomicsManager {
   }
 
   /**
+   * Set baseline context tokens for incremental accounting.
+   * Tokens up to this baseline are not counted toward the budget.
+   */
+  setBaseline(tokens: number): void {
+    this.baseline = tokens;
+    this.usage.baselineContextTokens = tokens;
+  }
+
+  /**
+   * Get current baseline context tokens.
+   */
+  getBaseline(): number {
+    return this.baseline;
+  }
+
+  /**
+   * Update baseline after compaction reduces context size.
+   */
+  updateBaseline(tokens: number): void {
+    this.baseline = tokens;
+    this.usage.baselineContextTokens = tokens;
+  }
+
+  /**
+   * Estimate the incremental cost of the next LLM call.
+   * Subtracts baseline from input tokens to give incremental cost.
+   */
+  estimateNextCallCost(inputTokens: number, outputTokens: number): number {
+    const incrementalInput = Math.max(0, inputTokens - this.baseline);
+    return incrementalInput + outputTokens;
+  }
+
+  /**
    * Set the extension request handler.
    */
   setExtensionHandler(
@@ -396,15 +443,32 @@ export class ExecutionEconomicsManager {
 
   /**
    * Record token usage from an LLM call.
+   * When a baseline is set, uses incremental accounting: only tokens beyond what
+   * was seen in the previous call are counted toward the budget.
    * @param inputTokens - Number of input tokens
    * @param outputTokens - Number of output tokens
    * @param model - Model name (for fallback pricing calculation)
    * @param actualCost - Actual cost from provider (e.g., OpenRouter returns this directly)
+   * @param cacheReadTokens - Tokens served from cache (deducted from incremental input)
    */
-  recordLLMUsage(inputTokens: number, outputTokens: number, model?: string, actualCost?: number): void {
-    this.usage.inputTokens += inputTokens;
+  recordLLMUsage(inputTokens: number, outputTokens: number, model?: string, actualCost?: number, cacheReadTokens?: number): void {
+    // Track cumulative input for debugging (always the full input)
+    this.usage.cumulativeInputTokens += inputTokens;
+
+    // Incremental accounting: only count new tokens since last call
+    let effectiveInput: number;
+    if (this.baseline > 0) {
+      const incrementalInput = Math.max(0, inputTokens - this.lastInputTokens);
+      effectiveInput = Math.max(0, incrementalInput - (cacheReadTokens ?? 0));
+    } else {
+      // No baseline: cumulative mode (backward compat)
+      effectiveInput = cacheReadTokens ? Math.max(0, inputTokens - cacheReadTokens) : inputTokens;
+    }
+
+    this.lastInputTokens = inputTokens;
+    this.usage.inputTokens += effectiveInput;
     this.usage.outputTokens += outputTokens;
-    this.usage.tokens += inputTokens + outputTokens;
+    this.usage.tokens += effectiveInput + outputTokens;
     this.usage.llmCalls++;
 
     // Use actual cost from provider if available, otherwise calculate
@@ -552,6 +616,8 @@ export class ExecutionEconomicsManager {
           percentUsed: (this.usage.tokens / this.budget.maxTokens) * 100,
           suggestedAction: 'warn',
           injectedPrompt: BUDGET_ADVISORY_PROMPT('tokens'),
+          budgetMode: 'warn',
+          allowTaskContinuation: true,
         };
       }
       return {
@@ -562,6 +628,8 @@ export class ExecutionEconomicsManager {
         isSoftLimit: false,
         percentUsed: (this.usage.tokens / this.budget.maxTokens) * 100,
         suggestedAction: 'stop',
+        budgetMode: 'hard',
+        allowTaskContinuation: false,
       };
     }
 
@@ -577,6 +645,8 @@ export class ExecutionEconomicsManager {
           percentUsed: (this.usage.cost / this.budget.maxCost) * 100,
           suggestedAction: 'warn',
           injectedPrompt: BUDGET_ADVISORY_PROMPT('cost'),
+          budgetMode: 'warn',
+          allowTaskContinuation: true,
         };
       }
       return {
@@ -587,6 +657,8 @@ export class ExecutionEconomicsManager {
         isSoftLimit: false,
         percentUsed: (this.usage.cost / this.budget.maxCost) * 100,
         suggestedAction: 'stop',
+        budgetMode: 'hard',
+        allowTaskContinuation: false,
       };
     }
 
@@ -602,6 +674,8 @@ export class ExecutionEconomicsManager {
           percentUsed: (this.usage.duration / this.budget.maxDuration) * 100,
           suggestedAction: 'warn',
           injectedPrompt: BUDGET_ADVISORY_PROMPT('duration'),
+          budgetMode: 'warn',
+          allowTaskContinuation: true,
         };
       }
       return {
@@ -612,6 +686,8 @@ export class ExecutionEconomicsManager {
         isSoftLimit: false,
         percentUsed: (this.usage.duration / this.budget.maxDuration) * 100,
         suggestedAction: 'stop',
+        budgetMode: 'hard',
+        allowTaskContinuation: false,
       };
     }
 
@@ -628,6 +704,8 @@ export class ExecutionEconomicsManager {
         suggestedAction: 'stop',
         forceTextOnly: true,  // No more tool calls
         injectedPrompt: MAX_STEPS_PROMPT,
+        budgetMode: 'hard',
+        allowTaskContinuation: false,
       };
     }
 
@@ -685,6 +763,8 @@ export class ExecutionEconomicsManager {
         percentUsed: (this.usage.iterations / this.budget.targetIterations) * 100,
         suggestedAction: 'warn',
         injectedPrompt: DOOM_LOOP_PROMPT(this.loopDetector.lastTool || 'unknown', this.loopDetector.consecutiveCount),
+        budgetMode: 'warn',
+        allowTaskContinuation: true,
       };
     }
 
@@ -844,6 +924,8 @@ export class ExecutionEconomicsManager {
         percentUsed,
         suggestedAction: forceTextOnly ? 'stop' : 'request_extension',
         forceTextOnly,
+        budgetMode: forceTextOnly ? 'restricted' : 'warn',
+        allowTaskContinuation: true,
         injectedPrompt: forceTextOnly
           ? `\u26a0\ufe0f **BUDGET CRITICAL**: ${percentUsed}% used (${this.usage.tokens.toLocaleString()}/${this.budget.maxTokens.toLocaleString()}). ` +
             `WRAP UP IMMEDIATELY. Return a concise summary. Do NOT call any tools.`
@@ -890,6 +972,8 @@ export class ExecutionEconomicsManager {
         (this.usage.cost / this.budget.maxCost) * 100,
         (this.usage.duration / this.budget.maxDuration) * 100
       ),
+      budgetMode: 'none',
+      allowTaskContinuation: true,
       suggestedAction: 'continue',
     };
   }
@@ -1076,6 +1160,8 @@ export class ExecutionEconomicsManager {
    * Reset usage (start new task).
    */
   reset(): void {
+    this.baseline = 0;
+    this.lastInputTokens = 0;
     this.usage = {
       tokens: 0,
       inputTokens: 0,
@@ -1085,6 +1171,8 @@ export class ExecutionEconomicsManager {
       iterations: 0,
       toolCalls: 0,
       llmCalls: 0,
+      baselineContextTokens: 0,
+      cumulativeInputTokens: 0,
     };
     this.progress = {
       filesRead: new Set(),
