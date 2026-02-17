@@ -52,7 +52,7 @@ export interface ToolCall {
  */
 export function extractJsonObject(
   text: string,
-  startFrom = 0
+  startFrom = 0,
 ): { json: string; endIndex: number } | null {
   // Find the first `{`
   const start = text.indexOf('{', startFrom);
@@ -136,7 +136,7 @@ export function extractAllJsonObjects(text: string): string[] {
  */
 export function safeParseJson<T = unknown>(
   input: string,
-  options: SafeParseOptions = {}
+  options: SafeParseOptions = {},
 ): SafeParseResult<T> {
   const { context, attemptRecovery = true } = options;
 
@@ -233,10 +233,7 @@ function attemptJsonRecovery(input: string): string | null {
  */
 export function extractToolCallJson(response: string): ToolCall | null {
   // Try code block first (most common format)
-  const codeBlockPatterns = [
-    /```json\s*([\s\S]*?)```/,
-    /```\s*([\s\S]*?)```/,
-  ];
+  const codeBlockPatterns = [/```json\s*([\s\S]*?)```/, /```\s*([\s\S]*?)```/];
 
   for (const pattern of codeBlockPatterns) {
     const match = response.match(pattern);

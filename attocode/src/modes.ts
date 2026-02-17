@@ -78,9 +78,9 @@ export const WRITE_TOOLS = [
   'write_file',
   'edit_file',
   'delete_file',
-  'bash',           // Can have side effects
-  'run_tests',      // Can have side effects
-  'execute_code',   // Can have side effects
+  'bash', // Can have side effects
+  'run_tests', // Can have side effects
+  'execute_code', // Can have side effects
 ];
 
 /**
@@ -118,7 +118,7 @@ export function isWriteTool(toolName: string): boolean {
 
   // Check MCP write patterns for mcp_ prefixed tools
   if (toolName.startsWith('mcp_')) {
-    return MCP_WRITE_PATTERNS.some(pattern => pattern.test(toolName));
+    return MCP_WRITE_PATTERNS.some((pattern) => pattern.test(toolName));
   }
 
   return false;
@@ -180,14 +180,14 @@ const SAFE_BASH_PATTERNS = [
  * Even if the base command is "safe", these suffixes indicate side effects.
  */
 const DANGEROUS_SUFFIXES = [
-  /\|\s*(rm|sudo|tee|dd|mkfs)\b/,    // Pipe to destructive tool
-  />\s*\S/,                            // Output redirect
-  />>\s*\S/,                           // Append redirect
-  /-exec\b/,                           // find -exec
-  /-delete\b/,                         // find -delete
-  /\bsed\b.*-i/,                       // In-place sed edit
-  /\bawk\b.*-i\s*inplace/,             // In-place awk edit
-  /\bxargs\s.*\b(rm|mv|cp)\b/,         // xargs with destructive commands
+  /\|\s*(rm|sudo|tee|dd|mkfs)\b/, // Pipe to destructive tool
+  />\s*\S/, // Output redirect
+  />>\s*\S/, // Append redirect
+  /-exec\b/, // find -exec
+  /-delete\b/, // find -delete
+  /\bsed\b.*-i/, // In-place sed edit
+  /\bawk\b.*-i\s*inplace/, // In-place awk edit
+  /\bxargs\s.*\b(rm|mv|cp)\b/, // xargs with destructive commands
 ];
 
 /**
@@ -604,9 +604,9 @@ export function calculateTaskSimilarity(taskA: string, taskB: string): number {
   const normalize = (s: string): Set<string> => {
     const words = s
       .toLowerCase()
-      .replace(/[^a-z0-9\s]/g, ' ')  // Remove punctuation
+      .replace(/[^a-z0-9\s]/g, ' ') // Remove punctuation
       .split(/\s+/)
-      .filter(w => w.length > 2);     // Filter short words
+      .filter((w) => w.length > 2); // Filter short words
     return new Set(words);
   };
 
@@ -617,7 +617,7 @@ export function calculateTaskSimilarity(taskA: string, taskB: string): number {
   if (wordsA.size === 0 || wordsB.size === 0) return 0;
 
   // Calculate Jaccard index: |intersection| / |union|
-  const intersection = new Set([...wordsA].filter(x => wordsB.has(x)));
+  const intersection = new Set([...wordsA].filter((x) => wordsB.has(x)));
   const union = new Set([...wordsA, ...wordsB]);
 
   return intersection.size / union.size;
@@ -627,11 +627,7 @@ export function calculateTaskSimilarity(taskA: string, taskB: string): number {
  * Check if two tasks are semantically similar.
  * Uses Jaccard similarity with a default threshold of 0.75 (75%).
  */
-export function areTasksSimilar(
-  taskA: string,
-  taskB: string,
-  threshold: number = 0.75
-): boolean {
+export function areTasksSimilar(taskA: string, taskB: string, threshold: number = 0.75): boolean {
   return calculateTaskSimilarity(taskA, taskB) >= threshold;
 }
 
@@ -660,18 +656,18 @@ export function parseMode(input: string): AgentMode | null {
 
   // Handle aliases
   const aliases: Record<string, AgentMode> = {
-    'read': 'plan',
-    'readonly': 'plan',
+    read: 'plan',
+    readonly: 'plan',
     'read-only': 'plan',
-    'explore': 'plan',
+    explore: 'plan',
     'code-review': 'review',
-    'codereview': 'review',
-    'cr': 'review',
-    'dev': 'build',
-    'development': 'build',
-    'write': 'build',
-    'bug': 'debug',
-    'fix': 'debug',
+    codereview: 'review',
+    cr: 'review',
+    dev: 'build',
+    development: 'build',
+    write: 'build',
+    bug: 'debug',
+    fix: 'debug',
   };
 
   return aliases[normalized] || null;

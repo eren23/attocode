@@ -103,7 +103,7 @@ export async function gracefulCleanup(reason: string): Promise<void> {
  */
 export function registerCleanupResource<K extends keyof CleanupResources>(
   key: K,
-  resource: CleanupResources[K]
+  resource: CleanupResources[K],
 ): void {
   cleanupResources[key] = resource;
 }

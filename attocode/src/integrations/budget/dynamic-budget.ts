@@ -11,7 +11,12 @@
  * - Priority-based allocation (critical children get more)
  */
 
-import { SharedBudgetPool, type BudgetPoolConfig, type BudgetAllocation, type BudgetPoolStats } from './budget-pool.js';
+import {
+  SharedBudgetPool,
+  type BudgetPoolConfig,
+  type BudgetAllocation,
+  type BudgetPoolStats,
+} from './budget-pool.js';
 
 // =============================================================================
 // TYPES
@@ -75,7 +80,8 @@ export class DynamicBudgetPool extends SharedBudgetPool {
     this.dynamicConfig = {
       ...config,
       maxRemainingRatio: config.maxRemainingRatio ?? DEFAULT_DYNAMIC_CONFIG.maxRemainingRatio!,
-      minPerExpectedChild: config.minPerExpectedChild ?? DEFAULT_DYNAMIC_CONFIG.minPerExpectedChild!,
+      minPerExpectedChild:
+        config.minPerExpectedChild ?? DEFAULT_DYNAMIC_CONFIG.minPerExpectedChild!,
       autoRebalance: config.autoRebalance ?? DEFAULT_DYNAMIC_CONFIG.autoRebalance!,
     };
   }
@@ -123,10 +129,16 @@ export class DynamicBudgetPool extends SharedBudgetPool {
     // Apply priority multiplier
     const priorityLevel = this.childPriorities.get(childId)?.priority ?? 'normal';
     const multiplier = PRIORITY_MULTIPLIERS[priorityLevel] ?? 1.0;
-    const priorityAdjusted = Math.floor(afterReserve * multiplier / Math.max(1, unreservedChildren + 1));
+    const priorityAdjusted = Math.floor(
+      (afterReserve * multiplier) / Math.max(1, unreservedChildren + 1),
+    );
 
     // Final allocation: min of all caps
-    const dynamicMax = Math.min(ratioCap, afterReserve, Math.max(priorityAdjusted, this.dynamicConfig.minPerExpectedChild));
+    const dynamicMax = Math.min(
+      ratioCap,
+      afterReserve,
+      Math.max(priorityAdjusted, this.dynamicConfig.minPerExpectedChild),
+    );
 
     // Temporarily set max per child for this reservation
     this.setMaxPerChild(dynamicMax);
@@ -167,9 +179,7 @@ export class DynamicBudgetPool extends SharedBudgetPool {
       spawnedCount: this.spawnedCount,
       completedCount: this.completedCount,
       pendingCount: pending,
-      avgPerChild: this.spawnedCount > 0
-        ? Math.floor(base.tokensUsed / this.spawnedCount)
-        : 0,
+      avgPerChild: this.spawnedCount > 0 ? Math.floor(base.tokensUsed / this.spawnedCount) : 0,
     };
   }
 
@@ -206,7 +216,7 @@ export function createDynamicBudgetPool(
   return new DynamicBudgetPool({
     totalTokens: poolTokens,
     maxPerChild: Math.min(config?.maxPerChild ?? 100000, poolTokens),
-    totalCost: 0.50,
+    totalCost: 0.5,
     maxCostPerChild: 0.25,
     maxRemainingRatio: config?.maxRemainingRatio ?? 0.6,
     minPerExpectedChild: config?.minPerExpectedChild ?? 10000,

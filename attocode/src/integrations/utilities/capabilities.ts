@@ -92,15 +92,32 @@ export type CapabilitiesEventListener = (event: CapabilitiesEvent) => void;
 
 const BUILT_IN_COMMANDS: CommandDefinition[] = [
   // General
-  { name: '/help', description: 'Show help and available commands', category: 'general', aliases: ['/h', '/?'] },
-  { name: '/status', description: 'Show session stats, metrics & token usage', category: 'general' },
+  {
+    name: '/help',
+    description: 'Show help and available commands',
+    category: 'general',
+    aliases: ['/h', '/?'],
+  },
+  {
+    name: '/status',
+    description: 'Show session stats, metrics & token usage',
+    category: 'general',
+  },
   { name: '/clear', description: 'Clear the screen', category: 'general' },
   { name: '/reset', description: 'Reset agent state (clears conversation)', category: 'general' },
   { name: '/quit', description: 'Exit attocode', category: 'general', aliases: ['/exit', '/q'] },
 
   // Modes
-  { name: '/mode', description: 'Show/change current mode (build, plan, review, debug)', category: 'modes' },
-  { name: '/plan', description: 'Toggle plan mode (writes queued for approval)', category: 'modes' },
+  {
+    name: '/mode',
+    description: 'Show/change current mode (build, plan, review, debug)',
+    category: 'modes',
+  },
+  {
+    name: '/plan',
+    description: 'Toggle plan mode (writes queued for approval)',
+    category: 'modes',
+  },
 
   // Plan approval
   { name: '/show-plan', description: 'Show pending plan with proposed changes', category: 'plan' },
@@ -118,8 +135,18 @@ const BUILT_IN_COMMANDS: CommandDefinition[] = [
   { name: '/compact', description: 'Summarize & compress context', category: 'context' },
 
   // Checkpoints
-  { name: '/checkpoint', description: 'Create a named checkpoint', category: 'checkpoints', aliases: ['/cp'] },
-  { name: '/checkpoints', description: 'List all checkpoints', category: 'checkpoints', aliases: ['/cps'] },
+  {
+    name: '/checkpoint',
+    description: 'Create a named checkpoint',
+    category: 'checkpoints',
+    aliases: ['/cp'],
+  },
+  {
+    name: '/checkpoints',
+    description: 'List all checkpoints',
+    category: 'checkpoints',
+    aliases: ['/cps'],
+  },
   { name: '/restore', description: 'Restore to a checkpoint', category: 'checkpoints' },
   { name: '/rollback', description: 'Rollback n steps', category: 'checkpoints', aliases: ['/rb'] },
 
@@ -357,7 +384,18 @@ export class CapabilitiesRegistry {
    */
   private extractTags(text: string): string[] {
     const tags: string[] = [];
-    const keywords = ['file', 'search', 'edit', 'read', 'write', 'bash', 'git', 'code', 'test', 'debug'];
+    const keywords = [
+      'file',
+      'search',
+      'edit',
+      'read',
+      'write',
+      'bash',
+      'git',
+      'code',
+      'test',
+      'debug',
+    ];
 
     const lowerText = text.toLowerCase();
     for (const keyword of keywords) {
@@ -380,7 +418,7 @@ export class CapabilitiesRegistry {
    * Get capabilities by type.
    */
   getByType(type: CapabilityType): Capability[] {
-    return this.getAll().filter(c => c.type === type);
+    return this.getAll().filter((c) => c.type === type);
   }
 
   /**
@@ -502,7 +540,9 @@ export function createCapabilitiesRegistry(): CapabilitiesRegistry {
 /**
  * Format capabilities summary for display.
  */
-export function formatCapabilitiesSummary(counts: Record<CapabilityType, CapabilityCounts>): string {
+export function formatCapabilitiesSummary(
+  counts: Record<CapabilityType, CapabilityCounts>,
+): string {
   const lines: string[] = [
     'Agent Capabilities:',
     `  Tools:     ${counts.tool.active}/${counts.tool.total}`,
@@ -532,7 +572,9 @@ export function formatCapabilitiesList(capabilities: Capability[], type: Capabil
   for (const cap of capabilities) {
     const status = cap.active ? '+' : 'o';
     const tags = cap.tags.length > 0 ? ` [${cap.tags.slice(0, 3).join(', ')}]` : '';
-    lines.push(`  ${status} ${cap.name} - ${cap.description.slice(0, 60)}${cap.description.length > 60 ? '...' : ''}${tags}`);
+    lines.push(
+      `  ${status} ${cap.name} - ${cap.description.slice(0, 60)}${cap.description.length > 60 ? '...' : ''}${tags}`,
+    );
   }
 
   return lines.join('\n');
@@ -553,7 +595,9 @@ export function formatSearchResults(results: CapabilitySearchResult[], limit = 1
     const type = capability.type.replace('_', ' ');
     const matchInfo = matches.slice(0, 2).join(', ');
     lines.push(`  [${type}] ${capability.name} (score: ${score.toFixed(1)})`);
-    lines.push(`    ${capability.description.slice(0, 70)}${capability.description.length > 70 ? '...' : ''}`);
+    lines.push(
+      `    ${capability.description.slice(0, 70)}${capability.description.length > 70 ? '...' : ''}`,
+    );
     lines.push(`    Matched: ${matchInfo}`);
   }
 

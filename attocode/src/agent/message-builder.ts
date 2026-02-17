@@ -65,7 +65,10 @@ export interface MessageBuilderDeps {
   lastSystemPromptLength: number;
 
   // ---- methods the builder delegates to ----
-  selectRelevantCodeSync(task: string, maxTokens: number): {
+  selectRelevantCodeSync(
+    task: string,
+    maxTokens: number,
+  ): {
     chunks: Array<{ filePath: string; content: string; tokenCount: number; importance: number }>;
     totalTokens: number;
     lspBoostedFiles?: string[];
@@ -82,10 +85,7 @@ export interface MessageBuilderDeps {
  * Uses cache-aware system prompt building (Trick P) when contextEngineering
  * is available, ensuring static content is ordered for optimal KV-cache reuse.
  */
-export async function buildMessages(
-  deps: MessageBuilderDeps,
-  task: string,
-): Promise<Message[]> {
+export async function buildMessages(deps: MessageBuilderDeps, task: string): Promise<Message[]> {
   const messages: Message[] = [];
 
   // Gather all context components
@@ -94,10 +94,11 @@ export async function buildMessages(
   const memoryContext = deps.memory?.getContextStrings(task) ?? [];
 
   // Get relevant learnings from past sessions
-  const learningsContext = deps.learningStore?.getLearningContext({
-    query: task,
-    maxLearnings: 5,
-  }) ?? '';
+  const learningsContext =
+    deps.learningStore?.getLearningContext({
+      query: task,
+      maxLearnings: 5,
+    }) ?? '';
 
   // Budget-aware codebase context selection
   let codebaseContextStr = '';
@@ -151,9 +152,7 @@ export async function buildMessages(
 
   // Add MCP tool summaries
   if (deps.config.mcpToolSummaries && deps.config.mcpToolSummaries.length > 0) {
-    const mcpLines = deps.config.mcpToolSummaries.map(
-      s => `- ${s.name}: ${s.description}`
-    );
+    const mcpLines = deps.config.mcpToolSummaries.map((s) => `- ${s.name}: ${s.description}`);
     if (toolDescriptions) {
       toolDescriptions += '\n\nMCP tools (call directly, they auto-load):\n' + mcpLines.join('\n');
     } else {
@@ -200,14 +199,17 @@ export async function buildMessages(
     const cacheableBlocks = deps.contextEngineering.buildCacheableSystemPrompt(promptOptions);
 
     // Safety check: ensure we have content (empty array = no cache context configured)
-    if (cacheableBlocks.length === 0 || cacheableBlocks.every(b => b.text.trim().length === 0)) {
+    if (cacheableBlocks.length === 0 || cacheableBlocks.every((b) => b.text.trim().length === 0)) {
       deps.cacheableSystemBlocks = null;
-      messages.push({ role: 'system', content: deps.config.systemPrompt || 'You are a helpful AI assistant.' });
+      messages.push({
+        role: 'system',
+        content: deps.config.systemPrompt || 'You are a helpful AI assistant.',
+      });
     } else {
       // Store cacheable blocks for provider injection
       deps.cacheableSystemBlocks = cacheableBlocks;
       // Push a regular string Message for backward compatibility (token estimation, etc.)
-      const flatPrompt = cacheableBlocks.map(b => b.text).join('');
+      const flatPrompt = cacheableBlocks.map((b) => b.text).join('');
       messages.push({ role: 'system', content: flatPrompt });
     }
   } else {
@@ -243,9 +245,10 @@ export async function buildMessages(
   messages.push({ role: 'user', content: task });
 
   // Track system prompt length for context % estimation
-  const sysMsg = messages.find(m => m.role === 'system');
+  const sysMsg = messages.find((m) => m.role === 'system');
   if (sysMsg) {
-    const content = typeof sysMsg.content === 'string' ? sysMsg.content : JSON.stringify(sysMsg.content);
+    const content =
+      typeof sysMsg.content === 'string' ? sysMsg.content : JSON.stringify(sysMsg.content);
     deps.lastSystemPromptLength = content.length;
   }
 

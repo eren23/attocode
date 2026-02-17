@@ -5,11 +5,7 @@
  * All functions are standalone and take subtasks as input.
  */
 
-import type {
-  SmartSubtask,
-  DependencyGraph,
-  ResourceConflict,
-} from './smart-decomposer.js';
+import type { SmartSubtask, DependencyGraph, ResourceConflict } from './smart-decomposer.js';
 
 // =============================================================================
 // DEPENDENCY GRAPH CONSTRUCTION
@@ -61,7 +57,7 @@ export function buildDependencyGraph(subtasks: SmartSubtask[]): DependencyGraph 
  */
 export function detectCycles(
   subtasks: SmartSubtask[],
-  dependencies: Map<string, string[]>
+  dependencies: Map<string, string[]>,
 ): string[][] {
   const cycles: string[][] = [];
   const visited = new Set<string>();
@@ -104,7 +100,7 @@ export function detectCycles(
  */
 export function topologicalSort(
   subtasks: SmartSubtask[],
-  dependencies: Map<string, string[]>
+  dependencies: Map<string, string[]>,
 ): string[] {
   const result: string[] = [];
   const visited = new Set<string>();
@@ -146,7 +142,7 @@ export function topologicalSort(
  */
 export function calculateParallelGroups(
   subtasks: SmartSubtask[],
-  dependencies: Map<string, string[]>
+  dependencies: Map<string, string[]>,
 ): string[][] {
   const groups: string[][] = [];
   const completed = new Set<string>();
@@ -232,7 +228,8 @@ export function detectConflicts(subtasks: SmartSubtask[]): ResourceConflict[] {
           taskIds,
           type: 'write-write',
           severity: 'error',
-          suggestion: `Tasks ${taskIds.join(', ')} both write to ${resource}. ` +
+          suggestion:
+            `Tasks ${taskIds.join(', ')} both write to ${resource}. ` +
             `Consider making them sequential or coordinating through the blackboard.`,
         });
       }
@@ -250,7 +247,8 @@ export function detectConflicts(subtasks: SmartSubtask[]): ResourceConflict[] {
             taskIds: [writeId, readId],
             type: 'read-write',
             severity: 'warning',
-            suggestion: `Task ${writeId} writes to ${resource} while ${readId} reads it. ` +
+            suggestion:
+              `Task ${writeId} writes to ${resource} while ${readId} reads it. ` +
               `Consider adding a dependency to ensure correct ordering.`,
           });
         }
@@ -274,10 +272,7 @@ function areInParallel(taskIds: string[], subtasks: SmartSubtask[]): boolean {
 
       if (task1 && task2) {
         // Check if either depends on the other
-        if (
-          !task1.dependencies.includes(task2.id) &&
-          !task2.dependencies.includes(task1.id)
-        ) {
+        if (!task1.dependencies.includes(task2.id) && !task2.dependencies.includes(task1.id)) {
           return true; // Can run in parallel
         }
       }

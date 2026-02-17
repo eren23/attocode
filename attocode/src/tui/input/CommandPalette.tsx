@@ -175,12 +175,12 @@ export function ControlledCommandPalette({
     if (!query) return items.slice(0, maxVisible);
 
     return items
-      .map(item => ({
+      .map((item) => ({
         item,
         score: Math.max(
           fuzzyMatch(query, item.label),
           fuzzyMatch(query, item.description || ''),
-          fuzzyMatch(query, item.id)
+          fuzzyMatch(query, item.id),
         ),
       }))
       .filter(({ score }) => score >= 0)
@@ -217,11 +217,7 @@ export function ControlledCommandPalette({
       {/* Search input */}
       <Box marginBottom={1}>
         <Text color={theme.colors.primary}>{'>'} </Text>
-        {query ? (
-          <Text>{query}</Text>
-        ) : (
-          <Text color={theme.colors.textMuted}>{placeholder}</Text>
-        )}
+        {query ? <Text>{query}</Text> : <Text color={theme.colors.textMuted}>{placeholder}</Text>}
         <Text backgroundColor={theme.colors.primary} color={theme.colors.textInverse}>
           {' '}
         </Text>
@@ -229,9 +225,7 @@ export function ControlledCommandPalette({
 
       {/* Divider */}
       <Box marginBottom={1}>
-        <Text color={theme.colors.border}>
-          {'─'.repeat(56)}
-        </Text>
+        <Text color={theme.colors.border}>{'─'.repeat(56)}</Text>
       </Box>
 
       {/* Results */}

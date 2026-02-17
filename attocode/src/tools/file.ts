@@ -53,11 +53,11 @@ export const readFileTool = defineTool(
         input.path,
         'read',
         { code: err.code },
-        err
+        err,
       );
     }
   },
-  'safe'
+  'safe',
 );
 
 // =============================================================================
@@ -126,9 +126,10 @@ export const writeFileTool = defineTool(
       const lines = input.content.split('\n').length;
 
       // Generate unified diff for display (shows what changed)
-      const diff = action === 'overwrote'
-        ? generateDiff(oldContent, input.content, input.path, input.path)
-        : generateDiff('', input.content, '/dev/null', input.path);
+      const diff =
+        action === 'overwrote'
+          ? generateDiff(oldContent, input.content, input.path, input.path)
+          : generateDiff('', input.content, '/dev/null', input.path);
 
       return {
         success: true,
@@ -144,7 +145,7 @@ export const writeFileTool = defineTool(
           false, // Not recoverable without human intervention
           input.path,
           'write',
-          { code: err.code }
+          { code: err.code },
         );
       }
       if (err.code === 'EACCES') {
@@ -160,11 +161,11 @@ export const writeFileTool = defineTool(
         input.path,
         'write',
         { code: err.code },
-        err
+        err,
       );
     }
   },
-  'moderate'
+  'moderate',
 );
 
 // =============================================================================
@@ -185,26 +186,26 @@ export const editFileTool = defineTool(
     try {
       // Read file
       const content = await fs.readFile(input.path, 'utf-8');
-      
+
       // Count occurrences
       const regex = new RegExp(escapeRegExp(input.old_string), 'g');
       const matches = content.match(regex);
       const count = matches?.length ?? 0;
-      
+
       if (count === 0) {
         return {
           success: false,
           output: `String not found in ${input.path}. Make sure old_string exactly matches the file content, including whitespace.`,
         };
       }
-      
+
       if (count > 1) {
         return {
           success: false,
           output: `String found ${count} times in ${input.path}. The old_string must be unique. Include more surrounding context.`,
         };
       }
-      
+
       // Replace and write atomically
       const newContent = content.replace(input.old_string, input.new_string);
       await writeFileAtomic(input.path, newContent);
@@ -236,7 +237,7 @@ export const editFileTool = defineTool(
           false,
           input.path,
           'edit',
-          { code: err.code }
+          { code: err.code },
         );
       }
       if (err.code === 'EACCES') {
@@ -252,11 +253,11 @@ export const editFileTool = defineTool(
         input.path,
         'edit',
         { code: err.code },
-        err
+        err,
       );
     }
   },
-  'moderate'
+  'moderate',
 );
 
 // =============================================================================
@@ -282,7 +283,7 @@ export const listFilesTool = defineTool(
           metadata: { count: files.length },
         };
       }
-      
+
       const entries = await fs.readdir(input.path, { withFileTypes: true });
       const formatted = entries
         .sort((a, b) => {
@@ -291,8 +292,8 @@ export const listFilesTool = defineTool(
           if (!a.isDirectory() && b.isDirectory()) return 1;
           return a.name.localeCompare(b.name);
         })
-        .map(e => `${e.isDirectory() ? '📁' : '📄'} ${e.name}`);
-      
+        .map((e) => `${e.isDirectory() ? '📁' : '📄'} ${e.name}`);
+
       return {
         success: true,
         output: formatted.length > 0 ? formatted.join('\n') : '(empty directory)',
@@ -313,11 +314,11 @@ export const listFilesTool = defineTool(
         input.path,
         'list',
         { code: err.code },
-        err
+        err,
       );
     }
   },
-  'safe'
+  'safe',
 );
 
 // =============================================================================
@@ -390,7 +391,9 @@ async function listRecursive(dir: string, prefix = '', count = { value: 0 }): Pr
     }
 
     if (count.value >= MAX_RECURSIVE_FILES) {
-      results.push(`\n... [Limit reached: ${MAX_RECURSIVE_FILES} files shown. Use specific paths to see more.]`);
+      results.push(
+        `\n... [Limit reached: ${MAX_RECURSIVE_FILES} files shown. Use specific paths to see more.]`,
+      );
       break;
     }
   }

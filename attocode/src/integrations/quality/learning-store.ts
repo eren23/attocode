@@ -54,20 +54,20 @@ import {
  * Status of a learning.
  */
 export type LearningStatus =
-  | 'proposed'   // Automatically extracted, pending validation
-  | 'validated'  // User confirmed as accurate
-  | 'rejected'   // User marked as inaccurate
-  | 'archived';  // No longer relevant
+  | 'proposed' // Automatically extracted, pending validation
+  | 'validated' // User confirmed as accurate
+  | 'rejected' // User marked as inaccurate
+  | 'archived'; // No longer relevant
 
 /**
  * Type of learning.
  */
 export type LearningType =
-  | 'pattern'       // Extracted from failure patterns
-  | 'workaround'    // Successful workaround for a failure
-  | 'antipattern'   // Thing to avoid
+  | 'pattern' // Extracted from failure patterns
+  | 'workaround' // Successful workaround for a failure
+  | 'antipattern' // Thing to avoid
   | 'best_practice' // Positive pattern
-  | 'gotcha';       // Non-obvious issue to watch for
+  | 'gotcha'; // Non-obvious issue to watch for
 
 /**
  * A learning record.
@@ -273,7 +273,7 @@ export class LearningStore {
    */
   private initializeSchema(): void {
     // Execute schema statements one at a time to handle SQLite limitations
-    const statements = SCHEMA.split(';').filter(s => s.trim());
+    const statements = SCHEMA.split(';').filter((s) => s.trim());
     for (const stmt of statements) {
       try {
         this.db.prepare(stmt + ';').run();
@@ -390,7 +390,9 @@ export class LearningStore {
    * Get a learning by ID.
    */
   getLearning(id: string): Learning | null {
-    const row = this.db.prepare('SELECT * FROM learnings WHERE id = ?').get(id) as LearningRow | undefined;
+    const row = this.db.prepare('SELECT * FROM learnings WHERE id = ?').get(id) as
+      | LearningRow
+      | undefined;
     if (!row) return null;
     return this.rowToLearning(row);
   }
@@ -428,7 +430,7 @@ export class LearningStore {
            WHERE learnings_fts MATCH ?
            AND learnings.status = 'validated'
            ORDER BY rank
-           LIMIT ?`
+           LIMIT ?`,
         )
         .all(this.sanitizeFtsQuery(query), limit) as LearningRow[];
 
@@ -449,7 +451,7 @@ export class LearningStore {
          WHERE status = 'validated'
          AND (description LIKE ? OR details LIKE ? OR keywords LIKE ?)
          ORDER BY confidence DESC
-         LIMIT ?`
+         LIMIT ?`,
       )
       .all(`%${keyword}%`, `%${keyword}%`, `%${keyword}%`, limit) as LearningRow[];
 
@@ -466,7 +468,7 @@ export class LearningStore {
          WHERE status = 'validated'
          AND categories LIKE ?
          ORDER BY confidence DESC, help_count DESC
-         LIMIT ?`
+         LIMIT ?`,
       )
       .all(`%${category}%`, limit) as LearningRow[];
 
@@ -483,7 +485,7 @@ export class LearningStore {
          WHERE status = 'validated'
          AND actions LIKE ?
          ORDER BY confidence DESC, help_count DESC
-         LIMIT ?`
+         LIMIT ?`,
       )
       .all(`%${action}%`, limit) as LearningRow[];
 
@@ -493,18 +495,15 @@ export class LearningStore {
   /**
    * Get learning context formatted for LLM inclusion.
    */
-  getLearningContext(options: {
-    query?: string;
-    categories?: FailureCategory[];
-    actions?: string[];
-    maxLearnings?: number;
-  } = {}): string {
-    const {
-      query,
-      categories = [],
-      actions = [],
-      maxLearnings = 5,
-    } = options;
+  getLearningContext(
+    options: {
+      query?: string;
+      categories?: FailureCategory[];
+      actions?: string[];
+      maxLearnings?: number;
+    } = {},
+  ): string {
+    const { query, categories = [], actions = [], maxLearnings = 5 } = options;
 
     let learnings: Learning[] = [];
 
@@ -527,11 +526,13 @@ export class LearningStore {
 
     // Deduplicate and limit
     const seen = new Set<string>();
-    learnings = learnings.filter((l) => {
-      if (seen.has(l.id)) return false;
-      seen.add(l.id);
-      return true;
-    }).slice(0, maxLearnings);
+    learnings = learnings
+      .filter((l) => {
+        if (seen.has(l.id)) return false;
+        seen.add(l.id);
+        return true;
+      })
+      .slice(0, maxLearnings);
 
     if (learnings.length === 0) {
       return '';
@@ -572,7 +573,9 @@ export class LearningStore {
     topApplied: Array<{ id: string; description: string; applyCount: number }>;
     topHelpful: Array<{ id: string; description: string; helpCount: number }>;
   } {
-    const total = (this.db.prepare('SELECT COUNT(*) as count FROM learnings').get() as { count: number }).count;
+    const total = (
+      this.db.prepare('SELECT COUNT(*) as count FROM learnings').get() as { count: number }
+    ).count;
 
     const byStatus: Record<LearningStatus, number> = {
       proposed: 0,
@@ -581,7 +584,9 @@ export class LearningStore {
       archived: 0,
     };
 
-    const statusRows = this.db.prepare('SELECT status, COUNT(*) as count FROM learnings GROUP BY status').all() as Array<{ status: LearningStatus; count: number }>;
+    const statusRows = this.db
+      .prepare('SELECT status, COUNT(*) as count FROM learnings GROUP BY status')
+      .all() as Array<{ status: LearningStatus; count: number }>;
     for (const row of statusRows) {
       byStatus[row.status] = row.count;
     }
@@ -594,13 +599,17 @@ export class LearningStore {
       gotcha: 0,
     };
 
-    const typeRows = this.db.prepare('SELECT type, COUNT(*) as count FROM learnings GROUP BY type').all() as Array<{ type: LearningType; count: number }>;
+    const typeRows = this.db
+      .prepare('SELECT type, COUNT(*) as count FROM learnings GROUP BY type')
+      .all() as Array<{ type: LearningType; count: number }>;
     for (const row of typeRows) {
       byType[row.type] = row.count;
     }
 
     const topApplied = this.db
-      .prepare('SELECT id, description, apply_count FROM learnings ORDER BY apply_count DESC LIMIT 5')
+      .prepare(
+        'SELECT id, description, apply_count FROM learnings ORDER BY apply_count DESC LIMIT 5',
+      )
       .all() as Array<{ id: string; description: string; apply_count: number }>;
 
     const topHelpful = this.db
@@ -611,8 +620,16 @@ export class LearningStore {
       total,
       byStatus,
       byType,
-      topApplied: topApplied.map((r) => ({ id: r.id, description: r.description, applyCount: r.apply_count })),
-      topHelpful: topHelpful.map((r) => ({ id: r.id, description: r.description, helpCount: r.help_count })),
+      topApplied: topApplied.map((r) => ({
+        id: r.id,
+        description: r.description,
+        applyCount: r.apply_count,
+      })),
+      topHelpful: topHelpful.map((r) => ({
+        id: r.id,
+        description: r.description,
+        helpCount: r.help_count,
+      })),
     };
   }
 
@@ -660,15 +677,82 @@ export class LearningStore {
   private extractKeywords(text: string): string[] {
     // Simple keyword extraction - remove common words and short words
     const stopWords = new Set([
-      'the', 'a', 'an', 'and', 'or', 'but', 'is', 'are', 'was', 'were',
-      'be', 'been', 'being', 'have', 'has', 'had', 'do', 'does', 'did',
-      'to', 'at', 'by', 'for', 'with', 'about', 'against', 'between',
-      'into', 'through', 'during', 'before', 'after', 'above', 'below',
-      'from', 'up', 'down', 'in', 'out', 'on', 'off', 'over', 'under',
-      'again', 'further', 'then', 'once', 'here', 'there', 'when', 'where',
-      'why', 'how', 'all', 'each', 'few', 'more', 'most', 'other', 'some',
-      'such', 'no', 'nor', 'not', 'only', 'own', 'same', 'so', 'than',
-      'too', 'very', 'can', 'will', 'just', 'should', 'now',
+      'the',
+      'a',
+      'an',
+      'and',
+      'or',
+      'but',
+      'is',
+      'are',
+      'was',
+      'were',
+      'be',
+      'been',
+      'being',
+      'have',
+      'has',
+      'had',
+      'do',
+      'does',
+      'did',
+      'to',
+      'at',
+      'by',
+      'for',
+      'with',
+      'about',
+      'against',
+      'between',
+      'into',
+      'through',
+      'during',
+      'before',
+      'after',
+      'above',
+      'below',
+      'from',
+      'up',
+      'down',
+      'in',
+      'out',
+      'on',
+      'off',
+      'over',
+      'under',
+      'again',
+      'further',
+      'then',
+      'once',
+      'here',
+      'there',
+      'when',
+      'where',
+      'why',
+      'how',
+      'all',
+      'each',
+      'few',
+      'more',
+      'most',
+      'other',
+      'some',
+      'such',
+      'no',
+      'nor',
+      'not',
+      'only',
+      'own',
+      'same',
+      'so',
+      'than',
+      'too',
+      'very',
+      'can',
+      'will',
+      'just',
+      'should',
+      'now',
     ]);
 
     return text
@@ -713,32 +797,44 @@ export class LearningStore {
       learning.helpCount,
       learning.confidence,
       JSON.stringify(learning.sourceFailureIds),
-      learning.userNotes || null
+      learning.userNotes || null,
     );
 
     // Enforce max learnings
-    const count = (this.db.prepare('SELECT COUNT(*) as count FROM learnings').get() as { count: number }).count;
+    const count = (
+      this.db.prepare('SELECT COUNT(*) as count FROM learnings').get() as { count: number }
+    ).count;
     if (count > this.config.maxLearnings) {
       // Delete oldest rejected or archived first, then lowest confidence
-      this.db.prepare(`
+      this.db
+        .prepare(
+          `
         DELETE FROM learnings WHERE id IN (
           SELECT id FROM learnings
           WHERE status IN ('rejected', 'archived')
           ORDER BY updated_at ASC
           LIMIT ?
         )
-      `).run(count - this.config.maxLearnings);
+      `,
+        )
+        .run(count - this.config.maxLearnings);
 
       // If still over limit, delete lowest confidence
-      const remainingCount = (this.db.prepare('SELECT COUNT(*) as count FROM learnings').get() as { count: number }).count;
+      const remainingCount = (
+        this.db.prepare('SELECT COUNT(*) as count FROM learnings').get() as { count: number }
+      ).count;
       if (remainingCount > this.config.maxLearnings) {
-        this.db.prepare(`
+        this.db
+          .prepare(
+            `
           DELETE FROM learnings WHERE id IN (
             SELECT id FROM learnings
             ORDER BY confidence ASC, apply_count ASC
             LIMIT ?
           )
-        `).run(remainingCount - this.config.maxLearnings);
+        `,
+          )
+          .run(remainingCount - this.config.maxLearnings);
       }
     }
   }
@@ -819,9 +915,7 @@ interface LearningRow {
  * const learnings = store.retrieveRelevant('file permissions');
  * ```
  */
-export function createLearningStore(
-  config: LearningStoreConfig = {}
-): LearningStore {
+export function createLearningStore(config: LearningStoreConfig = {}): LearningStore {
   return new LearningStore(config);
 }
 
@@ -829,7 +923,7 @@ export function createLearningStore(
  * Create an in-memory learning store (for testing).
  */
 export function createInMemoryLearningStore(
-  config: Omit<LearningStoreConfig, 'dbPath' | 'inMemory'> = {}
+  config: Omit<LearningStoreConfig, 'dbPath' | 'inMemory'> = {},
 ): LearningStore {
   return new LearningStore({
     ...config,
@@ -847,10 +941,7 @@ export function createInMemoryLearningStore(
 export function formatLearningsContext(learnings: Learning[]): string {
   if (learnings.length === 0) return '';
 
-  const lines = [
-    '[Learnings from Previous Sessions]',
-    '',
-  ];
+  const lines = ['[Learnings from Previous Sessions]', ''];
 
   for (const l of learnings) {
     const typeIcon = {
@@ -881,12 +972,7 @@ export function formatLearningsContext(learnings: Learning[]): string {
  * Format learning stats for display.
  */
 export function formatLearningStats(stats: ReturnType<LearningStore['getStats']>): string {
-  const lines = [
-    'Learning Statistics:',
-    `  Total: ${stats.total}`,
-    '',
-    '  By Status:',
-  ];
+  const lines = ['Learning Statistics:', `  Total: ${stats.total}`, '', '  By Status:'];
 
   for (const [status, count] of Object.entries(stats.byStatus)) {
     if (count > 0) {

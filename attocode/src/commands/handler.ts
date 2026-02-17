@@ -177,7 +177,7 @@ ${c('━━━━━━━━━━━━━━━━━━━━━━━━━
 export async function handleCommand(
   cmd: string,
   args: string[],
-  ctx: CommandContext
+  ctx: CommandContext,
 ): Promise<CommandResult> {
   const { agent, sessionId, output, integrations } = ctx;
   const { sessionStore, mcpClient, compactor, skillExecutor } = integrations;
@@ -244,7 +244,9 @@ export async function handleCommand(
               totalCurrent += goal.progressCurrent;
               totalExpected += goal.progressTotal;
               const pct = Math.round((goal.progressCurrent / goal.progressTotal) * 100);
-              goalLines.push(`  - ${goal.goalText} (${goal.progressCurrent}/${goal.progressTotal} - ${pct}%)`);
+              goalLines.push(
+                `  - ${goal.goalText} (${goal.progressCurrent}/${goal.progressTotal} - ${pct}%)`,
+              );
             } else {
               goalLines.push(`  - ${goal.goalText}`);
             }
@@ -326,10 +328,17 @@ ${c('Usage:', 'dim')} /mode <name> to switch, /plan to toggle plan mode`);
         const newMode = args[0].toLowerCase();
         agent.setMode(newMode);
         const modeInfo = agent.getModeInfo();
-        output.log(`${c('Mode changed to:', 'green')} ${modeInfo.color}${modeInfo.icon} ${modeInfo.name}\x1b[0m`);
+        output.log(
+          `${c('Mode changed to:', 'green')} ${modeInfo.color}${modeInfo.icon} ${modeInfo.name}\x1b[0m`,
+        );
 
         if (newMode !== 'plan' && agent.hasPendingPlan()) {
-          output.log(c('Warning: You have a pending plan. Use /show-plan to view, /approve or /reject to resolve.', 'yellow'));
+          output.log(
+            c(
+              'Warning: You have a pending plan. Use /show-plan to view, /approve or /reject to resolve.',
+              'yellow',
+            ),
+          );
         }
       }
       break;
@@ -338,18 +347,27 @@ ${c('Usage:', 'dim')} /mode <name> to switch, /plan to toggle plan mode`);
     case '/plan': {
       const newMode = agent.togglePlanMode();
       const modeInfo = agent.getModeInfo();
-      output.log(`${c('Mode toggled to:', 'green')} ${modeInfo.color}${modeInfo.icon} ${modeInfo.name}\x1b[0m`);
+      output.log(
+        `${c('Mode toggled to:', 'green')} ${modeInfo.color}${modeInfo.icon} ${modeInfo.name}\x1b[0m`,
+      );
 
       if (newMode === 'plan') {
-        output.log(c(`
+        output.log(
+          c(
+            `
 In Plan Mode:
   - You can explore the codebase and use all tools
   - Write operations will be QUEUED for approval
   - Use /show-plan to see queued changes
   - Use /approve to execute, /reject to discard
-`, 'dim'));
+`,
+            'dim',
+          ),
+        );
       } else if (agent.hasPendingPlan()) {
-        output.log(c('Note: You have a pending plan. Use /show-plan, /approve, or /reject.', 'yellow'));
+        output.log(
+          c('Note: You have a pending plan. Use /show-plan, /approve, or /reject.', 'yellow'),
+        );
       }
       break;
     }
@@ -360,7 +378,12 @@ In Plan Mode:
 
     case '/show-plan': {
       if (!agent.hasPendingPlan()) {
-        output.log(c('No pending plan. Enter plan mode with /plan and make requests that would modify files.', 'dim'));
+        output.log(
+          c(
+            'No pending plan. Enter plan mode with /plan and make requests that would modify files.',
+            'dim',
+          ),
+        );
       } else {
         output.log(`\n${agent.formatPendingPlan()}`);
       }
@@ -388,7 +411,12 @@ In Plan Mode:
       if (result.success) {
         output.log(c(`\n+ Successfully executed ${result.executed} change(s)`, 'green'));
       } else {
-        output.log(c(`\n! Executed ${result.executed} change(s) with ${result.errors.length} error(s):`, 'yellow'));
+        output.log(
+          c(
+            `\n! Executed ${result.executed} change(s) with ${result.errors.length} error(s):`,
+            'yellow',
+          ),
+        );
         for (const err of result.errors) {
           output.log(c(`  - ${err}`, 'red'));
         }
@@ -409,7 +437,12 @@ In Plan Mode:
 
       const pendingCount = agent.getPendingChangeCount();
       agent.rejectPlan();
-      output.log(c(`x Rejected plan with ${pendingCount} change(s). All proposed changes discarded.`, 'yellow'));
+      output.log(
+        c(
+          `x Rejected plan with ${pendingCount} change(s). All proposed changes discarded.`,
+          'yellow',
+        ),
+      );
 
       if (agent.getMode() === 'plan') {
         agent.setMode('build');
@@ -437,8 +470,12 @@ In Plan Mode:
               const progress = goal.progressTotal
                 ? ` (${goal.progressCurrent}/${goal.progressTotal})`
                 : '';
-              const priority = goal.priority === 1 ? c(' [HIGH]', 'red') :
-                              goal.priority === 3 ? c(' [low]', 'dim') : '';
+              const priority =
+                goal.priority === 1
+                  ? c(' [HIGH]', 'red')
+                  : goal.priority === 3
+                    ? c(' [low]', 'dim')
+                    : '';
               output.log(`  - ${goal.goalText}${progress}${priority}`);
               output.log(c(`    ID: ${goal.id}`, 'dim'));
             }
@@ -460,8 +497,12 @@ In Plan Mode:
           const goals = sqliteStore.listGoals();
           output.log(c('\nAll Goals:', 'bold'));
           for (const goal of goals) {
-            const status = goal.status === 'completed' ? c('+', 'green') :
-                          goal.status === 'abandoned' ? c('x', 'red') : ' ';
+            const status =
+              goal.status === 'completed'
+                ? c('+', 'green')
+                : goal.status === 'abandoned'
+                  ? c('x', 'red')
+                  : ' ';
             output.log(`  ${status} ${goal.goalText} [${goal.status}]`);
           }
         } else if (subCmd === 'junctures') {
@@ -471,9 +512,14 @@ In Plan Mode:
           } else {
             output.log(c('\nRecent Key Moments:', 'bold'));
             for (const j of junctures) {
-              const icon = j.type === 'failure' ? c('x', 'red') :
-                          j.type === 'breakthrough' ? c('*', 'yellow') :
-                          j.type === 'decision' ? c('>', 'cyan') : c('~', 'magenta');
+              const icon =
+                j.type === 'failure'
+                  ? c('x', 'red')
+                  : j.type === 'breakthrough'
+                    ? c('*', 'yellow')
+                    : j.type === 'decision'
+                      ? c('>', 'cyan')
+                      : c('~', 'magenta');
               output.log(`  ${icon} [${j.type}] ${j.description}`);
               if (j.outcome) output.log(c(`     -> ${j.outcome}`, 'dim'));
             }
@@ -509,7 +555,9 @@ In Plan Mode:
           output.log(markdown);
         }
       } else {
-        output.log(c('Handoff requires SQLite store (not available with JSONL fallback)', 'yellow'));
+        output.log(
+          c('Handoff requires SQLite store (not available with JSONL fallback)', 'yellow'),
+        );
       }
       break;
 
@@ -541,16 +589,19 @@ In Plan Mode:
         const task = args.join(' ');
         output.log(c(`\nRunning with team: ${task}`, 'cyan'));
         try {
-          const { CODER_ROLE, REVIEWER_ROLE, RESEARCHER_ROLE } = await import('../integrations/agents/multi-agent.js');
+          const { CODER_ROLE, REVIEWER_ROLE, RESEARCHER_ROLE } =
+            await import('../integrations/agents/multi-agent.js');
           const result = await agent.runWithTeam(
             { id: `team-${Date.now()}`, goal: task, context: '' },
-            [RESEARCHER_ROLE, CODER_ROLE, REVIEWER_ROLE]
+            [RESEARCHER_ROLE, CODER_ROLE, REVIEWER_ROLE],
           );
           output.log(c('\n--- Team Result ---', 'magenta'));
           output.log(`Success: ${result.success}`);
           output.log(`Coordinator: ${result.coordinator}`);
           if (result.consensus) {
-            output.log(`Consensus: ${result.consensus.agreed ? 'Agreed' : 'Disagreed'} - ${result.consensus.result}`);
+            output.log(
+              `Consensus: ${result.consensus.agreed ? 'Agreed' : 'Disagreed'} - ${result.consensus.result}`,
+            );
           }
           output.log(c('-------------------', 'magenta'));
         } catch (error) {
@@ -568,7 +619,9 @@ In Plan Mode:
       try {
         const label = args.length > 0 ? args.join(' ') : undefined;
         const checkpoint = agent.createCheckpoint(label);
-        output.log(c(`+ Checkpoint created: ${checkpoint.id}${label ? ` (${label})` : ''}`, 'green'));
+        output.log(
+          c(`+ Checkpoint created: ${checkpoint.id}${label ? ` (${label})` : ''}`, 'green'),
+        );
       } catch (error) {
         output.log(c(`Error: ${(error as Error).message}`, 'red'));
       }
@@ -582,7 +635,7 @@ In Plan Mode:
           output.log(c('No checkpoints.', 'dim'));
         } else {
           output.log(c('\nCheckpoints:', 'bold'));
-          checkpoints.forEach(cp => {
+          checkpoints.forEach((cp) => {
             output.log(`  ${c(cp.id, 'cyan')}${cp.label ? ` - ${cp.label}` : ''}`);
           });
         }
@@ -596,7 +649,9 @@ In Plan Mode:
         output.log(c('Usage: /restore <checkpoint-id>', 'yellow'));
       } else {
         const success = agent.restoreCheckpoint(args[0]);
-        output.log(success ? c(`+ Restored: ${args[0]}`, 'green') : c(`x Not found: ${args[0]}`, 'red'));
+        output.log(
+          success ? c(`+ Restored: ${args[0]}`, 'green') : c(`x Not found: ${args[0]}`, 'red'),
+        );
       }
       break;
 
@@ -607,7 +662,9 @@ In Plan Mode:
         output.log(c('Usage: /rollback <steps>', 'yellow'));
       } else {
         const success = agent.rollback(steps);
-        output.log(success ? c(`+ Rolled back ${steps} steps`, 'green') : c('x Rollback failed', 'red'));
+        output.log(
+          success ? c(`+ Rolled back ${steps} steps`, 'green') : c('x Rollback failed', 'red'),
+        );
       }
       break;
     }
@@ -633,7 +690,9 @@ In Plan Mode:
         } else {
           output.log(c('\nThreads:', 'bold'));
           threads.forEach((t: any) => {
-            output.log(`  ${c(t.id, 'cyan')}${t.name ? ` - ${t.name}` : ''} (${t.messages?.length || 0} messages)`);
+            output.log(
+              `  ${c(t.id, 'cyan')}${t.name ? ` - ${t.name}` : ''} (${t.messages?.length || 0} messages)`,
+            );
           });
         }
       } catch (error) {
@@ -646,7 +705,9 @@ In Plan Mode:
         output.log(c('Usage: /switch <thread-id>', 'yellow'));
       } else {
         const success = agent.switchThread(args[0]);
-        output.log(success ? c(`+ Switched to: ${args[0]}`, 'green') : c(`x Not found: ${args[0]}`, 'red'));
+        output.log(
+          success ? c(`+ Switched to: ${args[0]}`, 'green') : c(`x Not found: ${args[0]}`, 'red'),
+        );
       }
       break;
 
@@ -735,15 +796,27 @@ ${c('Progress:', 'bold')}
             switch (what) {
               case 'tokens':
                 agent.extendBudget({ maxTokens: limits.maxTokens + value });
-                output.log(c(`+ Token budget extended to ${(limits.maxTokens + value).toLocaleString()}`, 'green'));
+                output.log(
+                  c(
+                    `+ Token budget extended to ${(limits.maxTokens + value).toLocaleString()}`,
+                    'green',
+                  ),
+                );
                 break;
               case 'cost':
                 agent.extendBudget({ maxCost: limits.maxCost + value });
-                output.log(c(`+ Cost budget extended to $${(limits.maxCost + value).toFixed(2)}`, 'green'));
+                output.log(
+                  c(`+ Cost budget extended to $${(limits.maxCost + value).toFixed(2)}`, 'green'),
+                );
                 break;
               case 'time':
                 agent.extendBudget({ maxDuration: limits.maxDuration + value * 1000 });
-                output.log(c(`+ Time budget extended to ${Math.round((limits.maxDuration + value * 1000) / 1000)}s`, 'green'));
+                output.log(
+                  c(
+                    `+ Time budget extended to ${Math.round((limits.maxDuration + value * 1000) / 1000)}s`,
+                    'green',
+                  ),
+                );
                 break;
               default:
                 output.log(c('Unknown budget type. Use: tokens, cost, or time', 'yellow'));
@@ -785,7 +858,12 @@ ${c('Progress:', 'bold')}
           output.log(c('\n--- Agent Result ---', 'magenta'));
           output.log(`Success: ${result.success}`);
           output.log(`Output: ${result.output}`);
-          output.log(c(`\nTokens: ${result.metrics.tokens} | Tools: ${result.metrics.toolCalls} | Duration: ${result.metrics.duration}ms`, 'dim'));
+          output.log(
+            c(
+              `\nTokens: ${result.metrics.tokens} | Tools: ${result.metrics.toolCalls} | Duration: ${result.metrics.duration}ms`,
+              'dim',
+            ),
+          );
           output.log(c('--------------------', 'magenta'));
         } catch (error) {
           output.log(c(`Error: ${(error as Error).message}`, 'red'));
@@ -823,15 +901,22 @@ ${c('Progress:', 'bold')}
         const taskDesc = args.join(' ');
         output.log(c(`\nAnalyzing task: "${taskDesc}"`, 'cyan'));
         try {
-          const { suggestions, shouldDelegate, delegateAgent } = await agent.suggestAgentForTask(taskDesc);
+          const { suggestions, shouldDelegate, delegateAgent } =
+            await agent.suggestAgentForTask(taskDesc);
 
           if (suggestions.length === 0) {
-            output.log(c('\nNo specialized agent recommended. Main agent should handle this task.', 'dim'));
+            output.log(
+              c('\nNo specialized agent recommended. Main agent should handle this task.', 'dim'),
+            );
           } else {
             output.log(c('\nAgent Suggestions:', 'bold'));
             suggestions.forEach((s, i) => {
-              const confidenceBar = '='.repeat(Math.round(s.confidence * 10)) + '-'.repeat(10 - Math.round(s.confidence * 10));
-              output.log(`  ${i + 1}. ${c(s.agent.name, 'cyan')} [${confidenceBar}] ${(s.confidence * 100).toFixed(0)}%`);
+              const confidenceBar =
+                '='.repeat(Math.round(s.confidence * 10)) +
+                '-'.repeat(10 - Math.round(s.confidence * 10));
+              output.log(
+                `  ${i + 1}. ${c(s.agent.name, 'cyan')} [${confidenceBar}] ${(s.confidence * 100).toFixed(0)}%`,
+              );
               output.log(`     ${s.reason}`);
             });
 
@@ -863,7 +948,9 @@ ${c('Progress:', 'bold')}
               return ctx.confirm('Delegate to this agent?');
             }
             if (ctx.rl) {
-              const answer = await ctx.rl.question(c('   Delegate to this agent? (y/n): ', 'yellow'));
+              const answer = await ctx.rl.question(
+                c('   Delegate to this agent? (y/n): ', 'yellow'),
+              );
               return answer.toLowerCase().startsWith('y');
             }
             return false;
@@ -878,13 +965,23 @@ ${c('Progress:', 'bold')}
             output.log(c('\n--- Subagent Result ---', 'magenta'));
             output.log(`Success: ${result.success}`);
             output.log(result.output);
-            output.log(c(`\nTokens: ${result.metrics.tokens} | Duration: ${result.metrics.duration}ms`, 'dim'));
+            output.log(
+              c(
+                `\nTokens: ${result.metrics.tokens} | Duration: ${result.metrics.duration}ms`,
+                'dim',
+              ),
+            );
             output.log(c('-----------------------', 'magenta'));
           } else {
             output.log(c('\n--- Assistant ---', 'magenta'));
             output.log(result.response);
             output.log(c('-----------------', 'magenta'));
-            output.log(c(`\nTokens: ${result.metrics.inputTokens} in / ${result.metrics.outputTokens} out | Tools: ${result.metrics.toolCalls}`, 'dim'));
+            output.log(
+              c(
+                `\nTokens: ${result.metrics.inputTokens} in / ${result.metrics.outputTokens} out | Tools: ${result.metrics.toolCalls}`,
+                'dim',
+              ),
+            );
           }
         } catch (error) {
           output.log(c(`Error: ${(error as Error).message}`, 'red'));
@@ -922,10 +1019,12 @@ ${c('Progress:', 'bold')}
           output.log(c('No MCP tools available.', 'dim'));
         } else {
           output.log(c('\nMCP Tools:', 'bold'));
-          tools.forEach(t => {
+          tools.forEach((t) => {
             const loaded = mcpClient.isToolLoaded(t.name);
             const status = loaded ? c('+', 'green') : c('o', 'dim');
-            output.log(`  ${status} ${c(t.name, 'cyan')} - ${t.description?.slice(0, 60) || 'No description'}...`);
+            output.log(
+              `  ${status} ${c(t.name, 'cyan')} - ${t.description?.slice(0, 60) || 'No description'}...`,
+            );
           });
           const stats = mcpClient.getContextStats();
           output.log(c(`\n  Legend: + = full schema loaded, o = summary only`, 'dim'));
@@ -942,24 +1041,28 @@ ${c('Progress:', 'bold')}
             output.log(c('No matching tools found.', 'dim'));
           } else {
             output.log(c(`\nFound ${results.length} tool(s):`, 'bold'));
-            results.forEach(r => {
+            results.forEach((r) => {
               output.log(`  ${c(r.name, 'cyan')} (${r.serverName})`);
               output.log(`    ${r.description}`);
             });
-            const loadedTools = mcpClient.loadTools(results.map(r => r.name));
+            const loadedTools = mcpClient.loadTools(results.map((r) => r.name));
             for (const tool of loadedTools) {
               agent.addTool(tool);
             }
-            output.log(c(`\n+ Loaded ${loadedTools.length} tool(s). They are now available for use.`, 'green'));
+            output.log(
+              c(
+                `\n+ Loaded ${loadedTools.length} tool(s). They are now available for use.`,
+                'green',
+              ),
+            );
           }
         }
       } else if (args[0] === 'stats') {
         const stats = mcpClient.getContextStats();
         const fullLoadEstimate = stats.totalTools * 200;
         const currentTokens = stats.summaryTokens + stats.definitionTokens;
-        const savingsPercent = fullLoadEstimate > 0
-          ? Math.round((1 - currentTokens / fullLoadEstimate) * 100)
-          : 0;
+        const savingsPercent =
+          fullLoadEstimate > 0 ? Math.round((1 - currentTokens / fullLoadEstimate) * 100) : 0;
 
         output.log(`
 ${c('MCP Context Usage:', 'bold')}
@@ -1023,7 +1126,10 @@ ${c('Tip:', 'dim')} Use /mcp search <query> to load specific tools on-demand.
         const loadId = args[0];
         try {
           let checkpointData: CheckpointData | undefined;
-          if ('loadLatestCheckpoint' in sessionStore && typeof sessionStore.loadLatestCheckpoint === 'function') {
+          if (
+            'loadLatestCheckpoint' in sessionStore &&
+            typeof sessionStore.loadLatestCheckpoint === 'function'
+          ) {
             const sqliteCheckpoint = sessionStore.loadLatestCheckpoint(loadId);
             if (sqliteCheckpoint?.state) {
               checkpointData = sqliteCheckpoint.state as unknown as CheckpointData;
@@ -1036,7 +1142,7 @@ ${c('Tip:', 'dim')} Use /mcp search <query> to load specific tools on-demand.
               output.log(c(`No entries found for session: ${loadId}`, 'yellow'));
               break;
             }
-            const checkpoint = [...entries].reverse().find(e => e.type === 'checkpoint');
+            const checkpoint = [...entries].reverse().find((e) => e.type === 'checkpoint');
             checkpointData = checkpoint?.data as CheckpointData | undefined;
           }
 
@@ -1048,7 +1154,9 @@ ${c('Tip:', 'dim')} Use /mcp search <query> to load specific tools on-demand.
               plan: checkpointData.plan as any,
               memoryContext: checkpointData.memoryContext,
             });
-            output.log(c(`+ Loaded ${checkpointData.messages.length} messages from ${loadId}`, 'green'));
+            output.log(
+              c(`+ Loaded ${checkpointData.messages.length} messages from ${loadId}`, 'green'),
+            );
           } else {
             output.log(c('No checkpoint found in session', 'yellow'));
           }
@@ -1069,7 +1177,10 @@ ${c('Tip:', 'dim')} Use /mcp search <query> to load specific tools on-demand.
           output.log(c(`   Messages: ${recentSession.messageCount}`, 'dim'));
 
           let resumeCheckpointData: CheckpointData | undefined;
-          if ('loadLatestCheckpoint' in sessionStore && typeof sessionStore.loadLatestCheckpoint === 'function') {
+          if (
+            'loadLatestCheckpoint' in sessionStore &&
+            typeof sessionStore.loadLatestCheckpoint === 'function'
+          ) {
             const sqliteCheckpoint = sessionStore.loadLatestCheckpoint(recentSession.id);
             if (sqliteCheckpoint?.state) {
               resumeCheckpointData = sqliteCheckpoint.state as unknown as CheckpointData;
@@ -1079,7 +1190,7 @@ ${c('Tip:', 'dim')} Use /mcp search <query> to load specific tools on-demand.
           if (!resumeCheckpointData) {
             const entriesResult = sessionStore.loadSession(recentSession.id);
             const entries = Array.isArray(entriesResult) ? entriesResult : await entriesResult;
-            const checkpoint = [...entries].reverse().find(e => e.type === 'checkpoint');
+            const checkpoint = [...entries].reverse().find((e) => e.type === 'checkpoint');
             if (checkpoint?.data) {
               resumeCheckpointData = checkpoint.data as CheckpointData;
             } else {
@@ -1103,7 +1214,12 @@ ${c('Tip:', 'dim')} Use /mcp search <query> to load specific tools on-demand.
               plan: resumeCheckpointData.plan as any,
               memoryContext: resumeCheckpointData.memoryContext,
             });
-            output.log(c(`+ Resumed ${resumeCheckpointData.messages.length} messages from last session`, 'green'));
+            output.log(
+              c(
+                `+ Resumed ${resumeCheckpointData.messages.length} messages from last session`,
+                'green',
+              ),
+            );
             if (resumeCheckpointData.iteration) {
               output.log(c(`   Iteration: ${resumeCheckpointData.iteration}`, 'dim'));
             }
@@ -1111,12 +1227,22 @@ ${c('Tip:', 'dim')} Use /mcp search <query> to load specific tools on-demand.
               output.log(c(`   Plan restored`, 'dim'));
             }
 
-            if ('getPendingPlan' in sessionStore && typeof sessionStore.getPendingPlan === 'function') {
+            if (
+              'getPendingPlan' in sessionStore &&
+              typeof sessionStore.getPendingPlan === 'function'
+            ) {
               const pendingPlan = sessionStore.getPendingPlan(recentSession.id);
               if (pendingPlan && pendingPlan.status === 'pending') {
                 output.log(c(`\nFound pending plan: "${pendingPlan.task}"`, 'yellow'));
-                output.log(c(`   ${pendingPlan.proposedChanges.length} change(s) awaiting approval`, 'yellow'));
-                output.log(c('   Use /show-plan to view, /approve to execute, /reject to discard', 'dim'));
+                output.log(
+                  c(
+                    `   ${pendingPlan.proposedChanges.length} change(s) awaiting approval`,
+                    'yellow',
+                  ),
+                );
+                output.log(
+                  c('   Use /show-plan to view, /approve to execute, /reject to discard', 'dim'),
+                );
               }
             }
           }
@@ -1158,7 +1284,10 @@ ${c('Tip:', 'dim')} Use /mcp search <query> to load specific tools on-demand.
 
         // Try to load from checkpoint first (same as /resume)
         let loadCheckpointData: CheckpointData | undefined;
-        if ('loadLatestCheckpoint' in sessionStore && typeof sessionStore.loadLatestCheckpoint === 'function') {
+        if (
+          'loadLatestCheckpoint' in sessionStore &&
+          typeof sessionStore.loadLatestCheckpoint === 'function'
+        ) {
           const sqliteCheckpoint = sessionStore.loadLatestCheckpoint(targetSession.id);
           if (sqliteCheckpoint?.state) {
             loadCheckpointData = sqliteCheckpoint.state as unknown as CheckpointData;
@@ -1169,7 +1298,7 @@ ${c('Tip:', 'dim')} Use /mcp search <query> to load specific tools on-demand.
         if (!loadCheckpointData) {
           const entriesResult = sessionStore.loadSession(targetSession.id);
           const entries = Array.isArray(entriesResult) ? entriesResult : await entriesResult;
-          const checkpoint = [...entries].reverse().find(e => e.type === 'checkpoint');
+          const checkpoint = [...entries].reverse().find((e) => e.type === 'checkpoint');
           if (checkpoint?.data) {
             loadCheckpointData = checkpoint.data as CheckpointData;
           } else {
@@ -1194,7 +1323,9 @@ ${c('Tip:', 'dim')} Use /mcp search <query> to load specific tools on-demand.
             plan: loadCheckpointData.plan as any,
             memoryContext: loadCheckpointData.memoryContext,
           });
-          output.log(c(`+ Loaded ${loadCheckpointData.messages.length} messages from session`, 'green'));
+          output.log(
+            c(`+ Loaded ${loadCheckpointData.messages.length} messages from session`, 'green'),
+          );
           if (loadCheckpointData.iteration) {
             output.log(c(`   Iteration: ${loadCheckpointData.iteration}`, 'dim'));
           }
@@ -1203,12 +1334,19 @@ ${c('Tip:', 'dim')} Use /mcp search <query> to load specific tools on-demand.
           }
 
           // Check for pending plans
-          if ('getPendingPlan' in sessionStore && typeof sessionStore.getPendingPlan === 'function') {
+          if (
+            'getPendingPlan' in sessionStore &&
+            typeof sessionStore.getPendingPlan === 'function'
+          ) {
             const pendingPlan = sessionStore.getPendingPlan(targetSession.id);
             if (pendingPlan && pendingPlan.status === 'pending') {
               output.log(c(`\nFound pending plan: "${pendingPlan.task}"`, 'yellow'));
-              output.log(c(`   ${pendingPlan.proposedChanges.length} change(s) awaiting approval`, 'yellow'));
-              output.log(c('   Use /show-plan to view, /approve to execute, /reject to discard', 'dim'));
+              output.log(
+                c(`   ${pendingPlan.proposedChanges.length} change(s) awaiting approval`, 'yellow'),
+              );
+              output.log(
+                c('   Use /show-plan to view, /approve to execute, /reject to discard', 'dim'),
+              );
             }
           }
         }
@@ -1262,14 +1400,14 @@ ${c('Context Status:', 'bold')}
 
           const systemTokens = estimateTokens(systemPrompt);
           const mcpTokens = mcpStats.summaryTokens + mcpStats.definitionTokens;
-          const agentTools = agent.getTools().filter(t => !t.name.startsWith('mcp_'));
+          const agentTools = agent.getTools().filter((t) => !t.name.startsWith('mcp_'));
           const agentToolTokens = agentTools.length * 150;
           const convTokens = state.messages
-            .filter(m => m.role !== 'system')
+            .filter((m) => m.role !== 'system')
             .reduce((sum, m) => sum + estimateTokens(m.content), 0);
 
           const totalTokens = systemTokens + mcpTokens + agentToolTokens + convTokens;
-          const messageCount = state.messages.filter(m => m.role !== 'system').length;
+          const messageCount = state.messages.filter((m) => m.role !== 'system').length;
 
           const sysPct = totalTokens > 0 ? Math.round((systemTokens / totalTokens) * 100) : 0;
           const mcpPct = totalTokens > 0 ? Math.round((mcpTokens / totalTokens) * 100) : 0;
@@ -1293,12 +1431,12 @@ ${c('  Category             Tokens    % of Total', 'dim')}
 
           const systemTokens = estimateTokens(systemPrompt);
           const mcpTokens = mcpStats.summaryTokens + mcpStats.definitionTokens;
-          const agentTools = agent.getTools().filter(t => !t.name.startsWith('mcp_'));
+          const agentTools = agent.getTools().filter((t) => !t.name.startsWith('mcp_'));
           const agentToolTokens = agentTools.length * 150;
           const baseTokens = systemTokens + mcpTokens + agentToolTokens;
 
           const convTokens = state.messages
-            .filter(m => m.role !== 'system')
+            .filter((m) => m.role !== 'system')
             .reduce((sum, m) => sum + estimateTokens(m.content), 0);
 
           const totalTokens = baseTokens + convTokens;
@@ -1306,8 +1444,9 @@ ${c('  Category             Tokens    % of Total', 'dim')}
           const percent = Math.round((totalTokens / contextLimit) * 100);
           const shouldCompact = percent >= 80;
 
-          const bar = '='.repeat(Math.min(20, Math.round(percent / 5))) +
-                     '-'.repeat(Math.max(0, 20 - Math.round(percent / 5)));
+          const bar =
+            '='.repeat(Math.min(20, Math.round(percent / 5))) +
+            '-'.repeat(Math.max(0, 20 - Math.round(percent / 5)));
           const color = percent >= 80 ? 'red' : percent >= 60 ? 'yellow' : 'green';
 
           output.log(`
@@ -1315,7 +1454,7 @@ ${c('Context Window:', 'bold')}
   [${c(bar, color)}] ${percent}%
   Base:     ~${baseTokens.toLocaleString()} tokens (system + ${agentTools.length} agent tools)
   MCP:      ~${mcpTokens.toLocaleString()} tokens (${mcpStats.loadedCount}/${mcpStats.totalTools} tools loaded)
-  Messages: ${state.messages.filter(m => m.role !== 'system').length} (~${convTokens.toLocaleString()} tokens)
+  Messages: ${state.messages.filter((m) => m.role !== 'system').length} (~${convTokens.toLocaleString()} tokens)
   Total:    ~${totalTokens.toLocaleString()} / ${(contextLimit / 1000).toFixed(0)}k tokens
   ${shouldCompact ? c('! Consider running /compact', 'yellow') : c('+ Healthy', 'green')}
 `);
@@ -1337,7 +1476,7 @@ ${c('Context Window:', 'bold')}
         if (args.length === 0) {
           output.log(`
 ${c('Available Themes:', 'bold')}
-${themes.map(t => `  ${c(t, 'cyan')}`).join('\n')}
+${themes.map((t) => `  ${c(t, 'cyan')}`).join('\n')}
 
 ${c('Usage:', 'dim')} /theme <name>
 ${c('Note:', 'dim')} Theme switching is visual in TUI mode. REPL mode uses fixed ANSI colors.
@@ -1345,7 +1484,9 @@ ${c('Note:', 'dim')} Theme switching is visual in TUI mode. REPL mode uses fixed
         } else {
           const themeName = args[0];
           if (themes.includes(themeName)) {
-            const selectedTheme = getTheme(themeName as 'dark' | 'light' | 'high-contrast' | 'auto');
+            const selectedTheme = getTheme(
+              themeName as 'dark' | 'light' | 'high-contrast' | 'auto',
+            );
             output.log(c(`+ Theme set to: ${themeName}`, 'green'));
             output.log(c(`  Primary: ${selectedTheme.colors.primary}`, 'dim'));
             output.log(c(`  Note: Full theme support requires TUI mode`, 'dim'));
@@ -1379,7 +1520,9 @@ ${c('Note:', 'dim')} Theme switching is visual in TUI mode. REPL mode uses fixed
             skills.forEach((skill: any) => {
               const active = skill.active ? c('+', 'green') : c('o', 'dim');
               const invokable = skill.invokable ? c('[/]', 'magenta') : '   ';
-              output.log(`  ${active} ${invokable} ${c(skill.name, 'cyan')} - ${skill.description || 'No description'}`);
+              output.log(
+                `  ${active} ${invokable} ${c(skill.name, 'cyan')} - ${skill.description || 'No description'}`,
+              );
             });
           }
         }
@@ -1544,7 +1687,7 @@ ${c('Test it:', 'dim')}
           agent: 'agent',
           mcp: 'mcp_tool',
           'mcp-tools': 'mcp_tool',
-          'mcp_tools': 'mcp_tool',
+          mcp_tools: 'mcp_tool',
           commands: 'command',
           command: 'command',
         };
@@ -1609,14 +1752,18 @@ ${c('Main Agent:', 'bold')}
 ${c('Subagent Tree:', 'bold')}`);
 
           // Sort subagents by spawn time
-          const sortedSubagents = hierarchy.subagents.sort((a, b) =>
-            (a.spawnedAtIteration || 0) - (b.spawnedAtIteration || 0)
+          const sortedSubagents = hierarchy.subagents.sort(
+            (a, b) => (a.spawnedAtIteration || 0) - (b.spawnedAtIteration || 0),
           );
 
           for (const sub of sortedSubagents) {
             const durationSec = Math.round(sub.duration / 1000);
-            output.log(`  └─ ${c(sub.agentId, 'cyan')} (spawned iter ${sub.spawnedAtIteration || '?'})`);
-            output.log(`     ├─ ${sub.inputTokens.toLocaleString()} in / ${sub.outputTokens.toLocaleString()} out tokens`);
+            output.log(
+              `  └─ ${c(sub.agentId, 'cyan')} (spawned iter ${sub.spawnedAtIteration || '?'})`,
+            );
+            output.log(
+              `     ├─ ${sub.inputTokens.toLocaleString()} in / ${sub.outputTokens.toLocaleString()} out tokens`,
+            );
             output.log(`     ├─ ${sub.toolCalls} tools | ${durationSec}s`);
           }
 
@@ -1681,9 +1828,15 @@ ${c('Anomalies Detected:', 'bold')} ${summary.anomalies.length}
           output.log(c('  No significant issues detected.', 'green'));
         } else {
           for (const anomaly of summary.anomalies) {
-            const severityColor = anomaly.severity === 'high' ? 'red' :
-                                  anomaly.severity === 'medium' ? 'yellow' : 'dim';
-            output.log(`  ${c(`[${anomaly.severity.toUpperCase()}]`, severityColor)} ${anomaly.type}`);
+            const severityColor =
+              anomaly.severity === 'high'
+                ? 'red'
+                : anomaly.severity === 'medium'
+                  ? 'yellow'
+                  : 'dim';
+            output.log(
+              `  ${c(`[${anomaly.severity.toUpperCase()}]`, severityColor)} ${anomaly.type}`,
+            );
             output.log(`       ${anomaly.description}`);
             output.log(c(`       Evidence: ${anomaly.evidence}`, 'dim'));
           }
@@ -1699,13 +1852,16 @@ ${c('Tool Patterns:', 'bold')}
         if (summary.codeLocations.length > 0) {
           output.log(c('Related Code Locations:', 'bold'));
           for (const loc of summary.codeLocations) {
-            const rel = loc.relevance === 'primary' ? c('[PRIMARY]', 'cyan') :
-                       loc.relevance === 'secondary' ? c('[SECONDARY]', 'dim') : '';
+            const rel =
+              loc.relevance === 'primary'
+                ? c('[PRIMARY]', 'cyan')
+                : loc.relevance === 'secondary'
+                  ? c('[SECONDARY]', 'dim')
+                  : '';
             output.log(`  ${rel} ${loc.file} - ${loc.component}`);
             output.log(c(`       ${loc.description}`, 'dim'));
           }
         }
-
       } else if (args[0] === 'issues') {
         // List detected inefficiencies
         if (!traceCollector) {
@@ -1728,13 +1884,16 @@ ${c('Tool Patterns:', 'bold')}
         } else {
           output.log(c('\nDetected Issues:', 'bold'));
           summary.anomalies.forEach((anomaly, i) => {
-            const icon = anomaly.severity === 'high' ? c('!', 'red') :
-                        anomaly.severity === 'medium' ? c('*', 'yellow') : c('-', 'dim');
+            const icon =
+              anomaly.severity === 'high'
+                ? c('!', 'red')
+                : anomaly.severity === 'medium'
+                  ? c('*', 'yellow')
+                  : c('-', 'dim');
             output.log(`  ${icon} ${i + 1}. ${anomaly.type} (${anomaly.severity})`);
             output.log(`       ${anomaly.description}`);
           });
         }
-
       } else if (args[0] === 'fixes') {
         // List pending improvements from feedback loop
         try {
@@ -1760,7 +1919,12 @@ ${c('Feedback Loop Summary:', 'bold')}
             output.log(c('Pending Fixes:', 'bold'));
             for (const fix of pendingFixes.slice(0, 10)) {
               output.log(`  - ${fix.description}`);
-              output.log(c(`    ID: ${fix.id} | Created: ${new Date(fix.createdAt).toLocaleDateString()}`, 'dim'));
+              output.log(
+                c(
+                  `    ID: ${fix.id} | Created: ${new Date(fix.createdAt).toLocaleDateString()}`,
+                  'dim',
+                ),
+              );
             }
             if (pendingFixes.length > 10) {
               output.log(c(`  ... and ${pendingFixes.length - 10} more`, 'dim'));
@@ -1771,14 +1935,14 @@ ${c('Feedback Loop Summary:', 'bold')}
         } catch (error) {
           output.log(c(`Error loading feedback data: ${(error as Error).message}`, 'red'));
         }
-
       } else if (args[0] === 'compare' && args.length >= 3) {
         // Compare two sessions
         output.log(c(`Comparing sessions: ${args[1]} vs ${args[2]}`, 'cyan'));
         output.log(c('Use the trace dashboard for session comparison:', 'dim'));
         output.log(c('  npm run dashboard', 'dim'));
-        output.log(c(`  Then visit: http://localhost:5173/compare?a=${args[1]}&b=${args[2]}`, 'dim'));
-
+        output.log(
+          c(`  Then visit: http://localhost:5173/compare?a=${args[1]}&b=${args[2]}`, 'dim'),
+        );
       } else if (args[0] === 'export') {
         // Export current trace as JSON for LLM analysis
         if (!traceCollector) {
@@ -1801,7 +1965,6 @@ ${c('Feedback Loop Summary:', 'bold')}
         await writeFile(outFile, JSON.stringify(summary, null, 2), 'utf-8');
         output.log(c(`+ Trace exported to: ${outFile}`, 'green'));
         output.log(c('  This JSON is optimized for LLM analysis (~4000 tokens)', 'dim'));
-
       } else {
         output.log(c('Usage:', 'bold'));
         output.log(c('  /trace              - Show current session trace summary', 'dim'));

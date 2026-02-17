@@ -25,7 +25,7 @@ export const SPAWNABLE_AGENTS = [
   'documenter',
 ] as const;
 
-export type SpawnableAgent = typeof SPAWNABLE_AGENTS[number];
+export type SpawnableAgent = (typeof SPAWNABLE_AGENTS)[number];
 
 /**
  * Spawn constraints for focused execution.
@@ -134,7 +134,11 @@ Optional constraints help keep subagents focused:
 /**
  * Type for the spawn function provided by ProductionAgent.
  */
-export type SpawnFunction = (agentName: string, task: string, constraints?: SpawnConstraints) => Promise<SpawnResult>;
+export type SpawnFunction = (
+  agentName: string,
+  task: string,
+  constraints?: SpawnConstraints,
+) => Promise<SpawnResult>;
 
 /**
  * Create a spawn_agent tool bound to a specific agent's spawnAgent method.
@@ -189,7 +193,8 @@ export function createBoundSpawnAgentTool(spawnFn: SpawnFunction): ToolDefinitio
           `Failures: ${result.structured.failures.join('; ') || 'none'}\n` +
           `Remaining: ${result.structured.remainingWork.join('; ') || 'none'}\n` +
           (result.structured.suggestedNextSteps?.length
-            ? `Next steps: ${result.structured.suggestedNextSteps.join('; ')}\n` : '')
+            ? `Next steps: ${result.structured.suggestedNextSteps.join('; ')}\n`
+            : '')
         : '';
 
       // Include output store reference so parent can retrieve full output if truncated
@@ -231,7 +236,7 @@ export interface SpawnAgentsParallelInput {
  * Type for the parallel spawn function.
  */
 export type ParallelSpawnFunction = (
-  tasks: Array<{ agent: string; task: string }>
+  tasks: Array<{ agent: string; task: string }>,
 ) => Promise<SpawnResult[]>;
 
 /**
@@ -290,7 +295,7 @@ Returns results from all agents once they complete.`;
  * Create a spawn_agents_parallel tool bound to a specific agent's parallel spawn method.
  */
 export function createBoundSpawnAgentsParallelTool(
-  parallelSpawnFn: ParallelSpawnFunction
+  parallelSpawnFn: ParallelSpawnFunction,
 ): ToolDefinition {
   return {
     name: 'spawn_agents_parallel',
@@ -304,7 +309,8 @@ export function createBoundSpawnAgentsParallelTool(
       if (!Array.isArray(input.tasks) || input.tasks.length < 2) {
         return {
           success: false,
-          output: 'At least 2 tasks are required for parallel execution. Use spawn_agent for single tasks.',
+          output:
+            'At least 2 tasks are required for parallel execution. Use spawn_agent for single tasks.',
         };
       }
 
@@ -334,30 +340,32 @@ export function createBoundSpawnAgentsParallelTool(
       const results = await parallelSpawnFn(input.tasks);
 
       // Aggregate results
-      const successCount = results.filter(r => r.success).length;
+      const successCount = results.filter((r) => r.success).length;
       const totalTokens = results.reduce((sum, r) => sum + (r.metrics?.tokens || 0), 0);
-      const totalDuration = Math.max(...results.map(r => r.metrics?.duration || 0));
+      const totalDuration = Math.max(...results.map((r) => r.metrics?.duration || 0));
 
-      const outputs = results.map((r, i) => {
-        const task = input.tasks[i];
-        const storeRef = r.outputStoreId
-          ? `\n[Full output saved to: ${r.outputStoreId}.md — use read_file to retrieve if needed]`
-          : '';
-        return `## ${task.agent} (${r.success ? '✓' : '✗'})\n${r.output}${storeRef}`;
-      }).join('\n\n');
+      const outputs = results
+        .map((r, i) => {
+          const task = input.tasks[i];
+          const storeRef = r.outputStoreId
+            ? `\n[Full output saved to: ${r.outputStoreId}.md — use read_file to retrieve if needed]`
+            : '';
+          return `## ${task.agent} (${r.success ? '✓' : '✗'})\n${r.output}${storeRef}`;
+        })
+        .join('\n\n');
 
       return {
         success: successCount === results.length,
         output: `Parallel execution complete: ${successCount}/${results.length} succeeded\n\n${outputs}`,
         metadata: {
           tasks: input.tasks,
-          results: results.map(r => ({ success: r.success, metrics: r.metrics })),
+          results: results.map((r) => ({ success: r.success, metrics: r.metrics })),
           aggregateMetrics: {
             totalTokens,
             wallClockDuration: totalDuration,
             successRate: successCount / results.length,
           },
-          outputStoreIds: results.map(r => r.outputStoreId).filter(Boolean),
+          outputStoreIds: results.map((r) => r.outputStoreId).filter(Boolean),
         },
       };
     },

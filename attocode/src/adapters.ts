@@ -42,18 +42,18 @@ import { logger } from './integrations/utilities/logger.js';
 export class ProviderAdapter implements ProductionLLMProvider {
   constructor(
     private provider: LLMProviderWithTools,
-    private defaultModel?: string
+    private defaultModel?: string,
   ) {}
 
   async chat(
     messages: ProductionMessage[],
-    options?: ProductionChatOptions
+    options?: ProductionChatOptions,
   ): Promise<ProductionChatResponse> {
     // Convert ProductionMessage[] to provider message format
-    const providerMessages = messages.map(m => ({
+    const providerMessages = messages.map((m) => ({
       role: m.role as 'system' | 'user' | 'assistant' | 'tool',
       content: m.content,
-      tool_calls: m.toolCalls?.map(tc => ({
+      tool_calls: m.toolCalls?.map((tc) => ({
         id: tc.id,
         type: 'function' as const,
         function: {
@@ -62,13 +62,15 @@ export class ProviderAdapter implements ProductionLLMProvider {
         },
       })),
       tool_call_id: m.toolCallId,
-      name: m.toolCallId ? messages.find(msg =>
-        msg.toolCalls?.some(tc => tc.id === m.toolCallId)
-      )?.toolCalls?.find(tc => tc.id === m.toolCallId)?.name : undefined,
+      name: m.toolCallId
+        ? messages
+            .find((msg) => msg.toolCalls?.some((tc) => tc.id === m.toolCallId))
+            ?.toolCalls?.find((tc) => tc.id === m.toolCallId)?.name
+        : undefined,
     }));
 
     // Convert ProductionToolDefinition[] to ToolDefinitionSchema[]
-    const toolSchemas: ToolDefinitionSchema[] | undefined = options?.tools?.map(t => ({
+    const toolSchemas: ToolDefinitionSchema[] | undefined = options?.tools?.map((t) => ({
       type: 'function' as const,
       function: {
         name: t.name,
@@ -92,7 +94,7 @@ export class ProviderAdapter implements ProductionLLMProvider {
       content: response.content,
       thinking: response.thinking,
       stopReason: response.stopReason,
-      toolCalls: response.toolCalls?.map(tc => {
+      toolCalls: response.toolCalls?.map((tc) => {
         let args: Record<string, unknown>;
         let parseError: string | undefined;
         if (typeof tc.function.arguments === 'string') {
@@ -119,14 +121,16 @@ export class ProviderAdapter implements ProductionLLMProvider {
           ...(parseError ? { parseError } : {}),
         };
       }),
-      usage: response.usage ? {
-        inputTokens: response.usage.inputTokens,
-        outputTokens: response.usage.outputTokens,
-        totalTokens: (response.usage.inputTokens || 0) + (response.usage.outputTokens || 0),
-        cacheReadTokens: response.usage.cacheReadTokens ?? response.usage.cachedTokens,
-        cacheWriteTokens: response.usage.cacheWriteTokens,
-        cost: response.usage.cost,
-      } : undefined,
+      usage: response.usage
+        ? {
+            inputTokens: response.usage.inputTokens,
+            outputTokens: response.usage.outputTokens,
+            totalTokens: (response.usage.inputTokens || 0) + (response.usage.outputTokens || 0),
+            cacheReadTokens: response.usage.cacheReadTokens ?? response.usage.cachedTokens,
+            cacheWriteTokens: response.usage.cacheWriteTokens,
+            cost: response.usage.cost,
+          }
+        : undefined,
       model: model,
     };
 
@@ -135,17 +139,17 @@ export class ProviderAdapter implements ProductionLLMProvider {
 
   async *stream(
     messages: ProductionMessage[],
-    options?: ProductionChatOptions
+    options?: ProductionChatOptions,
   ): AsyncIterable<StreamChunk> {
     if (!this.provider.chatWithToolsStream) {
       return;
     }
 
     // Convert messages same way as chat()
-    const providerMessages = messages.map(m => ({
+    const providerMessages = messages.map((m) => ({
       role: m.role as 'system' | 'user' | 'assistant' | 'tool',
       content: m.content,
-      tool_calls: m.toolCalls?.map(tc => ({
+      tool_calls: m.toolCalls?.map((tc) => ({
         id: tc.id,
         type: 'function' as const,
         function: {
@@ -154,12 +158,14 @@ export class ProviderAdapter implements ProductionLLMProvider {
         },
       })),
       tool_call_id: m.toolCallId,
-      name: m.toolCallId ? messages.find(msg =>
-        msg.toolCalls?.some(tc => tc.id === m.toolCallId)
-      )?.toolCalls?.find(tc => tc.id === m.toolCallId)?.name : undefined,
+      name: m.toolCallId
+        ? messages
+            .find((msg) => msg.toolCalls?.some((tc) => tc.id === m.toolCallId))
+            ?.toolCalls?.find((tc) => tc.id === m.toolCallId)?.name
+        : undefined,
     }));
 
-    const toolSchemas: ToolDefinitionSchema[] | undefined = options?.tools?.map(t => ({
+    const toolSchemas: ToolDefinitionSchema[] | undefined = options?.tools?.map((t) => ({
       type: 'function' as const,
       function: {
         name: t.name,
@@ -178,7 +184,10 @@ export class ProviderAdapter implements ProductionLLMProvider {
     };
 
     // Map detailed streaming chunks to production StreamChunk format
-    for await (const chunk of this.provider.chatWithToolsStream(providerMessages, providerOptions)) {
+    for await (const chunk of this.provider.chatWithToolsStream(
+      providerMessages,
+      providerOptions,
+    )) {
       const t = chunk.type;
       if (t === 'text') {
         yield { type: 'text' as const, content: chunk.content };
@@ -186,7 +195,11 @@ export class ProviderAdapter implements ProductionLLMProvider {
         yield {
           type: 'tool_call' as const,
           toolCall: chunk.toolCall
-            ? { id: chunk.toolCallId || '', name: chunk.toolCall.name || '', arguments: (chunk.toolCall.arguments as Record<string, unknown>) || {} }
+            ? {
+                id: chunk.toolCallId || '',
+                name: chunk.toolCall.name || '',
+                arguments: (chunk.toolCall.arguments as Record<string, unknown>) || {},
+              }
             : undefined,
         };
       } else if (t === 'done') {
@@ -215,7 +228,7 @@ export function convertToolsFromRegistry(
 ): ProductionToolDefinition[] {
   const descriptions = registry.getDescriptions();
 
-  return descriptions.map(desc => ({
+  return descriptions.map((desc) => ({
     name: desc.name,
     description: desc.description,
     parameters: desc.input_schema as unknown as Record<string, unknown>,
@@ -240,7 +253,7 @@ export function convertToolsFromRegistry(
  */
 export function convertTool(
   desc: ToolDescription,
-  executor: (args: Record<string, unknown>) => Promise<unknown>
+  executor: (args: Record<string, unknown>) => Promise<unknown>,
 ): ProductionToolDefinition {
   return {
     name: desc.name,
@@ -274,8 +287,15 @@ import * as readline from 'node:readline/promises';
  * Unlike the broken auto-approve, this actually asks the user.
  */
 export function createInteractiveApprovalHandler(
-  rl: readline.Interface
-): (request: { id: string; action: string; tool?: string; args?: Record<string, unknown>; risk: string; context: string }) => Promise<{ approved: boolean; reason?: string }> {
+  rl: readline.Interface,
+): (request: {
+  id: string;
+  action: string;
+  tool?: string;
+  args?: Record<string, unknown>;
+  risk: string;
+  context: string;
+}) => Promise<{ approved: boolean; reason?: string }> {
   return async (request) => {
     const colors = {
       reset: '\x1b[0m',
@@ -329,9 +349,7 @@ export interface TUIApprovalBridge {
   handler: (request: ApprovalRequest) => Promise<ApprovalResponse>;
 
   /** Connect TUI callbacks after TUI mounts */
-  connect: (callbacks: {
-    onRequest: (request: ApprovalRequest) => void;
-  }) => void;
+  connect: (callbacks: { onRequest: (request: ApprovalRequest) => void }) => void;
 
   /** Resolve the current pending approval */
   resolve: (response: ApprovalResponse) => void;

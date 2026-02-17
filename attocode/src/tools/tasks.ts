@@ -9,7 +9,13 @@
  */
 
 import type { ToolDefinition } from '../types.js';
-import type { TaskManager, Task, CreateTaskOptions, UpdateTaskOptions, TaskStatus } from '../integrations/tasks/task-manager.js';
+import type {
+  TaskManager,
+  Task,
+  CreateTaskOptions,
+  UpdateTaskOptions,
+  TaskStatus,
+} from '../integrations/tasks/task-manager.js';
 
 // =============================================================================
 // TOOL PARAMETERS
@@ -20,15 +26,18 @@ const taskCreateParameters = {
   properties: {
     subject: {
       type: 'string',
-      description: 'Brief title in imperative form (e.g., "Fix authentication bug", "Add user validation")',
+      description:
+        'Brief title in imperative form (e.g., "Fix authentication bug", "Add user validation")',
     },
     description: {
       type: 'string',
-      description: 'Detailed description of what needs to be done, including context and acceptance criteria',
+      description:
+        'Detailed description of what needs to be done, including context and acceptance criteria',
     },
     activeForm: {
       type: 'string',
-      description: 'Present continuous form shown in spinner when task is in_progress (e.g., "Fixing authentication bug")',
+      description:
+        'Present continuous form shown in spinner when task is in_progress (e.g., "Fixing authentication bug")',
     },
     metadata: {
       type: 'object',
@@ -307,17 +316,18 @@ export function createTaskListTool(taskManager: TaskManager): ToolDefinition {
 
       return {
         success: true,
-        tasks: summaries.map(s => ({
+        tasks: summaries.map((s) => ({
           id: s.id.replace('task-', ''),
           subject: s.subject,
           status: s.status,
           owner: s.owner || null,
-          blockedBy: s.blockedBy.map(b => b.replace('task-', '')),
+          blockedBy: s.blockedBy.map((b) => b.replace('task-', '')),
         })),
         counts,
-        message: summaries.length === 0
-          ? 'No tasks'
-          : `${counts.total} task(s): ${counts.inProgress} in progress, ${counts.pending} pending, ${counts.completed} completed`,
+        message:
+          summaries.length === 0
+            ? 'No tasks'
+            : `${counts.total} task(s): ${counts.inProgress} in progress, ${counts.pending} pending, ${counts.completed} completed`,
       };
     },
   };
@@ -338,8 +348,8 @@ function formatTaskForOutput(task: Task): Record<string, unknown> {
     activeForm: task.activeForm,
     status: task.status,
     owner: task.owner || null,
-    blockedBy: task.blockedBy.map(b => b.replace('task-', '')),
-    blocks: task.blocks.map(b => b.replace('task-', '')),
+    blockedBy: task.blockedBy.map((b) => b.replace('task-', '')),
+    blocks: task.blocks.map((b) => b.replace('task-', '')),
     metadata: task.metadata,
     createdAt: new Date(task.createdAt).toISOString(),
     updatedAt: new Date(task.updatedAt).toISOString(),

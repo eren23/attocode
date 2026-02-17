@@ -1,6 +1,6 @@
 /**
  * Lesson 3: Permission System
- * 
+ *
  * Controls what operations the agent can perform.
  */
 
@@ -11,7 +11,7 @@ import type {
   PermissionResponse,
   PermissionMode,
   DangerLevel,
-  DangerPattern
+  DangerPattern,
 } from './types.js';
 import { DANGEROUS_PATTERNS } from './types.js';
 import { isReadOnlyBashCommand } from '../integrations/safety/bash-policy.js';
@@ -32,9 +32,9 @@ class StrictPermissionChecker implements PermissionChecker {
     if (request.dangerLevel === 'moderate') {
       return { granted: true };
     }
-    return { 
-      granted: false, 
-      reason: `Operation blocked in strict mode: ${request.operation}` 
+    return {
+      granted: false,
+      reason: `Operation blocked in strict mode: ${request.operation}`,
     };
   }
 }
@@ -58,16 +58,16 @@ class InteractivePermissionChecker implements PermissionChecker {
     }
 
     // Prompt user
-    const emoji = request.dangerLevel === 'critical' ? '🚨' : 
-                  request.dangerLevel === 'dangerous' ? '⚠️' : '⚡';
-    
+    const emoji =
+      request.dangerLevel === 'critical' ? '🚨' : request.dangerLevel === 'dangerous' ? '⚠️' : '⚡';
+
     logger.info(`\n${emoji} Permission required (${request.dangerLevel}):`);
     logger.info(`   Tool: ${request.tool}`);
     logger.info(`   Operation: ${request.operation}`);
     logger.info(`   Target: ${request.target}`);
-    
+
     const answer = await this.prompt('Allow? (y/n/always/never): ');
-    
+
     let granted = false;
     let remember = false;
 
@@ -101,8 +101,8 @@ class InteractivePermissionChecker implements PermissionChecker {
       output: process.stdout,
     });
 
-    return new Promise(resolve => {
-      rl.question(question, answer => {
+    return new Promise((resolve) => {
+      rl.question(question, (answer) => {
         rl.close();
         resolve(answer);
       });
@@ -259,7 +259,7 @@ export class TUIPermissionChecker implements PermissionChecker {
     if (!this.bridge.isConnected() && request.dangerLevel !== 'safe') {
       return {
         granted: false,
-        reason: 'Approval system not ready - TUI not connected'
+        reason: 'Approval system not ready - TUI not connected',
       };
     }
 

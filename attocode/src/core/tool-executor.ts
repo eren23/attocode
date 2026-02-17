@@ -7,11 +7,7 @@
  * and actual tool execution.
  */
 
-import type {
-  Message,
-  ToolCall,
-  ToolResult,
-} from '../types.js';
+import type { Message, ToolCall, ToolResult } from '../types.js';
 
 import type { AgentContext } from './types.js';
 
@@ -26,25 +22,34 @@ import { createComponentLogger } from '../integrations/utilities/logger.js';
  * These tools don't modify state, so running them concurrently is safe.
  */
 export const PARALLELIZABLE_TOOLS = new Set([
-  'read_file', 'glob', 'grep', 'list_files', 'search_files',
-  'search_code', 'get_file_info',
-  'task_create', 'task_update', 'task_get', 'task_list',
+  'read_file',
+  'glob',
+  'grep',
+  'list_files',
+  'search_files',
+  'search_code',
+  'get_file_info',
+  'task_create',
+  'task_update',
+  'task_get',
+  'task_list',
 ]);
 
 /**
  * Tools that can run in parallel IF they target different files.
  * write_file and edit_file on different paths are safe to parallelize.
  */
-export const CONDITIONALLY_PARALLEL_TOOLS = new Set([
-  'write_file', 'edit_file',
-]);
+export const CONDITIONALLY_PARALLEL_TOOLS = new Set(['write_file', 'edit_file']);
 
 /**
  * Extract the target file path from a tool call's arguments.
  * Returns null if no file path can be determined.
  */
-export function extractToolFilePath(toolCall: { name: string; [key: string]: unknown }): string | null {
-  const args = (toolCall as Record<string, unknown>);
+export function extractToolFilePath(toolCall: {
+  name: string;
+  [key: string]: unknown;
+}): string | null {
+  const args = toolCall as Record<string, unknown>;
   for (const key of ['path', 'file_path', 'filename', 'file']) {
     if (typeof args[key] === 'string') return args[key] as string;
   }
@@ -67,10 +72,7 @@ export function extractToolFilePath(toolCall: { name: string; [key: string]: unk
  * Check if a conditionally-parallel tool call conflicts with any tool
  * in the current accumulator (same file path).
  */
-function hasFileConflict<T extends { name: string }>(
-  toolCall: T,
-  accumulator: T[],
-): boolean {
+function hasFileConflict<T extends { name: string }>(toolCall: T, accumulator: T[]): boolean {
   const path = extractToolFilePath(toolCall as T & Record<string, unknown>);
   if (!path) return true;
 
@@ -137,7 +139,8 @@ export async function executeToolCalls(
   const results: ToolResult[] = [];
 
   // Circuit breaker state
-  const circuitBreakerThreshold = ctx.economics?.getBudget()?.tuning?.circuitBreakerFailureThreshold ?? 5;
+  const circuitBreakerThreshold =
+    ctx.economics?.getBudget()?.tuning?.circuitBreakerFailureThreshold ?? 5;
   let consecutiveFailures = 0;
   let circuitBroken = false;
 
@@ -161,7 +164,7 @@ export async function executeToolCalls(
     if (batch.length > 1 && PARALLELIZABLE_TOOLS.has(batch[0].name)) {
       // Execute parallelizable batch concurrently
       const batchResults = await Promise.allSettled(
-        batch.map(tc => executeSingleToolCall(tc, ctx))
+        batch.map((tc) => executeSingleToolCall(tc, ctx)),
       );
       let batchFailures = 0;
       for (const result of batchResults) {
@@ -171,7 +174,8 @@ export async function executeToolCalls(
             batchFailures++;
           }
         } else {
-          const error = result.reason instanceof Error ? result.reason.message : String(result.reason);
+          const error =
+            result.reason instanceof Error ? result.reason.message : String(result.reason);
           results.push({ callId: 'unknown', result: `Error: ${error}`, error });
           batchFailures++;
         }
@@ -266,7 +270,12 @@ export async function executeSingleToolCall(
     ctx.emit({ type: 'tool.blocked', tool: toolCall.name, reason: errorMsg });
     ctx.traceCollector?.record({
       type: 'tool.end',
-      data: { executionId, status: 'error', error: new Error(errorMsg), durationMs: Date.now() - startTime },
+      data: {
+        executionId,
+        status: 'error',
+        error: new Error(errorMsg),
+        durationMs: Date.now() - startTime,
+      },
     });
     ctx.observability?.tracer?.endSpan(spanId);
     return { callId: toolCall.id, result: `Error: ${errorMsg}`, error: errorMsg };
@@ -286,12 +295,17 @@ export async function executeSingleToolCall(
     // =====================================================================
     // PLAN MODE WRITE INTERCEPTION
     // =====================================================================
-    if (ctx.modeManager.shouldInterceptTool(toolCall.name, toolCall.arguments as Record<string, unknown>)) {
+    if (
+      ctx.modeManager.shouldInterceptTool(
+        toolCall.name,
+        toolCall.arguments as Record<string, unknown>,
+      )
+    ) {
       const reason = extractChangeReasoning(toolCall, ctx.state.messages);
 
       // Start a new plan if needed
       if (!ctx.pendingPlanManager.hasPendingPlan()) {
-        const lastUserMsg = [...ctx.state.messages].reverse().find(m => m.role === 'user');
+        const lastUserMsg = [...ctx.state.messages].reverse().find((m) => m.role === 'user');
         const task = typeof lastUserMsg?.content === 'string' ? lastUserMsg.content : 'Plan';
         ctx.pendingPlanManager.startPlan(task);
       }
@@ -301,7 +315,7 @@ export async function executeSingleToolCall(
         toolCall.name,
         toolCall.arguments as Record<string, unknown>,
         reason,
-        toolCall.id
+        toolCall.id,
       );
 
       // Emit event for UI
@@ -309,11 +323,15 @@ export async function executeSingleToolCall(
         type: 'plan.change.queued',
         tool: toolCall.name,
         changeId: change?.id,
-        summary: formatToolArgsForPlan(toolCall.name, toolCall.arguments as Record<string, unknown>),
+        summary: formatToolArgsForPlan(
+          toolCall.name,
+          toolCall.arguments as Record<string, unknown>,
+        ),
       });
 
       // Return a message indicating the change was queued
-      const queueMessage = `[PLAN MODE] Change queued for approval:\n` +
+      const queueMessage =
+        `[PLAN MODE] Change queued for approval:\n` +
         `Tool: ${toolCall.name}\n` +
         `${formatToolArgsForPlan(toolCall.name, toolCall.arguments as Record<string, unknown>)}\n` +
         `Use /show-plan to see all pending changes, /approve to execute, /reject to discard.`;
@@ -329,7 +347,7 @@ export async function executeSingleToolCall(
     if (ctx.executionPolicy) {
       const policyContext = {
         messages: ctx.state.messages,
-        currentMessage: ctx.state.messages.find(m => m.role === 'user')?.content,
+        currentMessage: ctx.state.messages.find((m) => m.role === 'user')?.content,
         previousToolCalls: [],
       };
 
@@ -347,9 +365,12 @@ export async function executeSingleToolCall(
       ctx.emit({
         type: 'decision.tool',
         tool: toolCall.name,
-        decision: evaluation.policy === 'forbidden' ? 'blocked'
-          : evaluation.policy === 'prompt' ? 'prompted'
-          : 'allowed',
+        decision:
+          evaluation.policy === 'forbidden'
+            ? 'blocked'
+            : evaluation.policy === 'prompt'
+              ? 'prompted'
+              : 'allowed',
         policyMatch: evaluation.reason,
       });
 
@@ -359,9 +380,12 @@ export async function executeSingleToolCall(
         data: {
           type: 'policy',
           decision: `Tool ${toolCall.name}: ${evaluation.policy}`,
-          outcome: evaluation.policy === 'forbidden' ? 'blocked'
-            : evaluation.policy === 'prompt' ? 'deferred'
-            : 'allowed',
+          outcome:
+            evaluation.policy === 'forbidden'
+              ? 'blocked'
+              : evaluation.policy === 'prompt'
+                ? 'deferred'
+                : 'allowed',
           reasoning: evaluation.reason,
           factors: [
             { name: 'policy', value: evaluation.policy },
@@ -387,10 +411,7 @@ export async function executeSingleToolCall(
         const humanInLoop = ctx.safety?.humanInLoop;
         if (humanInLoop) {
           const approval = await withPausedDuration(ctx, () =>
-            humanInLoop.requestApproval(
-              toolCall,
-              `Policy requires approval: ${evaluation.reason}`
-            )
+            humanInLoop.requestApproval(toolCall, `Policy requires approval: ${evaluation.reason}`),
           );
 
           if (!approval.approved) {
@@ -433,11 +454,9 @@ export async function executeSingleToolCall(
     if (ctx.safety) {
       const safety = ctx.safety;
       const validation = await withPausedDuration(ctx, () =>
-        safety.validateAndApprove(
-          toolCall,
-          `Executing tool: ${toolCall.name}`,
-          { skipHumanApproval: policyApprovedByUser }
-        )
+        safety.validateAndApprove(toolCall, `Executing tool: ${toolCall.name}`, {
+          skipHumanApproval: policyApprovedByUser,
+        }),
       );
 
       if (!validation.allowed) {
@@ -495,7 +514,7 @@ export async function executeSingleToolCall(
           const existingClaim = ctx.blackboard.getClaim(filePath);
           throw new Error(
             `File "${filePath}" is being edited by another agent (${existingClaim?.agentId || 'unknown'}). ` +
-            `Wait for the other agent to complete or choose a different file.`
+              `Wait for the other agent to complete or choose a different file.`,
           );
         }
       }
@@ -509,10 +528,17 @@ export async function executeSingleToolCall(
         const cached = ctx.fileCache.get(readPath);
         if (cached !== undefined) {
           const lines = cached.split('\n').length;
-          const cacheResult = { success: true, output: cached, metadata: { lines, bytes: cached.length, cached: true } };
+          const cacheResult = {
+            success: true,
+            output: cached,
+            metadata: { lines, bytes: cached.length, cached: true },
+          };
 
           const duration = Date.now() - startTime;
-          ctx.traceCollector?.record({ type: 'tool.end', data: { executionId, status: 'success', result: cacheResult, durationMs: duration } });
+          ctx.traceCollector?.record({
+            type: 'tool.end',
+            data: { executionId, status: 'success', result: cacheResult, durationMs: duration },
+          });
           ctx.observability?.metrics?.recordToolCall(toolCall.name, duration, true);
           ctx.state.metrics.toolCalls++;
           ctx.emit({ type: 'tool.complete', tool: toolCall.name, result: cacheResult });
@@ -536,14 +562,14 @@ export async function executeSingleToolCall(
       const subagentConfig = ctx.config.subagent;
       const hasSubagentConfig = subagentConfig !== false && subagentConfig !== undefined;
       const subagentTimeout = hasSubagentConfig
-        ? (subagentConfig as { defaultTimeout?: number }).defaultTimeout ?? 600000
+        ? ((subagentConfig as { defaultTimeout?: number }).defaultTimeout ?? 600000)
         : 600000;
 
       const toolTimeout = isSubagentTool ? subagentTimeout + 30000 : undefined;
 
       result = await ctx.safety.sandbox.executeWithLimits(
         () => tool.execute(toolCall.arguments),
-        toolTimeout
+        toolTimeout,
       );
     } else {
       // No sandbox — apply a safety timeout to prevent indefinite hangs
@@ -551,9 +577,15 @@ export async function executeSingleToolCall(
       result = await Promise.race([
         tool.execute(toolCall.arguments),
         new Promise<never>((_, reject) =>
-          setTimeout(() => reject(new Error(
-            `Tool '${toolCall.name}' timed out after ${DEFAULT_TOOL_TIMEOUT / 1000}s (no sandbox)`
-          )), DEFAULT_TOOL_TIMEOUT)
+          setTimeout(
+            () =>
+              reject(
+                new Error(
+                  `Tool '${toolCall.name}' timed out after ${DEFAULT_TOOL_TIMEOUT / 1000}s (no sandbox)`,
+                ),
+              ),
+            DEFAULT_TOOL_TIMEOUT,
+          ),
         ),
       ]);
     }
@@ -587,7 +619,12 @@ export async function executeSingleToolCall(
         if (resultObj?.success && typeof resultObj.output === 'string') {
           ctx.fileCache.set(filePath, resultObj.output);
         }
-      } else if ((toolCall.name === 'write_file' || toolCall.name === 'edit_file' || toolCall.name === 'undo_file_change') && filePath) {
+      } else if (
+        (toolCall.name === 'write_file' ||
+          toolCall.name === 'edit_file' ||
+          toolCall.name === 'undo_file_change') &&
+        filePath
+      ) {
         ctx.fileCache.invalidate(filePath);
       }
     }
@@ -630,7 +667,10 @@ export async function executeSingleToolCall(
       type: 'tool.end',
       data: {
         executionId,
-        status: error.message.includes('Blocked') || error.message.includes('Policy') ? 'blocked' : 'error',
+        status:
+          error.message.includes('Blocked') || error.message.includes('Policy')
+            ? 'blocked'
+            : 'error',
         error,
         durationMs: duration,
       },
@@ -660,7 +700,9 @@ export async function executeSingleToolCall(
     // Self-improvement: enhance error message with diagnosis
     if (ctx.selfImprovement) {
       const enhanced = ctx.selfImprovement.enhanceErrorMessage(
-        toolCall.name, error.message, toolCall.arguments as Record<string, unknown>
+        toolCall.name,
+        error.message,
+        toolCall.arguments as Record<string, unknown>,
       );
       ctx.emit({ type: 'tool.blocked', tool: toolCall.name, reason: enhanced });
       return { callId: toolCall.id, result: `Error: ${enhanced}`, error: enhanced };
@@ -698,11 +740,11 @@ export function summarizeToolResult(toolName: string, result: unknown): string {
   const resultStr = typeof result === 'string' ? result : JSON.stringify(result);
 
   if (toolName === 'list_files' || toolName === 'glob') {
-    const lines = resultStr.split('\n').filter(l => l.trim());
+    const lines = resultStr.split('\n').filter((l) => l.trim());
     return `Found ${lines.length} file${lines.length !== 1 ? 's' : ''}`;
   }
   if (toolName === 'bash' || toolName === 'execute_command') {
-    const lines = resultStr.split('\n').filter(l => l.trim());
+    const lines = resultStr.split('\n').filter((l) => l.trim());
     if (resultStr.includes('exit code: 0') || !resultStr.includes('exit code:')) {
       return lines.length > 1 ? `Success (${lines.length} lines)` : 'Success';
     }
@@ -760,10 +802,10 @@ export function formatToolArgsForPlan(toolName: string, args: Record<string, unk
  */
 export function extractChangeReasoning(
   toolCall: { name: string; arguments: unknown },
-  messages: Message[]
+  messages: Message[],
 ): string {
   const assistantMsgs = messages
-    .filter(m => m.role === 'assistant' && typeof m.content === 'string')
+    .filter((m) => m.role === 'assistant' && typeof m.content === 'string')
     .slice(-3)
     .reverse();
 
@@ -788,9 +830,9 @@ export function extractChangeReasoning(
     const path = String(args.path || args.file_path || '');
 
     if (path && content.toLowerCase().includes(path.toLowerCase().split('/').pop() || '')) {
-      const sentences = content.split(/[.!?\n]+/).filter(s =>
-        s.toLowerCase().includes(path.toLowerCase().split('/').pop() || '')
-      );
+      const sentences = content
+        .split(/[.!?\n]+/)
+        .filter((s) => s.toLowerCase().includes(path.toLowerCase().split('/').pop() || ''));
       if (sentences.length > 0) {
         const relevant = sentences.slice(0, 2).join('. ').trim();
         return relevant.length > 500 ? relevant.slice(0, 500) + '...' : relevant;
@@ -798,7 +840,7 @@ export function extractChangeReasoning(
     }
   }
 
-  const paragraphs = content.split(/\n\n+/).filter(p => p.trim().length > 20);
+  const paragraphs = content.split(/\n\n+/).filter((p) => p.trim().length > 20);
   if (paragraphs.length > 0) {
     const firstPara = paragraphs[0].trim();
     return firstPara.length > 500 ? firstPara.slice(0, 500) + '...' : firstPara;

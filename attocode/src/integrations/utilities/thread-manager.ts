@@ -150,11 +150,7 @@ export class ThreadManager {
   /**
    * Fork the current thread at the current point or a specific index.
    */
-  fork(options: {
-    name: string;
-    atIndex?: number;
-    description?: string;
-  }): Thread {
+  fork(options: { name: string; atIndex?: number; description?: string }): Thread {
     const parent = this.getActiveThread();
     const forkIndex = options.atIndex ?? parent.messages.length;
 
@@ -180,11 +176,7 @@ export class ThreadManager {
   /**
    * Merge a thread into another.
    */
-  merge(
-    sourceId: string,
-    targetId: string,
-    strategy: MergeStrategy = 'append'
-  ): boolean {
+  merge(sourceId: string, targetId: string, strategy: MergeStrategy = 'append'): boolean {
     const source = this.threads.get(sourceId);
     const target = this.threads.get(targetId);
 
@@ -195,7 +187,7 @@ export class ThreadManager {
     switch (strategy) {
       case 'append':
         // Append source messages after target
-        target.messages.push(...source.messages.map(m => ({ ...m })));
+        target.messages.push(...source.messages.map((m) => ({ ...m })));
         break;
 
       case 'interleave':
@@ -206,7 +198,7 @@ export class ThreadManager {
 
       case 'replace':
         // Replace target messages with source
-        target.messages = source.messages.map(m => ({ ...m }));
+        target.messages = source.messages.map((m) => ({ ...m }));
         break;
     }
 
@@ -308,11 +300,13 @@ export class ThreadManager {
   /**
    * Create a checkpoint of current state.
    */
-  createCheckpoint(options: {
-    label?: string;
-    agentState?: Partial<AgentState>;
-    metadata?: Record<string, unknown>;
-  } = {}): Checkpoint {
+  createCheckpoint(
+    options: {
+      label?: string;
+      agentState?: Partial<AgentState>;
+      metadata?: Record<string, unknown>;
+    } = {},
+  ): Checkpoint {
     const thread = this.getActiveThread();
 
     const checkpoint: Checkpoint = {
@@ -320,11 +314,13 @@ export class ThreadManager {
       threadId: thread.id,
       label: options.label,
       state: {
-        messages: thread.messages.map(m => ({ ...m })),
+        messages: thread.messages.map((m) => ({ ...m })),
         metrics: options.agentState?.metrics ?? this.emptyMetrics(),
         iteration: options.agentState?.iteration ?? 0,
         plan: options.agentState?.plan ? { ...options.agentState.plan } : undefined,
-        memoryContext: options.agentState?.memoryContext ? [...options.agentState.memoryContext] : undefined,
+        memoryContext: options.agentState?.memoryContext
+          ? [...options.agentState.memoryContext]
+          : undefined,
         custom: options.metadata,
       },
       createdAt: new Date(),
@@ -353,7 +349,7 @@ export class ThreadManager {
 
     // Restore messages
     const thread = this.getActiveThread();
-    thread.messages = checkpoint.state.messages.map(m => ({ ...m }));
+    thread.messages = checkpoint.state.messages.map((m) => ({ ...m }));
     thread.updatedAt = new Date();
 
     this.emit({ type: 'checkpoint.restored', checkpoint });
@@ -374,7 +370,7 @@ export class ThreadManager {
   getThreadCheckpoints(): Checkpoint[] {
     const threadId = this.activeThreadId;
     return Array.from(this.checkpoints.values())
-      .filter(cp => cp.threadId === threadId)
+      .filter((cp) => cp.threadId === threadId)
       .sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime());
   }
 
@@ -500,10 +496,7 @@ export function exportThread(thread: Thread): string {
 /**
  * Get thread lineage (parent chain).
  */
-export function getThreadLineage(
-  threads: Map<string, Thread>,
-  threadId: string
-): Thread[] {
+export function getThreadLineage(threads: Map<string, Thread>, threadId: string): Thread[] {
   const lineage: Thread[] = [];
   let current = threads.get(threadId);
 

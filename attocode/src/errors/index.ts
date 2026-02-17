@@ -84,7 +84,7 @@ export class AgentError extends Error {
     category: ErrorCategory,
     recoverable: boolean,
     context?: Record<string, unknown>,
-    cause?: Error
+    cause?: Error,
   ) {
     super(message);
     this.name = 'AgentError';
@@ -120,11 +120,7 @@ export class AgentError extends Error {
    * Format error for logging.
    */
   toLogString(): string {
-    const parts = [
-      `[${this.name}]`,
-      `(${this.category})`,
-      this.message,
-    ];
+    const parts = [`[${this.name}]`, `(${this.category})`, this.message];
 
     if (Object.keys(this.context).length > 0) {
       parts.push(`context=${JSON.stringify(this.context)}`);
@@ -151,7 +147,7 @@ export class ToolError extends AgentError {
     recoverable: boolean,
     toolName: string,
     context?: Record<string, unknown>,
-    cause?: Error
+    cause?: Error,
   ) {
     super(message, category, recoverable, { ...context, tool: toolName }, cause);
     this.name = 'ToolError';
@@ -163,14 +159,7 @@ export class ToolError extends AgentError {
    */
   static fromError(error: Error, toolName: string): ToolError {
     const { category, recoverable } = categorizeError(error);
-    return new ToolError(
-      error.message,
-      category,
-      recoverable,
-      toolName,
-      undefined,
-      error
-    );
+    return new ToolError(error.message, category, recoverable, toolName, undefined, error);
   }
 }
 
@@ -190,7 +179,7 @@ export class MCPError extends AgentError {
     recoverable: boolean,
     serverName: string,
     context?: Record<string, unknown>,
-    cause?: Error
+    cause?: Error,
   ) {
     super(message, category, recoverable, { ...context, server: serverName }, cause);
     this.name = 'MCPError';
@@ -206,7 +195,7 @@ export class MCPError extends AgentError {
       `Server not found: ${serverName}`,
       ErrorCategory.PERMANENT,
       false,
-      serverName
+      serverName,
     );
   }
 
@@ -218,7 +207,7 @@ export class MCPError extends AgentError {
       `Server not connected: ${serverName}`,
       ErrorCategory.DEPENDENCY,
       true, // May recover if server restarts
-      serverName
+      serverName,
     );
   }
 
@@ -226,13 +215,9 @@ export class MCPError extends AgentError {
    * Create error for request timeout.
    */
   static timeout(serverName: string, method: string): MCPError {
-    return new MCPError(
-      `Request timeout: ${method}`,
-      ErrorCategory.TRANSIENT,
-      true,
-      serverName,
-      { method }
-    );
+    return new MCPError(`Request timeout: ${method}`, ErrorCategory.TRANSIENT, true, serverName, {
+      method,
+    });
   }
 }
 
@@ -253,7 +238,7 @@ export class FileOperationError extends AgentError {
     path: string,
     operation: string,
     context?: Record<string, unknown>,
-    cause?: Error
+    cause?: Error,
   ) {
     super(message, category, recoverable, { ...context, path, operation }, cause);
     this.name = 'FileOperationError';
@@ -270,7 +255,7 @@ export class FileOperationError extends AgentError {
       ErrorCategory.PERMANENT,
       false,
       path,
-      operation
+      operation,
     );
   }
 
@@ -283,7 +268,7 @@ export class FileOperationError extends AgentError {
       ErrorCategory.PERMANENT,
       false,
       path,
-      operation
+      operation,
     );
   }
 
@@ -296,7 +281,7 @@ export class FileOperationError extends AgentError {
       ErrorCategory.TRANSIENT,
       true,
       path,
-      operation
+      operation,
     );
   }
 }
@@ -317,7 +302,7 @@ export class ProviderError extends AgentError {
     recoverable: boolean,
     providerName: string,
     context?: Record<string, unknown>,
-    cause?: Error
+    cause?: Error,
   ) {
     super(message, category, recoverable, { ...context, provider: providerName }, cause);
     this.name = 'ProviderError';
@@ -334,7 +319,7 @@ export class ProviderError extends AgentError {
       ErrorCategory.RATE_LIMITED,
       true,
       providerName,
-      { retryAfter }
+      { retryAfter },
     );
   }
 
@@ -346,7 +331,7 @@ export class ProviderError extends AgentError {
       `Authentication failed for ${providerName}`,
       ErrorCategory.PERMANENT,
       false,
-      providerName
+      providerName,
     );
   }
 
@@ -359,7 +344,7 @@ export class ProviderError extends AgentError {
       ErrorCategory.TRANSIENT,
       true,
       providerName,
-      { statusCode }
+      { statusCode },
     );
   }
 }
@@ -371,11 +356,7 @@ export class ValidationError extends AgentError {
   /** Field(s) that failed validation */
   readonly fields?: string[];
 
-  constructor(
-    message: string,
-    fields?: string[],
-    context?: Record<string, unknown>
-  ) {
+  constructor(message: string, fields?: string[], context?: Record<string, unknown>) {
     super(message, ErrorCategory.VALIDATION, false, { ...context, fields });
     this.name = 'ValidationError';
     this.fields = fields;
@@ -384,13 +365,12 @@ export class ValidationError extends AgentError {
   /**
    * Create error from Zod validation result.
    */
-  static fromZodError(error: { issues: Array<{ path: (string | number)[]; message: string }> }): ValidationError {
-    const fields = error.issues.map(i => i.path.join('.'));
-    const messages = error.issues.map(i => `${i.path.join('.')}: ${i.message}`);
-    return new ValidationError(
-      `Validation failed: ${messages.join(', ')}`,
-      fields
-    );
+  static fromZodError(error: {
+    issues: Array<{ path: (string | number)[]; message: string }>;
+  }): ValidationError {
+    const fields = error.issues.map((i) => i.path.join('.'));
+    const messages = error.issues.map((i) => `${i.path.join('.')}: ${i.message}`);
+    return new ValidationError(`Validation failed: ${messages.join(', ')}`, fields);
   }
 }
 
@@ -425,7 +405,7 @@ export class ResourceError extends AgentError {
     message: string,
     resourceType: 'memory' | 'cpu' | 'time' | 'tokens' | 'concurrent',
     usage?: number,
-    limit?: number
+    limit?: number,
   ) {
     super(message, ErrorCategory.RESOURCE, false, { resourceType, usage, limit });
     this.name = 'ResourceError';
@@ -442,7 +422,7 @@ export class ResourceError extends AgentError {
       `Memory limit exceeded: ${usage}MB / ${limit}MB`,
       'memory',
       usage,
-      limit
+      limit,
     );
   }
 
@@ -454,7 +434,7 @@ export class ResourceError extends AgentError {
       `Time limit exceeded: ${elapsed}ms / ${limit}ms`,
       'time',
       elapsed,
-      limit
+      limit,
     );
   }
 
@@ -462,12 +442,7 @@ export class ResourceError extends AgentError {
    * Create error for token limit exceeded.
    */
   static tokenLimitExceeded(used: number, limit: number): ResourceError {
-    return new ResourceError(
-      `Token limit exceeded: ${used} / ${limit}`,
-      'tokens',
-      used,
-      limit
-    );
+    return new ResourceError(`Token limit exceeded: ${used} / ${limit}`, 'tokens', used, limit);
   }
 }
 

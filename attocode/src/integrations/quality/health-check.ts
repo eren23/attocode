@@ -151,7 +151,11 @@ export class HealthChecker {
   /**
    * Register a health check.
    */
-  register(name: string, check: HealthCheckFn, options?: Partial<Omit<HealthCheckConfig, 'name' | 'check'>>): void {
+  register(
+    name: string,
+    check: HealthCheckFn,
+    options?: Partial<Omit<HealthCheckConfig, 'name' | 'check'>>,
+  ): void {
     this.checks.set(name, {
       name,
       check,
@@ -193,7 +197,7 @@ export class HealthChecker {
       const healthy = await Promise.race([
         config.check(),
         new Promise<never>((_, reject) =>
-          setTimeout(() => reject(new Error('Health check timeout')), config.timeout)
+          setTimeout(() => reject(new Error('Health check timeout')), config.timeout),
         ),
       ]);
 
@@ -216,7 +220,12 @@ export class HealthChecker {
     // Check for status change
     const previous = this.lastResults.get(name);
     if (previous?.healthy !== result.healthy) {
-      this.emit({ type: 'status.changed', name, healthy: result.healthy, previous: previous?.healthy });
+      this.emit({
+        type: 'status.changed',
+        name,
+        healthy: result.healthy,
+        previous: previous?.healthy,
+      });
       this.config.onStatusChange(name, result.healthy, previous?.healthy);
     }
 
@@ -236,7 +245,7 @@ export class HealthChecker {
     let results: HealthCheckResult[];
 
     if (this.config.parallel) {
-      results = await Promise.all(checkNames.map(name => this.check(name)));
+      results = await Promise.all(checkNames.map((name) => this.check(name)));
     } else {
       results = [];
       for (const name of checkNames) {
@@ -244,7 +253,7 @@ export class HealthChecker {
       }
     }
 
-    const healthyCount = results.filter(r => r.healthy).length;
+    const healthyCount = results.filter((r) => r.healthy).length;
 
     const report: HealthReport = {
       healthy: healthyCount === results.length,
@@ -307,13 +316,13 @@ export class HealthChecker {
   startPeriodicChecks(intervalMs: number): void {
     this.stopPeriodicChecks();
     this.periodicInterval = setInterval(() => {
-      this.checkAll().catch(err => {
+      this.checkAll().catch((err) => {
         logger.error('Periodic health check failed', { error: String(err) });
       });
     }, intervalMs);
 
     // Run initial check
-    this.checkAll().catch(err => {
+    this.checkAll().catch((err) => {
       logger.error('Initial health check failed', { error: String(err) });
     });
   }
@@ -385,7 +394,7 @@ export function createHealthChecker(config?: HealthCheckerConfig): HealthChecker
  */
 export function createProviderHealthCheck(
   provider: { chat: (messages: Array<{ role: string; content: string }>) => Promise<unknown> },
-  providerName: string = 'llm'
+  providerName: string = 'llm',
 ): HealthCheckConfig {
   return {
     name: providerName,
@@ -394,9 +403,7 @@ export function createProviderHealthCheck(
     critical: true,
     check: async () => {
       // Send minimal request to verify provider is responsive
-      const response = await provider.chat([
-        { role: 'user', content: 'ping' },
-      ]);
+      const response = await provider.chat([{ role: 'user', content: 'ping' }]);
       return response !== null && response !== undefined;
     },
   };
@@ -405,9 +412,7 @@ export function createProviderHealthCheck(
 /**
  * Create a health check for file system access.
  */
-export function createFileSystemHealthCheck(
-  path: string = '/tmp'
-): HealthCheckConfig {
+export function createFileSystemHealthCheck(path: string = '/tmp'): HealthCheckConfig {
   return {
     name: 'filesystem',
     description: 'File system write access check',
@@ -433,9 +438,7 @@ export function createFileSystemHealthCheck(
 /**
  * Create a health check for SQLite database.
  */
-export function createSQLiteHealthCheck(
-  dbPath: string
-): HealthCheckConfig {
+export function createSQLiteHealthCheck(dbPath: string): HealthCheckConfig {
   return {
     name: 'sqlite',
     description: `SQLite database health check for ${dbPath}`,
@@ -479,7 +482,7 @@ export function createMCPHealthCheck(
   mcpClient: {
     listServers: () => Array<{ name: string; status: string }>;
   },
-  serverName?: string
+  serverName?: string,
 ): HealthCheckConfig {
   return {
     name: serverName ? `mcp:${serverName}` : 'mcp',
@@ -492,12 +495,12 @@ export function createMCPHealthCheck(
       const servers = mcpClient.listServers();
 
       if (serverName) {
-        const server = servers.find(s => s.name === serverName);
+        const server = servers.find((s) => s.name === serverName);
         return server?.status === 'connected';
       }
 
       // At least one server should be connected
-      return servers.some(s => s.status === 'connected');
+      return servers.some((s) => s.status === 'connected');
     },
   };
 }
@@ -506,7 +509,7 @@ export function createMCPHealthCheck(
  * Create a health check for network connectivity.
  */
 export function createNetworkHealthCheck(
-  testUrl: string = 'https://api.anthropic.com'
+  testUrl: string = 'https://api.anthropic.com',
 ): HealthCheckConfig {
   return {
     name: 'network',
@@ -565,7 +568,7 @@ export function healthReportToJSON(report: HealthReport): Record<string, unknown
     totalCount: report.totalCount,
     timestamp: report.timestamp.toISOString(),
     totalLatencyMs: report.totalLatencyMs,
-    checks: report.checks.map(check => ({
+    checks: report.checks.map((check) => ({
       name: check.name,
       status: check.healthy ? 'pass' : 'fail',
       latencyMs: check.latencyMs,

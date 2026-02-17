@@ -41,14 +41,14 @@
  * Status of the interactive plan.
  */
 export type PlanStatus =
-  | 'draft'        // Being drafted, not yet approved
-  | 'discussing'   // Under discussion/refinement
-  | 'approved'     // Approved, ready to execute
-  | 'executing'    // Currently executing
-  | 'paused'       // Paused at decision point
-  | 'completed'    // All steps completed
-  | 'failed'       // Execution failed
-  | 'cancelled';   // User cancelled
+  | 'draft' // Being drafted, not yet approved
+  | 'discussing' // Under discussion/refinement
+  | 'approved' // Approved, ready to execute
+  | 'executing' // Currently executing
+  | 'paused' // Paused at decision point
+  | 'completed' // All steps completed
+  | 'failed' // Execution failed
+  | 'cancelled'; // User cancelled
 
 /**
  * A step in the plan.
@@ -212,7 +212,7 @@ export interface ParsedEdit {
  */
 export type PlannerLLMCall = (
   systemPrompt: string,
-  userMessage: string
+  userMessage: string,
 ) => Promise<{ content: string }>;
 
 /**
@@ -400,9 +400,7 @@ export class InteractivePlanner {
         .map((s) => `${s.number}. ${s.description} [${s.status}]`)
         .join('\n');
 
-      const prompt = EDIT_PARSE_PROMPT
-        .replace('{STEPS}', stepsText)
-        .replace('{COMMAND}', command);
+      const prompt = EDIT_PARSE_PROMPT.replace('{STEPS}', stepsText).replace('{COMMAND}', command);
 
       const response = await llmCall(prompt, command);
       const parsed = this.parseEditResponse(response.content, command);
@@ -545,9 +543,10 @@ export class InteractivePlanner {
   private applyEdit(edit: EditCommand): void {
     if (!this.plan) return;
 
-    const targetIndex = typeof edit.target === 'number'
-      ? edit.target - 1
-      : this.plan.steps.findIndex((s) => s.id === edit.target);
+    const targetIndex =
+      typeof edit.target === 'number'
+        ? edit.target - 1
+        : this.plan.steps.findIndex((s) => s.id === edit.target);
 
     switch (edit.type) {
       case 'skip': {
@@ -890,7 +889,7 @@ export class InteractivePlanner {
  * Create an interactive planner.
  */
 export function createInteractivePlanner(
-  config: InteractivePlannerConfig = {}
+  config: InteractivePlannerConfig = {},
 ): InteractivePlanner {
   return new InteractivePlanner(config);
 }
@@ -903,12 +902,7 @@ export function createInteractivePlanner(
  * Format plan for display.
  */
 export function formatPlan(plan: InteractivePlan): string {
-  const lines = [
-    `Plan: ${plan.goal}`,
-    `Status: ${plan.status}`,
-    `Steps: ${plan.steps.length}`,
-    '',
-  ];
+  const lines = [`Plan: ${plan.goal}`, `Status: ${plan.status}`, `Steps: ${plan.steps.length}`, ''];
 
   if (plan.reasoning) {
     lines.push(`Reasoning: ${plan.reasoning}`);

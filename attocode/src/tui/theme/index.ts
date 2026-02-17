@@ -39,7 +39,7 @@ export const darkColors: ThemeColors = {
   userMessage: '#61afef',
   assistantMessage: '#98c379',
   systemMessage: '#5c6370',
-  toolMessage: '#56b6c2',  // Cyan for tools (vibrant, original style)
+  toolMessage: '#56b6c2', // Cyan for tools (vibrant, original style)
 
   // Code colors
   codeBackground: '#21252b',
@@ -91,7 +91,7 @@ export const lightColors: ThemeColors = {
   userMessage: '#4078f2',
   assistantMessage: '#50a14f',
   systemMessage: '#a0a1a7',
-  toolMessage: '#0184bc',  // Cyan for tools (vibrant, readable on light bg)
+  toolMessage: '#0184bc', // Cyan for tools (vibrant, readable on light bg)
 
   // Code colors
   codeBackground: '#f0f0f0',
@@ -237,15 +237,15 @@ export const defaultThemeContext: ThemeContextValue = {
 export function hexToAnsi(hex: string): string {
   // Simple mapping for common colors
   const colorMap: Record<string, string> = {
-    '#61afef': '\x1b[34m',   // blue
-    '#98c379': '\x1b[32m',   // green
-    '#c678dd': '\x1b[35m',   // magenta
-    '#e06c75': '\x1b[31m',   // red
-    '#e5c07b': '\x1b[33m',   // yellow
-    '#56b6c2': '\x1b[36m',   // cyan
-    '#abb2bf': '\x1b[37m',   // white/gray
-    '#5c6370': '\x1b[90m',   // bright black/gray
-    '#282c34': '\x1b[40m',   // bg black
+    '#61afef': '\x1b[34m', // blue
+    '#98c379': '\x1b[32m', // green
+    '#c678dd': '\x1b[35m', // magenta
+    '#e06c75': '\x1b[31m', // red
+    '#e5c07b': '\x1b[33m', // yellow
+    '#56b6c2': '\x1b[36m', // cyan
+    '#abb2bf': '\x1b[37m', // white/gray
+    '#5c6370': '\x1b[90m', // bright black/gray
+    '#282c34': '\x1b[40m', // bg black
   };
 
   return colorMap[hex.toLowerCase()] ?? '\x1b[37m';

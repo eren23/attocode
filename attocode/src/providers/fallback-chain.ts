@@ -168,10 +168,7 @@ export class FallbackChain implements LLMProviderWithTools {
    * Send a chat request, falling back through providers on failure.
    */
   async chat(messages: Message[], options?: ChatOptions): Promise<ChatResponse> {
-    return this.executeWithFallback(
-      (provider) => provider.chat(messages, options),
-      'chat'
-    );
+    return this.executeWithFallback((provider) => provider.chat(messages, options), 'chat');
   }
 
   /**
@@ -179,22 +176,19 @@ export class FallbackChain implements LLMProviderWithTools {
    */
   async chatWithTools(
     messages: (Message | MessageWithContent)[],
-    options?: ChatOptionsWithTools
+    options?: ChatOptionsWithTools,
   ): Promise<ChatResponseWithTools> {
-    return this.executeWithFallback(
-      (provider) => {
-        if (this.supportsTools(provider)) {
-          return provider.chatWithTools(messages, options);
-        }
-        // Fall back to regular chat if provider doesn't support tools
-        const simpleMessages = messages.map(m => ({
-          role: m.role as 'user' | 'assistant' | 'system',
-          content: typeof m.content === 'string' ? m.content : '[complex content]',
-        }));
-        return provider.chat(simpleMessages, options);
-      },
-      'chatWithTools'
-    );
+    return this.executeWithFallback((provider) => {
+      if (this.supportsTools(provider)) {
+        return provider.chatWithTools(messages, options);
+      }
+      // Fall back to regular chat if provider doesn't support tools
+      const simpleMessages = messages.map((m) => ({
+        role: m.role as 'user' | 'assistant' | 'system',
+        content: typeof m.content === 'string' ? m.content : '[complex content]',
+      }));
+      return provider.chat(simpleMessages, options);
+    }, 'chatWithTools');
   }
 
   /**
@@ -255,7 +249,7 @@ export class FallbackChain implements LLMProviderWithTools {
 
   private async executeWithFallback<T>(
     operation: (provider: LLMProvider | LLMProviderWithTools) => Promise<T>,
-    operationName: string
+    operationName: string,
   ): Promise<T> {
     const errors: Array<{ provider: string; error: Error }> = [];
     const availableProviders = this.getAvailableProviders();
@@ -264,7 +258,7 @@ export class FallbackChain implements LLMProviderWithTools {
       throw new ProviderError(
         'No providers available in fallback chain (all in cooldown or unconfigured)',
         this.name,
-        'NOT_CONFIGURED'
+        'NOT_CONFIGURED',
       );
     }
 
@@ -309,9 +303,9 @@ export class FallbackChain implements LLMProviderWithTools {
 
     throw new ProviderError(
       `All providers in fallback chain failed for ${operationName}. ` +
-        `Errors: ${errors.map(e => `${e.provider}: ${e.error.message}`).join('; ')}`,
+        `Errors: ${errors.map((e) => `${e.provider}: ${e.error.message}`).join('; ')}`,
       this.name,
-      this.determineErrorCode(errors)
+      this.determineErrorCode(errors),
     );
   }
 
@@ -410,10 +404,11 @@ export class FallbackChain implements LLMProviderWithTools {
     }
 
     // Check if all errors are network-related
-    const allNetwork = errors.every(({ error }) =>
-      error.message.toLowerCase().includes('network') ||
-      error.message.toLowerCase().includes('timeout') ||
-      error.message.toLowerCase().includes('connection')
+    const allNetwork = errors.every(
+      ({ error }) =>
+        error.message.toLowerCase().includes('network') ||
+        error.message.toLowerCase().includes('timeout') ||
+        error.message.toLowerCase().includes('connection'),
     );
     if (allNetwork) return 'NETWORK_ERROR';
 
@@ -461,12 +456,12 @@ export function createFallbackChain(config: FallbackChainConfig): FallbackChain 
  * Automatically includes all configured providers sorted by priority.
  */
 export async function createFallbackChainFromRegistry(
-  overrides?: Partial<Omit<FallbackChainConfig, 'providers'>>
+  overrides?: Partial<Omit<FallbackChainConfig, 'providers'>>,
 ): Promise<FallbackChain> {
   // Dynamic import to avoid circular dependency
   const { listProviders, getProvider } = await import('./provider.js');
 
-  const available = listProviders().filter(p => p.configured);
+  const available = listProviders().filter((p) => p.configured);
   const chainedProviders: ChainedProvider[] = [];
 
   for (const { name, priority } of available) {
@@ -482,7 +477,7 @@ export async function createFallbackChainFromRegistry(
     throw new ProviderError(
       'No providers could be initialized for fallback chain',
       'fallback-chain',
-      'NOT_CONFIGURED'
+      'NOT_CONFIGURED',
     );
   }
 

@@ -52,7 +52,13 @@ export interface ResolvedConfig<T = Record<string, unknown>> {
  */
 export type ConfigEvent =
   | { type: 'config.loaded'; level: ConfigLevel; source: string }
-  | { type: 'config.changed'; key: string; oldValue: unknown; newValue: unknown; level: ConfigLevel }
+  | {
+      type: 'config.changed';
+      key: string;
+      oldValue: unknown;
+      newValue: unknown;
+      level: ConfigLevel;
+    }
   | { type: 'config.resolved'; config: ResolvedConfig }
   | { type: 'config.error'; level: ConfigLevel; error: string };
 
@@ -81,7 +87,9 @@ export interface HierarchicalConfigOptions {
 /**
  * Manages hierarchical configuration for the agent.
  */
-export class HierarchicalConfigManager<T extends Record<string, unknown> = Record<string, unknown>> {
+export class HierarchicalConfigManager<
+  T extends Record<string, unknown> = Record<string, unknown>,
+> {
   private levels: Map<ConfigLevel, LevelConfig> = new Map();
   private eventListeners: Set<ConfigEventListener> = new Set();
   private resolvedCache: ResolvedConfig<T> | null = null;
@@ -383,7 +391,11 @@ export class HierarchicalConfigManager<T extends Record<string, unknown> = Recor
       return true;
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
-      this.emit({ type: 'config.error', level, error: `Failed to save to ${filePath}: ${message}` });
+      this.emit({
+        type: 'config.error',
+        level,
+        error: `Failed to save to ${filePath}: ${message}`,
+      });
       return false;
     }
   }
@@ -457,7 +469,10 @@ export class HierarchicalConfigManager<T extends Record<string, unknown> = Recor
   /**
    * Get a diff between two levels.
    */
-  diff(level1: ConfigLevel, level2: ConfigLevel): { added: string[]; removed: string[]; changed: string[] } {
+  diff(
+    level1: ConfigLevel,
+    level2: ConfigLevel,
+  ): { added: string[]; removed: string[]; changed: string[] } {
     const config1 = this.levels.get(level1)?.values || {};
     const config2 = this.levels.get(level2)?.values || {};
 
@@ -534,7 +549,7 @@ export class HierarchicalConfigManager<T extends Record<string, unknown> = Recor
  */
 export function createHierarchicalConfig<T extends Record<string, unknown>>(
   defaults?: Partial<T>,
-  options?: HierarchicalConfigOptions
+  options?: HierarchicalConfigOptions,
 ): HierarchicalConfigManager<T> {
   return new HierarchicalConfigManager<T>(defaults, options);
 }
@@ -544,7 +559,7 @@ export function createHierarchicalConfig<T extends Record<string, unknown>>(
  */
 export function createAndLoadConfig<T extends Record<string, unknown>>(
   defaults?: Partial<T>,
-  workspaceDir?: string
+  workspaceDir?: string,
 ): HierarchicalConfigManager<T> {
   return new HierarchicalConfigManager<T>(defaults, {
     workspaceDir,

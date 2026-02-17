@@ -69,7 +69,7 @@ export interface DiagramResult {
  */
 export function generateDependencyDiagram(
   graph: FileDependencyGraph,
-  options: Partial<GraphVisualizationOptions> = {}
+  options: Partial<GraphVisualizationOptions> = {},
 ): DiagramResult {
   const opts: GraphVisualizationOptions = {
     format: options.format ?? 'mermaid',
@@ -100,7 +100,7 @@ export function generateDependencyDiagram(
 export function generateFocusedDiagram(
   graph: FileDependencyGraph,
   centerFile: string,
-  options: Partial<GraphVisualizationOptions> = {}
+  options: Partial<GraphVisualizationOptions> = {},
 ): DiagramResult {
   // Extract subgraph centered on the specified file
   const subgraph = extractSubgraph(graph, centerFile, 2); // 2 levels of depth
@@ -118,7 +118,7 @@ export function generateFocusedDiagram(
 export function generateReverseDiagram(
   reverseFileDependencyGraph: FileDependencyGraph,
   targetFile: string,
-  options: Partial<GraphVisualizationOptions> = {}
+  options: Partial<GraphVisualizationOptions> = {},
 ): DiagramResult {
   const subgraph = extractSubgraph(reverseFileDependencyGraph, targetFile, 2);
 
@@ -135,7 +135,7 @@ export function generateReverseDiagram(
 
 function generateMermaidDiagram(
   graph: FileDependencyGraph,
-  options: GraphVisualizationOptions
+  options: GraphVisualizationOptions,
 ): DiagramResult {
   const lines: string[] = [];
   const nodes = new Set<string>();
@@ -244,7 +244,7 @@ function generateMermaidDiagram(
 
 function generateDotDiagram(
   graph: FileDependencyGraph,
-  options: GraphVisualizationOptions
+  options: GraphVisualizationOptions,
 ): DiagramResult {
   const lines: string[] = [];
   const nodes = new Set<string>();
@@ -254,7 +254,9 @@ function generateDotDiagram(
   // Header
   lines.push('digraph dependencies {');
   lines.push('  // Graph settings');
-  lines.push(`  rankdir=${options.direction === 'LR' ? 'LR' : options.direction === 'RL' ? 'RL' : options.direction === 'BT' ? 'BT' : 'TB'};`);
+  lines.push(
+    `  rankdir=${options.direction === 'LR' ? 'LR' : options.direction === 'RL' ? 'RL' : options.direction === 'BT' ? 'BT' : 'TB'};`,
+  );
   lines.push('  node [shape=box, fontname="Arial", fontsize=10];');
   lines.push('  edge [fontname="Arial", fontsize=8];');
 
@@ -318,7 +320,7 @@ function generateDotDiagram(
 
 function generateAsciiDiagram(
   graph: FileDependencyGraph,
-  options: GraphVisualizationOptions
+  options: GraphVisualizationOptions,
 ): DiagramResult {
   const lines: string[] = [];
   const nodes = new Set<string>();
@@ -344,8 +346,8 @@ function generateAsciiDiagram(
 
     const prefix = isHighlighted ? '>>> ' : '    ';
     const depList = Array.from(deps)
-      .filter(dep => !options.includeExternal ? !dep.includes('node_modules') : true)
-      .map(dep => path.basename(dep));
+      .filter((dep) => (!options.includeExternal ? !dep.includes('node_modules') : true))
+      .map((dep) => path.basename(dep));
 
     if (depList.length === 0) {
       lines.push(`${prefix}${label} (no dependencies)`);
@@ -399,52 +401,52 @@ function sanitizeDotId(filePath: string): string {
  */
 function filterGraphEntries(
   graph: FileDependencyGraph,
-  options: GraphVisualizationOptions
+  options: GraphVisualizationOptions,
 ): Array<[string, Set<string>]> {
   const entries = Array.from(graph.entries());
 
-  return entries.filter(([file, deps]) => {
-    // Filter external dependencies
-    if (!options.includeExternal) {
-      if (file.includes('node_modules') || file.includes('vendor')) {
-        return false;
+  return entries
+    .filter(([file, deps]) => {
+      // Filter external dependencies
+      if (!options.includeExternal) {
+        if (file.includes('node_modules') || file.includes('vendor')) {
+          return false;
+        }
       }
-    }
 
-    // Filter by patterns
-    if (options.filterPatterns && options.filterPatterns.length > 0) {
-      const matchesPattern = options.filterPatterns.some(pattern => {
-        if (pattern.startsWith('*')) {
-          return file.endsWith(pattern.slice(1));
-        }
-        return file.includes(pattern);
-      });
-      if (!matchesPattern) return false;
-    }
-
-    return true;
-  }).map(([file, deps]) => {
-    // Also filter dependencies
-    const filteredDeps = new Set(
-      Array.from(deps).filter(dep => {
-        if (!options.includeExternal) {
-          if (dep.includes('node_modules') || dep.includes('vendor')) {
-            return false;
+      // Filter by patterns
+      if (options.filterPatterns && options.filterPatterns.length > 0) {
+        const matchesPattern = options.filterPatterns.some((pattern) => {
+          if (pattern.startsWith('*')) {
+            return file.endsWith(pattern.slice(1));
           }
-        }
-        return true;
-      })
-    );
-    return [file, filteredDeps] as [string, Set<string>];
-  });
+          return file.includes(pattern);
+        });
+        if (!matchesPattern) return false;
+      }
+
+      return true;
+    })
+    .map(([file, deps]) => {
+      // Also filter dependencies
+      const filteredDeps = new Set(
+        Array.from(deps).filter((dep) => {
+          if (!options.includeExternal) {
+            if (dep.includes('node_modules') || dep.includes('vendor')) {
+              return false;
+            }
+          }
+          return true;
+        }),
+      );
+      return [file, filteredDeps] as [string, Set<string>];
+    });
 }
 
 /**
  * Group files by their parent directory.
  */
-function groupByDirectory(
-  entries: Array<[string, Set<string>]>
-): Map<string, string[]> {
+function groupByDirectory(entries: Array<[string, Set<string>]>): Map<string, string[]> {
   const groups = new Map<string, string[]>();
 
   for (const [file, _deps] of entries) {
@@ -464,7 +466,7 @@ function groupByDirectory(
 function extractSubgraph(
   graph: FileDependencyGraph,
   centerFile: string,
-  depth: number
+  depth: number,
 ): FileDependencyGraph {
   const subgraph = new Map<string, Set<string>>();
   const visited = new Set<string>();
@@ -500,17 +502,21 @@ function extractSubgraph(
 /**
  * Create a configured diagram generator.
  */
-export function createGraphVisualizer(
-  defaultOptions: Partial<GraphVisualizationOptions> = {}
-) {
+export function createGraphVisualizer(defaultOptions: Partial<GraphVisualizationOptions> = {}) {
   return {
     generate: (graph: FileDependencyGraph, options?: Partial<GraphVisualizationOptions>) =>
       generateDependencyDiagram(graph, { ...defaultOptions, ...options }),
 
-    focused: (graph: FileDependencyGraph, centerFile: string, options?: Partial<GraphVisualizationOptions>) =>
-      generateFocusedDiagram(graph, centerFile, { ...defaultOptions, ...options }),
+    focused: (
+      graph: FileDependencyGraph,
+      centerFile: string,
+      options?: Partial<GraphVisualizationOptions>,
+    ) => generateFocusedDiagram(graph, centerFile, { ...defaultOptions, ...options }),
 
-    reverse: (graph: FileDependencyGraph, targetFile: string, options?: Partial<GraphVisualizationOptions>) =>
-      generateReverseDiagram(graph, targetFile, { ...defaultOptions, ...options }),
+    reverse: (
+      graph: FileDependencyGraph,
+      targetFile: string,
+      options?: Partial<GraphVisualizationOptions>,
+    ) => generateReverseDiagram(graph, targetFile, { ...defaultOptions, ...options }),
   };
 }

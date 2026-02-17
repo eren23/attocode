@@ -212,30 +212,27 @@ export class SubagentSupervisor {
    * Get all active handles.
    */
   getActive(): SubagentHandle[] {
-    return [...this.handles.values()].filter(h => h.isRunning());
+    return [...this.handles.values()].filter((h) => h.isRunning());
   }
 
   /**
    * Get all completed handles.
    */
   getCompleted(): SubagentHandle[] {
-    return [...this.handles.values()].filter(h => !h.isRunning());
+    return [...this.handles.values()].filter((h) => !h.isRunning());
   }
 
   /**
    * Wait for all handles to complete (or timeout).
    */
   async waitAll(timeoutMs?: number): Promise<SpawnResult[]> {
-    const promises = [...this.handles.values()].map(h => h.completion);
+    const promises = [...this.handles.values()].map((h) => h.completion);
 
     if (timeoutMs) {
       const timeout = new Promise<never>((_, reject) =>
         setTimeout(() => reject(new Error('Supervisor timeout')), timeoutMs),
       );
-      return Promise.race([
-        Promise.all(promises),
-        timeout.then(() => [] as SpawnResult[]),
-      ]);
+      return Promise.race([Promise.all(promises), timeout.then(() => [] as SpawnResult[])]);
     }
 
     return Promise.all(promises);
@@ -247,7 +244,7 @@ export class SubagentSupervisor {
   async waitAny(): Promise<{ handle: SubagentHandle; result: SpawnResult }> {
     const entries = [...this.handles.entries()];
     const racePromises = entries.map(([id, handle]) =>
-      handle.completion.then(result => ({ id, handle, result })),
+      handle.completion.then((result) => ({ id, handle, result })),
     );
     return Promise.race(racePromises);
   }
@@ -303,7 +300,10 @@ export class SubagentSupervisor {
       }
 
       // Check token budget
-      if (this.config.tokenBudgetWrapup > 0 && progress.tokensUsed > this.config.tokenBudgetWrapup) {
+      if (
+        this.config.tokenBudgetWrapup > 0 &&
+        progress.tokensUsed > this.config.tokenBudgetWrapup
+      ) {
         handle.requestWrapup(`Token usage exceeded ${this.config.tokenBudgetWrapup}`);
       }
     }
@@ -317,8 +317,6 @@ export class SubagentSupervisor {
 /**
  * Create a subagent supervisor.
  */
-export function createSubagentSupervisor(
-  config?: SubagentSupervisorConfig,
-): SubagentSupervisor {
+export function createSubagentSupervisor(config?: SubagentSupervisorConfig): SubagentSupervisor {
   return new SubagentSupervisor(config);
 }

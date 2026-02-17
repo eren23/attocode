@@ -105,13 +105,17 @@ export const ApprovalDialog = memo(function ApprovalDialog({
       {/* Tool name */}
       <Box marginTop={1} gap={1}>
         <Text color={colors.textMuted}>Tool:</Text>
-        <Text color="#DDA0DD" bold>{request.tool}</Text>
+        <Text color="#DDA0DD" bold>
+          {request.tool}
+        </Text>
       </Box>
 
       {/* Arguments */}
       <Box gap={1}>
         <Text color={colors.textMuted}>Args:</Text>
-        <Text color={colors.text} wrap="truncate">{argsDisplay}</Text>
+        <Text color={colors.text} wrap="truncate">
+          {argsDisplay}
+        </Text>
       </Box>
 
       {/* Context */}
@@ -129,20 +133,30 @@ export const ApprovalDialog = memo(function ApprovalDialog({
           <Box gap={1}>
             <Text color={colors.warning}>Deny reason:</Text>
             <Text color={colors.text}>{denyReason}</Text>
-            <Text color={colors.textMuted} dimColor>(Enter to confirm, Esc to cancel)</Text>
+            <Text color={colors.textMuted} dimColor>
+              (Enter to confirm, Esc to cancel)
+            </Text>
           </Box>
         ) : (
           <>
-            <Text color="#98FB98" bold>[Y]</Text>
+            <Text color="#98FB98" bold>
+              [Y]
+            </Text>
             <Text color={colors.text}>Approve</Text>
             <Text color={colors.textMuted}>|</Text>
-            <Text color="#87CEEB" bold>[A]</Text>
+            <Text color="#87CEEB" bold>
+              [A]
+            </Text>
             <Text color={colors.text}>Always</Text>
             <Text color={colors.textMuted}>|</Text>
-            <Text color="#FF6B6B" bold>[N]</Text>
+            <Text color="#FF6B6B" bold>
+              [N]
+            </Text>
             <Text color={colors.text}>Deny</Text>
             <Text color={colors.textMuted}>|</Text>
-            <Text color="#FFD700" bold>[D]</Text>
+            <Text color="#FFD700" bold>
+              [D]
+            </Text>
             <Text color={colors.text}>Deny with reason</Text>
           </>
         )}

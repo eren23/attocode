@@ -15,7 +15,14 @@ import type { ToolCall, ChatResponse } from '../../types.js';
  * A chunk from a streaming response.
  */
 export interface StreamChunk {
-  type: 'text' | 'tool_call_start' | 'tool_call_delta' | 'tool_call_end' | 'usage' | 'done' | 'error';
+  type:
+    | 'text'
+    | 'tool_call_start'
+    | 'tool_call_delta'
+    | 'tool_call_end'
+    | 'usage'
+    | 'done'
+    | 'error';
   content?: string;
   toolCall?: Partial<ToolCall>;
   toolCallId?: string;
@@ -80,7 +87,7 @@ export class StreamHandler {
   constructor(config: StreamConfig = {}) {
     this.config = {
       enabled: config.enabled ?? true,
-      bufferSize: config.bufferSize ?? 50,  // Batch updates to reduce re-renders
+      bufferSize: config.bufferSize ?? 50, // Batch updates to reduce re-renders
       showTypingIndicator: config.showTypingIndicator ?? true,
     };
   }
@@ -91,7 +98,7 @@ export class StreamHandler {
    */
   async processStream(
     stream: AsyncIterable<StreamChunk>,
-    onChunk?: StreamCallback
+    onChunk?: StreamCallback,
   ): Promise<ChatResponse> {
     const state: StreamState = {
       content: '',
@@ -116,11 +123,14 @@ export class StreamHandler {
     const response: ChatResponse = {
       content: state.content,
       toolCalls: state.toolCalls.length > 0 ? state.toolCalls : undefined,
-      usage: state.usage.inputTokens > 0 ? {
-        inputTokens: state.usage.inputTokens,
-        outputTokens: state.usage.outputTokens,
-        totalTokens: state.usage.inputTokens + state.usage.outputTokens,
-      } : undefined,
+      usage:
+        state.usage.inputTokens > 0
+          ? {
+              inputTokens: state.usage.inputTokens,
+              outputTokens: state.usage.outputTokens,
+              totalTokens: state.usage.inputTokens + state.usage.outputTokens,
+            }
+          : undefined,
     };
 
     this.emit({ type: 'stream.complete', response });
@@ -131,11 +141,7 @@ export class StreamHandler {
   /**
    * Process a single chunk.
    */
-  private processChunk(
-    chunk: StreamChunk,
-    state: StreamState,
-    onChunk?: StreamCallback
-  ): void {
+  private processChunk(chunk: StreamChunk, state: StreamState, onChunk?: StreamCallback): void {
     switch (chunk.type) {
       case 'text':
         if (chunk.content) {
@@ -291,9 +297,7 @@ export function formatChunkForTerminal(chunk: StreamChunk): string {
 /**
  * Convert OpenRouter SSE stream to StreamChunk iterator.
  */
-export async function* adaptOpenRouterStream(
-  response: Response
-): AsyncIterable<StreamChunk> {
+export async function* adaptOpenRouterStream(response: Response): AsyncIterable<StreamChunk> {
   const reader = response.body?.getReader();
   if (!reader) {
     throw new Error('No response body');
@@ -383,9 +387,7 @@ export async function* adaptOpenRouterStream(
 /**
  * Convert Anthropic stream to StreamChunk iterator.
  */
-export async function* adaptAnthropicStream(
-  response: Response
-): AsyncIterable<StreamChunk> {
+export async function* adaptAnthropicStream(response: Response): AsyncIterable<StreamChunk> {
   const reader = response.body?.getReader();
   if (!reader) {
     throw new Error('No response body');

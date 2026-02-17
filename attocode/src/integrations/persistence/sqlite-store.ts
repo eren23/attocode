@@ -118,14 +118,14 @@ export interface Goal {
   sessionId: string;
   goalText: string;
   status: GoalStatus;
-  priority: number;        // 1=highest, 3=lowest
-  parentGoalId?: string;   // for sub-goals
+  priority: number; // 1=highest, 3=lowest
+  parentGoalId?: string; // for sub-goals
   progressCurrent: number;
   progressTotal?: number;
   createdAt: string;
   updatedAt: string;
   completedAt?: string;
-  metadata?: string;       // JSON for extensibility
+  metadata?: string; // JSON for extensibility
 }
 
 /**
@@ -143,8 +143,8 @@ export interface Juncture {
   type: JunctureType;
   description: string;
   outcome?: string;
-  importance: number;      // 1=critical, 2=significant, 3=minor
-  context?: string;        // JSON
+  importance: number; // 1=critical, 2=significant, 3=minor
+  context?: string; // JSON
   createdAt: string;
 }
 
@@ -164,10 +164,10 @@ export interface WorkerResult {
   taskDescription: string;
   modelUsed?: string;
   status: WorkerResultStatus;
-  summary?: string;           // Brief summary for context injection
-  fullOutput?: string;        // Complete output stored here (not in context)
-  artifacts?: string;         // JSON: files modified, code generated
-  metrics?: string;           // JSON: tokens, duration, tool_calls
+  summary?: string; // Brief summary for context injection
+  fullOutput?: string; // Complete output stored here (not in context)
+  artifacts?: string; // JSON: files modified, code generated
+  metrics?: string; // JSON: tokens, duration, tool_calls
   error?: string;
   createdAt: string;
   completedAt?: string;
@@ -385,9 +385,13 @@ export class SQLiteStore {
       features: this.features,
       config: this.config,
       getCurrentSessionId: () => this.currentSessionId,
-      setCurrentSessionId: (id: string | null) => { this.currentSessionId = id; },
+      setCurrentSessionId: (id: string | null) => {
+        this.currentSessionId = id;
+      },
       emit: (event: SessionEvent) => this.emit(event),
-      ensureSession: () => { this.createSession(); },
+      ensureSession: () => {
+        this.createSession();
+      },
     };
   }
 
@@ -406,7 +410,7 @@ export class SQLiteStore {
     if (isDebug) {
       const status = getMigrationStatus(this.db);
       process.stderr.write(
-        `[DEBUG] [SQLite] DB version: ${status.currentVersion}, latest: ${status.latestVersion}, pending: ${status.pendingCount}\n`
+        `[DEBUG] [SQLite] DB version: ${status.currentVersion}, latest: ${status.latestVersion}, pending: ${status.pendingCount}\n`,
       );
     }
 
@@ -414,7 +418,7 @@ export class SQLiteStore {
 
     if (isDebug && result.applied > 0) {
       process.stderr.write(
-        `[DEBUG] [SQLite] Applied ${result.applied} migrations: ${result.appliedMigrations.join(', ')}\n`
+        `[DEBUG] [SQLite] Applied ${result.applied} migrations: ${result.appliedMigrations.join(', ')}\n`,
       );
     }
 
@@ -802,7 +806,7 @@ export class SQLiteStore {
 
   updateSessionMetadata(
     sessionId: string,
-    updates: Partial<Pick<SessionMetadata, 'name' | 'summary' | 'tokenCount'>>
+    updates: Partial<Pick<SessionMetadata, 'name' | 'summary' | 'tokenCount'>>,
   ): void {
     sessionRepo.updateSessionMetadata(this.deps, sessionId, updates);
   }
@@ -815,7 +819,12 @@ export class SQLiteStore {
     return sessionRepo.saveCheckpoint(this.deps, state, description);
   }
 
-  loadLatestCheckpoint(sessionId: string): { id: string; state: Record<string, unknown>; createdAt: string; description?: string } | null {
+  loadLatestCheckpoint(sessionId: string): {
+    id: string;
+    state: Record<string, unknown>;
+    createdAt: string;
+    description?: string;
+  } | null {
     return sessionRepo.loadLatestCheckpoint(this.deps, sessionId);
   }
 
@@ -845,7 +854,11 @@ export class SQLiteStore {
     sessionRepo.logUsage(this.deps, usage);
   }
 
-  getSessionUsage(sessionId: string): { promptTokens: number; completionTokens: number; costUsd: number } {
+  getSessionUsage(sessionId: string): {
+    promptTokens: number;
+    completionTokens: number;
+    costUsd: number;
+  } {
     return sessionRepo.getSessionUsage(this.deps, sessionId);
   }
 
@@ -880,7 +893,7 @@ export class SQLiteStore {
       parentGoalId?: string;
       progressTotal?: number;
       metadata?: Record<string, unknown>;
-    } = {}
+    } = {},
   ): string | undefined {
     return goalRepo.createGoal(this.deps, goalText, options);
   }
@@ -894,7 +907,7 @@ export class SQLiteStore {
       progressCurrent?: number;
       progressTotal?: number;
       metadata?: Record<string, unknown>;
-    }
+    },
   ): void {
     goalRepo.updateGoal(this.deps, goalId, updates);
   }
@@ -927,7 +940,7 @@ export class SQLiteStore {
       outcome?: string;
       importance?: number;
       context?: Record<string, unknown>;
-    } = {}
+    } = {},
   ): number {
     return goalRepo.logJuncture(this.deps, type, description, options);
   }
@@ -951,7 +964,7 @@ export class SQLiteStore {
   createWorkerResult(
     workerId: string,
     taskDescription: string,
-    modelUsed?: string
+    modelUsed?: string,
   ): string | undefined {
     return workerRepo.createWorkerResult(this.deps, workerId, taskDescription, modelUsed);
   }
@@ -963,7 +976,7 @@ export class SQLiteStore {
       summary?: string;
       artifacts?: Record<string, unknown>[];
       metrics?: { tokens?: number; duration?: number; toolCalls?: number };
-    }
+    },
   ): WorkerResultRef | undefined {
     return workerRepo.completeWorkerResult(this.deps, resultId, output);
   }
@@ -1053,17 +1066,13 @@ export class SQLiteStore {
     return this.features.rememberedPermissions;
   }
 
-  rememberPermission(
-    toolName: string,
-    decision: 'always' | 'never',
-    pattern?: string
-  ): void {
+  rememberPermission(toolName: string, decision: 'always' | 'never', pattern?: string): void {
     sessionRepo.rememberPermission(this.deps, toolName, decision, pattern);
   }
 
   getRememberedPermission(
     toolName: string,
-    pattern?: string
+    pattern?: string,
   ): { decision: 'always' | 'never'; pattern?: string } | undefined {
     return sessionRepo.getRememberedPermission(this.deps, toolName, pattern);
   }

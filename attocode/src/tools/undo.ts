@@ -103,11 +103,14 @@ export const showFileHistoryTool: ContextAwareToolDefinition = {
       return { success: true, output: `No changes recorded for ${args.path}` };
     }
 
-    const formatted = history.map((change, i) =>
-      `${i + 1}. [${change.operation}] Turn ${change.turnNumber} - ${change.createdAt}` +
-      `\n   Before: ${change.bytesBefore} bytes, After: ${change.bytesAfter} bytes` +
-      (change.isUndone ? ' (UNDONE)' : '')
-    ).join('\n');
+    const formatted = history
+      .map(
+        (change, i) =>
+          `${i + 1}. [${change.operation}] Turn ${change.turnNumber} - ${change.createdAt}` +
+          `\n   Before: ${change.bytesBefore} bytes, After: ${change.bytesAfter} bytes` +
+          (change.isUndone ? ' (UNDONE)' : ''),
+      )
+      .join('\n');
 
     return { success: true, output: `File history for ${args.path}:\n${formatted}` };
   },
@@ -125,7 +128,10 @@ export const showSessionChangesTool: ContextAwareToolDefinition = {
   description: 'Show a summary of all file changes in this session',
   parameters: z.object({}),
   dangerLevel: 'safe',
-  execute: async (_args: Record<string, never>, context?: ToolExecutionContext): Promise<ToolResult> => {
+  execute: async (
+    _args: Record<string, never>,
+    context?: ToolExecutionContext,
+  ): Promise<ToolResult> => {
     const tracker = context?.agent?.getFileChangeTracker?.();
     if (!tracker) {
       return { success: false, output: 'File change tracking is not enabled' };

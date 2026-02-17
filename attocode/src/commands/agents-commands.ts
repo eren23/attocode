@@ -95,11 +95,13 @@ ${c('Agent Locations:', 'dim')}
   const stats = getAgentStats(agents);
   const customCount = stats.user + stats.project + stats.legacy;
 
-  lines.push(`${c(`Agents (${agents.length} loaded: ${stats.builtin} built-in, ${customCount} custom)`, 'bold')}`);
+  lines.push(
+    `${c(`Agents (${agents.length} loaded: ${stats.builtin} built-in, ${customCount} custom)`, 'bold')}`,
+  );
   lines.push('');
 
   // Built-in agents
-  const builtIn = agents.filter(a => a.source === 'builtin');
+  const builtIn = agents.filter((a) => a.source === 'builtin');
   if (builtIn.length > 0) {
     lines.push(`  ${c('BUILT-IN:', 'cyan')}`);
     lines.push(`  ${c('─'.repeat(60), 'dim')}`);
@@ -113,7 +115,7 @@ ${c('Agent Locations:', 'dim')}
   }
 
   // User-defined agents
-  const userDefined = agents.filter(a => a.source === 'user' || a.source === 'project');
+  const userDefined = agents.filter((a) => a.source === 'user' || a.source === 'project');
   if (userDefined.length > 0) {
     lines.push(`  ${c('USER-DEFINED:', 'yellow')}`);
     lines.push(`  ${c('─'.repeat(60), 'dim')}`);
@@ -129,7 +131,7 @@ ${c('Agent Locations:', 'dim')}
   }
 
   // Legacy agents
-  const legacy = agents.filter(a => a.source === 'legacy');
+  const legacy = agents.filter((a) => a.source === 'legacy');
   if (legacy.length > 0) {
     lines.push(`  ${c('LEGACY (.agents/):', 'dim')}`);
     lines.push(`  ${c('─'.repeat(60), 'dim')}`);
@@ -144,7 +146,9 @@ ${c('Agent Locations:', 'dim')}
 
   // Commands
   lines.push(`  ${c('COMMANDS:', 'bold')}`);
-  lines.push(`    ${c('/agents new <name>', 'cyan').padEnd(35)} Create new agent in .attocode/agents/`);
+  lines.push(
+    `    ${c('/agents new <name>', 'cyan').padEnd(35)} Create new agent in .attocode/agents/`,
+  );
   lines.push(`    ${c('/agents info <name>', 'cyan').padEnd(35)} Show agent details`);
   lines.push(`    ${c('/agents edit <name>', 'cyan').padEnd(35)} Edit agent definition`);
   lines.push(`    ${c('/spawn <name> <task>', 'cyan').padEnd(35)} Spawn an agent with a task`);
@@ -161,7 +165,9 @@ export function formatAgentInfo(agent: LoadedAgent): string {
   lines.push(`${c(`Agent: ${agent.name}`, 'bold')}`);
   lines.push(c('─'.repeat(60), 'dim'));
 
-  lines.push(`  ${c('Description:', 'cyan').padEnd(20)} ${safeDescription(agent.description) || 'No description'}`);
+  lines.push(
+    `  ${c('Description:', 'cyan').padEnd(20)} ${safeDescription(agent.description) || 'No description'}`,
+  );
   lines.push(`  ${c('Source:', 'cyan').padEnd(20)} ${getAgentLocationDisplay(agent)}`);
 
   if (agent.filePath) {
@@ -175,7 +181,9 @@ export function formatAgentInfo(agent: LoadedAgent): string {
   }
 
   if (agent.maxTokenBudget) {
-    lines.push(`  ${c('Token Budget:', 'cyan').padEnd(20)} ${agent.maxTokenBudget.toLocaleString()}`);
+    lines.push(
+      `  ${c('Token Budget:', 'cyan').padEnd(20)} ${agent.maxTokenBudget.toLocaleString()}`,
+    );
   }
 
   if (agent.capabilities && agent.capabilities.length > 0) {
@@ -212,7 +220,7 @@ export function formatAgentInfo(agent: LoadedAgent): string {
 export async function handleAgentsCommand(
   args: string[],
   ctx: CommandContext,
-  agentRegistry: AgentRegistry
+  agentRegistry: AgentRegistry,
 ): Promise<void> {
   const { output } = ctx;
 
@@ -228,7 +236,12 @@ export async function handleAgentsCommand(
   switch (subCmd) {
     case 'new': {
       if (args.length < 2) {
-        output.log(c('Usage: /agents new <name> [--model fast|balanced|quality] [--description "..."]', 'yellow'));
+        output.log(
+          c(
+            'Usage: /agents new <name> [--model fast|balanced|quality] [--description "..."]',
+            'yellow',
+          ),
+        );
         return;
       }
 

@@ -170,7 +170,7 @@ export class VerificationGate {
     const compilationMaxNudges = this.criteria.compilationMaxAttempts ?? 8;
     const compilationNudgesExceeded = this.state.compilationNudgeCount >= compilationMaxNudges;
 
-    const hasTestMissing = missing.some(m => !m.startsWith('TypeScript compilation'));
+    const hasTestMissing = missing.some((m) => !m.startsWith('TypeScript compilation'));
     const hasCompilationMissing = this.criteria.requireCompilation && !this.state.compilationPassed;
 
     const allExceeded =
@@ -249,7 +249,9 @@ export class VerificationGate {
     }
 
     if (this.criteria.requireCompilation && !this.state.compilationPassed) {
-      parts.push(`\nRun \`npx tsc --noEmit\` and fix the ${this.state.compilationErrorCount} TypeScript error(s).`);
+      parts.push(
+        `\nRun \`npx tsc --noEmit\` and fix the ${this.state.compilationErrorCount} TypeScript error(s).`,
+      );
     }
 
     parts.push('Do NOT finish until verification is complete.');
@@ -270,6 +272,11 @@ export function createVerificationGate(
 ): VerificationGate | null {
   if (!criteria) return null;
   // Only create if there's something to verify
-  if (!criteria.requiredTests?.length && !criteria.requireFileChanges && !criteria.requireCompilation) return null;
+  if (
+    !criteria.requiredTests?.length &&
+    !criteria.requireFileChanges &&
+    !criteria.requireCompilation
+  )
+    return null;
   return new VerificationGate(criteria);
 }

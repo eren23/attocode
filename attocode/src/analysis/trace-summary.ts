@@ -5,11 +5,7 @@
  * Designed to produce compact output suitable for analysis by other LLMs.
  */
 
-import type {
-  SessionTrace,
-  TraceSummary,
-  TraceAnalysisResult,
-} from '../tracing/types.js';
+import type { SessionTrace, TraceSummary, TraceAnalysisResult } from '../tracing/types.js';
 
 /**
  * Generates TraceSummary from SessionTrace data.
@@ -197,7 +193,7 @@ export class TraceSummaryGenerator {
         avgDuration: Math.round(durations.reduce((a, b) => a + b, 0) / durations.length),
         maxDuration: Math.max(...durations),
       }))
-      .filter(t => t.avgDuration > 5000);
+      .filter((t) => t.avgDuration > 5000);
 
     return {
       frequency,
@@ -210,8 +206,8 @@ export class TraceSummaryGenerator {
    * Summarize each iteration.
    */
   private summarizeIterations(): TraceSummary['iterationSummaries'] {
-    return this.trace.iterations.map(iter => {
-      const hasError = iter.toolExecutions.some(t => t.status === 'error');
+    return this.trace.iterations.map((iter) => {
+      const hasError = iter.toolExecutions.some((t) => t.status === 'error');
 
       const flags: string[] = [];
       if (hasError) flags.push('error');
@@ -220,7 +216,7 @@ export class TraceSummaryGenerator {
       // Determine main action
       let action = 'processing';
       if (iter.toolExecutions.length > 0) {
-        action = `Tools: ${iter.toolExecutions.map(t => t.toolName).join(', ')}`;
+        action = `Tools: ${iter.toolExecutions.map((t) => t.toolName).join(', ')}`;
       }
 
       return {
@@ -240,20 +236,39 @@ export class TraceSummaryGenerator {
     const anomalies = this.detectAnomalies();
     const locations: TraceSummary['codeLocations'] = [];
 
-    const CODE_MAP: Record<string, Array<{ component: string; file: string; relevance: 'primary' | 'secondary' | 'related' }>> = {
+    const CODE_MAP: Record<
+      string,
+      Array<{ component: string; file: string; relevance: 'primary' | 'secondary' | 'related' }>
+    > = {
       excessive_iterations: [
         { file: 'src/agent.ts', component: 'ProductionAgent.run', relevance: 'primary' },
-        { file: 'src/integrations/context-engineering.ts', component: 'ContextEngineering', relevance: 'secondary' },
+        {
+          file: 'src/integrations/context-engineering.ts',
+          component: 'ContextEngineering',
+          relevance: 'secondary',
+        },
       ],
       cache_inefficiency: [
-        { file: 'src/tracing/cache-boundary-tracker.ts', component: 'CacheBoundaryTracker', relevance: 'primary' },
+        {
+          file: 'src/tracing/cache-boundary-tracker.ts',
+          component: 'CacheBoundaryTracker',
+          relevance: 'primary',
+        },
       ],
       redundant_tool_calls: [
         { file: 'src/agent.ts', component: 'executeToolCalls', relevance: 'primary' },
-        { file: 'src/tricks/failure-evidence.ts', component: 'FailureEvidence', relevance: 'secondary' },
+        {
+          file: 'src/tricks/failure-evidence.ts',
+          component: 'FailureEvidence',
+          relevance: 'secondary',
+        },
       ],
       error_loop: [
-        { file: 'src/tricks/failure-evidence.ts', component: 'FailureEvidence', relevance: 'primary' },
+        {
+          file: 'src/tricks/failure-evidence.ts',
+          component: 'FailureEvidence',
+          relevance: 'primary',
+        },
       ],
     };
 
@@ -261,7 +276,7 @@ export class TraceSummaryGenerator {
       const mappings = CODE_MAP[anomaly.type] || [];
       for (const mapping of mappings) {
         // Avoid duplicates
-        if (!locations.some(l => l.file === mapping.file && l.component === mapping.component)) {
+        if (!locations.some((l) => l.file === mapping.file && l.component === mapping.component)) {
           locations.push({
             ...mapping,
             description: `Related to: ${anomaly.type}`,

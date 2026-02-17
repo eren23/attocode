@@ -33,7 +33,7 @@ jobs:
         run: npm run build
 
       - name: Run tests
-        run: npm test -- --run --exclude tests/lsp.test.ts --exclude tests/sandbox.test.ts --exclude tests/swarm/decision-traceability.test.ts --exclude tests/swarm/resilience-all-paths.test.ts
+        run: npm test -- --run
 
   lint:
     runs-on: ubuntu-latest

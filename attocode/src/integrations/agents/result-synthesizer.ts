@@ -41,13 +41,13 @@ export interface AgentOutput {
 }
 
 export type OutputType =
-  | 'code'          // Code implementation
-  | 'research'      // Research findings
-  | 'analysis'      // Analysis/interpretation
-  | 'review'        // Code review feedback
-  | 'plan'          // Implementation plan
+  | 'code' // Code implementation
+  | 'research' // Research findings
+  | 'analysis' // Analysis/interpretation
+  | 'review' // Code review feedback
+  | 'plan' // Implementation plan
   | 'documentation' // Documentation
-  | 'mixed';        // Combination of types
+  | 'mixed'; // Combination of types
 
 /**
  * A file change from an agent.
@@ -108,12 +108,12 @@ export interface ResultConflict {
 }
 
 export type ConflictType =
-  | 'code_overlap'       // Same lines modified differently
+  | 'code_overlap' // Same lines modified differently
   | 'logic_contradiction' // Contradicting logic/conclusions
-  | 'approach_mismatch'  // Different approaches to same problem
-  | 'fact_disagreement'  // Disagreement on facts
-  | 'priority_conflict'  // Different prioritization
-  | 'naming_conflict';   // Different names for same thing
+  | 'approach_mismatch' // Different approaches to same problem
+  | 'fact_disagreement' // Disagreement on facts
+  | 'priority_conflict' // Different prioritization
+  | 'naming_conflict'; // Different names for same thing
 
 /**
  * Resolution applied to a conflict.
@@ -183,11 +183,11 @@ export interface SynthesisStats {
 }
 
 export type SynthesisMethod =
-  | 'concatenate'       // Simple concatenation
-  | 'deduplicate'       // Remove duplicates
-  | 'merge_structured'  // Structured merge (for code)
-  | 'synthesize_llm'    // LLM-based synthesis
-  | 'majority_vote';    // Take majority opinion
+  | 'concatenate' // Simple concatenation
+  | 'deduplicate' // Remove duplicates
+  | 'merge_structured' // Structured merge (for code)
+  | 'synthesize_llm' // LLM-based synthesis
+  | 'majority_vote'; // Take majority opinion
 
 /**
  * Configuration for the result synthesizer.
@@ -214,7 +214,7 @@ export interface ResultSynthesizerConfig {
  */
 export type LLMSynthesizeFunction = (
   outputs: AgentOutput[],
-  conflicts: ResultConflict[]
+  conflicts: ResultConflict[],
 ) => Promise<LLMSynthesisResult>;
 
 /**
@@ -456,7 +456,9 @@ export class ResultSynthesizer {
     const outputParts = [
       '## Synthesized Findings',
       '',
-      ...deduplicated.map((f, i) => `${i + 1}. ${f.finding} (confidence: ${(f.confidence * 100).toFixed(0)}%)`),
+      ...deduplicated.map(
+        (f, i) => `${i + 1}. ${f.finding} (confidence: ${(f.confidence * 100).toFixed(0)}%)`,
+      ),
     ];
 
     // Detect contradictions
@@ -544,10 +546,7 @@ export class ResultSynthesizer {
   /**
    * Check if two file changes overlap.
    */
-  private checkCodeOverlap(
-    a: FileChange,
-    b: FileChange
-  ): { lines: number[] } | null {
+  private checkCodeOverlap(a: FileChange, b: FileChange): { lines: number[] } | null {
     // Simple line-based overlap detection
     const aLines = new Set(a.newContent.split('\n').map((_, i) => i));
     const bLines = new Set(b.newContent.split('\n').map((_, i) => i));
@@ -573,10 +572,7 @@ export class ResultSynthesizer {
     // Check for contradicting findings
     for (let i = 0; i < outputs.length; i++) {
       for (let j = i + 1; j < outputs.length; j++) {
-        const contradictions = this.findContradictions(
-          outputs[i].content,
-          outputs[j].content
-        );
+        const contradictions = this.findContradictions(outputs[i].content, outputs[j].content);
 
         for (const contradiction of contradictions) {
           conflicts.push({
@@ -600,7 +596,7 @@ export class ResultSynthesizer {
    */
   private findContradictions(
     textA: string,
-    textB: string
+    textB: string,
   ): Array<{ description: string; contentA: string; contentB: string }> {
     const contradictions: Array<{ description: string; contentA: string; contentB: string }> = [];
 
@@ -629,7 +625,7 @@ export class ResultSynthesizer {
             // Check if they're about the same thing
             const similarity = this.calculateSimilarity(
               sentA.replace(pos, '').replace(neg, ''),
-              sentB.replace(pos, '').replace(neg, '')
+              sentB.replace(pos, '').replace(neg, ''),
             );
 
             if (similarity > 0.5) {
@@ -660,19 +656,12 @@ export class ResultSynthesizer {
 
     for (let i = 0; i < codeOutputs.length; i++) {
       for (let j = i + 1; j < codeOutputs.length; j++) {
-        const similarity = this.calculateSimilarity(
-          codeOutputs[i].content,
-          codeOutputs[j].content
-        );
+        const similarity = this.calculateSimilarity(codeOutputs[i].content, codeOutputs[j].content);
 
         // If outputs are similar in length but very different in content
-        const lengthRatio = Math.min(
-          codeOutputs[i].content.length,
-          codeOutputs[j].content.length
-        ) / Math.max(
-          codeOutputs[i].content.length,
-          codeOutputs[j].content.length
-        );
+        const lengthRatio =
+          Math.min(codeOutputs[i].content.length, codeOutputs[j].content.length) /
+          Math.max(codeOutputs[i].content.length, codeOutputs[j].content.length);
 
         if (lengthRatio > 0.5 && similarity < 0.3) {
           conflicts.push({
@@ -701,10 +690,7 @@ export class ResultSynthesizer {
   /**
    * Merge with deduplication.
    */
-  private deduplicateMerge(
-    outputs: AgentOutput[],
-    conflicts: ResultConflict[]
-  ): SynthesisResult {
+  private deduplicateMerge(outputs: AgentOutput[], conflicts: ResultConflict[]): SynthesisResult {
     // Combine all content
     const allParts: Array<{ content: string; confidence: number }> = [];
 
@@ -722,7 +708,8 @@ export class ResultSynthesizer {
     const deduplicated: Array<{ content: string; confidence: number }> = [];
     for (const part of allParts) {
       const isDuplicate = deduplicated.some(
-        (d) => this.calculateSimilarity(d.content, part.content) > this.config.deduplicationThreshold
+        (d) =>
+          this.calculateSimilarity(d.content, part.content) > this.config.deduplicationThreshold,
       );
       if (!isDuplicate) {
         deduplicated.push(part);
@@ -749,10 +736,7 @@ export class ResultSynthesizer {
   /**
    * Simple concatenation merge.
    */
-  private concatenateMerge(
-    outputs: AgentOutput[],
-    conflicts: ResultConflict[]
-  ): SynthesisResult {
+  private concatenateMerge(outputs: AgentOutput[], conflicts: ResultConflict[]): SynthesisResult {
     const parts = outputs.map((o) => `## From ${o.agentId}\n\n${o.content}`);
     const output = parts.join('\n\n---\n\n');
 
@@ -773,7 +757,7 @@ export class ResultSynthesizer {
    */
   private async mergeStructured(
     outputs: AgentOutput[],
-    conflicts: ResultConflict[]
+    conflicts: ResultConflict[],
   ): Promise<SynthesisResult> {
     // Resolve conflicts first
     for (const conflict of conflicts) {
@@ -812,7 +796,7 @@ export class ResultSynthesizer {
    */
   private async synthesizeLLM(
     outputs: AgentOutput[],
-    conflicts: ResultConflict[]
+    conflicts: ResultConflict[],
   ): Promise<SynthesisResult> {
     if (!this.config.llmSynthesizer) {
       return this.deduplicateMerge(outputs, conflicts);
@@ -854,10 +838,7 @@ export class ResultSynthesizer {
   /**
    * Majority vote synthesis.
    */
-  private majorityVote(
-    outputs: AgentOutput[],
-    conflicts: ResultConflict[]
-  ): SynthesisResult {
+  private majorityVote(outputs: AgentOutput[], conflicts: ResultConflict[]): SynthesisResult {
     // Group similar outputs
     const groups: Array<{ outputs: AgentOutput[]; representative: AgentOutput }> = [];
 
@@ -923,10 +904,13 @@ export class ResultSynthesizer {
     }
   }
 
-  private resolveByConfidence(conflict: ResultConflict, outputs: AgentOutput[]): ConflictResolution {
+  private resolveByConfidence(
+    conflict: ResultConflict,
+    outputs: AgentOutput[],
+  ): ConflictResolution {
     const relevant = outputs.filter((o) => conflict.agentIds.includes(o.agentId));
     const winner = relevant.reduce((best, curr) =>
-      curr.confidence > best.confidence ? curr : best
+      curr.confidence > best.confidence ? curr : best,
     );
 
     return {
@@ -940,7 +924,7 @@ export class ResultSynthesizer {
   private resolveByAuthority(conflict: ResultConflict, outputs: AgentOutput[]): ConflictResolution {
     const relevant = outputs.filter((o) => conflict.agentIds.includes(o.agentId));
     const winner = relevant.reduce((best, curr) =>
-      (curr.authority ?? 0) > (best.authority ?? 0) ? curr : best
+      (curr.authority ?? 0) > (best.authority ?? 0) ? curr : best,
     );
 
     return {
@@ -970,7 +954,7 @@ export class ResultSynthesizer {
     }
 
     const winner = Array.from(votes.entries()).reduce((best, curr) =>
-      curr[1] > best[1] ? curr : best
+      curr[1] > best[1] ? curr : best,
     )[0];
 
     return {
@@ -1025,10 +1009,7 @@ export class ResultSynthesizer {
 
     for (let i = 0; i < outputs.length; i++) {
       for (let j = i + 1; j < outputs.length; j++) {
-        totalSimilarity += this.calculateSimilarity(
-          outputs[i].content,
-          outputs[j].content
-        );
+        totalSimilarity += this.calculateSimilarity(outputs[i].content, outputs[j].content);
         pairs++;
       }
     }
@@ -1092,9 +1073,7 @@ export class ResultSynthesizer {
         merged.push(changes[0]);
       } else {
         // Take the one with most content or merge
-        const best = changes.reduce((a, b) =>
-          a.newContent.length > b.newContent.length ? a : b
-        );
+        const best = changes.reduce((a, b) => (a.newContent.length > b.newContent.length ? a : b));
         merged.push(best);
       }
     }
@@ -1108,7 +1087,7 @@ export class ResultSynthesizer {
   private mergeFileChanges(
     filePath: string,
     changes: FileChange[],
-    outputs: AgentOutput[]
+    outputs: AgentOutput[],
   ): { merged: FileChange | null; conflicts: ResultConflict[] } {
     const conflicts: ResultConflict[] = [];
 
@@ -1118,7 +1097,7 @@ export class ResultSynthesizer {
 
     for (const change of changes) {
       const output = outputs.find((o) =>
-        o.filesModified?.some((f) => f.path === filePath && f.newContent === change.newContent)
+        o.filesModified?.some((f) => f.path === filePath && f.newContent === change.newContent),
       );
       if (output && output.confidence > bestConfidence) {
         bestConfidence = output.confidence;
@@ -1129,10 +1108,7 @@ export class ResultSynthesizer {
     // Detect if there are significant differences
     for (let i = 0; i < changes.length; i++) {
       for (let j = i + 1; j < changes.length; j++) {
-        const similarity = this.calculateSimilarity(
-          changes[i].newContent,
-          changes[j].newContent
-        );
+        const similarity = this.calculateSimilarity(changes[i].newContent, changes[j].newContent);
         if (similarity < 0.8) {
           conflicts.push({
             id: `conflict-${++this.conflictCounter}`,
@@ -1141,7 +1117,10 @@ export class ResultSynthesizer {
               .filter((o) => o.filesModified?.some((f) => f.path === filePath))
               .map((o) => o.agentId),
             description: `Different versions of ${filePath}`,
-            conflictingContent: [changes[i].newContent.slice(0, 200), changes[j].newContent.slice(0, 200)],
+            conflictingContent: [
+              changes[i].newContent.slice(0, 200),
+              changes[j].newContent.slice(0, 200),
+            ],
             severity: 'high',
             filePath,
           });
@@ -1196,13 +1175,13 @@ export class ResultSynthesizer {
    * Deduplicate findings.
    */
   private deduplicateFindings(
-    findings: Array<{ finding: string; agentId: string; confidence: number }>
+    findings: Array<{ finding: string; agentId: string; confidence: number }>,
   ): Array<{ finding: string; confidence: number }> {
     const deduplicated: Array<{ finding: string; confidence: number }> = [];
 
     for (const f of findings) {
       const existing = deduplicated.find(
-        (d) => this.calculateSimilarity(d.finding, f.finding) > this.config.deduplicationThreshold
+        (d) => this.calculateSimilarity(d.finding, f.finding) > this.config.deduplicationThreshold,
       );
 
       if (existing) {
@@ -1222,7 +1201,7 @@ export class ResultSynthesizer {
    * Detect contradictions between findings.
    */
   private detectFindingContradictions(
-    findings: Array<{ finding: string; confidence: number }>
+    findings: Array<{ finding: string; confidence: number }>,
   ): ResultConflict[] {
     const conflicts: ResultConflict[] = [];
 
@@ -1251,7 +1230,7 @@ export class ResultSynthesizer {
   private calculateStats(
     outputs: AgentOutput[],
     synthesizedContent: string,
-    conflicts: ResultConflict[]
+    conflicts: ResultConflict[],
   ): SynthesisStats {
     const totalContentLength = outputs.reduce((sum, o) => sum + o.content.length, 0);
 
@@ -1259,9 +1238,8 @@ export class ResultSynthesizer {
       inputCount: outputs.length,
       totalContentLength,
       synthesizedLength: synthesizedContent.length,
-      deduplicationRate: totalContentLength > 0
-        ? 1 - (synthesizedContent.length / totalContentLength)
-        : 0,
+      deduplicationRate:
+        totalContentLength > 0 ? 1 - synthesizedContent.length / totalContentLength : 0,
       conflictsDetected: conflicts.length,
       conflictsResolved: conflicts.filter((c) => c.resolution).length,
       agreementRate: this.calculateAgreement(outputs),
@@ -1355,19 +1333,14 @@ export class ResultSynthesizer {
  * const result = await synthesizer.synthesize(agentOutputs);
  * ```
  */
-export function createResultSynthesizer(
-  config: ResultSynthesizerConfig = {}
-): ResultSynthesizer {
+export function createResultSynthesizer(config: ResultSynthesizerConfig = {}): ResultSynthesizer {
   return new ResultSynthesizer(config);
 }
 
 /**
  * Create an LLM prompt for synthesis.
  */
-export function createSynthesisPrompt(
-  outputs: AgentOutput[],
-  conflicts: ResultConflict[]
-): string {
+export function createSynthesisPrompt(outputs: AgentOutput[], conflicts: ResultConflict[]): string {
   const parts = [
     'You are synthesizing results from multiple AI agents. Combine their findings into a coherent, unified response.',
     '',
@@ -1399,7 +1372,9 @@ export function createSynthesisPrompt(
   parts.push('3. Resolve any contradictions');
   parts.push('4. Provide a unified, coherent response');
   parts.push('');
-  parts.push('Respond with JSON: { "content": "...", "findings": [...], "resolutions": [...], "confidence": 0.X }');
+  parts.push(
+    'Respond with JSON: { "content": "...", "findings": [...], "resolutions": [...], "confidence": 0.X }',
+  );
 
   return parts.join('\n');
 }

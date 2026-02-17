@@ -107,14 +107,106 @@ const syntax = {
 
 function highlightCode(code: string, lang: string): string {
   const lines = code.split('\n');
-  return lines.map(line => highlightLine(line, lang)).join('\n');
+  return lines.map((line) => highlightLine(line, lang)).join('\n');
 }
 
 function highlightLine(line: string, lang: string): string {
   const keywords: Record<string, string[]> = {
-    python: ['def', 'class', 'if', 'elif', 'else', 'for', 'while', 'return', 'import', 'from', 'as', 'try', 'except', 'finally', 'with', 'lambda', 'yield', 'async', 'await', 'True', 'False', 'None', 'and', 'or', 'not', 'in', 'is'],
-    javascript: ['function', 'const', 'let', 'var', 'if', 'else', 'for', 'while', 'return', 'import', 'export', 'from', 'class', 'extends', 'new', 'this', 'try', 'catch', 'finally', 'async', 'await', 'true', 'false', 'null', 'undefined', 'typeof', 'instanceof'],
-    typescript: ['function', 'const', 'let', 'var', 'if', 'else', 'for', 'while', 'return', 'import', 'export', 'from', 'class', 'extends', 'new', 'this', 'try', 'catch', 'finally', 'async', 'await', 'true', 'false', 'null', 'undefined', 'typeof', 'instanceof', 'interface', 'type', 'enum', 'as', 'implements', 'private', 'public', 'protected'],
+    python: [
+      'def',
+      'class',
+      'if',
+      'elif',
+      'else',
+      'for',
+      'while',
+      'return',
+      'import',
+      'from',
+      'as',
+      'try',
+      'except',
+      'finally',
+      'with',
+      'lambda',
+      'yield',
+      'async',
+      'await',
+      'True',
+      'False',
+      'None',
+      'and',
+      'or',
+      'not',
+      'in',
+      'is',
+    ],
+    javascript: [
+      'function',
+      'const',
+      'let',
+      'var',
+      'if',
+      'else',
+      'for',
+      'while',
+      'return',
+      'import',
+      'export',
+      'from',
+      'class',
+      'extends',
+      'new',
+      'this',
+      'try',
+      'catch',
+      'finally',
+      'async',
+      'await',
+      'true',
+      'false',
+      'null',
+      'undefined',
+      'typeof',
+      'instanceof',
+    ],
+    typescript: [
+      'function',
+      'const',
+      'let',
+      'var',
+      'if',
+      'else',
+      'for',
+      'while',
+      'return',
+      'import',
+      'export',
+      'from',
+      'class',
+      'extends',
+      'new',
+      'this',
+      'try',
+      'catch',
+      'finally',
+      'async',
+      'await',
+      'true',
+      'false',
+      'null',
+      'undefined',
+      'typeof',
+      'instanceof',
+      'interface',
+      'type',
+      'enum',
+      'as',
+      'implements',
+      'private',
+      'public',
+      'protected',
+    ],
   };
 
   const langKeywords = keywords[lang.toLowerCase()] || keywords['javascript'] || [];
@@ -128,7 +220,10 @@ function highlightLine(line: string, lang: string): string {
     }
   }
 
-  result = result.replace(/(["'`])((?:\\\1|(?:(?!\1)).)*)(\1)/g, syntax.string + '$1$2$3' + syntax.reset);
+  result = result.replace(
+    /(["'`])((?:\\\1|(?:(?!\1)).)*)(\1)/g,
+    syntax.string + '$1$2$3' + syntax.reset,
+  );
   result = result.replace(/\b(\d+\.?\d*)\b/g, syntax.number + '$1' + syntax.reset);
 
   for (const kw of langKeywords) {
@@ -183,11 +278,16 @@ export class SimpleTextRenderer implements TUIRenderer {
 
   renderToolCall(toolCall: ToolCallDisplay): void {
     if (!this.config.showToolCalls) return;
-    const statusEmoji = { pending: '⏳', running: '🔄', success: '✅', error: '❌' }[toolCall.status];
+    const statusEmoji = { pending: '⏳', running: '🔄', success: '✅', error: '❌' }[
+      toolCall.status
+    ];
     // eslint-disable-next-line no-console
     console.log(`\n${statusEmoji} \x1b[33mTool:\x1b[0m ${toolCall.name}`);
     if (Object.keys(toolCall.args).length > 0) {
-      const argsStr = JSON.stringify(toolCall.args, null, 2).split('\n').map(line => '    ' + line).join('\n');
+      const argsStr = JSON.stringify(toolCall.args, null, 2)
+        .split('\n')
+        .map((line) => '    ' + line)
+        .join('\n');
       // eslint-disable-next-line no-console
       console.log(`\x1b[90m${argsStr}\x1b[0m`);
     }
@@ -314,13 +414,7 @@ export { SimpleTextRenderer as FallbackRenderer };
 export { formatAssistantContent, highlightCode };
 
 // Types from types.ts
-export type {
-  ThemeColors,
-  Theme,
-  ThemeName,
-  TUIState,
-  TUIEventHandlers,
-} from './types.js';
+export type { ThemeColors, Theme, ThemeName, TUIState, TUIEventHandlers } from './types.js';
 
 // Theme system
 export {
@@ -360,7 +454,12 @@ export {
 } from './components/index.js';
 
 // Command palette
-export { ControlledCommandPalette, CommandPalette, type ControlledCommandPaletteProps, type CommandPaletteProps } from './input/CommandPalette.js';
+export {
+  ControlledCommandPalette,
+  CommandPalette,
+  type ControlledCommandPaletteProps,
+  type CommandPaletteProps,
+} from './input/CommandPalette.js';
 
 // Event display (console output handlers)
 export { createEventDisplay, createJunctureLogger } from './event-display.js';

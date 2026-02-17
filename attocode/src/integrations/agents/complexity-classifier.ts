@@ -68,24 +68,55 @@ export interface ClassificationContext {
 /** Keywords that indicate higher complexity */
 const COMPLEX_KEYWORDS = [
   // Multi-file operations
-  'refactor', 'migrate', 'redesign', 'rewrite', 'overhaul',
-  'restructure', 'reorganize', 'rearchitect',
+  'refactor',
+  'migrate',
+  'redesign',
+  'rewrite',
+  'overhaul',
+  'restructure',
+  'reorganize',
+  'rearchitect',
   // Broad scope
-  'all files', 'entire', 'codebase', 'every', 'across',
-  'comprehensive', 'full audit', 'system-wide',
+  'all files',
+  'entire',
+  'codebase',
+  'every',
+  'across',
+  'comprehensive',
+  'full audit',
+  'system-wide',
   // Multi-step
-  'first', 'then', 'after that', 'finally', 'step by step',
-  'and then', 'once done', 'followed by',
+  'first',
+  'then',
+  'after that',
+  'finally',
+  'step by step',
+  'and then',
+  'once done',
+  'followed by',
   // Research-heavy
-  'investigate', 'analyze', 'audit', 'security review',
-  'performance analysis', 'benchmark', 'compare',
+  'investigate',
+  'analyze',
+  'audit',
+  'security review',
+  'performance analysis',
+  'benchmark',
+  'compare',
 ];
 
 /** Keywords that indicate simplicity */
 const SIMPLE_KEYWORDS = [
-  'fix typo', 'rename', 'update version', 'add comment',
-  'change color', 'fix import', 'remove unused',
-  'what is', 'how does', 'where is', 'explain',
+  'fix typo',
+  'rename',
+  'update version',
+  'add comment',
+  'change color',
+  'fix import',
+  'remove unused',
+  'what is',
+  'how does',
+  'where is',
+  'explain',
 ];
 
 /** Dependency indicators (suggest sequential steps) */
@@ -160,39 +191,42 @@ export function classifyComplexity(
   });
 
   // Signal 2: Complex keyword matches
-  const complexMatches = COMPLEX_KEYWORDS.filter(kw => taskLower.includes(kw));
+  const complexMatches = COMPLEX_KEYWORDS.filter((kw) => taskLower.includes(kw));
   const complexScore = Math.min(complexMatches.length * 1.5, 4);
   signals.push({
     name: 'complex_keywords',
     value: complexScore,
     weight: 0.25,
-    description: complexMatches.length > 0
-      ? `Matches: ${complexMatches.slice(0, 3).join(', ')}`
-      : 'No complex keywords',
+    description:
+      complexMatches.length > 0
+        ? `Matches: ${complexMatches.slice(0, 3).join(', ')}`
+        : 'No complex keywords',
   });
 
   // Signal 3: Simple keyword matches (reduces score)
-  const simpleMatches = SIMPLE_KEYWORDS.filter(kw => taskLower.includes(kw));
+  const simpleMatches = SIMPLE_KEYWORDS.filter((kw) => taskLower.includes(kw));
   const simpleScore = simpleMatches.length > 0 ? -2 : 0;
   signals.push({
     name: 'simple_keywords',
     value: simpleScore,
     weight: 0.2,
-    description: simpleMatches.length > 0
-      ? `Simple: ${simpleMatches.slice(0, 2).join(', ')}`
-      : 'No simplicity signals',
+    description:
+      simpleMatches.length > 0
+        ? `Simple: ${simpleMatches.slice(0, 2).join(', ')}`
+        : 'No simplicity signals',
   });
 
   // Signal 4: Dependency patterns (suggest multi-step)
-  const depMatches = DEPENDENCY_PATTERNS.filter(p => p.test(task));
+  const depMatches = DEPENDENCY_PATTERNS.filter((p) => p.test(task));
   const depScore = depMatches.length * 2;
   signals.push({
     name: 'dependency_patterns',
     value: depScore,
     weight: 0.2,
-    description: depMatches.length > 0
-      ? `${depMatches.length} sequential dependencies detected`
-      : 'No dependency chains',
+    description:
+      depMatches.length > 0
+        ? `${depMatches.length} sequential dependencies detected`
+        : 'No dependency chains',
   });
 
   // Signal 5: Question vs action
@@ -232,18 +266,20 @@ export function classifyComplexity(
   }
 
   // Calculate confidence (higher when signals agree)
-  const signalVariance = signals.reduce((sum, s) => {
-    const normalized = s.value / 4; // Normalize to ~0-1 range
-    return sum + Math.abs(normalized - totalScore / 3);
-  }, 0) / signals.length;
+  const signalVariance =
+    signals.reduce((sum, s) => {
+      const normalized = s.value / 4; // Normalize to ~0-1 range
+      return sum + Math.abs(normalized - totalScore / 3);
+    }, 0) / signals.length;
   const confidence = Math.max(0.3, Math.min(1.0, 1.0 - signalVariance));
 
   // Build reasoning
   const topSignals = [...signals]
     .sort((a, b) => Math.abs(b.value * b.weight) - Math.abs(a.value * a.weight))
     .slice(0, 3);
-  const reasoning = `Classified as ${tier} (score: ${totalScore.toFixed(2)}). ` +
-    `Top factors: ${topSignals.map(s => s.description).join('; ')}`;
+  const reasoning =
+    `Classified as ${tier} (score: ${totalScore.toFixed(2)}). ` +
+    `Top factors: ${topSignals.map((s) => s.description).join('; ')}`;
 
   return {
     tier,
@@ -307,8 +343,7 @@ export function createComplexityClassifier(config?: {
   };
 
   return {
-    classify: (task: string, context?: ClassificationContext) =>
-      classifyComplexity(task, context),
+    classify: (task: string, context?: ClassificationContext) => classifyComplexity(task, context),
     getScalingGuidance,
     thresholds,
   };

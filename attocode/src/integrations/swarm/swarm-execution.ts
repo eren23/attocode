@@ -10,11 +10,22 @@ import * as path from 'node:path';
 import type { SwarmConfig, SwarmTask, SwarmTaskResult, WorkerCapability } from './types.js';
 import { getTaskTypeConfig } from './types.js';
 import { selectAlternativeModel } from './model-selector.js';
-import { evaluateWorkerOutput, runPreFlightChecks, checkArtifacts, checkArtifactsEnhanced, runConcreteChecks, type QualityGateConfig } from './swarm-quality-gate.js';
+import {
+  evaluateWorkerOutput,
+  runPreFlightChecks,
+  checkArtifacts,
+  checkArtifactsEnhanced,
+  runConcreteChecks,
+  type QualityGateConfig,
+} from './swarm-quality-gate.js';
 import { classifySwarmFailure } from './failure-classifier.js';
 import type { SpawnResult } from '../agents/agent-registry.js';
 import type { OrchestratorInternals } from './swarm-orchestrator.js';
-import { isHollowCompletion, FAILURE_INDICATORS, hasFutureIntentLanguage } from './swarm-helpers.js';
+import {
+  isHollowCompletion,
+  FAILURE_INDICATORS,
+  hasFutureIntentLanguage,
+} from './swarm-helpers.js';
 import {
   reviewWave,
   saveCheckpoint,
@@ -53,7 +64,7 @@ export async function executeWaves(
   const dispatchLeaseStaleMs = ctx.config.dispatchLeaseStaleMs ?? 5 * 60 * 1000;
 
   while (waveIndex < totalWaves && !ctx.cancelled) {
-    const activeTaskIds = new Set(ctx.workerPool.getActiveWorkerStatus().map(w => w.taskId));
+    const activeTaskIds = new Set(ctx.workerPool.getActiveWorkerStatus().map((w) => w.taskId));
     const recovered = ctx.taskQueue.reconcileStaleDispatched({
       staleAfterMs: dispatchLeaseStaleMs,
       activeTaskIds,
@@ -70,9 +81,11 @@ export async function executeWaves(
 
     // F18: Skip empty waves
     if (readyTasks.length === 0 && queueStats.running === 0 && queueStats.ready === 0) {
-      ctx.logDecision('wave-skip',
+      ctx.logDecision(
+        'wave-skip',
         `Skipping waves ${waveIndex + 1}-${totalWaves}: no dispatchable tasks remain`,
-        `Stats: ${queueStats.completed} completed, ${queueStats.failed} failed, ${queueStats.skipped} skipped`);
+        `Stats: ${queueStats.completed} completed, ${queueStats.failed} failed, ${queueStats.skipped} skipped`,
+      );
       break;
     }
 
@@ -88,9 +101,9 @@ export async function executeWaves(
 
     // Wave complete stats
     const afterStats = ctx.taskQueue.getStats();
-    const waveCompleted = afterStats.completed - (queueStats.completed);
-    const waveFailed = afterStats.failed - (queueStats.failed);
-    const waveSkipped = afterStats.skipped - (queueStats.skipped);
+    const waveCompleted = afterStats.completed - queueStats.completed;
+    const waveFailed = afterStats.failed - queueStats.failed;
+    const waveSkipped = afterStats.skipped - queueStats.skipped;
 
     ctx.emit({
       type: 'swarm.wave.complete',
@@ -104,14 +117,16 @@ export async function executeWaves(
     // Wave failure recovery: if ALL tasks in a wave failed, retry with adapted context
     if (waveCompleted === 0 && waveFailed > 0 && readyTasks.length > 0) {
       ctx.emit({ type: 'swarm.wave.allFailed', wave: waveIndex + 1 });
-      ctx.logDecision('wave-recovery',
+      ctx.logDecision(
+        'wave-recovery',
         `Entire wave ${waveIndex + 1} failed (${waveFailed} tasks)`,
-        'Checking if budget allows retry with adapted strategy');
+        'Checking if budget allows retry with adapted strategy',
+      );
 
       const budgetRemaining = ctx.budgetPool.hasCapacity();
-      const failedWaveTasks = readyTasks.filter(t => {
+      const failedWaveTasks = readyTasks.filter((t) => {
         const task = ctx.taskQueue.getTask(t.id);
-        return task && task.status === 'failed' && task.attempts < (ctx.config.workerRetries + 1);
+        return task && task.status === 'failed' && task.attempts < ctx.config.workerRetries + 1;
       });
 
       if (budgetRemaining && failedWaveTasks.length > 0) {
@@ -120,17 +135,27 @@ export async function executeWaves(
           if (!task) continue;
           task.status = 'ready';
           task.retryContext = {
-            previousFeedback: 'All tasks in this batch failed. Try a fundamentally different approach — the previous strategy did not work.',
+            previousFeedback:
+              'All tasks in this batch failed. Try a fundamentally different approach — the previous strategy did not work.',
             previousScore: 0,
             attempt: task.attempts,
             previousModel: task.assignedModel,
             swarmProgress: getSwarmProgressSummary(ctx),
           };
         }
-        ctx.logDecision('wave-recovery',
+        ctx.logDecision(
+          'wave-recovery',
           `Re-queued ${failedWaveTasks.length} tasks with adapted retry context`,
-          'Budget allows retry');
-        await executeWave(ctx, recoveryState, failedWaveTasks.map(t => ctx.taskQueue.getTask(t.id)!).filter(t => t.status === 'ready'), getStatus);
+          'Budget allows retry',
+        );
+        await executeWave(
+          ctx,
+          recoveryState,
+          failedWaveTasks
+            .map((t) => ctx.taskQueue.getTask(t.id)!)
+            .filter((t) => t.status === 'ready'),
+          getStatus,
+        );
       }
     }
 
@@ -138,9 +163,11 @@ export async function executeWaves(
     const waveTotal = waveCompleted + waveFailed + waveSkipped;
     const waveSuccessRate = waveTotal > 0 ? waveCompleted / waveTotal : 0;
     if (waveSuccessRate < 0.5 && waveTotal >= 2) {
-      ctx.logDecision('decomposition-quality',
+      ctx.logDecision(
+        'decomposition-quality',
         `Wave ${waveIndex + 1} success rate ${(waveSuccessRate * 100).toFixed(0)}% (${waveCompleted}/${waveTotal})`,
-        'Low success rate may indicate decomposition quality issues');
+        'Low success rate may indicate decomposition quality issues',
+      );
     }
 
     // V2: Review wave outputs
@@ -152,9 +179,11 @@ export async function executeWaves(
     // Rescue cascade-skipped tasks that can still run
     const rescued = rescueCascadeSkipped(ctx);
     if (rescued.length > 0) {
-      ctx.logDecision('cascade-rescue',
+      ctx.logDecision(
+        'cascade-rescue',
         `Rescued ${rescued.length} cascade-skipped tasks after wave ${waveIndex + 1}`,
-        rescued.map(t => t.id).join(', '));
+        rescued.map((t) => t.id).join(', '),
+      );
       await executeWave(ctx, recoveryState, rescued, getStatus);
     }
 
@@ -162,16 +191,20 @@ export async function executeWaves(
     if (recoveryState.qualityGateDisabledModels.size > 0) {
       recoveryState.qualityGateDisabledModels.clear();
       recoveryState.perModelQualityRejections.clear();
-      ctx.logDecision('quality-circuit-breaker',
+      ctx.logDecision(
+        'quality-circuit-breaker',
         `Re-enabled quality gates for all models at wave ${waveIndex + 1} boundary`,
-        'Each wave gets a fresh quality evaluation window');
+        'Each wave gets a fresh quality evaluation window',
+      );
     }
 
     // F3: Log budget reallocation after wave completion
     const budgetStats = ctx.budgetPool.getStats();
-    ctx.logDecision('budget-reallocation',
+    ctx.logDecision(
+      'budget-reallocation',
       `After wave ${waveIndex + 1}: ${budgetStats.tokensRemaining} tokens remaining (${(budgetStats.utilization * 100).toFixed(0)}% utilized)`,
-      '');
+      '',
+    );
     ctx.budgetPool.reallocateUnused(budgetStats.tokensRemaining);
 
     // F21: Mid-swarm situational assessment
@@ -200,7 +233,7 @@ export async function executeWave(
   while (taskIndex < tasks.length && ctx.workerPool.availableSlots > 0 && !ctx.cancelled) {
     if (isCircuitBreakerActive(recoveryState, ctx)) {
       const waitMs = recoveryState.circuitBreakerUntil - Date.now();
-      if (waitMs > 0) await new Promise(resolve => setTimeout(resolve, waitMs));
+      if (waitMs > 0) await new Promise((resolve) => setTimeout(resolve, waitMs));
       continue;
     }
 
@@ -209,7 +242,7 @@ export async function executeWave(
     taskIndex++;
 
     if (taskIndex < tasks.length && ctx.workerPool.availableSlots > 0) {
-      await new Promise(resolve => setTimeout(resolve, getStaggerMs(recoveryState)));
+      await new Promise((resolve) => setTimeout(resolve, getStaggerMs(recoveryState)));
     }
   }
 
@@ -218,7 +251,14 @@ export async function executeWave(
     const completed = await ctx.workerPool.waitForAny();
     if (!completed) break;
 
-    await handleTaskCompletion(ctx, recoveryState, completed.taskId, completed.result, completed.startedAt, getStatus);
+    await handleTaskCompletion(
+      ctx,
+      recoveryState,
+      completed.taskId,
+      completed.result,
+      completed.startedAt,
+      getStatus,
+    );
 
     emitBudgetUpdate(ctx);
     ctx.emit({ type: 'swarm.status', status: getStatus() });
@@ -229,7 +269,7 @@ export async function executeWave(
       if (task.status === 'ready') {
         await dispatchTask(ctx, recoveryState, task, getStatus);
         if (taskIndex + 1 < tasks.length && ctx.workerPool.availableSlots > 0) {
-          await new Promise(resolve => setTimeout(resolve, getStaggerMs(recoveryState)));
+          await new Promise((resolve) => setTimeout(resolve, getStaggerMs(recoveryState)));
         }
       }
       taskIndex++;
@@ -237,14 +277,15 @@ export async function executeWave(
 
     // Also check for cross-wave ready tasks to fill slots
     if (ctx.workerPool.availableSlots > 0 && !isCircuitBreakerActive(recoveryState, ctx)) {
-      const moreReady = ctx.taskQueue.getAllReadyTasks()
-        .filter(t => !ctx.workerPool.getActiveWorkerStatus().some(w => w.taskId === t.id));
+      const moreReady = ctx.taskQueue
+        .getAllReadyTasks()
+        .filter((t) => !ctx.workerPool.getActiveWorkerStatus().some((w) => w.taskId === t.id));
 
       for (let i = 0; i < moreReady.length; i++) {
         if (ctx.workerPool.availableSlots <= 0) break;
         await dispatchTask(ctx, recoveryState, moreReady[i], getStatus);
         if (i + 1 < moreReady.length && ctx.workerPool.availableSlots > 0) {
-          await new Promise(resolve => setTimeout(resolve, getStaggerMs(recoveryState)));
+          await new Promise((resolve) => setTimeout(resolve, getStaggerMs(recoveryState)));
         }
       }
     }
@@ -252,26 +293,36 @@ export async function executeWave(
 
   // F20: Re-dispatch pass — after all workers finish, budget may have been freed
   if (!ctx.cancelled && ctx.budgetPool.hasCapacity()) {
-    const stillReady = ctx.taskQueue.getAllReadyTasks()
-      .filter(t => !ctx.workerPool.getActiveWorkerStatus().some(w => w.taskId === t.id));
+    const stillReady = ctx.taskQueue
+      .getAllReadyTasks()
+      .filter((t) => !ctx.workerPool.getActiveWorkerStatus().some((w) => w.taskId === t.id));
 
     if (stillReady.length > 0) {
-      ctx.logDecision('budget-redispatch',
+      ctx.logDecision(
+        'budget-redispatch',
         `Budget freed after wave — re-dispatching ${stillReady.length} ready task(s)`,
-        `Budget: ${JSON.stringify(ctx.budgetPool.getStats())}`);
+        `Budget: ${JSON.stringify(ctx.budgetPool.getStats())}`,
+      );
 
       for (const task of stillReady) {
         if (ctx.workerPool.availableSlots <= 0 || !ctx.budgetPool.hasCapacity()) break;
         await dispatchTask(ctx, recoveryState, task, getStatus);
         if (ctx.workerPool.availableSlots > 0) {
-          await new Promise(resolve => setTimeout(resolve, getStaggerMs(recoveryState)));
+          await new Promise((resolve) => setTimeout(resolve, getStaggerMs(recoveryState)));
         }
       }
 
       while (ctx.workerPool.activeCount > 0 && !ctx.cancelled) {
         const completed = await ctx.workerPool.waitForAny();
         if (!completed) break;
-        await handleTaskCompletion(ctx, recoveryState, completed.taskId, completed.result, completed.startedAt, getStatus);
+        await handleTaskCompletion(
+          ctx,
+          recoveryState,
+          completed.taskId,
+          completed.result,
+          completed.startedAt,
+          getStatus,
+        );
         emitBudgetUpdate(ctx);
         ctx.emit({ type: 'swarm.status', status: getStatus() });
       }
@@ -294,9 +345,29 @@ export async function dispatchTask(
   if (!worker) {
     ctx.logDecision('no-worker', `${task.id}: no worker for type ${task.type}`, '');
     if (task.attempts > 0) {
-      const syntheticTaskResult: SwarmTaskResult = { success: false, output: '', tokensUsed: 0, costUsed: 0, durationMs: 0, model: 'none' };
-      const syntheticSpawn: SpawnResult = { success: false, output: '', metrics: { tokens: 0, duration: 0, toolCalls: 0 } };
-      if (await tryResilienceRecovery(ctx, recoveryState, task, task.id, syntheticTaskResult, syntheticSpawn)) {
+      const syntheticTaskResult: SwarmTaskResult = {
+        success: false,
+        output: '',
+        tokensUsed: 0,
+        costUsed: 0,
+        durationMs: 0,
+        model: 'none',
+      };
+      const syntheticSpawn: SpawnResult = {
+        success: false,
+        output: '',
+        metrics: { tokens: 0, duration: 0, toolCalls: 0 },
+      };
+      if (
+        await tryResilienceRecovery(
+          ctx,
+          recoveryState,
+          task,
+          task.id,
+          syntheticTaskResult,
+          syntheticSpawn,
+        )
+      ) {
         return;
       }
     }
@@ -334,7 +405,11 @@ export async function dispatchTask(
           return;
         }
       } catch (err) {
-        ctx.logDecision('auto-split', `${task.id}: split judge failed — ${(err as Error).message}`, '');
+        ctx.logDecision(
+          'auto-split',
+          `${task.id}: split judge failed — ${(err as Error).message}`,
+          '',
+        );
       }
     }
 
@@ -368,9 +443,11 @@ export async function dispatchTask(
     // F20: Budget exhaustion is NOT a task failure
     if (errorMsg.includes('Budget pool exhausted')) {
       task.status = 'ready';
-      ctx.logDecision('budget-pause',
+      ctx.logDecision(
+        'budget-pause',
         `Cannot dispatch ${task.id}: budget exhausted — task kept ready for potential re-dispatch`,
-        `Budget stats: ${JSON.stringify(ctx.budgetPool.getStats())}`);
+        `Budget stats: ${JSON.stringify(ctx.budgetPool.getStats())}`,
+      );
       return;
     }
 
@@ -380,12 +457,36 @@ export async function dispatchTask(
       message: errorMsg,
       recovered: false,
     });
-    ctx.logDecision('dispatch-error', `${task.id}: dispatch failed: ${errorMsg.slice(0, 100)}`, `attempts: ${task.attempts}`);
+    ctx.logDecision(
+      'dispatch-error',
+      `${task.id}: dispatch failed: ${errorMsg.slice(0, 100)}`,
+      `attempts: ${task.attempts}`,
+    );
 
     if (task.attempts > 0) {
-      const syntheticTaskResult: SwarmTaskResult = { success: false, output: '', tokensUsed: 0, costUsed: 0, durationMs: 0, model: 'none' };
-      const syntheticSpawn: SpawnResult = { success: false, output: '', metrics: { tokens: 0, duration: 0, toolCalls: 0 } };
-      if (await tryResilienceRecovery(ctx, recoveryState, task, task.id, syntheticTaskResult, syntheticSpawn)) {
+      const syntheticTaskResult: SwarmTaskResult = {
+        success: false,
+        output: '',
+        tokensUsed: 0,
+        costUsed: 0,
+        durationMs: 0,
+        model: 'none',
+      };
+      const syntheticSpawn: SpawnResult = {
+        success: false,
+        output: '',
+        metrics: { tokens: 0, duration: 0, toolCalls: 0 },
+      };
+      if (
+        await tryResilienceRecovery(
+          ctx,
+          recoveryState,
+          task,
+          task.id,
+          syntheticTaskResult,
+          syntheticSpawn,
+        )
+      ) {
         ctx.errors[ctx.errors.length - 1].recovered = true;
         return;
       }
@@ -447,7 +548,11 @@ export async function handleTaskCompletion(
       willRetry: false,
       failureMode: task.failureMode,
     });
-    ctx.logDecision('dispatch-cap', `${taskId}: hard cap reached (${task.attempts}/${maxDispatches})`, 'No more retries — resilience recovery also failed');
+    ctx.logDecision(
+      'dispatch-cap',
+      `${taskId}: hard cap reached (${task.attempts}/${maxDispatches})`,
+      'No more retries — resilience recovery also failed',
+    );
     return;
   }
 
@@ -466,7 +571,11 @@ export async function handleTaskCompletion(
   ctx.totalCost += taskResult.costUsed;
 
   if (taskResult.budgetUtilization) {
-    ctx.logDecision('budget-utilization', `${taskId}: token ${taskResult.budgetUtilization.tokenPercent}%, iter ${taskResult.budgetUtilization.iterationPercent}%`, `model=${model}, tokens=${taskResult.tokensUsed}, duration=${durationMs}ms`);
+    ctx.logDecision(
+      'budget-utilization',
+      `${taskId}: token ${taskResult.budgetUtilization.tokenPercent}%, iter ${taskResult.budgetUtilization.iterationPercent}%`,
+      `model=${model}, tokens=${taskResult.tokensUsed}, duration=${durationMs}ms`,
+    );
   }
 
   // V10: Emit per-attempt event
@@ -484,12 +593,32 @@ export async function handleTaskCompletion(
   });
 
   if (!spawnResult.success) {
-    return handleFailedCompletion(ctx, recoveryState, task, taskId, spawnResult, taskResult, model, durationMs, startedAt, maxDispatches);
+    return handleFailedCompletion(
+      ctx,
+      recoveryState,
+      task,
+      taskId,
+      spawnResult,
+      taskResult,
+      model,
+      durationMs,
+      startedAt,
+      maxDispatches,
+    );
   }
 
   // V6: Hollow completion detection
   if (isHollowCompletion(spawnResult, task.type, ctx.config)) {
-    return handleHollowCompletion(ctx, recoveryState, task, taskId, spawnResult, taskResult, model, maxDispatches);
+    return handleHollowCompletion(
+      ctx,
+      recoveryState,
+      task,
+      taskId,
+      spawnResult,
+      taskResult,
+      model,
+      maxDispatches,
+    );
   }
 
   // F4: Task had pendingCascadeSkip but produced non-hollow results
@@ -499,13 +628,25 @@ export async function handleTaskCompletion(
     if (preFlight && !preFlight.passed) {
       task.pendingCascadeSkip = undefined;
       task.status = 'skipped';
-      ctx.logDecision('cascade-skip', `${taskId}: pending cascade skip honored (pre-flight failed: ${preFlight.feedback})`, '');
-      ctx.emit({ type: 'swarm.task.skipped', taskId, reason: `cascade skip honored — output failed pre-flight: ${preFlight.feedback}` });
+      ctx.logDecision(
+        'cascade-skip',
+        `${taskId}: pending cascade skip honored (pre-flight failed: ${preFlight.feedback})`,
+        '',
+      );
+      ctx.emit({
+        type: 'swarm.task.skipped',
+        taskId,
+        reason: `cascade skip honored — output failed pre-flight: ${preFlight.feedback}`,
+      });
       return;
     }
     task.pendingCascadeSkip = undefined;
     task.status = 'dispatched';
-    ctx.logDecision('cascade-skip', `${taskId}: pending cascade skip overridden — worker produced valid output`, '');
+    ctx.logDecision(
+      'cascade-skip',
+      `${taskId}: pending cascade skip overridden — worker produced valid output`,
+      '',
+    );
   }
 
   // Record model health on success
@@ -514,18 +655,31 @@ export async function handleTaskCompletion(
 
   // Run quality gate if enabled
   const effectiveRetries = getEffectiveRetries(ctx, task);
-  const recentRLCount = recoveryState.recentRateLimits.filter(t => t > Date.now() - 30_000).length;
-  const isLastAttempt = task.attempts >= (effectiveRetries + 1);
-  const shouldRunQualityGate = ctx.config.qualityGates
-    && !recoveryState.qualityGateDisabledModels.has(model)
-    && !isLastAttempt
-    && Date.now() >= recoveryState.circuitBreakerUntil
-    && recentRLCount < 2;
+  const recentRLCount = recoveryState.recentRateLimits.filter(
+    (t) => t > Date.now() - 30_000,
+  ).length;
+  const isLastAttempt = task.attempts >= effectiveRetries + 1;
+  const shouldRunQualityGate =
+    ctx.config.qualityGates &&
+    !recoveryState.qualityGateDisabledModels.has(model) &&
+    !isLastAttempt &&
+    Date.now() >= recoveryState.circuitBreakerUntil &&
+    recentRLCount < 2;
 
   const cachedArtifactReport = checkArtifacts(task);
 
   if (shouldRunQualityGate) {
-    const rejected = await runQualityGate(ctx, recoveryState, task, taskId, spawnResult, taskResult, model, effectiveRetries, cachedArtifactReport);
+    const rejected = await runQualityGate(
+      ctx,
+      recoveryState,
+      task,
+      taskId,
+      spawnResult,
+      taskResult,
+      model,
+      effectiveRetries,
+      cachedArtifactReport,
+    );
     if (rejected) return;
   }
 
@@ -540,8 +694,14 @@ export async function handleTaskCompletion(
       if (canRetry) {
         ctx.retries++;
       } else {
-        ctx.logDecision('preflight-reject', `${taskId}: pre-flight failed: ${preFlight.feedback}`, '');
-        if (await tryResilienceRecovery(ctx, recoveryState, task, taskId, taskResult, spawnResult)) {
+        ctx.logDecision(
+          'preflight-reject',
+          `${taskId}: pre-flight failed: ${preFlight.feedback}`,
+          '',
+        );
+        if (
+          await tryResilienceRecovery(ctx, recoveryState, task, taskId, taskResult, spawnResult)
+        ) {
           return;
         }
         ctx.taskQueue.triggerCascadeSkip(taskId);
@@ -569,8 +729,14 @@ export async function handleTaskCompletion(
         if (canRetry) {
           ctx.retries++;
         } else {
-          ctx.logDecision('concrete-reject', `${taskId}: concrete validation failed: ${concreteResult.issues.join('; ')}`, '');
-          if (await tryResilienceRecovery(ctx, recoveryState, task, taskId, taskResult, spawnResult)) {
+          ctx.logDecision(
+            'concrete-reject',
+            `${taskId}: concrete validation failed: ${concreteResult.issues.join('; ')}`,
+            '',
+          );
+          if (
+            await tryResilienceRecovery(ctx, recoveryState, task, taskId, taskResult, spawnResult)
+          ) {
             return;
           }
           ctx.taskQueue.triggerCascadeSkip(taskId);
@@ -592,10 +758,11 @@ export async function handleTaskCompletion(
   // Final completion guard: block "narrative success" for action tasks
   const completionGuard = ctx.config.completionGuard ?? {};
   const rejectFutureIntentOutputs = completionGuard.rejectFutureIntentOutputs ?? true;
-  const requireConcreteArtifactsForActionTasks = completionGuard.requireConcreteArtifactsForActionTasks ?? true;
+  const requireConcreteArtifactsForActionTasks =
+    completionGuard.requireConcreteArtifactsForActionTasks ?? true;
   const typeConfig = getTaskTypeConfig(task.type, ctx.config);
   const artifactReport = checkArtifactsEnhanced(task, taskResult);
-  const filesOnDisk = artifactReport.files.filter(f => f.exists && f.sizeBytes > 0).length;
+  const filesOnDisk = artifactReport.files.filter((f) => f.exists && f.sizeBytes > 0).length;
   const hasConcreteArtifacts = filesOnDisk > 0 || (taskResult.filesModified?.length ?? 0) > 0;
   const isActionTask = !!typeConfig.requiresToolCalls;
 
@@ -729,13 +896,23 @@ async function handleFailedCompletion(
     const count = (recoveryState.taskTimeoutCounts.get(taskId) ?? 0) + 1;
     recoveryState.taskTimeoutCounts.set(taskId, count);
     const timeoutLimit = ctx.config.consecutiveTimeoutLimit ?? 3;
-    ctx.logDecision('timeout-tracking', `${taskId}: consecutive timeout ${count}/${timeoutLimit}`, '');
+    ctx.logDecision(
+      'timeout-tracking',
+      `${taskId}: consecutive timeout ${count}/${timeoutLimit}`,
+      '',
+    );
 
     if (count >= timeoutLimit) {
       let failoverSucceeded = false;
       if (ctx.config.enableModelFailover) {
-        const capability: WorkerCapability = getTaskTypeConfig(task.type, ctx.config).capability ?? 'code';
-        const alternative = selectAlternativeModel(ctx.config.workers, model, capability, ctx.healthTracker);
+        const capability: WorkerCapability =
+          getTaskTypeConfig(task.type, ctx.config).capability ?? 'code';
+        const alternative = selectAlternativeModel(
+          ctx.config.workers,
+          model,
+          capability,
+          ctx.healthTracker,
+        );
         if (alternative) {
           ctx.emit({
             type: 'swarm.model.failover',
@@ -746,15 +923,32 @@ async function handleFailedCompletion(
           });
           task.assignedModel = alternative.model;
           recoveryState.taskTimeoutCounts.set(taskId, 0);
-          ctx.logDecision('failover', `Timeout failover ${taskId}: ${model} → ${alternative.model}`, `${count} consecutive timeouts`);
+          ctx.logDecision(
+            'failover',
+            `Timeout failover ${taskId}: ${model} → ${alternative.model}`,
+            `${count} consecutive timeouts`,
+          );
           failoverSucceeded = true;
         }
       }
 
       if (!failoverSucceeded) {
         task.failureMode = 'timeout';
-        const timeoutTaskResult = ctx.workerPool.toTaskResult(spawnResult, task, Date.now() - startedAt);
-        if (await tryResilienceRecovery(ctx, recoveryState, task, taskId, timeoutTaskResult, spawnResult)) {
+        const timeoutTaskResult = ctx.workerPool.toTaskResult(
+          spawnResult,
+          task,
+          Date.now() - startedAt,
+        );
+        if (
+          await tryResilienceRecovery(
+            ctx,
+            recoveryState,
+            task,
+            taskId,
+            timeoutTaskResult,
+            spawnResult,
+          )
+        ) {
           recoveryState.taskTimeoutCounts.delete(taskId);
           return;
         }
@@ -773,7 +967,11 @@ async function handleFailedCompletion(
           retrySuppressed: true,
           retryReason: 'Consecutive timeout limit reached with no alternative model',
         });
-        ctx.logDecision('timeout-early-fail', `${taskId}: ${count} consecutive timeouts, no alt model — resilience recovery also failed`, '');
+        ctx.logDecision(
+          'timeout-early-fail',
+          `${taskId}: ${count} consecutive timeouts, no alt model — resilience recovery also failed`,
+          '',
+        );
         recoveryState.taskTimeoutCounts.delete(taskId);
         return;
       }
@@ -784,8 +982,14 @@ async function handleFailedCompletion(
 
   // V2: Model failover on retryable rate limits
   if (isRateLimited && ctx.config.enableModelFailover) {
-    const capability: WorkerCapability = getTaskTypeConfig(task.type, ctx.config).capability ?? 'code';
-    const alternative = selectAlternativeModel(ctx.config.workers, model, capability, ctx.healthTracker);
+    const capability: WorkerCapability =
+      getTaskTypeConfig(task.type, ctx.config).capability ?? 'code';
+    const alternative = selectAlternativeModel(
+      ctx.config.workers,
+      model,
+      capability,
+      ctx.healthTracker,
+    );
     if (alternative) {
       ctx.emit({
         type: 'swarm.model.failover',
@@ -795,7 +999,11 @@ async function handleFailedCompletion(
         reason: errorType,
       });
       task.assignedModel = alternative.model;
-      ctx.logDecision('failover', `Switched ${taskId} from ${model} to ${alternative.model}`, `${errorType} error`);
+      ctx.logDecision(
+        'failover',
+        `Switched ${taskId} from ${model} to ${alternative.model}`,
+        `${errorType} error`,
+      );
     }
   }
 
@@ -826,8 +1034,8 @@ async function handleFailedCompletion(
   const retryLimit = isNonRetryable
     ? 0
     : isRateLimited
-    ? Math.min(ctx.config.rateLimitRetries ?? 3, baseRetries + 1)
-    : baseRetries;
+      ? Math.min(ctx.config.rateLimitRetries ?? 3, baseRetries + 1)
+      : baseRetries;
   const canRetry = ctx.taskQueue.markFailedWithoutCascade(taskId, retryLimit);
   if (isNonRetryable) {
     ctx.logDecision('retry-suppressed', `${taskId}: ${failureClass}`, reason);
@@ -839,7 +1047,11 @@ async function handleFailedCompletion(
       const baseDelay = ctx.config.retryBaseDelayMs ?? 5000;
       const cooldownMs = Math.min(baseDelay * Math.pow(2, task.attempts - 1), 30000);
       ctx.taskQueue.setRetryAfter(taskId, cooldownMs);
-      ctx.logDecision('rate-limit-cooldown', `${taskId}: ${errorType} cooldown ${cooldownMs}ms, model ${model}`, '');
+      ctx.logDecision(
+        'rate-limit-cooldown',
+        `${taskId}: ${errorType} cooldown ${cooldownMs}ms, model ${model}`,
+        '',
+      );
     }
   } else if (!isRateLimited) {
     if (await tryResilienceRecovery(ctx, recoveryState, task, taskId, taskResult, spawnResult)) {
@@ -884,15 +1096,25 @@ async function handleHollowCompletion(
     task.pendingCascadeSkip = undefined;
     task.status = 'skipped';
     ctx.totalHollows++;
-    ctx.logDecision('cascade-skip', `${taskId}: pending cascade skip honored (hollow completion)`, '');
-    ctx.emit({ type: 'swarm.task.skipped', taskId, reason: 'cascade skip honored — hollow completion' });
+    ctx.logDecision(
+      'cascade-skip',
+      `${taskId}: pending cascade skip honored (hollow completion)`,
+      '',
+    );
+    ctx.emit({
+      type: 'swarm.task.skipped',
+      taskId,
+      reason: 'cascade skip honored — hollow completion',
+    });
     return;
   }
 
   task.failureMode = 'hollow';
   ctx.healthTracker.recordHollow(model);
 
-  const admitsFailure = spawnResult.success && FAILURE_INDICATORS.some(f => (spawnResult.output ?? '').toLowerCase().includes(f));
+  const admitsFailure =
+    spawnResult.success &&
+    FAILURE_INDICATORS.some((f) => (spawnResult.output ?? '').toLowerCase().includes(f));
   task.retryContext = {
     previousFeedback: admitsFailure
       ? 'Previous attempt reported success but admitted failure (e.g., "budget exhausted", "unable to complete"). You MUST execute tool calls and produce concrete output this time.'
@@ -910,8 +1132,14 @@ async function handleHollowCompletion(
 
   // Model failover for hollow completions
   if (ctx.config.enableModelFailover) {
-    const capability: WorkerCapability = getTaskTypeConfig(task.type, ctx.config).capability ?? 'code';
-    const alternative = selectAlternativeModel(ctx.config.workers, model, capability, ctx.healthTracker);
+    const capability: WorkerCapability =
+      getTaskTypeConfig(task.type, ctx.config).capability ?? 'code';
+    const alternative = selectAlternativeModel(
+      ctx.config.workers,
+      model,
+      capability,
+      ctx.healthTracker,
+    );
     if (alternative) {
       ctx.emit({
         type: 'swarm.model.failover',
@@ -921,7 +1149,11 @@ async function handleHollowCompletion(
         reason: 'hollow-completion',
       });
       task.assignedModel = alternative.model;
-      ctx.logDecision('failover', `Hollow failover ${taskId}: ${model} → ${alternative.model}`, 'Model produced hollow completion');
+      ctx.logDecision(
+        'failover',
+        `Hollow failover ${taskId}: ${model} → ${alternative.model}`,
+        'Model produced hollow completion',
+      );
     }
   }
 
@@ -948,26 +1180,38 @@ async function handleHollowCompletion(
   });
   ctx.hollowStreak++;
   ctx.totalHollows++;
-  ctx.logDecision('hollow-completion', `${taskId}: worker completed with 0 tool calls (streak: ${ctx.hollowStreak}, total hollows: ${ctx.totalHollows}/${ctx.totalDispatches})`, canRetry ? 'Marking as failed for retry' : 'Retries exhausted — hard fail');
+  ctx.logDecision(
+    'hollow-completion',
+    `${taskId}: worker completed with 0 tool calls (streak: ${ctx.hollowStreak}, total hollows: ${ctx.totalHollows}/${ctx.totalDispatches})`,
+    canRetry ? 'Marking as failed for retry' : 'Retries exhausted — hard fail',
+  );
 
   // B2: Hollow streak handling
   const HOLLOW_STREAK_THRESHOLD = 3;
   if (ctx.hollowStreak >= HOLLOW_STREAK_THRESHOLD) {
-    const uniqueModels = new Set(ctx.config.workers.map(w => w.model));
+    const uniqueModels = new Set(ctx.config.workers.map((w) => w.model));
     const singleModel = uniqueModels.size === 1;
     const onlyModel = [...uniqueModels][0];
-    const modelUnhealthy = singleModel && !ctx.healthTracker.getAllRecords().find(r => r.model === onlyModel)?.healthy;
+    const modelUnhealthy =
+      singleModel && !ctx.healthTracker.getAllRecords().find((r) => r.model === onlyModel)?.healthy;
 
     if (singleModel && modelUnhealthy) {
       if (ctx.config.enableHollowTermination) {
-        ctx.logDecision('early-termination',
+        ctx.logDecision(
+          'early-termination',
           `Terminating swarm: ${ctx.hollowStreak} consecutive hollow completions on sole model ${onlyModel}`,
-          'Single-model swarm with unhealthy model — enableHollowTermination is on');
-        skipRemainingTasksInternal(ctx, `Single-model hollow streak (${ctx.hollowStreak}x on ${onlyModel})`);
+          'Single-model swarm with unhealthy model — enableHollowTermination is on',
+        );
+        skipRemainingTasksInternal(
+          ctx,
+          `Single-model hollow streak (${ctx.hollowStreak}x on ${onlyModel})`,
+        );
       } else {
-        ctx.logDecision('stall-mode',
+        ctx.logDecision(
+          'stall-mode',
           `${ctx.hollowStreak} consecutive hollows on sole model ${onlyModel} — entering stall mode`,
-          'Will attempt model failover or simplified retry on next dispatch');
+          'Will attempt model failover or simplified retry on next dispatch',
+        );
         ctx.hollowStreak = 0;
       }
     }
@@ -980,15 +1224,22 @@ async function handleHollowCompletion(
     const ratio = ctx.totalHollows / ctx.totalDispatches;
     if (ratio > threshold) {
       if (ctx.config.enableHollowTermination) {
-        ctx.logDecision('early-termination',
+        ctx.logDecision(
+          'early-termination',
           `Terminating swarm: hollow ratio ${(ratio * 100).toFixed(0)}% (${ctx.totalHollows}/${ctx.totalDispatches})`,
-          `Exceeds threshold ${(threshold * 100).toFixed(0)}% after ${minDispatches}+ dispatches — enableHollowTermination is on`);
-        skipRemainingTasksInternal(ctx, `Hollow ratio ${(ratio * 100).toFixed(0)}% — models cannot execute tasks`);
+          `Exceeds threshold ${(threshold * 100).toFixed(0)}% after ${minDispatches}+ dispatches — enableHollowTermination is on`,
+        );
+        skipRemainingTasksInternal(
+          ctx,
+          `Hollow ratio ${(ratio * 100).toFixed(0)}% — models cannot execute tasks`,
+        );
       } else if (!recoveryState.hollowRatioWarned) {
         recoveryState.hollowRatioWarned = true;
-        ctx.logDecision('stall-warning',
+        ctx.logDecision(
+          'stall-warning',
           `Hollow ratio ${(ratio * 100).toFixed(0)}% (${ctx.totalHollows}/${ctx.totalDispatches})`,
-          'High hollow rate but continuing — tasks may still recover via resilience');
+          'High hollow rate but continuing — tasks may still recover via resilience',
+        );
       }
     }
   }
@@ -1009,14 +1260,22 @@ async function runQualityGate(
   effectiveRetries: number,
   cachedArtifactReport: ReturnType<typeof checkArtifacts>,
 ): Promise<boolean> {
-  const judgeModel = ctx.config.hierarchy?.judge?.model
-    ?? ctx.config.qualityGateModel ?? ctx.config.orchestratorModel;
+  const judgeModel =
+    ctx.config.hierarchy?.judge?.model ??
+    ctx.config.qualityGateModel ??
+    ctx.config.orchestratorModel;
   const judgeConfig: QualityGateConfig = {
     model: judgeModel,
     persona: ctx.config.hierarchy?.judge?.persona,
   };
 
-  ctx.emit({ type: 'swarm.role.action', role: 'judge', action: 'quality-gate', model: judgeModel, taskId });
+  ctx.emit({
+    type: 'swarm.role.action',
+    role: 'judge',
+    action: 'quality-gate',
+    model: judgeModel,
+    taskId,
+  });
 
   const fileArtifacts = extractFileArtifacts(ctx, task, taskResult);
 
@@ -1045,33 +1304,42 @@ async function runQualityGate(
     if (!concreteResult.passed) {
       quality.passed = false;
       quality.feedback += ` [F11: foundation task barely passed (${quality.score}/${baseThreshold}) but concrete validation failed: ${concreteResult.issues.join('; ')}]`;
-      ctx.logDecision('foundation-concrete-gate',
+      ctx.logDecision(
+        'foundation-concrete-gate',
         `${taskId}: foundation task scored ${quality.score} (relaxed threshold ${qualityThreshold}) but concrete checks failed — rejecting`,
-        concreteResult.issues.join('; '));
+        concreteResult.issues.join('; '),
+      );
     }
   }
 
   if (!quality.passed) {
     // F7: Gate error fallback
-    if (quality.gateError && (ctx.config.enableConcreteValidation !== false)) {
+    if (quality.gateError && ctx.config.enableConcreteValidation !== false) {
       const concreteResult = runConcreteChecks(task, taskResult);
       if (concreteResult.passed) {
-        ctx.logDecision('gate-error-fallback',
+        ctx.logDecision(
+          'gate-error-fallback',
           `${taskId}: gate error but concrete checks passed — tentatively accepting`,
-          quality.gateErrorMessage ?? 'unknown');
+          quality.gateErrorMessage ?? 'unknown',
+        );
         taskResult.qualityScore = quality.score;
         taskResult.qualityFeedback = `${quality.feedback} [concrete validation passed — tentative accept]`;
         recoveryState.perModelQualityRejections.delete(model);
         return false; // passed
       } else {
-        ctx.logDecision('gate-error-fallback',
+        ctx.logDecision(
+          'gate-error-fallback',
           `${taskId}: gate error AND concrete checks failed — rejecting`,
-          `Concrete issues: ${concreteResult.issues.join('; ')}`);
+          `Concrete issues: ${concreteResult.issues.join('; ')}`,
+        );
 
         ctx.qualityRejections++;
         task.failureMode = 'quality';
         ctx.healthTracker.recordQualityRejection(model, quality.score);
-        ctx.emit({ type: 'swarm.model.health', record: { model, ...getModelHealthSummary(ctx, model) } });
+        ctx.emit({
+          type: 'swarm.model.health',
+          record: { model, ...getModelHealthSummary(ctx, model) },
+        });
         ctx.hollowStreak = 0;
 
         task.retryContext = {
@@ -1087,7 +1355,9 @@ async function runQualityGate(
         if (canRetry) {
           ctx.retries++;
         } else {
-          if (await tryResilienceRecovery(ctx, recoveryState, task, taskId, taskResult, spawnResult)) {
+          if (
+            await tryResilienceRecovery(ctx, recoveryState, task, taskId, taskResult, spawnResult)
+          ) {
             return true;
           }
           ctx.taskQueue.triggerCascadeSkip(taskId);
@@ -1101,7 +1371,9 @@ async function runQualityGate(
           artifactCount: fileArtifacts.length,
           outputLength: taskResult.output.length,
           preFlightReject: false,
-          filesOnDisk: checkArtifactsEnhanced(task, taskResult).files.filter(f => f.exists && f.sizeBytes > 0).length,
+          filesOnDisk: checkArtifactsEnhanced(task, taskResult).files.filter(
+            (f) => f.exists && f.sizeBytes > 0,
+          ).length,
         });
         return true;
       }
@@ -1110,7 +1382,10 @@ async function runQualityGate(
       ctx.qualityRejections++;
       task.failureMode = 'quality';
       ctx.healthTracker.recordQualityRejection(model, quality.score);
-      ctx.emit({ type: 'swarm.model.health', record: { model, ...getModelHealthSummary(ctx, model) } });
+      ctx.emit({
+        type: 'swarm.model.health',
+        record: { model, ...getModelHealthSummary(ctx, model) },
+      });
       ctx.hollowStreak = 0;
 
       // F7: Per-model circuit breaker
@@ -1121,9 +1396,11 @@ async function runQualityGate(
 
         if (modelRejections >= QUALITY_CIRCUIT_BREAKER_THRESHOLD) {
           recoveryState.qualityGateDisabledModels.add(model);
-          ctx.logDecision('quality-circuit-breaker',
+          ctx.logDecision(
+            'quality-circuit-breaker',
             `Switched model ${model} to pre-flight-only mode after ${modelRejections} rejections`,
-            'Skipping LLM judge but keeping pre-flight checks mandatory');
+            'Skipping LLM judge but keeping pre-flight checks mandatory',
+          );
         }
       }
 
@@ -1141,9 +1418,19 @@ async function runQualityGate(
       });
 
       // V5: Model failover on quality rejection
-      if (quality.score < qualityThreshold && ctx.config.enableModelFailover && !quality.artifactAutoFail) {
-        const capability: WorkerCapability = getTaskTypeConfig(task.type, ctx.config).capability ?? 'code';
-        const alternative = selectAlternativeModel(ctx.config.workers, model, capability, ctx.healthTracker);
+      if (
+        quality.score < qualityThreshold &&
+        ctx.config.enableModelFailover &&
+        !quality.artifactAutoFail
+      ) {
+        const capability: WorkerCapability =
+          getTaskTypeConfig(task.type, ctx.config).capability ?? 'code';
+        const alternative = selectAlternativeModel(
+          ctx.config.workers,
+          model,
+          capability,
+          ctx.healthTracker,
+        );
         if (alternative) {
           ctx.emit({
             type: 'swarm.model.failover',
@@ -1153,7 +1440,11 @@ async function runQualityGate(
             reason: `quality-score-${quality.score}`,
           });
           task.assignedModel = alternative.model;
-          ctx.logDecision('failover', `Quality failover ${taskId}: ${model} → ${alternative.model}`, `Score ${quality.score}/5`);
+          ctx.logDecision(
+            'failover',
+            `Quality failover ${taskId}: ${model} → ${alternative.model}`,
+            `Score ${quality.score}/5`,
+          );
         }
       }
 
@@ -1161,7 +1452,9 @@ async function runQualityGate(
       if (canRetry) {
         ctx.retries++;
       } else {
-        if (await tryResilienceRecovery(ctx, recoveryState, task, taskId, taskResult, spawnResult)) {
+        if (
+          await tryResilienceRecovery(ctx, recoveryState, task, taskId, taskResult, spawnResult)
+        ) {
           return true;
         }
         ctx.taskQueue.triggerCascadeSkip(taskId);
@@ -1175,7 +1468,9 @@ async function runQualityGate(
         artifactCount: fileArtifacts.length,
         outputLength: taskResult.output.length,
         preFlightReject: quality.preFlightReject,
-        filesOnDisk: checkArtifactsEnhanced(task, taskResult).files.filter(f => f.exists && f.sizeBytes > 0).length,
+        filesOnDisk: checkArtifactsEnhanced(task, taskResult).files.filter(
+          (f) => f.exists && f.sizeBytes > 0,
+        ).length,
       });
       return true;
     } else {
@@ -1197,7 +1492,9 @@ async function runQualityGate(
       if (canRetry) {
         ctx.retries++;
       } else {
-        if (await tryResilienceRecovery(ctx, recoveryState, task, taskId, taskResult, spawnResult)) {
+        if (
+          await tryResilienceRecovery(ctx, recoveryState, task, taskId, taskResult, spawnResult)
+        ) {
           return true;
         }
         ctx.taskQueue.triggerCascadeSkip(taskId);
@@ -1211,7 +1508,9 @@ async function runQualityGate(
         artifactCount: fileArtifacts.length,
         outputLength: taskResult.output.length,
         preFlightReject: false,
-        filesOnDisk: checkArtifactsEnhanced(task, taskResult).files.filter(f => f.exists && f.sizeBytes > 0).length,
+        filesOnDisk: checkArtifactsEnhanced(task, taskResult).files.filter(
+          (f) => f.exists && f.sizeBytes > 0,
+        ).length,
       });
       return true;
     }

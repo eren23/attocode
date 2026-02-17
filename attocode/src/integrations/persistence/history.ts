@@ -68,7 +68,7 @@ export class HistoryManager {
         const content = fs.readFileSync(this.config.historyFile, 'utf8');
         this.history = content
           .split('\n')
-          .filter(line => line.trim().length > 0)
+          .filter((line) => line.trim().length > 0)
           .slice(-this.config.maxEntries); // Only keep most recent
       }
     } catch {
@@ -149,9 +149,7 @@ export class HistoryManager {
     if (!query.trim()) return [];
 
     const lowerQuery = query.toLowerCase();
-    return this.history
-      .filter(entry => entry.toLowerCase().includes(lowerQuery))
-      .reverse(); // Most recent first
+    return this.history.filter((entry) => entry.toLowerCase().includes(lowerQuery)).reverse(); // Most recent first
   }
 
   /**

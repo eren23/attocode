@@ -13,29 +13,83 @@ import { type Token, type TokenType, registerTokenizer } from '../lexer.js';
 
 const KEYWORDS = new Set([
   // Declarations
-  'const', 'let', 'var', 'function', 'class', 'interface', 'type', 'enum', 'namespace',
+  'const',
+  'let',
+  'var',
+  'function',
+  'class',
+  'interface',
+  'type',
+  'enum',
+  'namespace',
   // Control flow
-  'if', 'else', 'switch', 'case', 'default', 'break', 'continue',
-  'for', 'while', 'do', 'in', 'of',
-  'try', 'catch', 'finally', 'throw',
-  'return', 'yield',
+  'if',
+  'else',
+  'switch',
+  'case',
+  'default',
+  'break',
+  'continue',
+  'for',
+  'while',
+  'do',
+  'in',
+  'of',
+  'try',
+  'catch',
+  'finally',
+  'throw',
+  'return',
+  'yield',
   // Modules
-  'import', 'export', 'from', 'as', 'default',
+  'import',
+  'export',
+  'from',
+  'as',
+  'default',
   // Async
-  'async', 'await',
+  'async',
+  'await',
   // OOP
-  'new', 'this', 'super', 'extends', 'implements', 'static', 'get', 'set',
-  'public', 'private', 'protected', 'readonly', 'abstract', 'override',
+  'new',
+  'this',
+  'super',
+  'extends',
+  'implements',
+  'static',
+  'get',
+  'set',
+  'public',
+  'private',
+  'protected',
+  'readonly',
+  'abstract',
+  'override',
   // Operators
-  'typeof', 'instanceof', 'delete', 'void',
+  'typeof',
+  'instanceof',
+  'delete',
+  'void',
   // Values
-  'true', 'false', 'null', 'undefined', 'NaN', 'Infinity',
+  'true',
+  'false',
+  'null',
+  'undefined',
+  'NaN',
+  'Infinity',
   // TypeScript
-  'declare', 'module', 'keyof', 'infer', 'satisfies', 'is', 'asserts',
+  'declare',
+  'module',
+  'keyof',
+  'infer',
+  'satisfies',
+  'is',
+  'asserts',
 ]);
 
 const OPERATORS = /^(?:[+\-*/%&|^!~<>=?:]+|\.{3}|=>)/;
-const NUMBER = /^(?:0[xX][0-9a-fA-F_]+|0[oO][0-7_]+|0[bB][01_]+|(?:\d[\d_]*\.?[\d_]*|\.\d[\d_]*)(?:[eE][+-]?\d[\d_]*)?n?)/;
+const NUMBER =
+  /^(?:0[xX][0-9a-fA-F_]+|0[oO][0-7_]+|0[bB][01_]+|(?:\d[\d_]*\.?[\d_]*|\.\d[\d_]*)(?:[eE][+-]?\d[\d_]*)?n?)/;
 const IDENTIFIER = /^[a-zA-Z_$][a-zA-Z0-9_$]*/;
 const WHITESPACE = /^[ \t]+/;
 

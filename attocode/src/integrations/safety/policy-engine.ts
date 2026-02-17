@@ -13,14 +13,37 @@ import { evaluateBashPolicy } from './bash-policy.js';
 export const DEFAULT_POLICY_PROFILES: Record<string, PolicyProfile> = {
   'research-safe': {
     toolAccessMode: 'whitelist',
-    allowedTools: ['read_file', 'list_files', 'glob', 'grep', 'web_search', 'write_file', 'bash', 'task_get', 'task_list'],
+    allowedTools: [
+      'read_file',
+      'list_files',
+      'glob',
+      'grep',
+      'web_search',
+      'write_file',
+      'bash',
+      'task_get',
+      'task_list',
+    ],
     deniedTools: ['delete_file'],
     bashMode: 'read_only',
     bashWriteProtection: 'block_file_mutation',
   },
   'code-strict-bash': {
     toolAccessMode: 'whitelist',
-    allowedTools: ['read_file', 'write_file', 'edit_file', 'list_files', 'glob', 'grep', 'bash', 'web_search', 'task_create', 'task_update', 'task_get', 'task_list'],
+    allowedTools: [
+      'read_file',
+      'write_file',
+      'edit_file',
+      'list_files',
+      'glob',
+      'grep',
+      'bash',
+      'web_search',
+      'task_create',
+      'task_update',
+      'task_get',
+      'task_list',
+    ],
     bashMode: 'full',
     bashWriteProtection: 'block_file_mutation',
   },
@@ -31,7 +54,15 @@ export const DEFAULT_POLICY_PROFILES: Record<string, PolicyProfile> = {
   },
   'review-safe': {
     toolAccessMode: 'whitelist',
-    allowedTools: ['read_file', 'list_files', 'glob', 'grep', 'web_search', 'task_get', 'task_list'],
+    allowedTools: [
+      'read_file',
+      'list_files',
+      'glob',
+      'grep',
+      'web_search',
+      'task_get',
+      'task_list',
+    ],
     deniedTools: ['write_file', 'edit_file', 'delete_file', 'bash'],
     bashMode: 'disabled',
     bashWriteProtection: 'block_file_mutation',
@@ -166,9 +197,7 @@ function applyLegacyMappings(
     merged.bashMode = options.sandboxConfig.bashMode;
     metadata.usedLegacyMappings = true;
     metadata.legacyMappingSources.push('sandbox.bashMode');
-    metadata.warnings.push(
-      'sandbox.bashMode override is active. Prefer profile-level bashMode.',
-    );
+    metadata.warnings.push('sandbox.bashMode override is active. Prefer profile-level bashMode.');
   }
   if (options.sandboxConfig?.bashWriteProtection) {
     merged.bashWriteProtection = options.sandboxConfig.bashWriteProtection;
@@ -184,7 +213,8 @@ function applyLegacyMappings(
 
 export function resolvePolicyProfile(options: ResolvePolicyProfileOptions): ResolvedPolicyProfile {
   const policyEngine = options.policyEngine || undefined;
-  const legacyFallback = policyEngine?.legacyFallback ?? DEFAULT_POLICY_ENGINE_CONFIG.legacyFallback;
+  const legacyFallback =
+    policyEngine?.legacyFallback ?? DEFAULT_POLICY_ENGINE_CONFIG.legacyFallback;
   const mergedProfiles: Record<string, PolicyProfile> = {
     ...DEFAULT_POLICY_PROFILES,
     ...(policyEngine?.profiles ?? {}),
@@ -201,12 +231,12 @@ export function resolvePolicyProfile(options: ResolvePolicyProfileOptions): Reso
         target.allowedTools = [...new Set([...target.allowedTools, ...ext.addTools])];
         // If you explicitly add a tool, remove it from deniedTools so it actually works
         if (target.deniedTools) {
-          target.deniedTools = target.deniedTools.filter(t => !ext.addTools!.includes(t));
+          target.deniedTools = target.deniedTools.filter((t) => !ext.addTools!.includes(t));
         }
       }
       if (ext.removeTools?.length) {
         if (target.allowedTools) {
-          target.allowedTools = target.allowedTools.filter(t => !ext.removeTools!.includes(t));
+          target.allowedTools = target.allowedTools.filter((t) => !ext.removeTools!.includes(t));
         }
         // Also add removed tools to deniedTools for belt-and-suspenders
         target.deniedTools = [...new Set([...(target.deniedTools ?? []), ...ext.removeTools])];
@@ -222,7 +252,8 @@ export function resolvePolicyProfile(options: ResolvePolicyProfileOptions): Reso
   let requestedProfile: string = defaultProfileName;
 
   if (options.requestedProfile || options.worker?.policyProfile) {
-    requestedProfile = options.requestedProfile ?? options.worker?.policyProfile ?? defaultProfileName;
+    requestedProfile =
+      options.requestedProfile ?? options.worker?.policyProfile ?? defaultProfileName;
     selectionSource = 'explicit';
   } else if (options.isSwarmWorker) {
     const workerInferred = inferSwarmProfileForWorker(options.worker);
@@ -255,11 +286,19 @@ export function resolvePolicyProfile(options: ResolvePolicyProfileOptions): Reso
       };
 
   // Merge worker.extraTools into the profile whitelist (additive, overrides deniedTools)
-  if (options.worker?.extraTools?.length && effective.toolAccessMode === 'whitelist' && effective.allowedTools) {
-    effective.allowedTools = [...new Set([...effective.allowedTools, ...options.worker.extraTools])];
+  if (
+    options.worker?.extraTools?.length &&
+    effective.toolAccessMode === 'whitelist' &&
+    effective.allowedTools
+  ) {
+    effective.allowedTools = [
+      ...new Set([...effective.allowedTools, ...options.worker.extraTools]),
+    ];
     // If you explicitly add a tool via extraTools, remove it from deniedTools so it actually works
     if (effective.deniedTools) {
-      effective.deniedTools = effective.deniedTools.filter(t => !options.worker!.extraTools!.includes(t));
+      effective.deniedTools = effective.deniedTools.filter(
+        (t) => !options.worker!.extraTools!.includes(t),
+      );
     }
   }
 
@@ -300,16 +339,14 @@ export function evaluateBashCommandByProfile(
 ): { allowed: boolean; reason?: string } {
   let mode = profile.bashMode ?? 'full';
   if (mode === 'task_scoped') {
-    mode = ['implement', 'test', 'refactor', 'integrate', 'deploy', 'document'].includes(taskType ?? '')
+    mode = ['implement', 'test', 'refactor', 'integrate', 'deploy', 'document'].includes(
+      taskType ?? '',
+    )
       ? 'read_only'
       : 'disabled';
   }
 
-  const decision = evaluateBashPolicy(
-    command,
-    mode,
-    profile.bashWriteProtection ?? 'off',
-  );
+  const decision = evaluateBashPolicy(command, mode, profile.bashWriteProtection ?? 'off');
 
   return { allowed: decision.allowed, reason: decision.reason };
 }
@@ -327,8 +364,12 @@ export function mergeApprovalScopeWithProfile(
   requireApproval: string[];
 } {
   return {
-    autoApprove: [...new Set([...(scope.autoApprove ?? []), ...(profile.approval?.autoApprove ?? [])])],
+    autoApprove: [
+      ...new Set([...(scope.autoApprove ?? []), ...(profile.approval?.autoApprove ?? [])]),
+    ],
     scopedApprove: { ...(scope.scopedApprove ?? {}), ...(profile.approval?.scopedApprove ?? {}) },
-    requireApproval: [...new Set([...(scope.requireApproval ?? []), ...(profile.approval?.requireApproval ?? [])])],
+    requireApproval: [
+      ...new Set([...(scope.requireApproval ?? []), ...(profile.approval?.requireApproval ?? [])]),
+    ],
   };
 }

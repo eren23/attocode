@@ -45,17 +45,17 @@ import { logger } from '../integrations/utilities/logger.js';
  * Categories of failures for pattern detection.
  */
 export type FailureCategory =
-  | 'permission'     // Access/permission denied
-  | 'not_found'      // File/resource not found
-  | 'syntax'         // Syntax/parsing errors
-  | 'type'           // Type errors
-  | 'runtime'        // Runtime exceptions
-  | 'network'        // Network/connection errors
-  | 'timeout'        // Timeout errors
-  | 'validation'     // Input validation errors
-  | 'logic'          // Logic/assertion errors
-  | 'resource'       // Resource exhaustion (memory, disk)
-  | 'unknown';       // Uncategorized
+  | 'permission' // Access/permission denied
+  | 'not_found' // File/resource not found
+  | 'syntax' // Syntax/parsing errors
+  | 'type' // Type errors
+  | 'runtime' // Runtime exceptions
+  | 'network' // Network/connection errors
+  | 'timeout' // Timeout errors
+  | 'validation' // Input validation errors
+  | 'logic' // Logic/assertion errors
+  | 'resource' // Resource exhaustion (memory, disk)
+  | 'unknown'; // Uncategorized
 
 /**
  * A recorded failure.
@@ -344,17 +344,13 @@ export class FailureTracker {
    * Record a failure.
    */
   recordFailure(input: FailureInput): Failure {
-    const errorString = input.error instanceof Error
-      ? input.error.message
-      : input.error;
+    const errorString = input.error instanceof Error ? input.error.message : input.error;
 
-    const stackTrace = input.error instanceof Error
-      ? input.error.stack
-      : undefined;
+    const stackTrace = input.error instanceof Error ? input.error.stack : undefined;
 
     // Auto-categorize if needed
-    const category = input.category ??
-      (this.config.categorizeErrors ? categorizeError(errorString) : 'unknown');
+    const category =
+      input.category ?? (this.config.categorizeErrors ? categorizeError(errorString) : 'unknown');
 
     // Check for repeats
     let repeatCount = 1;
@@ -393,7 +389,9 @@ export class FailureTracker {
       const evicted = this.failures.shift()!;
 
       // Log warning about eviction
-      logger.warn(`[FailureTracker] Evicted failure due to limit (${this.config.maxFailures}): ${evicted.action} - ${evicted.error.slice(0, 50)}`);
+      logger.warn(
+        `[FailureTracker] Evicted failure due to limit (${this.config.maxFailures}): ${evicted.action} - ${evicted.error.slice(0, 50)}`,
+      );
 
       // Emit eviction event for observability
       this.emit({
@@ -426,7 +424,7 @@ export class FailureTracker {
    * Mark a failure as resolved.
    */
   resolveFailure(failureId: string): boolean {
-    const failure = this.failures.find(f => f.id === failureId);
+    const failure = this.failures.find((f) => f.id === failureId);
     if (failure) {
       failure.resolved = true;
       this.emit({ type: 'failure.resolved', failureId });
@@ -439,14 +437,14 @@ export class FailureTracker {
    * Get all unresolved failures.
    */
   getUnresolvedFailures(): Failure[] {
-    return this.failures.filter(f => !f.resolved);
+    return this.failures.filter((f) => !f.resolved);
   }
 
   /**
    * Get failures by category.
    */
   getFailuresByCategory(category: FailureCategory): Failure[] {
-    return this.failures.filter(f => f.category === category);
+    return this.failures.filter((f) => f.category === category);
   }
 
   /**
@@ -454,7 +452,7 @@ export class FailureTracker {
    */
   getFailuresByAction(action: string): Failure[] {
     const ids = this.actionHistory.get(action) || [];
-    return this.failures.filter(f => ids.includes(f.id));
+    return this.failures.filter((f) => ids.includes(f.id));
   }
 
   /**
@@ -467,20 +465,16 @@ export class FailureTracker {
   /**
    * Get failure context formatted for LLM inclusion.
    */
-  getFailureContext(options: {
-    maxFailures?: number;
-    includeResolved?: boolean;
-    includeStackTraces?: boolean;
-  } = {}): string {
-    const {
-      maxFailures = 10,
-      includeResolved = false,
-      includeStackTraces = false,
-    } = options;
+  getFailureContext(
+    options: {
+      maxFailures?: number;
+      includeResolved?: boolean;
+      includeStackTraces?: boolean;
+    } = {},
+  ): string {
+    const { maxFailures = 10, includeResolved = false, includeStackTraces = false } = options;
 
-    let failures = includeResolved
-      ? this.failures
-      : this.failures.filter(f => !f.resolved);
+    let failures = includeResolved ? this.failures : this.failures.filter((f) => !f.resolved);
 
     failures = failures.slice(-maxFailures);
 
@@ -497,7 +491,7 @@ export class FailureTracker {
   hasRecentFailure(action: string, withinMs: number = 60000): boolean {
     const cutoff = Date.now() - withinMs;
     return this.failures.some(
-      f => f.action === action && new Date(f.timestamp).getTime() > cutoff
+      (f) => f.action === action && new Date(f.timestamp).getTime() > cutoff,
     );
   }
 
@@ -540,7 +534,7 @@ export class FailureTracker {
 
     return {
       total: this.failures.length,
-      unresolved: this.failures.filter(f => !f.resolved).length,
+      unresolved: this.failures.filter((f) => !f.resolved).length,
       byCategory,
       mostFailedActions,
     };
@@ -569,9 +563,11 @@ export class FailureTracker {
 
   private countSimilarFailures(action: string, error: string): number {
     const normalizedError = error.toLowerCase().slice(0, 50);
-    return this.failures.filter(
-      f => f.action === action && f.error.toLowerCase().startsWith(normalizedError)
-    ).length + 1;
+    return (
+      this.failures.filter(
+        (f) => f.action === action && f.error.toLowerCase().startsWith(normalizedError),
+      ).length + 1
+    );
   }
 
   private detectPatterns(): void {
@@ -579,9 +575,9 @@ export class FailureTracker {
     for (const [action, ids] of this.actionHistory) {
       if (ids.length >= 3) {
         const recent = ids.slice(-3);
-        const recentFailures = this.failures.filter(f => recent.includes(f.id));
+        const recentFailures = this.failures.filter((f) => recent.includes(f.id));
 
-        if (recentFailures.every(f => !f.resolved)) {
+        if (recentFailures.every((f) => !f.resolved)) {
           this.emit({
             type: 'pattern.detected',
             pattern: {
@@ -611,7 +607,7 @@ export class FailureTracker {
           pattern: {
             type: 'category_cluster',
             description: `Multiple ${category} errors (${count} of last 10)`,
-            failureIds: recentFailures.filter(f => f.category === category).map(f => f.id),
+            failureIds: recentFailures.filter((f) => f.category === category).map((f) => f.id),
             confidence: count / 10,
             suggestion: `Address the underlying ${category} issue before continuing.`,
           },
@@ -668,9 +664,7 @@ export class FailureTracker {
  * }
  * ```
  */
-export function createFailureTracker(
-  config: FailureTrackerConfig = {}
-): FailureTracker {
+export function createFailureTracker(config: FailureTrackerConfig = {}): FailureTracker {
   return new FailureTracker(config);
 }
 
@@ -683,14 +677,11 @@ export function createFailureTracker(
  */
 export function formatFailureContext(
   failures: Failure[],
-  options: { includeStackTraces?: boolean } = {}
+  options: { includeStackTraces?: boolean } = {},
 ): string {
   if (failures.length === 0) return '';
 
-  const lines = [
-    '[Previous Failures - Learn from these to avoid repeating mistakes]',
-    '',
-  ];
+  const lines = ['[Previous Failures - Learn from these to avoid repeating mistakes]', ''];
 
   for (const f of failures) {
     lines.push(`**${f.action}** (${f.category}): ${f.error}`);
@@ -717,11 +708,7 @@ export function formatFailureContext(
 /**
  * Create a warning message for repeated failures.
  */
-export function createRepeatWarning(
-  action: string,
-  count: number,
-  suggestion?: string
-): string {
+export function createRepeatWarning(action: string, count: number, suggestion?: string): string {
   let warning = `⚠️ Action "${action}" has failed ${count} times.`;
 
   if (count >= 5) {

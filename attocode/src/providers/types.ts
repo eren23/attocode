@@ -1,6 +1,6 @@
 /**
  * Lesson 2: Provider Abstraction Types
- * 
+ *
  * Extended types that support multiple LLM providers.
  */
 
@@ -23,13 +23,13 @@ export interface Message {
 export interface ChatOptions {
   /** Maximum tokens to generate */
   maxTokens?: number;
-  
+
   /** Temperature for randomness (0-1) */
   temperature?: number;
-  
+
   /** Stop sequences */
   stopSequences?: string[];
-  
+
   /** Model override (uses provider default if not specified) */
   model?: string;
 }
@@ -79,17 +79,17 @@ export interface ChatResponse {
 export interface LLMProvider {
   /** Provider name for logging/debugging */
   readonly name: string;
-  
+
   /** Default model used by this provider */
   readonly defaultModel: string;
-  
+
   /**
    * Send a chat request to the LLM.
    * @param messages - Conversation history
    * @param options - Optional configuration
    */
   chat(messages: (Message | MessageWithContent)[], options?: ChatOptions): Promise<ChatResponse>;
-  
+
   /**
    * Check if the provider is properly configured.
    */
@@ -135,9 +135,9 @@ export interface AzureOpenAIConfig {
  */
 export interface OpenRouterConfig {
   apiKey: string;
-  model?: string;        // e.g., 'anthropic/claude-sonnet-4'
-  siteUrl?: string;      // For HTTP-Referer header (analytics)
-  siteName?: string;     // For X-Title header (analytics)
+  model?: string; // e.g., 'anthropic/claude-sonnet-4'
+  siteUrl?: string; // For HTTP-Referer header (analytics)
+  siteName?: string; // For X-Title header (analytics)
 }
 
 /**
@@ -162,7 +162,7 @@ export class ProviderError extends Error {
     message: string,
     public readonly provider: string,
     public readonly code: ProviderErrorCode,
-    public readonly cause?: Error
+    public readonly cause?: Error,
   ) {
     super(message);
     this.name = 'ProviderError';
@@ -301,7 +301,7 @@ export interface LLMProviderWithTools extends LLMProvider {
    */
   chatWithTools(
     messages: (Message | MessageWithContent)[],
-    options?: ChatOptionsWithTools
+    options?: ChatOptionsWithTools,
   ): Promise<ChatResponseWithTools>;
 
   /**
@@ -311,6 +311,6 @@ export interface LLMProviderWithTools extends LLMProvider {
    */
   chatWithToolsStream?(
     messages: (Message | MessageWithContent)[],
-    options?: ChatOptionsWithTools
+    options?: ChatOptionsWithTools,
   ): AsyncIterable<import('../integrations/streaming/streaming.js').StreamChunk>;
 }

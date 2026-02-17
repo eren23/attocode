@@ -14,7 +14,7 @@ interface OpenRouterModel {
   id: string;
   name: string;
   pricing: {
-    prompt: string;  // cost per token as string
+    prompt: string; // cost per token as string
     completion: string;
   };
   context_length: number;
@@ -111,7 +111,9 @@ export interface ModelSelectorOptions {
  * Queries `/api/v1/models`, filters by tool use support and cost,
  * then assigns models to capability roles.
  */
-export async function autoDetectWorkerModels(options: ModelSelectorOptions): Promise<SwarmWorkerSpec[]> {
+export async function autoDetectWorkerModels(
+  options: ModelSelectorOptions,
+): Promise<SwarmWorkerSpec[]> {
   try {
     const models = await fetchOpenRouterModels(options.apiKey);
     if (!models || models.length === 0) {
@@ -122,7 +124,7 @@ export async function autoDetectWorkerModels(options: ModelSelectorOptions): Pro
     const minContext = options.minContextWindow ?? 32768;
     const maxCost = options.maxCostPerMillion ?? 5.0;
 
-    const usable = models.filter(m => {
+    const usable = models.filter((m) => {
       const contextLen = m.context_length ?? 0;
       if (contextLen < minContext) return false;
 
@@ -168,7 +170,7 @@ export async function autoDetectWorkerModels(options: ModelSelectorOptions): Pro
       filter: (m: OpenRouterModel) => boolean,
       count: number,
     ): OpenRouterModel[] {
-      const matching = pool.filter(m => filter(m) && !usedIds.has(m.id));
+      const matching = pool.filter((m) => filter(m) && !usedIds.has(m.id));
       const picked: OpenRouterModel[] = [];
       const usedProvidersLocal = new Set<string>();
 
@@ -206,7 +208,7 @@ export async function autoDetectWorkerModels(options: ModelSelectorOptions): Pro
     // Find coders (up to 3, prefer models with 'coder' in the name first)
     const coderModels = pickDiverse(
       usable,
-      m => m.id.toLowerCase().includes('coder') || m.id.toLowerCase().includes('deepseek'),
+      (m) => m.id.toLowerCase().includes('coder') || m.id.toLowerCase().includes('deepseek'),
       3,
     );
     // If we didn't get 3, add more general-purpose models
@@ -228,7 +230,8 @@ export async function autoDetectWorkerModels(options: ModelSelectorOptions): Pro
     }
 
     // Find researchers (up to 2, prefer large context)
-    const researchPool = usable.filter(m => !usedIds.has(m.id))
+    const researchPool = usable
+      .filter((m) => !usedIds.has(m.id))
       .sort((a, b) => (b.context_length ?? 0) - (a.context_length ?? 0));
     const researcherModels = pickDiverse(researchPool, () => true, 2);
     for (let i = 0; i < researcherModels.length; i++) {
@@ -281,7 +284,7 @@ export async function autoDetectWorkerModels(options: ModelSelectorOptions): Pro
 async function fetchOpenRouterModels(apiKey: string): Promise<OpenRouterModel[]> {
   const response = await fetch('https://openrouter.ai/api/v1/models', {
     headers: {
-      'Authorization': `Bearer ${apiKey}`,
+      Authorization: `Bearer ${apiKey}`,
       'Content-Type': 'application/json',
     },
   });
@@ -290,7 +293,7 @@ async function fetchOpenRouterModels(apiKey: string): Promise<OpenRouterModel[]>
     return [];
   }
 
-  const data = await response.json() as OpenRouterModelsResponse;
+  const data = (await response.json()) as OpenRouterModelsResponse;
   return data.data ?? [];
 }
 
@@ -298,7 +301,9 @@ async function fetchOpenRouterModels(apiKey: string): Promise<OpenRouterModel[]>
  * Get fallback worker specs when API detection fails.
  */
 function getFallbackWorkers(orchestratorModel: string): SwarmWorkerSpec[] {
-  logger.warn('[swarm] Using hardcoded fallback workers — no workers configured or API detection failed');
+  logger.warn(
+    '[swarm] Using hardcoded fallback workers — no workers configured or API detection failed',
+  );
   return [
     ...FALLBACK_WORKERS,
     {
@@ -321,7 +326,7 @@ export function selectWorkerForCapability(
   taskIndex?: number,
   healthTracker?: ModelHealthTracker,
 ): SwarmWorkerSpec | undefined {
-  const matches = workers.filter(w => w.capabilities.includes(capability));
+  const matches = workers.filter((w) => w.capabilities.includes(capability));
 
   if (matches.length > 0) {
     if (healthTracker) {
@@ -341,10 +346,9 @@ export function selectWorkerForCapability(
       // Round-robin among top-tier models (same health status and similar success rate)
       const topRate = healthTracker.getSuccessRate(ranked[0].model);
       const topHealthy = healthTracker.isHealthy(ranked[0].model);
-      const topTier = ranked.filter(w => {
+      const topTier = ranked.filter((w) => {
         const rate = healthTracker.getSuccessRate(w.model);
-        return healthTracker.isHealthy(w.model) === topHealthy
-          && Math.abs(rate - topRate) < 0.2;
+        return healthTracker.isHealthy(w.model) === topHealthy && Math.abs(rate - topRate) < 0.2;
       });
       return topTier[(taskIndex ?? 0) % topTier.length];
     }
@@ -354,7 +358,7 @@ export function selectWorkerForCapability(
 
   // Fallback: any code-capable worker for code-adjacent tasks
   if (capability === 'test' || capability === 'code') {
-    const codeWorkers = workers.filter(w => w.capabilities.includes('code'));
+    const codeWorkers = workers.filter((w) => w.capabilities.includes('code'));
     if (codeWorkers.length > 0) {
       return codeWorkers[(taskIndex ?? 0) % codeWorkers.length];
     }
@@ -362,7 +366,7 @@ export function selectWorkerForCapability(
 
   // Fallback: write capability falls back to code workers (merge/synthesis tasks)
   if (capability === 'write') {
-    const codeWorkers = workers.filter(w => w.capabilities.includes('code'));
+    const codeWorkers = workers.filter((w) => w.capabilities.includes('code'));
     if (codeWorkers.length > 0) {
       return codeWorkers[(taskIndex ?? 0) % codeWorkers.length];
     }
@@ -407,9 +411,8 @@ export class ModelHealthTracker {
     const record = this.getOrCreate(model);
     record.successes++;
     // Exponential moving average for latency
-    record.averageLatencyMs = record.averageLatencyMs === 0
-      ? latencyMs
-      : record.averageLatencyMs * 0.7 + latencyMs * 0.3;
+    record.averageLatencyMs =
+      record.averageLatencyMs === 0 ? latencyMs : record.averageLatencyMs * 0.7 + latencyMs * 0.3;
     record.healthy = true;
     this.updateSuccessRate(record);
   }
@@ -429,7 +432,7 @@ export class ModelHealthTracker {
 
       // Unhealthy if 2+ rate limits in last 60s
       const cutoff = Date.now() - 60_000;
-      const recentCount = recent.filter(t => t > cutoff).length;
+      const recentCount = recent.filter((t) => t > cutoff).length;
       if (recentCount >= 2) {
         record.healthy = false;
       }
@@ -503,7 +506,7 @@ export class ModelHealthTracker {
   }
 
   getHealthy(models: string[]): string[] {
-    return models.filter(m => this.isHealthy(m));
+    return models.filter((m) => this.isHealthy(m));
   }
 
   getAllRecords(): ModelHealthRecord[] {
@@ -530,32 +533,32 @@ export function selectAlternativeModel(
   capability: WorkerCapability,
   healthTracker: ModelHealthTracker,
 ): SwarmWorkerSpec | undefined {
-  const alternatives = workers.filter(w =>
-    w.model !== failedModel &&
-    w.capabilities.includes(capability) &&
-    healthTracker.isHealthy(w.model),
+  const alternatives = workers.filter(
+    (w) =>
+      w.model !== failedModel &&
+      w.capabilities.includes(capability) &&
+      healthTracker.isHealthy(w.model),
   );
   if (alternatives.length > 0) return alternatives[0];
 
   // If no healthy alternatives, try any different model with same capability
-  const anyAlternative = workers.filter(w =>
-    w.model !== failedModel &&
-    w.capabilities.includes(capability),
+  const anyAlternative = workers.filter(
+    (w) => w.model !== failedModel && w.capabilities.includes(capability),
   );
   if (anyAlternative.length > 0) return anyAlternative[0];
 
   // Fallback: write capability falls back to code workers (merge/synthesis tasks)
   if (capability === 'write') {
-    const codeAlternatives = workers.filter(w =>
-      w.model !== failedModel &&
-      w.capabilities.includes('code') &&
-      healthTracker.isHealthy(w.model),
+    const codeAlternatives = workers.filter(
+      (w) =>
+        w.model !== failedModel &&
+        w.capabilities.includes('code') &&
+        healthTracker.isHealthy(w.model),
     );
     if (codeAlternatives.length > 0) return codeAlternatives[0];
 
-    const anyCodeAlt = workers.filter(w =>
-      w.model !== failedModel &&
-      w.capabilities.includes('code'),
+    const anyCodeAlt = workers.filter(
+      (w) => w.model !== failedModel && w.capabilities.includes('code'),
     );
     if (anyCodeAlt.length > 0) return anyCodeAlt[0];
   }

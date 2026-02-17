@@ -105,9 +105,7 @@ export class SharedBudgetPool {
     // Allocate up to maxPerChild or whatever remains, whichever is smaller
     const tokenBudget = Math.min(this.config.maxPerChild, remaining);
     const committedCost = Math.max(this.totalCostUsed, this.totalCostReserved);
-    const costRemaining = this.config.totalCost
-      ? this.config.totalCost - committedCost
-      : Infinity;
+    const costRemaining = this.config.totalCost ? this.config.totalCost - committedCost : Infinity;
     const costBudget = Math.min(
       this.config.maxCostPerChild ?? Infinity,
       costRemaining > 0 ? costRemaining : 0,
@@ -221,9 +219,7 @@ export class SharedBudgetPool {
       tokensUsed: this.totalTokensUsed,
       tokensRemaining: Math.max(0, this.config.totalTokens - committed),
       activeAllocations: this.allocations.size,
-      utilization: this.config.totalTokens > 0
-        ? committed / this.config.totalTokens
-        : 0,
+      utilization: this.config.totalTokens > 0 ? committed / this.config.totalTokens : 0,
     };
   }
 
@@ -232,7 +228,7 @@ export class SharedBudgetPool {
    */
   hasCapacity(): boolean {
     const committed = Math.max(this.totalTokensUsed, this.totalTokensReserved);
-    return (this.config.totalTokens - committed) > 10000; // Minimum 10K tokens
+    return this.config.totalTokens - committed > 10000; // Minimum 10K tokens
   }
 
   /**
@@ -272,7 +268,7 @@ export function createBudgetPool(
   return new SharedBudgetPool({
     totalTokens: poolTokens,
     maxPerChild: Math.min(maxPerChild, poolTokens),
-    totalCost: 0.50, // Default cost cap
+    totalCost: 0.5, // Default cost cap
     maxCostPerChild: 0.25,
   });
 }

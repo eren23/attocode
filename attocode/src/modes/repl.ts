@@ -9,7 +9,11 @@ import * as readline from 'node:readline/promises';
 import { stdin, stdout } from 'node:process';
 
 import { createProductionAgent } from '../agent/index.js';
-import { ProviderAdapter, convertToolsFromRegistry, createInteractiveApprovalHandler } from '../adapters.js';
+import {
+  ProviderAdapter,
+  convertToolsFromRegistry,
+  createInteractiveApprovalHandler,
+} from '../adapters.js';
 import { createStandardRegistry } from '../tools/standard.js';
 import type { LLMProviderWithTools } from '../providers/types.js';
 import type { PermissionMode } from '../tools/types.js';
@@ -27,10 +31,7 @@ import {
   type DeadLetterQueue,
 } from '../integrations/index.js';
 import { initModelCache } from '../integrations/utilities/openrouter-pricing.js';
-import {
-  DEFAULT_POLICY_ENGINE_CONFIG,
-  DEFAULT_SANDBOX_CONFIG,
-} from '../defaults.js';
+import { DEFAULT_POLICY_ENGINE_CONFIG, DEFAULT_SANDBOX_CONFIG } from '../defaults.js';
 
 import {
   persistenceDebug,
@@ -77,7 +78,7 @@ export interface REPLOptions {
  */
 export async function startProductionREPL(
   provider: LLMProviderWithTools,
-  options: REPLOptions = {}
+  options: REPLOptions = {},
 ): Promise<void> {
   const {
     permissionMode = 'interactive',
@@ -110,7 +111,7 @@ export async function startProductionREPL(
   });
 
   // Get MCP tool summaries
-  const mcpSummaries = mcpClient.getAllToolSummaries().map(s => ({
+  const mcpSummaries = mcpClient.getAllToolSummaries().map((s) => ({
     name: s.name,
     description: s.description,
   }));
@@ -153,13 +154,15 @@ export async function startProductionREPL(
       tracing: { enabled: true, serviceName: 'production-agent', exporter: 'console' },
       metrics: { enabled: true, collectTokens: true, collectCosts: true, collectLatencies: true },
       logging: { enabled: false },
-      traceCapture: trace ? {
-        enabled: true,
-        outputDir: '.traces',
-        captureMessageContent: true,
-        captureToolResults: true,
-        analyzeCacheBoundaries: true,
-      } : undefined,
+      traceCapture: trace
+        ? {
+            enabled: true,
+            outputDir: '.traces',
+            captureMessageContent: true,
+            captureToolResults: true,
+            analyzeCacheBoundaries: true,
+          }
+        : undefined,
     },
     sandbox: {
       ...DEFAULT_SANDBOX_CONFIG,
@@ -205,10 +208,34 @@ export async function startProductionREPL(
     multiAgent: {
       enabled: true,
       roles: [
-        { name: 'researcher', description: 'Explores codebases', systemPrompt: 'You are a code researcher.', capabilities: ['read_file', 'list_files', 'glob', 'grep'], authority: 1 },
-        { name: 'coder', description: 'Writes code', systemPrompt: 'You are a coder.', capabilities: ['read_file', 'write_file', 'edit_file', 'bash'], authority: 2 },
-        { name: 'reviewer', description: 'Reviews code', systemPrompt: 'You are a code reviewer.', capabilities: ['read_file', 'grep', 'glob'], authority: 2 },
-        { name: 'architect', description: 'Designs systems', systemPrompt: 'You are a software architect.', capabilities: ['read_file', 'list_files', 'glob'], authority: 3 },
+        {
+          name: 'researcher',
+          description: 'Explores codebases',
+          systemPrompt: 'You are a code researcher.',
+          capabilities: ['read_file', 'list_files', 'glob', 'grep'],
+          authority: 1,
+        },
+        {
+          name: 'coder',
+          description: 'Writes code',
+          systemPrompt: 'You are a coder.',
+          capabilities: ['read_file', 'write_file', 'edit_file', 'bash'],
+          authority: 2,
+        },
+        {
+          name: 'reviewer',
+          description: 'Reviews code',
+          systemPrompt: 'You are a code reviewer.',
+          capabilities: ['read_file', 'grep', 'glob'],
+          authority: 2,
+        },
+        {
+          name: 'architect',
+          description: 'Designs systems',
+          systemPrompt: 'You are a software architect.',
+          capabilities: ['read_file', 'list_files', 'glob'],
+          authority: 3,
+        },
       ],
       consensusStrategy: 'voting',
     },
@@ -291,7 +318,12 @@ export async function startProductionREPL(
     for (const srv of mcpServers) {
       const icon = srv.status === 'connected' ? '+' : srv.status === 'error' ? 'x' : 'o';
       // eslint-disable-next-line no-console
-      console.log(c(`  ${icon} ${srv.name} (${srv.status})${srv.toolCount > 0 ? ` - ${srv.toolCount} tools` : ''}`, 'dim'));
+      console.log(
+        c(
+          `  ${icon} ${srv.name} (${srv.status})${srv.toolCount > 0 ? ` - ${srv.toolCount} tools` : ''}`,
+          'dim',
+        ),
+      );
     }
   }
 
@@ -418,7 +450,7 @@ ${c('----------------------------------------------------------------------', 'd
       terminalSessionId,
       undefined, // No single task - this is a terminal session with multiple tasks
       model || provider.defaultModel,
-      { type: 'repl', permissionMode }
+      { type: 'repl', permissionMode },
     );
     // eslint-disable-next-line no-console
     console.log(c(`Trace session started: ${terminalSessionId}`, 'dim'));
@@ -487,14 +519,21 @@ ${c('----------------------------------------------------------------------', 'd
 
         const metrics = result.metrics;
         // eslint-disable-next-line no-console
-        console.log(c(`\nTokens: ${metrics.inputTokens} in / ${metrics.outputTokens} out | Tools: ${metrics.toolCalls} | Duration: ${metrics.duration}ms`, 'dim'));
+        console.log(
+          c(
+            `\nTokens: ${metrics.inputTokens} in / ${metrics.outputTokens} out | Tools: ${metrics.toolCalls} | Duration: ${metrics.duration}ms`,
+            'dim',
+          ),
+        );
 
         if (agent.hasPendingPlan()) {
           const changeCount = agent.getPendingChangeCount();
           // eslint-disable-next-line no-console
           console.log(c(`\nPlan Mode: ${changeCount} change(s) queued for approval`, 'yellow'));
           // eslint-disable-next-line no-console
-          console.log(c('   Use /show-plan to review, /approve to execute, /reject to discard', 'dim'));
+          console.log(
+            c('   Use /show-plan to review, /approve to execute, /reject to discard', 'dim'),
+          );
         }
 
         // Auto-checkpoint
@@ -520,11 +559,18 @@ ${c('----------------------------------------------------------------------', 'd
               memoryContext: checkpoint.state.memoryContext,
             });
 
-            if (agent.hasPendingPlan() && 'savePendingPlan' in sessionStore && typeof sessionStore.savePendingPlan === 'function') {
+            if (
+              agent.hasPendingPlan() &&
+              'savePendingPlan' in sessionStore &&
+              typeof sessionStore.savePendingPlan === 'function'
+            ) {
               const pendingPlan = agent.getPendingPlan();
               if (pendingPlan) {
                 sessionStore.savePendingPlan(pendingPlan, sessionId);
-                persistenceDebug.log('Pending plan saved', { planId: pendingPlan.id, changes: pendingPlan.proposedChanges.length });
+                persistenceDebug.log('Pending plan saved', {
+                  planId: pendingPlan.id,
+                  changes: pendingPlan.proposedChanges.length,
+                });
               }
             }
           } catch (err) {
@@ -534,7 +580,6 @@ ${c('----------------------------------------------------------------------', 'd
         } else {
           persistenceDebug.log('No checkpoint created (autoCheckpoint returned null)');
         }
-
       } catch (error) {
         hadRunFailure = true;
         lastFailureReason = (error as Error).message;
@@ -550,8 +595,12 @@ ${c('----------------------------------------------------------------------', 'd
       try {
         await traceCollector.endSession(
           hadRunFailure
-            ? { success: false, failureReason: lastFailureReason ?? 'At least one task failed during this terminal session' }
-            : { success: true }
+            ? {
+                success: false,
+                failureReason:
+                  lastFailureReason ?? 'At least one task failed during this terminal session',
+              }
+            : { success: true },
         );
         // eslint-disable-next-line no-console
         console.log(c(`\nTrace session ended -> .traces/`, 'dim'));

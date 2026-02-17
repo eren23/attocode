@@ -40,21 +40,31 @@ export interface DebugPanelProps {
 
 function getLevelColor(level: DebugEntry['level'], colors: ThemeColors): string {
   switch (level) {
-    case 'error': return colors.error;
-    case 'warn': return colors.warning;
-    case 'info': return colors.info;
-    case 'debug': return colors.textMuted;
-    default: return colors.text;
+    case 'error':
+      return colors.error;
+    case 'warn':
+      return colors.warning;
+    case 'info':
+      return colors.info;
+    case 'debug':
+      return colors.textMuted;
+    default:
+      return colors.text;
   }
 }
 
 function getLevelIcon(level: DebugEntry['level']): string {
   switch (level) {
-    case 'error': return '[X]';
-    case 'warn': return '[!]';
-    case 'info': return '[i]';
-    case 'debug': return '[.]';
-    default: return '[-]';
+    case 'error':
+      return '[X]';
+    case 'warn':
+      return '[!]';
+    case 'info':
+      return '[i]';
+    case 'debug':
+      return '[.]';
+    default:
+      return '[-]';
   }
 }
 
@@ -100,8 +110,13 @@ export const DebugPanel = memo(function DebugPanel({
         borderColor={colors.border}
         paddingX={1}
       >
-        <Text color={colors.accent} bold>[v] Debug Panel (Alt+D to toggle)</Text>
-        <Text color={colors.textMuted} dimColor>  No debug messages yet</Text>
+        <Text color={colors.accent} bold>
+          [v] Debug Panel (Alt+D to toggle)
+        </Text>
+        <Text color={colors.textMuted} dimColor>
+          {' '}
+          No debug messages yet
+        </Text>
       </Box>
     );
   }
@@ -118,21 +133,21 @@ export const DebugPanel = memo(function DebugPanel({
       paddingX={1}
     >
       <Box justifyContent="space-between">
-        <Text color={colors.accent} bold>[v] Debug Panel</Text>
+        <Text color={colors.accent} bold>
+          [v] Debug Panel
+        </Text>
         <Text color={colors.textMuted} dimColor>
           {entries.length > maxVisible ? `${entries.length - maxVisible}+ older | ` : ''}
           {entries.length} total
         </Text>
       </Box>
       <Box flexDirection="column" marginTop={1}>
-        {visibleEntries.map(entry => (
+        {visibleEntries.map((entry) => (
           <Box key={entry.id} gap={1}>
             <Text color={colors.textMuted} dimColor>
               {formatTimestamp(entry.timestamp)}
             </Text>
-            <Text color={getLevelColor(entry.level, colors)}>
-              {getLevelIcon(entry.level)}
-            </Text>
+            <Text color={getLevelColor(entry.level, colors)}>{getLevelIcon(entry.level)}</Text>
             <Text color={getLevelColor(entry.level, colors)} wrap="truncate">
               {entry.message}
             </Text>
@@ -162,7 +177,7 @@ export function useDebugBuffer(maxSize: number = 100) {
   const addEntry = (
     level: DebugEntry['level'],
     message: string,
-    data?: Record<string, unknown>
+    data?: Record<string, unknown>,
   ) => {
     const entry: DebugEntry = {
       id: `debug-${++idCounterRef.current}`,
@@ -172,7 +187,7 @@ export function useDebugBuffer(maxSize: number = 100) {
       data,
     };
 
-    setEntries(prev => {
+    setEntries((prev) => {
       const newEntries = [...prev, entry];
       // Keep only the last maxSize entries
       return newEntries.slice(-maxSize);

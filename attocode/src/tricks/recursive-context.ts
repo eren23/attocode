@@ -176,7 +176,7 @@ export interface ProcessOptions {
 export type LLMCallFunction = (
   systemPrompt: string,
   userMessage: string,
-  options?: { maxTokens?: number }
+  options?: { maxTokens?: number },
 ) => Promise<{ content: string; tokens: number }>;
 
 /**
@@ -284,7 +284,7 @@ export class RecursiveContextManager {
   async process(
     query: string,
     llmCall: LLMCallFunction,
-    options: ProcessOptions = {}
+    options: ProcessOptions = {},
   ): Promise<RecursiveResult> {
     const {
       depth = 0,
@@ -333,13 +333,15 @@ export class RecursiveContextManager {
       // Build context for navigation
       const contextSummary = this.buildContextSummary(gathered, path);
 
-      const systemPrompt = NAVIGATOR_SYSTEM_PROMPT
-        .replace('{SOURCES}', sourceDescriptions)
-        .replace('{CONTEXT}', contextSummary || 'No context gathered yet.');
+      const systemPrompt = NAVIGATOR_SYSTEM_PROMPT.replace('{SOURCES}', sourceDescriptions).replace(
+        '{CONTEXT}',
+        contextSummary || 'No context gathered yet.',
+      );
 
-      const userMessage = depth === 0
-        ? `Question: ${query}\n\nWhat would you like to explore first?`
-        : `Continue exploring to answer: ${query}\n\n${navigationContext}`;
+      const userMessage =
+        depth === 0
+          ? `Question: ${query}\n\nWhat would you like to explore first?`
+          : `Continue exploring to answer: ${query}\n\n${navigationContext}`;
 
       // Get navigation command from LLM
       const navResponse = await llmCall(systemPrompt, userMessage, {
@@ -491,7 +493,7 @@ export class RecursiveContextManager {
 
   private async executeCommand(
     command: NavigationCommand,
-    sourcesAccessed: Set<string>
+    sourcesAccessed: Set<string>,
   ): Promise<string | null> {
     if (!command.source) {
       return null;
@@ -541,9 +543,10 @@ export class RecursiveContextManager {
           }
 
           const results = await source.search(command.key);
-          return `Search results for "${command.key}":\n${
-            results.slice(0, 10).map(r => `- ${r.key}: ${r.snippet}`).join('\n')
-          }`;
+          return `Search results for "${command.key}":\n${results
+            .slice(0, 10)
+            .map((r) => `- ${r.key}: ${r.snippet}`)
+            .join('\n')}`;
         }
 
         default:
@@ -558,7 +561,7 @@ export class RecursiveContextManager {
   private async synthesize(
     query: string,
     gathered: string[],
-    llmCall: LLMCallFunction
+    llmCall: LLMCallFunction,
   ): Promise<{ content: string; tokens: number }> {
     if (gathered.length === 0) {
       return {
@@ -569,7 +572,7 @@ export class RecursiveContextManager {
 
     const systemPrompt = SYNTHESIS_SYSTEM_PROMPT.replace(
       '{GATHERED}',
-      gathered.map((g, i) => `[${i + 1}] ${g}`).join('\n\n')
+      gathered.map((g, i) => `[${i + 1}] ${g}`).join('\n\n'),
     );
 
     const userMessage = `Based on the gathered information, answer: ${query}`;
@@ -580,7 +583,9 @@ export class RecursiveContextManager {
   }
 
   private formatGatheredItem(command: NavigationCommand, result: string): string {
-    const prefix = command.source ? `[${command.source}${command.key ? ':' + command.key : ''}]` : '';
+    const prefix = command.source
+      ? `[${command.source}${command.key ? ':' + command.key : ''}]`
+      : '';
     return `${prefix} ${this.truncate(result, 500)}`;
   }
 
@@ -646,7 +651,7 @@ export class RecursiveContextManager {
  * ```
  */
 export function createRecursiveContext(
-  config: RecursiveContextConfig = {}
+  config: RecursiveContextConfig = {},
 ): RecursiveContextManager {
   return new RecursiveContextManager(config);
 }
@@ -675,7 +680,10 @@ export function createFileSystemSource(options: {
   basePath: string;
   glob: (pattern: string) => Promise<string[]>;
   readFile: (path: string) => Promise<string>;
-  grep?: (query: string, path?: string) => Promise<Array<{ file: string; line: number; content: string }>>;
+  grep?: (
+    query: string,
+    path?: string,
+  ) => Promise<Array<{ file: string; line: number; content: string }>>;
 }): ContextSource {
   return {
     describe: () => `Files in ${options.basePath}`,
@@ -760,7 +768,7 @@ export function formatRecursiveResult(result: RecursiveResult): string {
     'Navigation Path:',
     ...result.path.map(
       (step) =>
-        `  [${step.depth}] ${step.command.type}${step.command.source ? `:${step.command.source}` : ''} - ${step.command.reason || 'no reason'}`
+        `  [${step.depth}] ${step.command.type}${step.command.source ? `:${step.command.source}` : ''} - ${step.command.reason || 'no reason'}`,
     ),
     '',
     'Statistics:',

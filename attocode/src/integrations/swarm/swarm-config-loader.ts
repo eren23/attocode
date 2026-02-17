@@ -178,7 +178,7 @@ export function parseSwarmYaml(content: string): SwarmYamlConfig {
       } else {
         parent[key] = coerceValue(val);
         // If this is at a different scope than arrayKey, clear array tracking
-        if (indent <= (arrayItemIndent - 2)) {
+        if (indent <= arrayItemIndent - 2) {
           arrayKey = null;
         }
       }
@@ -235,7 +235,10 @@ export function loadSwarmYamlConfig(cwd?: string): SwarmYamlConfig | null {
 /**
  * Map parsed YAML config to SwarmConfig fields.
  */
-export function yamlToSwarmConfig(yaml: SwarmYamlConfig, orchestratorModel: string): Partial<SwarmConfig> {
+export function yamlToSwarmConfig(
+  yaml: SwarmYamlConfig,
+  orchestratorModel: string,
+): Partial<SwarmConfig> {
   const config: Partial<SwarmConfig> = {};
 
   // models section
@@ -243,7 +246,8 @@ export function yamlToSwarmConfig(yaml: SwarmYamlConfig, orchestratorModel: stri
   if (models) {
     if (models.paidOnly !== undefined) config.paidOnly = Boolean(models.paidOnly);
     if (models.paid_only !== undefined) config.paidOnly = Boolean(models.paid_only);
-    if (models.qualityGate || models.quality_gate) config.qualityGateModel = String(models.qualityGate ?? models.quality_gate);
+    if (models.qualityGate || models.quality_gate)
+      config.qualityGateModel = String(models.qualityGate ?? models.quality_gate);
     if (models.planner) config.plannerModel = String(models.planner);
     // orchestrator from YAML is a default; CLI --model always overrides
     if (models.orchestrator) config.orchestratorModel = String(models.orchestrator);
@@ -260,7 +264,7 @@ export function yamlToSwarmConfig(yaml: SwarmYamlConfig, orchestratorModel: stri
   // workers
   const workers = yaml.workers as Array<Record<string, unknown>> | undefined;
   if (workers && Array.isArray(workers)) {
-    config.workers = workers.map(w => {
+    config.workers = workers.map((w) => {
       const spec: SwarmWorkerSpec = {
         name: String(w.name ?? 'worker'),
         model: String(w.model ?? orchestratorModel),
@@ -268,7 +272,11 @@ export function yamlToSwarmConfig(yaml: SwarmYamlConfig, orchestratorModel: stri
           Array.isArray(w.capabilities)
             ? w.capabilities.map(String)
             : typeof w.capabilities === 'string'
-              ? (w.capabilities as string).replace(/^\[|\]$/g, '').split(',').map((s: string) => s.trim()).filter(Boolean)
+              ? (w.capabilities as string)
+                  .replace(/^\[|\]$/g, '')
+                  .split(',')
+                  .map((s: string) => s.trim())
+                  .filter(Boolean)
               : ['code'],
         ),
       };
@@ -287,7 +295,11 @@ export function yamlToSwarmConfig(yaml: SwarmYamlConfig, orchestratorModel: stri
         spec.extraTools = Array.isArray(w.extraTools)
           ? w.extraTools.map(String)
           : typeof w.extraTools === 'string'
-            ? (w.extraTools as string).replace(/^\[|\]$/g, '').split(',').map((s: string) => s.trim()).filter(Boolean)
+            ? (w.extraTools as string)
+                .replace(/^\[|\]$/g, '')
+                .split(',')
+                .map((s: string) => s.trim())
+                .filter(Boolean)
             : undefined;
       }
       return spec;
@@ -302,10 +314,14 @@ export function yamlToSwarmConfig(yaml: SwarmYamlConfig, orchestratorModel: stri
   if (comm) {
     config.communication = {
       blackboard: comm.blackboard !== undefined ? Boolean(comm.blackboard) : undefined,
-      dependencyContextMaxLength: (comm.dependencyContextMaxLength ?? comm.dependency_context_max_length)
-        ? Number(comm.dependencyContextMaxLength ?? comm.dependency_context_max_length) : undefined,
-      includeFileList: (comm.includeFileList ?? comm.include_file_list) !== undefined
-        ? Boolean(comm.includeFileList ?? comm.include_file_list) : undefined,
+      dependencyContextMaxLength:
+        (comm.dependencyContextMaxLength ?? comm.dependency_context_max_length)
+          ? Number(comm.dependencyContextMaxLength ?? comm.dependency_context_max_length)
+          : undefined,
+      includeFileList:
+        (comm.includeFileList ?? comm.include_file_list) !== undefined
+          ? Boolean(comm.includeFileList ?? comm.include_file_list)
+          : undefined,
     };
   }
 
@@ -319,20 +335,28 @@ export function yamlToSwarmConfig(yaml: SwarmYamlConfig, orchestratorModel: stri
       config.decompositionPriorities = tasks.priorities.map(String);
     }
     if (tasks.fileConflictStrategy) {
-      config.fileConflictStrategy = String(tasks.fileConflictStrategy) as SwarmConfig['fileConflictStrategy'];
+      config.fileConflictStrategy = String(
+        tasks.fileConflictStrategy,
+      ) as SwarmConfig['fileConflictStrategy'];
     }
   }
 
   // budget
   const budget = yaml.budget as Record<string, unknown> | undefined;
   if (budget) {
-    if (budget.totalTokens || budget.total_tokens) config.totalBudget = Number(budget.totalTokens ?? budget.total_tokens);
-    if (budget.maxCost || budget.max_cost) config.maxCost = Number(budget.maxCost ?? budget.max_cost);
-    if (budget.maxConcurrency || budget.max_concurrency) config.maxConcurrency = Number(budget.maxConcurrency ?? budget.max_concurrency);
-    if (budget.maxTokensPerWorker || budget.max_tokens_per_worker) config.maxTokensPerWorker = Number(budget.maxTokensPerWorker ?? budget.max_tokens_per_worker);
-    if (budget.workerTimeout || budget.worker_timeout) config.workerTimeout = Number(budget.workerTimeout ?? budget.worker_timeout);
+    if (budget.totalTokens || budget.total_tokens)
+      config.totalBudget = Number(budget.totalTokens ?? budget.total_tokens);
+    if (budget.maxCost || budget.max_cost)
+      config.maxCost = Number(budget.maxCost ?? budget.max_cost);
+    if (budget.maxConcurrency || budget.max_concurrency)
+      config.maxConcurrency = Number(budget.maxConcurrency ?? budget.max_concurrency);
+    if (budget.maxTokensPerWorker || budget.max_tokens_per_worker)
+      config.maxTokensPerWorker = Number(budget.maxTokensPerWorker ?? budget.max_tokens_per_worker);
+    if (budget.workerTimeout || budget.worker_timeout)
+      config.workerTimeout = Number(budget.workerTimeout ?? budget.worker_timeout);
     if (budget.workerMaxIterations) config.workerMaxIterations = Number(budget.workerMaxIterations);
-    if (budget.dispatchStaggerMs || budget.dispatch_stagger_ms) config.dispatchStaggerMs = Number(budget.dispatchStaggerMs ?? budget.dispatch_stagger_ms);
+    if (budget.dispatchStaggerMs || budget.dispatch_stagger_ms)
+      config.dispatchStaggerMs = Number(budget.dispatchStaggerMs ?? budget.dispatch_stagger_ms);
     const enforcementMode = budget.enforcementMode ?? budget.enforcement_mode;
     if (enforcementMode !== undefined) {
       const mode = String(enforcementMode);
@@ -356,17 +380,37 @@ export function yamlToSwarmConfig(yaml: SwarmYamlConfig, orchestratorModel: stri
   // reliability — dispatch cap + hollow termination
   const reliability = yaml.reliability as Record<string, unknown> | undefined;
   if (reliability) {
-    if (reliability.maxDispatchesPerTask !== undefined || reliability.max_dispatches_per_task !== undefined) {
-      config.maxDispatchesPerTask = Number(reliability.maxDispatchesPerTask ?? reliability.max_dispatches_per_task);
+    if (
+      reliability.maxDispatchesPerTask !== undefined ||
+      reliability.max_dispatches_per_task !== undefined
+    ) {
+      config.maxDispatchesPerTask = Number(
+        reliability.maxDispatchesPerTask ?? reliability.max_dispatches_per_task,
+      );
     }
-    if (reliability.hollowTerminationRatio !== undefined || reliability.hollow_termination_ratio !== undefined) {
-      config.hollowTerminationRatio = Number(reliability.hollowTerminationRatio ?? reliability.hollow_termination_ratio);
+    if (
+      reliability.hollowTerminationRatio !== undefined ||
+      reliability.hollow_termination_ratio !== undefined
+    ) {
+      config.hollowTerminationRatio = Number(
+        reliability.hollowTerminationRatio ?? reliability.hollow_termination_ratio,
+      );
     }
-    if (reliability.hollowTerminationMinDispatches !== undefined || reliability.hollow_termination_min_dispatches !== undefined) {
-      config.hollowTerminationMinDispatches = Number(reliability.hollowTerminationMinDispatches ?? reliability.hollow_termination_min_dispatches);
+    if (
+      reliability.hollowTerminationMinDispatches !== undefined ||
+      reliability.hollow_termination_min_dispatches !== undefined
+    ) {
+      config.hollowTerminationMinDispatches = Number(
+        reliability.hollowTerminationMinDispatches ?? reliability.hollow_termination_min_dispatches,
+      );
     }
-    if (reliability.enableHollowTermination !== undefined || reliability.enable_hollow_termination !== undefined) {
-      config.enableHollowTermination = Boolean(reliability.enableHollowTermination ?? reliability.enable_hollow_termination);
+    if (
+      reliability.enableHollowTermination !== undefined ||
+      reliability.enable_hollow_termination !== undefined
+    ) {
+      config.enableHollowTermination = Boolean(
+        reliability.enableHollowTermination ?? reliability.enable_hollow_termination,
+      );
     }
   }
 
@@ -378,13 +422,18 @@ export function yamlToSwarmConfig(yaml: SwarmYamlConfig, orchestratorModel: stri
       if (!typeConfig || typeof typeConfig !== 'object') continue;
       const parsed: Record<string, unknown> = {};
       if (typeConfig.timeout !== undefined) parsed.timeout = Number(typeConfig.timeout);
-      if (typeConfig.maxIterations !== undefined) parsed.maxIterations = Number(typeConfig.maxIterations);
+      if (typeConfig.maxIterations !== undefined)
+        parsed.maxIterations = Number(typeConfig.maxIterations);
       if (typeConfig.idleTimeout !== undefined) parsed.idleTimeout = Number(typeConfig.idleTimeout);
-      if (typeConfig.policyProfile !== undefined) parsed.policyProfile = String(typeConfig.policyProfile);
+      if (typeConfig.policyProfile !== undefined)
+        parsed.policyProfile = String(typeConfig.policyProfile);
       if (typeConfig.capability !== undefined) parsed.capability = String(typeConfig.capability);
-      if (typeConfig.requiresToolCalls !== undefined) parsed.requiresToolCalls = Boolean(typeConfig.requiresToolCalls);
-      if (typeConfig.promptTemplate !== undefined) parsed.promptTemplate = String(typeConfig.promptTemplate);
-      if (typeConfig.tools && Array.isArray(typeConfig.tools)) parsed.tools = typeConfig.tools.map(String);
+      if (typeConfig.requiresToolCalls !== undefined)
+        parsed.requiresToolCalls = Boolean(typeConfig.requiresToolCalls);
+      if (typeConfig.promptTemplate !== undefined)
+        parsed.promptTemplate = String(typeConfig.promptTemplate);
+      if (typeConfig.tools && Array.isArray(typeConfig.tools))
+        parsed.tools = typeConfig.tools.map(String);
       if (typeConfig.retries !== undefined) parsed.retries = Number(typeConfig.retries);
       if (typeConfig.tokenBudget !== undefined) parsed.tokenBudget = Number(typeConfig.tokenBudget);
       config.taskTypes[typeName] = parsed as import('./types.js').TaskTypeConfig;
@@ -397,20 +446,34 @@ export function yamlToSwarmConfig(yaml: SwarmYamlConfig, orchestratorModel: stri
     if (resilience.maxConcurrency !== undefined || resilience.max_concurrency !== undefined) {
       config.maxConcurrency = Number(resilience.maxConcurrency ?? resilience.max_concurrency);
     }
-    if (resilience.dispatchStaggerMs !== undefined || resilience.dispatch_stagger_ms !== undefined) {
-      config.dispatchStaggerMs = Number(resilience.dispatchStaggerMs ?? resilience.dispatch_stagger_ms);
+    if (
+      resilience.dispatchStaggerMs !== undefined ||
+      resilience.dispatch_stagger_ms !== undefined
+    ) {
+      config.dispatchStaggerMs = Number(
+        resilience.dispatchStaggerMs ?? resilience.dispatch_stagger_ms,
+      );
     }
     if (resilience.workerRetries !== undefined || resilience.worker_retries !== undefined) {
       config.workerRetries = Number(resilience.workerRetries ?? resilience.worker_retries);
     }
-    if (resilience.dispatchLeaseStaleMs !== undefined || resilience.dispatch_lease_stale_ms !== undefined) {
-      config.dispatchLeaseStaleMs = Number(resilience.dispatchLeaseStaleMs ?? resilience.dispatch_lease_stale_ms);
+    if (
+      resilience.dispatchLeaseStaleMs !== undefined ||
+      resilience.dispatch_lease_stale_ms !== undefined
+    ) {
+      config.dispatchLeaseStaleMs = Number(
+        resilience.dispatchLeaseStaleMs ?? resilience.dispatch_lease_stale_ms,
+      );
     }
     if (resilience.rateLimitRetries !== undefined || resilience.rate_limit_retries !== undefined) {
-      config.rateLimitRetries = Number(resilience.rateLimitRetries ?? resilience.rate_limit_retries);
+      config.rateLimitRetries = Number(
+        resilience.rateLimitRetries ?? resilience.rate_limit_retries,
+      );
     }
-    if (resilience.modelFailover !== undefined) config.enableModelFailover = Boolean(resilience.modelFailover);
-    if (resilience.model_failover !== undefined) config.enableModelFailover = Boolean(resilience.model_failover);
+    if (resilience.modelFailover !== undefined)
+      config.enableModelFailover = Boolean(resilience.modelFailover);
+    if (resilience.model_failover !== undefined)
+      config.enableModelFailover = Boolean(resilience.model_failover);
   }
 
   // hierarchy
@@ -439,15 +502,22 @@ export function yamlToSwarmConfig(yaml: SwarmYamlConfig, orchestratorModel: stri
     if (features.planning !== undefined) config.enablePlanning = Boolean(features.planning);
     if (features.waveReview !== undefined) config.enableWaveReview = Boolean(features.waveReview);
     if (features.wave_review !== undefined) config.enableWaveReview = Boolean(features.wave_review);
-    if (features.verification !== undefined) config.enableVerification = Boolean(features.verification);
-    if (features.persistence !== undefined) config.enablePersistence = Boolean(features.persistence);
+    if (features.verification !== undefined)
+      config.enableVerification = Boolean(features.verification);
+    if (features.persistence !== undefined)
+      config.enablePersistence = Boolean(features.persistence);
   }
 
   // permissions — sandbox and approval overrides for swarm workers
   const permissions = yaml.permissions as Record<string, unknown> | undefined;
   if (permissions) {
     config.permissions = {};
-    if (permissions.mode) config.permissions.mode = String(permissions.mode) as 'auto-safe' | 'interactive' | 'strict' | 'yolo';
+    if (permissions.mode)
+      config.permissions.mode = String(permissions.mode) as
+        | 'auto-safe'
+        | 'interactive'
+        | 'strict'
+        | 'yolo';
     if (permissions.auto_approve && Array.isArray(permissions.auto_approve)) {
       config.permissions.autoApprove = permissions.auto_approve.map(String);
     }
@@ -455,10 +525,16 @@ export function yamlToSwarmConfig(yaml: SwarmYamlConfig, orchestratorModel: stri
       config.permissions.autoApprove = (permissions.autoApprove as unknown[]).map(String);
     }
     if (permissions.scoped_approve) {
-      config.permissions.scopedApprove = permissions.scoped_approve as Record<string, { paths: string[] }>;
+      config.permissions.scopedApprove = permissions.scoped_approve as Record<
+        string,
+        { paths: string[] }
+      >;
     }
     if (permissions.scopedApprove) {
-      config.permissions.scopedApprove = permissions.scopedApprove as Record<string, { paths: string[] }>;
+      config.permissions.scopedApprove = permissions.scopedApprove as Record<
+        string,
+        { paths: string[] }
+      >;
     }
     if (permissions.require_approval && Array.isArray(permissions.require_approval)) {
       config.permissions.requireApproval = permissions.require_approval.map(String);
@@ -469,8 +545,13 @@ export function yamlToSwarmConfig(yaml: SwarmYamlConfig, orchestratorModel: stri
     if (permissions.allowed_commands && Array.isArray(permissions.allowed_commands)) {
       config.permissions.additionalAllowedCommands = permissions.allowed_commands.map(String);
     }
-    if (permissions.additionalAllowedCommands && Array.isArray(permissions.additionalAllowedCommands)) {
-      config.permissions.additionalAllowedCommands = (permissions.additionalAllowedCommands as unknown[]).map(String);
+    if (
+      permissions.additionalAllowedCommands &&
+      Array.isArray(permissions.additionalAllowedCommands)
+    ) {
+      config.permissions.additionalAllowedCommands = (
+        permissions.additionalAllowedCommands as unknown[]
+      ).map(String);
     }
   }
 
@@ -481,7 +562,9 @@ export function yamlToSwarmConfig(yaml: SwarmYamlConfig, orchestratorModel: stri
   }
 
   // profileExtensions — additive tool patches for built-in or named profiles
-  const profileExtensions = (yaml.profileExtensions ?? yaml.profile_extensions) as Record<string, Record<string, unknown>> | undefined;
+  const profileExtensions = (yaml.profileExtensions ?? yaml.profile_extensions) as
+    | Record<string, Record<string, unknown>>
+    | undefined;
   if (profileExtensions && typeof profileExtensions === 'object') {
     config.profileExtensions = {};
     for (const [profileName, ext] of Object.entries(profileExtensions)) {
@@ -510,8 +593,10 @@ export function yamlToSwarmConfig(yaml: SwarmYamlConfig, orchestratorModel: stri
   if (autoSplit) {
     config.autoSplit = {};
     if (autoSplit.enabled !== undefined) config.autoSplit.enabled = Boolean(autoSplit.enabled);
-    if (autoSplit.complexityFloor !== undefined) config.autoSplit.complexityFloor = Number(autoSplit.complexityFloor);
-    if (autoSplit.maxSubtasks !== undefined) config.autoSplit.maxSubtasks = Number(autoSplit.maxSubtasks);
+    if (autoSplit.complexityFloor !== undefined)
+      config.autoSplit.complexityFloor = Number(autoSplit.complexityFloor);
+    if (autoSplit.maxSubtasks !== undefined)
+      config.autoSplit.maxSubtasks = Number(autoSplit.maxSubtasks);
     if (autoSplit.splittableTypes && Array.isArray(autoSplit.splittableTypes)) {
       config.autoSplit.splittableTypes = autoSplit.splittableTypes.map(String);
     }
@@ -541,7 +626,12 @@ export function yamlToSwarmConfig(yaml: SwarmYamlConfig, orchestratorModel: stri
 export function mergeSwarmConfigs(
   defaults: typeof DEFAULT_SWARM_CONFIG,
   yamlConfig: Partial<SwarmConfig> | null,
-  cliOverrides: { paidOnly?: boolean; orchestratorModel: string; orchestratorModelExplicit?: boolean; resumeSessionId?: string },
+  cliOverrides: {
+    paidOnly?: boolean;
+    orchestratorModel: string;
+    orchestratorModelExplicit?: boolean;
+    resumeSessionId?: string;
+  },
 ): SwarmConfig {
   // Start with defaults + orchestratorModel
   const merged: SwarmConfig = {
@@ -603,19 +693,29 @@ const KNOWN_MODEL_PROVIDERS = new Set([
   'allenai',
 ]);
 
-function normalizeSingleModelId(raw: string | undefined, fallback: string): { model: string; changed: boolean; valid: boolean } {
+function normalizeSingleModelId(
+  raw: string | undefined,
+  fallback: string,
+): { model: string; changed: boolean; valid: boolean } {
   const value = (raw ?? '').trim();
   if (!value) {
     return { model: fallback, changed: true, valid: false };
   }
 
-  const parts = value.split('/').map(p => p.trim()).filter(Boolean);
+  const parts = value
+    .split('/')
+    .map((p) => p.trim())
+    .filter(Boolean);
   if (parts.length === 2) {
     return { model: value, changed: false, valid: true };
   }
 
   // Common malformed shape: "anthropic/z-ai/glm-5" -> "z-ai/glm-5"
-  if (parts.length >= 3 && KNOWN_MODEL_PROVIDERS.has(parts[0]) && KNOWN_MODEL_PROVIDERS.has(parts[1])) {
+  if (
+    parts.length >= 3 &&
+    KNOWN_MODEL_PROVIDERS.has(parts[0]) &&
+    KNOWN_MODEL_PROVIDERS.has(parts[1])
+  ) {
     const normalized = `${parts[1]}/${parts.slice(2).join('/')}`;
     return { model: normalized, changed: normalized !== value, valid: true };
   }
@@ -627,10 +727,13 @@ function normalizeSingleModelId(raw: string | undefined, fallback: string): { mo
  * Normalize and validate model IDs in swarm config.
  * Auto-corrects common malformed IDs and falls back to orchestrator model on invalid values.
  */
-export function normalizeSwarmModelConfig(config: SwarmConfig): { config: SwarmConfig; warnings: string[] } {
+export function normalizeSwarmModelConfig(config: SwarmConfig): {
+  config: SwarmConfig;
+  warnings: string[];
+} {
   const warnings: string[] = [];
   const normalized: SwarmConfig = { ...config };
-  normalized.workers = config.workers.map(w => ({ ...w }));
+  normalized.workers = config.workers.map((w) => ({ ...w }));
   if (config.hierarchy) {
     normalized.hierarchy = {
       manager: config.hierarchy.manager ? { ...config.hierarchy.manager } : undefined,
@@ -644,7 +747,7 @@ export function normalizeSwarmModelConfig(config: SwarmConfig): { config: SwarmC
     const result = normalizeSingleModelId(worker.model, config.orchestratorModel);
     if (result.changed || !result.valid) {
       warnings.push(
-        `[workers.${i}.model] "${worker.model}" -> "${result.model}"${result.valid ? ' (autocorrected)' : ' (fallback applied)'}`
+        `[workers.${i}.model] "${worker.model}" -> "${result.model}"${result.valid ? ' (autocorrected)' : ' (fallback applied)'}`,
       );
       worker.model = result.model;
     }
@@ -654,7 +757,7 @@ export function normalizeSwarmModelConfig(config: SwarmConfig): { config: SwarmC
   const orchestrator = normalizeSingleModelId(config.orchestratorModel, fallbackModel);
   if (orchestrator.changed || !orchestrator.valid) {
     warnings.push(
-      `[orchestratorModel] "${config.orchestratorModel}" -> "${orchestrator.model}"${orchestrator.valid ? ' (autocorrected)' : ' (fallback applied)'}`
+      `[orchestratorModel] "${config.orchestratorModel}" -> "${orchestrator.model}"${orchestrator.valid ? ' (autocorrected)' : ' (fallback applied)'}`,
     );
     normalized.orchestratorModel = orchestrator.model;
   }
@@ -662,7 +765,7 @@ export function normalizeSwarmModelConfig(config: SwarmConfig): { config: SwarmC
   const planner = normalizeSingleModelId(config.plannerModel, normalized.orchestratorModel);
   if (config.plannerModel && (planner.changed || !planner.valid)) {
     warnings.push(
-      `[plannerModel] "${config.plannerModel}" -> "${planner.model}"${planner.valid ? ' (autocorrected)' : ' (fallback applied)'}`
+      `[plannerModel] "${config.plannerModel}" -> "${planner.model}"${planner.valid ? ' (autocorrected)' : ' (fallback applied)'}`,
     );
     normalized.plannerModel = planner.model;
   }
@@ -670,26 +773,32 @@ export function normalizeSwarmModelConfig(config: SwarmConfig): { config: SwarmC
   const quality = normalizeSingleModelId(config.qualityGateModel, normalized.orchestratorModel);
   if (config.qualityGateModel && (quality.changed || !quality.valid)) {
     warnings.push(
-      `[qualityGateModel] "${config.qualityGateModel}" -> "${quality.model}"${quality.valid ? ' (autocorrected)' : ' (fallback applied)'}`
+      `[qualityGateModel] "${config.qualityGateModel}" -> "${quality.model}"${quality.valid ? ' (autocorrected)' : ' (fallback applied)'}`,
     );
     normalized.qualityGateModel = quality.model;
   }
 
   if (normalized.hierarchy?.manager?.model) {
-    const manager = normalizeSingleModelId(normalized.hierarchy.manager.model, normalized.orchestratorModel);
+    const manager = normalizeSingleModelId(
+      normalized.hierarchy.manager.model,
+      normalized.orchestratorModel,
+    );
     if (manager.changed || !manager.valid) {
       warnings.push(
-        `[hierarchy.manager.model] "${normalized.hierarchy.manager.model}" -> "${manager.model}"${manager.valid ? ' (autocorrected)' : ' (fallback applied)'}`
+        `[hierarchy.manager.model] "${normalized.hierarchy.manager.model}" -> "${manager.model}"${manager.valid ? ' (autocorrected)' : ' (fallback applied)'}`,
       );
       normalized.hierarchy.manager.model = manager.model;
     }
   }
 
   if (normalized.hierarchy?.judge?.model) {
-    const judge = normalizeSingleModelId(normalized.hierarchy.judge.model, normalized.orchestratorModel);
+    const judge = normalizeSingleModelId(
+      normalized.hierarchy.judge.model,
+      normalized.orchestratorModel,
+    );
     if (judge.changed || !judge.valid) {
       warnings.push(
-        `[hierarchy.judge.model] "${normalized.hierarchy.judge.model}" -> "${judge.model}"${judge.valid ? ' (autocorrected)' : ' (fallback applied)'}`
+        `[hierarchy.judge.model] "${normalized.hierarchy.judge.model}" -> "${judge.model}"${judge.valid ? ' (autocorrected)' : ' (fallback applied)'}`,
       );
       normalized.hierarchy.judge.model = judge.model;
     }
@@ -700,7 +809,14 @@ export function normalizeSwarmModelConfig(config: SwarmConfig): { config: SwarmC
 
 // ─── Capability Normalization ────────────────────────────────────────────────
 
-const VALID_CAPABILITIES = new Set<WorkerCapability>(['code', 'research', 'review', 'test', 'document', 'write']);
+const VALID_CAPABILITIES = new Set<WorkerCapability>([
+  'code',
+  'research',
+  'review',
+  'test',
+  'document',
+  'write',
+]);
 
 const CAPABILITY_ALIASES: Record<string, WorkerCapability> = {
   refactor: 'code',

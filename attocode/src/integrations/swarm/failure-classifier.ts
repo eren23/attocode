@@ -24,10 +24,7 @@ function hasAny(haystack: string, needles: string[]): boolean {
   return needles.some((needle) => haystack.includes(needle));
 }
 
-export function classifySwarmFailure(
-  rawOutput: string,
-  toolCalls?: number,
-): FailureClassification {
+export function classifySwarmFailure(rawOutput: string, toolCalls?: number): FailureClassification {
   const message = rawOutput.toLowerCase();
 
   if (toolCalls === -1 || hasAny(message, ['timed out', 'timeout'])) {
@@ -40,7 +37,13 @@ export function classifySwarmFailure(
     };
   }
 
-  if (hasAny(message, ['tool arguments could not be parsed', 'failed to parse arguments as json', 'arguments were of the wrong type or format'])) {
+  if (
+    hasAny(message, [
+      'tool arguments could not be parsed',
+      'failed to parse arguments as json',
+      'arguments were of the wrong type or format',
+    ])
+  ) {
     return {
       failureClass: 'invalid_tool_args',
       retryable: false,
@@ -50,7 +53,13 @@ export function classifySwarmFailure(
     };
   }
 
-  if (hasAny(message, ['file not found', 'target file or directory does not exist', 'use glob to search for similar files'])) {
+  if (
+    hasAny(message, [
+      'file not found',
+      'target file or directory does not exist',
+      'use glob to search for similar files',
+    ])
+  ) {
     return {
       failureClass: 'missing_target_path',
       retryable: false,
@@ -110,7 +119,16 @@ export function classifySwarmFailure(
     };
   }
 
-  if (hasAny(message, ['http 500', 'http 502', 'http 503', 'http 504', 'internal server error', 'network error'])) {
+  if (
+    hasAny(message, [
+      'http 500',
+      'http 502',
+      'http 503',
+      'http 504',
+      'internal server error',
+      'network error',
+    ])
+  ) {
     return {
       failureClass: 'provider_transient',
       retryable: true,

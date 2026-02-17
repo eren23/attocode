@@ -1,19 +1,12 @@
 /**
  * Agent builder and factory functions.
  */
-export {
-  createProductionAgent,
-  ProductionAgentBuilder,
-  buildAgent,
-} from './agent-builder.js';
+export { createProductionAgent, ProductionAgentBuilder, buildAgent } from './agent-builder.js';
 
 /**
  * Message builder (extracted from ProductionAgent.buildMessages).
  */
-export {
-  buildMessages,
-  type MessageBuilderDeps,
-} from './message-builder.js';
+export { buildMessages, type MessageBuilderDeps } from './message-builder.js';
 
 /**
  * Session, checkpoint, and file-change tracking API.

@@ -88,9 +88,15 @@ function calculateHunkStats(hunk: DiffHunk): HunkStats {
 
   for (const line of hunk.lines) {
     switch (line.type) {
-      case 'add': additions++; break;
-      case 'remove': deletions++; break;
-      default: context++; break;
+      case 'add':
+        additions++;
+        break;
+      case 'remove':
+        deletions++;
+        break;
+      default:
+        context++;
+        break;
     }
   }
 
@@ -102,9 +108,12 @@ function calculateHunkStats(hunk: DiffHunk): HunkStats {
  */
 function getLineTypeColor(type: DiffLine['type']): string {
   switch (type) {
-    case 'add': return COLORS.addition;
-    case 'remove': return COLORS.deletion;
-    default: return COLORS.context;
+    case 'add':
+      return COLORS.addition;
+    case 'remove':
+      return COLORS.deletion;
+    default:
+      return COLORS.context;
   }
 }
 
@@ -113,9 +122,12 @@ function getLineTypeColor(type: DiffLine['type']): string {
  */
 function getLinePrefix(type: DiffLine['type']): string {
   switch (type) {
-    case 'add': return '+';
-    case 'remove': return '-';
-    default: return ' ';
+    case 'add':
+      return '+';
+    case 'remove':
+      return '-';
+    default:
+      return ' ';
   }
 }
 
@@ -144,7 +156,7 @@ function findLinePairs(lines: DiffLine[]): Map<number, string> {
 function renderWordDiff(
   oldContent: string,
   newContent: string,
-  lineType: 'add' | 'remove'
+  lineType: 'add' | 'remove',
 ): React.ReactNode {
   const changes = diffWords(oldContent, newContent);
 
@@ -159,7 +171,11 @@ function renderWordDiff(
       } else if (change.added) {
         return null;
       }
-      return <Text key={i} color={COLORS.deletion}>{change.value}</Text>;
+      return (
+        <Text key={i} color={COLORS.deletion}>
+          {change.value}
+        </Text>
+      );
     } else {
       if (change.added) {
         return (
@@ -170,7 +186,11 @@ function renderWordDiff(
       } else if (change.removed) {
         return null;
       }
-      return <Text key={i} color={COLORS.addition}>{change.value}</Text>;
+      return (
+        <Text key={i} color={COLORS.addition}>
+          {change.value}
+        </Text>
+      );
     }
   });
 }
@@ -182,7 +202,7 @@ function renderSyntaxHighlight(
   content: string,
   theme: ThemeColors,
   language: string,
-  _baseColor?: string
+  _baseColor?: string,
 ): React.ReactNode {
   const tokens = tokenize(content, language);
   return tokens.map((token: Token, i: number) => (
@@ -200,7 +220,7 @@ function renderWordDiffWithSyntax(
   newContent: string,
   lineType: 'add' | 'remove',
   theme: ThemeColors,
-  language: string
+  language: string,
 ): React.ReactNode {
   const changes = diffWords(oldContent, newContent);
   const elements: React.ReactNode[] = [];
@@ -212,7 +232,7 @@ function renderWordDiffWithSyntax(
         elements.push(
           <Text key={keyIndex++} color={COLORS.deletion} bold inverse>
             {change.value}
-          </Text>
+          </Text>,
         );
       } else if (change.added) {
         continue;
@@ -223,7 +243,7 @@ function renderWordDiffWithSyntax(
           elements.push(
             <Text key={keyIndex++} color={getTokenColor(token.type, theme)}>
               {token.content}
-            </Text>
+            </Text>,
           );
         }
       }
@@ -232,7 +252,7 @@ function renderWordDiffWithSyntax(
         elements.push(
           <Text key={keyIndex++} color={COLORS.addition} bold inverse>
             {change.value}
-          </Text>
+          </Text>,
         );
       } else if (change.removed) {
         continue;
@@ -243,7 +263,7 @@ function renderWordDiffWithSyntax(
           elements.push(
             <Text key={keyIndex++} color={getTokenColor(token.type, theme)}>
               {token.content}
-            </Text>
+            </Text>,
           );
         }
       }
@@ -301,8 +321,8 @@ const DiffLineView = memo(function DiffLineView({
   const color = getLineTypeColor(line.type);
   const prefix = getLinePrefix(line.type);
 
-  const useWordDiff = showWordDiff && pairedContent !== undefined &&
-    (line.type === 'add' || line.type === 'remove');
+  const useWordDiff =
+    showWordDiff && pairedContent !== undefined && (line.type === 'add' || line.type === 'remove');
 
   const useSyntax = syntaxHighlight && theme && language;
 
@@ -319,7 +339,7 @@ const DiffLineView = memo(function DiffLineView({
           line.type === 'add' ? line.content : pairedContent,
           line.type as 'add' | 'remove',
           theme,
-          language
+          language,
         )}
       </Text>
     );
@@ -331,7 +351,7 @@ const DiffLineView = memo(function DiffLineView({
         {renderWordDiff(
           line.type === 'remove' ? line.content : pairedContent,
           line.type === 'add' ? line.content : pairedContent,
-          line.type as 'add' | 'remove'
+          line.type as 'add' | 'remove',
         )}
       </Text>
     );
@@ -345,18 +365,29 @@ const DiffLineView = memo(function DiffLineView({
     );
   } else {
     // Plain text
-    contentNode = <Text color={color}>{prefix}{line.content}</Text>;
+    contentNode = (
+      <Text color={color}>
+        {prefix}
+        {line.content}
+      </Text>
+    );
   }
 
   if (showLineNumbers) {
-    const oldNum = line.oldLineNumber?.toString().padStart(lineNumberWidth) ?? ' '.repeat(lineNumberWidth);
-    const newNum = line.newLineNumber?.toString().padStart(lineNumberWidth) ?? ' '.repeat(lineNumberWidth);
+    const oldNum =
+      line.oldLineNumber?.toString().padStart(lineNumberWidth) ?? ' '.repeat(lineNumberWidth);
+    const newNum =
+      line.newLineNumber?.toString().padStart(lineNumberWidth) ?? ' '.repeat(lineNumberWidth);
 
     return (
       <Box>
-        <Text color={COLORS.lineNumber} dimColor>{oldNum}</Text>
+        <Text color={COLORS.lineNumber} dimColor>
+          {oldNum}
+        </Text>
         <Text> </Text>
-        <Text color={COLORS.lineNumber} dimColor>{newNum}</Text>
+        <Text color={COLORS.lineNumber} dimColor>
+          {newNum}
+        </Text>
         <Text> </Text>
         {contentNode}
       </Box>
@@ -408,7 +439,7 @@ const CollapsibleHunk = memo(function CollapsibleHunk({
   const linesToShow = maxLines && expanded ? hunk.lines.slice(0, maxLines) : hunk.lines;
   const hasMore = maxLines && hunk.lines.length > maxLines;
 
-  const gutterWidth = showLineNumbers ? ((lineNumberWidth ?? 4) * 2 + 2) : 0;
+  const gutterWidth = showLineNumbers ? (lineNumberWidth ?? 4) * 2 + 2 : 0;
 
   return (
     <Box flexDirection="column">
@@ -423,7 +454,8 @@ const CollapsibleHunk = memo(function CollapsibleHunk({
         </Text>
         {!expanded && (
           <Text color={COLORS.collapsed} dimColor>
-            {' '}({stats.additions} additions, {stats.deletions} deletions)
+            {' '}
+            ({stats.additions} additions, {stats.deletions} deletions)
           </Text>
         )}
       </Box>
@@ -493,7 +525,7 @@ export const CollapsibleDiffView = memo(function CollapsibleDiffView({
 
   // Toggle a hunk's expanded state
   const toggleHunk = useCallback((index: number) => {
-    setExpandedHunks(prev => {
+    setExpandedHunks((prev) => {
       const next = new Set(prev);
       if (next.has(index)) {
         next.delete(index);

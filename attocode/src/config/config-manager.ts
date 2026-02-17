@@ -58,7 +58,10 @@ function deepMergeConfigs(
       !Array.isArray(baseValue)
     ) {
       // 1-level nested object merge
-      result[key] = { ...(baseValue as Record<string, unknown>), ...(value as Record<string, unknown>) };
+      result[key] = {
+        ...(baseValue as Record<string, unknown>),
+        ...(value as Record<string, unknown>),
+      };
     } else {
       result[key] = value;
     }
@@ -75,10 +78,7 @@ function deepMergeConfigs(
  * Load a JSON config file, returning the parsed object or null.
  * Collects parse errors as warnings.
  */
-function loadJsonFile(
-  filePath: string,
-  warnings: string[],
-): Record<string, unknown> | null {
+function loadJsonFile(filePath: string, warnings: string[]): Record<string, unknown> | null {
   if (!existsSync(filePath)) {
     return null;
   }
@@ -88,7 +88,9 @@ function loadJsonFile(
     const parsed = JSON.parse(content);
 
     if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) {
-      warnings.push(`${filePath}: expected a JSON object, got ${Array.isArray(parsed) ? 'array' : typeof parsed}`);
+      warnings.push(
+        `${filePath}: expected a JSON object, got ${Array.isArray(parsed) ? 'array' : typeof parsed}`,
+      );
       return null;
     }
 

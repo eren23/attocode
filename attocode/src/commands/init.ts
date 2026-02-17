@@ -16,13 +16,13 @@ const rl = createInterface({
 });
 
 function question(prompt: string): Promise<string> {
-  return new Promise(resolve => {
+  return new Promise((resolve) => {
     rl.question(prompt, resolve);
   });
 }
 
 function select(prompt: string, options: string[]): Promise<number> {
-  return new Promise(async resolve => {
+  return new Promise(async (resolve) => {
     // eslint-disable-next-line no-console
     console.log(prompt);
     // eslint-disable-next-line no-console
@@ -60,11 +60,11 @@ export async function runInit(): Promise<void> {
   // Detect existing providers
   const detected = detectProviders();
   if (detected.length > 0) {
-    logger.debug('Detected providers from environment', { providers: detected.map(p => p.name) });
+    logger.debug('Detected providers from environment', { providers: detected.map((p) => p.name) });
     // eslint-disable-next-line no-console
     console.log('✓ Detected API keys from environment:');
     // eslint-disable-next-line no-console
-    detected.forEach(p => console.log(`  - ${p.name.toUpperCase()}`));
+    detected.forEach((p) => console.log(`  - ${p.name.toUpperCase()}`));
     // eslint-disable-next-line no-console
     console.log('');
   }
@@ -122,7 +122,7 @@ export async function runInit(): Promise<void> {
   };
 
   const models = suggestedModels[provider];
-  const modelOptions = [...models.map(m => m.name), '✏️  Enter custom model'];
+  const modelOptions = [...models.map((m) => m.name), '✏️  Enter custom model'];
 
   // eslint-disable-next-line no-console
   console.log('\nSelect model:');
@@ -163,19 +163,19 @@ export async function runInit(): Promise<void> {
   await ensureDirectories();
 
   const config = {
-    "$schema": "https://attocode.dev/schema/config.json",
-    "version": 1,
-    "providers": {
-      "default": provider
+    $schema: 'https://attocode.dev/schema/config.json',
+    version: 1,
+    providers: {
+      default: provider,
     },
-    "model": model,
-    "maxIterations": 50,
-    "timeout": 300000,
-    "features": {
-      "memory": true,
-      "planning": true,
-      "sandbox": true
-    }
+    model: model,
+    maxIterations: 50,
+    timeout: 300000,
+    features: {
+      memory: true,
+      planning: true,
+      sandbox: true,
+    },
   };
 
   writeFileSync(getConfigPath(), JSON.stringify(config, null, 2));

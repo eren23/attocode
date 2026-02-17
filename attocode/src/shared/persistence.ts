@@ -26,11 +26,7 @@ function mapReplacer(_key: string, value: unknown): unknown {
 
 /** JSON reviver that deserializes Maps from { __type: 'Map', entries: [...] } */
 function mapReviver(_key: string, value: unknown): unknown {
-  if (
-    value &&
-    typeof value === 'object' &&
-    (value as Record<string, unknown>).__type === 'Map'
-  ) {
+  if (value && typeof value === 'object' && (value as Record<string, unknown>).__type === 'Map') {
     return new Map((value as { entries: [unknown, unknown][] }).entries);
   }
   return value;
@@ -90,9 +86,7 @@ export class JSONFilePersistenceAdapter implements PersistenceAdapter {
   async list(namespace: string): Promise<string[]> {
     try {
       const entries = await fs.readdir(this.nsDir(namespace));
-      return entries
-        .filter((e) => e.endsWith('.json'))
-        .map((e) => e.slice(0, -5));
+      return entries.filter((e) => e.endsWith('.json')).map((e) => e.slice(0, -5));
     } catch {
       return [];
     }
@@ -177,9 +171,7 @@ export class SQLitePersistenceAdapter implements PersistenceAdapter {
 
   async exists(namespace: string, key: string): Promise<boolean> {
     const row = this.db
-      .prepare(
-        `SELECT 1 FROM kv_store WHERE namespace = ? AND key = ? LIMIT 1`,
-      )
+      .prepare(`SELECT 1 FROM kv_store WHERE namespace = ? AND key = ? LIMIT 1`)
       .get(namespace, key);
     return row !== undefined;
   }

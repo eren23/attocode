@@ -158,8 +158,8 @@ export class TaskManager extends EventEmitter {
     if (updates.status === 'deleted') {
       // Remove this task from all blockedBy references
       for (const t of this.tasks.values()) {
-        t.blockedBy = t.blockedBy.filter(id => id !== taskId);
-        t.blocks = t.blocks.filter(id => id !== taskId);
+        t.blockedBy = t.blockedBy.filter((id) => id !== taskId);
+        t.blocks = t.blocks.filter((id) => id !== taskId);
       }
       this.tasks.delete(taskId);
       this.emit('task.deleted', { taskId });
@@ -246,10 +246,15 @@ export class TaskManager extends EventEmitter {
   list(): Task[] {
     this.normalizeTaskOwnershipInvariants();
     return Array.from(this.tasks.values())
-      .filter(t => t.status !== 'deleted')
+      .filter((t) => t.status !== 'deleted')
       .sort((a, b) => {
         // Sort by status (in_progress first, then pending, then completed)
-        const statusOrder: Record<TaskStatus, number> = { in_progress: 0, pending: 1, completed: 2, deleted: 3 };
+        const statusOrder: Record<TaskStatus, number> = {
+          in_progress: 0,
+          pending: 1,
+          completed: 2,
+          deleted: 3,
+        };
         const statusDiff = statusOrder[a.status] - statusOrder[b.status];
         if (statusDiff !== 0) return statusDiff;
         // Then by ID (earlier tasks first)
@@ -261,7 +266,7 @@ export class TaskManager extends EventEmitter {
    * Get task summaries for display.
    */
   listSummaries(): TaskSummary[] {
-    return this.list().map(t => ({
+    return this.list().map((t) => ({
       id: t.id,
       subject: t.subject,
       status: t.status,
@@ -289,7 +294,7 @@ export class TaskManager extends EventEmitter {
   getOpenBlockers(taskId: string): string[] {
     const task = this.get(taskId);
     if (!task) return [];
-    return task.blockedBy.filter(blockerId => {
+    return task.blockedBy.filter((blockerId) => {
       const blocker = this.tasks.get(blockerId);
       return blocker && blocker.status !== 'completed';
     });
@@ -302,10 +307,7 @@ export class TaskManager extends EventEmitter {
    */
   getAvailableTasks(): Task[] {
     this.normalizeTaskOwnershipInvariants();
-    return this.list().filter(t =>
-      t.status === 'pending' &&
-      !this.isBlocked(t.id)
-    );
+    return this.list().filter((t) => t.status === 'pending' && !this.isBlocked(t.id));
   }
 
   /**
@@ -357,7 +359,12 @@ export class TaskManager extends EventEmitter {
       }
       taskIds.push(task.id);
       this.emit('task.updated', { task });
-      this.emit('task.recovered', { taskId: task.id, from: 'in_progress', to: 'pending', reason: options.reason });
+      this.emit('task.recovered', {
+        taskId: task.id,
+        from: 'in_progress',
+        to: 'pending',
+        reason: options.reason,
+      });
     }
 
     return { reconciled: taskIds.length, taskIds };
@@ -385,8 +392,7 @@ export class TaskManager extends EventEmitter {
 
     for (const task of tasks) {
       const statusIcon =
-        task.status === 'completed' ? '[x]' :
-        task.status === 'in_progress' ? '[~]' : '[ ]';
+        task.status === 'completed' ? '[x]' : task.status === 'in_progress' ? '[~]' : '[ ]';
 
       lines.push(`## ${statusIcon} ${task.id}: ${task.subject}`);
       lines.push('');
@@ -427,8 +433,7 @@ export class TaskManager extends EventEmitter {
 
       // Parse status
       const status: TaskStatus =
-        statusChar === 'x' ? 'completed' :
-        statusChar === '~' ? 'in_progress' : 'pending';
+        statusChar === 'x' ? 'completed' : statusChar === '~' ? 'in_progress' : 'pending';
 
       // Parse fields from body
       const ownerMatch = body.match(/\*\*Owner:\*\* (.+)/);
@@ -443,8 +448,8 @@ export class TaskManager extends EventEmitter {
         activeForm: `Working on ${subject.toLowerCase()}`,
         status,
         owner: ownerMatch ? ownerMatch[1].trim() : undefined,
-        blockedBy: blockedByMatch ? blockedByMatch[1].split(',').map(s => s.trim()) : [],
-        blocks: blocksMatch ? blocksMatch[1].split(',').map(s => s.trim()) : [],
+        blockedBy: blockedByMatch ? blockedByMatch[1].split(',').map((s) => s.trim()) : [],
+        blocks: blocksMatch ? blocksMatch[1].split(',').map((s) => s.trim()) : [],
         metadata: {},
         createdAt: Date.now(),
         updatedAt: Date.now(),
@@ -479,9 +484,9 @@ export class TaskManager extends EventEmitter {
   getCounts(): { pending: number; inProgress: number; completed: number; total: number } {
     const tasks = this.list();
     return {
-      pending: tasks.filter(t => t.status === 'pending').length,
-      inProgress: tasks.filter(t => t.status === 'in_progress').length,
-      completed: tasks.filter(t => t.status === 'completed').length,
+      pending: tasks.filter((t) => t.status === 'pending').length,
+      inProgress: tasks.filter((t) => t.status === 'in_progress').length,
+      completed: tasks.filter((t) => t.status === 'completed').length,
       total: tasks.length,
     };
   }

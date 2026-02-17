@@ -55,7 +55,11 @@ async function commandExists(command: string): Promise<boolean> {
 /**
  * Check if Landlock is available on this system.
  */
-async function isLandlockAvailable(): Promise<{ available: boolean; version?: number; reason?: string }> {
+async function isLandlockAvailable(): Promise<{
+  available: boolean;
+  version?: number;
+  reason?: string;
+}> {
   // Must be Linux
   if (platform() !== 'linux') {
     return { available: false, reason: 'Not Linux' };
@@ -239,14 +243,14 @@ export class LandlockSandbox implements Sandbox {
    */
   private async buildSandboxedCommand(
     command: string,
-    opts: Required<SandboxOptions>
+    opts: Required<SandboxOptions>,
   ): Promise<{ program: string; args: string[] }> {
     // Check what isolation method is available
-    if (this.useBubblewrap || await commandExists('bwrap')) {
+    if (this.useBubblewrap || (await commandExists('bwrap'))) {
       return this.buildBubblewrapCommand(command, opts);
     }
 
-    if (this.useFirejail || await commandExists('firejail')) {
+    if (this.useFirejail || (await commandExists('firejail'))) {
       return this.buildFirejailCommand(command, opts);
     }
 
@@ -259,7 +263,7 @@ export class LandlockSandbox implements Sandbox {
    */
   private buildBubblewrapCommand(
     command: string,
-    opts: Required<SandboxOptions>
+    opts: Required<SandboxOptions>,
   ): { program: string; args: string[] } {
     const args: string[] = [];
 
@@ -313,7 +317,7 @@ export class LandlockSandbox implements Sandbox {
    */
   private buildFirejailCommand(
     command: string,
-    opts: Required<SandboxOptions>
+    opts: Required<SandboxOptions>,
   ): { program: string; args: string[] } {
     const args: string[] = [];
 
@@ -356,7 +360,7 @@ export class LandlockSandbox implements Sandbox {
    */
   private buildUlimitCommand(
     command: string,
-    opts: Required<SandboxOptions>
+    opts: Required<SandboxOptions>,
   ): { program: string; args: string[] } {
     // Use bash to set ulimits before running the command
     const script = [
@@ -417,5 +421,9 @@ export async function checkLandlockSupport(): Promise<{
   }
 
   // Fallback to ulimit only
-  return { available: true, method: 'ulimit', details: 'Using ulimit constraints only (minimal isolation)' };
+  return {
+    available: true,
+    method: 'ulimit',
+    details: 'Using ulimit constraints only (minimal isolation)',
+  };
 }

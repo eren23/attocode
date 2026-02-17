@@ -5,6 +5,12 @@ export default defineConfig({
     globals: true,
     environment: 'node',
     include: ['tests/**/*.test.ts', 'tests/**/*.test.tsx'],
+    exclude: [
+      'tests/lsp.test.ts',
+      'tests/sandbox.test.ts',
+      'tests/swarm/decision-traceability.test.ts',
+      'tests/swarm/resilience-all-paths.test.ts',
+    ],
     testTimeout: 30000,
     coverage: {
       provider: 'v8',

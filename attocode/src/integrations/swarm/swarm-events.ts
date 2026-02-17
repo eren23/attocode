@@ -5,33 +5,123 @@
  * These events are emitted through the existing agent event system.
  */
 
-import type { SwarmStatus, SwarmExecutionStats, SwarmError, SwarmTask, OrchestratorDecision, ModelHealthRecord, VerificationResult, WaveReviewResult, WorkerRole, ArtifactInventory } from './types.js';
+import type {
+  SwarmStatus,
+  SwarmExecutionStats,
+  SwarmError,
+  SwarmTask,
+  OrchestratorDecision,
+  ModelHealthRecord,
+  VerificationResult,
+  WaveReviewResult,
+  WorkerRole,
+  ArtifactInventory,
+} from './types.js';
 
 // ─── Swarm Events ──────────────────────────────────────────────────────────
 
 export type SwarmEvent =
-  | { type: 'swarm.start'; taskCount: number; waveCount: number; config: { maxConcurrency: number; totalBudget: number; maxCost: number } }
+  | {
+      type: 'swarm.start';
+      taskCount: number;
+      waveCount: number;
+      config: { maxConcurrency: number; totalBudget: number; maxCost: number };
+    }
   | { type: 'swarm.tasks.loaded'; tasks: SwarmTask[] }
   | { type: 'swarm.wave.start'; wave: number; totalWaves: number; taskCount: number }
-  | { type: 'swarm.wave.complete'; wave: number; totalWaves: number; completed: number; failed: number; skipped: number }
-  | { type: 'swarm.task.dispatched'; taskId: string; description: string; model: string; workerName: string; toolCount: number; tools?: string[]; retryContext?: { previousScore: number; previousFeedback: string; attempt: number }; fromModel?: string; attempts?: number }
-  | { type: 'swarm.task.completed'; taskId: string; success: boolean; tokensUsed: number; costUsed: number; durationMs: number; qualityScore?: number; qualityFeedback?: string; output?: string; closureReport?: import('../agents/agent-registry.js').StructuredClosureReport; toolCalls?: number }
-  | { type: 'swarm.task.failed'; taskId: string; error: string; attempt: number; maxAttempts: number; willRetry: boolean; toolCalls?: number; failoverModel?: string; failureMode?: string; failureClass?: string; retrySuppressed?: boolean; retryReason?: string }
+  | {
+      type: 'swarm.wave.complete';
+      wave: number;
+      totalWaves: number;
+      completed: number;
+      failed: number;
+      skipped: number;
+    }
+  | {
+      type: 'swarm.task.dispatched';
+      taskId: string;
+      description: string;
+      model: string;
+      workerName: string;
+      toolCount: number;
+      tools?: string[];
+      retryContext?: { previousScore: number; previousFeedback: string; attempt: number };
+      fromModel?: string;
+      attempts?: number;
+    }
+  | {
+      type: 'swarm.task.completed';
+      taskId: string;
+      success: boolean;
+      tokensUsed: number;
+      costUsed: number;
+      durationMs: number;
+      qualityScore?: number;
+      qualityFeedback?: string;
+      output?: string;
+      closureReport?: import('../agents/agent-registry.js').StructuredClosureReport;
+      toolCalls?: number;
+    }
+  | {
+      type: 'swarm.task.failed';
+      taskId: string;
+      error: string;
+      attempt: number;
+      maxAttempts: number;
+      willRetry: boolean;
+      toolCalls?: number;
+      failoverModel?: string;
+      failureMode?: string;
+      failureClass?: string;
+      retrySuppressed?: boolean;
+      retryReason?: string;
+    }
   | { type: 'swarm.task.skipped'; taskId: string; reason: string }
-  | { type: 'swarm.quality.rejected'; taskId: string; score: number; feedback: string; artifactCount: number; outputLength: number; preFlightReject?: boolean; filesOnDisk?: number }
-  | { type: 'swarm.budget.update'; tokensUsed: number; tokensTotal: number; costUsed: number; costTotal: number }
+  | {
+      type: 'swarm.quality.rejected';
+      taskId: string;
+      score: number;
+      feedback: string;
+      artifactCount: number;
+      outputLength: number;
+      preFlightReject?: boolean;
+      filesOnDisk?: number;
+    }
+  | {
+      type: 'swarm.budget.update';
+      tokensUsed: number;
+      tokensTotal: number;
+      costUsed: number;
+      costTotal: number;
+    }
   | { type: 'swarm.status'; status: SwarmStatus }
-  | { type: 'swarm.complete'; stats: SwarmExecutionStats; errors: SwarmError[]; artifactInventory?: ArtifactInventory }
+  | {
+      type: 'swarm.complete';
+      stats: SwarmExecutionStats;
+      errors: SwarmError[];
+      artifactInventory?: ArtifactInventory;
+    }
   | { type: 'swarm.error'; error: string; phase: string; taskId?: string }
   // V2: Planning, review, verification events
   | { type: 'swarm.plan.complete'; criteriaCount: number; hasIntegrationPlan: boolean }
   | { type: 'swarm.review.start'; wave: number }
-  | { type: 'swarm.review.complete'; wave: number; assessment: WaveReviewResult['assessment']; fixupCount: number }
+  | {
+      type: 'swarm.review.complete';
+      wave: number;
+      assessment: WaveReviewResult['assessment'];
+      fixupCount: number;
+    }
   | { type: 'swarm.verify.start'; stepCount: number }
   | { type: 'swarm.verify.step'; stepIndex: number; description: string; passed: boolean }
   | { type: 'swarm.verify.complete'; result: VerificationResult }
   | { type: 'swarm.worker.stuck'; taskId: string; repeatedTool: string; count: number }
-  | { type: 'swarm.model.failover'; taskId: string; fromModel: string; toModel: string; reason: string }
+  | {
+      type: 'swarm.model.failover';
+      taskId: string;
+      fromModel: string;
+      toModel: string;
+      reason: string;
+    }
   | { type: 'swarm.model.health'; record: ModelHealthRecord }
   | { type: 'swarm.state.checkpoint'; sessionId: string; wave: number }
   | { type: 'swarm.state.resume'; sessionId: string; fromWave: number }
@@ -40,21 +130,47 @@ export type SwarmEvent =
   | { type: 'swarm.circuit.open'; recentCount: number; pauseMs: number }
   | { type: 'swarm.circuit.closed' }
   // V3: Hierarchy role events
-  | { type: 'swarm.role.action'; role: WorkerRole; action: 'review' | 'quality-gate' | 'verify' | 'plan'; model: string; taskId?: string; wave?: number }
+  | {
+      type: 'swarm.role.action';
+      role: WorkerRole;
+      action: 'review' | 'quality-gate' | 'verify' | 'plan';
+      model: string;
+      taskId?: string;
+      wave?: number;
+    }
   // V8: Wave failure recovery
   | { type: 'swarm.wave.allFailed'; wave: number }
   // V9: Phase progress for dashboard visibility during decomposition/planning
-  | { type: 'swarm.phase.progress'; phase: 'decomposing' | 'planning' | 'scheduling'; message: string }
+  | {
+      type: 'swarm.phase.progress';
+      phase: 'decomposing' | 'planning' | 'scheduling';
+      message: string;
+    }
   // V8: Orchestrator LLM call tracking
   | { type: 'swarm.orchestrator.llm'; model: string; purpose: string; tokens: number; cost: number }
   // V10: Per-attempt record for full decision traceability
-  | { type: 'swarm.task.attempt'; taskId: string; attempt: number; model: string;
-      success: boolean; durationMs: number; toolCalls: number;
-      failureMode?: string; qualityScore?: number; output?: string }
+  | {
+      type: 'swarm.task.attempt';
+      taskId: string;
+      attempt: number;
+      model: string;
+      success: boolean;
+      durationMs: number;
+      toolCalls: number;
+      failureMode?: string;
+      qualityScore?: number;
+      output?: string;
+    }
   // V10: Resilience recovery attempt record
-  | { type: 'swarm.task.resilience'; taskId: string;
+  | {
+      type: 'swarm.task.resilience';
+      taskId: string;
       strategy: 'micro-decompose' | 'degraded-acceptance' | 'auto-split' | 'none';
-      succeeded: boolean; reason: string; artifactsFound: number; toolCalls: number }
+      succeeded: boolean;
+      reason: string;
+      artifactsFound: number;
+      toolCalls: number;
+    }
   // F15: All-probe-failure abort
   | { type: 'swarm.abort'; reason: string }
   // Mid-swarm re-planning and stall detection
@@ -86,7 +202,7 @@ export function formatSwarmEvent(event: SwarmEvent): string {
     case 'swarm.task.completed':
       return `Task ${event.taskId} ${event.success ? 'completed' : 'failed'} (${event.tokensUsed} tokens, $${event.costUsed.toFixed(4)}, ${(event.durationMs / 1000).toFixed(1)}s)`;
     case 'swarm.task.failed':
-      return `Task ${event.taskId} failed (attempt ${event.attempt}/${event.maxAttempts}): ${event.error}${event.failureClass ? ` [${event.failureClass}]` : ''}${event.retrySuppressed ? ` — retry suppressed${event.retryReason ? ` (${event.retryReason})` : ''}` : (event.willRetry ? ' — will retry' : '')}${event.toolCalls !== undefined ? ` [${event.toolCalls === -1 ? 'timeout' : event.toolCalls + ' tools'}]` : ''}`;
+      return `Task ${event.taskId} failed (attempt ${event.attempt}/${event.maxAttempts}): ${event.error}${event.failureClass ? ` [${event.failureClass}]` : ''}${event.retrySuppressed ? ` — retry suppressed${event.retryReason ? ` (${event.retryReason})` : ''}` : event.willRetry ? ' — will retry' : ''}${event.toolCalls !== undefined ? ` [${event.toolCalls === -1 ? 'timeout' : event.toolCalls + ' tools'}]` : ''}`;
     case 'swarm.task.skipped':
       return `Task ${event.taskId} skipped: ${event.reason}`;
     case 'swarm.quality.rejected':

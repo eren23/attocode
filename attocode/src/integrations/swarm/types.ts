@@ -60,17 +60,94 @@ export interface TaskTypeConfig {
  * Custom types that aren't in this map fall back to the 'implement' config.
  */
 export const BUILTIN_TASK_TYPE_CONFIGS: Record<string, TaskTypeConfig> = {
-  research:  { timeout: 300_000, capability: 'research', requiresToolCalls: false, promptTemplate: 'research', policyProfile: 'research-safe',     tokenBudgetRange: { min: 20_000, max: 80_000 } },
-  analysis:  { timeout: 300_000, capability: 'research', requiresToolCalls: false, promptTemplate: 'research', policyProfile: 'research-safe',     tokenBudgetRange: { min: 20_000, max: 80_000 } },
-  design:    { timeout: 300_000, capability: 'research', requiresToolCalls: false, promptTemplate: 'research', policyProfile: 'code-strict-bash',  tokenBudgetRange: { min: 20_000, max: 80_000 } },
-  implement: { timeout: 300_000, capability: 'code',     requiresToolCalls: true,  promptTemplate: 'code',     policyProfile: 'code-strict-bash',  tokenBudgetRange: { min: 40_000, max: 150_000 } },
-  test:      { timeout: 240_000, capability: 'test',     requiresToolCalls: true,  promptTemplate: 'code',     policyProfile: 'code-strict-bash',  tokenBudgetRange: { min: 20_000, max: 60_000 } },
-  refactor:  { timeout: 240_000, capability: 'code',     requiresToolCalls: true,  promptTemplate: 'code',     policyProfile: 'code-strict-bash',  tokenBudgetRange: { min: 30_000, max: 100_000 } },
-  review:    { timeout: 240_000, capability: 'review',   requiresToolCalls: false, promptTemplate: 'research', policyProfile: 'review-safe',       tokenBudgetRange: { min: 15_000, max: 50_000 } },
-  document:  { timeout: 240_000, capability: 'document', requiresToolCalls: true,  promptTemplate: 'document', policyProfile: 'code-strict-bash',  tokenBudgetRange: { min: 15_000, max: 50_000 } },
-  integrate: { timeout: 300_000, capability: 'code',     requiresToolCalls: true,  promptTemplate: 'code',     policyProfile: 'code-strict-bash',  tokenBudgetRange: { min: 40_000, max: 150_000 } },
-  deploy:    { timeout: 240_000, capability: 'code',     requiresToolCalls: true,  promptTemplate: 'code',     policyProfile: 'code-strict-bash',  tokenBudgetRange: { min: 20_000, max: 60_000 } },
-  merge:     { timeout: 180_000, capability: 'write',    requiresToolCalls: false, promptTemplate: 'synthesis', policyProfile: 'research-safe',    tokenBudgetRange: { min: 10_000, max: 30_000 } },
+  research: {
+    timeout: 300_000,
+    capability: 'research',
+    requiresToolCalls: false,
+    promptTemplate: 'research',
+    policyProfile: 'research-safe',
+    tokenBudgetRange: { min: 20_000, max: 80_000 },
+  },
+  analysis: {
+    timeout: 300_000,
+    capability: 'research',
+    requiresToolCalls: false,
+    promptTemplate: 'research',
+    policyProfile: 'research-safe',
+    tokenBudgetRange: { min: 20_000, max: 80_000 },
+  },
+  design: {
+    timeout: 300_000,
+    capability: 'research',
+    requiresToolCalls: false,
+    promptTemplate: 'research',
+    policyProfile: 'code-strict-bash',
+    tokenBudgetRange: { min: 20_000, max: 80_000 },
+  },
+  implement: {
+    timeout: 300_000,
+    capability: 'code',
+    requiresToolCalls: true,
+    promptTemplate: 'code',
+    policyProfile: 'code-strict-bash',
+    tokenBudgetRange: { min: 40_000, max: 150_000 },
+  },
+  test: {
+    timeout: 240_000,
+    capability: 'test',
+    requiresToolCalls: true,
+    promptTemplate: 'code',
+    policyProfile: 'code-strict-bash',
+    tokenBudgetRange: { min: 20_000, max: 60_000 },
+  },
+  refactor: {
+    timeout: 240_000,
+    capability: 'code',
+    requiresToolCalls: true,
+    promptTemplate: 'code',
+    policyProfile: 'code-strict-bash',
+    tokenBudgetRange: { min: 30_000, max: 100_000 },
+  },
+  review: {
+    timeout: 240_000,
+    capability: 'review',
+    requiresToolCalls: false,
+    promptTemplate: 'research',
+    policyProfile: 'review-safe',
+    tokenBudgetRange: { min: 15_000, max: 50_000 },
+  },
+  document: {
+    timeout: 240_000,
+    capability: 'document',
+    requiresToolCalls: true,
+    promptTemplate: 'document',
+    policyProfile: 'code-strict-bash',
+    tokenBudgetRange: { min: 15_000, max: 50_000 },
+  },
+  integrate: {
+    timeout: 300_000,
+    capability: 'code',
+    requiresToolCalls: true,
+    promptTemplate: 'code',
+    policyProfile: 'code-strict-bash',
+    tokenBudgetRange: { min: 40_000, max: 150_000 },
+  },
+  deploy: {
+    timeout: 240_000,
+    capability: 'code',
+    requiresToolCalls: true,
+    promptTemplate: 'code',
+    policyProfile: 'code-strict-bash',
+    tokenBudgetRange: { min: 20_000, max: 60_000 },
+  },
+  merge: {
+    timeout: 180_000,
+    capability: 'write',
+    requiresToolCalls: false,
+    promptTemplate: 'synthesis',
+    policyProfile: 'research-safe',
+    tokenBudgetRange: { min: 10_000, max: 30_000 },
+  },
 };
 
 /**
@@ -378,7 +455,7 @@ export const DEFAULT_SWARM_CONFIG: Omit<SwarmConfig, 'orchestratorModel' | 'work
   enabled: true,
   maxConcurrency: 3,
   totalBudget: 5_000_000,
-  maxCost: 10.00,
+  maxCost: 10.0,
   orchestratorReserveRatio: 0.15,
   maxTokensPerWorker: 50_000,
   workerTimeout: 120_000,
@@ -401,17 +478,17 @@ export const DEFAULT_SWARM_CONFIG: Omit<SwarmConfig, 'orchestratorModel' | 'work
   maxVerificationRetries: 2,
   rateLimitRetries: 3,
   taskTypeTimeouts: {
-    research: 300_000,      // 5 min for research (web searches take time)
+    research: 300_000, // 5 min for research (web searches take time)
     analysis: 300_000,
-    design: 300_000,        // 5 min for design tasks
-    merge: 180_000,         // 3 min for synthesis
-    implement: 300_000,     // 5 min for implementation
-    test: 240_000,          // 4 min for test writing
-    refactor: 240_000,      // 4 min for refactoring
-    integrate: 300_000,     // 5 min for integration
-    deploy: 240_000,        // 4 min for deploy tasks
-    document: 240_000,      // 4 min for documentation
-    review: 240_000,        // 4 min for code review
+    design: 300_000, // 5 min for design tasks
+    merge: 180_000, // 3 min for synthesis
+    implement: 300_000, // 5 min for implementation
+    test: 240_000, // 4 min for test writing
+    refactor: 240_000, // 4 min for refactoring
+    integrate: 300_000, // 5 min for integration
+    deploy: 240_000, // 4 min for deploy tasks
+    document: 240_000, // 4 min for documentation
+    review: 240_000, // 4 min for code review
   },
   completionGuard: {
     requireConcreteArtifactsForActionTasks: true,
@@ -473,7 +550,14 @@ export interface SwarmWorkerSpec {
 export type TaskFailureMode = 'timeout' | 'rate-limit' | 'error' | 'quality' | 'hollow' | 'cascade';
 
 /** Status of a swarm task */
-export type SwarmTaskStatus = 'pending' | 'ready' | 'dispatched' | 'completed' | 'failed' | 'skipped' | 'decomposed';
+export type SwarmTaskStatus =
+  | 'pending'
+  | 'ready'
+  | 'dispatched'
+  | 'completed'
+  | 'failed'
+  | 'skipped'
+  | 'decomposed';
 
 /**
  * A task within the swarm execution pipeline.
@@ -526,7 +610,14 @@ export interface SwarmTask {
   dependencyContext?: string;
 
   /** Context from previous failed attempt (quality rejection or error) for retry prompts */
-  retryContext?: { previousFeedback: string; previousScore: number; attempt: number; previousModel?: string; previousFiles?: string[]; swarmProgress?: string };
+  retryContext?: {
+    previousFeedback: string;
+    previousScore: number;
+    attempt: number;
+    previousModel?: string;
+    previousFiles?: string[];
+    swarmProgress?: string;
+  };
 
   /** Partial dependency context when some deps failed but threshold met.
    *  Lists which deps succeeded and which failed so the worker can adapt. */
@@ -719,7 +810,17 @@ export interface SwarmError {
   taskId?: string;
 
   /** Phase where error occurred */
-  phase: 'decomposition' | 'scheduling' | 'dispatch' | 'execution' | 'quality-gate' | 'synthesis' | 'planning' | 'review' | 'verification' | 'persistence';
+  phase:
+    | 'decomposition'
+    | 'scheduling'
+    | 'dispatch'
+    | 'execution'
+    | 'quality-gate'
+    | 'synthesis'
+    | 'planning'
+    | 'review'
+    | 'verification'
+    | 'persistence';
 
   /** Error message */
   message: string;
@@ -735,7 +836,16 @@ export interface SwarmError {
  */
 export interface SwarmStatus {
   /** Current phase */
-  phase: 'decomposing' | 'scheduling' | 'executing' | 'synthesizing' | 'completed' | 'failed' | 'planning' | 'reviewing' | 'verifying';
+  phase:
+    | 'decomposing'
+    | 'scheduling'
+    | 'executing'
+    | 'synthesizing'
+    | 'completed'
+    | 'failed'
+    | 'planning'
+    | 'reviewing'
+    | 'verifying';
 
   /** Current wave number (1-indexed) */
   currentWave: number;
@@ -907,7 +1017,9 @@ export interface SwarmCheckpoint {
   /** Cross-worker failure learning state (Phase 3.1) */
   sharedContext?: { failures: unknown[]; references: [string, unknown][]; staticPrefix: string };
   /** Cross-worker doom loop aggregation state (Phase 3.2) */
-  sharedEconomics?: { fingerprints: Array<{ fingerprint: string; count: number; workers: string[] }> };
+  sharedEconomics?: {
+    fingerprints: Array<{ fingerprint: string; count: number; workers: string[] }>;
+  };
 }
 
 /** Logged orchestrator decision with reasoning. */
@@ -972,7 +1084,9 @@ export function subtaskToSwarmTask(subtask: SmartSubtask, wave: number): SwarmTa
  * Map a WorkerCapability to the AgentOutput 'type' field.
  * Uses configurable task type config instead of hardcoded type lists.
  */
-function capabilityToOutputType(capability: WorkerCapability): 'code' | 'research' | 'review' | 'documentation' | 'mixed' {
+function capabilityToOutputType(
+  capability: WorkerCapability,
+): 'code' | 'research' | 'review' | 'documentation' | 'mixed' {
   switch (capability) {
     case 'code':
     case 'test':
@@ -989,7 +1103,10 @@ function capabilityToOutputType(capability: WorkerCapability): 'code' | 'researc
   }
 }
 
-export function taskResultToAgentOutput(task: SwarmTask, swarmConfig?: SwarmConfig): AgentOutput | null {
+export function taskResultToAgentOutput(
+  task: SwarmTask,
+  swarmConfig?: SwarmConfig,
+): AgentOutput | null {
   if (!task.result || !task.result.success) return null;
 
   const typeConfig = getTaskTypeConfig(task.type, swarmConfig);

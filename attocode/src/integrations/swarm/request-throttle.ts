@@ -7,7 +7,13 @@
  * throttles ALL downstream LLM calls.
  */
 
-import type { LLMProvider, Message, ChatOptions, ChatResponse, MessageWithContent } from '../../providers/types.js';
+import type {
+  LLMProvider,
+  Message,
+  ChatOptions,
+  ChatResponse,
+  MessageWithContent,
+} from '../../providers/types.js';
 
 // ─── Configuration ──────────────────────────────────────────────────────────
 
@@ -80,7 +86,7 @@ export class SwarmThrottle {
   async acquire(): Promise<void> {
     // FIFO: wait in queue if there are already waiters or no tokens
     if (this.queue.length > 0 || this.refill() < 1) {
-      await new Promise<void>(resolve => {
+      await new Promise<void>((resolve) => {
         this.queue.push(resolve);
         this.ensureRefillTimer();
       });
@@ -153,12 +159,8 @@ export class SwarmThrottle {
     // Interpolate back toward original config
     const ratio = this._backoffLevel / SwarmThrottle.MAX_BACKOFF_LEVEL;
     this.config = {
-      maxConcurrent: Math.max(1, Math.round(
-        this.originalConfig.maxConcurrent * (1 - ratio * 0.5),
-      )),
-      minSpacingMs: Math.round(
-        this.originalConfig.minSpacingMs * (1 + ratio),
-      ),
+      maxConcurrent: Math.max(1, Math.round(this.originalConfig.maxConcurrent * (1 - ratio * 0.5))),
+      minSpacingMs: Math.round(this.originalConfig.minSpacingMs * (1 + ratio)),
       refillRatePerSecond: this.originalConfig.refillRatePerSecond * (1 - ratio * 0.5),
     };
   }
@@ -167,7 +169,11 @@ export class SwarmThrottle {
    * Feed rate limit info from response headers to proactively adjust throttle.
    * If remaining requests or tokens are low, preemptively back off.
    */
-  feedRateLimitInfo(info: { remainingRequests?: number; remainingTokens?: number; resetSeconds?: number }): void {
+  feedRateLimitInfo(info: {
+    remainingRequests?: number;
+    remainingTokens?: number;
+    resetSeconds?: number;
+  }): void {
     // Proactive backoff: if < 5 remaining requests, increase spacing
     if (info.remainingRequests !== undefined && info.remainingRequests < 5) {
       if (this._backoffLevel < SwarmThrottle.MAX_BACKOFF_LEVEL) {
@@ -175,7 +181,12 @@ export class SwarmThrottle {
       }
     }
     // If reset is imminent (< 2s), briefly pause
-    if (info.resetSeconds !== undefined && info.resetSeconds < 2 && info.remainingRequests !== undefined && info.remainingRequests <= 1) {
+    if (
+      info.resetSeconds !== undefined &&
+      info.resetSeconds < 2 &&
+      info.remainingRequests !== undefined &&
+      info.remainingRequests <= 1
+    ) {
       this.config = {
         ...this.config,
         minSpacingMs: Math.max(this.config.minSpacingMs, info.resetSeconds * 1000),
@@ -248,7 +259,10 @@ export class ThrottledProvider implements LLMProvider {
     return this.inner.isConfigured();
   }
 
-  async chat(messages: (Message | MessageWithContent)[], options?: ChatOptions): Promise<ChatResponse> {
+  async chat(
+    messages: (Message | MessageWithContent)[],
+    options?: ChatOptions,
+  ): Promise<ChatResponse> {
     await this.throttle.acquire();
     try {
       const result = await this.inner.chat(messages, options);
@@ -309,11 +323,13 @@ export function createThrottledProvider(
 // ─── Helpers ────────────────────────────────────────────────────────────────
 
 function sleep(ms: number): Promise<void> {
-  return new Promise(resolve => setTimeout(resolve, ms));
+  return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
 /** Check if an error is a rate limit (429) or spend limit (402) error. */
 function isRateLimitError(error: unknown): boolean {
   const msg = String(error instanceof Error ? error.message : error).toLowerCase();
-  return msg.includes('429') || msg.includes('rate') || msg.includes('too many') || msg.includes('402');
+  return (
+    msg.includes('429') || msg.includes('rate') || msg.includes('too many') || msg.includes('402')
+  );
 }

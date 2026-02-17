@@ -44,15 +44,15 @@ import { estimateTokenCount } from '../integrations/utilities/token-estimate.js'
  * Types of references that can be preserved.
  */
 export type ReferenceType =
-  | 'file'       // File paths
-  | 'url'        // URLs (docs, issues, etc.)
-  | 'function'   // Function/method names
-  | 'class'      // Class/type names
-  | 'error'      // Error messages/stack traces
-  | 'command'    // Shell commands
-  | 'snippet'    // Code snippets (abbreviated)
-  | 'decision'   // Key decisions made
-  | 'custom';    // Custom reference type
+  | 'file' // File paths
+  | 'url' // URLs (docs, issues, etc.)
+  | 'function' // Function/method names
+  | 'class' // Class/type names
+  | 'error' // Error messages/stack traces
+  | 'command' // Shell commands
+  | 'snippet' // Code snippets (abbreviated)
+  | 'decision' // Key decisions made
+  | 'custom'; // Custom reference type
 
 /**
  * A preserved reference that can be used for retrieval.
@@ -259,7 +259,10 @@ export function extractFunctionReferences(content: string, sourceIndex?: number)
   const timestamp = new Date().toISOString();
 
   // Function definitions
-  const funcDefs = content.match(/(?:function|async function|const|let|var)\s+(\w+)\s*(?:=\s*(?:async\s*)?\([^)]*\)\s*=>|\([^)]*\))/g) || [];
+  const funcDefs =
+    content.match(
+      /(?:function|async function|const|let|var)\s+(\w+)\s*(?:=\s*(?:async\s*)?\([^)]*\)\s*=>|\([^)]*\))/g,
+    ) || [];
 
   // Method calls with meaningful names
   const methodCalls = content.match(/\b([a-z][a-zA-Z0-9]*(?:[A-Z][a-zA-Z0-9]*)+)\s*\(/g) || [];
@@ -328,7 +331,8 @@ export function extractErrorReferences(content: string, sourceIndex?: number): R
     }
   }
 
-  for (const errorMsg of errorMessages.slice(0, 3)) { // Limit error messages
+  for (const errorMsg of errorMessages.slice(0, 3)) {
+    // Limit error messages
     const truncated = errorMsg.slice(0, 100);
     if (!seen.has(truncated)) {
       seen.add(truncated);
@@ -355,11 +359,11 @@ export function extractCommandReferences(content: string, sourceIndex?: number):
 
   // Shell commands (common patterns)
   const shellPatterns = [
-    /\$\s*([^\n]+)/g,           // $ command
-    /```(?:bash|sh|shell)\n([^`]+)```/g,  // Code blocks
-    /(?:npm|yarn|pnpm|npx|bun)\s+[^\n]+/g,  // Package managers
-    /(?:git)\s+[^\n]+/g,        // Git commands
-    /(?:docker|kubectl)\s+[^\n]+/g,  // Container commands
+    /\$\s*([^\n]+)/g, // $ command
+    /```(?:bash|sh|shell)\n([^`]+)```/g, // Code blocks
+    /(?:npm|yarn|pnpm|npx|bun)\s+[^\n]+/g, // Package managers
+    /(?:git)\s+[^\n]+/g, // Git commands
+    /(?:docker|kubectl)\s+[^\n]+/g, // Container commands
   ];
 
   const seen = new Set<string>();
@@ -367,7 +371,10 @@ export function extractCommandReferences(content: string, sourceIndex?: number):
   for (const pattern of shellPatterns) {
     const matches = content.match(pattern) || [];
     for (const match of matches) {
-      const cleaned = match.replace(/^\$\s*/, '').replace(/```(?:bash|sh|shell)?\n?/g, '').trim();
+      const cleaned = match
+        .replace(/^\$\s*/, '')
+        .replace(/```(?:bash|sh|shell)?\n?/g, '')
+        .trim();
       if (cleaned.length > 3 && !seen.has(cleaned)) {
         seen.add(cleaned);
         references.push({
@@ -391,7 +398,7 @@ export function extractReferences(
   content: string,
   types: ReferenceType[],
   sourceIndex?: number,
-  customExtractors?: Map<ReferenceType, ReferenceExtractor>
+  customExtractors?: Map<ReferenceType, ReferenceExtractor>,
 ): Reference[] {
   const references: Reference[] = [];
 
@@ -452,14 +459,11 @@ export class ReversibleCompactor {
   /**
    * Compact messages while preserving references.
    */
-  async compact(
-    messages: CompactionMessage[],
-    options: CompactOptions
-  ): Promise<CompactionResult> {
+  async compact(messages: CompactionMessage[], options: CompactOptions): Promise<CompactionResult> {
     this.emit({ type: 'compaction.started', messageCount: messages.length });
 
     // Calculate original token estimate
-    const originalContent = messages.map(m => m.content).join('\n');
+    const originalContent = messages.map((m) => m.content).join('\n');
     const originalTokens = estimateTokenCount(originalContent);
 
     // Extract references from all messages
@@ -469,7 +473,7 @@ export class ReversibleCompactor {
         messages[i].content,
         this.config.preserveTypes,
         i,
-        this.config.customExtractors
+        this.config.customExtractors,
       );
 
       for (const ref of refs) {
@@ -487,7 +491,7 @@ export class ReversibleCompactor {
     // Filter by relevance
     if (this.config.minRelevance > 0) {
       processedReferences = processedReferences.filter(
-        r => (r.relevance ?? 1) >= this.config.minRelevance
+        (r) => (r.relevance ?? 1) >= this.config.minRelevance,
       );
     }
 
@@ -557,14 +561,14 @@ export class ReversibleCompactor {
    * Get a reference by ID.
    */
   getReference(id: string): Reference | undefined {
-    return this.preservedReferences.find(r => r.id === id);
+    return this.preservedReferences.find((r) => r.id === id);
   }
 
   /**
    * Get references by type.
    */
   getReferencesByType(type: ReferenceType): Reference[] {
-    return this.preservedReferences.filter(r => r.type === type);
+    return this.preservedReferences.filter((r) => r.type === type);
   }
 
   /**
@@ -572,9 +576,7 @@ export class ReversibleCompactor {
    */
   searchReferences(query: string): Reference[] {
     const lowerQuery = query.toLowerCase();
-    return this.preservedReferences.filter(
-      r => r.value.toLowerCase().includes(lowerQuery)
-    );
+    return this.preservedReferences.filter((r) => r.value.toLowerCase().includes(lowerQuery));
   }
 
   /**
@@ -668,9 +670,7 @@ export class ReversibleCompactor {
  * const errorRefs = compactor.searchReferences('TypeError');
  * ```
  */
-export function createReversibleCompactor(
-  config: ReversibleCompactionConfig
-): ReversibleCompactor {
+export function createReversibleCompactor(config: ReversibleCompactionConfig): ReversibleCompactor {
   return new ReversibleCompactor(config);
 }
 
@@ -683,7 +683,7 @@ export function createReversibleCompactor(
  */
 export function quickExtract(
   content: string,
-  types: ReferenceType[] = ['file', 'url', 'function', 'error']
+  types: ReferenceType[] = ['file', 'url', 'function', 'error'],
 ): Reference[] {
   return extractReferences(content, types);
 }
@@ -757,7 +757,7 @@ export function createReconstructionPrompt(references: Reference[]): string {
  */
 export function calculateRelevance(
   reference: Reference,
-  context: { goal?: string; recentTopics?: string[] }
+  context: { goal?: string; recentTopics?: string[] },
 ): number {
   let score = 0.5; // Base score
 

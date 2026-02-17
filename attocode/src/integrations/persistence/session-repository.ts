@@ -13,10 +13,7 @@ import { join } from 'node:path';
 import { existsSync, readFileSync } from 'node:fs';
 import type { Message, ToolCall } from '../../types.js';
 import { logger } from '../utilities/logger.js';
-import type {
-  SessionEntry,
-  SessionEntryType,
-} from './session-store.js';
+import type { SessionEntry, SessionEntryType } from './session-store.js';
 import type { PendingPlan, ProposedChange } from '../tasks/pending-plan.js';
 import type {
   SessionMetadata,
@@ -33,10 +30,7 @@ import type {
 /**
  * Create a new session.
  */
-export function createSession(
-  deps: SQLiteStoreDeps,
-  name?: string
-): string {
+export function createSession(deps: SQLiteStoreDeps, name?: string): string {
   const id = `session-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`;
   const now = new Date().toISOString();
 
@@ -63,10 +57,7 @@ export function createSession(
 /**
  * Append an entry to the current session.
  */
-export function appendEntry(
-  deps: SQLiteStoreDeps,
-  entry: Omit<SessionEntry, 'timestamp'>
-): void {
+export function appendEntry(deps: SQLiteStoreDeps, entry: Omit<SessionEntry, 'timestamp'>): void {
   if (!deps.getCurrentSessionId()) {
     createSession(deps);
   }
@@ -97,16 +88,24 @@ export function appendEntry(
       }
     }
 
-    deps.db.prepare(`
+    deps.db
+      .prepare(
+        `
       UPDATE sessions SET
         last_active_at = ?,
         message_count = message_count + 1
       WHERE id = ?
-    `).run(timestamp, sessionId);
+    `,
+      )
+      .run(timestamp, sessionId);
   } else {
-    deps.db.prepare(`
+    deps.db
+      .prepare(
+        `
       UPDATE sessions SET last_active_at = ? WHERE id = ?
-    `).run(timestamp, sessionId);
+    `,
+      )
+      .run(timestamp, sessionId);
   }
 
   deps.emit({ type: 'entry.appended', sessionId, entryType: entry.type });
@@ -158,7 +157,11 @@ export function appendToolResult(deps: SQLiteStoreDeps, callId: string, result: 
 /**
  * Append a compaction summary.
  */
-export function appendCompaction(deps: SQLiteStoreDeps, summary: string, compactedCount: number): void {
+export function appendCompaction(
+  deps: SQLiteStoreDeps,
+  summary: string,
+  compactedCount: number,
+): void {
   appendEntry(deps, {
     type: 'compaction',
     data: { summary, compactedCount, compactedAt: new Date().toISOString() },
@@ -175,7 +178,7 @@ export function loadSession(deps: SQLiteStoreDeps, sessionId: string): SessionEn
     data: string;
   }>;
 
-  const entries: SessionEntry[] = rows.map(row => ({
+  const entries: SessionEntry[] = rows.map((row) => ({
     timestamp: row.timestamp,
     type: row.type as SessionEntryType,
     data: JSON.parse(row.data),
@@ -252,7 +255,10 @@ export function getRecentSession(deps: SQLiteStoreDeps): SessionMetadata | null 
 /**
  * Get session metadata by ID.
  */
-export function getSessionMetadata(deps: SQLiteStoreDeps, sessionId: string): SessionMetadata | undefined {
+export function getSessionMetadata(
+  deps: SQLiteStoreDeps,
+  sessionId: string,
+): SessionMetadata | undefined {
   return deps.stmts.getSession.get(sessionId) as SessionMetadata | undefined;
 }
 
@@ -262,7 +268,7 @@ export function getSessionMetadata(deps: SQLiteStoreDeps, sessionId: string): Se
 export function updateSessionMetadata(
   deps: SQLiteStoreDeps,
   sessionId: string,
-  updates: Partial<Pick<SessionMetadata, 'name' | 'summary' | 'tokenCount'>>
+  updates: Partial<Pick<SessionMetadata, 'name' | 'summary' | 'tokenCount'>>,
 ): void {
   deps.stmts.updateSession.run({
     id: sessionId,
@@ -284,7 +290,7 @@ export function updateSessionMetadata(
 export function saveCheckpoint(
   deps: SQLiteStoreDeps,
   state: Record<string, unknown>,
-  description?: string
+  description?: string,
 ): string {
   if (!deps.getCurrentSessionId()) {
     createSession(deps);
@@ -303,9 +309,13 @@ export function saveCheckpoint(
 
   // Update message_count in sessions table to match checkpoint
   if (state.messages && Array.isArray(state.messages)) {
-    deps.db.prepare(`
+    deps.db
+      .prepare(
+        `
       UPDATE sessions SET message_count = ? WHERE id = ?
-    `).run(state.messages.length, sessionId);
+    `,
+      )
+      .run(state.messages.length, sessionId);
   }
 
   return id;
@@ -316,14 +326,16 @@ export function saveCheckpoint(
  */
 export function loadLatestCheckpoint(
   deps: SQLiteStoreDeps,
-  sessionId: string
+  sessionId: string,
 ): { id: string; state: Record<string, unknown>; createdAt: string; description?: string } | null {
-  const row = deps.stmts.getLatestCheckpoint.get(sessionId) as {
-    id: string;
-    stateJson: string;
-    createdAt: string;
-    description: string | null;
-  } | undefined;
+  const row = deps.stmts.getLatestCheckpoint.get(sessionId) as
+    | {
+        id: string;
+        stateJson: string;
+        createdAt: string;
+        description: string | null;
+      }
+    | undefined;
 
   if (!row) return null;
 
@@ -338,7 +350,11 @@ export function loadLatestCheckpoint(
 /**
  * Query entries with SQL (advanced usage).
  */
-export function query<T = unknown>(deps: SQLiteStoreDeps, sql: string, params: unknown[] = []): T[] {
+export function query<T = unknown>(
+  deps: SQLiteStoreDeps,
+  sql: string,
+  params: unknown[] = [],
+): T[] {
   return deps.db.prepare(sql).all(...params) as T[];
 }
 
@@ -352,11 +368,23 @@ export function getStats(deps: SQLiteStoreDeps): {
   checkpointCount: number;
   dbSizeBytes: number;
 } {
-  const sessionCount = (deps.db.prepare('SELECT COUNT(*) as count FROM sessions').get() as { count: number }).count;
-  const entryCount = (deps.db.prepare('SELECT COUNT(*) as count FROM entries').get() as { count: number }).count;
-  const toolCallCount = (deps.db.prepare('SELECT COUNT(*) as count FROM tool_calls').get() as { count: number }).count;
-  const checkpointCount = (deps.db.prepare('SELECT COUNT(*) as count FROM checkpoints').get() as { count: number }).count;
-  const dbSizeBytes = (deps.db.prepare('SELECT page_count * page_size as size FROM pragma_page_count(), pragma_page_size()').get() as { size: number }).size;
+  const sessionCount = (
+    deps.db.prepare('SELECT COUNT(*) as count FROM sessions').get() as { count: number }
+  ).count;
+  const entryCount = (
+    deps.db.prepare('SELECT COUNT(*) as count FROM entries').get() as { count: number }
+  ).count;
+  const toolCallCount = (
+    deps.db.prepare('SELECT COUNT(*) as count FROM tool_calls').get() as { count: number }
+  ).count;
+  const checkpointCount = (
+    deps.db.prepare('SELECT COUNT(*) as count FROM checkpoints').get() as { count: number }
+  ).count;
+  const dbSizeBytes = (
+    deps.db
+      .prepare('SELECT page_count * page_size as size FROM pragma_page_count(), pragma_page_size()')
+      .get() as { size: number }
+  ).size;
 
   return { sessionCount, entryCount, toolCallCount, checkpointCount, dbSizeBytes };
 }
@@ -395,12 +423,17 @@ export function logUsage(deps: SQLiteStoreDeps, usage: UsageLog): void {
 /**
  * Get aggregated usage for a session.
  */
-export function getSessionUsage(deps: SQLiteStoreDeps, sessionId: string): { promptTokens: number; completionTokens: number; costUsd: number } {
-  const result = deps.stmts.getSessionUsage.get(sessionId) as {
-    promptTokens: number;
-    completionTokens: number;
-    costUsd: number;
-  } | undefined;
+export function getSessionUsage(
+  deps: SQLiteStoreDeps,
+  sessionId: string,
+): { promptTokens: number; completionTokens: number; costUsd: number } {
+  const result = deps.stmts.getSessionUsage.get(sessionId) as
+    | {
+        promptTokens: number;
+        completionTokens: number;
+        costUsd: number;
+      }
+    | undefined;
 
   return result || { promptTokens: 0, completionTokens: 0, costUsd: 0 };
 }
@@ -416,7 +449,7 @@ export function createChildSession(
   deps: SQLiteStoreDeps,
   parentId: string,
   name?: string,
-  type: SessionType = 'subagent'
+  type: SessionType = 'subagent',
 ): string {
   const id = `session-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`;
   const now = new Date().toISOString();
@@ -465,7 +498,7 @@ export function getSessionTree(deps: SQLiteStoreDeps, rootId: string): SessionMe
 export function savePendingPlan(
   deps: SQLiteStoreDeps,
   plan: PendingPlan,
-  sessionId?: string
+  sessionId?: string,
 ): void {
   if (!deps.features.pendingPlans || !deps.stmts.insertPendingPlan) {
     return;
@@ -519,16 +552,18 @@ export function getPendingPlan(deps: SQLiteStoreDeps, sessionId?: string): Pendi
   const sid = sessionId ?? deps.getCurrentSessionId();
   if (!sid) return null;
 
-  const row = deps.stmts.getPendingPlan.get(sid) as {
-    id: string;
-    sessionId: string;
-    task: string;
-    proposedChanges: string;
-    explorationSummary: string | null;
-    status: string;
-    createdAt: string;
-    updatedAt: string;
-  } | undefined;
+  const row = deps.stmts.getPendingPlan.get(sid) as
+    | {
+        id: string;
+        sessionId: string;
+        task: string;
+        proposedChanges: string;
+        explorationSummary: string | null;
+        status: string;
+        createdAt: string;
+        updatedAt: string;
+      }
+    | undefined;
 
   if (!row) return null;
 
@@ -550,7 +585,7 @@ export function getPendingPlan(deps: SQLiteStoreDeps, sessionId?: string): Pendi
 export function updatePlanStatus(
   deps: SQLiteStoreDeps,
   planId: string,
-  status: 'approved' | 'rejected' | 'partially_approved'
+  status: 'approved' | 'rejected' | 'partially_approved',
 ): void {
   if (!deps.features.pendingPlans || !deps.stmts.updatePendingPlan) {
     return;
@@ -558,9 +593,13 @@ export function updatePlanStatus(
 
   const now = new Date().toISOString();
 
-  deps.db.prepare(`
+  deps.db
+    .prepare(
+      `
     UPDATE pending_plans SET status = ?, updated_at = ? WHERE id = ?
-  `).run(status, now, planId);
+  `,
+    )
+    .run(status, now, planId);
 }
 
 /**
@@ -584,7 +623,7 @@ export function rememberPermission(
   deps: SQLiteStoreDeps,
   toolName: string,
   decision: 'always' | 'never',
-  pattern?: string
+  pattern?: string,
 ): void {
   if (!deps.features.rememberedPermissions || !deps.stmts.insertRememberedPermission) {
     return;
@@ -604,18 +643,20 @@ export function rememberPermission(
 export function getRememberedPermission(
   deps: SQLiteStoreDeps,
   toolName: string,
-  pattern?: string
+  pattern?: string,
 ): { decision: 'always' | 'never'; pattern?: string } | undefined {
   if (!deps.features.rememberedPermissions || !deps.stmts.getRememberedPermission) {
     return undefined;
   }
 
-  const row = deps.stmts.getRememberedPermission.get(toolName, pattern ?? null) as {
-    toolName: string;
-    pattern: string | null;
-    decision: 'always' | 'never';
-    createdAt: string;
-  } | undefined;
+  const row = deps.stmts.getRememberedPermission.get(toolName, pattern ?? null) as
+    | {
+        toolName: string;
+        pattern: string | null;
+        decision: 'always' | 'never';
+        createdAt: string;
+      }
+    | undefined;
 
   if (!row) return undefined;
 
@@ -628,9 +669,7 @@ export function getRememberedPermission(
 /**
  * List all remembered permission decisions.
  */
-export function listRememberedPermissions(
-  deps: SQLiteStoreDeps
-): Array<{
+export function listRememberedPermissions(deps: SQLiteStoreDeps): Array<{
   toolName: string;
   pattern?: string;
   decision: 'always' | 'never';
@@ -647,7 +686,7 @@ export function listRememberedPermissions(
     createdAt: string;
   }>;
 
-  return rows.map(row => ({
+  return rows.map((row) => ({
     toolName: row.toolName,
     pattern: row.pattern ?? undefined,
     decision: row.decision,
@@ -690,9 +729,26 @@ export function clearRememberedPermissions(deps: SQLiteStoreDeps, toolName?: str
  * These are provided by the SQLiteStore class to bridge to goal/worker repositories.
  */
 export interface ManifestCallbacks {
-  listGoals(sessionId?: string): Array<{ id: string; goalText: string; status: string; priority: number; progressCurrent: number; progressTotal?: number; completedAt?: string }>;
-  listJunctures(sessionId?: string, limit?: number): Array<{ type: string; description: string; outcome?: string; createdAt: string }>;
-  listWorkerResults(sessionId?: string): Array<{ id: string; taskDescription: string; status: string; summary?: string; modelUsed?: string }>;
+  listGoals(sessionId?: string): Array<{
+    id: string;
+    goalText: string;
+    status: string;
+    priority: number;
+    progressCurrent: number;
+    progressTotal?: number;
+    completedAt?: string;
+  }>;
+  listJunctures(
+    sessionId?: string,
+    limit?: number,
+  ): Array<{ type: string; description: string; outcome?: string; createdAt: string }>;
+  listWorkerResults(sessionId?: string): Array<{
+    id: string;
+    taskDescription: string;
+    status: string;
+    summary?: string;
+    modelUsed?: string;
+  }>;
 }
 
 /**
@@ -702,7 +758,7 @@ export interface ManifestCallbacks {
 export function exportSessionManifest(
   deps: SQLiteStoreDeps,
   callbacks: ManifestCallbacks,
-  sessionId?: string
+  sessionId?: string,
 ): SessionManifest | undefined {
   const sid = sessionId ?? deps.getCurrentSessionId();
   if (!sid) return undefined;
@@ -712,16 +768,16 @@ export function exportSessionManifest(
 
   // Collect all session state
   const goals = callbacks.listGoals(sid);
-  const activeGoals = goals.filter(g => g.status === 'active');
-  const completedGoals = goals.filter(g => g.status === 'completed');
+  const activeGoals = goals.filter((g) => g.status === 'active');
+  const completedGoals = goals.filter((g) => g.status === 'completed');
   const junctures = callbacks.listJunctures(sid, 20);
   const workerResults = callbacks.listWorkerResults(sid);
   const entries = loadSession(deps, sid);
 
   // Count message types from entries
-  let messageCount = entries.filter(e => e.type === 'message').length;
-  const toolCallCount = entries.filter(e => e.type === 'tool_call').length;
-  const compactionCount = entries.filter(e => e.type === 'compaction').length;
+  let messageCount = entries.filter((e) => e.type === 'message').length;
+  const toolCallCount = entries.filter((e) => e.type === 'tool_call').length;
+  const compactionCount = entries.filter((e) => e.type === 'compaction').length;
 
   // If no messages in entries, check the latest checkpoint
   if (messageCount === 0) {
@@ -749,27 +805,25 @@ export function exportSessionManifest(
       costUsd: session.costUsd,
     },
     goals: {
-      active: activeGoals.map(g => ({
+      active: activeGoals.map((g) => ({
         id: g.id,
         text: g.goalText,
         priority: g.priority,
-        progress: g.progressTotal
-          ? `${g.progressCurrent}/${g.progressTotal}`
-          : undefined,
+        progress: g.progressTotal ? `${g.progressCurrent}/${g.progressTotal}` : undefined,
       })),
-      completed: completedGoals.map(g => ({
+      completed: completedGoals.map((g) => ({
         id: g.id,
         text: g.goalText,
         completedAt: g.completedAt,
       })),
     },
-    keyMoments: junctures.map(j => ({
+    keyMoments: junctures.map((j) => ({
       type: j.type,
       description: j.description,
       outcome: j.outcome,
       createdAt: j.createdAt,
     })),
-    workerResults: workerResults.map(r => ({
+    workerResults: workerResults.map((r) => ({
       id: r.id,
       task: r.taskDescription,
       status: r.status,
@@ -790,7 +844,7 @@ export function exportSessionManifest(
 export function exportSessionMarkdown(
   deps: SQLiteStoreDeps,
   callbacks: ManifestCallbacks,
-  sessionId?: string
+  sessionId?: string,
 ): string {
   const manifest = exportSessionManifest(deps, callbacks, sessionId);
   if (!manifest) return '# Session Not Found\n';
@@ -851,9 +905,14 @@ export function exportSessionMarkdown(
     lines.push('## Key Moments');
     lines.push('');
     for (const moment of manifest.keyMoments) {
-      const icon = moment.type === 'failure' ? '\u274C' :
-                   moment.type === 'breakthrough' ? '\u2B50' :
-                   moment.type === 'decision' ? '\u2192' : '\u21BB';
+      const icon =
+        moment.type === 'failure'
+          ? '\u274C'
+          : moment.type === 'breakthrough'
+            ? '\u2B50'
+            : moment.type === 'decision'
+              ? '\u2192'
+              : '\u21BB';
       lines.push(`### ${icon} ${moment.type.charAt(0).toUpperCase() + moment.type.slice(1)}`);
       lines.push('');
       lines.push(moment.description);
@@ -870,8 +929,8 @@ export function exportSessionMarkdown(
     lines.push('## Worker Results');
     lines.push('');
     for (const result of manifest.workerResults) {
-      const status = result.status === 'success' ? '\u2705' :
-                    result.status === 'error' ? '\u274C' : '\u23F3';
+      const status =
+        result.status === 'success' ? '\u2705' : result.status === 'error' ? '\u274C' : '\u23F3';
       lines.push(`- ${status} **${result.task}**`);
       if (result.summary) {
         lines.push(`  - ${result.summary}`);
@@ -907,7 +966,7 @@ export function exportSessionMarkdown(
  */
 export async function migrateFromJSONL(
   deps: SQLiteStoreDeps,
-  jsonlDir: string
+  jsonlDir: string,
 ): Promise<{ migrated: number; failed: number }> {
   const indexPath = join(jsonlDir, 'index.json');
   let migrated = 0;

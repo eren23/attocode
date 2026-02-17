@@ -270,7 +270,10 @@ function parseFrontmatter(content: string): { frontmatter: Record<string, unknow
   }
 
   const yamlContent = lines.slice(1, endIndex).join('\n');
-  const body = lines.slice(endIndex + 1).join('\n').trim();
+  const body = lines
+    .slice(endIndex + 1)
+    .join('\n')
+    .trim();
 
   // Simple YAML parser for frontmatter
   const frontmatter: Record<string, unknown> = {};
@@ -287,7 +290,10 @@ function parseFrontmatter(content: string): { frontmatter: Record<string, unknow
 
     // Handle arrays (simple format: [item1, item2])
     if (typeof value === 'string' && value.startsWith('[') && value.endsWith(']')) {
-      value = value.slice(1, -1).split(',').map(s => s.trim().replace(/^["']|["']$/g, ''));
+      value = value
+        .slice(1, -1)
+        .split(',')
+        .map((s) => s.trim().replace(/^["']|["']$/g, ''));
     }
     // Handle quoted strings
     else if (typeof value === 'string' && (value.startsWith('"') || value.startsWith("'"))) {
@@ -296,8 +302,7 @@ function parseFrontmatter(content: string): { frontmatter: Record<string, unknow
     // Handle booleans
     else if (value === 'true') {
       value = true;
-    }
-    else if (value === 'false') {
+    } else if (value === 'false') {
       value = false;
     }
 
@@ -369,7 +374,10 @@ export class SkillManager {
             this.emit({ type: 'skill.loaded', name: skill.name, path: fullPath });
             loaded++;
           }
-        } else if (entry.isFile() && (entry.name.endsWith('.md') || entry.name.endsWith('.skill'))) {
+        } else if (
+          entry.isFile() &&
+          (entry.name.endsWith('.md') || entry.name.endsWith('.skill'))
+        ) {
           // Load skill from standalone file
           const skill = await this.loadSkillFromFile(fullPath);
           if (skill) {
@@ -450,14 +458,15 @@ export class SkillManager {
             type: (a.type as SkillArgument['type']) || 'string',
             required: Boolean(a.required),
             default: a.default,
-            aliases: Array.isArray(a.aliases) ? a.aliases as string[] : undefined,
+            aliases: Array.isArray(a.aliases) ? (a.aliases as string[]) : undefined,
           };
         });
       }
 
       const skill: Skill = {
         name,
-        description: (frontmatter.description as string) || body.split('\n')[0]?.replace(/^#\s*/, '') || name,
+        description:
+          (frontmatter.description as string) || body.split('\n')[0]?.replace(/^#\s*/, '') || name,
         tools,
         content: body,
         sourcePath: filePath,
@@ -498,7 +507,7 @@ export class SkillManager {
    */
   getActiveSkills(): Skill[] {
     return Array.from(this.activeSkills)
-      .map(name => this.skills.get(name))
+      .map((name) => this.skills.get(name))
       .filter((s): s is Skill => s !== undefined);
   }
 
@@ -584,7 +593,7 @@ export class SkillManager {
       }
 
       // Check tags
-      if (skill.tags?.some(tag => queryLower.includes(tag.toLowerCase()))) {
+      if (skill.tags?.some((tag) => queryLower.includes(tag.toLowerCase()))) {
         if (!matches.includes(skill)) {
           matches.push(skill);
         }
@@ -690,26 +699,40 @@ When this skill is active:
 /**
  * Get a skill scaffold template with all options.
  */
-export function getSkillScaffold(name: string, options: {
-  invokable?: boolean;
-  description?: string;
-  args?: Array<{ name: string; description: string; type?: string; required?: boolean }>;
-  triggers?: string[];
-} = {}): string {
-  const { invokable = true, description = '[Add description here]', args = [], triggers = [] } = options;
+export function getSkillScaffold(
+  name: string,
+  options: {
+    invokable?: boolean;
+    description?: string;
+    args?: Array<{ name: string; description: string; type?: string; required?: boolean }>;
+    triggers?: string[];
+  } = {},
+): string {
+  const {
+    invokable = true,
+    description = '[Add description here]',
+    args = [],
+    triggers = [],
+  } = options;
 
-  const argLines = args.length > 0
-    ? `arguments:
-${args.map(a => `  - name: ${a.name}
+  const argLines =
+    args.length > 0
+      ? `arguments:
+${args
+  .map(
+    (a) => `  - name: ${a.name}
     description: ${a.description}
     type: ${a.type || 'string'}
-    required: ${a.required ?? false}`).join('\n')}`
-    : '';
+    required: ${a.required ?? false}`,
+  )
+  .join('\n')}`
+      : '';
 
-  const triggerLines = triggers.length > 0
-    ? `triggers:
-${triggers.map(t => `  - ${t}`).join('\n')}`
-    : '';
+  const triggerLines =
+    triggers.length > 0
+      ? `triggers:
+${triggers.map((t) => `  - ${t}`).join('\n')}`
+      : '';
 
   return `---
 name: ${name}
@@ -727,12 +750,16 @@ ${description}
 
 [Add instructions for the agent when this skill is active]
 
-${invokable ? `## Usage
+${
+  invokable
+    ? `## Usage
 
 \`\`\`
-/${name}${args.map(a => ` --${a.name} <${a.type || 'value'}>`).join('')}
+/${name}${args.map((a) => ` --${a.name} <${a.type || 'value'}>`).join('')}
 \`\`\`
-` : ''}
+`
+    : ''
+}
 ## Guidelines
 
 - Be thorough but concise
@@ -760,22 +787,21 @@ export async function createSkillScaffold(
     description?: string;
     args?: Array<{ name: string; description: string; type?: string; required?: boolean }>;
     triggers?: string[];
-    userLevel?: boolean;  // Create in ~/.attocode/skills/ instead of project
-  } = {}
+    userLevel?: boolean; // Create in ~/.attocode/skills/ instead of project
+  } = {},
 ): Promise<SkillScaffoldResult> {
   try {
     // Validate name
     if (!/^[a-z][a-z0-9-]*$/.test(name)) {
       return {
         success: false,
-        error: 'Skill name must start with a letter and contain only lowercase letters, numbers, and hyphens',
+        error:
+          'Skill name must start with a letter and contain only lowercase letters, numbers, and hyphens',
       };
     }
 
     // Determine target directory
-    const baseDir = options.userLevel
-      ? getUserSkillDirectory()
-      : getSkillCreationDirectory();
+    const baseDir = options.userLevel ? getUserSkillDirectory() : getSkillCreationDirectory();
 
     const skillDir = join(baseDir, name);
     const skillPath = join(skillDir, 'SKILL.md');

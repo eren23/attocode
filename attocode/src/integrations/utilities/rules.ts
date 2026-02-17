@@ -176,7 +176,7 @@ export class RulesManager {
       const rule = await this.loadSource(source);
       if (rule) {
         // Find and replace existing rule from this source
-        const existingIndex = this.rules.findIndex(r => r.source === rule.source);
+        const existingIndex = this.rules.findIndex((r) => r.source === rule.source);
         if (existingIndex >= 0) {
           this.rules[existingIndex] = rule;
         } else {
@@ -207,16 +207,14 @@ export class RulesManager {
   getRulesContent(): string {
     if (this.rules.length === 0) return '';
 
-    return this.rules
-      .map(r => `# Rules from ${r.source}\n\n${r.content}`)
-      .join('\n\n---\n\n');
+    return this.rules.map((r) => `# Rules from ${r.source}\n\n${r.content}`).join('\n\n---\n\n');
   }
 
   /**
    * Get rules as context strings for memory augmentation.
    */
   getRulesContext(): string[] {
-    return this.rules.map(r => r.content);
+    return this.rules.map((r) => r.content);
   }
 
   /**
@@ -243,7 +241,7 @@ export class RulesManager {
    * Remove a rule by source.
    */
   removeRule(source: string): boolean {
-    const index = this.rules.findIndex(r => r.source === source);
+    const index = this.rules.findIndex((r) => r.source === source);
     if (index >= 0) {
       this.rules.splice(index, 1);
       return true;
@@ -294,7 +292,7 @@ export class RulesManager {
  */
 export async function createRulesManager(
   config?: Partial<RulesConfig>,
-  baseDir?: string
+  baseDir?: string,
 ): Promise<RulesManager> {
   const manager = new RulesManager(config, baseDir);
   await manager.loadRules();

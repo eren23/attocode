@@ -65,13 +65,9 @@ export interface MCPToolSearchOptions {
  */
 export function createMCPToolSearchTool(
   mcpClient: MCPClient,
-  options: MCPToolSearchOptions = {}
+  options: MCPToolSearchOptions = {},
 ): ToolDefinition {
-  const {
-    autoLoad = true,
-    defaultLimit = 5,
-    onToolsLoaded,
-  } = options;
+  const { autoLoad = true, defaultLimit = 5, onToolsLoaded } = options;
 
   return {
     name: 'mcp_tool_search',
@@ -117,7 +113,7 @@ Use this when you need an MCP tool but don't see it in your available tools.`,
       // Auto-load found tools if enabled
       let loadedTools: ToolDefinition[] = [];
       if (autoLoad && matches.length > 0) {
-        loadedTools = mcpClient.loadTools(matches.map(m => m.name));
+        loadedTools = mcpClient.loadTools(matches.map((m) => m.name));
 
         // Notify callback if provided
         if (onToolsLoaded && loadedTools.length > 0) {
@@ -163,13 +159,15 @@ Use this to see what tools are available before searching for specific ones.`,
         },
       },
     },
-    execute: async (args: Record<string, unknown>): Promise<{ tools: MCPToolSummary[]; count: number }> => {
+    execute: async (
+      args: Record<string, unknown>,
+    ): Promise<{ tools: MCPToolSummary[]; count: number }> => {
       const serverFilter = args.server ? String(args.server) : undefined;
 
       let summaries = mcpClient.getAllToolSummaries();
 
       if (serverFilter) {
-        summaries = summaries.filter(s => s.serverName === serverFilter);
+        summaries = summaries.filter((s) => s.serverName === serverFilter);
       }
 
       return {
@@ -203,16 +201,17 @@ Reports token usage for tool summaries vs full definitions.`,
       // Calculate savings
       const fullLoadTokens = stats.totalTools * 200; // Estimate: ~200 tokens per full tool
       const currentTokens = stats.summaryTokens + stats.definitionTokens;
-      const savingsPercent = fullLoadTokens > 0
-        ? Math.round((1 - currentTokens / fullLoadTokens) * 100)
-        : 0;
+      const savingsPercent =
+        fullLoadTokens > 0 ? Math.round((1 - currentTokens / fullLoadTokens) * 100) : 0;
 
       // Generate recommendation
       let recommendation: string;
       if (stats.loadedCount > 20) {
-        recommendation = 'Consider using lazy loading more aggressively - many tools are fully loaded.';
+        recommendation =
+          'Consider using lazy loading more aggressively - many tools are fully loaded.';
       } else if (stats.loadedCount === 0) {
-        recommendation = 'All tools are summaries. Use mcp_tool_search to load specific tools when needed.';
+        recommendation =
+          'All tools are summaries. Use mcp_tool_search to load specific tools when needed.';
       } else {
         recommendation = `Good balance: ${stats.loadedCount} tools loaded, ${stats.summaryCount} as summaries.`;
       }
@@ -235,7 +234,7 @@ Reports token usage for tool summaries vs full definitions.`,
  */
 export function createMCPMetaTools(
   mcpClient: MCPClient,
-  options: MCPToolSearchOptions = {}
+  options: MCPToolSearchOptions = {},
 ): ToolDefinition[] {
   return [
     createMCPToolSearchTool(mcpClient, options),

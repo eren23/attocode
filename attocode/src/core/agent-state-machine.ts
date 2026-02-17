@@ -296,7 +296,10 @@ export class AgentStateMachine {
               this.inTestFixCycle = true;
               // Go back to acting to fix
               if (this.currentPhase === 'verifying') {
-                this.transition('acting', `Test failed ${this.consecutiveTestFailures} times, fixing`);
+                this.transition(
+                  'acting',
+                  `Test failed ${this.consecutiveTestFailures} times, fixing`,
+                );
               }
             }
           }
@@ -349,13 +352,20 @@ export class AgentStateMachine {
     }
 
     // After N+ unique files without edits
-    if (this.uniqueFilesRead.size >= this.explorationFileThreshold && this.filesModified.size === 0) {
+    if (
+      this.uniqueFilesRead.size >= this.explorationFileThreshold &&
+      this.filesModified.size === 0
+    ) {
       this.shouldTransition = true;
       return;
     }
 
     // After N+ iterations with diminishing returns
-    if (this.phaseIterations >= this.explorationIterThreshold && this.recentNewFiles < 2 && this.filesModified.size === 0) {
+    if (
+      this.phaseIterations >= this.explorationIterThreshold &&
+      this.recentNewFiles < 2 &&
+      this.filesModified.size === 0
+    ) {
       this.shouldTransition = true;
       return;
     }

@@ -93,7 +93,7 @@ function getStatusIndicator(type: FileChange['type']): { char: string; color: st
  */
 function sortChanges(
   changes: FileChange[],
-  sortBy: FileChangeSummaryProps['sortBy']
+  sortBy: FileChangeSummaryProps['sortBy'],
 ): FileChange[] {
   const sorted = [...changes];
 
@@ -103,9 +103,7 @@ function sortChanges(
     case 'deletions':
       return sorted.sort((a, b) => b.deletions - a.deletions);
     case 'total':
-      return sorted.sort(
-        (a, b) => (b.additions + b.deletions) - (a.additions + a.deletions)
-      );
+      return sorted.sort((a, b) => b.additions + b.deletions - (a.additions + a.deletions));
     case 'path':
     default:
       return sorted.sort((a, b) => a.path.localeCompare(b.path));
@@ -135,9 +133,10 @@ const FileChangeRow = memo(function FileChangeRow({
   maxPathWidth: number;
 }) {
   const status = getStatusIndicator(change.type);
-  const displayPath = change.type === 'rename' && change.oldPath
-    ? `${truncatePath(change.oldPath, maxPathWidth / 2 - 2)} → ${truncatePath(change.path, maxPathWidth / 2 - 2)}`
-    : truncatePath(change.path, maxPathWidth);
+  const displayPath =
+    change.type === 'rename' && change.oldPath
+      ? `${truncatePath(change.oldPath, maxPathWidth / 2 - 2)} → ${truncatePath(change.path, maxPathWidth / 2 - 2)}`
+      : truncatePath(change.path, maxPathWidth);
 
   return (
     <Box>
@@ -152,15 +151,9 @@ const FileChangeRow = memo(function FileChangeRow({
       <Text> </Text>
 
       {/* Stats */}
-      {change.additions > 0 && (
-        <Text color={COLORS.addition}>+{change.additions}</Text>
-      )}
-      {change.additions > 0 && change.deletions > 0 && (
-        <Text color={COLORS.muted}>/</Text>
-      )}
-      {change.deletions > 0 && (
-        <Text color={COLORS.deletion}>-{change.deletions}</Text>
-      )}
+      {change.additions > 0 && <Text color={COLORS.addition}>+{change.additions}</Text>}
+      {change.additions > 0 && change.deletions > 0 && <Text color={COLORS.muted}>/</Text>}
+      {change.deletions > 0 && <Text color={COLORS.deletion}>-{change.deletions}</Text>}
     </Box>
   );
 });
@@ -185,12 +178,8 @@ const StatsBar = memo(function StatsBar({
 
   return (
     <Box>
-      <Text backgroundColor={COLORS.addition}>
-        {' '.repeat(Math.max(1, addWidth))}
-      </Text>
-      <Text backgroundColor={COLORS.deletion}>
-        {' '.repeat(Math.max(1, delWidth))}
-      </Text>
+      <Text backgroundColor={COLORS.addition}>{' '.repeat(Math.max(1, addWidth))}</Text>
+      <Text backgroundColor={COLORS.deletion}>{' '.repeat(Math.max(1, delWidth))}</Text>
     </Box>
   );
 });
@@ -219,10 +208,18 @@ export const FileChangeSummary = memo(function FileChangeSummary({
       deletions += change.deletions;
 
       switch (change.type) {
-        case 'create': created++; break;
-        case 'modify': modified++; break;
-        case 'delete': deleted++; break;
-        case 'rename': renamed++; break;
+        case 'create':
+          created++;
+          break;
+        case 'modify':
+          modified++;
+          break;
+        case 'delete':
+          deleted++;
+          break;
+        case 'rename':
+          renamed++;
+          break;
       }
     }
 
@@ -241,18 +238,15 @@ export const FileChangeSummary = memo(function FileChangeSummary({
   if (changes.length === 0) {
     return (
       <Box borderStyle="round" borderColor={COLORS.border} paddingX={1}>
-        <Text color={COLORS.muted} dimColor>No changes in this session</Text>
+        <Text color={COLORS.muted} dimColor>
+          No changes in this session
+        </Text>
       </Box>
     );
   }
 
   return (
-    <Box
-      flexDirection="column"
-      borderStyle="round"
-      borderColor={COLORS.border}
-      paddingX={1}
-    >
+    <Box flexDirection="column" borderStyle="round" borderColor={COLORS.border} paddingX={1}>
       {/* Header with totals */}
       <Box>
         <Text bold>Session Changes: </Text>
@@ -260,43 +254,29 @@ export const FileChangeSummary = memo(function FileChangeSummary({
         <Text color={COLORS.muted}>/</Text>
         <Text color={COLORS.deletion}>-{stats.deletions}</Text>
         <Text color={COLORS.muted}> in </Text>
-        <Text>{changes.length} file{changes.length !== 1 ? 's' : ''}</Text>
+        <Text>
+          {changes.length} file{changes.length !== 1 ? 's' : ''}
+        </Text>
       </Box>
 
       {/* Stats bar */}
       <Box marginTop={1}>
-        <StatsBar
-          additions={stats.additions}
-          deletions={stats.deletions}
-          maxWidth={30}
-        />
+        <StatsBar additions={stats.additions} deletions={stats.deletions} maxWidth={30} />
       </Box>
 
       {/* Type breakdown */}
       <Box marginTop={1}>
-        {stats.created > 0 && (
-          <Text color={COLORS.create}>{stats.created} new </Text>
-        )}
-        {stats.modified > 0 && (
-          <Text color={COLORS.modify}>{stats.modified} modified </Text>
-        )}
-        {stats.deleted > 0 && (
-          <Text color={COLORS.delete}>{stats.deleted} deleted </Text>
-        )}
-        {stats.renamed > 0 && (
-          <Text color={COLORS.rename}>{stats.renamed} renamed </Text>
-        )}
+        {stats.created > 0 && <Text color={COLORS.create}>{stats.created} new </Text>}
+        {stats.modified > 0 && <Text color={COLORS.modify}>{stats.modified} modified </Text>}
+        {stats.deleted > 0 && <Text color={COLORS.delete}>{stats.deleted} deleted </Text>}
+        {stats.renamed > 0 && <Text color={COLORS.rename}>{stats.renamed} renamed </Text>}
       </Box>
 
       {/* Expanded file list */}
       {expanded && (
         <Box flexDirection="column" marginTop={1}>
           {displayChanges.map((change, i) => (
-            <FileChangeRow
-              key={`${change.path}-${i}`}
-              change={change}
-              maxPathWidth={50}
-            />
+            <FileChangeRow key={`${change.path}-${i}`} change={change} maxPathWidth={50} />
           ))}
 
           {hasMore && (

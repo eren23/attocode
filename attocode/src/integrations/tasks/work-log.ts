@@ -44,8 +44,8 @@ export interface WorkLogConfig {
 
 export class WorkLog {
   private currentHypothesis: string = '';
-  private filesRead: Map<string, string> = new Map();      // path → 1-line summary
-  private filesModified: Map<string, string> = new Map();   // path → what changed
+  private filesRead: Map<string, string> = new Map(); // path → 1-line summary
+  private filesModified: Map<string, string> = new Map(); // path → what changed
   private testResults: TestResult[] = [];
   private approachesTried: ApproachEntry[] = [];
   private commands: string[] = [];
@@ -62,11 +62,7 @@ export class WorkLog {
    * Record a tool execution result into the work log.
    * Called automatically after each tool call in agent.ts.
    */
-  recordToolExecution(
-    toolName: string,
-    args: Record<string, unknown>,
-    result?: unknown,
-  ): void {
+  recordToolExecution(toolName: string, args: Record<string, unknown>, result?: unknown): void {
     const resultStr = typeof result === 'string' ? result : '';
 
     switch (toolName) {
@@ -85,9 +81,10 @@ export class WorkLog {
       case 'edit_file': {
         const filePath = String(args.path || args.file_path || '');
         if (filePath) {
-          const desc = toolName === 'write_file'
-            ? 'created/overwritten'
-            : `edited: ${String(args.old_text || '').slice(0, 50)}...`;
+          const desc =
+            toolName === 'write_file'
+              ? 'created/overwritten'
+              : `edited: ${String(args.old_text || '').slice(0, 50)}...`;
           this.filesModified.set(filePath, desc);
           this.trimMap(this.filesModified, this.config.maxEntriesPerCategory);
         }
@@ -176,27 +173,35 @@ export class WorkLog {
     // Test results (most recent)
     if (this.testResults.length > 0) {
       const recentTests = this.testResults.slice(-5);
-      const testLines = recentTests.map(t =>
-        `  ${t.passed ? 'PASS' : 'FAIL'}: ${t.test}${t.error ? ` (${t.error.slice(0, 80)})` : ''}`
-      ).join('\n');
+      const testLines = recentTests
+        .map(
+          (t) =>
+            `  ${t.passed ? 'PASS' : 'FAIL'}: ${t.test}${t.error ? ` (${t.error.slice(0, 80)})` : ''}`,
+        )
+        .join('\n');
       sections.push(`Test results:\n${testLines}`);
     }
 
     // Approaches tried
     if (this.approachesTried.length > 0) {
-      const approachLines = this.approachesTried.map(a =>
-        `  [${a.outcome}] ${a.approach}${a.detail ? `: ${a.detail}` : ''}`
-      ).join('\n');
+      const approachLines = this.approachesTried
+        .map((a) => `  [${a.outcome}] ${a.approach}${a.detail ? `: ${a.detail}` : ''}`)
+        .join('\n');
       sections.push(`Approaches tried:\n${approachLines}`);
     }
 
     // Recent commands
     if (this.commands.length > 0) {
-      const recentCmds = this.commands.slice(-5).map(c => `  $ ${c}`).join('\n');
+      const recentCmds = this.commands
+        .slice(-5)
+        .map((c) => `  $ ${c}`)
+        .join('\n');
       sections.push(`Recent commands:\n${recentCmds}`);
     }
 
-    sections.push('[END WORK LOG - Do NOT re-read files listed above. Continue from where you left off.]');
+    sections.push(
+      '[END WORK LOG - Do NOT re-read files listed above. Continue from where you left off.]',
+    );
 
     const result = sections.join('\n\n');
 
@@ -239,26 +244,36 @@ export class WorkLog {
         .map(([path, summary]) => `  ${path}: ${summary}`)
         .join('\n');
       if (fileEntries) {
-        sections.push(`Files read (${this.filesRead.size} total, showing last 10):\n${fileEntries}`);
+        sections.push(
+          `Files read (${this.filesRead.size} total, showing last 10):\n${fileEntries}`,
+        );
       }
     }
 
     // Test results (last 3)
     if (this.testResults.length > 0) {
       const recentTests = this.testResults.slice(-5);
-      const testLines = recentTests.map(t =>
-        `  ${t.passed ? 'PASS' : 'FAIL'}: ${t.test}${t.error ? ` (${t.error.slice(0, 80)})` : ''}`
-      ).join('\n');
+      const testLines = recentTests
+        .map(
+          (t) =>
+            `  ${t.passed ? 'PASS' : 'FAIL'}: ${t.test}${t.error ? ` (${t.error.slice(0, 80)})` : ''}`,
+        )
+        .join('\n');
       sections.push(`Test results:\n${testLines}`);
     }
 
     // Recent commands (last 3)
     if (this.commands.length > 0) {
-      const recentCmds = this.commands.slice(-3).map(c => `  $ ${c}`).join('\n');
+      const recentCmds = this.commands
+        .slice(-3)
+        .map((c) => `  $ ${c}`)
+        .join('\n');
       sections.push(`Recent commands:\n${recentCmds}`);
     }
 
-    sections.push('[END WORK LOG - Do NOT re-read files listed above. Continue from where you left off.]');
+    sections.push(
+      '[END WORK LOG - Do NOT re-read files listed above. Continue from where you left off.]',
+    );
 
     let result = sections.join('\n\n');
 
@@ -274,10 +289,12 @@ export class WorkLog {
    * Check if the work log has any content worth injecting.
    */
   hasContent(): boolean {
-    return this.filesRead.size > 0
-      || this.filesModified.size > 0
-      || this.testResults.length > 0
-      || this.commands.length > 0;
+    return (
+      this.filesRead.size > 0 ||
+      this.filesModified.size > 0 ||
+      this.testResults.length > 0 ||
+      this.commands.length > 0
+    );
   }
 
   /**
@@ -317,7 +334,7 @@ export class WorkLog {
 
   private summarizeFileContent(content: string): string {
     if (!content) return '(read)';
-    const firstLine = content.split('\n').find(l => l.trim().length > 0) || '';
+    const firstLine = content.split('\n').find((l) => l.trim().length > 0) || '';
     return firstLine.slice(0, 80) || '(read)';
   }
 

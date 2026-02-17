@@ -25,23 +25,38 @@ import type { SwarmEvent } from './swarm-events.js';
  * this catches workers that report success but actually did no useful work.
  */
 export const FAILURE_INDICATORS = [
-  'budget exhausted', 'unable to complete', 'could not complete',
-  'ran out of budget', 'no changes were made', 'no files were modified',
-  'no files were created', 'failed to complete', 'before research could begin',
-  'i was unable to', 'i could not', 'unfortunately i',
+  'budget exhausted',
+  'unable to complete',
+  'could not complete',
+  'ran out of budget',
+  'no changes were made',
+  'no files were modified',
+  'no files were created',
+  'failed to complete',
+  'before research could begin',
+  'i was unable to',
+  'i could not',
+  'unfortunately i',
 ];
 
 export const BOILERPLATE_INDICATORS = [
-  'task completed successfully', 'i have completed the task',
-  'the task has been completed', 'done', 'completed', 'finished',
-  'no issues found', 'everything looks good', 'all tasks completed',
+  'task completed successfully',
+  'i have completed the task',
+  'the task has been completed',
+  'done',
+  'completed',
+  'finished',
+  'no issues found',
+  'everything looks good',
+  'all tasks completed',
 ];
 
 export function hasFutureIntentLanguage(content: string): boolean {
   const trimmed = content.trim();
   if (!trimmed) return false;
   const lower = trimmed.toLowerCase();
-  const completionSignals = /\b(done|completed|finished|created|saved|wrote|implemented|fixed|updated|added)\b/;
+  const completionSignals =
+    /\b(done|completed|finished|created|saved|wrote|implemented|fixed|updated|added)\b/;
   if (completionSignals.test(lower)) return false;
   const futureIntentPatterns: RegExp[] = [
     /\b(i\s+will|i'll|let me)\s+(create|write|save|update|modify|fix|add|edit|implement|change|run|execute|build|continue)\b/,
@@ -49,7 +64,7 @@ export function hasFutureIntentLanguage(content: string): boolean {
     /\b(next step|remaining work|still need|to be done)\b/,
     /\b(i am going to|i'm going to)\b/,
   ];
-  return futureIntentPatterns.some(p => p.test(lower));
+  return futureIntentPatterns.some((p) => p.test(lower));
 }
 
 export function repoLooksUnscaffolded(baseDir: string): boolean {
@@ -65,7 +80,11 @@ export function repoLooksUnscaffolded(baseDir: string): boolean {
   return false;
 }
 
-export function isHollowCompletion(spawnResult: SpawnResult, taskType?: string, swarmConfig?: SwarmConfig): boolean {
+export function isHollowCompletion(
+  spawnResult: SpawnResult,
+  taskType?: string,
+  swarmConfig?: SwarmConfig,
+): boolean {
   // Timeout uses toolCalls === -1, not hollow
   if ((spawnResult.metrics.toolCalls ?? 0) === -1) return false;
 
@@ -73,15 +92,14 @@ export function isHollowCompletion(spawnResult: SpawnResult, taskType?: string, 
 
   // Truly empty completions: zero tools AND trivial output
   const hollowThreshold = swarmConfig?.hollowOutputThreshold ?? 120;
-  if (toolCalls === 0
-    && (spawnResult.output?.trim().length ?? 0) < hollowThreshold) {
+  if (toolCalls === 0 && (spawnResult.output?.trim().length ?? 0) < hollowThreshold) {
     return true;
   }
 
   // P4: Boilerplate detection
   if (toolCalls === 0 && (spawnResult.output?.trim().length ?? 0) < 300) {
     const outputLower = (spawnResult.output ?? '').toLowerCase().trim();
-    if (BOILERPLATE_INDICATORS.some(b => outputLower.includes(b))) {
+    if (BOILERPLATE_INDICATORS.some((b) => outputLower.includes(b))) {
       return true;
     }
   }
@@ -89,7 +107,7 @@ export function isHollowCompletion(spawnResult: SpawnResult, taskType?: string, 
   // "Success" that admits failure
   if (spawnResult.success) {
     const outputLower = (spawnResult.output ?? '').toLowerCase();
-    if (FAILURE_INDICATORS.some(f => outputLower.includes(f))) {
+    if (FAILURE_INDICATORS.some((f) => outputLower.includes(f))) {
       return true;
     }
   }

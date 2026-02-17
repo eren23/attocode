@@ -216,7 +216,7 @@ export class DiverseSerializer {
     const styleKey = this.getStyleKey(style);
     this.stats.styleDistribution.set(
       styleKey,
-      (this.stats.styleDistribution.get(styleKey) || 0) + 1
+      (this.stats.styleDistribution.get(styleKey) || 0) + 1,
     );
 
     const variation = this.calculateVariation(style);
@@ -301,9 +301,8 @@ export class DiverseSerializer {
     return {
       totalSerializations: this.stats.totalSerializations,
       styleDistribution: new Map(this.stats.styleDistribution),
-      averageVariation: variations.length > 0
-        ? variations.reduce((a, b) => a + b, 0) / variations.length
-        : 0,
+      averageVariation:
+        variations.length > 0 ? variations.reduce((a, b) => a + b, 0) / variations.length : 0,
     };
   }
 
@@ -388,21 +387,22 @@ export class DiverseSerializer {
     const itemIndent = indent.repeat(depth + 1);
 
     // Determine if compact
-    const useCompact = style.arrayStyle === 'compact' ||
-      (style.arrayStyle === 'mixed' && arr.length <= 3 && arr.every(item =>
-        typeof item !== 'object' || item === null
-      ));
+    const useCompact =
+      style.arrayStyle === 'compact' ||
+      (style.arrayStyle === 'mixed' &&
+        arr.length <= 3 &&
+        arr.every((item) => typeof item !== 'object' || item === null));
 
     if (useCompact || style.indent === 0) {
-      const items = arr.map(item => this.doSerialize(item, style, depth + 1)).filter(Boolean);
+      const items = arr.map((item) => this.doSerialize(item, style, depth + 1)).filter(Boolean);
       const inner = items.join(', ');
       return style.spaceInsideBrackets ? `[ ${inner} ]` : `[${inner}]`;
     }
 
     const items = arr
-      .map(item => this.doSerialize(item, style, depth + 1))
+      .map((item) => this.doSerialize(item, style, depth + 1))
       .filter(Boolean)
-      .map(item => `${itemIndent}${item}`);
+      .map((item) => `${itemIndent}${item}`);
 
     return `[${newline}${items.join(`,${newline}`)}${newline}${currentIndent}]`;
   }
@@ -410,12 +410,12 @@ export class DiverseSerializer {
   private serializeObject(
     obj: Record<string, unknown>,
     style: SerializationStyle,
-    depth: number
+    depth: number,
   ): string {
     let keys = Object.keys(obj);
 
     // Filter keys based on style
-    keys = keys.filter(key => {
+    keys = keys.filter((key) => {
       const value = obj[key];
       if (value === undefined) return false;
       if (value === null && style.omitNull) return false;
@@ -445,14 +445,14 @@ export class DiverseSerializer {
     const colonSpace = style.spaceAfterColon ? ' ' : '';
 
     if (style.indent === 0) {
-      const pairs = keys.map(key => {
+      const pairs = keys.map((key) => {
         const value = this.doSerialize(obj[key], style, depth + 1);
         return `${JSON.stringify(key)}:${colonSpace}${value}`;
       });
       return `{${pairs.join(',')}}`;
     }
 
-    const pairs = keys.map(key => {
+    const pairs = keys.map((key) => {
       const value = this.doSerialize(obj[key], style, depth + 1);
       return `${propIndent}${JSON.stringify(key)}:${colonSpace}${value}`;
     });
@@ -484,10 +484,13 @@ export class DiverseSerializer {
 
     if (style.indent !== undefined && style.indent !== defaults.indent) variation += 0.2;
     if (style.sortKeys !== undefined && style.sortKeys !== defaults.sortKeys) variation += 0.2;
-    if (style.keySortOrder !== undefined && style.keySortOrder !== defaults.keySortOrder) variation += 0.2;
-    if (style.spaceAfterColon !== undefined && style.spaceAfterColon !== defaults.spaceAfterColon) variation += 0.1;
+    if (style.keySortOrder !== undefined && style.keySortOrder !== defaults.keySortOrder)
+      variation += 0.2;
+    if (style.spaceAfterColon !== undefined && style.spaceAfterColon !== defaults.spaceAfterColon)
+      variation += 0.1;
     if (style.omitNull !== undefined && style.omitNull !== defaults.omitNull) variation += 0.1;
-    if (style.arrayStyle !== undefined && style.arrayStyle !== defaults.arrayStyle) variation += 0.2;
+    if (style.arrayStyle !== undefined && style.arrayStyle !== defaults.arrayStyle)
+      variation += 0.2;
 
     return Math.min(1, variation);
   }
@@ -526,9 +529,7 @@ export class DiverseSerializer {
  * // result2: {"files": ["a.ts", "b.ts"], "count": 2}
  * ```
  */
-export function createDiverseSerializer(
-  config: DiverseSerializerConfig = {}
-): DiverseSerializer {
+export function createDiverseSerializer(config: DiverseSerializerConfig = {}): DiverseSerializer {
   return new DiverseSerializer(config);
 }
 
@@ -539,10 +540,7 @@ export function createDiverseSerializer(
 /**
  * Quick helper to serialize with variation.
  */
-export function serializeWithVariation(
-  data: unknown,
-  variationLevel: number = 0.3
-): string {
+export function serializeWithVariation(data: unknown, variationLevel: number = 0.3): string {
   const serializer = createDiverseSerializer({ variationLevel });
   return serializer.serialize(data);
 }
@@ -554,7 +552,7 @@ export function serializeWithVariation(
 export function generateVariations(
   data: unknown,
   count: number,
-  variationLevel: number = 0.5
+  variationLevel: number = 0.5,
 ): string[] {
   const serializer = createDiverseSerializer({ variationLevel });
   const results: string[] = [];
@@ -571,7 +569,7 @@ export function generateVariations(
  */
 export function diversifyToolArgs(
   args: Record<string, unknown>,
-  variationLevel: number = 0.3
+  variationLevel: number = 0.3,
 ): string {
   const serializer = createDiverseSerializer({
     variationLevel,
@@ -583,10 +581,7 @@ export function diversifyToolArgs(
 /**
  * Apply diversity to tool results.
  */
-export function diversifyToolResult(
-  result: unknown,
-  variationLevel: number = 0.3
-): string {
+export function diversifyToolResult(result: unknown, variationLevel: number = 0.3): string {
   const serializer = createDiverseSerializer({
     variationLevel,
     preserveSemantics: true,
@@ -622,8 +617,10 @@ export function areSemanticEquivalent(json1: string, json2: string): boolean {
   try {
     const obj1 = JSON.parse(json1);
     const obj2 = JSON.parse(json2);
-    return JSON.stringify(obj1, Object.keys(obj1).sort()) ===
-           JSON.stringify(obj2, Object.keys(obj2).sort());
+    return (
+      JSON.stringify(obj1, Object.keys(obj1).sort()) ===
+      JSON.stringify(obj2, Object.keys(obj2).sort())
+    );
   } catch {
     return false;
   }

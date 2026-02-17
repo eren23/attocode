@@ -80,7 +80,7 @@ export class ResilientFetchError extends Error {
     public readonly attempts: number,
     public readonly lastError?: Error,
     public readonly isTimeout: boolean = false,
-    public readonly isCancelled: boolean = false
+    public readonly isCancelled: boolean = false,
   ) {
     super(message);
     this.name = 'ResilientFetchError';
@@ -118,16 +118,9 @@ const DEFAULT_CONFIG: Required<NetworkConfig> = {
  * ```
  */
 export async function resilientFetch(
-  options: ResilientFetchOptions
+  options: ResilientFetchOptions,
 ): Promise<ResilientFetchResult> {
-  const {
-    url,
-    init,
-    providerName,
-    networkConfig = {},
-    cancellationToken,
-    onRetry,
-  } = options;
+  const { url, init, providerName, networkConfig = {}, cancellationToken, onRetry } = options;
 
   const config = { ...DEFAULT_CONFIG, ...networkConfig };
   const startTime = Date.now();
@@ -147,7 +140,7 @@ export async function resilientFetch(
         attempts,
         lastError,
         false,
-        true
+        true,
       );
     }
 
@@ -182,9 +175,9 @@ export async function resilientFetch(
         // Parse Retry-After header for rate limits
         const retryAfter = parseRetryAfter(response.headers.get('Retry-After'));
         // 429 uses steeper backoff (3^n instead of 2^n)
-        const delay = retryAfter ?? (is429
-          ? calculate429Backoff(attempts, config)
-          : calculateBackoff(attempts, config));
+        const delay =
+          retryAfter ??
+          (is429 ? calculate429Backoff(attempts, config) : calculateBackoff(attempts, config));
 
         lastError = new Error(`HTTP ${response.status}: ${response.statusText}`);
 
@@ -194,7 +187,7 @@ export async function resilientFetch(
             `${providerName} request failed after ${attempts} attempts: HTTP ${response.status}`,
             providerName,
             attempts,
-            lastError
+            lastError,
           );
         }
 
@@ -226,7 +219,7 @@ export async function resilientFetch(
             attempts,
             error,
             false,
-            true
+            true,
           );
         }
         // Timeout
@@ -238,7 +231,7 @@ export async function resilientFetch(
             providerName,
             attempts,
             lastError,
-            true
+            true,
           );
         }
 
@@ -258,7 +251,7 @@ export async function resilientFetch(
           `${providerName} network error after ${attempts} attempts: ${lastError.message}`,
           providerName,
           attempts,
-          lastError
+          lastError,
         );
       }
 
@@ -275,7 +268,7 @@ export async function resilientFetch(
     `${providerName} request failed after ${attempts} attempts`,
     providerName,
     attempts,
-    lastError
+    lastError,
   );
 }
 
@@ -309,10 +302,7 @@ function parseRetryAfter(header: string | null): number | null {
 /**
  * Calculate exponential backoff delay with jitter.
  */
-function calculateBackoff(
-  attempt: number,
-  config: Required<NetworkConfig>
-): number {
+function calculateBackoff(attempt: number, config: Required<NetworkConfig>): number {
   // Exponential backoff: baseDelay * 2^(attempt-1)
   const exponentialDelay = config.baseRetryDelay * Math.pow(2, attempt - 1);
 
@@ -328,10 +318,7 @@ function calculateBackoff(
  * Steeper exponential backoff for 429 rate limit errors.
  * Uses 3^n instead of 2^n to give rate limit windows more recovery time.
  */
-function calculate429Backoff(
-  attempt: number,
-  config: Required<NetworkConfig>
-): number {
+function calculate429Backoff(attempt: number, config: Required<NetworkConfig>): number {
   // Steeper backoff: baseDelay * 3^(attempt-1)
   const exponentialDelay = config.baseRetryDelay * Math.pow(3, attempt - 1);
 

@@ -260,7 +260,7 @@ export class CircuitBreaker {
       throw new ProviderError(
         `Circuit breaker is ${this.state}`,
         'circuit-breaker',
-        'SERVER_ERROR'
+        'SERVER_ERROR',
       );
     }
 
@@ -275,7 +275,7 @@ export class CircuitBreaker {
         result = await Promise.race([
           fn(),
           new Promise<never>((_, reject) =>
-            setTimeout(() => reject(new Error('Request timeout')), this.config.requestTimeout)
+            setTimeout(() => reject(new Error('Request timeout')), this.config.requestTimeout),
           ),
         ]);
       } else {
@@ -311,10 +311,10 @@ export class CircuitBreaker {
         if (prop === 'chatWithTools' && 'chatWithTools' in target) {
           return async function (
             messages: (Message | MessageWithContent)[],
-            options?: ChatOptionsWithTools
+            options?: ChatOptionsWithTools,
           ) {
             return breaker.execute(() =>
-              (target as LLMProviderWithTools).chatWithTools(messages, options)
+              (target as LLMProviderWithTools).chatWithTools(messages, options),
             );
           };
         }
@@ -377,11 +377,17 @@ export class CircuitBreaker {
     }
 
     if (this.config.tripOnErrors.includes('SERVER_ERROR')) {
-      if (message.includes('500') || message.includes('502') || message.includes('503')) return true;
+      if (message.includes('500') || message.includes('502') || message.includes('503'))
+        return true;
     }
 
     if (this.config.tripOnErrors.includes('NETWORK_ERROR')) {
-      if (message.includes('network') || message.includes('connection') || message.includes('econnrefused')) return true;
+      if (
+        message.includes('network') ||
+        message.includes('connection') ||
+        message.includes('econnrefused')
+      )
+        return true;
     }
 
     if (this.config.tripOnErrors.includes('TIMEOUT')) {
@@ -467,8 +473,5 @@ export function formatCircuitBreakerMetrics(metrics: CircuitBreakerMetrics): str
  * Check if an error is from a tripped circuit breaker.
  */
 export function isCircuitBreakerError(error: unknown): boolean {
-  return (
-    error instanceof ProviderError &&
-    error.provider === 'circuit-breaker'
-  );
+  return error instanceof ProviderError && error.provider === 'circuit-breaker';
 }

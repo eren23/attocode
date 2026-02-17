@@ -15,7 +15,7 @@ export type EventListener = (envelope: EventEnvelope) => void;
  * Typed event listener that receives events of a specific type.
  */
 export type TypedEventListener<T extends AgentEvent> = (
-  envelope: EventEnvelope & { event: T }
+  envelope: EventEnvelope & { event: T },
 ) => void;
 
 /**
@@ -113,10 +113,7 @@ export class EventQueue {
    * @param listener - The listener to call for matching events
    * @returns Unsubscribe function
    */
-  on<T extends AgentEvent>(
-    type: T['type'],
-    listener: TypedEventListener<T>
-  ): () => void {
+  on<T extends AgentEvent>(type: T['type'], listener: TypedEventListener<T>): () => void {
     let listeners = this.typedListeners.get(type);
     if (!listeners) {
       listeners = new Set();
@@ -144,7 +141,7 @@ export class EventQueue {
    */
   once<T extends AgentEvent>(
     type: T['type'],
-    timeout?: number
+    timeout?: number,
   ): Promise<EventEnvelope & { event: T }> {
     return new Promise((resolve, reject) => {
       let timeoutId: ReturnType<typeof setTimeout> | undefined;
@@ -196,9 +193,7 @@ export class EventQueue {
    * @returns Array of event envelopes for the submission
    */
   getEventsForSubmission(submissionId: SubmissionId): EventEnvelope[] {
-    return this.recentEvents.filter(
-      (envelope) => envelope.submissionId === submissionId
-    );
+    return this.recentEvents.filter((envelope) => envelope.submissionId === submissionId);
   }
 
   /**

@@ -86,10 +86,10 @@ function compilePattern(pattern: string): RegExp {
   // Remove leading and trailing slashes for processing
   let cleanPattern = pattern;
   if (isAnchored) {
-    cleanPattern = cleanPattern.slice(1);  // Remove leading /
+    cleanPattern = cleanPattern.slice(1); // Remove leading /
   }
   if (cleanPattern.endsWith('/')) {
-    cleanPattern = cleanPattern.slice(0, -1);  // Remove trailing /
+    cleanPattern = cleanPattern.slice(0, -1); // Remove trailing /
   }
 
   // Convert gitignore pattern to regex, processing glob patterns before escaping
@@ -111,7 +111,7 @@ function compilePattern(pattern: string): RegExp {
   if (cleanPattern.startsWith('**/')) {
     // The pattern can match at root level or at any subdirectory
     // (.*/)? matches optional path prefix, then the rest of the pattern
-    regexStr = '(.*/)?' + regexStr.slice(4);  // slice(4) removes the '.*/' from regex
+    regexStr = '(.*/)?' + regexStr.slice(4); // slice(4) removes the '.*/' from regex
   } else if (cleanPattern.startsWith('**')) {
     regexStr = `^${regexStr}`;
   } else if (!isAnchored) {
@@ -348,7 +348,7 @@ export class IgnoreManager {
    * Filter a list of paths, removing ignored ones.
    */
   filterPaths(paths: string[]): string[] {
-    return paths.filter(path => !this.shouldIgnore(path));
+    return paths.filter((path) => !this.shouldIgnore(path));
   }
 
   /**

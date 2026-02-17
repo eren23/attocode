@@ -36,10 +36,7 @@ import type {
   OpenTaskSummary,
 } from './types.js';
 
-import {
-  buildConfig,
-  isFeatureEnabled,
-} from './defaults.js';
+import { buildConfig, isFeatureEnabled } from './defaults.js';
 
 import {
   ModeManager,
@@ -49,10 +46,7 @@ import {
   type AgentMode,
 } from './modes.js';
 
-import {
-  createLSPFileTools,
-  type LSPFileToolsConfig,
-} from './agent-tools/index.js';
+import { createLSPFileTools, type LSPFileToolsConfig } from './agent-tools/index.js';
 
 import {
   HookManager,
@@ -133,9 +127,7 @@ import { getModelContextLength } from './integrations/utilities/openrouter-prici
 import { createComponentLogger } from './integrations/utilities/logger.js';
 
 // Spawn agent tools type for LLM-driven subagent delegation
-import {
-  type SpawnConstraints,
-} from './tools/agent.js';
+import { type SpawnConstraints } from './tools/agent.js';
 
 // =============================================================================
 // PRODUCTION AGENT
@@ -154,7 +146,12 @@ import {
   extractToolFilePath,
   groupToolCallsIntoBatches,
 } from './core/index.js';
-export { PARALLELIZABLE_TOOLS, CONDITIONALLY_PARALLEL_TOOLS, extractToolFilePath, groupToolCallsIntoBatches };
+export {
+  PARALLELIZABLE_TOOLS,
+  CONDITIONALLY_PARALLEL_TOOLS,
+  extractToolFilePath,
+  groupToolCallsIntoBatches,
+};
 
 // Extracted core modules (Phase 2.1 — thin orchestrator delegates)
 import {
@@ -168,10 +165,16 @@ import { type AgentStateMachine } from './core/agent-state-machine.js';
 import { detectIncompleteActionResponse } from './core/completion-analyzer.js';
 
 // Feature initialization (extracted from initializeFeatures method)
-import { initializeFeatures as doInitializeFeatures, type AgentInternals } from './agent/feature-initializer.js';
+import {
+  initializeFeatures as doInitializeFeatures,
+  type AgentInternals,
+} from './agent/feature-initializer.js';
 
 // Message builder (extracted from buildMessages method)
-import { buildMessages as doBuildMessages, type MessageBuilderDeps } from './agent/message-builder.js';
+import {
+  buildMessages as doBuildMessages,
+  type MessageBuilderDeps,
+} from './agent/message-builder.js';
 
 // Session/checkpoint/file-change API (extracted from ProductionAgent methods)
 import {
@@ -238,7 +241,9 @@ export class ProductionAgent {
   private swarmOrchestrator: SwarmOrchestrator | null = null;
   private workLog: WorkLog | null = null;
   private verificationGate: VerificationGate | null = null;
-  private typeCheckerState: import('./integrations/safety/type-checker.js').TypeCheckerState | null = null;
+  private typeCheckerState:
+    | import('./integrations/safety/type-checker.js').TypeCheckerState
+    | null = null;
 
   // Phase 2-4 integration modules
   private injectionBudget: InjectionBudgetManager | null = null;
@@ -252,7 +257,10 @@ export class ProductionAgent {
 
   // Duplicate spawn prevention - tracks recently spawned tasks to prevent doom loops
   // Map<taskKey, { timestamp: number; result: string; queuedChanges: number }>
-  private spawnedTasks = new Map<string, { timestamp: number; result: string; queuedChanges: number }>();
+  private spawnedTasks = new Map<
+    string,
+    { timestamp: number; result: string; queuedChanges: number }
+  >();
   // SPAWN_DEDUP_WINDOW_MS moved to core/subagent-spawner.ts
 
   // Parent iteration tracking for total budget calculation
@@ -309,7 +317,8 @@ export class ProductionAgent {
     this.provider = userConfig.provider;
 
     // Set unique agent ID (passed from spawnAgent for subagents, auto-generated for parents)
-    this.agentId = userConfig.agentId || `agent-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+    this.agentId =
+      userConfig.agentId || `agent-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 
     // Initialize tool registry
     this.tools = new Map();
@@ -387,9 +396,8 @@ export class ProductionAgent {
       return;
     }
 
-    const trackerConfig = typeof this.config.fileChangeTracker === 'object'
-      ? this.config.fileChangeTracker
-      : {};
+    const trackerConfig =
+      typeof this.config.fileChangeTracker === 'object' ? this.config.fileChangeTracker : {};
 
     this.fileChangeTracker = createFileChangeTracker(db, sessionId, {
       enabled: true,
@@ -429,9 +437,11 @@ export class ProductionAgent {
     const startTime = Date.now();
 
     // Create cancellation context if enabled
-    const cancellationConfig = isFeatureEnabled(this.config.cancellation) ? this.config.cancellation : null;
+    const cancellationConfig = isFeatureEnabled(this.config.cancellation)
+      ? this.config.cancellation
+      : null;
     const cancellationToken = this.cancellation?.createContext(
-      cancellationConfig?.defaultTimeout || undefined
+      cancellationConfig?.defaultTimeout || undefined,
     );
 
     // Start tracing
@@ -454,7 +464,12 @@ export class ProductionAgent {
       if (this.swarmOrchestrator) {
         sessionMetadata.swarm = true;
       }
-      await this.traceCollector?.startSession(traceSessionId, task, this.config.model || 'default', sessionMetadata);
+      await this.traceCollector?.startSession(
+        traceSessionId,
+        task,
+        this.config.model || 'default',
+        sessionMetadata,
+      );
     }
 
     try {
@@ -517,11 +532,10 @@ export class ProductionAgent {
       }
 
       // Get final response - find the LAST assistant message (not just check if last message is assistant)
-      const assistantMessages = this.state.messages.filter(m => m.role === 'assistant');
+      const assistantMessages = this.state.messages.filter((m) => m.role === 'assistant');
       const lastAssistantMessage = assistantMessages[assistantMessages.length - 1];
-      const response = typeof lastAssistantMessage?.content === 'string'
-        ? lastAssistantMessage.content
-        : '';
+      const response =
+        typeof lastAssistantMessage?.content === 'string' ? lastAssistantMessage.content : '';
 
       // Final guardrail: never mark a run successful if the final answer is "I'll do X".
       if (runSuccess && detectIncompleteActionResponse(response)) {
@@ -618,13 +632,21 @@ export class ProductionAgent {
         await this.traceCollector.endTask(
           runSuccess
             ? { success: true, output: response }
-            : { success: false, failureReason: runFailureReason ?? 'Task failed', output: response },
+            : {
+                success: false,
+                failureReason: runFailureReason ?? 'Task failed',
+                output: response,
+              },
         );
       } else if (this.traceCollector?.isSessionActive()) {
         await this.traceCollector.endSession(
           runSuccess
             ? { success: true, output: response }
-            : { success: false, failureReason: runFailureReason ?? 'Task failed', output: response },
+            : {
+                success: false,
+                failureReason: runFailureReason ?? 'Task failed',
+                output: response,
+              },
         );
       }
 
@@ -639,14 +661,23 @@ export class ProductionAgent {
         const cleanupDuration = Date.now() - cleanupStart;
 
         this.emit({ type: 'cancellation.completed', cleanupDuration });
-        this.observability?.logger?.info('Agent cancelled', { reason: error.message, cleanupDuration });
+        this.observability?.logger?.info('Agent cancelled', {
+          reason: error.message,
+          cleanupDuration,
+        });
         this.state.metrics.cancelCount = (this.state.metrics.cancelCount ?? 0) + 1;
 
         // Lesson 26: End trace capture on cancellation
         if (this.traceCollector?.isTaskActive()) {
-          await this.traceCollector.endTask({ success: false, failureReason: `Cancelled: ${error.message}` });
+          await this.traceCollector.endTask({
+            success: false,
+            failureReason: `Cancelled: ${error.message}`,
+          });
         } else if (this.traceCollector?.isSessionActive()) {
-          await this.traceCollector.endSession({ success: false, failureReason: `Cancelled: ${error.message}` });
+          await this.traceCollector.endSession({
+            success: false,
+            failureReason: `Cancelled: ${error.message}`,
+          });
         }
 
         this.emit({
@@ -684,8 +715,8 @@ export class ProductionAgent {
       this.emit({ type: 'error', error: error.message });
       this.observability?.logger?.error('Agent failed', { error: error.message });
       const completionReason = error.message.includes('failed to complete requested action')
-        ? 'incomplete_action' as const
-        : 'error' as const;
+        ? ('incomplete_action' as const)
+        : ('error' as const);
 
       // Lesson 26: End trace capture on error
       if (this.traceCollector?.isTaskActive()) {
@@ -773,7 +804,7 @@ export class ProductionAgent {
     this.observability?.logger?.info('Starting swarm mode — decomposing task into subtasks...');
 
     // Forward swarm events to the main agent event system
-    const unsubSwarm = this.swarmOrchestrator.subscribe(event => {
+    const unsubSwarm = this.swarmOrchestrator.subscribe((event) => {
       // Forward as a generic agent event for TUI display
       this.emit(event as unknown as import('./types.js').AgentEvent);
     });
@@ -803,7 +834,7 @@ export class ProductionAgent {
       const topChunks = chunks
         .sort((a, b) => b.importance - a.importance)
         .slice(0, 100)
-        .map(c => ({
+        .map((c) => ({
           filePath: c.filePath,
           tokenCount: c.tokenCount,
           importance: c.importance,
@@ -852,7 +883,7 @@ export class ProductionAgent {
     };
 
     // Write observability snapshots to swarm-live/ on relevant events
-    const unsubSnapshots = this.swarmOrchestrator.subscribe(event => {
+    const unsubSnapshots = this.swarmOrchestrator.subscribe((event) => {
       // Write codemap snapshot when tasks are loaded.
       if (event.type === 'swarm.tasks.loaded' && this.codebaseContext) {
         try {
@@ -875,11 +906,14 @@ export class ProductionAgent {
       }
 
       // Write blackboard.json on wave completion or task completion
-      if ((event.type === 'swarm.wave.complete' || event.type === 'swarm.task.completed') && this.blackboard) {
+      if (
+        (event.type === 'swarm.wave.complete' || event.type === 'swarm.task.completed') &&
+        this.blackboard
+      ) {
         try {
           const findings = this.blackboard.getAllFindings();
           bridge.writeBlackboardSnapshot({
-            findings: findings.map(f => ({
+            findings: findings.map((f) => ({
               id: f.id ?? '',
               topic: f.topic ?? '',
               type: f.type ?? '',
@@ -916,7 +950,7 @@ export class ProductionAgent {
     const traceCollector = this.traceCollector;
     let unsubTrace: (() => void) | undefined;
     if (traceCollector) {
-      unsubTrace = this.swarmOrchestrator.subscribe(event => {
+      unsubTrace = this.swarmOrchestrator.subscribe((event) => {
         switch (event.type) {
           case 'swarm.start':
             traceCollector.record({
@@ -928,14 +962,14 @@ export class ProductionAgent {
             traceCollector.record({
               type: 'swarm.decomposition',
               data: {
-                tasks: event.tasks.map(t => ({
+                tasks: event.tasks.map((t) => ({
                   id: t.id,
                   description: t.description.slice(0, 200),
                   type: t.type,
                   wave: t.wave,
                   deps: t.dependencies,
                 })),
-                totalWaves: Math.max(...event.tasks.map(t => t.wave), 0) + 1,
+                totalWaves: Math.max(...event.tasks.map((t) => t.wave), 0) + 1,
               },
             });
             break;
@@ -1034,7 +1068,12 @@ export class ProductionAgent {
           case 'swarm.orchestrator.llm':
             traceCollector.record({
               type: 'swarm.orchestrator.llm',
-              data: { model: event.model, purpose: event.purpose, tokens: event.tokens, cost: event.cost },
+              data: {
+                model: event.model,
+                purpose: event.purpose,
+                tokens: event.tokens,
+                cost: event.cost,
+              },
             });
             break;
           case 'swarm.wave.allFailed':
@@ -1114,7 +1153,9 @@ export class ProductionAgent {
   /**
    * Execute a task directly without planning (delegates to core/execution-loop).
    */
-  private async executeDirectly(task: string): Promise<Awaited<ReturnType<typeof coreExecuteDirectly>>> {
+  private async executeDirectly(
+    task: string,
+  ): Promise<Awaited<ReturnType<typeof coreExecuteDirectly>>> {
     const messages = await this.buildMessages(task);
     const ctx = this.buildContext();
     const mutators = this.buildMutators();
@@ -1137,37 +1178,65 @@ export class ProductionAgent {
 
   private buildContext(): import('./core/types.js').AgentContext {
     return {
-      config: this.config, agentId: this.agentId, provider: this.provider,
-      tools: this.tools, state: this.state,
-      modeManager: this.modeManager, pendingPlanManager: this.pendingPlanManager,
-      hooks: this.hooks, economics: this.economics, cancellation: this.cancellation,
-      resourceManager: this.resourceManager, safety: this.safety,
-      observability: this.observability, contextEngineering: this.contextEngineering,
-      traceCollector: this.traceCollector, executionPolicy: this.executionPolicy,
-      routing: this.routing, planning: this.planning, memory: this.memory,
-      react: this.react, blackboard: this.blackboard, fileCache: this.fileCache,
-      budgetPool: this.budgetPool, taskManager: this.taskManager, store: this.store,
-      codebaseContext: this.codebaseContext, learningStore: this.learningStore,
-      compactor: this.compactor, autoCompactionManager: this.autoCompactionManager,
-      workLog: this.workLog, verificationGate: this.verificationGate,
-      agentRegistry: this.agentRegistry, toolRecommendation: this.toolRecommendation,
-      selfImprovement: this.selfImprovement, subagentOutputStore: this.subagentOutputStore,
-      autoCheckpointManager: this.autoCheckpointManager, injectionBudget: this.injectionBudget,
-      skillManager: this.skillManager, semanticCache: this.semanticCache,
-      lspManager: this.lspManager, threadManager: this.threadManager,
-      interactivePlanner: this.interactivePlanner, recursiveContext: this.recursiveContext,
-      fileChangeTracker: this.fileChangeTracker, typeCheckerState: this.typeCheckerState,
+      config: this.config,
+      agentId: this.agentId,
+      provider: this.provider,
+      tools: this.tools,
+      state: this.state,
+      modeManager: this.modeManager,
+      pendingPlanManager: this.pendingPlanManager,
+      hooks: this.hooks,
+      economics: this.economics,
+      cancellation: this.cancellation,
+      resourceManager: this.resourceManager,
+      safety: this.safety,
+      observability: this.observability,
+      contextEngineering: this.contextEngineering,
+      traceCollector: this.traceCollector,
+      executionPolicy: this.executionPolicy,
+      routing: this.routing,
+      planning: this.planning,
+      memory: this.memory,
+      react: this.react,
+      blackboard: this.blackboard,
+      fileCache: this.fileCache,
+      budgetPool: this.budgetPool,
+      taskManager: this.taskManager,
+      store: this.store,
+      codebaseContext: this.codebaseContext,
+      learningStore: this.learningStore,
+      compactor: this.compactor,
+      autoCompactionManager: this.autoCompactionManager,
+      workLog: this.workLog,
+      verificationGate: this.verificationGate,
+      agentRegistry: this.agentRegistry,
+      toolRecommendation: this.toolRecommendation,
+      selfImprovement: this.selfImprovement,
+      subagentOutputStore: this.subagentOutputStore,
+      autoCheckpointManager: this.autoCheckpointManager,
+      injectionBudget: this.injectionBudget,
+      skillManager: this.skillManager,
+      semanticCache: this.semanticCache,
+      lspManager: this.lspManager,
+      threadManager: this.threadManager,
+      interactivePlanner: this.interactivePlanner,
+      recursiveContext: this.recursiveContext,
+      fileChangeTracker: this.fileChangeTracker,
+      typeCheckerState: this.typeCheckerState,
       capabilitiesRegistry: this.capabilitiesRegistry,
-      rules: this.rules, stateMachine: this.stateMachine,
+      rules: this.rules,
+      stateMachine: this.stateMachine,
       lastComplexityAssessment: this.lastComplexityAssessment,
       cacheableSystemBlocks: this.cacheableSystemBlocks,
       parentIterations: this.parentIterations,
       externalCancellationToken: this.externalCancellationToken,
-      wrapupRequested: this.wrapupRequested, wrapupReason: this.wrapupReason,
+      wrapupRequested: this.wrapupRequested,
+      wrapupReason: this.wrapupReason,
       compactionPending: this.compactionPending,
       sharedContextState: this._sharedContextState,
       sharedEconomicsState: this._sharedEconomicsState,
-      spawnedTasks: this.spawnedTasks, toolResolver: this.toolResolver,
+      spawnedTasks: this.spawnedTasks,
+      toolResolver: this.toolResolver,
       emit: (event) => this.emit(event),
       addTool: (tool) => this.addTool(tool),
       getMaxContextTokens: () => this.getMaxContextTokens(),
@@ -1177,17 +1246,30 @@ export class ProductionAgent {
 
   private buildMutators(): import('./core/types.js').AgentContextMutators {
     return {
-      setBudgetPool: (pool) => { this.budgetPool = pool; },
-      setCacheableSystemBlocks: (blocks) => { this.cacheableSystemBlocks = blocks; },
-      setCompactionPending: (pending) => { this.compactionPending = pending; },
-      setWrapupRequested: (requested) => { this.wrapupRequested = requested; },
-      setLastComplexityAssessment: (a) => { this.lastComplexityAssessment = a; },
-      setExternalCancellationToken: (t) => { this.externalCancellationToken = t; },
+      setBudgetPool: (pool) => {
+        this.budgetPool = pool;
+      },
+      setCacheableSystemBlocks: (blocks) => {
+        this.cacheableSystemBlocks = blocks;
+      },
+      setCompactionPending: (pending) => {
+        this.compactionPending = pending;
+      },
+      setWrapupRequested: (requested) => {
+        this.wrapupRequested = requested;
+      },
+      setLastComplexityAssessment: (a) => {
+        this.lastComplexityAssessment = a;
+      },
+      setExternalCancellationToken: (t) => {
+        this.externalCancellationToken = t;
+      },
     };
   }
 
   private createSubAgentFactory(): import('./core/types.js').SubAgentFactory {
-    return (config) => new ProductionAgent(config) as unknown as import('./core/types.js').SubAgentInstance;
+    return (config) =>
+      new ProductionAgent(config) as unknown as import('./core/types.js').SubAgentInstance;
   }
 
   /**
@@ -1233,7 +1315,10 @@ export class ProductionAgent {
    * Uses LSP-enhanced selection when available to boost related files.
    * Returns empty result if analysis hasn't been run yet.
    */
-  private selectRelevantCodeSync(task: string, maxTokens: number): {
+  private selectRelevantCodeSync(
+    task: string,
+    maxTokens: number,
+  ): {
     chunks: Array<{ filePath: string; content: string; tokenCount: number; importance: number }>;
     totalTokens: number;
     lspBoostedFiles?: string[];
@@ -1316,7 +1401,12 @@ export class ProductionAgent {
     // Sort by score and select within budget
     scored.sort((a, b) => b.score - a.score);
 
-    const selected: Array<{ filePath: string; content: string; tokenCount: number; importance: number }> = [];
+    const selected: Array<{
+      filePath: string;
+      content: string;
+      tokenCount: number;
+      importance: number;
+    }> = [];
     let totalTokens = 0;
     const boostedFiles: string[] = [];
 
@@ -1361,7 +1451,6 @@ export class ProductionAgent {
     this.hooks?.emit(event);
   }
 
-
   /**
    * Update memory statistics.
    * Memory stats are retrieved via memory manager, not stored in state.
@@ -1404,7 +1493,10 @@ export class ProductionAgent {
    * Get shared state stats for TUI visibility.
    * Returns null when not in a swarm context.
    */
-  getSharedStats(): { context: { failures: number; references: number }; economics: { fingerprints: number; globalLoops: string[] } } | null {
+  getSharedStats(): {
+    context: { failures: number; references: number };
+    economics: { fingerprints: number; globalLoops: string[] };
+  } | null {
     if (!this._sharedContextState) return null;
     return {
       context: this._sharedContextState.getStats(),
@@ -1509,7 +1601,9 @@ export class ProductionAgent {
    * Undo the last change to a specific file.
    * Returns null if file change tracking is not enabled.
    */
-  async undoLastFileChange(filePath: string): Promise<import('./integrations/index.js').UndoResult | null> {
+  async undoLastFileChange(
+    filePath: string,
+  ): Promise<import('./integrations/index.js').UndoResult | null> {
     return doUndoLastFileChange(this as unknown as SessionApiDeps, filePath);
   }
 
@@ -1621,13 +1715,9 @@ export class ProductionAgent {
     let savedChars = 0;
     const preservedExpensiveIndexes = this.state.messages
       .map((msg, index) => ({ msg, index }))
-      .filter(({ msg }) =>
-        msg.role === 'tool' && msg.metadata?.preserveFromCompaction === true
-      )
+      .filter(({ msg }) => msg.role === 'tool' && msg.metadata?.preserveFromCompaction === true)
       .map(({ index }) => index);
-    const preserveSet = new Set(
-      preservedExpensiveIndexes.slice(-MAX_PRESERVED_EXPENSIVE_RESULTS)
-    );
+    const preserveSet = new Set(preservedExpensiveIndexes.slice(-MAX_PRESERVED_EXPENSIVE_RESULTS));
 
     for (let i = 0; i < this.state.messages.length; i++) {
       const msg = this.state.messages[i];
@@ -1644,7 +1734,10 @@ export class ProductionAgent {
     }
 
     if (compactedCount > 0 && process.env.DEBUG) {
-      log.debug('Compacted tool outputs', { compactedCount, savedTokens: Math.round(savedChars / 4) });
+      log.debug('Compacted tool outputs', {
+        compactedCount,
+        savedTokens: Math.round(savedChars / 4),
+      });
     }
   }
 
@@ -1674,7 +1767,9 @@ export class ProductionAgent {
    * Returns null when no explicit artifact requirement is detected.
    */
   private extractRequestedArtifact(task: string): string | null {
-    const markdownArtifactMatch = task.match(/(?:write|save|create)[^.\n]{0,120}\b([A-Za-z0-9._/-]+\.md)\b/i);
+    const markdownArtifactMatch = task.match(
+      /(?:write|save|create)[^.\n]{0,120}\b([A-Za-z0-9._/-]+\.md)\b/i,
+    );
     return markdownArtifactMatch?.[1] ?? null;
   }
 
@@ -1683,14 +1778,14 @@ export class ProductionAgent {
    */
   private isRequestedArtifactMissing(
     requestedArtifact: string | null,
-    executedToolNames: Set<string>
+    executedToolNames: Set<string>,
   ): boolean {
     if (!requestedArtifact) {
       return false;
     }
 
     const artifactWriteTools = ['write_file', 'edit_file', 'apply_patch', 'append_file'];
-    return !artifactWriteTools.some(toolName => executedToolNames.has(toolName));
+    return !artifactWriteTools.some((toolName) => executedToolNames.has(toolName));
   }
 
   private getOpenTasksSummary(): OpenTaskSummary | undefined {
@@ -1698,17 +1793,20 @@ export class ProductionAgent {
       return undefined;
     }
     const tasks = this.taskManager.list();
-    const pending = tasks.filter(t => t.status === 'pending').length;
-    const inProgress = tasks.filter(t => t.status === 'in_progress').length;
-    const blocked = tasks.filter(t => t.status === 'pending' && this.taskManager?.isBlocked(t.id)).length;
+    const pending = tasks.filter((t) => t.status === 'pending').length;
+    const inProgress = tasks.filter((t) => t.status === 'in_progress').length;
+    const blocked = tasks.filter(
+      (t) => t.status === 'pending' && this.taskManager?.isBlocked(t.id),
+    ).length;
     return { pending, inProgress, blocked };
   }
 
   private reconcileStaleTasks(reason: string): void {
     if (!this.taskManager) return;
-    const staleAfterMs = typeof this.config.resilience === 'object'
-      ? (this.config.resilience.taskLeaseStaleMs ?? 5 * 60 * 1000)
-      : 5 * 60 * 1000;
+    const staleAfterMs =
+      typeof this.config.resilience === 'object'
+        ? (this.config.resilience.taskLeaseStaleMs ?? 5 * 60 * 1000)
+        : 5 * 60 * 1000;
     const recovered = this.taskManager.reconcileStaleInProgress({
       staleAfterMs,
       reason,
@@ -1741,7 +1839,10 @@ export class ProductionAgent {
       throw new Error('Multi-agent not enabled. Enable it in config to use runWithTeam()');
     }
 
-    this.observability?.logger?.info('Running with team', { task: task.goal, roles: roles.map(r => r.name) });
+    this.observability?.logger?.info('Running with team', {
+      task: task.goal,
+      roles: roles.map((r) => r.name),
+    });
 
     // Register roles if not already registered
     for (const role of roles) {
@@ -1749,19 +1850,27 @@ export class ProductionAgent {
     }
 
     // Set up event forwarding (unsubscribe after operation to prevent memory leaks)
-    const unsubMultiAgent = this.multiAgent.on(event => {
+    const unsubMultiAgent = this.multiAgent.on((event) => {
       switch (event.type) {
         case 'agent.spawn':
           this.emit({ type: 'multiagent.spawn', agentId: event.agentId, role: event.role });
           break;
         case 'agent.complete':
-          this.emit({ type: 'multiagent.complete', agentId: event.agentId, success: event.result.success });
+          this.emit({
+            type: 'multiagent.complete',
+            agentId: event.agentId,
+            success: event.result.success,
+          });
           break;
         case 'consensus.start':
           this.emit({ type: 'consensus.start', strategy: event.strategy });
           break;
         case 'consensus.reached':
-          this.emit({ type: 'consensus.reached', agreed: event.decision.agreed, result: event.decision.result });
+          this.emit({
+            type: 'consensus.reached',
+            agreed: event.decision.agreed,
+            result: event.decision.result,
+          });
           break;
       }
     });
@@ -1769,9 +1878,10 @@ export class ProductionAgent {
     try {
       const result = await this.multiAgent.runWithTeam(task, {
         roles,
-        consensusStrategy: this.config.multiAgent && isFeatureEnabled(this.config.multiAgent)
-          ? this.config.multiAgent.consensusStrategy || 'voting'
-          : 'voting',
+        consensusStrategy:
+          this.config.multiAgent && isFeatureEnabled(this.config.multiAgent)
+            ? this.config.multiAgent.consensusStrategy || 'voting'
+            : 'voting',
         communicationMode: 'broadcast',
       });
 
@@ -1807,16 +1917,25 @@ export class ProductionAgent {
     this.observability?.logger?.info('Running with ReAct', { task });
 
     // Set up event forwarding (unsubscribe after operation to prevent memory leaks)
-    const unsubReact = this.react.on(event => {
+    const unsubReact = this.react.on((event) => {
       switch (event.type) {
         case 'react.thought':
           this.emit({ type: 'react.thought', step: event.step, thought: event.thought });
           break;
         case 'react.action':
-          this.emit({ type: 'react.action', step: event.step, action: event.action.tool, input: event.action.input });
+          this.emit({
+            type: 'react.action',
+            step: event.step,
+            action: event.action.tool,
+            input: event.action.input,
+          });
           break;
         case 'react.observation':
-          this.emit({ type: 'react.observation', step: event.step, observation: event.observation });
+          this.emit({
+            type: 'react.observation',
+            step: event.step,
+            observation: event.observation,
+          });
           break;
         case 'react.answer':
           this.emit({ type: 'react.answer', answer: event.answer });
@@ -1929,7 +2048,7 @@ export class ProductionAgent {
       percentUsed: Math.max(
         (usage.tokens / budget.maxTokens) * 100,
         (usage.cost / budget.maxCost) * 100,
-        (usage.duration / budget.maxDuration) * 100
+        (usage.duration / budget.maxDuration) * 100,
       ),
     };
   }
@@ -1992,7 +2111,9 @@ export class ProductionAgent {
    */
   createCheckpoint(label?: string): Checkpoint {
     if (!this.threadManager) {
-      throw new Error('Thread management not enabled. Enable it in config to use createCheckpoint()');
+      throw new Error(
+        'Thread management not enabled. Enable it in config to use createCheckpoint()',
+      );
     }
 
     // CRITICAL: Sync current state.messages to threadManager before checkpoint
@@ -2220,16 +2341,30 @@ export class ProductionAgent {
   /**
    * Spawn a subagent (delegates to core/subagent-spawner).
    */
-  async spawnAgent(agentName: string, task: string, constraints?: SpawnConstraints): Promise<SpawnResult> {
-    return coreSpawnAgent(agentName, task, this.buildContext(), this.createSubAgentFactory(), constraints);
+  async spawnAgent(
+    agentName: string,
+    task: string,
+    constraints?: SpawnConstraints,
+  ): Promise<SpawnResult> {
+    return coreSpawnAgent(
+      agentName,
+      task,
+      this.buildContext(),
+      this.createSubAgentFactory(),
+      constraints,
+    );
   }
-
 
   /**
    * Spawn multiple subagents in parallel (delegates to core/subagent-spawner).
    */
   async spawnAgentsParallel(tasks: Array<{ agent: string; task: string }>): Promise<SpawnResult[]> {
-    return coreSpawnAgentsParallel(tasks, this.buildContext(), this.buildMutators(), this.createSubAgentFactory());
+    return coreSpawnAgentsParallel(
+      tasks,
+      this.buildContext(),
+      this.buildMutators(),
+      this.createSubAgentFactory(),
+    );
   }
 
   /**
@@ -2281,9 +2416,12 @@ export class ProductionAgent {
 
     // Build agent descriptions for LLM
     const agents = this.agentRegistry.getAllAgents();
-    const agentDescriptions = agents.map(a =>
-      `- ${a.name}: ${a.description}${a.capabilities?.length ? ` (can: ${a.capabilities.join(', ')})` : ''}`
-    ).join('\n');
+    const agentDescriptions = agents
+      .map(
+        (a) =>
+          `- ${a.name}: ${a.description}${a.capabilities?.length ? ` (can: ${a.capabilities.join(', ')})` : ''}`,
+      )
+      .join('\n');
 
     // Ask LLM to classify the task
     const classificationPrompt = `You are a task routing assistant. Given a user task, determine which specialized agent (if any) should handle it.
@@ -2305,12 +2443,18 @@ Respond in JSON format:
 If the task is a simple question or doesn't need specialized handling, set bestAgent to null.`;
 
     try {
-      const response = await this.provider.chat([
-        { role: 'system', content: 'You are a task routing classifier. Always respond with valid JSON.' },
-        { role: 'user', content: classificationPrompt },
-      ], {
-        model: this.config.model,
-      });
+      const response = await this.provider.chat(
+        [
+          {
+            role: 'system',
+            content: 'You are a task routing classifier. Always respond with valid JSON.',
+          },
+          { role: 'user', content: classificationPrompt },
+        ],
+        {
+          model: this.config.model,
+        },
+      );
 
       // Parse the JSON response
       const jsonMatch = response.content.match(/\{[\s\S]*\}/);
@@ -2352,7 +2496,7 @@ If the task is a simple question or doesn't need specialized handling, set bestA
       for (let i = 0; i < (classification.alternatives || []).length; i++) {
         const altName = classification.alternatives[i];
         const altAgent = this.agentRegistry.getAgent(altName);
-        if (altAgent && !suggestions.find(s => s.agent.name === altName)) {
+        if (altAgent && !suggestions.find((s) => s.agent.name === altName)) {
           suggestions.push({
             agent: altAgent,
             confidence: Math.max(0.3, classification.confidence - 0.2 - i * 0.1),
@@ -2393,7 +2537,7 @@ If the task is a simple question or doesn't need specialized handling, set bestA
     options: {
       confidenceThreshold?: number;
       confirmDelegate?: (agent: LoadedAgent, reason: string) => Promise<boolean>;
-    } = {}
+    } = {},
   ): Promise<AgentResult | SpawnResult> {
     const { confidenceThreshold = 0.8, confirmDelegate } = options;
 
@@ -2407,7 +2551,7 @@ If the task is a simple question or doesn't need specialized handling, set bestA
       // If confirmation callback provided, ask user
       if (confirmDelegate && topSuggestion) {
         const confirmed = await this.withPausedDuration(() =>
-          confirmDelegate(topSuggestion.agent, topSuggestion.reason)
+          confirmDelegate(topSuggestion.agent, topSuggestion.reason),
         );
         if (!confirmed) {
           // User declined, run with main agent
@@ -2580,7 +2724,7 @@ If the task is a simple question or doesn't need specialized handling, set bestA
     }
 
     this.observability?.logger?.info('LSP file tools enabled', {
-      tools: lspTools.map(t => t.name),
+      tools: lspTools.map((t) => t.name),
     });
   }
 
@@ -2602,22 +2746,34 @@ If the task is a simple question or doesn't need specialized handling, set bestA
   /**
    * Cache an LLM response for a query.
    */
-  async cacheResponse(query: string, response: string, metadata?: Record<string, unknown>): Promise<string | null> {
-    return await this.semanticCache?.set(query, response, metadata) || null;
+  async cacheResponse(
+    query: string,
+    response: string,
+    metadata?: Record<string, unknown>,
+  ): Promise<string | null> {
+    return (await this.semanticCache?.set(query, response, metadata)) || null;
   }
 
   /**
    * Check if a similar query exists in cache (without retrieving).
    */
   async hasCachedQuery(query: string): Promise<boolean> {
-    return await this.semanticCache?.has(query) || false;
+    return (await this.semanticCache?.has(query)) || false;
   }
 
   /**
    * Get cache statistics.
    */
   getCacheStats() {
-    return this.semanticCache?.getStats() || { size: 0, totalHits: 0, avgHits: 0, hitRate: 0, totalQueries: 0 };
+    return (
+      this.semanticCache?.getStats() || {
+        size: 0,
+        totalHits: 0,
+        avgHits: 0,
+        hitRate: 0,
+        totalQueries: 0,
+      }
+    );
   }
 
   /**
@@ -3017,7 +3173,10 @@ If the task is a simple question or doesn't need specialized handling, set bestA
   /**
    * Register an MCP client with the capabilities registry.
    */
-  registerMCPClient(client: { getAllTools(): ToolDefinition[]; isToolLoaded(name: string): boolean }): void {
+  registerMCPClient(client: {
+    getAllTools(): ToolDefinition[];
+    isToolLoaded(name: string): boolean;
+  }): void {
     const registry = this.getCapabilitiesRegistry();
     registry.registerMCPClient(client as any);
   }

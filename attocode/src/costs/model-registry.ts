@@ -13,7 +13,7 @@ const DEFAULT_MODELS: ModelConfig[] = [
     pricing: {
       promptPerMillion: 3.0,
       completionPerMillion: 15.0,
-      cacheReadPerMillion: 0.30,
+      cacheReadPerMillion: 0.3,
       cacheWritePerMillion: 3.75,
     },
     capabilities: {
@@ -29,7 +29,7 @@ const DEFAULT_MODELS: ModelConfig[] = [
     provider: 'anthropic',
     displayName: 'Claude 3.5 Haiku',
     pricing: {
-      promptPerMillion: 0.80,
+      promptPerMillion: 0.8,
       completionPerMillion: 4.0,
       cacheReadPerMillion: 0.08,
       cacheWritePerMillion: 1.0,
@@ -49,7 +49,7 @@ const DEFAULT_MODELS: ModelConfig[] = [
     pricing: {
       promptPerMillion: 15.0,
       completionPerMillion: 75.0,
-      cacheReadPerMillion: 1.50,
+      cacheReadPerMillion: 1.5,
       cacheWritePerMillion: 18.75,
     },
     capabilities: {
@@ -66,7 +66,7 @@ const DEFAULT_MODELS: ModelConfig[] = [
     provider: 'openai',
     displayName: 'GPT-4o',
     pricing: {
-      promptPerMillion: 2.50,
+      promptPerMillion: 2.5,
       completionPerMillion: 10.0,
     },
     capabilities: {
@@ -82,7 +82,7 @@ const DEFAULT_MODELS: ModelConfig[] = [
     displayName: 'GPT-4o Mini',
     pricing: {
       promptPerMillion: 0.15,
-      completionPerMillion: 0.60,
+      completionPerMillion: 0.6,
     },
     capabilities: {
       maxContextTokens: 128000,
@@ -159,7 +159,7 @@ export class ModelRegistry {
    * @returns Array of models from the specified provider
    */
   getModelsByProvider(provider: string): ModelConfig[] {
-    return this.getAllModels().filter(m => m.provider === provider);
+    return this.getAllModels().filter((m) => m.provider === provider);
   }
 
   /**

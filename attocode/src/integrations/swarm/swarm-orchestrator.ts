@@ -22,10 +22,20 @@
  * - swarm-recovery.ts    — Error recovery, resilience, circuit breaker, adaptive stagger
  */
 
-import type { LLMProvider, LLMProviderWithTools, ToolDefinitionSchema } from '../../providers/types.js';
+import type {
+  LLMProvider,
+  LLMProviderWithTools,
+  ToolDefinitionSchema,
+} from '../../providers/types.js';
 import type { AgentRegistry } from '../agents/agent-registry.js';
 import type { SharedBlackboard } from '../agents/shared-blackboard.js';
-import { createSmartDecomposer, parseDecompositionResponse, validateDecomposition, type LLMDecomposeFunction, type SmartDecompositionResult } from '../tasks/smart-decomposer.js';
+import {
+  createSmartDecomposer,
+  parseDecompositionResponse,
+  validateDecomposition,
+  type LLMDecomposeFunction,
+  type SmartDecompositionResult,
+} from '../tasks/smart-decomposer.js';
 import { createResultSynthesizer } from '../agents/result-synthesizer.js';
 import type {
   SwarmConfig,
@@ -48,9 +58,18 @@ import { SwarmWorkerPool, createSwarmWorkerPool, type SpawnAgentFn } from './wor
 import { ModelHealthTracker, selectAlternativeModel } from './model-selector.js';
 import { SwarmStateStore } from './swarm-state-store.js';
 import type { SwarmEvent } from './swarm-events.js';
-import { createSharedContextState, type SharedContextState } from '../../shared/shared-context-state.js';
-import { createSharedEconomicsState, type SharedEconomicsState } from '../../shared/shared-economics-state.js';
-import { createSharedContextEngine, type SharedContextEngine } from '../../shared/context-engine.js';
+import {
+  createSharedContextState,
+  type SharedContextState,
+} from '../../shared/shared-context-state.js';
+import {
+  createSharedEconomicsState,
+  type SharedEconomicsState,
+} from '../../shared/shared-economics-state.js';
+import {
+  createSharedContextEngine,
+  type SharedContextEngine,
+} from '../../shared/context-engine.js';
 import { calculateCost } from '../utilities/openrouter-pricing.js';
 
 // ─── Extracted Module Imports ───────────────────────────────────────────
@@ -76,21 +95,21 @@ import {
   executeWave as executeWaveImpl,
 } from './swarm-execution.js';
 
-import {
-  type SwarmRecoveryState,
-  finalRescuePass,
-  midSwarmReplan,
-} from './swarm-recovery.js';
+import { type SwarmRecoveryState, finalRescuePass, midSwarmReplan } from './swarm-recovery.js';
 
 // ─── Helpers (extracted to break circular dependency) ─────────────────────
 
-import {
+import { repoLooksUnscaffolded, type SwarmEventListener } from './swarm-helpers.js';
+
+// Re-export for backward compatibility
+export {
+  isHollowCompletion,
+  FAILURE_INDICATORS,
+  hasFutureIntentLanguage,
+  BOILERPLATE_INDICATORS,
   repoLooksUnscaffolded,
   type SwarmEventListener,
 } from './swarm-helpers.js';
-
-// Re-export for backward compatibility
-export { isHollowCompletion, FAILURE_INDICATORS, hasFutureIntentLanguage, BOILERPLATE_INDICATORS, repoLooksUnscaffolded, type SwarmEventListener } from './swarm-helpers.js';
 
 // ─── OrchestratorInternals Interface ────────────────────────────────────
 
@@ -286,22 +305,38 @@ export class SwarmOrchestrator {
     // C1: Build LLM decompose function with explicit JSON schema
     const llmDecompose: LLMDecomposeFunction = async (task, context) => {
       // V7: Dynamically build the allowed type list from built-in + user-defined types
-      const builtinTypes = ['research', 'analysis', 'design', 'implement', 'test', 'refactor', 'review', 'document', 'integrate', 'deploy', 'merge'];
-      const customTypes = Object.keys(this.config.taskTypes ?? {}).filter(t => !builtinTypes.includes(t));
+      const builtinTypes = [
+        'research',
+        'analysis',
+        'design',
+        'implement',
+        'test',
+        'refactor',
+        'review',
+        'document',
+        'integrate',
+        'deploy',
+        'merge',
+      ];
+      const customTypes = Object.keys(this.config.taskTypes ?? {}).filter(
+        (t) => !builtinTypes.includes(t),
+      );
       const allTypes = [...builtinTypes, ...customTypes];
-      const typeListStr = allTypes.map(t => `"${t}"`).join(' | ');
+      const typeListStr = allTypes.map((t) => `"${t}"`).join(' | ');
 
       // Build custom type descriptions so the LLM knows when to use them
       let customTypeSection = '';
       if (customTypes.length > 0) {
-        const descriptions = customTypes.map(t => {
-          const cfg = this.config.taskTypes![t];
-          const parts = [`  - "${t}"`];
-          if (cfg.capability) parts.push(`(capability: ${cfg.capability})`);
-          if (cfg.promptTemplate) parts.push(`— uses ${cfg.promptTemplate} workflow`);
-          if (cfg.timeout) parts.push(`— timeout: ${Math.round(cfg.timeout / 60000)}min`);
-          return parts.join(' ');
-        }).join('\n');
+        const descriptions = customTypes
+          .map((t) => {
+            const cfg = this.config.taskTypes![t];
+            const parts = [`  - "${t}"`];
+            if (cfg.capability) parts.push(`(capability: ${cfg.capability})`);
+            if (cfg.promptTemplate) parts.push(`— uses ${cfg.promptTemplate} workflow`);
+            if (cfg.timeout) parts.push(`— timeout: ${Math.round(cfg.timeout / 60000)}min`);
+            return parts.join(' ');
+          })
+          .join('\n');
         customTypeSection = `\n\nCustom task types available:\n${descriptions}\nUse these when their description matches the subtask's purpose.`;
       }
 
@@ -312,7 +347,10 @@ export class SwarmOrchestrator {
         const topFiles = Array.from(map.chunks.values())
           .sort((a, b) => b.importance - a.importance)
           .slice(0, 30)
-          .map(c => `  - ${c.filePath} (${c.type}, ${c.tokenCount} tokens, importance: ${c.importance.toFixed(2)})`);
+          .map(
+            (c) =>
+              `  - ${c.filePath} (${c.type}, ${c.tokenCount} tokens, importance: ${c.importance.toFixed(2)})`,
+          );
 
         codebaseSection = `
 
@@ -418,7 +456,10 @@ Rules:
         const retryResponse = await this.provider.chat(
           [
             { role: 'system', content: systemPrompt },
-            { role: 'user', content: `${task}\n\nIMPORTANT: Your previous attempt was truncated or could not be parsed (${parseError}). Return ONLY a raw JSON object with NO markdown formatting, NO explanation text, NO code fences. The JSON must have a "subtasks" array with at least 2 entries matching the schema above. Keep subtask descriptions concise to avoid truncation.` },
+            {
+              role: 'user',
+              content: `${task}\n\nIMPORTANT: Your previous attempt was truncated or could not be parsed (${parseError}). Return ONLY a raw JSON object with NO markdown formatting, NO explanation text, NO code fences. The JSON must have a "subtasks" array with at least 2 entries matching the schema above. Keep subtask descriptions concise to avoid truncation.`,
+            },
           ],
           {
             model: this.config.orchestratorModel,
@@ -506,11 +547,23 @@ Rules:
   /**
    * Track token usage from an orchestrator LLM call.
    */
-  private trackOrchestratorUsage(response: { usage?: { total_tokens?: number; prompt_tokens?: number; completion_tokens?: number; inputTokens?: number; outputTokens?: number; cost?: number } }, purpose: string): void {
+  private trackOrchestratorUsage(
+    response: {
+      usage?: {
+        total_tokens?: number;
+        prompt_tokens?: number;
+        completion_tokens?: number;
+        inputTokens?: number;
+        outputTokens?: number;
+        cost?: number;
+      };
+    },
+    purpose: string,
+  ): void {
     if (!response.usage) return;
     const input = response.usage.prompt_tokens ?? response.usage.inputTokens ?? 0;
     const output = response.usage.completion_tokens ?? response.usage.outputTokens ?? 0;
-    const tokens = response.usage.total_tokens ?? (input + output);
+    const tokens = response.usage.total_tokens ?? input + output;
     const cost = response.usage.cost ?? calculateCost(this.config.orchestratorModel, input, output);
     this.orchestratorTokens += tokens;
     this.orchestratorCost += cost;
@@ -568,8 +621,10 @@ Rules:
       originalPrompt: this.originalPrompt,
       hasReplanned: this.hasReplanned,
       emit: (event: SwarmEvent) => this.emit(event),
-      trackOrchestratorUsage: (response: any, purpose: string) => this.trackOrchestratorUsage(response, purpose),
-      logDecision: (phase: string, decision: string, reasoning: string) => this.logDecision(phase, decision, reasoning),
+      trackOrchestratorUsage: (response: any, purpose: string) =>
+        this.trackOrchestratorUsage(response, purpose),
+      logDecision: (phase: string, decision: string, reasoning: string) =>
+        this.logDecision(phase, decision, reasoning),
       executeWaves: () => this.executeWavesDelegate(),
       executeWave: (tasks: SwarmTask[]) => this.executeWaveDelegate(tasks),
       finalRescuePass: () => this.finalRescuePassDelegate(),
@@ -613,10 +668,7 @@ Rules:
 
       // V2: Check for resume
       if (this.config.resumeSessionId && this.stateStore) {
-        const resumeResult = await resumeExecution(
-          ctx, task,
-          () => midSwarmReplan(ctx),
-        );
+        const resumeResult = await resumeExecution(ctx, task, () => midSwarmReplan(ctx));
         this.syncFromInternals(ctx);
         if (resumeResult) return resumeResult;
         // null means no checkpoint found, fall through to normal execute
@@ -625,7 +677,11 @@ Rules:
       // Phase 1: Decompose
       this.currentPhase = 'decomposing';
       ctx.currentPhase = 'decomposing';
-      this.emit({ type: 'swarm.phase.progress', phase: 'decomposing', message: 'Decomposing task into subtasks...' });
+      this.emit({
+        type: 'swarm.phase.progress',
+        phase: 'decomposing',
+        message: 'Decomposing task into subtasks...',
+      });
       const decomposeOutcome = await decomposeTask(ctx, task);
       this.syncFromInternals(ctx);
       if (!decomposeOutcome.result) {
@@ -636,8 +692,8 @@ Rules:
 
       // If repository is mostly empty, force a scaffold-first dependency chain
       if (repoLooksUnscaffolded(this.config.facts?.workingDirectory ?? process.cwd())) {
-        const scaffoldTask = decomposition.subtasks.find(st =>
-          /\b(scaffold|bootstrap|initialize|setup|set up|project scaffold)\b/i.test(st.description)
+        const scaffoldTask = decomposition.subtasks.find((st) =>
+          /\b(scaffold|bootstrap|initialize|setup|set up|project scaffold)\b/i.test(st.description),
         );
         if (scaffoldTask) {
           for (const subtask of decomposition.subtasks) {
@@ -649,7 +705,7 @@ Rules:
           this.logDecision(
             'scaffold-first',
             `Repo appears unscaffolded; enforcing scaffold task ${scaffoldTask.id} as prerequisite`,
-            ''
+            '',
           );
         }
       }
@@ -657,12 +713,18 @@ Rules:
       // F5: Validate decomposition
       const validation = validateDecomposition(decomposition);
       if (validation.warnings.length > 0) {
-        this.logDecision('decomposition-validation',
-          `Warnings: ${validation.warnings.join('; ')}`, '');
+        this.logDecision(
+          'decomposition-validation',
+          `Warnings: ${validation.warnings.join('; ')}`,
+          '',
+        );
       }
       if (!validation.valid) {
-        this.logDecision('decomposition-validation',
-          `Invalid decomposition: ${validation.issues.join('; ')}`, 'Retrying...');
+        this.logDecision(
+          'decomposition-validation',
+          `Invalid decomposition: ${validation.issues.join('; ')}`,
+          'Retrying...',
+        );
         const retryOutcome = await decomposeTask(
           ctx,
           `${task}\n\nIMPORTANT: Previous decomposition was invalid: ${validation.issues.join('. ')}. Fix these issues.`,
@@ -670,32 +732,44 @@ Rules:
         this.syncFromInternals(ctx);
         if (!retryOutcome.result) {
           this.currentPhase = 'failed';
-          return buildErrorResult(ctx, `Decomposition validation failed: ${validation.issues.join('; ')}`);
+          return buildErrorResult(
+            ctx,
+            `Decomposition validation failed: ${validation.issues.join('; ')}`,
+          );
         }
         decomposition = retryOutcome.result;
         const retryValidation = validateDecomposition(decomposition);
         if (!retryValidation.valid) {
-          this.logDecision('decomposition-validation',
-            `Retry still invalid: ${retryValidation.issues.join('; ')}`, 'Proceeding anyway');
+          this.logDecision(
+            'decomposition-validation',
+            `Retry still invalid: ${retryValidation.issues.join('; ')}`,
+            'Proceeding anyway',
+          );
         }
       }
 
       // Phase 2: Schedule into waves
       this.currentPhase = 'scheduling';
       ctx.currentPhase = 'scheduling';
-      this.emit({ type: 'swarm.phase.progress', phase: 'scheduling', message: `Scheduling ${decomposition.subtasks.length} subtasks into waves...` });
+      this.emit({
+        type: 'swarm.phase.progress',
+        phase: 'scheduling',
+        message: `Scheduling ${decomposition.subtasks.length} subtasks into waves...`,
+      });
       this.taskQueue.loadFromDecomposition(decomposition, this.config);
 
       // F3: Dynamic orchestrator reserve scaling
       const subtaskCount = decomposition.subtasks.length;
-      const dynamicReserveRatio = Math.min(0.40, Math.max(
-        this.config.orchestratorReserveRatio,
-        subtaskCount * 0.05,
-      ));
+      const dynamicReserveRatio = Math.min(
+        0.4,
+        Math.max(this.config.orchestratorReserveRatio, subtaskCount * 0.05),
+      );
       if (dynamicReserveRatio > this.config.orchestratorReserveRatio) {
-        this.logDecision('budget-scaling',
+        this.logDecision(
+          'budget-scaling',
           `Scaled orchestrator reserve from ${(this.config.orchestratorReserveRatio * 100).toFixed(0)}% to ${(dynamicReserveRatio * 100).toFixed(0)}% for ${subtaskCount} subtasks`,
-          '');
+          '',
+        );
       }
 
       // Foundation task detection
@@ -705,9 +779,10 @@ Rules:
       if (this.config.probeModels !== false) {
         await this.probeModelCapability();
 
-        const probeStrategy = this.config.probeFailureStrategy
-          ?? (this.config.ignoreProbeFailures ? 'warn-and-try' : 'warn-and-try');
-        const uniqueModels = [...new Set(this.config.workers.map(w => w.model))];
+        const probeStrategy =
+          this.config.probeFailureStrategy ??
+          (this.config.ignoreProbeFailures ? 'warn-and-try' : 'warn-and-try');
+        const uniqueModels = [...new Set(this.config.workers.map((w) => w.model))];
         const healthyModels = this.healthTracker.getHealthy(uniqueModels);
 
         if (healthyModels.length === 0 && uniqueModels.length > 0) {
@@ -718,21 +793,32 @@ Rules:
             skipRemainingTasks(ctx, reason);
             const totalTasks = this.taskQueue.getStats().total;
             const abortStats: SwarmExecutionStats = {
-              completedTasks: 0, failedTasks: 0, skippedTasks: totalTasks,
-              totalTasks, totalWaves: 0, totalTokens: 0, totalCost: 0,
+              completedTasks: 0,
+              failedTasks: 0,
+              skippedTasks: totalTasks,
+              totalTasks,
+              totalWaves: 0,
+              totalTokens: 0,
+              totalCost: 0,
               totalDurationMs: Date.now() - this.startTime,
-              qualityRejections: 0, retries: 0,
+              qualityRejections: 0,
+              retries: 0,
               modelUsage: new Map(),
             };
             this.emit({ type: 'swarm.complete', stats: abortStats, errors: this.errors });
             return {
-              success: false, summary: reason,
-              tasks: this.taskQueue.getAllTasks(), stats: abortStats, errors: this.errors,
+              success: false,
+              summary: reason,
+              tasks: this.taskQueue.getAllTasks(),
+              stats: abortStats,
+              errors: this.errors,
             };
           } else {
-            this.logDecision('probe-warning',
+            this.logDecision(
+              'probe-warning',
               `All ${uniqueModels.length} model(s) failed probe — continuing anyway (strategy: warn-and-try)`,
-              'Will abort after first real task failure if model cannot use tools');
+              'Will abort after first real task failure if model cannot use tools',
+            );
             for (const model of uniqueModels) {
               this.healthTracker.recordSuccess(model, 0);
             }
@@ -746,19 +832,29 @@ Rules:
       });
 
       const stats = this.taskQueue.getStats();
-      this.emit({ type: 'swarm.phase.progress', phase: 'scheduling', message: `Scheduled ${stats.total} tasks in ${this.taskQueue.getTotalWaves()} waves` });
+      this.emit({
+        type: 'swarm.phase.progress',
+        phase: 'scheduling',
+        message: `Scheduled ${stats.total} tasks in ${this.taskQueue.getTotalWaves()} waves`,
+      });
 
       // V2: Phase 2.5: Plan execution
       let planPromise: Promise<void> | undefined;
       if (this.config.enablePlanning) {
         this.currentPhase = 'planning';
         ctx.currentPhase = 'planning';
-        this.emit({ type: 'swarm.phase.progress', phase: 'planning', message: 'Creating acceptance criteria...' });
-        planPromise = planExecution(ctx, task, decomposition).then(() => {
-          this.syncFromInternals(ctx);
-        }).catch(err => {
-          this.logDecision('planning', 'Planning failed (non-fatal)', (err as Error).message);
+        this.emit({
+          type: 'swarm.phase.progress',
+          phase: 'planning',
+          message: 'Creating acceptance criteria...',
         });
+        planPromise = planExecution(ctx, task, decomposition)
+          .then(() => {
+            this.syncFromInternals(ctx);
+          })
+          .catch((err) => {
+            this.logDecision('planning', 'Planning failed (non-fatal)', (err as Error).message);
+          });
       }
 
       this.emit({
@@ -823,12 +919,18 @@ Rules:
       saveCheckpoint(ctx, 'final');
 
       const hasArtifacts = (this.artifactInventory?.totalFiles ?? 0) > 0;
-      this.emit({ type: 'swarm.complete', stats: executionStats, errors: this.errors, artifactInventory: this.artifactInventory });
+      this.emit({
+        type: 'swarm.complete',
+        stats: executionStats,
+        errors: this.errors,
+        artifactInventory: this.artifactInventory,
+      });
 
       // Success requires completing at least 70% of tasks
-      const completionRatio = executionStats.totalTasks > 0
-        ? executionStats.completedTasks / executionStats.totalTasks
-        : 0;
+      const completionRatio =
+        executionStats.totalTasks > 0
+          ? executionStats.completedTasks / executionStats.totalTasks
+          : 0;
       const isSuccess = completionRatio >= 0.7;
       const isPartialSuccess = !isSuccess && executionStats.completedTasks > 0;
 
@@ -898,30 +1000,41 @@ Rules:
   // ─── D3: Model Capability Probing ─────────────────────────────────────
 
   private async probeModelCapability(): Promise<void> {
-    const uniqueModels = new Set(this.config.workers.map(w => w.model));
-    this.emit({ type: 'swarm.phase.progress', phase: 'scheduling', message: `Probing ${uniqueModels.size} model(s) for tool-calling capability...` });
+    const uniqueModels = new Set(this.config.workers.map((w) => w.model));
+    this.emit({
+      type: 'swarm.phase.progress',
+      phase: 'scheduling',
+      message: `Probing ${uniqueModels.size} model(s) for tool-calling capability...`,
+    });
 
-    const supportsTools = 'chatWithTools' in this.provider
-      && typeof (this.provider as LLMProviderWithTools).chatWithTools === 'function';
+    const supportsTools =
+      'chatWithTools' in this.provider &&
+      typeof (this.provider as LLMProviderWithTools).chatWithTools === 'function';
 
     if (!supportsTools) {
-      this.logDecision('model-probe', 'Provider does not support chatWithTools — skipping probe', '');
+      this.logDecision(
+        'model-probe',
+        'Provider does not support chatWithTools — skipping probe',
+        '',
+      );
       return;
     }
 
     const providerWithTools = this.provider as LLMProviderWithTools;
-    const probeTools: ToolDefinitionSchema[] = [{
-      type: 'function',
-      function: {
-        name: 'read_file',
-        description: 'Read a file from disk',
-        parameters: {
-          type: 'object',
-          properties: { path: { type: 'string', description: 'File path' } },
-          required: ['path'],
+    const probeTools: ToolDefinitionSchema[] = [
+      {
+        type: 'function',
+        function: {
+          name: 'read_file',
+          description: 'Read a file from disk',
+          parameters: {
+            type: 'object',
+            properties: { path: { type: 'string', description: 'File path' } },
+            required: ['path'],
+          },
         },
       },
-    }];
+    ];
 
     const probeTimeout = this.config.probeTimeoutMs ?? 60_000;
 
@@ -934,7 +1047,10 @@ Rules:
         const response = await Promise.race([
           providerWithTools.chatWithTools(
             [
-              { role: 'system', content: 'You are a test probe. Call the read_file tool with path "package.json".' },
+              {
+                role: 'system',
+                content: 'You are a test probe. Call the read_file tool with path "package.json".',
+              },
               { role: 'user', content: 'Read package.json.' },
             ],
             { model, maxTokens: 200, temperature: 0, tools: probeTools, tool_choice: 'required' },
@@ -946,7 +1062,11 @@ Rules:
 
         if (!hasToolCall) {
           this.healthTracker.markUnhealthy(model);
-          this.logDecision('model-probe', `Model ${model} failed probe (no tool calls)`, 'Marked unhealthy');
+          this.logDecision(
+            'model-probe',
+            `Model ${model} failed probe (no tool calls)`,
+            'Marked unhealthy',
+          );
         } else {
           this.healthTracker.recordSuccess(model, 0);
           this.logDecision('model-probe', `Model ${model} passed probe`, '');

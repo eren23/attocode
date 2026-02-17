@@ -12,10 +12,10 @@ import { logger } from './logger.js';
 // =============================================================================
 
 export interface ModelPricing {
-  prompt: number;      // Cost per token (input)
-  completion: number;  // Cost per token (output)
-  request: number;     // Per-request cost (if any)
-  image: number;       // Cost per image token
+  prompt: number; // Cost per token (input)
+  completion: number; // Cost per token (output)
+  request: number; // Per-request cost (if any)
+  image: number; // Cost per image token
 }
 
 export interface ModelInfo {
@@ -54,8 +54,8 @@ const CACHE_TTL = 3600000; // 1 hour
 // Using Gemini Flash tier pricing as default since it's the default model
 // This prevents massive overestimation when actual pricing can't be fetched
 const DEFAULT_PRICING: ModelPricing = {
-  prompt: 0.000000075,    // $0.075 per million tokens (Gemini Flash tier)
-  completion: 0.0000003,  // $0.30 per million tokens (Gemini Flash tier)
+  prompt: 0.000000075, // $0.075 per million tokens (Gemini Flash tier)
+  completion: 0.0000003, // $0.30 per million tokens (Gemini Flash tier)
   request: 0,
   image: 0,
 };
@@ -86,7 +86,7 @@ export async function fetchOpenRouterModels(): Promise<OpenRouterModelData> {
   try {
     const response = await fetch('https://openrouter.ai/api/v1/models', {
       headers: {
-        'Authorization': `Bearer ${apiKey}`,
+        Authorization: `Bearer ${apiKey}`,
         'Content-Type': 'application/json',
       },
     });
@@ -95,7 +95,7 @@ export async function fetchOpenRouterModels(): Promise<OpenRouterModelData> {
       throw new Error(`OpenRouter API error: ${response.status}`);
     }
 
-    const data = await response.json() as OpenRouterModelsResponse;
+    const data = (await response.json()) as OpenRouterModelsResponse;
     const pricing = new Map<string, ModelPricing>();
     const contextLengths = new Map<string, number>();
 
@@ -135,7 +135,7 @@ export async function initModelCache(): Promise<void> {
   const now = Date.now();
 
   // Only refresh if cache is stale
-  if (pricingCache.size > 0 && (now - cacheTimestamp) < CACHE_TTL) {
+  if (pricingCache.size > 0 && now - cacheTimestamp < CACHE_TTL) {
     return;
   }
 
@@ -211,11 +211,7 @@ export function isModelCacheInitialized(): boolean {
 /**
  * Calculate cost for a completion.
  */
-export function calculateCost(
-  modelId: string,
-  inputTokens: number,
-  outputTokens: number
-): number {
+export function calculateCost(modelId: string, inputTokens: number, outputTokens: number): number {
   const pricing = getModelPricing(modelId);
 
   const inputCost = inputTokens * pricing.prompt;

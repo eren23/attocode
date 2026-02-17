@@ -14,7 +14,11 @@ export { ToolCallItem, type ToolCallItemProps, type ToolCallDisplayItem } from '
 export { MemoizedInputArea, type InputAreaProps } from './InputArea.js';
 
 // Approval dialog for permission requests
-export { ApprovalDialog, type ApprovalDialogProps, type ApprovalRequest } from './ApprovalDialog.js';
+export {
+  ApprovalDialog,
+  type ApprovalDialogProps,
+  type ApprovalRequest,
+} from './ApprovalDialog.js';
 
 // Diff display components with syntax highlighting support
 export { DiffView, type UnifiedDiff, type DiffHunk, type DiffLine } from './DiffView.js';
@@ -23,7 +27,14 @@ export { CollapsibleDiffView, type CollapsibleDiffViewProps } from './Collapsibl
 export { FileChangeSummary } from './FileChangeSummary.js';
 
 // Syntax highlighting component
-export { SyntaxText, MemoizedSyntaxText, SyntaxLine, MemoizedSyntaxLine, type SyntaxTextProps, type SyntaxLineProps } from './SyntaxText.js';
+export {
+  SyntaxText,
+  MemoizedSyntaxText,
+  SyntaxLine,
+  MemoizedSyntaxLine,
+  type SyntaxTextProps,
+  type SyntaxLineProps,
+} from './SyntaxText.js';
 
 // Error boundaries
 export { TUIErrorBoundary, ErrorFallback, withErrorBoundary } from './ErrorBoundary.js';

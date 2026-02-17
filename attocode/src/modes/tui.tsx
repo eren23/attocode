@@ -66,7 +66,7 @@ export interface TUIModeOptions {
  */
 export async function startTUIMode(
   provider: LLMProviderWithTools,
-  options: TUIModeOptions = {}
+  options: TUIModeOptions = {},
 ): Promise<void> {
   const {
     permissionMode = 'interactive',
@@ -105,7 +105,10 @@ export async function startTUIMode(
       if (persistenceDebug.isEnabled()) {
         const sqliteStore = sessionStore as SQLiteStore;
         const stats = sqliteStore.getStats();
-        persistenceDebug.log('[TUI] SQLite store initialized!', { sessions: stats.sessionCount, checkpoints: stats.checkpointCount });
+        persistenceDebug.log('[TUI] SQLite store initialized!', {
+          sessions: stats.sessionCount,
+          checkpoints: stats.checkpointCount,
+        });
       }
       // eslint-disable-next-line no-console
       console.log('+ SQLite session store initialized');
@@ -170,7 +173,7 @@ export async function startTUIMode(
       maxToolsPerSearch: 5,
     });
 
-    const mcpSummaries = mcpClient.getAllToolSummaries().map(s => ({
+    const mcpSummaries = mcpClient.getAllToolSummaries().map((s) => ({
       name: s.name,
       description: s.description,
     }));
@@ -190,20 +193,25 @@ export async function startTUIMode(
         console.log(`   For inline diagnostics: npm i -g typescript-language-server typescript`);
       }
     } catch (err) {
-      logger.warn('LSP: Could not start language servers', { error: String((err as Error).message) });
+      logger.warn('LSP: Could not start language servers', {
+        error: String((err as Error).message),
+      });
     }
 
     // Create LSP-enhanced file tools (replaces standard edit_file/write_file)
     const lspFileTools = createLSPFileTools({ lspManager, diagnosticDelay: 500 });
 
     // Replace standard edit_file/write_file with LSP-enhanced versions
-    const standardToolsWithoutFileOps = tools.filter(t => !['edit_file', 'write_file'].includes(t.name));
+    const standardToolsWithoutFileOps = tools.filter(
+      (t) => !['edit_file', 'write_file'].includes(t.name),
+    );
     const allTools = [...standardToolsWithoutFileOps, ...lspFileTools];
 
     // approvalBridge is already created above with the permission checker
 
     const agent = createProductionAgent({
-      toolResolver: (toolName: string) => toolName.startsWith('mcp_') ? mcpClient.getFullToolDefinition(toolName) : null,
+      toolResolver: (toolName: string) =>
+        toolName.startsWith('mcp_') ? mcpClient.getFullToolDefinition(toolName) : null,
       mcpToolSummaries: mcpSummaries,
       provider: adaptedProvider,
       tools: allTools,
@@ -221,19 +229,33 @@ export async function startTUIMode(
         enableRollback: true,
         enableForking: true,
       },
-      humanInLoop: permissionMode === 'interactive'
-        ? {
-            enabled: true,
-            riskThreshold: 'moderate',  // Require approval for moderate+ risk tools
-            alwaysApprove: [],  // Don't auto-approve anything, show dialog
-            neverApprove: ['read_file', 'list_files', 'glob', 'grep', 'task_create', 'task_update', 'task_get', 'task_list'],  // Safe read + task tools
-            approvalHandler: approvalBridge!.handler,  // TUI approval handler
-            auditLog: true,
-          }
-        : false,
+      humanInLoop:
+        permissionMode === 'interactive'
+          ? {
+              enabled: true,
+              riskThreshold: 'moderate', // Require approval for moderate+ risk tools
+              alwaysApprove: [], // Don't auto-approve anything, show dialog
+              neverApprove: [
+                'read_file',
+                'list_files',
+                'glob',
+                'grep',
+                'task_create',
+                'task_update',
+                'task_get',
+                'task_list',
+              ], // Safe read + task tools
+              approvalHandler: approvalBridge!.handler, // TUI approval handler
+              auditLog: true,
+            }
+          : false,
       // Observability: trace capture to file when --trace, logging disabled in TUI (use debug mode instead)
       observability: trace
-        ? { enabled: true, traceCapture: { enabled: true, outputDir: '.traces' }, logging: { enabled: false } }
+        ? {
+            enabled: true,
+            traceCapture: { enabled: true, outputDir: '.traces' },
+            logging: { enabled: false },
+          }
         : undefined,
       // Codebase context: lazy analysis on first prompt, ready by second turn
       codebaseContext: {
@@ -247,7 +269,7 @@ export async function startTUIMode(
         enabled: true,
         builtIn: {
           logging: persistenceDebug.isEnabled(), // Only show [Hook] logs in debug mode
-          timing: persistenceDebug.isEnabled(),  // Only show timing in debug mode
+          timing: persistenceDebug.isEnabled(), // Only show timing in debug mode
           metrics: true,
         },
         custom: [],
@@ -258,7 +280,8 @@ export async function startTUIMode(
     const unsubAgentOutcome = agent.subscribe((event) => {
       if (event.type === 'complete' && !event.result.success) {
         hadRunFailure = true;
-        lastFailureReason = event.result.error || 'At least one task failed during this terminal session';
+        lastFailureReason =
+          event.result.error || 'At least one task failed during this terminal session';
       } else if (event.type === 'error') {
         hadRunFailure = true;
         lastFailureReason = event.error || 'Agent reported an error';
@@ -370,7 +393,10 @@ export async function startTUIMode(
     const getGitBranch = (): string => {
       try {
         const { execFileSync } = require('child_process');
-        return execFileSync('git', ['rev-parse', '--abbrev-ref', 'HEAD'], { encoding: 'utf8', stdio: ['pipe', 'pipe', 'pipe'] }).trim();
+        return execFileSync('git', ['rev-parse', '--abbrev-ref', 'HEAD'], {
+          encoding: 'utf8',
+          stdio: ['pipe', 'pipe', 'pipe'],
+        }).trim();
       } catch {
         return '';
       }
@@ -394,7 +420,7 @@ export async function startTUIMode(
         terminalSessionId,
         undefined, // No single task - this is a terminal session with multiple tasks
         model || 'default',
-        { type: 'tui', permissionMode }
+        { type: 'tui', permissionMode },
       );
       persistenceDebug.log(`[TUI] Trace session started: ${terminalSessionId}`);
     }
@@ -434,8 +460,12 @@ export async function startTUIMode(
         try {
           await traceCollector.endSession(
             hadRunFailure
-              ? { success: false, failureReason: lastFailureReason ?? 'At least one task failed during this terminal session' }
-              : { success: true }
+              ? {
+                  success: false,
+                  failureReason:
+                    lastFailureReason ?? 'At least one task failed during this terminal session',
+                }
+              : { success: true },
           );
           persistenceDebug.log(`[TUI] Trace session ended -> .traces/`);
         } catch (err) {
@@ -447,7 +477,6 @@ export async function startTUIMode(
       await mcpClient.cleanup();
       await lspManager.cleanup();
     }
-
   } catch (error) {
     logger.error('TUI failed', { error: String((error as Error).message) });
     // eslint-disable-next-line no-console

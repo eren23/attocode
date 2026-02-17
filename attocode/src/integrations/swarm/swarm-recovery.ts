@@ -60,7 +60,7 @@ export function recordRateLimit(state: SwarmRecoveryState, ctx: OrchestratorInte
   increaseStagger(state);
 
   const cutoff = now - CIRCUIT_BREAKER_WINDOW_MS;
-  state.recentRateLimits = state.recentRateLimits.filter(t => t > cutoff);
+  state.recentRateLimits = state.recentRateLimits.filter((t) => t > cutoff);
 
   if (state.recentRateLimits.length >= CIRCUIT_BREAKER_THRESHOLD) {
     state.circuitBreakerUntil = now + CIRCUIT_BREAKER_PAUSE_MS;
@@ -69,15 +69,21 @@ export function recordRateLimit(state: SwarmRecoveryState, ctx: OrchestratorInte
       recentCount: state.recentRateLimits.length,
       pauseMs: CIRCUIT_BREAKER_PAUSE_MS,
     });
-    ctx.logDecision('circuit-breaker', 'Tripped — pausing all dispatch',
-      `${state.recentRateLimits.length} rate limits in ${CIRCUIT_BREAKER_WINDOW_MS / 1000}s window`);
+    ctx.logDecision(
+      'circuit-breaker',
+      'Tripped — pausing all dispatch',
+      `${state.recentRateLimits.length} rate limits in ${CIRCUIT_BREAKER_WINDOW_MS / 1000}s window`,
+    );
   }
 }
 
 /**
  * Check if the circuit breaker is currently active.
  */
-export function isCircuitBreakerActive(state: SwarmRecoveryState, ctx: OrchestratorInternals): boolean {
+export function isCircuitBreakerActive(
+  state: SwarmRecoveryState,
+  ctx: OrchestratorInternals,
+): boolean {
   if (Date.now() < state.circuitBreakerUntil) return true;
   if (state.circuitBreakerUntil > 0) {
     state.circuitBreakerUntil = 0;
@@ -128,9 +134,11 @@ export async function tryResilienceRecovery(
     if (subtasks && subtasks.length >= 2) {
       task.status = 'dispatched';
       ctx.taskQueue.replaceWithSubtasks(taskId, subtasks);
-      ctx.logDecision('micro-decompose',
+      ctx.logDecision(
+        'micro-decompose',
         `${taskId}: decomposed into ${subtasks.length} subtasks after ${task.attempts} failures`,
-        subtasks.map(s => `${s.id}: ${s.description.slice(0, 60)}`).join('; '));
+        subtasks.map((s) => `${s.id}: ${s.description.slice(0, 60)}`).join('; '),
+      );
       ctx.emit({
         type: 'swarm.task.failed',
         taskId,
@@ -153,36 +161,47 @@ export async function tryResilienceRecovery(
       return true;
     }
     if ((task.complexity ?? 0) < 4) {
-      ctx.logDecision('resilience-skip', `${taskId}: skipped micro-decompose — complexity ${task.complexity} < 4`, '');
+      ctx.logDecision(
+        'resilience-skip',
+        `${taskId}: skipped micro-decompose — complexity ${task.complexity} < 4`,
+        '',
+      );
     }
   }
 
   // Strategy 2: Degraded acceptance
   const artifactReport = checkArtifactsEnhanced(task, taskResult);
-  const existingArtifacts = artifactReport.files.filter(f => f.exists && f.sizeBytes > 0);
+  const existingArtifacts = artifactReport.files.filter((f) => f.exists && f.sizeBytes > 0);
   const hasArtifacts = existingArtifacts.length > 0;
   const toolCalls = spawnResult.metrics.toolCalls ?? 0;
-  const hadToolCalls = toolCalls > 0 || toolCalls === -1
-    || (taskResult.filesModified && taskResult.filesModified.length > 0);
+  const hadToolCalls =
+    toolCalls > 0 ||
+    toolCalls === -1 ||
+    (taskResult.filesModified && taskResult.filesModified.length > 0);
 
   const isNarrativeOnly = hasFutureIntentLanguage(taskResult.output ?? '');
   const typeConfig = getTaskTypeConfig(task.type, ctx.config);
-  const actionTaskNeedsArtifacts = (ctx.config.completionGuard?.requireConcreteArtifactsForActionTasks ?? true)
-    && !!typeConfig.requiresToolCalls;
-  const allowDegradedWithoutArtifacts = !actionTaskNeedsArtifacts && hadToolCalls && !isNarrativeOnly;
+  const actionTaskNeedsArtifacts =
+    (ctx.config.completionGuard?.requireConcreteArtifactsForActionTasks ?? true) &&
+    !!typeConfig.requiresToolCalls;
+  const allowDegradedWithoutArtifacts =
+    !actionTaskNeedsArtifacts && hadToolCalls && !isNarrativeOnly;
 
   if (hasArtifacts || allowDegradedWithoutArtifacts) {
     taskResult.success = true;
     taskResult.degraded = true;
     taskResult.qualityScore = 2;
-    taskResult.qualityFeedback = 'Degraded acceptance: retries exhausted but filesystem artifacts exist';
+    taskResult.qualityFeedback =
+      'Degraded acceptance: retries exhausted but filesystem artifacts exist';
     task.degraded = true;
     task.status = 'dispatched';
     ctx.taskQueue.markCompleted(taskId, taskResult);
     ctx.hollowStreak = 0;
-    ctx.logDecision('degraded-acceptance',
+    ctx.logDecision(
+      'degraded-acceptance',
       `${taskId}: accepted as degraded — ${existingArtifacts.length} artifacts on disk, ${toolCalls} tool calls`,
-      'Prevents cascade-skip of dependent tasks');
+      'Prevents cascade-skip of dependent tasks',
+    );
     ctx.emit({
       type: 'swarm.task.completed',
       taskId,
@@ -208,9 +227,11 @@ export async function tryResilienceRecovery(
   }
 
   // Both strategies failed
-  ctx.logDecision('resilience-exhausted',
+  ctx.logDecision(
+    'resilience-exhausted',
     `${taskId}: no recovery — artifacts: ${existingArtifacts.length}, toolCalls: ${toolCalls}, filesModified: ${taskResult.filesModified?.length ?? 0}`,
-    '');
+    '',
+  );
   ctx.emit({
     type: 'swarm.task.resilience',
     taskId,
@@ -228,7 +249,10 @@ export async function tryResilienceRecovery(
 /**
  * Micro-decompose a complex task into 2-3 smaller subtasks using the LLM.
  */
-async function microDecompose(ctx: OrchestratorInternals, task: SwarmTask): Promise<SwarmTask[] | null> {
+async function microDecompose(
+  ctx: OrchestratorInternals,
+  task: SwarmTask,
+): Promise<SwarmTask[] | null> {
   if ((task.complexity ?? 0) < 4) return null;
 
   try {
@@ -249,7 +273,10 @@ Return JSON ONLY (no markdown, no explanation):
 
     const response = await ctx.provider.chat(
       [
-        { role: 'system', content: 'You are a task decomposition assistant. Return only valid JSON.' },
+        {
+          role: 'system',
+          content: 'You are a task decomposition assistant. Return only valid JSON.',
+        },
         { role: 'user', content: prompt },
       ],
       {
@@ -285,9 +312,11 @@ Return JSON ONLY (no markdown, no explanation):
 
     return subtasks;
   } catch (error) {
-    ctx.logDecision('micro-decompose',
+    ctx.logDecision(
+      'micro-decompose',
       `${task.id}: micro-decomposition failed — ${(error as Error).message}`,
-      'Falling through to normal failure path');
+      'Falling through to normal failure path',
+    );
     return null;
   }
 }
@@ -316,7 +345,10 @@ export function shouldAutoSplit(ctx: OrchestratorInternals, task: SwarmTask): bo
 /**
  * LLM judge call: ask the orchestrator model whether and how to split a task.
  */
-export async function judgeSplit(ctx: OrchestratorInternals, task: SwarmTask): Promise<{ shouldSplit: boolean; subtasks?: SwarmTask[] }> {
+export async function judgeSplit(
+  ctx: OrchestratorInternals,
+  task: SwarmTask,
+): Promise<{ shouldSplit: boolean; subtasks?: SwarmTask[] }> {
   const maxSubs = ctx.config.autoSplit?.maxSubtasks ?? 4;
 
   const prompt = `You are evaluating whether a task should be split into parallel subtasks before dispatch.
@@ -381,7 +413,10 @@ If shouldSplit is false, omit subtasks.`;
     type: sub.type ?? task.type,
     dependencies: [],
     status: 'ready' as const,
-    complexity: Math.max(3, Math.min(sub.complexity ?? Math.ceil(task.complexity / 2), task.complexity - 1)),
+    complexity: Math.max(
+      3,
+      Math.min(sub.complexity ?? Math.ceil(task.complexity / 2), task.complexity - 1),
+    ),
     wave: task.wave,
     targetFiles: sub.targetFiles ?? [],
     readFiles: task.readFiles,
@@ -389,9 +424,11 @@ If shouldSplit is false, omit subtasks.`;
     rescueContext: `Auto-split from ${task.id} (original complexity ${task.complexity})`,
   }));
 
-  ctx.logDecision('auto-split',
+  ctx.logDecision(
+    'auto-split',
     `${task.id}: split into ${subtasks.length} subtasks — ${parsed.reason}`,
-    subtasks.map(s => `${s.id}: ${s.description.slice(0, 60)}`).join('; '));
+    subtasks.map((s) => `${s.id}: ${s.description.slice(0, 60)}`).join('; '),
+  );
 
   return { shouldSplit: true, subtasks };
 }
@@ -424,30 +461,43 @@ export function rescueCascadeSkipped(ctx: OrchestratorInternals, lenient = false
         completedDeps++;
       } else if (dep.status === 'failed' || dep.status === 'skipped') {
         const artifactReport = lenient ? checkArtifactsEnhanced(dep) : checkArtifacts(dep);
-        if (artifactReport && artifactReport.files.filter(f => f.exists && f.sizeBytes > 0).length > 0) {
+        if (
+          artifactReport &&
+          artifactReport.files.filter((f) => f.exists && f.sizeBytes > 0).length > 0
+        ) {
           failedDepsWithArtifacts++;
-          failedDepDescriptions.push(`${dep.description} (failed but ${artifactReport.files.filter(f => f.exists && f.sizeBytes > 0).length} artifacts exist)`);
+          failedDepDescriptions.push(
+            `${dep.description} (failed but ${artifactReport.files.filter((f) => f.exists && f.sizeBytes > 0).length} artifacts exist)`,
+          );
         } else {
           const targetFiles = dep.targetFiles ?? [];
-          const existingFiles = targetFiles.filter(f => {
+          const existingFiles = targetFiles.filter((f) => {
             try {
               const resolved = path.resolve(ctx.config.facts?.workingDirectory ?? process.cwd(), f);
               return fs.statSync(resolved).size > 0;
-            } catch { return false; }
+            } catch {
+              return false;
+            }
           });
           if (existingFiles.length > 0) {
             failedDepsWithArtifacts++;
-            failedDepDescriptions.push(`${dep.description} (failed but ${existingFiles.length}/${targetFiles.length} target files exist)`);
+            failedDepDescriptions.push(
+              `${dep.description} (failed but ${existingFiles.length}/${targetFiles.length} target files exist)`,
+            );
           } else {
             const taskTargets = new Set(task.targetFiles ?? []);
             const depTargets = new Set(dep.targetFiles ?? []);
-            const hasOverlap = [...taskTargets].some(f => depTargets.has(f));
+            const hasOverlap = [...taskTargets].some((f) => depTargets.has(f));
             if (!hasOverlap && taskTargets.size > 0) {
               failedDepsWithArtifacts++;
-              failedDepDescriptions.push(`${dep.description} (failed, no file overlap — likely independent)`);
+              failedDepDescriptions.push(
+                `${dep.description} (failed, no file overlap — likely independent)`,
+              );
             } else if (lenient && dep.status === 'skipped') {
               skippedDepsBlockedBySkipped++;
-              failedDepDescriptions.push(`${dep.description} (skipped — transitive cascade victim)`);
+              failedDepDescriptions.push(
+                `${dep.description} (skipped — transitive cascade victim)`,
+              );
             } else {
               failedDepsWithoutArtifacts++;
             }
@@ -458,16 +508,21 @@ export function rescueCascadeSkipped(ctx: OrchestratorInternals, lenient = false
 
     const effectiveWithout = failedDepsWithoutArtifacts;
     const maxMissing = lenient ? 1 : 0;
-    const hasEnoughContext = lenient ? (completedDeps + failedDepsWithArtifacts + skippedDepsBlockedBySkipped > 0) : (completedDeps > 0);
+    const hasEnoughContext = lenient
+      ? completedDeps + failedDepsWithArtifacts + skippedDepsBlockedBySkipped > 0
+      : completedDeps > 0;
 
     if (totalDeps > 0 && effectiveWithout <= maxMissing && hasEnoughContext) {
-      const rescueContext = `Rescued from cascade-skip${lenient ? ' (lenient)' : ''}: ${completedDeps}/${totalDeps} deps completed, ` +
+      const rescueContext =
+        `Rescued from cascade-skip${lenient ? ' (lenient)' : ''}: ${completedDeps}/${totalDeps} deps completed, ` +
         `${failedDepsWithArtifacts} failed deps have artifacts${skippedDepsBlockedBySkipped > 0 ? `, ${skippedDepsBlockedBySkipped} transitive cascade victims` : ''}. ${failedDepDescriptions.join('; ')}`;
       ctx.taskQueue.rescueTask(task.id, rescueContext);
       rescued.push(task);
-      ctx.logDecision('cascade-rescue',
+      ctx.logDecision(
+        'cascade-rescue',
         `${task.id}: rescued from cascade-skip${lenient ? ' (lenient)' : ''}`,
-        rescueContext);
+        rescueContext,
+      );
     }
   }
 
@@ -477,14 +532,25 @@ export function rescueCascadeSkipped(ctx: OrchestratorInternals, lenient = false
 /**
  * Final rescue pass — runs after executeWaves() finishes.
  */
-export async function finalRescuePass(ctx: OrchestratorInternals, executeWaveFn: (tasks: SwarmTask[]) => Promise<void>): Promise<void> {
+export async function finalRescuePass(
+  ctx: OrchestratorInternals,
+  executeWaveFn: (tasks: SwarmTask[]) => Promise<void>,
+): Promise<void> {
   const skipped = ctx.taskQueue.getSkippedTasks();
   if (skipped.length === 0) return;
 
-  ctx.logDecision('final-rescue', `${skipped.length} skipped tasks — running final rescue pass`, '');
+  ctx.logDecision(
+    'final-rescue',
+    `${skipped.length} skipped tasks — running final rescue pass`,
+    '',
+  );
   const rescued = rescueCascadeSkipped(ctx, true);
   if (rescued.length > 0) {
-    ctx.logDecision('final-rescue', `Rescued ${rescued.length} tasks`, rescued.map(t => t.id).join(', '));
+    ctx.logDecision(
+      'final-rescue',
+      `Rescued ${rescued.length} tasks`,
+      rescued.map((t) => t.id).join(', '),
+    );
     await executeWaveFn(rescued);
   }
 }
@@ -494,30 +560,36 @@ export async function finalRescuePass(ctx: OrchestratorInternals, executeWaveFn:
 /**
  * F21: Mid-swarm situational assessment after each wave.
  */
-export async function assessAndAdapt(ctx: OrchestratorInternals, _recoveryState: SwarmRecoveryState, waveIndex: number): Promise<void> {
+export async function assessAndAdapt(
+  ctx: OrchestratorInternals,
+  _recoveryState: SwarmRecoveryState,
+  waveIndex: number,
+): Promise<void> {
   const stats = ctx.taskQueue.getStats();
   const budgetStats = ctx.budgetPool.getStats();
 
   const successRate = stats.completed / Math.max(1, stats.completed + stats.failed + stats.skipped);
-  const tokensPerTask = stats.completed > 0
-    ? (ctx.totalTokens / stats.completed)
-    : Infinity;
+  const tokensPerTask = stats.completed > 0 ? ctx.totalTokens / stats.completed : Infinity;
 
   const remainingTasks = stats.total - stats.completed - stats.failed - stats.skipped;
   const estimatedTokensNeeded = remainingTasks * tokensPerTask;
   const budgetSufficient = budgetStats.tokensRemaining > estimatedTokensNeeded * 0.5;
 
-  ctx.logDecision('mid-swarm-assessment',
+  ctx.logDecision(
+    'mid-swarm-assessment',
     `After wave ${waveIndex + 1}: ${stats.completed}/${stats.total} completed (${(successRate * 100).toFixed(0)}%), ` +
-    `${remainingTasks} remaining, ${budgetStats.tokensRemaining} tokens left`,
-    budgetSufficient ? 'Budget looks sufficient' : 'Budget may be insufficient for remaining tasks');
+      `${remainingTasks} remaining, ${budgetStats.tokensRemaining} tokens left`,
+    budgetSufficient ? 'Budget looks sufficient' : 'Budget may be insufficient for remaining tasks',
+  );
 
   if (!budgetSufficient && remainingTasks > 1 && stats.completed > 0) {
     const runningCount = stats.running ?? 0;
     if (runningCount > 0) {
-      ctx.logDecision('budget-wait',
+      ctx.logDecision(
+        'budget-wait',
         'Budget tight but workers still running — waiting for budget release',
-        `${runningCount} workers active, ${budgetStats.tokensRemaining} tokens remaining`);
+        `${runningCount} workers active, ${budgetStats.tokensRemaining} tokens remaining`,
+      );
       return;
     }
 
@@ -531,11 +603,16 @@ export async function assessAndAdapt(ctx: OrchestratorInternals, _recoveryState:
         if (currentEstimate * 0.7 <= budgetStats.tokensRemaining) break;
         task.status = 'skipped';
         skipped++;
-        ctx.emit({ type: 'swarm.task.skipped', taskId: task.id,
-          reason: 'Budget conservation: skipping low-priority task to protect critical path' });
-        ctx.logDecision('budget-triage',
+        ctx.emit({
+          type: 'swarm.task.skipped',
+          taskId: task.id,
+          reason: 'Budget conservation: skipping low-priority task to protect critical path',
+        });
+        ctx.logDecision(
+          'budget-triage',
           `Skipping ${task.id} (${task.type}, complexity ${task.complexity}) to conserve budget`,
-          `${remainingTasks} tasks remain, ${budgetStats.tokensRemaining} tokens`);
+          `${remainingTasks} tasks remain, ${budgetStats.tokensRemaining} tokens`,
+        );
         currentEstimate -= tokensPerTask;
       }
     }
@@ -546,9 +623,11 @@ export async function assessAndAdapt(ctx: OrchestratorInternals, _recoveryState:
   if (attemptedTasks >= 5) {
     const progressRatio = stats.completed / Math.max(1, attemptedTasks);
     if (progressRatio < 0.4) {
-      ctx.logDecision('stall-detected',
+      ctx.logDecision(
+        'stall-detected',
         `Progress stalled: ${stats.completed}/${attemptedTasks} tasks succeeded (${(progressRatio * 100).toFixed(0)}%)`,
-        'Triggering mid-swarm re-plan');
+        'Triggering mid-swarm re-plan',
+      );
       ctx.emit({
         type: 'swarm.stall',
         progressRatio,
@@ -574,12 +653,13 @@ function findExpendableTasks(ctx: OrchestratorInternals): SwarmTask[] {
   }
 
   return allTasks
-    .filter(t =>
-      (t.status === 'pending' || t.status === 'ready') &&
-      t.attempts === 0 &&
-      !t.isFoundation &&
-      (t.complexity ?? 5) <= 2 &&
-      (dependentCounts.get(t.id) ?? 0) === 0,
+    .filter(
+      (t) =>
+        (t.status === 'pending' || t.status === 'ready') &&
+        t.attempts === 0 &&
+        !t.isFoundation &&
+        (t.complexity ?? 5) <= 2 &&
+        (dependentCounts.get(t.id) ?? 0) === 0,
     )
     .sort((a, b) => (a.complexity ?? 5) - (b.complexity ?? 5));
 }
@@ -592,19 +672,21 @@ export async function midSwarmReplan(ctx: OrchestratorInternals): Promise<void> 
   ctx.hasReplanned = true;
 
   const allTasks = ctx.taskQueue.getAllTasks();
-  const completed = allTasks.filter(t => t.status === 'completed' || t.status === 'decomposed');
-  const stuck = allTasks.filter(t => t.status === 'failed' || t.status === 'skipped');
+  const completed = allTasks.filter((t) => t.status === 'completed' || t.status === 'decomposed');
+  const stuck = allTasks.filter((t) => t.status === 'failed' || t.status === 'skipped');
 
   if (stuck.length === 0) return;
 
-  const completedSummary = completed.map(t =>
-    `- ${t.description} [${t.type}] → completed${t.degraded ? ' (degraded)' : ''}`,
-  ).join('\n') || '(none)';
-  const stuckSummary = stuck.map(t =>
-    `- ${t.description} [${t.type}] → ${t.status} (${t.failureMode ?? 'unknown'})`,
-  ).join('\n');
+  const completedSummary =
+    completed
+      .map((t) => `- ${t.description} [${t.type}] → completed${t.degraded ? ' (degraded)' : ''}`)
+      .join('\n') || '(none)';
+  const stuckSummary = stuck
+    .map((t) => `- ${t.description} [${t.type}] → ${t.status} (${t.failureMode ?? 'unknown'})`)
+    .join('\n');
   const artifactInventoryData = buildArtifactInventory(ctx);
-  const artifactSummary = artifactInventoryData.files.map(f => `- ${f.path} (${f.sizeBytes}B)`).join('\n') || '(none)';
+  const artifactSummary =
+    artifactInventoryData.files.map((f) => `- ${f.path} (${f.sizeBytes}B)`).join('\n') || '(none)';
 
   const replanPrompt = `The swarm is stalled. Here's the situation:
 
@@ -632,20 +714,34 @@ Return ONLY the JSON object, no other text.`;
     const content = response.content ?? '';
     const jsonMatch = content.match(/\{[\s\S]*"subtasks"[\s\S]*\}/);
     if (!jsonMatch) {
-      ctx.logDecision('replan-failed', 'LLM produced no parseable re-plan JSON', content.slice(0, 200));
+      ctx.logDecision(
+        'replan-failed',
+        'LLM produced no parseable re-plan JSON',
+        content.slice(0, 200),
+      );
       return;
     }
 
-    const parsed = JSON.parse(jsonMatch[0]) as { subtasks: Array<{ description: string; type: string; complexity: number; dependencies: string[]; relevantFiles?: string[] }> };
+    const parsed = JSON.parse(jsonMatch[0]) as {
+      subtasks: Array<{
+        description: string;
+        type: string;
+        complexity: number;
+        dependencies: string[];
+        relevantFiles?: string[];
+      }>;
+    };
     if (!parsed.subtasks || parsed.subtasks.length === 0) {
       ctx.logDecision('replan-failed', 'LLM produced empty subtask list', '');
       return;
     }
 
     const newTasks = ctx.taskQueue.addReplanTasks(parsed.subtasks, ctx.taskQueue.getCurrentWave());
-    ctx.logDecision('replan-success',
+    ctx.logDecision(
+      'replan-success',
       `Re-planned ${stuck.length} stuck tasks into ${newTasks.length} new tasks`,
-      newTasks.map(t => t.description).join('; '));
+      newTasks.map((t) => t.description).join('; '),
+    );
 
     ctx.emit({
       type: 'swarm.replan',
@@ -659,7 +755,7 @@ Return ONLY the JSON object, no other text.`;
         timestamp: Date.now(),
         phase: 'replan',
         decision: `Re-planned ${stuck.length} stuck tasks into ${newTasks.length} new tasks`,
-        reasoning: newTasks.map(t => `${t.id}: ${t.description}`).join('; '),
+        reasoning: newTasks.map((t) => `${t.id}: ${t.description}`).join('; '),
       },
     });
   } catch (error) {

@@ -8,7 +8,12 @@
 
 import * as fs from 'node:fs';
 import * as path from 'node:path';
-import { createSmartDecomposer, parseDecompositionResponse, type SmartDecompositionResult, type SmartSubtask } from '../tasks/smart-decomposer.js';
+import {
+  createSmartDecomposer,
+  parseDecompositionResponse,
+  type SmartDecompositionResult,
+  type SmartSubtask,
+} from '../tasks/smart-decomposer.js';
 import type {
   SwarmConfig,
   SwarmExecutionResult,
@@ -28,12 +33,19 @@ import type { OrchestratorInternals } from './swarm-orchestrator.js';
 
 // ─── Decomposition ──────────────────────────────────────────────────────
 
-export function classifyDecompositionFailure(message: string): 'rate_limit' | 'provider_budget_limit' | 'parse_failure' | 'validation_failure' | 'other' {
+export function classifyDecompositionFailure(
+  message: string,
+): 'rate_limit' | 'provider_budget_limit' | 'parse_failure' | 'validation_failure' | 'other' {
   const m = message.toLowerCase();
   if (m.includes('429') || m.includes('too many requests') || m.includes('rate limit')) {
     return 'rate_limit';
   }
-  if (m.includes('402') || m.includes('spend limit') || m.includes('key limit exceeded') || m.includes('insufficient credits')) {
+  if (
+    m.includes('402') ||
+    m.includes('spend limit') ||
+    m.includes('key limit exceeded') ||
+    m.includes('insufficient credits')
+  ) {
     return 'provider_budget_limit';
   }
   if (m.includes('parse') || m.includes('json') || m.includes('subtasks')) {
@@ -49,15 +61,19 @@ export function classifyDecompositionFailure(message: string): 'rate_limit' | 'p
  * Deterministic decomposition fallback when all LLM decomposition paths fail.
  * Keeps swarm mode alive with visible scaffolding tasks instead of aborting.
  */
-export function buildEmergencyDecomposition(ctx: OrchestratorInternals, task: string, _reason: string): SmartDecompositionResult {
+export function buildEmergencyDecomposition(
+  ctx: OrchestratorInternals,
+  task: string,
+  _reason: string,
+): SmartDecompositionResult {
   const normalizer = createSmartDecomposer({ detectConflicts: true });
   const taskLabel = task.trim().slice(0, 140) || 'requested task';
   const repoMap = ctx.config.codebaseContext?.getRepoMap();
   const topFiles = repoMap
     ? Array.from(repoMap.chunks.values())
-      .sort((a, b) => b.importance - a.importance)
-      .slice(0, 10)
-      .map(c => c.filePath)
+        .sort((a, b) => b.importance - a.importance)
+        .slice(0, 10)
+        .map((c) => c.filePath)
     : [];
 
   const subtasks: SmartSubtask[] = [
@@ -125,14 +141,17 @@ export function buildEmergencyDecomposition(ctx: OrchestratorInternals, task: st
 /**
  * Last-resort decomposition: radically simplified prompt that even weak models can handle.
  */
-export async function lastResortDecompose(ctx: OrchestratorInternals, task: string): Promise<SmartDecompositionResult | null> {
+export async function lastResortDecompose(
+  ctx: OrchestratorInternals,
+  task: string,
+): Promise<SmartDecompositionResult | null> {
   let codebaseHint = '';
   const repoMap = ctx.config.codebaseContext?.getRepoMap();
   if (repoMap) {
     const topFiles = Array.from(repoMap.chunks.values())
       .sort((a, b) => b.importance - a.importance)
       .slice(0, 10)
-      .map(c => c.filePath);
+      .map((c) => c.filePath);
     codebaseHint = `\nKey project files: ${topFiles.join(', ')}\nReference actual files in subtask descriptions.`;
   }
 
@@ -165,7 +184,9 @@ Rules:
   const subtasks = parsed.subtasks.map((s, index) => ({
     id: `task-lr-${index}`,
     description: s.description,
-    status: (s.dependencies.length > 0 ? 'blocked' : 'ready') as import('../tasks/smart-decomposer.js').SubtaskStatus,
+    status: (s.dependencies.length > 0
+      ? 'blocked'
+      : 'ready') as import('../tasks/smart-decomposer.js').SubtaskStatus,
     dependencies: s.dependencies.map((d: number | string) => `task-lr-${d}`),
     complexity: s.complexity,
     type: s.type,
@@ -196,7 +217,13 @@ Rules:
 /**
  * Phase 1: Decompose the task into subtasks.
  */
-export async function decomposeTask(ctx: OrchestratorInternals, task: string): Promise<{ result: SmartDecompositionResult; failureReason?: undefined } | { result: null; failureReason: string }> {
+export async function decomposeTask(
+  ctx: OrchestratorInternals,
+  task: string,
+): Promise<
+  | { result: SmartDecompositionResult; failureReason?: undefined }
+  | { result: null; failureReason: string }
+> {
   try {
     const repoMap = ctx.config.codebaseContext?.getRepoMap() ?? undefined;
     const result = await ctx.decomposer.decompose(task, {
@@ -204,23 +231,28 @@ export async function decomposeTask(ctx: OrchestratorInternals, task: string): P
     });
 
     if (result.subtasks.length < 2) {
-      const reason = result.subtasks.length === 0
-        ? `Decomposition produced 0 subtasks (model: ${ctx.config.orchestratorModel}).`
-        : `Decomposition produced only ${result.subtasks.length} subtask — too few for swarm mode.`;
+      const reason =
+        result.subtasks.length === 0
+          ? `Decomposition produced 0 subtasks (model: ${ctx.config.orchestratorModel}).`
+          : `Decomposition produced only ${result.subtasks.length} subtask — too few for swarm mode.`;
       ctx.logDecision('decomposition', `Insufficient subtasks: ${result.subtasks.length}`, reason);
 
       try {
         const lastResortResult = await lastResortDecompose(ctx, task);
         if (lastResortResult && lastResortResult.subtasks.length >= 2) {
-          ctx.logDecision('decomposition',
+          ctx.logDecision(
+            'decomposition',
             `Last-resort decomposition succeeded: ${lastResortResult.subtasks.length} subtasks`,
-            'Recovered from insufficient primary decomposition');
+            'Recovered from insufficient primary decomposition',
+          );
           return { result: lastResortResult };
         }
       } catch (error) {
-        ctx.logDecision('decomposition',
+        ctx.logDecision(
+          'decomposition',
           'Last-resort decomposition failed after insufficient primary decomposition',
-          (error as Error).message);
+          (error as Error).message,
+        );
       }
 
       const fallback = buildEmergencyDecomposition(ctx, task, reason);
@@ -229,34 +261,44 @@ export async function decomposeTask(ctx: OrchestratorInternals, task: string): P
         phase: 'decomposing',
         message: `Using emergency decomposition fallback (${classifyDecompositionFailure(reason)})`,
       });
-      ctx.logDecision('decomposition',
+      ctx.logDecision(
+        'decomposition',
         `Using emergency scaffold decomposition: ${fallback.subtasks.length} subtasks`,
-        'Swarm will continue with deterministic fallback tasks');
+        'Swarm will continue with deterministic fallback tasks',
+      );
       return { result: fallback };
     }
 
     if (!result.metadata.llmAssisted) {
-      ctx.logDecision('decomposition',
+      ctx.logDecision(
+        'decomposition',
         'Heuristic decomposition detected — attempting last-resort simplified LLM decomposition',
-        `Model: ${ctx.config.orchestratorModel}`);
+        `Model: ${ctx.config.orchestratorModel}`,
+      );
 
       try {
         const lastResortResult = await lastResortDecompose(ctx, task);
         if (lastResortResult && lastResortResult.subtasks.length >= 2) {
-          ctx.logDecision('decomposition',
+          ctx.logDecision(
+            'decomposition',
             `Last-resort decomposition succeeded: ${lastResortResult.subtasks.length} subtasks`,
-            'Simplified prompt worked');
+            'Simplified prompt worked',
+          );
           return { result: lastResortResult };
         }
       } catch (error) {
-        ctx.logDecision('decomposition',
+        ctx.logDecision(
+          'decomposition',
           'Last-resort decomposition also failed',
-          (error as Error).message);
+          (error as Error).message,
+        );
       }
 
-      ctx.logDecision('decomposition',
+      ctx.logDecision(
+        'decomposition',
         `Continuing with heuristic decomposition: ${result.subtasks.length} subtasks`,
-        'Fallback is acceptable; do not abort swarm');
+        'Fallback is acceptable; do not abort swarm',
+      );
       ctx.emit({
         type: 'swarm.phase.progress',
         phase: 'decomposing',
@@ -266,11 +308,13 @@ export async function decomposeTask(ctx: OrchestratorInternals, task: string): P
     }
 
     // Flat-DAG detection
-    const hasAnyDependency = result.subtasks.some(s => s.dependencies.length > 0);
+    const hasAnyDependency = result.subtasks.some((s) => s.dependencies.length > 0);
     if (!hasAnyDependency && result.subtasks.length >= 3) {
-      ctx.logDecision('decomposition',
+      ctx.logDecision(
+        'decomposition',
         `Flat DAG: ${result.subtasks.length} tasks, zero dependencies`,
-        'All tasks will execute in wave 0 without ordering');
+        'All tasks will execute in wave 0 without ordering',
+      );
     }
 
     return { result };
@@ -281,15 +325,21 @@ export async function decomposeTask(ctx: OrchestratorInternals, task: string): P
       message,
       recovered: true,
     });
-    const fallback = buildEmergencyDecomposition(ctx, task, `Decomposition threw an error: ${message}`);
+    const fallback = buildEmergencyDecomposition(
+      ctx,
+      task,
+      `Decomposition threw an error: ${message}`,
+    );
     ctx.emit({
       type: 'swarm.phase.progress',
       phase: 'decomposing',
       message: `Decomposition fallback due to ${classifyDecompositionFailure(message)}`,
     });
-    ctx.logDecision('decomposition',
+    ctx.logDecision(
+      'decomposition',
       `Decomposition threw error; using emergency scaffold decomposition (${fallback.subtasks.length} subtasks)`,
-      message);
+      message,
+    );
     return { result: fallback };
   }
 }
@@ -300,16 +350,25 @@ export async function decomposeTask(ctx: OrchestratorInternals, task: string): P
  * Create acceptance criteria and integration test plan.
  * Graceful: if planning fails, continues without criteria.
  */
-export async function planExecution(ctx: OrchestratorInternals, task: string, decomposition: { subtasks: Array<{ id: string; description: string; type: string }> }): Promise<void> {
+export async function planExecution(
+  ctx: OrchestratorInternals,
+  task: string,
+  decomposition: { subtasks: Array<{ id: string; description: string; type: string }> },
+): Promise<void> {
   try {
-    const plannerModel = ctx.config.hierarchy?.manager?.model
-      ?? ctx.config.plannerModel ?? ctx.config.orchestratorModel;
+    const plannerModel =
+      ctx.config.hierarchy?.manager?.model ??
+      ctx.config.plannerModel ??
+      ctx.config.orchestratorModel;
 
     ctx.emit({ type: 'swarm.role.action', role: 'manager', action: 'plan', model: plannerModel });
-    ctx.logDecision('planning', `Creating acceptance criteria (manager: ${plannerModel})`,
-      `Task has ${decomposition.subtasks.length} subtasks, planning to ensure quality`);
+    ctx.logDecision(
+      'planning',
+      `Creating acceptance criteria (manager: ${plannerModel})`,
+      `Task has ${decomposition.subtasks.length} subtasks, planning to ensure quality`,
+    );
     const taskList = decomposition.subtasks
-      .map(s => `- [${s.id}] (${s.type}): ${s.description}`)
+      .map((s) => `- [${s.id}] (${s.type}): ${s.description}`)
       .join('\n');
 
     const response = await ctx.provider.chat(
@@ -377,31 +436,49 @@ Respond with valid JSON:
  * Review completed wave outputs against acceptance criteria.
  * May spawn fix-up tasks for issues found.
  */
-export async function reviewWave(ctx: OrchestratorInternals, waveIndex: number): Promise<WaveReviewResult | null> {
+export async function reviewWave(
+  ctx: OrchestratorInternals,
+  waveIndex: number,
+): Promise<WaveReviewResult | null> {
   if (!ctx.config.enableWaveReview) return null;
 
   try {
-    const managerModel = ctx.config.hierarchy?.manager?.model
-      ?? ctx.config.plannerModel ?? ctx.config.orchestratorModel;
+    const managerModel =
+      ctx.config.hierarchy?.manager?.model ??
+      ctx.config.plannerModel ??
+      ctx.config.orchestratorModel;
     const managerPersona = ctx.config.hierarchy?.manager?.persona;
 
-    ctx.emit({ type: 'swarm.role.action', role: 'manager', action: 'review', model: managerModel, wave: waveIndex + 1 });
+    ctx.emit({
+      type: 'swarm.role.action',
+      role: 'manager',
+      action: 'review',
+      model: managerModel,
+      wave: waveIndex + 1,
+    });
     ctx.emit({ type: 'swarm.review.start', wave: waveIndex + 1 });
-    ctx.logDecision('review', `Reviewing wave ${waveIndex + 1} outputs (manager: ${managerModel})`, 'Checking task outputs against acceptance criteria');
+    ctx.logDecision(
+      'review',
+      `Reviewing wave ${waveIndex + 1} outputs (manager: ${managerModel})`,
+      'Checking task outputs against acceptance criteria',
+    );
 
-    const completedTasks = ctx.taskQueue.getAllTasks()
-      .filter(t => t.status === 'completed' && t.wave === waveIndex);
+    const completedTasks = ctx.taskQueue
+      .getAllTasks()
+      .filter((t) => t.status === 'completed' && t.wave === waveIndex);
 
     if (completedTasks.length === 0) {
       return { wave: waveIndex, assessment: 'good', taskAssessments: [], fixupTasks: [] };
     }
 
-    const taskSummaries = completedTasks.map(t => {
-      const criteria = ctx.plan?.acceptanceCriteria.find(c => c.taskId === t.id);
-      return `Task ${t.id}: ${t.description}
+    const taskSummaries = completedTasks
+      .map((t) => {
+        const criteria = ctx.plan?.acceptanceCriteria.find((c) => c.taskId === t.id);
+        return `Task ${t.id}: ${t.description}
   Output: ${t.result?.output?.slice(0, 500) ?? 'No output'}
   Acceptance criteria: ${criteria?.criteria.join('; ') ?? 'None set'}`;
-    }).join('\n\n');
+      })
+      .join('\n\n');
 
     const reviewModel = managerModel;
     const reviewSystemPrompt = managerPersona
@@ -423,7 +500,10 @@ export async function reviewWave(ctx: OrchestratorInternals, waveIndex: number):
   ]
 }`,
         },
-        { role: 'user', content: `Review these wave ${waveIndex + 1} outputs:\n\n${taskSummaries}` },
+        {
+          role: 'user',
+          content: `Review these wave ${waveIndex + 1} outputs:\n\n${taskSummaries}`,
+        },
       ],
       { model: reviewModel, maxTokens: 2000, temperature: 0.3 },
     );
@@ -451,7 +531,12 @@ export async function reviewWave(ctx: OrchestratorInternals, waveIndex: number):
           fixInstructions: fix.instructions,
         };
         fixupTasks.push(fixupTask);
-        ctx.emit({ type: 'swarm.fixup.spawned', taskId: fixupId, fixesTaskId: fix.fixesTaskId, description: fix.description });
+        ctx.emit({
+          type: 'swarm.fixup.spawned',
+          taskId: fixupId,
+          fixesTaskId: fix.fixesTaskId,
+          description: fix.description,
+        });
       }
 
       if (fixupTasks.length > 0) {
@@ -494,12 +579,21 @@ export async function reviewWave(ctx: OrchestratorInternals, waveIndex: number):
 /**
  * Run integration verification steps.
  */
-export async function verifyIntegration(ctx: OrchestratorInternals, testPlan: NonNullable<SwarmPlan['integrationTestPlan']>): Promise<VerificationResult> {
-  const verifyModel = ctx.config.hierarchy?.judge?.model
-    ?? ctx.config.qualityGateModel ?? ctx.config.orchestratorModel;
+export async function verifyIntegration(
+  ctx: OrchestratorInternals,
+  testPlan: NonNullable<SwarmPlan['integrationTestPlan']>,
+): Promise<VerificationResult> {
+  const verifyModel =
+    ctx.config.hierarchy?.judge?.model ??
+    ctx.config.qualityGateModel ??
+    ctx.config.orchestratorModel;
   ctx.emit({ type: 'swarm.role.action', role: 'judge', action: 'verify', model: verifyModel });
   ctx.emit({ type: 'swarm.verify.start', stepCount: testPlan.steps.length });
-  ctx.logDecision('verification', `Running ${testPlan.steps.length} verification steps (judge: ${verifyModel})`, testPlan.description);
+  ctx.logDecision(
+    'verification',
+    `Running ${testPlan.steps.length} verification steps (judge: ${verifyModel})`,
+    testPlan.description,
+  );
 
   const stepResults: VerificationResult['stepResults'] = [];
   let allRequiredPassed = true;
@@ -508,8 +602,10 @@ export async function verifyIntegration(ctx: OrchestratorInternals, testPlan: No
     const step = testPlan.steps[i];
     try {
       const verifierName = `swarm-verifier-${i}`;
-      const result = await ctx.spawnAgentFn(verifierName,
-        `Run this command and report the result: ${step.command}\nExpected: ${step.expectedResult ?? 'success'}`);
+      const result = await ctx.spawnAgentFn(
+        verifierName,
+        `Run this command and report the result: ${step.command}\nExpected: ${step.expectedResult ?? 'success'}`,
+      );
 
       const passed = result.success;
       stepResults.push({ step, passed, output: result.output.slice(0, 500) });
@@ -523,7 +619,12 @@ export async function verifyIntegration(ctx: OrchestratorInternals, testPlan: No
       const output = `Error: ${(error as Error).message}`;
       stepResults.push({ step, passed: false, output });
       if (step.required) allRequiredPassed = false;
-      ctx.emit({ type: 'swarm.verify.step', stepIndex: i, description: step.description, passed: false });
+      ctx.emit({
+        type: 'swarm.verify.step',
+        stepIndex: i,
+        description: step.description,
+        passed: false,
+      });
     }
   }
 
@@ -531,8 +632,8 @@ export async function verifyIntegration(ctx: OrchestratorInternals, testPlan: No
     passed: allRequiredPassed,
     stepResults,
     summary: allRequiredPassed
-      ? `All ${stepResults.filter(r => r.passed).length}/${stepResults.length} steps passed`
-      : `${stepResults.filter(r => !r.passed).length}/${stepResults.length} steps failed`,
+      ? `All ${stepResults.filter((r) => r.passed).length}/${stepResults.length} steps passed`
+      : `${stepResults.filter((r) => !r.passed).length}/${stepResults.length} steps failed`,
   };
 
   ctx.verificationResult = verificationResult;
@@ -544,18 +645,24 @@ export async function verifyIntegration(ctx: OrchestratorInternals, testPlan: No
 /**
  * Handle verification failure: create fix-up tasks and re-verify.
  */
-export async function handleVerificationFailure(ctx: OrchestratorInternals, verification: VerificationResult, task: string): Promise<void> {
+export async function handleVerificationFailure(
+  ctx: OrchestratorInternals,
+  verification: VerificationResult,
+  task: string,
+): Promise<void> {
   const maxRetries = ctx.config.maxVerificationRetries ?? 2;
 
   for (let attempt = 0; attempt < maxRetries; attempt++) {
-    ctx.logDecision('verification',
+    ctx.logDecision(
+      'verification',
       `Verification failed, fix-up attempt ${attempt + 1}/${maxRetries}`,
-      `${verification.stepResults.filter(r => !r.passed).length} steps failed`);
+      `${verification.stepResults.filter((r) => !r.passed).length} steps failed`,
+    );
 
     try {
       const failedSteps = verification.stepResults
-        .filter(r => !r.passed)
-        .map(r => `- ${r.step.description}: ${r.output}`)
+        .filter((r) => !r.passed)
+        .map((r) => `- ${r.step.description}: ${r.output}`)
         .join('\n');
 
       const response = await ctx.provider.chat(
@@ -565,27 +672,36 @@ export async function handleVerificationFailure(ctx: OrchestratorInternals, veri
             content: `Verification failed. Analyze the failures and create fix-up tasks.
 Respond with JSON: { "fixups": [{ "description": "what to fix", "type": "implement" }] }`,
           },
-          { role: 'user', content: `Original task: ${task}\n\nFailed verifications:\n${failedSteps}` },
+          {
+            role: 'user',
+            content: `Original task: ${task}\n\nFailed verifications:\n${failedSteps}`,
+          },
         ],
-        { model: ctx.config.plannerModel ?? ctx.config.orchestratorModel, maxTokens: 1500, temperature: 0.3 },
+        {
+          model: ctx.config.plannerModel ?? ctx.config.orchestratorModel,
+          maxTokens: 1500,
+          temperature: 0.3,
+        },
       );
 
       ctx.trackOrchestratorUsage(response as any, 'verification-fixup');
 
       const parsed = parseJSON(response.content);
       if (parsed?.fixups && parsed.fixups.length > 0) {
-        const fixupTasks: FixupTask[] = parsed.fixups.map((f: { description: string; type?: string }, i: number) => ({
-          id: `verify-fix-${attempt}-${i}-${Date.now()}`,
-          description: f.description,
-          type: (f.type ?? 'implement') as FixupTask['type'],
-          dependencies: [],
-          status: 'ready' as const,
-          complexity: 4,
-          wave: ctx.taskQueue.getCurrentWave(),
-          attempts: 0,
-          fixesTaskId: 'verification',
-          fixInstructions: f.description,
-        }));
+        const fixupTasks: FixupTask[] = parsed.fixups.map(
+          (f: { description: string; type?: string }, i: number) => ({
+            id: `verify-fix-${attempt}-${i}-${Date.now()}`,
+            description: f.description,
+            type: (f.type ?? 'implement') as FixupTask['type'],
+            dependencies: [],
+            status: 'ready' as const,
+            complexity: 4,
+            wave: ctx.taskQueue.getCurrentWave(),
+            attempts: 0,
+            fixesTaskId: 'verification',
+            fixInstructions: f.description,
+          }),
+        );
 
         ctx.taskQueue.addFixupTasks(fixupTasks);
         ctx.emit({
@@ -612,20 +728,36 @@ Respond with JSON: { "fixups": [{ "description": "what to fix", "type": "impleme
  * Resume execution from a saved checkpoint.
  * Returns null if no checkpoint found (caller should fall through to normal execute).
  */
-export async function resumeExecution(ctx: OrchestratorInternals, task: string, midSwarmReplan: () => Promise<void>): Promise<SwarmExecutionResult | null> {
+export async function resumeExecution(
+  ctx: OrchestratorInternals,
+  task: string,
+  midSwarmReplan: () => Promise<void>,
+): Promise<SwarmExecutionResult | null> {
   const checkpoint = SwarmStateStore.loadLatest(
     ctx.config.stateDir ?? '.agent/swarm-state',
     ctx.config.resumeSessionId!,
   );
 
   if (!checkpoint) {
-    ctx.logDecision('resume', 'No checkpoint found, starting fresh', `Session: ${ctx.config.resumeSessionId}`);
+    ctx.logDecision(
+      'resume',
+      'No checkpoint found, starting fresh',
+      `Session: ${ctx.config.resumeSessionId}`,
+    );
     ctx.config.resumeSessionId = undefined;
     return null;
   }
 
-  ctx.logDecision('resume', `Resuming from wave ${checkpoint.currentWave}`, `Session: ${checkpoint.sessionId}`);
-  ctx.emit({ type: 'swarm.state.resume', sessionId: checkpoint.sessionId, fromWave: checkpoint.currentWave });
+  ctx.logDecision(
+    'resume',
+    `Resuming from wave ${checkpoint.currentWave}`,
+    `Session: ${checkpoint.sessionId}`,
+  );
+  ctx.emit({
+    type: 'swarm.state.resume',
+    sessionId: checkpoint.sessionId,
+    fromWave: checkpoint.currentWave,
+  });
 
   // Restore state
   if (checkpoint.originalPrompt) ctx.originalPrompt = checkpoint.originalPrompt;
@@ -639,7 +771,9 @@ export async function resumeExecution(ctx: OrchestratorInternals, task: string, 
   ctx.retries = checkpoint.stats.retries;
 
   if (checkpoint.sharedContext) {
-    ctx.sharedContextState.restoreFrom(checkpoint.sharedContext as Parameters<typeof ctx.sharedContextState.restoreFrom>[0]);
+    ctx.sharedContextState.restoreFrom(
+      checkpoint.sharedContext as Parameters<typeof ctx.sharedContextState.restoreFrom>[0],
+    );
   }
   if (checkpoint.sharedEconomics) {
     ctx.sharedEconomicsState.restoreFrom(checkpoint.sharedEconomics);
@@ -662,15 +796,19 @@ export async function resumeExecution(ctx: OrchestratorInternals, task: string, 
     t.attempts = Math.min(t.attempts, Math.max(0, ctx.config.workerRetries - 1));
   }
   if (resetCount > 0) {
-    ctx.logDecision('resume', `Reset ${resetCount} orphaned dispatched tasks to ready`, 'Workers died with previous process');
+    ctx.logDecision(
+      'resume',
+      `Reset ${resetCount} orphaned dispatched tasks to ready`,
+      'Workers died with previous process',
+    );
   }
 
   let unskippedCount = 0;
   for (const t of ctx.taskQueue.getAllTasks()) {
     if (t.status === 'skipped') {
-      const deps = t.dependencies.map(id => ctx.taskQueue.getTask(id));
-      const allDepsSatisfied = deps.every(d =>
-        d && (d.status === 'completed' || d.status === 'decomposed'),
+      const deps = t.dependencies.map((id) => ctx.taskQueue.getTask(id));
+      const allDepsSatisfied = deps.every(
+        (d) => d && (d.status === 'completed' || d.status === 'decomposed'),
       );
       if (allDepsSatisfied) {
         t.status = 'ready';
@@ -688,15 +826,22 @@ export async function resumeExecution(ctx: OrchestratorInternals, task: string, 
     }
   }
   if (unskippedCount > 0) {
-    ctx.logDecision('resume', `Recovered ${unskippedCount} skipped/failed tasks`, 'Fresh retry on resume');
+    ctx.logDecision(
+      'resume',
+      `Recovered ${unskippedCount} skipped/failed tasks`,
+      'Fresh retry on resume',
+    );
   }
 
   const resumeStats = ctx.taskQueue.getStats();
   const stuckCount = resumeStats.failed + resumeStats.skipped;
   const totalAttempted = resumeStats.completed + stuckCount;
   if (totalAttempted > 0 && stuckCount / totalAttempted > 0.4) {
-    ctx.logDecision('resume-replan',
-      `${stuckCount}/${totalAttempted} tasks still stuck after resume — triggering re-plan`, '');
+    ctx.logDecision(
+      'resume-replan',
+      `${stuckCount}/${totalAttempted} tasks still stuck after resume — triggering re-plan`,
+      '',
+    );
     ctx.hasReplanned = false;
     await midSwarmReplan();
   }
@@ -724,11 +869,15 @@ export async function resumeExecution(ctx: OrchestratorInternals, task: string, 
   saveCheckpoint(ctx, 'final');
 
   const hasArtifacts = (ctx.artifactInventory?.totalFiles ?? 0) > 0;
-  ctx.emit({ type: 'swarm.complete', stats: executionStats, errors: ctx.errors, artifactInventory: ctx.artifactInventory });
+  ctx.emit({
+    type: 'swarm.complete',
+    stats: executionStats,
+    errors: ctx.errors,
+    artifactInventory: ctx.artifactInventory,
+  });
 
-  const completionRatio = executionStats.totalTasks > 0
-    ? executionStats.completedTasks / executionStats.totalTasks
-    : 0;
+  const completionRatio =
+    executionStats.totalTasks > 0 ? executionStats.completedTasks / executionStats.totalTasks : 0;
   const isSuccess = completionRatio >= 0.7;
   const isPartialSuccess = !isSuccess && executionStats.completedTasks > 0;
 
@@ -753,8 +902,8 @@ export async function resumeExecution(ctx: OrchestratorInternals, task: string, 
 export async function synthesizeOutputs(ctx: OrchestratorInternals) {
   const tasks = ctx.taskQueue.getAllTasks();
   const outputs = tasks
-    .filter(t => t.status === 'completed')
-    .map(t => taskResultToAgentOutput(t, ctx.config))
+    .filter((t) => t.status === 'completed')
+    .map((t) => taskResultToAgentOutput(t, ctx.config))
     .filter((o): o is NonNullable<typeof o> => o !== null);
 
   if (outputs.length === 0) return null;
@@ -868,7 +1017,9 @@ export function buildSummary(ctx: OrchestratorInternals, stats: SwarmExecutionSt
   }
 
   if (ctx.artifactInventory && ctx.artifactInventory.totalFiles > 0) {
-    parts.push(`  Files on disk: ${ctx.artifactInventory.totalFiles} files (${(ctx.artifactInventory.totalBytes / 1024).toFixed(1)}KB)`);
+    parts.push(
+      `  Files on disk: ${ctx.artifactInventory.totalFiles} files (${(ctx.artifactInventory.totalBytes / 1024).toFixed(1)}KB)`,
+    );
     for (const f of ctx.artifactInventory.files.slice(0, 15)) {
       parts.push(`    ${f.path}: ${f.sizeBytes}B`);
     }
@@ -880,7 +1031,10 @@ export function buildSummary(ctx: OrchestratorInternals, stats: SwarmExecutionSt
   return parts.join('\n');
 }
 
-export function buildErrorResult(ctx: OrchestratorInternals, message: string): SwarmExecutionResult {
+export function buildErrorResult(
+  ctx: OrchestratorInternals,
+  message: string,
+): SwarmExecutionResult {
   return {
     success: false,
     summary: `Swarm failed: ${message}`,
@@ -907,9 +1061,11 @@ export function detectFoundationTasks(ctx: OrchestratorInternals): void {
     const dependentCount = dependentCounts.get(task.id) ?? 0;
     if (dependentCount >= 2) {
       task.isFoundation = true;
-      ctx.logDecision('scheduling',
+      ctx.logDecision(
+        'scheduling',
         `Foundation task: ${task.id} (${dependentCount} dependents)`,
-        'Extra retries and relaxed quality threshold applied');
+        'Extra retries and relaxed quality threshold applied',
+      );
     }
   }
 }
@@ -917,7 +1073,11 @@ export function detectFoundationTasks(ctx: OrchestratorInternals): void {
 /**
  * Extract file artifacts from a worker's output for quality gate visibility.
  */
-export function extractFileArtifacts(ctx: OrchestratorInternals, task: SwarmTask, taskResult: SwarmTaskResult): Array<{ path: string; preview: string }> {
+export function extractFileArtifacts(
+  ctx: OrchestratorInternals,
+  task: SwarmTask,
+  taskResult: SwarmTaskResult,
+): Array<{ path: string; preview: string }> {
   const artifacts: Array<{ path: string; preview: string }> = [];
   const seen = new Set<string>();
 
@@ -966,8 +1126,8 @@ export function extractFileArtifacts(ctx: OrchestratorInternals, task: SwarmTask
 export function buildArtifactInventory(ctx: OrchestratorInternals): ArtifactInventory {
   const allFiles = new Set<string>();
   for (const task of ctx.taskQueue.getAllTasks()) {
-    for (const f of (task.targetFiles ?? [])) allFiles.add(f);
-    for (const f of (task.readFiles ?? [])) allFiles.add(f);
+    for (const f of task.targetFiles ?? []) allFiles.add(f);
+    for (const f of task.readFiles ?? []) allFiles.add(f);
   }
 
   const baseDir = ctx.config.facts?.workingDirectory ?? process.cwd();
@@ -982,7 +1142,9 @@ export function buildArtifactInventory(ctx: OrchestratorInternals): ArtifactInve
           artifacts.push({ path: filePath, sizeBytes: stats.size, exists: true });
         }
       }
-    } catch { /* skip unreadable files */ }
+    } catch {
+      /* skip unreadable files */
+    }
   }
 
   return {
@@ -1028,7 +1190,7 @@ export function getEffectiveRetries(ctx: OrchestratorInternals, task: SwarmTask)
  */
 export function getSwarmProgressSummary(ctx: OrchestratorInternals): string {
   const allTasks = ctx.taskQueue.getAllTasks();
-  const completed = allTasks.filter(t => t.status === 'completed');
+  const completed = allTasks.filter((t) => t.status === 'completed');
 
   if (completed.length === 0) return '';
 
@@ -1041,12 +1203,14 @@ export function getSwarmProgressSummary(ctx: OrchestratorInternals): string {
   const files = new Set<string>();
   const baseDir = ctx.config.facts?.workingDirectory ?? process.cwd();
   for (const task of completed) {
-    for (const f of (task.result?.filesModified ?? [])) files.add(f);
-    for (const f of (task.targetFiles ?? [])) {
+    for (const f of task.result?.filesModified ?? []) files.add(f);
+    for (const f of task.targetFiles ?? []) {
       try {
         const resolved = path.resolve(baseDir, f);
         if (fs.existsSync(resolved)) files.add(f);
-      } catch { /* skip */ }
+      } catch {
+        /* skip */
+      }
     }
   }
 
@@ -1060,10 +1224,20 @@ export function getSwarmProgressSummary(ctx: OrchestratorInternals): string {
 }
 
 /** Get a model health summary for emitting events. */
-export function getModelHealthSummary(ctx: OrchestratorInternals, model: string): Omit<import('./types.js').ModelHealthRecord, 'model'> {
+export function getModelHealthSummary(
+  ctx: OrchestratorInternals,
+  model: string,
+): Omit<import('./types.js').ModelHealthRecord, 'model'> {
   const records = ctx.healthTracker.getAllRecords();
-  const record = records.find(r => r.model === model);
+  const record = records.find((r) => r.model === model);
   return record
-    ? { successes: record.successes, failures: record.failures, rateLimits: record.rateLimits, lastRateLimit: record.lastRateLimit, averageLatencyMs: record.averageLatencyMs, healthy: record.healthy }
+    ? {
+        successes: record.successes,
+        failures: record.failures,
+        rateLimits: record.rateLimits,
+        lastRateLimit: record.lastRateLimit,
+        averageLatencyMs: record.averageLatencyMs,
+        healthy: record.healthy,
+      }
     : { successes: 0, failures: 0, rateLimits: 0, averageLatencyMs: 0, healthy: true };
 }

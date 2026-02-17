@@ -165,22 +165,26 @@ export class HookManager {
       }, timeoutMs);
 
       let stderr = '';
-      child.stderr.on('data', chunk => {
+      child.stderr.on('data', (chunk) => {
         stderr += String(chunk);
       });
 
-      child.on('error', err => {
+      child.on('error', (err) => {
         clearTimeout(timer);
         reject(err);
       });
 
-      child.on('exit', code => {
+      child.on('exit', (code) => {
         clearTimeout(timer);
         if (code === 0) {
           resolve();
           return;
         }
-        reject(new Error(`Shell hook failed (${commandConfig.command}) exit=${code}${stderr ? `: ${stderr.trim()}` : ''}`));
+        reject(
+          new Error(
+            `Shell hook failed (${commandConfig.command}) exit=${code}${stderr ? `: ${stderr.trim()}` : ''}`,
+          ),
+        );
       });
 
       try {
@@ -486,7 +490,7 @@ export class HookManager {
 
 export function createHookManager(
   hooksConfig: HooksConfig,
-  pluginsConfig: PluginsConfig
+  pluginsConfig: PluginsConfig,
 ): HookManager {
   return new HookManager(hooksConfig, pluginsConfig);
 }

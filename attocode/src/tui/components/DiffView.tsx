@@ -60,12 +60,12 @@ interface DiffViewProps {
 // =============================================================================
 
 const COLORS = {
-  addition: '#98FB98',      // Green for additions
-  deletion: '#FF6B6B',      // Red for deletions
-  context: '#666666',       // Gray for context
-  hunkHeader: '#87CEEB',    // Cyan for @@ lines
-  fileHeader: '#DDA0DD',    // Purple for --- +++ lines
-  lineNumber: '#555555',    // Dim for line numbers
+  addition: '#98FB98', // Green for additions
+  deletion: '#FF6B6B', // Red for deletions
+  context: '#666666', // Gray for context
+  hunkHeader: '#87CEEB', // Cyan for @@ lines
+  fileHeader: '#DDA0DD', // Purple for --- +++ lines
+  lineNumber: '#555555', // Dim for line numbers
 };
 
 // =============================================================================
@@ -132,9 +132,12 @@ function getDiffLineColor(line: string): string {
  */
 function getLineTypeColor(type: DiffLine['type']): string {
   switch (type) {
-    case 'add': return COLORS.addition;
-    case 'remove': return COLORS.deletion;
-    default: return COLORS.context;
+    case 'add':
+      return COLORS.addition;
+    case 'remove':
+      return COLORS.deletion;
+    default:
+      return COLORS.context;
   }
 }
 
@@ -143,9 +146,12 @@ function getLineTypeColor(type: DiffLine['type']): string {
  */
 function getLinePrefix(type: DiffLine['type']): string {
   switch (type) {
-    case 'add': return '+';
-    case 'remove': return '-';
-    default: return ' ';
+    case 'add':
+      return '+';
+    case 'remove':
+      return '-';
+    default:
+      return ' ';
   }
 }
 
@@ -162,7 +168,7 @@ function findLinePairs(lines: DiffLine[]): Map<number, string> {
 
     // If we have a remove followed by an add, they're likely a modification
     if (current.type === 'remove' && next.type === 'add') {
-      pairs.set(i, next.content);      // removed line paired with added content
+      pairs.set(i, next.content); // removed line paired with added content
       pairs.set(i + 1, current.content); // added line paired with removed content
     }
   }
@@ -176,7 +182,7 @@ function findLinePairs(lines: DiffLine[]): Map<number, string> {
 function renderWordDiff(
   oldContent: string,
   newContent: string,
-  lineType: 'add' | 'remove'
+  lineType: 'add' | 'remove',
 ): React.ReactNode {
   const changes = diffWords(oldContent, newContent);
 
@@ -196,7 +202,11 @@ function renderWordDiff(
         return null;
       }
       // Unchanged part
-      return <Text key={i} color={COLORS.deletion}>{change.value}</Text>;
+      return (
+        <Text key={i} color={COLORS.deletion}>
+          {change.value}
+        </Text>
+      );
     } else {
       // lineType === 'add'
       if (change.added) {
@@ -211,7 +221,11 @@ function renderWordDiff(
         return null;
       }
       // Unchanged part
-      return <Text key={i} color={COLORS.addition}>{change.value}</Text>;
+      return (
+        <Text key={i} color={COLORS.addition}>
+          {change.value}
+        </Text>
+      );
     }
   });
 }
@@ -223,7 +237,7 @@ function renderSyntaxHighlight(
   content: string,
   theme: ThemeColors,
   language: string | null,
-  baseColor?: string
+  baseColor?: string,
 ): React.ReactNode {
   if (!language) {
     return <Text color={baseColor}>{content}</Text>;
@@ -247,7 +261,7 @@ function renderWordDiffWithSyntax(
   newContent: string,
   lineType: 'add' | 'remove',
   theme: ThemeColors,
-  language: string | null
+  language: string | null,
 ): React.ReactNode {
   const changes = diffWords(oldContent, newContent);
   const elements: React.ReactNode[] = [];
@@ -260,7 +274,7 @@ function renderWordDiffWithSyntax(
         elements.push(
           <Text key={keyIndex++} color={COLORS.deletion} bold inverse>
             {change.value}
-          </Text>
+          </Text>,
         );
       } else if (change.added) {
         // Skip added content on removed line
@@ -273,14 +287,14 @@ function renderWordDiffWithSyntax(
             elements.push(
               <Text key={keyIndex++} color={getTokenColor(token.type, theme)}>
                 {token.content}
-              </Text>
+              </Text>,
             );
           }
         } else {
           elements.push(
             <Text key={keyIndex++} color={COLORS.deletion}>
               {change.value}
-            </Text>
+            </Text>,
           );
         }
       }
@@ -291,7 +305,7 @@ function renderWordDiffWithSyntax(
         elements.push(
           <Text key={keyIndex++} color={COLORS.addition} bold inverse>
             {change.value}
-          </Text>
+          </Text>,
         );
       } else if (change.removed) {
         // Skip removed content on added line
@@ -304,14 +318,14 @@ function renderWordDiffWithSyntax(
             elements.push(
               <Text key={keyIndex++} color={getTokenColor(token.type, theme)}>
                 {token.content}
-              </Text>
+              </Text>,
             );
           }
         } else {
           elements.push(
             <Text key={keyIndex++} color={COLORS.addition}>
               {change.value}
-            </Text>
+            </Text>,
           );
         }
       }
@@ -375,8 +389,8 @@ const DiffLineView = memo(function DiffLineView({
   const prefix = getLinePrefix(line.type);
 
   // Determine if we should render word-level diff
-  const useWordDiff = showWordDiff && pairedContent !== undefined &&
-    (line.type === 'add' || line.type === 'remove');
+  const useWordDiff =
+    showWordDiff && pairedContent !== undefined && (line.type === 'add' || line.type === 'remove');
 
   // Determine if we should use syntax highlighting
   const useSyntax = syntaxHighlight && theme && language;
@@ -394,7 +408,7 @@ const DiffLineView = memo(function DiffLineView({
           line.type === 'add' ? line.content : pairedContent,
           line.type as 'add' | 'remove',
           theme,
-          language
+          language,
         )}
       </Text>
     );
@@ -406,7 +420,7 @@ const DiffLineView = memo(function DiffLineView({
         {renderWordDiff(
           line.type === 'remove' ? line.content : pairedContent,
           line.type === 'add' ? line.content : pairedContent,
-          line.type as 'add' | 'remove'
+          line.type as 'add' | 'remove',
         )}
       </Text>
     );
@@ -420,18 +434,29 @@ const DiffLineView = memo(function DiffLineView({
     );
   } else {
     // Plain text
-    contentNode = <Text color={color}>{prefix}{line.content}</Text>;
+    contentNode = (
+      <Text color={color}>
+        {prefix}
+        {line.content}
+      </Text>
+    );
   }
 
   if (showLineNumbers) {
-    const oldNum = line.oldLineNumber?.toString().padStart(lineNumberWidth) ?? ' '.repeat(lineNumberWidth);
-    const newNum = line.newLineNumber?.toString().padStart(lineNumberWidth) ?? ' '.repeat(lineNumberWidth);
+    const oldNum =
+      line.oldLineNumber?.toString().padStart(lineNumberWidth) ?? ' '.repeat(lineNumberWidth);
+    const newNum =
+      line.newLineNumber?.toString().padStart(lineNumberWidth) ?? ' '.repeat(lineNumberWidth);
 
     return (
       <Box>
-        <Text color={COLORS.lineNumber} dimColor>{oldNum}</Text>
+        <Text color={COLORS.lineNumber} dimColor>
+          {oldNum}
+        </Text>
         <Text> </Text>
-        <Text color={COLORS.lineNumber} dimColor>{newNum}</Text>
+        <Text color={COLORS.lineNumber} dimColor>
+          {newNum}
+        </Text>
         <Text> </Text>
         {contentNode}
       </Box>
@@ -454,7 +479,7 @@ const HunkHeaderView = memo(function HunkHeaderView({
   lineNumberWidth?: number;
 }) {
   const header = `@@ -${hunk.oldStart},${hunk.oldCount} +${hunk.newStart},${hunk.newCount} @@`;
-  const gutterWidth = showLineNumbers ? (lineNumberWidth * 2 + 2) : 0;
+  const gutterWidth = showLineNumbers ? lineNumberWidth * 2 + 2 : 0;
 
   return (
     <Box>
@@ -572,7 +597,11 @@ export const DiffView = memo(function DiffView({
 
   // No content
   if (!hasParsedDiff && !hasStringDiff) {
-    return <Text color={COLORS.context} dimColor>No changes</Text>;
+    return (
+      <Text color={COLORS.context} dimColor>
+        No changes
+      </Text>
+    );
   }
 
   // Collapsed view: just show +N/-M summary
@@ -582,7 +611,9 @@ export const DiffView = memo(function DiffView({
 
   // Expanded view with parsed diff (structured rendering)
   if (hasParsedDiff) {
-    const linesPerHunk = maxLines ? Math.ceil(maxLines / Math.max(parsedDiff.hunks.length, 1)) : undefined;
+    const linesPerHunk = maxLines
+      ? Math.ceil(maxLines / Math.max(parsedDiff.hunks.length, 1))
+      : undefined;
 
     return (
       <Box flexDirection="column" marginTop={1}>
@@ -624,7 +655,9 @@ export const DiffView = memo(function DiffView({
     <Box flexDirection="column" marginTop={1}>
       {/* Summary header */}
       <Box gap={1}>
-        <Text color={COLORS.fileHeader} bold>Diff:</Text>
+        <Text color={COLORS.fileHeader} bold>
+          Diff:
+        </Text>
         <DiffSummary additions={stats.additions} deletions={stats.deletions} />
       </Box>
 

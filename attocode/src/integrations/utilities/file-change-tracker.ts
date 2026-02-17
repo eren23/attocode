@@ -127,10 +127,7 @@ function generateUnifiedDiff(before: string, after: string, filePath: string): s
   const beforeLines = before.split('\n');
   const afterLines = after.split('\n');
 
-  const header = [
-    `--- a/${filePath}`,
-    `+++ b/${filePath}`,
-  ];
+  const header = [`--- a/${filePath}`, `+++ b/${filePath}`];
 
   // Simple line-by-line diff (not optimal but functional)
   const hunks: string[] = [];
@@ -165,8 +162,12 @@ function generateUnifiedDiff(before: string, after: string, filePath: string): s
           let matchCount = 0;
           let tempI = i;
           let tempJ = j;
-          while (tempI < beforeLines.length && tempJ < afterLines.length &&
-                 beforeLines[tempI] === afterLines[tempJ] && matchCount < 3) {
+          while (
+            tempI < beforeLines.length &&
+            tempJ < afterLines.length &&
+            beforeLines[tempI] === afterLines[tempJ] &&
+            matchCount < 3
+          ) {
             matchCount++;
             tempI++;
             tempJ++;
@@ -613,9 +614,11 @@ export class FileChangeTracker {
    * Undo the last change to a specific file.
    */
   async undoLastChange(filePath: string): Promise<UndoResult> {
-    const row = this.stmts.getLastFileChange.get(this.sessionId, filePath) as {
-      id: number;
-    } | undefined;
+    const row = this.stmts.getLastFileChange.get(this.sessionId, filePath) as
+      | {
+          id: number;
+        }
+      | undefined;
 
     if (!row) {
       return {
@@ -670,7 +673,7 @@ export class FileChangeTracker {
       createdAt: string;
     }>;
 
-    return rows.map(row => ({
+    return rows.map((row) => ({
       id: row.id,
       sessionId: row.sessionId,
       turnNumber: row.turnNumber,
@@ -715,7 +718,7 @@ export class FileChangeTracker {
       createdAt: string;
     }>;
 
-    return rows.map(row => ({
+    return rows.map((row) => ({
       id: row.id,
       sessionId: row.sessionId,
       turnNumber: row.turnNumber,
@@ -782,7 +785,7 @@ export class FileChangeTracker {
 export function createFileChangeTracker(
   db: Database.Database,
   sessionId: string,
-  config?: FileChangeTrackerConfig
+  config?: FileChangeTrackerConfig,
 ): FileChangeTracker {
   return new FileChangeTracker(db, sessionId, config);
 }

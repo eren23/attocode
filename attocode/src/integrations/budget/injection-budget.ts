@@ -96,7 +96,7 @@ export class InjectionBudgetManager {
     if (proposals.length === 0) return [];
 
     // Assign priorities from config for known slots
-    const withPriority = proposals.map(slot => ({
+    const withPriority = proposals.map((slot) => ({
       ...slot,
       priority: this.config.slotPriorities[slot.name] ?? slot.priority,
     }));

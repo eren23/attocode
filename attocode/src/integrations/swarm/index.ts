@@ -34,7 +34,12 @@ export type {
   ArtifactEntry,
   ArtifactInventory,
 } from './types.js';
-export { DEFAULT_SWARM_CONFIG, subtaskToSwarmTask, taskResultToAgentOutput, SUBTASK_TO_CAPABILITY } from './types.js';
+export {
+  DEFAULT_SWARM_CONFIG,
+  subtaskToSwarmTask,
+  taskResultToAgentOutput,
+  SUBTASK_TO_CAPABILITY,
+} from './types.js';
 
 // Events
 export type { SwarmEvent } from './swarm-events.js';
@@ -48,7 +53,12 @@ export type { SwarmBudgetPool } from './swarm-budget.js';
 export { createSwarmBudgetPool } from './swarm-budget.js';
 
 // Model Selector
-export { autoDetectWorkerModels, selectWorkerForCapability, ModelHealthTracker, selectAlternativeModel } from './model-selector.js';
+export {
+  autoDetectWorkerModels,
+  selectWorkerForCapability,
+  ModelHealthTracker,
+  selectAlternativeModel,
+} from './model-selector.js';
 export type { ModelSelectorOptions } from './model-selector.js';
 
 // Worker Pool
@@ -65,7 +75,13 @@ export type { ThrottleConfig, ThrottleStats } from './request-throttle.js';
 export { FREE_TIER_THROTTLE, PAID_TIER_THROTTLE } from './request-throttle.js';
 
 // Helpers (extracted to break circular dependency)
-export { isHollowCompletion, FAILURE_INDICATORS, hasFutureIntentLanguage, BOILERPLATE_INDICATORS, repoLooksUnscaffolded } from './swarm-helpers.js';
+export {
+  isHollowCompletion,
+  FAILURE_INDICATORS,
+  hasFutureIntentLanguage,
+  BOILERPLATE_INDICATORS,
+  repoLooksUnscaffolded,
+} from './swarm-helpers.js';
 export type { SwarmEventListener } from './swarm-helpers.js';
 
 // Orchestrator
@@ -73,10 +89,20 @@ export { SwarmOrchestrator, createSwarmOrchestrator } from './swarm-orchestrator
 
 // Event Bridge (file-based dashboard integration)
 export { SwarmEventBridge } from './swarm-event-bridge.js';
-export type { SwarmLiveState, TimestampedSwarmEvent, SwarmEventBridgeOptions } from './swarm-event-bridge.js';
+export type {
+  SwarmLiveState,
+  TimestampedSwarmEvent,
+  SwarmEventBridgeOptions,
+} from './swarm-event-bridge.js';
 
 // State Store (V2: persistence/resume)
 export { SwarmStateStore } from './swarm-state-store.js';
 
 // Config Loader (V3: YAML support)
-export { loadSwarmYamlConfig, mergeSwarmConfigs, parseSwarmYaml, yamlToSwarmConfig, normalizeCapabilities } from './swarm-config-loader.js';
+export {
+  loadSwarmYamlConfig,
+  mergeSwarmConfigs,
+  parseSwarmYaml,
+  yamlToSwarmConfig,
+  normalizeCapabilities,
+} from './swarm-config-loader.js';

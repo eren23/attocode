@@ -7,13 +7,7 @@
  * Extracted from sqlite-store.ts as part of Phase 3c restructuring.
  */
 
-import type {
-  Goal,
-  GoalStatus,
-  Juncture,
-  JunctureType,
-  SQLiteStoreDeps,
-} from './sqlite-store.js';
+import type { Goal, GoalStatus, Juncture, JunctureType, SQLiteStoreDeps } from './sqlite-store.js';
 
 // =============================================================================
 // GOAL CRUD
@@ -32,7 +26,7 @@ export function createGoal(
     parentGoalId?: string;
     progressTotal?: number;
     metadata?: Record<string, unknown>;
-  } = {}
+  } = {},
 ): string | undefined {
   if (!deps.features.goals || !deps.stmts.insertGoal) {
     return undefined;
@@ -76,7 +70,7 @@ export function updateGoal(
     progressCurrent?: number;
     progressTotal?: number;
     metadata?: Record<string, unknown>;
-  }
+  },
 ): void {
   if (!deps.features.goals || !deps.stmts.updateGoal) {
     return;
@@ -154,9 +148,7 @@ export function getGoalsSummary(deps: SQLiteStoreDeps, sessionId?: string): stri
 
   const lines: string[] = ['Active Goals:'];
   for (const goal of goals) {
-    const progress = goal.progressTotal
-      ? ` (${goal.progressCurrent}/${goal.progressTotal})`
-      : '';
+    const progress = goal.progressTotal ? ` (${goal.progressCurrent}/${goal.progressTotal})` : '';
     const priority = goal.priority === 1 ? ' [HIGH]' : goal.priority === 3 ? ' [low]' : '';
     lines.push(`\u2022 ${goal.goalText}${progress}${priority}`);
   }
@@ -180,7 +172,7 @@ export function logJuncture(
     outcome?: string;
     importance?: number;
     context?: Record<string, unknown>;
-  } = {}
+  } = {},
 ): number {
   if (!deps.features.goals || !deps.stmts.insertJuncture) {
     return -1;
@@ -207,7 +199,11 @@ export function logJuncture(
 /**
  * List junctures for a session.
  */
-export function listJunctures(deps: SQLiteStoreDeps, sessionId?: string, limit?: number): Juncture[] {
+export function listJunctures(
+  deps: SQLiteStoreDeps,
+  sessionId?: string,
+  limit?: number,
+): Juncture[] {
   if (!deps.features.goals || !deps.stmts.listJunctures) {
     return [];
   }
@@ -222,7 +218,11 @@ export function listJunctures(deps: SQLiteStoreDeps, sessionId?: string, limit?:
 /**
  * Get recent critical junctures for context.
  */
-export function getJuncturesSummary(deps: SQLiteStoreDeps, sessionId?: string, limit: number = 5): string {
+export function getJuncturesSummary(
+  deps: SQLiteStoreDeps,
+  sessionId?: string,
+  limit: number = 5,
+): string {
   if (!deps.features.goals) {
     return '';
   }
@@ -234,8 +234,14 @@ export function getJuncturesSummary(deps: SQLiteStoreDeps, sessionId?: string, l
 
   const lines: string[] = ['Recent Key Moments:'];
   for (const j of junctures) {
-    const icon = j.type === 'failure' ? '\u2717' : j.type === 'breakthrough' ? '\u2605' :
-                 j.type === 'decision' ? '\u2192' : '\u21BB';
+    const icon =
+      j.type === 'failure'
+        ? '\u2717'
+        : j.type === 'breakthrough'
+          ? '\u2605'
+          : j.type === 'decision'
+            ? '\u2192'
+            : '\u21BB';
     lines.push(`${icon} [${j.type}] ${j.description}`);
     if (j.outcome) {
       lines.push(`  \u2514\u2500 ${j.outcome}`);

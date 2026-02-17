@@ -128,13 +128,9 @@ export class ReActManager {
   private patterns: ReActPatterns;
   private listeners: ReActEventListener[] = [];
 
-  constructor(
-    provider: LLMProvider,
-    tools: ToolDefinition[],
-    config: Partial<ReActConfig> = {}
-  ) {
+  constructor(provider: LLMProvider, tools: ToolDefinition[], config: Partial<ReActConfig> = {}) {
     this.provider = provider;
-    this.tools = new Map(tools.map(t => [t.name, t]));
+    this.tools = new Map(tools.map((t) => [t.name, t]));
     this.config = {
       maxSteps: config.maxSteps ?? 15,
       stopOnAnswer: config.stopOnAnswer ?? true,
@@ -208,7 +204,7 @@ export class ReActManager {
         // Add to messages for next iteration
         messages.push(
           { role: 'assistant', content: output },
-          { role: 'user', content: `Observation: ${observation}` }
+          { role: 'user', content: `Observation: ${observation}` },
         );
       } else {
         // No action, just add the response
@@ -291,7 +287,7 @@ export class ReActManager {
 
   private buildSystemPrompt(): string {
     const toolDescriptions = Array.from(this.tools.values())
-      .map(t => `- ${t.name}: ${t.description}`)
+      .map((t) => `- ${t.name}: ${t.description}`)
       .join('\n');
 
     return REACT_SYSTEM_PROMPT.replace('{tools}', toolDescriptions);
@@ -367,7 +363,7 @@ export class ReActManager {
 export function createReActManager(
   provider: LLMProvider,
   tools: ToolDefinition[],
-  config?: Partial<ReActConfig>
+  config?: Partial<ReActConfig>,
 ): ReActManager {
   return new ReActManager(provider, tools, config);
 }
@@ -391,18 +387,14 @@ export interface ReActComparison {
  * Extract all thoughts from a trace.
  */
 export function extractThoughts(trace: ReActTrace): string[] {
-  return trace.steps
-    .map(s => s.thought)
-    .filter(t => t && t !== 'No explicit thought');
+  return trace.steps.map((s) => s.thought).filter((t) => t && t !== 'No explicit thought');
 }
 
 /**
  * Extract all actions from a trace.
  */
 export function extractActions(trace: ReActTrace): ReActAction[] {
-  return trace.steps
-    .filter(s => s.action)
-    .map(s => s.action!);
+  return trace.steps.filter((s) => s.action).map((s) => s.action!);
 }
 
 /**
@@ -416,8 +408,8 @@ export function hasCoherentReasoning(trace: ReActTrace): boolean {
 
   // Check for progression keywords
   const progressionKeywords = ['then', 'next', 'now', 'based on', 'after', 'since'];
-  const hasProgression = thoughts.some(t =>
-    progressionKeywords.some(k => t.toLowerCase().includes(k))
+  const hasProgression = thoughts.some((t) =>
+    progressionKeywords.some((k) => t.toLowerCase().includes(k)),
   );
 
   return hasProgression;

@@ -36,7 +36,8 @@ export const PROMPT_TEMPLATES: Record<AnalysisTemplate, (ctx: PromptContext) => 
   /**
    * Efficiency audit - broad analysis of session efficiency.
    */
-  efficiencyAudit: (ctx: PromptContext) => `
+  efficiencyAudit: (ctx: PromptContext) =>
+    `
 You are an expert at analyzing AI agent execution traces. Analyze this trace summary and provide an efficiency audit.
 
 ## Trace Summary
@@ -93,7 +94,8 @@ Respond with a JSON object matching this schema:
   /**
    * Issue investigation - deep dive into a specific issue.
    */
-  issueInvestigation: (ctx: PromptContext) => `
+  issueInvestigation: (ctx: PromptContext) =>
+    `
 You are an expert at debugging AI agent behavior. Investigate this specific issue in the trace.
 
 ## Issue ID: ${ctx.issueId || 'unknown'}
@@ -134,7 +136,8 @@ Respond with a JSON object:
   /**
    * Comparison analysis - compare two sessions.
    */
-  comparisonAnalysis: (ctx: PromptContext) => `
+  comparisonAnalysis: (ctx: PromptContext) =>
+    `
 You are an expert at comparing AI agent execution patterns. Compare these two trace sessions.
 
 ## Baseline Session
@@ -172,7 +175,8 @@ Respond with a JSON object:
   /**
    * Root cause analysis - five whys approach.
    */
-  rootCauseAnalysis: (ctx: PromptContext) => `
+  rootCauseAnalysis: (ctx: PromptContext) =>
+    `
 You are an expert at root cause analysis. Use the Five Whys technique to analyze this trace failure.
 
 ## Trace Summary
@@ -212,10 +216,7 @@ Respond with a JSON object:
 /**
  * Generate an analysis prompt.
  */
-export function generateAnalysisPrompt(
-  template: AnalysisTemplate,
-  context: PromptContext
-): string {
+export function generateAnalysisPrompt(template: AnalysisTemplate, context: PromptContext): string {
   const generator = PROMPT_TEMPLATES[template];
   if (!generator) {
     throw new Error(`Unknown analysis template: ${template}`);

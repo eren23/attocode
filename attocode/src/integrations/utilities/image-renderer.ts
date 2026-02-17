@@ -83,11 +83,10 @@ export function detectProtocol(): ImageProtocol {
   }
 
   // Check for sixel support via TERM
-  if (env.TERM && (
-    env.TERM.includes('sixel') ||
-    env.TERM === 'xterm' ||
-    env.TERM === 'xterm-256color'
-  )) {
+  if (
+    env.TERM &&
+    (env.TERM.includes('sixel') || env.TERM === 'xterm' || env.TERM === 'xterm-256color')
+  ) {
     // Note: Sixel detection is imperfect; many terminals don't advertise it
     return 'sixel';
   }
@@ -137,9 +136,7 @@ export class ImageRenderer {
       preserveAspectRatio: config.preserveAspectRatio ?? true,
     };
 
-    this.protocol = this.config.protocol === 'auto'
-      ? detectProtocol()
-      : this.config.protocol;
+    this.protocol = this.config.protocol === 'auto' ? detectProtocol() : this.config.protocol;
   }
 
   /**
@@ -238,9 +235,7 @@ export class ImageRenderer {
 
       // Kitty graphics protocol escape sequence
       // a=T (transmit), f=100 (PNG), m=0/1 (more chunks coming)
-      const params = i === 0
-        ? `a=T,f=100,m=${isLast ? 0 : 1}`
-        : `m=${isLast ? 0 : 1}`;
+      const params = i === 0 ? `a=T,f=100,m=${isLast ? 0 : 1}` : `m=${isLast ? 0 : 1}`;
 
       chunks.push(`\x1b_G${params};${chunk}\x1b\\`);
     }
@@ -328,10 +323,7 @@ export class ImageRenderer {
   /**
    * Render an image with a caption.
    */
-  async renderWithCaption(
-    filePath: string,
-    caption?: string
-  ): Promise<string> {
+  async renderWithCaption(filePath: string, caption?: string): Promise<string> {
     const result = await this.renderFile(filePath);
 
     const lines: string[] = [];

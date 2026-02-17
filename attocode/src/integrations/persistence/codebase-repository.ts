@@ -70,10 +70,15 @@ export function saveCodebaseAnalysis(
     for (const chunk of chunks) {
       const contentHash = djb2Hash(chunk.content).toString(36);
       insertChunk.run(
-        chunk.filePath, root, contentHash,
+        chunk.filePath,
+        root,
+        contentHash,
         JSON.stringify(chunk.symbolDetails),
         JSON.stringify(chunk.dependencies),
-        chunk.importance, chunk.type, chunk.tokenCount, Date.now(),
+        chunk.importance,
+        chunk.type,
+        chunk.tokenCount,
+        Date.now(),
       );
     }
     for (const [source, targets] of dependencyGraph) {
@@ -100,9 +105,9 @@ export function loadCodebaseAnalysis(
   if (!deps.features.codebaseAnalysis) return null;
 
   const { db } = deps;
-  const rows = db.prepare(
-    'SELECT * FROM codebase_chunks WHERE workspace_root = ?',
-  ).all(root) as Array<{
+  const rows = db
+    .prepare('SELECT * FROM codebase_chunks WHERE workspace_root = ?')
+    .all(root) as Array<{
     file_path: string;
     content_hash: string;
     symbols_json: string;
@@ -129,9 +134,9 @@ export function loadCodebaseAnalysis(
     });
   }
 
-  const depRows = db.prepare(
-    'SELECT source_file, target_file FROM codebase_deps WHERE workspace_root = ?',
-  ).all(root) as Array<{ source_file: string; target_file: string }>;
+  const depRows = db
+    .prepare('SELECT source_file, target_file FROM codebase_deps WHERE workspace_root = ?')
+    .all(root) as Array<{ source_file: string; target_file: string }>;
 
   const depsMap = new Map<string, Set<string>>();
   for (const row of depRows) {
@@ -143,4 +148,3 @@ export function loadCodebaseAnalysis(
 
   return { chunks, deps: depsMap };
 }
-

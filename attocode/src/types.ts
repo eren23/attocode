@@ -97,7 +97,10 @@ export interface MessageWithStructuredContent {
  */
 export interface LLMProvider {
   name?: string;
-  chat(messages: (Message | MessageWithStructuredContent)[], options?: ChatOptions): Promise<ChatResponse>;
+  chat(
+    messages: (Message | MessageWithStructuredContent)[],
+    options?: ChatOptions,
+  ): Promise<ChatResponse>;
   stream?(messages: Message[], options?: ChatOptions): AsyncIterable<StreamChunk>;
 }
 
@@ -922,12 +925,15 @@ export interface LSPAgentConfig {
   autoDetect?: boolean;
 
   /** Custom server configurations (language -> {command, args, extensions}) */
-  servers?: Record<string, {
-    command: string;
-    args?: string[];
-    extensions: string[];
-    languageId: string;
-  }>;
+  servers?: Record<
+    string,
+    {
+      command: string;
+      args?: string[];
+      extensions: string[];
+      languageId: string;
+    }
+  >;
 
   /** Request timeout in ms */
   timeout?: number;
@@ -1200,16 +1206,18 @@ export interface ProviderResilienceConfig {
   enabled?: boolean;
 
   /** Circuit breaker configuration */
-  circuitBreaker?: {
-    /** Number of failures before opening circuit (default: 5) */
-    failureThreshold?: number;
-    /** Time in ms before testing recovery (default: 30000) */
-    resetTimeout?: number;
-    /** Requests allowed in half-open state (default: 1) */
-    halfOpenRequests?: number;
-    /** Error types that trigger circuit (default: all) */
-    tripOnErrors?: Array<'RATE_LIMITED' | 'SERVER_ERROR' | 'NETWORK_ERROR' | 'TIMEOUT' | 'ALL'>;
-  } | false;
+  circuitBreaker?:
+    | {
+        /** Number of failures before opening circuit (default: 5) */
+        failureThreshold?: number;
+        /** Time in ms before testing recovery (default: 30000) */
+        resetTimeout?: number;
+        /** Requests allowed in half-open state (default: 1) */
+        halfOpenRequests?: number;
+        /** Error types that trigger circuit (default: all) */
+        tripOnErrors?: Array<'RATE_LIMITED' | 'SERVER_ERROR' | 'NETWORK_ERROR' | 'TIMEOUT' | 'ALL'>;
+      }
+    | false;
 
   /** Fallback provider names in priority order */
   fallbackProviders?: string[];
@@ -1387,11 +1395,26 @@ export interface AgentResult {
 export type AgentEvent =
   // Lifecycle hooks
   | { type: 'run.before'; task: string }
-  | { type: 'run.after'; success: boolean; reason: AgentCompletionStatus['reason']; details?: string }
+  | {
+      type: 'run.after';
+      success: boolean;
+      reason: AgentCompletionStatus['reason'];
+      details?: string;
+    }
   | { type: 'iteration.before'; iteration: number }
-  | { type: 'iteration.after'; iteration: number; hadToolCalls: boolean; completionCandidate: boolean }
+  | {
+      type: 'iteration.after';
+      iteration: number;
+      hadToolCalls: boolean;
+      completionCandidate: boolean;
+    }
   | { type: 'completion.before'; reason: string; attempt?: number; maxAttempts?: number }
-  | { type: 'completion.after'; success: boolean; reason: AgentCompletionStatus['reason']; details?: string }
+  | {
+      type: 'completion.after';
+      success: boolean;
+      reason: AgentCompletionStatus['reason'];
+      details?: string;
+    }
   | { type: 'recovery.before'; reason: string; attempt: number; maxAttempts: number }
   | { type: 'recovery.after'; reason: string; recovered: boolean; attempts: number }
   // Core events
@@ -1437,11 +1460,30 @@ export type AgentEvent =
   | { type: 'intent.classified'; tool: string; intent: string; confidence: number }
   | { type: 'grant.created'; grantId: string; tool: string }
   | { type: 'grant.used'; grantId: string }
-  | { type: 'policy.profile.resolved'; profile: string; context: 'root' | 'subagent' | 'swarm'; selectionSource?: 'explicit' | 'worker-capability' | 'task-type' | 'default'; usedLegacyMappings: boolean; legacySources?: string[] }
+  | {
+      type: 'policy.profile.resolved';
+      profile: string;
+      context: 'root' | 'subagent' | 'swarm';
+      selectionSource?: 'explicit' | 'worker-capability' | 'task-type' | 'default';
+      usedLegacyMappings: boolean;
+      legacySources?: string[];
+    }
   | { type: 'policy.legacy.fallback.used'; profile: string; sources: string[]; warnings: string[] }
   | { type: 'policy.tool.auto-allowed'; tool: string; reason: string }
-  | { type: 'policy.tool.blocked'; tool: string; profile?: string; phase?: 'precheck' | 'enforced'; reason: string }
-  | { type: 'policy.bash.blocked'; command: string; profile?: string; phase?: 'precheck' | 'enforced'; reason: string }
+  | {
+      type: 'policy.tool.blocked';
+      tool: string;
+      profile?: string;
+      phase?: 'precheck' | 'enforced';
+      reason: string;
+    }
+  | {
+      type: 'policy.bash.blocked';
+      command: string;
+      profile?: string;
+      phase?: 'precheck' | 'enforced';
+      reason: string;
+    }
   // Thread events (Lesson 24)
   | { type: 'thread.forked'; threadId: string; parentId: string }
   | { type: 'thread.switched'; fromId: string; toId: string }
@@ -1452,11 +1494,21 @@ export type AgentEvent =
   // agentId is the unique instance ID (e.g., "spawn-1704067200000-abc123")
   // agentType is the agent type name (e.g., "researcher") for display purposes
   | { type: 'agent.spawn'; agentId: string; name: string; task: string }
-  | { type: 'agent.complete'; agentId: string; agentType?: string; success: boolean; output?: string }
+  | {
+      type: 'agent.complete';
+      agentId: string;
+      agentType?: string;
+      success: boolean;
+      output?: string;
+    }
   | { type: 'agent.error'; agentId: string; agentType?: string; error: string }
   | { type: 'agent.registered'; name: string }
   | { type: 'agent.unregistered'; name: string }
-  | { type: 'agent.pending_plan'; agentId: string; changes: Array<{ id: string; tool: string; args: Record<string, unknown>; reason: string }> }
+  | {
+      type: 'agent.pending_plan';
+      agentId: string;
+      changes: Array<{ id: string; tool: string; args: Record<string, unknown>; reason: string }>;
+    }
   // Cancellation events
   | { type: 'cancellation.requested'; reason?: string }
   | { type: 'cancellation.completed'; cleanupDuration: number }
@@ -1465,59 +1517,160 @@ export type AgentEvent =
   | { type: 'cache.miss'; query: string }
   | { type: 'cache.set'; query: string }
   // Compaction events
-  | { type: 'compaction.auto'; tokensBefore: number; tokensAfter: number; messagesCompacted: number }
+  | {
+      type: 'compaction.auto';
+      tokensBefore: number;
+      tokensAfter: number;
+      messagesCompacted: number;
+    }
   | { type: 'compaction.warning'; currentTokens: number; threshold: number }
   // Insight events (verbose execution feedback)
-  | { type: 'insight.tokens'; inputTokens: number; outputTokens: number; cacheReadTokens?: number; cacheWriteTokens?: number; cost?: number; model: string }
-  | { type: 'insight.context'; currentTokens: number; maxTokens: number; messageCount: number; percentUsed: number }
+  | {
+      type: 'insight.tokens';
+      inputTokens: number;
+      outputTokens: number;
+      cacheReadTokens?: number;
+      cacheWriteTokens?: number;
+      cost?: number;
+      model: string;
+    }
+  | {
+      type: 'insight.context';
+      currentTokens: number;
+      maxTokens: number;
+      messageCount: number;
+      percentUsed: number;
+    }
   | { type: 'insight.tool'; tool: string; summary: string; durationMs: number; success: boolean }
   | { type: 'insight.routing'; model: string; reason: string; complexity?: string }
   // Mode events
   | { type: 'mode.changed'; from: string; to: string }
   // Plan mode events
-  | { type: 'plan.change.queued'; tool: string; changeId?: string; summary?: string; subagent?: string }
+  | {
+      type: 'plan.change.queued';
+      tool: string;
+      changeId?: string;
+      summary?: string;
+      subagent?: string;
+    }
   | { type: 'plan.approved'; changeCount: number }
   | { type: 'plan.rejected' }
   | { type: 'plan.executing'; changeIndex: number; totalChanges: number }
-  | { type: 'plan.change.complete'; changeIndex: number; tool: string; result: unknown; error?: string }
+  | {
+      type: 'plan.change.complete';
+      changeIndex: number;
+      tool: string;
+      result: unknown;
+      error?: string;
+    }
   // Resilience events (LLM call recovery)
   | { type: 'resilience.retry'; reason: string; attempt: number; maxAttempts: number }
   | { type: 'resilience.recovered'; reason: string; attempts: number }
-  | { type: 'resilience.continue'; reason: string; continuation: number; maxContinuations: number; accumulatedLength: number }
+  | {
+      type: 'resilience.continue';
+      reason: string;
+      continuation: number;
+      maxContinuations: number;
+      accumulatedLength: number;
+    }
   | { type: 'resilience.completed'; reason: string; continuations: number; finalLength: number }
   | { type: 'resilience.failed'; reason: string; emptyRetries: number; continuations: number }
   | { type: 'resilience.truncated_tool_call'; toolNames: string[] }
-  | { type: 'resilience.incomplete_action_detected'; reason: string; attempt: number; maxAttempts: number; requiresArtifact: boolean }
+  | {
+      type: 'resilience.incomplete_action_detected';
+      reason: string;
+      attempt: number;
+      maxAttempts: number;
+      requiresArtifact: boolean;
+    }
   | { type: 'resilience.incomplete_action_recovered'; reason: string; attempts: number }
-  | { type: 'resilience.incomplete_action_failed'; reason: string; attempts: number; maxAttempts: number }
+  | {
+      type: 'resilience.incomplete_action_failed';
+      reason: string;
+      attempts: number;
+      maxAttempts: number;
+    }
   // Learning store events
   | { type: 'learning.proposed'; learningId: string; description: string }
   | { type: 'learning.validated'; learningId: string }
   | { type: 'learning.applied'; learningId: string; context: string }
   // Decision transparency events (Phase 3)
-  | { type: 'decision.routing'; model: string; reason: string; alternatives?: Array<{ model: string; rejected: string }> }
-  | { type: 'decision.tool'; tool: string; decision: 'allowed' | 'prompted' | 'blocked'; policyMatch?: string }
-  | { type: 'context.health'; currentTokens: number; maxTokens: number; estimatedExchanges: number; percentUsed: number }
+  | {
+      type: 'decision.routing';
+      model: string;
+      reason: string;
+      alternatives?: Array<{ model: string; rejected: string }>;
+    }
+  | {
+      type: 'decision.tool';
+      tool: string;
+      decision: 'allowed' | 'prompted' | 'blocked';
+      policyMatch?: string;
+    }
+  | {
+      type: 'context.health';
+      currentTokens: number;
+      maxTokens: number;
+      estimatedExchanges: number;
+      percentUsed: number;
+    }
   // Subagent visibility events (Phase 5)
   | { type: 'subagent.iteration'; agentId: string; iteration: number; maxIterations: number }
-  | { type: 'subagent.phase'; agentId: string; phase: 'exploring' | 'planning' | 'executing' | 'completing' }
-  | { type: 'subagent.wrapup.started'; agentId: string; agentType: string; reason: string; elapsedMs: number }
+  | {
+      type: 'subagent.phase';
+      agentId: string;
+      phase: 'exploring' | 'planning' | 'executing' | 'completing';
+    }
+  | {
+      type: 'subagent.wrapup.started';
+      agentId: string;
+      agentType: string;
+      reason: string;
+      elapsedMs: number;
+    }
   | { type: 'subagent.wrapup.completed'; agentId: string; agentType: string; elapsedMs: number }
-  | { type: 'subagent.timeout.hard_kill'; agentId: string; agentType: string; reason: string; elapsedMs: number }
+  | {
+      type: 'subagent.timeout.hard_kill';
+      agentId: string;
+      agentType: string;
+      reason: string;
+      elapsedMs: number;
+    }
   // Parallel subagent events
   | { type: 'parallel.spawn.start'; count: number; agents: string[] }
-  | { type: 'parallel.spawn.complete'; count: number; successCount: number; results: Array<{ agent: string; success: boolean; tokens: number }> }
+  | {
+      type: 'parallel.spawn.complete';
+      count: number;
+      successCount: number;
+      results: Array<{ agent: string; success: boolean; tokens: number }>;
+    }
   // Task system events (Claude Code-style)
   | { type: 'task.created'; task: { id: string; subject: string; status: string } }
   | { type: 'task.updated'; task: { id: string; subject: string; status: string } }
   | { type: 'task.deleted'; taskId: string }
   // Safeguard events (tool call explosion defense)
   | { type: 'safeguard.tool_call_cap'; requested: number; cap: number; droppedCount: number }
-  | { type: 'safeguard.circuit_breaker'; totalInBatch: number; failures: number; threshold: number; skipped: number }
-  | { type: 'safeguard.context_overflow_guard'; estimatedTokens: number; maxTokens: number; toolResultsSkipped: number }
+  | {
+      type: 'safeguard.circuit_breaker';
+      totalInBatch: number;
+      failures: number;
+      threshold: number;
+      skipped: number;
+    }
+  | {
+      type: 'safeguard.context_overflow_guard';
+      estimatedTokens: number;
+      maxTokens: number;
+      toolResultsSkipped: number;
+    }
   // Diagnostics events (AST + compilation visibility)
   | { type: 'diagnostics.syntax-error'; file: string; line: number; message: string }
-  | { type: 'diagnostics.tsc-check'; errorCount: number; duration: number; trigger: 'periodic' | 'completion' | 'manual' }
+  | {
+      type: 'diagnostics.tsc-check';
+      errorCount: number;
+      duration: number;
+      trigger: 'periodic' | 'completion' | 'manual';
+    }
   // Swarm mode events (M8: use union with canonical SwarmEvent type)
   | import('./integrations/swarm/swarm-events.js').SwarmEvent;
 

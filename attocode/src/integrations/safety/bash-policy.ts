@@ -82,10 +82,13 @@ export const FILE_MUTATION_PATTERNS: Array<{ pattern: RegExp; reason: string }> 
   { pattern: /<<-?\s*['"]?[A-Za-z_][\w-]*/m, reason: 'heredoc (<<)' },
   { pattern: /(^|[^<])>>(?!&)\s*(?!\/dev\/null)\S/m, reason: 'append redirect (>>)' },
   { pattern: /(^|[^>])>(?!&)\s*(?!\/dev\/null)\S/m, reason: 'output redirect (>)' },
-  { pattern: /\|\s*tee\b\s+(?:-[aip]\s+)*(?!\/dev\/null\b)(?!\||;|$)[^\s|;]/m, reason: 'pipe to tee' },
+  {
+    pattern: /\|\s*tee\b\s+(?:-[aip]\s+)*(?!\/dev\/null\b)(?!\||;|$)[^\s|;]/m,
+    reason: 'pipe to tee',
+  },
   { pattern: /\bsed\b[^|;]*\s-i(\b|['"])/m, reason: 'in-place sed edit' },
   { pattern: /\bperl\b[^|;]*\s-i(\b|['"])/m, reason: 'in-place perl edit' },
-  { pattern: /\bawk\b[^|;]*-i\s*(inplace|in_place)?/mi, reason: 'in-place awk edit' },
+  { pattern: /\bawk\b[^|;]*-i\s*(inplace|in_place)?/im, reason: 'in-place awk edit' },
   { pattern: /-exec\b.*\b(rm|mv|cp|chmod|chown)\b/m, reason: 'find -exec mutation' },
   { pattern: /-delete\b/m, reason: 'find -delete' },
   { pattern: /\bxargs\b.*\b(rm|mv|cp|chmod|chown)\b/m, reason: 'xargs mutation' },
@@ -108,10 +111,10 @@ export function stripCdPrefix(command: string): string {
 export function isReadOnlyBashCommand(command: string): boolean {
   const trimmed = command.trim();
   const effective = stripCdPrefix(trimmed);
-  if (!READ_ONLY_PATTERNS.some(p => p.test(effective))) {
+  if (!READ_ONLY_PATTERNS.some((p) => p.test(effective))) {
     return false;
   }
-  if (WRITE_COMMAND_PATTERNS.some(p => p.test(trimmed))) {
+  if (WRITE_COMMAND_PATTERNS.some((p) => p.test(trimmed))) {
     return false;
   }
   return !detectFileMutationViaBash(trimmed).detected;
@@ -122,7 +125,7 @@ export function isWriteLikeBashCommand(command: string): boolean {
   if (detectFileMutationViaBash(trimmed).detected) {
     return true;
   }
-  return WRITE_COMMAND_PATTERNS.some(p => p.test(trimmed));
+  return WRITE_COMMAND_PATTERNS.some((p) => p.test(trimmed));
 }
 
 export function evaluateBashPolicy(

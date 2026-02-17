@@ -6,15 +6,28 @@
  */
 
 import type { AgentRegistry, AgentDefinition, SpawnResult } from '../agents/agent-registry.js';
-import type { SwarmConfig, SwarmTask, SwarmTaskResult, SwarmWorkerSpec, SwarmWorkerStatus } from './types.js';
+import type {
+  SwarmConfig,
+  SwarmTask,
+  SwarmTaskResult,
+  SwarmWorkerSpec,
+  SwarmWorkerStatus,
+} from './types.js';
 import { getTaskTypeConfig, type WorkerCapability } from './types.js';
 import { selectWorkerForCapability, type ModelHealthTracker } from './model-selector.js';
 import type { SwarmBudgetPool } from './swarm-budget.js';
 import type { SharedContextEngine } from '../../shared/context-engine.js';
 import { WorkerBudgetTracker, createWorkerBudgetTracker } from '../../shared/budget-tracker.js';
-import { buildDelegationPrompt, createMinimalDelegationSpec } from '../agents/delegation-protocol.js';
+import {
+  buildDelegationPrompt,
+  createMinimalDelegationSpec,
+} from '../agents/delegation-protocol.js';
 import { getSubagentQualityPrompt } from '../utilities/thinking-strategy.js';
-import { getEnvironmentFacts, formatFactsBlock, formatFactsCompact } from '../utilities/environment-facts.js';
+import {
+  getEnvironmentFacts,
+  formatFactsBlock,
+  formatFactsCompact,
+} from '../utilities/environment-facts.js';
 import { calculateCost } from '../utilities/openrouter-pricing.js';
 import { resolvePolicyProfile } from '../safety/policy-engine.js';
 
@@ -103,8 +116,14 @@ export class SwarmWorkerPool {
    * Select the best worker spec for a task based on capability matching.
    */
   selectWorker(task: SwarmTask): SwarmWorkerSpec | undefined {
-    const capability: WorkerCapability = getTaskTypeConfig(task.type, this.config).capability ?? 'code';
-    return selectWorkerForCapability(this.workers, capability, this.dispatchCount++, this.healthTracker);
+    const capability: WorkerCapability =
+      getTaskTypeConfig(task.type, this.config).capability ?? 'code';
+    return selectWorkerForCapability(
+      this.workers,
+      capability,
+      this.dispatchCount++,
+      this.healthTracker,
+    );
   }
 
   /**
@@ -138,18 +157,20 @@ export class SwarmWorkerPool {
       swarmConfig: this.config,
       worker,
       taskType: task.type,
-      legacyAllowedTools: this.config.toolAccessMode === 'whitelist' ? worker.allowedTools : undefined,
+      legacyAllowedTools:
+        this.config.toolAccessMode === 'whitelist' ? worker.allowedTools : undefined,
       legacyDeniedTools: worker.deniedTools,
       globalDeniedTools: this.config.globalDeniedTools,
     });
     const { profile } = policyResolution;
 
     // If profile requires whitelist, expose only allowed tools to this worker.
-    const tools = (this.config.toolAccessMode === 'all' && !requestedProfile)
-      ? undefined
-      : (profile.toolAccessMode === 'whitelist'
-        ? profile.allowedTools
-        : worker.allowedTools);
+    const tools =
+      this.config.toolAccessMode === 'all' && !requestedProfile
+        ? undefined
+        : profile.toolAccessMode === 'whitelist'
+          ? profile.allowedTools
+          : worker.allowedTools;
 
     // V7: Get effective per-type config (user overrides > builtin defaults > fallback)
     const typeConfig = getTaskTypeConfig(task.type, this.config);
@@ -160,10 +181,8 @@ export class SwarmWorkerPool {
     // Escalating retry budget — if a worker ran out on the first attempt,
     // giving it the same budget will produce the same result.
     // 1st retry: 1.3x, 2nd: 1.6x, 3rd+: 2.0x (double budget).
-    const retryMultiplier = task.attempts === 0 ? 1.0
-      : task.attempts === 1 ? 1.3
-      : task.attempts === 2 ? 1.6
-      : 2.0;
+    const retryMultiplier =
+      task.attempts === 0 ? 1.0 : task.attempts === 1 ? 1.3 : task.attempts === 2 ? 1.6 : 2.0;
 
     // F3: Task-aware budget using tokenBudgetRange from TaskTypeConfig.
     // Foundation tasks get max budget, leaf tasks get proportional to complexity.
@@ -178,7 +197,8 @@ export class SwarmWorkerPool {
         baseTokenBudget = Math.round(min + ratio * (max - min));
       }
     } else {
-      baseTokenBudget = typeConfig.tokenBudget ?? worker.maxTokens ?? this.config.maxTokensPerWorker;
+      baseTokenBudget =
+        typeConfig.tokenBudget ?? worker.maxTokens ?? this.config.maxTokensPerWorker;
     }
     const baseMaxIterations = typeConfig.maxIterations ?? this.config.workerMaxIterations;
     // 2nd+ retries get 50% more iterations — more turns to complete the task
@@ -186,7 +206,10 @@ export class SwarmWorkerPool {
 
     // V7: Per-task-type timeout from TaskTypeConfig, with backward compat to taskTypeTimeouts
     // Computed before agentDef so we can pass it through to spawnAgent's timeout chain
-    const baseTimeoutMs = typeConfig.timeout ?? this.config.taskTypeTimeouts?.[task.type] ?? Math.max(this.config.workerTimeout, 240_000);
+    const baseTimeoutMs =
+      typeConfig.timeout ??
+      this.config.taskTypeTimeouts?.[task.type] ??
+      Math.max(this.config.workerTimeout, 240_000);
     // Foundation tasks (3+ dependents) get 2.5x timeout to reduce cascade failure risk
     const adjustedTimeoutMs = task.isFoundation ? Math.round(baseTimeoutMs * 2.5) : baseTimeoutMs;
     // Apply both complexity and retry multipliers — retries get more wall-clock time too
@@ -203,9 +226,11 @@ export class SwarmWorkerPool {
       model: task.assignedModel ?? worker.model,
       taskType: task.type,
       maxTokenBudget: Math.round(baseTokenBudget * complexityMultiplier * retryMultiplier),
-      maxIterations: Math.round(baseMaxIterations * complexityMultiplier * retryMultiplier * iterationMultiplier),
-      timeout: timeoutMs,  // Pass calculated timeout through to spawnAgent (highest priority in timeout chain)
-      idleTimeout: typeConfig.idleTimeout,  // V7: Configurable idle timeout (for long-running tasks)
+      maxIterations: Math.round(
+        baseMaxIterations * complexityMultiplier * retryMultiplier * iterationMultiplier,
+      ),
+      timeout: timeoutMs, // Pass calculated timeout through to spawnAgent (highest priority in timeout chain)
+      idleTimeout: typeConfig.idleTimeout, // V7: Configurable idle timeout (for long-running tasks)
       capabilities: worker.capabilities,
       // W3: Swarm workers get tighter economics thresholds by default
       // These can be overridden via swarmConfig.economicsTuning
@@ -240,9 +265,17 @@ export class SwarmWorkerPool {
     const spawnPromise = this.spawnAgent(agentName, taskPrompt);
     let timeoutHandle: ReturnType<typeof setTimeout>;
     const timeoutPromise = new Promise<never>((_, reject) => {
-      timeoutHandle = setTimeout(() => reject(new WorkerTimeoutError(`Worker timeout after ${backstopTimeoutMs}ms (base: ${timeoutMs}ms + 60s backstop)`)), backstopTimeoutMs);
+      timeoutHandle = setTimeout(
+        () =>
+          reject(
+            new WorkerTimeoutError(
+              `Worker timeout after ${backstopTimeoutMs}ms (base: ${timeoutMs}ms + 60s backstop)`,
+            ),
+          ),
+        backstopTimeoutMs,
+      );
     });
-    const promise = Promise.race([spawnPromise, timeoutPromise]).then(result => {
+    const promise = Promise.race([spawnPromise, timeoutPromise]).then((result) => {
       clearTimeout(timeoutHandle);
       return { taskId: task.id, result, startedAt };
     });
@@ -255,7 +288,9 @@ export class SwarmWorkerPool {
       doomLoopThreshold: agentDef.economicsTuning?.doomLoopThreshold ?? 3,
     });
     if (process.env.DEBUG) {
-      console.log(`[WorkerBudgetTracker] Created for ${task.id}: maxTokens=${agentDef.maxTokenBudget}, maxIter=${agentDef.maxIterations}`);
+      console.log(
+        `[WorkerBudgetTracker] Created for ${task.id}: maxTokens=${agentDef.maxTokenBudget}, maxIter=${agentDef.maxIterations}`,
+      );
     }
 
     // Track active worker
@@ -283,7 +318,7 @@ export class SwarmWorkerPool {
 
     // Wrap each promise so rejections become resolved error results
     // This ensures Promise.race always resolves (never rejects)
-    const wrappedPromises = [...this.activeWorkers.values()].map(worker =>
+    const wrappedPromises = [...this.activeWorkers.values()].map((worker) =>
       worker.promise.catch((error): { taskId: string; result: SpawnResult; startedAt: number } => ({
         taskId: worker.taskId,
         result: {
@@ -296,7 +331,7 @@ export class SwarmWorkerPool {
             // timeouts (worker was working but ran out of time) from hollow completions
             // (worker produced no tool calls at all).
             // Uses instanceof check instead of fragile string matching.
-            toolCalls: (error instanceof WorkerTimeoutError) ? -1 : 0,
+            toolCalls: error instanceof WorkerTimeoutError ? -1 : 0,
           },
         },
         startedAt: worker.startedAt,
@@ -311,8 +346,8 @@ export class SwarmWorkerPool {
       // Populate budget tracker with actual usage from SpawnResult
       const tokens = completed.result.metrics.tokens;
       worker.budgetTracker.recordLLMUsage(
-        Math.floor(tokens * 0.6),  // estimate input
-        Math.floor(tokens * 0.4),  // estimate output
+        Math.floor(tokens * 0.6), // estimate input
+        Math.floor(tokens * 0.4), // estimate output
       );
       // Store tracker for utilization lookup before removing active worker
       this.completedTrackers.set(completed.taskId, worker.budgetTracker);
@@ -356,7 +391,9 @@ export class SwarmWorkerPool {
     const tracker = this.completedTrackers.get(task.id);
     const budgetUtilization = tracker ? tracker.getUtilization() : undefined;
     if (process.env.DEBUG && budgetUtilization) {
-      console.log(`[WorkerBudgetTracker] ${task.id}: token=${budgetUtilization.tokenPercent}%, iter=${budgetUtilization.iterationPercent}%`);
+      console.log(
+        `[WorkerBudgetTracker] ${task.id}: token=${budgetUtilization.tokenPercent}%, iter=${budgetUtilization.iterationPercent}%`,
+      );
     }
 
     return {
@@ -377,7 +414,9 @@ export class SwarmWorkerPool {
   /**
    * Get budget utilization for a completed worker.
    */
-  getWorkerUtilization(taskId: string): { tokenPercent: number; iterationPercent: number } | undefined {
+  getWorkerUtilization(
+    taskId: string,
+  ): { tokenPercent: number; iterationPercent: number } | undefined {
     return this.completedTrackers.get(taskId)?.getUtilization();
   }
 
@@ -386,7 +425,7 @@ export class SwarmWorkerPool {
    */
   getActiveWorkerStatus(): SwarmWorkerStatus[] {
     const now = Date.now();
-    return [...this.activeWorkers.values()].map(w => ({
+    return [...this.activeWorkers.values()].map((w) => ({
       taskId: w.taskId,
       taskDescription: w.task.description,
       model: w.model,
@@ -405,8 +444,8 @@ export class SwarmWorkerPool {
     if (this.activeWorkers.size > 0) {
       const timeout = Math.min(5000, this.config.workerTimeout / 10);
       await Promise.race([
-        Promise.allSettled([...this.activeWorkers.values()].map(w => w.promise)),
-        new Promise<void>(resolve => setTimeout(resolve, timeout)),
+        Promise.allSettled([...this.activeWorkers.values()].map((w) => w.promise)),
+        new Promise<void>((resolve) => setTimeout(resolve, timeout)),
       ]);
     }
     this.cleanup();
@@ -440,8 +479,11 @@ export class SwarmWorkerPool {
     // D2: Determine prompt tier — explicit override > retry detection > model detection > full
     const promptTier: 'full' | 'reduced' | 'minimal' =
       worker.promptTier ??
-      (task.attempts > 0 ? 'reduced' :
-       isLightweightModel(task.assignedModel ?? worker.model) ? 'reduced' : 'full');
+      (task.attempts > 0
+        ? 'reduced'
+        : isLightweightModel(task.assignedModel ?? worker.model)
+          ? 'reduced'
+          : 'full');
 
     // D2: Minimal prompt tier for cheap/weak models — drastically reduced prompt
     if (promptTier === 'minimal') {
@@ -622,7 +664,10 @@ export class SwarmWorkerPool {
     if (worker.allowedTools && worker.allowedTools.length > 0) {
       parts.push('', `AVAILABLE TOOLS: ${worker.allowedTools.join(', ')}`);
     } else {
-      parts.push('', 'You have access to ALL tools including: write_file, edit_file, read_file, glob, grep, bash, web_search');
+      parts.push(
+        '',
+        'You have access to ALL tools including: write_file, edit_file, read_file, glob, grep, bash, web_search',
+      );
     }
 
     // V9: Action-orientation reinforcement for task types that MUST produce file changes
@@ -641,19 +686,10 @@ export class SwarmWorkerPool {
     if (task.attempts > 0 && task.retryContext) {
       // F22: Include swarm progress so retrying workers know what's been accomplished
       if (task.retryContext.swarmProgress) {
-        parts.push(
-          '',
-          '═══ SWARM PROGRESS ═══',
-          '',
-          task.retryContext.swarmProgress,
-        );
+        parts.push('', '═══ SWARM PROGRESS ═══', '', task.retryContext.swarmProgress);
       }
 
-      parts.push(
-        '',
-        '═══ RETRY CONTEXT (THIS IS YOUR 2ND+ ATTEMPT) ═══',
-        '',
-      );
+      parts.push('', '═══ RETRY CONTEXT (THIS IS YOUR 2ND+ ATTEMPT) ═══', '');
       if (task.retryContext.previousScore === 0) {
         parts.push(
           `Your previous attempt FAILED with error:`,
@@ -690,18 +726,26 @@ export class SwarmWorkerPool {
         '═══ FILES FROM PREVIOUS ATTEMPT ═══',
         '',
         'These files ALREADY EXIST on disk from the previous attempt:',
-        ...task.retryContext.previousFiles.map(f => `  - ${f}`),
+        ...task.retryContext.previousFiles.map((f) => `  - ${f}`),
         '',
         'DO NOT recreate these with write_file. Use edit_file to fix issues, or read_file to check state.',
       );
     }
 
     if (task.targetFiles && task.targetFiles.length > 0) {
-      parts.push('', `TARGET FILES (you should modify these):`, ...task.targetFiles.map(f => `  - ${f}`));
+      parts.push(
+        '',
+        `TARGET FILES (you should modify these):`,
+        ...task.targetFiles.map((f) => `  - ${f}`),
+      );
     }
 
     if (task.readFiles && task.readFiles.length > 0) {
-      parts.push('', `REFERENCE FILES (read for context):`, ...task.readFiles.map(f => `  - ${f}`));
+      parts.push(
+        '',
+        `REFERENCE FILES (read for context):`,
+        ...task.readFiles.map((f) => `  - ${f}`),
+      );
     }
 
     // V7: Delegation spec — skip for research/analysis tasks (redundant with research rules)
@@ -724,7 +768,12 @@ export class SwarmWorkerPool {
       }
       // Goal recitation only on full prompts (not reduced/minimal)
       if (promptTier === 'full') {
-        const workerTask = { id: task.id, description: task.description, goal: task.description, dependencies: task.dependencies };
+        const workerTask = {
+          id: task.id,
+          description: task.description,
+          goal: task.description,
+          dependencies: task.dependencies,
+        };
         const goalRecitation = this.sharedContextEngine.getGoalRecitation(workerTask);
         if (goalRecitation) parts.push('', goalRecitation);
       }
@@ -747,9 +796,10 @@ export class SwarmWorkerPool {
       // Truncate large context — extract key lines (file names, "created"/"implemented" mentions)
       if (context.length > maxLen) {
         const lines = context.split('\n');
-        const keyLines = lines.filter(line =>
-          line.startsWith('[Dependency:') ||
-          /\b(created|implemented|modified|wrote|built|added|file|\.ts|\.js|\.tsx)\b/i.test(line),
+        const keyLines = lines.filter(
+          (line) =>
+            line.startsWith('[Dependency:') ||
+            /\b(created|implemented|modified|wrote|built|added|file|\.ts|\.js|\.tsx)\b/i.test(line),
         );
         context = keyLines.join('\n');
         if (context.length > maxLen) {
@@ -774,5 +824,12 @@ export function createSwarmWorkerPool(
   healthTracker?: ModelHealthTracker,
   sharedContextEngine?: SharedContextEngine,
 ): SwarmWorkerPool {
-  return new SwarmWorkerPool(config, agentRegistry, spawnAgent, budgetPool, healthTracker, sharedContextEngine);
+  return new SwarmWorkerPool(
+    config,
+    agentRegistry,
+    spawnAgent,
+    budgetPool,
+    healthTracker,
+    sharedContextEngine,
+  );
 }

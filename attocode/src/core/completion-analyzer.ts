@@ -21,7 +21,8 @@ export function analyzeCompletionIntent(content: string): CompletionIntentAnalys
   const lower = trimmed.toLowerCase();
 
   // Positive completion signals should override weaker future-intent cues.
-  const completionSignals = /\b(done|completed|finished|here is the (final|complete)|created successfully|saved|wrote|all (changes|tasks) (are )?complete)\b/;
+  const completionSignals =
+    /\b(done|completed|finished|here is the (final|complete)|created successfully|saved|wrote|all (changes|tasks) (are )?complete)\b/;
   if (completionSignals.test(lower)) {
     return { isIncompleteAction: false, reason: 'none', confidence: 0.9 };
   }
@@ -32,7 +33,7 @@ export function analyzeCompletionIntent(content: string): CompletionIntentAnalys
     /\b(the next step|first[, ]+i|now i)\b/,
     /\b(i am going to|i'm going to)\b/,
   ];
-  if (futureIntentPatterns.some(pattern => pattern.test(lower))) {
+  if (futureIntentPatterns.some((pattern) => pattern.test(lower))) {
     return { isIncompleteAction: true, reason: 'future_intent', confidence: 0.95 };
   }
 
@@ -44,13 +45,14 @@ export function analyzeCompletionIntent(content: string): CompletionIntentAnalys
     /\bno changes were made\b/,
     /\bno files were modified\b/,
   ];
-  if (failureAdmissionPatterns.some(pattern => pattern.test(lower))) {
+  if (failureAdmissionPatterns.some((pattern) => pattern.test(lower))) {
     return { isIncompleteAction: true, reason: 'failure_admission', confidence: 0.9 };
   }
 
   // Heuristic: short narrative about "changing code" with no artifact.
   const hasCodeBlock = /```/.test(trimmed);
-  const mentionsCodeConcepts = /\b(file|function|class|module|component|import|export|variable|method)\b/i.test(trimmed);
+  const mentionsCodeConcepts =
+    /\b(file|function|class|module|component|import|export|variable|method)\b/i.test(trimmed);
   if (!hasCodeBlock && mentionsCodeConcepts && trimmed.length < 600) {
     const actionWords = /\b(update|modify|create|add|change|fix|implement|refactor|write|edit)\b/i;
     if (actionWords.test(lower)) {

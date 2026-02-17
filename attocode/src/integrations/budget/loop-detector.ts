@@ -23,7 +23,8 @@ import type { LoopDetectionState, EconomicsTuning, PhaseState } from './economic
  * Regex for common bash file-read commands (simple, no pipes/redirects).
  * Captures the file path for normalized doom loop fingerprinting.
  */
-const BASH_FILE_READ_RE = /^\s*(cat|head|tail|wc|less|more|file|stat|md5sum|sha256sum)\b(?:\s+-[^\s]+)*\s+((?:\/|\.\/|\.\.\/)[\w.\/\-@]+|[\w.\-@][\w.\/\-@]*)\s*$/;
+const BASH_FILE_READ_RE =
+  /^\s*(cat|head|tail|wc|less|more|file|stat|md5sum|sha256sum)\b(?:\s+-[^\s]+)*\s+((?:\/|\.\/|\.\.\/)[\w.\/\-@]+|[\w.\-@][\w.\/\-@]*)\s*$/;
 
 /** Detect bash commands that are doing file write operations (write/append/redirect/heredoc). */
 const BASH_FILE_WRITE_RE = /^\s*(cat|echo|printf)\b.*(?:>>?|<<)\s*/;
@@ -32,7 +33,18 @@ const BASH_FILE_WRITE_RE = /^\s*(cat|echo|printf)\b.*(?:>>?|<<)\s*/;
  * Primary argument keys that identify the *target* of a tool call.
  * Used for fuzzy doom loop detection -- ignoring secondary/optional args.
  */
-const PRIMARY_KEYS = ['path', 'file_path', 'command', 'pattern', 'query', 'url', 'content', 'filename', 'offset', 'limit'];
+const PRIMARY_KEYS = [
+  'path',
+  'file_path',
+  'command',
+  'pattern',
+  'query',
+  'url',
+  'content',
+  'filename',
+  'offset',
+  'limit',
+];
 
 // =============================================================================
 // PROMPT TEMPLATES
@@ -73,7 +85,7 @@ export const GLOBAL_DOOM_LOOP_PROMPT = (tool: string, workerCount: number, total
  * Test-fix rethink prompt - injected after consecutive test failures.
  */
 export const TEST_FIX_RETHINK_PROMPT = (failures: number) =>
-`[System] You've had ${failures} consecutive test failures. Step back and rethink:
+  `[System] You've had ${failures} consecutive test failures. Step back and rethink:
 1. Re-read the error messages carefully
 2. Consider whether your approach is fundamentally wrong
 3. Try a DIFFERENT fix strategy instead of iterating on the same one
@@ -81,7 +93,11 @@ Do not retry the same fix. Try a new approach.`;
 
 /** Check whether a bash command is attempting file operations that should use dedicated tools. */
 export function isBashFileOperation(command: string): boolean {
-  return BASH_FILE_READ_RE.test(command) || BASH_FILE_WRITE_RE.test(command) || /heredoc|EOF/i.test(command);
+  return (
+    BASH_FILE_READ_RE.test(command) ||
+    BASH_FILE_WRITE_RE.test(command) ||
+    /heredoc|EOF/i.test(command)
+  );
 }
 
 export const BASH_FAILURE_CASCADE_PROMPT = (failures: number, lastCommand?: string) => {
@@ -100,8 +116,7 @@ Switch to the correct tool NOW.`;
 3. Do not run another bash command with the same pattern`;
 };
 
-export const SUMMARY_LOOP_PROMPT =
-`[System] You've produced text-only responses without using tools. You should be DOING work, not summarizing it.
+export const SUMMARY_LOOP_PROMPT = `[System] You've produced text-only responses without using tools. You should be DOING work, not summarizing it.
 Pick the most important remaining task and start working on it NOW using your tools (write_file, edit_file, bash, etc.).
 Do NOT output another status summary or task list.`;
 
@@ -204,7 +219,9 @@ export class LoopDetector {
       lastTool: null,
       consecutiveCount: 0,
       threshold: tuning?.doomLoopThreshold ?? 3,
-      fuzzyThreshold: tuning?.doomLoopFuzzyThreshold ?? (tuning?.doomLoopThreshold ? tuning.doomLoopThreshold + 1 : 4),
+      fuzzyThreshold:
+        tuning?.doomLoopFuzzyThreshold ??
+        (tuning?.doomLoopThreshold ? tuning.doomLoopThreshold + 1 : 4),
       lastWarningTime: 0,
     };
   }
@@ -295,7 +312,9 @@ export class LoopDetector {
       lastTool: null,
       consecutiveCount: 0,
       threshold: tuning?.doomLoopThreshold ?? 3,
-      fuzzyThreshold: tuning?.doomLoopFuzzyThreshold ?? (tuning?.doomLoopThreshold ? tuning.doomLoopThreshold + 1 : 4),
+      fuzzyThreshold:
+        tuning?.doomLoopFuzzyThreshold ??
+        (tuning?.doomLoopThreshold ? tuning.doomLoopThreshold + 1 : 4),
       lastWarningTime: 0,
     };
   }
@@ -306,7 +325,7 @@ export class LoopDetector {
   isStuckByRepetition(recentCalls: RecentToolCall[]): boolean {
     if (recentCalls.length >= 3) {
       const last3 = recentCalls.slice(-3);
-      const unique = new Set(last3.map(tc => `${tc.tool}:${tc.args}`));
+      const unique = new Set(last3.map((tc) => `${tc.tool}:${tc.args}`));
       if (unique.size === 1) {
         return true;
       }
@@ -323,7 +342,9 @@ export class LoopDetector {
         try {
           const parsed = JSON.parse(recentCalls[i].args);
           return parsed.command;
-        } catch { /* ignore parse errors */ }
+        } catch {
+          /* ignore parse errors */
+        }
         break;
       }
     }

@@ -44,9 +44,7 @@ export function getConfigDir(): string {
  */
 export function getDataDir(): string {
   const xdg = process.env.XDG_DATA_HOME;
-  return xdg
-    ? join(xdg, 'attocode')
-    : join(homedir(), '.local', 'share', 'attocode');
+  return xdg ? join(xdg, 'attocode') : join(homedir(), '.local', 'share', 'attocode');
 }
 
 /**
@@ -57,9 +55,7 @@ export function getDataDir(): string {
  */
 export function getStateDir(): string {
   const xdg = process.env.XDG_STATE_HOME;
-  return xdg
-    ? join(xdg, 'attocode')
-    : join(homedir(), '.local', 'state', 'attocode');
+  return xdg ? join(xdg, 'attocode') : join(homedir(), '.local', 'state', 'attocode');
 }
 
 /**
@@ -135,8 +131,8 @@ export function getGlobalRulesPath(): string {
  */
 export function getMCPConfigPaths(cwd: string = process.cwd()): string[] {
   return [
-    join(getConfigDir(), 'mcp.json'),     // Global user config
-    join(cwd, '.mcp.json'),                // Workspace-specific
+    join(getConfigDir(), 'mcp.json'), // Global user config
+    join(cwd, '.mcp.json'), // Workspace-specific
   ];
 }
 

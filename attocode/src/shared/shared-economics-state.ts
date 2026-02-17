@@ -60,9 +60,7 @@ export class SharedEconomicsState {
   /**
    * Get detailed info about a fingerprint's global usage.
    */
-  getGlobalLoopInfo(
-    fingerprint: string,
-  ): { count: number; workerCount: number } | null {
+  getGlobalLoopInfo(fingerprint: string): { count: number; workerCount: number } | null {
     const entry = this.toolFingerprints.get(fingerprint);
     if (!entry) return null;
     return { count: entry.count, workerCount: entry.workers.size };
@@ -95,7 +93,9 @@ export class SharedEconomicsState {
   }
 
   /** Restore state from checkpoint data. */
-  restoreFrom(data: { fingerprints?: Array<{ fingerprint: string; count: number; workers: string[] }> }): void {
+  restoreFrom(data: {
+    fingerprints?: Array<{ fingerprint: string; count: number; workers: string[] }>;
+  }): void {
     if (data.fingerprints) {
       for (const entry of data.fingerprints) {
         this.toolFingerprints.set(entry.fingerprint, {
@@ -122,8 +122,6 @@ export class SharedEconomicsState {
 // FACTORY
 // =============================================================================
 
-export function createSharedEconomicsState(
-  config?: SharedEconomicsConfig,
-): SharedEconomicsState {
+export function createSharedEconomicsState(config?: SharedEconomicsConfig): SharedEconomicsState {
   return new SharedEconomicsState(config);
 }

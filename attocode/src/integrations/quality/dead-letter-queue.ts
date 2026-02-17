@@ -239,9 +239,10 @@ export class DeadLetterQueue {
       throw new Error('Dead letter queue not available - migration required');
     }
 
-    const { category } = input.error instanceof Error
-      ? categorizeError(input.error)
-      : { category: ErrorCategory.INTERNAL };
+    const { category } =
+      input.error instanceof Error
+        ? categorizeError(input.error)
+        : { category: ErrorCategory.INTERNAL };
 
     const item: DeadLetterItem = {
       id: randomUUID(),
@@ -314,9 +315,12 @@ export class DeadLetterQueue {
     }
 
     const orderBy = options.orderBy ?? 'createdAt';
-    const orderCol = orderBy === 'createdAt' ? 'created_at'
-      : orderBy === 'lastAttempt' ? 'last_attempt'
-      : 'next_retry';
+    const orderCol =
+      orderBy === 'createdAt'
+        ? 'created_at'
+        : orderBy === 'lastAttempt'
+          ? 'last_attempt'
+          : 'next_retry';
 
     const limit = options.limit ?? 100;
 
@@ -328,7 +332,7 @@ export class DeadLetterQueue {
     `;
 
     const rows = this.db.prepare(sql).all(params) as Record<string, unknown>[];
-    return rows.map(row => this.rowToItem(row));
+    return rows.map((row) => this.rowToItem(row));
   }
 
   /**
@@ -361,9 +365,12 @@ export class DeadLetterQueue {
     }
 
     const orderBy = options.orderBy ?? 'createdAt';
-    const orderCol = orderBy === 'createdAt' ? 'created_at'
-      : orderBy === 'lastAttempt' ? 'last_attempt'
-      : 'next_retry';
+    const orderCol =
+      orderBy === 'createdAt'
+        ? 'created_at'
+        : orderBy === 'lastAttempt'
+          ? 'last_attempt'
+          : 'next_retry';
 
     const limit = options.limit ?? 100;
 
@@ -376,7 +383,7 @@ export class DeadLetterQueue {
     `;
 
     const rows = this.db.prepare(sql).all(params) as Record<string, unknown>[];
-    return rows.map(row => this.rowToItem(row));
+    return rows.map((row) => this.rowToItem(row));
   }
 
   /**
@@ -542,11 +549,15 @@ export class DeadLetterQueue {
     const cutoff = new Date();
     cutoff.setDate(cutoff.getDate() - olderThanDays);
 
-    const result = this.db.prepare(`
+    const result = this.db
+      .prepare(
+        `
       DELETE FROM dead_letters
       WHERE status IN ('resolved', 'abandoned')
         AND resolved_at < ?
-    `).run(cutoff.toISOString());
+    `,
+      )
+      .run(cutoff.toISOString());
 
     return result.changes;
   }

@@ -80,53 +80,59 @@ export const ScrollableBox = memo(function ScrollableBox({
   }, [scrollTop, maxScrollTop]);
 
   // Handle keyboard navigation
-  const handleScroll = useCallback((delta: number) => {
-    setUserScrolled(true);
-    setScrollTop(prev => {
-      const newValue = Math.max(0, Math.min(maxScrollTop, prev + delta));
-      onScroll?.(newValue);
-      return newValue;
-    });
-  }, [maxScrollTop, onScroll]);
-
-  useInput((input, key) => {
-    if (!focused) return;
-
-    // Page Up/Down
-    if (key.pageUp) {
-      handleScroll(-visibleItems);
-      return;
-    }
-    if (key.pageDown) {
-      handleScroll(visibleItems);
-      return;
-    }
-
-    // Arrow Up/Down
-    if (key.upArrow) {
-      handleScroll(-1);
-      return;
-    }
-    if (key.downArrow) {
-      handleScroll(1);
-      return;
-    }
-
-    // Home (Ctrl+Home or 'g' for go-to-top like vim)
-    if ((key.ctrl && input === 'g') || input === 'g') {
+  const handleScroll = useCallback(
+    (delta: number) => {
       setUserScrolled(true);
-      setScrollTop(0);
-      onScroll?.(0);
-      return;
-    }
-    // End (Ctrl+G or 'G' for go-to-bottom like vim)
-    if ((key.ctrl && input === 'G') || (key.shift && input === 'G')) {
-      setUserScrolled(false);
-      setScrollTop(maxScrollTop);
-      onScroll?.(maxScrollTop);
-      return;
-    }
-  }, { isActive: focused });
+      setScrollTop((prev) => {
+        const newValue = Math.max(0, Math.min(maxScrollTop, prev + delta));
+        onScroll?.(newValue);
+        return newValue;
+      });
+    },
+    [maxScrollTop, onScroll],
+  );
+
+  useInput(
+    (input, key) => {
+      if (!focused) return;
+
+      // Page Up/Down
+      if (key.pageUp) {
+        handleScroll(-visibleItems);
+        return;
+      }
+      if (key.pageDown) {
+        handleScroll(visibleItems);
+        return;
+      }
+
+      // Arrow Up/Down
+      if (key.upArrow) {
+        handleScroll(-1);
+        return;
+      }
+      if (key.downArrow) {
+        handleScroll(1);
+        return;
+      }
+
+      // Home (Ctrl+Home or 'g' for go-to-top like vim)
+      if ((key.ctrl && input === 'g') || input === 'g') {
+        setUserScrolled(true);
+        setScrollTop(0);
+        onScroll?.(0);
+        return;
+      }
+      // End (Ctrl+G or 'G' for go-to-bottom like vim)
+      if ((key.ctrl && input === 'G') || (key.shift && input === 'G')) {
+        setUserScrolled(false);
+        setScrollTop(maxScrollTop);
+        onScroll?.(maxScrollTop);
+        return;
+      }
+    },
+    { isActive: focused },
+  );
 
   // Calculate scroll indicator position
   const scrollPercentage = maxScrollTop > 0 ? scrollTop / maxScrollTop : 1;
@@ -142,7 +148,7 @@ export const ScrollableBox = memo(function ScrollableBox({
     items.push(
       <Box key={i} flexDirection="column">
         {renderItem(i)}
-      </Box>
+      </Box>,
     );
   }
 
@@ -161,11 +167,7 @@ export const ScrollableBox = memo(function ScrollableBox({
       <Box flexDirection="row">
         {/* Items */}
         <Box flexDirection="column" flexGrow={1}>
-          {items.length === 0 ? (
-            <Text color={theme.colors.textMuted}>No items</Text>
-          ) : (
-            items
-          )}
+          {items.length === 0 ? <Text color={theme.colors.textMuted}>No items</Text> : items}
         </Box>
 
         {/* Scrollbar track */}

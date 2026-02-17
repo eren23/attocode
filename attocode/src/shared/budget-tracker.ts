@@ -108,7 +108,7 @@ export class WorkerBudgetTracker {
     // Local doom loop detection (consecutive identical tool calls)
     if (this.toolCalls.length >= this.doomLoopThreshold) {
       const recent = this.toolCalls.slice(-this.doomLoopThreshold);
-      const allSame = recent.every(tc => tc.fingerprint === recent[0].fingerprint);
+      const allSame = recent.every((tc) => tc.fingerprint === recent[0].fingerprint);
       if (allSame) {
         return {
           canContinue: false,
@@ -137,7 +137,13 @@ export class WorkerBudgetTracker {
   /**
    * Get current usage stats.
    */
-  getUsage(): { inputTokens: number; outputTokens: number; totalTokens: number; iterations: number; toolCalls: number } {
+  getUsage(): {
+    inputTokens: number;
+    outputTokens: number;
+    totalTokens: number;
+    iterations: number;
+    toolCalls: number;
+  } {
     return {
       inputTokens: this.inputTokens,
       outputTokens: this.outputTokens,
@@ -154,7 +160,8 @@ export class WorkerBudgetTracker {
     const totalTokens = this.inputTokens + this.outputTokens;
     return {
       tokenPercent: this.maxTokens > 0 ? Math.round((totalTokens / this.maxTokens) * 100) : 0,
-      iterationPercent: this.maxIterations > 0 ? Math.round((this.iterations / this.maxIterations) * 100) : 0,
+      iterationPercent:
+        this.maxIterations > 0 ? Math.round((this.iterations / this.maxIterations) * 100) : 0,
     };
   }
 }

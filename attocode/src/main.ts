@@ -32,7 +32,10 @@ import './providers/adapters/mock.js';
 
 // Provider detection and resilience
 import { getProvider } from './providers/provider.js';
-import { getResilientProvider, createResilientFallbackChain } from './providers/resilient-provider.js';
+import {
+  getResilientProvider,
+  createResilientFallbackChain,
+} from './providers/resilient-provider.js';
 import type { LLMProviderWithTools } from './providers/types.js';
 import { DEFAULT_PROVIDER_RESILIENCE_CONFIG } from './defaults.js';
 import type { ProviderResilienceConfig } from './types.js';
@@ -73,11 +76,26 @@ import {
 } from './integrations/quality/health-check.js';
 
 // Structured logger
-import { logger, configureLogger, ConsoleSink, MemorySink } from './integrations/utilities/logger.js';
+import {
+  logger,
+  configureLogger,
+  ConsoleSink,
+  MemorySink,
+} from './integrations/utilities/logger.js';
 
 // Swarm mode support
-import { DEFAULT_SWARM_CONFIG, autoDetectWorkerModels, type SwarmConfig } from './integrations/swarm/index.js';
-import { loadSwarmYamlConfig, parseSwarmYaml, yamlToSwarmConfig, mergeSwarmConfigs, normalizeSwarmModelConfig } from './integrations/swarm/swarm-config-loader.js';
+import {
+  DEFAULT_SWARM_CONFIG,
+  autoDetectWorkerModels,
+  type SwarmConfig,
+} from './integrations/swarm/index.js';
+import {
+  loadSwarmYamlConfig,
+  parseSwarmYaml,
+  yamlToSwarmConfig,
+  mergeSwarmConfigs,
+  normalizeSwarmModelConfig,
+} from './integrations/swarm/swarm-config-loader.js';
 import { readFileSync } from 'node:fs';
 
 /**
@@ -106,7 +124,10 @@ async function buildSwarmConfig(
         yamlConfig = yamlToSwarmConfig(parsed, orchestratorModel);
       }
     } catch (err) {
-      logger.warn('[Swarm] Failed to load config', { path: swarmArg, error: String((err as Error).message) });
+      logger.warn('[Swarm] Failed to load config', {
+        path: swarmArg,
+        error: String((err as Error).message),
+      });
     }
   } else {
     // Auto-load: try .attocode/swarm.yaml, then ~/.attocode/swarm.yaml
@@ -150,9 +171,7 @@ async function buildSwarmConfig(
     const mode = config.modelValidation?.mode ?? 'autocorrect';
     const onInvalid = config.modelValidation?.onInvalid ?? 'warn';
     if (mode === 'strict' || onInvalid === 'fail') {
-      throw new Error(
-        `Invalid swarm model configuration:\n${normalized.warnings.join('\n')}`
-      );
+      throw new Error(`Invalid swarm model configuration:\n${normalized.warnings.join('\n')}`);
     }
     for (const warning of normalized.warnings) {
       logger.warn('[Swarm] Model config adjusted', { warning });
@@ -171,13 +190,17 @@ async function buildSwarmConfig(
         if (!finalConfig.throttle) {
           finalConfig.throttle = 'paid';
         }
-        logger.info('[Swarm] No swarm config found; defaulting to paid-only worker model selection for paid-tier key');
+        logger.info(
+          '[Swarm] No swarm config found; defaulting to paid-only worker model selection for paid-tier key',
+        );
       }
       if (keyInfo.isPaid === false && !finalConfig.paidOnly) {
         logger.info('[Swarm] Free-tier API key detected — throttle will auto-adjust.');
       }
       if (keyInfo.creditsRemaining !== undefined && keyInfo.creditsRemaining < 0.5) {
-        logger.warn('[Swarm] Low credits remaining', { credits: `$${keyInfo.creditsRemaining.toFixed(2)}` });
+        logger.warn('[Swarm] Low credits remaining', {
+          credits: `$${keyInfo.creditsRemaining.toFixed(2)}`,
+        });
       }
     } catch {
       // Non-fatal: continue without key info
@@ -211,7 +234,7 @@ async function buildSwarmConfig(
   logger.info('[Swarm] Resolved config', {
     orchestratorModel: finalConfig.orchestratorModel,
     workerCount: finalConfig.workers.length,
-    workerModels: finalConfig.workers.map(w => w.model),
+    workerModels: finalConfig.workers.map((w) => w.model),
     paidOnly: finalConfig.paidOnly ?? false,
     throttle: finalConfig.throttle ?? false,
     totalBudget: finalConfig.totalBudget,
@@ -298,9 +321,11 @@ async function main(): Promise<void> {
           : providerResilienceConfig.fallbackProviders,
         circuitBreaker: providerResilienceConfig.circuitBreaker,
         fallback: providerResilienceConfig.fallbackChain,
-        onFallback: providerResilienceConfig.onFallback ?? ((from, to, error) => {
-          logger.info('[Resilience] Falling back', { from, to, error: error.message });
-        }),
+        onFallback:
+          providerResilienceConfig.onFallback ??
+          ((from, to, error) => {
+            logger.info('[Resilience] Falling back', { from, to, error: error.message });
+          }),
       });
 
       if (!('chatWithTools' in chain)) {
@@ -310,7 +335,9 @@ async function main(): Promise<void> {
 
       provider = chain as LLMProviderWithTools;
       // eslint-disable-next-line no-console
-      console.log(`+ Provider resilience: fallback chain enabled (${providerResilienceConfig.fallbackProviders!.length + 1} providers)`);
+      console.log(
+        `+ Provider resilience: fallback chain enabled (${providerResilienceConfig.fallbackProviders!.length + 1} providers)`,
+      );
     } else if (resilienceEnabled && providerResilienceConfig.circuitBreaker !== false) {
       // Use single provider with circuit breaker protection
       const resilientProvider = await getResilientProvider(preferredProvider, {
@@ -345,7 +372,8 @@ async function main(): Promise<void> {
   }
 
   // Resolve model: CLI args > env var > user config > provider default
-  const resolvedModel = args.model || process.env.OPENROUTER_MODEL || userConfig?.model || provider.defaultModel;
+  const resolvedModel =
+    args.model || process.env.OPENROUTER_MODEL || userConfig?.model || provider.defaultModel;
   // eslint-disable-next-line no-console
   console.log(`+ Using ${provider.name} (${resolvedModel})`);
   if (args.trace) {
@@ -380,22 +408,25 @@ async function main(): Promise<void> {
   healthChecker.register(sqliteCheck.name, sqliteCheck.check, sqliteCheck);
 
   // Run initial health check (non-blocking)
-  healthChecker.checkAll().then(report => {
-    if (!report.healthy) {
-      const unhealthy = report.checks.filter(c => !c.healthy).map(c => c.name);
-      logger.warn('[Health] Some checks failed', { unhealthy: unhealthy.join(', ') });
-      if (args.debug) {
-        logger.warn(formatHealthReport(report));
+  healthChecker
+    .checkAll()
+    .then((report) => {
+      if (!report.healthy) {
+        const unhealthy = report.checks.filter((c) => !c.healthy).map((c) => c.name);
+        logger.warn('[Health] Some checks failed', { unhealthy: unhealthy.join(', ') });
+        if (args.debug) {
+          logger.warn(formatHealthReport(report));
+        }
+      } else if (args.debug) {
+        logger.debug('[Health] All checks passed', { totalCount: report.totalCount });
       }
-    } else if (args.debug) {
-      logger.debug('[Health] All checks passed', { totalCount: report.totalCount });
-    }
-  }).catch(err => {
-    // Don't block startup on health check failure
-    if (args.debug) {
-      logger.warn('[Health] Initial check failed', { error: String(err.message) });
-    }
-  });
+    })
+    .catch((err) => {
+      // Don't block startup on health check failure
+      if (args.debug) {
+        logger.warn('[Health] Initial check failed', { error: String(err.message) });
+      }
+    });
 
   // eslint-disable-next-line no-console
   console.log('');
@@ -407,7 +438,15 @@ async function main(): Promise<void> {
     const adaptedProvider = new ProviderAdapter(provider, resolvedModel);
 
     // Build swarm config if --swarm flag is set
-    const swarmConfig = args.swarm ? await buildSwarmConfig(args.swarm, resolvedModel, args.swarmResume, args.paidOnly, !!args.model) : undefined;
+    const swarmConfig = args.swarm
+      ? await buildSwarmConfig(
+          args.swarm,
+          resolvedModel,
+          args.swarmResume,
+          args.paidOnly,
+          !!args.model,
+        )
+      : undefined;
 
     const agent = createProductionAgent({
       provider: adaptedProvider,
@@ -421,15 +460,17 @@ async function main(): Promise<void> {
         root: process.cwd(),
       },
       swarm: swarmConfig || false,
-      observability: args.trace ? {
-        enabled: true,
-        traceCapture: {
-          enabled: true,
-          outputDir: '.traces',
-          captureMessageContent: true,
-          captureToolResults: true,
-        },
-      } : undefined,
+      observability: args.trace
+        ? {
+            enabled: true,
+            traceCapture: {
+              enabled: true,
+              outputDir: '.traces',
+              captureMessageContent: true,
+              captureToolResults: true,
+            },
+          }
+        : undefined,
     });
 
     agent.subscribe(createEventDisplay());
@@ -468,7 +509,15 @@ async function main(): Promise<void> {
         model: resolvedModel,
         trace: args.trace,
         theme: args.theme,
-        swarm: args.swarm ? await buildSwarmConfig(args.swarm, resolvedModel, args.swarmResume, args.paidOnly, !!args.model) : undefined,
+        swarm: args.swarm
+          ? await buildSwarmConfig(
+              args.swarm,
+              resolvedModel,
+              args.swarmResume,
+              args.paidOnly,
+              !!args.model,
+            )
+          : undefined,
       });
     } else {
       await startProductionREPL(provider, {
@@ -476,7 +525,15 @@ async function main(): Promise<void> {
         maxIterations: args.maxIterations,
         model: resolvedModel,
         trace: args.trace,
-        swarm: args.swarm ? await buildSwarmConfig(args.swarm, resolvedModel, args.swarmResume, args.paidOnly, !!args.model) : undefined,
+        swarm: args.swarm
+          ? await buildSwarmConfig(
+              args.swarm,
+              resolvedModel,
+              args.swarmResume,
+              args.paidOnly,
+              !!args.model,
+            )
+          : undefined,
       });
     }
   }

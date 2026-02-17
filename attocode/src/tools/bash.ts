@@ -1,6 +1,6 @@
 /**
  * Lesson 3: Bash Tool
- * 
+ *
  * Tool for executing shell commands with safety checks.
  */
 
@@ -52,7 +52,7 @@ export const bashTool = defineTool(
 
     // Classify the command's danger level
     const { level, reasons } = classifyCommand(input.command);
-    
+
     // Add warning to output for dangerous commands
     let warning = '';
     if (reasons.length > 0) {
@@ -84,7 +84,9 @@ export const bashTool = defineTool(
             // Verify termination after SIGKILL, attempt process group kill if needed
             setTimeout(() => {
               if (!proc.killed && proc.pid) {
-                logger.warn(`[Bash] Process ${proc.pid} may be zombie after SIGKILL, attempting process group kill`);
+                logger.warn(
+                  `[Bash] Process ${proc.pid} may be zombie after SIGKILL, attempting process group kill`,
+                );
                 try {
                   // Try to kill the entire process group (negative PID)
                   process.kill(-proc.pid, 'SIGKILL');
@@ -126,15 +128,15 @@ export const bashTool = defineTool(
 
         const output = stdout + (stderr ? `\n--- stderr ---\n${stderr}` : '');
         const truncated = output.length > maxOutput;
-        const finalOutput = truncated 
+        const finalOutput = truncated
           ? output.slice(0, maxOutput) + '\n... (output truncated)'
           : output;
 
         resolve({
           success: code === 0,
           output: warning + (finalOutput || '(no output)'),
-          metadata: { 
-            exitCode: code, 
+          metadata: {
+            exitCode: code,
             dangerLevel: level,
             truncated,
           },
@@ -157,7 +159,7 @@ export const bashTool = defineTool(
     dangerLevel: 'moderate' as DangerLevel,
     // Dynamic danger level based on actual command
     getDangerLevel: (input: { command: string }) => classifyBashCommandDangerLevel(input.command),
-  }
+  },
 );
 
 // =============================================================================
@@ -177,10 +179,10 @@ export const grepTool = defineTool(
   async (input): Promise<ToolResult> => {
     const flags = input.recursive ? '-rn' : '-n';
     const command = `grep ${flags} "${input.pattern}" "${input.path}" || true`;
-    
+
     return bashTool.execute({ command, timeout: 10000 });
   },
-  'safe'
+  'safe',
 );
 
 const globSchema = z.object({
@@ -194,8 +196,8 @@ export const globTool = defineTool(
   globSchema,
   async (input): Promise<ToolResult> => {
     const command = `find "${input.path}" -name "${input.pattern}" 2>/dev/null | head -100`;
-    
+
     return bashTool.execute({ command, timeout: 10000 });
   },
-  'safe'
+  'safe',
 );

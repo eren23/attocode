@@ -60,9 +60,8 @@ export class ConsoleSink implements LogSink {
   write(entry: LogEntry): void {
     const prefix = `[${entry.timestamp}] [${entry.level.toUpperCase()}]`;
     const traceStr = entry.traceId ? ` (${entry.traceId})` : '';
-    const dataStr = entry.data && Object.keys(entry.data).length > 0
-      ? ' ' + JSON.stringify(entry.data)
-      : '';
+    const dataStr =
+      entry.data && Object.keys(entry.data).length > 0 ? ' ' + JSON.stringify(entry.data) : '';
     const line = `${prefix}${traceStr} ${entry.message}${dataStr}`;
 
     switch (entry.level) {

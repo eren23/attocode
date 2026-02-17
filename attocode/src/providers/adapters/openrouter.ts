@@ -16,7 +16,7 @@ import type {
   ChatResponse,
   ChatResponseWithTools,
   ToolCallResponse,
-  OpenRouterConfig
+  OpenRouterConfig,
 } from '../types.js';
 import { ProviderError } from '../types.js';
 import { registerProvider, hasEnv, requireEnv } from '../provider.js';
@@ -76,7 +76,7 @@ export class OpenRouterProvider implements LLMProvider, LLMProviderWithTools {
     this.siteUrl = config?.siteUrl ?? process.env.OPENROUTER_SITE_URL;
     this.siteName = config?.siteName ?? process.env.OPENROUTER_SITE_NAME;
     this.networkConfig = {
-      timeout: 120000,  // 2 minutes
+      timeout: 120000, // 2 minutes
       maxRetries: 3,
       baseRetryDelay: 1000,
     };
@@ -86,12 +86,15 @@ export class OpenRouterProvider implements LLMProvider, LLMProviderWithTools {
     return hasEnv('OPENROUTER_API_KEY');
   }
 
-  async chat(messages: (Message | MessageWithContent)[], options?: ChatOptions): Promise<ChatResponse> {
+  async chat(
+    messages: (Message | MessageWithContent)[],
+    options?: ChatOptions,
+  ): Promise<ChatResponse> {
     const model = options?.model ?? this.model;
 
     // OpenRouter uses OpenAI-compatible message format
     // Handles both string content and structured content with cache_control markers
-    const openRouterMessages = messages.map(m => {
+    const openRouterMessages = messages.map((m) => {
       if (typeof m.content !== 'string') {
         return { role: m.role, content: m.content }; // Pass structured content for caching
       }
@@ -112,7 +115,7 @@ export class OpenRouterProvider implements LLMProvider, LLMProviderWithTools {
     // OpenRouter requires specific headers for analytics
     const headers: Record<string, string> = {
       'Content-Type': 'application/json',
-      'Authorization': `Bearer ${this.apiKey}`,
+      Authorization: `Bearer ${this.apiKey}`,
     };
 
     // Optional headers for OpenRouter analytics/rate limits
@@ -143,7 +146,7 @@ export class OpenRouterProvider implements LLMProvider, LLMProviderWithTools {
         throw this.handleError(response.status, error);
       }
 
-      const data = await response.json() as {
+      const data = (await response.json()) as {
         id: string;
         choices: Array<{
           message: {
@@ -173,9 +176,7 @@ export class OpenRouterProvider implements LLMProvider, LLMProviderWithTools {
       }
 
       // Extract reasoning/thinking content (used by DeepSeek-R1, GLM-4, QwQ, etc.)
-      const thinking = choice.message.reasoning
-        ?? choice.message.reasoning_content
-        ?? undefined;
+      const thinking = choice.message.reasoning ?? choice.message.reasoning_content ?? undefined;
 
       return {
         content: choice.message.content ?? '',
@@ -196,7 +197,7 @@ export class OpenRouterProvider implements LLMProvider, LLMProviderWithTools {
         `OpenRouter request failed: ${(error as Error).message}`,
         this.name,
         'NETWORK_ERROR',
-        error as Error
+        error as Error,
       );
     }
   }
@@ -221,18 +222,21 @@ export class OpenRouterProvider implements LLMProvider, LLMProviderWithTools {
    */
   async chatWithTools(
     messages: (Message | MessageWithContent)[],
-    options?: ChatOptionsWithTools
+    options?: ChatOptionsWithTools,
   ): Promise<ChatResponseWithTools> {
     const model = options?.model ?? this.model;
 
     // Convert messages to OpenRouter format
     // This handles both simple string content and structured content with cache_control
-    const openRouterMessages = messages.map(m => {
+    const openRouterMessages = messages.map((m) => {
       // Handle tool role messages (results from tool execution)
       if ('tool_call_id' in m && m.role === 'tool') {
         const toolMsg: Record<string, unknown> = {
           role: 'tool' as const,
-          content: typeof m.content === 'string' ? m.content : m.content.map(c => c.type === 'text' ? c.text : '').join(''),
+          content:
+            typeof m.content === 'string'
+              ? m.content
+              : m.content.map((c) => (c.type === 'text' ? c.text : '')).join(''),
           tool_call_id: m.tool_call_id,
         };
         // Include name if present (required for Gemini)
@@ -246,7 +250,12 @@ export class OpenRouterProvider implements LLMProvider, LLMProviderWithTools {
       if ('tool_calls' in m && m.tool_calls) {
         return {
           role: 'assistant' as const,
-          content: typeof m.content === 'string' ? m.content : (m.content.length > 0 ? m.content.map(c => c.type === 'text' ? c.text : '').join('') : null),
+          content:
+            typeof m.content === 'string'
+              ? m.content
+              : m.content.length > 0
+                ? m.content.map((c) => (c.type === 'text' ? c.text : '')).join('')
+                : null,
           tool_calls: m.tool_calls,
         };
       }
@@ -285,7 +294,7 @@ export class OpenRouterProvider implements LLMProvider, LLMProviderWithTools {
 
     const headers: Record<string, string> = {
       'Content-Type': 'application/json',
-      'Authorization': `Bearer ${this.apiKey}`,
+      Authorization: `Bearer ${this.apiKey}`,
     };
 
     if (this.siteUrl) {
@@ -315,8 +324,8 @@ export class OpenRouterProvider implements LLMProvider, LLMProviderWithTools {
         throw this.handleError(response.status, error);
       }
 
-      const data = await response.json() as {
-        id: string;  // Generation ID for querying cost
+      const data = (await response.json()) as {
+        id: string; // Generation ID for querying cost
         choices: Array<{
           message: {
             content: string | null;
@@ -355,11 +364,15 @@ export class OpenRouterProvider implements LLMProvider, LLMProviderWithTools {
       }
 
       if (process.env.DEBUG_COST) {
-        logger.debug('OpenRouter response details', { responseId: data.id, usage: data.usage, cost });
+        logger.debug('OpenRouter response details', {
+          responseId: data.id,
+          usage: data.usage,
+          cost,
+        });
       }
 
       // Extract tool calls if present
-      const toolCalls: ToolCallResponse[] | undefined = choice.message.tool_calls?.map(tc => ({
+      const toolCalls: ToolCallResponse[] | undefined = choice.message.tool_calls?.map((tc) => ({
         id: tc.id,
         type: tc.type,
         function: {
@@ -369,9 +382,7 @@ export class OpenRouterProvider implements LLMProvider, LLMProviderWithTools {
       }));
 
       // Extract reasoning/thinking content (used by DeepSeek-R1, GLM-4, QwQ, etc.)
-      const thinking = choice.message.reasoning
-        ?? choice.message.reasoning_content
-        ?? undefined;
+      const thinking = choice.message.reasoning ?? choice.message.reasoning_content ?? undefined;
 
       return {
         content: choice.message.content ?? '',
@@ -393,7 +404,7 @@ export class OpenRouterProvider implements LLMProvider, LLMProviderWithTools {
         `OpenRouter request failed: ${(error as Error).message}`,
         this.name,
         'NETWORK_ERROR',
-        error as Error
+        error as Error,
       );
     }
   }
@@ -404,15 +415,18 @@ export class OpenRouterProvider implements LLMProvider, LLMProviderWithTools {
    */
   async *chatWithToolsStream(
     messages: (Message | MessageWithContent)[],
-    options?: ChatOptionsWithTools
+    options?: ChatOptionsWithTools,
   ): AsyncIterable<StreamChunk> {
     const model = options?.model ?? this.model;
 
-    const openRouterMessages = messages.map(m => {
+    const openRouterMessages = messages.map((m) => {
       if ('tool_call_id' in m && m.role === 'tool') {
         const toolMsg: Record<string, unknown> = {
           role: 'tool' as const,
-          content: typeof m.content === 'string' ? m.content : m.content.map(c => c.type === 'text' ? c.text : '').join(''),
+          content:
+            typeof m.content === 'string'
+              ? m.content
+              : m.content.map((c) => (c.type === 'text' ? c.text : '')).join(''),
           tool_call_id: m.tool_call_id,
         };
         if ('name' in m && m.name) {
@@ -424,7 +438,12 @@ export class OpenRouterProvider implements LLMProvider, LLMProviderWithTools {
       if ('tool_calls' in m && m.tool_calls) {
         return {
           role: 'assistant' as const,
-          content: typeof m.content === 'string' ? m.content : (m.content.length > 0 ? m.content.map(c => c.type === 'text' ? c.text : '').join('') : null),
+          content:
+            typeof m.content === 'string'
+              ? m.content
+              : m.content.length > 0
+                ? m.content.map((c) => (c.type === 'text' ? c.text : '')).join('')
+                : null,
           tool_calls: m.tool_calls,
         };
       }
@@ -453,7 +472,7 @@ export class OpenRouterProvider implements LLMProvider, LLMProviderWithTools {
 
     const headers: Record<string, string> = {
       'Content-Type': 'application/json',
-      'Authorization': `Bearer ${this.apiKey}`,
+      Authorization: `Bearer ${this.apiKey}`,
     };
 
     if (this.siteUrl) {
@@ -494,23 +513,26 @@ export class OpenRouterProvider implements LLMProvider, LLMProviderWithTools {
     for (let attempt = 0; attempt < maxRetries; attempt++) {
       try {
         // Wait before querying (generation data needs time to propagate)
-        await new Promise(resolve => setTimeout(resolve, delays[attempt]));
+        await new Promise((resolve) => setTimeout(resolve, delays[attempt]));
 
         const response = await fetch(`${this.baseUrl}/generation?id=${generationId}`, {
           method: 'GET',
           headers: {
-            'Authorization': `Bearer ${this.apiKey}`,
+            Authorization: `Bearer ${this.apiKey}`,
           },
         });
 
         if (!response.ok) {
           if (process.env.DEBUG_COST) {
-            logger.debug('OpenRouter generation query failed', { attempt: attempt + 1, status: response.status });
+            logger.debug('OpenRouter generation query failed', {
+              attempt: attempt + 1,
+              status: response.status,
+            });
           }
           continue; // Retry on non-OK response
         }
 
-        const data = await response.json() as {
+        const data = (await response.json()) as {
           data?: {
             total_cost?: number;
             usage?: number;
@@ -521,7 +543,11 @@ export class OpenRouterProvider implements LLMProvider, LLMProviderWithTools {
         const cost = data.data?.total_cost ?? data.data?.usage;
 
         if (process.env.DEBUG_COST) {
-          logger.debug('OpenRouter generation cost query result', { attempt: attempt + 1, data: data.data, cost });
+          logger.debug('OpenRouter generation cost query result', {
+            attempt: attempt + 1,
+            data: data.data,
+            cost,
+          });
         }
 
         // If we got a valid cost, return it
@@ -535,7 +561,10 @@ export class OpenRouterProvider implements LLMProvider, LLMProviderWithTools {
         }
       } catch (err) {
         if (process.env.DEBUG_COST) {
-          logger.error('OpenRouter generation query error', { attempt: attempt + 1, error: String(err) });
+          logger.error('OpenRouter generation query error', {
+            attempt: attempt + 1,
+            error: String(err),
+          });
         }
       }
     }
@@ -575,10 +604,10 @@ export class OpenRouterProvider implements LLMProvider, LLMProviderWithTools {
   }> {
     try {
       const response = await fetch('https://openrouter.ai/api/v1/key', {
-        headers: { 'Authorization': `Bearer ${apiKey}` },
+        headers: { Authorization: `Bearer ${apiKey}` },
       });
       if (!response.ok) return {};
-      const data = await response.json() as {
+      const data = (await response.json()) as {
         data?: {
           rate_limit?: { requests: number; interval: string };
           limit?: number;
@@ -588,9 +617,10 @@ export class OpenRouterProvider implements LLMProvider, LLMProviderWithTools {
       };
       return {
         rateLimitPerMinute: data.data?.rate_limit?.requests,
-        creditsRemaining: data.data?.limit != null && data.data?.usage != null
-          ? data.data.limit - data.data.usage
-          : undefined,
+        creditsRemaining:
+          data.data?.limit != null && data.data?.usage != null
+            ? data.data.limit - data.data.usage
+            : undefined,
         isPaid: data.data?.is_free_tier === false,
       };
     } catch {
@@ -610,23 +640,23 @@ export class OpenRouterProvider implements LLMProvider, LLMProviderWithTools {
       } else {
         code = 'INVALID_REQUEST';
       }
-    }
-    else if (status >= 500) code = 'SERVER_ERROR';
+    } else if (status >= 500) code = 'SERVER_ERROR';
 
-    return new ProviderError(
-      `OpenRouter API error (${status}): ${body}`,
-      this.name,
-      code
-    );
+    return new ProviderError(`OpenRouter API error (${status}): ${body}`, this.name, code);
   }
 
   private mapStopReason(reason: string): ChatResponse['stopReason'] {
     switch (reason) {
-      case 'stop': return 'end_turn';
-      case 'length': return 'max_tokens';
-      case 'stop_sequence': return 'stop_sequence';
-      case 'tool_calls': return 'end_turn'; // Tool calls are a form of completion
-      default: return 'end_turn';
+      case 'stop':
+        return 'end_turn';
+      case 'length':
+        return 'max_tokens';
+      case 'stop_sequence':
+        return 'stop_sequence';
+      case 'tool_calls':
+        return 'end_turn'; // Tool calls are a form of completion
+      default:
+        return 'end_turn';
     }
   }
 }

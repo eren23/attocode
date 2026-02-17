@@ -170,18 +170,16 @@ export async function initAttocodeDirectory(options: InitOptions = {}): Promise<
   };
 
   // Directories to create
-  const directories = [
-    '.attocode',
-    '.attocode/skills',
-    '.attocode/agents',
-  ];
+  const directories = ['.attocode', '.attocode/skills', '.attocode/agents'];
 
   // Files to create with their content
-  const files: Array<{ path: string; content: string }> = options.minimal ? [] : [
-    { path: '.attocode/config.json', content: DEFAULT_CONFIG },
-    { path: '.attocode/rules.md', content: DEFAULT_RULES },
-    { path: '.attocode/swarm.yaml', content: DEFAULT_SWARM_YAML },
-  ];
+  const files: Array<{ path: string; content: string }> = options.minimal
+    ? []
+    : [
+        { path: '.attocode/config.json', content: DEFAULT_CONFIG },
+        { path: '.attocode/rules.md', content: DEFAULT_RULES },
+        { path: '.attocode/swarm.yaml', content: DEFAULT_SWARM_YAML },
+      ];
 
   // Create directories
   for (const dir of directories) {
@@ -242,10 +240,7 @@ export async function checkAttocodeStatus(): Promise<{
 /**
  * Handle /init command.
  */
-export async function handleInitCommand(
-  args: string[],
-  ctx: CommandContext
-): Promise<void> {
+export async function handleInitCommand(args: string[], ctx: CommandContext): Promise<void> {
   const { output } = ctx;
 
   // Check current status

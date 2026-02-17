@@ -143,16 +143,31 @@ export class ResourceManager {
       message = `Memory limit exceeded (${usage.memoryMB.toFixed(1)}MB / ${this.config.maxMemoryMB}MB)`;
       canContinue = false;
       recommendation = 'stop';
-      this.emit({ type: 'resource.exceeded', metric: 'memory', value: usage.memoryMB, limit: this.config.maxMemoryMB });
+      this.emit({
+        type: 'resource.exceeded',
+        metric: 'memory',
+        value: usage.memoryMB,
+        limit: this.config.maxMemoryMB,
+      });
     } else if (usage.memoryPercent >= this.config.criticalThreshold) {
       status = 'critical';
       message = `Memory critically high (${(usage.memoryPercent * 100).toFixed(1)}%)`;
       recommendation = 'slow_down';
-      this.emit({ type: 'resource.critical', metric: 'memory', value: usage.memoryPercent, threshold: this.config.criticalThreshold });
+      this.emit({
+        type: 'resource.critical',
+        metric: 'memory',
+        value: usage.memoryPercent,
+        threshold: this.config.criticalThreshold,
+      });
     } else if (usage.memoryPercent >= this.config.warnThreshold) {
       status = 'warning';
       message = `Memory usage elevated (${(usage.memoryPercent * 100).toFixed(1)}%)`;
-      this.emit({ type: 'resource.warning', metric: 'memory', value: usage.memoryPercent, threshold: this.config.warnThreshold });
+      this.emit({
+        type: 'resource.warning',
+        metric: 'memory',
+        value: usage.memoryPercent,
+        threshold: this.config.warnThreshold,
+      });
     }
 
     // Check CPU time (only override if worse)
@@ -161,16 +176,31 @@ export class ResourceManager {
       message = `CPU time limit exceeded (${usage.cpuTimeSec.toFixed(1)}s / ${this.config.maxCpuTimeSec}s)`;
       canContinue = false;
       recommendation = 'stop';
-      this.emit({ type: 'resource.exceeded', metric: 'cpuTime', value: usage.cpuTimeSec, limit: this.config.maxCpuTimeSec });
+      this.emit({
+        type: 'resource.exceeded',
+        metric: 'cpuTime',
+        value: usage.cpuTimeSec,
+        limit: this.config.maxCpuTimeSec,
+      });
     } else if (usage.cpuPercent >= this.config.criticalThreshold && status === 'healthy') {
       status = 'critical';
       message = `Approaching CPU time limit (${(usage.cpuPercent * 100).toFixed(1)}%)`;
       recommendation = 'slow_down';
-      this.emit({ type: 'resource.critical', metric: 'cpuTime', value: usage.cpuPercent, threshold: this.config.criticalThreshold });
+      this.emit({
+        type: 'resource.critical',
+        metric: 'cpuTime',
+        value: usage.cpuPercent,
+        threshold: this.config.criticalThreshold,
+      });
     } else if (usage.cpuPercent >= this.config.warnThreshold && status === 'healthy') {
       status = 'warning';
       message = `CPU time usage elevated (${(usage.cpuPercent * 100).toFixed(1)}%)`;
-      this.emit({ type: 'resource.warning', metric: 'cpuTime', value: usage.cpuPercent, threshold: this.config.warnThreshold });
+      this.emit({
+        type: 'resource.warning',
+        metric: 'cpuTime',
+        value: usage.cpuPercent,
+        threshold: this.config.warnThreshold,
+      });
     }
 
     // Check concurrent operations
@@ -179,12 +209,21 @@ export class ResourceManager {
       message = `Max concurrent operations reached (${usage.concurrentOps}/${this.config.maxConcurrentOps})`;
       canContinue = false;
       recommendation = 'stop';
-      this.emit({ type: 'resource.exceeded', metric: 'concurrentOps', value: usage.concurrentOps, limit: this.config.maxConcurrentOps });
+      this.emit({
+        type: 'resource.exceeded',
+        metric: 'concurrentOps',
+        value: usage.concurrentOps,
+        limit: this.config.maxConcurrentOps,
+      });
     }
 
     // Check for recovery
     if (this.previousStatus !== 'healthy' && status === 'healthy') {
-      this.emit({ type: 'resource.recovered', metric: 'overall', previousStatus: this.previousStatus });
+      this.emit({
+        type: 'resource.recovered',
+        metric: 'overall',
+        previousStatus: this.previousStatus,
+      });
     }
 
     this.previousStatus = status;
@@ -344,7 +383,9 @@ export class ResourceLimitError extends Error {
 export function isResourceLimitError(error: unknown): error is ResourceLimitError {
   return (
     error instanceof ResourceLimitError ||
-    (error instanceof Error && 'isResourceLimit' in error && (error as ResourceLimitError).isResourceLimit === true)
+    (error instanceof Error &&
+      'isResourceLimit' in error &&
+      (error as ResourceLimitError).isResourceLimit === true)
   );
 }
 
@@ -397,11 +438,14 @@ export function createLenientResourceManager(): ResourceManager {
  */
 export function combinedShouldContinue(
   resourceManager: ResourceManager | null,
-  economicsShouldContinue: boolean
+  economicsShouldContinue: boolean,
 ): { canContinue: boolean; reason?: string } {
   // If no resource manager, just use economics
   if (!resourceManager) {
-    return { canContinue: economicsShouldContinue, reason: economicsShouldContinue ? undefined : 'Budget limit' };
+    return {
+      canContinue: economicsShouldContinue,
+      reason: economicsShouldContinue ? undefined : 'Budget limit',
+    };
   }
 
   // Check resources

@@ -8,11 +8,7 @@
  * Extracted from sqlite-store.ts as part of Phase 3c restructuring.
  */
 
-import type {
-  WorkerResult,
-  WorkerResultRef,
-  SQLiteStoreDeps,
-} from './sqlite-store.js';
+import type { WorkerResult, WorkerResultRef, SQLiteStoreDeps } from './sqlite-store.js';
 
 // =============================================================================
 // WORKER RESULT CRUD
@@ -27,7 +23,7 @@ export function createWorkerResult(
   deps: SQLiteStoreDeps,
   workerId: string,
   taskDescription: string,
-  modelUsed?: string
+  modelUsed?: string,
 ): string | undefined {
   if (!deps.features.workerResults || !deps.stmts.insertWorkerResult) {
     return undefined;
@@ -71,7 +67,7 @@ export function completeWorkerResult(
     summary?: string;
     artifacts?: Record<string, unknown>[];
     metrics?: { tokens?: number; duration?: number; toolCalls?: number };
-  }
+  },
 ): WorkerResultRef | undefined {
   if (!deps.features.workerResults || !deps.stmts.updateWorkerResult) {
     return undefined;
@@ -132,7 +128,10 @@ export function getWorkerResult(deps: SQLiteStoreDeps, resultId: string): Worker
  * Get a lightweight reference to a worker result (for context injection).
  * Does NOT include full output - that stays in database.
  */
-export function getWorkerResultRef(deps: SQLiteStoreDeps, resultId: string): WorkerResultRef | undefined {
+export function getWorkerResultRef(
+  deps: SQLiteStoreDeps,
+  resultId: string,
+): WorkerResultRef | undefined {
   const result = getWorkerResult(deps, resultId);
   return result ? toResultRef(result) : undefined;
 }
@@ -152,7 +151,10 @@ export function listWorkerResults(deps: SQLiteStoreDeps, sessionId?: string): Wo
 /**
  * List pending worker results (workers still running).
  */
-export function listPendingWorkerResults(deps: SQLiteStoreDeps, sessionId?: string): WorkerResult[] {
+export function listPendingWorkerResults(
+  deps: SQLiteStoreDeps,
+  sessionId?: string,
+): WorkerResult[] {
   if (!deps.features.workerResults || !deps.stmts.listPendingWorkerResults) {
     return [];
   }
@@ -178,9 +180,8 @@ export function getWorkerResultsSummary(deps: SQLiteStoreDeps, sessionId?: strin
   const lines: string[] = ['Worker Results:'];
   for (const r of results.slice(0, 10)) {
     const status = r.status === 'success' ? '\u2713' : r.status === 'error' ? '\u2717' : '\u23F3';
-    const task = r.taskDescription.length > 50
-      ? r.taskDescription.slice(0, 47) + '...'
-      : r.taskDescription;
+    const task =
+      r.taskDescription.length > 50 ? r.taskDescription.slice(0, 47) + '...' : r.taskDescription;
     lines.push(`${status} [${r.id}] ${task}`);
     if (r.summary) {
       lines.push(`  \u2514\u2500 ${r.summary}`);

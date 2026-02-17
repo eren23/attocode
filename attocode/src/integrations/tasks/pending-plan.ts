@@ -155,7 +155,7 @@ export class PendingPlanManager {
     tool: string,
     args: Record<string, unknown>,
     reason: string,
-    toolCallId?: string
+    toolCallId?: string,
   ): ProposedChange | null {
     if (!this.currentPlan) {
       return null;
@@ -239,9 +239,7 @@ export class PendingPlanManager {
     }
 
     const allChanges = this.currentPlan.proposedChanges;
-    const approvedChanges = count !== undefined
-      ? allChanges.slice(0, count)
-      : allChanges;
+    const approvedChanges = count !== undefined ? allChanges.slice(0, count) : allChanges;
     const skippedCount = allChanges.length - approvedChanges.length;
 
     this.currentPlan.status = skippedCount > 0 ? 'partially_approved' : 'approved';
@@ -323,7 +321,7 @@ export class PendingPlanManager {
     } else {
       // Extract overall approach from first change's reason (often shared across spawn_agent calls)
       const firstReason = this.currentPlan.proposedChanges[0]?.reason || '';
-      const allSameReason = this.currentPlan.proposedChanges.every(c => c.reason === firstReason);
+      const allSameReason = this.currentPlan.proposedChanges.every((c) => c.reason === firstReason);
 
       if (allSameReason && firstReason && this.currentPlan.proposedChanges.length > 1) {
         lines.push('🎯 Overall Approach:');
@@ -356,7 +354,7 @@ export class PendingPlanManager {
           lines.push(`${change.order}. [${agentType}]`);
 
           // Show the full task, properly formatted with line breaks
-          const taskLines = task.split(/\n/).filter(l => l.trim());
+          const taskLines = task.split(/\n/).filter((l) => l.trim());
           if (taskLines.length <= 3) {
             // Short task - show inline
             for (const taskLine of taskLines) {
@@ -412,7 +410,9 @@ export class PendingPlanManager {
    * @returns A coherent plan summary string
    */
   async synthesizePlan(llmProvider?: {
-    chat(messages: Array<{ role: 'user' | 'assistant' | 'system'; content: string }>): Promise<{ content: string }>;
+    chat(
+      messages: Array<{ role: 'user' | 'assistant' | 'system'; content: string }>,
+    ): Promise<{ content: string }>;
   }): Promise<string> {
     if (!this.currentPlan) {
       return 'No pending plan.';
@@ -424,14 +424,17 @@ export class PendingPlanManager {
     // If LLM provider is available, use it for intelligent synthesis
     if (llmProvider && changes.length > 0) {
       try {
-        const changesDescription = changes.map(c => {
-          const target = c.tool === 'spawn_agent'
-            ? `Delegate to subagent: ${String(c.args.agent || c.args.type || 'subagent')}`
-            : c.tool === 'bash'
-            ? `Execute: ${String(c.args.command || '').slice(0, 100)}`
-            : `${c.tool}: ${String(c.args.path || c.args.file_path || JSON.stringify(c.args)).slice(0, 100)}`;
-          return `${c.order}. [${c.tool}] ${target}\n   Reason: ${c.reason}`;
-        }).join('\n\n');
+        const changesDescription = changes
+          .map((c) => {
+            const target =
+              c.tool === 'spawn_agent'
+                ? `Delegate to subagent: ${String(c.args.agent || c.args.type || 'subagent')}`
+                : c.tool === 'bash'
+                  ? `Execute: ${String(c.args.command || '').slice(0, 100)}`
+                  : `${c.tool}: ${String(c.args.path || c.args.file_path || JSON.stringify(c.args)).slice(0, 100)}`;
+            return `${c.order}. [${c.tool}] ${target}\n   Reason: ${c.reason}`;
+          })
+          .join('\n\n');
 
         const prompt = `Analyze this plan and provide a concise executive summary.
 
@@ -449,9 +452,7 @@ Provide:
 
 Keep it concise and actionable. Focus on the "why" not just the "what".`;
 
-        const response = await llmProvider.chat([
-          { role: 'user', content: prompt },
-        ]);
+        const response = await llmProvider.chat([{ role: 'user', content: prompt }]);
 
         if (response.content && response.content.length > 50) {
           return response.content;
@@ -465,9 +466,9 @@ Keep it concise and actionable. Focus on the "why" not just the "what".`;
     const lines: string[] = [];
 
     // Executive summary based on change types
-    const fileChanges = changes.filter(c => ['write_file', 'edit_file'].includes(c.tool));
-    const bashCommands = changes.filter(c => c.tool === 'bash');
-    const subagentTasks = changes.filter(c => c.tool === 'spawn_agent');
+    const fileChanges = changes.filter((c) => ['write_file', 'edit_file'].includes(c.tool));
+    const bashCommands = changes.filter((c) => c.tool === 'bash');
+    const subagentTasks = changes.filter((c) => c.tool === 'spawn_agent');
 
     lines.push('## Executive Summary');
     lines.push('');
@@ -476,7 +477,9 @@ Keep it concise and actionable. Focus on the "why" not just the "what".`;
       lines.push(`This plan delegates ${subagentTasks.length} task(s) to specialized subagents.`);
     }
     if (fileChanges.length > 0) {
-      const uniqueFiles = new Set(fileChanges.map(c => String(c.args.path || c.args.file_path || '')));
+      const uniqueFiles = new Set(
+        fileChanges.map((c) => String(c.args.path || c.args.file_path || '')),
+      );
       lines.push(`${fileChanges.length} file operation(s) across ${uniqueFiles.size} file(s).`);
     }
     if (bashCommands.length > 0) {
@@ -496,7 +499,9 @@ Keep it concise and actionable. Focus on the "why" not just the "what".`;
     // Key targets
     if (fileChanges.length > 0) {
       lines.push('## Files Affected');
-      const uniqueFiles = [...new Set(fileChanges.map(c => String(c.args.path || c.args.file_path || 'unknown')))];
+      const uniqueFiles = [
+        ...new Set(fileChanges.map((c) => String(c.args.path || c.args.file_path || 'unknown'))),
+      ];
       for (const file of uniqueFiles.slice(0, 10)) {
         lines.push(`- ${file}`);
       }
@@ -515,7 +520,7 @@ Keep it concise and actionable. Focus on the "why" not just the "what".`;
 
     // Verification suggestion
     lines.push('## Verification');
-    if (bashCommands.some(c => String(c.args.command || '').includes('test'))) {
+    if (bashCommands.some((c) => String(c.args.command || '').includes('test'))) {
       lines.push('- Tests are included in this plan');
     } else {
       lines.push('- Consider running tests after approval: `npm test` or relevant test command');

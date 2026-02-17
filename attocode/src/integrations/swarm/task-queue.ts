@@ -9,17 +9,24 @@
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import type { SmartDecompositionResult, ResourceConflict } from '../tasks/smart-decomposer.js';
-import type { SwarmTask, SwarmTaskResult, SwarmConfig, FixupTask, SwarmCheckpoint, TaskFailureMode } from './types.js';
+import type {
+  SwarmTask,
+  SwarmTaskResult,
+  SwarmConfig,
+  FixupTask,
+  SwarmCheckpoint,
+  TaskFailureMode,
+} from './types.js';
 import { subtaskToSwarmTask } from './types.js';
 
 /** P6: Failure-mode-specific thresholds — more lenient for external failures, stricter for quality. */
 const FAILURE_MODE_THRESHOLDS: Record<TaskFailureMode, number> = {
-  'timeout': 0.3,
+  timeout: 0.3,
   'rate-limit': 0.3,
-  'error': 0.5,
-  'quality': 0.7,
-  'hollow': 0.7,
-  'cascade': 0.8,
+  error: 0.5,
+  quality: 0.7,
+  hollow: 0.7,
+  cascade: 0.8,
 };
 
 /** P6: Get the effective threshold for a task based on its failed dependencies' failure modes.
@@ -74,7 +81,7 @@ export class SwarmTaskQueue {
     // Defensive: if parallelGroups is empty but subtasks exist, fall back to
     // single-wave scheduling so tasks aren't silently dropped.
     if (parallelGroups.length === 0 && subtasks.length > 0) {
-      parallelGroups = [subtasks.map(s => s.id)];
+      parallelGroups = [subtasks.map((s) => s.id)];
     }
 
     // Map subtask IDs to wave numbers
@@ -189,9 +196,12 @@ export class SwarmTaskQueue {
       } else {
         // P6: Some deps failed — check failure-mode-aware threshold
         const failedDepTasks = task.dependencies
-          .map(id => this.tasks.get(id))
+          .map((id) => this.tasks.get(id))
           .filter((d): d is SwarmTask => !!d && (d.status === 'failed' || d.status === 'skipped'));
-        const effectiveThreshold = getEffectiveThreshold(failedDepTasks, this.partialDependencyThreshold);
+        const effectiveThreshold = getEffectiveThreshold(
+          failedDepTasks,
+          this.partialDependencyThreshold,
+        );
         const ratio = completedCount / task.dependencies.length;
         if (ratio >= effectiveThreshold) {
           // Enough succeeded — dispatch with partial context
@@ -201,8 +211,10 @@ export class SwarmTaskQueue {
         } else {
           // Too many failures — skip
           task.status = 'skipped';
-          this.onCascadeSkipCallback?.(task.id,
-            `${failedDeps.length}/${task.dependencies.length} dependencies failed (ratio ${ratio.toFixed(2)} < threshold ${effectiveThreshold.toFixed(2)})`);
+          this.onCascadeSkipCallback?.(
+            task.id,
+            `${failedDeps.length}/${task.dependencies.length} dependencies failed (ratio ${ratio.toFixed(2)} < threshold ${effectiveThreshold.toFixed(2)})`,
+          );
         }
       }
     }
@@ -241,7 +253,9 @@ export class SwarmTaskQueue {
       if (!dep || !dep.result || !dep.result.success) continue;
 
       const summary = dep.result.closureReport
-        ? dep.result.closureReport.findings.join('\n') + '\n' + dep.result.closureReport.actionsTaken.join('\n')
+        ? dep.result.closureReport.findings.join('\n') +
+          '\n' +
+          dep.result.closureReport.actionsTaken.join('\n')
         : dep.result.output.slice(0, 500);
 
       // F24b: Append files created/modified by this dependency
@@ -256,8 +270,10 @@ export class SwarmTaskQueue {
 
       // V6: Detect hollow dependency output — both conditions must be true:
       // short output AND budget/unable failures (so legitimate short completions pass through)
-      const isHollow = summary.trim().length < 100 &&
-        (dep.result.closureReport?.failures?.some(f => /budget|unable|not completed/i.test(f)) ?? false);
+      const isHollow =
+        summary.trim().length < 100 &&
+        (dep.result.closureReport?.failures?.some((f) => /budget|unable|not completed/i.test(f)) ??
+          false);
 
       if (isHollow) {
         emptyDeps.push(dep.description);
@@ -267,7 +283,9 @@ export class SwarmTaskQueue {
     }
 
     if (emptyDeps.length > 0) {
-      parts.unshift(`WARNING: ${emptyDeps.length} dependencies completed without meaningful output: ${emptyDeps.join(', ')}. You may need to do additional research to compensate.`);
+      parts.unshift(
+        `WARNING: ${emptyDeps.length} dependencies completed without meaningful output: ${emptyDeps.join(', ')}. You may need to do additional research to compensate.`,
+      );
     }
 
     return parts.length > 0 ? parts.join('\n\n') : '';
@@ -283,8 +301,8 @@ export class SwarmTaskQueue {
     const now = Date.now();
     const waveTaskIds = this.waves[this.currentWave];
     return waveTaskIds
-      .map(id => this.tasks.get(id)!)
-      .filter(task => task.status === 'ready' && !(task.retryAfter && now < task.retryAfter));
+      .map((id) => this.tasks.get(id)!)
+      .filter((task) => task.status === 'ready' && !(task.retryAfter && now < task.retryAfter));
   }
 
   /**
@@ -434,7 +452,7 @@ export class SwarmTaskQueue {
   unSkipDependents(taskId: string): void {
     for (const [, task] of this.tasks) {
       if (task.status === 'skipped' && task.dependencies.includes(taskId)) {
-        const allDepsSatisfied = task.dependencies.every(depId => {
+        const allDepsSatisfied = task.dependencies.every((depId) => {
           const dep = this.tasks.get(depId);
           return dep && (dep.status === 'completed' || dep.status === 'decomposed');
         });
@@ -453,7 +471,8 @@ export class SwarmTaskQueue {
   private cascadeSkip(failedTaskId: string): void {
     for (const [, task] of this.tasks) {
       // H5: Also handle dispatched tasks whose dependency failed
-      if (task.status !== 'pending' && task.status !== 'ready' && task.status !== 'dispatched') continue;
+      if (task.status !== 'pending' && task.status !== 'ready' && task.status !== 'dispatched')
+        continue;
 
       // Only consider direct dependents — transitive deps are handled recursively
       // when a direct dependent gets skipped (it will trigger another cascadeSkip)
@@ -466,11 +485,13 @@ export class SwarmTaskQueue {
         const failedTask = this.tasks.get(failedTaskId);
         const targetFiles = failedTask?.targetFiles ?? [];
         if (targetFiles.length > 0) {
-          const existingCount = targetFiles.filter(f => {
+          const existingCount = targetFiles.filter((f) => {
             try {
               const resolved = path.resolve(this.workingDirectory, f);
               return fs.statSync(resolved).size > 0;
-            } catch { return false; }
+            } catch {
+              return false;
+            }
           }).length;
           if (existingCount >= targetFiles.length * 0.5) {
             // Most target files exist — treat failure as less severe, keep dependent ready
@@ -480,7 +501,10 @@ export class SwarmTaskQueue {
               const dep = this.tasks.get(depId);
               if (!dep) continue;
               if (dep.status === 'completed') succeededDeps.push(dep.description);
-              else failedDeps.push(`${dep.description} (failed but ${existingCount}/${targetFiles.length} files exist)`);
+              else
+                failedDeps.push(
+                  `${dep.description} (failed but ${existingCount}/${targetFiles.length} files exist)`,
+                );
             }
             task.status = 'ready';
             task.partialContext = {
@@ -511,9 +535,12 @@ export class SwarmTaskQueue {
         if (resolvedCount < task.dependencies.length) continue;
 
         const failedDepTasks = task.dependencies
-          .map(id => this.tasks.get(id))
+          .map((id) => this.tasks.get(id))
           .filter((d): d is SwarmTask => !!d && (d.status === 'failed' || d.status === 'skipped'));
-        const effectiveThreshold = getEffectiveThreshold(failedDepTasks, this.partialDependencyThreshold);
+        const effectiveThreshold = getEffectiveThreshold(
+          failedDepTasks,
+          this.partialDependencyThreshold,
+        );
         const ratio = completedCount / task.dependencies.length;
         if (ratio >= effectiveThreshold) {
           // Enough deps succeeded — mark ready with partial context instead of skipping
@@ -540,8 +567,10 @@ export class SwarmTaskQueue {
       if (failedTask?.failureMode === 'timeout') {
         if (task.status === 'dispatched') {
           // Already running — don't interfere
-          this.onCascadeSkipCallback?.(task.id,
-            `dependency ${failedTaskId} timed out — dispatched task allowed to complete`);
+          this.onCascadeSkipCallback?.(
+            task.id,
+            `dependency ${failedTaskId} timed out — dispatched task allowed to complete`,
+          );
           continue;
         }
         const succeededDeps: string[] = [];
@@ -559,8 +588,10 @@ export class SwarmTaskQueue {
           ratio: succeededDeps.length / task.dependencies.length,
         };
         task.dependencyContext = this.buildDependencyContext(task);
-        this.onCascadeSkipCallback?.(task.id,
-          `dependency ${failedTaskId} timed out — proceeding with partial context`);
+        this.onCascadeSkipCallback?.(
+          task.id,
+          `dependency ${failedTaskId} timed out — proceeding with partial context`,
+        );
         continue;
       }
 
@@ -568,7 +599,10 @@ export class SwarmTaskQueue {
       // instead of immediately skipping. The result will be evaluated when it arrives.
       if (task.status === 'dispatched') {
         task.pendingCascadeSkip = true;
-        this.onCascadeSkipCallback?.(task.id, `dependency ${failedTaskId} failed (pending — worker still running)`);
+        this.onCascadeSkipCallback?.(
+          task.id,
+          `dependency ${failedTaskId} failed (pending — worker still running)`,
+        );
       } else {
         task.status = 'skipped';
         this.onCascadeSkipCallback?.(task.id, `dependency ${failedTaskId} failed`);
@@ -588,7 +622,7 @@ export class SwarmTaskQueue {
 
     if (task.dependencies.includes(depId)) return true;
 
-    return task.dependencies.some(d => this.dependsOn(d, depId, visited));
+    return task.dependencies.some((d) => this.dependsOn(d, depId, visited));
   }
 
   /**
@@ -598,9 +632,15 @@ export class SwarmTaskQueue {
     if (this.currentWave >= this.waves.length) return true;
 
     const waveTaskIds = this.waves[this.currentWave];
-    return waveTaskIds.every(id => {
+    return waveTaskIds.every((id) => {
       const task = this.tasks.get(id);
-      return task && (task.status === 'completed' || task.status === 'failed' || task.status === 'skipped' || task.status === 'decomposed');
+      return (
+        task &&
+        (task.status === 'completed' ||
+          task.status === 'failed' ||
+          task.status === 'skipped' ||
+          task.status === 'decomposed')
+      );
     });
   }
 
@@ -639,7 +679,7 @@ export class SwarmTaskQueue {
     if (!original) return;
 
     original.status = 'decomposed';
-    original.subtaskIds = subtasks.map(s => s.id);
+    original.subtaskIds = subtasks.map((s) => s.id);
 
     // Insert subtasks
     for (const sub of subtasks) {
@@ -656,14 +696,14 @@ export class SwarmTaskQueue {
       if (task.subtaskIds?.length) continue; // Skip the original itself
       const depIndex = task.dependencies.indexOf(originalTaskId);
       if (depIndex !== -1) {
-        task.dependencies.splice(depIndex, 1, ...subtasks.map(s => s.id));
+        task.dependencies.splice(depIndex, 1, ...subtasks.map((s) => s.id));
       }
     }
 
     // Add subtask IDs to the wave
     const waveIdx = original.wave;
     if (waveIdx < this.waves.length) {
-      this.waves[waveIdx].push(...subtasks.map(s => s.id));
+      this.waves[waveIdx].push(...subtasks.map((s) => s.id));
     }
 
     this.updateReadyStatus();
@@ -673,7 +713,7 @@ export class SwarmTaskQueue {
    * Get all tasks that were cascade-skipped.
    */
   getSkippedTasks(): SwarmTask[] {
-    return [...this.tasks.values()].filter(t => t.status === 'skipped');
+    return [...this.tasks.values()].filter((t) => t.status === 'skipped');
   }
 
   /**
@@ -718,17 +758,40 @@ export class SwarmTaskQueue {
   /**
    * Get task count by status.
    */
-  getStats(): { ready: number; running: number; completed: number; failed: number; skipped: number; total: number } {
-    let ready = 0, running = 0, completed = 0, failed = 0, skipped = 0;
+  getStats(): {
+    ready: number;
+    running: number;
+    completed: number;
+    failed: number;
+    skipped: number;
+    total: number;
+  } {
+    let ready = 0,
+      running = 0,
+      completed = 0,
+      failed = 0,
+      skipped = 0;
 
     for (const [, task] of this.tasks) {
       switch (task.status) {
-        case 'ready': ready++; break;
-        case 'dispatched': running++; break;
-        case 'completed': completed++; break;
-        case 'failed': failed++; break;
-        case 'skipped': skipped++; break;
-        case 'decomposed': completed++; break; // Decomposed tasks count as completed (replaced by subtasks)
+        case 'ready':
+          ready++;
+          break;
+        case 'dispatched':
+          running++;
+          break;
+        case 'completed':
+          completed++;
+          break;
+        case 'failed':
+          failed++;
+          break;
+        case 'skipped':
+          skipped++;
+          break;
+        case 'decomposed':
+          completed++;
+          break; // Decomposed tasks count as completed (replaced by subtasks)
       }
     }
 
@@ -748,7 +811,7 @@ export class SwarmTaskQueue {
    * Export current state for checkpoint serialization.
    */
   getCheckpointState(): Pick<SwarmCheckpoint, 'taskStates' | 'waves' | 'currentWave'> {
-    const taskStates = [...this.tasks.values()].map(t => ({
+    const taskStates = [...this.tasks.values()].map((t) => ({
       id: t.id,
       status: t.status,
       result: t.result,
@@ -775,7 +838,9 @@ export class SwarmTaskQueue {
   /**
    * Restore state from a checkpoint. Merges checkpoint state into existing tasks.
    */
-  restoreFromCheckpoint(state: Pick<SwarmCheckpoint, 'taskStates' | 'waves' | 'currentWave'>): void {
+  restoreFromCheckpoint(
+    state: Pick<SwarmCheckpoint, 'taskStates' | 'waves' | 'currentWave'>,
+  ): void {
     this.waves = state.waves;
     this.currentWave = state.currentWave;
 
@@ -815,7 +880,16 @@ export class SwarmTaskQueue {
    * Add re-planned tasks from mid-swarm re-planning.
    * Inserts new tasks into the specified wave and marks them ready.
    */
-  addReplanTasks(subtasks: Array<{ description: string; type: string; complexity: number; dependencies: string[]; relevantFiles?: string[] }>, wave: number): SwarmTask[] {
+  addReplanTasks(
+    subtasks: Array<{
+      description: string;
+      type: string;
+      complexity: number;
+      dependencies: string[];
+      relevantFiles?: string[];
+    }>,
+    wave: number,
+  ): SwarmTask[] {
     const newTasks: SwarmTask[] = [];
     for (const st of subtasks) {
       const id = `replan-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
@@ -836,7 +910,7 @@ export class SwarmTaskQueue {
     }
     // Add to wave
     if (!this.waves[wave]) this.waves[wave] = [];
-    this.waves[wave].push(...newTasks.map(t => t.id));
+    this.waves[wave].push(...newTasks.map((t) => t.id));
     return newTasks;
   }
 

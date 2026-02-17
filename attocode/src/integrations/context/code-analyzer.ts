@@ -8,7 +8,14 @@
 
 import * as fs from 'fs/promises';
 import * as path from 'path';
-import { isASTSupported, extractSymbolsAST, extractDependenciesAST, parseFile, getCachedParse, type ASTSymbol } from './codebase-ast.js';
+import {
+  isASTSupported,
+  extractSymbolsAST,
+  extractDependenciesAST,
+  parseFile,
+  getCachedParse,
+  type ASTSymbol,
+} from './codebase-ast.js';
 import type { CodeChunk, CodeChunkType, CodebaseContextConfig } from './codebase-context.js';
 
 // =============================================================================
@@ -105,13 +112,19 @@ export async function processFile(
     // Use single parseFile() call — parses once, extracts symbols + deps from same tree
     const parsed = parseFile(content, fullPath);
     const symbolDetailsList = parsed
-      ? parsed.symbols.map(s => ({ name: s.name, kind: s.kind, exported: s.exported, line: s.line }))
+      ? parsed.symbols.map((s) => ({
+          name: s.name,
+          kind: s.kind,
+          exported: s.exported,
+          line: s.line,
+        }))
       : extractSymbolDetails(content, relativePath);
-    const symbols = symbolDetailsList.length > 0
-      ? symbolDetailsList.map((s) => s.name)
-      : extractSymbols(content, relativePath);
+    const symbols =
+      symbolDetailsList.length > 0
+        ? symbolDetailsList.map((s) => s.name)
+        : extractSymbols(content, relativePath);
     const dependencies = parsed
-      ? parsed.dependencies.flatMap(d => d.names.filter(n => !n.startsWith('* as ')))
+      ? parsed.dependencies.flatMap((d) => d.names.filter((n) => !n.startsWith('* as ')))
       : extractDependencyNames(content, relativePath);
 
     // Calculate base importance
@@ -173,11 +186,7 @@ export function determineChunkType(
   }
 
   // Config
-  if (
-    lower.includes('config') ||
-    lower.includes('settings') ||
-    lower.endsWith('.json')
-  ) {
+  if (lower.includes('config') || lower.includes('settings') || lower.endsWith('.json')) {
     return 'config';
   }
 
@@ -187,11 +196,7 @@ export function determineChunkType(
   }
 
   // Utilities
-  if (
-    lower.includes('/utils/') ||
-    lower.includes('/helpers/') ||
-    lower.includes('/lib/')
-  ) {
+  if (lower.includes('/utils/') || lower.includes('/helpers/') || lower.includes('/lib/')) {
     return 'utility';
   }
 
@@ -270,7 +275,7 @@ export function extractSymbols(content: string, filePath: string): string[] {
   if (isASTSupported(filePath)) {
     const astSymbols = extractSymbolsAST(content, filePath);
     if (astSymbols.length > 0) {
-      return astSymbols.map(s => s.name);
+      return astSymbols.map((s) => s.name);
     }
   }
 
@@ -299,10 +304,7 @@ export function extractSymbols(content: string, filePath: string): string[] {
     }
   } else if (ext === '.py') {
     // Python: class and def at module level
-    const pyPatterns = [
-      /^class\s+(\w+)/gm,
-      /^def\s+(\w+)/gm,
-    ];
+    const pyPatterns = [/^class\s+(\w+)/gm, /^def\s+(\w+)/gm];
 
     for (const pattern of pyPatterns) {
       let match;
@@ -386,7 +388,9 @@ export function extractDependencies(content: string, currentFile: string): Set<s
   const cached = getCachedParse(currentFile);
   const astDeps = cached
     ? cached.dependencies
-    : isASTSupported(currentFile) ? extractDependenciesAST(content, currentFile) : null;
+    : isASTSupported(currentFile)
+      ? extractDependenciesAST(content, currentFile)
+      : null;
 
   if (astDeps) {
     const deps = new Set<string>();
@@ -439,7 +443,7 @@ export function extractDependencyNames(content: string, filePath?: string): stri
     if (astDeps.length > 0) {
       const names: string[] = [];
       for (const dep of astDeps) {
-        names.push(...dep.names.filter(n => !n.startsWith('* as ')));
+        names.push(...dep.names.filter((n) => !n.startsWith('* as ')));
       }
       if (names.length > 0) return names;
     }
@@ -448,10 +452,7 @@ export function extractDependencyNames(content: string, filePath?: string): stri
   // Fallback to regex extraction
   const depNames: string[] = [];
 
-  const patterns = [
-    /import\s+\{\s*([^}]+)\s*\}\s+from/g,
-    /import\s+(\w+)\s+from/g,
-  ];
+  const patterns = [/import\s+\{\s*([^}]+)\s*\}\s+from/g, /import\s+(\w+)\s+from/g];
 
   for (const pattern of patterns) {
     let match;
@@ -475,7 +476,11 @@ export function extractDependencyNames(content: string, filePath?: string): stri
 /**
  * Check if a path matches any of the given patterns.
  */
-export function matchesPatterns(_deps: CodeAnalyzerDeps, filePath: string, patterns: string[]): boolean {
+export function matchesPatterns(
+  _deps: CodeAnalyzerDeps,
+  filePath: string,
+  patterns: string[],
+): boolean {
   const normalizedFilePath = normalizePath(filePath);
   for (const pattern of patterns) {
     if (matchesGlob(normalizedFilePath, pattern)) {

@@ -908,7 +908,14 @@ export interface PlanEvolutionTrace {
   /** What changed from previous version */
   change?: {
     /** Type of change */
-    type: 'created' | 'step_added' | 'step_removed' | 'step_modified' | 'step_completed' | 'step_failed' | 'replanned';
+    type:
+      | 'created'
+      | 'step_added'
+      | 'step_removed'
+      | 'step_modified'
+      | 'step_completed'
+      | 'step_failed'
+      | 'replanned';
     /** Reason for change */
     reason: string;
     /** Affected step IDs */
@@ -991,7 +998,14 @@ export interface DecisionTrace {
   traceId: string;
 
   /** Type of decision */
-  type: 'routing' | 'tool_selection' | 'policy' | 'plan_choice' | 'model_selection' | 'retry' | 'escalation';
+  type:
+    | 'routing'
+    | 'tool_selection'
+    | 'policy'
+    | 'plan_choice'
+    | 'model_selection'
+    | 'retry'
+    | 'escalation';
 
   /** The decision made */
   decision: string;
@@ -1242,7 +1256,15 @@ export interface TraceSummary {
 
   /** Detected anomalies */
   anomalies: Array<{
-    type: 'excessive_iterations' | 'cache_inefficiency' | 'redundant_tool_calls' | 'error_loop' | 'plan_thrashing' | 'memory_miss' | 'slow_tool' | 'token_spike';
+    type:
+      | 'excessive_iterations'
+      | 'cache_inefficiency'
+      | 'redundant_tool_calls'
+      | 'error_loop'
+      | 'plan_thrashing'
+      | 'memory_miss'
+      | 'slow_tool'
+      | 'token_spike';
     severity: 'low' | 'medium' | 'high' | 'critical';
     description: string;
     evidence: string;
@@ -1362,7 +1384,11 @@ export interface BenchmarkSandbox {
   exists(relativePath: string): Promise<boolean>;
 
   /** Run a command in sandbox (uses execFile internally for safety) */
-  run(command: string, args: string[], options?: { timeout?: number }): Promise<{ stdout: string; stderr: string; exitCode: number }>;
+  run(
+    command: string,
+    args: string[],
+    options?: { timeout?: number },
+  ): Promise<{ stdout: string; stderr: string; exitCode: number }>;
 
   /** List files matching pattern */
   glob(pattern: string): Promise<string[]>;

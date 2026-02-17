@@ -32,11 +32,7 @@
  * ```
  */
 
-import {
-  type CacheBreakdown,
-  type CacheBreakpointInfo,
-  type TracedMessage,
-} from './types.js';
+import { type CacheBreakdown, type CacheBreakpointInfo, type TracedMessage } from './types.js';
 import { estimateTokenCount } from '../integrations/utilities/token-estimate.js';
 import { stableStringify } from '../tricks/kv-cache-context.js';
 
@@ -165,28 +161,25 @@ export class CacheBoundaryTracker {
     this.requestCount++;
 
     // Compute prefix hash (system prompt + tools)
-    const prefixContent = request.systemPrompt +
+    const prefixContent =
+      request.systemPrompt +
       (request.toolDefinitions ? stableStringify(request.toolDefinitions) : '');
     const prefixHash = this.hashContent(prefixContent);
 
     // Compute message hashes
-    const messageHashes = request.messages.map(msg =>
-      this.hashContent(`${msg.role}:${msg.content}:${msg.toolCallId ?? ''}`)
+    const messageHashes = request.messages.map((msg) =>
+      this.hashContent(`${msg.role}:${msg.content}:${msg.toolCallId ?? ''}`),
     );
 
     // Detect breakpoints
-    const breakpoints = this.detectBreakpoints(
-      prefixHash,
-      messageHashes,
-      request.messages
-    );
+    const breakpoints = this.detectBreakpoints(prefixHash, messageHashes, request.messages);
 
     // Estimate cacheable tokens
     const estimatedTokens = this.estimateTokens(request);
     const predictedCacheableTokens = this.predictCacheableTokens(
       prefixHash,
       messageHashes,
-      estimatedTokens
+      estimatedTokens,
     );
 
     // Store history entry
@@ -212,7 +205,7 @@ export class CacheBoundaryTracker {
       hitRate: predictedCacheableTokens / estimatedTokens.total,
       estimatedSavings: this.calculateSavings(
         predictedCacheableTokens,
-        estimatedTokens.total - predictedCacheableTokens
+        estimatedTokens.total - predictedCacheableTokens,
       ),
       breakpoints,
     };
@@ -232,9 +225,8 @@ export class CacheBoundaryTracker {
     lastEntry.totalInputTokens = response.totalInputTokens;
 
     const freshTokens = response.totalInputTokens - response.cacheReadTokens;
-    const hitRate = response.totalInputTokens > 0
-      ? response.cacheReadTokens / response.totalInputTokens
-      : 0;
+    const hitRate =
+      response.totalInputTokens > 0 ? response.cacheReadTokens / response.totalInputTokens : 0;
 
     return {
       cacheReadTokens: response.cacheReadTokens,
@@ -276,9 +268,8 @@ export class CacheBoundaryTracker {
     }
 
     const hitRate = totalTokens > 0 ? totalCacheRead / totalTokens : 0;
-    const avgHitRate = hitRates.length > 0
-      ? hitRates.reduce((a, b) => a + b, 0) / hitRates.length
-      : 0;
+    const avgHitRate =
+      hitRates.length > 0 ? hitRates.reduce((a, b) => a + b, 0) / hitRates.length : 0;
 
     // Calculate tokens saved and cost savings
     const tokensSaved = totalCacheRead;
@@ -288,7 +279,10 @@ export class CacheBoundaryTracker {
     const trend = this.calculateTrend(hitRates);
 
     // Aggregate breakpoints
-    const breakpointCounts = new Map<CacheBreakpointInfo['type'], { count: number; tokens: number }>();
+    const breakpointCounts = new Map<
+      CacheBreakpointInfo['type'],
+      { count: number; tokens: number }
+    >();
     for (const entry of this.history) {
       for (const bp of entry.breakpoints) {
         const existing = breakpointCounts.get(bp.type) ?? { count: 0, tokens: 0 };
@@ -307,11 +301,7 @@ export class CacheBoundaryTracker {
       .sort((a, b) => b.count - a.count);
 
     // Generate recommendations
-    const recommendations = this.generateRecommendations(
-      hitRate,
-      commonBreakpoints,
-      trend
-    );
+    const recommendations = this.generateRecommendations(hitRate, commonBreakpoints, trend);
 
     return {
       hitRate,
@@ -382,7 +372,7 @@ export class CacheBoundaryTracker {
   private detectBreakpoints(
     currentPrefixHash: string,
     currentMessageHashes: string[],
-    messages: CacheTrackingRequest['messages']
+    messages: CacheTrackingRequest['messages'],
   ): CacheBreakpointInfo[] {
     const breakpoints: CacheBreakpointInfo[] = [];
 
@@ -436,7 +426,7 @@ export class CacheBoundaryTracker {
   private classifyBreakpoint(
     message: CacheTrackingRequest['messages'][0],
     position: number,
-    lastUnchangedIndex: number
+    lastUnchangedIndex: number,
   ): CacheBreakpointInfo['type'] {
     // If role changed from previous position
     if (position > 0) {
@@ -458,7 +448,7 @@ export class CacheBoundaryTracker {
   private predictCacheableTokens(
     currentPrefixHash: string,
     currentMessageHashes: string[],
-    estimatedTokens: { total: number; messages: number[] }
+    estimatedTokens: { total: number; messages: number[] },
   ): number {
     // First request - nothing cached
     if (this.previousPrefixHash === null) {
@@ -493,8 +483,8 @@ export class CacheBoundaryTracker {
       ? this.estimateTokensFromContent(stableStringify(request.toolDefinitions))
       : 0;
 
-    const messageTokens = request.messages.map(msg =>
-      this.estimateTokensFromContent(msg.content)
+    const messageTokens = request.messages.map((msg) =>
+      this.estimateTokensFromContent(msg.content),
     );
 
     const total = systemTokens + toolTokens + messageTokens.reduce((a, b) => a + b, 0);
@@ -514,7 +504,7 @@ export class CacheBoundaryTracker {
    */
   private estimateRemainingTokens(
     messages: CacheTrackingRequest['messages'],
-    fromIndex: number
+    fromIndex: number,
   ): number {
     let tokens = 0;
     for (let i = fromIndex; i < messages.length; i++) {
@@ -531,7 +521,8 @@ export class CacheBoundaryTracker {
     const withoutCacheCost = (cachedTokens + uncachedTokens) * this.uncachedTokenCost;
 
     // What it actually costs with caching
-    const withCacheCost = cachedTokens * this.cachedTokenCost + uncachedTokens * this.uncachedTokenCost;
+    const withCacheCost =
+      cachedTokens * this.cachedTokenCost + uncachedTokens * this.uncachedTokenCost;
 
     return withoutCacheCost - withCacheCost;
   }
@@ -563,7 +554,7 @@ export class CacheBoundaryTracker {
   private generateRecommendations(
     hitRate: number,
     breakpoints: CacheAnalysis['commonBreakpoints'],
-    trend: CacheAnalysis['trend']
+    trend: CacheAnalysis['trend'],
   ): string[] {
     const recommendations: string[] = [];
 
@@ -572,22 +563,30 @@ export class CacheBoundaryTracker {
     }
 
     if (hitRate < 0.3) {
-      recommendations.push('Very low cache efficiency. Check for timestamps or dynamic content at the start of prompts.');
+      recommendations.push(
+        'Very low cache efficiency. Check for timestamps or dynamic content at the start of prompts.',
+      );
     }
 
     // Check for common breakpoint types
-    const dynamicBreaks = breakpoints.find(b => b.type === 'dynamic_content');
+    const dynamicBreaks = breakpoints.find((b) => b.type === 'dynamic_content');
     if (dynamicBreaks && dynamicBreaks.count > 2) {
-      recommendations.push('Frequent dynamic content changes detected. Move variable content to the end of prompts.');
+      recommendations.push(
+        'Frequent dynamic content changes detected. Move variable content to the end of prompts.',
+      );
     }
 
-    const contentChanges = breakpoints.find(b => b.type === 'content_change');
+    const contentChanges = breakpoints.find((b) => b.type === 'content_change');
     if (contentChanges && contentChanges.count > 3) {
-      recommendations.push('Message content is being modified. Ensure append-only message history.');
+      recommendations.push(
+        'Message content is being modified. Ensure append-only message history.',
+      );
     }
 
     if (trend === 'declining') {
-      recommendations.push('Cache efficiency is declining over time. Review recent prompt structure changes.');
+      recommendations.push(
+        'Cache efficiency is declining over time. Review recent prompt structure changes.',
+      );
     }
 
     if (recommendations.length === 0 && hitRate > 0.7) {
@@ -604,7 +603,7 @@ export class CacheBoundaryTracker {
     let hash = 0;
     for (let i = 0; i < content.length; i++) {
       const char = content.charCodeAt(i);
-      hash = ((hash << 5) - hash) + char;
+      hash = (hash << 5) - hash + char;
       hash = hash & hash;
     }
     return hash.toString(16);

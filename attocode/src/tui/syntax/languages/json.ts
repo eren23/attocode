@@ -55,13 +55,11 @@ function tokenizeJSON(code: string): Token[] {
       tokens.push({ type: 'keyword', content: 'true' });
       pos += 4;
       matched = true;
-    }
-    else if (remaining.startsWith('false')) {
+    } else if (remaining.startsWith('false')) {
       tokens.push({ type: 'keyword', content: 'false' });
       pos += 5;
       matched = true;
-    }
-    else if (remaining.startsWith('null')) {
+    } else if (remaining.startsWith('null')) {
       tokens.push({ type: 'keyword', content: 'null' });
       pos += 4;
       matched = true;

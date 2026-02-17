@@ -144,7 +144,9 @@ export interface AgentContext {
   readonly interactivePlanner: InteractivePlanner | null;
   readonly recursiveContext: RecursiveContextManager | null;
   readonly fileChangeTracker: FileChangeTracker | null;
-  readonly typeCheckerState: import('../integrations/safety/type-checker.js').TypeCheckerState | null;
+  readonly typeCheckerState:
+    | import('../integrations/safety/type-checker.js').TypeCheckerState
+    | null;
   readonly capabilitiesRegistry: CapabilitiesRegistry | null;
   readonly rules: import('../integrations/index.js').RulesManager | null;
 

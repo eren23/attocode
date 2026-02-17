@@ -53,11 +53,11 @@ export interface Span {
  * Type of span.
  */
 export type SpanKind =
-  | 'internal'   // Internal operation
-  | 'client'     // Client call (e.g., LLM API)
-  | 'server'     // Handling incoming request
-  | 'producer'   // Producing message
-  | 'consumer';  // Consuming message
+  | 'internal' // Internal operation
+  | 'client' // Client call (e.g., LLM API)
+  | 'server' // Handling incoming request
+  | 'producer' // Producing message
+  | 'consumer'; // Consuming message
 
 /**
  * Span status.
@@ -70,13 +70,7 @@ export interface SpanStatus {
 /**
  * Attribute value types.
  */
-export type SpanAttributeValue =
-  | string
-  | number
-  | boolean
-  | string[]
-  | number[]
-  | boolean[];
+export type SpanAttributeValue = string | number | boolean | string[] | number[] | boolean[];
 
 /**
  * An event within a span.
@@ -195,10 +189,10 @@ export interface MetricPoint {
  * Types of metrics.
  */
 export type MetricType =
-  | 'counter'     // Monotonically increasing
-  | 'gauge'       // Point-in-time value
-  | 'histogram'   // Distribution of values
-  | 'summary';    // Statistical summary
+  | 'counter' // Monotonically increasing
+  | 'gauge' // Point-in-time value
+  | 'histogram' // Distribution of values
+  | 'summary'; // Statistical summary
 
 /**
  * Metric aggregations.
@@ -278,10 +272,10 @@ export interface LogEntry {
  * Export format.
  */
 export type ExportFormat =
-  | 'console'    // Human-readable console output
-  | 'json'       // JSON format
-  | 'jsonl'      // JSON Lines format
-  | 'otlp';      // OpenTelemetry Protocol
+  | 'console' // Human-readable console output
+  | 'json' // JSON format
+  | 'jsonl' // JSON Lines format
+  | 'otlp'; // OpenTelemetry Protocol
 
 /**
  * Exporter interface.

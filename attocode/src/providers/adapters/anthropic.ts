@@ -62,7 +62,7 @@ export class AnthropicProvider implements LLMProvider, LLMProviderWithTools {
     this.baseUrl = config?.baseUrl ?? 'https://api.anthropic.com';
     // Anthropic requests can be slow for complex tasks
     this.networkConfig = {
-      timeout: 120000,  // 2 minutes for complex reasoning
+      timeout: 120000, // 2 minutes for complex reasoning
       maxRetries: 3,
       baseRetryDelay: 1000,
     };
@@ -72,29 +72,40 @@ export class AnthropicProvider implements LLMProvider, LLMProviderWithTools {
     return hasEnv('ANTHROPIC_API_KEY');
   }
 
-  async chat(messages: (Message | MessageWithContent)[], options?: ChatOptions): Promise<ChatResponse> {
+  async chat(
+    messages: (Message | MessageWithContent)[],
+    options?: ChatOptions,
+  ): Promise<ChatResponse> {
     const model = options?.model ?? this.model;
 
     // Separate system message from conversation
-    const systemMessage = messages.find(m => m.role === 'system');
+    const systemMessage = messages.find((m) => m.role === 'system');
     const conversationMessages = messages
-      .filter(m => m.role !== 'system')
-      .map(m => ({
+      .filter((m) => m.role !== 'system')
+      .map((m) => ({
         role: m.role as 'user' | 'assistant',
-        content: typeof m.content === 'string' ? m.content : m.content.map(c => c.type === 'text' ? c.text : '').join(''),
+        content:
+          typeof m.content === 'string'
+            ? m.content
+            : m.content.map((c) => (c.type === 'text' ? c.text : '')).join(''),
       }));
 
     // Build system content — supports structured blocks with cache_control for prompt caching
-    let systemContent: string | Array<{ type: 'text'; text: string; cache_control?: { type: 'ephemeral' } }> | undefined;
+    let systemContent:
+      | string
+      | Array<{ type: 'text'; text: string; cache_control?: { type: 'ephemeral' } }>
+      | undefined;
     if (systemMessage) {
       if (typeof systemMessage.content !== 'string' && Array.isArray(systemMessage.content)) {
         // Structured content with cache_control markers — filter to text blocks only
-        systemContent = systemMessage.content
-          .filter((c): c is CacheableContent => c.type === 'text');
+        systemContent = systemMessage.content.filter(
+          (c): c is CacheableContent => c.type === 'text',
+        );
       } else {
-        systemContent = typeof systemMessage.content === 'string'
-          ? systemMessage.content
-          : (systemMessage.content as Array<{ text: string }>).map(c => c.text).join('');
+        systemContent =
+          typeof systemMessage.content === 'string'
+            ? systemMessage.content
+            : (systemMessage.content as Array<{ text: string }>).map((c) => c.text).join('');
       }
     }
 
@@ -133,7 +144,7 @@ export class AnthropicProvider implements LLMProvider, LLMProviderWithTools {
         throw this.handleError(response.status, error);
       }
 
-      const data = await response.json() as {
+      const data = (await response.json()) as {
         content: Array<{ type: string; text: string }>;
         stop_reason: string;
         usage: {
@@ -146,8 +157,8 @@ export class AnthropicProvider implements LLMProvider, LLMProviderWithTools {
 
       // Extract text from content blocks
       const content = data.content
-        .filter(block => block.type === 'text')
-        .map(block => block.text)
+        .filter((block) => block.type === 'text')
+        .map((block) => block.text)
         .join('');
 
       return {
@@ -166,7 +177,7 @@ export class AnthropicProvider implements LLMProvider, LLMProviderWithTools {
         `Anthropic request failed: ${(error as Error).message}`,
         this.name,
         'NETWORK_ERROR',
-        error as Error
+        error as Error,
       );
     }
   }
@@ -180,32 +191,37 @@ export class AnthropicProvider implements LLMProvider, LLMProviderWithTools {
    */
   async chatWithTools(
     messages: (Message | MessageWithContent)[],
-    options?: ChatOptionsWithTools
+    options?: ChatOptionsWithTools,
   ): Promise<ChatResponseWithTools> {
     const model = options?.model ?? this.model;
 
     // Separate system message from conversation
-    const systemMessage = messages.find(m => m.role === 'system');
+    const systemMessage = messages.find((m) => m.role === 'system');
 
     // Convert messages to Anthropic format
     const anthropicMessages = this.convertMessagesToAnthropicFormat(
-      messages.filter(m => m.role !== 'system')
+      messages.filter((m) => m.role !== 'system'),
     );
 
     // Convert tool definitions from OpenAI format to Anthropic format
     const anthropicTools = options?.tools?.map(this.convertToolToAnthropicFormat);
 
     // Build system content — supports structured blocks with cache_control for prompt caching
-    let systemContent: string | Array<{ type: 'text'; text: string; cache_control?: { type: 'ephemeral' } }> | undefined;
+    let systemContent:
+      | string
+      | Array<{ type: 'text'; text: string; cache_control?: { type: 'ephemeral' } }>
+      | undefined;
     if (systemMessage) {
       if (typeof systemMessage.content !== 'string' && Array.isArray(systemMessage.content)) {
         // Structured content with cache_control markers — filter to text blocks only
-        systemContent = systemMessage.content
-          .filter((c): c is CacheableContent => c.type === 'text');
+        systemContent = systemMessage.content.filter(
+          (c): c is CacheableContent => c.type === 'text',
+        );
       } else {
-        systemContent = typeof systemMessage.content === 'string'
-          ? systemMessage.content
-          : (systemMessage.content as Array<{ text: string }>).map(c => c.text).join('');
+        systemContent =
+          typeof systemMessage.content === 'string'
+            ? systemMessage.content
+            : (systemMessage.content as Array<{ text: string }>).map((c) => c.text).join('');
       }
     }
 
@@ -253,7 +269,7 @@ export class AnthropicProvider implements LLMProvider, LLMProviderWithTools {
         throw this.handleError(response.status, error);
       }
 
-      const data = await response.json() as {
+      const data = (await response.json()) as {
         id: string;
         content: AnthropicContentBlock[];
         stop_reason: string;
@@ -268,26 +284,33 @@ export class AnthropicProvider implements LLMProvider, LLMProviderWithTools {
       // Extract text content and tool calls from content blocks
       const textContent = data.content
         .filter((block): block is { type: 'text'; text: string } => block.type === 'text')
-        .map(block => block.text)
+        .map((block) => block.text)
         .join('');
 
       const toolUseBlocks = data.content.filter(
-        (block): block is { type: 'tool_use'; id: string; name: string; input: Record<string, unknown> } =>
-          block.type === 'tool_use'
+        (
+          block,
+        ): block is {
+          type: 'tool_use';
+          id: string;
+          name: string;
+          input: Record<string, unknown>;
+        } => block.type === 'tool_use',
       );
 
       // Convert Anthropic tool_use blocks to our ToolCallResponse format
-      const toolCalls: ToolCallResponse[] | undefined = toolUseBlocks.length > 0
-        ? toolUseBlocks.map(block => ({
-            id: block.id,
-            type: 'function' as const,
-            function: {
-              name: block.name,
-              // Anthropic returns input as object, we need to stringify it
-              arguments: JSON.stringify(block.input),
-            },
-          }))
-        : undefined;
+      const toolCalls: ToolCallResponse[] | undefined =
+        toolUseBlocks.length > 0
+          ? toolUseBlocks.map((block) => ({
+              id: block.id,
+              type: 'function' as const,
+              function: {
+                name: block.name,
+                // Anthropic returns input as object, we need to stringify it
+                arguments: JSON.stringify(block.input),
+              },
+            }))
+          : undefined;
 
       return {
         content: textContent,
@@ -306,7 +329,7 @@ export class AnthropicProvider implements LLMProvider, LLMProviderWithTools {
         `Anthropic request failed: ${(error as Error).message}`,
         this.name,
         'NETWORK_ERROR',
-        error as Error
+        error as Error,
       );
     }
   }
@@ -317,26 +340,31 @@ export class AnthropicProvider implements LLMProvider, LLMProviderWithTools {
    */
   async *chatWithToolsStream(
     messages: (Message | MessageWithContent)[],
-    options?: ChatOptionsWithTools
+    options?: ChatOptionsWithTools,
   ): AsyncIterable<StreamChunk> {
     const model = options?.model ?? this.model;
 
-    const systemMessage = messages.find(m => m.role === 'system');
+    const systemMessage = messages.find((m) => m.role === 'system');
     const anthropicMessages = this.convertMessagesToAnthropicFormat(
-      messages.filter(m => m.role !== 'system')
+      messages.filter((m) => m.role !== 'system'),
     );
     const anthropicTools = options?.tools?.map(this.convertToolToAnthropicFormat);
 
-    let systemContent: string | Array<{ type: 'text'; text: string; cache_control?: { type: 'ephemeral' } }> | undefined;
+    let systemContent:
+      | string
+      | Array<{ type: 'text'; text: string; cache_control?: { type: 'ephemeral' } }>
+      | undefined;
     if (systemMessage) {
       if (typeof systemMessage.content !== 'string' && Array.isArray(systemMessage.content)) {
         // Structured content with cache_control markers — filter to text blocks only
-        systemContent = systemMessage.content
-          .filter((c): c is CacheableContent => c.type === 'text');
+        systemContent = systemMessage.content.filter(
+          (c): c is CacheableContent => c.type === 'text',
+        );
       } else {
-        systemContent = typeof systemMessage.content === 'string'
-          ? systemMessage.content
-          : (systemMessage.content as Array<{ text: string }>).map(c => c.text).join('');
+        systemContent =
+          typeof systemMessage.content === 'string'
+            ? systemMessage.content
+            : (systemMessage.content as Array<{ text: string }>).map((c) => c.text).join('');
       }
     }
 
@@ -386,7 +414,7 @@ export class AnthropicProvider implements LLMProvider, LLMProviderWithTools {
    * Handles tool result messages specially.
    */
   private convertMessagesToAnthropicFormat(
-    messages: (Message | MessageWithContent)[]
+    messages: (Message | MessageWithContent)[],
   ): Array<{ role: string; content: string | AnthropicContentBlock[] }> {
     const result: Array<{ role: string; content: string | AnthropicContentBlock[] }> = [];
 
@@ -397,9 +425,13 @@ export class AnthropicProvider implements LLMProvider, LLMProviderWithTools {
         const toolResultBlock: AnthropicContentBlock = {
           type: 'tool_result',
           tool_use_id: msg.tool_call_id!,
-          content: typeof msg.content === 'string'
-            ? msg.content
-            : msg.content.filter((c): c is CacheableContent => c.type === 'text').map(c => c.text).join(''),
+          content:
+            typeof msg.content === 'string'
+              ? msg.content
+              : msg.content
+                  .filter((c): c is CacheableContent => c.type === 'text')
+                  .map((c) => c.text)
+                  .join(''),
         };
 
         // Check if the last message is already a user message we can add to
@@ -420,9 +452,13 @@ export class AnthropicProvider implements LLMProvider, LLMProviderWithTools {
         const contentBlocks: AnthropicContentBlock[] = [];
 
         // Add text content if present
-        const textContent = typeof msg.content === 'string'
-          ? msg.content
-          : msg.content?.filter((c): c is CacheableContent => c.type === 'text').map(c => c.text).join('') || '';
+        const textContent =
+          typeof msg.content === 'string'
+            ? msg.content
+            : msg.content
+                ?.filter((c): c is CacheableContent => c.type === 'text')
+                .map((c) => c.text)
+                .join('') || '';
         if (textContent) {
           contentBlocks.push({ type: 'text', text: textContent });
         }
@@ -452,9 +488,9 @@ export class AnthropicProvider implements LLMProvider, LLMProviderWithTools {
         });
       } else if (Array.isArray(msg.content)) {
         // Check if any blocks are images
-        const hasImages = msg.content.some(c => c.type === 'image');
+        const hasImages = msg.content.some((c) => c.type === 'image');
         if (hasImages) {
-          const blocks: AnthropicContentBlock[] = msg.content.map(c => {
+          const blocks: AnthropicContentBlock[] = msg.content.map((c) => {
             if (c.type === 'image') {
               return { type: 'image' as const, source: c.source };
             }
@@ -464,7 +500,7 @@ export class AnthropicProvider implements LLMProvider, LLMProviderWithTools {
         } else {
           result.push({
             role: msg.role as 'user' | 'assistant',
-            content: msg.content.map(c => c.type === 'text' ? c.text : '').join('') || '',
+            content: msg.content.map((c) => (c.type === 'text' ? c.text : '')).join('') || '',
           });
         }
       } else {
@@ -489,9 +525,10 @@ export class AnthropicProvider implements LLMProvider, LLMProviderWithTools {
   /**
    * Convert tool_choice from OpenAI format to Anthropic format.
    */
-  private convertToolChoice(
-    choice: ChatOptionsWithTools['tool_choice']
-  ): { type: 'auto' | 'any' | 'tool'; name?: string } {
+  private convertToolChoice(choice: ChatOptionsWithTools['tool_choice']): {
+    type: 'auto' | 'any' | 'tool';
+    name?: string;
+  } {
     if (choice === 'auto') {
       return { type: 'auto' };
     }
@@ -509,25 +546,25 @@ export class AnthropicProvider implements LLMProvider, LLMProviderWithTools {
 
   private handleError(status: number, body: string): ProviderError {
     let code: ProviderError['code'] = 'UNKNOWN';
-    
+
     if (status === 401) code = 'AUTHENTICATION_FAILED';
     else if (status === 429) code = 'RATE_LIMITED';
     else if (status === 400) code = 'INVALID_REQUEST';
     else if (status >= 500) code = 'SERVER_ERROR';
 
-    return new ProviderError(
-      `Anthropic API error (${status}): ${body}`,
-      this.name,
-      code
-    );
+    return new ProviderError(`Anthropic API error (${status}): ${body}`, this.name, code);
   }
 
   private mapStopReason(reason: string): ChatResponse['stopReason'] {
     switch (reason) {
-      case 'end_turn': return 'end_turn';
-      case 'max_tokens': return 'max_tokens';
-      case 'stop_sequence': return 'stop_sequence';
-      default: return 'end_turn';
+      case 'end_turn':
+        return 'end_turn';
+      case 'max_tokens':
+        return 'max_tokens';
+      case 'stop_sequence':
+        return 'stop_sequence';
+      default:
+        return 'end_turn';
     }
   }
 }

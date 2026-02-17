@@ -55,11 +55,11 @@ export interface CacheAwareConfig {
  * Cache breakpoint markers.
  */
 export type CacheBreakpoint =
-  | 'system_end'      // After system prompt
-  | 'tools_end'       // After tool definitions
-  | 'rules_end'       // After rules content
-  | 'memory_end'      // After memory context
-  | 'custom';         // Custom breakpoint
+  | 'system_end' // After system prompt
+  | 'tools_end' // After tool definitions
+  | 'rules_end' // After rules content
+  | 'memory_end' // After memory context
+  | 'custom'; // Custom breakpoint
 
 /**
  * Dynamic content that goes at the END of system prompt.
@@ -395,9 +395,7 @@ export class CacheAwareContext {
       const previousHash = this.messageHashes.get(i);
 
       if (previousHash !== undefined && previousHash !== currentHash) {
-        violations.push(
-          `Message at index ${i} was modified (role: ${msg.role})`
-        );
+        violations.push(`Message at index ${i} was modified (role: ${msg.role})`);
         this.emit({
           type: 'cache.violation',
           reason: 'message_modified',
@@ -443,8 +441,7 @@ export class CacheAwareContext {
     const { systemPrompt, messages, dynamicContentLength = 0 } = options;
 
     // Estimate tokens (~4 chars per token)
-    const totalChars = systemPrompt.length +
-      messages.reduce((sum, m) => sum + m.content.length, 0);
+    const totalChars = systemPrompt.length + messages.reduce((sum, m) => sum + m.content.length, 0);
     const totalTokens = Math.ceil(totalChars / 4);
 
     // Cacheable = everything except dynamic content at end
@@ -504,7 +501,7 @@ export class CacheAwareContext {
     let hash = 0;
     for (let i = 0; i < content.length; i++) {
       const char = content.charCodeAt(i);
-      hash = ((hash << 5) - hash) + char;
+      hash = (hash << 5) - hash + char;
       hash = hash & hash; // Convert to 32-bit integer
     }
     return hash.toString(16);
@@ -545,9 +542,7 @@ export class CacheAwareContext {
  * });
  * ```
  */
-export function createCacheAwareContext(
-  config: CacheAwareConfig
-): CacheAwareContext {
+export function createCacheAwareContext(config: CacheAwareConfig): CacheAwareContext {
   return new CacheAwareContext(config);
 }
 
@@ -568,8 +563,8 @@ export function analyzeCacheEfficiency(systemPrompt: string): {
 
   // Check for timestamps at start
   const timestampPatterns = [
-    /^\[?\d{4}-\d{2}-\d{2}/,  // ISO date
-    /^\[?\d{1,2}\/\d{1,2}\/\d{4}/,  // US date
+    /^\[?\d{4}-\d{2}-\d{2}/, // ISO date
+    /^\[?\d{1,2}\/\d{1,2}\/\d{4}/, // US date
     /^Current time:/i,
     /^Timestamp:/i,
     /^Date:/i,

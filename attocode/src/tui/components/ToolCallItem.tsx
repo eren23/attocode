@@ -115,9 +115,12 @@ function formatToolArgsExpanded(args: Record<string, unknown>): string[] {
  */
 function getDiffString(tc: ToolCallDisplayItem): string | null {
   if (tc.status !== 'success' || !isFileOperation(tc.name)) return null;
-  if (typeof tc.result === 'object' && tc.result !== null &&
-      'metadata' in tc.result &&
-      typeof (tc.result as { metadata?: { diff?: string } }).metadata?.diff === 'string') {
+  if (
+    typeof tc.result === 'object' &&
+    tc.result !== null &&
+    'metadata' in tc.result &&
+    typeof (tc.result as { metadata?: { diff?: string } }).metadata?.diff === 'string'
+  ) {
     return (tc.result as { metadata: { diff: string } }).metadata.diff;
   }
   return null;
@@ -127,9 +130,27 @@ function getDiffString(tc: ToolCallDisplayItem): string | null {
  * Memoized tool call item - displays tool execution status.
  * Supports expanded view with full args, diff rendering, and result preview.
  */
-export const ToolCallItem = memo(function ToolCallItem({ tc, expanded, colors }: ToolCallItemProps) {
-  const icon = tc.status === 'success' ? '[OK]' : tc.status === 'error' ? '[X]' : tc.status === 'running' ? '[~]' : '[ ]';
-  const statusColor = tc.status === 'success' ? '#98FB98' : tc.status === 'error' ? '#FF6B6B' : tc.status === 'running' ? '#87CEEB' : colors.textMuted;
+export const ToolCallItem = memo(function ToolCallItem({
+  tc,
+  expanded,
+  colors,
+}: ToolCallItemProps) {
+  const icon =
+    tc.status === 'success'
+      ? '[OK]'
+      : tc.status === 'error'
+        ? '[X]'
+        : tc.status === 'running'
+          ? '[~]'
+          : '[ ]';
+  const statusColor =
+    tc.status === 'success'
+      ? '#98FB98'
+      : tc.status === 'error'
+        ? '#FF6B6B'
+        : tc.status === 'running'
+          ? '#87CEEB'
+          : colors.textMuted;
   const diffString = getDiffString(tc);
 
   if (expanded) {
@@ -139,13 +160,21 @@ export const ToolCallItem = memo(function ToolCallItem({ tc, expanded, colors }:
       <Box marginLeft={2} flexDirection="column">
         <Box gap={1}>
           <Text color={statusColor}>{icon}</Text>
-          <Text color="#DDA0DD" bold>{tc.name}</Text>
-          {tc.duration ? <Text color={colors.textMuted} dimColor>({tc.duration}ms)</Text> : null}
+          <Text color="#DDA0DD" bold>
+            {tc.name}
+          </Text>
+          {tc.duration ? (
+            <Text color={colors.textMuted} dimColor>
+              ({tc.duration}ms)
+            </Text>
+          ) : null}
         </Box>
         {/* Show each arg on its own line for readability */}
         {expandedArgs.map((argLine, i) => (
           <Box key={i} marginLeft={3}>
-            <Text color="#87CEEB" dimColor>{argLine}</Text>
+            <Text color="#87CEEB" dimColor>
+              {argLine}
+            </Text>
           </Box>
         ))}
         {tc.status === 'success' && tc.result !== undefined && tc.result !== null ? (
@@ -184,16 +213,21 @@ export const ToolCallItem = memo(function ToolCallItem({ tc, expanded, colors }:
   return (
     <Box marginLeft={2} gap={1}>
       <Text color={statusColor}>{icon}</Text>
-      <Text color="#DDA0DD" bold>{tc.name}</Text>
-      {argsStr ? <Text color={colors.textMuted} dimColor>{argsStr}</Text> : null}
+      <Text color="#DDA0DD" bold>
+        {tc.name}
+      </Text>
+      {argsStr ? (
+        <Text color={colors.textMuted} dimColor>
+          {argsStr}
+        </Text>
+      ) : null}
       {/* Show diff summary in collapsed view */}
-      {diffString && (
-        <DiffView
-          diff={diffString}
-          expanded={false}
-        />
-      )}
-      {tc.duration ? <Text color={colors.textMuted} dimColor>({tc.duration}ms)</Text> : null}
+      {diffString && <DiffView diff={diffString} expanded={false} />}
+      {tc.duration ? (
+        <Text color={colors.textMuted} dimColor>
+          ({tc.duration}ms)
+        </Text>
+      ) : null}
     </Box>
   );
 });

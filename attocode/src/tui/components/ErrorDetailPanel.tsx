@@ -122,11 +122,7 @@ interface StackFrameItemProps {
   index: number;
 }
 
-const StackFrameItem = memo(function StackFrameItem({
-  frame,
-  colors,
-  index,
-}: StackFrameItemProps) {
+const StackFrameItem = memo(function StackFrameItem({ frame, colors, index }: StackFrameItemProps) {
   // Dim node_modules and native frames
   const isDimmed = frame.isNative || frame.isNodeModules;
 
@@ -176,16 +172,16 @@ const ErrorItem = memo(function ErrorItem({
         <Text color={colors.textMuted} dimColor>
           {formatTimestamp(error.timestamp)}
         </Text>
-        {error.code && (
-          <Text color="#FFD700">[{error.code}]</Text>
-        )}
+        {error.code && <Text color="#FFD700">[{error.code}]</Text>}
         <Text color={colors.error} wrap="truncate-end">
           {error.message.length > 80 && !expanded
             ? error.message.slice(0, 77) + '...'
             : error.message}
         </Text>
         {!error.recoverable && (
-          <Text color={colors.error} dimColor>[fatal]</Text>
+          <Text color={colors.error} dimColor>
+            [fatal]
+          </Text>
         )}
       </Box>
 
@@ -203,7 +199,9 @@ const ErrorItem = memo(function ErrorItem({
           {/* Stack trace */}
           {hasStack ? (
             <Box flexDirection="column">
-              <Text color={colors.textMuted} dimColor>Stack trace ({frames.length} frames):</Text>
+              <Text color={colors.textMuted} dimColor>
+                Stack trace ({frames.length} frames):
+              </Text>
               {frames.slice(0, 10).map((frame, i) => (
                 <StackFrameItem
                   key={`${error.id}-frame-${i}`}
@@ -222,7 +220,9 @@ const ErrorItem = memo(function ErrorItem({
             </Box>
           ) : error.stack ? (
             <Box flexDirection="column">
-              <Text color={colors.textMuted} dimColor>Raw stack:</Text>
+              <Text color={colors.textMuted} dimColor>
+                Raw stack:
+              </Text>
               <Box marginLeft={2}>
                 <Text color={colors.textMuted} dimColor>
                   {error.stack.slice(0, 500)}
@@ -251,9 +251,8 @@ export const ErrorDetailPanel = memo(function ErrorDetailPanel({
   // Internal expansion state if no external control provided
   const [internalExpanded, setInternalExpanded] = useState<string | null>(null);
   const actualExpanded = expandedId !== undefined ? expandedId : internalExpanded;
-  const handleToggle = onToggleExpand || ((id: string) =>
-    setInternalExpanded(prev => prev === id ? null : id)
-  );
+  const handleToggle =
+    onToggleExpand || ((id: string) => setInternalExpanded((prev) => (prev === id ? null : id)));
 
   if (errors.length === 0) {
     return null;
@@ -271,13 +270,15 @@ export const ErrorDetailPanel = memo(function ErrorDetailPanel({
       paddingX={1}
     >
       <Box justifyContent="space-between">
-        <Text color={colors.error} bold>[!] Errors ({errors.length})</Text>
+        <Text color={colors.error} bold>
+          [!] Errors ({errors.length})
+        </Text>
         <Text color={colors.textMuted} dimColor>
           Click to expand stack trace
         </Text>
       </Box>
       <Box flexDirection="column" marginTop={1}>
-        {visibleErrors.map(error => (
+        {visibleErrors.map((error) => (
           <ErrorItem
             key={error.id}
             error={error}

@@ -190,7 +190,9 @@ export class CancellationError extends Error {
 export function isCancellationError(error: unknown): error is CancellationError {
   return (
     error instanceof CancellationError ||
-    (error instanceof Error && 'isCancellation' in error && (error as CancellationError).isCancellation === true)
+    (error instanceof Error &&
+      'isCancellation' in error &&
+      (error as CancellationError).isCancellation === true)
   );
 }
 
@@ -269,7 +271,7 @@ export interface ProgressAwareTimeoutSource extends CancellationTokenSource {
 export function createProgressAwareTimeout(
   maxTimeout: number,
   idleTimeout: number,
-  checkInterval = 5000
+  checkInterval = 5000,
 ): ProgressAwareTimeoutSource {
   const source = createCancellationTokenSource() as CancellationTokenSourceImpl;
   const startTime = Date.now();
@@ -343,7 +345,7 @@ export function createGracefulTimeout(
   maxTimeout: number,
   idleTimeout: number,
   wrapupWindow = 30000,
-  checkInterval = 5000
+  checkInterval = 5000,
 ): GracefulTimeoutSource {
   const source = createCancellationTokenSource() as CancellationTokenSourceImpl;
   const startTime = Date.now();
@@ -371,7 +373,9 @@ export function createGracefulTimeout(
     // Schedule hard kill after wrapup window
     hardKillTimer = setTimeout(() => {
       if (!source.isCancellationRequested) {
-        source.cancel(`Timeout after graceful wrapup (${Math.round((Date.now() - startTime) / 1000)}s total)`);
+        source.cancel(
+          `Timeout after graceful wrapup (${Math.round((Date.now() - startTime) / 1000)}s total)`,
+        );
       }
     }, wrapupWindow);
   }
@@ -465,7 +469,7 @@ export const CancellationToken = {
  */
 export async function withCancellation<T>(
   fn: (token: CancellationToken) => Promise<T>,
-  options: CancellableOptions = {}
+  options: CancellableOptions = {},
 ): Promise<T> {
   const { token, timeout } = options;
 
@@ -479,8 +483,20 @@ export async function withCancellation<T>(
     // Link user token with timeout
     timeoutSource = createTimeoutToken(timeout);
     const linkedSource = createLinkedToken(
-      { token, isCancellationRequested: token.isCancellationRequested, cancel: () => {}, cancelAfter: () => ({ token, isCancellationRequested: false, cancel: () => {}, cancelAfter: () => ({} as CancellationTokenSource), dispose: () => {} }), dispose: () => {} },
-      timeoutSource
+      {
+        token,
+        isCancellationRequested: token.isCancellationRequested,
+        cancel: () => {},
+        cancelAfter: () => ({
+          token,
+          isCancellationRequested: false,
+          cancel: () => {},
+          cancelAfter: () => ({}) as CancellationTokenSource,
+          dispose: () => {},
+        }),
+        dispose: () => {},
+      },
+      timeoutSource,
     );
     effectiveToken = linkedSource.token;
   } else {

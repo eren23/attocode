@@ -43,10 +43,7 @@ export class SharedContextEngine {
   private maxFailuresInPrompt: number;
   private includeInsights: boolean;
 
-  constructor(
-    contextState: SharedContextState,
-    config: SharedContextEngineConfig = {},
-  ) {
+  constructor(contextState: SharedContextState, config: SharedContextEngineConfig = {}) {
     this.contextState = contextState;
     this.maxFailuresInPrompt = config.maxFailuresInPrompt ?? 5;
     this.includeInsights = config.includeInsights ?? true;
@@ -116,7 +113,7 @@ export class SharedContextEngine {
     if (this.includeInsights) {
       const insights = this.contextState.getFailureInsights();
       if (insights.length > 0) {
-        parts.push('## Cross-Worker Insights\n' + insights.map(i => `- ${i}`).join('\n'));
+        parts.push('## Cross-Worker Insights\n' + insights.map((i) => `- ${i}`).join('\n'));
       }
     }
 

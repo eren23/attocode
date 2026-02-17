@@ -21,7 +21,10 @@ export function createEventDisplay() {
         break;
 
       case 'planning':
-        logger.debug('Plan created', { steps: event.plan.tasks.length, tasks: event.plan.tasks.map((t, i) => `${i + 1}. ${t.description}`) });
+        logger.debug('Plan created', {
+          steps: event.plan.tasks.length,
+          tasks: event.plan.tasks.map((t, i) => `${i + 1}. ${t.description}`),
+        });
         break;
 
       case 'task.start':
@@ -96,7 +99,10 @@ export function createEventDisplay() {
         break;
 
       case 'agent.spawn':
-        logger.debug('Spawning subagent', { name: (event as any).name || event.agentId, task: (event as any).task });
+        logger.debug('Spawning subagent', {
+          name: (event as any).name || event.agentId,
+          task: (event as any).task,
+        });
         break;
 
       case 'agent.complete':
@@ -116,7 +122,10 @@ export function createEventDisplay() {
         break;
 
       case 'consensus.reached':
-        logger.debug('Consensus reached', { agreed: event.agreed, result: event.result.slice(0, 100) });
+        logger.debug('Consensus reached', {
+          agreed: event.agreed,
+          result: event.result.slice(0, 100),
+        });
         break;
 
       case 'checkpoint.created':

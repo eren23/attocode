@@ -31,10 +31,12 @@ export interface DecompositionValidationResult {
  * 2. Feasibility: referenced files exist (warning only)
  * 3. Granularity: no subtask complexity > 7 (should split further)
  */
-export function validateDecomposition(result: SmartDecompositionResult): DecompositionValidationResult {
+export function validateDecomposition(
+  result: SmartDecompositionResult,
+): DecompositionValidationResult {
   const issues: string[] = [];
   const warnings: string[] = [];
-  const taskIds = new Set(result.subtasks.map(s => s.id));
+  const taskIds = new Set(result.subtasks.map((s) => s.id));
 
   // 1. Structural checks
   // Cycle detection
@@ -80,13 +82,17 @@ export function validateDecomposition(result: SmartDecompositionResult): Decompo
   // 3. Granularity: flag overly complex subtasks
   for (const subtask of result.subtasks) {
     if (subtask.complexity > 7) {
-      warnings.push(`Task ${subtask.id} has complexity ${subtask.complexity} (>7) — consider splitting further`);
+      warnings.push(
+        `Task ${subtask.id} has complexity ${subtask.complexity} (>7) — consider splitting further`,
+      );
     }
   }
 
   // Additional structural check: at least 2 subtasks
   if (result.subtasks.length < 2) {
-    issues.push(`Decomposition produced only ${result.subtasks.length} subtask(s) — too few for swarm mode`);
+    issues.push(
+      `Decomposition produced only ${result.subtasks.length} subtask(s) — too few for swarm mode`,
+    );
   }
 
   return {
@@ -103,10 +109,7 @@ export function validateDecomposition(result: SmartDecompositionResult): Decompo
 /**
  * Create an LLM prompt for task decomposition.
  */
-export function createDecompositionPrompt(
-  task: string,
-  context: DecomposeContext
-): string {
+export function createDecompositionPrompt(task: string, context: DecomposeContext): string {
   const parts = [
     'You are a task decomposition expert. Break down the following task into subtasks.',
     '',
@@ -131,12 +134,16 @@ export function createDecompositionPrompt(
 
   parts.push('For each subtask, provide:');
   parts.push('1. Description');
-  parts.push('2. Type (research, analysis, design, implement, test, refactor, review, document, integrate, deploy, merge)');
+  parts.push(
+    '2. Type (research, analysis, design, implement, test, refactor, review, document, integrate, deploy, merge)',
+  );
   parts.push('3. Complexity (1-10)');
   parts.push('4. Dependencies (which other subtasks must complete first)');
   parts.push('5. Whether it can run in parallel with other tasks');
   parts.push('');
-  parts.push('Also suggest an overall strategy: sequential, parallel, hierarchical, adaptive, or pipeline.');
+  parts.push(
+    'Also suggest an overall strategy: sequential, parallel, hierarchical, adaptive, or pipeline.',
+  );
   parts.push('');
   parts.push('Respond in JSON format.');
 
@@ -173,11 +180,8 @@ function extractSubtasksFromParsed(parsed: any): LLMDecomposeResult | null {
   }
 
   // Normalize alternative key names: tasks, steps, task_list -> subtasks
-  const subtasksArray = parsed.subtasks
-    ?? parsed.tasks
-    ?? parsed.steps
-    ?? parsed.task_list
-    ?? parsed.decomposition;
+  const subtasksArray =
+    parsed.subtasks ?? parsed.tasks ?? parsed.steps ?? parsed.task_list ?? parsed.decomposition;
 
   if (!subtasksArray || !Array.isArray(subtasksArray) || subtasksArray.length === 0) {
     return null;
@@ -283,7 +287,10 @@ export function extractSubtasksFromNaturalLanguage(response: string): LLMDecompo
   while ((match = mdHeaderPattern.exec(response)) !== null) {
     const desc = match[1].trim();
     // Skip generic headers like "Summary", "Strategy", "Overview"
-    if (desc.length > 5 && !/^(summary|strategy|overview|reasoning|conclusion|notes?)$/i.test(desc)) {
+    if (
+      desc.length > 5 &&
+      !/^(summary|strategy|overview|reasoning|conclusion|notes?)$/i.test(desc)
+    ) {
       items.push(desc);
     }
   }
@@ -298,7 +305,15 @@ export function extractSubtasksFromNaturalLanguage(response: string): LLMDecompo
  */
 function buildSubtasksFromList(items: string[]): LLMDecomposeResult {
   const TYPE_KEYWORDS: Record<string, string[]> = {
-    research: ['research', 'investigate', 'explore', 'analyze', 'understand', 'study', 'review existing'],
+    research: [
+      'research',
+      'investigate',
+      'explore',
+      'analyze',
+      'understand',
+      'study',
+      'review existing',
+    ],
     design: ['design', 'plan', 'architect', 'schema', 'structure'],
     test: ['test', 'verify', 'validate', 'assert', 'check'],
     refactor: ['refactor', 'clean up', 'reorganize', 'simplify'],
@@ -312,7 +327,7 @@ function buildSubtasksFromList(items: string[]): LLMDecomposeResult {
       const lower = desc.toLowerCase();
       let type: SubtaskType = 'implement';
       for (const [t, keywords] of Object.entries(TYPE_KEYWORDS)) {
-        if (keywords.some(k => lower.includes(k))) {
+        if (keywords.some((k) => lower.includes(k))) {
           type = t as SubtaskType;
           break;
         }
@@ -351,18 +366,18 @@ function extractMegaTask(response: string): LLMDecomposeResult | null {
   // Only create mega-task if there's substantial text (not just JSON garbage)
   if (prose.length < 20) return null;
 
-  const desc = prose.length > 200
-    ? prose.slice(0, 200).replace(/\s+\S*$/, '') + '...'
-    : prose;
+  const desc = prose.length > 200 ? prose.slice(0, 200).replace(/\s+\S*$/, '') + '...' : prose;
 
   return {
-    subtasks: [{
-      description: desc,
-      type: 'implement',
-      complexity: 5,
-      dependencies: [],
-      parallelizable: false,
-    }],
+    subtasks: [
+      {
+        description: desc,
+        type: 'implement',
+        complexity: 5,
+        dependencies: [],
+        parallelizable: false,
+      },
+    ],
     strategy: 'adaptive',
     reasoning: '(single mega-task — parser could not extract structured subtasks)',
   };
@@ -400,9 +415,18 @@ function tryRecoverTruncatedJSON(response: string): string | null {
 
   for (let i = 0; i < jsonStr.length; i++) {
     const ch = jsonStr[i];
-    if (escape) { escape = false; continue; }
-    if (ch === '\\' && inString) { escape = true; continue; }
-    if (ch === '"') { inString = !inString; continue; }
+    if (escape) {
+      escape = false;
+      continue;
+    }
+    if (ch === '\\' && inString) {
+      escape = true;
+      continue;
+    }
+    if (ch === '"') {
+      inString = !inString;
+      continue;
+    }
     if (inString) continue;
 
     if (ch === '{') braceDepth++;
@@ -431,9 +455,18 @@ function tryRecoverTruncatedJSON(response: string): string | null {
   escape = false;
   for (let i = 0; i < trimmed.length; i++) {
     const ch = trimmed[i];
-    if (escape) { escape = false; continue; }
-    if (ch === '\\' && inString) { escape = true; continue; }
-    if (ch === '"') { inString = !inString; continue; }
+    if (escape) {
+      escape = false;
+      continue;
+    }
+    if (ch === '\\' && inString) {
+      escape = true;
+      continue;
+    }
+    if (ch === '"') {
+      inString = !inString;
+      continue;
+    }
     if (inString) continue;
     if (ch === '{') openBraces++;
     else if (ch === '}') openBraces--;
@@ -483,8 +516,8 @@ export function parseDecompositionResponse(response: string): LLMDecomposeResult
     // \{[\s\S]*\} greedily matching across multiple objects in the array
     const trimmed = response.trim();
     const jsonMatch = trimmed.startsWith('[')
-      ? (response.match(/\[[\s\S]*\]/) || response.match(/\{[\s\S]*\}/))
-      : (response.match(/\{[\s\S]*\}/) || response.match(/\[[\s\S]*\]/));
+      ? response.match(/\[[\s\S]*\]/) || response.match(/\{[\s\S]*\}/)
+      : response.match(/\{[\s\S]*\}/) || response.match(/\[[\s\S]*\]/);
     if (jsonMatch) jsonStr = jsonMatch[0];
   }
 

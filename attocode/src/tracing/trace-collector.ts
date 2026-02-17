@@ -488,7 +488,14 @@ export interface PlanEvolutionData {
   };
   /** What changed from previous version */
   change?: {
-    type: 'created' | 'step_added' | 'step_removed' | 'step_modified' | 'step_completed' | 'step_failed' | 'replanned';
+    type:
+      | 'created'
+      | 'step_added'
+      | 'step_removed'
+      | 'step_modified'
+      | 'step_completed'
+      | 'step_failed'
+      | 'replanned';
     reason: string;
     affectedSteps?: string[];
     previousState?: string;
@@ -532,7 +539,14 @@ export interface SubagentLinkData {
  */
 export interface DecisionData {
   /** Type of decision */
-  type: 'routing' | 'tool_selection' | 'policy' | 'plan_choice' | 'model_selection' | 'retry' | 'escalation';
+  type:
+    | 'routing'
+    | 'tool_selection'
+    | 'policy'
+    | 'plan_choice'
+    | 'model_selection'
+    | 'retry'
+    | 'escalation';
   /** The decision made */
   decision: string;
   /** Outcome/result of decision */
@@ -609,8 +623,10 @@ export class TraceCollector {
 
   // Accumulated data
   private iterations: IterationTrace[] = [];
-  private pendingRequests: Map<string, { span: Span; data: LLMRequestData; startTime: number }> = new Map();
-  private pendingTools: Map<string, { span: Span; data: ToolStartData; startTime: number }> = new Map();
+  private pendingRequests: Map<string, { span: Span; data: LLMRequestData; startTime: number }> =
+    new Map();
+  private pendingTools: Map<string, { span: Span; data: ToolStartData; startTime: number }> =
+    new Map();
 
   // JSONL output
   private outputPath: string | null = null;
@@ -672,7 +688,7 @@ export class TraceCollector {
     sessionId: string,
     task: string | undefined,
     model: string,
-    metadata: Record<string, unknown> = {}
+    metadata: Record<string, unknown> = {},
   ): Promise<void> {
     if (this.sessionId) {
       throw new Error('Session already in progress. Call endSession() first.');
@@ -942,9 +958,8 @@ export class TraceCollector {
       totalCost += iteration.metrics.totalCost;
     }
 
-    const cacheHitRate = this.taskIterations.length > 0
-      ? totalCacheHitRate / this.taskIterations.length
-      : 0;
+    const cacheHitRate =
+      this.taskIterations.length > 0 ? totalCacheHitRate / this.taskIterations.length : 0;
 
     return {
       inputTokens,
@@ -1069,7 +1084,8 @@ export class TraceCollector {
     // Track cache boundaries
     if (this.config.analyzeCacheBoundaries) {
       this.cacheTracker.recordRequest({
-        systemPrompt: data.systemPrompt ?? data.messages.find(m => m.role === 'system')?.content ?? '',
+        systemPrompt:
+          data.systemPrompt ?? data.messages.find((m) => m.role === 'system')?.content ?? '',
         messages: data.messages,
         toolDefinitions: data.tools,
       });
@@ -1156,10 +1172,8 @@ export class TraceCollector {
       model: requestData.model,
       provider: requestData.provider,
       request: {
-        messages: this.config.captureMessageContent
-          ? this.traceMessages(requestData.messages)
-          : [],
-        tools: requestData.tools?.map(t => ({
+        messages: this.config.captureMessageContent ? this.traceMessages(requestData.messages) : [],
+        tools: requestData.tools?.map((t) => ({
           name: t.name,
           description: t.description,
           parametersSchema: t.parametersSchema,
@@ -1254,9 +1268,7 @@ export class TraceCollector {
 
     // Add result or error
     if (data.status === 'success' && data.result !== undefined) {
-      const resultStr = typeof data.result === 'string'
-        ? data.result
-        : JSON.stringify(data.result);
+      const resultStr = typeof data.result === 'string' ? data.result : JSON.stringify(data.result);
 
       toolTrace.result = {
         type: typeof data.result === 'string' ? 'string' : 'object',
@@ -1320,10 +1332,7 @@ export class TraceCollector {
    * Truncate tool input for trace logging.
    * Shows key arguments but limits large values.
    */
-  private truncateInput(
-    args: Record<string, unknown>,
-    toolName: string
-  ): Record<string, unknown> {
+  private truncateInput(args: Record<string, unknown>, toolName: string): Record<string, unknown> {
     const MAX_STRING_LENGTH = 200;
     const result: Record<string, unknown> = {};
 
@@ -1337,20 +1346,19 @@ export class TraceCollector {
           result[key] = value.length > 500 ? value.slice(0, 500) + '...' : value;
         } else if (key === 'content' || key === 'new_content') {
           // Truncate file content
-          result[key] = value.length > MAX_STRING_LENGTH
-            ? `${value.slice(0, MAX_STRING_LENGTH)}... (${value.length} chars)`
-            : value;
+          result[key] =
+            value.length > MAX_STRING_LENGTH
+              ? `${value.slice(0, MAX_STRING_LENGTH)}... (${value.length} chars)`
+              : value;
         } else {
-          result[key] = value.length > MAX_STRING_LENGTH
-            ? value.slice(0, MAX_STRING_LENGTH) + '...'
-            : value;
+          result[key] =
+            value.length > MAX_STRING_LENGTH ? value.slice(0, MAX_STRING_LENGTH) + '...' : value;
         }
       } else if (typeof value === 'object' && value !== null) {
         // Show structure but truncate nested values
         const str = JSON.stringify(value);
-        result[key] = str.length > MAX_STRING_LENGTH
-          ? `${str.slice(0, MAX_STRING_LENGTH)}...`
-          : value;
+        result[key] =
+          str.length > MAX_STRING_LENGTH ? `${str.slice(0, MAX_STRING_LENGTH)}...` : value;
       } else {
         result[key] = value;
       }
@@ -1808,7 +1816,7 @@ export class TraceCollector {
     const calculatedCost = this.calculateCost(
       llmRequest?.tokens.input ?? 0,
       llmRequest?.tokens.output ?? 0,
-      llmRequest?.cache.cacheReadTokens ?? 0
+      llmRequest?.cache.cacheReadTokens ?? 0,
     );
 
     const metrics = {
@@ -1821,7 +1829,7 @@ export class TraceCollector {
 
     // Complete iteration trace
     const iterationTrace: IterationTrace = {
-      ...this.currentIterationTrace as IterationTrace,
+      ...(this.currentIterationTrace as IterationTrace),
       durationMs,
       metrics,
     };
@@ -1939,7 +1947,7 @@ export class TraceCollector {
    * Convert messages to traced format.
    */
   private traceMessages(messages: LLMRequestData['messages']): TracedMessage[] {
-    return messages.map(msg => ({
+    return messages.map((msg) => ({
       role: msg.role,
       content: msg.content,
       estimatedTokens: this.estimateTokens(msg.content),
@@ -2009,8 +2017,10 @@ export class TraceCollector {
     // Apply cache discount: cached tokens cost ~10% of regular input
     // fullCost = (input * inputPrice) + (output * outputPrice)
     // We need to subtract the savings from cached tokens
-    const inputPricePerToken = inputTokens > 0 ?
-      (fullCost - calculateOpenRouterCost(this.model, 0, outputTokens)) / inputTokens : 0;
+    const inputPricePerToken =
+      inputTokens > 0
+        ? (fullCost - calculateOpenRouterCost(this.model, 0, outputTokens)) / inputTokens
+        : 0;
     const cacheSavings = cachedTokens * inputPricePerToken * 0.9; // 90% discount
 
     return Math.max(0, fullCost - cacheSavings);
@@ -2023,7 +2033,7 @@ export class TraceCollector {
     let hash = 0;
     for (let i = 0; i < content.length; i++) {
       const char = content.charCodeAt(i);
-      hash = ((hash << 5) - hash) + char;
+      hash = (hash << 5) - hash + char;
       hash = hash & hash;
     }
     return hash.toString(16);
@@ -2186,21 +2196,26 @@ export class TraceCollector {
     try {
       const { readFile } = await import('fs/promises');
       const content = await readFile(this.outputPath, 'utf-8');
-      const lines = content.trim().split('\n').filter(line => line.length > 0);
+      const lines = content
+        .trim()
+        .split('\n')
+        .filter((line) => line.length > 0);
 
       // Parse all entries
-      const entries = lines.map(line => {
-        try {
-          return JSON.parse(line) as JSONLEntry & {
-            subagentId?: string;
-            subagentType?: string;
-            parentSessionId?: string;
-            spawnedAtIteration?: number;
-          };
-        } catch {
-          return null;
-        }
-      }).filter((e): e is NonNullable<typeof e> => e !== null);
+      const entries = lines
+        .map((line) => {
+          try {
+            return JSON.parse(line) as JSONLEntry & {
+              subagentId?: string;
+              subagentType?: string;
+              parentSessionId?: string;
+              spawnedAtIteration?: number;
+            };
+          } catch {
+            return null;
+          }
+        })
+        .filter((e): e is NonNullable<typeof e> => e !== null);
 
       // Group by agent (null = main agent, string = subagent)
       const mainAgent: AgentMetricsData = {
@@ -2282,10 +2297,14 @@ export class TraceCollector {
 
       // Calculate totals
       const subagentArray = Array.from(subagents.values());
-      const totalInputTokens = mainAgent.inputTokens + subagentArray.reduce((sum, s) => sum + s.inputTokens, 0);
-      const totalOutputTokens = mainAgent.outputTokens + subagentArray.reduce((sum, s) => sum + s.outputTokens, 0);
-      const totalToolCalls = mainAgent.toolCalls + subagentArray.reduce((sum, s) => sum + s.toolCalls, 0);
-      const totalLLMCalls = mainAgent.llmCalls + subagentArray.reduce((sum, s) => sum + s.llmCalls, 0);
+      const totalInputTokens =
+        mainAgent.inputTokens + subagentArray.reduce((sum, s) => sum + s.inputTokens, 0);
+      const totalOutputTokens =
+        mainAgent.outputTokens + subagentArray.reduce((sum, s) => sum + s.outputTokens, 0);
+      const totalToolCalls =
+        mainAgent.toolCalls + subagentArray.reduce((sum, s) => sum + s.toolCalls, 0);
+      const totalLLMCalls =
+        mainAgent.llmCalls + subagentArray.reduce((sum, s) => sum + s.llmCalls, 0);
 
       // Estimate cost for subagents based on token usage ratio
       // (since actual cost is only tracked at session level)
@@ -2293,10 +2312,12 @@ export class TraceCollector {
       const mainCost = mainAgent.estimatedCost;
       for (const sub of subagentArray) {
         const tokenRatio = sub.inputTokens / Math.max(totalInputTokens, 1);
-        sub.estimatedCost = (mainCost / tokenRatioMain) * tokenRatio * (1 / Math.max(tokenRatioMain, 0.01));
+        sub.estimatedCost =
+          (mainCost / tokenRatioMain) * tokenRatio * (1 / Math.max(tokenRatioMain, 0.01));
       }
 
-      const totalCost = mainAgent.estimatedCost + subagentArray.reduce((sum, s) => sum + s.estimatedCost, 0);
+      const totalCost =
+        mainAgent.estimatedCost + subagentArray.reduce((sum, s) => sum + s.estimatedCost, 0);
 
       return {
         sessionId: this.sessionId || 'unknown',
@@ -2360,8 +2381,6 @@ export interface SubagentHierarchy {
 /**
  * Create a new trace collector.
  */
-export function createTraceCollector(
-  config: Partial<TraceCollectorConfig> = {}
-): TraceCollector {
+export function createTraceCollector(config: Partial<TraceCollectorConfig> = {}): TraceCollector {
   return new TraceCollector(config);
 }

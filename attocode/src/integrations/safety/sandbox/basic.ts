@@ -187,10 +187,7 @@ export class BasicSandbox implements Sandbox {
   /**
    * Validate a command against allowlist and blocklist.
    */
-  validateCommand(
-    command: string,
-    options: SandboxOptions
-  ): { allowed: boolean; reason?: string } {
+  validateCommand(command: string, options: SandboxOptions): { allowed: boolean; reason?: string } {
     // Check for dangerous patterns
     for (const pattern of DANGEROUS_PATTERNS) {
       if (pattern.test(command)) {
@@ -273,16 +270,16 @@ export class BasicSandbox implements Sandbox {
    */
   private validatePaths(
     command: string,
-    options: SandboxOptions
+    options: SandboxOptions,
   ): { allowed: boolean; reason?: string } {
     const writablePaths = options.writablePaths ?? ['.'];
     const workDir = options.workingDir ?? process.cwd();
 
     // Check for writes to paths outside writable areas
     const writePatterns = [
-      />>\?\s*["']?([^"'\s]+)/g,      // Append redirect
-      />\s*["']?([^"'\s]+)/g,         // Write redirect
-      /\btee\s+["']?([^"'\s]+)/g,     // tee command
+      />>\?\s*["']?([^"'\s]+)/g, // Append redirect
+      />\s*["']?([^"'\s]+)/g, // Write redirect
+      /\btee\s+["']?([^"'\s]+)/g, // tee command
     ];
 
     for (const pattern of writePatterns) {
@@ -301,15 +298,9 @@ export class BasicSandbox implements Sandbox {
   /**
    * Check if a path is in the writable list.
    */
-  private isPathWritable(
-    path: string,
-    writablePaths: string[],
-    workDir: string
-  ): boolean {
+  private isPathWritable(path: string, writablePaths: string[], workDir: string): boolean {
     // Resolve the path
-    const resolvedPath = path.startsWith('/')
-      ? path
-      : `${workDir}/${path}`;
+    const resolvedPath = path.startsWith('/') ? path : `${workDir}/${path}`;
 
     // Check against writable paths
     for (const writable of writablePaths) {

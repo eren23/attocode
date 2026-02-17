@@ -99,7 +99,11 @@ export function parseArgs(): CLIArgs {
     } else if (arg === '--swarm') {
       // --swarm or --swarm path/to/config.yaml
       const next = args[i + 1];
-      if (next && !next.startsWith('-') && (next.endsWith('.yaml') || next.endsWith('.yml') || next.endsWith('.json'))) {
+      if (
+        next &&
+        !next.startsWith('-') &&
+        (next.endsWith('.yaml') || next.endsWith('.yml') || next.endsWith('.json'))
+      ) {
         result.swarm = args[++i];
       } else {
         result.swarm = true;

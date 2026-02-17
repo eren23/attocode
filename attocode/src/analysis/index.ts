@@ -4,10 +4,7 @@
  * Provides LLM-powered trace analysis capabilities.
  */
 
-export {
-  TraceSummaryGenerator,
-  createTraceSummaryGenerator,
-} from './trace-summary.js';
+export { TraceSummaryGenerator, createTraceSummaryGenerator } from './trace-summary.js';
 
 export {
   PROMPT_TEMPLATES,

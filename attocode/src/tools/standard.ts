@@ -222,7 +222,5 @@ export function getToolsSummary(): string {
     { name: 'show_session_changes', desc: 'Show all session changes', safe: true },
   ];
 
-  return tools
-    .map(t => `  • ${t.name}: ${t.desc}${t.safe ? '' : ' ⚠️'}`)
-    .join('\n');
+  return tools.map((t) => `  • ${t.name}: ${t.desc}${t.safe ? '' : ' ⚠️'}`).join('\n');
 }

@@ -205,7 +205,7 @@ class LSPClient {
     config: LanguageServerConfig,
     rootUri: string,
     timeout: number = 30000,
-    onDiagnostics?: (uri: string, diagnostics: LSPDiagnostic[]) => void
+    onDiagnostics?: (uri: string, diagnostics: LSPDiagnostic[]) => void,
   ) {
     this.config = config;
     this.rootUri = rootUri;
@@ -351,7 +351,7 @@ class LSPClient {
     uri: string,
     line: number,
     character: number,
-    includeDeclaration: boolean = true
+    includeDeclaration: boolean = true,
   ): Promise<LSPLocation[]> {
     if (!this.initialized) return [];
 
@@ -589,7 +589,7 @@ export class LSPManager {
       (uri, diagnostics) => {
         this.diagnosticsCache.set(uri, diagnostics);
         this.emit({ type: 'lsp.diagnostics', uri, diagnostics });
-      }
+      },
     );
 
     await client.start();
@@ -657,7 +657,7 @@ export class LSPManager {
     file: string,
     line: number,
     col: number,
-    includeDeclaration: boolean = true
+    includeDeclaration: boolean = true,
   ): Promise<LSPLocation[]> {
     const client = this.getClientForFile(file);
     if (!client) return [];
@@ -810,7 +810,7 @@ export function createLSPManager(config?: LSPConfig): LSPManager {
  */
 export async function createAndStartLSPManager(
   workspaceRoot?: string,
-  config?: LSPConfig
+  config?: LSPConfig,
 ): Promise<LSPManager> {
   const manager = new LSPManager(config);
   await manager.autoStart(workspaceRoot);

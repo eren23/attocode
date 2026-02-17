@@ -19,22 +19,22 @@ export interface TypeCheckError {
   file: string;
   line: number;
   column: number;
-  code: string;   // e.g., "TS2554"
+  code: string; // e.g., "TS2554"
   message: string;
 }
 
 export interface TypeCheckResult {
-  success: boolean;      // exit code 0
+  success: boolean; // exit code 0
   errorCount: number;
   errors: TypeCheckError[];
-  duration: number;      // ms
+  duration: number; // ms
 }
 
 export interface TypeCheckerState {
-  tsconfigDir: string | null;         // directory with tsconfig.json, or null
-  tsEditsSinceLastCheck: number;      // .ts/.tsx edits since last tsc run
+  tsconfigDir: string | null; // directory with tsconfig.json, or null
+  tsEditsSinceLastCheck: number; // .ts/.tsx edits since last tsc run
   lastResult: TypeCheckResult | null; // last tsc result
-  hasRunOnce: boolean;                // whether tsc has been run this session
+  hasRunOnce: boolean; // whether tsc has been run this session
 }
 
 // =============================================================================
@@ -101,8 +101,12 @@ export async function runTypeCheck(
         timeout,
       });
 
-      child.stdout?.on('data', (data: Buffer) => { stdout += data.toString(); });
-      child.stderr?.on('data', (data: Buffer) => { stderr += data.toString(); });
+      child.stdout?.on('data', (data: Buffer) => {
+        stdout += data.toString();
+      });
+      child.stderr?.on('data', (data: Buffer) => {
+        stderr += data.toString();
+      });
 
       child.on('close', (code) => {
         done(code === 0);
@@ -153,10 +157,7 @@ export function parseTypeCheckOutput(output: string): TypeCheckError[] {
  * Format compilation errors into an agent-readable nudge message.
  * Shows up to maxErrors errors and ends with a fix instruction.
  */
-export function formatTypeCheckNudge(
-  result: TypeCheckResult,
-  maxErrors: number = 15,
-): string {
+export function formatTypeCheckNudge(result: TypeCheckResult, maxErrors: number = 15): string {
   const parts: string[] = [
     `[System] TypeScript compilation failed with ${result.errorCount} error(s):`,
     '',

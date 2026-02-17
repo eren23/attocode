@@ -103,7 +103,7 @@ export class AzureOpenAIProvider implements LLMProvider, LLMProviderWithTools {
     this.endpoint = this.endpoint.replace(/\/+$/, '');
 
     this.networkConfig = {
-      timeout: 120000,  // 2 minutes
+      timeout: 120000, // 2 minutes
       maxRetries: 3,
       baseRetryDelay: 1000,
     };
@@ -124,7 +124,10 @@ export class AzureOpenAIProvider implements LLMProvider, LLMProviderWithTools {
   /**
    * Basic chat without tool support.
    */
-  async chat(messages: (Message | MessageWithContent)[], options?: ChatOptions): Promise<ChatResponse> {
+  async chat(
+    messages: (Message | MessageWithContent)[],
+    options?: ChatOptions,
+  ): Promise<ChatResponse> {
     // Azure ignores the model field — the deployment determines the model
     const openaiMessages = this.convertMessagesToOpenAIFormat(messages);
 
@@ -148,7 +151,11 @@ export class AzureOpenAIProvider implements LLMProvider, LLMProviderWithTools {
         providerName: this.name,
         networkConfig: this.networkConfig,
         onRetry: (attempt, delay, error) => {
-          logger.warn('Azure OpenAI retry attempt', { attempt, delayMs: delay, error: error.message });
+          logger.warn('Azure OpenAI retry attempt', {
+            attempt,
+            delayMs: delay,
+            error: error.message,
+          });
         },
       });
 
@@ -157,7 +164,7 @@ export class AzureOpenAIProvider implements LLMProvider, LLMProviderWithTools {
         throw this.handleError(response.status, error);
       }
 
-      const data = await response.json() as OpenAIChatCompletion;
+      const data = (await response.json()) as OpenAIChatCompletion;
       const result = this.parseResponse(data);
       result.rateLimitInfo = this.extractRateLimitInfo(response);
       return result;
@@ -167,7 +174,7 @@ export class AzureOpenAIProvider implements LLMProvider, LLMProviderWithTools {
         `Azure OpenAI request failed: ${(error as Error).message}`,
         this.name,
         'NETWORK_ERROR',
-        error as Error
+        error as Error,
       );
     }
   }
@@ -177,7 +184,7 @@ export class AzureOpenAIProvider implements LLMProvider, LLMProviderWithTools {
    */
   async chatWithTools(
     messages: (Message | MessageWithContent)[],
-    options?: ChatOptionsWithTools
+    options?: ChatOptionsWithTools,
   ): Promise<ChatResponseWithTools> {
     const openaiMessages = this.convertMessagesWithToolsToOpenAIFormat(messages);
 
@@ -214,7 +221,11 @@ export class AzureOpenAIProvider implements LLMProvider, LLMProviderWithTools {
         providerName: this.name,
         networkConfig: this.networkConfig,
         onRetry: (attempt, delay, error) => {
-          logger.warn('Azure OpenAI retry attempt', { attempt, delayMs: delay, error: error.message });
+          logger.warn('Azure OpenAI retry attempt', {
+            attempt,
+            delayMs: delay,
+            error: error.message,
+          });
         },
       });
 
@@ -223,7 +234,7 @@ export class AzureOpenAIProvider implements LLMProvider, LLMProviderWithTools {
         throw this.handleError(response.status, error);
       }
 
-      const data = await response.json() as OpenAIChatCompletion;
+      const data = (await response.json()) as OpenAIChatCompletion;
       const result = this.parseResponseWithTools(data);
       result.rateLimitInfo = this.extractRateLimitInfo(response);
       return result;
@@ -233,7 +244,7 @@ export class AzureOpenAIProvider implements LLMProvider, LLMProviderWithTools {
         `Azure OpenAI request failed: ${(error as Error).message}`,
         this.name,
         'NETWORK_ERROR',
-        error as Error
+        error as Error,
       );
     }
   }
@@ -245,10 +256,15 @@ export class AzureOpenAIProvider implements LLMProvider, LLMProviderWithTools {
   /**
    * Convert basic messages to OpenAI format.
    */
-  private convertMessagesToOpenAIFormat(messages: (Message | MessageWithContent)[]): OpenAIMessage[] {
-    return messages.map(m => ({
+  private convertMessagesToOpenAIFormat(
+    messages: (Message | MessageWithContent)[],
+  ): OpenAIMessage[] {
+    return messages.map((m) => ({
       role: m.role as OpenAIMessage['role'],
-      content: typeof m.content === 'string' ? m.content : m.content.map(c => c.type === 'text' ? c.text : '').join(''),
+      content:
+        typeof m.content === 'string'
+          ? m.content
+          : m.content.map((c) => (c.type === 'text' ? c.text : '')).join(''),
     }));
   }
 
@@ -256,7 +272,7 @@ export class AzureOpenAIProvider implements LLMProvider, LLMProviderWithTools {
    * Convert messages with potential tool calls to OpenAI format.
    */
   private convertMessagesWithToolsToOpenAIFormat(
-    messages: (Message | MessageWithContent)[]
+    messages: (Message | MessageWithContent)[],
   ): OpenAIMessage[] {
     const result: OpenAIMessage[] = [];
 
@@ -265,9 +281,10 @@ export class AzureOpenAIProvider implements LLMProvider, LLMProviderWithTools {
       if ('tool_call_id' in msg && msg.role === 'tool') {
         result.push({
           role: 'tool',
-          content: typeof msg.content === 'string'
-            ? msg.content
-            : msg.content?.map(c => c.type === 'text' ? c.text : '').join('') || '',
+          content:
+            typeof msg.content === 'string'
+              ? msg.content
+              : msg.content?.map((c) => (c.type === 'text' ? c.text : '')).join('') || '',
           tool_call_id: msg.tool_call_id,
           name: msg.name,
         });
@@ -276,14 +293,15 @@ export class AzureOpenAIProvider implements LLMProvider, LLMProviderWithTools {
 
       // Handle assistant messages with tool calls
       if ('tool_calls' in msg && msg.tool_calls && msg.tool_calls.length > 0) {
-        const content = typeof msg.content === 'string'
-          ? msg.content
-          : msg.content?.map(c => c.type === 'text' ? c.text : '').join('') || null;
+        const content =
+          typeof msg.content === 'string'
+            ? msg.content
+            : msg.content?.map((c) => (c.type === 'text' ? c.text : '')).join('') || null;
 
         result.push({
           role: 'assistant',
           content,
-          tool_calls: msg.tool_calls.map(tc => ({
+          tool_calls: msg.tool_calls.map((tc) => ({
             id: tc.id,
             type: 'function' as const,
             function: {
@@ -296,9 +314,10 @@ export class AzureOpenAIProvider implements LLMProvider, LLMProviderWithTools {
       }
 
       // Regular message
-      const content = typeof msg.content === 'string'
-        ? msg.content
-        : msg.content?.map(c => c.type === 'text' ? c.text : '').join('') || '';
+      const content =
+        typeof msg.content === 'string'
+          ? msg.content
+          : msg.content?.map((c) => (c.type === 'text' ? c.text : '')).join('') || '';
 
       result.push({
         role: msg.role as OpenAIMessage['role'],
@@ -332,7 +351,7 @@ export class AzureOpenAIProvider implements LLMProvider, LLMProviderWithTools {
    * Convert tool_choice to OpenAI format.
    */
   private convertToolChoice(
-    choice: ChatOptionsWithTools['tool_choice']
+    choice: ChatOptionsWithTools['tool_choice'],
   ): 'auto' | 'required' | 'none' | { type: 'function'; function: { name: string } } {
     if (choice === 'auto') return 'auto';
     if (choice === 'required') return 'required';
@@ -369,7 +388,7 @@ export class AzureOpenAIProvider implements LLMProvider, LLMProviderWithTools {
   private parseResponseWithTools(data: OpenAIChatCompletion): ChatResponseWithTools {
     const choice = data.choices[0];
 
-    const toolCalls: ToolCallResponse[] | undefined = choice.message.tool_calls?.map(tc => ({
+    const toolCalls: ToolCallResponse[] | undefined = choice.message.tool_calls?.map((tc) => ({
       id: tc.id,
       type: 'function' as const,
       function: {
@@ -448,15 +467,10 @@ export class AzureOpenAIProvider implements LLMProvider, LLMProviderWithTools {
       } else {
         code = 'INVALID_REQUEST';
       }
-    }
-    else if (status === 404) code = 'INVALID_REQUEST';
+    } else if (status === 404) code = 'INVALID_REQUEST';
     else if (status >= 500) code = 'SERVER_ERROR';
 
-    return new ProviderError(
-      `Azure OpenAI API error (${status}): ${body}`,
-      this.name,
-      code
-    );
+    return new ProviderError(`Azure OpenAI API error (${status}): ${body}`, this.name, code);
   }
 
   /**
@@ -464,11 +478,16 @@ export class AzureOpenAIProvider implements LLMProvider, LLMProviderWithTools {
    */
   private mapStopReason(reason: string): ChatResponse['stopReason'] {
     switch (reason) {
-      case 'stop': return 'end_turn';
-      case 'length': return 'max_tokens';
-      case 'tool_calls': return 'end_turn';
-      case 'content_filter': return 'end_turn';
-      default: return 'end_turn';
+      case 'stop':
+        return 'end_turn';
+      case 'length':
+        return 'max_tokens';
+      case 'tool_calls':
+        return 'end_turn';
+      case 'content_filter':
+        return 'end_turn';
+      default:
+        return 'end_turn';
     }
   }
 }

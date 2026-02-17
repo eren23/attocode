@@ -34,10 +34,7 @@ function generateSeatbeltProfile(options: SandboxOptions): string {
   const workingDir = options.workingDir ?? process.cwd();
 
   // Start with version declaration and deny default
-  const rules: string[] = [
-    '(version 1)',
-    '(deny default)',
-  ];
+  const rules: string[] = ['(version 1)', '(deny default)'];
 
   // Allow process management
   rules.push('(allow process-fork)');
@@ -70,7 +67,7 @@ function generateSeatbeltProfile(options: SandboxOptions): string {
     '/dev/tty',
     '/etc',
     '/private/etc',
-    '/var/folders',    // Temp files
+    '/var/folders', // Temp files
     '/private/var/folders',
     '/tmp',
     '/private/tmp',
@@ -168,13 +165,9 @@ export class SeatbeltSandbox implements Sandbox {
           ...process.env,
           ...mergedOptions.env,
           // Add common paths to PATH
-          PATH: [
-            process.env.PATH,
-            '/usr/local/bin',
-            '/opt/homebrew/bin',
-            '/usr/bin',
-            '/bin',
-          ].filter(Boolean).join(':'),
+          PATH: [process.env.PATH, '/usr/local/bin', '/opt/homebrew/bin', '/usr/bin', '/bin']
+            .filter(Boolean)
+            .join(':'),
         },
         stdio: ['pipe', 'pipe', 'pipe'],
       });
@@ -304,8 +297,8 @@ export const STRICT_PROFILE: SandboxOptions = {
 export const DEV_PROFILE: SandboxOptions = {
   writablePaths: ['.', 'node_modules', '.git'],
   readablePaths: ['/'],
-  networkAllowed: true,  // Allow npm install
-  timeout: 300000,       // 5 minutes
+  networkAllowed: true, // Allow npm install
+  timeout: 300000, // 5 minutes
   maxMemoryMB: 1024,
   maxCpuSeconds: 120,
 };
@@ -329,7 +322,7 @@ export const TEST_PROFILE: SandboxOptions = {
   writablePaths: ['.', 'coverage', 'test-results', 'node_modules/.cache'],
   readablePaths: ['/'],
   networkAllowed: false, // Tests should be isolated
-  timeout: 600000,       // 10 minutes
+  timeout: 600000, // 10 minutes
   maxMemoryMB: 1024,
   maxCpuSeconds: 300,
 };

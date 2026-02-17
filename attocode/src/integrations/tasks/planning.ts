@@ -54,9 +54,21 @@ export class PlanningManager {
 
     // Keyword-based complexity
     const complexKeywords = [
-      'implement', 'refactor', 'migrate', 'integrate', 'build',
-      'create', 'design', 'architect', 'optimize', 'debug',
-      'multiple', 'several', 'all', 'entire', 'complete',
+      'implement',
+      'refactor',
+      'migrate',
+      'integrate',
+      'build',
+      'create',
+      'design',
+      'architect',
+      'optimize',
+      'debug',
+      'multiple',
+      'several',
+      'all',
+      'entire',
+      'complete',
     ];
 
     for (const keyword of complexKeywords) {
@@ -94,9 +106,7 @@ Example format:
 
 Return ONLY the JSON array, no other text.`;
 
-    const messages: Message[] = [
-      { role: 'user', content: planPrompt },
-    ];
+    const messages: Message[] = [{ role: 'user', content: planPrompt }];
 
     try {
       const response = await provider.chat(messages);
@@ -171,9 +181,7 @@ Return ONLY the JSON array, no other text.`;
         id: String(item.id || `step-${index + 1}`),
         description: String(item.description || `Step ${index + 1}`),
         status: 'pending' as const,
-        dependencies: Array.isArray(item.dependencies)
-          ? item.dependencies.map(String)
-          : [],
+        dependencies: Array.isArray(item.dependencies) ? item.dependencies.map(String) : [],
       }));
     } catch (err) {
       logger.warn('Failed to parse plan', { error: String(err) });
@@ -188,9 +196,24 @@ Return ONLY the JSON array, no other text.`;
     return {
       goal: task,
       tasks: [
-        { id: 'step-1', description: 'Understand the requirements', status: 'pending', dependencies: [] },
-        { id: 'step-2', description: 'Execute the task', status: 'pending', dependencies: ['step-1'] },
-        { id: 'step-3', description: 'Verify the results', status: 'pending', dependencies: ['step-2'] },
+        {
+          id: 'step-1',
+          description: 'Understand the requirements',
+          status: 'pending',
+          dependencies: [],
+        },
+        {
+          id: 'step-2',
+          description: 'Execute the task',
+          status: 'pending',
+          dependencies: ['step-1'],
+        },
+        {
+          id: 'step-3',
+          description: 'Verify the results',
+          status: 'pending',
+          dependencies: ['step-2'],
+        },
       ],
       currentTaskIndex: 0,
     };
@@ -281,9 +304,7 @@ Return ONLY the JSON array, no other text.`;
   isPlanComplete(): boolean {
     if (!this.currentPlan) return true;
 
-    return this.currentPlan.tasks.every(
-      (t) => t.status === 'completed' || t.status === 'failed'
-    );
+    return this.currentPlan.tasks.every((t) => t.status === 'completed' || t.status === 'failed');
   }
 
   /**
@@ -298,18 +319,18 @@ Return ONLY the JSON array, no other text.`;
     if (!this.currentPlan) return [];
 
     const groups: PlanTask[][] = [];
-    const pending = this.currentPlan.tasks.filter(t => t.status === 'pending');
+    const pending = this.currentPlan.tasks.filter((t) => t.status === 'pending');
     const processed = new Set<string>();
 
     // Find tasks whose dependencies are all completed
     while (processed.size < pending.length) {
-      const canRun = pending.filter(t => {
+      const canRun = pending.filter((t) => {
         // Skip already processed
         if (processed.has(t.id)) return false;
 
         // Check all dependencies are completed
-        return t.dependencies.every(depId => {
-          const dep = this.currentPlan!.tasks.find(x => x.id === depId);
+        return t.dependencies.every((depId) => {
+          const dep = this.currentPlan!.tasks.find((x) => x.id === depId);
           return dep?.status === 'completed' || processed.has(depId);
         });
       });
@@ -320,7 +341,7 @@ Return ONLY the JSON array, no other text.`;
       }
 
       groups.push(canRun);
-      canRun.forEach(t => processed.add(t.id));
+      canRun.forEach((t) => processed.add(t.id));
     }
 
     return groups;
@@ -356,11 +377,7 @@ Return ONLY the JSON array, no other text.`;
   /**
    * Reflect on an output and determine if it's satisfactory.
    */
-  async reflect(
-    goal: string,
-    output: string,
-    provider: LLMProvider
-  ): Promise<ReflectionResult> {
+  async reflect(goal: string, output: string, provider: LLMProvider): Promise<ReflectionResult> {
     const reflectionPrompt = `Evaluate this output against the goal.
 
 Goal: ${goal}
@@ -383,9 +400,7 @@ Respond in JSON format:
 
 Return ONLY the JSON, no other text.`;
 
-    const messages: Message[] = [
-      { role: 'user', content: reflectionPrompt },
-    ];
+    const messages: Message[] = [{ role: 'user', content: reflectionPrompt }];
 
     try {
       const response = await provider.chat(messages);
@@ -417,9 +432,7 @@ Return ONLY the JSON, no other text.`;
         satisfied: Boolean(parsed.satisfied),
         confidence: Number(parsed.confidence) || 0.5,
         critique: String(parsed.critique || ''),
-        suggestions: Array.isArray(parsed.suggestions)
-          ? parsed.suggestions.map(String)
-          : [],
+        suggestions: Array.isArray(parsed.suggestions) ? parsed.suggestions.map(String) : [],
       };
     } catch (err) {
       return {
@@ -437,7 +450,7 @@ Return ONLY the JSON, no other text.`;
   async reflectionLoop(
     task: () => Promise<string>,
     goal: string,
-    provider: LLMProvider
+    provider: LLMProvider,
   ): Promise<{ output: string; attempts: number; reflections: ReflectionResult[] }> {
     const maxAttempts = this.reflectionConfig.maxAttempts || 3;
     const threshold = this.reflectionConfig.confidenceThreshold || 0.8;
@@ -488,7 +501,7 @@ export interface ReflectionResult {
 
 export function createPlanningManager(
   planningConfig: PlanningConfig,
-  reflectionConfig: ReflectionConfig
+  reflectionConfig: ReflectionConfig,
 ): PlanningManager {
   return new PlanningManager(planningConfig, reflectionConfig);
 }

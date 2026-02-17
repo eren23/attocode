@@ -156,7 +156,11 @@ export class PTYShellManager {
       // Wait a bit for shell to initialize
       setTimeout(() => {
         if (this.process && this.process.pid) {
-          this.emitEvent({ type: 'shell.started', pid: this.process.pid, shell: this.config.shell });
+          this.emitEvent({
+            type: 'shell.started',
+            pid: this.process.pid,
+            shell: this.config.shell,
+          });
           resolve();
         } else {
           reject(new Error('Failed to start shell'));
@@ -416,7 +420,8 @@ export async function createAndStartPTYShell(config?: PTYShellConfig): Promise<P
 export function createPTYShellTool(shell: PTYShellManager) {
   return {
     name: 'shell_exec',
-    description: 'Execute a command in the persistent shell session. Maintains state between calls (working directory, environment variables, etc.)',
+    description:
+      'Execute a command in the persistent shell session. Maintains state between calls (working directory, environment variables, etc.)',
     parameters: {
       type: 'object',
       properties: {

@@ -12,10 +12,7 @@ import type {
 } from '../types.js';
 
 import type { buildConfig } from '../defaults.js';
-import {
-  isFeatureEnabled,
-  getEnabledFeatures,
-} from '../defaults.js';
+import { isFeatureEnabled, getEnabledFeatures } from '../defaults.js';
 
 import {
   HookManager,
@@ -86,9 +83,7 @@ import {
   createSerperSearchTool,
 } from '../integrations/index.js';
 
-import {
-  resolvePolicyProfile,
-} from '../integrations/safety/policy-engine.js';
+import { resolvePolicyProfile } from '../integrations/safety/policy-engine.js';
 
 import type { SharedContextState } from '../shared/shared-context-state.js';
 import type { SharedEconomicsState } from '../shared/shared-economics-state.js';
@@ -103,9 +98,7 @@ import {
   type SpawnConstraints,
 } from '../tools/agent.js';
 
-import {
-  createTaskTools,
-} from '../tools/tasks.js';
+import { createTaskTools } from '../tools/tasks.js';
 
 import { type AgentStateMachine, createAgentStateMachine } from '../core/agent-state-machine.js';
 
@@ -281,7 +274,11 @@ export function initializeFeatures(agent: AgentInternals): void {
       authority: r.authority,
       model: r.model,
     }));
-    agent.multiAgent = new MultiAgentManager(agent.provider, Array.from(agent.tools.values()), roles);
+    agent.multiAgent = new MultiAgentManager(
+      agent.provider,
+      Array.from(agent.tools.values()),
+      roles,
+    );
   }
 
   // ReAct (Lesson 18)
@@ -297,7 +294,18 @@ export function initializeFeatures(agent: AgentInternals): void {
   if (isFeatureEnabled(agent.config.executionPolicy)) {
     agent.executionPolicy = new ExecutionPolicyManager({
       defaultPolicy: agent.config.executionPolicy.defaultPolicy,
-      toolPolicies: agent.config.executionPolicy.toolPolicies as Record<string, { policy: 'allow' | 'prompt' | 'forbidden'; conditions?: { argMatch?: Record<string, string | RegExp>; policy: 'allow' | 'prompt' | 'forbidden'; reason?: string }[]; reason?: string }>,
+      toolPolicies: agent.config.executionPolicy.toolPolicies as Record<
+        string,
+        {
+          policy: 'allow' | 'prompt' | 'forbidden';
+          conditions?: {
+            argMatch?: Record<string, string | RegExp>;
+            policy: 'allow' | 'prompt' | 'forbidden';
+            reason?: string;
+          }[];
+          reason?: string;
+        }
+      >,
       intentAware: agent.config.executionPolicy.intentAware,
       intentConfidenceThreshold: agent.config.executionPolicy.intentConfidenceThreshold,
     });
@@ -318,9 +326,9 @@ export function initializeFeatures(agent: AgentInternals): void {
     });
     // Load rules asynchronously - tracked for ensureReady()
     agent.initPromises.push(
-      agent.rules.loadRules().catch(err => {
+      agent.rules.loadRules().catch((err) => {
         log.warn('Failed to load rules', { error: String(err) });
-      })
+      }),
     );
   }
 
@@ -353,9 +361,12 @@ export function initializeFeatures(agent: AgentInternals): void {
   agent.stateMachine = createAgentStateMachine();
   // Forward state machine phase transitions as subagent.phase events
   const phaseMap: Record<string, 'exploring' | 'planning' | 'executing' | 'completing'> = {
-    exploring: 'exploring', planning: 'planning', acting: 'executing', verifying: 'completing',
+    exploring: 'exploring',
+    planning: 'planning',
+    acting: 'executing',
+    verifying: 'completing',
   };
-  const unsubStateMachine = agent.stateMachine.subscribe(event => {
+  const unsubStateMachine = agent.stateMachine.subscribe((event) => {
     if (event.type === 'phase.changed') {
       agent.emit({
         type: 'subagent.phase',
@@ -391,7 +402,10 @@ export function initializeFeatures(agent: AgentInternals): void {
 
   // Phase 2-4: Orchestration & Advanced modules (always enabled, lightweight)
   agent.injectionBudget = createInjectionBudgetManager();
-  agent.selfImprovement = createSelfImprovementProtocol(undefined, agent.learningStore ?? undefined);
+  agent.selfImprovement = createSelfImprovementProtocol(
+    undefined,
+    agent.learningStore ?? undefined,
+  );
   agent.subagentOutputStore = createSubagentOutputStore({ persistToFile: false });
   agent.autoCheckpointManager = createAutoCheckpointManager({ enabled: true });
   agent.toolRecommendation = createToolRecommendationEngine();
@@ -400,20 +414,20 @@ export function initializeFeatures(agent: AgentInternals): void {
   agent.agentRegistry = new AgentRegistry();
   // Load user agents asynchronously - tracked for ensureReady()
   agent.initPromises.push(
-    agent.agentRegistry.loadUserAgents().catch(err => {
+    agent.agentRegistry.loadUserAgents().catch((err) => {
       log.warn('Failed to load user agents', { error: String(err) });
-    })
+    }),
   );
 
   // Register spawn_agent tool so LLM can delegate to subagents
-  const boundSpawnTool = createBoundSpawnAgentTool(
-    (name, task, constraints) => agent.spawnAgent(name, task, constraints)
+  const boundSpawnTool = createBoundSpawnAgentTool((name, task, constraints) =>
+    agent.spawnAgent(name, task, constraints),
   );
   agent.tools.set(boundSpawnTool.name, boundSpawnTool);
 
   // Register spawn_agents_parallel tool for parallel subagent execution
-  const boundParallelSpawnTool = createBoundSpawnAgentsParallelTool(
-    (tasks) => agent.spawnAgentsParallel(tasks)
+  const boundParallelSpawnTool = createBoundSpawnAgentsParallelTool((tasks) =>
+    agent.spawnAgentsParallel(tasks),
   );
   agent.tools.set(boundParallelSpawnTool.name, boundParallelSpawnTool);
 
@@ -455,11 +469,12 @@ export function initializeFeatures(agent: AgentInternals): void {
     // All subagents share agent.provider by reference (line 4398),
     // so wrapping here throttles ALL downstream LLM calls.
     if (swarmConfig.throttle !== false) {
-      const throttleConfig = swarmConfig.throttle === 'paid'
-        ? PAID_TIER_THROTTLE
-        : swarmConfig.throttle === 'free' || swarmConfig.throttle === undefined
-          ? FREE_TIER_THROTTLE
-          : swarmConfig.throttle;
+      const throttleConfig =
+        swarmConfig.throttle === 'paid'
+          ? PAID_TIER_THROTTLE
+          : swarmConfig.throttle === 'free' || swarmConfig.throttle === undefined
+            ? FREE_TIER_THROTTLE
+            : swarmConfig.throttle;
       agent.provider = createThrottledProvider(
         agent.provider as unknown as import('../providers/types.js').LLMProvider,
         throttleConfig,
@@ -491,7 +506,7 @@ export function initializeFeatures(agent: AgentInternals): void {
   if (isFeatureEnabled(agent.config.cancellation)) {
     agent.cancellation = createCancellationManager();
     // Forward cancellation events (with cleanup tracking)
-    const unsubCancellation = agent.cancellation.subscribe(event => {
+    const unsubCancellation = agent.cancellation.subscribe((event) => {
       if (event.type === 'cancellation.requested') {
         agent.emit({ type: 'cancellation.requested', reason: event.reason });
       }
@@ -531,7 +546,7 @@ export function initializeFeatures(agent: AgentInternals): void {
       ttl: agent.config.semanticCache.ttl,
     });
     // Forward cache events (with cleanup tracking)
-    const unsubSemanticCache = agent.semanticCache.subscribe(event => {
+    const unsubSemanticCache = agent.semanticCache.subscribe((event) => {
       if (event.type === 'cache.hit') {
         agent.emit({ type: 'cache.hit', query: event.query, similarity: event.similarity });
       } else if (event.type === 'cache.miss') {
@@ -553,11 +568,12 @@ export function initializeFeatures(agent: AgentInternals): void {
     });
     // Load skills asynchronously - tracked for ensureReady()
     agent.initPromises.push(
-      agent.skillManager.loadSkills()
+      agent.skillManager
+        .loadSkills()
         .then(() => {}) // Convert to void
-        .catch(err => {
+        .catch((err) => {
           log.warn('Failed to load skills', { error: String(err) });
-        })
+        }),
     );
   }
 
@@ -583,9 +599,8 @@ export function initializeFeatures(agent: AgentInternals): void {
   // Codebase Context - intelligent code selection for context management
   // Analyzes repo structure and selects relevant code within token budgets
   if (agent.config.codebaseContext !== false) {
-    const codebaseConfig = typeof agent.config.codebaseContext === 'object'
-      ? agent.config.codebaseContext
-      : {};
+    const codebaseConfig =
+      typeof agent.config.codebaseContext === 'object' ? agent.config.codebaseContext : {};
     agent.codebaseContext = createCodebaseContext({
       root: codebaseConfig.root ?? process.cwd(),
       includePatterns: codebaseConfig.includePatterns,
@@ -610,7 +625,7 @@ export function initializeFeatures(agent: AgentInternals): void {
   }
 
   // Forward context engineering events (with cleanup tracking)
-  const unsubContextEngineering = agent.contextEngineering.on(event => {
+  const unsubContextEngineering = agent.contextEngineering.on((event) => {
     switch (event.type) {
       case 'failure.recorded':
         agent.observability?.logger?.warn('Failure recorded', {
@@ -636,9 +651,8 @@ export function initializeFeatures(agent: AgentInternals): void {
 
   // Interactive Planning (conversational + editable planning)
   if (isFeatureEnabled(agent.config.interactivePlanning)) {
-    const interactiveConfig = typeof agent.config.interactivePlanning === 'object'
-      ? agent.config.interactivePlanning
-      : {};
+    const interactiveConfig =
+      typeof agent.config.interactivePlanning === 'object' ? agent.config.interactivePlanning : {};
 
     agent.interactivePlanner = createInteractivePlanner({
       autoCheckpoint: interactiveConfig.enableCheckpoints ?? true,
@@ -648,7 +662,7 @@ export function initializeFeatures(agent: AgentInternals): void {
     });
 
     // Forward planner events to observability (with cleanup tracking)
-    const unsubInteractivePlanner = agent.interactivePlanner.on(event => {
+    const unsubInteractivePlanner = agent.interactivePlanner.on((event) => {
       switch (event.type) {
         case 'plan.created':
           agent.observability?.logger?.info('Interactive plan created', {
@@ -678,9 +692,8 @@ export function initializeFeatures(agent: AgentInternals): void {
   // Recursive Context (RLM - Recursive Language Models)
   // Enables on-demand context exploration for large codebases
   if (isFeatureEnabled(agent.config.recursiveContext)) {
-    const recursiveConfig = typeof agent.config.recursiveContext === 'object'
-      ? agent.config.recursiveContext
-      : {};
+    const recursiveConfig =
+      typeof agent.config.recursiveContext === 'object' ? agent.config.recursiveContext : {};
 
     agent.recursiveContext = createRecursiveContext({
       maxDepth: recursiveConfig.maxRecursionDepth ?? 5,
@@ -694,7 +707,7 @@ export function initializeFeatures(agent: AgentInternals): void {
     // This is deferred to allow flexible configuration
 
     // Forward RLM events (with cleanup tracking)
-    const unsubRecursiveContext = agent.recursiveContext.on(event => {
+    const unsubRecursiveContext = agent.recursiveContext.on((event) => {
       switch (event.type) {
         case 'process.started':
           agent.observability?.logger?.debug('RLM process started', {
@@ -727,9 +740,8 @@ export function initializeFeatures(agent: AgentInternals): void {
   // Learning Store (cross-session learning from failures)
   // Connects to the failure tracker in contextEngineering for automatic learning extraction
   if (isFeatureEnabled(agent.config.learningStore)) {
-    const learningConfig = typeof agent.config.learningStore === 'object'
-      ? agent.config.learningStore
-      : {};
+    const learningConfig =
+      typeof agent.config.learningStore === 'object' ? agent.config.learningStore : {};
 
     agent.learningStore = createLearningStore({
       dbPath: learningConfig.dbPath ?? '.agent/learnings.db',
@@ -747,7 +759,7 @@ export function initializeFeatures(agent: AgentInternals): void {
     }
 
     // Forward learning events to observability (with cleanup tracking)
-    const unsubLearningStore = agent.learningStore.on(event => {
+    const unsubLearningStore = agent.learningStore.on((event) => {
       switch (event.type) {
         case 'learning.proposed':
           agent.observability?.logger?.info('Learning proposed', {
@@ -791,9 +803,8 @@ export function initializeFeatures(agent: AgentInternals): void {
   // Auto-Compaction Manager (sophisticated context compaction)
   // Uses the Compactor for LLM-based summarization with threshold monitoring
   if (isFeatureEnabled(agent.config.compaction)) {
-    const compactionConfig = typeof agent.config.compaction === 'object'
-      ? agent.config.compaction
-      : {};
+    const compactionConfig =
+      typeof agent.config.compaction === 'object' ? agent.config.compaction : {};
 
     // Create the compactor (requires provider for LLM summarization)
     agent.compactor = createCompactor(agent.provider, {
@@ -815,15 +826,19 @@ export function initializeFeatures(agent: AgentInternals): void {
             const result = await agent.compactor!.compact(msgs);
             return result.summary;
           };
-          const contextMsgs = messages.map(m => ({
+          const contextMsgs = messages.map((m) => ({
             role: m.role as 'system' | 'user' | 'assistant' | 'tool',
             content: typeof m.content === 'string' ? m.content : JSON.stringify(m.content),
           }));
           const result = await agent.contextEngineering!.compact(contextMsgs, summarize);
           const tokensBefore = agent.compactor!.estimateTokens(messages);
-          const tokensAfter = agent.compactor!.estimateTokens([{ role: 'assistant', content: result.summary }]);
+          const tokensAfter = agent.compactor!.estimateTokens([
+            { role: 'assistant', content: result.summary },
+          ]);
           return {
-            summary: result.summary + (result.reconstructionPrompt ? `\n\n${result.reconstructionPrompt}` : ''),
+            summary:
+              result.summary +
+              (result.reconstructionPrompt ? `\n\n${result.reconstructionPrompt}` : ''),
             tokensBefore,
             tokensAfter,
             preservedMessages: [{ role: 'assistant' as const, content: result.summary }],
@@ -837,25 +852,26 @@ export function initializeFeatures(agent: AgentInternals): void {
     const openRouterContext = getModelContextLength(agent.config.model || '');
     const registryInfo = modelRegistry.getModel(agent.config.model || '');
     const registryContext = registryInfo?.capabilities?.maxContextTokens;
-    const maxContextTokens = agent.config.maxContextTokens
-      ?? openRouterContext   // From OpenRouter API (e.g., GLM-4.7 = 202752)
-      ?? registryContext     // From hardcoded registry (Claude, GPT-4o, etc.)
-      ?? 200000;             // Fallback to 200K
+    const maxContextTokens =
+      agent.config.maxContextTokens ??
+      openRouterContext ?? // From OpenRouter API (e.g., GLM-4.7 = 202752)
+      registryContext ?? // From hardcoded registry (Claude, GPT-4o, etc.)
+      200000; // Fallback to 200K
 
     agent.autoCompactionManager = createAutoCompactionManager(agent.compactor, {
       mode: compactionConfig.mode ?? 'auto',
-      warningThreshold: 0.70,       // Warn at 70% of model's context
-      autoCompactThreshold: 0.80,   // Compact at 80% (changed from 0.90)
-      hardLimitThreshold: 0.95,     // Hard limit at 95%
+      warningThreshold: 0.7, // Warn at 70% of model's context
+      autoCompactThreshold: 0.8, // Compact at 80% (changed from 0.90)
+      hardLimitThreshold: 0.95, // Hard limit at 95%
       preserveRecentUserMessages: Math.ceil((compactionConfig.preserveRecentCount ?? 10) / 2),
       preserveRecentAssistantMessages: Math.ceil((compactionConfig.preserveRecentCount ?? 10) / 2),
       cooldownMs: 60000, // 1 minute cooldown
-      maxContextTokens,  // Dynamic from model registry or config
+      maxContextTokens, // Dynamic from model registry or config
       compactHandler, // Use reversible compaction when contextEngineering is available
     });
 
     // Forward compactor events to observability (with cleanup tracking)
-    const unsubCompactor = agent.compactor.on(event => {
+    const unsubCompactor = agent.compactor.on((event) => {
       switch (event.type) {
         case 'compaction.start':
           agent.observability?.logger?.info('Compaction started', {

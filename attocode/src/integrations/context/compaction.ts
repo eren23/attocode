@@ -106,7 +106,11 @@ export class Compactor {
     }
 
     const tokens = currentTokens ?? this.estimateTokens(messages);
-    this.emit({ type: 'compaction.check', currentTokens: tokens, threshold: this.config.tokenThreshold });
+    this.emit({
+      type: 'compaction.check',
+      currentTokens: tokens,
+      threshold: this.config.tokenThreshold,
+    });
 
     return tokens >= this.config.tokenThreshold;
   }
@@ -118,12 +122,15 @@ export class Compactor {
     const tokensBefore = this.estimateTokens(messages);
 
     // Find system message (always preserve)
-    const systemMessage = messages.find(m => m.role === 'system');
-    const conversationMessages = messages.filter(m => m.role !== 'system');
+    const systemMessage = messages.find((m) => m.role === 'system');
+    const conversationMessages = messages.filter((m) => m.role !== 'system');
 
     // Split into messages to compact and messages to preserve
     const preserveCount = Math.min(this.config.preserveRecentCount, conversationMessages.length);
-    const messagesToCompact = conversationMessages.slice(0, -preserveCount || conversationMessages.length);
+    const messagesToCompact = conversationMessages.slice(
+      0,
+      -preserveCount || conversationMessages.length,
+    );
     const messagesToPreserve = conversationMessages.slice(-preserveCount);
 
     this.emit({ type: 'compaction.start', messageCount: messagesToCompact.length });
@@ -183,23 +190,25 @@ export class Compactor {
    */
   private async generateSummary(messages: Message[]): Promise<string> {
     // Format messages for summarization
-    const conversationText = messages.map(m => {
-      const role = m.role === 'assistant' ? 'Assistant' : m.role === 'user' ? 'User' : 'System';
-      let content = m.content;
+    const conversationText = messages
+      .map((m) => {
+        const role = m.role === 'assistant' ? 'Assistant' : m.role === 'user' ? 'User' : 'System';
+        let content = m.content;
 
-      // Truncate very long messages
-      if (content.length > 2000) {
-        content = content.slice(0, 2000) + '... [truncated]';
-      }
+        // Truncate very long messages
+        if (content.length > 2000) {
+          content = content.slice(0, 2000) + '... [truncated]';
+        }
 
-      // Include tool calls
-      if (m.toolCalls && m.toolCalls.length > 0) {
-        const toolNames = m.toolCalls.map(tc => tc.name).join(', ');
-        content += `\n[Used tools: ${toolNames}]`;
-      }
+        // Include tool calls
+        if (m.toolCalls && m.toolCalls.length > 0) {
+          const toolNames = m.toolCalls.map((tc) => tc.name).join(', ');
+          content += `\n[Used tools: ${toolNames}]`;
+        }
 
-      return `${role}: ${content}`;
-    }).join('\n\n');
+        return `${role}: ${content}`;
+      })
+      .join('\n\n');
 
     const summaryPrompt = `Summarize this conversation concisely, preserving:
 1. The CURRENT TASK being worked on and its overall goal
@@ -226,15 +235,19 @@ ${conversationText}
 Summary:`;
 
     try {
-      const response = await this.provider.chat([
+      const response = await this.provider.chat(
+        [
+          {
+            role: 'system',
+            content:
+              'You are a conversation summarizer. Create concise, structured summaries that preserve key context.',
+          },
+          { role: 'user', content: summaryPrompt },
+        ],
         {
-          role: 'system',
-          content: 'You are a conversation summarizer. Create concise, structured summaries that preserve key context.',
+          model: this.config.summaryModel || undefined,
         },
-        { role: 'user', content: summaryPrompt },
-      ], {
-        model: this.config.summaryModel || undefined,
-      });
+      );
 
       return response.content.trim();
     } catch (err) {
@@ -253,7 +266,7 @@ Summary:`;
     const lines: string[] = ['[Auto-generated summary - LLM unavailable]'];
 
     // Extract user requests
-    const userMessages = messages.filter(m => m.role === 'user');
+    const userMessages = messages.filter((m) => m.role === 'user');
     if (userMessages.length > 0) {
       lines.push('User requests:');
       for (const msg of userMessages.slice(0, 5)) {
@@ -264,9 +277,9 @@ Summary:`;
 
     // Extract tool usage
     const toolCalls = messages
-      .filter(m => m.toolCalls && m.toolCalls.length > 0)
-      .flatMap(m => m.toolCalls!)
-      .map(tc => tc.name);
+      .filter((m) => m.toolCalls && m.toolCalls.length > 0)
+      .flatMap((m) => m.toolCalls!)
+      .map((tc) => tc.name);
 
     const uniqueTools = [...new Set(toolCalls)];
     if (uniqueTools.length > 0) {
@@ -322,10 +335,7 @@ Summary:`;
 /**
  * Create a compactor.
  */
-export function createCompactor(
-  provider: LLMProvider,
-  config?: CompactionConfig
-): Compactor {
+export function createCompactor(provider: LLMProvider, config?: CompactionConfig): Compactor {
   return new Compactor(provider, config);
 }
 
@@ -351,7 +361,7 @@ export function formatCompactionResult(result: CompactionResult): string {
  */
 export function getContextUsage(
   messages: Message[],
-  threshold: number
+  threshold: number,
 ): { tokens: number; percent: number; shouldCompact: boolean } {
   const tokens = messages.reduce((sum, m) => sum + estimateTokenCount(m.content), 0);
   const percent = Math.round((tokens / threshold) * 100);
@@ -465,15 +475,13 @@ export function getContextBreakdown(
     memoryContext?: string;
     /** MCP stats from MCPClient.getContextStats() */
     mcpStats?: MCPBreakdownStats;
-  } = {}
+  } = {},
 ): ContextBreakdown {
   const { tools = [], rulesContent = '', memoryContext = '', mcpStats } = options;
 
   // Extract system message
-  const systemMessage = messages.find(m => m.role === 'system');
-  const systemPromptTokens = systemMessage
-    ? estimateTokensForString(systemMessage.content)
-    : 0;
+  const systemMessage = messages.find((m) => m.role === 'system');
+  const systemPromptTokens = systemMessage ? estimateTokensForString(systemMessage.content) : 0;
 
   // Tool schemas (non-MCP tools)
   const toolSchemaTokens = estimateToolSchemaTokens(tools);
@@ -485,7 +493,7 @@ export function getContextBreakdown(
   const memoryTokens = estimateTokensForString(memoryContext);
 
   // Conversation messages (excluding system)
-  const conversationMessages = messages.filter(m => m.role !== 'system');
+  const conversationMessages = messages.filter((m) => m.role !== 'system');
   const conversationTokens = conversationMessages.reduce((sum, m) => {
     let tokens = estimateTokensForString(m.content);
     // Include tool calls in assistant messages
@@ -501,10 +509,16 @@ export function getContextBreakdown(
   const mcpTotalTokens = mcpSummaryTokens + mcpDefinitionTokens;
 
   // Calculate total (include MCP tokens)
-  const total = systemPromptTokens + toolSchemaTokens + rulesTokens + memoryTokens + conversationTokens + mcpTotalTokens;
+  const total =
+    systemPromptTokens +
+    toolSchemaTokens +
+    rulesTokens +
+    memoryTokens +
+    conversationTokens +
+    mcpTotalTokens;
 
   // Calculate percentages
-  const safePercent = (value: number) => total > 0 ? Math.round((value / total) * 100) : 0;
+  const safePercent = (value: number) => (total > 0 ? Math.round((value / total) * 100) : 0);
 
   return {
     total,
@@ -538,8 +552,9 @@ export function getContextBreakdown(
  */
 export function formatContextBreakdown(breakdown: ContextBreakdown): string {
   const formatTokens = (tokens: number, percent: number) => {
-    const bar = '█'.repeat(Math.min(20, Math.round(percent / 5))) +
-                '░'.repeat(Math.max(0, 20 - Math.round(percent / 5)));
+    const bar =
+      '█'.repeat(Math.min(20, Math.round(percent / 5))) +
+      '░'.repeat(Math.max(0, 20 - Math.round(percent / 5)));
     return `[${bar}] ${tokens.toLocaleString().padStart(6)} tokens (${percent}%)`;
   };
 
@@ -561,15 +576,20 @@ export function formatContextBreakdown(breakdown: ContextBreakdown): string {
 
     // Calculate savings estimate (full load vs current)
     const fullLoadEstimate = totalMcpTools * 200; // ~200 tokens per full tool
-    const savings = fullLoadEstimate > 0
-      ? Math.round((1 - mcpTotalTokens / fullLoadEstimate) * 100)
-      : 0;
+    const savings =
+      fullLoadEstimate > 0 ? Math.round((1 - mcpTotalTokens / fullLoadEstimate) * 100) : 0;
 
     lines.push('');
     lines.push('  MCP Tool Context:');
-    lines.push(`    Tool summaries:   ${breakdown.mcpSummaryCount.toString().padStart(3)} tools (~${breakdown.mcpToolSummaries.toLocaleString()} tokens)`);
-    lines.push(`    Full definitions: ${breakdown.mcpLoadedCount.toString().padStart(3)} tools (~${breakdown.mcpToolDefinitions.toLocaleString()} tokens)`);
-    lines.push(`    Total:            ${totalMcpTools.toString().padStart(3)} tools (~${mcpTotalTokens.toLocaleString()} tokens, ${mcpPercent}%)`);
+    lines.push(
+      `    Tool summaries:   ${breakdown.mcpSummaryCount.toString().padStart(3)} tools (~${breakdown.mcpToolSummaries.toLocaleString()} tokens)`,
+    );
+    lines.push(
+      `    Full definitions: ${breakdown.mcpLoadedCount.toString().padStart(3)} tools (~${breakdown.mcpToolDefinitions.toLocaleString()} tokens)`,
+    );
+    lines.push(
+      `    Total:            ${totalMcpTools.toString().padStart(3)} tools (~${mcpTotalTokens.toLocaleString()} tokens, ${mcpPercent}%)`,
+    );
 
     if (savings > 0) {
       lines.push(`    Context savings:  ${savings}% (vs loading all schemas)`);

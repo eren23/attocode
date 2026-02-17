@@ -124,7 +124,7 @@ export function parseUnifiedDiff(diffText: string): UnifiedDiff[] {
  */
 function parseFileDiff(
   lines: string[],
-  startIndex: number
+  startIndex: number,
 ): { diff: UnifiedDiff; nextIndex: number } | null {
   let i = startIndex;
 
@@ -182,7 +182,7 @@ function parseFileDiff(
  */
 function parseHunk(
   lines: string[],
-  startIndex: number
+  startIndex: number,
 ): { hunk: DiffHunk; nextIndex: number } | null {
   const headerLine = lines[startIndex];
   const match = headerLine.match(/^@@ -(\d+)(?:,(\d+))? \+(\d+)(?:,(\d+))? @@/);
@@ -258,7 +258,7 @@ export function applyDiff(originalContent: string, diff: UnifiedDiff): ApplyResu
   // Handle new file
   if (diff.isNewFile) {
     const newContent = diff.hunks
-      .flatMap(h => h.lines.filter(l => l.type === 'add').map(l => l.content))
+      .flatMap((h) => h.lines.filter((l) => l.type === 'add').map((l) => l.content))
       .join('\n');
     return {
       success: true,
@@ -313,7 +313,7 @@ export function applyDiff(originalContent: string, diff: UnifiedDiff): ApplyResu
 function applyHunk(
   lines: string[],
   hunk: DiffHunk,
-  offset: number
+  offset: number,
 ): { success: boolean; newOffset: number; error?: string } {
   const startLine = hunk.oldStart - 1 + offset; // Convert to 0-indexed
 
@@ -363,7 +363,7 @@ function applyHunk(
 
   // Add lines
   // Adjust indices for removed lines
-  const removeOffset = toRemove.filter(r => r < startLine).length;
+  const removeOffset = toRemove.filter((r) => r < startLine).length;
   for (const add of toAdd) {
     const adjustedIndex = add.index - removeOffset;
     lines.splice(adjustedIndex, 0, add.content);
@@ -387,7 +387,7 @@ export function generateDiff(
   newContent: string,
   oldPath = 'a/file',
   newPath = 'b/file',
-  contextLines = 3
+  contextLines = 3,
 ): string {
   const oldLines = oldContent.split('\n');
   const newLines = newContent.split('\n');
@@ -400,10 +400,7 @@ export function generateDiff(
     return ''; // No differences
   }
 
-  const output: string[] = [
-    `--- ${oldPath}`,
-    `+++ ${newPath}`,
-  ];
+  const output: string[] = [`--- ${oldPath}`, `+++ ${newPath}`];
 
   for (const hunk of hunks) {
     const header = `@@ -${hunk.oldStart},${hunk.oldCount} +${hunk.newStart},${hunk.newCount} @@`;
@@ -424,7 +421,9 @@ export function generateDiff(
 function computeLCS(a: string[], b: string[]): Array<[number, number]> {
   const m = a.length;
   const n = b.length;
-  const dp: number[][] = Array(m + 1).fill(null).map(() => Array(n + 1).fill(0));
+  const dp: number[][] = Array(m + 1)
+    .fill(null)
+    .map(() => Array(n + 1).fill(0));
 
   for (let i = 1; i <= m; i++) {
     for (let j = 1; j <= n; j++) {
@@ -438,7 +437,8 @@ function computeLCS(a: string[], b: string[]): Array<[number, number]> {
 
   // Backtrack to find LCS
   const lcs: Array<[number, number]> = [];
-  let i = m, j = n;
+  let i = m,
+    j = n;
   while (i > 0 && j > 0) {
     if (a[i - 1] === b[j - 1]) {
       lcs.unshift([i - 1, j - 1]);
@@ -461,9 +461,14 @@ function generateHunks(
   oldLines: string[],
   newLines: string[],
   lcs: Array<[number, number]>,
-  contextLines: number
+  contextLines: number,
 ): DiffHunk[] {
-  const changes: Array<{ type: 'same' | 'remove' | 'add'; oldIdx: number; newIdx: number; content: string }> = [];
+  const changes: Array<{
+    type: 'same' | 'remove' | 'add';
+    oldIdx: number;
+    newIdx: number;
+    content: string;
+  }> = [];
 
   let oldIdx = 0;
   let newIdx = 0;
@@ -515,9 +520,14 @@ function generateHunks(
  * Create a hunk from a range of changes.
  */
 function createHunk(
-  changes: Array<{ type: 'same' | 'remove' | 'add'; oldIdx: number; newIdx: number; content: string }>,
+  changes: Array<{
+    type: 'same' | 'remove' | 'add';
+    oldIdx: number;
+    newIdx: number;
+    content: string;
+  }>,
   start: number,
-  end: number
+  end: number,
 ): DiffHunk {
   const lines: DiffLine[] = [];
   let oldStart = -1;
@@ -615,7 +625,9 @@ export function formatDiffColored(diff: UnifiedDiff): string {
   ];
 
   for (const hunk of diff.hunks) {
-    output.push(`${CYAN}@@ -${hunk.oldStart},${hunk.oldCount} +${hunk.newStart},${hunk.newCount} @@${RESET}`);
+    output.push(
+      `${CYAN}@@ -${hunk.oldStart},${hunk.oldCount} +${hunk.newStart},${hunk.newCount} @@${RESET}`,
+    );
 
     for (const line of hunk.lines) {
       if (line.type === 'add') {

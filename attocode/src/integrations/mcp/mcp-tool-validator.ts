@@ -78,7 +78,9 @@ export function validateToolDescription(
     issues.push('No description provided');
     score -= 40;
   } else if (description.length < cfg.minDescriptionLength) {
-    issues.push(`Description too short (${description.length} chars, min: ${cfg.minDescriptionLength})`);
+    issues.push(
+      `Description too short (${description.length} chars, min: ${cfg.minDescriptionLength})`,
+    );
     suggestions.push('Add more detail about what this tool does and when to use it');
     score -= 20;
   }
@@ -87,7 +89,7 @@ export function validateToolDescription(
   if (description && tool.name) {
     const nameWords = tool.name.replace(/[_-]/g, ' ').toLowerCase().split(/\s+/);
     const descWords = description.toLowerCase().split(/\s+/);
-    const overlap = nameWords.filter(w => descWords.includes(w)).length;
+    const overlap = nameWords.filter((w) => descWords.includes(w)).length;
     if (overlap === nameWords.length && description.split(/\s+/).length < 5) {
       issues.push('Description merely restates the tool name');
       suggestions.push('Explain what the tool does, its purpose, and any important behavior');
@@ -97,7 +99,9 @@ export function validateToolDescription(
 
   // Check 3: Input schema has property descriptions
   if (cfg.requirePropertyDescriptions && tool.inputSchema) {
-    const properties = (tool.inputSchema as Record<string, unknown>).properties as Record<string, Record<string, unknown>> | undefined;
+    const properties = (tool.inputSchema as Record<string, unknown>).properties as
+      | Record<string, Record<string, unknown>>
+      | undefined;
     if (properties) {
       const undocumented: string[] = [];
       for (const [propName, propSchema] of Object.entries(properties)) {
@@ -116,7 +120,9 @@ export function validateToolDescription(
   // Check 4: Required parameters are specified
   if (tool.inputSchema) {
     const required = (tool.inputSchema as Record<string, unknown>).required as string[] | undefined;
-    const properties = (tool.inputSchema as Record<string, unknown>).properties as Record<string, unknown> | undefined;
+    const properties = (tool.inputSchema as Record<string, unknown>).properties as
+      | Record<string, unknown>
+      | undefined;
     if (properties && Object.keys(properties).length > 0 && (!required || required.length === 0)) {
       suggestions.push('Consider marking required parameters in the schema');
       score -= 5;
@@ -158,7 +164,7 @@ export function validateAllTools(
   config?: Partial<ToolValidationConfig>,
 ): ToolValidationResult[] {
   return tools
-    .map(tool => validateToolDescription(tool, config))
+    .map((tool) => validateToolDescription(tool, config))
     .sort((a, b) => a.score - b.score);
 }
 
@@ -166,12 +172,10 @@ export function validateAllTools(
  * Get a summary of validation results.
  */
 export function formatValidationSummary(results: ToolValidationResult[]): string {
-  const passed = results.filter(r => r.score >= (DEFAULT_CONFIG.minimumPassScore));
-  const failed = results.filter(r => r.score < (DEFAULT_CONFIG.minimumPassScore));
+  const passed = results.filter((r) => r.score >= DEFAULT_CONFIG.minimumPassScore);
+  const failed = results.filter((r) => r.score < DEFAULT_CONFIG.minimumPassScore);
 
-  const lines: string[] = [
-    `Tool Description Quality: ${passed.length}/${results.length} passed`,
-  ];
+  const lines: string[] = [`Tool Description Quality: ${passed.length}/${results.length} passed`];
 
   if (failed.length > 0) {
     lines.push('', 'Failed:');

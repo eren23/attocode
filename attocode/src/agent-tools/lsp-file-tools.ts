@@ -37,8 +37,8 @@ function formatDiagnostics(diagnostics: LSPDiagnostic[], filePath: string): stri
     return '';
   }
 
-  const errors = diagnostics.filter(d => d.severity === 'error');
-  const warnings = diagnostics.filter(d => d.severity === 'warning');
+  const errors = diagnostics.filter((d) => d.severity === 'error');
+  const warnings = diagnostics.filter((d) => d.severity === 'warning');
 
   const parts: string[] = [];
 
@@ -70,7 +70,7 @@ function formatDiagnostics(diagnostics: LSPDiagnostic[], filePath: string): stri
 async function waitForDiagnostics(
   lsp: LSPManager,
   filePath: string,
-  delay: number
+  delay: number,
 ): Promise<LSPDiagnostic[]> {
   // Notify LSP about the file - must open first, then notify change
   try {
@@ -78,14 +78,14 @@ async function waitForDiagnostics(
     // Open the document (required for LSP to track it)
     lsp.notifyFileOpened(filePath, content);
     // Small delay then notify change to trigger diagnostics
-    await new Promise(resolve => setTimeout(resolve, 100));
+    await new Promise((resolve) => setTimeout(resolve, 100));
     lsp.notifyFileChanged(filePath, content, Date.now());
   } catch {
     // File might not exist yet, that's ok
   }
 
   // Wait for diagnostics to be computed
-  await new Promise(resolve => setTimeout(resolve, delay));
+  await new Promise((resolve) => setTimeout(resolve, delay));
 
   return lsp.getDiagnostics(filePath);
 }
@@ -108,7 +108,8 @@ export function createLSPEditFileTool(config: LSPFileToolsConfig): ToolDefinitio
 
   return {
     name: 'edit_file',
-    description: 'Make a surgical edit by replacing a unique string in a file (with LSP diagnostics)',
+    description:
+      'Make a surgical edit by replacing a unique string in a file (with LSP diagnostics)',
     parameters: lspEditFileSchema.shape as unknown as Record<string, unknown>,
     dangerLevel: 'moderate',
     async execute(args: Record<string, unknown>) {
@@ -141,8 +142,8 @@ export function createLSPEditFileTool(config: LSPFileToolsConfig): ToolDefinitio
         // Get LSP diagnostics
         const diagnostics = await waitForDiagnostics(lspManager, input.path, diagnosticDelay);
         const diagOutput = formatDiagnostics(
-          includeWarnings ? diagnostics : diagnostics.filter(d => d.severity === 'error'),
-          input.path
+          includeWarnings ? diagnostics : diagnostics.filter((d) => d.severity === 'error'),
+          input.path,
         );
 
         if (diagOutput) {
@@ -208,8 +209,8 @@ export function createLSPWriteFileTool(config: LSPFileToolsConfig): ToolDefiniti
         // Get LSP diagnostics
         const diagnostics = await waitForDiagnostics(lspManager, input.path, diagnosticDelay);
         const diagOutput = formatDiagnostics(
-          includeWarnings ? diagnostics : diagnostics.filter(d => d.severity === 'error'),
-          input.path
+          includeWarnings ? diagnostics : diagnostics.filter((d) => d.severity === 'error'),
+          input.path,
         );
 
         if (diagOutput) {
@@ -235,10 +236,7 @@ export function createLSPWriteFileTool(config: LSPFileToolsConfig): ToolDefiniti
  * Create all LSP-aware file tools.
  */
 export function createLSPFileTools(config: LSPFileToolsConfig): ToolDefinition[] {
-  return [
-    createLSPEditFileTool(config),
-    createLSPWriteFileTool(config),
-  ];
+  return [createLSPEditFileTool(config), createLSPWriteFileTool(config)];
 }
 
 /**
@@ -247,11 +245,18 @@ export function createLSPFileTools(config: LSPFileToolsConfig): ToolDefinition[]
 export function isLSPSupportedFile(filePath: string): boolean {
   const ext = path.extname(filePath).toLowerCase();
   const supported = [
-    '.ts', '.tsx', '.js', '.jsx', '.mjs', '.cjs',  // TypeScript/JavaScript
-    '.py', '.pyi',                                   // Python
-    '.rs',                                           // Rust
-    '.go',                                           // Go
-    '.json', '.jsonc',                               // JSON
+    '.ts',
+    '.tsx',
+    '.js',
+    '.jsx',
+    '.mjs',
+    '.cjs', // TypeScript/JavaScript
+    '.py',
+    '.pyi', // Python
+    '.rs', // Rust
+    '.go', // Go
+    '.json',
+    '.jsonc', // JSON
   ];
   return supported.includes(ext);
 }

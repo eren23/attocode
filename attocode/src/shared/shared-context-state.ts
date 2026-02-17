@@ -139,8 +139,8 @@ export class SharedContextState {
    */
   searchReferences(query: string): Reference[] {
     const lowerQuery = query.toLowerCase();
-    return Array.from(this.references.values()).filter(
-      (r) => r.value.toLowerCase().includes(lowerQuery),
+    return Array.from(this.references.values()).filter((r) =>
+      r.value.toLowerCase().includes(lowerQuery),
     );
   }
 
@@ -219,8 +219,6 @@ export class SharedContextState {
 // FACTORY
 // =============================================================================
 
-export function createSharedContextState(
-  config?: SharedContextConfig,
-): SharedContextState {
+export function createSharedContextState(config?: SharedContextConfig): SharedContextState {
   return new SharedContextState(config);
 }

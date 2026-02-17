@@ -34,11 +34,7 @@ export interface TeamConfig {
   coordinatorRole?: string; // Role that coordinates, defaults to highest authority
 }
 
-export type ConsensusStrategy =
-  | 'voting'
-  | 'authority'
-  | 'unanimous'
-  | 'first-complete';
+export type ConsensusStrategy = 'voting' | 'authority' | 'unanimous' | 'first-complete';
 
 /**
  * Task for team execution.
@@ -116,11 +112,7 @@ export class MultiAgentManager {
   private tools: ToolDefinition[];
   private listeners: MultiAgentEventListener[] = [];
 
-  constructor(
-    provider: LLMProvider,
-    tools: ToolDefinition[],
-    initialRoles?: AgentRole[]
-  ) {
+  constructor(provider: LLMProvider, tools: ToolDefinition[], initialRoles?: AgentRole[]) {
     this.provider = provider;
     this.tools = tools;
 
@@ -149,16 +141,13 @@ export class MultiAgentManager {
    * Find roles with specific capability.
    */
   findRolesWithCapability(capability: string): AgentRole[] {
-    return this.getRoles().filter(r => r.capabilities.includes(capability));
+    return this.getRoles().filter((r) => r.capabilities.includes(capability));
   }
 
   /**
    * Execute task with a team.
    */
-  async runWithTeam(
-    task: TeamTask,
-    config: TeamConfig
-  ): Promise<TeamResult> {
+  async runWithTeam(task: TeamTask, config: TeamConfig): Promise<TeamResult> {
     const startTime = Date.now();
 
     this.emit({ type: 'team.start', task });
@@ -175,14 +164,11 @@ export class MultiAgentManager {
     // Build consensus if multiple agents
     let consensus: Decision | undefined;
     if (agentResults.length > 1) {
-      consensus = await this.buildConsensus(
-        agentResults,
-        config.consensusStrategy
-      );
+      consensus = await this.buildConsensus(agentResults, config.consensusStrategy);
     }
 
     const result: TeamResult = {
-      success: consensus ? consensus.agreed : agentResults[0]?.success ?? false,
+      success: consensus ? consensus.agreed : (agentResults[0]?.success ?? false),
       task,
       agentResults,
       consensus,
@@ -227,9 +213,7 @@ export class MultiAgentManager {
     }
 
     // Default to highest authority
-    return config.roles.reduce((max, role) =>
-      role.authority > max.authority ? role : max
-    );
+    return config.roles.reduce((max, role) => (role.authority > max.authority ? role : max));
   }
 
   private selectAgents(task: TeamTask, config: TeamConfig): AgentRole[] {
@@ -238,17 +222,12 @@ export class MultiAgentManager {
     }
 
     // Select roles that have at least one required capability
-    return config.roles.filter(role =>
-      task.requiredCapabilities!.some(cap =>
-        role.capabilities.includes(cap)
-      )
+    return config.roles.filter((role) =>
+      task.requiredCapabilities!.some((cap) => role.capabilities.includes(cap)),
     );
   }
 
-  private async runAgents(
-    task: TeamTask,
-    roles: AgentRole[]
-  ): Promise<AgentTaskResult[]> {
+  private async runAgents(task: TeamTask, roles: AgentRole[]): Promise<AgentTaskResult[]> {
     const results: AgentTaskResult[] = [];
 
     // Run agents in parallel
@@ -273,7 +252,7 @@ export class MultiAgentManager {
       }
     });
 
-    results.push(...await Promise.all(promises));
+    results.push(...(await Promise.all(promises)));
 
     return results;
   }
@@ -281,7 +260,7 @@ export class MultiAgentManager {
   private async runSingleAgent(
     agentId: string,
     role: AgentRole,
-    task: TeamTask
+    task: TeamTask,
   ): Promise<AgentTaskResult> {
     this.emit({ type: 'agent.working', agentId, status: 'thinking' });
 
@@ -309,7 +288,7 @@ export class MultiAgentManager {
 
   private async buildConsensus(
     results: AgentTaskResult[],
-    strategy: ConsensusStrategy
+    strategy: ConsensusStrategy,
   ): Promise<Decision> {
     this.emit({ type: 'consensus.start', strategy });
 
@@ -328,14 +307,12 @@ export class MultiAgentManager {
             dissent.push(`${result.role}: ${result.output.slice(0, 100)}`);
           }
         }
-        const yesVotes = Array.from(votes.values()).filter(v => v).length;
+        const yesVotes = Array.from(votes.values()).filter((v) => v).length;
         const agreed = yesVotes > results.length / 2;
 
         const decision: Decision = {
           agreed,
-          result: agreed
-            ? results.find(r => r.success)?.output ?? ''
-            : 'No consensus reached',
+          result: agreed ? (results.find((r) => r.success)?.output ?? '') : 'No consensus reached',
           votes,
           dissent,
         };
@@ -368,7 +345,7 @@ export class MultiAgentManager {
 
       case 'unanimous': {
         // All must agree
-        const allSuccess = results.every(r => r.success);
+        const allSuccess = results.every((r) => r.success);
         for (const result of results) {
           votes.set(result.agentId, result.success);
           if (!result.success) {
@@ -378,9 +355,7 @@ export class MultiAgentManager {
 
         const decision: Decision = {
           agreed: allSuccess,
-          result: allSuccess
-            ? results[0]?.output ?? ''
-            : 'Unanimous agreement not reached',
+          result: allSuccess ? (results[0]?.output ?? '') : 'Unanimous agreement not reached',
           votes,
           dissent,
         };
@@ -390,7 +365,7 @@ export class MultiAgentManager {
 
       case 'first-complete': {
         // First successful result wins
-        const first = results.find(r => r.success);
+        const first = results.find((r) => r.success);
         for (const result of results) {
           votes.set(result.agentId, result === first);
         }
@@ -418,7 +393,7 @@ export class MultiAgentManager {
 export function createMultiAgentManager(
   provider: LLMProvider,
   tools: ToolDefinition[],
-  roles?: AgentRole[]
+  roles?: AgentRole[],
 ): MultiAgentManager {
   return new MultiAgentManager(provider, tools, roles);
 }

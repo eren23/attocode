@@ -122,7 +122,7 @@ export class FeedbackLoopManager {
     sessionId: string,
     efficiencyScore: number,
     issues: Array<{ id: string; description: string; severity: string }>,
-    recommendations: Array<{ priority: number; recommendation: string }>
+    recommendations: Array<{ priority: number; recommendation: string }>,
   ): string {
     const id = `analysis-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 
@@ -138,7 +138,7 @@ export class FeedbackLoopManager {
       efficiencyScore,
       issues.length,
       JSON.stringify(issues),
-      JSON.stringify(recommendations)
+      JSON.stringify(recommendations),
     );
 
     return id;
@@ -181,7 +181,7 @@ export class FeedbackLoopManager {
     analysisId: string,
     issueId: string,
     description: string,
-    codeLocations: string[]
+    codeLocations: string[],
   ): string {
     const id = `fix-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 
@@ -241,12 +241,10 @@ export class FeedbackLoopManager {
     fixId: string,
     metricName: string,
     beforeValue: number,
-    afterValue: number
+    afterValue: number,
   ): void {
     const id = `metric-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
-    const improvement = beforeValue !== 0
-      ? ((afterValue - beforeValue) / beforeValue) * 100
-      : 0;
+    const improvement = beforeValue !== 0 ? ((afterValue - beforeValue) / beforeValue) * 100 : 0;
 
     const stmt = this.db.prepare(`
       INSERT INTO improvement_metrics (id, fix_id, metric_name, before_value, after_value, improvement, measured_at)
@@ -283,24 +281,36 @@ export class FeedbackLoopManager {
     verifiedFixes: number;
     avgImprovement: number;
   } {
-    const analysisStats = this.db.prepare(`
+    const analysisStats = this.db
+      .prepare(
+        `
       SELECT COUNT(*) as count, AVG(efficiency_score) as avgScore
       FROM analysis_results
-    `).get() as { count: number; avgScore: number };
+    `,
+      )
+      .get() as { count: number; avgScore: number };
 
-    const fixStats = this.db.prepare(`
+    const fixStats = this.db
+      .prepare(
+        `
       SELECT
         COUNT(*) as total,
         SUM(CASE WHEN status = 'implemented' OR status = 'verified' THEN 1 ELSE 0 END) as implemented,
         SUM(CASE WHEN status = 'verified' THEN 1 ELSE 0 END) as verified
       FROM proposed_fixes
-    `).get() as { total: number; implemented: number; verified: number };
+    `,
+      )
+      .get() as { total: number; implemented: number; verified: number };
 
-    const improvementStats = this.db.prepare(`
+    const improvementStats = this.db
+      .prepare(
+        `
       SELECT AVG(improvement) as avgImprovement
       FROM improvement_metrics
       WHERE improvement > 0
-    `).get() as { avgImprovement: number | null };
+    `,
+      )
+      .get() as { avgImprovement: number | null };
 
     return {
       totalAnalyses: analysisStats.count,

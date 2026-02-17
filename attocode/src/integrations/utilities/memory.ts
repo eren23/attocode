@@ -61,7 +61,7 @@ export class MemoryManager {
 
     const toEvict = store.size - maxSize + this.evictionBatchSize;
     const entries = [...store.entries()].sort(
-      (a, b) => a[1].createdAt.getTime() - b[1].createdAt.getTime()
+      (a, b) => a[1].createdAt.getTime() - b[1].createdAt.getTime(),
     );
 
     for (let i = 0; i < toEvict && i < entries.length; i++) {
@@ -226,9 +226,7 @@ export class MemoryManager {
    */
   private retrieveByRecency(query: string, limit: number): MemoryEntry[] {
     const all = this.getAllEntries();
-    return all
-      .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())
-      .slice(0, limit);
+    return all.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime()).slice(0, limit);
   }
 
   /**
@@ -321,7 +319,7 @@ export class MemoryManager {
   private createEntry(
     type: MemoryEntry['type'],
     content: string,
-    metadata: Record<string, unknown>
+    metadata: Record<string, unknown>,
   ): MemoryEntry {
     const now = new Date();
     return {

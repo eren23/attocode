@@ -217,7 +217,9 @@ export class SourcegraphClient {
    */
   async search(query: string, options: SearchOptions = {}): Promise<SearchResponse> {
     if (!this.isConfigured()) {
-      throw new Error('Sourcegraph access token not configured. Set SOURCEGRAPH_ACCESS_TOKEN environment variable.');
+      throw new Error(
+        'Sourcegraph access token not configured. Set SOURCEGRAPH_ACCESS_TOKEN environment variable.',
+      );
     }
 
     // Build full query with options
@@ -327,10 +329,7 @@ export class SourcegraphClient {
   /**
    * Find references to a symbol.
    */
-  async findReferences(
-    symbolName: string,
-    options: SearchOptions = {}
-  ): Promise<SearchResponse> {
+  async findReferences(symbolName: string, options: SearchOptions = {}): Promise<SearchResponse> {
     const query = `\\b${this.escapeRegex(symbolName)}\\b`;
     return this.search(query, { ...options, patternType: 'regexp' });
   }
@@ -338,23 +337,15 @@ export class SourcegraphClient {
   /**
    * Find definition of a symbol.
    */
-  async findDefinition(
-    symbolName: string,
-    language?: string
-  ): Promise<SymbolInfo[]> {
-    const query = language
-      ? `${symbolName} lang:${language}`
-      : symbolName;
+  async findDefinition(symbolName: string, language?: string): Promise<SymbolInfo[]> {
+    const query = language ? `${symbolName} lang:${language}` : symbolName;
     return this.searchSymbols(query, { maxResults: 10 });
   }
 
   /**
    * Search for files by path pattern.
    */
-  async searchFiles(
-    pathPattern: string,
-    options: SearchOptions = {}
-  ): Promise<SearchResponse> {
+  async searchFiles(pathPattern: string, options: SearchOptions = {}): Promise<SearchResponse> {
     const query = `file:${pathPattern}`;
     return this.search(query, options);
   }
@@ -449,7 +440,7 @@ export class SourcegraphClient {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `token ${this.config.accessToken}`,
+          Authorization: `token ${this.config.accessToken}`,
         },
         body: JSON.stringify({ query, variables }),
         signal: controller.signal,
@@ -459,7 +450,10 @@ export class SourcegraphClient {
         throw new Error(`Sourcegraph API error: ${response.status} ${response.statusText}`);
       }
 
-      const json = await response.json() as { data?: Record<string, unknown>; errors?: Array<{ message: string }> };
+      const json = (await response.json()) as {
+        data?: Record<string, unknown>;
+        errors?: Array<{ message: string }>;
+      };
 
       if (json.errors?.length) {
         throw new Error(`Sourcegraph query error: ${json.errors[0].message}`);

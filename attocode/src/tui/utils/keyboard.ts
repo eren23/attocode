@@ -204,19 +204,34 @@ export function createShortcutHandler(handlers: ShortcutHandlers) {
       if (shortcut.matched) {
         switch (shortcut.type) {
           case 'alt-t':
-            if (handlers.onAltT) { handlers.onAltT(); return true; }
+            if (handlers.onAltT) {
+              handlers.onAltT();
+              return true;
+            }
             break;
           case 'alt-o':
-            if (handlers.onAltO) { handlers.onAltO(); return true; }
+            if (handlers.onAltO) {
+              handlers.onAltO();
+              return true;
+            }
             break;
           case 'alt-i':
-            if (handlers.onAltI) { handlers.onAltI(); return true; }
+            if (handlers.onAltI) {
+              handlers.onAltI();
+              return true;
+            }
             break;
           case 'alt-d':
-            if (handlers.onAltD) { handlers.onAltD(); return true; }
+            if (handlers.onAltD) {
+              handlers.onAltD();
+              return true;
+            }
             break;
           case 'alt-s':
-            if (handlers.onAltS) { handlers.onAltS(); return true; }
+            if (handlers.onAltS) {
+              handlers.onAltS();
+              return true;
+            }
             break;
         }
       }

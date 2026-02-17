@@ -6,10 +6,7 @@
  * usage recording, routing, and tracing.
  */
 
-import type {
-  Message,
-  ChatResponse,
-} from '../types.js';
+import type { Message, ChatResponse } from '../types.js';
 
 import type { AgentContext } from './types.js';
 import type { MessageWithContent } from '../providers/types.js';
@@ -24,17 +21,15 @@ const log = createComponentLogger('ResponseHandler');
  * Replaces ProductionAgent.callLLM() — extracted as a standalone function
  * that receives AgentContext instead of using `this`.
  */
-export async function callLLM(
-  messages: Message[],
-  ctx: AgentContext,
-): Promise<ChatResponse> {
+export async function callLLM(messages: Message[], ctx: AgentContext): Promise<ChatResponse> {
   const spanId = ctx.observability?.tracer?.startSpan('llm.call');
 
   ctx.emit({ type: 'llm.start', model: ctx.config.model || 'default' });
 
   // Prompt caching: Replace system message with structured content for Anthropic models
   const configModel = ctx.config.model || 'default';
-  const isAnthropicModel = configModel.startsWith('anthropic/') || configModel.startsWith('claude-');
+  const isAnthropicModel =
+    configModel.startsWith('anthropic/') || configModel.startsWith('claude-');
   let providerMessages: (Message | MessageWithContent)[] = messages;
   if (isAnthropicModel && ctx.cacheableSystemBlocks && ctx.cacheableSystemBlocks.length > 0) {
     providerMessages = messages.map((m, i) => {
@@ -87,17 +82,17 @@ export async function callLLM(
       requestId,
       model,
       provider,
-      messages: messages.map(m => ({
+      messages: messages.map((m) => ({
         role: m.role as 'system' | 'user' | 'assistant' | 'tool',
         content: m.content,
         toolCallId: m.toolCallId,
-        toolCalls: m.toolCalls?.map(tc => ({
+        toolCalls: m.toolCalls?.map((tc) => ({
           id: tc.id,
           name: tc.name,
           arguments: tc.arguments,
         })),
       })),
-      tools: Array.from(ctx.tools.values()).map(t => ({
+      tools: Array.from(ctx.tools.values()).map((t) => ({
         name: t.name,
         description: t.description,
         parametersSchema: t.parameters,
@@ -118,7 +113,9 @@ export async function callLLM(
 
     // Use routing if enabled
     if (ctx.routing) {
-      const complexity = ctx.routing.estimateComplexity(messages[messages.length - 1]?.content || '');
+      const complexity = ctx.routing.estimateComplexity(
+        messages[messages.length - 1]?.content || '',
+      );
       const routingContext = {
         task: messages[messages.length - 1]?.content || '',
         complexity,
@@ -144,12 +141,14 @@ export async function callLLM(
       ctx.emit({
         type: 'decision.routing',
         model: actualModel,
-        reason: actualModel !== model
-          ? `Complexity ${(complexity * 100).toFixed(0)}% - using ${actualModel}`
-          : 'Default model for current task',
-        alternatives: actualModel !== model
-          ? [{ model, rejected: 'complexity threshold exceeded' }]
-          : undefined,
+        reason:
+          actualModel !== model
+            ? `Complexity ${(complexity * 100).toFixed(0)}% - using ${actualModel}`
+            : 'Default model for current task',
+        alternatives:
+          actualModel !== model
+            ? [{ model, rejected: 'complexity threshold exceeded' }]
+            : undefined,
       });
 
       // Enhanced tracing: Record routing decision
@@ -159,17 +158,19 @@ export async function callLLM(
           type: 'routing',
           decision: `Selected model: ${actualModel}`,
           outcome: 'allowed',
-          reasoning: actualModel !== model
-            ? `Task complexity ${(complexity * 100).toFixed(0)}% exceeded threshold - routed to ${actualModel}`
-            : `Default model ${model} suitable for task complexity ${(complexity * 100).toFixed(0)}%`,
+          reasoning:
+            actualModel !== model
+              ? `Task complexity ${(complexity * 100).toFixed(0)}% exceeded threshold - routed to ${actualModel}`
+              : `Default model ${model} suitable for task complexity ${(complexity * 100).toFixed(0)}%`,
           factors: [
             { name: 'complexity', value: complexity, weight: 0.8 },
             { name: 'hasTools', value: routingContext.hasTools, weight: 0.1 },
             { name: 'taskType', value: routingContext.taskType, weight: 0.1 },
           ],
-          alternatives: actualModel !== model
-            ? [{ option: model, reason: 'complexity threshold exceeded', rejected: true }]
-            : undefined,
+          alternatives:
+            actualModel !== model
+              ? [{ option: model, reason: 'complexity threshold exceeded', rejected: true }]
+              : undefined,
           confidence: 0.9,
         },
       });
@@ -188,7 +189,13 @@ export async function callLLM(
       const cw = response.usage?.cacheWriteTokens ?? 0;
       const inp = response.usage?.inputTokens ?? 0;
       const hitRate = inp > 0 ? ((cr / inp) * 100).toFixed(1) : '0.0';
-      log.debug('Cache stats', { model: actualModel, read: cr, write: cw, input: inp, hitRate: `${hitRate}%` });
+      log.debug('Cache stats', {
+        model: actualModel,
+        read: cr,
+        write: cw,
+        input: inp,
+        hitRate: `${hitRate}%`,
+      });
     }
 
     // Record LLM response for tracing
@@ -197,15 +204,19 @@ export async function callLLM(
       data: {
         requestId,
         content: response.content || '',
-        toolCalls: response.toolCalls?.map(tc => ({
+        toolCalls: response.toolCalls?.map((tc) => ({
           id: tc.id,
           name: tc.name,
           arguments: tc.arguments,
         })),
-        stopReason: response.stopReason === 'end_turn' ? 'end_turn'
-          : response.stopReason === 'tool_use' ? 'tool_use'
-          : response.stopReason === 'max_tokens' ? 'max_tokens'
-          : 'stop_sequence',
+        stopReason:
+          response.stopReason === 'end_turn'
+            ? 'end_turn'
+            : response.stopReason === 'tool_use'
+              ? 'tool_use'
+              : response.stopReason === 'max_tokens'
+                ? 'max_tokens'
+                : 'stop_sequence',
         usage: {
           inputTokens: response.usage?.inputTokens || 0,
           outputTokens: response.usage?.outputTokens || 0,
@@ -237,7 +248,7 @@ export async function callLLM(
       response.usage?.outputTokens || 0,
       duration,
       actualModel,
-      response.usage?.cost
+      response.usage?.cost,
     );
 
     ctx.state.metrics.llmCalls++;

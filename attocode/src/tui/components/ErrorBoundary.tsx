@@ -61,8 +61,13 @@ export class TUIErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundar
     this.setState({ errorInfo });
 
     // Log error for debugging
-    logger.error(`[TUIErrorBoundary:${this.props.name}] Component error:`, { error: error.message, stack: error.stack });
-    logger.error(`[TUIErrorBoundary:${this.props.name}] Component stack:`, { componentStack: errorInfo.componentStack ?? undefined });
+    logger.error(`[TUIErrorBoundary:${this.props.name}] Component error:`, {
+      error: error.message,
+      stack: error.stack,
+    });
+    logger.error(`[TUIErrorBoundary:${this.props.name}] Component stack:`, {
+      componentStack: errorInfo.componentStack ?? undefined,
+    });
 
     // Call optional error handler
     this.props.onError?.(error, errorInfo);
@@ -100,8 +105,12 @@ export class TUIErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundar
           marginY={1}
         >
           <Box gap={1}>
-            <Text color="#FF6B6B" bold>[X]</Text>
-            <Text color="#FF6B6B" bold>{name} encountered an error</Text>
+            <Text color="#FF6B6B" bold>
+              [X]
+            </Text>
+            <Text color="#FF6B6B" bold>
+              {name} encountered an error
+            </Text>
           </Box>
           {showDetails && error && (
             <Box marginTop={1} flexDirection="column">
@@ -155,7 +164,7 @@ export function ErrorFallback({
 export function withErrorBoundary<P extends object>(
   WrappedComponent: React.ComponentType<P>,
   boundaryName: string,
-  options?: Omit<ErrorBoundaryProps, 'name' | 'children'>
+  options?: Omit<ErrorBoundaryProps, 'name' | 'children'>,
 ): React.FC<P> {
   const WithErrorBoundary: React.FC<P> = (props: P) => (
     <TUIErrorBoundary name={boundaryName} {...options}>

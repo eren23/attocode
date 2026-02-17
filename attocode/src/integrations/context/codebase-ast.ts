@@ -123,11 +123,16 @@ export function getParser(ext: string): ParserLike | null {
   }
 
   switch (ext) {
-    case '.ts': return tsParser;
-    case '.tsx': return tsxParser;
-    case '.js': return tsParser;  // TS parser handles JS fine
-    case '.jsx': return tsxParser;
-    case '.py': return pyParser;
+    case '.ts':
+      return tsParser;
+    case '.tsx':
+      return tsxParser;
+    case '.js':
+      return tsParser; // TS parser handles JS fine
+    case '.jsx':
+      return tsxParser;
+    case '.py':
+      return pyParser;
     default: {
       // Try polyglot language profiles (LANGUAGE_PROFILES defined below, accessed lazily at call time)
       const profile = getLanguageProfile(ext);
@@ -189,7 +194,13 @@ export function parseFile(content: string, filePath: string): ParsedFile | null 
     const symbols = extractSymbolsFromRoot(tree.rootNode, ext);
     const dependencies = extractDependenciesFromRoot(tree.rootNode, ext);
 
-    const result: ParsedFile = { tree, symbols, dependencies, contentHash: hash, parsedAt: Date.now() };
+    const result: ParsedFile = {
+      tree,
+      symbols,
+      dependencies,
+      contentHash: hash,
+      parsedAt: Date.now(),
+    };
     astCache.set(key, result);
     return result;
   } catch {
@@ -235,7 +246,13 @@ export function incrementalReparse(
     const dependencies = extractDependenciesFromRoot(newTree.rootNode, ext);
 
     const hash = djb2Hash(newContent);
-    const result: ParsedFile = { tree: newTree, symbols, dependencies, contentHash: hash, parsedAt: Date.now() };
+    const result: ParsedFile = {
+      tree: newTree,
+      symbols,
+      dependencies,
+      contentHash: hash,
+      parsedAt: Date.now(),
+    };
     astCache.set(key, result);
     return result;
   } catch {
@@ -245,16 +262,24 @@ export function incrementalReparse(
 }
 
 /** Remove a single file from the cache. */
-export function invalidateAST(filePath: string): void { astCache.delete(cacheKey(filePath)); }
+export function invalidateAST(filePath: string): void {
+  astCache.delete(cacheKey(filePath));
+}
 
 /** Clear all cached parse results. */
-export function clearASTCache(): void { astCache.clear(); }
+export function clearASTCache(): void {
+  astCache.clear();
+}
 
 /** Get number of cached files. */
-export function getASTCacheSize(): number { return astCache.size; }
+export function getASTCacheSize(): number {
+  return astCache.size;
+}
 
 /** Get cached parse result without re-parsing. */
-export function getCachedParse(filePath: string): ParsedFile | null { return astCache.get(cacheKey(filePath)) ?? null; }
+export function getCachedParse(filePath: string): ParsedFile | null {
+  return astCache.get(cacheKey(filePath)) ?? null;
+}
 
 /** Get AST cache diagnostics stats. */
 export function getASTCacheStats(): {
@@ -266,10 +291,14 @@ export function getASTCacheStats(): {
   const languages: Record<string, number> = {};
   for (const [key] of astCache) {
     const ext = key.slice(key.lastIndexOf('.')).toLowerCase();
-    const lang = ext === '.ts' || ext === '.tsx' ? 'typescript'
-      : ext === '.js' || ext === '.jsx' ? 'javascript'
-      : ext === '.py' ? 'python'
-      : ext;
+    const lang =
+      ext === '.ts' || ext === '.tsx'
+        ? 'typescript'
+        : ext === '.js' || ext === '.jsx'
+          ? 'javascript'
+          : ext === '.py'
+            ? 'python'
+            : ext;
     languages[lang] = (languages[lang] || 0) + 1;
   }
   return { fileCount: astCache.size, languages, totalParses, cacheHits };
@@ -315,7 +344,7 @@ export function extractDependenciesAST(content: string, filePath: string): ASTDe
 
 /** Lookup a polyglot language profile by extension. */
 function getLanguageProfile(ext: string): LanguageProfile | undefined {
-  return LANGUAGE_PROFILES.find(p => p.extensions.includes(ext));
+  return LANGUAGE_PROFILES.find((p) => p.extensions.includes(ext));
 }
 
 function extractSymbolsFromRoot(root: SyntaxNode, ext: string): ASTSymbol[] {
@@ -547,7 +576,8 @@ function extractImportClauseNames(clause: SyntaxNode, names: string[]): void {
       }
     } else if (child.type === 'namespace_import') {
       // import * as NS
-      const nameNode = child.childForFieldName('name') ?? child.namedChildren.find(c => c.type === 'identifier');
+      const nameNode =
+        child.childForFieldName('name') ?? child.namedChildren.find((c) => c.type === 'identifier');
       if (nameNode) names.push(`* as ${nameNode.text}`);
     }
   }
@@ -684,12 +714,18 @@ function extractPythonDependencies(root: SyntaxNode): ASTDependency[] {
 
 function declarationKind(nodeType: string): ASTSymbol['kind'] | null {
   switch (nodeType) {
-    case 'function_declaration': return 'function';
-    case 'class_declaration': return 'class';
-    case 'interface_declaration': return 'interface';
-    case 'type_alias_declaration': return 'type';
-    case 'enum_declaration': return 'enum';
-    default: return null;
+    case 'function_declaration':
+      return 'function';
+    case 'class_declaration':
+      return 'class';
+    case 'interface_declaration':
+      return 'interface';
+    case 'type_alias_declaration':
+      return 'type';
+    case 'enum_declaration':
+      return 'enum';
+    default:
+      return null;
   }
 }
 
@@ -699,8 +735,7 @@ function getDeclarationName(node: SyntaxNode): string | null {
 }
 
 function stripQuotes(str: string): string {
-  if ((str.startsWith("'") && str.endsWith("'")) ||
-      (str.startsWith('"') && str.endsWith('"'))) {
+  if ((str.startsWith("'") && str.endsWith("'")) || (str.startsWith('"') && str.endsWith('"'))) {
     return str.slice(1, -1);
   }
   return str;
@@ -726,9 +761,9 @@ export const LANGUAGE_PROFILES: LanguageProfile[] = [
     extensions: ['.go'],
     grammar: 'tree-sitter-go',
     symbolNodes: {
-      'function_declaration': 'function',
-      'method_declaration': 'method',
-      'type_declaration': 'class',
+      function_declaration: 'function',
+      method_declaration: 'method',
+      type_declaration: 'class',
     },
     importNodes: ['import_declaration'],
     exportDetection: 'convention',
@@ -739,7 +774,11 @@ export const LANGUAGE_PROFILES: LanguageProfile[] = [
         if (n.type === 'import_spec' || n.type === 'interpreted_string_literal') {
           const source = stripQuotes(n.text);
           if (source && !source.startsWith('(')) {
-            deps.push({ source, names: [path.basename(source)], isRelative: source.startsWith('.') });
+            deps.push({
+              source,
+              names: [path.basename(source)],
+              isRelative: source.startsWith('.'),
+            });
           }
         }
         for (const child of n.namedChildren) walkImport(child);
@@ -752,12 +791,12 @@ export const LANGUAGE_PROFILES: LanguageProfile[] = [
     extensions: ['.rs'],
     grammar: 'tree-sitter-rust',
     symbolNodes: {
-      'function_item': 'function',
-      'impl_item': 'class',
-      'struct_item': 'class',
-      'enum_item': 'enum',
-      'trait_item': 'interface',
-      'type_item': 'type',
+      function_item: 'function',
+      impl_item: 'class',
+      struct_item: 'class',
+      enum_item: 'enum',
+      trait_item: 'interface',
+      type_item: 'type',
     },
     importNodes: ['use_declaration'],
     exportDetection: 'keyword',
@@ -766,7 +805,13 @@ export const LANGUAGE_PROFILES: LanguageProfile[] = [
       const match = /use\s+(.+?)(?:\s+as\s+\w+)?;/.exec(text);
       if (match) {
         const source = match[1].replace(/::/g, '/');
-        return [{ source, names: [path.basename(source)], isRelative: source.startsWith('self') || source.startsWith('super') }];
+        return [
+          {
+            source,
+            names: [path.basename(source)],
+            isRelative: source.startsWith('self') || source.startsWith('super'),
+          },
+        ];
       }
       return [];
     },
@@ -775,10 +820,10 @@ export const LANGUAGE_PROFILES: LanguageProfile[] = [
     extensions: ['.java'],
     grammar: 'tree-sitter-java',
     symbolNodes: {
-      'class_declaration': 'class',
-      'interface_declaration': 'interface',
-      'method_declaration': 'method',
-      'enum_declaration': 'enum',
+      class_declaration: 'class',
+      interface_declaration: 'interface',
+      method_declaration: 'method',
+      enum_declaration: 'enum',
     },
     importNodes: ['import_declaration'],
     exportDetection: 'visibility',
@@ -797,10 +842,10 @@ export const LANGUAGE_PROFILES: LanguageProfile[] = [
     extensions: ['.c', '.h'],
     grammar: 'tree-sitter-c',
     symbolNodes: {
-      'function_definition': 'function',
-      'struct_specifier': 'class',
-      'enum_specifier': 'enum',
-      'type_definition': 'type',
+      function_definition: 'function',
+      struct_specifier: 'class',
+      enum_specifier: 'enum',
+      type_definition: 'type',
     },
     importNodes: ['preproc_include'],
     exportDetection: 'convention',
@@ -809,7 +854,13 @@ export const LANGUAGE_PROFILES: LanguageProfile[] = [
       const match = /#include\s+[<"](.+?)[>"]/.exec(text);
       if (match) {
         const source = match[1];
-        return [{ source, names: [path.basename(source)], isRelative: source.includes('/') || text.includes('"') }];
+        return [
+          {
+            source,
+            names: [path.basename(source)],
+            isRelative: source.includes('/') || text.includes('"'),
+          },
+        ];
       }
       return [];
     },
@@ -818,11 +869,11 @@ export const LANGUAGE_PROFILES: LanguageProfile[] = [
     extensions: ['.cpp', '.cc', '.cxx', '.hpp'],
     grammar: 'tree-sitter-cpp',
     symbolNodes: {
-      'function_definition': 'function',
-      'class_specifier': 'class',
-      'struct_specifier': 'class',
-      'enum_specifier': 'enum',
-      'namespace_definition': 'variable',
+      function_definition: 'function',
+      class_specifier: 'class',
+      struct_specifier: 'class',
+      enum_specifier: 'enum',
+      namespace_definition: 'variable',
     },
     importNodes: ['preproc_include'],
     exportDetection: 'convention',
@@ -831,7 +882,13 @@ export const LANGUAGE_PROFILES: LanguageProfile[] = [
       const match = /#include\s+[<"](.+?)[>"]/.exec(text);
       if (match) {
         const source = match[1];
-        return [{ source, names: [path.basename(source)], isRelative: source.includes('/') || text.includes('"') }];
+        return [
+          {
+            source,
+            names: [path.basename(source)],
+            isRelative: source.includes('/') || text.includes('"'),
+          },
+        ];
       }
       return [];
     },
@@ -840,10 +897,10 @@ export const LANGUAGE_PROFILES: LanguageProfile[] = [
     extensions: ['.rb'],
     grammar: 'tree-sitter-ruby',
     symbolNodes: {
-      'method': 'function',
-      'singleton_method': 'function',
-      'class': 'class',
-      'module': 'class',
+      method: 'function',
+      singleton_method: 'function',
+      class: 'class',
+      module: 'class',
     },
     importNodes: ['call'],
     exportDetection: 'convention',
@@ -852,7 +909,9 @@ export const LANGUAGE_PROFILES: LanguageProfile[] = [
       const match = /(?:require|require_relative)\s+['"](.+?)['"]/.exec(text);
       if (match) {
         const source = match[1];
-        return [{ source, names: [path.basename(source)], isRelative: text.includes('require_relative') }];
+        return [
+          { source, names: [path.basename(source)], isRelative: text.includes('require_relative') },
+        ];
       }
       return [];
     },
@@ -861,7 +920,7 @@ export const LANGUAGE_PROFILES: LanguageProfile[] = [
     extensions: ['.sh', '.bash'],
     grammar: 'tree-sitter-bash',
     symbolNodes: {
-      'function_definition': 'function',
+      function_definition: 'function',
     },
     importNodes: ['command'],
     exportDetection: 'convention',
@@ -870,7 +929,13 @@ export const LANGUAGE_PROFILES: LanguageProfile[] = [
       const match = /(?:source|\.)\s+['"]?(.+?)['"]?(?:\s|$)/.exec(text);
       if (match) {
         const source = match[1];
-        return [{ source, names: [path.basename(source)], isRelative: source.startsWith('.') || source.startsWith('/') }];
+        return [
+          {
+            source,
+            names: [path.basename(source)],
+            isRelative: source.startsWith('.') || source.startsWith('/'),
+          },
+        ];
       }
       return [];
     },
@@ -933,7 +998,9 @@ function detectExport(node: SyntaxNode, name: string, detection: ExportDetection
   switch (detection) {
     case 'convention':
       // Go: uppercase first letter = exported; C/C++/Ruby/Bash: treat all as exported
-      return name.length > 0 && name[0] === name[0].toUpperCase() && name[0] !== name[0].toLowerCase();
+      return (
+        name.length > 0 && name[0] === name[0].toUpperCase() && name[0] !== name[0].toLowerCase()
+      );
     case 'keyword': {
       // Rust: check for 'pub' keyword
       const nodeText = node.text;

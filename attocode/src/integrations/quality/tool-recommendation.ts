@@ -20,7 +20,7 @@ import type { WorkerCapability } from '../swarm/types.js';
 
 export interface ToolRecommendation {
   toolName: string;
-  relevanceScore: number;  // 0-1
+  relevanceScore: number; // 0-1
   reason: string;
   source: 'builtin' | 'mcp';
 }
@@ -50,14 +50,30 @@ export interface ToolCategory {
  */
 const TASK_TYPE_TOOL_MAP: Record<string, ToolCategory[]> = {
   research: [
-    { name: 'file_reading', tools: ['read_file', 'glob', 'grep', 'list_files', 'search_files', 'search_code', 'get_file_info'], relevance: 1.0 },
+    {
+      name: 'file_reading',
+      tools: [
+        'read_file',
+        'glob',
+        'grep',
+        'list_files',
+        'search_files',
+        'search_code',
+        'get_file_info',
+      ],
+      relevance: 1.0,
+    },
     { name: 'web', tools: ['web_search'], relevance: 0.8 },
     { name: 'file_writing', tools: ['write_file', 'edit_file'], relevance: 0.6 },
     { name: 'bash_readonly', tools: ['bash'], relevance: 0.5 },
     { name: 'task_coordination', tools: ['task_get', 'task_list'], relevance: 0.3 },
   ],
   analysis: [
-    { name: 'file_reading', tools: ['read_file', 'glob', 'grep', 'list_files', 'search_files', 'search_code'], relevance: 1.0 },
+    {
+      name: 'file_reading',
+      tools: ['read_file', 'glob', 'grep', 'list_files', 'search_files', 'search_code'],
+      relevance: 1.0,
+    },
     { name: 'bash_readonly', tools: ['bash'], relevance: 0.6 },
     { name: 'web', tools: ['web_search'], relevance: 0.5 },
   ],
@@ -69,7 +85,11 @@ const TASK_TYPE_TOOL_MAP: Record<string, ToolCategory[]> = {
     { name: 'file_reading', tools: ['read_file', 'glob', 'grep', 'list_files'], relevance: 0.8 },
     { name: 'file_writing', tools: ['write_file', 'edit_file'], relevance: 1.0 },
     { name: 'execution', tools: ['bash'], relevance: 0.7 },
-    { name: 'task_coordination', tools: ['task_create', 'task_update', 'task_get', 'task_list'], relevance: 0.3 },
+    {
+      name: 'task_coordination',
+      tools: ['task_create', 'task_update', 'task_get', 'task_list'],
+      relevance: 0.3,
+    },
   ],
   test: [
     { name: 'execution', tools: ['bash'], relevance: 1.0 },
@@ -77,12 +97,20 @@ const TASK_TYPE_TOOL_MAP: Record<string, ToolCategory[]> = {
     { name: 'file_writing', tools: ['write_file', 'edit_file'], relevance: 0.5 },
   ],
   refactor: [
-    { name: 'file_reading', tools: ['read_file', 'glob', 'grep', 'list_files', 'search_code'], relevance: 0.9 },
+    {
+      name: 'file_reading',
+      tools: ['read_file', 'glob', 'grep', 'list_files', 'search_code'],
+      relevance: 0.9,
+    },
     { name: 'file_writing', tools: ['write_file', 'edit_file'], relevance: 1.0 },
     { name: 'execution', tools: ['bash'], relevance: 0.5 },
   ],
   review: [
-    { name: 'file_reading', tools: ['read_file', 'glob', 'grep', 'list_files', 'search_files'], relevance: 1.0 },
+    {
+      name: 'file_reading',
+      tools: ['read_file', 'glob', 'grep', 'list_files', 'search_files'],
+      relevance: 1.0,
+    },
     { name: 'file_writing', tools: ['write_file', 'edit_file'], relevance: 0.4 },
     { name: 'bash_readonly', tools: ['bash'], relevance: 0.3 },
   ],
@@ -189,13 +217,15 @@ export class ToolRecommendationEngine {
     // For custom types not in the map, fall back to a known type via capability
     let categories: ToolCategory[];
     if (this.config.taskToolOverrides[taskType]) {
-      categories = [{ name: 'override', tools: this.config.taskToolOverrides[taskType], relevance: 1.0 }];
+      categories = [
+        { name: 'override', tools: this.config.taskToolOverrides[taskType], relevance: 1.0 },
+      ];
     } else if (TASK_TYPE_TOOL_MAP[taskType]) {
       categories = TASK_TYPE_TOOL_MAP[taskType];
     } else {
       // Custom type fallback: use capability to find closest built-in tool map
       const fallbackType = capability
-        ? CAPABILITY_TO_TOOL_MAP_KEY[capability] ?? 'implement'
+        ? (CAPABILITY_TO_TOOL_MAP_KEY[capability] ?? 'implement')
         : 'implement';
       categories = TASK_TYPE_TOOL_MAP[fallbackType] ?? [];
     }
@@ -216,7 +246,7 @@ export class ToolRecommendationEngine {
     // Phase 2: Keyword-based MCP tool recommendations
     const taskLower = taskDescription.toLowerCase();
     for (const pattern of MCP_KEYWORD_PATTERNS) {
-      const matchCount = pattern.keywords.filter(kw => taskLower.includes(kw)).length;
+      const matchCount = pattern.keywords.filter((kw) => taskLower.includes(kw)).length;
       if (matchCount > 0) {
         // Find available MCP tools matching the prefix
         for (const toolName of availableToolNames) {
@@ -259,7 +289,7 @@ export class ToolRecommendationEngine {
     const prefixes: string[] = [];
 
     for (const pattern of MCP_KEYWORD_PATTERNS) {
-      const matches = pattern.keywords.filter(kw => taskLower.includes(kw));
+      const matches = pattern.keywords.filter((kw) => taskLower.includes(kw));
       if (matches.length > 0) {
         prefixes.push(pattern.mcpPrefix);
       }
@@ -272,12 +302,9 @@ export class ToolRecommendationEngine {
    * Filter tools for an agent based on task type.
    * Returns tool names that should be available to the agent.
    */
-  getToolFilterForTaskType(
-    taskType: string,
-    availableToolNames: string[],
-  ): string[] {
+  getToolFilterForTaskType(taskType: string, availableToolNames: string[]): string[] {
     const recommendations = this.recommendTools('', taskType, availableToolNames);
-    return recommendations.map(r => r.toolName);
+    return recommendations.map((r) => r.toolName);
   }
 
   /**

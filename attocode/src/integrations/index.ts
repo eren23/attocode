@@ -88,9 +88,7 @@ export {
 } from './budget/loop-detector.js';
 
 // Phase Tracker (extracted from economics - phase transitions + nudges)
-export {
-  PhaseTracker,
-} from './budget/phase-tracker.js';
+export { PhaseTracker } from './budget/phase-tracker.js';
 
 // Work Log (compaction-resilient summary)
 export {
@@ -553,9 +551,7 @@ export {
 } from './context/codebase-context.js';
 
 // AST Cache Stats
-export {
-  getASTCacheStats,
-} from './context/codebase-ast.js';
+export { getASTCacheStats } from './context/codebase-ast.js';
 
 // Edit Validator (Phase 5.1)
 export {

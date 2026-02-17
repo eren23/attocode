@@ -31,7 +31,9 @@ import type {
 function generateTraceId(): string {
   const bytes = new Uint8Array(16);
   crypto.getRandomValues(bytes);
-  return Array.from(bytes).map((b) => b.toString(16).padStart(2, '0')).join('');
+  return Array.from(bytes)
+    .map((b) => b.toString(16).padStart(2, '0'))
+    .join('');
 }
 
 /**
@@ -40,7 +42,9 @@ function generateTraceId(): string {
 function generateSpanId(): string {
   const bytes = new Uint8Array(8);
   crypto.getRandomValues(bytes);
-  return Array.from(bytes).map((b) => b.toString(16).padStart(2, '0')).join('');
+  return Array.from(bytes)
+    .map((b) => b.toString(16).padStart(2, '0'))
+    .join('');
 }
 
 // =============================================================================
@@ -114,7 +118,7 @@ export class Tracer {
       kind?: SpanKind;
       attributes?: Record<string, SpanAttributeValue>;
       parent?: SpanContext;
-    } = {}
+    } = {},
   ): Span {
     const parentContext = options.parent || getCurrentContext();
 
@@ -178,7 +182,7 @@ export class Tracer {
     const trace = this.traces.get(span.traceId);
     if (trace) {
       trace.endTime = span.endTime;
-      trace.duration = (trace.endTime - trace.startTime);
+      trace.duration = trace.endTime - trace.startTime;
     }
 
     this.emit({ type: 'span.end', span });
@@ -221,11 +225,7 @@ export class Tracer {
   /**
    * Add an event to a span.
    */
-  addEvent(
-    span: Span,
-    name: string,
-    attributes?: Record<string, SpanAttributeValue>
-  ): void {
+  addEvent(span: Span, name: string, attributes?: Record<string, SpanAttributeValue>): void {
     const event: SpanEvent = {
       name,
       timestamp: Date.now(),
@@ -247,7 +247,7 @@ export class Tracer {
     options: {
       kind?: SpanKind;
       attributes?: Record<string, SpanAttributeValue>;
-    } = {}
+    } = {},
   ): Promise<T> {
     const span = this.startSpan(name, options);
 
@@ -271,7 +271,7 @@ export class Tracer {
     options: {
       kind?: SpanKind;
       attributes?: Record<string, SpanAttributeValue>;
-    } = {}
+    } = {},
   ): T {
     const span = this.startSpan(name, options);
 
@@ -315,9 +315,7 @@ export class Tracer {
    * Get child spans of a span.
    */
   getChildSpans(spanId: string): Span[] {
-    return Array.from(this.spans.values()).filter(
-      (s) => s.parentId === spanId
-    );
+    return Array.from(this.spans.values()).filter((s) => s.parentId === spanId);
   }
 
   /**

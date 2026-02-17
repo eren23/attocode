@@ -122,7 +122,8 @@ export function createSerperSearchTool(config?: SerperSearchConfig): CustomToolD
       if (!apiKey) {
         return {
           success: false,
-          content: 'SERPER_API_KEY not configured. Set the environment variable or pass apiKey in config.',
+          content:
+            'SERPER_API_KEY not configured. Set the environment variable or pass apiKey in config.',
           error: 'Missing API key',
         };
       }
@@ -136,10 +137,7 @@ export function createSerperSearchTool(config?: SerperSearchConfig): CustomToolD
         };
       }
 
-      const resultCount = Math.min(
-        Number(args.num_results ?? numResults),
-        10,
-      );
+      const resultCount = Math.min(Number(args.num_results ?? numResults), 10);
 
       try {
         const controller = new AbortController();
@@ -170,7 +168,7 @@ export function createSerperSearchTool(config?: SerperSearchConfig): CustomToolD
           };
         }
 
-        const data = await response.json() as SerperResponse;
+        const data = (await response.json()) as SerperResponse;
         const lines: string[] = [];
 
         // Answer box (direct answer)
@@ -360,5 +358,5 @@ export function createCustomTools(
   specs: GenericToolSpec[],
   config?: CustomToolConfig,
 ): CustomToolDefinition[] {
-  return specs.map(spec => createCustomTool(spec, config));
+  return specs.map((spec) => createCustomTool(spec, config));
 }

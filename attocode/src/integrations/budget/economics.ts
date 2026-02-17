@@ -81,18 +81,18 @@ export interface ExecutionBudget {
   enforcementMode?: 'strict' | 'doomloop_only';
 
   // Hard limits (will force stop)
-  maxTokens: number;           // e.g., 200000
-  maxCost: number;             // e.g., 0.50 USD
-  maxDuration: number;         // e.g., 300000ms (5 min)
+  maxTokens: number; // e.g., 200000
+  maxCost: number; // e.g., 0.50 USD
+  maxDuration: number; // e.g., 300000ms (5 min)
 
   // Soft limits (will warn/prompt for extension)
-  softTokenLimit: number;      // e.g., 150000
-  softCostLimit: number;       // e.g., 0.30 USD
-  softDurationLimit: number;   // e.g., 180000ms (3 min)
+  softTokenLimit: number; // e.g., 150000
+  softCostLimit: number; // e.g., 0.30 USD
+  softDurationLimit: number; // e.g., 180000ms (3 min)
 
   // Iteration is now soft guidance (not hard limit)
-  targetIterations: number;    // e.g., 20 (advisory)
-  maxIterations: number;       // e.g., 100 (absolute safety cap)
+  targetIterations: number; // e.g., 20 (advisory)
+  maxIterations: number; // e.g., 100 (absolute safety cap)
 
   /** Configurable thresholds for economics behavior tuning */
   tuning?: EconomicsTuning;
@@ -273,7 +273,7 @@ Respond with ONLY this JSON (no tool calls):
 }`;
 
 const BUDGET_ADVISORY_PROMPT = (reason: string) =>
-`[System] Budget advisory (${reason}) detected. Continue execution and focus on concrete tool actions to complete the task.`;
+  `[System] Budget advisory (${reason}) detected. Continue execution and focus on concrete tool actions to complete the task.`;
 
 // =============================================================================
 // ECONOMICS MANAGER
@@ -295,7 +295,9 @@ export class ExecutionEconomicsManager {
   private pausedDuration = 0;
   private pauseStart: number | null = null;
   private listeners: EconomicsEventListener[] = [];
-  private extensionHandler?: (request: ExtensionRequest) => Promise<Partial<ExecutionBudget> | null>;
+  private extensionHandler?: (
+    request: ExtensionRequest,
+  ) => Promise<Partial<ExecutionBudget> | null>;
 
   // Shared economics state for cross-worker doom loop aggregation
   private sharedEconomics: SharedEconomicsState | null;
@@ -308,7 +310,11 @@ export class ExecutionEconomicsManager {
   private baseline = 0;
   private lastInputTokens = 0;
 
-  constructor(budget?: Partial<ExecutionBudget>, sharedEconomics?: SharedEconomicsState, workerId?: string) {
+  constructor(
+    budget?: Partial<ExecutionBudget>,
+    sharedEconomics?: SharedEconomicsState,
+    workerId?: string,
+  ) {
     this.sharedEconomics = sharedEconomics ?? null;
     this.workerId = workerId ?? 'root';
     const tuning = budget?.tuning;
@@ -317,7 +323,7 @@ export class ExecutionEconomicsManager {
       enforcementMode: budget?.enforcementMode ?? 'strict',
       // Hard limits
       maxTokens: budget?.maxTokens ?? 200000,
-      maxCost: budget?.maxCost ?? 1.00,
+      maxCost: budget?.maxCost ?? 1.0,
       maxDuration: budget?.maxDuration ?? 900000, // 15 minutes (up from 5min to support subagent tasks)
 
       // Soft limits (80% of hard limits)
@@ -436,7 +442,7 @@ export class ExecutionEconomicsManager {
    * Set the extension request handler.
    */
   setExtensionHandler(
-    handler: (request: ExtensionRequest) => Promise<Partial<ExecutionBudget> | null>
+    handler: (request: ExtensionRequest) => Promise<Partial<ExecutionBudget> | null>,
   ): void {
     this.extensionHandler = handler;
   }
@@ -451,7 +457,13 @@ export class ExecutionEconomicsManager {
    * @param actualCost - Actual cost from provider (e.g., OpenRouter returns this directly)
    * @param cacheReadTokens - Tokens served from cache (deducted from incremental input)
    */
-  recordLLMUsage(inputTokens: number, outputTokens: number, model?: string, actualCost?: number, cacheReadTokens?: number): void {
+  recordLLMUsage(
+    inputTokens: number,
+    outputTokens: number,
+    model?: string,
+    actualCost?: number,
+    cacheReadTokens?: number,
+  ): void {
     // Track cumulative input for debugging (always the full input)
     this.usage.cumulativeInputTokens += inputTokens;
 
@@ -522,7 +534,11 @@ export class ExecutionEconomicsManager {
     // =========================================================================
     // DOOM LOOP DETECTION (delegated to LoopDetector)
     // =========================================================================
-    const newDoomLoop = this.loopDetector.updateDoomLoopState(toolName, argsStr, this.progress.recentToolCalls);
+    const newDoomLoop = this.loopDetector.updateDoomLoopState(
+      toolName,
+      argsStr,
+      this.progress.recentToolCalls,
+    );
     if (newDoomLoop) {
       this.emit({
         type: 'doom_loop.detected',
@@ -583,7 +599,12 @@ export class ExecutionEconomicsManager {
         this.phaseTracker.trackBashResult(command, bashResult.success, bashResult.output);
       } else {
         // Detect test runs even without result (for phase transition)
-        if (command.includes('test') || command.includes('pytest') || command.includes('npm test') || command.includes('jest')) {
+        if (
+          command.includes('test') ||
+          command.includes('pytest') ||
+          command.includes('npm test') ||
+          command.includes('jest')
+        ) {
           this.phaseTracker.trackBashResult(command, true, '');
         }
       }
@@ -595,7 +616,11 @@ export class ExecutionEconomicsManager {
     // Check for stuck state
     if (this.isStuck()) {
       this.progress.stuckCount++;
-      this.emit({ type: 'progress.stuck', stuckCount: this.progress.stuckCount, lastProgress: this.progress.lastMeaningfulProgress });
+      this.emit({
+        type: 'progress.stuck',
+        stuckCount: this.progress.stuckCount,
+        lastProgress: this.progress.lastMeaningfulProgress,
+      });
     } else {
       this.emit({
         type: 'progress.made',
@@ -615,7 +640,12 @@ export class ExecutionEconomicsManager {
 
     // Check hard limits first
     if (this.usage.tokens >= this.budget.maxTokens) {
-      this.emit({ type: 'budget.exceeded', budgetType: 'tokens', limit: this.budget.maxTokens, actual: this.usage.tokens });
+      this.emit({
+        type: 'budget.exceeded',
+        budgetType: 'tokens',
+        limit: this.budget.maxTokens,
+        actual: this.usage.tokens,
+      });
       if (!strictBudgetEnforcement) {
         return {
           canContinue: true,
@@ -644,7 +674,12 @@ export class ExecutionEconomicsManager {
     }
 
     if (this.usage.cost >= this.budget.maxCost) {
-      this.emit({ type: 'budget.exceeded', budgetType: 'cost', limit: this.budget.maxCost, actual: this.usage.cost });
+      this.emit({
+        type: 'budget.exceeded',
+        budgetType: 'cost',
+        limit: this.budget.maxCost,
+        actual: this.usage.cost,
+      });
       if (!strictBudgetEnforcement) {
         return {
           canContinue: true,
@@ -673,7 +708,12 @@ export class ExecutionEconomicsManager {
     }
 
     if (this.usage.duration >= this.budget.maxDuration) {
-      this.emit({ type: 'budget.exceeded', budgetType: 'duration', limit: this.budget.maxDuration, actual: this.usage.duration });
+      this.emit({
+        type: 'budget.exceeded',
+        budgetType: 'duration',
+        limit: this.budget.maxDuration,
+        actual: this.usage.duration,
+      });
       if (!strictBudgetEnforcement) {
         return {
           canContinue: true,
@@ -705,14 +745,14 @@ export class ExecutionEconomicsManager {
     if (this.usage.iterations >= this.budget.maxIterations) {
       const isFirstOverage = this.usage.iterations === this.budget.maxIterations;
       return {
-        canContinue: isFirstOverage,  // Only allow one summary turn
+        canContinue: isFirstOverage, // Only allow one summary turn
         reason: `Maximum iterations reached (${this.usage.iterations} / ${this.budget.maxIterations})`,
         budgetType: 'iterations',
         isHardLimit: true,
         isSoftLimit: false,
         percentUsed: 100,
         suggestedAction: 'stop',
-        forceTextOnly: true,  // No more tool calls
+        forceTextOnly: true, // No more tool calls
         injectedPrompt: MAX_STEPS_PROMPT,
         budgetMode: 'hard',
         allowTaskContinuation: false,
@@ -734,10 +774,13 @@ export class ExecutionEconomicsManager {
         percentUsed: (this.usage.iterations / this.budget.maxIterations) * 100,
         suggestedAction: isCompleteStall ? 'stop' : 'warn',
         forceTextOnly: isCompleteStall,
-        injectedPrompt: `[System] WARNING: You have completed ${this.usage.iterations} iterations without making a single tool call. ` +
+        injectedPrompt:
+          `[System] WARNING: You have completed ${this.usage.iterations} iterations without making a single tool call. ` +
           `You MUST use your tools (read_file, write_file, grep, bash, etc.) to accomplish your task. ` +
           `Start by reading a relevant file or running a command NOW.` +
-          (isCompleteStall ? ` This is your LAST chance — respond with a summary if you cannot proceed.` : ''),
+          (isCompleteStall
+            ? ` This is your LAST chance — respond with a summary if you cannot proceed.`
+            : ''),
       };
     }
 
@@ -755,7 +798,11 @@ export class ExecutionEconomicsManager {
       }
     }
     // Restore original maxIterations if tools start being used after reduction
-    if (this.originalMaxIterations && this.usage.toolCalls > 0 && this.budget.maxIterations < this.originalMaxIterations) {
+    if (
+      this.originalMaxIterations &&
+      this.usage.toolCalls > 0 &&
+      this.budget.maxIterations < this.originalMaxIterations
+    ) {
       this.budget.maxIterations = this.originalMaxIterations;
       this.originalMaxIterations = null;
     }
@@ -772,7 +819,10 @@ export class ExecutionEconomicsManager {
         isSoftLimit: true,
         percentUsed: (this.usage.iterations / this.budget.targetIterations) * 100,
         suggestedAction: 'warn',
-        injectedPrompt: DOOM_LOOP_PROMPT(this.loopDetector.lastTool || 'unknown', this.loopDetector.consecutiveCount),
+        injectedPrompt: DOOM_LOOP_PROMPT(
+          this.loopDetector.lastTool || 'unknown',
+          this.loopDetector.consecutiveCount,
+        ),
         budgetMode: 'warn',
         allowTaskContinuation: true,
       };
@@ -817,7 +867,7 @@ export class ExecutionEconomicsManager {
         suggestedAction: 'warn',
         injectedPrompt: EXPLORATION_NUDGE_PROMPT(
           phaseState.uniqueFilesRead.size,
-          phaseState.iterationsInPhase
+          phaseState.iterationsInPhase,
         ),
       };
     }
@@ -842,7 +892,9 @@ export class ExecutionEconomicsManager {
     // BASH FAILURE CASCADE - Strong intervention after 3+ consecutive failures
     // =========================================================================
     if (phaseState.consecutiveBashFailures >= 3) {
-      const lastBashCommand = this.loopDetector.extractLastBashCommand(this.progress.recentToolCalls);
+      const lastBashCommand = this.loopDetector.extractLastBashCommand(
+        this.progress.recentToolCalls,
+      );
       return {
         canContinue: true,
         reason: `${phaseState.consecutiveBashFailures} consecutive bash failures`,
@@ -851,7 +903,10 @@ export class ExecutionEconomicsManager {
         isSoftLimit: true,
         percentUsed: (this.usage.iterations / this.budget.targetIterations) * 100,
         suggestedAction: 'warn',
-        injectedPrompt: BASH_FAILURE_CASCADE_PROMPT(phaseState.consecutiveBashFailures, lastBashCommand),
+        injectedPrompt: BASH_FAILURE_CASCADE_PROMPT(
+          phaseState.consecutiveBashFailures,
+          lastBashCommand,
+        ),
       };
     }
 
@@ -880,12 +935,16 @@ export class ExecutionEconomicsManager {
     // =========================================================================
     if (this.phaseBudget?.enabled) {
       const iterPct = (this.usage.iterations / this.budget.maxIterations) * 100;
-      const explorationPct = phaseState.phase === 'exploring'
-        ? (phaseState.iterationsInPhase / this.budget.maxIterations) * 100
-        : 0;
+      const explorationPct =
+        phaseState.phase === 'exploring'
+          ? (phaseState.iterationsInPhase / this.budget.maxIterations) * 100
+          : 0;
 
       // Too much time in exploration
-      if (explorationPct > this.phaseBudget.maxExplorationPercent && phaseState.filesModified.size === 0) {
+      if (
+        explorationPct > this.phaseBudget.maxExplorationPercent &&
+        phaseState.filesModified.size === 0
+      ) {
         return {
           canContinue: true,
           reason: `Exploration exceeds ${this.phaseBudget.maxExplorationPercent}% of budget`,
@@ -900,10 +959,12 @@ export class ExecutionEconomicsManager {
 
       // Only verification-reserve iterations remain
       const remainingPct = 100 - iterPct;
-      if (remainingPct <= this.phaseBudget.reservedVerificationPercent
-          && phaseState.phase !== 'verifying'
-          && phaseState.filesModified.size > 0
-          && phaseState.testsRun === 0) {
+      if (
+        remainingPct <= this.phaseBudget.reservedVerificationPercent &&
+        phaseState.phase !== 'verifying' &&
+        phaseState.filesModified.size > 0 &&
+        phaseState.testsRun === 0
+      ) {
         return {
           canContinue: true,
           reason: `Only ${Math.round(remainingPct)}% budget remaining, verification needed`,
@@ -949,7 +1010,12 @@ export class ExecutionEconomicsManager {
 
     if (this.usage.cost >= this.budget.softCostLimit) {
       const remaining = this.budget.maxCost - this.usage.cost;
-      this.emit({ type: 'budget.warning', budgetType: 'cost', percentUsed: (this.usage.cost / this.budget.maxCost) * 100, remaining });
+      this.emit({
+        type: 'budget.warning',
+        budgetType: 'cost',
+        percentUsed: (this.usage.cost / this.budget.maxCost) * 100,
+        remaining,
+      });
       return {
         canContinue: true,
         reason: `Cost budget at ${Math.round((this.usage.cost / this.budget.maxCost) * 100)}%`,
@@ -982,7 +1048,7 @@ export class ExecutionEconomicsManager {
       percentUsed: Math.max(
         (this.usage.tokens / this.budget.maxTokens) * 100,
         (this.usage.cost / this.budget.maxCost) * 100,
-        (this.usage.duration / this.budget.maxDuration) * 100
+        (this.usage.duration / this.budget.maxDuration) * 100,
       ),
       budgetMode: 'none',
       allowTaskContinuation: true,
@@ -1067,9 +1133,10 @@ export class ExecutionEconomicsManager {
 
     const tokenPct = Math.round((usage.tokens / budget.maxTokens) * 100);
     const remainingTokens = budget.maxTokens - usage.tokens;
-    const remainingSec = budget.maxDuration === Infinity
-      ? Infinity
-      : Math.max(0, Math.round((budget.maxDuration - usage.duration) / 1000));
+    const remainingSec =
+      budget.maxDuration === Infinity
+        ? Infinity
+        : Math.max(0, Math.round((budget.maxDuration - usage.duration) / 1000));
 
     // Determine urgency level
     let urgency = '';
@@ -1243,7 +1310,7 @@ export class ExecutionEconomicsManager {
  * Create an economics manager with optional budget configuration.
  */
 export function createEconomicsManager(
-  budget?: Partial<ExecutionBudget>
+  budget?: Partial<ExecutionBudget>,
 ): ExecutionEconomicsManager {
   return new ExecutionEconomicsManager(budget);
 }
@@ -1257,7 +1324,7 @@ export function createEconomicsManager(
  */
 export const QUICK_BUDGET: Partial<ExecutionBudget> = {
   maxTokens: 50000,
-  maxCost: 0.10,
+  maxCost: 0.1,
   maxDuration: 60000, // 1 minute
   targetIterations: 5,
   maxIterations: 20,
@@ -1268,7 +1335,7 @@ export const QUICK_BUDGET: Partial<ExecutionBudget> = {
  */
 export const STANDARD_BUDGET: Partial<ExecutionBudget> = {
   maxTokens: 200000,
-  maxCost: 0.50,
+  maxCost: 0.5,
   maxDuration: 600000, // 10 minutes (supports subagent workflows)
   targetIterations: 20,
   maxIterations: 50,
@@ -1281,10 +1348,10 @@ export const STANDARD_BUDGET: Partial<ExecutionBudget> = {
  * and other parallel subagents.
  */
 export const SUBAGENT_BUDGET: Partial<ExecutionBudget> = {
-  maxTokens: 250000,        // 250k tokens -- coders need room for explore + code
-  softTokenLimit: 180000,   // Warn at 180k
-  maxCost: 0.75,            // Increased ceiling for heavier workloads
-  maxDuration: 480000,      // 8 minutes
+  maxTokens: 250000, // 250k tokens -- coders need room for explore + code
+  softTokenLimit: 180000, // Warn at 180k
+  maxCost: 0.75, // Increased ceiling for heavier workloads
+  maxDuration: 480000, // 8 minutes
   softDurationLimit: 420000, // Warn at 7 minutes
   targetIterations: 30,
   maxIterations: 60,
@@ -1295,7 +1362,7 @@ export const SUBAGENT_BUDGET: Partial<ExecutionBudget> = {
  */
 export const LARGE_BUDGET: Partial<ExecutionBudget> = {
   maxTokens: 500000,
-  maxCost: 2.00,
+  maxCost: 2.0,
   maxDuration: 900000, // 15 minutes
   targetIterations: 50,
   maxIterations: 200,
@@ -1311,9 +1378,9 @@ export const TUI_ROOT_BUDGET: Partial<ExecutionBudget> = {
   enforcementMode: 'doomloop_only',
   maxTokens: 500000,
   softTokenLimit: 400000,
-  maxCost: 5.00,
-  softCostLimit: 4.00,
-  maxDuration: Infinity,      // No time limit -- run as long as tasks remain
+  maxCost: 5.0,
+  softCostLimit: 4.0,
+  maxDuration: Infinity, // No time limit -- run as long as tasks remain
   softDurationLimit: Infinity,
   targetIterations: 100,
   maxIterations: 500,
@@ -1338,7 +1405,7 @@ export const SWARM_WORKER_BUDGET: Partial<ExecutionBudget> = {
   maxTokens: 30000,
   softTokenLimit: 25000,
   maxCost: 0.08,
-  maxDuration: 180000,      // 3 minutes
+  maxDuration: 180000, // 3 minutes
   softDurationLimit: 150000, // Warn at 2.5 min
   targetIterations: 15,
   maxIterations: 25,
@@ -1351,7 +1418,7 @@ export const SWARM_ORCHESTRATOR_BUDGET: Partial<ExecutionBudget> = {
   maxTokens: 100000,
   softTokenLimit: 80000,
   maxCost: 0.25,
-  maxDuration: 300000,     // 5 minutes
+  maxDuration: 300000, // 5 minutes
   softDurationLimit: 240000,
   targetIterations: 30,
   maxIterations: 50,

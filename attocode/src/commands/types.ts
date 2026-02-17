@@ -6,7 +6,15 @@
  */
 
 import type { ProductionAgent } from '../agent.js';
-import type { MCPClient, Compactor, SQLiteStore, SessionStore, SkillExecutor, SkillManager, AgentRegistry } from '../integrations/index.js';
+import type {
+  MCPClient,
+  Compactor,
+  SQLiteStore,
+  SessionStore,
+  SkillExecutor,
+  SkillManager,
+  AgentRegistry,
+} from '../integrations/index.js';
 import type * as readline from 'node:readline/promises';
 
 /**

@@ -217,7 +217,10 @@ export interface LayoutConfig {
 export interface TUIEventHandlers {
   onInput?: (input: string) => void;
   onCommand?: (command: string, args: string[]) => void;
-  onKeyPress?: (key: string, modifiers: { ctrl: boolean; alt: boolean; meta: boolean; shift: boolean }) => void;
+  onKeyPress?: (
+    key: string,
+    modifiers: { ctrl: boolean; alt: boolean; meta: boolean; shift: boolean },
+  ) => void;
   onAgentEvent?: (event: AgentEvent) => void;
   onPermissionRequest?: (tool: string, args: Record<string, unknown>) => Promise<boolean>;
   onSessionSwitch?: (sessionId: string) => void;

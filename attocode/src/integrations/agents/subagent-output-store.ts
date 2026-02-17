@@ -122,18 +122,14 @@ export class SubagentOutputStore {
   /**
    * List all outputs, optionally filtered.
    */
-  list(filter?: {
-    agentName?: string;
-    since?: Date;
-    limit?: number;
-  }): SubagentOutput[] {
+  list(filter?: { agentName?: string; since?: Date; limit?: number }): SubagentOutput[] {
     let outputs = [...this.memoryStore.values()];
 
     if (filter?.agentName) {
-      outputs = outputs.filter(o => o.agentName === filter.agentName);
+      outputs = outputs.filter((o) => o.agentName === filter.agentName);
     }
     if (filter?.since) {
-      outputs = outputs.filter(o => o.timestamp >= filter.since!);
+      outputs = outputs.filter((o) => o.timestamp >= filter.since!);
     }
 
     // Sort by timestamp descending
@@ -204,8 +200,9 @@ export class SubagentOutputStore {
     let cleaned = 0;
 
     // Sort by timestamp
-    const entries = [...this.memoryStore.entries()]
-      .sort((a, b) => new Date(b[1].timestamp).getTime() - new Date(a[1].timestamp).getTime());
+    const entries = [...this.memoryStore.entries()].sort(
+      (a, b) => new Date(b[1].timestamp).getTime() - new Date(a[1].timestamp).getTime(),
+    );
 
     for (let i = this.config.maxOutputs; i < entries.length; i++) {
       const [id, output] = entries[i];

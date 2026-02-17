@@ -90,11 +90,21 @@ export type AutoCompactionEvent =
   | { type: 'autocompaction.check'; currentTokens: number; ratio: number; threshold: string }
   | { type: 'autocompaction.warning'; currentTokens: number; ratio: number }
   | { type: 'autocompaction.triggered'; mode: string; currentTokens: number }
-  | { type: 'autocompaction.completed'; tokensBefore: number; tokensAfter: number; reduction: number }
+  | {
+      type: 'autocompaction.completed';
+      tokensBefore: number;
+      tokensAfter: number;
+      reduction: number;
+    }
   | { type: 'autocompaction.cooldown'; remainingMs: number }
   | { type: 'autocompaction.hard_limit'; currentTokens: number; ratio: number }
   | { type: 'autocompaction.needs_approval'; currentTokens: number; ratio: number }
-  | { type: 'autocompaction.emergency_truncate'; reason: string; messagesBefore: number; messagesAfter: number };
+  | {
+      type: 'autocompaction.emergency_truncate';
+      reason: string;
+      messagesBefore: number;
+      messagesAfter: number;
+    };
 
 export type AutoCompactionEventListener = (event: AutoCompactionEvent) => void;
 
@@ -104,8 +114,8 @@ export type AutoCompactionEventListener = (event: AutoCompactionEvent) => void;
 
 const DEFAULT_CONFIG: AutoCompactionConfig = {
   mode: 'auto',
-  warningThreshold: 0.80,
-  autoCompactThreshold: 0.90,
+  warningThreshold: 0.8,
+  autoCompactThreshold: 0.9,
   hardLimitThreshold: 0.98,
   preserveRecentUserMessages: 5,
   preserveRecentAssistantMessages: 5,
@@ -375,7 +385,7 @@ export class AutoCompactionManager {
     messages: Message[],
     currentTokens: number,
     maxTokens: number,
-    _ratio: number
+    _ratio: number,
   ): Promise<CompactionCheckResult> {
     this.emit({
       type: 'autocompaction.triggered',
@@ -397,9 +407,10 @@ export class AutoCompactionManager {
    */
   private async performCustomCompaction(
     messages: Message[],
-    maxTokens: number
+    maxTokens: number,
   ): Promise<CompactionCheckResult> {
-    const totalPreserve = this.config.preserveRecentUserMessages + this.config.preserveRecentAssistantMessages;
+    const totalPreserve =
+      this.config.preserveRecentUserMessages + this.config.preserveRecentAssistantMessages;
 
     try {
       const result = await this.config.compactHandler!(messages);
@@ -407,9 +418,10 @@ export class AutoCompactionManager {
       // Update cooldown
       this.lastCompactionTime = Date.now();
 
-      const reduction = result.tokensBefore > 0
-        ? Math.round((1 - result.tokensAfter / result.tokensBefore) * 100)
-        : 0;
+      const reduction =
+        result.tokensBefore > 0
+          ? Math.round((1 - result.tokensAfter / result.tokensBefore) * 100)
+          : 0;
 
       this.emit({
         type: 'autocompaction.completed',
@@ -428,7 +440,9 @@ export class AutoCompactionManager {
         references: result.references, // Preserve references from reversible compaction
       };
     } catch (compactionError) {
-      logger.error('[AutoCompaction] Custom compaction failed, using emergency truncation:', { error: compactionError });
+      logger.error('[AutoCompaction] Custom compaction failed, using emergency truncation:', {
+        error: compactionError,
+      });
       const emergencyResult = this.emergencyTruncate(messages, totalPreserve);
       this.lastCompactionTime = Date.now();
       return emergencyResult;
@@ -440,10 +454,11 @@ export class AutoCompactionManager {
    */
   private async performDefaultCompaction(
     messages: Message[],
-    maxTokens: number
+    maxTokens: number,
   ): Promise<CompactionCheckResult> {
     // Configure compactor to preserve the specified number of messages
-    const totalPreserve = this.config.preserveRecentUserMessages + this.config.preserveRecentAssistantMessages;
+    const totalPreserve =
+      this.config.preserveRecentUserMessages + this.config.preserveRecentAssistantMessages;
     const currentCompactorConfig = this.compactor.getConfig();
 
     // Temporarily adjust if our preserve count differs
@@ -457,13 +472,17 @@ export class AutoCompactionManager {
       result = await this.compactor.compact(messages);
     } catch (compactionError) {
       // LLM-based compaction failed - use emergency truncation as fallback
-      logger.error('[AutoCompaction] LLM compaction failed, using emergency truncation:', { error: compactionError });
+      logger.error('[AutoCompaction] LLM compaction failed, using emergency truncation:', {
+        error: compactionError,
+      });
 
       const emergencyResult = this.emergencyTruncate(messages, totalPreserve);
 
       // Restore original config
       if (needsRestore) {
-        this.compactor.updateConfig({ preserveRecentCount: currentCompactorConfig.preserveRecentCount });
+        this.compactor.updateConfig({
+          preserveRecentCount: currentCompactorConfig.preserveRecentCount,
+        });
       }
 
       // Update cooldown even for emergency truncation
@@ -474,15 +493,18 @@ export class AutoCompactionManager {
 
     // Restore original config
     if (needsRestore) {
-      this.compactor.updateConfig({ preserveRecentCount: currentCompactorConfig.preserveRecentCount });
+      this.compactor.updateConfig({
+        preserveRecentCount: currentCompactorConfig.preserveRecentCount,
+      });
     }
 
     // Update cooldown
     this.lastCompactionTime = Date.now();
 
-    const reduction = result.tokensBefore > 0
-      ? Math.round((1 - result.tokensAfter / result.tokensBefore) * 100)
-      : 0;
+    const reduction =
+      result.tokensBefore > 0
+        ? Math.round((1 - result.tokensAfter / result.tokensBefore) * 100)
+        : 0;
 
     this.emit({
       type: 'autocompaction.completed',
@@ -509,10 +531,10 @@ export class AutoCompactionManager {
     const messagesBefore = messages.length;
 
     // Find and keep the system message
-    const systemMessage = messages.find(m => m.role === 'system');
+    const systemMessage = messages.find((m) => m.role === 'system');
 
     // Get the last N messages (excluding system message from count)
-    const nonSystemMessages = messages.filter(m => m.role !== 'system');
+    const nonSystemMessages = messages.filter((m) => m.role !== 'system');
     const preservedMessages = nonSystemMessages.slice(-preserveCount);
 
     // Build the truncated message array
@@ -526,7 +548,8 @@ export class AutoCompactionManager {
     const removedCount = messagesBefore - preservedMessages.length - (systemMessage ? 1 : 0);
     truncatedMessages.push({
       role: 'system',
-      content: `[CONTEXT REDUCED - Emergency truncation]\n\nPrevious context was truncated to stay within token limits.\n` +
+      content:
+        `[CONTEXT REDUCED - Emergency truncation]\n\nPrevious context was truncated to stay within token limits.\n` +
         `${removedCount} messages were removed. ` +
         `Continue working from the preserved messages below. ` +
         `If you need context from earlier in the conversation, check your goals and work log.`,
@@ -577,7 +600,7 @@ export class AutoCompactionManager {
  */
 export function createAutoCompactionManager(
   compactor: Compactor,
-  config?: Partial<AutoCompactionConfig>
+  config?: Partial<AutoCompactionConfig>,
 ): AutoCompactionManager {
   return new AutoCompactionManager(compactor, config);
 }
@@ -595,24 +618,32 @@ export function formatCompactionCheckResult(result: CompactionCheckResult): stri
 
   switch (result.status) {
     case 'ok':
-      lines.push(`Context usage: ${percentUsed}% (${result.currentTokens.toLocaleString()} / ${result.maxTokens.toLocaleString()} tokens)`);
+      lines.push(
+        `Context usage: ${percentUsed}% (${result.currentTokens.toLocaleString()} / ${result.maxTokens.toLocaleString()} tokens)`,
+      );
       lines.push('Status: OK');
       break;
 
     case 'warning':
-      lines.push(`Context usage: ${percentUsed}% (${result.currentTokens.toLocaleString()} / ${result.maxTokens.toLocaleString()} tokens)`);
+      lines.push(
+        `Context usage: ${percentUsed}% (${result.currentTokens.toLocaleString()} / ${result.maxTokens.toLocaleString()} tokens)`,
+      );
       lines.push('Status: WARNING - Context usage is high');
       lines.push('Consider compacting the conversation to free up space.');
       break;
 
     case 'needs_approval':
-      lines.push(`Context usage: ${percentUsed}% (${result.currentTokens.toLocaleString()} / ${result.maxTokens.toLocaleString()} tokens)`);
+      lines.push(
+        `Context usage: ${percentUsed}% (${result.currentTokens.toLocaleString()} / ${result.maxTokens.toLocaleString()} tokens)`,
+      );
       lines.push('Status: NEEDS APPROVAL');
       lines.push('Context is nearing capacity. Approve compaction to continue.');
       break;
 
     case 'compacted':
-      lines.push(`Context usage: ${percentUsed}% (${result.currentTokens.toLocaleString()} / ${result.maxTokens.toLocaleString()} tokens)`);
+      lines.push(
+        `Context usage: ${percentUsed}% (${result.currentTokens.toLocaleString()} / ${result.maxTokens.toLocaleString()} tokens)`,
+      );
       lines.push('Status: COMPACTED');
       if (result.summary) {
         lines.push('Summary preserved: Yes');
@@ -620,7 +651,9 @@ export function formatCompactionCheckResult(result: CompactionCheckResult): stri
       break;
 
     case 'hard_limit':
-      lines.push(`Context usage: ${percentUsed}% (${result.currentTokens.toLocaleString()} / ${result.maxTokens.toLocaleString()} tokens)`);
+      lines.push(
+        `Context usage: ${percentUsed}% (${result.currentTokens.toLocaleString()} / ${result.maxTokens.toLocaleString()} tokens)`,
+      );
       lines.push('Status: HARD LIMIT REACHED');
       lines.push('Cannot continue - context window is too full.');
       lines.push('Manual intervention required.');

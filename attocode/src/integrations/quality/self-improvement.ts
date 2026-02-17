@@ -39,14 +39,14 @@ export interface ToolCallDiagnosis {
 }
 
 export type FailureCategory =
-  | 'wrong_args'       // Arguments were malformed or wrong type
-  | 'missing_args'     // Required arguments were missing
-  | 'file_not_found'   // Target file doesn't exist
-  | 'permission'       // Permission denied
-  | 'timeout'          // Operation timed out
-  | 'syntax_error'     // Command syntax error
-  | 'state_error'      // System not in expected state
-  | 'unknown';         // Can't determine cause
+  | 'wrong_args' // Arguments were malformed or wrong type
+  | 'missing_args' // Required arguments were missing
+  | 'file_not_found' // Target file doesn't exist
+  | 'permission' // Permission denied
+  | 'timeout' // Operation timed out
+  | 'syntax_error' // Command syntax error
+  | 'state_error' // System not in expected state
+  | 'unknown'; // Can't determine cause
 
 export interface SelfImprovementConfig {
   /** Enable tool call diagnosis (default: true) */
@@ -150,10 +150,7 @@ export class SelfImprovementProtocol {
   private successPatterns: Map<string, SuccessPattern> = new Map();
   private failureCounts: Map<string, number> = new Map();
 
-  constructor(
-    config?: Partial<SelfImprovementConfig>,
-    learningStore?: LearningStore | null,
-  ) {
+  constructor(config?: Partial<SelfImprovementConfig>, learningStore?: LearningStore | null) {
     this.config = { ...DEFAULT_CONFIG, ...config };
     this.learningStore = learningStore ?? null;
   }
@@ -238,9 +235,7 @@ export class SelfImprovementProtocol {
     } else {
       this.successPatterns.set(key, {
         toolName,
-        argPattern: Object.fromEntries(
-          Object.entries(args).map(([k, v]) => [k, typeof v]),
-        ),
+        argPattern: Object.fromEntries(Object.entries(args).map(([k, v]) => [k, typeof v])),
         context,
         count: 1,
       });
@@ -280,7 +275,9 @@ export class SelfImprovementProtocol {
     }
 
     if (this.isRepeatedlyFailing(toolName)) {
-      parts.push(`\n[Warning: "${toolName}" has failed ${this.getFailureCount(toolName)} times. Consider using a different tool or approach.]`);
+      parts.push(
+        `\n[Warning: "${toolName}" has failed ${this.getFailureCount(toolName)} times. Consider using a different tool or approach.]`,
+      );
     }
 
     return parts.join('');
@@ -290,17 +287,13 @@ export class SelfImprovementProtocol {
    * Get success patterns for a tool (useful for prompt context).
    */
   getSuccessPatterns(toolName: string): SuccessPattern[] {
-    return [...this.successPatterns.values()].filter(p => p.toolName === toolName);
+    return [...this.successPatterns.values()].filter((p) => p.toolName === toolName);
   }
 
   /**
    * Persist a failure learning to the learning store.
    */
-  private persistFailureLearning(
-    toolName: string,
-    diagnosis: string,
-    fix: string,
-  ): void {
+  private persistFailureLearning(toolName: string, diagnosis: string, fix: string): void {
     try {
       this.learningStore?.proposeLearning({
         type: 'best_practice',

@@ -48,7 +48,10 @@ export class PersistenceDebugger {
     if (!this.enabled) return;
     const timestamp = new Date().toISOString().split('T')[1].slice(0, 12);
     const logLine = `[${timestamp}] ${message}`;
-    const dataLine = data !== undefined ? `    -> ${JSON.stringify(data, null, 2).split('\n').join('\n    ')}` : '';
+    const dataLine =
+      data !== undefined
+        ? `    -> ${JSON.stringify(data, null, 2).split('\n').join('\n    ')}`
+        : '';
 
     if (this.tuiMode) {
       // Buffer logs in TUI mode to avoid console interference
@@ -115,10 +118,7 @@ export interface CheckpointData {
  * Save checkpoint to session store (works with both SQLite and JSONL).
  * Now includes plan and memoryContext for full state restoration.
  */
-export function saveCheckpointToStore(
-  store: AnySessionStore,
-  checkpoint: CheckpointData
-): void {
+export function saveCheckpointToStore(store: AnySessionStore, checkpoint: CheckpointData): void {
   const storeType = persistenceDebug.storeType(store);
   persistenceDebug.log(`saveCheckpointToStore called`, {
     storeType,
@@ -139,7 +139,10 @@ export function saveCheckpointToStore(
       });
 
       if (!currentSessionId) {
-        persistenceDebug.error('SQLite store has no currentSessionId!', new Error('No active session'));
+        persistenceDebug.error(
+          'SQLite store has no currentSessionId!',
+          new Error('No active session'),
+        );
       }
 
       const ckptId = store.saveCheckpoint(
@@ -152,7 +155,7 @@ export function saveCheckpointToStore(
           plan: checkpoint.plan,
           memoryContext: checkpoint.memoryContext,
         },
-        checkpoint.label || `auto-checkpoint-${checkpoint.id}`
+        checkpoint.label || `auto-checkpoint-${checkpoint.id}`,
       );
       persistenceDebug.log(`SQLite checkpoint saved successfully`, { returnedId: ckptId });
     } else if ('appendEntry' in store && typeof store.appendEntry === 'function') {
@@ -190,12 +193,15 @@ export function saveCheckpointToStore(
  */
 export async function loadSessionState(
   sessionStore: AnySessionStore,
-  sessionId: string
+  sessionId: string,
 ): Promise<CheckpointData | null> {
   persistenceDebug.log('Loading session state', { sessionId });
 
   // Try SQLite's loadLatestCheckpoint first
-  if ('loadLatestCheckpoint' in sessionStore && typeof sessionStore.loadLatestCheckpoint === 'function') {
+  if (
+    'loadLatestCheckpoint' in sessionStore &&
+    typeof sessionStore.loadLatestCheckpoint === 'function'
+  ) {
     const sqliteCheckpoint = sessionStore.loadLatestCheckpoint(sessionId);
     if (sqliteCheckpoint?.state) {
       persistenceDebug.log('Loaded from SQLite checkpoint', {
@@ -211,7 +217,7 @@ export async function loadSessionState(
     const entries = Array.isArray(entriesResult) ? entriesResult : await entriesResult;
 
     // Try to find a checkpoint entry
-    const checkpoint = [...entries].reverse().find(e => e.type === 'checkpoint');
+    const checkpoint = [...entries].reverse().find((e) => e.type === 'checkpoint');
     if (checkpoint?.data) {
       persistenceDebug.log('Loaded from entries checkpoint', {
         messageCount: (checkpoint.data as any).messages?.length,

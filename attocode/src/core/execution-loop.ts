@@ -8,10 +8,7 @@
  * resilience handling, tool execution, and compaction.
  */
 
-import type {
-  Message,
-  OpenTaskSummary,
-} from '../types.js';
+import type { Message, OpenTaskSummary } from '../types.js';
 
 import { isFeatureEnabled } from '../defaults.js';
 import { estimateTokenCount } from '../integrations/utilities/token-estimate.js';
@@ -88,13 +85,9 @@ export function compactToolOutputs(messages: Message[]): void {
 
   const preservedExpensiveIndexes = messages
     .map((msg, index) => ({ msg, index }))
-    .filter(({ msg }) =>
-      msg.role === 'tool' && msg.metadata?.preserveFromCompaction === true
-    )
+    .filter(({ msg }) => msg.role === 'tool' && msg.metadata?.preserveFromCompaction === true)
     .map(({ index }) => index);
-  const preserveSet = new Set(
-    preservedExpensiveIndexes.slice(-MAX_PRESERVED_EXPENSIVE_RESULTS)
-  );
+  const preserveSet = new Set(preservedExpensiveIndexes.slice(-MAX_PRESERVED_EXPENSIVE_RESULTS));
 
   for (let i = 0; i < messages.length; i++) {
     const msg = messages[i];
@@ -111,7 +104,10 @@ export function compactToolOutputs(messages: Message[]): void {
   }
 
   if (compactedCount > 0 && process.env.DEBUG) {
-    log.debug('Compacted tool outputs', { compactedCount, savedTokens: Math.round(savedChars / 4) });
+    log.debug('Compacted tool outputs', {
+      compactedCount,
+      savedTokens: Math.round(savedChars / 4),
+    });
   }
 }
 
@@ -119,7 +115,9 @@ export function compactToolOutputs(messages: Message[]): void {
  * Extract a requested markdown artifact filename from a task prompt.
  */
 export function extractRequestedArtifact(task: string): string | null {
-  const markdownArtifactMatch = task.match(/(?:write|save|create)[^.\n]{0,120}\b([A-Za-z0-9._/-]+\.md)\b/i);
+  const markdownArtifactMatch = task.match(
+    /(?:write|save|create)[^.\n]{0,120}\b([A-Za-z0-9._/-]+\.md)\b/i,
+  );
   return markdownArtifactMatch?.[1] ?? null;
 }
 
@@ -128,25 +126,27 @@ export function extractRequestedArtifact(task: string): string | null {
  */
 export function isRequestedArtifactMissing(
   requestedArtifact: string | null,
-  executedToolNames: Set<string>
+  executedToolNames: Set<string>,
 ): boolean {
   if (!requestedArtifact) return false;
   const artifactWriteTools = ['write_file', 'edit_file', 'apply_patch', 'append_file'];
-  return !artifactWriteTools.some(toolName => executedToolNames.has(toolName));
+  return !artifactWriteTools.some((toolName) => executedToolNames.has(toolName));
 }
 
 function getOpenTaskSummary(ctx: AgentContext): OpenTaskSummary | undefined {
   if (!ctx.taskManager) return undefined;
   const tasks = ctx.taskManager.list();
-  const pending = tasks.filter(t => t.status === 'pending').length;
-  const inProgress = tasks.filter(t => t.status === 'in_progress').length;
-  const blocked = tasks.filter(t => t.status === 'pending' && ctx.taskManager?.isBlocked(t.id)).length;
+  const pending = tasks.filter((t) => t.status === 'pending').length;
+  const inProgress = tasks.filter((t) => t.status === 'in_progress').length;
+  const blocked = tasks.filter(
+    (t) => t.status === 'pending' && ctx.taskManager?.isBlocked(t.id),
+  ).length;
   return { pending, inProgress, blocked };
 }
 
 function getPendingWithOwnerCount(ctx: AgentContext): number {
   if (!ctx.taskManager) return 0;
-  return ctx.taskManager.list().filter(t => t.status === 'pending' && !!t.owner).length;
+  return ctx.taskManager.list().filter((t) => t.status === 'pending' && !!t.owner).length;
 }
 
 // =============================================================================
@@ -169,9 +169,10 @@ export async function executeDirectly(
 ): Promise<ExecutionLoopResult> {
   // Reset economics for new task
   ctx.economics?.reset();
-  const taskLeaseStaleMs = typeof ctx.config.resilience === 'object'
-    ? (ctx.config.resilience.taskLeaseStaleMs ?? 5 * 60 * 1000)
-    : 5 * 60 * 1000;
+  const taskLeaseStaleMs =
+    typeof ctx.config.resilience === 'object'
+      ? (ctx.config.resilience.taskLeaseStaleMs ?? 5 * 60 * 1000)
+      : 5 * 60 * 1000;
 
   // Recover orphaned in-progress tasks left behind by interrupted runs.
   if (ctx.taskManager) {
@@ -190,12 +191,8 @@ export async function executeDirectly(
   const reflectionConfig = ctx.config.reflection;
   const reflectionEnabled = isFeatureEnabled(reflectionConfig);
   const autoReflect = reflectionEnabled && reflectionConfig.autoReflect;
-  const maxReflectionAttempts = reflectionEnabled
-    ? (reflectionConfig.maxAttempts || 3)
-    : 1;
-  const confidenceThreshold = reflectionEnabled
-    ? (reflectionConfig.confidenceThreshold || 0.8)
-    : 0.8;
+  const maxReflectionAttempts = reflectionEnabled ? reflectionConfig.maxAttempts || 3 : 1;
+  const confidenceThreshold = reflectionEnabled ? reflectionConfig.confidenceThreshold || 0.8 : 0.8;
 
   let reflectionAttempt = 0;
   let lastResponse = '';
@@ -290,14 +287,19 @@ export async function executeDirectly(
 
         if (!budgetCheck.canContinue) {
           // RECOVERY ATTEMPT: Try emergency context reduction
-          const isTokenLimit = budgetCheck.budgetType === 'tokens' || budgetCheck.budgetType === 'cost';
-          const alreadyTriedRecovery = (ctx.state as { _recoveryAttempted?: boolean })._recoveryAttempted === true;
+          const isTokenLimit =
+            budgetCheck.budgetType === 'tokens' || budgetCheck.budgetType === 'cost';
+          const alreadyTriedRecovery =
+            (ctx.state as { _recoveryAttempted?: boolean })._recoveryAttempted === true;
 
           if (isTokenLimit && !alreadyTriedRecovery) {
-            ctx.observability?.logger?.info('Budget limit reached, attempting recovery via context reduction', {
-              reason: budgetCheck.reason,
-              percentUsed: budgetCheck.percentUsed,
-            });
+            ctx.observability?.logger?.info(
+              'Budget limit reached, attempting recovery via context reduction',
+              {
+                reason: budgetCheck.reason,
+                percentUsed: budgetCheck.percentUsed,
+              },
+            );
 
             ctx.emit({
               type: 'resilience.retry',
@@ -317,8 +319,8 @@ export async function executeDirectly(
             // Step 2: Emergency truncation - keep system + last N messages
             const PRESERVE_RECENT = 10;
             if (messages.length > PRESERVE_RECENT + 2) {
-              const systemMessage = messages.find(m => m.role === 'system');
-              const recentMessages = messages.slice(-(PRESERVE_RECENT));
+              const systemMessage = messages.find((m) => m.role === 'system');
+              const recentMessages = messages.slice(-PRESERVE_RECENT);
 
               messages.length = 0;
               if (systemMessage) {
@@ -348,11 +350,14 @@ export async function executeDirectly(
             const reduction = Math.round((1 - tokensAfter / tokensBefore) * 100);
 
             if (tokensAfter < tokensBefore * 0.8) {
-              ctx.observability?.logger?.info('Context reduction successful, continuing execution', {
-                tokensBefore,
-                tokensAfter,
-                reduction,
-              });
+              ctx.observability?.logger?.info(
+                'Context reduction successful, continuing execution',
+                {
+                  tokensBefore,
+                  tokensAfter,
+                  reduction,
+                },
+              );
 
               ctx.emit({
                 type: 'resilience.recovered',
@@ -389,9 +394,10 @@ export async function executeDirectly(
 
           if (budgetCheck.budgetType === 'iterations') {
             const totalIter = ctx.getTotalIterations();
-            const iterMsg = ctx.parentIterations > 0
-              ? `${ctx.state.iteration} + ${ctx.parentIterations} parent = ${totalIter}`
-              : `${ctx.state.iteration}`;
+            const iterMsg =
+              ctx.parentIterations > 0
+                ? `${ctx.state.iteration} + ${ctx.parentIterations} parent = ${totalIter}`
+                : `${ctx.state.iteration}`;
             const reason = `Max iterations reached (${iterMsg})`;
             ctx.emit({ type: 'error', error: reason });
             result = {
@@ -489,24 +495,31 @@ export async function executeDirectly(
           messages as Array<{ role: 'system' | 'user' | 'assistant' | 'tool'; content: string }>,
           {
             goal: task,
-            plan: ctx.state.plan ? {
-              description: ctx.state.plan.goal || task,
-              tasks: ctx.state.plan.tasks.map(t => ({
-                id: t.id,
-                description: t.description,
-                status: t.status,
-              })),
-              currentTaskIndex: ctx.state.plan.tasks.findIndex(t => t.status === 'in_progress'),
-            } : undefined,
+            plan: ctx.state.plan
+              ? {
+                  description: ctx.state.plan.goal || task,
+                  tasks: ctx.state.plan.tasks.map((t) => ({
+                    id: t.id,
+                    description: t.description,
+                    status: t.status,
+                  })),
+                  currentTaskIndex: ctx.state.plan.tasks.findIndex(
+                    (t) => t.status === 'in_progress',
+                  ),
+                }
+              : undefined,
             activeFiles: ctx.economics?.getProgress().filesModified
               ? [`${ctx.economics.getProgress().filesModified} files modified`]
               : undefined,
             recentErrors: ctx.contextEngineering.getFailureInsights().slice(0, 2),
-          }
+          },
         );
 
         if (process.env.DEBUG_LLM) {
-          if (process.env.DEBUG) log.debug('Recitation after', { messageCount: enrichedMessages?.length ?? 'null/undefined' });
+          if (process.env.DEBUG)
+            log.debug('Recitation after', {
+              messageCount: enrichedMessages?.length ?? 'null/undefined',
+            });
         }
 
         if (enrichedMessages && enrichedMessages !== messages && enrichedMessages.length > 0) {
@@ -545,8 +558,11 @@ export async function executeDirectly(
       // =======================================================================
       // RESUME ORIENTATION — after compaction, nudge the agent to act, not re-summarize
       // =======================================================================
-      const hasCompactionSummary = messages.some(m =>
-        m.role === 'system' && typeof m.content === 'string' && m.content.includes('[Conversation Summary')
+      const hasCompactionSummary = messages.some(
+        (m) =>
+          m.role === 'system' &&
+          typeof m.content === 'string' &&
+          m.content.includes('[Conversation Summary'),
       );
       if (hasCompactionSummary && ctx.state.iteration <= 2) {
         messages.push({
@@ -561,22 +577,41 @@ export async function executeDirectly(
       if (ctx.injectionBudget) {
         const proposals: InjectionSlot[] = [];
         if (budgetInjectedPrompt) {
-          proposals.push({ name: 'budget_warning', priority: 0, maxTokens: 500, content: budgetInjectedPrompt });
+          proposals.push({
+            name: 'budget_warning',
+            priority: 0,
+            maxTokens: 500,
+            content: budgetInjectedPrompt,
+          });
         }
         if (ctx.contextEngineering) {
           const failureCtx = ctx.contextEngineering.getFailureContext(5);
           if (failureCtx) {
-            proposals.push({ name: 'failure_context', priority: 2, maxTokens: 300, content: failureCtx });
+            proposals.push({
+              name: 'failure_context',
+              priority: 2,
+              maxTokens: 300,
+              content: failureCtx,
+            });
           }
         }
         if (proposals.length > 0) {
           const accepted = ctx.injectionBudget.allocate(proposals);
           const stats = ctx.injectionBudget.getLastStats();
           if (stats && stats.droppedNames.length > 0 && process.env.DEBUG) {
-            log.debug('Injection budget dropped items', { droppedNames: stats.droppedNames.join(', '), proposedTokens: stats.proposedTokens, acceptedTokens: stats.acceptedTokens });
+            log.debug('Injection budget dropped items', {
+              droppedNames: stats.droppedNames.join(', '),
+              proposedTokens: stats.proposedTokens,
+              acceptedTokens: stats.acceptedTokens,
+            });
           }
           if (stats && process.env.DEBUG_LLM) {
-            log.debug('Injection budget summary', { iteration: ctx.state.iteration, accepted: accepted.length, total: proposals.length, tokens: stats.acceptedTokens });
+            log.debug('Injection budget summary', {
+              iteration: ctx.state.iteration,
+              accepted: accepted.length,
+              total: proposals.length,
+              tokens: stats.acceptedTokens,
+            });
           }
         }
       }
@@ -584,9 +619,8 @@ export async function executeDirectly(
       // =======================================================================
       // RESILIENT LLM CALL
       // =======================================================================
-      const resilienceConfig = typeof ctx.config.resilience === 'object'
-        ? ctx.config.resilience
-        : {};
+      const resilienceConfig =
+        typeof ctx.config.resilience === 'object' ? ctx.config.resilience : {};
       const resilienceEnabled = isFeatureEnabled(ctx.config.resilience);
       const MAX_EMPTY_RETRIES = resilienceConfig.maxEmptyRetries ?? 2;
       const MAX_CONTINUATIONS = resilienceConfig.maxContinuations ?? 3;
@@ -605,7 +639,10 @@ export async function executeDirectly(
         // Use proportional output estimate: 10% of remaining budget, capped at 4096, floored at 512.
         // The old hardcoded 4096 caused premature wrapup for subagents with smaller budgets.
         const remainingTokens = budget.maxTokens - currentUsage.tokens - estimatedInputTokens;
-        const estimatedOutputTokens = Math.min(4096, Math.max(512, Math.floor(remainingTokens * 0.1)));
+        const estimatedOutputTokens = Math.min(
+          4096,
+          Math.max(512, Math.floor(remainingTokens * 0.1)),
+        );
         const projectedTotal = currentUsage.tokens + estimatedInputTokens + estimatedOutputTokens;
 
         if (projectedTotal > budget.maxTokens) {
@@ -626,11 +663,13 @@ export async function executeDirectly(
             if (!budgetInjectedPrompt) {
               messages.push({
                 role: 'user',
-                content: '[System] BUDGET CRITICAL: This is your LAST response. Summarize findings concisely and stop. Do NOT call tools.',
+                content:
+                  '[System] BUDGET CRITICAL: This is your LAST response. Summarize findings concisely and stop. Do NOT call tools.',
               });
               ctx.state.messages.push({
                 role: 'user',
-                content: '[System] BUDGET CRITICAL: This is your LAST response. Summarize findings concisely and stop. Do NOT call tools.',
+                content:
+                  '[System] BUDGET CRITICAL: This is your LAST response. Summarize findings concisely and stop. Do NOT call tools.',
               });
             }
             forceTextOnly = true;
@@ -642,16 +681,24 @@ export async function executeDirectly(
       // skip the expensive LLM call (whose tool calls would be discarded) and
       // go directly to the task continuation gate. Only allowed once per
       // forceTextOnly episode to prevent tight loops.
-      if (forceTextOnly && budgetAllowsTaskContinuation && ctx.taskManager
-          && !(ctx.state as { _lastSkippedLLMIteration?: number })._lastSkippedLLMIteration) {
+      if (
+        forceTextOnly &&
+        budgetAllowsTaskContinuation &&
+        ctx.taskManager &&
+        !(ctx.state as { _lastSkippedLLMIteration?: number })._lastSkippedLLMIteration
+      ) {
         const availableTasks = ctx.taskManager.getAvailableTasks();
         if (availableTasks.length > 0) {
-          log.info('Skipping LLM call — forceTextOnly with tasks available, going to task continuation', {
-            availableTasks: availableTasks.length,
-            iteration: ctx.state.iteration,
-          });
+          log.info(
+            'Skipping LLM call — forceTextOnly with tasks available, going to task continuation',
+            {
+              availableTasks: availableTasks.length,
+              iteration: ctx.state.iteration,
+            },
+          );
           // Mark that we skipped so we don't skip again on the next iteration
-          (ctx.state as { _lastSkippedLLMIteration?: number })._lastSkippedLLMIteration = ctx.state.iteration;
+          (ctx.state as { _lastSkippedLLMIteration?: number })._lastSkippedLLMIteration =
+            ctx.state.iteration;
           // Reset forceTextOnly for the next iteration so the task can run normally
           forceTextOnly = false;
           const nextTask = availableTasks[0];
@@ -708,13 +755,17 @@ export async function executeDirectly(
               maxAttempts: MAX_EMPTY_RETRIES,
             });
             ctx.state.metrics.retryCount = (ctx.state.metrics.retryCount ?? 0) + 1;
-            ctx.observability?.logger?.warn('Thinking-only response (no visible content), nudging', {
-              thinkingLength: response.thinking!.length,
-            });
+            ctx.observability?.logger?.warn(
+              'Thinking-only response (no visible content), nudging',
+              {
+                thinkingLength: response.thinking!.length,
+              },
+            );
 
             const thinkingNudge: Message = {
               role: 'user',
-              content: '[System: You produced reasoning but no visible response. Please provide your answer based on your analysis.]',
+              content:
+                '[System: You produced reasoning but no visible response. Please provide your answer based on your analysis.]',
             };
             messages.push(thinkingNudge);
             ctx.state.messages.push(thinkingNudge);
@@ -743,7 +794,8 @@ export async function executeDirectly(
 
         const nudgeMessage: Message = {
           role: 'user',
-          content: '[System: Your previous response was empty. Please provide a response or use a tool.]',
+          content:
+            '[System: Your previous response was empty. Please provide a response or use a tool.]',
         };
         messages.push(nudgeMessage);
         ctx.state.messages.push(nudgeMessage);
@@ -752,7 +804,12 @@ export async function executeDirectly(
       }
 
       // Phase 2: Handle max_tokens truncation with continuation
-      if (resilienceEnabled && AUTO_CONTINUE && response.stopReason === 'max_tokens' && !response.toolCalls?.length) {
+      if (
+        resilienceEnabled &&
+        AUTO_CONTINUE &&
+        response.stopReason === 'max_tokens' &&
+        !response.toolCalls?.length
+      ) {
         let accumulatedContent = response.content || '';
 
         while (continuations < MAX_CONTINUATIONS && response.stopReason === 'max_tokens') {
@@ -775,7 +832,8 @@ export async function executeDirectly(
           };
           const continueRequest: Message = {
             role: 'user',
-            content: '[System: Please continue from where you left off. Do not repeat what you already said.]',
+            content:
+              '[System: Please continue from where you left off. Do not repeat what you already said.]',
           };
           messages.push(continuationMessage, continueRequest);
           ctx.state.messages.push(continuationMessage, continueRequest);
@@ -802,10 +860,10 @@ export async function executeDirectly(
       if (resilienceEnabled && response.stopReason === 'max_tokens' && response.toolCalls?.length) {
         ctx.emit({
           type: 'resilience.truncated_tool_call',
-          toolNames: response.toolCalls.map(tc => tc.name),
+          toolNames: response.toolCalls.map((tc) => tc.name),
         });
         ctx.observability?.logger?.warn('Tool call truncated at max_tokens', {
-          toolNames: response.toolCalls.map(tc => tc.name),
+          toolNames: response.toolCalls.map((tc) => tc.name),
           outputTokens: response.usage?.outputTokens,
         });
 
@@ -813,7 +871,8 @@ export async function executeDirectly(
         response = { ...response, toolCalls: undefined };
         const recoveryMessage: Message = {
           role: 'user',
-          content: '[System: Your previous tool call was truncated because the output exceeded the token limit. ' +
+          content:
+            '[System: Your previous tool call was truncated because the output exceeded the token limit. ' +
             'The tool call arguments were cut off and could not be parsed. ' +
             'Please retry with a smaller approach: for write_file, break the content into smaller chunks ' +
             'or use edit_file for targeted changes instead of rewriting entire files.]',
@@ -840,9 +899,12 @@ export async function executeDirectly(
         if (!forceTextOnly) {
           const postCheck = ctx.economics.checkBudget();
           if (!postCheck.canContinue) {
-            ctx.observability?.logger?.warn('Budget exceeded after LLM call, skipping tool execution', {
-              reason: postCheck.reason,
-            });
+            ctx.observability?.logger?.warn(
+              'Budget exceeded after LLM call, skipping tool execution',
+              {
+                reason: postCheck.reason,
+              },
+            );
             forceTextOnly = true;
           }
         }
@@ -860,13 +922,20 @@ export async function executeDirectly(
       lastResponse = response.content || (response.thinking ? response.thinking : '');
 
       // Plan mode: capture exploration findings
-      if (ctx.modeManager.getMode() === 'plan' && response.content && response.content.length > 50) {
-        const hasReadOnlyTools = response.toolCalls?.every(tc =>
-          ['read_file', 'list_files', 'glob', 'grep', 'search', 'mcp_'].some(prefix =>
-            tc.name.startsWith(prefix) || tc.name === prefix
-          )
+      if (
+        ctx.modeManager.getMode() === 'plan' &&
+        response.content &&
+        response.content.length > 50
+      ) {
+        const hasReadOnlyTools = response.toolCalls?.every((tc) =>
+          ['read_file', 'list_files', 'glob', 'grep', 'search', 'mcp_'].some(
+            (prefix) => tc.name.startsWith(prefix) || tc.name === prefix,
+          ),
         );
-        if (hasReadOnlyTools && !response.content.match(/^(Let me|I'll|I will|I need to|First,)/i)) {
+        if (
+          hasReadOnlyTools &&
+          !response.content.match(/^(Let me|I'll|I will|I need to|First,)/i)
+        ) {
           ctx.pendingPlanManager.appendExplorationFinding(response.content.slice(0, 1000));
         }
       }
@@ -875,10 +944,13 @@ export async function executeDirectly(
       const hasToolCalls = response.toolCalls && response.toolCalls.length > 0;
       if (!hasToolCalls || forceTextOnly) {
         if (forceTextOnly && hasToolCalls) {
-          ctx.observability?.logger?.info('Ignoring tool calls due to forceTextOnly (max steps reached)', {
-            toolCallCount: response.toolCalls?.length,
-            iteration: ctx.state.iteration,
-          });
+          ctx.observability?.logger?.info(
+            'Ignoring tool calls due to forceTextOnly (max steps reached)',
+            {
+              toolCallCount: response.toolCalls?.length,
+              iteration: ctx.state.iteration,
+            },
+          );
         }
 
         // Track text-only turns for summary-loop detection (skip forceTextOnly — that's expected)
@@ -890,25 +962,28 @@ export async function executeDirectly(
         const missingRequiredArtifact = ENFORCE_REQUESTED_ARTIFACTS
           ? isRequestedArtifactMissing(requestedArtifact, executedToolNames)
           : false;
-        const shouldRecoverIncompleteAction = resilienceEnabled
-          && INCOMPLETE_ACTION_RECOVERY
-          && !forceTextOnly
-          && (incompleteAction || missingRequiredArtifact);
+        const shouldRecoverIncompleteAction =
+          resilienceEnabled &&
+          INCOMPLETE_ACTION_RECOVERY &&
+          !forceTextOnly &&
+          (incompleteAction || missingRequiredArtifact);
 
         if (shouldRecoverIncompleteAction) {
           ctx.emit({
             type: 'completion.before',
-            reason: missingRequiredArtifact && requestedArtifact
-              ? `missing_requested_artifact:${requestedArtifact}`
-              : 'future_intent_without_action',
+            reason:
+              missingRequiredArtifact && requestedArtifact
+                ? `missing_requested_artifact:${requestedArtifact}`
+                : 'future_intent_without_action',
             attempt: incompleteActionRetries + 1,
             maxAttempts: MAX_INCOMPLETE_ACTION_RETRIES,
           });
           if (incompleteActionRetries < MAX_INCOMPLETE_ACTION_RETRIES) {
             incompleteActionRetries++;
-            const reason = missingRequiredArtifact && requestedArtifact
-              ? `missing_requested_artifact:${requestedArtifact}`
-              : 'future_intent_without_action';
+            const reason =
+              missingRequiredArtifact && requestedArtifact
+                ? `missing_requested_artifact:${requestedArtifact}`
+                : 'future_intent_without_action';
             ctx.emit({
               type: 'recovery.before',
               reason,
@@ -930,9 +1005,10 @@ export async function executeDirectly(
 
             const nudgeMessage: Message = {
               role: 'user',
-              content: missingRequiredArtifact && requestedArtifact
-                ? `[System: You said you would complete the next action, but no tool call was made. The task requires creating or updating "${requestedArtifact}". Execute the required tool now, or explicitly explain why it cannot be produced.]`
-                : '[System: You described a next action but did not execute it. If work remains, call the required tool now. If the task is complete, provide a final answer with no pending action language.]',
+              content:
+                missingRequiredArtifact && requestedArtifact
+                  ? `[System: You said you would complete the next action, but no tool call was made. The task requires creating or updating "${requestedArtifact}". Execute the required tool now, or explicitly explain why it cannot be produced.]`
+                  : '[System: You described a next action but did not execute it. If work remains, call the required tool now. If the task is complete, provide a final answer with no pending action language.]',
             };
             messages.push(nudgeMessage);
             ctx.state.messages.push(nudgeMessage);
@@ -945,9 +1021,10 @@ export async function executeDirectly(
             continue;
           }
 
-          const failureReason = missingRequiredArtifact && requestedArtifact
-            ? `incomplete_action_missing_artifact:${requestedArtifact}`
-            : 'incomplete_action_unresolved';
+          const failureReason =
+            missingRequiredArtifact && requestedArtifact
+              ? `incomplete_action_missing_artifact:${requestedArtifact}`
+              : 'incomplete_action_unresolved';
           ctx.emit({
             type: 'resilience.incomplete_action_failed',
             reason: failureReason,
@@ -991,15 +1068,22 @@ export async function executeDirectly(
         }
 
         // TypeScript compilation gate — block completion if TS files edited and errors exist
-        if (ctx.typeCheckerState?.tsconfigDir
-            && !forceTextOnly
-            && (ctx.typeCheckerState.tsEditsSinceLastCheck > 0 || !ctx.typeCheckerState.hasRunOnce)) {
+        if (
+          ctx.typeCheckerState?.tsconfigDir &&
+          !forceTextOnly &&
+          (ctx.typeCheckerState.tsEditsSinceLastCheck > 0 || !ctx.typeCheckerState.hasRunOnce)
+        ) {
           const tscResult = await runTypeCheck(ctx.typeCheckerState.tsconfigDir);
           ctx.typeCheckerState.tsEditsSinceLastCheck = 0;
           ctx.typeCheckerState.lastResult = tscResult;
           ctx.typeCheckerState.hasRunOnce = true;
           ctx.verificationGate?.recordCompilationResult(tscResult.success, tscResult.errorCount);
-          ctx.emit({ type: 'diagnostics.tsc-check', errorCount: tscResult.errorCount, duration: tscResult.duration, trigger: 'completion' });
+          ctx.emit({
+            type: 'diagnostics.tsc-check',
+            errorCount: tscResult.errorCount,
+            duration: tscResult.duration,
+            trigger: 'completion',
+          });
 
           if (!tscResult.success) {
             const vState = ctx.verificationGate?.getState();
@@ -1010,14 +1094,17 @@ export async function executeDirectly(
               messages.push(nudgeMessage);
               ctx.state.messages.push(nudgeMessage);
               ctx.verificationGate?.incrementCompilationNudge();
-              log.info('Compilation gate blocked completion', { count: tscResult.errorCount, nudgeCount: ctx.verificationGate?.getState().compilationNudgeCount });
+              log.info('Compilation gate blocked completion', {
+                count: tscResult.errorCount,
+                nudgeCount: ctx.verificationGate?.getState().compilationNudgeCount,
+              });
               ctx.emit({
                 type: 'iteration.after',
                 iteration: ctx.state.iteration,
                 hadToolCalls: false,
                 completionCandidate: false,
               });
-              continue;  // Re-enter main loop — agent must fix errors
+              continue; // Re-enter main loop — agent must fix errors
             }
             // If exceeded max nudges, fall through to verification gate (which will forceAllow)
           }
@@ -1146,7 +1233,9 @@ export async function executeDirectly(
             }
             const reasons = [
               `Open tasks remain: ${openTasks.pending} pending, ${openTasks.inProgress} in_progress`,
-              openTasks.blocked > 0 ? `${openTasks.blocked} pending tasks are currently blocked` : '',
+              openTasks.blocked > 0
+                ? `${openTasks.blocked} pending tasks are currently blocked`
+                : '',
             ].filter(Boolean);
             ctx.emit({
               type: 'completion.blocked',
@@ -1174,12 +1263,13 @@ export async function executeDirectly(
       const toolCalls = response.toolCalls!;
 
       // SAFEGUARD: Hard cap on tool calls per LLM response
-      const maxToolCallsPerResponse = ctx.economics?.getBudget()?.tuning?.maxToolCallsPerResponse ?? 25;
+      const maxToolCallsPerResponse =
+        ctx.economics?.getBudget()?.tuning?.maxToolCallsPerResponse ?? 25;
       if (toolCalls.length > maxToolCallsPerResponse) {
         log.warn('Tool call explosion detected — capping', {
           requested: toolCalls.length,
           cap: maxToolCallsPerResponse,
-          toolNames: [...new Set(toolCalls.map(tc => tc.name))],
+          toolNames: [...new Set(toolCalls.map((tc) => tc.name))],
         });
         ctx.emit({
           type: 'safeguard.tool_call_cap',
@@ -1204,26 +1294,33 @@ export async function executeDirectly(
         const result = toolResults[i];
         executedToolNames.add(toolCall.name);
         ctx.economics?.recordToolCall(toolCall.name, toolCall.arguments, result?.result);
-        ctx.stateMachine?.recordToolCall(toolCall.name, toolCall.arguments as Record<string, unknown>, result?.result);
-        // Record in work log
-        const toolOutput = result?.result && typeof result.result === 'object' && 'output' in (result.result as any)
-          ? String((result.result as any).output)
-          : typeof result?.result === 'string' ? result.result : undefined;
-        ctx.workLog?.recordToolExecution(
+        ctx.stateMachine?.recordToolCall(
           toolCall.name,
-          toolCall.arguments,
-          toolOutput,
+          toolCall.arguments as Record<string, unknown>,
+          result?.result,
         );
+        // Record in work log
+        const toolOutput =
+          result?.result && typeof result.result === 'object' && 'output' in (result.result as any)
+            ? String((result.result as any).output)
+            : typeof result?.result === 'string'
+              ? result.result
+              : undefined;
+        ctx.workLog?.recordToolExecution(toolCall.name, toolCall.arguments, toolOutput);
         // Record in verification gate
         if (ctx.verificationGate) {
           if (toolCall.name === 'bash') {
             const toolRes = result?.result as any;
-            const output = toolRes && typeof toolRes === 'object' && 'output' in toolRes
-              ? String(toolRes.output)
-              : typeof toolRes === 'string' ? toolRes : '';
-            const exitCode = toolRes && typeof toolRes === 'object' && toolRes.metadata
-              ? (toolRes.metadata as any).exitCode ?? null
-              : null;
+            const output =
+              toolRes && typeof toolRes === 'object' && 'output' in toolRes
+                ? String(toolRes.output)
+                : typeof toolRes === 'string'
+                  ? toolRes
+                  : '';
+            const exitCode =
+              toolRes && typeof toolRes === 'object' && toolRes.metadata
+                ? ((toolRes.metadata as any).exitCode ?? null)
+                : null;
             ctx.verificationGate.recordBashExecution(
               String(toolCall.arguments.command || ''),
               output,
@@ -1236,32 +1333,45 @@ export async function executeDirectly(
         }
 
         // Phase 5.1: Post-edit syntax validation + AST cache invalidation
-        if (['write_file', 'edit_file'].includes(toolCall.name) && result?.result && (result.result as any).success) {
+        if (
+          ['write_file', 'edit_file'].includes(toolCall.name) &&
+          result?.result &&
+          (result.result as any).success
+        ) {
           const filePath = String(toolCall.arguments.path || '');
           if (filePath) {
             // Invalidate stale AST cache entry so next analysis/validation reparses
             invalidateAST(filePath);
             try {
-              const content = toolCall.name === 'write_file'
-                ? String(toolCall.arguments.content || '')
-                : await fs.promises.readFile(filePath, 'utf-8');
+              const content =
+                toolCall.name === 'write_file'
+                  ? String(toolCall.arguments.content || '')
+                  : await fs.promises.readFile(filePath, 'utf-8');
               // Update codebase context first — fullReparse caches the AST tree,
               // so validateSyntax below will use the cached tree (no double-parse)
               if (ctx.codebaseContext) {
                 try {
                   await ctx.codebaseContext.updateFile(filePath, content);
-                } catch { /* non-blocking */ }
+                } catch {
+                  /* non-blocking */
+                }
               }
               const validation = validateSyntax(content, filePath);
               if (!validation.valid && result.result && typeof result.result === 'object') {
                 const errorSummary = validation.errors
                   .slice(0, 3)
-                  .map(e => `  L${e.line}:${e.column}: ${e.message}`)
+                  .map((e) => `  L${e.line}:${e.column}: ${e.message}`)
                   .join('\n');
-                (result.result as any).output += `\n\n⚠ Syntax validation warning:\n${errorSummary}`;
+                (result.result as any).output +=
+                  `\n\n⚠ Syntax validation warning:\n${errorSummary}`;
                 // Emit diagnostic events for each syntax error
                 for (const err of validation.errors.slice(0, 5)) {
-                  ctx.emit({ type: 'diagnostics.syntax-error', file: filePath, line: err.line, message: err.message });
+                  ctx.emit({
+                    type: 'diagnostics.syntax-error',
+                    file: filePath,
+                    line: err.line,
+                    message: err.message,
+                  });
                 }
               }
             } catch {
@@ -1293,12 +1403,15 @@ export async function executeDirectly(
             mutators.setCompactionPending(true);
             const preCompactionMsg: Message = {
               role: 'user',
-              content: '[SYSTEM] Context compaction is imminent. Summarize your current progress, key findings, and next steps into a single concise message. This will be preserved after compaction.',
+              content:
+                '[SYSTEM] Context compaction is imminent. Summarize your current progress, key findings, and next steps into a single concise message. This will be preserved after compaction.',
             };
             messages.push(preCompactionMsg);
             ctx.state.messages.push(preCompactionMsg);
 
-            ctx.observability?.logger?.info('Pre-compaction agentic turn: injected summary request');
+            ctx.observability?.logger?.info(
+              'Pre-compaction agentic turn: injected summary request',
+            );
           } else {
             mutators.setCompactionPending(false);
 
@@ -1327,7 +1440,11 @@ export async function executeDirectly(
 
             if (ctx.store) {
               const goalsSummary = ctx.store.getGoalsSummary();
-              if (goalsSummary && goalsSummary !== 'No active goals.' && goalsSummary !== 'Goals feature not available.') {
+              if (
+                goalsSummary &&
+                goalsSummary !== 'No active goals.' &&
+                goalsSummary !== 'Goals feature not available.'
+              ) {
                 recoveryParts.push(goalsSummary);
               }
             }
@@ -1413,7 +1530,7 @@ export async function executeDirectly(
       if (ctx.economics && toolResults.length > 10) {
         const preAccumTokens = estimateContextTokens(messages);
         const budget = ctx.economics.getBudget();
-        const availableTokens = budget.maxTokens * 0.90 - preAccumTokens;
+        const availableTokens = budget.maxTokens * 0.9 - preAccumTokens;
 
         // Estimate total result tokens
         let totalResultTokens = 0;
@@ -1430,9 +1547,10 @@ export async function executeDirectly(
           });
           let tokenBudget = availableTokens;
           for (let i = 0; i < toolResults.length; i++) {
-            const c = typeof toolResults[i].result === 'string'
-              ? toolResults[i].result as string
-              : stableStringify(toolResults[i].result);
+            const c =
+              typeof toolResults[i].result === 'string'
+                ? (toolResults[i].result as string)
+                : stableStringify(toolResults[i].result);
             const tokens = Math.ceil(Math.min(c.length, MAX_TOOL_OUTPUT_CHARS) / 4);
             if (tokens > tokenBudget) {
               const skipped = toolResults.length - i;
@@ -1455,16 +1573,22 @@ export async function executeDirectly(
         }
       }
 
-      const toolCallNameById = new Map(toolCalls.map(tc => [tc.id, tc.name]));
+      const toolCallNameById = new Map(toolCalls.map((tc) => [tc.id, tc.name]));
 
       for (const result of toolResults) {
-        let content = typeof result.result === 'string' ? result.result : stableStringify(result.result);
+        let content =
+          typeof result.result === 'string' ? result.result : stableStringify(result.result);
         const sourceToolName = toolCallNameById.get(result.callId);
-        const isExpensiveResult = sourceToolName === 'spawn_agent' || sourceToolName === 'spawn_agents_parallel';
+        const isExpensiveResult =
+          sourceToolName === 'spawn_agent' || sourceToolName === 'spawn_agents_parallel';
 
-        const effectiveMaxChars = isExpensiveResult ? MAX_TOOL_OUTPUT_CHARS * 2 : MAX_TOOL_OUTPUT_CHARS;
+        const effectiveMaxChars = isExpensiveResult
+          ? MAX_TOOL_OUTPUT_CHARS * 2
+          : MAX_TOOL_OUTPUT_CHARS;
         if (content.length > effectiveMaxChars) {
-          content = content.slice(0, effectiveMaxChars) + `\n\n... [truncated ${content.length - effectiveMaxChars} chars]`;
+          content =
+            content.slice(0, effectiveMaxChars) +
+            `\n\n... [truncated ${content.length - effectiveMaxChars} chars]`;
         }
 
         // Check if adding this result would exceed budget
@@ -1512,15 +1636,22 @@ export async function executeDirectly(
 
       // Periodic TypeScript compilation check (every 5 TS edits)
       const TYPE_CHECK_EDIT_THRESHOLD = 5;
-      if (ctx.typeCheckerState?.tsconfigDir
-          && ctx.typeCheckerState.tsEditsSinceLastCheck >= TYPE_CHECK_EDIT_THRESHOLD
-          && !forceTextOnly) {
+      if (
+        ctx.typeCheckerState?.tsconfigDir &&
+        ctx.typeCheckerState.tsEditsSinceLastCheck >= TYPE_CHECK_EDIT_THRESHOLD &&
+        !forceTextOnly
+      ) {
         const tscResult = await runTypeCheck(ctx.typeCheckerState.tsconfigDir);
         ctx.typeCheckerState.tsEditsSinceLastCheck = 0;
         ctx.typeCheckerState.lastResult = tscResult;
         ctx.typeCheckerState.hasRunOnce = true;
         ctx.verificationGate?.recordCompilationResult(tscResult.success, tscResult.errorCount);
-        ctx.emit({ type: 'diagnostics.tsc-check', errorCount: tscResult.errorCount, duration: tscResult.duration, trigger: 'periodic' });
+        ctx.emit({
+          type: 'diagnostics.tsc-check',
+          errorCount: tscResult.errorCount,
+          duration: tscResult.duration,
+          trigger: 'periodic',
+        });
 
         if (!tscResult.success) {
           const nudge = formatTypeCheckNudge(tscResult);

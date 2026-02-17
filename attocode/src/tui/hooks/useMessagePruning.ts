@@ -132,13 +132,8 @@ const DEFAULT_CONFIG: Required<MessagePruningConfig> = {
  * }, [pruneIfNeeded]);
  * ```
  */
-export function useMessagePruning(
-  config: MessagePruningConfig = {}
-): UseMessagePruningResult {
-  const resolvedConfig = useMemo(
-    () => ({ ...DEFAULT_CONFIG, ...config }),
-    [config]
-  );
+export function useMessagePruning(config: MessagePruningConfig = {}): UseMessagePruningResult {
+  const resolvedConfig = useMemo(() => ({ ...DEFAULT_CONFIG, ...config }), [config]);
 
   const lastPruneStatsRef = useRef<PruneStats | null>(null);
   const totalPrunedRef = useRef(0);
@@ -153,7 +148,7 @@ export function useMessagePruning(
         messages.length >= resolvedConfig.minBeforePrune
       );
     },
-    [resolvedConfig.maxMessages, resolvedConfig.minBeforePrune]
+    [resolvedConfig.maxMessages, resolvedConfig.minBeforePrune],
   );
 
   /**
@@ -189,7 +184,7 @@ export function useMessagePruning(
 
       // Merge and sort by timestamp
       const result = [...keptPriority, ...keptRegular].sort(
-        (a, b) => a.ts.getTime() - b.ts.getTime()
+        (a, b) => a.ts.getTime() - b.ts.getTime(),
       );
 
       // Record stats
@@ -207,7 +202,7 @@ export function useMessagePruning(
 
       return result;
     },
-    [resolvedConfig]
+    [resolvedConfig],
   );
 
   /**
@@ -221,7 +216,7 @@ export function useMessagePruning(
       }
       return doPrune(messages, resolvedConfig.preserveRecent);
     },
-    [needsPruning, doPrune, resolvedConfig.preserveRecent]
+    [needsPruning, doPrune, resolvedConfig.preserveRecent],
   );
 
   /**
@@ -231,7 +226,7 @@ export function useMessagePruning(
     (messages: TUIMessage[]): TUIMessage[] => {
       return doPrune(messages, resolvedConfig.preserveRecent);
     },
-    [doPrune, resolvedConfig.preserveRecent]
+    [doPrune, resolvedConfig.preserveRecent],
   );
 
   /**

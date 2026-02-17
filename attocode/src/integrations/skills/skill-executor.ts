@@ -222,7 +222,7 @@ export class SkillExecutor {
   async executeSkill(
     skillName: string,
     rawArgs: string[],
-    ctx: SkillExecutionContext
+    ctx: SkillExecutionContext,
   ): Promise<SkillExecutionResult> {
     this.emit({ type: 'skill.invoke.start', skillName, args: rawArgs });
 
@@ -244,7 +244,7 @@ export class SkillExecutor {
     this.emit({ type: 'skill.invoke.parsed', skillName, parsed });
 
     if (parsed.errors.length > 0) {
-      const error = `Argument errors:\n${parsed.errors.map(e => `  - ${e}`).join('\n')}\n\n${this.formatSkillHelp(skill)}`;
+      const error = `Argument errors:\n${parsed.errors.map((e) => `  - ${e}`).join('\n')}\n\n${this.formatSkillHelp(skill)}`;
       this.emit({ type: 'skill.invoke.error', skillName, error });
       return { success: false, output: '', error };
     }
@@ -320,11 +320,7 @@ export class SkillExecutor {
    * Format help text for a skill.
    */
   formatSkillHelp(skill: Skill): string {
-    const lines: string[] = [
-      `Usage: /${skill.name} [options]`,
-      '',
-      skill.description,
-    ];
+    const lines: string[] = [`Usage: /${skill.name} [options]`, '', skill.description];
 
     if (skill.arguments && skill.arguments.length > 0) {
       lines.push('', 'Options:');
@@ -343,7 +339,7 @@ export class SkillExecutor {
    * Get all invokable skills.
    */
   getInvokableSkills(): Skill[] {
-    return this.skillManager.getAllSkills().filter(s => s.invokable);
+    return this.skillManager.getAllSkills().filter((s) => s.invokable);
   }
 
   /**

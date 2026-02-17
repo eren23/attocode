@@ -58,7 +58,16 @@ export interface QualityGateResult {
  *
  * Checks: V4 artifact verification, V9 zero-tool-call, V10 file-creation intent, V6 closure report.
  */
-export function runPreFlightChecks(task: SwarmTask, result: SwarmTaskResult, swarmConfig?: SwarmConfig, cachedArtifacts?: { allEmpty: boolean; summary: string; files: Array<{ path: string; exists: boolean; sizeBytes: number; preview: string }> }): QualityGateResult | null {
+export function runPreFlightChecks(
+  task: SwarmTask,
+  result: SwarmTaskResult,
+  swarmConfig?: SwarmConfig,
+  cachedArtifacts?: {
+    allEmpty: boolean;
+    summary: string;
+    files: Array<{ path: string; exists: boolean; sizeBytes: number; preview: string }>;
+  },
+): QualityGateResult | null {
   // V4: Pre-flight artifact check — if task has target files, verify they exist
   // C1: Accept pre-computed artifacts to avoid double filesystem scan
   const artifactReport = cachedArtifacts ?? checkArtifacts(task);
@@ -90,9 +99,12 @@ export function runPreFlightChecks(task: SwarmTask, result: SwarmTaskResult, swa
   // auto-reject. This catches workers that lacked write tools but still produced
   // rich text output (which would pass the hollow-completion check).
   if ((result.filesModified ?? []).length === 0 && (result.toolCalls ?? 0) === 0) {
-    const hasWriteIntent = /\b(write|create|generate|produce|save)\b.*\b(file|report|document|output)\b/i.test(task.description)
-      || /\b(write_file|write to|save to|output to)\b/i.test(task.description)
-      || (task.targetFiles && task.targetFiles.length > 0);
+    const hasWriteIntent =
+      /\b(write|create|generate|produce|save)\b.*\b(file|report|document|output)\b/i.test(
+        task.description,
+      ) ||
+      /\b(write_file|write to|save to|output to)\b/i.test(task.description) ||
+      (task.targetFiles && task.targetFiles.length > 0);
     if (hasWriteIntent) {
       return {
         score: 1,
@@ -109,10 +121,12 @@ export function runPreFlightChecks(task: SwarmTask, result: SwarmTaskResult, swa
   // closure report to detect workers that admit failure with budget excuses
   if (!artifactReport.allEmpty && result.closureReport) {
     const cr = result.closureReport;
-    const noRealFindings = cr.findings.length === 0 ||
-      cr.findings.every(f => /budget|unable|not completed|constraint/i.test(f));
-    const admitsFailure = cr.failures.length > 0 &&
-      cr.failures.some(f => /no.*search|no.*performed|not created/i.test(f));
+    const noRealFindings =
+      cr.findings.length === 0 ||
+      cr.findings.every((f) => /budget|unable|not completed|constraint/i.test(f));
+    const admitsFailure =
+      cr.failures.length > 0 &&
+      cr.failures.some((f) => /no.*search|no.*performed|not created/i.test(f));
 
     if (noRealFindings && admitsFailure) {
       return {
@@ -199,7 +213,7 @@ export function runConcreteChecks(task: SwarmTask, result: SwarmTaskResult): Con
   // Check 2: Verify closure report filesModified matches actual changes
   if (result.closureReport && result.closureReport.actionsTaken.length > 0) {
     const claimedFiles = filesModified;
-    const missingClaimed = claimedFiles.filter(f => {
+    const missingClaimed = claimedFiles.filter((f) => {
       try {
         return !fs.existsSync(path.resolve(f));
       } catch {
@@ -229,7 +243,12 @@ export async function evaluateWorkerOutput(
   result: SwarmTaskResult,
   judgeConfig?: QualityGateConfig,
   qualityThreshold: number = 3,
-  onUsage?: (response: { usage?: { total_tokens?: number; prompt_tokens?: number; completion_tokens?: number } }, purpose: string) => void,
+  onUsage?: (
+    response: {
+      usage?: { total_tokens?: number; prompt_tokens?: number; completion_tokens?: number };
+    },
+    purpose: string,
+  ) => void,
   fileArtifacts?: Array<{ path: string; preview: string }>,
   swarmConfig?: SwarmConfig,
   cachedArtifactReport?: ArtifactReport,
@@ -333,7 +352,7 @@ export function checkArtifacts(task: SwarmTask): ArtifactReport {
     files.push({ path: filePath, exists, sizeBytes, preview });
   }
 
-  const lines = files.map(f => {
+  const lines = files.map((f) => {
     if (!f.exists) return `  - ${f.path}: MISSING`;
     if (f.sizeBytes === 0) return `  - ${f.path}: EMPTY (0 bytes)`;
     return `  - ${f.path}: ${f.sizeBytes} bytes`;
@@ -440,10 +459,10 @@ export function checkArtifactsEnhanced(
   }
 
   // Build unified report
-  const existingFiles = allFiles.filter(f => f.exists && f.sizeBytes > 0);
+  const existingFiles = allFiles.filter((f) => f.exists && f.sizeBytes > 0);
   const allEmpty = allFiles.length > 0 && existingFiles.length === 0;
 
-  const lines = allFiles.map(f => {
+  const lines = allFiles.map((f) => {
     if (!f.exists) return `  - ${f.path}: MISSING`;
     if (f.sizeBytes === 0) return `  - ${f.path}: EMPTY (0 bytes)`;
     return `  - ${f.path}: ${f.sizeBytes} bytes`;
@@ -462,21 +481,29 @@ export function checkArtifactsEnhanced(
  * Build the quality evaluation prompt.
  * V4: Includes artifact verification data and temporal anchoring.
  */
-function buildQualityPrompt(task: SwarmTask, result: SwarmTaskResult, artifacts: ArtifactReport, fileArtifacts?: Array<{ path: string; preview: string }>): string {
+function buildQualityPrompt(
+  task: SwarmTask,
+  result: SwarmTaskResult,
+  artifacts: ArtifactReport,
+  fileArtifacts?: Array<{ path: string; preview: string }>,
+): string {
   const output = result.output.slice(0, 16000); // Truncate long outputs (16K gives judge enough evidence for multi-file tasks)
   const facts = getEnvironmentFacts();
 
   let artifactSection = '';
   if (artifacts.files.length > 0) {
-    const fileDetails = artifacts.files.map(f => {
-      if (!f.exists) return `  ${f.path}: MISSING — file was not created`;
-      if (f.sizeBytes === 0) return `  ${f.path}: EMPTY (0 bytes) — file exists but has no content`;
-      let detail = `  ${f.path}: ${f.sizeBytes} bytes`;
-      if (f.preview) {
-        detail += `\n    First 2000 chars: ${f.preview}`;
-      }
-      return detail;
-    }).join('\n');
+    const fileDetails = artifacts.files
+      .map((f) => {
+        if (!f.exists) return `  ${f.path}: MISSING — file was not created`;
+        if (f.sizeBytes === 0)
+          return `  ${f.path}: EMPTY (0 bytes) — file exists but has no content`;
+        let detail = `  ${f.path}: ${f.sizeBytes} bytes`;
+        if (f.preview) {
+          detail += `\n    First 2000 chars: ${f.preview}`;
+        }
+        return detail;
+      })
+      .join('\n');
 
     artifactSection = `
 ARTIFACT VERIFICATION (filesystem check — this is ground truth):
@@ -491,7 +518,7 @@ of what the worker claims. An empty file is NOT an acceptable artifact. Score <=
   if (fileArtifacts && fileArtifacts.length > 0) {
     const artifactDetails = fileArtifacts
       .slice(0, 10) // Limit to 10 files
-      .map(f => `  ${f.path}:\n    ${f.preview.slice(0, 1500)}`)
+      .map((f) => `  ${f.path}:\n    ${f.preview.slice(0, 1500)}`)
       .join('\n');
     fileArtifactsSection = `
 FILES CREATED/MODIFIED BY WORKER (from tool call results — ground truth):
@@ -512,11 +539,15 @@ ${task.targetFiles ? `TARGET FILES: ${task.targetFiles.join(', ')}` : ''}
 WORKER OUTPUT:
 ${output}
 
-${result.closureReport ? `STRUCTURED REPORT:
+${
+  result.closureReport
+    ? `STRUCTURED REPORT:
 - Findings: ${result.closureReport.findings.join('; ')}
 - Actions: ${result.closureReport.actionsTaken.join('; ')}
 - Failures: ${result.closureReport.failures.join('; ')}
-- Remaining: ${result.closureReport.remainingWork.join('; ')}` : ''}
+- Remaining: ${result.closureReport.remainingWork.join('; ')}`
+    : ''
+}
 ${artifactSection}
 ${fileArtifactsSection}
 

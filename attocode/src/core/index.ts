@@ -30,28 +30,52 @@ export * from './protocol/index.js';
 export * from './process-handlers.js';
 
 // Core agent context types (Phase 2.1: God class decomposition)
-export type { AgentContext, AgentContextMutators, SubAgentInstance, SubAgentFactory } from './types.js';
+export type {
+  AgentContext,
+  AgentContextMutators,
+  SubAgentInstance,
+  SubAgentFactory,
+} from './types.js';
 
 // Extracted modules (Phase 2.1)
 export {
-  executeToolCalls, executeSingleToolCall, summarizeToolResult, formatToolArgsForPlan, extractChangeReasoning,
-  PARALLELIZABLE_TOOLS, CONDITIONALLY_PARALLEL_TOOLS, extractToolFilePath, groupToolCallsIntoBatches,
+  executeToolCalls,
+  executeSingleToolCall,
+  summarizeToolResult,
+  formatToolArgsForPlan,
+  extractChangeReasoning,
+  PARALLELIZABLE_TOOLS,
+  CONDITIONALLY_PARALLEL_TOOLS,
+  extractToolFilePath,
+  groupToolCallsIntoBatches,
 } from './tool-executor.js';
 export { callLLM } from './response-handler.js';
 export { executeDirectly } from './execution-loop.js';
-export { spawnAgent, spawnAgentsParallel, getSubagentBudget, parseStructuredClosureReport } from './subagent-spawner.js';
+export {
+  spawnAgent,
+  spawnAgentsParallel,
+  getSubagentBudget,
+  parseStructuredClosureReport,
+} from './subagent-spawner.js';
 
 // Phase 2.2: Agent State Machine
 export {
-  AgentStateMachine, createAgentStateMachine,
-  type AgentPhase, type PhaseMetrics, type PhaseTransition, type PhaseSnapshot,
-  type StateMachineEvent, type StateMachineEventListener,
+  AgentStateMachine,
+  createAgentStateMachine,
+  type AgentPhase,
+  type PhaseMetrics,
+  type PhaseTransition,
+  type PhaseSnapshot,
+  type StateMachineEvent,
+  type StateMachineEventListener,
 } from './agent-state-machine.js';
 
 // Phase 2.3: Base Manager Pattern
 export {
   BaseManager,
-  type ManagerState, type BaseEvent, type ManagerLifecycleEvent,
+  type ManagerState,
+  type BaseEvent,
+  type ManagerLifecycleEvent,
 } from './base-manager.js';
 
 // Note: The queues/ directory was removed as unused dead code.

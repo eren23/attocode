@@ -181,11 +181,14 @@ export function needsMigration(db: Database.Database, migrationsDir: string): bo
  * @param migrationsDir - Directory containing SQL migration files
  * @returns Array of migrations that need to be applied
  */
-export function getPendingMigrations(db: Database.Database, migrationsDir: string): MigrationFile[] {
+export function getPendingMigrations(
+  db: Database.Database,
+  migrationsDir: string,
+): MigrationFile[] {
   const currentVersion = getSchemaVersion(db);
   const migrations = loadMigrations(migrationsDir);
 
-  return migrations.filter(m => m.version > currentVersion);
+  return migrations.filter((m) => m.version > currentVersion);
 }
 
 /**
@@ -230,8 +233,8 @@ function executeMigrationSql(db: Database.Database, sql: string): void {
 
   // Process each statement: trim, strip leading comments, filter out empty/comment-only
   const statements = rawStatements
-    .map(s => s.trim())
-    .filter(s => s.length > 0 && !isCommentOnly(s));
+    .map((s) => s.trim())
+    .filter((s) => s.length > 0 && !isCommentOnly(s));
 
   for (const statement of statements) {
     try {
@@ -264,7 +267,7 @@ export function applyMigrations(db: Database.Database, migrationsDir: string): M
   const appliedMigrations: string[] = [];
 
   // Filter to only pending migrations
-  const pendingMigrations = migrations.filter(m => m.version > currentVersion);
+  const pendingMigrations = migrations.filter((m) => m.version > currentVersion);
 
   if (pendingMigrations.length === 0) {
     return {
@@ -286,9 +289,7 @@ export function applyMigrations(db: Database.Database, migrationsDir: string): M
       appliedMigrations.push(migration.name);
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : String(err);
-      throw new Error(
-        `Migration ${migration.version}_${migration.name} failed: ${errorMessage}`
-      );
+      throw new Error(`Migration ${migration.version}_${migration.name} failed: ${errorMessage}`);
     }
   }
 
@@ -312,7 +313,7 @@ export function applyMigrations(db: Database.Database, migrationsDir: string): M
 export function applyMigrationsTo(
   db: Database.Database,
   migrationsDir: string,
-  targetVersion: number
+  targetVersion: number,
 ): MigrationResult {
   const currentVersion = getSchemaVersion(db);
   const migrations = loadMigrations(migrationsDir);
@@ -320,7 +321,7 @@ export function applyMigrationsTo(
 
   // Filter to migrations between current and target version
   const pendingMigrations = migrations.filter(
-    m => m.version > currentVersion && m.version <= targetVersion
+    (m) => m.version > currentVersion && m.version <= targetVersion,
   );
 
   if (pendingMigrations.length === 0) {
@@ -339,9 +340,7 @@ export function applyMigrationsTo(
       appliedMigrations.push(migration.name);
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : String(err);
-      throw new Error(
-        `Migration ${migration.version}_${migration.name} failed: ${errorMessage}`
-      );
+      throw new Error(`Migration ${migration.version}_${migration.name} failed: ${errorMessage}`);
     }
   }
 
@@ -361,7 +360,10 @@ export function applyMigrationsTo(
  * @param migrationsDir - Directory containing SQL migration files
  * @returns Object containing version info and pending migrations
  */
-export function getMigrationStatus(db: Database.Database, migrationsDir: string): {
+export function getMigrationStatus(
+  db: Database.Database,
+  migrationsDir: string,
+): {
   currentVersion: number;
   latestVersion: number;
   pendingCount: number;
@@ -369,12 +371,12 @@ export function getMigrationStatus(db: Database.Database, migrationsDir: string)
 } {
   const currentVersion = getSchemaVersion(db);
   const migrations = loadMigrations(migrationsDir);
-  const pending = migrations.filter(m => m.version > currentVersion);
+  const pending = migrations.filter((m) => m.version > currentVersion);
 
   return {
     currentVersion,
     latestVersion: migrations.length > 0 ? migrations[migrations.length - 1].version : 0,
     pendingCount: pending.length,
-    pendingMigrations: pending.map(m => ({ version: m.version, name: m.name })),
+    pendingMigrations: pending.map((m) => ({ version: m.version, name: m.name })),
   };
 }

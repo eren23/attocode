@@ -326,7 +326,7 @@ export class ContextEngineeringManager {
    */
   injectRecitation(
     messages: ContextMessage[],
-    state: Omit<RecitationState, 'iteration'>
+    state: Omit<RecitationState, 'iteration'>,
   ): ContextMessage[] {
     this.iteration++;
 
@@ -340,7 +340,7 @@ export class ContextEngineeringManager {
       {
         ...state,
         iteration: this.iteration,
-      }
+      },
     );
 
     if (result.length > messages.length) {
@@ -366,7 +366,7 @@ export class ContextEngineeringManager {
    */
   async compact(
     messages: ContextMessage[],
-    summarize: (msgs: ContextMessage[]) => Promise<string>
+    summarize: (msgs: ContextMessage[]) => Promise<string>,
   ): Promise<{
     summary: string;
     references: Reference[];
@@ -592,7 +592,7 @@ export class ContextEngineeringManager {
  * ```
  */
 export function createContextEngineering(
-  config: ContextEngineeringConfig = {}
+  config: ContextEngineeringConfig = {},
 ): ContextEngineeringManager {
   return new ContextEngineeringManager(config);
 }
@@ -613,9 +613,7 @@ export function createMinimalContextEngineering(): ContextEngineeringManager {
 /**
  * Create a full-featured context engineering manager.
  */
-export function createFullContextEngineering(
-  staticPrefix: string
-): ContextEngineeringManager {
+export function createFullContextEngineering(staticPrefix: string): ContextEngineeringManager {
   return new ContextEngineeringManager({
     enableCacheOptimization: true,
     enableRecitation: true,

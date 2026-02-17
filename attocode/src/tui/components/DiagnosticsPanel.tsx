@@ -18,7 +18,12 @@ import type { TypeCheckerState } from '../../integrations/safety/type-checker.js
 export interface DiagnosticsPanelProps {
   diagnostics: TransparencyState['diagnostics'];
   typeCheckerState: TypeCheckerState | null;
-  astCacheStats: { fileCount: number; languages: Record<string, number>; totalParses: number; cacheHits: number } | null;
+  astCacheStats: {
+    fileCount: number;
+    languages: Record<string, number>;
+    totalParses: number;
+    cacheHits: number;
+  } | null;
   expanded: boolean;
   colors: ThemeColors;
 }
@@ -43,9 +48,12 @@ export const DiagnosticsPanel = memo(function DiagnosticsPanel({
     ? `${astCacheStats.fileCount} files (${astCacheStats.totalParses} parses, ${astCacheStats.cacheHits} hits)`
     : 'not available';
 
-  const langBreakdown = astCacheStats && Object.keys(astCacheStats.languages).length > 0
-    ? Object.entries(astCacheStats.languages).map(([k, v]) => `${k}:${v}`).join(' ')
-    : '';
+  const langBreakdown =
+    astCacheStats && Object.keys(astCacheStats.languages).length > 0
+      ? Object.entries(astCacheStats.languages)
+          .map(([k, v]) => `${k}:${v}`)
+          .join(' ')
+      : '';
 
   // TSC status
   let tscStatus: string;
@@ -75,7 +83,9 @@ export const DiagnosticsPanel = memo(function DiagnosticsPanel({
       paddingX={1}
     >
       <Box justifyContent="space-between">
-        <Text color={colors.accent} bold>[d] Diagnostics (Alt+Y)</Text>
+        <Text color={colors.accent} bold>
+          [d] Diagnostics (Alt+Y)
+        </Text>
         <Text color={colors.textMuted} dimColor>
           {typeCheckerState?.tsconfigDir ? 'TypeScript project' : ''}
         </Text>
@@ -89,8 +99,10 @@ export const DiagnosticsPanel = memo(function DiagnosticsPanel({
         </Box>
         {langBreakdown && (
           <Box gap={1}>
-            <Text color={colors.textMuted}>           </Text>
-            <Text color={colors.textMuted} dimColor>{langBreakdown}</Text>
+            <Text color={colors.textMuted}> </Text>
+            <Text color={colors.textMuted} dimColor>
+              {langBreakdown}
+            </Text>
           </Box>
         )}
 
@@ -103,8 +115,10 @@ export const DiagnosticsPanel = memo(function DiagnosticsPanel({
         </Box>
         {tsEdits > 0 && (
           <Box gap={1}>
-            <Text color={colors.textMuted}>           </Text>
-            <Text color={colors.warning} dimColor>{tsEdits} TS edit(s) since last check</Text>
+            <Text color={colors.textMuted}> </Text>
+            <Text color={colors.warning} dimColor>
+              {tsEdits} TS edit(s) since last check
+            </Text>
           </Box>
         )}
 
@@ -112,11 +126,15 @@ export const DiagnosticsPanel = memo(function DiagnosticsPanel({
         {diagnostics.recentSyntaxErrors.length > 0 && (
           <>
             <Box marginTop={1}>
-              <Text color={colors.warning} bold>Recent Syntax Errors:</Text>
+              <Text color={colors.warning} bold>
+                Recent Syntax Errors:
+              </Text>
             </Box>
             {diagnostics.recentSyntaxErrors.slice(-5).map((err, i) => (
               <Box key={`${err.file}:${err.line}:${i}`} gap={1}>
-                <Text color={colors.textMuted} dimColor>  </Text>
+                <Text color={colors.textMuted} dimColor>
+                  {' '}
+                </Text>
                 <Text color={colors.error} wrap="truncate">
                   {err.file.split('/').pop()}:{err.line} — {err.message}
                 </Text>

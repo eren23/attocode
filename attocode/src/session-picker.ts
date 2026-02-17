@@ -30,7 +30,11 @@ async function readLineRaw(prompt: string, debug = false): Promise<string> {
   };
 
   if (debug) {
-    logger.debug('stdin listeners before', { data: savedListeners.data.length, readable: savedListeners.readable.length, keypress: savedListeners.keypress.length });
+    logger.debug('stdin listeners before', {
+      data: savedListeners.data.length,
+      readable: savedListeners.readable.length,
+      keypress: savedListeners.keypress.length,
+    });
   }
 
   stdin.removeAllListeners('data');
@@ -103,9 +107,9 @@ async function readLineRaw(prompt: string, debug = false): Promise<string> {
       }
 
       // Restore all saved listeners
-      savedListeners.data.forEach(l => stdin.on('data', l as any));
-      savedListeners.readable.forEach(l => stdin.on('readable', l as any));
-      savedListeners.keypress.forEach(l => stdin.on('keypress', l as any));
+      savedListeners.data.forEach((l) => stdin.on('data', l as any));
+      savedListeners.readable.forEach((l) => stdin.on('readable', l as any));
+      savedListeners.keypress.forEach((l) => stdin.on('keypress', l as any));
     };
 
     stdin.on('data', onData);
@@ -210,7 +214,7 @@ export interface SessionPickerResult {
  */
 export async function showSessionPicker(
   sessions: SessionMetadata[],
-  options: SessionPickerOptions = {}
+  options: SessionPickerOptions = {},
 ): Promise<SessionPickerResult> {
   const { maxSessions = 10 } = options;
 
@@ -263,7 +267,7 @@ export async function showSessionPicker(
   if (num >= 1 && num <= recentSessions.length) {
     return {
       action: 'resume',
-      sessionId: recentSessions[num - 1].id
+      sessionId: recentSessions[num - 1].id,
     };
   }
 
@@ -276,9 +280,7 @@ export async function showSessionPicker(
 /**
  * Simple inline session picker (single line prompt).
  */
-export async function showQuickPicker(
-  sessions: SessionMetadata[]
-): Promise<SessionPickerResult> {
+export async function showQuickPicker(sessions: SessionMetadata[]): Promise<SessionPickerResult> {
   if (sessions.length === 0) {
     return { action: 'new' };
   }
@@ -297,7 +299,10 @@ export async function showQuickPicker(
 
   // Use raw input to avoid conflicts with other readline instances
   // Enable debug logging to diagnose double character issue
-  const answer = await readLineRaw(workspaceMismatch ? 'Resume? [force/n/list]: ' : 'Resume? [Y/n/list]: ', true);
+  const answer = await readLineRaw(
+    workspaceMismatch ? 'Resume? [force/n/list]: ' : 'Resume? [Y/n/list]: ',
+    true,
+  );
   const trimmed = answer.trim().toLowerCase();
 
   if (!workspaceMismatch && (trimmed === '' || trimmed === 'y' || trimmed === 'yes')) {
@@ -308,7 +313,9 @@ export async function showQuickPicker(
   }
   if (workspaceMismatch && (trimmed === '' || trimmed === 'y' || trimmed === 'yes')) {
     // eslint-disable-next-line no-console
-    console.log('Starting new session (resume blocked by workspace mismatch; use "force" to override).');
+    console.log(
+      'Starting new session (resume blocked by workspace mismatch; use "force" to override).',
+    );
     return { action: 'new' };
   }
 
@@ -323,10 +330,7 @@ export async function showQuickPicker(
 /**
  * Format sessions for display (used by /sessions command).
  */
-export function formatSessionsTable(
-  sessions: SessionMetadata[],
-  maxRows: number = 10
-): string {
+export function formatSessionsTable(sessions: SessionMetadata[], maxRows: number = 10): string {
   if (sessions.length === 0) {
     return 'No saved sessions.';
   }
@@ -350,7 +354,9 @@ export function formatSessionsTable(
   lines.push('└────┴────────────────────────────────┴──────────┴────────────┘');
 
   if (sessions.length > maxRows) {
-    lines.push(`  ... and ${sessions.length - maxRows} more (use /load <id> to load specific session)`);
+    lines.push(
+      `  ... and ${sessions.length - maxRows} more (use /load <id> to load specific session)`,
+    );
   }
 
   return lines.join('\n');

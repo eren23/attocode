@@ -12,7 +12,15 @@
  * On startup, detects recent sessions (<5 min) and offers auto-resume.
  */
 
-import { writeFileSync, readFileSync, mkdirSync, existsSync, readdirSync, statSync, unlinkSync } from 'node:fs';
+import {
+  writeFileSync,
+  readFileSync,
+  mkdirSync,
+  existsSync,
+  readdirSync,
+  statSync,
+  unlinkSync,
+} from 'node:fs';
 import { join } from 'node:path';
 
 // =============================================================================
@@ -218,7 +226,7 @@ export class AutoCheckpointManager {
     try {
       if (!existsSync(sessionDir)) return [];
 
-      const files = readdirSync(sessionDir).filter(f => f.endsWith('.json'));
+      const files = readdirSync(sessionDir).filter((f) => f.endsWith('.json'));
 
       for (const file of files) {
         try {
@@ -240,9 +248,8 @@ export class AutoCheckpointManager {
    */
   formatCheckpointSummary(checkpoint: Checkpoint): string {
     const age = Date.now() - checkpoint.timestamp;
-    const ageStr = age < 60000
-      ? `${Math.round(age / 1000)}s ago`
-      : `${Math.round(age / 60000)}m ago`;
+    const ageStr =
+      age < 60000 ? `${Math.round(age / 1000)}s ago` : `${Math.round(age / 60000)}m ago`;
 
     const lines: string[] = [
       `Session: ${checkpoint.sessionId}`,
@@ -314,7 +321,10 @@ export class AutoCheckpointManager {
 
     if (checkpoints.length > this.config.maxCheckpointsPerSession) {
       // Remove oldest checkpoints
-      const toRemove = checkpoints.slice(0, checkpoints.length - this.config.maxCheckpointsPerSession);
+      const toRemove = checkpoints.slice(
+        0,
+        checkpoints.length - this.config.maxCheckpointsPerSession,
+      );
       const sessionDir = join(this.config.checkpointDir, sessionId);
 
       for (const ckpt of toRemove) {

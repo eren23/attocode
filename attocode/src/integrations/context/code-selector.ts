@@ -121,8 +121,7 @@ export async function selectRelevantCode(
       filesConsidered: repoMap.chunks.size,
       filesSelected: selected.length,
       coveragePercent: (selected.length / repoMap.chunks.size) * 100,
-      averageImportance:
-        selected.reduce((sum, c) => sum + c.importance, 0) / selected.length || 0,
+      averageImportance: selected.reduce((sum, c) => sum + c.importance, 0) / selected.length || 0,
     },
   };
 
@@ -146,12 +145,7 @@ export async function getEnhancedContext(
   deps: CodeSelectorDeps,
   options: EnhancedContextOptions,
 ): Promise<EnhancedContextResult> {
-  const {
-    editingFile,
-    editingPosition,
-    lspBoostFactor = 0.3,
-    ...baseOptions
-  } = options;
+  const { editingFile, editingPosition, lspBoostFactor = 0.3, ...baseOptions } = options;
 
   // Start with base selection
   const baseResult = await selectRelevantCode(deps, baseOptions);
@@ -187,9 +181,8 @@ export async function getEnhancedContext(
   const repoMap = deps.repoMap!;
   const boostedFiles: string[] = [];
 
-  const boostedChunks = Array.from(repoMap.chunks.values()).map(chunk => {
-    const isLspRelated = lspRelatedFiles.has(chunk.filePath) ||
-      lspRelatedFiles.has(chunk.id);
+  const boostedChunks = Array.from(repoMap.chunks.values()).map((chunk) => {
+    const isLspRelated = lspRelatedFiles.has(chunk.filePath) || lspRelatedFiles.has(chunk.id);
 
     if (isLspRelated) {
       boostedFiles.push(chunk.filePath);
@@ -202,7 +195,7 @@ export async function getEnhancedContext(
   });
 
   // Re-sort and select with boosted importance
-  const candidates = boostedChunks.filter(chunk => {
+  const candidates = boostedChunks.filter((chunk) => {
     if (chunk.importance < (baseOptions.minImportance ?? 0)) return false;
     if (!baseOptions.includeTypes && chunk.type === 'types') return false;
     if (!baseOptions.includeTests && chunk.type === 'test') return false;
@@ -211,7 +204,7 @@ export async function getEnhancedContext(
 
   // Calculate relevance if task provided
   const withRelevance = baseOptions.task
-    ? candidates.map(chunk => ({
+    ? candidates.map((chunk) => ({
         ...chunk,
         relevance: calculateRelevance(chunk, baseOptions.task!),
       }))
@@ -240,7 +233,7 @@ export async function getEnhancedContext(
   // Then priority files
   for (const priorityFile of baseOptions.priorityFiles ?? []) {
     const chunk = repoMap.chunks.get(priorityFile);
-    if (chunk && !selected.some(s => s.id === priorityFile)) {
+    if (chunk && !selected.some((s) => s.id === priorityFile)) {
       if (totalTokens + chunk.tokenCount <= baseOptions.maxTokens) {
         selected.push(chunk);
         totalTokens += chunk.tokenCount;
@@ -250,7 +243,7 @@ export async function getEnhancedContext(
 
   // Fill remaining budget
   for (const chunk of sorted) {
-    if (selected.some(s => s.id === chunk.id)) continue;
+    if (selected.some((s) => s.id === chunk.id)) continue;
     if (totalTokens + chunk.tokenCount <= baseOptions.maxTokens) {
       selected.push(chunk);
       totalTokens += chunk.tokenCount;
@@ -271,7 +264,7 @@ export async function getEnhancedContext(
       averageImportance: selected.reduce((sum, c) => sum + c.importance, 0) / selected.length || 0,
     },
     lspEnhancements: enhancements,
-    lspBoostedFiles: boostedFiles.filter(f => selected.some(s => s.filePath === f)),
+    lspBoostedFiles: boostedFiles.filter((f) => selected.some((s) => s.filePath === f)),
   };
 }
 
@@ -609,18 +602,16 @@ export function searchChunks(
   const queryTerms = tokenizeQuery(query);
   if (queryTerms.length === 0) return [];
 
-  const normalize = caseSensitive
-    ? (s: string) => s
-    : (s: string) => s.toLowerCase();
+  const normalize = caseSensitive ? (s: string) => s : (s: string) => s.toLowerCase();
 
   const chunks = Array.from(repoMap.chunks.values());
 
-  return chunks.filter(chunk => {
+  return chunks.filter((chunk) => {
     // Symbol matching (most relevant for code search)
     if (includeSymbols && chunk.symbols.length > 0) {
-      const symbolMatch = chunk.symbols.some(symbol => {
+      const symbolMatch = chunk.symbols.some((symbol) => {
         const normalizedSymbol = normalize(symbol);
-        return queryTerms.some(term => {
+        return queryTerms.some((term) => {
           if (useFuzzy) {
             return fuzzyMatch(normalizedSymbol, normalize(term), maxDistance);
           }
@@ -633,7 +624,7 @@ export function searchChunks(
     // Path matching
     if (includePaths) {
       const normalizedPath = normalize(chunk.filePath);
-      const pathMatch = queryTerms.some(term => {
+      const pathMatch = queryTerms.some((term) => {
         const normalizedTerm = normalize(term);
         // Always check substring first
         if (normalizedPath.includes(normalizedTerm)) {
@@ -652,9 +643,7 @@ export function searchChunks(
     // Content matching (expensive, off by default)
     if (includeContent) {
       const normalizedContent = normalize(chunk.content);
-      const contentMatch = queryTerms.every(term =>
-        normalizedContent.includes(normalize(term)),
-      );
+      const contentMatch = queryTerms.every((term) => normalizedContent.includes(normalize(term)));
       if (contentMatch) return true;
     }
 
@@ -674,7 +663,7 @@ export function searchRanked(
 
   const matches = searchChunks(repoMap, query, searchOptions);
 
-  const scored = matches.map(chunk => ({
+  const scored = matches.map((chunk) => ({
     chunk,
     score: calculateSearchScore(chunk, query),
   }));
@@ -753,16 +742,38 @@ export function calculateSearchScore(chunk: CodeChunk, query: string): number {
 export function tokenizeQuery(query: string): string[] {
   // Common stop words to filter out
   const stopWords = new Set([
-    'the', 'and', 'for', 'with', 'this', 'that', 'from', 'are', 'was', 'were',
-    'been', 'being', 'have', 'has', 'had', 'does', 'did', 'will', 'would',
-    'could', 'should', 'may', 'might', 'must', 'can',
+    'the',
+    'and',
+    'for',
+    'with',
+    'this',
+    'that',
+    'from',
+    'are',
+    'was',
+    'were',
+    'been',
+    'being',
+    'have',
+    'has',
+    'had',
+    'does',
+    'did',
+    'will',
+    'would',
+    'could',
+    'should',
+    'may',
+    'might',
+    'must',
+    'can',
   ]);
 
   return query
     .split(/\s+/)
-    .map(term => term.replace(/[^\w]/g, '')) // Remove punctuation
-    .filter(term => term.length > 1) // At least 2 chars
-    .filter(term => !stopWords.has(term.toLowerCase()));
+    .map((term) => term.replace(/[^\w]/g, '')) // Remove punctuation
+    .filter((term) => term.length > 1) // At least 2 chars
+    .filter((term) => !stopWords.has(term.toLowerCase()));
 }
 
 /**

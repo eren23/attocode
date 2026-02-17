@@ -1,6 +1,6 @@
 /**
  * Lesson 3: Tool System Types
- * 
+ *
  * Type definitions for the tool registry and permission system.
  */
 
@@ -75,20 +75,20 @@ export interface ToolResult {
 /**
  * Danger levels for tools and operations.
  */
-export type DangerLevel = 
-  | 'safe'      // Reading, listing - auto-approve
-  | 'moderate'  // Writing files - may need confirmation
+export type DangerLevel =
+  | 'safe' // Reading, listing - auto-approve
+  | 'moderate' // Writing files - may need confirmation
   | 'dangerous' // Destructive commands - require confirmation
   | 'critical'; // System commands - may be blocked entirely
 
 /**
  * Permission modes.
  */
-export type PermissionMode = 
-  | 'strict'      // Block dangerous, ask for moderate
+export type PermissionMode =
+  | 'strict' // Block dangerous, ask for moderate
   | 'interactive' // Ask user for moderate and dangerous
-  | 'auto-safe'   // Auto-approve safe and moderate
-  | 'yolo';       // Auto-approve everything (testing only)
+  | 'auto-safe' // Auto-approve safe and moderate
+  | 'yolo'; // Auto-approve everything (testing only)
 
 /**
  * Request for permission to perform an operation.
@@ -157,10 +157,10 @@ export interface ToolDescription {
 export interface ExecuteOptions {
   /** Permission mode to use */
   permissionMode?: PermissionMode;
-  
+
   /** Working directory for file operations */
   cwd?: string;
-  
+
   /** Timeout in milliseconds */
   timeout?: number;
 }
@@ -168,7 +168,7 @@ export interface ExecuteOptions {
 /**
  * Events emitted during tool execution.
  */
-export type ToolEvent = 
+export type ToolEvent =
   | { type: 'start'; tool: string; input: unknown }
   | { type: 'permission_requested'; request: PermissionRequest }
   | { type: 'permission_granted'; request: PermissionRequest }
@@ -204,15 +204,19 @@ export const DANGEROUS_PATTERNS: DangerPattern[] = [
   { pattern: /\bsu\b/, level: 'critical', description: 'Switch user' },
   { pattern: /\bchmod\s+[0-7]*7/, level: 'critical', description: 'World-writable permission' },
   { pattern: /\bchown\b/, level: 'critical', description: 'Change ownership' },
-  
+
   // Dangerous - destructive operations
   { pattern: /\brm\s+(-[rf]+\s+)*\//, level: 'dangerous', description: 'Remove from root' },
   { pattern: /\brm\s+-rf\b/, level: 'dangerous', description: 'Recursive force delete' },
-  { pattern: />\s*\/dev\/(?!null)/, level: 'dangerous', description: 'Write to device (excludes /dev/null)' },
+  {
+    pattern: />\s*\/dev\/(?!null)/,
+    level: 'dangerous',
+    description: 'Write to device (excludes /dev/null)',
+  },
   { pattern: /\bdd\b.*if=/, level: 'dangerous', description: 'Low-level disk operation' },
   { pattern: /\bmkfs\b/, level: 'dangerous', description: 'Format filesystem' },
   { pattern: /\bkill\s+-9\b/, level: 'dangerous', description: 'Force kill process' },
-  
+
   // Moderate - network and potentially harmful
   { pattern: /\bcurl\b.*\|\s*(ba)?sh/, level: 'dangerous', description: 'Pipe URL to shell' },
   { pattern: /\bwget\b.*\|\s*(ba)?sh/, level: 'dangerous', description: 'Pipe URL to shell' },

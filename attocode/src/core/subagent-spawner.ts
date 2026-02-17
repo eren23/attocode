@@ -9,23 +9,15 @@
  * ProductionAgent directly — avoids circular dependencies.
  */
 
-import type {
-  SandboxConfig,
-} from '../types.js';
+import type { SandboxConfig } from '../types.js';
 
 import type { AgentContext, AgentContextMutators, SubAgentFactory } from './types.js';
 import { estimateTokenCount } from '../integrations/utilities/token-estimate.js';
 import type { SpawnConstraints } from '../tools/agent.js';
 
-import {
-  getSubagentTimeout,
-  getSubagentMaxIterations,
-} from '../defaults.js';
+import { getSubagentTimeout, getSubagentMaxIterations } from '../defaults.js';
 
-import {
-  calculateTaskSimilarity,
-  SUBAGENT_PLAN_MODE_ADDITION,
-} from '../modes.js';
+import { calculateTaskSimilarity, SUBAGENT_PLAN_MODE_ADDITION } from '../modes.js';
 
 import {
   SUBAGENT_BUDGET,
@@ -90,7 +82,9 @@ export function parseStructuredClosureReport(
           failures: Array.isArray(parsed.failures) ? parsed.failures : [],
           remainingWork: Array.isArray(parsed.remainingWork) ? parsed.remainingWork : [],
           exitReason: defaultExitReason,
-          suggestedNextSteps: Array.isArray(parsed.suggestedNextSteps) ? parsed.suggestedNextSteps : undefined,
+          suggestedNextSteps: Array.isArray(parsed.suggestedNextSteps)
+            ? parsed.suggestedNextSteps
+            : undefined,
         };
       }
     }
@@ -235,12 +229,14 @@ export async function spawnAgent(
       elapsedMs: now - existingMatch.timestamp,
     });
 
-    const duplicateMessage = `[DUPLICATE SPAWN PREVENTED${matchType === 'semantic' ? ' - SEMANTIC MATCH' : ''}]\n` +
+    const duplicateMessage =
+      `[DUPLICATE SPAWN PREVENTED${matchType === 'semantic' ? ' - SEMANTIC MATCH' : ''}]\n` +
       `This task was already spawned ${Math.round((now - existingMatch.timestamp) / 1000)}s ago.\n` +
-      `${existingMatch.queuedChanges > 0
-        ? `The previous spawn queued ${existingMatch.queuedChanges} change(s) to the pending plan.\n` +
-          `These changes are already in your plan - do NOT spawn again.\n`
-        : ''
+      `${
+        existingMatch.queuedChanges > 0
+          ? `The previous spawn queued ${existingMatch.queuedChanges} change(s) to the pending plan.\n` +
+            `These changes are already in your plan - do NOT spawn again.\n`
+          : ''
       }Previous result summary:\n${existingMatch.result.slice(0, 500)}`;
 
     return {
@@ -269,14 +265,16 @@ export async function spawnAgent(
     const policyResolution = resolvePolicyProfile({
       policyEngine: ctx.config.policyEngine,
       requestedProfile: agentDef.policyProfile,
-      swarmConfig: isSwarmWorker && ctx.config.swarm && typeof ctx.config.swarm === 'object'
-        ? ctx.config.swarm as SwarmConfig
-        : undefined,
+      swarmConfig:
+        isSwarmWorker && ctx.config.swarm && typeof ctx.config.swarm === 'object'
+          ? (ctx.config.swarm as SwarmConfig)
+          : undefined,
       taskType: inferredTaskType,
       isSwarmWorker,
-      sandboxConfig: ctx.config.sandbox && typeof ctx.config.sandbox === 'object'
-        ? ctx.config.sandbox
-        : undefined,
+      sandboxConfig:
+        ctx.config.sandbox && typeof ctx.config.sandbox === 'object'
+          ? ctx.config.sandbox
+          : undefined,
     });
     ctx.emit({
       type: 'policy.profile.resolved',
@@ -304,37 +302,46 @@ export async function spawnAgent(
     if (ctx.toolRecommendation && agentTools.length > 15) {
       const taskType = ToolRecommendationEngine.inferTaskType(agentName);
       const recommendations = ctx.toolRecommendation.recommendTools(
-        task, taskType, agentTools.map(t => t.name)
+        task,
+        taskType,
+        agentTools.map((t) => t.name),
       );
       if (recommendations.length > 0) {
-        const recommendedNames = new Set(recommendations.map(r => r.toolName));
+        const recommendedNames = new Set(recommendations.map((r) => r.toolName));
         const alwaysKeep = new Set(['spawn_agent', 'spawn_agents_parallel']);
         if (policyResolution.profile.allowedTools) {
           for (const t of policyResolution.profile.allowedTools) alwaysKeep.add(t);
         }
-        agentTools = agentTools.filter(t =>
-          recommendedNames.has(t.name) || alwaysKeep.has(t.name)
+        agentTools = agentTools.filter(
+          (t) => recommendedNames.has(t.name) || alwaysKeep.has(t.name),
         );
       }
     }
 
     // Enforce unified tool policy
-    if (policyResolution.profile.toolAccessMode === 'whitelist' && policyResolution.profile.allowedTools) {
+    if (
+      policyResolution.profile.toolAccessMode === 'whitelist' &&
+      policyResolution.profile.allowedTools
+    ) {
       const allowed = new Set(policyResolution.profile.allowedTools);
-      agentTools = agentTools.filter(t => allowed.has(t.name));
-    } else if (policyResolution.profile.deniedTools && policyResolution.profile.deniedTools.length > 0) {
+      agentTools = agentTools.filter((t) => allowed.has(t.name));
+    } else if (
+      policyResolution.profile.deniedTools &&
+      policyResolution.profile.deniedTools.length > 0
+    ) {
       const denied = new Set(policyResolution.profile.deniedTools);
-      agentTools = agentTools.filter(t => !denied.has(t.name));
+      agentTools = agentTools.filter((t) => !denied.has(t.name));
     }
 
     if (agentTools.length === 0) {
-      throw new Error(`Worker '${agentName}' has zero available tools after filtering. Check toolAccessMode and policy profile '${policyResolution.profileName}'.`);
+      throw new Error(
+        `Worker '${agentName}' has zero available tools after filtering. Check toolAccessMode and policy profile '${policyResolution.profileName}'.`,
+      );
     }
 
     // Resolve model
-    const resolvedModel = (agentDef.model && agentDef.model.includes('/'))
-      ? agentDef.model
-      : ctx.config.model;
+    const resolvedModel =
+      agentDef.model && agentDef.model.includes('/') ? agentDef.model : ctx.config.model;
 
     // Persist subagent task lifecycle
     if (ctx.store?.hasWorkerResultsFeature()) {
@@ -342,7 +349,7 @@ export async function spawnAgent(
         workerResultId = ctx.store.createWorkerResult(
           agentId,
           task.slice(0, 500),
-          resolvedModel || 'default'
+          resolvedModel || 'default',
         );
       } catch (storeErr) {
         ctx.observability?.logger?.warn('Failed to create worker result record', {
@@ -369,7 +376,8 @@ export async function spawnAgent(
     const agentDefTimeout = isValidTimeout(agentDef.timeout) ? agentDef.timeout : undefined;
     const perTypeConfigTimeout = isValidTimeout(rawPerTypeTimeout) ? rawPerTypeTimeout : undefined;
     const globalConfigTimeout = isValidTimeout(rawGlobalTimeout) ? rawGlobalTimeout : undefined;
-    const subagentTimeout = agentDefTimeout ?? perTypeConfigTimeout ?? agentTypeTimeout ?? globalConfigTimeout ?? 300000;
+    const subagentTimeout =
+      agentDefTimeout ?? perTypeConfigTimeout ?? agentTypeTimeout ?? globalConfigTimeout ?? 300000;
 
     // Iteration precedence
     const agentTypeMaxIter = getSubagentMaxIterations(agentName);
@@ -383,7 +391,12 @@ export async function spawnAgent(
       v !== undefined && Number.isFinite(v) && v > 0 && Number.isInteger(v);
     const perTypeConfigMaxIter = isValidIter(rawPerTypeMaxIter) ? rawPerTypeMaxIter : undefined;
     const globalConfigMaxIter = isValidIter(rawGlobalMaxIter) ? rawGlobalMaxIter : undefined;
-    const defaultMaxIterations = agentDef.maxIterations ?? perTypeConfigMaxIter ?? agentTypeMaxIter ?? globalConfigMaxIter ?? 15;
+    const defaultMaxIterations =
+      agentDef.maxIterations ??
+      perTypeConfigMaxIter ??
+      agentTypeMaxIter ??
+      globalConfigMaxIter ??
+      15;
 
     // BLACKBOARD CONTEXT INJECTION
     let blackboardContext = '';
@@ -408,7 +421,10 @@ export async function spawnAgent(
       blackboardFindingsCount = recentFindings.length;
       if (recentFindings.length > 0) {
         const findingsSummary = recentFindings
-          .map(f => `- [${f.agentId}] ${f.topic}: ${f.content.slice(0, 150)}${f.content.length > 150 ? '...' : ''}`)
+          .map(
+            (f) =>
+              `- [${f.agentId}] ${f.topic}: ${f.content.slice(0, 150)}${f.content.length > 150 ? '...' : ''}`,
+          )
           .join('\n');
         blackboardContext = `\n\n**BLACKBOARD CONTEXT (from parent/sibling agents):**\n${findingsSummary}\n`;
       }
@@ -419,7 +435,9 @@ export async function spawnAgent(
     if (currentPlan && currentPlan.proposedChanges.length > 0) {
       const pendingFiles = currentPlan.proposedChanges
         .filter((c: { tool: string }) => c.tool === 'write_file' || c.tool === 'edit_file')
-        .map((c: { args: { path?: string; file_path?: string } }) => c.args.path || c.args.file_path)
+        .map(
+          (c: { args: { path?: string; file_path?: string } }) => c.args.path || c.args.file_path,
+        )
         .filter(Boolean) as string[];
 
       if (pendingFiles.length > 0) {
@@ -436,37 +454,45 @@ export async function spawnAgent(
     if (isSwarmWorker) {
       constraintParts.push(
         `**Execution Mode:** You are a focused worker agent.\n` +
-        `- Complete your assigned task using tool calls.\n` +
-        `- Your FIRST action must be a tool call (read_file, write_file, edit_file, grep, glob, etc.).\n` +
-        `- To create files use write_file. To modify files use edit_file. Do NOT use bash for file operations.\n` +
-        `- You will receive a system message if you need to wrap up. Until then, work normally.\n` +
-        `- Do NOT produce summaries or reports — produce CODE and FILE CHANGES.`
+          `- Complete your assigned task using tool calls.\n` +
+          `- Your FIRST action must be a tool call (read_file, write_file, edit_file, grep, glob, etc.).\n` +
+          `- To create files use write_file. To modify files use edit_file. Do NOT use bash for file operations.\n` +
+          `- You will receive a system message if you need to wrap up. Until then, work normally.\n` +
+          `- Do NOT produce summaries or reports — produce CODE and FILE CHANGES.`,
       );
     } else {
       constraintParts.push(
         `**RESOURCE AWARENESS (CRITICAL):**\n` +
-        `- Token budget: ~${(subagentBudgetTokens / 1000).toFixed(0)}k tokens\n` +
-        `- Time limit: ~${subagentBudgetMinutes} minutes\n` +
-        `- You will receive warnings at 70% usage. When warned, WRAP UP immediately.\n` +
-        `- Do not explore indefinitely - be focused and efficient.\n` +
-        `- If approaching limits, summarize findings and return.\n` +
-        `- **STRUCTURED WRAPUP:** When told to wrap up, respond with ONLY this JSON (no tool calls):\n` +
-        `  {"findings":[...], "actionsTaken":[...], "failures":[...], "remainingWork":[...], "suggestedNextSteps":[...]}`
+          `- Token budget: ~${(subagentBudgetTokens / 1000).toFixed(0)}k tokens\n` +
+          `- Time limit: ~${subagentBudgetMinutes} minutes\n` +
+          `- You will receive warnings at 70% usage. When warned, WRAP UP immediately.\n` +
+          `- Do not explore indefinitely - be focused and efficient.\n` +
+          `- If approaching limits, summarize findings and return.\n` +
+          `- **STRUCTURED WRAPUP:** When told to wrap up, respond with ONLY this JSON (no tool calls):\n` +
+          `  {"findings":[...], "actionsTaken":[...], "failures":[...], "remainingWork":[...], "suggestedNextSteps":[...]}`,
       );
     }
 
     if (constraints) {
       if (constraints.focusAreas && constraints.focusAreas.length > 0) {
-        constraintParts.push(`**FOCUS AREAS (limit exploration to these paths):**\n${constraints.focusAreas.map(a => `  - ${a}`).join('\n')}`);
+        constraintParts.push(
+          `**FOCUS AREAS (limit exploration to these paths):**\n${constraints.focusAreas.map((a) => `  - ${a}`).join('\n')}`,
+        );
       }
       if (constraints.excludeAreas && constraints.excludeAreas.length > 0) {
-        constraintParts.push(`**EXCLUDED AREAS (do NOT explore these):**\n${constraints.excludeAreas.map(a => `  - ${a}`).join('\n')}`);
+        constraintParts.push(
+          `**EXCLUDED AREAS (do NOT explore these):**\n${constraints.excludeAreas.map((a) => `  - ${a}`).join('\n')}`,
+        );
       }
       if (constraints.requiredDeliverables && constraints.requiredDeliverables.length > 0) {
-        constraintParts.push(`**REQUIRED DELIVERABLES (you must produce these):**\n${constraints.requiredDeliverables.map(d => `  - ${d}`).join('\n')}`);
+        constraintParts.push(
+          `**REQUIRED DELIVERABLES (you must produce these):**\n${constraints.requiredDeliverables.map((d) => `  - ${d}`).join('\n')}`,
+        );
       }
       if (constraints.timeboxMinutes) {
-        constraintParts.push(`**TIME LIMIT:** ${constraints.timeboxMinutes} minutes (soft limit - wrap up if approaching)`);
+        constraintParts.push(
+          `**TIME LIMIT:** ${constraints.timeboxMinutes} minutes (soft limit - wrap up if approaching)`,
+        );
       }
     }
 
@@ -487,8 +513,10 @@ export async function spawnAgent(
       const repoMap = ctx.codebaseContext.getRepoMap();
       if (repoMap) {
         // Lightweight repo map: file tree with key symbols (capped at 3000 tokens)
-        const { generateLightweightRepoMap } = await import('../integrations/context/codebase-context.js');
-        repoContextStr = '\n\n**REPOSITORY STRUCTURE:**\n' + generateLightweightRepoMap(repoMap, 3000);
+        const { generateLightweightRepoMap } =
+          await import('../integrations/context/codebase-context.js');
+        repoContextStr =
+          '\n\n**REPOSITORY STRUCTURE:**\n' + generateLightweightRepoMap(repoMap, 3000);
       }
     }
     // Inject parent's recently modified files so subagent knows the working context
@@ -498,16 +526,21 @@ export async function spawnAgent(
       const modifiedPaths = ctx.economics.getModifiedFilePaths();
       modifiedFilesList = modifiedPaths.slice(0, 15);
       if (modifiedPaths.length > 0) {
-        recentFilesStr = '\n\n**RECENTLY MODIFIED FILES (by parent agent):**\n' +
-          modifiedPaths.slice(0, 15).map(f => `- ${f}`).join('\n');
+        recentFilesStr =
+          '\n\n**RECENTLY MODIFIED FILES (by parent agent):**\n' +
+          modifiedPaths
+            .slice(0, 15)
+            .map((f) => `- ${f}`)
+            .join('\n');
       }
     }
 
     // Build subagent system prompt
     const parentMode = ctx.modeManager.getMode();
-    const subagentSystemPrompt = parentMode === 'plan'
-      ? `${agentDef.systemPrompt}\n\n${SUBAGENT_PLAN_MODE_ADDITION}${blackboardContext}${repoContextStr}${recentFilesStr}${constraintContext}${delegationContext}${qualityPrompt}`
-      : `${agentDef.systemPrompt}${blackboardContext}${repoContextStr}${recentFilesStr}${constraintContext}${delegationContext}${qualityPrompt}`;
+    const subagentSystemPrompt =
+      parentMode === 'plan'
+        ? `${agentDef.systemPrompt}\n\n${SUBAGENT_PLAN_MODE_ADDITION}${blackboardContext}${repoContextStr}${recentFilesStr}${constraintContext}${delegationContext}${qualityPrompt}`
+        : `${agentDef.systemPrompt}${blackboardContext}${repoContextStr}${recentFilesStr}${constraintContext}${delegationContext}${qualityPrompt}`;
 
     // Trace context injection for subagent prompt
     ctx.traceCollector?.record({
@@ -528,7 +561,10 @@ export async function spawnAgent(
     const poolAllocationId = pooledBudget.allocationId;
 
     const deniedByProfile = new Set(policyResolution.profile.deniedTools ?? []);
-    const policyToolPolicies: Record<string, { policy: 'allow' | 'prompt' | 'forbidden'; reason?: string }> = {};
+    const policyToolPolicies: Record<
+      string,
+      { policy: 'allow' | 'prompt' | 'forbidden'; reason?: string }
+    > = {};
     for (const toolName of deniedByProfile) {
       policyToolPolicies[toolName] = {
         policy: 'forbidden',
@@ -566,7 +602,10 @@ export async function spawnAgent(
       observability: ctx.config.observability,
       sandbox: (() => {
         const swarm = ctx.config.swarm;
-        const extraCmds = swarm && typeof swarm === 'object' && (swarm as SwarmConfig).permissions?.additionalAllowedCommands;
+        const extraCmds =
+          swarm &&
+          typeof swarm === 'object' &&
+          (swarm as SwarmConfig).permissions?.additionalAllowedCommands;
         const baseSbx = ctx.config.sandbox;
         if (baseSbx && typeof baseSbx === 'object') {
           const sbx = baseSbx as SandboxConfig;
@@ -577,7 +616,8 @@ export async function spawnAgent(
             ...sbx,
             allowedCommands,
             bashMode: policyResolution.profile.bashMode ?? sbx.bashMode,
-            bashWriteProtection: policyResolution.profile.bashWriteProtection ?? sbx.bashWriteProtection,
+            bashWriteProtection:
+              policyResolution.profile.bashWriteProtection ?? sbx.bashWriteProtection,
             blockFileCreationViaBash:
               (policyResolution.profile.bashWriteProtection ?? 'off') === 'block_file_mutation'
                 ? true
@@ -615,17 +655,25 @@ export async function spawnAgent(
             intentAware: false,
           };
         }
-        return { enabled: true, defaultPolicy: 'allow' as const, toolPolicies: {}, intentAware: false };
+        return {
+          enabled: true,
+          defaultPolicy: 'allow' as const,
+          toolPolicies: {},
+          intentAware: false,
+        };
       })(),
       policyEngine: ctx.config.policyEngine
         ? { ...ctx.config.policyEngine, defaultProfile: policyResolution.profileName }
         : ctx.config.policyEngine,
       threads: false,
-      hooks: ctx.config.hooks === false ? false : {
-        enabled: true,
-        builtIn: { logging: false, timing: false, metrics: false },
-        custom: [],
-      },
+      hooks:
+        ctx.config.hooks === false
+          ? false
+          : {
+              enabled: true,
+              builtIn: { logging: false, timing: false, metrics: false },
+              custom: [],
+            },
       agentId,
       blackboard: ctx.blackboard || undefined,
       fileCache: ctx.fileCache || undefined,
@@ -644,10 +692,19 @@ export async function spawnAgent(
     }
 
     // APPROVAL BATCHING
-    const swarmPerms = ctx.config.swarm && typeof ctx.config.swarm === 'object'
-      ? (ctx.config.swarm as SwarmConfig).permissions : undefined;
+    const swarmPerms =
+      ctx.config.swarm && typeof ctx.config.swarm === 'object'
+        ? (ctx.config.swarm as SwarmConfig).permissions
+        : undefined;
 
-    const baseAutoApprove = ['read_file', 'list_files', 'glob', 'grep', 'show_file_history', 'show_session_changes'];
+    const baseAutoApprove = [
+      'read_file',
+      'list_files',
+      'glob',
+      'grep',
+      'show_file_history',
+      'show_session_changes',
+    ];
     const baseScopedApprove: Record<string, { paths: string[] }> = isSwarmWorker
       ? {
           write_file: { paths: ['src/', 'tests/', 'tools/'] },
@@ -659,17 +716,20 @@ export async function spawnAgent(
           edit_file: { paths: ['src/', 'tests/', 'tools/'] },
         };
     const baseRequireApproval = isSwarmWorker ? ['delete_file'] : ['bash', 'delete_file'];
-    const mergedScope = mergeApprovalScopeWithProfile({
-      autoApprove: swarmPerms?.autoApprove
-        ? [...new Set([...baseAutoApprove, ...swarmPerms.autoApprove])]
-        : baseAutoApprove,
-      scopedApprove: swarmPerms?.scopedApprove
-        ? { ...baseScopedApprove, ...swarmPerms.scopedApprove }
-        : baseScopedApprove,
-      requireApproval: swarmPerms?.requireApproval
-        ? swarmPerms.requireApproval
-        : baseRequireApproval,
-    }, policyResolution.profile);
+    const mergedScope = mergeApprovalScopeWithProfile(
+      {
+        autoApprove: swarmPerms?.autoApprove
+          ? [...new Set([...baseAutoApprove, ...swarmPerms.autoApprove])]
+          : baseAutoApprove,
+        scopedApprove: swarmPerms?.scopedApprove
+          ? { ...baseScopedApprove, ...swarmPerms.scopedApprove }
+          : baseScopedApprove,
+        requireApproval: swarmPerms?.requireApproval
+          ? swarmPerms.requireApproval
+          : baseRequireApproval,
+      },
+      policyResolution.profile,
+    );
 
     subAgent.setApprovalScope(mergedScope);
     subAgent.setParentIterations(ctx.getTotalIterations());
@@ -696,7 +756,7 @@ export async function spawnAgent(
       subagentTimeout,
       IDLE_TIMEOUT,
       WRAPUP_WINDOW,
-      IDLE_CHECK_INTERVAL
+      IDLE_CHECK_INTERVAL,
     );
 
     progressAwareTimeout.onWrapupWarning(() => {
@@ -711,7 +771,7 @@ export async function spawnAgent(
     });
 
     // Forward events from subagent
-    const unsubSubAgent = subAgent.subscribe(event => {
+    const unsubSubAgent = subAgent.subscribe((event) => {
       const taggedEvent = { ...event, subagent: agentName, subagentId: agentId };
       ctx.emit(taggedEvent);
 
@@ -750,7 +810,7 @@ export async function spawnAgent(
             changes: subPlan.proposedChanges,
           });
 
-          const changeSummaries = subPlan.proposedChanges.map(c => {
+          const changeSummaries = subPlan.proposedChanges.map((c) => {
             if (c.tool === 'write_file' || c.tool === 'edit_file') {
               const path = c.args.path || c.args.file_path || '(unknown file)';
               return `  - [${c.tool}] ${path}: ${c.reason}`;
@@ -761,9 +821,11 @@ export async function spawnAgent(
             return `  - [${c.tool}]: ${c.reason}`;
           });
 
-          queuedChangeSummary = `\n\n[PLAN MODE - CHANGES QUEUED TO PARENT]\n` +
+          queuedChangeSummary =
+            `\n\n[PLAN MODE - CHANGES QUEUED TO PARENT]\n` +
             `The following ${subPlan.proposedChanges.length} change(s) have been queued in the parent's pending plan:\n` +
-            changeSummaries.join('\n') + '\n' +
+            changeSummaries.join('\n') +
+            '\n' +
             `\nThese changes are now in YOUR pending plan. The task for this subagent is COMPLETE.\n` +
             `Do NOT spawn another agent for the same task - the changes are already queued.\n` +
             `Use /show-plan to see all pending changes, /approve to execute them.`;
@@ -773,26 +835,23 @@ export async function spawnAgent(
               change.tool,
               { ...change.args, _fromSubagent: agentName },
               `[${agentName}] ${change.reason}`,
-              change.toolCallId
+              change.toolCallId,
             );
           }
         }
 
         if (subPlan?.explorationSummary) {
           ctx.pendingPlanManager.appendExplorationFinding(
-            `[${agentName}] ${subPlan.explorationSummary}`
+            `[${agentName}] ${subPlan.explorationSummary}`,
           );
         }
       }
 
       const finalOutput = queuedChangeSummary
         ? (result.response || '') + queuedChangeSummary
-        : (result.response || result.error || '');
+        : result.response || result.error || '';
 
-      const structured = parseStructuredClosureReport(
-        result.response || '',
-        'completed'
-      );
+      const structured = parseStructuredClosureReport(result.response || '', 'completed');
 
       const subagentFilePaths = subAgent.getModifiedFilePaths();
 
@@ -876,7 +935,7 @@ export async function spawnAgent(
             agentType: agentName,
             model: resolvedModel || 'default',
             task,
-            tools: agentTools.map(t => t.name),
+            tools: agentTools.map((t) => t.name),
           },
           spawnContext: {
             reason: `Delegated task: ${task.slice(0, 100)}`,
@@ -925,11 +984,10 @@ export async function spawnAgent(
         const subagentState = subAgent.getState();
         const subagentMetrics = subAgent.getMetrics();
 
-        const assistantMessages = subagentState.messages.filter(m => m.role === 'assistant');
+        const assistantMessages = subagentState.messages.filter((m) => m.role === 'assistant');
         const lastAssistantMsg = assistantMessages[assistantMessages.length - 1];
-        const partialResponse = typeof lastAssistantMsg?.content === 'string'
-          ? lastAssistantMsg.content
-          : '';
+        const partialResponse =
+          typeof lastAssistantMsg?.content === 'string' ? lastAssistantMsg.content : '';
 
         let cancelledQueuedSummary = '';
         if (subAgent.hasPendingPlan()) {
@@ -941,7 +999,7 @@ export async function spawnAgent(
               changes: subPlan.proposedChanges,
             });
 
-            const changeSummaries = subPlan.proposedChanges.map(c => {
+            const changeSummaries = subPlan.proposedChanges.map((c) => {
               if (c.tool === 'write_file' || c.tool === 'edit_file') {
                 const path = c.args.path || c.args.file_path || '(unknown file)';
                 return `  - [${c.tool}] ${path}: ${c.reason}`;
@@ -952,9 +1010,11 @@ export async function spawnAgent(
               return `  - [${c.tool}]: ${c.reason}`;
             });
 
-            cancelledQueuedSummary = `\n\n[PLAN MODE - CHANGES QUEUED BEFORE CANCELLATION]\n` +
+            cancelledQueuedSummary =
+              `\n\n[PLAN MODE - CHANGES QUEUED BEFORE CANCELLATION]\n` +
               `${subPlan.proposedChanges.length} change(s) were queued to the parent plan:\n` +
-              changeSummaries.join('\n') + '\n' +
+              changeSummaries.join('\n') +
+              '\n' +
               `These changes are preserved in your pending plan.`;
 
             for (const change of subPlan.proposedChanges) {
@@ -962,14 +1022,14 @@ export async function spawnAgent(
                 change.tool,
                 { ...change.args, _fromSubagent: agentName },
                 `[${agentName}] ${change.reason}`,
-                change.toolCallId
+                change.toolCallId,
               );
             }
           }
 
           if (subPlan?.explorationSummary) {
             ctx.pendingPlanManager.appendExplorationFinding(
-              `[${agentName}] ${subPlan.explorationSummary}`
+              `[${agentName}] ${subPlan.explorationSummary}`,
             );
           }
         }
@@ -1001,7 +1061,7 @@ export async function spawnAgent(
               agentType: agentName,
               model: resolvedModel || 'default',
               task,
-              tools: agentTools.map(t => t.name),
+              tools: agentTools.map((t) => t.name),
             },
             spawnContext: {
               reason: `Delegated task: ${task.slice(0, 100)}`,
@@ -1017,12 +1077,10 @@ export async function spawnAgent(
           },
         });
 
-        const exitReason = isUserCancellation ? 'cancelled' as const : 'timeout_graceful' as const;
-        const structured = parseStructuredClosureReport(
-          partialResponse,
-          exitReason,
-          task
-        );
+        const exitReason = isUserCancellation
+          ? ('cancelled' as const)
+          : ('timeout_graceful' as const);
+        const structured = parseStructuredClosureReport(partialResponse, exitReason, task);
 
         if (workerResultId && ctx.store?.hasWorkerResultsFeature()) {
           try {
@@ -1102,7 +1160,7 @@ export async function spawnAgentsParallel(
   ctx.emit({
     type: 'parallel.spawn.start',
     count: tasks.length,
-    agents: tasks.map(t => t.agent),
+    agents: tasks.map((t) => t.agent),
   });
 
   let settled: PromiseSettledResult<SpawnResult>[];
@@ -1138,9 +1196,7 @@ export async function spawnAgentsParallel(
       supervisor?.stop();
     }
   } else {
-    const promises = tasks.map(({ agent, task }) =>
-      spawnAgent(agent, task, ctx, createSubAgent)
-    );
+    const promises = tasks.map(({ agent, task }) => spawnAgent(agent, task, ctx, createSubAgent));
     settled = await Promise.allSettled(promises);
   }
 
@@ -1164,7 +1220,7 @@ export async function spawnAgentsParallel(
   ctx.emit({
     type: 'parallel.spawn.complete',
     count: tasks.length,
-    successCount: results.filter(r => r.success).length,
+    successCount: results.filter((r) => r.success).length,
     results: results.map((r, i) => ({
       agent: tasks[i].agent,
       success: r.success,

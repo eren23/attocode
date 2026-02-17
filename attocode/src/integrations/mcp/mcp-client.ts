@@ -81,10 +81,13 @@ interface MCPConnection {
   tools: MCPToolDefinition[];
   status: 'disconnected' | 'connecting' | 'connected' | 'error';
   error?: string;
-  pendingRequests: Map<number, {
-    resolve: (result: unknown) => void;
-    reject: (error: Error) => void;
-  }>;
+  pendingRequests: Map<
+    number,
+    {
+      resolve: (result: unknown) => void;
+      reject: (error: Error) => void;
+    }
+  >;
   nextRequestId: number;
   /** Set of tools that have been fully loaded (lazy loading mode) */
   loadedTools: Set<string>;
@@ -207,8 +210,11 @@ export class MCPClient {
         this.registerServer(name, expandedConfig);
 
         if (this.config.autoConnect) {
-          await this.connectServer(name).catch(err => {
-            logger.warn('Failed to connect to MCP server', { server: name, error: String(err.message) });
+          await this.connectServer(name).catch((err) => {
+            logger.warn('Failed to connect to MCP server', {
+              server: name,
+              error: String(err.message),
+            });
           });
         }
       }
@@ -249,8 +255,11 @@ export class MCPClient {
       this.registerServer(name, config);
 
       if (this.config.autoConnect) {
-        await this.connectServer(name).catch(err => {
-          logger.warn('Failed to connect to MCP server', { server: name, error: String(err.message) });
+        await this.connectServer(name).catch((err) => {
+          logger.warn('Failed to connect to MCP server', {
+            server: name,
+            error: String(err.message),
+          });
         });
       }
     }
@@ -268,9 +277,7 @@ export class MCPClient {
       command: expand(config.command),
       args: config.args?.map(expand),
       env: config.env
-        ? Object.fromEntries(
-            Object.entries(config.env).map(([k, v]) => [k, expand(v)])
-          )
+        ? Object.fromEntries(Object.entries(config.env).map(([k, v]) => [k, expand(v)]))
         : undefined,
       cwd: config.cwd ? expand(config.cwd) : undefined,
     };
@@ -353,7 +360,7 @@ export class MCPClient {
         // CRITICAL: Reject ALL pending requests before clearing
         // This prevents orphaned promises that never resolve
         const exitError = new Error(
-          `MCP server "${name}" exited unexpectedly (code: ${code}, signal: ${signal})`
+          `MCP server "${name}" exited unexpectedly (code: ${code}, signal: ${signal})`,
         );
         for (const [_id, pending] of server.pendingRequests) {
           pending.reject(exitError);
@@ -397,7 +404,9 @@ export class MCPClient {
     this.sendNotification(server, 'notifications/initialized', {});
 
     // List available tools
-    const toolsResult = await this.sendRequest(server, 'tools/list', {}) as { tools: MCPToolDefinition[] };
+    const toolsResult = (await this.sendRequest(server, 'tools/list', {})) as {
+      tools: MCPToolDefinition[];
+    };
     server.tools = toolsResult.tools || [];
   }
 
@@ -467,7 +476,11 @@ export class MCPClient {
       // This helps diagnose protocol desync issues
       const preview = line.length > 100 ? line.substring(0, 100) + '...' : line;
       logger.error('Malformed JSON-RPC message from MCP server', { server: server.name, preview });
-      this.emit({ type: 'server.error', name: server.name, error: 'Protocol error: malformed JSON' });
+      this.emit({
+        type: 'server.error',
+        name: server.name,
+        error: 'Protocol error: malformed JSON',
+      });
       return; // Don't crash, just skip this malformed message
     }
 
@@ -532,10 +545,10 @@ export class MCPClient {
       // Wrap the request with retry logic for transient failures
       const result = await withRetry(
         async () => {
-          return await this.sendRequest(server, 'tools/call', {
+          return (await this.sendRequest(server, 'tools/call', {
             name: toolName,
             arguments: args,
-          }) as { content: Array<{ type: string; text?: string }> };
+          })) as { content: Array<{ type: string; text?: string }> };
         },
         {
           maxAttempts: 2, // Initial + 1 retry
@@ -549,15 +562,15 @@ export class MCPClient {
               retry: { attempt, error: error.message, delayMs: delay },
             });
           },
-        }
+        },
       );
 
       this.emit({ type: 'tool.result', server: serverName, tool: toolName, success: true });
 
       // Extract text content from result
       const textContent = result.content
-        ?.filter(c => c.type === 'text')
-        .map(c => c.text)
+        ?.filter((c) => c.type === 'text')
+        .map((c) => c.text)
         .join('\n');
 
       return textContent || result;
@@ -586,7 +599,7 @@ export class MCPClient {
    * List all servers and their status.
    */
   listServers(): MCPServerInfo[] {
-    return Array.from(this.servers.values()).map(s => ({
+    return Array.from(this.servers.values()).map((s) => ({
       name: s.name,
       status: s.status,
       toolCount: s.tools.length,
@@ -637,10 +650,7 @@ export class MCPClient {
    * Search tools by name or description with BM25-style scoring.
    * Returns matching tool summaries sorted by relevance.
    */
-  searchTools(
-    query: string,
-    options: { limit?: number; regex?: boolean } = {}
-  ): MCPToolSummary[] {
+  searchTools(query: string, options: { limit?: number; regex?: boolean } = {}): MCPToolSummary[] {
     const { limit = this.config.maxToolsPerSearch, regex = false } = options;
     const summaries = this.getAllToolSummaries();
 
@@ -650,10 +660,10 @@ export class MCPClient {
 
     // Normalize query
     const queryLower = query.toLowerCase();
-    const queryTerms = queryLower.split(/\s+/).filter(t => t.length > 0);
+    const queryTerms = queryLower.split(/\s+/).filter((t) => t.length > 0);
 
     // Score each tool
-    const scored = summaries.map(summary => {
+    const scored = summaries.map((summary) => {
       let score = 0;
       const nameLower = summary.name.toLowerCase();
       const descLower = summary.description.toLowerCase();
@@ -683,8 +693,8 @@ export class MCPClient {
       }
 
       // Boost if all terms appear
-      const allTermsInName = queryTerms.every(t => nameLower.includes(t));
-      const allTermsInDesc = queryTerms.every(t => descLower.includes(t));
+      const allTermsInName = queryTerms.every((t) => nameLower.includes(t));
+      const allTermsInDesc = queryTerms.every((t) => descLower.includes(t));
       if (allTermsInName) score += 15;
       if (allTermsInDesc) score += 5;
 
@@ -693,10 +703,10 @@ export class MCPClient {
 
     // Filter and sort by score
     const results = scored
-      .filter(s => s.score > 0)
+      .filter((s) => s.score > 0)
       .sort((a, b) => b.score - a.score)
       .slice(0, limit)
-      .map(s => s.summary);
+      .map((s) => s.summary);
 
     this.emit({ type: 'tool.search', query, resultCount: results.length });
 
@@ -716,7 +726,7 @@ export class MCPClient {
     const server = this.servers.get(serverName);
     if (!server || server.status !== 'connected') return null;
 
-    const mcpTool = server.tools.find(t => t.name === originalName);
+    const mcpTool = server.tools.find((t) => t.name === originalName);
     if (!mcpTool) return null;
 
     // Mark as loaded
@@ -726,7 +736,10 @@ export class MCPClient {
     return {
       name: toolName,
       description: mcpTool.description || `MCP tool: ${mcpTool.name} (from ${serverName})`,
-      parameters: mcpTool.inputSchema as Record<string, unknown> || { type: 'object', properties: {} },
+      parameters: (mcpTool.inputSchema as Record<string, unknown>) || {
+        type: 'object',
+        properties: {},
+      },
       execute: async (args: Record<string, unknown>) => {
         return this.callTool(serverName, originalName, args);
       },
@@ -770,16 +783,14 @@ export class MCPClient {
           loadedCount++;
           // Full definition tokens: name + description + schema
           const schemaStr = tool.inputSchema ? JSON.stringify(tool.inputSchema) : '{}';
-          const defChars = (tool.name.length) +
-                          (tool.description?.length || 0) +
-                          schemaStr.length;
+          const defChars = tool.name.length + (tool.description?.length || 0) + schemaStr.length;
           definitionTokens += Math.ceil(defChars / 4); // ~4 chars per token
         } else {
           summaryCount++;
           // Summary tokens: name + truncated description
           const descLen = Math.min(
             tool.description?.length || 0,
-            this.config.summaryDescriptionLimit
+            this.config.summaryDescriptionLimit,
           );
           const sumChars = tool.name.length + descLen + server.name.length;
           summaryTokens += Math.ceil(sumChars / 4);
@@ -827,7 +838,10 @@ export class MCPClient {
           tools.push({
             name: `mcp_${server.name}_${tool.name}`,
             description: tool.description || `MCP tool: ${tool.name} (from ${server.name})`,
-            parameters: tool.inputSchema as Record<string, unknown> || { type: 'object', properties: {} },
+            parameters: (tool.inputSchema as Record<string, unknown>) || {
+              type: 'object',
+              properties: {},
+            },
             execute: async (args: Record<string, unknown>) => {
               return this.callTool(server.name, tool.name, args);
             },
@@ -839,9 +853,13 @@ export class MCPClient {
       if (tools.length > 0) {
         try {
           const results = validateAllTools(tools);
-          const poor = results.filter(r => r.score < 50);
+          const poor = results.filter((r) => r.score < 50);
           if (poor.length > 0) {
-            logger.warn('MCP tool quality issues detected', { poorCount: poor.length, totalCount: tools.length, summary: formatValidationSummary(poor) });
+            logger.warn('MCP tool quality issues detected', {
+              poorCount: poor.length,
+              totalCount: tools.length,
+              summary: formatValidationSummary(poor),
+            });
           }
         } catch {
           // Validation is optional — don't fail if module has issues
@@ -860,7 +878,7 @@ export class MCPClient {
       for (const tool of server.tools) {
         const fullName = `mcp_${server.name}_${tool.name}`;
         const isAlwaysLoaded = this.config.alwaysLoadTools.some(
-          pattern => fullName.includes(pattern) || tool.name.includes(pattern)
+          (pattern) => fullName.includes(pattern) || tool.name.includes(pattern),
         );
         const isPreviouslyLoaded = server.loadedTools.has(tool.name);
 
@@ -871,7 +889,10 @@ export class MCPClient {
           tools.push({
             name: fullName,
             description: tool.description || `MCP tool: ${tool.name} (from ${server.name})`,
-            parameters: tool.inputSchema as Record<string, unknown> || { type: 'object', properties: {} },
+            parameters: (tool.inputSchema as Record<string, unknown>) || {
+              type: 'object',
+              properties: {},
+            },
             execute: async (args: Record<string, unknown>) => {
               return this.callTool(server.name, tool.name, args);
             },
@@ -971,7 +992,8 @@ export function formatServerList(servers: MCPServerInfo[]): string {
 
   for (const server of servers) {
     const statusIcon = server.status === 'connected' ? '✓' : server.status === 'error' ? '✗' : '○';
-    const statusColor = server.status === 'connected' ? 'green' : server.status === 'error' ? 'red' : 'dim';
+    const statusColor =
+      server.status === 'connected' ? 'green' : server.status === 'error' ? 'red' : 'dim';
     lines.push(`  ${statusIcon} ${server.name} (${server.status}) - ${server.toolCount} tools`);
     if (server.error) {
       lines.push(`      Error: ${server.error}`);
@@ -985,23 +1007,27 @@ export function formatServerList(servers: MCPServerInfo[]): string {
  * Create a sample .mcp.json config file content.
  */
 export function getSampleMCPConfig(): string {
-  return JSON.stringify({
-    servers: {
-      filesystem: {
-        command: 'npx',
-        args: ['-y', '@anthropic/mcp-server-filesystem', '/path/to/allowed/dir'],
-      },
-      sqlite: {
-        command: 'npx',
-        args: ['-y', '@anthropic/mcp-server-sqlite', '~/database.db'],
-      },
-      github: {
-        command: 'npx',
-        args: ['-y', '@anthropic/mcp-server-github'],
-        env: {
-          GITHUB_TOKEN: '${GITHUB_TOKEN}',
+  return JSON.stringify(
+    {
+      servers: {
+        filesystem: {
+          command: 'npx',
+          args: ['-y', '@anthropic/mcp-server-filesystem', '/path/to/allowed/dir'],
+        },
+        sqlite: {
+          command: 'npx',
+          args: ['-y', '@anthropic/mcp-server-sqlite', '~/database.db'],
+        },
+        github: {
+          command: 'npx',
+          args: ['-y', '@anthropic/mcp-server-github'],
+          env: {
+            GITHUB_TOKEN: '${GITHUB_TOKEN}',
+          },
         },
       },
     },
-  }, null, 2);
+    null,
+    2,
+  );
 }

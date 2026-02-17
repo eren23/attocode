@@ -109,13 +109,13 @@ export interface CodeChunk {
 }
 
 export type CodeChunkType =
-  | 'entry_point'    // Main entry points (index.ts, main.ts, app.ts)
-  | 'core_module'    // Core business logic
-  | 'utility'        // Utility/helper functions
-  | 'types'          // Type definitions
-  | 'config'         // Configuration files
-  | 'test'           // Test files
-  | 'documentation'  // Markdown, comments
+  | 'entry_point' // Main entry points (index.ts, main.ts, app.ts)
+  | 'core_module' // Core business logic
+  | 'utility' // Utility/helper functions
+  | 'types' // Type definitions
+  | 'config' // Configuration files
+  | 'test' // Test files
+  | 'documentation' // Markdown, comments
   | 'other';
 
 /**
@@ -187,10 +187,10 @@ export interface SelectionOptions {
 }
 
 export type SelectionStrategy =
-  | 'importance_first'    // Select by importance, then fit to budget
-  | 'relevance_first'     // Select by task relevance, then fit
-  | 'breadth_first'       // Select diverse files first
-  | 'depth_first';        // Select related files deeply
+  | 'importance_first' // Select by importance, then fit to budget
+  | 'relevance_first' // Select by task relevance, then fit
+  | 'breadth_first' // Select diverse files first
+  | 'depth_first'; // Select related files deeply
 
 /**
  * Result of code selection.
@@ -347,16 +347,21 @@ const DEFAULT_CONFIG: Required<CodebaseContextConfig> = {
   maxFileSize: 100 * 1024, // 100KB
   tokensPerChar: 0.25, // Approximate: 4 chars per token
   entryPointPatterns: [
-    '**/index.ts', '**/index.tsx', '**/index.js',
-    '**/main.ts', '**/main.py', '**/main.go',
-    '**/app.ts', '**/app.tsx', '**/app.py',
-    '**/server.ts', '**/server.js',
-    '**/cli.ts', '**/cli.js',
+    '**/index.ts',
+    '**/index.tsx',
+    '**/index.js',
+    '**/main.ts',
+    '**/main.py',
+    '**/main.go',
+    '**/app.ts',
+    '**/app.tsx',
+    '**/app.py',
+    '**/server.ts',
+    '**/server.js',
+    '**/cli.ts',
+    '**/cli.js',
   ],
-  coreModulePatterns: [
-    '**/src/**', '**/lib/**', '**/core/**',
-    '**/services/**', '**/modules/**',
-  ],
+  coreModulePatterns: ['**/src/**', '**/lib/**', '**/core/**', '**/services/**', '**/modules/**'],
   analyzeDependencies: true,
   cacheResults: true,
   cacheTTL: 5 * 60 * 1000, // 5 minutes
@@ -574,10 +579,10 @@ export class CodebaseContextManager {
       // Persist analysis to SQLite for warm startup next session
       if (this.persistenceStore) {
         try {
-          this.persistenceStore.saveCodebaseAnalysis(
-            repoRoot, chunks.values(), dependencyGraph,
-          );
-        } catch { /* persistence is non-blocking */ }
+          this.persistenceStore.saveCodebaseAnalysis(repoRoot, chunks.values(), dependencyGraph);
+        } catch {
+          /* persistence is non-blocking */
+        }
       }
 
       this.emit({
@@ -601,7 +606,7 @@ export class CodebaseContextManager {
           topChunks: Array.from(chunks.values())
             .sort((a, b) => b.importance - a.importance)
             .slice(0, 50)
-            .map(chunk => ({
+            .map((chunk) => ({
               filePath: chunk.filePath,
               tokenCount: chunk.tokenCount,
               importance: chunk.importance,
@@ -817,12 +822,16 @@ export class CodebaseContextManager {
       existingChunk.tokenCount = Math.ceil(newContent.length * this.config.tokensPerChar);
       existingChunk.lastModified = new Date();
       if (parsed) {
-        existingChunk.symbols = parsed.symbols.map(s => s.name);
-        existingChunk.symbolDetails = parsed.symbols.map(s => ({
-          name: s.name, kind: s.kind, exported: s.exported, line: s.line,
+        existingChunk.symbols = parsed.symbols.map((s) => s.name);
+        existingChunk.symbolDetails = parsed.symbols.map((s) => ({
+          name: s.name,
+          kind: s.kind,
+          exported: s.exported,
+          line: s.line,
         }));
-        existingChunk.dependencies = parsed.dependencies
-          .flatMap(d => d.names.filter(n => !n.startsWith('* as ')));
+        existingChunk.dependencies = parsed.dependencies.flatMap((d) =>
+          d.names.filter((n) => !n.startsWith('* as ')),
+        );
       }
 
       // Update dependency graph edges for this file
@@ -970,9 +979,7 @@ export class CodebaseContextManager {
  * console.log(`Using ${selection.totalTokens} tokens`);
  * ```
  */
-export function createCodebaseContext(
-  config: CodebaseContextConfig = {},
-): CodebaseContextManager {
+export function createCodebaseContext(config: CodebaseContextConfig = {}): CodebaseContextManager {
   return new CodebaseContextManager(config);
 }
 
@@ -997,11 +1004,7 @@ export function buildContextFromChunks(
     maxTotalTokens?: number;
   } = {},
 ): string {
-  const {
-    includeFilePaths = true,
-    includeSeparators = true,
-    maxTotalTokens,
-  } = options;
+  const { includeFilePaths = true, includeSeparators = true, maxTotalTokens } = options;
 
   const parts: string[] = [];
   let totalTokens = 0;

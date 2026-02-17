@@ -7,19 +7,16 @@
  * method signatures.
  */
 
-import type {
-  Message,
-  AgentMetrics,
-  AgentPlan,
-  AgentState,
-} from '../types.js';
+import type { Message, AgentMetrics, AgentPlan, AgentState } from '../types.js';
+
+import type { FileChangeTracker, UndoResult } from '../integrations/index.js';
 
 import type {
-  FileChangeTracker,
-  UndoResult,
+  ObservabilityManager,
+  PlanningManager,
+  ThreadManager,
+  MemoryManager,
 } from '../integrations/index.js';
-
-import type { ObservabilityManager, PlanningManager, ThreadManager, MemoryManager } from '../integrations/index.js';
 
 import { createComponentLogger } from '../integrations/utilities/logger.js';
 
@@ -97,9 +94,7 @@ export async function undoLastFileChange(
  * Undo all changes in the current turn.
  * Returns null if file change tracking is not enabled.
  */
-export async function undoCurrentTurn(
-  deps: SessionApiDeps,
-): Promise<UndoResult[] | null> {
+export async function undoCurrentTurn(deps: SessionApiDeps): Promise<UndoResult[] | null> {
   if (!deps.fileChangeTracker) {
     return null;
   }
@@ -148,10 +143,7 @@ export function reset(deps: SessionApiDeps): void {
  * Load messages from a previous session.
  * @deprecated Use loadState() for full state restoration
  */
-export function loadMessages(
-  deps: SessionApiDeps,
-  messages: Message[],
-): void {
+export function loadMessages(deps: SessionApiDeps, messages: Message[]): void {
   deps.state.messages = [...messages];
 
   // Sync to threadManager if enabled
@@ -268,20 +260,22 @@ export function validateCheckpoint(data: unknown): {
 
   // Build sanitized checkpoint
   const messages = (checkpoint.messages as Message[]).filter(
-    (msg): msg is Message => msg && typeof msg === 'object' && typeof msg.role === 'string'
+    (msg): msg is Message => msg && typeof msg === 'object' && typeof msg.role === 'string',
   );
 
   const sanitized = {
     messages,
-    iteration: typeof checkpoint.iteration === 'number' && checkpoint.iteration >= 0
-      ? checkpoint.iteration
-      : Math.floor(messages.length / 2),
-    metrics: typeof checkpoint.metrics === 'object' && checkpoint.metrics !== null
-      ? checkpoint.metrics as Partial<AgentMetrics>
-      : undefined,
+    iteration:
+      typeof checkpoint.iteration === 'number' && checkpoint.iteration >= 0
+        ? checkpoint.iteration
+        : Math.floor(messages.length / 2),
+    metrics:
+      typeof checkpoint.metrics === 'object' && checkpoint.metrics !== null
+        ? (checkpoint.metrics as Partial<AgentMetrics>)
+        : undefined,
     plan: checkpoint.plan as AgentPlan | undefined,
     memoryContext: Array.isArray(checkpoint.memoryContext)
-      ? checkpoint.memoryContext as string[]
+      ? (checkpoint.memoryContext as string[])
       : undefined,
   };
 
@@ -319,7 +313,9 @@ export function loadState(
   // Fail on validation errors
   if (!validation.valid || !validation.sanitized) {
     const errorMsg = `Invalid checkpoint: ${validation.errors.join('; ')}`;
-    deps.observability?.logger?.error('Checkpoint validation failed', { errors: validation.errors });
+    deps.observability?.logger?.error('Checkpoint validation failed', {
+      errors: validation.errors,
+    });
     throw new Error(errorMsg);
   }
 

@@ -31,13 +31,13 @@ export interface AgentDefinition {
   name: string;
   description: string;
   systemPrompt: string;
-  tools?: string[];              // Whitelist of tool names (all if omitted)
+  tools?: string[]; // Whitelist of tool names (all if omitted)
   model?: 'fast' | 'balanced' | 'quality' | string;
   maxTokenBudget?: number;
   maxIterations?: number;
-  timeout?: number;              // Timeout in ms (passed to spawnAgent, highest priority)
-  capabilities?: string[];       // Used for NL matching
-  tags?: string[];               // Additional tags for discovery
+  timeout?: number; // Timeout in ms (passed to spawnAgent, highest priority)
+  capabilities?: string[]; // Used for NL matching
+  tags?: string[]; // Additional tags for discovery
   /** Control MCP tool access: true = all MCP tools (default), false = none, string[] = specific names */
   allowMcpTools?: boolean | string[];
   /** Optional named policy profile */
@@ -106,7 +106,13 @@ export interface StructuredClosureReport {
   actionsTaken: string[];
   failures: string[];
   remainingWork: string[];
-  exitReason: 'completed' | 'timeout_graceful' | 'timeout_hard' | 'cancelled' | 'budget_exceeded' | 'error';
+  exitReason:
+    | 'completed'
+    | 'timeout_graceful'
+    | 'timeout_hard'
+    | 'cancelled'
+    | 'budget_exceeded'
+    | 'error';
   suggestedNextSteps?: string[];
 }
 
@@ -130,7 +136,8 @@ export type RegistryEventListener = (event: RegistryEvent) => void;
 const BUILTIN_AGENTS: AgentDefinition[] = [
   {
     name: 'researcher',
-    description: 'Explores codebases and gathers information. Good for finding files, understanding structure, and summarizing code.',
+    description:
+      'Explores codebases and gathers information. Good for finding files, understanding structure, and summarizing code.',
     systemPrompt: `You are a code researcher. Your job is to:
 - Explore codebases thoroughly
 - Find relevant files and functions
@@ -154,7 +161,8 @@ Explain what you found and why it matters.`,
   },
   {
     name: 'coder',
-    description: 'Writes and modifies code. Good for implementing features, fixing bugs, and making changes.',
+    description:
+      'Writes and modifies code. Good for implementing features, fixing bugs, and making changes.',
     systemPrompt: `You are a skilled coder. Your job is to:
 - Write clean, well-documented code
 - Follow existing code patterns and conventions
@@ -171,7 +179,8 @@ Always explain what you're changing and why.`,
   },
   {
     name: 'reviewer',
-    description: 'Reviews code for quality, bugs, and security issues. Good for code reviews and quality checks.',
+    description:
+      'Reviews code for quality, bugs, and security issues. Good for code reviews and quality checks.',
     systemPrompt: `You are a code reviewer. Your job is to:
 - Find bugs and potential issues
 - Identify security vulnerabilities
@@ -188,7 +197,8 @@ Be constructive and specific in your feedback. Prioritize serious issues.`,
   },
   {
     name: 'architect',
-    description: 'Designs system architecture and structure. Good for planning features and making design decisions.',
+    description:
+      'Designs system architecture and structure. Good for planning features and making design decisions.',
     systemPrompt: `You are a software architect. Your job is to:
 - Design scalable, maintainable systems
 - Consider trade-offs and alternatives
@@ -222,7 +232,8 @@ Be methodical. Test assumptions before making changes.`,
   },
   {
     name: 'documenter',
-    description: 'Writes documentation and comments. Good for adding docs, README files, and code comments.',
+    description:
+      'Writes documentation and comments. Good for adding docs, README files, and code comments.',
     systemPrompt: `You are a technical writer. Your job is to:
 - Write clear, helpful documentation
 - Add meaningful code comments
@@ -375,7 +386,7 @@ export class AgentRegistry {
         for (const file of files) {
           const fullPath = join(agentsDir, file);
           try {
-            const stat = await import('node:fs/promises').then(m => m.stat(fullPath));
+            const stat = await import('node:fs/promises').then((m) => m.stat(fullPath));
             if (stat.isDirectory()) {
               const agentFile = await this.findAgentFileInDir(fullPath);
               if (agentFile) {
@@ -496,7 +507,7 @@ export class AgentRegistry {
           // Array
           const arrayMatch = value.match(/\[(.*)\]/);
           if (arrayMatch) {
-            result[key] = arrayMatch[1].split(',').map(s => s.trim().replace(/['"]/g, ''));
+            result[key] = arrayMatch[1].split(',').map((s) => s.trim().replace(/['"]/g, ''));
           }
         } else if (value === 'true' || value === 'false') {
           result[key] = value === 'true';
@@ -566,7 +577,7 @@ export class AgentRegistry {
    * Get agents by source.
    */
   getAgentsBySource(source: 'builtin' | 'user'): LoadedAgent[] {
-    return this.getAllAgents().filter(a => a.source === source);
+    return this.getAllAgents().filter((a) => a.source === source);
   }
 
   /**
@@ -585,7 +596,9 @@ export class AgentRegistry {
       }
 
       // Check description match
-      const descWords = String(agent.description || '').toLowerCase().split(/\s+/);
+      const descWords = String(agent.description || '')
+        .toLowerCase()
+        .split(/\s+/);
       for (const word of descWords) {
         if (queryLower.includes(word) && word.length > 3) {
           score += 2;
@@ -614,7 +627,7 @@ export class AgentRegistry {
     // Sort by score descending
     scored.sort((a, b) => b.score - a.score);
 
-    return scored.slice(0, limit).map(s => s.agent);
+    return scored.slice(0, limit).map((s) => s.agent);
   }
 
   /**
@@ -701,24 +714,22 @@ export async function createAgentRegistry(baseDir?: string): Promise<AgentRegist
  */
 export function filterToolsForAgent(
   agent: AgentDefinition,
-  allTools: ToolDefinition[]
+  allTools: ToolDefinition[],
 ): ToolDefinition[] {
   if (!agent.tools || agent.tools.length === 0) {
     // No whitelist — apply MCP filtering only
     if (agent.allowMcpTools === false) {
-      return allTools.filter(t => !t.name.startsWith('mcp_'));
+      return allTools.filter((t) => !t.name.startsWith('mcp_'));
     }
     if (Array.isArray(agent.allowMcpTools)) {
       const allowed = agent.allowMcpTools;
-      return allTools.filter(t =>
-        !t.name.startsWith('mcp_') || allowed.includes(t.name)
-      );
+      return allTools.filter((t) => !t.name.startsWith('mcp_') || allowed.includes(t.name));
     }
     return allTools;
   }
 
   const mcpPolicy = agent.allowMcpTools;
-  return allTools.filter(t => {
+  return allTools.filter((t) => {
     // Check explicit tool whitelist
     if (agent.tools!.includes(t.name)) return true;
 
@@ -740,9 +751,9 @@ export function filterToolsForAgent(
 export function formatAgentList(agents: LoadedAgent[]): string {
   const lines: string[] = [];
 
-  const builtIn = agents.filter(a => a.source === 'builtin');
-  const userOrProject = agents.filter(a => a.source === 'user' || a.source === 'project');
-  const legacy = agents.filter(a => a.source === 'legacy');
+  const builtIn = agents.filter((a) => a.source === 'builtin');
+  const userOrProject = agents.filter((a) => a.source === 'user' || a.source === 'project');
+  const legacy = agents.filter((a) => a.source === 'legacy');
 
   if (builtIn.length > 0) {
     lines.push('Built-in Agents:');
@@ -755,7 +766,9 @@ export function formatAgentList(agents: LoadedAgent[]): string {
     lines.push('\nCustom Agents:');
     for (const agent of userOrProject) {
       const location = getAgentLocationDisplay(agent);
-      lines.push(`  ${agent.name} - ${String(agent.description || '').split('.')[0]} (${location})`);
+      lines.push(
+        `  ${agent.name} - ${String(agent.description || '').split('.')[0]} (${location})`,
+      );
     }
   }
 
@@ -772,12 +785,15 @@ export function formatAgentList(agents: LoadedAgent[]): string {
 /**
  * Get an agent scaffold template in YAML format.
  */
-export function getAgentScaffold(name: string, options: {
-  description?: string;
-  model?: 'fast' | 'balanced' | 'quality';
-  capabilities?: string[];
-  tools?: string[];
-} = {}): string {
+export function getAgentScaffold(
+  name: string,
+  options: {
+    description?: string;
+    model?: 'fast' | 'balanced' | 'quality';
+    capabilities?: string[];
+    tools?: string[];
+  } = {},
+): string {
   const {
     description = '[Add description here]',
     model = 'balanced',
@@ -792,10 +808,10 @@ maxIterations: 30
 maxTokenBudget: 80000
 
 capabilities:
-${capabilities.length > 0 ? capabilities.map(c => `  - ${c}`).join('\n') : '  - # Add capabilities for NL matching'}
+${capabilities.length > 0 ? capabilities.map((c) => `  - ${c}`).join('\n') : '  - # Add capabilities for NL matching'}
 
 tools:
-${tools.length > 0 ? tools.map(t => `  - ${t}`).join('\n') : '  - read_file\n  - list_files\n  - glob\n  - grep'}
+${tools.length > 0 ? tools.map((t) => `  - ${t}`).join('\n') : '  - read_file\n  - list_files\n  - glob\n  - grep'}
 
 systemPrompt: |
   You are ${name}. Your job is to:
@@ -831,22 +847,21 @@ export async function createAgentScaffold(
     model?: 'fast' | 'balanced' | 'quality';
     capabilities?: string[];
     tools?: string[];
-    userLevel?: boolean;  // Create in ~/.attocode/agents/ instead of project
-  } = {}
+    userLevel?: boolean; // Create in ~/.attocode/agents/ instead of project
+  } = {},
 ): Promise<AgentScaffoldResult> {
   try {
     // Validate name
     if (!/^[a-z][a-z0-9-]*$/.test(name)) {
       return {
         success: false,
-        error: 'Agent name must start with a letter and contain only lowercase letters, numbers, and hyphens',
+        error:
+          'Agent name must start with a letter and contain only lowercase letters, numbers, and hyphens',
       };
     }
 
     // Determine target directory
-    const baseDir = options.userLevel
-      ? getUserAgentDirectory()
-      : getAgentCreationDirectory();
+    const baseDir = options.userLevel ? getUserAgentDirectory() : getAgentCreationDirectory();
 
     const agentDir = join(baseDir, name);
     const agentPath = join(agentDir, 'AGENT.yaml');

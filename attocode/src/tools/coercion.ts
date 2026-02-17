@@ -31,7 +31,7 @@ export function coerceBoolean() {
 export function coerceString() {
   return z.preprocess((val) => {
     if (Array.isArray(val)) {
-      return val.map(item => String(item)).join('\n');
+      return val.map((item) => String(item)).join('\n');
     }
     return val;
   }, z.string());

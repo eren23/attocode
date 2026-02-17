@@ -36,19 +36,31 @@ export const MessageItem = memo(function MessageItem({ msg, colors }: MessageIte
   const roleColor = isUser ? '#87CEEB' : isAssistant ? '#98FB98' : isError ? '#FF6B6B' : '#FFD700';
   const label = isUser ? 'You' : isAssistant ? 'Assistant' : isError ? 'Error' : 'System';
 
-  return React.createElement(Box, { marginBottom: 1, flexDirection: 'column' },
+  return React.createElement(
+    Box,
+    { marginBottom: 1, flexDirection: 'column' },
     // Role header
-    React.createElement(Box, { gap: 1 },
+    React.createElement(
+      Box,
+      { gap: 1 },
       React.createElement(Text, { color: roleColor, bold: true }, icon),
       React.createElement(Text, { color: roleColor, bold: true }, label),
-      React.createElement(Text, { color: colors.textMuted, dimColor: true },
-        ` ${msg.ts.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}`
-      )
+      React.createElement(
+        Text,
+        { color: colors.textMuted, dimColor: true },
+        ` ${msg.ts.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}`,
+      ),
     ),
     // Message content
-    React.createElement(Box, { marginLeft: 2 },
-      React.createElement(Text, { wrap: 'wrap', color: isError ? colors.error : colors.text }, msg.content)
-    )
+    React.createElement(
+      Box,
+      { marginLeft: 2 },
+      React.createElement(
+        Text,
+        { wrap: 'wrap', color: isError ? colors.error : colors.text },
+        msg.content,
+      ),
+    ),
   );
 });
 

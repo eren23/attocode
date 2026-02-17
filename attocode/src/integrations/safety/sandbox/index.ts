@@ -144,10 +144,34 @@ const DEFAULT_OPTIONS: Required<SandboxOptions> = {
   maxMemoryMB: 512,
   maxCpuSeconds: 30,
   allowedCommands: [
-    'node', 'npm', 'npx', 'yarn', 'pnpm', 'bun',
-    'git', 'ls', 'cat', 'head', 'tail', 'grep', 'find', 'wc',
-    'echo', 'pwd', 'which', 'env', 'mkdir', 'cp', 'mv', 'touch',
-    'tsc', 'eslint', 'prettier', 'jest', 'vitest', 'mocha',
+    'node',
+    'npm',
+    'npx',
+    'yarn',
+    'pnpm',
+    'bun',
+    'git',
+    'ls',
+    'cat',
+    'head',
+    'tail',
+    'grep',
+    'find',
+    'wc',
+    'echo',
+    'pwd',
+    'which',
+    'env',
+    'mkdir',
+    'cp',
+    'mv',
+    'touch',
+    'tsc',
+    'eslint',
+    'prettier',
+    'jest',
+    'vitest',
+    'mocha',
   ],
   blockedCommands: [
     'rm -rf /',
@@ -247,12 +271,12 @@ export class SandboxManager {
 
     // Check for dangerous patterns
     const dangerousPatterns = [
-      /rm\s+-[rf]*\s+\/(?!\w)/,        // rm -rf / or similar
-      />\s*\/dev\/sd[a-z]/,             // writing to block devices
-      /mkfs/,                            // formatting filesystems
-      /:\(\)\{.*\};:/,                   // fork bomb
-      /wget.*\|\s*(?:ba)?sh/,            // download and execute
-      /curl.*\|\s*(?:ba)?sh/,            // download and execute
+      /rm\s+-[rf]*\s+\/(?!\w)/, // rm -rf / or similar
+      />\s*\/dev\/sd[a-z]/, // writing to block devices
+      /mkfs/, // formatting filesystems
+      /:\(\)\{.*\};:/, // fork bomb
+      /wget.*\|\s*(?:ba)?sh/, // download and execute
+      /curl.*\|\s*(?:ba)?sh/, // download and execute
     ];
 
     for (const pattern of dangerousPatterns) {
@@ -359,7 +383,9 @@ export class SandboxManager {
         if (await landlock.isAvailable()) {
           return landlock;
         }
-        throw new Error('Landlock sandbox not available (requires Linux with Landlock/bwrap/firejail)');
+        throw new Error(
+          'Landlock sandbox not available (requires Linux with Landlock/bwrap/firejail)',
+        );
       }
 
       case 'docker': {
@@ -537,10 +563,7 @@ export async function createSandbox(options?: SandboxOptions): Promise<Sandbox> 
 /**
  * Quick execute with auto-detected sandbox.
  */
-export async function sandboxExec(
-  command: string,
-  options?: SandboxOptions
-): Promise<ExecResult> {
+export async function sandboxExec(command: string, options?: SandboxOptions): Promise<ExecResult> {
   const sandbox = await createSandbox(options);
   try {
     return await sandbox.execute(command, options);

@@ -50,15 +50,15 @@ export interface Finding {
 }
 
 export type FindingType =
-  | 'discovery'      // Found something interesting
-  | 'analysis'       // Analysis/interpretation
-  | 'solution'       // Proposed solution
-  | 'problem'        // Identified problem
-  | 'question'       // Question for other agents
-  | 'answer'         // Answer to a question
-  | 'progress'       // Progress update
-  | 'blocker'        // Blocked on something
-  | 'resource';      // Resource location/information
+  | 'discovery' // Found something interesting
+  | 'analysis' // Analysis/interpretation
+  | 'solution' // Proposed solution
+  | 'problem' // Identified problem
+  | 'question' // Question for other agents
+  | 'answer' // Answer to a question
+  | 'progress' // Progress update
+  | 'blocker' // Blocked on something
+  | 'resource'; // Resource location/information
 
 /**
  * A resource claim on the blackboard.
@@ -79,9 +79,9 @@ export interface ResourceClaim {
 }
 
 export type ClaimType =
-  | 'read'        // Reading the resource
-  | 'write'       // Writing/modifying the resource
-  | 'exclusive';  // Exclusive access
+  | 'read' // Reading the resource
+  | 'write' // Writing/modifying the resource
+  | 'exclusive'; // Exclusive access
 
 /**
  * Subscription to findings.
@@ -242,10 +242,7 @@ export class SharedBlackboard {
   /**
    * Post a finding to the blackboard.
    */
-  post(
-    agentId: string,
-    input: Omit<Finding, 'id' | 'agentId' | 'timestamp'>
-  ): Finding {
+  post(agentId: string, input: Omit<Finding, 'id' | 'agentId' | 'timestamp'>): Finding {
     // Check for duplicates
     if (this.config.deduplicateFindings) {
       const duplicate = this.findDuplicate(input);
@@ -302,7 +299,10 @@ export class SharedBlackboard {
   /**
    * Update an existing finding.
    */
-  update(findingId: string, updates: Partial<Omit<Finding, 'id' | 'agentId' | 'timestamp'>>): Finding | null {
+  update(
+    findingId: string,
+    updates: Partial<Omit<Finding, 'id' | 'agentId' | 'timestamp'>>,
+  ): Finding | null {
     const existing = this.findings.get(findingId);
     if (!existing) return null;
 
@@ -359,9 +359,7 @@ export class SharedBlackboard {
     }
 
     if (filter.tags && filter.tags.length > 0) {
-      results = results.filter((f) =>
-        f.tags?.some((tag) => filter.tags!.includes(tag))
-      );
+      results = results.filter((f) => f.tags?.some((tag) => filter.tags!.includes(tag)));
     }
 
     if (filter.minConfidence !== undefined) {
@@ -374,15 +372,13 @@ export class SharedBlackboard {
 
     if (filter.relatedFiles && filter.relatedFiles.length > 0) {
       results = results.filter((f) =>
-        f.relatedFiles?.some((file) => filter.relatedFiles!.includes(file))
+        f.relatedFiles?.some((file) => filter.relatedFiles!.includes(file)),
       );
     }
 
     if (filter.contentSearch) {
       const searchLower = filter.contentSearch.toLowerCase();
-      results = results.filter((f) =>
-        f.content.toLowerCase().includes(searchLower)
-      );
+      results = results.filter((f) => f.content.toLowerCase().includes(searchLower));
     }
 
     // Sort by timestamp (newest first)
@@ -420,9 +416,7 @@ export class SharedBlackboard {
   /**
    * Check if a finding similar to the input already exists.
    */
-  private findDuplicate(
-    input: Omit<Finding, 'id' | 'agentId' | 'timestamp'>
-  ): Finding | null {
+  private findDuplicate(input: Omit<Finding, 'id' | 'agentId' | 'timestamp'>): Finding | null {
     for (const existing of this.findings.values()) {
       if (existing.topic === input.topic && existing.type === input.type) {
         const similarity = this.calculateSimilarity(existing.content, input.content);
@@ -582,7 +576,7 @@ export class SharedBlackboard {
     resource: string,
     agentId: string,
     type: ClaimType,
-    options: { ttl?: number; intent?: string } = {}
+    options: { ttl?: number; intent?: string } = {},
   ): boolean {
     const existing = this.claims.get(resource);
 
@@ -782,19 +776,14 @@ export class SharedBlackboard {
 
     // Return highest confidence
     return findings.reduce((best, current) =>
-      current.confidence > best.confidence ? current : best
+      current.confidence > best.confidence ? current : best,
     );
   }
 
   /**
    * Ask a question to other agents.
    */
-  askQuestion(
-    agentId: string,
-    topic: string,
-    question: string,
-    tags?: string[]
-  ): Finding {
+  askQuestion(agentId: string, topic: string, question: string, tags?: string[]): Finding {
     return this.post(agentId, {
       topic,
       content: question,
@@ -807,12 +796,7 @@ export class SharedBlackboard {
   /**
    * Answer a question.
    */
-  answerQuestion(
-    agentId: string,
-    questionId: string,
-    answer: string,
-    confidence: number
-  ): Finding {
+  answerQuestion(agentId: string, questionId: string, answer: string, confidence: number): Finding {
     const question = this.getFinding(questionId);
     if (!question) {
       throw new Error(`Question ${questionId} not found`);
@@ -835,7 +819,7 @@ export class SharedBlackboard {
     agentId: string,
     topic: string,
     description: string,
-    relatedFiles?: string[]
+    relatedFiles?: string[],
   ): Finding {
     return this.post(agentId, {
       topic,
@@ -853,7 +837,7 @@ export class SharedBlackboard {
     agentId: string,
     topic: string,
     description: string,
-    metadata?: Record<string, unknown>
+    metadata?: Record<string, unknown>,
   ): Finding {
     return this.post(agentId, {
       topic,
@@ -876,14 +860,8 @@ export class SharedBlackboard {
     const findingsByAgent = new Map<string, number>();
 
     for (const finding of this.findings.values()) {
-      findingsByType.set(
-        finding.type,
-        (findingsByType.get(finding.type) ?? 0) + 1
-      );
-      findingsByAgent.set(
-        finding.agentId,
-        (findingsByAgent.get(finding.agentId) ?? 0) + 1
-      );
+      findingsByType.set(finding.type, (findingsByType.get(finding.type) ?? 0) + 1);
+      findingsByAgent.set(finding.agentId, (findingsByAgent.get(finding.agentId) ?? 0) + 1);
     }
 
     return {
@@ -1014,9 +992,7 @@ export class SharedBlackboard {
  * }
  * ```
  */
-export function createSharedBlackboard(
-  config: BlackboardConfig = {}
-): SharedBlackboard {
+export function createSharedBlackboard(config: BlackboardConfig = {}): SharedBlackboard {
   return new SharedBlackboard(config);
 }
 
@@ -1031,7 +1007,7 @@ export function createFindingFromOutput(
     type?: FindingType;
     confidence?: number;
     relatedFiles?: string[];
-  }
+  },
 ): Omit<Finding, 'id' | 'agentId' | 'timestamp'> {
   return {
     topic: options.topic,
@@ -1047,7 +1023,7 @@ export function createFindingFromOutput(
  */
 export function extractFindings(
   text: string,
-  topic: string
+  topic: string,
 ): Array<Omit<Finding, 'id' | 'agentId' | 'timestamp'>> {
   const findings: Array<Omit<Finding, 'id' | 'agentId' | 'timestamp'>> = [];
 

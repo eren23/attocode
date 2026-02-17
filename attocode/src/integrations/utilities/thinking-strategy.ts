@@ -175,9 +175,7 @@ If you find gaps, note them clearly in your response.`;
 /**
  * Create a thinking strategy manager.
  */
-export function createThinkingStrategy(
-  config?: Partial<ThinkingConfig>,
-): {
+export function createThinkingStrategy(config?: Partial<ThinkingConfig>): {
   generateDirectives: (tier: ComplexityTier) => ThinkingDirective;
   getSystemPrompt: (tier: ComplexityTier) => string | null;
   getSubagentPrompt: () => string;

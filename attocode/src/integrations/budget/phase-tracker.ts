@@ -11,7 +11,12 @@
  * - Nudge prompt generation for exploration budget, verification reserve
  */
 
-import type { PhaseState, EconomicsTuning, EconomicsEvent, PhaseBudgetConfig } from './economics.js';
+import type {
+  PhaseState,
+  EconomicsTuning,
+  EconomicsEvent,
+  PhaseBudgetConfig,
+} from './economics.js';
 
 // =============================================================================
 // PROMPT TEMPLATES
@@ -21,7 +26,7 @@ import type { PhaseState, EconomicsTuning, EconomicsEvent, PhaseBudgetConfig } f
  * Exploration saturation prompt - gentle nudge to start making edits.
  */
 export const EXPLORATION_NUDGE_PROMPT = (filesRead: number, iterations: number) =>
-`[System] You've read ${filesRead} files across ${iterations} iterations. If you understand the issue:
+  `[System] You've read ${filesRead} files across ${iterations} iterations. If you understand the issue:
 - Make the code changes now
 - Run tests to verify
 If you're still gathering context, briefly explain what you're looking for.`;
@@ -30,14 +35,13 @@ If you're still gathering context, briefly explain what you're looking for.`;
  * Phase budget exploration exceeded prompt.
  */
 export const EXPLORATION_BUDGET_EXCEEDED_PROMPT = (pct: number) =>
-`[System] You've spent ${pct}% of your iterations in exploration. Start making edits NOW.
+  `[System] You've spent ${pct}% of your iterations in exploration. Start making edits NOW.
 Do not read more files. Use what you know to make the fix.`;
 
 /**
  * Phase budget verification reserve prompt.
  */
-export const VERIFICATION_RESERVE_PROMPT =
-`[System] You are running low on iterations. Run your tests NOW to verify your changes.
+export const VERIFICATION_RESERVE_PROMPT = `[System] You are running low on iterations. Run your tests NOW to verify your changes.
 Do not make more edits until you've confirmed whether the current fix works.`;
 
 // =============================================================================
@@ -157,7 +161,12 @@ export class PhaseTracker {
     }
 
     // Detect test runs and track outcomes
-    if (command.includes('test') || command.includes('pytest') || command.includes('npm test') || command.includes('jest')) {
+    if (
+      command.includes('test') ||
+      command.includes('pytest') ||
+      command.includes('npm test') ||
+      command.includes('jest')
+    ) {
       this.state.testsRun++;
       // Transition to verifying phase when tests are run after edits
       if (this.state.phase === 'acting' && this.state.filesModified.size > 0) {
@@ -290,7 +299,8 @@ export class PhaseTracker {
 
     // Detect pass/fail from pytest-style output
     const hasPassed = /(\d+)\s+passed/.test(output) || output.includes('PASSED');
-    const hasFailed = /(\d+)\s+failed/.test(output) || output.includes('FAILED') || output.includes('ERROR');
+    const hasFailed =
+      /(\d+)\s+failed/.test(output) || output.includes('FAILED') || output.includes('ERROR');
 
     if (hasFailed && !hasPassed) {
       // Pure failure

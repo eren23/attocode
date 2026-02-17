@@ -69,7 +69,7 @@ function getStatusIcon(status: ActiveAgentStatus): string {
     case 'timeout':
       return '⏱';
     case 'timing_out':
-      return '⧖';  // Hourglass - indicates timing out but still running
+      return '⧖'; // Hourglass - indicates timing out but still running
     default:
       return '○';
   }
@@ -89,7 +89,7 @@ function getStatusColor(status: ActiveAgentStatus, colors: ThemeColors): string 
     case 'timeout':
       return colors.warning;
     case 'timing_out':
-      return colors.warning;  // Warning color to indicate impending timeout
+      return colors.warning; // Warning color to indicate impending timeout
     default:
       return colors.textMuted;
   }
@@ -156,20 +156,26 @@ const AgentItem = memo(function AgentItem({ agent, colors }: AgentItemProps) {
   return (
     <Box gap={1}>
       <Text color={statusColor}>{icon}</Text>
-      <Text color={colors.accent} bold>{agent.type}</Text>
+      <Text color={colors.accent} bold>
+        {agent.type}
+      </Text>
       <Text color={colors.textMuted} dimColor>
         ({agent.id.slice(-7)})
       </Text>
       <Text color={colors.text}>{taskPreview}</Text>
-      {agent.status === 'running' && phaseInfo && (
-        <Text color={colors.info}>{phaseInfo}</Text>
-      )}
-      <Text color={colors.textMuted} dimColor>|</Text>
+      {agent.status === 'running' && phaseInfo && <Text color={colors.info}>{phaseInfo}</Text>}
+      <Text color={colors.textMuted} dimColor>
+        |
+      </Text>
       <Text color={agent.tokens > 3000 ? colors.warning : colors.textMuted} dimColor>
         {tokens} tokens
       </Text>
-      <Text color={colors.textMuted} dimColor>|</Text>
-      <Text color={colors.textMuted} dimColor>{elapsed}</Text>
+      <Text color={colors.textMuted} dimColor>
+        |
+      </Text>
+      <Text color={colors.textMuted} dimColor>
+        {elapsed}
+      </Text>
     </Box>
   );
 });
@@ -189,9 +195,9 @@ export const ActiveAgentsPanel = memo(function ActiveAgentsPanel({
   }
 
   // Count by status (timing_out counts as running since agent is still executing)
-  const running = agents.filter(a => a.status === 'running' || a.status === 'timing_out').length;
-  const completed = agents.filter(a => a.status === 'completed').length;
-  const failed = agents.filter(a => a.status === 'error' || a.status === 'timeout').length;
+  const running = agents.filter((a) => a.status === 'running' || a.status === 'timing_out').length;
+  const completed = agents.filter((a) => a.status === 'completed').length;
+  const failed = agents.filter((a) => a.status === 'error' || a.status === 'timeout').length;
 
   // Only show recent agents (last 5)
   const visibleAgents = agents.slice(-5);
@@ -207,14 +213,17 @@ export const ActiveAgentsPanel = memo(function ActiveAgentsPanel({
       {/* Header */}
       <Box justifyContent="space-between">
         <Text color={colors.accent} bold>
-          ACTIVE AGENTS [{running} running, {completed} done{failed > 0 ? `, ${failed} failed` : ''}]
+          ACTIVE AGENTS [{running} running, {completed} done{failed > 0 ? `, ${failed} failed` : ''}
+          ]
         </Text>
-        <Text color={colors.textMuted} dimColor>Alt+A to hide</Text>
+        <Text color={colors.textMuted} dimColor>
+          Alt+A to hide
+        </Text>
       </Box>
 
       {/* Agent list */}
       <Box flexDirection="column" marginTop={1}>
-        {visibleAgents.map(agent => (
+        {visibleAgents.map((agent) => (
           <AgentItem key={agent.id} agent={agent} colors={colors} />
         ))}
       </Box>

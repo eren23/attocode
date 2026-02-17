@@ -51,7 +51,7 @@ export const DEFAULT_HOOKS_CONFIG: HooksConfig = {
   builtIn: {
     logging: false, // Disabled by default - prints [Hook] logs to console
     metrics: true,
-    timing: false,  // Disabled by default - prints [Hook] timing to console
+    timing: false, // Disabled by default - prints [Hook] timing to console
   },
   custom: [],
   shell: {
@@ -164,29 +164,80 @@ export const DEFAULT_SANDBOX_CONFIG: SandboxConfig = {
   mode: 'auto', // Auto-detect best sandbox (seatbelt on macOS, docker on Linux, basic fallback)
   allowedCommands: [
     // JS/TS toolchain
-    'node', 'npm', 'npx', 'yarn', 'pnpm', 'bun',
-    'tsc', 'eslint', 'prettier', 'jest', 'vitest', 'mocha',
+    'node',
+    'npm',
+    'npx',
+    'yarn',
+    'pnpm',
+    'bun',
+    'tsc',
+    'eslint',
+    'prettier',
+    'jest',
+    'vitest',
+    'mocha',
     // Git
     'git',
     // File inspection
-    'ls', 'cat', 'head', 'tail', 'grep', 'find', 'wc',
-    'echo', 'pwd', 'which', 'env',
+    'ls',
+    'cat',
+    'head',
+    'tail',
+    'grep',
+    'find',
+    'wc',
+    'echo',
+    'pwd',
+    'which',
+    'env',
     // File manipulation
-    'mkdir', 'cp', 'mv', 'touch', 'rm', 'rmdir', 'chmod', 'ln',
+    'mkdir',
+    'cp',
+    'mv',
+    'touch',
+    'rm',
+    'rmdir',
+    'chmod',
+    'ln',
     // Text processing
-    'sed', 'awk', 'sort', 'tr', 'cut', 'uniq', 'diff', 'xargs',
+    'sed',
+    'awk',
+    'sort',
+    'tr',
+    'cut',
+    'uniq',
+    'diff',
+    'xargs',
     // Path utilities
-    'basename', 'dirname', 'realpath', 'readlink',
+    'basename',
+    'dirname',
+    'realpath',
+    'readlink',
     // Archive / compression
-    'tar', 'gzip', 'gunzip', 'zip', 'unzip',
+    'tar',
+    'gzip',
+    'gunzip',
+    'zip',
+    'unzip',
     // System info
-    'date', 'uname',
+    'date',
+    'uname',
     // Other languages & tools
-    'python', 'python3', 'pip', 'pip3',
-    'curl', 'wget',
-    'make', 'jq',
-    'docker', 'docker-compose',
-    'cargo', 'go', 'java', 'mvn', 'gradle',
+    'python',
+    'python3',
+    'pip',
+    'pip3',
+    'curl',
+    'wget',
+    'make',
+    'jq',
+    'docker',
+    'docker-compose',
+    'cargo',
+    'go',
+    'java',
+    'mvn',
+    'gradle',
   ],
   blockedCommands: [
     'rm -rf /',
@@ -216,12 +267,7 @@ export const DEFAULT_SANDBOX_CONFIG: SandboxConfig = {
 export const DEFAULT_HUMAN_IN_LOOP_CONFIG: HumanInLoopConfig = {
   enabled: true,
   riskThreshold: 'high', // Only require approval for high-risk actions
-  alwaysApprove: [
-    'delete_file',
-    'rm',
-    'drop_table',
-    'truncate',
-  ],
+  alwaysApprove: ['delete_file', 'rm', 'drop_table', 'truncate'],
   neverApprove: [
     'read_file',
     'list_directory',
@@ -381,7 +427,7 @@ export const DEFAULT_COMPACTION_CONFIG: CompactionAgentConfig = {
  */
 export function mergeConfig<T extends object>(
   defaults: T,
-  userConfig: Partial<T> | false | undefined
+  userConfig: Partial<T> | false | undefined,
 ): T | false {
   if (userConfig === false) {
     return false;
@@ -409,7 +455,7 @@ export function mergeConfig<T extends object>(
           return [key, { ...defaultValue, ...value }];
         }
         return [key, value];
-      })
+      }),
     ),
   } as T;
 }
@@ -496,13 +542,13 @@ export const DEFAULT_FILE_CHANGE_TRACKER_CONFIG: FileChangeTrackerAgentConfig = 
  * The previous defaults (2-5 min) caused frequent timeouts during exploration.
  */
 export const SUBAGENT_TIMEOUTS: Record<string, number> = {
-  researcher: 420000,    // 7 minutes - exploration needs time (was 5 min)
-  coder: 300000,         // 5 minutes - implementation tasks (was 3 min)
-  reviewer: 180000,      // 3 minutes - focused review (was 2 min)
-  architect: 360000,     // 6 minutes - design thinking (was 4 min)
-  debugger: 300000,      // 5 minutes - investigation (was 3 min)
-  documenter: 180000,    // 3 minutes - documentation (was 2 min)
-  default: 300000,       // 5 minutes - fallback (was 2 min)
+  researcher: 420000, // 7 minutes - exploration needs time (was 5 min)
+  coder: 300000, // 5 minutes - implementation tasks (was 3 min)
+  reviewer: 180000, // 3 minutes - focused review (was 2 min)
+  architect: 360000, // 6 minutes - design thinking (was 4 min)
+  debugger: 300000, // 5 minutes - investigation (was 3 min)
+  documenter: 180000, // 3 minutes - documentation (was 2 min)
+  default: 300000, // 5 minutes - fallback (was 2 min)
 } as const;
 
 /**
@@ -510,13 +556,13 @@ export const SUBAGENT_TIMEOUTS: Record<string, number> = {
  * Research may need more iterations than documentation.
  */
 export const SUBAGENT_MAX_ITERATIONS: Record<string, number> = {
-  researcher: 25,        // More iterations for thorough exploration
-  coder: 20,             // Sufficient for implementation
-  reviewer: 15,          // Focused review needs fewer
-  architect: 20,         // Design requires iteration
-  debugger: 20,          // Investigation can be iterative
-  documenter: 10,        // Documentation is straightforward
-  default: 15,           // Balanced default
+  researcher: 25, // More iterations for thorough exploration
+  coder: 20, // Sufficient for implementation
+  reviewer: 15, // Focused review needs fewer
+  architect: 20, // Design requires iteration
+  debugger: 20, // Investigation can be iterative
+  documenter: 10, // Documentation is straightforward
+  default: 15, // Balanced default
 } as const;
 
 /**
@@ -579,8 +625,41 @@ export const DEFAULT_PROVIDER_RESILIENCE_CONFIG: ProviderResilienceConfig = {
  * Build complete configuration from partial user config.
  */
 export function buildConfig(
-  userConfig: Partial<ProductionAgentConfig>
-): Required<Omit<ProductionAgentConfig, 'provider' | 'tools' | 'toolResolver' | 'mcpToolSummaries' | 'maxContextTokens' | 'blackboard' | 'fileCache' | 'budget' | 'agentId' | 'workingDirectory' | 'verificationCriteria' | 'sharedContextState' | 'sharedEconomicsState'>> & Pick<ProductionAgentConfig, 'provider' | 'tools' | 'toolResolver' | 'mcpToolSummaries' | 'maxContextTokens' | 'blackboard' | 'fileCache' | 'budget' | 'agentId' | 'workingDirectory' | 'verificationCriteria' | 'sharedContextState' | 'sharedEconomicsState'> {
+  userConfig: Partial<ProductionAgentConfig>,
+): Required<
+  Omit<
+    ProductionAgentConfig,
+    | 'provider'
+    | 'tools'
+    | 'toolResolver'
+    | 'mcpToolSummaries'
+    | 'maxContextTokens'
+    | 'blackboard'
+    | 'fileCache'
+    | 'budget'
+    | 'agentId'
+    | 'workingDirectory'
+    | 'verificationCriteria'
+    | 'sharedContextState'
+    | 'sharedEconomicsState'
+  >
+> &
+  Pick<
+    ProductionAgentConfig,
+    | 'provider'
+    | 'tools'
+    | 'toolResolver'
+    | 'mcpToolSummaries'
+    | 'maxContextTokens'
+    | 'blackboard'
+    | 'fileCache'
+    | 'budget'
+    | 'agentId'
+    | 'workingDirectory'
+    | 'verificationCriteria'
+    | 'sharedContextState'
+    | 'sharedEconomicsState'
+  > {
   return {
     provider: userConfig.provider!,
     tools: userConfig.tools || [],
@@ -609,15 +688,24 @@ export function buildConfig(
     semanticCache: mergeConfig(DEFAULT_SEMANTIC_CACHE_CONFIG, userConfig.semanticCache),
     skills: mergeConfig(DEFAULT_SKILLS_CONFIG, userConfig.skills),
     codebaseContext: mergeConfig(DEFAULT_CODEBASE_CONTEXT_CONFIG, userConfig.codebaseContext),
-    interactivePlanning: mergeConfig(DEFAULT_INTERACTIVE_PLANNING_CONFIG, userConfig.interactivePlanning),
+    interactivePlanning: mergeConfig(
+      DEFAULT_INTERACTIVE_PLANNING_CONFIG,
+      userConfig.interactivePlanning,
+    ),
     recursiveContext: mergeConfig(DEFAULT_RECURSIVE_CONTEXT_CONFIG, userConfig.recursiveContext),
     compaction: mergeConfig(DEFAULT_COMPACTION_CONFIG, userConfig.compaction),
     learningStore: mergeConfig(DEFAULT_LEARNING_STORE_CONFIG, userConfig.learningStore),
     resilience: mergeConfig(DEFAULT_LLM_RESILIENCE_CONFIG, userConfig.resilience),
-    fileChangeTracker: mergeConfig(DEFAULT_FILE_CHANGE_TRACKER_CONFIG, userConfig.fileChangeTracker),
+    fileChangeTracker: mergeConfig(
+      DEFAULT_FILE_CHANGE_TRACKER_CONFIG,
+      userConfig.fileChangeTracker,
+    ),
     subagent: mergeConfig(DEFAULT_SUBAGENT_CONFIG, userConfig.subagent),
     swarm: userConfig.swarm || false,
-    providerResilience: mergeConfig(DEFAULT_PROVIDER_RESILIENCE_CONFIG, userConfig.providerResilience),
+    providerResilience: mergeConfig(
+      DEFAULT_PROVIDER_RESILIENCE_CONFIG,
+      userConfig.providerResilience,
+    ),
     maxContextTokens: userConfig.maxContextTokens, // Dynamic: fetched from OpenRouter/ModelRegistry if not explicitly set
     maxIterations: userConfig.maxIterations ?? 50,
     timeout: userConfig.timeout ?? 300000, // 5 minutes
@@ -700,7 +788,7 @@ When making changes:
  * Check if a feature is enabled in config.
  */
 export function isFeatureEnabled<T extends { enabled?: boolean }>(
-  config: T | false | undefined
+  config: T | false | undefined,
 ): config is T {
   if (config === false || config === undefined) {
     return false;

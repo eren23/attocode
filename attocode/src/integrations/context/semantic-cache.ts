@@ -174,7 +174,9 @@ function generateId(): string {
  */
 export class SemanticCacheManager {
   private entries: Map<string, CacheEntry> = new Map();
-  private config: Required<Omit<SemanticCacheConfig, 'embedFunction'>> & { embedFunction: EmbeddingFunction };
+  private config: Required<Omit<SemanticCacheConfig, 'embedFunction'>> & {
+    embedFunction: EmbeddingFunction;
+  };
   private eventListeners: Set<CacheEventListener> = new Set();
   private totalQueries: number = 0;
   private totalHits: number = 0;
@@ -220,7 +222,12 @@ export class SemanticCacheManager {
       // Update hit count
       bestMatch.entry.hitCount++;
       this.totalHits++;
-      this.emit({ type: 'cache.hit', query, similarity: bestMatch.similarity, entryId: bestMatch.entry.id });
+      this.emit({
+        type: 'cache.hit',
+        query,
+        similarity: bestMatch.similarity,
+        entryId: bestMatch.entry.id,
+      });
     } else {
       this.emit({ type: 'cache.miss', query });
     }
@@ -476,7 +483,7 @@ export function createLenientCache(): SemanticCacheManager {
  */
 export function withSemanticCache<T extends (...args: string[]) => Promise<string>>(
   fn: T,
-  cache: SemanticCacheManager
+  cache: SemanticCacheManager,
 ): T {
   return (async (...args: string[]) => {
     const query = args.join('\n');

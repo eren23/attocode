@@ -23,7 +23,7 @@ import { ProductionAgent } from '../agent.js';
  * Create a production agent with the given configuration.
  */
 export function createProductionAgent(
-  config: Partial<ProductionAgentConfig> & { provider: LLMProvider }
+  config: Partial<ProductionAgentConfig> & { provider: LLMProvider },
 ): ProductionAgent {
   return new ProductionAgent(config);
 }
@@ -218,7 +218,12 @@ export class ProductionAgentBuilder {
   /**
    * Disable a feature.
    */
-  disable(feature: keyof Omit<ProductionAgentConfig, 'provider' | 'tools' | 'systemPrompt' | 'model' | 'maxIterations' | 'timeout'>): this {
+  disable(
+    feature: keyof Omit<
+      ProductionAgentConfig,
+      'provider' | 'tools' | 'systemPrompt' | 'model' | 'maxIterations' | 'timeout'
+    >,
+  ): this {
     (this.config as Record<string, unknown>)[feature] = false;
     return this;
   }
@@ -230,7 +235,9 @@ export class ProductionAgentBuilder {
     if (!this.config.provider) {
       throw new Error('Provider is required');
     }
-    return new ProductionAgent(this.config as Partial<ProductionAgentConfig> & { provider: LLMProvider });
+    return new ProductionAgent(
+      this.config as Partial<ProductionAgentConfig> & { provider: LLMProvider },
+    );
   }
 }
 

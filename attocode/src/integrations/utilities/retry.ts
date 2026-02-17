@@ -140,10 +140,7 @@ export const DEFAULT_RETRYABLE_CODES = [
  * );
  * ```
  */
-export async function withRetry<T>(
-  fn: () => Promise<T>,
-  config: RetryConfig
-): Promise<T> {
+export async function withRetry<T>(fn: () => Promise<T>, config: RetryConfig): Promise<T> {
   const {
     maxAttempts,
     baseDelayMs = 1000,
@@ -180,10 +177,7 @@ export async function withRetry<T>(
       }
 
       // Calculate delay with exponential backoff
-      let delay = Math.min(
-        baseDelayMs * Math.pow(backoffMultiplier, attempt - 1),
-        maxDelayMs
-      );
+      let delay = Math.min(baseDelayMs * Math.pow(backoffMultiplier, attempt - 1), maxDelayMs);
 
       // Add jitter (±25%)
       if (jitter) {
@@ -221,7 +215,7 @@ export async function withRetry<T>(
  */
 export async function withRetryResult<T>(
   fn: () => Promise<T>,
-  config: RetryConfig
+  config: RetryConfig,
 ): Promise<RetryResult<T>> {
   const startTime = Date.now();
   let attempts = 0;
@@ -259,7 +253,7 @@ function shouldRetry(
   error: Error,
   retryableErrors: string[],
   retryableCodes: string[],
-  customIsRetryable?: (error: Error) => boolean
+  customIsRetryable?: (error: Error) => boolean,
 ): boolean {
   // Custom check takes precedence
   if (customIsRetryable) {
@@ -287,7 +281,7 @@ function shouldRetry(
  * Sleep for a specified duration.
  */
 function sleep(ms: number): Promise<void> {
-  return new Promise(resolve => setTimeout(resolve, ms));
+  return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
 // =============================================================================

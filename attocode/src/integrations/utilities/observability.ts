@@ -25,7 +25,8 @@ export class Tracer {
 
   constructor(config: NonNullable<ObservabilityConfig['tracing']>) {
     this.config = config;
-    this.exporter = config.customExporter || this.createDefaultExporter(config.exporter || 'console');
+    this.exporter =
+      config.customExporter || this.createDefaultExporter(config.exporter || 'console');
   }
 
   /**
@@ -43,7 +44,10 @@ export class Tracer {
   /**
    * Start a new span.
    */
-  startSpan(name: string, options: { isRoot?: boolean; attributes?: Record<string, unknown> } = {}): string {
+  startSpan(
+    name: string,
+    options: { isRoot?: boolean; attributes?: Record<string, unknown> } = {},
+  ): string {
     const spanId = this.generateId();
     const parentId = this.spanStack[this.spanStack.length - 1];
 
@@ -211,9 +215,7 @@ export class Tracer {
 
       logger.info(`${indent}${prefix}${status} ${span.name} (${duration}ms)`);
 
-      const children = spans.filter(
-        (s) => this.spans.get(s.spanId)?.parentId === span.spanId
-      );
+      const children = spans.filter((s) => this.spans.get(s.spanId)?.parentId === span.spanId);
       const newIndent = indent + (isLast ? '    ' : '│   ');
 
       children.forEach((child, i) => {
@@ -277,7 +279,13 @@ export class MetricsCollector {
   /**
    * Record LLM call metrics.
    */
-  recordLLMCall(inputTokens: number, outputTokens: number, durationMs: number, model: string, actualCost?: number): void {
+  recordLLMCall(
+    inputTokens: number,
+    outputTokens: number,
+    durationMs: number,
+    model: string,
+    actualCost?: number,
+  ): void {
     if (this.config.collectTokens) {
       this.increment('llm.input_tokens', inputTokens);
       this.increment('llm.output_tokens', outputTokens);

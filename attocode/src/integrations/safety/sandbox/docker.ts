@@ -115,11 +115,7 @@ export class DockerSandbox implements Sandbox {
   /**
    * Build docker run arguments.
    */
-  private buildDockerArgs(
-    command: string,
-    options: SandboxOptions,
-    workDir: string
-  ): string[] {
+  private buildDockerArgs(command: string, options: SandboxOptions, workDir: string): string[] {
     const args: string[] = ['run', '--rm'];
 
     // Security: drop all capabilities
@@ -337,7 +333,7 @@ export const DOCKER_CI_PROFILE: SandboxOptions = {
   writablePaths: ['.'],
   readablePaths: [],
   networkAllowed: true, // For package downloads
-  timeout: 600000,      // 10 minutes
+  timeout: 600000, // 10 minutes
   maxMemoryMB: 2048,
   maxCpuSeconds: 300,
 };

@@ -10,7 +10,15 @@ import * as fs from 'node:fs';
 import * as path from 'node:path';
 import type { SwarmOrchestrator } from './swarm-orchestrator.js';
 import type { SwarmEvent } from './swarm-events.js';
-import type { SwarmStatus, SwarmTask, OrchestratorDecision, ModelHealthRecord, VerificationResult, SwarmPlan, ArtifactInventory } from './types.js';
+import type {
+  SwarmStatus,
+  SwarmTask,
+  OrchestratorDecision,
+  ModelHealthRecord,
+  VerificationResult,
+  SwarmPlan,
+  ArtifactInventory,
+} from './types.js';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -56,7 +64,10 @@ export interface SwarmLiveState {
   }>;
   // V2: Extended state
   decisions: OrchestratorDecision[];
-  plan?: { acceptanceCriteria: SwarmPlan['acceptanceCriteria']; integrationTestPlan?: SwarmPlan['integrationTestPlan'] };
+  plan?: {
+    acceptanceCriteria: SwarmPlan['acceptanceCriteria'];
+    integrationTestPlan?: SwarmPlan['integrationTestPlan'];
+  };
   verification?: VerificationResult;
   modelHealth: ModelHealthRecord[];
   workerLogFiles: string[];
@@ -152,17 +163,33 @@ export class SwarmEventBridge {
     this.updateAccumulatedState(event, ts);
 
     // Write state snapshot (debounced for status/task events, immediate for milestones)
-    const immediateTriggers = ['swarm.complete', 'swarm.plan.complete', 'swarm.review.complete', 'swarm.verify.complete', 'swarm.state.checkpoint'];
+    const immediateTriggers = [
+      'swarm.complete',
+      'swarm.plan.complete',
+      'swarm.review.complete',
+      'swarm.verify.complete',
+      'swarm.state.checkpoint',
+    ];
     const debouncedTriggers = [
       'swarm.start',
-      'swarm.task.dispatched', 'swarm.task.completed', 'swarm.task.failed', 'swarm.task.skipped',
-      'swarm.task.attempt', 'swarm.task.resilience',
+      'swarm.task.dispatched',
+      'swarm.task.completed',
+      'swarm.task.failed',
+      'swarm.task.skipped',
+      'swarm.task.attempt',
+      'swarm.task.resilience',
       'swarm.quality.rejected',
-      'swarm.budget.update', 'swarm.wave.start', 'swarm.wave.complete', 'swarm.wave.allFailed',
+      'swarm.budget.update',
+      'swarm.wave.start',
+      'swarm.wave.complete',
+      'swarm.wave.allFailed',
       'swarm.phase.progress',
-      'swarm.circuit.open', 'swarm.circuit.closed',
-      'swarm.model.health', 'swarm.model.failover',
-      'swarm.orchestrator.llm', 'swarm.orchestrator.decision',
+      'swarm.circuit.open',
+      'swarm.circuit.closed',
+      'swarm.model.health',
+      'swarm.model.failover',
+      'swarm.orchestrator.llm',
+      'swarm.orchestrator.decision',
       'swarm.fixup.spawned',
     ];
     if (immediateTriggers.includes(event.type)) {
@@ -179,7 +206,9 @@ export class SwarmEventBridge {
     switch (event.type) {
       case 'swarm.start':
         this.timeline.push({
-          ts, seq: this.seq, type: 'swarm.start',
+          ts,
+          seq: this.seq,
+          type: 'swarm.start',
           tokensUsed: 0,
           costUsed: 0,
           completedCount: 0,
@@ -324,7 +353,9 @@ export class SwarmEventBridge {
       // V2 events
       case 'swarm.plan.complete':
         this.timeline.push({
-          ts, seq: this.seq, type: 'plan.complete',
+          ts,
+          seq: this.seq,
+          type: 'plan.complete',
           tokensUsed: this.lastStatus?.budget.tokensUsed ?? 0,
           costUsed: this.lastStatus?.budget.costUsed ?? 0,
           completedCount: this.lastStatus?.queue.completed ?? 0,
@@ -335,7 +366,9 @@ export class SwarmEventBridge {
       case 'swarm.review.start':
       case 'swarm.review.complete':
         this.timeline.push({
-          ts, seq: this.seq, type: event.type.replace('swarm.', ''),
+          ts,
+          seq: this.seq,
+          type: event.type.replace('swarm.', ''),
           tokensUsed: this.lastStatus?.budget.tokensUsed ?? 0,
           costUsed: this.lastStatus?.budget.costUsed ?? 0,
           completedCount: this.lastStatus?.queue.completed ?? 0,
@@ -346,7 +379,9 @@ export class SwarmEventBridge {
       case 'swarm.verify.start':
       case 'swarm.verify.step':
         this.timeline.push({
-          ts, seq: this.seq, type: event.type.replace('swarm.', ''),
+          ts,
+          seq: this.seq,
+          type: event.type.replace('swarm.', ''),
           tokensUsed: this.lastStatus?.budget.tokensUsed ?? 0,
           costUsed: this.lastStatus?.budget.costUsed ?? 0,
           completedCount: this.lastStatus?.queue.completed ?? 0,
@@ -360,13 +395,15 @@ export class SwarmEventBridge {
 
       case 'swarm.model.health':
         // Update or add model health record
-        this.modelHealth = this.modelHealth.filter(r => r.model !== event.record.model);
+        this.modelHealth = this.modelHealth.filter((r) => r.model !== event.record.model);
         this.modelHealth.push(event.record);
         break;
 
       case 'swarm.model.failover':
         this.timeline.push({
-          ts, seq: this.seq, type: 'model.failover',
+          ts,
+          seq: this.seq,
+          type: 'model.failover',
           tokensUsed: this.lastStatus?.budget.tokensUsed ?? 0,
           costUsed: this.lastStatus?.budget.costUsed ?? 0,
           completedCount: this.lastStatus?.queue.completed ?? 0,
@@ -376,7 +413,9 @@ export class SwarmEventBridge {
 
       case 'swarm.wave.start':
         this.timeline.push({
-          ts, seq: this.seq, type: `wave.start`,
+          ts,
+          seq: this.seq,
+          type: `wave.start`,
           tokensUsed: this.lastStatus?.budget.tokensUsed ?? 0,
           costUsed: this.lastStatus?.budget.costUsed ?? 0,
           completedCount: this.lastStatus?.queue.completed ?? 0,
@@ -386,7 +425,9 @@ export class SwarmEventBridge {
 
       case 'swarm.wave.complete':
         this.timeline.push({
-          ts, seq: this.seq, type: `wave.complete`,
+          ts,
+          seq: this.seq,
+          type: `wave.complete`,
           tokensUsed: this.lastStatus?.budget.tokensUsed ?? 0,
           costUsed: this.lastStatus?.budget.costUsed ?? 0,
           completedCount: event.completed,
@@ -396,7 +437,9 @@ export class SwarmEventBridge {
 
       case 'swarm.wave.allFailed':
         this.timeline.push({
-          ts, seq: this.seq, type: 'wave.allFailed',
+          ts,
+          seq: this.seq,
+          type: 'wave.allFailed',
           tokensUsed: this.lastStatus?.budget.tokensUsed ?? 0,
           costUsed: this.lastStatus?.budget.costUsed ?? 0,
           completedCount: this.lastStatus?.queue.completed ?? 0,
@@ -411,7 +454,9 @@ export class SwarmEventBridge {
 
       case 'swarm.circuit.open':
         this.timeline.push({
-          ts, seq: this.seq, type: 'circuit.open',
+          ts,
+          seq: this.seq,
+          type: 'circuit.open',
           tokensUsed: this.lastStatus?.budget.tokensUsed ?? 0,
           costUsed: this.lastStatus?.budget.costUsed ?? 0,
           completedCount: this.lastStatus?.queue.completed ?? 0,
@@ -426,7 +471,9 @@ export class SwarmEventBridge {
 
       case 'swarm.circuit.closed':
         this.timeline.push({
-          ts, seq: this.seq, type: 'circuit.closed',
+          ts,
+          seq: this.seq,
+          type: 'circuit.closed',
           tokensUsed: this.lastStatus?.budget.tokensUsed ?? 0,
           costUsed: this.lastStatus?.budget.costUsed ?? 0,
           completedCount: this.lastStatus?.queue.completed ?? 0,
@@ -436,7 +483,9 @@ export class SwarmEventBridge {
 
       case 'swarm.orchestrator.llm':
         this.timeline.push({
-          ts, seq: this.seq, type: 'orchestrator.llm',
+          ts,
+          seq: this.seq,
+          type: 'orchestrator.llm',
           tokensUsed: this.lastStatus?.budget.tokensUsed ?? 0,
           costUsed: this.lastStatus?.budget.costUsed ?? 0,
           completedCount: this.lastStatus?.queue.completed ?? 0,
@@ -451,7 +500,9 @@ export class SwarmEventBridge {
       case 'swarm.role.action':
         // V3: Record hierarchy role actions in timeline
         this.timeline.push({
-          ts, seq: this.seq, type: `role.${event.role}.${event.action}`,
+          ts,
+          seq: this.seq,
+          type: `role.${event.role}.${event.action}`,
           tokensUsed: this.lastStatus?.budget.tokensUsed ?? 0,
           costUsed: this.lastStatus?.budget.costUsed ?? 0,
           completedCount: this.lastStatus?.queue.completed ?? 0,
@@ -466,7 +517,9 @@ export class SwarmEventBridge {
       case 'swarm.state.resume':
         // Record in timeline
         this.timeline.push({
-          ts, seq: this.seq, type: event.type.replace('swarm.', ''),
+          ts,
+          seq: this.seq,
+          type: event.type.replace('swarm.', ''),
           tokensUsed: this.lastStatus?.budget.tokensUsed ?? 0,
           costUsed: this.lastStatus?.budget.costUsed ?? 0,
           completedCount: this.lastStatus?.queue.completed ?? 0,
@@ -478,7 +531,9 @@ export class SwarmEventBridge {
       case 'swarm.task.attempt':
         this.appendTaskAttempt(event.taskId, { ...event, timestamp: ts });
         this.timeline.push({
-          ts, seq: this.seq, type: 'task.attempt',
+          ts,
+          seq: this.seq,
+          type: 'task.attempt',
           tokensUsed: this.lastStatus?.budget.tokensUsed ?? 0,
           costUsed: this.lastStatus?.budget.costUsed ?? 0,
           completedCount: this.lastStatus?.queue.completed ?? 0,
@@ -489,7 +544,9 @@ export class SwarmEventBridge {
       case 'swarm.task.resilience':
         this.appendTaskAttempt(event.taskId, { ...event, recordType: 'resilience', timestamp: ts });
         this.timeline.push({
-          ts, seq: this.seq, type: 'task.resilience',
+          ts,
+          seq: this.seq,
+          type: 'task.resilience',
           tokensUsed: this.lastStatus?.budget.tokensUsed ?? 0,
           costUsed: this.lastStatus?.budget.costUsed ?? 0,
           completedCount: this.lastStatus?.queue.completed ?? 0,
@@ -762,10 +819,7 @@ export class SwarmEventBridge {
   }): void {
     try {
       fs.mkdirSync(this.outputDir, { recursive: true });
-      fs.writeFileSync(
-        path.join(this.outputDir, 'codemap.json'),
-        JSON.stringify(data, null, 2)
-      );
+      fs.writeFileSync(path.join(this.outputDir, 'codemap.json'), JSON.stringify(data, null, 2));
     } catch {
       // Best effort
     }
@@ -775,16 +829,20 @@ export class SwarmEventBridge {
    * Write blackboard.json snapshot (periodically during execution).
    */
   writeBlackboardSnapshot(data: {
-    findings: Array<{ id: string; topic: string; type: string; agentId: string; confidence: number; content: string }>;
+    findings: Array<{
+      id: string;
+      topic: string;
+      type: string;
+      agentId: string;
+      confidence: number;
+      content: string;
+    }>;
     claims: Array<{ resource: string; agentId: string; type: string }>;
     updatedAt: string;
   }): void {
     try {
       fs.mkdirSync(this.outputDir, { recursive: true });
-      fs.writeFileSync(
-        path.join(this.outputDir, 'blackboard.json'),
-        JSON.stringify(data, null, 2)
-      );
+      fs.writeFileSync(path.join(this.outputDir, 'blackboard.json'), JSON.stringify(data, null, 2));
     } catch {
       // Best effort
     }
@@ -804,7 +862,7 @@ export class SwarmEventBridge {
       fs.mkdirSync(this.outputDir, { recursive: true });
       fs.writeFileSync(
         path.join(this.outputDir, 'budget-pool.json'),
-        JSON.stringify(data, null, 2)
+        JSON.stringify(data, null, 2),
       );
     } catch {
       // Best effort

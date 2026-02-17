@@ -278,7 +278,7 @@ export class TransparencyAggregator {
  * Create a transparency aggregator.
  */
 export function createTransparencyAggregator(
-  config?: TransparencyAggregatorConfig
+  config?: TransparencyAggregatorConfig,
 ): TransparencyAggregator {
   return new TransparencyAggregator(config);
 }
@@ -299,8 +299,12 @@ export function formatTransparencyState(state: TransparencyState): string {
   }
 
   if (state.lastPolicy) {
-    const icon = state.lastPolicy.decision === 'allowed' ? '+' :
-                 state.lastPolicy.decision === 'blocked' ? 'x' : '?';
+    const icon =
+      state.lastPolicy.decision === 'allowed'
+        ? '+'
+        : state.lastPolicy.decision === 'blocked'
+          ? 'x'
+          : '?';
     lines.push(`  Policy: ${icon} ${state.lastPolicy.tool} (${state.lastPolicy.decision})`);
     if (state.lastPolicy.reason) {
       lines.push(`    ${state.lastPolicy.reason}`);
@@ -323,9 +327,12 @@ export function formatTransparencyState(state: TransparencyState): string {
   if (state.contextHealth) {
     const barLen = 20;
     const filledLen = Math.round((state.contextHealth.percentUsed / 100) * barLen);
-    const bar = '='.repeat(Math.min(filledLen, barLen)) + '-'.repeat(Math.max(0, barLen - filledLen));
+    const bar =
+      '='.repeat(Math.min(filledLen, barLen)) + '-'.repeat(Math.max(0, barLen - filledLen));
     lines.push(`  [${bar}] ${state.contextHealth.percentUsed}%`);
-    lines.push(`  ${(state.contextHealth.currentTokens / 1000).toFixed(1)}k / ${(state.contextHealth.maxTokens / 1000).toFixed(0)}k tokens`);
+    lines.push(
+      `  ${(state.contextHealth.currentTokens / 1000).toFixed(1)}k / ${(state.contextHealth.maxTokens / 1000).toFixed(0)}k tokens`,
+    );
     lines.push(`  ~${state.contextHealth.estimatedExchanges} exchanges remaining`);
   } else {
     lines.push('  (no context data yet)');

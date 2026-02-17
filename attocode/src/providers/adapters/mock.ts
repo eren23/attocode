@@ -1,6 +1,6 @@
 /**
  * Mock Provider
- * 
+ *
  * A mock LLM provider for testing and demonstration.
  * Always available as a fallback.
  */
@@ -48,7 +48,7 @@ const SCENARIOS: MockScenario[] = [
 \`\`\`json
 { "tool": "list_files", "input": { "path": "." } }
 \`\`\``,
-      "Here are the files I found in the directory.",
+      'Here are the files I found in the directory.',
     ],
   },
   {
@@ -59,7 +59,7 @@ const SCENARIOS: MockScenario[] = [
 \`\`\`json
 { "tool": "read_file", "input": { "path": "package.json" } }
 \`\`\``,
-      "Here are the contents of the file.",
+      'Here are the contents of the file.',
     ],
   },
   {
@@ -98,29 +98,33 @@ export class MockProvider implements LLMProvider, LLMProviderWithTools {
     return true; // Always available
   }
 
-  async chat(messages: (Message | MessageWithContent)[], _options?: ChatOptions): Promise<ChatResponse> {
+  async chat(
+    messages: (Message | MessageWithContent)[],
+    _options?: ChatOptions,
+  ): Promise<ChatResponse> {
     // Simulate network latency
-    await new Promise(resolve => setTimeout(resolve, 100));
-    
+    await new Promise((resolve) => setTimeout(resolve, 100));
+
     this.callCount++;
-    
+
     // Get the most recent user message
-    const lastUserMessage = [...messages]
-      .reverse()
-      .find(m => m.role === 'user');
-    
+    const lastUserMessage = [...messages].reverse().find((m) => m.role === 'user');
+
     const rawContent = lastUserMessage?.content ?? '';
-    const content = typeof rawContent === 'string' ? rawContent : rawContent.map(c => c.type === 'text' ? c.text : '').join('');
-    
+    const content =
+      typeof rawContent === 'string'
+        ? rawContent
+        : rawContent.map((c) => (c.type === 'text' ? c.text : '')).join('');
+
     // Try to match a scenario
     if (!this.currentScenario || this.scenarioIndex >= this.currentScenario.responses.length) {
       // Find a new scenario
-      this.currentScenario = SCENARIOS.find(s => s.trigger.test(content)) ?? null;
+      this.currentScenario = SCENARIOS.find((s) => s.trigger.test(content)) ?? null;
       this.scenarioIndex = 0;
     }
-    
+
     let response: string;
-    
+
     if (this.currentScenario && this.scenarioIndex < this.currentScenario.responses.length) {
       response = this.currentScenario.responses[this.scenarioIndex];
       this.scenarioIndex++;
@@ -134,7 +138,7 @@ Based on the context, here's my analysis:
 
 Is there anything specific you'd like me to clarify?`;
     }
-    
+
     return {
       content: response,
       stopReason: 'end_turn',
@@ -151,11 +155,11 @@ Is there anything specific you'd like me to clarify?`;
    */
   async chatWithTools(
     messages: (Message | MessageWithContent)[],
-    options?: ChatOptionsWithTools
+    options?: ChatOptionsWithTools,
   ): Promise<ChatResponseWithTools> {
     // If tool responses are configured, use them
     if (this.toolResponses.length > 0) {
-      await new Promise(resolve => setTimeout(resolve, 50));
+      await new Promise((resolve) => setTimeout(resolve, 50));
       this.callCount++;
 
       const idx = this.toolResponseIndex % this.toolResponses.length;

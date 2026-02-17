@@ -121,7 +121,7 @@ const DEFAULT_CIRCUIT_BREAKER_CONFIG: CircuitBreakerConfig = {
  */
 export async function getResilientProvider(
   preferred?: string,
-  config: ResilientProviderConfig = {}
+  config: ResilientProviderConfig = {},
 ): Promise<LLMProvider | LLMProviderWithTools> {
   const provider = await getProvider(preferred);
 
@@ -212,21 +212,19 @@ export function resetAllCircuitBreakers(): void {
  * ```
  */
 export async function createResilientFallbackChain(
-  config: ResilientChainConfig = {}
+  config: ResilientChainConfig = {},
 ): Promise<FallbackChain> {
   // Get available providers
-  const available = listProviders().filter(p => p.configured);
+  const available = listProviders().filter((p) => p.configured);
 
   // Determine provider order
   let providerNames: string[];
   if (config.providers && config.providers.length > 0) {
     // Use specified order, but only include configured providers
-    providerNames = config.providers.filter(name =>
-      available.some(p => p.name === name)
-    );
+    providerNames = config.providers.filter((name) => available.some((p) => p.name === name));
   } else {
     // Use default priority order
-    providerNames = available.map(p => p.name);
+    providerNames = available.map((p) => p.name);
   }
 
   if (providerNames.length === 0) {
@@ -254,7 +252,10 @@ export async function createResilientFallbackChain(
       });
     } catch (error) {
       // Skip providers that fail to initialize
-      logger.warn('Failed to initialize resilient provider', { provider: name, error: String(error) });
+      logger.warn('Failed to initialize resilient provider', {
+        provider: name,
+        error: String(error),
+      });
     }
   }
 
@@ -305,11 +306,12 @@ export function formatResilienceStatus(): string {
   }
 
   for (const [name, m] of Object.entries(metrics)) {
-    const stateIcon = {
-      CLOSED: '✓',
-      OPEN: '✗',
-      'HALF_OPEN': '◐',
-    }[m.state] ?? '?';
+    const stateIcon =
+      {
+        CLOSED: '✓',
+        OPEN: '✗',
+        HALF_OPEN: '◐',
+      }[m.state] ?? '?';
 
     lines.push(`  ${stateIcon} ${name}: ${m.state}`);
     lines.push(`      Requests: ${m.totalRequests} (${m.rejectedRequests} rejected)`);

@@ -1,6 +1,6 @@
 /**
  * Lesson 3: Tool Registry
- * 
+ *
  * Central registry for tool management, validation, and execution.
  */
 
@@ -13,7 +13,7 @@ import type {
   ToolEvent,
   ToolEventListener,
   PermissionChecker,
-  DangerLevel
+  DangerLevel,
 } from './types.js';
 import { createPermissionChecker } from './permission.js';
 import { withRetry, TOOL_RETRY_CONFIG } from '../integrations/utilities/retry.js';
@@ -44,7 +44,7 @@ function zodToJsonSchema(schema: z.ZodTypeAny): Record<string, unknown> {
 
     for (const [key, value] of Object.entries(shape)) {
       properties[key] = zodToJsonSchema(value as z.ZodTypeAny);
-      
+
       // Check if optional
       if (!(value instanceof z.ZodOptional)) {
         required.push(key);
@@ -166,7 +166,7 @@ export class ToolRegistry {
    * Get tool descriptions for LLM (JSON Schema format).
    */
   getDescriptions(): ToolDescription[] {
-    return Array.from(this.tools.values()).map(tool => ({
+    return Array.from(this.tools.values()).map((tool) => ({
       name: tool.name,
       description: tool.description,
       input_schema: zodToJsonSchema(tool.parameters) as unknown as ToolDescription['input_schema'],
@@ -176,13 +176,9 @@ export class ToolRegistry {
   /**
    * Execute a tool by name.
    */
-  async execute(
-    name: string, 
-    input: unknown, 
-    options?: ExecuteOptions
-  ): Promise<ToolResult> {
+  async execute(name: string, input: unknown, options?: ExecuteOptions): Promise<ToolResult> {
     const tool = this.tools.get(name);
-    
+
     if (!tool) {
       return {
         success: false,
@@ -223,12 +219,12 @@ export class ToolRegistry {
     this.emit({ type: 'permission_requested', request: permissionRequest });
 
     const permissionResponse = await this.permissionChecker.check(permissionRequest);
-    
+
     if (!permissionResponse.granted) {
-      this.emit({ 
-        type: 'permission_denied', 
-        request: permissionRequest, 
-        reason: permissionResponse.reason ?? 'Permission denied' 
+      this.emit({
+        type: 'permission_denied',
+        request: permissionRequest,
+        reason: permissionResponse.reason ?? 'Permission denied',
       });
       return {
         success: false,
@@ -249,7 +245,7 @@ export class ToolRegistry {
         return await Promise.race([
           tool.execute(validatedInput),
           new Promise<never>((_, reject) =>
-            setTimeout(() => reject(ResourceError.timeout(timeout, timeout)), timeout)
+            setTimeout(() => reject(ResourceError.timeout(timeout, timeout)), timeout),
           ),
         ]);
       };
@@ -278,9 +274,7 @@ export class ToolRegistry {
       return result;
     } catch (error) {
       // Convert to ToolError if not already a typed error
-      const toolError = isAgentError(error)
-        ? error
-        : ToolError.fromError(error as Error, name);
+      const toolError = isAgentError(error) ? error : ToolError.fromError(error as Error, name);
 
       this.emit({ type: 'error', tool: name, error: toolError });
 
@@ -378,12 +372,13 @@ export function defineTool<T extends z.ZodTypeAny>(
   description: string,
   parameters: T,
   execute: (input: z.infer<T>) => Promise<ToolResult>,
-  dangerLevelOrOptions: DangerLevel | DefineToolOptions<T> = 'safe'
+  dangerLevelOrOptions: DangerLevel | DefineToolOptions<T> = 'safe',
 ): ToolDefinition<T> {
   // Support both old signature (dangerLevel string) and new signature (options object)
-  const options: DefineToolOptions<T> = typeof dangerLevelOrOptions === 'string'
-    ? { dangerLevel: dangerLevelOrOptions }
-    : dangerLevelOrOptions;
+  const options: DefineToolOptions<T> =
+    typeof dangerLevelOrOptions === 'string'
+      ? { dangerLevel: dangerLevelOrOptions }
+      : dangerLevelOrOptions;
 
   return {
     name,

@@ -108,25 +108,31 @@ export function buildDelegationPrompt(spec: DelegationSpec): string {
 
   // Tool Guidance
   if (spec.toolGuidance.recommended.length > 0) {
-    sections.push(`## RECOMMENDED TOOLS\n${spec.toolGuidance.recommended.map(t => `- ${t}`).join('\n')}`);
+    sections.push(
+      `## RECOMMENDED TOOLS\n${spec.toolGuidance.recommended.map((t) => `- ${t}`).join('\n')}`,
+    );
   }
   if (spec.toolGuidance.avoid && spec.toolGuidance.avoid.length > 0) {
-    sections.push(`## TOOLS TO AVOID\n${spec.toolGuidance.avoid.map(a => `- ${a.tool}: ${a.reason}`).join('\n')}`);
+    sections.push(
+      `## TOOLS TO AVOID\n${spec.toolGuidance.avoid.map((a) => `- ${a.tool}: ${a.reason}`).join('\n')}`,
+    );
   }
   if (spec.toolGuidance.sources && spec.toolGuidance.sources.length > 0) {
-    sections.push(`## KEY SOURCES\n${spec.toolGuidance.sources.map(s => `- ${s}`).join('\n')}`);
+    sections.push(`## KEY SOURCES\n${spec.toolGuidance.sources.map((s) => `- ${s}`).join('\n')}`);
   }
 
   // Boundaries
   sections.push(`## SCOPE`);
-  sections.push(`In scope:\n${spec.boundaries.inScope.map(s => `- ${s}`).join('\n')}`);
-  sections.push(`Out of scope:\n${spec.boundaries.outOfScope.map(s => `- ${s}`).join('\n')}`);
+  sections.push(`In scope:\n${spec.boundaries.inScope.map((s) => `- ${s}`).join('\n')}`);
+  sections.push(`Out of scope:\n${spec.boundaries.outOfScope.map((s) => `- ${s}`).join('\n')}`);
   if (spec.boundaries.maxExplorationDepth) {
     sections.push(`Exploration depth: ${spec.boundaries.maxExplorationDepth}`);
   }
 
   // Success Criteria
-  sections.push(`## SUCCESS CRITERIA\n${spec.successCriteria.map((c, i) => `${i + 1}. ${c}`).join('\n')}`);
+  sections.push(
+    `## SUCCESS CRITERIA\n${spec.successCriteria.map((c, i) => `${i + 1}. ${c}`).join('\n')}`,
+  );
 
   // Sibling Context
   if (spec.siblingContext) {
@@ -135,7 +141,9 @@ export function buildDelegationPrompt(spec: DelegationSpec): string {
       sections.push(`- ${sibling.agent}: ${sibling.task}`);
     }
     if (spec.siblingContext.claimedFiles && spec.siblingContext.claimedFiles.length > 0) {
-      sections.push(`\nClaimed files (DO NOT modify):\n${spec.siblingContext.claimedFiles.map(f => `- ${f}`).join('\n')}`);
+      sections.push(
+        `\nClaimed files (DO NOT modify):\n${spec.siblingContext.claimedFiles.map((f) => `- ${f}`).join('\n')}`,
+      );
     }
   }
 
@@ -146,10 +154,7 @@ export function buildDelegationPrompt(spec: DelegationSpec): string {
  * Create a minimal DelegationSpec from a task string.
  * Used as a fallback when the orchestrator doesn't provide a full spec.
  */
-export function createMinimalDelegationSpec(
-  task: string,
-  agentType?: string,
-): DelegationSpec {
+export function createMinimalDelegationSpec(task: string, agentType?: string): DelegationSpec {
   return {
     objective: task,
     context: '',

@@ -86,27 +86,27 @@ export interface SmartSubtask {
 }
 
 export type SubtaskStatus =
-  | 'pending'      // Not yet started
-  | 'ready'        // Dependencies satisfied, can start
-  | 'blocked'      // Waiting on dependencies
-  | 'in_progress'  // Currently executing
-  | 'completed'    // Successfully finished
-  | 'failed'       // Failed
-  | 'skipped';     // Skipped (e.g., deemed unnecessary)
+  | 'pending' // Not yet started
+  | 'ready' // Dependencies satisfied, can start
+  | 'blocked' // Waiting on dependencies
+  | 'in_progress' // Currently executing
+  | 'completed' // Successfully finished
+  | 'failed' // Failed
+  | 'skipped'; // Skipped (e.g., deemed unnecessary)
 
 /** Known built-in task types (for autocomplete + defaults) */
 export type BuiltinSubtaskType =
-  | 'research'     // Gather information
-  | 'analysis'     // Analyze existing code/data
-  | 'design'       // Design/plan implementation
-  | 'implement'    // Write code
-  | 'test'         // Write/run tests
-  | 'refactor'     // Improve existing code
-  | 'review'       // Review code/changes
-  | 'document'     // Write documentation
-  | 'integrate'    // Integrate components
-  | 'deploy'       // Deploy/release
-  | 'merge';       // Combine results
+  | 'research' // Gather information
+  | 'analysis' // Analyze existing code/data
+  | 'design' // Design/plan implementation
+  | 'implement' // Write code
+  | 'test' // Write/run tests
+  | 'refactor' // Improve existing code
+  | 'review' // Review code/changes
+  | 'document' // Write documentation
+  | 'integrate' // Integrate components
+  | 'deploy' // Deploy/release
+  | 'merge'; // Combine results
 
 /** Any string is valid — custom types are first-class citizens. */
 export type SubtaskType = BuiltinSubtaskType | (string & {});
@@ -170,11 +170,11 @@ export interface SmartDecompositionResult {
 }
 
 export type DecompositionStrategy =
-  | 'sequential'    // Tasks must run in order
-  | 'parallel'      // Tasks can run simultaneously
-  | 'hierarchical'  // Tasks have subtasks
-  | 'adaptive'      // Mix of strategies
-  | 'pipeline';     // Data flows through stages
+  | 'sequential' // Tasks must run in order
+  | 'parallel' // Tasks can run simultaneously
+  | 'hierarchical' // Tasks have subtasks
+  | 'adaptive' // Mix of strategies
+  | 'pipeline'; // Data flows through stages
 
 /**
  * Configuration for smart decomposer.
@@ -201,7 +201,7 @@ export interface SmartDecomposerConfig {
  */
 export type LLMDecomposeFunction = (
   task: string,
-  context: DecomposeContext
+  context: DecomposeContext,
 ) => Promise<LLMDecomposeResult>;
 
 /**
@@ -328,10 +328,7 @@ export class SmartDecomposer {
   /**
    * Decompose a task into subtasks.
    */
-  async decompose(
-    task: string,
-    context: DecomposeContext = {}
-  ): Promise<SmartDecompositionResult> {
+  async decompose(task: string, context: DecomposeContext = {}): Promise<SmartDecompositionResult> {
     this.emit({ type: 'decomposition.started', task });
 
     let subtasks: SmartSubtask[] = [];
@@ -351,17 +348,29 @@ export class SmartDecomposer {
           if (subtasks.length > 0) break; // Success
           // 0 subtasks on first attempt -> retry
           if (attempt === 0) {
-            this.emit({ type: 'llm.fallback', reason: 'LLM returned 0 subtasks, retrying...', task });
+            this.emit({
+              type: 'llm.fallback',
+              reason: 'LLM returned 0 subtasks, retrying...',
+              task,
+            });
             continue;
           }
         } catch (error) {
           if (attempt === 0) {
-            this.emit({ type: 'llm.fallback', reason: `${(error as Error).message}, retrying...`, task });
+            this.emit({
+              type: 'llm.fallback',
+              reason: `${(error as Error).message}, retrying...`,
+              task,
+            });
             continue;
           }
         }
         // Both attempts failed -> return empty so orchestrator can try lastResortDecompose
-        this.emit({ type: 'llm.fallback', reason: 'LLM failed after 2 attempts — skipping heuristic', task });
+        this.emit({
+          type: 'llm.fallback',
+          reason: 'LLM failed after 2 attempts — skipping heuristic',
+          task,
+        });
         subtasks = [];
         strategy = 'adaptive';
         llmAssisted = false;
@@ -404,10 +413,7 @@ export class SmartDecomposer {
 
     // Calculate totals
     const totalComplexity = subtasks.reduce((sum, t) => sum + t.complexity, 0);
-    const totalEstimatedTokens = subtasks.reduce(
-      (sum, t) => sum + (t.estimatedTokens ?? 1000),
-      0
-    );
+    const totalEstimatedTokens = subtasks.reduce((sum, t) => sum + (t.estimatedTokens ?? 1000), 0);
 
     const result: SmartDecompositionResult = {
       originalTask: task,
@@ -447,7 +453,9 @@ export class SmartDecomposer {
 
       // F14: Populate modifies/reads from relevantFiles so downstream consumers
       // (F12 hollow retry prompts, quality gate) get concrete file targets.
-      const isModifyType = ['implement', 'fix', 'refactor', 'integrate', 'test', 'deploy'].includes(s.type);
+      const isModifyType = ['implement', 'fix', 'refactor', 'integrate', 'test', 'deploy'].includes(
+        s.type,
+      );
 
       return {
         id,
@@ -498,7 +506,7 @@ export class SmartDecomposer {
    */
   private decomposeHeuristic(
     task: string,
-    _context: DecomposeContext
+    _context: DecomposeContext,
   ): { subtasks: SmartSubtask[]; strategy: DecompositionStrategy } {
     const taskLower = task.toLowerCase();
 
@@ -823,16 +831,11 @@ export class SmartDecomposer {
     }
 
     // Clean up and filter
-    parts = parts
-      .map((p) => p.trim())
-      .filter((p) => p.length > 10);
+    parts = parts.map((p) => p.trim()).filter((p) => p.length > 10);
 
     // If no good splits, create generic parts
     if (parts.length < 2) {
-      parts = [
-        `Part 1: ${task}`,
-        `Part 2: ${task}`,
-      ];
+      parts = [`Part 1: ${task}`, `Part 2: ${task}`];
     }
 
     return parts.slice(0, 5);
@@ -845,10 +848,7 @@ export class SmartDecomposer {
   /**
    * Enhance subtasks with codebase context.
    */
-  private enhanceWithCodebaseContext(
-    subtasks: SmartSubtask[],
-    repoMap: RepoMap
-  ): SmartSubtask[] {
+  private enhanceWithCodebaseContext(subtasks: SmartSubtask[], repoMap: RepoMap): SmartSubtask[] {
     return subtasks.map((subtask) => {
       // Find relevant files based on task description
       const relevantFiles = this.findRelevantFiles(subtask.description, repoMap);
@@ -983,8 +983,6 @@ export class SmartDecomposer {
  * const result = await decomposer.decompose('Build a REST API for user management');
  * ```
  */
-export function createSmartDecomposer(
-  config: SmartDecomposerConfig = {}
-): SmartDecomposer {
+export function createSmartDecomposer(config: SmartDecomposerConfig = {}): SmartDecomposer {
   return new SmartDecomposer(config);
 }

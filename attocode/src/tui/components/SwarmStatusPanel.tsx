@@ -75,15 +75,24 @@ function formatElapsed(startedAt: number): string {
  */
 function getPhaseInfo(phase: SwarmStatus['phase']): { text: string; color: string } {
   switch (phase) {
-    case 'decomposing': return { text: 'Decomposing task...', color: '#DDA0DD' };
-    case 'scheduling': return { text: 'Scheduling waves...', color: '#DDA0DD' };
-    case 'planning': return { text: 'Planning execution...', color: '#DDA0DD' };
-    case 'executing': return { text: 'Executing', color: '#87CEEB' };
-    case 'reviewing': return { text: 'Reviewing outputs...', color: '#DDA0DD' };
-    case 'verifying': return { text: 'Verifying integration...', color: '#DDA0DD' };
-    case 'synthesizing': return { text: 'Synthesizing results...', color: '#DDA0DD' };
-    case 'completed': return { text: 'Completed', color: '#98FB98' };
-    case 'failed': return { text: 'Failed', color: '#FF6B6B' };
+    case 'decomposing':
+      return { text: 'Decomposing task...', color: '#DDA0DD' };
+    case 'scheduling':
+      return { text: 'Scheduling waves...', color: '#DDA0DD' };
+    case 'planning':
+      return { text: 'Planning execution...', color: '#DDA0DD' };
+    case 'executing':
+      return { text: 'Executing', color: '#87CEEB' };
+    case 'reviewing':
+      return { text: 'Reviewing outputs...', color: '#DDA0DD' };
+    case 'verifying':
+      return { text: 'Verifying integration...', color: '#DDA0DD' };
+    case 'synthesizing':
+      return { text: 'Synthesizing results...', color: '#DDA0DD' };
+    case 'completed':
+      return { text: 'Completed', color: '#98FB98' };
+    case 'failed':
+      return { text: 'Failed', color: '#FF6B6B' };
   }
 }
 
@@ -108,17 +117,24 @@ interface WorkerRowProps {
 
 const WorkerRow = memo(function WorkerRow({ worker, colors }: WorkerRowProps) {
   const elapsed = formatElapsed(worker.startedAt);
-  const taskPreview = worker.taskDescription.length > 40
-    ? worker.taskDescription.slice(0, 37) + '...'
-    : worker.taskDescription;
+  const taskPreview =
+    worker.taskDescription.length > 40
+      ? worker.taskDescription.slice(0, 37) + '...'
+      : worker.taskDescription;
 
   return (
     <Box gap={1}>
       <Text color={colors.info}>{'●'}</Text>
-      <Text color={colors.accent} bold>{worker.workerName.padEnd(10)}</Text>
-      <Text color={colors.textMuted} dimColor>({shortModelName(worker.model)})</Text>
+      <Text color={colors.accent} bold>
+        {worker.workerName.padEnd(10)}
+      </Text>
+      <Text color={colors.textMuted} dimColor>
+        ({shortModelName(worker.model)})
+      </Text>
       <Text color={colors.text}>{taskPreview}</Text>
-      <Text color={colors.textMuted} dimColor>[{elapsed}]</Text>
+      <Text color={colors.textMuted} dimColor>
+        [{elapsed}]
+      </Text>
     </Box>
   );
 });
@@ -138,15 +154,17 @@ export const SwarmStatusPanel = memo(function SwarmStatusPanel({
   }
 
   const phaseInfo = getPhaseInfo(status.phase);
-  const isActive = status.phase === 'executing' || status.phase === 'decomposing' || status.phase === 'scheduling' || status.phase === 'synthesizing';
-  const waveProgress = status.totalWaves > 0
-    ? Math.round((status.currentWave / status.totalWaves) * 100)
-    : 0;
+  const isActive =
+    status.phase === 'executing' ||
+    status.phase === 'decomposing' ||
+    status.phase === 'scheduling' ||
+    status.phase === 'synthesizing';
+  const waveProgress =
+    status.totalWaves > 0 ? Math.round((status.currentWave / status.totalWaves) * 100) : 0;
 
   const { queue, budget } = status;
-  const tokenPct = budget.tokensTotal > 0
-    ? Math.round((budget.tokensUsed / budget.tokensTotal) * 100)
-    : 0;
+  const tokenPct =
+    budget.tokensTotal > 0 ? Math.round((budget.tokensUsed / budget.tokensTotal) * 100) : 0;
   const costStr = `$${budget.costUsed.toFixed(4)}/$${budget.costTotal.toFixed(2)}`;
 
   return (
@@ -160,16 +178,22 @@ export const SwarmStatusPanel = memo(function SwarmStatusPanel({
       {/* Header */}
       <Box justifyContent="space-between">
         <Box gap={1}>
-          <Text color="#DDA0DD" bold>SWARM</Text>
+          <Text color="#DDA0DD" bold>
+            SWARM
+          </Text>
           <Text color={phaseInfo.color}>{phaseInfo.text}</Text>
         </Box>
-        <Text color={colors.textMuted} dimColor>Alt+W to hide</Text>
+        <Text color={colors.textMuted} dimColor>
+          Alt+W to hide
+        </Text>
       </Box>
 
       {/* Wave Progress */}
       {status.totalWaves > 0 && (
         <Box marginTop={1} gap={1}>
-          <Text color={colors.text}>Wave {status.currentWave}/{status.totalWaves}</Text>
+          <Text color={colors.text}>
+            Wave {status.currentWave}/{status.totalWaves}
+          </Text>
           <Text color={isActive ? '#DDA0DD' : colors.success}>
             {progressBar(status.currentWave, status.totalWaves, 16)} {waveProgress}%
           </Text>
@@ -184,18 +208,23 @@ export const SwarmStatusPanel = memo(function SwarmStatusPanel({
         <Text color={colors.success}>Done: {queue.completed}</Text>
         {queue.failed > 0 && <Text color={colors.error}>Failed: {queue.failed}</Text>}
         {queue.skipped > 0 && <Text color={colors.warning}>Skipped: {queue.skipped}</Text>}
-        <Text color={colors.textMuted} dimColor>Total: {queue.total}</Text>
+        <Text color={colors.textMuted} dimColor>
+          Total: {queue.total}
+        </Text>
       </Box>
 
       {/* Active Workers */}
       {status.activeWorkers.length > 0 && (
         <Box flexDirection="column" marginTop={1}>
           <Text color={colors.textMuted}>Workers ({status.activeWorkers.length} active):</Text>
-          {status.activeWorkers.slice(0, 5).map(worker => (
+          {status.activeWorkers.slice(0, 5).map((worker) => (
             <WorkerRow key={worker.taskId} worker={worker} colors={colors} />
           ))}
           {status.activeWorkers.length > 5 && (
-            <Text color={colors.textMuted} dimColor>  ...and {status.activeWorkers.length - 5} more</Text>
+            <Text color={colors.textMuted} dimColor>
+              {' '}
+              ...and {status.activeWorkers.length - 5} more
+            </Text>
           )}
         </Box>
       )}
@@ -209,8 +238,13 @@ export const SwarmStatusPanel = memo(function SwarmStatusPanel({
         <Text color={tokenPct > 80 ? colors.warning : colors.textMuted} dimColor>
           {progressBar(budget.tokensUsed, budget.tokensTotal, 10)} {tokenPct}%
         </Text>
-        <Text color={colors.textMuted} dimColor>|</Text>
-        <Text color={budget.costUsed > budget.costTotal * 0.8 ? colors.warning : '#98FB98'} dimColor>
+        <Text color={colors.textMuted} dimColor>
+          |
+        </Text>
+        <Text
+          color={budget.costUsed > budget.costTotal * 0.8 ? colors.warning : '#98FB98'}
+          dimColor
+        >
           {costStr}
         </Text>
       </Box>

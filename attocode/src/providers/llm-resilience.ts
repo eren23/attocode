@@ -105,7 +105,7 @@ function calculateBackoff(
     maxBackoffMs: number;
     backoffMultiplier: number;
     useJitter: boolean;
-  }
+  },
 ): number {
   const baseDelay = config.initialBackoffMs * Math.pow(config.backoffMultiplier, attempt - 1);
   const cappedDelay = Math.min(baseDelay, config.maxBackoffMs);
@@ -121,7 +121,7 @@ function calculateBackoff(
  * Sleep for a specified duration.
  */
 function sleep(ms: number): Promise<void> {
-  return new Promise(resolve => setTimeout(resolve, ms));
+  return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
 // =============================================================================
@@ -148,7 +148,7 @@ function sleep(ms: number): Promise<void> {
 export async function resilientLLMCall(
   messages: Message[],
   callFn: LLMCallFn,
-  config: LLMResilienceConfig = {}
+  config: LLMResilienceConfig = {},
 ): Promise<ResilientLLMResult> {
   const cfg = { ...DEFAULT_CONFIG, ...config };
   const onEvent = config.onEvent || (() => {});
@@ -248,7 +248,8 @@ export async function resilientLLMCall(
         },
         {
           role: 'user' as const,
-          content: '[System: Please continue from where you left off. Do not repeat what you already said.]',
+          content:
+            '[System: Please continue from where you left off. Do not repeat what you already said.]',
         },
       ];
 
@@ -352,7 +353,7 @@ export class LLMResilienceError extends Error {
     public readonly details: {
       emptyRetries: number;
       continuations: number;
-    }
+    },
   ) {
     super(message);
     this.name = 'LLMResilienceError';
@@ -375,7 +376,7 @@ export function isLLMResilienceError(error: unknown): error is LLMResilienceErro
  */
 export function validateResponse(
   response: ChatResponse,
-  options: { minContentLength?: number } = {}
+  options: { minContentLength?: number } = {},
 ): { valid: boolean; issues: string[] } {
   const issues: string[] = [];
   const minLength = options.minContentLength ?? 1;
@@ -411,7 +412,7 @@ export function summarizeResponse(response: ChatResponse): string {
   }
 
   if (response.toolCalls?.length) {
-    const toolNames = response.toolCalls.map(tc => tc.name).join(', ');
+    const toolNames = response.toolCalls.map((tc) => tc.name).join(', ');
     parts.push(`tools: [${toolNames}]`);
   }
 

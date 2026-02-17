@@ -31,7 +31,13 @@ export interface SessionMetadata {
 /**
  * Entry types that can be stored in a session.
  */
-export type SessionEntryType = 'message' | 'tool_call' | 'tool_result' | 'checkpoint' | 'compaction' | 'metadata';
+export type SessionEntryType =
+  | 'message'
+  | 'tool_call'
+  | 'tool_result'
+  | 'checkpoint'
+  | 'compaction'
+  | 'metadata';
 
 /**
  * A single entry in the session log.
@@ -199,7 +205,7 @@ export class SessionStore {
     await this.writeQueue;
 
     // Update metadata
-    const meta = this.index.sessions.find(s => s.id === this.currentSessionId);
+    const meta = this.index.sessions.find((s) => s.id === this.currentSessionId);
     if (meta) {
       meta.lastActiveAt = fullEntry.timestamp;
       if (entry.type === 'message') {
@@ -336,7 +342,7 @@ export class SessionStore {
       await unlink(sessionPath);
     }
 
-    this.index.sessions = this.index.sessions.filter(s => s.id !== sessionId);
+    this.index.sessions = this.index.sessions.filter((s) => s.id !== sessionId);
     await this.saveIndex();
 
     if (this.currentSessionId === sessionId) {
@@ -364,7 +370,7 @@ export class SessionStore {
    * Get session metadata by ID.
    */
   getSessionMetadata(sessionId: string): SessionMetadata | undefined {
-    return this.index.sessions.find(s => s.id === sessionId);
+    return this.index.sessions.find((s) => s.id === sessionId);
   }
 
   /**
@@ -372,9 +378,9 @@ export class SessionStore {
    */
   async updateSessionMetadata(
     sessionId: string,
-    updates: Partial<Pick<SessionMetadata, 'name' | 'summary' | 'tokenCount'>>
+    updates: Partial<Pick<SessionMetadata, 'name' | 'summary' | 'tokenCount'>>,
   ): Promise<void> {
-    const meta = this.index.sessions.find(s => s.id === sessionId);
+    const meta = this.index.sessions.find((s) => s.id === sessionId);
     if (meta) {
       Object.assign(meta, updates);
       await this.saveIndex();

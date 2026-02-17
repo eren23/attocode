@@ -100,9 +100,10 @@ function alignLines(oldContent: string, newContent: string): AlignedPair[] {
   let i = 0;
   while (i < changes.length) {
     const change = changes[i];
-    const lines = change.value.split('\n').filter((l, idx, arr) =>
-      // Keep all lines except trailing empty from split
-      idx < arr.length - 1 || l !== ''
+    const lines = change.value.split('\n').filter(
+      (l, idx, arr) =>
+        // Keep all lines except trailing empty from split
+        idx < arr.length - 1 || l !== '',
     );
 
     if (!change.added && !change.removed) {
@@ -122,9 +123,9 @@ function alignLines(oldContent: string, newContent: string): AlignedPair[] {
       if (nextChange?.added) {
         // This is a modification - pair up removed and added lines
         const removedLines = lines;
-        const addedLines = nextChange.value.split('\n').filter((l, idx, arr) =>
-          idx < arr.length - 1 || l !== ''
-        );
+        const addedLines = nextChange.value
+          .split('\n')
+          .filter((l, idx, arr) => idx < arr.length - 1 || l !== '');
 
         const maxLen = Math.max(removedLines.length, addedLines.length);
         for (let j = 0; j < maxLen; j++) {
@@ -200,7 +201,7 @@ function renderWordDiff(
   oldLine: string,
   newLine: string,
   side: 'old' | 'new',
-  maxWidth: number
+  maxWidth: number,
 ): React.ReactNode {
   const changes = diffWords(oldLine, newLine);
   const elements: React.ReactNode[] = [];
@@ -222,8 +223,7 @@ function renderWordDiff(
     currentWidth += text.length;
 
     // Determine styling
-    const isHighlighted = (side === 'old' && change.removed) ||
-                          (side === 'new' && change.added);
+    const isHighlighted = (side === 'old' && change.removed) || (side === 'new' && change.added);
 
     elements.push(
       <Text
@@ -233,7 +233,7 @@ function renderWordDiff(
         inverse={isHighlighted}
       >
         {text}
-      </Text>
+      </Text>,
     );
   }
 
@@ -249,7 +249,7 @@ function renderWordDiffWithSyntax(
   side: 'old' | 'new',
   maxWidth: number,
   theme: ThemeColors,
-  language: string
+  language: string,
 ): React.ReactNode {
   const changes = diffWords(oldLine, newLine);
   const elements: React.ReactNode[] = [];
@@ -273,8 +273,7 @@ function renderWordDiffWithSyntax(
     currentWidth += text.length;
 
     // Determine if this part is highlighted (changed)
-    const isHighlighted = (side === 'old' && change.removed) ||
-                          (side === 'new' && change.added);
+    const isHighlighted = (side === 'old' && change.removed) || (side === 'new' && change.added);
 
     if (isHighlighted) {
       // Changed parts get inverse highlighting
@@ -286,7 +285,7 @@ function renderWordDiffWithSyntax(
           inverse
         >
           {text}
-        </Text>
+        </Text>,
       );
     } else {
       // Unchanged parts get syntax highlighting
@@ -295,7 +294,7 @@ function renderWordDiffWithSyntax(
         elements.push(
           <Text key={keyIndex++} color={getTokenColor(token.type, theme)}>
             {token.content}
-          </Text>
+          </Text>,
         );
       }
     }
@@ -312,11 +311,9 @@ function renderSyntaxHighlight(
   maxWidth: number,
   theme: ThemeColors,
   language: string,
-  _baseColor?: string
+  _baseColor?: string,
 ): React.ReactNode {
-  const truncated = content.length > maxWidth
-    ? content.slice(0, maxWidth - 1) + '…'
-    : content;
+  const truncated = content.length > maxWidth ? content.slice(0, maxWidth - 1) + '…' : content;
 
   const tokens = tokenize(truncated, language);
   return tokens.map((token: Token, i: number) => (
@@ -355,12 +352,10 @@ const DiffRow = memo(function DiffRow({
   const contentWidth = showLineNumbers ? halfWidth - lineNumWidth - 1 : halfWidth;
 
   // Determine colors based on change type
-  const oldColor = pair.type === 'remove' || pair.type === 'modify'
-    ? COLORS.deletion
-    : COLORS.unchanged;
-  const newColor = pair.type === 'add' || pair.type === 'modify'
-    ? COLORS.addition
-    : COLORS.unchanged;
+  const oldColor =
+    pair.type === 'remove' || pair.type === 'modify' ? COLORS.deletion : COLORS.unchanged;
+  const newColor =
+    pair.type === 'add' || pair.type === 'modify' ? COLORS.addition : COLORS.unchanged;
 
   const oldBg = pair.type === 'remove' ? COLORS.deletionBg : undefined;
   const newBg = pair.type === 'add' ? COLORS.additionBg : undefined;
@@ -375,28 +370,46 @@ const DiffRow = memo(function DiffRow({
   if (showWordDiff && pair.type === 'modify' && pair.old && pair.new) {
     // Word diff with or without syntax
     if (useSyntax) {
-      oldContent = renderWordDiffWithSyntax(pair.old, pair.new, 'old', contentWidth, theme, language);
-      newContent = renderWordDiffWithSyntax(pair.old, pair.new, 'new', contentWidth, theme, language);
+      oldContent = renderWordDiffWithSyntax(
+        pair.old,
+        pair.new,
+        'old',
+        contentWidth,
+        theme,
+        language,
+      );
+      newContent = renderWordDiffWithSyntax(
+        pair.old,
+        pair.new,
+        'new',
+        contentWidth,
+        theme,
+        language,
+      );
     } else {
       oldContent = renderWordDiff(pair.old, pair.new, 'old', contentWidth);
       newContent = renderWordDiff(pair.old, pair.new, 'new', contentWidth);
     }
   } else if (useSyntax) {
     // Syntax highlighting without word diff
-    oldContent = pair.old !== undefined ? (
-      renderSyntaxHighlight(pair.old, contentWidth, theme, language, oldColor)
-    ) : null;
-    newContent = pair.new !== undefined ? (
-      renderSyntaxHighlight(pair.new, contentWidth, theme, language, newColor)
-    ) : null;
+    oldContent =
+      pair.old !== undefined
+        ? renderSyntaxHighlight(pair.old, contentWidth, theme, language, oldColor)
+        : null;
+    newContent =
+      pair.new !== undefined
+        ? renderSyntaxHighlight(pair.new, contentWidth, theme, language, newColor)
+        : null;
   } else {
     // Plain text
-    oldContent = pair.old !== undefined ? (
-      <Text color={oldColor}>{truncate(pair.old, contentWidth)}</Text>
-    ) : null;
-    newContent = pair.new !== undefined ? (
-      <Text color={newColor}>{truncate(pair.new, contentWidth)}</Text>
-    ) : null;
+    oldContent =
+      pair.old !== undefined ? (
+        <Text color={oldColor}>{truncate(pair.old, contentWidth)}</Text>
+      ) : null;
+    newContent =
+      pair.new !== undefined ? (
+        <Text color={newColor}>{truncate(pair.new, contentWidth)}</Text>
+      ) : null;
   }
 
   return (
@@ -410,9 +423,7 @@ const DiffRow = memo(function DiffRow({
         )}
         {showLineNumbers && <Text> </Text>}
         <Box width={contentWidth}>
-          <Text backgroundColor={oldBg}>
-            {oldContent || ' '}
-          </Text>
+          <Text backgroundColor={oldBg}>{oldContent || ' '}</Text>
         </Box>
       </Box>
 
@@ -428,9 +439,7 @@ const DiffRow = memo(function DiffRow({
         )}
         {showLineNumbers && <Text> </Text>}
         <Box width={contentWidth}>
-          <Text backgroundColor={newBg}>
-            {newContent || ' '}
-          </Text>
+          <Text backgroundColor={newBg}>{newContent || ' '}</Text>
         </Box>
       </Box>
     </Box>
@@ -503,10 +512,7 @@ export const SideBySideDiff = memo(function SideBySideDiff({
   }, [syntaxHighlight, filePath, newPath, oldPath]);
 
   // Align lines
-  const alignedPairs = useMemo(
-    () => alignLines(oldContent, newContent),
-    [oldContent, newContent]
-  );
+  const alignedPairs = useMemo(() => alignLines(oldContent, newContent), [oldContent, newContent]);
 
   // Apply max lines limit
   const displayPairs = alignedPairs.slice(0, maxLines);

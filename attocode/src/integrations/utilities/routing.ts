@@ -5,12 +5,7 @@
  * Provides intelligent model selection and fallback capabilities.
  */
 
-import type {
-  RoutingConfig,
-  LLMProvider,
-  Message,
-  ChatResponse,
-} from '../../types.js';
+import type { RoutingConfig, LLMProvider, Message, ChatResponse } from '../../types.js';
 import type { MessageWithContent } from '../../providers/types.js';
 import { logger } from './logger.js';
 
@@ -198,7 +193,9 @@ export class RoutingManager {
 
     const scored = models.map((model) => {
       // Normalize scores to 0-1 range
-      const costScore = 1 - Math.min((estimated / 1000) * (model.costPer1kInput + model.costPer1kOutput) / 0.1, 1);
+      const costScore =
+        1 -
+        Math.min(((estimated / 1000) * (model.costPer1kInput + model.costPer1kOutput)) / 0.1, 1);
       const qualityScore = model.qualityScore;
       const latencyScore = 1 - Math.min(model.latencyMs / 5000, 1);
 
@@ -217,7 +214,8 @@ export class RoutingManager {
         latencyWeight = 0.2;
       }
 
-      const score = costScore * costWeight + qualityScore * qualityWeight + latencyScore * latencyWeight;
+      const score =
+        costScore * costWeight + qualityScore * qualityWeight + latencyScore * latencyWeight;
 
       return { model: model.model, score };
     });
@@ -310,7 +308,7 @@ export class RoutingManager {
    */
   async executeWithFallback(
     messages: (Message | MessageWithContent)[],
-    context: TaskContext
+    context: TaskContext,
   ): Promise<{ response: ChatResponse; model: string }> {
     // Build fallback chain
     const chain = this.config.fallbackChain?.length
@@ -393,9 +391,20 @@ export class RoutingManager {
 
     // Keyword-based complexity
     const complexKeywords = [
-      'implement', 'refactor', 'migrate', 'integrate', 'build',
-      'create', 'design', 'architect', 'optimize', 'debug',
-      'analyze', 'compare', 'evaluate', 'synthesize',
+      'implement',
+      'refactor',
+      'migrate',
+      'integrate',
+      'build',
+      'create',
+      'design',
+      'architect',
+      'optimize',
+      'debug',
+      'analyze',
+      'compare',
+      'evaluate',
+      'synthesize',
     ];
 
     for (const keyword of complexKeywords) {

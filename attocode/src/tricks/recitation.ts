@@ -245,7 +245,11 @@ export class RecitationManager {
     const tokenEstimate = estimateTokenCount(content);
     if (tokenEstimate > this.config.maxTokens) {
       const truncated = this.truncateContent(content, this.config.maxTokens);
-      this.emit({ type: 'recitation.built', content: truncated, tokenEstimate: this.config.maxTokens });
+      this.emit({
+        type: 'recitation.built',
+        content: truncated,
+        tokenEstimate: this.config.maxTokens,
+      });
       return truncated;
     }
 
@@ -257,10 +261,7 @@ export class RecitationManager {
    * Inject recitation into messages if needed.
    * Returns the modified message array.
    */
-  injectIfNeeded<T extends RecitationMessage>(
-    messages: T[],
-    state: RecitationState
-  ): T[] {
+  injectIfNeeded<T extends RecitationMessage>(messages: T[], state: RecitationState): T[] {
     if (!this.shouldInject(state.iteration)) {
       this.emit({
         type: 'recitation.skipped',
@@ -294,8 +295,8 @@ export class RecitationManager {
         iteration: state.iteration,
         timestamp: new Date().toISOString(),
         content: recitationContent,
-        sources: this.config.sources.filter(s =>
-          recitationContent.toLowerCase().includes(s.toLowerCase())
+        sources: this.config.sources.filter((s) =>
+          recitationContent.toLowerCase().includes(s.toLowerCase()),
         ),
       });
     }
@@ -324,10 +325,7 @@ export class RecitationManager {
   /**
    * Force recitation injection regardless of frequency.
    */
-  forceInject<T extends RecitationMessage>(
-    messages: T[],
-    state: RecitationState
-  ): T[] {
+  forceInject<T extends RecitationMessage>(messages: T[], state: RecitationState): T[] {
     const originalFrequency = this.config.frequency;
     this.config.frequency = 0; // Force injection
     const result = this.injectIfNeeded(messages, state);
@@ -371,49 +369,49 @@ export class RecitationManager {
   // Internal methods
 
   private buildPlanSummary(plan: PlanState): string {
-    const completedCount = plan.tasks.filter(t => t.status === 'completed').length;
+    const completedCount = plan.tasks.filter((t) => t.status === 'completed').length;
     const totalCount = plan.tasks.length;
     const currentTask = plan.tasks[plan.currentTaskIndex];
 
-    const lines = [
-      `**Plan Progress**: ${completedCount}/${totalCount} tasks completed`,
-    ];
+    const lines = [`**Plan Progress**: ${completedCount}/${totalCount} tasks completed`];
 
     if (currentTask) {
       lines.push(`**Current Task**: ${currentTask.description}`);
     }
 
     // Show next pending tasks (max 2)
-    const pendingTasks = plan.tasks
-      .filter(t => t.status === 'pending')
-      .slice(0, 2);
+    const pendingTasks = plan.tasks.filter((t) => t.status === 'pending').slice(0, 2);
 
     if (pendingTasks.length > 0) {
-      lines.push('**Next**: ' + pendingTasks.map(t => t.description).join('; '));
+      lines.push('**Next**: ' + pendingTasks.map((t) => t.description).join('; '));
     }
 
     return lines.join('\n');
   }
 
   private buildTodoSummary(todos: TodoItem[]): string {
-    const pending = todos.filter(t => t.status === 'pending');
-    const inProgress = todos.filter(t => t.status === 'in_progress');
-    const completed = todos.filter(t => t.status === 'completed');
+    const pending = todos.filter((t) => t.status === 'pending');
+    const inProgress = todos.filter((t) => t.status === 'in_progress');
+    const completed = todos.filter((t) => t.status === 'completed');
 
     const lines = [
       `**Todo Status**: ${completed.length} done, ${inProgress.length} active, ${pending.length} pending`,
     ];
 
     if (inProgress.length > 0) {
-      lines.push('**In Progress**: ' + inProgress.map(t => t.content).join('; '));
+      lines.push('**In Progress**: ' + inProgress.map((t) => t.content).join('; '));
     }
 
     if (pending.length > 0 && pending.length <= 3) {
-      lines.push('**Remaining**: ' + pending.map(t => t.content).join('; '));
+      lines.push('**Remaining**: ' + pending.map((t) => t.content).join('; '));
     } else if (pending.length > 3) {
       lines.push(
-        '**Next**: ' + pending.slice(0, 3).map(t => t.content).join('; ') +
-        ` (+${pending.length - 3} more)`
+        '**Next**: ' +
+          pending
+            .slice(0, 3)
+            .map((t) => t.content)
+            .join('; ') +
+          ` (+${pending.length - 3} more)`,
       );
     }
 
@@ -485,9 +483,7 @@ export class RecitationManager {
  * });
  * ```
  */
-export function createRecitationManager(
-  config: RecitationConfig
-): RecitationManager {
+export function createRecitationManager(config: RecitationConfig): RecitationManager {
   return new RecitationManager(config);
 }
 
@@ -506,7 +502,7 @@ export function buildQuickRecitation(state: RecitationState): string {
   }
 
   if (state.plan) {
-    const completed = state.plan.tasks.filter(t => t.status === 'completed').length;
+    const completed = state.plan.tasks.filter((t) => t.status === 'completed').length;
     parts.push(`Progress: ${completed}/${state.plan.tasks.length} tasks`);
 
     const current = state.plan.tasks[state.plan.currentTaskIndex];
@@ -516,7 +512,7 @@ export function buildQuickRecitation(state: RecitationState): string {
   }
 
   if (state.todos?.length) {
-    const pending = state.todos.filter(t => t.status !== 'completed').length;
+    const pending = state.todos.filter((t) => t.status !== 'completed').length;
     parts.push(`Todos: ${pending} remaining`);
   }
 
@@ -528,10 +524,10 @@ export function buildQuickRecitation(state: RecitationState): string {
  * Longer contexts need more frequent recitation.
  */
 export function calculateOptimalFrequency(contextTokens: number): number {
-  if (contextTokens < 10000) return 10;  // Light context
-  if (contextTokens < 30000) return 7;   // Medium context
-  if (contextTokens < 60000) return 5;   // Heavy context
-  return 3;  // Very heavy context - recite often
+  if (contextTokens < 10000) return 10; // Light context
+  if (contextTokens < 30000) return 7; // Medium context
+  if (contextTokens < 60000) return 5; // Heavy context
+  return 3; // Very heavy context - recite often
 }
 
 /**

@@ -142,21 +142,20 @@ export class SandboxManager {
    * Get resource limits.
    */
   getResourceLimits(): NonNullable<SandboxConfig['resourceLimits']> {
-    return this.config.resourceLimits || {
-      maxCpuSeconds: 30,
-      maxMemoryMB: 512,
-      maxOutputBytes: 1024 * 1024,
-      timeout: 60000,
-    };
+    return (
+      this.config.resourceLimits || {
+        maxCpuSeconds: 30,
+        maxMemoryMB: 512,
+        maxOutputBytes: 1024 * 1024,
+        timeout: 60000,
+      }
+    );
   }
 
   /**
    * Wrap execution with resource limits.
    */
-  async executeWithLimits<T>(
-    fn: () => Promise<T>,
-    timeout?: number
-  ): Promise<T> {
+  async executeWithLimits<T>(fn: () => Promise<T>, timeout?: number): Promise<T> {
     const limits = this.getResourceLimits();
     const timeoutMs = timeout || limits.timeout;
 
@@ -200,7 +199,11 @@ export class SandboxManager {
     }
 
     // Check for file operation tools
-    if (toolCall.name === 'read_file' || toolCall.name === 'write_file' || toolCall.name === 'edit_file') {
+    if (
+      toolCall.name === 'read_file' ||
+      toolCall.name === 'write_file' ||
+      toolCall.name === 'edit_file'
+    ) {
       const path = String(args.path || args.file || args.file_path || '');
       if (!this.isPathAllowed(path)) {
         return { valid: false, reason: `Path not allowed: ${path}` };
@@ -249,12 +252,12 @@ export class HumanInLoopManager {
     const toolName = toolCall.name.toLowerCase();
 
     // Check require-approval list first (highest priority) — exact match only
-    if (this.approvalScope.requireApproval?.some(t => toolName === t.toLowerCase())) {
+    if (this.approvalScope.requireApproval?.some((t) => toolName === t.toLowerCase())) {
       return false;
     }
 
     // Check auto-approve list — exact match only
-    if (this.approvalScope.autoApprove?.some(t => toolName === t.toLowerCase())) {
+    if (this.approvalScope.autoApprove?.some((t) => toolName === t.toLowerCase())) {
       return true;
     }
 
@@ -264,16 +267,19 @@ export class HumanInLoopManager {
       const args = toolCall.arguments as Record<string, unknown>;
       const filePath = String(args.path || args.file_path || '');
 
-      if (filePath && scope.paths.some(p => {
-        // Directory-aware path matching
-        const dir = p.endsWith('/**') ? p.slice(0, -3) : p;
-        // Ensure directory boundary: "src/" matches "src/foo.ts" but not "src-backup/foo.ts"
-        // If dir already ends with '/', use as-is; otherwise check exact match or '/' boundary
-        if (dir.endsWith('/')) {
-          return filePath.startsWith(dir);
-        }
-        return filePath === dir || filePath.startsWith(dir + '/');
-      })) {
+      if (
+        filePath &&
+        scope.paths.some((p) => {
+          // Directory-aware path matching
+          const dir = p.endsWith('/**') ? p.slice(0, -3) : p;
+          // Ensure directory boundary: "src/" matches "src/foo.ts" but not "src-backup/foo.ts"
+          // If dir already ends with '/', use as-is; otherwise check exact match or '/' boundary
+          if (dir.endsWith('/')) {
+            return filePath.startsWith(dir);
+          }
+          return filePath === dir || filePath.startsWith(dir + '/');
+        })
+      ) {
         return true;
       }
     }
@@ -354,10 +360,7 @@ export class HumanInLoopManager {
   /**
    * Request approval for an action.
    */
-  async requestApproval(
-    toolCall: ToolCall,
-    context: string
-  ): Promise<ApprovalResult> {
+  async requestApproval(toolCall: ToolCall, context: string): Promise<ApprovalResult> {
     const risk = this.assessRisk(toolCall);
 
     // Auto-approve low risk if below threshold
@@ -379,7 +382,7 @@ export class HumanInLoopManager {
 
       const response = await this.executeWithTimeout(
         () => this.config.approvalHandler!(approvalRequest),
-        this.config.approvalTimeout || 300000
+        this.config.approvalTimeout || 300000,
       );
 
       // Convert ApprovalResponse to ApprovalResult
@@ -404,7 +407,7 @@ export class HumanInLoopManager {
   private async consoleApproval(
     toolCall: ToolCall,
     context: string,
-    risk: RiskLevel
+    risk: RiskLevel,
   ): Promise<ApprovalResult> {
     logger.info('Approval required', {
       tool: toolCall.name,
@@ -422,10 +425,7 @@ export class HumanInLoopManager {
   /**
    * Execute with timeout.
    */
-  private async executeWithTimeout<T>(
-    fn: () => Promise<T>,
-    timeout: number
-  ): Promise<T> {
+  private async executeWithTimeout<T>(fn: () => Promise<T>, timeout: number): Promise<T> {
     return new Promise<T>((resolve, reject) => {
       const timer = setTimeout(() => {
         reject(new Error('Approval timeout'));
@@ -451,7 +451,7 @@ export class HumanInLoopManager {
     toolCall: ToolCall,
     approved: boolean,
     approver: string,
-    risk: RiskLevel
+    risk: RiskLevel,
   ): void {
     if (!this.config.auditLog) return;
 
@@ -534,7 +534,7 @@ export class SafetyManager {
   async validateAndApprove(
     toolCall: ToolCall,
     context: string,
-    options?: { skipHumanApproval?: boolean }
+    options?: { skipHumanApproval?: boolean },
   ): Promise<{ allowed: boolean; reason?: string }> {
     // Sandbox validation
     if (this.sandbox) {
@@ -563,7 +563,7 @@ export class SafetyManager {
   async executeWithSafety<T>(
     fn: () => Promise<T>,
     toolCall: ToolCall,
-    context: string
+    context: string,
   ): Promise<T> {
     // Validate first
     const validation = await this.validateAndApprove(toolCall, context);

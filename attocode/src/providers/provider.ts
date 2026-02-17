@@ -1,6 +1,6 @@
 /**
  * Lesson 2: Provider Factory
- * 
+ *
  * Creates and manages LLM providers with auto-detection.
  */
 
@@ -28,10 +28,7 @@ const providers: Map<string, ProviderRegistry> = new Map();
  * Register a provider.
  * Call this for each provider adapter.
  */
-export function registerProvider(
-  name: string,
-  registry: ProviderRegistry
-): void {
+export function registerProvider(name: string, registry: ProviderRegistry): void {
   providers.set(name, registry);
 }
 
@@ -59,13 +56,12 @@ export async function getProvider(preferred?: string): Promise<LLMProvider> {
     throw new ProviderError(
       `Preferred provider "${preferred}" is not configured`,
       preferred,
-      'NOT_CONFIGURED'
+      'NOT_CONFIGURED',
     );
   }
 
   // Sort by priority and find first configured provider
-  const sorted = [...providers.entries()]
-    .sort((a, b) => a[1].priority - b[1].priority);
+  const sorted = [...providers.entries()].sort((a, b) => a[1].priority - b[1].priority);
 
   for (const [name, registry] of sorted) {
     if (registry.detect()) {
@@ -77,7 +73,7 @@ export async function getProvider(preferred?: string): Promise<LLMProvider> {
   throw new ProviderError(
     'No LLM provider configured. Set ANTHROPIC_API_KEY, OPENAI_API_KEY, or AZURE_OPENAI_* environment variables.',
     'none',
-    'NOT_CONFIGURED'
+    'NOT_CONFIGURED',
   );
 }
 
@@ -112,7 +108,7 @@ export async function createProvider(config: ProviderConfig): Promise<LLMProvide
       throw new ProviderError(
         `Unknown provider type: ${(config as ProviderConfig).type}`,
         'unknown',
-        'INVALID_REQUEST'
+        'INVALID_REQUEST',
       );
   }
 }

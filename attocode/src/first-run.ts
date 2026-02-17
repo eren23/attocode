@@ -52,10 +52,12 @@ export function hasUsableProvider(): boolean {
 export function getDefaultProvider(): DetectedProvider | null {
   const providers = detectProviders();
   // Prefer Anthropic > OpenRouter > OpenAI
-  return providers.find(p => p.name === 'anthropic')
-    || providers.find(p => p.name === 'openrouter')
-    || providers.find(p => p.name === 'openai')
-    || null;
+  return (
+    providers.find((p) => p.name === 'anthropic') ||
+    providers.find((p) => p.name === 'openrouter') ||
+    providers.find((p) => p.name === 'openai') ||
+    null
+  );
 }
 
 /**
@@ -65,14 +67,14 @@ export async function createInitialConfig(): Promise<void> {
   await ensureDirectories();
 
   const config = {
-    "$schema": "https://attocode.dev/schema/config.json",
-    "version": 1,
-    "providers": {
-      "default": getDefaultProvider()?.name || "anthropic"
+    $schema: 'https://attocode.dev/schema/config.json',
+    version: 1,
+    providers: {
+      default: getDefaultProvider()?.name || 'anthropic',
     },
-    "model": "claude-sonnet-4-20250514",
-    "maxIterations": 50,
-    "timeout": 300000
+    model: 'claude-sonnet-4-20250514',
+    maxIterations: 50,
+    timeout: 300000,
   };
 
   writeFileSync(getConfigPath(), JSON.stringify(config, null, 2));

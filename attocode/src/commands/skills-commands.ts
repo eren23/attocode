@@ -51,10 +51,7 @@ function c(text: string, color: keyof typeof colors): string {
 /**
  * Format skills list with categorization and usage hints.
  */
-export function formatEnhancedSkillList(
-  skills: Skill[],
-  activeSkillNames: Set<string>
-): string {
+export function formatEnhancedSkillList(skills: Skill[], activeSkillNames: Set<string>): string {
   if (skills.length === 0) {
     return `${c('No skills loaded.', 'dim')}
 
@@ -75,9 +72,9 @@ ${c('Skill Locations:', 'dim')}
   lines.push('');
 
   // Categorize skills
-  const invokable = skills.filter(s => s.invokable);
-  const passive = skills.filter(s => !s.invokable && s.triggers && s.triggers.length > 0);
-  const inactive = skills.filter(s => !s.invokable && (!s.triggers || s.triggers.length === 0));
+  const invokable = skills.filter((s) => s.invokable);
+  const passive = skills.filter((s) => !s.invokable && s.triggers && s.triggers.length > 0);
+  const inactive = skills.filter((s) => !s.invokable && (!s.triggers || s.triggers.length === 0));
 
   // Invokable skills (can be called with /<name>)
   if (invokable.length > 0) {
@@ -85,9 +82,11 @@ ${c('Skill Locations:', 'dim')}
     lines.push(`  ${c('─'.repeat(60), 'dim')}`);
 
     for (const skill of invokable) {
-      const args = skill.arguments?.map(a => `--${a.name}`).join(', ') || '';
+      const args = skill.arguments?.map((a) => `--${a.name}`).join(', ') || '';
       const active = activeSkillNames.has(skill.name) ? c(' +', 'green') : '';
-      lines.push(`    /${c(skill.name.padEnd(12), 'cyan')}${active} ${skill.description.slice(0, 40)}${args ? `  ${c(args, 'dim')}` : ''}`);
+      lines.push(
+        `    /${c(skill.name.padEnd(12), 'cyan')}${active} ${skill.description.slice(0, 40)}${args ? `  ${c(args, 'dim')}` : ''}`,
+      );
     }
     lines.push('');
   }
@@ -100,8 +99,14 @@ ${c('Skill Locations:', 'dim')}
     for (const skill of passive) {
       const isActive = activeSkillNames.has(skill.name);
       const icon = isActive ? c('+', 'green') : c('o', 'dim');
-      const triggers = skill.triggers?.map(t => t.pattern).slice(0, 3).join(', ') || '';
-      lines.push(`  ${icon} ${c(skill.name.padEnd(14), isActive ? 'green' : 'white')} ${skill.description.slice(0, 30)}  ${c(`triggers: ${triggers}`, 'dim')}`);
+      const triggers =
+        skill.triggers
+          ?.map((t) => t.pattern)
+          .slice(0, 3)
+          .join(', ') || '';
+      lines.push(
+        `  ${icon} ${c(skill.name.padEnd(14), isActive ? 'green' : 'white')} ${skill.description.slice(0, 30)}  ${c(`triggers: ${triggers}`, 'dim')}`,
+      );
     }
     lines.push('');
   }
@@ -114,22 +119,38 @@ ${c('Skill Locations:', 'dim')}
     for (const skill of inactive) {
       const isActive = activeSkillNames.has(skill.name);
       const icon = isActive ? c('+', 'green') : c('o', 'dim');
-      lines.push(`  ${icon} ${c(skill.name.padEnd(14), 'white')} ${skill.description.slice(0, 40)}  ${c('/skills enable ' + skill.name, 'dim')}`);
+      lines.push(
+        `  ${icon} ${c(skill.name.padEnd(14), 'white')} ${skill.description.slice(0, 40)}  ${c('/skills enable ' + skill.name, 'dim')}`,
+      );
     }
     lines.push('');
   }
 
   // Location statistics
   lines.push(`  ${c('LOCATIONS:', 'bold')}`);
-  if (stats.builtin > 0) lines.push(`    ${c('built-in', 'cyan').padEnd(30)} ${stats.builtin} skill${stats.builtin > 1 ? 's' : ''}`);
-  if (stats.user > 0) lines.push(`    ${c('~/.attocode/skills/', 'cyan').padEnd(30)} ${stats.user} skill${stats.user > 1 ? 's' : ''}`);
-  if (stats.project > 0) lines.push(`    ${c('.attocode/skills/', 'cyan').padEnd(30)} ${stats.project} skill${stats.project > 1 ? 's' : ''}`);
-  if (stats.legacy > 0) lines.push(`    ${c('.agent/skills/ (legacy)', 'dim').padEnd(30)} ${stats.legacy} skill${stats.legacy > 1 ? 's' : ''}`);
+  if (stats.builtin > 0)
+    lines.push(
+      `    ${c('built-in', 'cyan').padEnd(30)} ${stats.builtin} skill${stats.builtin > 1 ? 's' : ''}`,
+    );
+  if (stats.user > 0)
+    lines.push(
+      `    ${c('~/.attocode/skills/', 'cyan').padEnd(30)} ${stats.user} skill${stats.user > 1 ? 's' : ''}`,
+    );
+  if (stats.project > 0)
+    lines.push(
+      `    ${c('.attocode/skills/', 'cyan').padEnd(30)} ${stats.project} skill${stats.project > 1 ? 's' : ''}`,
+    );
+  if (stats.legacy > 0)
+    lines.push(
+      `    ${c('.agent/skills/ (legacy)', 'dim').padEnd(30)} ${stats.legacy} skill${stats.legacy > 1 ? 's' : ''}`,
+    );
   lines.push('');
 
   // Commands
   lines.push(`  ${c('COMMANDS:', 'bold')}`);
-  lines.push(`    ${c('/skills new <name>', 'cyan').padEnd(30)} Create new skill in .attocode/skills/`);
+  lines.push(
+    `    ${c('/skills new <name>', 'cyan').padEnd(30)} Create new skill in .attocode/skills/`,
+  );
   lines.push(`    ${c('/skills info <name>', 'cyan').padEnd(30)} Show detailed skill info`);
   lines.push(`    ${c('/skills enable <name>', 'cyan').padEnd(30)} Activate a skill`);
   lines.push(`    ${c('/skills disable <name>', 'cyan').padEnd(30)} Deactivate a skill`);
@@ -150,8 +171,12 @@ export function formatSkillInfo(skill: Skill, isActive: boolean): string {
   lines.push(`  ${c('Description:', 'cyan').padEnd(20)} ${skill.description}`);
   lines.push(`  ${c('Source:', 'cyan').padEnd(20)} ${getSkillLocationDisplay(skill)}`);
   lines.push(`  ${c('File:', 'cyan').padEnd(20)} ${skill.sourcePath}`);
-  lines.push(`  ${c('Status:', 'cyan').padEnd(20)} ${isActive ? c('active', 'green') : c('inactive', 'dim')}`);
-  lines.push(`  ${c('Invokable:', 'cyan').padEnd(20)} ${skill.invokable ? c('yes (/' + skill.name + ')', 'green') : c('no', 'dim')}`);
+  lines.push(
+    `  ${c('Status:', 'cyan').padEnd(20)} ${isActive ? c('active', 'green') : c('inactive', 'dim')}`,
+  );
+  lines.push(
+    `  ${c('Invokable:', 'cyan').padEnd(20)} ${skill.invokable ? c('yes (/' + skill.name + ')', 'green') : c('no', 'dim')}`,
+  );
 
   if (skill.version) {
     lines.push(`  ${c('Version:', 'cyan').padEnd(20)} ${skill.version}`);
@@ -192,7 +217,8 @@ export function formatSkillInfo(skill: Skill, isActive: boolean): string {
   if (skill.invokable) {
     lines.push('');
     lines.push(`  ${c('Usage:', 'bold')}`);
-    const argStr = skill.arguments?.map(a => ` --${a.name} <${a.type || 'value'}>`).join('') || '';
+    const argStr =
+      skill.arguments?.map((a) => ` --${a.name} <${a.type || 'value'}>`).join('') || '';
     lines.push(`    /${skill.name}${argStr}`);
   }
 
@@ -209,14 +235,14 @@ export function formatSkillInfo(skill: Skill, isActive: boolean): string {
 export async function handleSkillsCommand(
   args: string[],
   ctx: CommandContext,
-  skillManager: SkillManager
+  skillManager: SkillManager,
 ): Promise<void> {
   const { output } = ctx;
 
   if (args.length === 0) {
     // List all skills
     const skills = skillManager.getAllSkills();
-    const activeSkills = new Set(skillManager.getActiveSkills().map(s => s.name));
+    const activeSkills = new Set(skillManager.getActiveSkills().map((s) => s.name));
     output.log(formatEnhancedSkillList(skills, activeSkills));
     return;
   }
@@ -255,7 +281,9 @@ export async function handleSkillsCommand(
         output.log('');
         output.log(c('Edit the file to customize:', 'dim'));
         output.log(c('  - Add description and triggers', 'dim'));
-        output.log(c(`  - ${invokable ? 'Define arguments if needed' : 'Set trigger patterns'}`, 'dim'));
+        output.log(
+          c(`  - ${invokable ? 'Define arguments if needed' : 'Set trigger patterns'}`, 'dim'),
+        );
         output.log('');
         output.log(c(`Open in editor: /skills edit ${name}`, 'cyan'));
 

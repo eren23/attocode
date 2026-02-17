@@ -181,32 +181,36 @@ const HooksSchema = z
         enabled: z.boolean().optional(),
         defaultTimeoutMs: z.number().int().positive().optional(),
         envAllowlist: z.array(z.string()).optional(),
-        commands: z.array(
-          z.object({
-            id: z.string().optional(),
-            event: z.enum([
-              'run.before',
-              'run.after',
-              'iteration.before',
-              'iteration.after',
-              'completion.before',
-              'completion.after',
-              'recovery.before',
-              'recovery.after',
-              'agent.start',
-              'agent.end',
-              'llm.before',
-              'llm.after',
-              'tool.before',
-              'tool.after',
-              'error',
-            ]),
-            command: z.string(),
-            args: z.array(z.string()).optional(),
-            timeoutMs: z.number().int().positive().optional(),
-            priority: z.number().int().optional(),
-          }).strict(),
-        ).optional(),
+        commands: z
+          .array(
+            z
+              .object({
+                id: z.string().optional(),
+                event: z.enum([
+                  'run.before',
+                  'run.after',
+                  'iteration.before',
+                  'iteration.after',
+                  'completion.before',
+                  'completion.after',
+                  'recovery.before',
+                  'recovery.after',
+                  'agent.start',
+                  'agent.end',
+                  'llm.before',
+                  'llm.after',
+                  'tool.before',
+                  'tool.after',
+                  'error',
+                ]),
+                command: z.string(),
+                args: z.array(z.string()).optional(),
+                timeoutMs: z.number().int().positive().optional(),
+                priority: z.number().int().optional(),
+              })
+              .strict(),
+          )
+          .optional(),
       })
       .optional(),
   })

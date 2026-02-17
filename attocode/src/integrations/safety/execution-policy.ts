@@ -149,10 +149,7 @@ export class ExecutionPolicyManager {
   /**
    * Evaluate policy for a tool call.
    */
-  evaluate(
-    toolCall: ToolCall,
-    context: PolicyContext
-  ): PolicyEvaluation {
+  evaluate(toolCall: ToolCall, context: PolicyContext): PolicyEvaluation {
     // Check for active grant first
     const grant = this.findGrant(toolCall);
     if (grant) {
@@ -188,7 +185,10 @@ export class ExecutionPolicyManager {
       this.emit({ type: 'intent.classified', tool: toolCall.name, intent });
 
       // Adjust policy based on intent
-      if (intent.type === 'deliberate' && intent.confidence >= this.config.intentConfidenceThreshold!) {
+      if (
+        intent.type === 'deliberate' &&
+        intent.confidence >= this.config.intentConfidenceThreshold!
+      ) {
         policy = 'allow';
         reason = `Intent: deliberate (confidence: ${(intent.confidence * 100).toFixed(0)}%)`;
       }
@@ -333,7 +333,7 @@ export class ExecutionPolicyManager {
   private matchesCondition(
     toolCall: ToolCall,
     context: PolicyContext,
-    condition: PolicyCondition
+    condition: PolicyCondition,
   ): boolean {
     // Check argument pattern
     if (condition.argMatch) {
@@ -360,7 +360,7 @@ export class ExecutionPolicyManager {
 
   private matchesArgPattern(
     args: Record<string, unknown>,
-    pattern: Record<string, unknown>
+    pattern: Record<string, unknown>,
   ): boolean {
     for (const [key, value] of Object.entries(pattern)) {
       const argValue = args[key];
@@ -369,10 +369,7 @@ export class ExecutionPolicyManager {
     return true;
   }
 
-  private classifyIntent(
-    toolCall: ToolCall,
-    context: PolicyContext
-  ): IntentClassification {
+  private classifyIntent(toolCall: ToolCall, context: PolicyContext): IntentClassification {
     const evidence: string[] = [];
     let score = 0;
 
@@ -382,15 +379,26 @@ export class ExecutionPolicyManager {
       const normalizedTool = toolCall.name.toLowerCase().replace(/_/g, ' ');
       const normalizedMessage = recentUserMessage.toLowerCase();
 
-      if (normalizedMessage.includes(normalizedTool) ||
-          normalizedMessage.includes(toolCall.name.toLowerCase())) {
+      if (
+        normalizedMessage.includes(normalizedTool) ||
+        normalizedMessage.includes(toolCall.name.toLowerCase())
+      ) {
         score += 0.4;
         evidence.push('Tool name mentioned in user message');
       }
 
       // Check for imperative verbs suggesting intent
-      const imperatives = ['please', 'can you', 'could you', 'i need', 'i want', 'do', 'run', 'execute'];
-      if (imperatives.some(imp => normalizedMessage.includes(imp))) {
+      const imperatives = [
+        'please',
+        'can you',
+        'could you',
+        'i need',
+        'i want',
+        'do',
+        'run',
+        'execute',
+      ];
+      if (imperatives.some((imp) => normalizedMessage.includes(imp))) {
         score += 0.2;
         evidence.push('Imperative language detected');
       }
@@ -398,7 +406,7 @@ export class ExecutionPolicyManager {
 
     // Check if this tool was used before in conversation
     const previousToolCalls = context.previousToolCalls || [];
-    if (previousToolCalls.some(tc => tc.name === toolCall.name)) {
+    if (previousToolCalls.some((tc) => tc.name === toolCall.name)) {
       score += 0.2;
       evidence.push('Tool used previously in session');
     }
@@ -406,8 +414,8 @@ export class ExecutionPolicyManager {
     // Check conversation flow
     if (context.messages.length >= 2) {
       const recentMessages = context.messages.slice(-3);
-      const mentionsAction = recentMessages.some(m =>
-        m.content.toLowerCase().includes(toolCall.name.toLowerCase())
+      const mentionsAction = recentMessages.some((m) =>
+        m.content.toLowerCase().includes(toolCall.name.toLowerCase()),
       );
       if (mentionsAction) {
         score += 0.2;
@@ -450,7 +458,7 @@ export class ExecutionPolicyManager {
  * Create an execution policy manager.
  */
 export function createExecutionPolicyManager(
-  config?: Partial<ExecutionPolicyConfig>
+  config?: Partial<ExecutionPolicyConfig>,
 ): ExecutionPolicyManager {
   return new ExecutionPolicyManager(config);
 }
