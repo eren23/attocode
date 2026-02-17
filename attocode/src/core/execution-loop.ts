@@ -262,12 +262,31 @@ export async function executeDirectly(
       // =======================================================================
       let forceTextOnly = false;
       let budgetInjectedPrompt: string | undefined;
+      let budgetAllowsTaskContinuation = true;
 
       if (ctx.economics) {
         const budgetCheck = ctx.economics.checkBudget();
 
         forceTextOnly = budgetCheck.forceTextOnly ?? false;
         budgetInjectedPrompt = budgetCheck.injectedPrompt;
+        budgetAllowsTaskContinuation = budgetCheck.allowTaskContinuation ?? true;
+
+        // Record budget check in trace for debugging premature death
+        ctx.traceCollector?.record({
+          type: 'budget.check',
+          data: {
+            iteration: ctx.state.iteration,
+            canContinue: budgetCheck.canContinue,
+            percentUsed: budgetCheck.percentUsed,
+            budgetType: budgetCheck.budgetType,
+            budgetMode: budgetCheck.budgetMode,
+            forceTextOnly,
+            allowTaskContinuation: budgetAllowsTaskContinuation,
+            enforcementMode: ctx.economics.getBudget().enforcementMode ?? 'strict',
+            tokenUsage: ctx.economics.getUsage().tokens,
+            maxTokens: ctx.economics.getBudget().maxTokens,
+          },
+        });
 
         if (!budgetCheck.canContinue) {
           // RECOVERY ATTEMPT: Try emergency context reduction
@@ -347,6 +366,10 @@ export async function executeDirectly(
                 tokensAfter,
                 messagesCompacted: tokensBefore - tokensAfter,
               });
+
+              // Update baseline after emergency context reduction so
+              // incremental token accounting reflects the new context size
+              ctx.economics?.updateBaseline(tokensAfter);
 
               continue;
             }
@@ -578,6 +601,7 @@ export async function executeDirectly(
         const estimatedInputTokens = estimateContextTokens(messages);
         const currentUsage = ctx.economics.getUsage();
         const budget = ctx.economics.getBudget();
+        const isStrictEnforcement = (budget.enforcementMode ?? 'strict') === 'strict';
         // Use proportional output estimate: 10% of remaining budget, capped at 4096, floored at 512.
         // The old hardcoded 4096 caused premature wrapup for subagents with smaller budgets.
         const remainingTokens = budget.maxTokens - currentUsage.tokens - estimatedInputTokens;
@@ -590,23 +614,64 @@ export async function executeDirectly(
             estimatedInput: estimatedInputTokens,
             projectedTotal,
             maxTokens: budget.maxTokens,
+            enforcementMode: budget.enforcementMode ?? 'strict',
           });
 
-          if (!budgetInjectedPrompt) {
-            messages.push({
-              role: 'user',
-              content: '[System] BUDGET CRITICAL: This is your LAST response. Summarize findings concisely and stop. Do NOT call tools.',
-            });
-            ctx.state.messages.push({
-              role: 'user',
-              content: '[System] BUDGET CRITICAL: This is your LAST response. Summarize findings concisely and stop. Do NOT call tools.',
-            });
+          // Only force text-only in strict mode. In doomloop_only mode,
+          // the pre-flight check warns but does not kill the agent.
+          if (isStrictEnforcement) {
+            if (!budgetInjectedPrompt) {
+              messages.push({
+                role: 'user',
+                content: '[System] BUDGET CRITICAL: This is your LAST response. Summarize findings concisely and stop. Do NOT call tools.',
+              });
+              ctx.state.messages.push({
+                role: 'user',
+                content: '[System] BUDGET CRITICAL: This is your LAST response. Summarize findings concisely and stop. Do NOT call tools.',
+              });
+            }
+            forceTextOnly = true;
           }
-          forceTextOnly = true;
+        }
+      }
+
+      // EARLY EXIT: When forceTextOnly is set but task continuation is allowed,
+      // skip the expensive LLM call (whose tool calls would be discarded) and
+      // go directly to the task continuation gate. Only allowed once per
+      // forceTextOnly episode to prevent tight loops.
+      if (forceTextOnly && budgetAllowsTaskContinuation && ctx.taskManager
+          && !(ctx.state as { _lastSkippedLLMIteration?: number })._lastSkippedLLMIteration) {
+        const availableTasks = ctx.taskManager.getAvailableTasks();
+        if (availableTasks.length > 0) {
+          log.info('Skipping LLM call — forceTextOnly with tasks available, going to task continuation', {
+            availableTasks: availableTasks.length,
+            iteration: ctx.state.iteration,
+          });
+          // Mark that we skipped so we don't skip again on the next iteration
+          (ctx.state as { _lastSkippedLLMIteration?: number })._lastSkippedLLMIteration = ctx.state.iteration;
+          // Reset forceTextOnly for the next iteration so the task can run normally
+          forceTextOnly = false;
+          const nextTask = availableTasks[0];
+          ctx.taskManager.claim(nextTask.id, ctx.agentId);
+          const taskPrompt: Message = {
+            role: 'user',
+            content: `[System] Budget warning noted. Continuing with next task:\n\n**Task ${nextTask.id}: ${nextTask.subject}**\n${nextTask.description}\n\nStart working on this task now using your tools.`,
+          };
+          messages.push(taskPrompt);
+          ctx.state.messages.push(taskPrompt);
+          ctx.emit({
+            type: 'iteration.after',
+            iteration: ctx.state.iteration,
+            hadToolCalls: false,
+            completionCandidate: false,
+          });
+          continue; // Re-enter main loop for next task without wasting an LLM call
         }
       }
 
       let response = await callLLM(messages, ctx);
+      // Clear the LLM-skip guard now that we've made a real LLM call
+      delete (ctx.state as { _lastSkippedLLMIteration?: number })._lastSkippedLLMIteration;
       let emptyRetries = 0;
       let continuations = 0;
 
@@ -764,7 +829,8 @@ export async function executeDirectly(
           response.usage.inputTokens,
           response.usage.outputTokens,
           ctx.config.model,
-          response.usage.cost
+          response.usage.cost,
+          response.usage.cacheReadTokens,
         );
 
         // POST-LLM BUDGET CHECK
@@ -1032,7 +1098,7 @@ export async function executeDirectly(
           });
           const pendingWithOwner = getPendingWithOwnerCount(ctx);
           const availableTasks = ctx.taskManager.getAvailableTasks();
-          if (!forceTextOnly && availableTasks.length > 0) {
+          if ((!forceTextOnly || budgetAllowsTaskContinuation) && availableTasks.length > 0) {
             const nextTask = availableTasks[0];
             ctx.taskManager.claim(nextTask.id, ctx.agentId);
             log.info('Picking up next task from task list', {
@@ -1289,6 +1355,11 @@ export async function executeDirectly(
             // Emit compaction event
             const compactionTokensAfter = estimateContextTokens(messages);
             const compactionRecoveryInjected = recoveryParts.length > 0;
+
+            // Update baseline after compaction so incremental token
+            // accounting reflects the reduced context size
+            ctx.economics?.updateBaseline(compactionTokensAfter);
+
             const compactionEvent = {
               type: 'context.compacted',
               tokensBefore: currentContextTokens,

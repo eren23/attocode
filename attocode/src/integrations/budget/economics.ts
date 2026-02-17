@@ -455,6 +455,16 @@ export class ExecutionEconomicsManager {
     // Track cumulative input for debugging (always the full input)
     this.usage.cumulativeInputTokens += inputTokens;
 
+    // On the very first LLM call, refine the baseline from the actual
+    // API-reported input tokens. The initial estimate (from systemPrompt
+    // char count) may miss tool definitions, rules, etc. Using the real
+    // value makes the first call "free" (all context is baseline) and
+    // subsequent calls only pay the marginal token growth.
+    if (this.baseline > 0 && this.usage.llmCalls === 0) {
+      this.baseline = inputTokens;
+      this.usage.baselineContextTokens = inputTokens;
+    }
+
     // Incremental accounting: only count new tokens since last call
     let effectiveInput: number;
     if (this.baseline > 0) {
@@ -913,7 +923,9 @@ export class ExecutionEconomicsManager {
       const percentUsed = Math.round((this.usage.tokens / this.budget.maxTokens) * 100);
       this.emit({ type: 'budget.warning', budgetType: 'tokens', percentUsed, remaining });
 
-      const forceTextOnly = percentUsed >= 80;
+      // Only force text-only in strict mode. In doomloop_only mode,
+      // soft limits warn but do not kill the agent.
+      const forceTextOnly = strictBudgetEnforcement && percentUsed >= 80;
 
       return {
         canContinue: true,
@@ -930,7 +942,7 @@ export class ExecutionEconomicsManager {
           ? `\u26a0\ufe0f **BUDGET CRITICAL**: ${percentUsed}% used (${this.usage.tokens.toLocaleString()}/${this.budget.maxTokens.toLocaleString()}). ` +
             `WRAP UP IMMEDIATELY. Return a concise summary. Do NOT call any tools.`
           : `\u26a0\ufe0f **BUDGET WARNING**: You have used ${percentUsed}% of your token budget (${this.usage.tokens.toLocaleString()}/${this.budget.maxTokens.toLocaleString()} tokens). ` +
-            `Only ~${remaining.toLocaleString()} tokens remaining. WRAP UP NOW - summarize your findings and return a concise result. ` +
+            `Only ~${remaining.toLocaleString()} tokens remaining. Focus on completing current work. ` +
             `Do not start new explorations.`,
       };
     }

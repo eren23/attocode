@@ -338,6 +338,16 @@ export function initializeFeatures(agent: AgentInternals): void {
     agent.agentId,
   );
 
+  // Enable incremental token accounting for the root agent.
+  // Estimate baseline from system prompt size (~4 chars/token).
+  // This activates incremental mode in recordLLMUsage() so only marginal
+  // tokens per call are counted toward the budget, preventing quadratic growth.
+  const systemPromptLength = agent.config.systemPrompt?.length ?? 0;
+  const estimatedBaselineTokens = Math.ceil(systemPromptLength / 4);
+  if (estimatedBaselineTokens > 0) {
+    agent.economics.setBaseline(estimatedBaselineTokens);
+  }
+
   // Phase 2.2: Agent State Machine - formalizes phase tracking
   // Always enabled - provides structured phase transitions with metrics
   agent.stateMachine = createAgentStateMachine();

@@ -119,7 +119,22 @@ interface TUIMessage {
 function buildAutoLoopPrompt(
   details: string | undefined,
   promptStyle: 'strict' | 'concise',
+  reason?: string,
+  openTasks?: { pending: number; inProgress: number; blocked: number },
 ): string {
+  // For open_tasks / budget_limit: the agent ran out of budget but has pending tasks
+  if (reason === 'open_tasks' || reason === 'budget_limit') {
+    const taskSummary = openTasks
+      ? `Open tasks: ${openTasks.pending} pending, ${openTasks.inProgress} in_progress, ${openTasks.blocked} blocked.`
+      : '';
+    return [
+      '[System] Previous run ended with incomplete tasks due to budget limits.',
+      taskSummary,
+      'Continue working on the remaining tasks. Pick up the next available task and execute it.',
+      details ? `Context: ${details}` : '',
+    ].filter(Boolean).join('\n');
+  }
+
   if (promptStyle === 'concise') {
     return `[System] Continue now and execute required actions immediately. Avoid future-intent phrasing. ${details ? `Context: ${details}` : ''}`.trim();
   }
@@ -157,15 +172,26 @@ export async function runWithIncompleteAutoLoop(
   const reasonChain: string[] = [result.completion.reason];
   let autoLoopRuns = 0;
 
+  const isRetryableReason = (reason: string) =>
+    reason === 'future_intent'
+    || reason === 'incomplete_action'
+    || reason === 'open_tasks'
+    || reason === 'budget_limit';
+
   while (
     !result.success
     && incompleteAutoLoop
-    && (result.completion.reason === 'future_intent' || result.completion.reason === 'incomplete_action')
+    && isRetryableReason(result.completion.reason)
     && autoLoopRuns < maxIncompleteAutoLoops
   ) {
     autoLoopRuns++;
     callbacks?.onRetry?.(autoLoopRuns, maxIncompleteAutoLoops);
-    const recoveryPrompt = buildAutoLoopPrompt(result.completion.details, promptStyle);
+    const recoveryPrompt = buildAutoLoopPrompt(
+      result.completion.details,
+      promptStyle,
+      result.completion.reason,
+      result.completion.openTasks,
+    );
     result = await agent.run(recoveryPrompt);
     reasonChain.push(result.completion.reason);
   }
@@ -632,6 +658,7 @@ export function TUIApp({
   const [toolCalls, setToolCalls] = useState<ToolCallDisplayItem[]>([]);
   const [currentThemeName, setCurrentThemeName] = useState<string>(theme);
   const [contextTokens, setContextTokens] = useState(0);
+  const [budgetPct, setBudgetPct] = useState(0);
   const [elapsedTime, setElapsedTime] = useState(0);
   const processingStartRef = useRef<number | null>(null);
 
@@ -2550,7 +2577,7 @@ export function TUIApp({
     });
   }, [addMessage]);
 
-  // Update context tokens (include system prompt overhead)
+  // Update context tokens (include system prompt overhead) and budget health
   useEffect(() => {
     const agentState = agent.getState();
     const estimateTokens = (str: string) => estimateTokenCount(str);
@@ -2558,6 +2585,12 @@ export function TUIApp({
       sum + estimateTokens(typeof m.content === 'string' ? m.content : JSON.stringify(m.content)), 0);
     const systemPromptTokens = agent.getSystemPromptTokenEstimate?.() ?? 0;
     setContextTokens(messageTokens + systemPromptTokens);
+
+    // Update budget health from economics system
+    const budgetUsage = agent.getBudgetUsage?.();
+    if (budgetUsage) {
+      setBudgetPct(Math.round(budgetUsage.percentUsed));
+    }
   }, [status.tokens, messages.length, agent]);
 
   // Track elapsed time
@@ -2786,12 +2819,18 @@ export function TUIApp({
           </Box>
           <Box gap={2}>
             <Text color="#DDA0DD" dimColor>{modelShort}</Text>
-            {/* Mini context bar: [====----] 42% */}
+            {/* Mini context bar: ctx:[====----] 42% */}
             <Text color={contextPct > 70 ? '#FFD700' : colors.textMuted} dimColor>
-              {'[' + '='.repeat(Math.min(8, Math.round((contextPct / 100) * 8))) +
+              {'ctx:[' + '='.repeat(Math.min(8, Math.round((contextPct / 100) * 8))) +
                '-'.repeat(Math.max(0, 8 - Math.round((contextPct / 100) * 8))) + '] ' +
                contextPct + '%'}
             </Text>
+            {/* Budget health indicator */}
+            {budgetPct > 0 && (
+              <Text color={budgetPct >= 80 ? '#FF6B6B' : budgetPct >= 50 ? '#FFD700' : colors.textMuted} dimColor>
+                {'bud:' + budgetPct + '%'}
+              </Text>
+            )}
             <Text color="#98FB98" dimColor>{costStr}</Text>
             {gitBranch && <Text color="#87CEEB" dimColor>{gitBranch}</Text>}
             {/* Show learnings count if any */}
