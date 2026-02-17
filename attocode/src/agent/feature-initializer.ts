@@ -163,7 +163,7 @@ export interface AgentInternals {
   learningStore: LearningStore | null;
   compactor: Compactor | null;
   autoCompactionManager: AutoCompactionManager | null;
-  modeManager: { /* opaque - not used in initializeFeatures */ };
+  modeManager: unknown;
   taskManager: TaskManager | null;
   swarmOrchestrator: SwarmOrchestrator | null;
   budgetPool: SharedBudgetPool | null;
