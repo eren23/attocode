@@ -8,7 +8,7 @@ import { createInterface } from 'readline';
 import { writeFileSync, existsSync } from 'fs';
 import { getConfigPath, ensureDirectories } from '../paths.js';
 import { detectProviders } from '../first-run.js';
-import { logger } from '../integrations/logger.js';
+import { logger } from '../integrations/utilities/logger.js';
 
 const rl = createInterface({
   input: process.stdin,

@@ -21,7 +21,7 @@ import type {
 import { ProviderError } from '../types.js';
 import { registerProvider, hasEnv, requireEnv } from '../provider.js';
 import { resilientFetch, type NetworkConfig } from '../resilient-fetch.js';
-import { logger } from '../../integrations/logger.js';
+import { logger } from '../../integrations/utilities/logger.js';
 
 // =============================================================================
 // OPENAI API TYPES
@@ -85,7 +85,7 @@ interface OpenAIChatCompletion {
 
 export class OpenAIProvider implements LLMProvider, LLMProviderWithTools {
   readonly name = 'openai';
-  readonly defaultModel = 'gpt-4-turbo-preview';
+  readonly defaultModel = 'gpt-4o';
 
   private apiKey: string;
   private model: string;
@@ -150,7 +150,9 @@ export class OpenAIProvider implements LLMProvider, LLMProviderWithTools {
       }
 
       const data = await response.json() as OpenAIChatCompletion;
-      return this.parseResponse(data);
+      const result = this.parseResponse(data);
+      result.rateLimitInfo = this.extractRateLimitInfo(response);
+      return result;
     } catch (error) {
       if (error instanceof ProviderError) throw error;
       throw new ProviderError(
@@ -220,7 +222,9 @@ export class OpenAIProvider implements LLMProvider, LLMProviderWithTools {
       }
 
       const data = await response.json() as OpenAIChatCompletion;
-      return this.parseResponseWithTools(data);
+      const result = this.parseResponseWithTools(data);
+      result.rateLimitInfo = this.extractRateLimitInfo(response);
+      return result;
     } catch (error) {
       if (error instanceof ProviderError) throw error;
       throw new ProviderError(
@@ -242,7 +246,7 @@ export class OpenAIProvider implements LLMProvider, LLMProviderWithTools {
   private convertMessagesToOpenAIFormat(messages: (Message | MessageWithContent)[]): OpenAIMessage[] {
     return messages.map(m => ({
       role: m.role as OpenAIMessage['role'],
-      content: typeof m.content === 'string' ? m.content : m.content.map(c => c.text).join(''),
+      content: typeof m.content === 'string' ? m.content : m.content.map(c => c.type === 'text' ? c.text : '').join(''),
     }));
   }
 
@@ -261,7 +265,7 @@ export class OpenAIProvider implements LLMProvider, LLMProviderWithTools {
           role: 'tool',
           content: typeof msg.content === 'string'
             ? msg.content
-            : msg.content?.map(c => c.text).join('') || '',
+            : msg.content?.map(c => c.type === 'text' ? c.text : '').join('') || '',
           tool_call_id: msg.tool_call_id,
           name: msg.name,
         });
@@ -272,7 +276,7 @@ export class OpenAIProvider implements LLMProvider, LLMProviderWithTools {
       if ('tool_calls' in msg && msg.tool_calls && msg.tool_calls.length > 0) {
         const content = typeof msg.content === 'string'
           ? msg.content
-          : msg.content?.map(c => c.text).join('') || null;
+          : msg.content?.map(c => c.type === 'text' ? c.text : '').join('') || null;
 
         result.push({
           role: 'assistant',
@@ -292,7 +296,7 @@ export class OpenAIProvider implements LLMProvider, LLMProviderWithTools {
       // Regular message
       const content = typeof msg.content === 'string'
         ? msg.content
-        : msg.content?.map(c => c.text).join('') || '';
+        : msg.content?.map(c => c.type === 'text' ? c.text : '').join('') || '';
 
       result.push({
         role: msg.role as OpenAIMessage['role'],
@@ -388,6 +392,36 @@ export class OpenAIProvider implements LLMProvider, LLMProviderWithTools {
   // ===========================================================================
   // UTILITIES
   // ===========================================================================
+
+  /**
+   * Extract rate limit info from response headers.
+   * OpenAI returns x-ratelimit-* headers on every response.
+   */
+  private extractRateLimitInfo(response: Response): ChatResponse['rateLimitInfo'] {
+    const remaining = response.headers.get('x-ratelimit-remaining-requests');
+    const remainingTokens = response.headers.get('x-ratelimit-remaining-tokens');
+    const reset = response.headers.get('x-ratelimit-reset-requests');
+
+    if (!remaining && !remainingTokens && !reset) return undefined;
+
+    // Parse reset time (OpenAI sends values like "6m0s" or "2ms")
+    let resetSeconds: number | undefined;
+    if (reset) {
+      const match = reset.match(/(?:(\d+)h)?(?:(\d+)m)?(?:(\d+)s)?(?:(\d+)ms)?/);
+      if (match) {
+        const h = parseInt(match[1] || '0', 10);
+        const m = parseInt(match[2] || '0', 10);
+        const s = parseInt(match[3] || '0', 10);
+        resetSeconds = h * 3600 + m * 60 + s;
+      }
+    }
+
+    return {
+      remainingRequests: remaining ? parseInt(remaining, 10) : undefined,
+      remainingTokens: remainingTokens ? parseInt(remainingTokens, 10) : undefined,
+      resetSeconds,
+    };
+  }
 
   /**
    * Build request headers.

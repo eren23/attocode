@@ -18,7 +18,7 @@ import {
   stableStringify,
   calculateOptimalFrequency,
   type ContextEngineeringEvent,
-} from '../src/integrations/context-engineering.js';
+} from '../src/integrations/context/context-engineering.js';
 
 describe('ContextEngineeringManager', () => {
   let manager: ContextEngineeringManager;

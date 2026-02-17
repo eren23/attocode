@@ -15,7 +15,7 @@ import { mkdtemp, rm } from 'node:fs/promises';
 import Database from 'better-sqlite3';
 
 // Import from core modules
-import { createSQLiteStore, SQLiteStore, type UsageLog } from '../../src/integrations/sqlite-store.js';
+import { createSQLiteStore, SQLiteStore, type UsageLog } from '../../src/integrations/persistence/sqlite-store.js';
 import { SubmissionQueue, EventQueue } from '../../src/core/queues/index.js';
 import { modelRegistry, type UsageRecord } from '../../src/costs/index.js';
 import { getSchemaVersion, loadMigrations } from '../../src/persistence/migrator.js';

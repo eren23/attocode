@@ -14,7 +14,7 @@
  */
 
 import type { ToolDefinition } from './types.js';
-import { evaluateBashPolicy, isWriteLikeBashCommand } from './integrations/bash-policy.js';
+import { evaluateBashPolicy, isWriteLikeBashCommand } from './integrations/safety/bash-policy.js';
 
 // =============================================================================
 // TYPES

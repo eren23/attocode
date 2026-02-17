@@ -19,7 +19,7 @@
  * visible output in the fallback TUI mode.
  */
 
-import { logger } from '../integrations/logger.js';
+import { logger } from '../integrations/utilities/logger.js';
 
 // =============================================================================
 // TYPES

@@ -16,7 +16,7 @@ import {
   LARGE_BUDGET,
   SWARM_WORKER_BUDGET,
   type EconomicsEvent,
-} from '../src/integrations/economics.js';
+} from '../src/integrations/budget/economics.js';
 
 // =============================================================================
 // Hard Limits

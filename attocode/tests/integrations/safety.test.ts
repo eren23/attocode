@@ -13,7 +13,7 @@ import {
   HumanInLoopManager,
   SafetyManager,
   createSafetyManager,
-} from '../../src/integrations/safety.js';
+} from '../../src/integrations/safety/safety.js';
 import type { SandboxConfig, HumanInLoopConfig, ToolCall } from '../../src/types.js';
 
 describe('SandboxManager', () => {

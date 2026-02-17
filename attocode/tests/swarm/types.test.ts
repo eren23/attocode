@@ -8,7 +8,7 @@ import {
   SUBTASK_TO_CAPABILITY,
   DEFAULT_SWARM_CONFIG,
 } from '../../src/integrations/swarm/types.js';
-import type { SmartSubtask } from '../../src/integrations/smart-decomposer.js';
+import type { SmartSubtask } from '../../src/integrations/tasks/smart-decomposer.js';
 import type { SwarmTask } from '../../src/integrations/swarm/types.js';
 
 describe('subtaskToSwarmTask', () => {

@@ -32,8 +32,6 @@ import type {
   AgentResult,
   AgentEvent,
   AgentEventListener,
-  AgentRoleConfig,
-  MultiAgentConfig,
   AgentCompletionStatus,
   OpenTaskSummary,
 } from './types.js';
@@ -41,7 +39,6 @@ import type {
 import {
   buildConfig,
   isFeatureEnabled,
-  getEnabledFeatures,
 } from './defaults.js';
 
 import {
@@ -69,29 +66,19 @@ import {
   ExecutionPolicyManager,
   ThreadManager,
   RulesManager,
-  DEFAULT_RULE_SOURCES,
   ExecutionEconomicsManager,
   STANDARD_BUDGET,
   AgentRegistry,
   formatAgentList,
   CancellationManager,
-  createCancellationManager,
   isCancellationError,
   ResourceManager,
-  createResourceManager,
   LSPManager,
-  createLSPManager,
   SemanticCacheManager,
-  createSemanticCacheManager,
   SkillManager,
-  createSkillManager,
   formatSkillList,
   ContextEngineeringManager,
-  createContextEngineering,
   CodebaseContextManager,
-  createCodebaseContext,
-  buildContextFromChunks,
-  generateLightweightRepoMap,
   type ExecutionBudget,
   type AgentRole,
   type TeamTask,
@@ -113,16 +100,10 @@ import {
   createPendingPlanManager,
   type PendingPlan,
   InteractivePlanner,
-  createInteractivePlanner,
   RecursiveContextManager,
-  createRecursiveContext,
   LearningStore,
-  createLearningStore,
   Compactor,
-  createCompactor,
   AutoCompactionManager,
-  createAutoCompactionManager,
-  type AutoCompactionEvent,
   FileChangeTracker,
   createFileChangeTracker,
   CapabilitiesRegistry,
@@ -130,59 +111,31 @@ import {
   SharedBlackboard,
   createSharedBlackboard,
   TaskManager,
-  createTaskManager,
   type SQLiteStore,
   SwarmOrchestrator,
-  createSwarmOrchestrator,
-  createThrottledProvider,
-  FREE_TIER_THROTTLE,
-  PAID_TIER_THROTTLE,
-  type SwarmConfig,
   type SwarmExecutionResult,
   WorkLog,
-  createWorkLog,
   VerificationGate,
-  createVerificationGate,
   classifyComplexity,
-  getScalingGuidance,
   type ComplexityAssessment,
   ToolRecommendationEngine,
-  createToolRecommendationEngine,
   InjectionBudgetManager,
-  createInjectionBudgetManager,
-  getThinkingSystemPrompt,
   SelfImprovementProtocol,
-  createSelfImprovementProtocol,
   SubagentOutputStore,
-  createSubagentOutputStore,
-  createSerperSearchTool,
-  getEnvironmentFacts,
-  formatFactsBlock,
   AutoCheckpointManager,
-  createAutoCheckpointManager,
 } from './integrations/index.js';
-import {
-  resolvePolicyProfile,
-} from './integrations/policy-engine.js';
 
 import type { SharedContextState } from './shared/shared-context-state.js';
 import type { SharedEconomicsState } from './shared/shared-economics-state.js';
-import { TraceCollector, createTraceCollector } from './tracing/trace-collector.js';
+import { TraceCollector } from './tracing/trace-collector.js';
 import { modelRegistry } from './costs/index.js';
-import { getModelContextLength } from './integrations/openrouter-pricing.js';
-import { createComponentLogger } from './integrations/logger.js';
+import { getModelContextLength } from './integrations/utilities/openrouter-pricing.js';
+import { createComponentLogger } from './integrations/utilities/logger.js';
 
-// Spawn agent tools for LLM-driven subagent delegation
+// Spawn agent tools type for LLM-driven subagent delegation
 import {
-  createBoundSpawnAgentTool,
-  createBoundSpawnAgentsParallelTool,
   type SpawnConstraints,
 } from './tools/agent.js';
-
-// Task tools for Claude Code-style task management
-import {
-  createTaskTools,
-} from './tools/tasks.js';
 
 // =============================================================================
 // PRODUCTION AGENT
@@ -211,8 +164,27 @@ import {
 } from './core/index.js';
 
 // Phase 2.2: Agent State Machine
-import { type AgentStateMachine, createAgentStateMachine } from './core/agent-state-machine.js';
+import { type AgentStateMachine } from './core/agent-state-machine.js';
 import { detectIncompleteActionResponse } from './core/completion-analyzer.js';
+
+// Feature initialization (extracted from initializeFeatures method)
+import { initializeFeatures as doInitializeFeatures, type AgentInternals } from './agent/feature-initializer.js';
+
+// Message builder (extracted from buildMessages method)
+import { buildMessages as doBuildMessages, type MessageBuilderDeps } from './agent/message-builder.js';
+
+// Session/checkpoint/file-change API (extracted from ProductionAgent methods)
+import {
+  trackFileChange as doTrackFileChange,
+  undoLastFileChange as doUndoLastFileChange,
+  undoCurrentTurn as doUndoCurrentTurn,
+  reset as doReset,
+  loadMessages as doLoadMessages,
+  getSerializableState as doGetSerializableState,
+  validateCheckpoint as doValidateCheckpoint,
+  loadState as doLoadState,
+  type SessionApiDeps,
+} from './agent/session-api.js';
 
 /**
  * Production-ready agent that composes all features.
@@ -266,6 +238,7 @@ export class ProductionAgent {
   private swarmOrchestrator: SwarmOrchestrator | null = null;
   private workLog: WorkLog | null = null;
   private verificationGate: VerificationGate | null = null;
+  private typeCheckerState: import('./integrations/safety/type-checker.js').TypeCheckerState | null = null;
 
   // Phase 2-4 integration modules
   private injectionBudget: InjectionBudgetManager | null = null;
@@ -396,723 +369,10 @@ export class ProductionAgent {
 
   /**
    * Initialize all enabled features.
+   * Delegates to the extracted feature-initializer module.
    */
   private initializeFeatures(): void {
-    // Debug output only when DEBUG env var is set
-    if (process.env.DEBUG) {
-      const features = getEnabledFeatures(this.config);
-      log.debug('Initializing with features', { features: features.join(', ') });
-    }
-
-    // Hooks & Plugins
-    if (isFeatureEnabled(this.config.hooks) && isFeatureEnabled(this.config.plugins)) {
-      this.hooks = new HookManager(this.config.hooks, this.config.plugins);
-    }
-
-    // Memory
-    if (isFeatureEnabled(this.config.memory)) {
-      this.memory = new MemoryManager(this.config.memory);
-    }
-
-    // Planning & Reflection
-    if (isFeatureEnabled(this.config.planning) && isFeatureEnabled(this.config.reflection)) {
-      this.planning = new PlanningManager(this.config.planning, this.config.reflection);
-    }
-
-    // Observability
-    if (isFeatureEnabled(this.config.observability)) {
-      this.observability = new ObservabilityManager(this.config.observability);
-
-      // Lesson 26: Full trace capture
-      const traceCaptureConfig = this.config.observability.traceCapture;
-      if (traceCaptureConfig?.enabled) {
-        this.traceCollector = createTraceCollector({
-          enabled: true,
-          outputDir: traceCaptureConfig.outputDir ?? '.traces',
-          captureMessageContent: traceCaptureConfig.captureMessageContent ?? true,
-          captureToolResults: traceCaptureConfig.captureToolResults ?? true,
-          analyzeCacheBoundaries: traceCaptureConfig.analyzeCacheBoundaries ?? true,
-          filePattern: traceCaptureConfig.filePattern ?? 'trace-{sessionId}-{timestamp}.jsonl',
-          enableConsoleOutput: false,
-        });
-      }
-    }
-
-    // Safety (Sandbox + Human-in-Loop)
-    if (isFeatureEnabled(this.config.sandbox) || isFeatureEnabled(this.config.humanInLoop)) {
-      this.safety = new SafetyManager(
-        isFeatureEnabled(this.config.sandbox) ? this.config.sandbox : false,
-        isFeatureEnabled(this.config.humanInLoop) ? this.config.humanInLoop : false,
-        isFeatureEnabled(this.config.policyEngine) ? this.config.policyEngine : false,
-      );
-    }
-
-    if (isFeatureEnabled(this.config.policyEngine)) {
-      const rootPolicy = resolvePolicyProfile({
-        policyEngine: this.config.policyEngine,
-        sandboxConfig: isFeatureEnabled(this.config.sandbox) ? this.config.sandbox : undefined,
-      });
-      this.emit({
-        type: 'policy.profile.resolved',
-        profile: rootPolicy.profileName,
-        context: 'root',
-        selectionSource: rootPolicy.metadata.selectionSource,
-        usedLegacyMappings: rootPolicy.metadata.usedLegacyMappings,
-        legacySources: rootPolicy.metadata.legacyMappingSources,
-      });
-      if (rootPolicy.metadata.usedLegacyMappings) {
-        this.emit({
-          type: 'policy.legacy.fallback.used',
-          profile: rootPolicy.profileName,
-          sources: rootPolicy.metadata.legacyMappingSources,
-          warnings: rootPolicy.metadata.warnings,
-        });
-      }
-    }
-
-    // Routing
-    if (isFeatureEnabled(this.config.routing)) {
-      this.routing = new RoutingManager(this.config.routing);
-    }
-
-    // Multi-Agent (Lesson 17)
-    if (isFeatureEnabled(this.config.multiAgent)) {
-      const roles = (this.config.multiAgent.roles || []).map((r: AgentRoleConfig) => ({
-        name: r.name,
-        description: r.description,
-        systemPrompt: r.systemPrompt,
-        capabilities: r.capabilities,
-        authority: r.authority,
-        model: r.model,
-      }));
-      this.multiAgent = new MultiAgentManager(this.provider, Array.from(this.tools.values()), roles);
-    }
-
-    // ReAct (Lesson 18)
-    if (isFeatureEnabled(this.config.react)) {
-      this.react = new ReActManager(this.provider, Array.from(this.tools.values()), {
-        maxSteps: this.config.react.maxSteps,
-        stopOnAnswer: this.config.react.stopOnAnswer,
-        includeReasoning: this.config.react.includeReasoning,
-      });
-    }
-
-    // Execution Policies (Lesson 23)
-    if (isFeatureEnabled(this.config.executionPolicy)) {
-      this.executionPolicy = new ExecutionPolicyManager({
-        defaultPolicy: this.config.executionPolicy.defaultPolicy,
-        toolPolicies: this.config.executionPolicy.toolPolicies as Record<string, { policy: 'allow' | 'prompt' | 'forbidden'; conditions?: { argMatch?: Record<string, string | RegExp>; policy: 'allow' | 'prompt' | 'forbidden'; reason?: string }[]; reason?: string }>,
-        intentAware: this.config.executionPolicy.intentAware,
-        intentConfidenceThreshold: this.config.executionPolicy.intentConfidenceThreshold,
-      });
-    }
-
-    // Thread Management (Lesson 24)
-    if (isFeatureEnabled(this.config.threads)) {
-      this.threadManager = new ThreadManager();
-    }
-
-    // Rules System (Lesson 12)
-    if (isFeatureEnabled(this.config.rules)) {
-      const ruleSources = this.config.rules.sources || DEFAULT_RULE_SOURCES;
-      this.rules = new RulesManager({
-        enabled: true,
-        sources: ruleSources,
-        watch: this.config.rules.watch,
-      });
-      // Load rules asynchronously - tracked for ensureReady()
-      this.initPromises.push(
-        this.rules.loadRules().catch(err => {
-          log.warn('Failed to load rules', { error: String(err) });
-        })
-      );
-    }
-
-    // Economics System (Token Budget) - always enabled
-    // Use custom budget if provided (subagents use SUBAGENT_BUDGET), otherwise STANDARD_BUDGET
-    const baseBudget = this.config.budget ?? STANDARD_BUDGET;
-    this.economics = new ExecutionEconomicsManager(
-      {
-        ...baseBudget,
-        // Use maxIterations from config as absolute safety cap
-        maxIterations: this.config.maxIterations,
-        targetIterations: Math.min(baseBudget.targetIterations ?? 20, this.config.maxIterations),
-      },
-      this._sharedEconomicsState ?? undefined,
-      this.agentId,
-    );
-
-    // Phase 2.2: Agent State Machine - formalizes phase tracking
-    // Always enabled - provides structured phase transitions with metrics
-    this.stateMachine = createAgentStateMachine();
-    // Forward state machine phase transitions as subagent.phase events
-    const phaseMap: Record<string, 'exploring' | 'planning' | 'executing' | 'completing'> = {
-      exploring: 'exploring', planning: 'planning', acting: 'executing', verifying: 'completing',
-    };
-    const unsubStateMachine = this.stateMachine.subscribe(event => {
-      if (event.type === 'phase.changed') {
-        this.emit({
-          type: 'subagent.phase',
-          agentId: this.agentId,
-          phase: phaseMap[event.transition.to] ?? 'exploring',
-        });
-      }
-    });
-    this.unsubscribers.push(unsubStateMachine);
-
-    // Work Log - compaction-resilient summary of agent work
-    // Always enabled - minimal overhead and critical for long-running tasks
-    this.workLog = createWorkLog();
-
-    // Verification Gate - opt-in completion verification
-    if (this.config.verificationCriteria) {
-      this.verificationGate = createVerificationGate(this.config.verificationCriteria);
-    }
-
-    // Phase 2-4: Orchestration & Advanced modules (always enabled, lightweight)
-    this.injectionBudget = createInjectionBudgetManager();
-    this.selfImprovement = createSelfImprovementProtocol(undefined, this.learningStore ?? undefined);
-    this.subagentOutputStore = createSubagentOutputStore({ persistToFile: false });
-    this.autoCheckpointManager = createAutoCheckpointManager({ enabled: true });
-    this.toolRecommendation = createToolRecommendationEngine();
-
-    // Agent Registry - always enabled for subagent support
-    this.agentRegistry = new AgentRegistry();
-    // Load user agents asynchronously - tracked for ensureReady()
-    this.initPromises.push(
-      this.agentRegistry.loadUserAgents().catch(err => {
-        log.warn('Failed to load user agents', { error: String(err) });
-      })
-    );
-
-    // Register spawn_agent tool so LLM can delegate to subagents
-    const boundSpawnTool = createBoundSpawnAgentTool(
-      (name, task, constraints) => this.spawnAgent(name, task, constraints)
-    );
-    this.tools.set(boundSpawnTool.name, boundSpawnTool);
-
-    // Register spawn_agents_parallel tool for parallel subagent execution
-    const boundParallelSpawnTool = createBoundSpawnAgentsParallelTool(
-      (tasks) => this.spawnAgentsParallel(tasks)
-    );
-    this.tools.set(boundParallelSpawnTool.name, boundParallelSpawnTool);
-
-    // Task Manager - Claude Code-style task system for coordination
-    this.taskManager = createTaskManager();
-    // Forward task events (with cleanup tracking for EventEmitter-based managers)
-    const taskCreatedHandler = (data: { task: any }) => {
-      this.emit({ type: 'task.created', task: data.task });
-    };
-    this.taskManager.on('task.created', taskCreatedHandler);
-    this.unsubscribers.push(() => this.taskManager?.off('task.created', taskCreatedHandler));
-
-    const taskUpdatedHandler = (data: { task: any }) => {
-      this.emit({ type: 'task.updated', task: data.task });
-    };
-    this.taskManager.on('task.updated', taskUpdatedHandler);
-    this.unsubscribers.push(() => this.taskManager?.off('task.updated', taskUpdatedHandler));
-    // Register task tools
-    const taskTools = createTaskTools(this.taskManager);
-    for (const tool of taskTools) {
-      this.tools.set(tool.name, tool);
-    }
-
-    // Built-in web search (Serper API) — gracefully handles missing API key
-    const serperCustomTool = createSerperSearchTool();
-    this.tools.set('web_search', {
-      name: serperCustomTool.name,
-      description: serperCustomTool.description,
-      parameters: serperCustomTool.inputSchema,
-      execute: serperCustomTool.execute,
-      dangerLevel: 'safe',
-    });
-
-    // Swarm Mode (experimental)
-    if (this.config.swarm) {
-      const swarmConfig = this.config.swarm as SwarmConfig;
-
-      // Wrap provider with request throttle to prevent 429 rate limiting.
-      // All subagents share this.provider by reference (line 4398),
-      // so wrapping here throttles ALL downstream LLM calls.
-      if (swarmConfig.throttle !== false) {
-        const throttleConfig = swarmConfig.throttle === 'paid'
-          ? PAID_TIER_THROTTLE
-          : swarmConfig.throttle === 'free' || swarmConfig.throttle === undefined
-            ? FREE_TIER_THROTTLE
-            : swarmConfig.throttle;
-        this.provider = createThrottledProvider(
-          this.provider as unknown as import('./providers/types.js').LLMProvider,
-          throttleConfig,
-        ) as any;
-      }
-
-      // Pass codebaseContext so the decomposer can ground tasks in actual project files
-      swarmConfig.codebaseContext = this.codebaseContext ?? undefined;
-
-      this.swarmOrchestrator = createSwarmOrchestrator(
-        swarmConfig,
-        this.provider as unknown as import('./providers/types.js').LLMProvider,
-        this.agentRegistry,
-        (name, task) => this.spawnAgent(name, task),
-        this.blackboard ?? undefined,
-      );
-
-      // Override parent budget pool with swarm's much larger pool so spawnAgent()
-      // allocates from the swarm budget (e.g. 10M tokens) instead of the parent's
-      // generic pool (200K tokens). Without this, workers get 5K emergency budget.
-      this.budgetPool = this.swarmOrchestrator.getBudgetPool().pool;
-
-      // Phase 3.1+3.2: Set shared state so workers inherit it via buildContext()
-      this._sharedContextState = this.swarmOrchestrator.getSharedContextState();
-      this._sharedEconomicsState = this.swarmOrchestrator.getSharedEconomicsState();
-    }
-
-    // Cancellation Support
-    if (isFeatureEnabled(this.config.cancellation)) {
-      this.cancellation = createCancellationManager();
-      // Forward cancellation events (with cleanup tracking)
-      const unsubCancellation = this.cancellation.subscribe(event => {
-        if (event.type === 'cancellation.requested') {
-          this.emit({ type: 'cancellation.requested', reason: event.reason });
-        }
-      });
-      this.unsubscribers.push(unsubCancellation);
-    }
-
-    // Resource Monitoring
-    if (isFeatureEnabled(this.config.resources)) {
-      this.resourceManager = createResourceManager({
-        enabled: this.config.resources.enabled,
-        maxMemoryMB: this.config.resources.maxMemoryMB,
-        maxCpuTimeSec: this.config.resources.maxCpuTimeSec,
-        maxConcurrentOps: this.config.resources.maxConcurrentOps,
-        warnThreshold: this.config.resources.warnThreshold,
-        criticalThreshold: this.config.resources.criticalThreshold,
-      });
-    }
-
-    // LSP (Language Server Protocol) Support
-    if (isFeatureEnabled(this.config.lsp)) {
-      this.lspManager = createLSPManager({
-        enabled: this.config.lsp.enabled,
-        autoDetect: this.config.lsp.autoDetect,
-        servers: this.config.lsp.servers,
-        timeout: this.config.lsp.timeout,
-      });
-      // Auto-start is done lazily on first use to avoid startup delays
-    }
-
-    // Semantic Cache Support
-    if (isFeatureEnabled(this.config.semanticCache)) {
-      this.semanticCache = createSemanticCacheManager({
-        enabled: this.config.semanticCache.enabled,
-        threshold: this.config.semanticCache.threshold,
-        maxSize: this.config.semanticCache.maxSize,
-        ttl: this.config.semanticCache.ttl,
-      });
-      // Forward cache events (with cleanup tracking)
-      const unsubSemanticCache = this.semanticCache.subscribe(event => {
-        if (event.type === 'cache.hit') {
-          this.emit({ type: 'cache.hit', query: event.query, similarity: event.similarity });
-        } else if (event.type === 'cache.miss') {
-          this.emit({ type: 'cache.miss', query: event.query });
-        } else if (event.type === 'cache.set') {
-          this.emit({ type: 'cache.set', query: event.query });
-        }
-      });
-      this.unsubscribers.push(unsubSemanticCache);
-    }
-
-    // Skills Support
-    if (isFeatureEnabled(this.config.skills)) {
-      this.skillManager = createSkillManager({
-        enabled: this.config.skills.enabled,
-        directories: this.config.skills.directories,
-        loadBuiltIn: this.config.skills.loadBuiltIn,
-        autoActivate: this.config.skills.autoActivate,
-      });
-      // Load skills asynchronously - tracked for ensureReady()
-      this.initPromises.push(
-        this.skillManager.loadSkills()
-          .then(() => {}) // Convert to void
-          .catch(err => {
-            log.warn('Failed to load skills', { error: String(err) });
-          })
-      );
-    }
-
-    // Context Engineering (Manus-inspired tricks P, Q, R, S, T)
-    // Always enabled - these are performance optimizations
-    this.contextEngineering = createContextEngineering({
-      enableCacheOptimization: true,
-      enableRecitation: true,
-      enableReversibleCompaction: true,
-      enableFailureTracking: true,
-      enableDiversity: false, // Off by default - can cause unexpected behavior
-      staticPrefix: this.config.systemPrompt,
-      recitationFrequency: 5,
-      maxFailures: 30,
-      maxReferences: 50,
-    });
-
-    // Bind shared context state for cross-worker failure learning (swarm workers only)
-    if (this._sharedContextState) {
-      this.contextEngineering.setSharedState(this._sharedContextState);
-    }
-
-    // Codebase Context - intelligent code selection for context management
-    // Analyzes repo structure and selects relevant code within token budgets
-    if (this.config.codebaseContext !== false) {
-      const codebaseConfig = typeof this.config.codebaseContext === 'object'
-        ? this.config.codebaseContext
-        : {};
-      this.codebaseContext = createCodebaseContext({
-        root: codebaseConfig.root ?? process.cwd(),
-        includePatterns: codebaseConfig.includePatterns,
-        excludePatterns: codebaseConfig.excludePatterns,
-        maxFileSize: codebaseConfig.maxFileSize ?? 100 * 1024, // 100KB
-        tokensPerChar: 0.25,
-        analyzeDependencies: true,
-        cacheResults: true,
-        cacheTTL: 5 * 60 * 1000, // 5 minutes
-      });
-
-      // Forward trace collector so codebase analysis can emit codebase.map entries.
-      if (this.traceCollector) {
-        this.codebaseContext.traceCollector = this.traceCollector;
-      }
-
-      // Connect LSP manager to codebase context for enhanced code selection
-      // This enables LSP-based relevance boosting (Phase 4.1)
-      if (this.lspManager) {
-        this.codebaseContext.setLSPManager(this.lspManager);
-      }
-    }
-
-    // Forward context engineering events (with cleanup tracking)
-    const unsubContextEngineering = this.contextEngineering.on(event => {
-      switch (event.type) {
-        case 'failure.recorded':
-          this.observability?.logger?.warn('Failure recorded', {
-            action: event.failure.action,
-            category: event.failure.category,
-          });
-          break;
-        case 'failure.pattern':
-          this.observability?.logger?.warn('Failure pattern detected', {
-            type: event.pattern.type,
-            description: event.pattern.description,
-          });
-          this.emit({ type: 'error', error: `Pattern: ${event.pattern.description}` });
-          break;
-        case 'recitation.injected':
-          this.observability?.logger?.debug('Recitation injected', {
-            iteration: event.iteration,
-          });
-          break;
-      }
-    });
-    this.unsubscribers.push(unsubContextEngineering);
-
-    // Interactive Planning (conversational + editable planning)
-    if (isFeatureEnabled(this.config.interactivePlanning)) {
-      const interactiveConfig = typeof this.config.interactivePlanning === 'object'
-        ? this.config.interactivePlanning
-        : {};
-
-      this.interactivePlanner = createInteractivePlanner({
-        autoCheckpoint: interactiveConfig.enableCheckpoints ?? true,
-        confirmBeforeExecute: interactiveConfig.requireApproval ?? true,
-        maxCheckpoints: 20,
-        autoPauseAtDecisions: true,
-      });
-
-      // Forward planner events to observability (with cleanup tracking)
-      const unsubInteractivePlanner = this.interactivePlanner.on(event => {
-        switch (event.type) {
-          case 'plan.created':
-            this.observability?.logger?.info('Interactive plan created', {
-              planId: event.plan.id,
-              stepCount: event.plan.steps.length,
-            });
-            break;
-          case 'step.completed':
-            this.observability?.logger?.debug('Plan step completed', {
-              stepId: event.step.id,
-              status: event.step.status,
-            });
-            break;
-          case 'plan.cancelled':
-            this.observability?.logger?.info('Plan cancelled', { reason: event.reason });
-            break;
-          case 'checkpoint.created':
-            this.observability?.logger?.debug('Plan checkpoint created', {
-              checkpointId: event.checkpoint.id,
-            });
-            break;
-        }
-      });
-      this.unsubscribers.push(unsubInteractivePlanner);
-    }
-
-    // Recursive Context (RLM - Recursive Language Models)
-    // Enables on-demand context exploration for large codebases
-    if (isFeatureEnabled(this.config.recursiveContext)) {
-      const recursiveConfig = typeof this.config.recursiveContext === 'object'
-        ? this.config.recursiveContext
-        : {};
-
-      this.recursiveContext = createRecursiveContext({
-        maxDepth: recursiveConfig.maxRecursionDepth ?? 5,
-        snippetTokens: recursiveConfig.maxSnippetTokens ?? 2000,
-        synthesisTokens: 1000,
-        totalBudget: 50000,
-        cacheResults: recursiveConfig.cacheNavigationResults ?? true,
-      });
-
-      // Note: File system source should be registered when needed with proper glob/readFile functions
-      // This is deferred to allow flexible configuration
-
-      // Forward RLM events (with cleanup tracking)
-      const unsubRecursiveContext = this.recursiveContext.on(event => {
-        switch (event.type) {
-          case 'process.started':
-            this.observability?.logger?.debug('RLM process started', {
-              query: event.query,
-              depth: event.depth,
-            });
-            break;
-          case 'navigation.command':
-            this.observability?.logger?.debug('RLM navigation command', {
-              command: event.command,
-              depth: event.depth,
-            });
-            break;
-          case 'process.completed':
-            this.observability?.logger?.debug('RLM process completed', {
-              stats: event.stats,
-            });
-            break;
-          case 'budget.warning':
-            this.observability?.logger?.warn('RLM budget warning', {
-              remaining: event.remaining,
-              total: event.total,
-            });
-            break;
-        }
-      });
-      this.unsubscribers.push(unsubRecursiveContext);
-    }
-
-    // Learning Store (cross-session learning from failures)
-    // Connects to the failure tracker in contextEngineering for automatic learning extraction
-    if (isFeatureEnabled(this.config.learningStore)) {
-      const learningConfig = typeof this.config.learningStore === 'object'
-        ? this.config.learningStore
-        : {};
-
-      this.learningStore = createLearningStore({
-        dbPath: learningConfig.dbPath ?? '.agent/learnings.db',
-        requireValidation: learningConfig.requireValidation ?? true,
-        autoValidateThreshold: learningConfig.autoValidateThreshold ?? 0.9,
-        maxLearnings: learningConfig.maxLearnings ?? 500,
-      });
-
-      // Connect to the failure tracker if available
-      if (this.contextEngineering) {
-        const failureTracker = this.contextEngineering.getFailureTracker();
-        if (failureTracker) {
-          this.learningStore.connectFailureTracker(failureTracker);
-        }
-      }
-
-      // Forward learning events to observability (with cleanup tracking)
-      const unsubLearningStore = this.learningStore.on(event => {
-        switch (event.type) {
-          case 'learning.proposed':
-            this.observability?.logger?.info('Learning proposed', {
-              learningId: event.learning.id,
-              description: event.learning.description,
-            });
-            this.emit({
-              type: 'learning.proposed',
-              learningId: event.learning.id,
-              description: event.learning.description,
-            });
-            break;
-          case 'learning.validated':
-            this.observability?.logger?.info('Learning validated', {
-              learningId: event.learningId,
-            });
-            this.emit({ type: 'learning.validated', learningId: event.learningId });
-            break;
-          case 'learning.applied':
-            this.observability?.logger?.debug('Learning applied', {
-              learningId: event.learningId,
-              context: event.context,
-            });
-            this.emit({
-              type: 'learning.applied',
-              learningId: event.learningId,
-              context: event.context,
-            });
-            break;
-          case 'pattern.extracted':
-            this.observability?.logger?.info('Pattern extracted as learning', {
-              pattern: event.pattern.description,
-              learningId: event.learning.id,
-            });
-            break;
-        }
-      });
-      this.unsubscribers.push(unsubLearningStore);
-    }
-
-    // Auto-Compaction Manager (sophisticated context compaction)
-    // Uses the Compactor for LLM-based summarization with threshold monitoring
-    if (isFeatureEnabled(this.config.compaction)) {
-      const compactionConfig = typeof this.config.compaction === 'object'
-        ? this.config.compaction
-        : {};
-
-      // Create the compactor (requires provider for LLM summarization)
-      this.compactor = createCompactor(this.provider, {
-        enabled: true,
-        tokenThreshold: compactionConfig.tokenThreshold ?? 80000,
-        preserveRecentCount: compactionConfig.preserveRecentCount ?? 10,
-        preserveToolResults: compactionConfig.preserveToolResults ?? true,
-        summaryMaxTokens: compactionConfig.summaryMaxTokens ?? 2000,
-        summaryModel: compactionConfig.summaryModel,
-      });
-
-      // Create the auto-compaction manager with threshold monitoring
-      // Wire reversible compaction through contextEngineering when available
-      const compactHandler = this.contextEngineering
-        ? async (messages: Message[]) => {
-            // Use contextEngineering's reversible compaction to preserve references
-            const summarize = async (msgs: Message[]) => {
-              // Use the basic compactor's summarization capability
-              const result = await this.compactor!.compact(msgs);
-              return result.summary;
-            };
-            const contextMsgs = messages.map(m => ({
-              role: m.role as 'system' | 'user' | 'assistant' | 'tool',
-              content: typeof m.content === 'string' ? m.content : JSON.stringify(m.content),
-            }));
-            const result = await this.contextEngineering!.compact(contextMsgs, summarize);
-            const tokensBefore = this.compactor!.estimateTokens(messages);
-            const tokensAfter = this.compactor!.estimateTokens([{ role: 'assistant', content: result.summary }]);
-            return {
-              summary: result.summary + (result.reconstructionPrompt ? `\n\n${result.reconstructionPrompt}` : ''),
-              tokensBefore,
-              tokensAfter,
-              preservedMessages: [{ role: 'assistant' as const, content: result.summary }],
-              references: result.references,
-            };
-          }
-        : undefined;
-
-      // Get model's actual context window - try OpenRouter first (real API data),
-      // then fall back to hardcoded ModelRegistry, then config, then default
-      const openRouterContext = getModelContextLength(this.config.model || '');
-      const registryInfo = modelRegistry.getModel(this.config.model || '');
-      const registryContext = registryInfo?.capabilities?.maxContextTokens;
-      const maxContextTokens = this.config.maxContextTokens
-        ?? openRouterContext   // From OpenRouter API (e.g., GLM-4.7 = 202752)
-        ?? registryContext     // From hardcoded registry (Claude, GPT-4o, etc.)
-        ?? 200000;             // Fallback to 200K
-
-      this.autoCompactionManager = createAutoCompactionManager(this.compactor, {
-        mode: compactionConfig.mode ?? 'auto',
-        warningThreshold: 0.70,       // Warn at 70% of model's context
-        autoCompactThreshold: 0.80,   // Compact at 80% (changed from 0.90)
-        hardLimitThreshold: 0.95,     // Hard limit at 95%
-        preserveRecentUserMessages: Math.ceil((compactionConfig.preserveRecentCount ?? 10) / 2),
-        preserveRecentAssistantMessages: Math.ceil((compactionConfig.preserveRecentCount ?? 10) / 2),
-        cooldownMs: 60000, // 1 minute cooldown
-        maxContextTokens,  // Dynamic from model registry or config
-        compactHandler, // Use reversible compaction when contextEngineering is available
-      });
-
-      // Forward compactor events to observability (with cleanup tracking)
-      const unsubCompactor = this.compactor.on(event => {
-        switch (event.type) {
-          case 'compaction.start':
-            this.observability?.logger?.info('Compaction started', {
-              messageCount: event.messageCount,
-            });
-            break;
-          case 'compaction.complete':
-            this.observability?.logger?.info('Compaction complete', {
-              tokensBefore: event.result.tokensBefore,
-              tokensAfter: event.result.tokensAfter,
-              compactedCount: event.result.compactedCount,
-            });
-            break;
-          case 'compaction.error':
-            this.observability?.logger?.error('Compaction error', {
-              error: event.error,
-            });
-            break;
-        }
-      });
-      this.unsubscribers.push(unsubCompactor);
-
-      // Forward auto-compaction events (with cleanup tracking)
-      const unsubAutoCompaction = this.autoCompactionManager.on((event: AutoCompactionEvent) => {
-        switch (event.type) {
-          case 'autocompaction.warning':
-            this.observability?.logger?.warn('Context approaching limit', {
-              currentTokens: event.currentTokens,
-              ratio: event.ratio,
-            });
-            this.emit({
-              type: 'compaction.warning',
-              currentTokens: event.currentTokens,
-              threshold: Math.round(event.ratio * (this.config.maxContextTokens ?? 200000)),
-            });
-            break;
-          case 'autocompaction.triggered':
-            this.observability?.logger?.info('Auto-compaction triggered', {
-              mode: event.mode,
-              currentTokens: event.currentTokens,
-            });
-            break;
-          case 'autocompaction.completed':
-            this.observability?.logger?.info('Auto-compaction completed', {
-              tokensBefore: event.tokensBefore,
-              tokensAfter: event.tokensAfter,
-              reduction: event.reduction,
-            });
-            this.emit({
-              type: 'compaction.auto',
-              tokensBefore: event.tokensBefore,
-              tokensAfter: event.tokensAfter,
-              messagesCompacted: event.tokensBefore - event.tokensAfter,
-            });
-            break;
-          case 'autocompaction.hard_limit':
-            this.observability?.logger?.error('Context hard limit reached', {
-              currentTokens: event.currentTokens,
-              ratio: event.ratio,
-            });
-            break;
-          case 'autocompaction.emergency_truncate':
-            this.observability?.logger?.warn('Emergency truncation performed', {
-              reason: event.reason,
-              messagesBefore: event.messagesBefore,
-              messagesAfter: event.messagesAfter,
-            });
-            break;
-        }
-      });
-      this.unsubscribers.push(unsubAutoCompaction);
-    }
-
-    // Note: FileChangeTracker requires a database instance which is not
-    // available at this point. Use initFileChangeTracker() to enable it
-    // after the agent is constructed with a database reference.
-    // This allows the feature to be optional and not require SQLite at all times.
+    doInitializeFeatures(this as unknown as AgentInternals);
   }
 
   /**
@@ -1868,170 +1128,7 @@ export class ProductionAgent {
    * is available, ensuring static content is ordered for optimal KV-cache reuse.
    */
   private async buildMessages(task: string): Promise<Message[]> {
-    const messages: Message[] = [];
-
-    // Gather all context components
-    const rulesContent = this.rules?.getRulesContent() ?? '';
-    const skillsPrompt = this.skillManager?.getActiveSkillsPrompt() ?? '';
-    const memoryContext = this.memory?.getContextStrings(task) ?? [];
-
-    // Get relevant learnings from past sessions
-    const learningsContext = this.learningStore?.getLearningContext({
-      query: task,
-      maxLearnings: 5,
-    }) ?? '';
-
-    // Budget-aware codebase context selection
-    let codebaseContextStr = '';
-    if (this.codebaseContext) {
-      // Calculate available budget for codebase context
-      // Reserve tokens for: rules (~2000), tools (~2500), memory (~1000), conversation (~5000)
-      const reservedTokens = 10500;
-      const maxContextTokens = (this.config.maxContextTokens ?? 80000) - reservedTokens;
-      const codebaseBudget = Math.min(maxContextTokens * 0.3, 15000); // Up to 30% or 15K tokens
-
-      // Synchronous analysis on first system prompt build so context is available immediately
-      if (!this.codebaseContext.getRepoMap() && !this.codebaseAnalysisTriggered) {
-        this.codebaseAnalysisTriggered = true;
-        try {
-          await this.codebaseContext.analyze();
-        } catch {
-          // non-fatal — agent can still work without codebase context
-        }
-      }
-
-      // Get repo map AFTER analysis so we have fresh data on first prompt
-      const repoMap = this.codebaseContext.getRepoMap();
-      if (repoMap) {
-        try {
-          const selection = this.selectRelevantCodeSync(task, codebaseBudget);
-          if (selection.chunks.length > 0) {
-            codebaseContextStr = buildContextFromChunks(selection.chunks, {
-              includeFilePaths: true,
-              includeSeparators: true,
-              maxTotalTokens: codebaseBudget,
-            });
-          } else {
-            // Fallback: lightweight repo map when task-specific selection finds nothing
-            codebaseContextStr = generateLightweightRepoMap(repoMap, codebaseBudget);
-          }
-        } catch {
-          // Selection error — skip
-        }
-      }
-    }
-
-    // Build tool descriptions
-    let toolDescriptions = '';
-    if (this.tools.size > 0) {
-      const toolLines: string[] = [];
-      for (const tool of this.tools.values()) {
-        toolLines.push(`- ${tool.name}: ${tool.description}`);
-      }
-      toolDescriptions = toolLines.join('\n');
-    }
-
-    // Add MCP tool summaries
-    if (this.config.mcpToolSummaries && this.config.mcpToolSummaries.length > 0) {
-      const mcpLines = this.config.mcpToolSummaries.map(
-        s => `- ${s.name}: ${s.description}`
-      );
-      if (toolDescriptions) {
-        toolDescriptions += '\n\nMCP tools (call directly, they auto-load):\n' + mcpLines.join('\n');
-      } else {
-        toolDescriptions = 'MCP tools (call directly, they auto-load):\n' + mcpLines.join('\n');
-      }
-    }
-
-    // Build system prompt using cache-aware builder if available (Trick P)
-    // Combine memory, learnings, codebase context, and environment facts
-    const combinedContextParts = [
-      // Environment facts — temporal/platform grounding (prevents stale date hallucinations)
-      formatFactsBlock(getEnvironmentFacts()),
-      ...(memoryContext.length > 0 ? memoryContext : []),
-      ...(learningsContext ? [learningsContext] : []),
-      ...(codebaseContextStr ? [`\n## Relevant Code\n${codebaseContextStr}`] : []),
-    ];
-
-    // Inject thinking directives and scaling guidance for non-simple tasks
-    if (this.lastComplexityAssessment) {
-      const thinkingPrompt = getThinkingSystemPrompt(this.lastComplexityAssessment.tier);
-      if (thinkingPrompt) {
-        combinedContextParts.push(thinkingPrompt);
-      }
-      if (this.lastComplexityAssessment.tier !== 'simple') {
-        combinedContextParts.push(getScalingGuidance(this.lastComplexityAssessment));
-      }
-    }
-
-    const combinedContext = combinedContextParts.join('\n');
-
-    const promptOptions = {
-      rules: rulesContent + (skillsPrompt ? '\n\n' + skillsPrompt : ''),
-      tools: toolDescriptions,
-      memory: combinedContext.length > 0 ? combinedContext : undefined,
-      dynamic: {
-        mode: this.modeManager?.getMode() ?? 'default',
-      },
-    };
-
-    if (this.contextEngineering) {
-      // Build cache-aware system prompt with cache_control markers (Improvement P1).
-      // Store structured blocks for callLLM() to inject as MessageWithContent.
-      // The string version is still used for token estimation and debugging.
-      const cacheableBlocks = this.contextEngineering.buildCacheableSystemPrompt(promptOptions);
-
-      // Safety check: ensure we have content (empty array = no cache context configured)
-      if (cacheableBlocks.length === 0 || cacheableBlocks.every(b => b.text.trim().length === 0)) {
-        this.cacheableSystemBlocks = null;
-        messages.push({ role: 'system', content: this.config.systemPrompt || 'You are a helpful AI assistant.' });
-      } else {
-        // Store cacheable blocks for provider injection
-        this.cacheableSystemBlocks = cacheableBlocks;
-        // Push a regular string Message for backward compatibility (token estimation, etc.)
-        const flatPrompt = cacheableBlocks.map(b => b.text).join('');
-        messages.push({ role: 'system', content: flatPrompt });
-      }
-    } else {
-      // Fallback: manual concatenation (original behavior) — no cache markers
-      this.cacheableSystemBlocks = null;
-      let systemPrompt = this.config.systemPrompt;
-      if (rulesContent) systemPrompt += '\n\n' + rulesContent;
-      if (skillsPrompt) systemPrompt += skillsPrompt;
-      if (combinedContext.length > 0) {
-        systemPrompt += '\n\nRelevant context:\n' + combinedContext;
-      }
-      if (toolDescriptions) {
-        systemPrompt += '\n\nAvailable tools:\n' + toolDescriptions;
-      }
-
-      // Safety check: ensure system prompt is not empty
-      if (!systemPrompt || systemPrompt.trim().length === 0) {
-        log.warn('Empty system prompt detected, using fallback');
-        systemPrompt = this.config.systemPrompt || 'You are a helpful AI assistant.';
-      }
-
-      messages.push({ role: 'system', content: systemPrompt });
-    }
-
-    // Add existing conversation
-    for (const msg of this.state.messages) {
-      if (msg.role !== 'system') {
-        messages.push(msg);
-      }
-    }
-
-    // Add current task
-    messages.push({ role: 'user', content: task });
-
-    // Track system prompt length for context % estimation
-    const sysMsg = messages.find(m => m.role === 'system');
-    if (sysMsg) {
-      const content = typeof sysMsg.content === 'string' ? sysMsg.content : JSON.stringify(sysMsg.content);
-      this.lastSystemPromptLength = content.length;
-    }
-
-    return messages;
+    return doBuildMessages(this as unknown as MessageBuilderDeps, task);
   }
 
   // ===========================================================================
@@ -2059,7 +1156,8 @@ export class ProductionAgent {
       skillManager: this.skillManager, semanticCache: this.semanticCache,
       lspManager: this.lspManager, threadManager: this.threadManager,
       interactivePlanner: this.interactivePlanner, recursiveContext: this.recursiveContext,
-      fileChangeTracker: this.fileChangeTracker, capabilitiesRegistry: this.capabilitiesRegistry,
+      fileChangeTracker: this.fileChangeTracker, typeCheckerState: this.typeCheckerState,
+      capabilitiesRegistry: this.capabilitiesRegistry,
       rules: this.rules, stateMachine: this.stateMachine,
       lastComplexityAssessment: this.lastComplexityAssessment,
       cacheableSystemBlocks: this.cacheableSystemBlocks,
@@ -2404,18 +1502,7 @@ export class ProductionAgent {
     contentAfter?: string;
     toolCallId?: string;
   }): Promise<number> {
-    if (!this.fileChangeTracker) {
-      return -1;
-    }
-
-    return this.fileChangeTracker.recordChange({
-      filePath: params.filePath,
-      operation: params.operation,
-      contentBefore: params.contentBefore,
-      contentAfter: params.contentAfter,
-      turnNumber: this.state.iteration,
-      toolCallId: params.toolCallId,
-    });
+    return doTrackFileChange(this as unknown as SessionApiDeps, params);
   }
 
   /**
@@ -2423,10 +1510,7 @@ export class ProductionAgent {
    * Returns null if file change tracking is not enabled.
    */
   async undoLastFileChange(filePath: string): Promise<import('./integrations/index.js').UndoResult | null> {
-    if (!this.fileChangeTracker) {
-      return null;
-    }
-    return this.fileChangeTracker.undoLastChange(filePath);
+    return doUndoLastFileChange(this as unknown as SessionApiDeps, filePath);
   }
 
   /**
@@ -2434,10 +1518,7 @@ export class ProductionAgent {
    * Returns null if file change tracking is not enabled.
    */
   async undoCurrentTurn(): Promise<import('./integrations/index.js').UndoResult[] | null> {
-    if (!this.fileChangeTracker) {
-      return null;
-    }
-    return this.fileChangeTracker.undoTurn(this.state.iteration);
+    return doUndoCurrentTurn(this as unknown as SessionApiDeps);
   }
 
   /**
@@ -2454,32 +1535,7 @@ export class ProductionAgent {
    * Reset agent state.
    */
   reset(): void {
-    this.state = {
-      status: 'idle',
-      messages: [],
-      plan: undefined,
-      memoryContext: [],
-      metrics: {
-        totalTokens: 0,
-        inputTokens: 0,
-        outputTokens: 0,
-        estimatedCost: 0,
-        llmCalls: 0,
-        toolCalls: 0,
-        duration: 0,
-        successCount: 0,
-        failureCount: 0,
-        cancelCount: 0,
-        retryCount: 0,
-      },
-      iteration: 0,
-    };
-
-    this.memory?.clear();
-    this.observability?.metrics?.reset();
-    this.planning?.clearPlan();
-
-    this.observability?.logger?.info('Agent state reset');
+    doReset(this as unknown as SessionApiDeps);
   }
 
   /**
@@ -2487,15 +1543,7 @@ export class ProductionAgent {
    * @deprecated Use loadState() for full state restoration
    */
   loadMessages(messages: Message[]): void {
-    this.state.messages = [...messages];
-
-    // Sync to threadManager if enabled
-    if (this.threadManager) {
-      const thread = this.threadManager.getActiveThread();
-      thread.messages = [...messages];
-    }
-
-    this.observability?.logger?.info('Messages loaded', { count: messages.length });
+    doLoadMessages(this as unknown as SessionApiDeps, messages);
   }
 
   /**
@@ -2508,13 +1556,7 @@ export class ProductionAgent {
     plan?: AgentPlan;
     memoryContext?: string[];
   } {
-    return {
-      messages: this.state.messages,
-      iteration: this.state.iteration,
-      metrics: { ...this.state.metrics },
-      plan: this.state.plan ? { ...this.state.plan } : undefined,
-      memoryContext: this.state.memoryContext ? [...this.state.memoryContext] : undefined,
-    };
+    return doGetSerializableState(this as unknown as SessionApiDeps);
   }
 
   /**
@@ -2533,86 +1575,7 @@ export class ProductionAgent {
       memoryContext?: string[];
     } | null;
   } {
-    const errors: string[] = [];
-    const warnings: string[] = [];
-
-    // Check if data is an object
-    if (!data || typeof data !== 'object') {
-      errors.push('Checkpoint data must be an object');
-      return { valid: false, errors, warnings, sanitized: null };
-    }
-
-    const checkpoint = data as Record<string, unknown>;
-
-    // Validate messages array (required)
-    if (!checkpoint.messages) {
-      errors.push('Checkpoint missing required "messages" field');
-    } else if (!Array.isArray(checkpoint.messages)) {
-      errors.push('Checkpoint "messages" must be an array');
-    } else {
-      // Validate each message has required fields
-      for (let i = 0; i < checkpoint.messages.length; i++) {
-        const msg = checkpoint.messages[i] as Record<string, unknown>;
-        if (!msg || typeof msg !== 'object') {
-          errors.push(`Message at index ${i} is not an object`);
-          continue;
-        }
-        if (!msg.role || typeof msg.role !== 'string') {
-          errors.push(`Message at index ${i} missing valid "role" field`);
-        }
-        if (msg.content !== undefined && msg.content !== null && typeof msg.content !== 'string') {
-          // Content can be undefined for tool call messages
-          warnings.push(`Message at index ${i} has non-string content (type: ${typeof msg.content})`);
-        }
-      }
-    }
-
-    // Validate iteration (optional but should be non-negative number)
-    if (checkpoint.iteration !== undefined) {
-      if (typeof checkpoint.iteration !== 'number' || checkpoint.iteration < 0) {
-        warnings.push(`Invalid iteration value: ${checkpoint.iteration}, will use default`);
-      }
-    }
-
-    // Validate metrics (optional)
-    if (checkpoint.metrics !== undefined && checkpoint.metrics !== null) {
-      if (typeof checkpoint.metrics !== 'object') {
-        warnings.push('Metrics field is not an object, will be ignored');
-      }
-    }
-
-    // Validate memoryContext (optional)
-    if (checkpoint.memoryContext !== undefined && checkpoint.memoryContext !== null) {
-      if (!Array.isArray(checkpoint.memoryContext)) {
-        warnings.push('memoryContext is not an array, will be ignored');
-      }
-    }
-
-    // If we have critical errors, fail validation
-    if (errors.length > 0) {
-      return { valid: false, errors, warnings, sanitized: null };
-    }
-
-    // Build sanitized checkpoint
-    const messages = (checkpoint.messages as Message[]).filter(
-      (msg): msg is Message => msg && typeof msg === 'object' && typeof msg.role === 'string'
-    );
-
-    const sanitized = {
-      messages,
-      iteration: typeof checkpoint.iteration === 'number' && checkpoint.iteration >= 0
-        ? checkpoint.iteration
-        : Math.floor(messages.length / 2),
-      metrics: typeof checkpoint.metrics === 'object' && checkpoint.metrics !== null
-        ? checkpoint.metrics as Partial<AgentMetrics>
-        : undefined,
-      plan: checkpoint.plan as AgentPlan | undefined,
-      memoryContext: Array.isArray(checkpoint.memoryContext)
-        ? checkpoint.memoryContext as string[]
-        : undefined,
-    };
-
-    return { valid: true, errors, warnings, sanitized };
+    return doValidateCheckpoint(data);
   }
 
   /**
@@ -2627,75 +1590,7 @@ export class ProductionAgent {
     plan?: AgentPlan;
     memoryContext?: string[];
   }): void {
-    // Validate checkpoint data
-    const validation = this.validateCheckpoint(savedState);
-
-    // Log warnings
-    for (const warning of validation.warnings) {
-      log.warn('Checkpoint validation warning', { warning });
-      this.observability?.logger?.warn('Checkpoint validation warning', { warning });
-    }
-
-    // Fail on validation errors
-    if (!validation.valid || !validation.sanitized) {
-      const errorMsg = `Invalid checkpoint: ${validation.errors.join('; ')}`;
-      this.observability?.logger?.error('Checkpoint validation failed', { errors: validation.errors });
-      throw new Error(errorMsg);
-    }
-
-    // Use sanitized data
-    const sanitized = validation.sanitized;
-
-    // Restore messages
-    this.state.messages = [...sanitized.messages];
-
-    // Restore iteration (already validated/defaulted in sanitized)
-    this.state.iteration = sanitized.iteration;
-
-    // Restore metrics (merge with defaults)
-    if (sanitized.metrics) {
-      this.state.metrics = {
-        totalTokens: sanitized.metrics.totalTokens ?? 0,
-        inputTokens: sanitized.metrics.inputTokens ?? 0,
-        outputTokens: sanitized.metrics.outputTokens ?? 0,
-        estimatedCost: sanitized.metrics.estimatedCost ?? 0,
-        llmCalls: sanitized.metrics.llmCalls ?? 0,
-        toolCalls: sanitized.metrics.toolCalls ?? 0,
-        duration: sanitized.metrics.duration ?? 0,
-        reflectionAttempts: sanitized.metrics.reflectionAttempts,
-        successCount: sanitized.metrics.successCount ?? 0,
-        failureCount: sanitized.metrics.failureCount ?? 0,
-        cancelCount: sanitized.metrics.cancelCount ?? 0,
-        retryCount: sanitized.metrics.retryCount ?? 0,
-      };
-    }
-
-    // Restore plan if present
-    if (sanitized.plan) {
-      this.state.plan = { ...sanitized.plan };
-      // Sync with planning manager if enabled
-      if (this.planning) {
-        this.planning.loadPlan(sanitized.plan);
-      }
-    }
-
-    // Restore memory context if present
-    if (sanitized.memoryContext) {
-      this.state.memoryContext = [...sanitized.memoryContext];
-    }
-
-    // Sync to threadManager if enabled
-    if (this.threadManager) {
-      const thread = this.threadManager.getActiveThread();
-      thread.messages = [...sanitized.messages];
-    }
-
-    this.observability?.logger?.info('State loaded', {
-      messageCount: sanitized.messages.length,
-      iteration: this.state.iteration,
-      hasPlan: !!sanitized.plan,
-      hasMemoryContext: !!sanitized.memoryContext,
-    });
+    doLoadState(this as unknown as SessionApiDeps, savedState);
   }
 
   /**
@@ -3788,6 +2683,10 @@ If the task is a simple question or doesn't need specialized handling, set bestA
    */
   setStore(store: SQLiteStore): void {
     this.store = store;
+    // Wire persistence to codebase context for warm startup across sessions
+    if (this.codebaseContext) {
+      this.codebaseContext.setPersistenceStore(store);
+    }
   }
 
   /**
@@ -3821,6 +2720,13 @@ If the task is a simple question or doesn't need specialized handling, set bestA
    */
   cycleMode(): AgentMode {
     return this.modeManager.cycleMode();
+  }
+
+  /**
+   * Get type checker state for TUI diagnostics display.
+   */
+  getTypeCheckerState(): import('./integrations/safety/type-checker.js').TypeCheckerState | null {
+    return this.typeCheckerState;
   }
 
   /**
@@ -4176,231 +3082,6 @@ If the task is a simple question or doesn't need specialized handling, set bestA
 }
 
 // =============================================================================
-// FACTORY
-// =============================================================================
-
-/**
- * Create a production agent with the given configuration.
- */
-export function createProductionAgent(
-  config: Partial<ProductionAgentConfig> & { provider: LLMProvider }
-): ProductionAgent {
-  return new ProductionAgent(config);
-}
-
-// =============================================================================
-// BUILDER PATTERN
-// =============================================================================
-
-/**
- * Builder for creating customized production agents.
- */
-export class ProductionAgentBuilder {
-  private config: Partial<ProductionAgentConfig> = {};
-
-  /**
-   * Set the LLM provider.
-   */
-  provider(provider: LLMProvider): this {
-    this.config.provider = provider;
-    return this;
-  }
-
-  /**
-   * Set the model.
-   */
-  model(model: string): this {
-    this.config.model = model;
-    return this;
-  }
-
-  /**
-   * Set the system prompt.
-   */
-  systemPrompt(prompt: string): this {
-    this.config.systemPrompt = prompt;
-    return this;
-  }
-
-  /**
-   * Add tools.
-   */
-  tools(tools: ToolDefinition[]): this {
-    this.config.tools = tools;
-    return this;
-  }
-
-  /**
-   * Configure hooks.
-   */
-  hooks(config: ProductionAgentConfig['hooks']): this {
-    this.config.hooks = config;
-    return this;
-  }
-
-  /**
-   * Configure plugins.
-   */
-  plugins(config: ProductionAgentConfig['plugins']): this {
-    this.config.plugins = config;
-    return this;
-  }
-
-  /**
-   * Configure memory.
-   */
-  memory(config: ProductionAgentConfig['memory']): this {
-    this.config.memory = config;
-    return this;
-  }
-
-  /**
-   * Configure planning.
-   */
-  planning(config: ProductionAgentConfig['planning']): this {
-    this.config.planning = config;
-    return this;
-  }
-
-  /**
-   * Configure reflection.
-   */
-  reflection(config: ProductionAgentConfig['reflection']): this {
-    this.config.reflection = config;
-    return this;
-  }
-
-  /**
-   * Configure observability.
-   */
-  observability(config: ProductionAgentConfig['observability']): this {
-    this.config.observability = config;
-    return this;
-  }
-
-  /**
-   * Configure sandbox.
-   */
-  sandbox(config: ProductionAgentConfig['sandbox']): this {
-    this.config.sandbox = config;
-    return this;
-  }
-
-  /**
-   * Configure human-in-the-loop.
-   */
-  humanInLoop(config: ProductionAgentConfig['humanInLoop']): this {
-    this.config.humanInLoop = config;
-    return this;
-  }
-
-  /**
-   * Configure routing.
-   */
-  routing(config: ProductionAgentConfig['routing']): this {
-    this.config.routing = config;
-    return this;
-  }
-
-  /**
-   * Configure multi-agent coordination (Lesson 17).
-   */
-  multiAgent(config: ProductionAgentConfig['multiAgent']): this {
-    this.config.multiAgent = config;
-    return this;
-  }
-
-  /**
-   * Add a role to multi-agent config.
-   */
-  addRole(role: AgentRoleConfig): this {
-    // Handle undefined, false, or disabled config
-    if (!this.config.multiAgent) {
-      this.config.multiAgent = { enabled: true, roles: [] };
-    }
-    // Ensure roles array exists
-    const multiAgentConfig = this.config.multiAgent as MultiAgentConfig;
-    if (!multiAgentConfig.roles) {
-      multiAgentConfig.roles = [];
-    }
-    multiAgentConfig.roles.push(role);
-    return this;
-  }
-
-  /**
-   * Configure ReAct pattern (Lesson 18).
-   */
-  react(config: ProductionAgentConfig['react']): this {
-    this.config.react = config;
-    return this;
-  }
-
-  /**
-   * Configure execution policies (Lesson 23).
-   */
-  executionPolicy(config: ProductionAgentConfig['executionPolicy']): this {
-    this.config.executionPolicy = config;
-    return this;
-  }
-
-  /**
-   * Configure thread management (Lesson 24).
-   */
-  threads(config: ProductionAgentConfig['threads']): this {
-    this.config.threads = config;
-    return this;
-  }
-
-  /**
-   * Configure skills system.
-   */
-  skills(config: ProductionAgentConfig['skills']): this {
-    this.config.skills = config;
-    return this;
-  }
-
-  /**
-   * Set max iterations.
-   */
-  maxIterations(max: number): this {
-    this.config.maxIterations = max;
-    return this;
-  }
-
-  /**
-   * Set timeout.
-   */
-  timeout(ms: number): this {
-    this.config.timeout = ms;
-    return this;
-  }
-
-  /**
-   * Disable a feature.
-   */
-  disable(feature: keyof Omit<ProductionAgentConfig, 'provider' | 'tools' | 'systemPrompt' | 'model' | 'maxIterations' | 'timeout'>): this {
-    (this.config as Record<string, unknown>)[feature] = false;
-    return this;
-  }
-
-  /**
-   * Build the agent.
-   */
-  build(): ProductionAgent {
-    if (!this.config.provider) {
-      throw new Error('Provider is required');
-    }
-    return new ProductionAgent(this.config as Partial<ProductionAgentConfig> & { provider: LLMProvider });
-  }
-}
-
-/**
- * Start building a production agent.
- */
-export function buildAgent(): ProductionAgentBuilder {
-  return new ProductionAgentBuilder();
-}
-
-// =============================================================================
-// Re-export from core for backward compatibility
+// Re-exports for backward compatibility
 export { parseStructuredClosureReport } from './core/index.js';
+export { buildAgent, ProductionAgentBuilder, createProductionAgent } from './agent/index.js';

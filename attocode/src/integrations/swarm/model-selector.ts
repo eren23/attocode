@@ -6,7 +6,7 @@
  */
 
 import type { SwarmWorkerSpec, WorkerCapability, ModelHealthRecord } from './types.js';
-import { logger } from '../logger.js';
+import { logger } from '../utilities/logger.js';
 
 // ─── OpenRouter Model API Types ────────────────────────────────────────────
 

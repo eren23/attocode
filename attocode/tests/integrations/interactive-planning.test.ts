@@ -14,7 +14,7 @@ import {
   type InteractivePlannerEvent,
   type InteractivePlan,
   type PlanStep,
-} from '../../src/integrations/interactive-planning.js';
+} from '../../src/integrations/tasks/interactive-planning.js';
 
 // =============================================================================
 // TEST HELPERS

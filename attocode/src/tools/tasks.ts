@@ -9,7 +9,7 @@
  */
 
 import type { ToolDefinition } from '../types.js';
-import type { TaskManager, Task, CreateTaskOptions, UpdateTaskOptions, TaskStatus } from '../integrations/task-manager.js';
+import type { TaskManager, Task, CreateTaskOptions, UpdateTaskOptions, TaskStatus } from '../integrations/tasks/task-manager.js';
 
 // =============================================================================
 // TOOL PARAMETERS

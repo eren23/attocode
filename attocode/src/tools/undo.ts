@@ -18,7 +18,7 @@
 
 import { z } from 'zod';
 import type { ToolDefinition, ToolResult, DangerLevel } from './types.js';
-import type { FileChangeTracker } from '../integrations/file-change-tracker.js';
+import type { FileChangeTracker } from '../integrations/utilities/file-change-tracker.js';
 
 // =============================================================================
 // TYPES

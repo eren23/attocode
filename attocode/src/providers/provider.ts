@@ -6,7 +6,7 @@
 
 import type { LLMProvider, ProviderConfig } from './types.js';
 import { ProviderError } from './types.js';
-import { logger } from '../integrations/logger.js';
+import { logger } from '../integrations/utilities/logger.js';
 
 // =============================================================================
 // PROVIDER REGISTRY

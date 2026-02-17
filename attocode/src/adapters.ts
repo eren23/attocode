@@ -11,11 +11,13 @@ import type {
   ChatResponse as ProductionChatResponse,
   ToolDefinition as ProductionToolDefinition,
   Message as ProductionMessage,
+  StreamChunk,
 } from './types.js';
 
 import type {
   LLMProviderWithTools,
   ToolDefinitionSchema,
+  ChatOptionsWithTools,
 } from './providers/types.js';
 
 import { stableStringify } from './integrations/index.js';
@@ -24,7 +26,7 @@ import type { ToolDescription } from './tools/types.js';
 import type { ToolRegistry } from './tools/registry.js';
 
 import { safeParseJson } from './tricks/json-utils.js';
-import { logger } from './integrations/logger.js';
+import { logger } from './integrations/utilities/logger.js';
 
 // =============================================================================
 // PROVIDER ADAPTER
@@ -86,7 +88,7 @@ export class ProviderAdapter implements ProductionLLMProvider {
     });
 
     // Convert response to ProductionChatResponse
-    return {
+    const result: ProductionChatResponse = {
       content: response.content,
       thinking: response.thinking,
       stopReason: response.stopReason,
@@ -127,6 +129,73 @@ export class ProviderAdapter implements ProductionLLMProvider {
       } : undefined,
       model: model,
     };
+
+    return result;
+  }
+
+  async *stream(
+    messages: ProductionMessage[],
+    options?: ProductionChatOptions
+  ): AsyncIterable<StreamChunk> {
+    if (!this.provider.chatWithToolsStream) {
+      return;
+    }
+
+    // Convert messages same way as chat()
+    const providerMessages = messages.map(m => ({
+      role: m.role as 'system' | 'user' | 'assistant' | 'tool',
+      content: m.content,
+      tool_calls: m.toolCalls?.map(tc => ({
+        id: tc.id,
+        type: 'function' as const,
+        function: {
+          name: tc.name,
+          arguments: stableStringify(tc.arguments),
+        },
+      })),
+      tool_call_id: m.toolCallId,
+      name: m.toolCallId ? messages.find(msg =>
+        msg.toolCalls?.some(tc => tc.id === m.toolCallId)
+      )?.toolCalls?.find(tc => tc.id === m.toolCallId)?.name : undefined,
+    }));
+
+    const toolSchemas: ToolDefinitionSchema[] | undefined = options?.tools?.map(t => ({
+      type: 'function' as const,
+      function: {
+        name: t.name,
+        description: t.description,
+        parameters: t.parameters,
+      },
+    }));
+
+    const model = options?.model || this.defaultModel;
+
+    const providerOptions: ChatOptionsWithTools = {
+      tools: toolSchemas,
+      tool_choice: toolSchemas && toolSchemas.length > 0 ? 'auto' : undefined,
+      model,
+      maxTokens: options?.maxTokens,
+    };
+
+    // Map detailed streaming chunks to production StreamChunk format
+    for await (const chunk of this.provider.chatWithToolsStream(providerMessages, providerOptions)) {
+      const t = chunk.type;
+      if (t === 'text') {
+        yield { type: 'text' as const, content: chunk.content };
+      } else if (t === 'tool_call_start' || t === 'tool_call_end') {
+        yield {
+          type: 'tool_call' as const,
+          toolCall: chunk.toolCall
+            ? { id: chunk.toolCallId || '', name: chunk.toolCall.name || '', arguments: (chunk.toolCall.arguments as Record<string, unknown>) || {} }
+            : undefined,
+        };
+      } else if (t === 'done') {
+        yield { type: 'done' as const };
+      } else if (t === 'error') {
+        yield { type: 'error' as const, error: chunk.error };
+      }
+      // tool_call_delta and usage have no equivalent in production StreamChunk
+    }
   }
 }
 

@@ -7,7 +7,7 @@ import {
   createSubagentHandle,
   SubagentSupervisor,
   createSubagentSupervisor,
-} from '../src/integrations/async-subagent.js';
+} from '../src/integrations/agents/async-subagent.js';
 
 function makeSuccessResult() {
   return {

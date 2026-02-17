@@ -14,7 +14,7 @@ import {
   quickShouldIgnore,
   getSampleAgentignore,
   getBuiltinIgnorePatterns,
-} from '../src/integrations/ignore.js';
+} from '../src/integrations/utilities/ignore.js';
 
 describe('IgnoreManager', () => {
   let manager: IgnoreManager;

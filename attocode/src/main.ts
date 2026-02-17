@@ -38,7 +38,7 @@ import { DEFAULT_PROVIDER_RESILIENCE_CONFIG } from './defaults.js';
 import type { ProviderResilienceConfig } from './types.js';
 
 // Agent and tools
-import { createProductionAgent } from './agent.js';
+import { createProductionAgent } from './agent/index.js';
 import { ProviderAdapter, convertToolsFromRegistry } from './adapters.js';
 import { createStandardRegistry } from './tools/standard.js';
 
@@ -57,7 +57,7 @@ import { startTUIMode, startProductionREPL } from './modes/index.js';
 import { createEventDisplay } from './tui/event-display.js';
 
 // Persistence debug for --debug flag
-import { persistenceDebug } from './integrations/persistence.js';
+import { persistenceDebug } from './integrations/persistence/persistence.js';
 
 // Process handlers for graceful shutdown
 import { installProcessHandlers } from './core/process-handlers.js';
@@ -67,11 +67,13 @@ import {
   createHealthChecker,
   createFileSystemHealthCheck,
   createNetworkHealthCheck,
+  createProviderHealthCheck,
+  createSQLiteHealthCheck,
   formatHealthReport,
-} from './integrations/health-check.js';
+} from './integrations/quality/health-check.js';
 
 // Structured logger
-import { logger, configureLogger, ConsoleSink, MemorySink } from './integrations/logger.js';
+import { logger, configureLogger, ConsoleSink, MemorySink } from './integrations/utilities/logger.js';
 
 // Swarm mode support
 import { DEFAULT_SWARM_CONFIG, autoDetectWorkerModels, type SwarmConfig } from './integrations/swarm/index.js';
@@ -368,6 +370,14 @@ async function main(): Promise<void> {
   // Network check uses the provider's API endpoint
   const networkCheck = createNetworkHealthCheck('https://api.anthropic.com');
   healthChecker.register(networkCheck.name, networkCheck.check, networkCheck);
+
+  // LLM provider check verifies the provider can respond
+  const providerCheck = createProviderHealthCheck(provider as any, provider.name);
+  healthChecker.register(providerCheck.name, providerCheck.check, providerCheck);
+
+  // SQLite check verifies session persistence database
+  const sqliteCheck = createSQLiteHealthCheck('.agent/sessions/sessions.db');
+  healthChecker.register(sqliteCheck.name, sqliteCheck.check, sqliteCheck);
 
   // Run initial health check (non-blocking)
   healthChecker.checkAll().then(report => {

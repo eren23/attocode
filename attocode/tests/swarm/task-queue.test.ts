@@ -4,7 +4,7 @@
 import { describe, it, expect } from 'vitest';
 import { createSwarmTaskQueue } from '../../src/integrations/swarm/task-queue.js';
 import { DEFAULT_SWARM_CONFIG } from '../../src/integrations/swarm/types.js';
-import type { SmartDecompositionResult, SmartSubtask, DependencyGraph } from '../../src/integrations/smart-decomposer.js';
+import type { SmartDecompositionResult, SmartSubtask, DependencyGraph } from '../../src/integrations/tasks/smart-decomposer.js';
 import type { SwarmConfig, SwarmTaskResult, FixupTask } from '../../src/integrations/swarm/types.js';
 
 function makeSubtask(overrides: Partial<SmartSubtask> = {}): SmartSubtask {

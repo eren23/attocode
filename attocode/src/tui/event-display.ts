@@ -7,7 +7,7 @@
 
 import type { AgentEvent } from '../types.js';
 import type { SQLiteStore } from '../integrations/index.js';
-import { logger } from '../integrations/logger.js';
+import { logger } from '../integrations/utilities/logger.js';
 
 /**
  * Create an event display handler for console output.

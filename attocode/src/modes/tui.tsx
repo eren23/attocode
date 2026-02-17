@@ -13,7 +13,7 @@
  * - Session persistence with checkpoints
  */
 
-import { createProductionAgent } from '../agent.js';
+import { createProductionAgent } from '../agent/index.js';
 import { ProviderAdapter, convertToolsFromRegistry, createTUIApprovalBridge } from '../adapters.js';
 import { createStandardRegistry } from '../tools/standard.js';
 import { TUIPermissionChecker } from '../tools/permission.js';
@@ -35,15 +35,15 @@ import {
   saveCheckpointToStore,
   loadSessionState,
   type AnySessionStore,
-} from '../integrations/persistence.js';
+} from '../integrations/persistence/persistence.js';
 
 import { getMCPConfigPaths } from '../paths.js';
 import { showSessionPicker, showQuickPicker, formatSessionsTable } from '../session-picker.js';
-import { TUI_ROOT_BUDGET } from '../integrations/economics.js';
-import { createLSPManager } from '../integrations/lsp.js';
+import { TUI_ROOT_BUDGET } from '../integrations/budget/economics.js';
+import { createLSPManager } from '../integrations/lsp/lsp.js';
 import { createLSPFileTools } from '../agent-tools/lsp-file-tools.js';
-import { initPricingCache } from '../integrations/openrouter-pricing.js';
-import { logger } from '../integrations/logger.js';
+import { initPricingCache } from '../integrations/utilities/openrouter-pricing.js';
+import { logger } from '../integrations/utilities/logger.js';
 
 // Import TUI components and utilities
 import { TUIApp, type TUIAppProps, checkTUICapabilities } from '../tui/index.js';
@@ -330,6 +330,24 @@ export async function startTUIMode(
     if (dlq) {
       registry.setDeadLetterQueue(dlq, currentSessionId);
       mcpClient.setDeadLetterQueue(dlq, currentSessionId);
+
+      // Set up retry executor for tool operations
+      dlq.setRetryExecutor(async (item) => {
+        const args = JSON.parse(item.args);
+        if (item.operation.startsWith('tool:')) {
+          const toolName = item.operation.slice(5);
+          try {
+            const result = await registry.execute(toolName, args);
+            return result.success;
+          } catch {
+            return false;
+          }
+        }
+        return false;
+      });
+
+      // Start periodic retry loop (every 2 minutes, non-blocking)
+      dlq.startRetryLoop(120000);
     }
 
     // If resuming, load the session state

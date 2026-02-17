@@ -13,8 +13,9 @@ import type {
 
 import type { AgentContext } from './types.js';
 import type { MessageWithContent } from '../providers/types.js';
+import { estimateTokenCount } from '../integrations/utilities/token-estimate.js';
 
-import { createComponentLogger } from '../integrations/logger.js';
+import { createComponentLogger } from '../integrations/utilities/logger.js';
 
 const log = createComponentLogger('ResponseHandler');
 
@@ -124,7 +125,7 @@ export async function callLLM(
         hasTools: ctx.tools.size > 0,
         hasImages: false,
         taskType: 'general',
-        estimatedTokens: messages.reduce((sum, m) => sum + m.content.length / 4, 0),
+        estimatedTokens: messages.reduce((sum, m) => sum + estimateTokenCount(m.content), 0),
       };
 
       const result = await ctx.routing.executeWithFallback(providerMessages, routingContext);

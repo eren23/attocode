@@ -12,7 +12,7 @@ import {
   sleep,
   isCancellationError,
   CancellationError,
-} from '../src/integrations/cancellation.js';
+} from '../src/integrations/budget/cancellation.js';
 
 describe('CancellationToken', () => {
   describe('createCancellationTokenSource', () => {

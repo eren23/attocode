@@ -3,10 +3,10 @@
  * Run with: npx tsx tests/integration-verify.ts
  */
 
-import { DEFAULT_PRICING, calculateCost } from '../src/integrations/openrouter-pricing.js';
-import { parseUnifiedDiff, applyDiff, generateDiff } from '../src/integrations/diff-utils.js';
-import { createImageRenderer, detectProtocol } from '../src/integrations/image-renderer.js';
-import { createSourcegraphClient, isSourcegraphConfigured } from '../src/integrations/sourcegraph.js';
+import { DEFAULT_PRICING, calculateCost } from '../src/integrations/utilities/openrouter-pricing.js';
+import { parseUnifiedDiff, applyDiff, generateDiff } from '../src/integrations/utilities/diff-utils.js';
+import { createImageRenderer, detectProtocol } from '../src/integrations/utilities/image-renderer.js';
+import { createSourcegraphClient, isSourcegraphConfigured } from '../src/integrations/utilities/sourcegraph.js';
 import { DEFAULT_TUI_STATE } from '../src/tui/types.js';
 
 console.log('=== Attocode Modernization Integration Verification ===\n');

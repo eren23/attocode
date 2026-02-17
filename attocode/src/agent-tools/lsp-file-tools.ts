@@ -9,7 +9,7 @@ import { z } from 'zod';
 import * as fs from 'node:fs/promises';
 import * as path from 'node:path';
 import type { ToolDefinition } from '../types.js';
-import type { LSPManager, LSPDiagnostic } from '../integrations/lsp.js';
+import type { LSPManager, LSPDiagnostic } from '../integrations/lsp/lsp.js';
 
 // =============================================================================
 // TYPES

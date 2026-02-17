@@ -8,7 +8,7 @@ import {
   validateAllTools,
   formatValidationSummary,
   createToolValidator,
-} from '../src/integrations/mcp-tool-validator.js';
+} from '../src/integrations/mcp/mcp-tool-validator.js';
 
 describe('validateToolDescription', () => {
   it('should score well-documented tool highly', () => {

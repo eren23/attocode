@@ -16,11 +16,14 @@ import { SwarmStatusPanel } from './components/SwarmStatusPanel.js';
 import type { SwarmStatus } from '../integrations/swarm/types.js';
 import { ToolCallItem, type ToolCallDisplayItem as ImportedToolCallDisplayItem } from './components/ToolCallItem.js';
 import { DebugPanel, useDebugBuffer } from './components/DebugPanel.js';
-import type { Task } from '../integrations/task-manager.js';
+import { DiagnosticsPanel } from './components/DiagnosticsPanel.js';
+import { runTypeCheck, getASTCacheStats } from '../integrations/index.js';
+import { estimateTokenCount } from '../integrations/utilities/token-estimate.js';
+import type { Task } from '../integrations/tasks/task-manager.js';
 import type { ProductionAgent } from '../agent.js';
-import type { SQLiteStore } from '../integrations/sqlite-store.js';
-import type { MCPClient } from '../integrations/mcp-client.js';
-import type { Compactor } from '../integrations/compaction.js';
+import type { SQLiteStore } from '../integrations/persistence/sqlite-store.js';
+import type { MCPClient } from '../integrations/mcp/mcp-client.js';
+import type { Compactor } from '../integrations/context/compaction.js';
 import type { ThemeColors, CommandPaletteItem } from './types.js';
 import { getTheme, getThemeNames } from './theme/index.js';
 import { ControlledCommandPalette } from './input/CommandPalette.js';
@@ -32,7 +35,7 @@ import { handleSkillsCommand, formatEnhancedSkillList } from '../commands/skills
 import { handleAgentsCommand, formatEnhancedAgentList } from '../commands/agents-commands.js';
 import { handleInitCommand } from '../commands/init-commands.js';
 import type { CommandOutput } from '../commands/types.js';
-import { createHistoryManager, type HistoryManager } from '../integrations/history.js';
+import { createHistoryManager, type HistoryManager } from '../integrations/persistence/history.js';
 import type { AgentResult } from '../types.js';
 
 // =============================================================================
@@ -116,7 +119,22 @@ interface TUIMessage {
 function buildAutoLoopPrompt(
   details: string | undefined,
   promptStyle: 'strict' | 'concise',
+  reason?: string,
+  openTasks?: { pending: number; inProgress: number; blocked: number },
 ): string {
+  // For open_tasks / budget_limit: the agent ran out of budget but has pending tasks
+  if (reason === 'open_tasks' || reason === 'budget_limit') {
+    const taskSummary = openTasks
+      ? `Open tasks: ${openTasks.pending} pending, ${openTasks.inProgress} in_progress, ${openTasks.blocked} blocked.`
+      : '';
+    return [
+      '[System] Previous run ended with incomplete tasks due to budget limits.',
+      taskSummary,
+      'Continue working on the remaining tasks. Pick up the next available task and execute it.',
+      details ? `Context: ${details}` : '',
+    ].filter(Boolean).join('\n');
+  }
+
   if (promptStyle === 'concise') {
     return `[System] Continue now and execute required actions immediately. Avoid future-intent phrasing. ${details ? `Context: ${details}` : ''}`.trim();
   }
@@ -154,15 +172,26 @@ export async function runWithIncompleteAutoLoop(
   const reasonChain: string[] = [result.completion.reason];
   let autoLoopRuns = 0;
 
+  const isRetryableReason = (reason: string) =>
+    reason === 'future_intent'
+    || reason === 'incomplete_action'
+    || reason === 'open_tasks'
+    || reason === 'budget_limit';
+
   while (
     !result.success
     && incompleteAutoLoop
-    && (result.completion.reason === 'future_intent' || result.completion.reason === 'incomplete_action')
+    && isRetryableReason(result.completion.reason)
     && autoLoopRuns < maxIncompleteAutoLoops
   ) {
     autoLoopRuns++;
     callbacks?.onRetry?.(autoLoopRuns, maxIncompleteAutoLoops);
-    const recoveryPrompt = buildAutoLoopPrompt(result.completion.details, promptStyle);
+    const recoveryPrompt = buildAutoLoopPrompt(
+      result.completion.details,
+      promptStyle,
+      result.completion.reason,
+      result.completion.openTasks,
+    );
     result = await agent.run(recoveryPrompt);
     reasonChain.push(result.completion.reason);
   }
@@ -247,6 +276,7 @@ interface MemoizedInputAreaProps {
   onToggleTasks?: () => void;
   onToggleDebug?: () => void;
   onToggleSwarm?: () => void;
+  onToggleDiagnostics?: () => void;
   onPageUp?: () => void;
   onPageDown?: () => void;
   onHome?: () => void;
@@ -285,6 +315,7 @@ const MemoizedInputArea = memo(function MemoizedInputArea({
   onToggleTasks,
   onToggleDebug,
   onToggleSwarm,
+  onToggleDiagnostics,
   onPageUp,
   onPageDown,
   onHome,
@@ -314,7 +345,7 @@ const MemoizedInputArea = memo(function MemoizedInputArea({
   // Store callbacks in refs so useInput doesn't re-subscribe on prop changes
   const callbacksRef = useRef({
     onSubmit, onCtrlC, onCtrlL, onCtrlP, onEscape,
-    onToggleToolExpand, onToggleThinking, onToggleTransparency, onToggleActiveAgents, onToggleTasks, onToggleDebug, onToggleSwarm,
+    onToggleToolExpand, onToggleThinking, onToggleTransparency, onToggleActiveAgents, onToggleTasks, onToggleDebug, onToggleSwarm, onToggleDiagnostics,
     onPageUp, onPageDown, onHome, onEnd,
     commandPaletteOpen, onCommandPaletteInput,
     approvalDialogOpen, approvalDenyReasonMode,
@@ -324,7 +355,7 @@ const MemoizedInputArea = memo(function MemoizedInputArea({
   });
   callbacksRef.current = {
     onSubmit, onCtrlC, onCtrlL, onCtrlP, onEscape,
-    onToggleToolExpand, onToggleThinking, onToggleTransparency, onToggleActiveAgents, onToggleTasks, onToggleDebug, onToggleSwarm,
+    onToggleToolExpand, onToggleThinking, onToggleTransparency, onToggleActiveAgents, onToggleTasks, onToggleDebug, onToggleSwarm, onToggleDiagnostics,
     onPageUp, onPageDown, onHome, onEnd,
     commandPaletteOpen, onCommandPaletteInput,
     approvalDialogOpen, approvalDenyReasonMode,
@@ -388,6 +419,11 @@ const MemoizedInputArea = memo(function MemoizedInputArea({
     // Alt+W / Option+W - Toggle swarm panel
     if (input === '\u2211' || (key.meta && input === 'w')) {
       cb.onToggleSwarm?.();
+      return;
+    }
+    // Alt+Y / Option+Y - Toggle diagnostics panel
+    if (input === '\u00a5' || (key.meta && input === 'y')) {
+      cb.onToggleDiagnostics?.();
       return;
     }
 
@@ -622,6 +658,7 @@ export function TUIApp({
   const [toolCalls, setToolCalls] = useState<ToolCallDisplayItem[]>([]);
   const [currentThemeName, setCurrentThemeName] = useState<string>(theme);
   const [contextTokens, setContextTokens] = useState(0);
+  const [budgetPct, setBudgetPct] = useState(0);
   const [elapsedTime, setElapsedTime] = useState(0);
   const processingStartRef = useRef<number | null>(null);
 
@@ -653,6 +690,7 @@ export function TUIApp({
   const [tasksExpanded, setTasksExpanded] = useState(true);
   const [debugExpanded, setDebugExpanded] = useState(false);
   const [swarmExpanded, setSwarmExpanded] = useState(true);
+  const [diagExpanded, setDiagExpanded] = useState(false);
 
   // Swarm status tracking (for Swarm Status Panel)
   const [swarmStatus, setSwarmStatus] = useState<SwarmStatus | null>(null);
@@ -1365,6 +1403,9 @@ export function TUIApp({
           '  /approve [n]      Approve plan',
           '  /reject           Reject plan',
           '',
+          '> DIAGNOSTICS',
+          '  /tsc              Run TypeScript type check',
+          '',
           '> TRACE ANALYSIS',
           '  /trace            Show trace summary',
           '  /trace --analyze  Run efficiency analysis',
@@ -1381,6 +1422,7 @@ export function TUIApp({
           '  Alt+K       Toggle tasks panel',
           '  Alt+D       Toggle debug panel',
           '  Alt+W       Toggle swarm panel',
+          '  Alt+Y       Toggle diagnostics panel',
           '========================',
         ].join('\n'));
         return;
@@ -1522,7 +1564,7 @@ export function TUIApp({
       case 'ctx': {
         const agentState = agent.getState();
         const mcpStats = mcpClient.getContextStats();
-        const estimateTokens = (str: string) => Math.ceil(str.length / 3.2);
+        const estimateTokens = (str: string) => estimateTokenCount(str);
         const systemPrompt = agent.getSystemPromptWithMode ? agent.getSystemPromptWithMode() : '';
         const systemTokens = estimateTokens(systemPrompt);
         const mcpTokens = mcpStats.summaryTokens + mcpStats.definitionTokens;
@@ -2149,6 +2191,29 @@ export function TUIApp({
         return;
       }
 
+      case 'tsc': {
+        const tcState = agent.getTypeCheckerState();
+        if (!tcState?.tsconfigDir) {
+          addMessage('system', 'No TypeScript project detected (no tsconfig.json found).');
+          return;
+        }
+        addMessage('system', 'Running tsc --noEmit...');
+        const tscResult = await runTypeCheck(tcState.tsconfigDir);
+        tcState.lastResult = tscResult;
+        tcState.tsEditsSinceLastCheck = 0;
+        tcState.hasRunOnce = true;
+        if (tscResult.success) {
+          addMessage('system', `[ok] TypeScript compilation clean (${tscResult.duration}ms)`);
+        } else {
+          const summary = tscResult.errors.slice(0, 10)
+            .map(e => `  ${e.file}(${e.line},${e.column}): ${e.code} — ${e.message}`)
+            .join('\n');
+          addMessage('system', `[X] ${tscResult.errorCount} TypeScript error(s) (${tscResult.duration}ms):\n${summary}`);
+        }
+        transparencyAggregatorRef.current?.processEvent({ type: 'diagnostics.tsc-check', errorCount: tscResult.errorCount, duration: tscResult.duration, trigger: 'manual' });
+        return;
+      }
+
       default:
         addMessage('system', `Unknown: /${cmd}. Try /help`);
     }
@@ -2205,7 +2270,7 @@ export function TUIApp({
 
       // Calculate current context size (what's actually in the window now)
       const agentState = agent.getState();
-      const estimateTokens = (str: string) => Math.ceil(str.length / 3.2);
+      const estimateTokens = (str: string) => estimateTokenCount(str);
       const messageTokens = agentState.messages.reduce((sum: number, m: any) =>
         sum + estimateTokens(typeof m.content === 'string' ? m.content : JSON.stringify(m.content)), 0);
       // Include system prompt overhead (codebase context, tools, rules)
@@ -2291,6 +2356,7 @@ export function TUIApp({
     { id: 'approve', label: 'Approve Plan', shortcut: '/approve', category: 'Plan', action: () => handleCommand('approve', []) },
     { id: 'reject', label: 'Reject Plan', shortcut: '/reject', category: 'Plan', action: () => handleCommand('reject', []) },
     { id: 'tools', label: 'List Tools', shortcut: '/tools', category: 'Debug', action: () => handleCommand('tools', []) },
+    { id: 'tsc', label: 'TypeScript Check', shortcut: '/tsc', category: 'Diagnostics', action: () => handleCommand('tsc', []) },
     { id: 'theme', label: 'Change Theme', shortcut: '/theme', category: 'Settings', action: () => handleCommand('theme', []) },
     { id: 'exit', label: 'Exit', shortcut: 'Ctrl+C', category: 'General', action: () => agent.cleanup().then(() => exit()) },
   ], [handleCommand, agent, exit]);
@@ -2504,14 +2570,27 @@ export function TUIApp({
     setSwarmExpanded(prev => !prev);
   }, []);
 
-  // Update context tokens (include system prompt overhead)
+  const handleToggleDiagnostics = useCallback(() => {
+    setDiagExpanded(prev => {
+      addMessage('system', !prev ? '[d] Diagnostics: visible (Alt+Y)' : '[^] Diagnostics: hidden');
+      return !prev;
+    });
+  }, [addMessage]);
+
+  // Update context tokens (include system prompt overhead) and budget health
   useEffect(() => {
     const agentState = agent.getState();
-    const estimateTokens = (str: string) => Math.ceil(str.length / 3.2);
+    const estimateTokens = (str: string) => estimateTokenCount(str);
     const messageTokens = agentState.messages.reduce((sum: number, m: any) =>
       sum + estimateTokens(typeof m.content === 'string' ? m.content : JSON.stringify(m.content)), 0);
     const systemPromptTokens = agent.getSystemPromptTokenEstimate?.() ?? 0;
     setContextTokens(messageTokens + systemPromptTokens);
+
+    // Update budget health from economics system
+    const budgetUsage = agent.getBudgetUsage?.();
+    if (budgetUsage) {
+      setBudgetPct(Math.round(budgetUsage.percentUsed));
+    }
   }, [status.tokens, messages.length, agent]);
 
   // Track elapsed time
@@ -2630,6 +2709,15 @@ export function TUIApp({
           />
         )}
 
+        {/* Diagnostics Panel (toggle with Alt+Y) */}
+        <DiagnosticsPanel
+          diagnostics={transparencyState?.diagnostics ?? { lastTscResult: null, recentSyntaxErrors: [] }}
+          typeCheckerState={agent.getTypeCheckerState()}
+          astCacheStats={diagExpanded ? getASTCacheStats() : null}
+          expanded={diagExpanded}
+          colors={colors}
+        />
+
         {/* Debug Panel (toggle with Alt+D) */}
         <DebugPanel
           entries={debugBuffer.entries}
@@ -2675,6 +2763,7 @@ export function TUIApp({
           onToggleTasks={handleToggleTasks}
           onToggleDebug={handleToggleDebug}
           onToggleSwarm={handleToggleSwarm}
+          onToggleDiagnostics={handleToggleDiagnostics}
           commandPaletteOpen={commandPaletteOpen}
           onCommandPaletteInput={handleCommandPaletteInput}
           approvalDialogOpen={!!pendingApproval}
@@ -2730,18 +2819,31 @@ export function TUIApp({
           </Box>
           <Box gap={2}>
             <Text color="#DDA0DD" dimColor>{modelShort}</Text>
-            {/* Mini context bar: [====----] 42% */}
+            {/* Mini context bar: ctx:[====----] 42% */}
             <Text color={contextPct > 70 ? '#FFD700' : colors.textMuted} dimColor>
-              {'[' + '='.repeat(Math.min(8, Math.round((contextPct / 100) * 8))) +
+              {'ctx:[' + '='.repeat(Math.min(8, Math.round((contextPct / 100) * 8))) +
                '-'.repeat(Math.max(0, 8 - Math.round((contextPct / 100) * 8))) + '] ' +
                contextPct + '%'}
             </Text>
+            {/* Budget health indicator */}
+            {budgetPct > 0 && (
+              <Text color={budgetPct >= 80 ? '#FF6B6B' : budgetPct >= 50 ? '#FFD700' : colors.textMuted} dimColor>
+                {'bud:' + budgetPct + '%'}
+              </Text>
+            )}
             <Text color="#98FB98" dimColor>{costStr}</Text>
             {gitBranch && <Text color="#87CEEB" dimColor>{gitBranch}</Text>}
             {/* Show learnings count if any */}
             {transparencyState?.activeLearnings && transparencyState.activeLearnings.length > 0 && (
               <Text color="#87CEEB" dimColor>L:{transparencyState.activeLearnings.length}</Text>
             )}
+            {/* TSC status indicator (only for TS projects) */}
+            {agent.getTypeCheckerState()?.tsconfigDir && (() => {
+              const tscRes = transparencyState?.diagnostics?.lastTscResult;
+              if (!tscRes) return <Text color={colors.textMuted} dimColor>tsc:—</Text>;
+              if (tscRes.success) return <Text color="#98FB98" dimColor>tsc:[ok]</Text>;
+              return <Text color={colors.error} dimColor>tsc:[X]{tscRes.errorCount}</Text>;
+            })()}
             <Text color={colors.textMuted} dimColor>^P:help</Text>
           </Box>
         </Box>

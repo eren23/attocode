@@ -24,7 +24,7 @@
 import React, { memo, useMemo, useState, useCallback } from 'react';
 import { Box, Text } from 'ink';
 import { diffWords } from 'diff';
-import type { UnifiedDiff, DiffHunk, DiffLine } from '../../integrations/diff-utils.js';
+import type { UnifiedDiff, DiffHunk, DiffLine } from '../../integrations/utilities/diff-utils.js';
 import type { ThemeColors } from '../types.js';
 import { tokenize, detectLanguage, getTokenColor, type Token } from '../syntax/index.js';
 

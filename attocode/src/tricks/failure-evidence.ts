@@ -35,7 +35,7 @@
  * ```
  */
 
-import { logger } from '../integrations/logger.js';
+import { logger } from '../integrations/utilities/logger.js';
 
 // =============================================================================
 // TYPES

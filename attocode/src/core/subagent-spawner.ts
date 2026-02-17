@@ -14,6 +14,7 @@ import type {
 } from '../types.js';
 
 import type { AgentContext, AgentContextMutators, SubAgentFactory } from './types.js';
+import { estimateTokenCount } from '../integrations/utilities/token-estimate.js';
 import type { SpawnConstraints } from '../tools/agent.js';
 
 import {
@@ -51,7 +52,7 @@ import {
 import {
   mergeApprovalScopeWithProfile,
   resolvePolicyProfile,
-} from '../integrations/policy-engine.js';
+} from '../integrations/safety/policy-engine.js';
 
 /** Duplicate spawn prevention window (60 seconds). */
 const SPAWN_DEDUP_WINDOW_MS = 60000;
@@ -486,7 +487,7 @@ export async function spawnAgent(
       const repoMap = ctx.codebaseContext.getRepoMap();
       if (repoMap) {
         // Lightweight repo map: file tree with key symbols (capped at 3000 tokens)
-        const { generateLightweightRepoMap } = await import('../integrations/codebase-context.js');
+        const { generateLightweightRepoMap } = await import('../integrations/context/codebase-context.js');
         repoContextStr = '\n\n**REPOSITORY STRUCTURE:**\n' + generateLightweightRepoMap(repoMap, 3000);
       }
     }
@@ -514,7 +515,7 @@ export async function spawnAgent(
       data: {
         agentId: agentName,
         parentAgentId: ctx.traceCollector.getSessionId() || 'unknown',
-        repoMapTokens: Math.ceil(repoContextStr.length / 4),
+        repoMapTokens: estimateTokenCount(repoContextStr),
         blackboardFindings: blackboardFindingsCount,
         modifiedFiles: modifiedFilesList,
         toolCount: agentTools.length,
@@ -628,9 +629,11 @@ export async function spawnAgent(
       agentId,
       blackboard: ctx.blackboard || undefined,
       fileCache: ctx.fileCache || undefined,
-      budget: agentDef.economicsTuning
-        ? { ...pooledBudget.budget, tuning: agentDef.economicsTuning }
-        : pooledBudget.budget,
+      budget: {
+        ...pooledBudget.budget,
+        ...(agentDef.economicsTuning ? { tuning: agentDef.economicsTuning } : {}),
+        ...(agentDef.enforcementMode ? { enforcementMode: agentDef.enforcementMode } : {}),
+      },
       sharedContextState: ctx.sharedContextState || undefined,
       sharedEconomicsState: ctx.sharedEconomicsState || undefined,
     });
@@ -798,6 +801,8 @@ export async function spawnAgent(
         output: finalOutput,
         metrics: {
           tokens: result.metrics.totalTokens,
+          inputTokens: result.metrics.inputTokens,
+          outputTokens: result.metrics.outputTokens,
           duration,
           toolCalls: result.metrics.toolCalls,
         },
@@ -1035,6 +1040,8 @@ export async function spawnAgent(
           output: baseOutput + partialResultSection + cancelledQueuedSummary,
           metrics: {
             tokens: subagentMetrics.totalTokens,
+            inputTokens: subagentMetrics.inputTokens,
+            outputTokens: subagentMetrics.outputTokens,
             duration,
             toolCalls: subagentMetrics.toolCalls,
           },

@@ -14,7 +14,7 @@ import {
   formatSkillList,
   getSampleSkillContent,
   getDefaultSkillDirectories,
-} from '../src/integrations/skills.js';
+} from '../src/integrations/skills/skills.js';
 
 describe('SkillManager', () => {
   let manager: SkillManager;

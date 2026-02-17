@@ -13,8 +13,9 @@ import {
   CodebaseContextManager,
   type CodeChunk,
   type RepoMap,
-} from '../../src/integrations/codebase-context.js';
-import type { LSPManager, LSPLocation } from '../../src/integrations/lsp.js';
+} from '../../src/integrations/context/codebase-context.js';
+import { uriToPath, extractSymbolName } from '../../src/integrations/context/code-selector.js';
+import type { LSPManager, LSPLocation } from '../../src/integrations/lsp/lsp.js';
 
 // =============================================================================
 // MOCK FACTORIES
@@ -678,20 +679,12 @@ describe('CodebaseContextManager.getEnhancedContext - Error Handling', () => {
 // =============================================================================
 
 describe('CodebaseContextManager URI Utilities', () => {
-  let manager: CodebaseContextManager;
-
-  beforeEach(() => {
-    manager = new CodebaseContextManager({ root: '/test/project' });
-  });
-
   it('should convert file:// URIs to paths', () => {
-    const uriToPath = (manager as any).uriToPath.bind(manager);
     expect(uriToPath('file:///src/auth.ts')).toBe('/src/auth.ts');
     expect(uriToPath('file://src/auth.ts')).toBe('src/auth.ts');
   });
 
   it('should pass through non-file URIs', () => {
-    const uriToPath = (manager as any).uriToPath.bind(manager);
     expect(uriToPath('src/auth.ts')).toBe('src/auth.ts');
   });
 });
@@ -701,15 +694,7 @@ describe('CodebaseContextManager URI Utilities', () => {
 // =============================================================================
 
 describe('CodebaseContextManager Symbol Extraction', () => {
-  let manager: CodebaseContextManager;
-
-  beforeEach(() => {
-    manager = new CodebaseContextManager({ root: '/test/project' });
-  });
-
   it('should extract function names from hover text', () => {
-    const extractSymbolName = (manager as any).extractSymbolName.bind(manager);
-
     expect(extractSymbolName('function validateUser(user: User): boolean')).toBe('validateUser');
     expect(extractSymbolName('const config = { ... }')).toBe('config');
     expect(extractSymbolName('class AuthService')).toBe('AuthService');
@@ -720,16 +705,12 @@ describe('CodebaseContextManager Symbol Extraction', () => {
   });
 
   it('should handle simple identifiers', () => {
-    const extractSymbolName = (manager as any).extractSymbolName.bind(manager);
-
     expect(extractSymbolName('myFunction(arg1, arg2)')).toBe('myFunction');
     expect(extractSymbolName('variableName: string')).toBe('variableName');
     expect(extractSymbolName('singleWord')).toBe('singleWord');
   });
 
   it('should return null for unrecognized patterns', () => {
-    const extractSymbolName = (manager as any).extractSymbolName.bind(manager);
-
     expect(extractSymbolName('')).toBeNull();
     expect(extractSymbolName('   ')).toBeNull();
     // Note: "123invalid" matches because the regex finds "invalid" substring
@@ -755,6 +736,7 @@ describe('CodebaseContextManager.getEnhancedContext - Editing File Priority', ()
     const repoMap = createMockRepoMap(chunks);
     (manager as any).repoMap = repoMap;
 
+    // Mock returns all chunks (budget fits all 3 = 600 tokens)
     vi.spyOn(manager, 'selectRelevantCode').mockResolvedValue({
       chunks: [...chunks].sort((a, b) => b.importance - a.importance),
       totalTokens: 600,
@@ -772,11 +754,11 @@ describe('CodebaseContextManager.getEnhancedContext - Editing File Priority', ()
     manager.setLSPManager(mockLSP);
 
     const result = await manager.getEnhancedContext({
-      maxTokens: 500, // Only room for 2 files
+      maxTokens: 1000, // Enough room for all files
       editingFile: 'src/auth.ts',
     });
 
-    // Editing file should be first despite lower importance
+    // Editing file should be present in the result
     expect(result.chunks.some(c => c.id === 'src/auth.ts')).toBe(true);
   });
 });

@@ -15,7 +15,7 @@ import {
   getSampleGlobalConfig,
   getSampleWorkspaceConfig,
   type ConfigLevel,
-} from '../src/integrations/hierarchical-config.js';
+} from '../src/integrations/utilities/hierarchical-config.js';
 
 // Test config type
 interface TestConfig {

@@ -8,7 +8,7 @@
 import * as readline from 'node:readline/promises';
 import { stdin, stdout } from 'node:process';
 
-import { createProductionAgent } from '../agent.js';
+import { createProductionAgent } from '../agent/index.js';
 import { ProviderAdapter, convertToolsFromRegistry, createInteractiveApprovalHandler } from '../adapters.js';
 import { createStandardRegistry } from '../tools/standard.js';
 import type { LLMProviderWithTools } from '../providers/types.js';
@@ -26,7 +26,7 @@ import {
   createDeadLetterQueue,
   type DeadLetterQueue,
 } from '../integrations/index.js';
-import { initModelCache } from '../integrations/openrouter-pricing.js';
+import { initModelCache } from '../integrations/utilities/openrouter-pricing.js';
 import {
   DEFAULT_POLICY_ENGINE_CONFIG,
   DEFAULT_SANDBOX_CONFIG,
@@ -37,7 +37,7 @@ import {
   saveCheckpointToStore,
   loadSessionState,
   type AnySessionStore,
-} from '../integrations/persistence.js';
+} from '../integrations/persistence/persistence.js';
 
 import { createEventDisplay, createJunctureLogger } from '../tui/event-display.js';
 import { createTUIRenderer } from '../tui/index.js';
@@ -45,8 +45,8 @@ import { getMCPConfigPaths } from '../paths.js';
 import { showSessionPicker, showQuickPicker } from '../session-picker.js';
 import { registerCleanupResource } from '../core/process-handlers.js';
 import { handleCommand, createConsoleOutput } from '../commands/handler.js';
-import { logger } from '../integrations/logger.js';
-import { TUI_ROOT_BUDGET } from '../integrations/economics.js';
+import { logger } from '../integrations/utilities/logger.js';
+import { TUI_ROOT_BUDGET } from '../integrations/budget/economics.js';
 
 // ANSI color helper
 const colors = {
@@ -353,6 +353,24 @@ export async function startProductionREPL(
       // Wire DLQ to registry and MCP client
       registry.setDeadLetterQueue(dlq, sessionId);
       mcpClient.setDeadLetterQueue(dlq, sessionId);
+
+      // Set up retry executor for tool operations
+      dlq.setRetryExecutor(async (item) => {
+        const args = JSON.parse(item.args);
+        if (item.operation.startsWith('tool:')) {
+          const toolName = item.operation.slice(5);
+          try {
+            const result = await registry.execute(toolName, args);
+            return result.success;
+          } catch {
+            return false;
+          }
+        }
+        return false;
+      });
+
+      // Start periodic retry loop (every 2 minutes, non-blocking)
+      dlq.startRetryLoop(120000);
     }
   }
 

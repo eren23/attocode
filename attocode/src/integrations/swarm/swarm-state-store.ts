@@ -42,6 +42,11 @@ export class SwarmStateStore {
     this.sessionId = sessionId ?? `swarm-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
     this.sessionDir = path.join(stateDir, this.sessionId);
     this.adapter = adapter;
+    // Resume: start numbering after existing checkpoints to avoid overwriting
+    try {
+      const files = fs.readdirSync(this.sessionDir).filter(f => f.startsWith('checkpoint-'));
+      this.checkpointCount = files.length;
+    } catch { /* dir doesn't exist yet */ }
   }
 
   get id(): string {

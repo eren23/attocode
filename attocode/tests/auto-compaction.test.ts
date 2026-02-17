@@ -9,8 +9,8 @@ import {
   AutoCompactionManager,
   createAutoCompactionManager,
   type AutoCompactionConfig,
-} from '../src/integrations/auto-compaction.js';
-import { Compactor, createCompactor } from '../src/integrations/compaction.js';
+} from '../src/integrations/context/auto-compaction.js';
+import { Compactor, createCompactor } from '../src/integrations/context/compaction.js';
 import type { Message } from '../src/types.js';
 
 // =============================================================================

@@ -13,7 +13,7 @@ import {
   combinedShouldContinue,
   isResourceLimitError,
   ResourceLimitError,
-} from '../src/integrations/resources.js';
+} from '../src/integrations/budget/resources.js';
 
 describe('ResourceManager', () => {
   let manager: ResourceManager;

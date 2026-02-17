@@ -29,9 +29,10 @@
  * ```
  */
 
+import { estimateTokenCount } from '../integrations/utilities/token-estimate.js';
 import { mkdir, appendFile } from 'fs/promises';
 import { join } from 'path';
-import { logger } from '../integrations/logger.js';
+import { logger } from '../integrations/utilities/logger.js';
 import { Tracer, createTracer } from '../observability/tracer.js';
 import { CacheBoundaryTracker, createCacheBoundaryTracker } from './cache-boundary-tracker.js';
 import type {
@@ -82,12 +83,13 @@ import type {
   CodebaseMapEntry,
   BlackboardEventEntry,
   BudgetPoolEntry,
+  BudgetCheckEntry,
   FileCacheEventEntry,
   ContextInjectionEntry,
 } from './types.js';
 import { DEFAULT_TRACE_CONFIG, DEFAULT_ENHANCED_TRACE_CONFIG } from './types.js';
 import type { AgentMetrics, Span } from '../observability/types.js';
-import { calculateCost as calculateOpenRouterCost } from '../integrations/openrouter-pricing.js';
+import { calculateCost as calculateOpenRouterCost } from '../integrations/utilities/openrouter-pricing.js';
 
 // =============================================================================
 // TYPES
@@ -126,6 +128,7 @@ export type TraceEvent =
   | { type: 'codebase.map'; data: CodebaseMapData }
   | { type: 'blackboard.event'; data: BlackboardEventData }
   | { type: 'budget.pool'; data: BudgetPoolData }
+  | { type: 'budget.check'; data: BudgetCheckData }
   | { type: 'filecache.event'; data: FileCacheEventData }
   | { type: 'context.injection'; data: ContextInjectionData };
 
@@ -307,6 +310,22 @@ export interface BudgetPoolData {
   tokensUsed?: number;
   poolRemaining: number;
   poolTotal: number;
+}
+
+/**
+ * Budget check event data - records each budget check for debugging premature death.
+ */
+export interface BudgetCheckData {
+  iteration: number;
+  canContinue: boolean;
+  percentUsed: number;
+  budgetType?: string;
+  budgetMode?: string;
+  forceTextOnly: boolean;
+  allowTaskContinuation: boolean;
+  enforcementMode: string;
+  tokenUsage: number;
+  maxTokens: number;
 }
 
 /**
@@ -1021,6 +1040,9 @@ export class TraceCollector {
       case 'budget.pool':
         await this.recordBudgetPool(event.data);
         break;
+      case 'budget.check':
+        await this.recordBudgetCheck(event.data);
+        break;
       case 'filecache.event':
         await this.recordFileCacheEvent(event.data);
         break;
@@ -1689,6 +1711,27 @@ export class TraceCollector {
   }
 
   /**
+   * Record a budget check result for debugging premature death.
+   */
+  private async recordBudgetCheck(data: BudgetCheckData): Promise<void> {
+    await this.writeEntry({
+      _type: 'budget.check',
+      _ts: new Date().toISOString(),
+      traceId: this.traceId!,
+      iteration: data.iteration,
+      canContinue: data.canContinue,
+      percentUsed: data.percentUsed,
+      budgetType: data.budgetType,
+      budgetMode: data.budgetMode,
+      forceTextOnly: data.forceTextOnly,
+      allowTaskContinuation: data.allowTaskContinuation,
+      enforcementMode: data.enforcementMode,
+      tokenUsage: data.tokenUsage,
+      maxTokens: data.maxTokens,
+    } as BudgetCheckEntry);
+  }
+
+  /**
    * Record a file cache hit/miss/set/invalidate event.
    */
   private async recordFileCacheEvent(data: FileCacheEventData): Promise<void> {
@@ -1910,7 +1953,7 @@ export class TraceCollector {
    * Estimate tokens from text.
    */
   private estimateTokens(text: string): number {
-    return Math.ceil(text.length / 4);
+    return estimateTokenCount(text);
   }
 
   /**

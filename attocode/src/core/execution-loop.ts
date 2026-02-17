@@ -14,6 +14,7 @@ import type {
 } from '../types.js';
 
 import { isFeatureEnabled } from '../defaults.js';
+import { estimateTokenCount } from '../integrations/utilities/token-estimate.js';
 
 import type { AgentContext, AgentContextMutators } from './types.js';
 import { callLLM } from './response-handler.js';
@@ -27,8 +28,10 @@ import {
 import { detectIncompleteActionResponse } from './completion-analyzer.js';
 export { detectIncompleteActionResponse } from './completion-analyzer.js';
 
-import { createComponentLogger } from '../integrations/logger.js';
-import { validateSyntax } from '../integrations/edit-validator.js';
+import { createComponentLogger } from '../integrations/utilities/logger.js';
+import { validateSyntax } from '../integrations/safety/edit-validator.js';
+import { runTypeCheck, formatTypeCheckNudge } from '../integrations/safety/type-checker.js';
+import { invalidateAST } from '../integrations/context/codebase-ast.js';
 import * as fs from 'node:fs';
 
 const log = createComponentLogger('ExecutionLoop');
@@ -259,12 +262,31 @@ export async function executeDirectly(
       // =======================================================================
       let forceTextOnly = false;
       let budgetInjectedPrompt: string | undefined;
+      let budgetAllowsTaskContinuation = true;
 
       if (ctx.economics) {
         const budgetCheck = ctx.economics.checkBudget();
 
         forceTextOnly = budgetCheck.forceTextOnly ?? false;
         budgetInjectedPrompt = budgetCheck.injectedPrompt;
+        budgetAllowsTaskContinuation = budgetCheck.allowTaskContinuation ?? true;
+
+        // Record budget check in trace for debugging premature death
+        ctx.traceCollector?.record({
+          type: 'budget.check',
+          data: {
+            iteration: ctx.state.iteration,
+            canContinue: budgetCheck.canContinue,
+            percentUsed: budgetCheck.percentUsed,
+            budgetType: budgetCheck.budgetType,
+            budgetMode: budgetCheck.budgetMode,
+            forceTextOnly,
+            allowTaskContinuation: budgetAllowsTaskContinuation,
+            enforcementMode: ctx.economics.getBudget().enforcementMode ?? 'strict',
+            tokenUsage: ctx.economics.getUsage().tokens,
+            maxTokens: ctx.economics.getBudget().maxTokens,
+          },
+        });
 
         if (!budgetCheck.canContinue) {
           // RECOVERY ATTEMPT: Try emergency context reduction
@@ -344,6 +366,10 @@ export async function executeDirectly(
                 tokensAfter,
                 messagesCompacted: tokensBefore - tokensAfter,
               });
+
+              // Update baseline after emergency context reduction so
+              // incremental token accounting reflects the new context size
+              ctx.economics?.updateBaseline(tokensAfter);
 
               continue;
             }
@@ -575,6 +601,7 @@ export async function executeDirectly(
         const estimatedInputTokens = estimateContextTokens(messages);
         const currentUsage = ctx.economics.getUsage();
         const budget = ctx.economics.getBudget();
+        const isStrictEnforcement = (budget.enforcementMode ?? 'strict') === 'strict';
         // Use proportional output estimate: 10% of remaining budget, capped at 4096, floored at 512.
         // The old hardcoded 4096 caused premature wrapup for subagents with smaller budgets.
         const remainingTokens = budget.maxTokens - currentUsage.tokens - estimatedInputTokens;
@@ -587,23 +614,67 @@ export async function executeDirectly(
             estimatedInput: estimatedInputTokens,
             projectedTotal,
             maxTokens: budget.maxTokens,
+            enforcementMode: budget.enforcementMode ?? 'strict',
           });
 
-          if (!budgetInjectedPrompt) {
-            messages.push({
-              role: 'user',
-              content: '[System] BUDGET CRITICAL: This is your LAST response. Summarize findings concisely and stop. Do NOT call tools.',
-            });
-            ctx.state.messages.push({
-              role: 'user',
-              content: '[System] BUDGET CRITICAL: This is your LAST response. Summarize findings concisely and stop. Do NOT call tools.',
-            });
+          // Only force text-only in strict mode. In doomloop_only mode,
+          // the pre-flight check warns but does not kill the agent.
+          // NEVER force text-only on the first iteration — an agent that hasn't
+          // made a single tool call yet should always get at least one chance.
+          // This prevents swarm workers from being killed before they can work.
+          if (isStrictEnforcement && ctx.state.iteration > 1) {
+            if (!budgetInjectedPrompt) {
+              messages.push({
+                role: 'user',
+                content: '[System] BUDGET CRITICAL: This is your LAST response. Summarize findings concisely and stop. Do NOT call tools.',
+              });
+              ctx.state.messages.push({
+                role: 'user',
+                content: '[System] BUDGET CRITICAL: This is your LAST response. Summarize findings concisely and stop. Do NOT call tools.',
+              });
+            }
+            forceTextOnly = true;
           }
-          forceTextOnly = true;
+        }
+      }
+
+      // EARLY EXIT: When forceTextOnly is set but task continuation is allowed,
+      // skip the expensive LLM call (whose tool calls would be discarded) and
+      // go directly to the task continuation gate. Only allowed once per
+      // forceTextOnly episode to prevent tight loops.
+      if (forceTextOnly && budgetAllowsTaskContinuation && ctx.taskManager
+          && !(ctx.state as { _lastSkippedLLMIteration?: number })._lastSkippedLLMIteration) {
+        const availableTasks = ctx.taskManager.getAvailableTasks();
+        if (availableTasks.length > 0) {
+          log.info('Skipping LLM call — forceTextOnly with tasks available, going to task continuation', {
+            availableTasks: availableTasks.length,
+            iteration: ctx.state.iteration,
+          });
+          // Mark that we skipped so we don't skip again on the next iteration
+          (ctx.state as { _lastSkippedLLMIteration?: number })._lastSkippedLLMIteration = ctx.state.iteration;
+          // Reset forceTextOnly for the next iteration so the task can run normally
+          forceTextOnly = false;
+          const nextTask = availableTasks[0];
+          ctx.taskManager.claim(nextTask.id, ctx.agentId);
+          const taskPrompt: Message = {
+            role: 'user',
+            content: `[System] Budget warning noted. Continuing with next task:\n\n**Task ${nextTask.id}: ${nextTask.subject}**\n${nextTask.description}\n\nStart working on this task now using your tools.`,
+          };
+          messages.push(taskPrompt);
+          ctx.state.messages.push(taskPrompt);
+          ctx.emit({
+            type: 'iteration.after',
+            iteration: ctx.state.iteration,
+            hadToolCalls: false,
+            completionCandidate: false,
+          });
+          continue; // Re-enter main loop for next task without wasting an LLM call
         }
       }
 
       let response = await callLLM(messages, ctx);
+      // Clear the LLM-skip guard now that we've made a real LLM call
+      delete (ctx.state as { _lastSkippedLLMIteration?: number })._lastSkippedLLMIteration;
       let emptyRetries = 0;
       let continuations = 0;
 
@@ -761,7 +832,8 @@ export async function executeDirectly(
           response.usage.inputTokens,
           response.usage.outputTokens,
           ctx.config.model,
-          response.usage.cost
+          response.usage.cost,
+          response.usage.cacheReadTokens,
         );
 
         // POST-LLM BUDGET CHECK
@@ -918,6 +990,39 @@ export async function executeDirectly(
           incompleteActionRetries = 0;
         }
 
+        // TypeScript compilation gate — block completion if TS files edited and errors exist
+        if (ctx.typeCheckerState?.tsconfigDir
+            && !forceTextOnly
+            && (ctx.typeCheckerState.tsEditsSinceLastCheck > 0 || !ctx.typeCheckerState.hasRunOnce)) {
+          const tscResult = await runTypeCheck(ctx.typeCheckerState.tsconfigDir);
+          ctx.typeCheckerState.tsEditsSinceLastCheck = 0;
+          ctx.typeCheckerState.lastResult = tscResult;
+          ctx.typeCheckerState.hasRunOnce = true;
+          ctx.verificationGate?.recordCompilationResult(tscResult.success, tscResult.errorCount);
+          ctx.emit({ type: 'diagnostics.tsc-check', errorCount: tscResult.errorCount, duration: tscResult.duration, trigger: 'completion' });
+
+          if (!tscResult.success) {
+            const vState = ctx.verificationGate?.getState();
+            const maxCompNudges = 8;
+            if (!vState || (vState.compilationNudgeCount ?? 0) < maxCompNudges) {
+              const nudge = formatTypeCheckNudge(tscResult);
+              const nudgeMessage: Message = { role: 'user', content: nudge };
+              messages.push(nudgeMessage);
+              ctx.state.messages.push(nudgeMessage);
+              ctx.verificationGate?.incrementCompilationNudge();
+              log.info('Compilation gate blocked completion', { count: tscResult.errorCount, nudgeCount: ctx.verificationGate?.getState().compilationNudgeCount });
+              ctx.emit({
+                type: 'iteration.after',
+                iteration: ctx.state.iteration,
+                hadToolCalls: false,
+                completionCandidate: false,
+              });
+              continue;  // Re-enter main loop — agent must fix errors
+            }
+            // If exceeded max nudges, fall through to verification gate (which will forceAllow)
+          }
+        }
+
         // Verification gate
         if (ctx.verificationGate && !forceTextOnly) {
           const vResult = ctx.verificationGate.check();
@@ -996,7 +1101,7 @@ export async function executeDirectly(
           });
           const pendingWithOwner = getPendingWithOwnerCount(ctx);
           const availableTasks = ctx.taskManager.getAvailableTasks();
-          if (!forceTextOnly && availableTasks.length > 0) {
+          if ((!forceTextOnly || budgetAllowsTaskContinuation) && availableTasks.length > 0) {
             const nextTask = availableTasks[0];
             ctx.taskManager.claim(nextTask.id, ctx.agentId);
             log.info('Picking up next task from task list', {
@@ -1130,14 +1235,23 @@ export async function executeDirectly(
           }
         }
 
-        // Phase 5.1: Post-edit syntax validation
+        // Phase 5.1: Post-edit syntax validation + AST cache invalidation
         if (['write_file', 'edit_file'].includes(toolCall.name) && result?.result && (result.result as any).success) {
           const filePath = String(toolCall.arguments.path || '');
           if (filePath) {
+            // Invalidate stale AST cache entry so next analysis/validation reparses
+            invalidateAST(filePath);
             try {
               const content = toolCall.name === 'write_file'
                 ? String(toolCall.arguments.content || '')
                 : await fs.promises.readFile(filePath, 'utf-8');
+              // Update codebase context first — fullReparse caches the AST tree,
+              // so validateSyntax below will use the cached tree (no double-parse)
+              if (ctx.codebaseContext) {
+                try {
+                  await ctx.codebaseContext.updateFile(filePath, content);
+                } catch { /* non-blocking */ }
+              }
               const validation = validateSyntax(content, filePath);
               if (!validation.valid && result.result && typeof result.result === 'object') {
                 const errorSummary = validation.errors
@@ -1145,9 +1259,18 @@ export async function executeDirectly(
                   .map(e => `  L${e.line}:${e.column}: ${e.message}`)
                   .join('\n');
                 (result.result as any).output += `\n\n⚠ Syntax validation warning:\n${errorSummary}`;
+                // Emit diagnostic events for each syntax error
+                for (const err of validation.errors.slice(0, 5)) {
+                  ctx.emit({ type: 'diagnostics.syntax-error', file: filePath, line: err.line, message: err.message });
+                }
               }
             } catch {
               // Validation failure is non-blocking
+            }
+
+            // Track .ts/.tsx edits for periodic type checking
+            if (ctx.typeCheckerState?.tsconfigDir && /\.(ts|tsx)$/.test(filePath)) {
+              ctx.typeCheckerState.tsEditsSinceLastCheck++;
             }
           }
         }
@@ -1235,6 +1358,11 @@ export async function executeDirectly(
             // Emit compaction event
             const compactionTokensAfter = estimateContextTokens(messages);
             const compactionRecoveryInjected = recoveryParts.length > 0;
+
+            // Update baseline after compaction so incremental token
+            // accounting reflects the reduced context size
+            ctx.economics?.updateBaseline(compactionTokensAfter);
+
             const compactionEvent = {
               type: 'context.compacted',
               tokensBefore: currentContextTokens,
@@ -1341,7 +1469,7 @@ export async function executeDirectly(
 
         // Check if adding this result would exceed budget
         if (ctx.economics) {
-          const estimatedNewTokens = Math.ceil(content.length / 4);
+          const estimatedNewTokens = estimateTokenCount(content);
           const currentCtxTokens = estimateContextTokens(messages);
           const budget = ctx.economics.getBudget();
 
@@ -1380,6 +1508,27 @@ export async function executeDirectly(
         };
         messages.push(toolMessage);
         ctx.state.messages.push(toolMessage);
+      }
+
+      // Periodic TypeScript compilation check (every 5 TS edits)
+      const TYPE_CHECK_EDIT_THRESHOLD = 5;
+      if (ctx.typeCheckerState?.tsconfigDir
+          && ctx.typeCheckerState.tsEditsSinceLastCheck >= TYPE_CHECK_EDIT_THRESHOLD
+          && !forceTextOnly) {
+        const tscResult = await runTypeCheck(ctx.typeCheckerState.tsconfigDir);
+        ctx.typeCheckerState.tsEditsSinceLastCheck = 0;
+        ctx.typeCheckerState.lastResult = tscResult;
+        ctx.typeCheckerState.hasRunOnce = true;
+        ctx.verificationGate?.recordCompilationResult(tscResult.success, tscResult.errorCount);
+        ctx.emit({ type: 'diagnostics.tsc-check', errorCount: tscResult.errorCount, duration: tscResult.duration, trigger: 'periodic' });
+
+        if (!tscResult.success) {
+          const nudge = formatTypeCheckNudge(tscResult);
+          const infoMsg: Message = { role: 'user', content: nudge };
+          messages.push(infoMsg);
+          ctx.state.messages.push(infoMsg);
+          log.info('Periodic tsc check found errors', { count: tscResult.errorCount });
+        }
       }
 
       // Emit context health

@@ -16,12 +16,14 @@ import type {
   ChatResponseWithTools,
   ToolCallResponse,
   ToolDefinitionSchema,
-  AnthropicConfig
+  AnthropicConfig,
+  CacheableContent,
 } from '../types.js';
 import { ProviderError } from '../types.js';
 import { registerProvider, hasEnv, requireEnv } from '../provider.js';
 import { resilientFetch, type NetworkConfig } from '../resilient-fetch.js';
-import { logger } from '../../integrations/logger.js';
+import { adaptAnthropicStream, type StreamChunk } from '../../integrations/streaming/streaming.js';
+import { logger } from '../../integrations/utilities/logger.js';
 
 // =============================================================================
 // ANTHROPIC API TYPES
@@ -37,6 +39,7 @@ interface AnthropicTool {
 /** Anthropic content block types */
 type AnthropicContentBlock =
   | { type: 'text'; text: string }
+  | { type: 'image'; source: { type: 'base64' | 'url'; media_type: string; data: string } }
   | { type: 'tool_use'; id: string; name: string; input: Record<string, unknown> }
   | { type: 'tool_result'; tool_use_id: string; content: string };
 
@@ -78,15 +81,16 @@ export class AnthropicProvider implements LLMProvider, LLMProviderWithTools {
       .filter(m => m.role !== 'system')
       .map(m => ({
         role: m.role as 'user' | 'assistant',
-        content: typeof m.content === 'string' ? m.content : m.content.map(c => c.text).join(''),
+        content: typeof m.content === 'string' ? m.content : m.content.map(c => c.type === 'text' ? c.text : '').join(''),
       }));
 
     // Build system content — supports structured blocks with cache_control for prompt caching
     let systemContent: string | Array<{ type: 'text'; text: string; cache_control?: { type: 'ephemeral' } }> | undefined;
     if (systemMessage) {
       if (typeof systemMessage.content !== 'string' && Array.isArray(systemMessage.content)) {
-        // Structured content with cache_control markers
-        systemContent = systemMessage.content;
+        // Structured content with cache_control markers — filter to text blocks only
+        systemContent = systemMessage.content
+          .filter((c): c is CacheableContent => c.type === 'text');
       } else {
         systemContent = typeof systemMessage.content === 'string'
           ? systemMessage.content
@@ -195,8 +199,9 @@ export class AnthropicProvider implements LLMProvider, LLMProviderWithTools {
     let systemContent: string | Array<{ type: 'text'; text: string; cache_control?: { type: 'ephemeral' } }> | undefined;
     if (systemMessage) {
       if (typeof systemMessage.content !== 'string' && Array.isArray(systemMessage.content)) {
-        // Structured content with cache_control markers - pass through directly
-        systemContent = systemMessage.content;
+        // Structured content with cache_control markers — filter to text blocks only
+        systemContent = systemMessage.content
+          .filter((c): c is CacheableContent => c.type === 'text');
       } else {
         systemContent = typeof systemMessage.content === 'string'
           ? systemMessage.content
@@ -307,6 +312,76 @@ export class AnthropicProvider implements LLMProvider, LLMProviderWithTools {
   }
 
   /**
+   * Stream a chat response with tool definitions.
+   * Uses Anthropic's SSE streaming format.
+   */
+  async *chatWithToolsStream(
+    messages: (Message | MessageWithContent)[],
+    options?: ChatOptionsWithTools
+  ): AsyncIterable<StreamChunk> {
+    const model = options?.model ?? this.model;
+
+    const systemMessage = messages.find(m => m.role === 'system');
+    const anthropicMessages = this.convertMessagesToAnthropicFormat(
+      messages.filter(m => m.role !== 'system')
+    );
+    const anthropicTools = options?.tools?.map(this.convertToolToAnthropicFormat);
+
+    let systemContent: string | Array<{ type: 'text'; text: string; cache_control?: { type: 'ephemeral' } }> | undefined;
+    if (systemMessage) {
+      if (typeof systemMessage.content !== 'string' && Array.isArray(systemMessage.content)) {
+        // Structured content with cache_control markers — filter to text blocks only
+        systemContent = systemMessage.content
+          .filter((c): c is CacheableContent => c.type === 'text');
+      } else {
+        systemContent = typeof systemMessage.content === 'string'
+          ? systemMessage.content
+          : (systemMessage.content as Array<{ text: string }>).map(c => c.text).join('');
+      }
+    }
+
+    const body: Record<string, unknown> = {
+      model,
+      max_tokens: options?.maxTokens ?? 4096,
+      temperature: options?.temperature ?? 0.7,
+      system: systemContent,
+      messages: anthropicMessages,
+      stream: true,
+      ...(options?.stopSequences && { stop_sequences: options.stopSequences }),
+    };
+
+    if (anthropicTools && anthropicTools.length > 0) {
+      body.tools = anthropicTools;
+      if (options?.tool_choice) {
+        body.tool_choice = this.convertToolChoice(options.tool_choice);
+      }
+    }
+
+    const { response } = await resilientFetch({
+      url: `${this.baseUrl}/v1/messages`,
+      init: {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-api-key': this.apiKey,
+          'anthropic-version': '2023-06-01',
+          'anthropic-beta': 'prompt-caching-2024-07-31',
+        },
+        body: JSON.stringify(body),
+      },
+      providerName: this.name,
+      networkConfig: { ...this.networkConfig, maxRetries: 1 },
+    });
+
+    if (!response.ok) {
+      const error = await response.text();
+      throw this.handleError(response.status, error);
+    }
+
+    yield* adaptAnthropicStream(response);
+  }
+
+  /**
    * Convert messages to Anthropic's expected format.
    * Handles tool result messages specially.
    */
@@ -322,7 +397,9 @@ export class AnthropicProvider implements LLMProvider, LLMProviderWithTools {
         const toolResultBlock: AnthropicContentBlock = {
           type: 'tool_result',
           tool_use_id: msg.tool_call_id!,
-          content: typeof msg.content === 'string' ? msg.content : msg.content.map(c => c.text).join(''),
+          content: typeof msg.content === 'string'
+            ? msg.content
+            : msg.content.filter((c): c is CacheableContent => c.type === 'text').map(c => c.text).join(''),
         };
 
         // Check if the last message is already a user message we can add to
@@ -345,7 +422,7 @@ export class AnthropicProvider implements LLMProvider, LLMProviderWithTools {
         // Add text content if present
         const textContent = typeof msg.content === 'string'
           ? msg.content
-          : msg.content?.map(c => c.text).join('') || '';
+          : msg.content?.filter((c): c is CacheableContent => c.type === 'text').map(c => c.text).join('') || '';
         if (textContent) {
           contentBlocks.push({ type: 'text', text: textContent });
         }
@@ -368,14 +445,31 @@ export class AnthropicProvider implements LLMProvider, LLMProviderWithTools {
       }
 
       // Regular user/assistant message
-      const content = typeof msg.content === 'string'
-        ? msg.content
-        : msg.content?.map(c => c.text).join('') || '';
-
-      result.push({
-        role: msg.role as 'user' | 'assistant',
-        content,
-      });
+      if (typeof msg.content === 'string') {
+        result.push({
+          role: msg.role as 'user' | 'assistant',
+          content: msg.content,
+        });
+      } else if (Array.isArray(msg.content)) {
+        // Check if any blocks are images
+        const hasImages = msg.content.some(c => c.type === 'image');
+        if (hasImages) {
+          const blocks: AnthropicContentBlock[] = msg.content.map(c => {
+            if (c.type === 'image') {
+              return { type: 'image' as const, source: c.source };
+            }
+            return { type: 'text' as const, text: c.type === 'text' ? c.text : '' };
+          });
+          result.push({ role: msg.role as 'user' | 'assistant', content: blocks });
+        } else {
+          result.push({
+            role: msg.role as 'user' | 'assistant',
+            content: msg.content.map(c => c.type === 'text' ? c.text : '').join('') || '',
+          });
+        }
+      } else {
+        result.push({ role: msg.role as 'user' | 'assistant', content: '' });
+      }
     }
 
     return result;

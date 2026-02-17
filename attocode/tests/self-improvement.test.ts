@@ -6,7 +6,7 @@ import { describe, it, expect } from 'vitest';
 import {
   SelfImprovementProtocol,
   createSelfImprovementProtocol,
-} from '../src/integrations/self-improvement.js';
+} from '../src/integrations/quality/self-improvement.js';
 
 describe('SelfImprovementProtocol', () => {
   describe('diagnoseToolFailure', () => {

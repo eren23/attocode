@@ -5,24 +5,24 @@
  */
 
 // Core integrations (Lessons 10-22)
-export { HookManager, createHookManager } from './hooks.js';
-export { MemoryManager, createMemoryManager } from './memory.js';
-export { PlanningManager, createPlanningManager, type ReflectionResult } from './planning.js';
+export { HookManager, createHookManager } from './utilities/hooks.js';
+export { MemoryManager, createMemoryManager } from './utilities/memory.js';
+export { PlanningManager, createPlanningManager, type ReflectionResult } from './tasks/planning.js';
 export {
   Tracer,
   MetricsCollector,
   Logger,
   ObservabilityManager,
   createObservabilityManager,
-} from './observability.js';
+} from './utilities/observability.js';
 export {
   SandboxManager,
   HumanInLoopManager,
   SafetyManager,
   createSafetyManager,
   type ApprovalScope,
-} from './safety.js';
-export { RoutingManager, createRoutingManager } from './routing.js';
+} from './safety/safety.js';
+export { RoutingManager, createRoutingManager } from './utilities/routing.js';
 export {
   DEFAULT_POLICY_PROFILES,
   DEFAULT_POLICY_ENGINE_CONFIG,
@@ -32,7 +32,7 @@ export {
   mergeApprovalScopeWithProfile,
   type ResolvePolicyProfileOptions,
   type ResolvedPolicyProfile,
-} from './policy-engine.js';
+} from './safety/policy-engine.js';
 export {
   detectFileMutationViaBash,
   evaluateBashPolicy,
@@ -41,7 +41,7 @@ export {
   type BashMode,
   type BashWriteProtection,
   type BashPolicyDecision,
-} from './bash-policy.js';
+} from './safety/bash-policy.js';
 
 // Rules system (from Lesson 12)
 export {
@@ -54,7 +54,7 @@ export {
   type LoadedRule,
   type RulesEvent,
   type RulesEventListener,
-} from './rules.js';
+} from './utilities/rules.js';
 
 // Economics system (token budgets, progress detection)
 export {
@@ -77,7 +77,20 @@ export {
   type EconomicsEventListener,
   type LoopDetectionState,
   type PhaseBudgetConfig,
-} from './economics.js';
+} from './budget/economics.js';
+
+// Loop Detector (extracted from economics - doom loop + pattern detection)
+export {
+  LoopDetector,
+  extractBashResult,
+  extractBashFileTarget,
+  type RecentToolCall,
+} from './budget/loop-detector.js';
+
+// Phase Tracker (extracted from economics - phase transitions + nudges)
+export {
+  PhaseTracker,
+} from './budget/phase-tracker.js';
 
 // Work Log (compaction-resilient summary)
 export {
@@ -87,7 +100,7 @@ export {
   type TestResult as WorkLogTestResult,
   type ApproachEntry,
   type WorkLogConfig,
-} from './work-log.js';
+} from './tasks/work-log.js';
 
 // Verification Gate (opt-in completion verification)
 export {
@@ -96,7 +109,7 @@ export {
   type VerificationCriteria,
   type VerificationState,
   type VerificationCheckResult,
-} from './verification-gate.js';
+} from './tasks/verification-gate.js';
 
 // Extensible agent registry
 export {
@@ -121,7 +134,7 @@ export {
   type RegistryEvent,
   type RegistryEventListener,
   type AgentScaffoldResult,
-} from './agent-registry.js';
+} from './agents/agent-registry.js';
 
 // Multi-agent coordination (from Lesson 17)
 export {
@@ -138,7 +151,7 @@ export {
   type ConsensusStrategy,
   type MultiAgentEvent,
   type MultiAgentEventListener,
-} from './multi-agent.js';
+} from './agents/multi-agent.js';
 
 // ReAct pattern (from Lesson 18)
 export {
@@ -153,7 +166,7 @@ export {
   type ReActTrace,
   type ReActEvent,
   type ReActEventListener,
-} from './react.js';
+} from './utilities/react.js';
 
 // Execution policies (from Lesson 23)
 export {
@@ -170,7 +183,7 @@ export {
   type IntentClassification,
   type PolicyEvent,
   type PolicyEventListener,
-} from './execution-policy.js';
+} from './safety/execution-policy.js';
 
 // Thread management (from Lesson 24)
 export {
@@ -185,7 +198,7 @@ export {
   type MergeStrategy,
   type ThreadEvent,
   type ThreadEventListener,
-} from './thread-manager.js';
+} from './utilities/thread-manager.js';
 
 // Session persistence
 export {
@@ -197,7 +210,7 @@ export {
   type SessionStoreConfig,
   type SessionEvent,
   type SessionEventListener,
-} from './session-store.js';
+} from './persistence/session-store.js';
 
 // SQLite session persistence (preferred for production)
 export {
@@ -212,7 +225,7 @@ export {
   type WorkerResultStatus,
   type WorkerResultRef,
   type SessionManifest,
-} from './sqlite-store.js';
+} from './persistence/sqlite-store.js';
 
 // Schema management (embedded migrations)
 export {
@@ -238,7 +251,7 @@ export {
   type StreamConfig,
   type StreamEvent,
   type StreamEventListener,
-} from './streaming.js';
+} from './streaming/streaming.js';
 
 // Context compaction
 export {
@@ -254,7 +267,7 @@ export {
   type CompactionEventListener,
   type ContextBreakdown,
   type ToolDefinition,
-} from './compaction.js';
+} from './context/compaction.js';
 
 // Auto-Compaction Manager
 export {
@@ -266,7 +279,7 @@ export {
   type CompactionCheckResult,
   type AutoCompactionEvent,
   type AutoCompactionEventListener,
-} from './auto-compaction.js';
+} from './context/auto-compaction.js';
 
 // File Change Tracker (undo capability)
 export {
@@ -276,7 +289,7 @@ export {
   type FileChange as TrackedFileChange,
   type UndoResult,
   type ChangeSummary,
-} from './file-change-tracker.js';
+} from './utilities/file-change-tracker.js';
 
 // MCP client
 export {
@@ -292,7 +305,7 @@ export {
   type MCPEventListener,
   type MCPToolSummary,
   type MCPContextStats,
-} from './mcp-client.js';
+} from './mcp/mcp-client.js';
 
 // MCP tool search (dynamic tool discovery)
 export {
@@ -304,7 +317,7 @@ export {
   formatContextStats,
   type MCPToolSearchResult,
   type MCPToolSearchOptions,
-} from './mcp-tool-search.js';
+} from './mcp/mcp-tool-search.js';
 
 // Cancellation tokens
 export {
@@ -329,7 +342,7 @@ export {
   type CancellableOptions,
   type CancellationEvent,
   type CancellationEventListener,
-} from './cancellation.js';
+} from './budget/cancellation.js';
 
 // Resource monitoring
 export {
@@ -346,7 +359,7 @@ export {
   type ResourceCheck,
   type ResourceEvent,
   type ResourceEventListener,
-} from './resources.js';
+} from './budget/resources.js';
 
 /**
  * Hierarchical configuration.
@@ -366,7 +379,7 @@ export {
   type ConfigEvent,
   type ConfigEventListener,
   type HierarchicalConfigOptions,
-} from './hierarchical-config.js';
+} from './utilities/hierarchical-config.js';
 
 // LSP (Language Server Protocol)
 export {
@@ -384,7 +397,7 @@ export {
   type CompletionKind,
   type LSPEvent,
   type LSPEventListener,
-} from './lsp.js';
+} from './lsp/lsp.js';
 
 // Semantic Cache
 export {
@@ -401,7 +414,7 @@ export {
   type EmbeddingFunction,
   type CacheEvent,
   type CacheEventListener,
-} from './semantic-cache.js';
+} from './context/semantic-cache.js';
 
 // OS-Specific Sandbox (renamed to avoid conflict with SandboxManager from safety.js)
 export {
@@ -419,7 +432,7 @@ export {
   type SandboxManagerConfig as OSSandboxManagerConfig,
   type SandboxEvent as OSSandboxEvent,
   type SandboxEventListener as OSSandboxEventListener,
-} from './sandbox/index.js';
+} from './safety/sandbox/index.js';
 
 // Skills Standard
 export {
@@ -443,7 +456,7 @@ export {
   type SkillEvent,
   type SkillEventListener,
   type SkillScaffoldResult,
-} from './skills.js';
+} from './skills/skills.js';
 
 // Skill Executor (invokable skills)
 export {
@@ -454,7 +467,7 @@ export {
   type SkillExecutionResult,
   type SkillExecutorEvent,
   type SkillExecutorEventListener,
-} from './skill-executor.js';
+} from './skills/skill-executor.js';
 
 // Capabilities Registry (unified discovery)
 export {
@@ -469,7 +482,7 @@ export {
   type CapabilityCounts,
   type CapabilitiesEvent,
   type CapabilitiesEventListener,
-} from './capabilities.js';
+} from './utilities/capabilities.js';
 
 // Ignore File Support
 export {
@@ -482,7 +495,7 @@ export {
   type IgnoreConfig,
   type IgnoreEvent,
   type IgnoreEventListener,
-} from './ignore.js';
+} from './utilities/ignore.js';
 
 // Persistent PTY Shell
 export {
@@ -496,7 +509,7 @@ export {
   type ShellState,
   type PTYEvent,
   type PTYEventListener,
-} from './pty-shell.js';
+} from './streaming/pty-shell.js';
 
 // Context Engineering (Manus-inspired tricks P, Q, R, S, T)
 export {
@@ -514,7 +527,7 @@ export {
   type ContextEngineeringEvent,
   type ContextEngineeringEventListener,
   type CacheableContentBlock,
-} from './context-engineering.js';
+} from './context/context-engineering.js';
 
 // Codebase Context (intelligent code selection)
 export {
@@ -537,7 +550,12 @@ export {
   type SearchOptions,
   type RankedSearchOptions,
   type ScoredChunk,
-} from './codebase-context.js';
+} from './context/codebase-context.js';
+
+// AST Cache Stats
+export {
+  getASTCacheStats,
+} from './context/codebase-ast.js';
 
 // Edit Validator (Phase 5.1)
 export {
@@ -545,7 +563,19 @@ export {
   validateEdit,
   type ValidationResult,
   type SyntaxError,
-} from './edit-validator.js';
+} from './safety/edit-validator.js';
+
+// TypeScript compilation checker
+export {
+  detectTypeScriptProject,
+  runTypeCheck,
+  parseTypeCheckOutput,
+  formatTypeCheckNudge,
+  createTypeCheckerState,
+  type TypeCheckError,
+  type TypeCheckResult,
+  type TypeCheckerState,
+} from './safety/type-checker.js';
 
 // Shared Blackboard (subagent coordination)
 export {
@@ -563,7 +593,7 @@ export {
   type BlackboardEvent,
   type BlackboardEventListener,
   type BlackboardStats,
-} from './shared-blackboard.js';
+} from './agents/shared-blackboard.js';
 
 // Shared Budget Pool (parent-child token budget sharing)
 export {
@@ -572,7 +602,7 @@ export {
   type BudgetPoolConfig,
   type BudgetAllocation,
   type BudgetPoolStats,
-} from './budget-pool.js';
+} from './budget/budget-pool.js';
 
 // Shared File Cache (cross-agent read deduplication)
 export {
@@ -581,7 +611,7 @@ export {
   type FileCacheConfig,
   type FileCacheStats,
   type FileCacheEntry,
-} from './file-cache.js';
+} from './context/file-cache.js';
 
 // Smart Decomposer (semantic task decomposition)
 export {
@@ -602,7 +632,7 @@ export {
   type LLMDecomposeResult,
   type SmartDecomposerEvent,
   type SmartDecomposerEventListener,
-} from './smart-decomposer.js';
+} from './tasks/smart-decomposer.js';
 
 // Result Synthesizer (structured result merging)
 export {
@@ -625,7 +655,7 @@ export {
   type LLMSynthesisResult,
   type ResultSynthesizerEvent,
   type ResultSynthesizerEventListener,
-} from './result-synthesizer.js';
+} from './agents/result-synthesizer.js';
 
 // Pending Plan (plan mode write interception)
 export {
@@ -638,7 +668,7 @@ export {
   type PlanApprovalResult,
   type PendingPlanEvent,
   type PendingPlanEventListener,
-} from './pending-plan.js';
+} from './tasks/pending-plan.js';
 
 // Persistence utilities (debug logging, checkpoint management)
 export {
@@ -648,7 +678,7 @@ export {
   loadSessionState,
   type AnySessionStore,
   type CheckpointData,
-} from './persistence.js';
+} from './persistence/persistence.js';
 
 // Interactive Planning (conversational + editable planning)
 export {
@@ -666,7 +696,7 @@ export {
   type InteractivePlannerConfig,
   type InteractivePlannerEvent,
   type InteractivePlannerEventListener,
-} from './interactive-planning.js';
+} from './tasks/interactive-planning.js';
 
 // Learning Store (persistent cross-session learning)
 export {
@@ -682,7 +712,7 @@ export {
   type LearningStoreConfig,
   type LearningStoreEvent,
   type LearningStoreEventListener,
-} from './learning-store.js';
+} from './quality/learning-store.js';
 
 // Recursive Context (RLM) - from tricks
 export {
@@ -760,7 +790,7 @@ export {
   DEFAULT_RETRYABLE_CODES,
   type RetryConfig,
   type RetryResult,
-} from './retry.js';
+} from './utilities/retry.js';
 
 // Centralized error types (CancellationError exported from cancellation.js above)
 export {
@@ -801,7 +831,7 @@ export {
   type HealthCheckerConfig,
   type HealthEvent,
   type HealthEventListener,
-} from './health-check.js';
+} from './quality/health-check.js';
 
 // Dead letter queue for failed operations
 export {
@@ -815,7 +845,7 @@ export {
   type DeadLetterStats,
   type DeadLetterEvent,
   type DeadLetterEventListener,
-} from './dead-letter-queue.js';
+} from './quality/dead-letter-queue.js';
 
 // Graph Visualization (dependency diagrams)
 export {
@@ -828,7 +858,7 @@ export {
   type DiagramDirection,
   type GraphVisualizationOptions,
   type DiagramResult,
-} from './graph-visualization.js';
+} from './utilities/graph-visualization.js';
 
 // Task Management (Claude Code-style)
 export {
@@ -839,14 +869,14 @@ export {
   type CreateTaskOptions,
   type UpdateTaskOptions,
   type TaskSummary,
-} from './task-manager.js';
+} from './tasks/task-manager.js';
 
 // Command History (persistent input history)
 export {
   HistoryManager,
   createHistoryManager,
   type HistoryManagerConfig,
-} from './history.js';
+} from './persistence/history.js';
 
 // Swarm Mode (orchestrator + worker models)
 export {
@@ -903,7 +933,7 @@ export {
   type ToolGuidance,
   type TaskBoundaries,
   type SiblingContext,
-} from './delegation-protocol.js';
+} from './agents/delegation-protocol.js';
 
 // Complexity Classifier (task complexity heuristics)
 export {
@@ -915,7 +945,7 @@ export {
   type ExecutionRecommendation,
   type ComplexitySignal,
   type ClassificationContext,
-} from './complexity-classifier.js';
+} from './agents/complexity-classifier.js';
 
 // Tool Recommendation Engine (task-type to tool mapping)
 export {
@@ -924,7 +954,7 @@ export {
   type ToolRecommendation,
   type ToolRecommendationConfig,
   type ToolCategory,
-} from './tool-recommendation.js';
+} from './quality/tool-recommendation.js';
 
 // Injection Budget Manager (context window health)
 export {
@@ -933,7 +963,7 @@ export {
   type InjectionSlot,
   type InjectionBudgetConfig,
   type InjectionBudgetStats,
-} from './injection-budget.js';
+} from './budget/injection-budget.js';
 
 // Thinking/Reflection Strategy (prompt engineering for reasoning)
 export {
@@ -943,7 +973,7 @@ export {
   createThinkingStrategy,
   type ThinkingDirective,
   type ThinkingConfig,
-} from './thinking-strategy.js';
+} from './utilities/thinking-strategy.js';
 
 // Subagent Output Store (bypass coordinator pattern)
 export {
@@ -951,7 +981,7 @@ export {
   createSubagentOutputStore,
   type SubagentOutput,
   type SubagentOutputStoreConfig,
-} from './subagent-output-store.js';
+} from './agents/subagent-output-store.js';
 
 // Self-Improvement Protocol (tool failure diagnosis)
 export {
@@ -961,7 +991,7 @@ export {
   type FailureCategory as SelfImprovementFailureCategory,
   type SelfImprovementConfig,
   type SuccessPattern,
-} from './self-improvement.js';
+} from './quality/self-improvement.js';
 
 // MCP Tool Validator (description quality checks)
 export {
@@ -971,7 +1001,7 @@ export {
   createToolValidator,
   type ToolValidationResult,
   type ToolValidationConfig,
-} from './mcp-tool-validator.js';
+} from './mcp/mcp-tool-validator.js';
 
 // MCP Custom Tools (API wrapper factory)
 export {
@@ -984,7 +1014,7 @@ export {
   type CustomToolConfig,
   type SerperSearchConfig,
   type GenericToolSpec,
-} from './mcp-custom-tools.js';
+} from './mcp/mcp-custom-tools.js';
 
 // Async Subagent Execution (non-blocking subagent handles)
 export {
@@ -996,7 +1026,7 @@ export {
   type ProgressCallback,
   type AsyncSubagentConfig,
   type SubagentSupervisorConfig,
-} from './async-subagent.js';
+} from './agents/async-subagent.js';
 
 // Auto-Checkpoint Resumption (crash recovery)
 export {
@@ -1005,7 +1035,7 @@ export {
   type Checkpoint as AutoCheckpoint,
   type AutoCheckpointConfig,
   type ResumeCandidate,
-} from './auto-checkpoint.js';
+} from './quality/auto-checkpoint.js';
 
 // Dynamic Budget Rebalancing (starvation prevention)
 export {
@@ -1014,7 +1044,7 @@ export {
   type DynamicBudgetConfig,
   type ChildPriority,
   type RebalanceResult,
-} from './dynamic-budget.js';
+} from './budget/dynamic-budget.js';
 
 // Structured Logger (leveled logging with trace IDs and multiple sinks)
 export {
@@ -1029,7 +1059,7 @@ export {
   type LogEntry,
   type LogSink,
   type LoggerConfig,
-} from './logger.js';
+} from './utilities/logger.js';
 
 // Environment Facts (temporal/platform grounding for all agents)
 export {
@@ -1038,4 +1068,4 @@ export {
   formatFactsBlock,
   formatFactsCompact,
   type EnvironmentFacts,
-} from './environment-facts.js';
+} from './utilities/environment-facts.js';

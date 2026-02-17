@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest';
-import { detectFileMutationViaBash, isReadOnlyBashCommand, evaluateBashPolicy, stripCdPrefix } from '../../src/integrations/bash-policy.js';
+import { detectFileMutationViaBash, isReadOnlyBashCommand, evaluateBashPolicy, stripCdPrefix } from '../../src/integrations/safety/bash-policy.js';
 import { classifyBashCommandDangerLevel } from '../../src/tools/permission.js';
-import { SandboxManager } from '../../src/integrations/safety.js';
-import { BasicSandbox } from '../../src/integrations/sandbox/basic.js';
+import { SandboxManager } from '../../src/integrations/safety/safety.js';
+import { BasicSandbox } from '../../src/integrations/safety/sandbox/basic.js';
 
 describe('B1: stream redirect false positives fixed', () => {
   it('2>&1 is NOT detected as file mutation', () => {

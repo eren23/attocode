@@ -5,7 +5,7 @@
  * SharedEconomicsState for cross-worker doom loop aggregation.
  */
 
-import { computeToolFingerprint } from '../integrations/economics.js';
+import { computeToolFingerprint } from '../integrations/budget/economics.js';
 import type { SharedEconomicsState } from './shared-economics-state.js';
 
 // =============================================================================

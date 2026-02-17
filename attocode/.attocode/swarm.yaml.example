@@ -1,0 +1,60 @@
+# Swarm Configuration Template
+#
+# Copy this file to .attocode/swarm.yaml to enable swarm mode.
+#
+# Usage:
+#   attocode --swarm "Build a REST API with tests"
+#   attocode --swarm .attocode/swarm.yaml "Implement auth system"
+#
+# See docs/swarm/examples/ for more templates:
+#   minimal.yaml       — Minimal config, auto-detect models
+#   free-tier.yaml     — Free models only (DeepSeek, Gemma, etc.)
+#   paid-fast.yaml     — Paid models, max parallelism
+#   quality-focused.yaml — Strict quality gates
+#   resume-friendly.yaml — Optimized for resumable sessions
+
+philosophy: |
+  Write production-quality TypeScript with strict types.
+  Include comprehensive error handling. Write tests.
+
+# Model configuration
+# Uses paid models for speed and reliability
+models:
+  orchestrator: anthropic/claude-sonnet-4
+  quality_gate: anthropic/claude-sonnet-4
+  planner: anthropic/claude-sonnet-4
+  paid_only: true
+
+# Throttle preset: 'paid' (5 concurrent, 2 req/s) or 'free' (2 concurrent, 0.5 req/s)
+throttle: paid
+
+# Budget limits
+budget:
+  total_tokens: 5000000
+  max_cost: 5.00
+  max_tokens_per_worker: 50000
+  max_concurrency: 5
+  dispatch_stagger_ms: 200
+
+# Quality gates — LLM scoring of worker outputs
+quality:
+  enabled: true
+
+# Resilience — retries and failover
+resilience:
+  workerRetries: 1
+  rateLimitRetries: 2
+  modelFailover: true
+
+# Inter-worker communication
+communication:
+  blackboard: true
+  dependencyContextMaxLength: 4000
+  includeFileList: true
+
+# Feature flags
+features:
+  planning: true
+  wave_review: true
+  verification: true
+  persistence: true

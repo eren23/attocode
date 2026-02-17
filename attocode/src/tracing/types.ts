@@ -731,6 +731,23 @@ export interface BudgetPoolEntry extends BaseJSONLEntry {
 }
 
 /**
+ * Budget check entry - records each economics budget check for debugging premature death.
+ */
+export interface BudgetCheckEntry extends BaseJSONLEntry {
+  _type: 'budget.check';
+  iteration: number;
+  canContinue: boolean;
+  percentUsed: number;
+  budgetType?: string;
+  budgetMode?: string;
+  forceTextOnly: boolean;
+  allowTaskContinuation: boolean;
+  enforcementMode: string;
+  tokenUsage: number;
+  maxTokens: number;
+}
+
+/**
  * File cache event entry - emitted on cache hit/miss/set/invalidate.
  */
 export interface FileCacheEventEntry extends BaseJSONLEntry {
@@ -786,6 +803,7 @@ export type JSONLEntry =
   | CodebaseMapEntry
   | BlackboardEventEntry
   | BudgetPoolEntry
+  | BudgetCheckEntry
   | FileCacheEventEntry
   | ContextInjectionEntry;
 

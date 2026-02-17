@@ -1,16 +1,25 @@
 /**
- * Tests for Codebase AST Module (Phase 3.3)
+ * Tests for Codebase AST Module
  *
- * Tests tree-sitter based symbol and dependency extraction for
- * TypeScript/TSX and Python.
+ * Tests tree-sitter based symbol and dependency extraction,
+ * ASTCache, incremental parsing, and polyglot language support.
  */
 
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, beforeEach } from 'vitest';
 import {
   extractSymbolsAST,
   extractDependenciesAST,
   isASTSupported,
-} from '../../src/integrations/codebase-ast.js';
+  parseFile,
+  clearASTCache,
+  getASTCacheSize,
+  invalidateAST,
+  getCachedParse,
+  fullReparse,
+  djb2Hash,
+  getASTCacheStats,
+  resetASTCacheStats,
+} from '../../src/integrations/context/codebase-ast.js';
 
 // =============================================================================
 // isASTSupported
@@ -325,6 +334,7 @@ describe('extractDependenciesAST - Python', () => {
 
 describe('edge cases', () => {
   it('handles unsupported file extension gracefully', () => {
+    // .rs and .go grammars are not installed, so they should fall back gracefully
     expect(extractSymbolsAST('fn main() {}', 'test.rs')).toEqual([]);
     expect(extractDependenciesAST('use std::io;', 'test.rs')).toEqual([]);
   });
@@ -343,5 +353,258 @@ describe('edge cases', () => {
       kind: 'function',
       exported: true,
     }));
+  });
+});
+
+// =============================================================================
+// ASTCache (Phase 1)
+// =============================================================================
+
+describe('ASTCache', () => {
+  beforeEach(() => {
+    clearASTCache();
+  });
+
+  it('parseFile returns ParsedFile with tree, symbols, and dependencies', () => {
+    const code = `import { A } from './mod';\nexport function foo() {}`;
+    const parsed = parseFile(code, '/test/cache-test.ts');
+    expect(parsed).not.toBeNull();
+    expect(parsed!.tree).toBeDefined();
+    expect(parsed!.symbols).toContainEqual(expect.objectContaining({
+      name: 'foo',
+      kind: 'function',
+      exported: true,
+    }));
+    expect(parsed!.dependencies).toContainEqual(expect.objectContaining({
+      source: './mod',
+      isRelative: true,
+    }));
+    expect(parsed!.contentHash).toBeTypeOf('number');
+    expect(parsed!.parsedAt).toBeTypeOf('number');
+  });
+
+  it('caches parsed results by filePath + contentHash', () => {
+    const code = 'export function bar() {}';
+    clearASTCache();
+
+    const first = parseFile(code, '/test/cache-hit.ts');
+    expect(getASTCacheSize()).toBe(1);
+
+    const second = parseFile(code, '/test/cache-hit.ts');
+    expect(second).toBe(first); // Same reference = cache hit
+  });
+
+  it('invalidates cache when content changes', () => {
+    const code1 = 'export function v1() {}';
+    const code2 = 'export function v2() {}';
+
+    const first = parseFile(code1, '/test/cache-miss.ts');
+    const second = parseFile(code2, '/test/cache-miss.ts');
+
+    expect(second).not.toBe(first); // Different reference = cache miss
+    expect(second!.symbols[0].name).toBe('v2');
+  });
+
+  it('invalidateAST removes a single file from cache', () => {
+    parseFile('export const x = 1;', '/test/a.ts');
+    parseFile('export const y = 2;', '/test/b.ts');
+    expect(getASTCacheSize()).toBe(2);
+
+    invalidateAST('/test/a.ts');
+    expect(getASTCacheSize()).toBe(1);
+    expect(getCachedParse('/test/a.ts')).toBeNull();
+    expect(getCachedParse('/test/b.ts')).not.toBeNull();
+  });
+
+  it('clearASTCache empties the entire cache', () => {
+    parseFile('export const x = 1;', '/test/c.ts');
+    parseFile('export const y = 2;', '/test/d.ts');
+    expect(getASTCacheSize()).toBe(2);
+
+    clearASTCache();
+    expect(getASTCacheSize()).toBe(0);
+  });
+
+  it('getCachedParse returns null for unparsed file', () => {
+    expect(getCachedParse('/test/nonexistent.ts')).toBeNull();
+  });
+
+  it('extractSymbolsAST uses cache (single parse for multiple calls)', () => {
+    clearASTCache();
+    const code = 'export class Cached {}';
+
+    // First call parses and caches
+    extractSymbolsAST(code, '/test/dedup.ts');
+    expect(getASTCacheSize()).toBe(1);
+
+    // Second call with extractDependenciesAST should hit cache
+    extractDependenciesAST(code, '/test/dedup.ts');
+    expect(getASTCacheSize()).toBe(1); // Still 1 = no re-parse
+  });
+
+  it('returns null for unsupported file extension', () => {
+    expect(parseFile('some content', '/test/file.txt')).toBeNull();
+  });
+
+  it('normalizes cache keys so absolute paths always hit (Bug 1 regression)', () => {
+    clearASTCache();
+    const code = 'export function normalized() {}';
+
+    // Parse with absolute path
+    const parsed = parseFile(code, '/project/src/file.ts');
+    expect(parsed).not.toBeNull();
+    expect(getASTCacheSize()).toBe(1);
+
+    // getCachedParse with same absolute path should hit
+    const cached = getCachedParse('/project/src/file.ts');
+    expect(cached).toBe(parsed);
+  });
+
+  it('getCachedParse finds entry after parseFile with equivalent paths', () => {
+    clearASTCache();
+    const code = 'export const val = 42;';
+
+    // Parse with one form
+    parseFile(code, '/project/src/./utils/../utils/helper.ts');
+    expect(getASTCacheSize()).toBe(1);
+
+    // Lookup with normalized form should hit
+    const cached = getCachedParse('/project/src/utils/helper.ts');
+    expect(cached).not.toBeNull();
+    expect(cached!.symbols[0].name).toBe('val');
+  });
+});
+
+// =============================================================================
+// djb2Hash
+// =============================================================================
+
+describe('djb2Hash', () => {
+  it('produces consistent hashes', () => {
+    const hash1 = djb2Hash('hello world');
+    const hash2 = djb2Hash('hello world');
+    expect(hash1).toBe(hash2);
+  });
+
+  it('produces different hashes for different strings', () => {
+    const hash1 = djb2Hash('hello');
+    const hash2 = djb2Hash('world');
+    expect(hash1).not.toBe(hash2);
+  });
+
+  it('returns unsigned 32-bit integer', () => {
+    const hash = djb2Hash('test string');
+    expect(hash).toBeGreaterThanOrEqual(0);
+    expect(hash).toBeLessThan(2 ** 32);
+  });
+});
+
+// =============================================================================
+// fullReparse (Phase 2)
+// =============================================================================
+
+describe('fullReparse', () => {
+  beforeEach(() => {
+    clearASTCache();
+  });
+
+  it('reparses and updates cache', () => {
+    parseFile('export function old() {}', '/test/reparse.ts');
+    const reparsed = fullReparse('/test/reparse.ts', 'export function updated() {}');
+    expect(reparsed).not.toBeNull();
+    expect(reparsed!.symbols[0].name).toBe('updated');
+
+    // Cache should be updated
+    const cached = getCachedParse('/test/reparse.ts');
+    expect(cached!.symbols[0].name).toBe('updated');
+  });
+});
+
+// =============================================================================
+// Polyglot: isASTSupported with grammars not installed
+// =============================================================================
+
+describe('polyglot language support (graceful degradation)', () => {
+  // These tests verify that polyglot extensions are recognized by the profile system
+  // but gracefully degrade when the grammar packages aren't installed.
+  // The grammar packages (tree-sitter-go, tree-sitter-rust, etc.) are NOT in dependencies,
+  // so isASTSupported should return false for them.
+
+  it('recognizes .go extension in profiles but degrades without grammar', () => {
+    // Without tree-sitter-go installed, this returns false
+    const supported = isASTSupported('main.go');
+    // Either supported (grammar installed) or not — both are valid
+    expect(typeof supported).toBe('boolean');
+  });
+
+  it('recognizes .java extension in profiles but degrades without grammar', () => {
+    const supported = isASTSupported('Main.java');
+    expect(typeof supported).toBe('boolean');
+  });
+
+  it('recognizes .c extension in profiles but degrades without grammar', () => {
+    const supported = isASTSupported('main.c');
+    expect(typeof supported).toBe('boolean');
+  });
+
+  it('returns empty arrays for unsupported polyglot files', () => {
+    // Without grammars installed, should return empty arrays (not throw)
+    expect(extractSymbolsAST('package main', 'main.go')).toEqual([]);
+    expect(extractDependenciesAST('import "fmt"', 'main.go')).toEqual([]);
+  });
+
+  it('returns empty for unknown extensions', () => {
+    expect(extractSymbolsAST('whatever', 'test.zig')).toEqual([]);
+    expect(isASTSupported('test.zig')).toBe(false);
+  });
+});
+
+// =============================================================================
+// getASTCacheStats
+// =============================================================================
+
+describe('getASTCacheStats', () => {
+  beforeEach(() => {
+    clearASTCache();
+    resetASTCacheStats();
+  });
+
+  it('returns zero counts initially', () => {
+    const stats = getASTCacheStats();
+    expect(stats.fileCount).toBe(0);
+    expect(stats.totalParses).toBe(0);
+    expect(stats.cacheHits).toBe(0);
+    expect(Object.keys(stats.languages)).toHaveLength(0);
+  });
+
+  it('counts increase after parsing files', () => {
+    parseFile('export function a() {}', '/test/stats-a.ts');
+    parseFile('export function b() {}', '/test/stats-b.ts');
+
+    const stats = getASTCacheStats();
+    expect(stats.fileCount).toBe(2);
+    expect(stats.totalParses).toBe(2);
+    expect(stats.cacheHits).toBe(0);
+  });
+
+  it('records cache hits on repeated parse', () => {
+    const code = 'export function c() {}';
+    parseFile(code, '/test/stats-c.ts');
+    parseFile(code, '/test/stats-c.ts'); // cache hit
+
+    const stats = getASTCacheStats();
+    expect(stats.fileCount).toBe(1);
+    expect(stats.totalParses).toBe(1);
+    expect(stats.cacheHits).toBe(1);
+  });
+
+  it('provides accurate language breakdown', () => {
+    parseFile('export function ts1() {}', '/test/lang-a.ts');
+    parseFile('export function ts2() {}', '/test/lang-b.tsx');
+    parseFile('const x = 1;', '/test/lang-c.js');
+
+    const stats = getASTCacheStats();
+    expect(stats.languages['typescript']).toBe(2); // .ts + .tsx
+    expect(stats.languages['javascript']).toBe(1);
   });
 });

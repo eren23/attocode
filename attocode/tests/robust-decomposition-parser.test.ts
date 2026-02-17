@@ -11,7 +11,7 @@ import {
   parseDecompositionResponse,
   repairJSON,
   extractSubtasksFromNaturalLanguage,
-} from '../src/integrations/smart-decomposer.js';
+} from '../src/integrations/tasks/smart-decomposer.js';
 
 // =============================================================================
 // Layer 0: Standard JSON (existing behavior preserved)

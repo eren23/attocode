@@ -10,7 +10,7 @@ import { defineTool } from './registry.js';
 import { classifyCommand, classifyBashCommandDangerLevel } from './permission.js';
 import { coerceBoolean } from './coercion.js';
 import type { ToolResult, DangerLevel } from './types.js';
-import { logger } from '../integrations/logger.js';
+import { logger } from '../integrations/utilities/logger.js';
 
 // =============================================================================
 // BASH COMMAND TOOL

@@ -10,7 +10,7 @@ import {
   refreshEnvironmentFacts,
   formatFactsBlock,
   formatFactsCompact,
-} from '../src/integrations/environment-facts.js';
+} from '../src/integrations/utilities/environment-facts.js';
 
 describe('getEnvironmentFacts', () => {
   beforeEach(() => {

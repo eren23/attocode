@@ -37,6 +37,7 @@ import {
   type CacheBreakpointInfo,
   type TracedMessage,
 } from './types.js';
+import { estimateTokenCount } from '../integrations/utilities/token-estimate.js';
 import { stableStringify } from '../tricks/kv-cache-context.js';
 
 // =============================================================================
@@ -505,8 +506,7 @@ export class CacheBoundaryTracker {
    * Estimate tokens from content (rough approximation).
    */
   private estimateTokensFromContent(content: string): number {
-    // Rough estimate: 1 token per 4 characters
-    return Math.ceil(content.length / 4);
+    return estimateTokenCount(content);
   }
 
   /**

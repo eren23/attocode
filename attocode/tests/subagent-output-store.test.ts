@@ -7,7 +7,7 @@ import {
   SubagentOutputStore,
   createSubagentOutputStore,
   type SubagentOutput,
-} from '../src/integrations/subagent-output-store.js';
+} from '../src/integrations/agents/subagent-output-store.js';
 
 function makeOutput(overrides?: Partial<SubagentOutput>): SubagentOutput {
   return {

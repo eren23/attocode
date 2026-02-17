@@ -14,7 +14,7 @@ import { join } from 'node:path';
 import {
   FileChangeTracker,
   createFileChangeTracker,
-} from '../../src/integrations/file-change-tracker.js';
+} from '../../src/integrations/utilities/file-change-tracker.js';
 
 describe('FileChangeTracker', () => {
   let db: Database.Database;

@@ -11,13 +11,13 @@ import {
   sandboxExec,
   BasicSandbox,
   type SandboxOptions,
-} from '../src/integrations/sandbox/index.js';
+} from '../src/integrations/safety/sandbox/index.js';
 import {
   detectFileCreationViaBash,
   isCommandSafe,
   sanitizeArgument,
   buildSafeCommand,
-} from '../src/integrations/sandbox/basic.js';
+} from '../src/integrations/safety/sandbox/basic.js';
 
 describe('BasicSandbox', () => {
   let sandbox: BasicSandbox;

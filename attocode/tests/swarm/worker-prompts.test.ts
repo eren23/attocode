@@ -5,7 +5,7 @@ import { describe, it, expect, vi } from 'vitest';
 import { SwarmWorkerPool, isLightweightModel } from '../../src/integrations/swarm/worker-pool.js';
 import { DEFAULT_SWARM_CONFIG } from '../../src/integrations/swarm/types.js';
 import type { SwarmConfig, SwarmTask } from '../../src/integrations/swarm/types.js';
-import type { AgentRegistry, AgentDefinition } from '../../src/integrations/agent-registry.js';
+import type { AgentRegistry, AgentDefinition } from '../../src/integrations/agents/agent-registry.js';
 import type { SwarmBudgetPool } from '../../src/integrations/swarm/swarm-budget.js';
 
 // Capture registered agent definitions

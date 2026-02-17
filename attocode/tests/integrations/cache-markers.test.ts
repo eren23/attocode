@@ -10,7 +10,7 @@ import { describe, it, expect } from 'vitest';
 import {
   CacheAwareContext,
 } from '../../src/tricks/kv-cache-context.js';
-import { createContextEngineering } from '../../src/integrations/context-engineering.js';
+import { createContextEngineering } from '../../src/integrations/context/context-engineering.js';
 
 describe('CacheAwareContext.buildCacheableSystemPrompt', () => {
   function createContext(staticPrefix = 'You are a helpful assistant.') {

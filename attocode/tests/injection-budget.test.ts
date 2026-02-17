@@ -7,7 +7,7 @@ import {
   InjectionBudgetManager,
   createInjectionBudgetManager,
   type InjectionSlot,
-} from '../src/integrations/injection-budget.js';
+} from '../src/integrations/budget/injection-budget.js';
 
 function makeSlot(name: string, priority: number, content: string, maxTokens = 500): InjectionSlot {
   return { name, priority, maxTokens, content };

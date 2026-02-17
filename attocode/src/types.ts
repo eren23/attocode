@@ -55,13 +55,30 @@ export interface ToolDefinition {
 }
 
 /**
- * Content block with optional cache_control marker for prompt caching.
+ * Text content block with optional cache_control marker for prompt caching.
  */
-export interface ContentBlock {
+export interface TextContentBlock {
   type: 'text';
   text: string;
   cache_control?: { type: 'ephemeral' };
 }
+
+/**
+ * Image content block for vision support.
+ */
+export interface ImageContentBlock {
+  type: 'image';
+  source: {
+    type: 'base64' | 'url';
+    media_type: string;
+    data: string;
+  };
+}
+
+/**
+ * Content block: text or image.
+ */
+export type ContentBlock = TextContentBlock | ImageContentBlock;
 
 /**
  * Message that supports both string and structured content (for prompt caching).
@@ -1498,6 +1515,9 @@ export type AgentEvent =
   | { type: 'safeguard.tool_call_cap'; requested: number; cap: number; droppedCount: number }
   | { type: 'safeguard.circuit_breaker'; totalInBatch: number; failures: number; threshold: number; skipped: number }
   | { type: 'safeguard.context_overflow_guard'; estimatedTokens: number; maxTokens: number; toolResultsSkipped: number }
+  // Diagnostics events (AST + compilation visibility)
+  | { type: 'diagnostics.syntax-error'; file: string; line: number; message: string }
+  | { type: 'diagnostics.tsc-check'; errorCount: number; duration: number; trigger: 'periodic' | 'completion' | 'manual' }
   // Swarm mode events (M8: use union with canonical SwarmEvent type)
   | import('./integrations/swarm/swarm-events.js').SwarmEvent;
 

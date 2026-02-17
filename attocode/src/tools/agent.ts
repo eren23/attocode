@@ -7,7 +7,7 @@
  */
 
 import type { ToolDefinition } from '../types.js';
-import type { SpawnResult } from '../integrations/agent-registry.js';
+import type { SpawnResult } from '../integrations/agents/agent-registry.js';
 
 // =============================================================================
 // CONSTANTS

@@ -16,10 +16,10 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { DEFAULT_SWARM_CONFIG } from '../../src/integrations/swarm/types.js';
 import type { SwarmTask, SwarmConfig, SwarmTaskResult, SwarmTaskStatus } from '../../src/integrations/swarm/types.js';
-import type { SmartDecompositionResult, SmartSubtask } from '../../src/integrations/smart-decomposer.js';
+import type { SmartDecompositionResult, SmartSubtask } from '../../src/integrations/tasks/smart-decomposer.js';
 import { SwarmTaskQueue } from '../../src/integrations/swarm/task-queue.js';
 import { SwarmWorkerPool } from '../../src/integrations/swarm/worker-pool.js';
-import type { AgentRegistry, AgentDefinition } from '../../src/integrations/agent-registry.js';
+import type { AgentRegistry, AgentDefinition } from '../../src/integrations/agents/agent-registry.js';
 import type { SwarmBudgetPool } from '../../src/integrations/swarm/swarm-budget.js';
 import type { SwarmEvent } from '../../src/integrations/swarm/swarm-events.js';
 

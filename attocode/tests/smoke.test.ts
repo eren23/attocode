@@ -67,27 +67,27 @@ describe('Smoke Tests', () => {
     });
 
     it('imports cancellation', async () => {
-      const { CancellationManager } = await import('../src/integrations/cancellation.js');
+      const { CancellationManager } = await import('../src/integrations/budget/cancellation.js');
       expect(CancellationManager).toBeDefined();
     });
 
     it('imports memory', async () => {
-      const { MemoryManager } = await import('../src/integrations/memory.js');
+      const { MemoryManager } = await import('../src/integrations/utilities/memory.js');
       expect(MemoryManager).toBeDefined();
     });
 
     it('imports planning', async () => {
-      const { PlanningManager } = await import('../src/integrations/planning.js');
+      const { PlanningManager } = await import('../src/integrations/tasks/planning.js');
       expect(PlanningManager).toBeDefined();
     });
 
     it('imports hooks', async () => {
-      const { HookManager } = await import('../src/integrations/hooks.js');
+      const { HookManager } = await import('../src/integrations/utilities/hooks.js');
       expect(HookManager).toBeDefined();
     });
 
     it('imports sandbox', async () => {
-      const sandbox = await import('../src/integrations/sandbox/index.js');
+      const sandbox = await import('../src/integrations/safety/sandbox/index.js');
       expect(sandbox).toBeDefined();
     });
   });

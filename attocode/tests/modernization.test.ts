@@ -24,7 +24,7 @@ import {
   getDiffStats,
   formatDiffColored,
   type UnifiedDiff,
-} from '../src/integrations/diff-utils.js';
+} from '../src/integrations/utilities/diff-utils.js';
 
 describe('Diff Utils', () => {
   describe('parseUnifiedDiff', () => {
@@ -332,7 +332,7 @@ import {
   canRenderImage,
   getProtocolInfo,
   type ImageProtocol,
-} from '../src/integrations/image-renderer.js';
+} from '../src/integrations/utilities/image-renderer.js';
 
 describe('Image Renderer', () => {
   describe('detectProtocol', () => {
@@ -441,7 +441,7 @@ import {
   SQLiteStore,
   createSQLiteStore,
   type SQLiteStoreConfig,
-} from '../src/integrations/sqlite-store.js';
+} from '../src/integrations/persistence/sqlite-store.js';
 
 describe('SQLite Store', () => {
   let store: SQLiteStore;
@@ -690,7 +690,7 @@ import {
   isSourcegraphConfigured,
   formatSearchResults,
   type SearchResponse,
-} from '../src/integrations/sourcegraph.js';
+} from '../src/integrations/utilities/sourcegraph.js';
 
 describe('Sourcegraph Client', () => {
   describe('isSourcegraphConfigured', () => {
@@ -809,7 +809,7 @@ describe('Sourcegraph Client', () => {
 // PRICING UPDATES TESTS
 // =============================================================================
 
-import { DEFAULT_PRICING, getModelPricing, calculateCost, formatCost } from '../src/integrations/openrouter-pricing.js';
+import { DEFAULT_PRICING, getModelPricing, calculateCost, formatCost } from '../src/integrations/utilities/openrouter-pricing.js';
 
 describe('Pricing Updates', () => {
   describe('DEFAULT_PRICING', () => {
@@ -894,7 +894,7 @@ describe('TUI State Updates', () => {
 // EXECUTION ECONOMICS MANAGER TESTS
 // =============================================================================
 
-import { ExecutionEconomicsManager } from '../src/integrations/economics.js';
+import { ExecutionEconomicsManager } from '../src/integrations/budget/economics.js';
 
 describe('ExecutionEconomicsManager', () => {
   describe('initialization', () => {
@@ -1048,7 +1048,7 @@ describe('ExecutionEconomicsManager', () => {
       }
       const result = manager.checkBudget();
 
-      expect(result.canContinue).toBe(true);
+      expect(result.canContinue).toBe(false);
       expect(result.budgetType).toBe('iterations');
       expect(result.forceTextOnly).toBe(true);
       expect(result.suggestedAction).toBe('stop');
@@ -1100,7 +1100,7 @@ describe('ExecutionEconomicsManager', () => {
 // PRICING API TESTS
 // =============================================================================
 
-import { fetchOpenRouterPricing, initPricingCache, pricingCache } from '../src/integrations/openrouter-pricing.js';
+import { fetchOpenRouterPricing, initPricingCache, pricingCache } from '../src/integrations/utilities/openrouter-pricing.js';
 
 describe('OpenRouter Pricing API', () => {
   describe('fetchOpenRouterPricing', () => {
