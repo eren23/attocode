@@ -10,22 +10,19 @@
 
 import { useState, useCallback, useEffect, memo, useRef, useMemo } from 'react';
 import { Box, Text, useApp, useInput, Static } from 'ink';
-import {
-  ActiveAgentsPanel,
-  type ActiveAgent,
-  type ActiveAgentStatus,
-} from './components/ActiveAgentsPanel.js';
+import { ActiveAgentsPanel, type ActiveAgent } from './components/ActiveAgentsPanel.js';
 import { TasksPanel } from './components/TasksPanel.js';
 import { SwarmStatusPanel } from './components/SwarmStatusPanel.js';
 import type { SwarmStatus } from '../integrations/swarm/types.js';
-import {
-  ToolCallItem,
-  type ToolCallDisplayItem as ImportedToolCallDisplayItem,
-} from './components/ToolCallItem.js';
+import { type ToolCallDisplayItem as ImportedToolCallDisplayItem } from './components/ToolCallItem.js';
 import { DebugPanel, useDebugBuffer } from './components/DebugPanel.js';
 import { DiagnosticsPanel } from './components/DiagnosticsPanel.js';
 import { runTypeCheck, getASTCacheStats } from '../integrations/index.js';
 import { estimateTokenCount } from '../integrations/utilities/token-estimate.js';
+import { StatusBar } from './components/StatusBar.js';
+import { ToolCallsPanel } from './components/ToolCallsPanel.js';
+import { TransparencyPanel } from './components/TransparencyPanel.js';
+import { useAgentEvents } from './hooks/use-agent-events.js';
 import type { Task } from '../integrations/tasks/task-manager.js';
 import type { ProductionAgent } from '../agent.js';
 import type { SQLiteStore } from '../integrations/persistence/sqlite-store.js';
@@ -36,12 +33,8 @@ import { getTheme, getThemeNames } from './theme/index.js';
 import { ControlledCommandPalette } from './input/CommandPalette.js';
 import { ApprovalDialog } from './components/ApprovalDialog.js';
 import type { TUIApprovalBridge } from '../adapters.js';
-import type { ApprovalRequest as TypesApprovalRequest, AgentEvent } from '../types.js';
-import {
-  TransparencyAggregator,
-  formatTransparencyState,
-  type TransparencyState,
-} from './transparency-aggregator.js';
+import type { ApprovalRequest as TypesApprovalRequest } from '../types.js';
+import type { TransparencyState } from './transparency-aggregator.js';
 import { handleSkillsCommand, formatEnhancedSkillList } from '../commands/skills-commands.js';
 import { handleAgentsCommand, formatEnhancedAgentList } from '../commands/agents-commands.js';
 import { handleInitCommand } from '../commands/init-commands.js';
@@ -734,12 +727,50 @@ export function TUIApp({
   const initialModeInfo = agent.getModeInfo();
   const initialMode = initialModeInfo.name === 'Plan' ? 'ready (plan)' : 'ready';
   const [status, setStatus] = useState({ iter: 0, tokens: 0, cost: 0, mode: initialMode });
+
+  // Throttled mode-only setter for handleAgentEvent — rapid mode transitions
+  // (thinking→calling X→thinking) collapse into the latest value instead of
+  // triggering 5-7 renders per LLM iteration
+  const statusModeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const pendingStatusRef = useRef<((s: typeof status) => typeof status) | null>(null);
+  const lastStatusModeUpdateRef = useRef(0);
+  const STATUS_MODE_THROTTLE_MS = 150;
+
+  const setStatusThrottled = useCallback(
+    (updater: (s: { iter: number; tokens: number; cost: number; mode: string }) => { iter: number; tokens: number; cost: number; mode: string }) => {
+      const now = Date.now();
+      const elapsed = now - lastStatusModeUpdateRef.current;
+
+      if (elapsed >= STATUS_MODE_THROTTLE_MS) {
+        lastStatusModeUpdateRef.current = now;
+        setStatus(updater);
+        pendingStatusRef.current = null;
+      } else {
+        pendingStatusRef.current = updater;
+        if (!statusModeTimerRef.current) {
+          statusModeTimerRef.current = setTimeout(() => {
+            statusModeTimerRef.current = null;
+            if (pendingStatusRef.current) {
+              lastStatusModeUpdateRef.current = Date.now();
+              setStatus(pendingStatusRef.current);
+              pendingStatusRef.current = null;
+            }
+          }, STATUS_MODE_THROTTLE_MS - elapsed);
+        }
+      }
+    },
+    [],
+  );
+
+  // Cleanup throttle timer
+  useEffect(() => {
+    return () => {
+      if (statusModeTimerRef.current) clearTimeout(statusModeTimerRef.current);
+    };
+  }, []);
   const [toolCalls, setToolCalls] = useState<ToolCallDisplayItem[]>([]);
   const [currentThemeName, setCurrentThemeName] = useState<string>(theme);
-  const [contextTokens, setContextTokens] = useState(0);
-  const [budgetPct, setBudgetPct] = useState(0);
-  const [elapsedTime, setElapsedTime] = useState(0);
-  const processingStartRef = useRef<number | null>(null);
+  // contextTokens, budgetPct, elapsedTime are now colocated in StatusBar component
 
   // Command history manager (persistent)
   const historyManagerRef = useRef<HistoryManager | null>(null);
@@ -771,6 +802,13 @@ export function TUIApp({
   const [swarmExpanded, setSwarmExpanded] = useState(true);
   const [diagExpanded, setDiagExpanded] = useState(false);
 
+  // Refs for values used inside handleAgentEvent — prevents subscription churn
+  // when user toggles these display settings
+  const showThinkingRef = useRef(showThinking);
+  showThinkingRef.current = showThinking;
+  const debugExpandedRef = useRef(debugExpanded);
+  debugExpandedRef.current = debugExpanded;
+
   // Swarm status tracking (for Swarm Status Panel)
   const [swarmStatus, setSwarmStatus] = useState<SwarmStatus | null>(null);
 
@@ -795,7 +833,6 @@ export function TUIApp({
 
   // Transparency state
   const [transparencyState, setTransparencyState] = useState<TransparencyState | null>(null);
-  const transparencyAggregatorRef = useRef<TransparencyAggregator | null>(null);
 
   // Consecutive Ctrl+C tracking for force exit
   const [ctrlCCount, setCtrlCCount] = useState(0);
@@ -976,565 +1013,22 @@ export function TUIApp({
   }, [sessionStore]);
 
   // =========================================================================
-  // UNIFIED EVENT HANDLER
-  // Consolidated handler for all agent events - prevents duplicate messages
+  // AGENT EVENT HANDLING (extracted to hook)
   // =========================================================================
-
-  const handleAgentEvent = useCallback(
-    (event: AgentEvent) => {
-      const mode = executionModeRef.current;
-      if (mode === 'idle') return; // No active execution, ignore events
-
-      // Log event to debug buffer
-      if (debugExpanded) {
-        debugBuffer.debug(`Event: ${event.type}`, event as Record<string, unknown>);
-      }
-
-      // Extract subagent from event if present (not all events have it)
-      const eventWithSubagent = event as { subagent?: string };
-      const subagentPrefix = eventWithSubagent.subagent ? `[${eventWithSubagent.subagent}] ` : '';
-
-      // -------------------------------------------------------------------------
-      // Approving-only events (plan execution)
-      // -------------------------------------------------------------------------
-      if (mode === 'approving') {
-        if (event.type === 'plan.approved') {
-          const e = event as { changeCount: number };
-          addMessage('system', `[PLAN] Executing ${e.changeCount} change(s)...`);
-          return;
-        }
-        if (event.type === 'plan.executing') {
-          const e = event as { changeIndex: number; totalChanges: number };
-          setStatus((s) => ({ ...s, mode: `executing ${e.changeIndex + 1}/${e.totalChanges}` }));
-          return;
-        }
-      }
-
-      // -------------------------------------------------------------------------
-      // Shared events (both processing and approving modes)
-      // -------------------------------------------------------------------------
-
-      // Subagent lifecycle events - also update Active Agents Panel
-      if (event.type === 'agent.spawn') {
-        const e = event as { agentId: string; name: string; task: string };
-        const agentId = e.agentId || `spawn-${Date.now()}`;
-        addMessage(
-          'system',
-          `[AGENT] Spawning ${e.name}: ${e.task.slice(0, 100)}${e.task.length > 100 ? '...' : ''}`,
-        );
-        // Add to active agents panel
-        setActiveAgents((prev) => [
-          ...prev,
-          {
-            id: agentId,
-            type: e.name,
-            task: e.task,
-            status: 'running' as ActiveAgentStatus,
-            tokens: 0,
-            startTime: Date.now(),
-          },
-        ]);
-        return;
-      }
-      if (event.type === 'agent.complete') {
-        const e = event as {
-          agentId: string;
-          agentType?: string;
-          success: boolean;
-          output?: string;
-        };
-        const statusText = e.success ? 'completed' : 'failed';
-        const displayName = e.agentType || e.agentId;
-        addMessage('system', `[AGENT] ${displayName} ${statusText}`);
-        // Show output preview if substantive (increased from 300 to 1000 chars)
-        if (e.output && e.output.length > 50) {
-          const preview = e.output.slice(0, 1000);
-          const truncated = e.output.length > 1000;
-          addMessage(
-            'system',
-            `[AGENT OUTPUT]\n${preview}${truncated ? `\n...(full output: ${e.output.length} chars)` : ''}`,
-          );
-        }
-        // Update active agents panel - use strict ID matching
-        setActiveAgents((prev) =>
-          prev.map((a) =>
-            a.id === e.agentId
-              ? {
-                  ...a,
-                  status: e.success
-                    ? ('completed' as ActiveAgentStatus)
-                    : ('error' as ActiveAgentStatus),
-                }
-              : a,
-          ),
-        );
-        return;
-      }
-      if (event.type === 'agent.error') {
-        const e = event as { agentId: string; agentType?: string; error: string };
-        const displayName = e.agentType || e.agentId;
-        addMessage('system', `[AGENT] ${displayName} error: ${e.error}`);
-
-        // For timeout errors, use 'timing_out' status first to indicate the agent
-        // is in the process of stopping. Then transition to 'timeout' after a delay.
-        // This provides better UX than immediately showing "failed" while tokens accumulate.
-        const isTimeout = e.error.includes('timed out') || e.error.includes('Timed out');
-
-        if (isTimeout) {
-          // First, mark as timing_out - use strict ID matching
-          setActiveAgents((prev) =>
-            prev.map((a) =>
-              a.id === e.agentId ? { ...a, status: 'timing_out' as ActiveAgentStatus } : a,
-            ),
-          );
-
-          // After 3 seconds, transition to final timeout status
-          // (agent should have stopped by then due to cancellation token check)
-          setTimeout(() => {
-            setActiveAgents((prev) =>
-              prev.map((a) =>
-                a.id === e.agentId && a.status === 'timing_out'
-                  ? { ...a, status: 'timeout' as ActiveAgentStatus }
-                  : a,
-              ),
-            );
-          }, 3000);
-        } else {
-          // Regular error - set immediately with strict ID matching
-          setActiveAgents((prev) =>
-            prev.map((a) =>
-              a.id === e.agentId ? { ...a, status: 'error' as ActiveAgentStatus } : a,
-            ),
-          );
-        }
-        return;
-      }
-      if (event.type === 'agent.pending_plan') {
-        const e = event as { agentId: string; changes: Array<{ tool: string }> };
-        addMessage(
-          'system',
-          `[AGENT] ${e.agentId} queued ${e.changes.length} change(s) to pending plan`,
-        );
-        return;
-      }
-
-      // Tool events
-      if (event.type === 'tool.start') {
-        const e = event as { tool: string; args?: Record<string, unknown>; subagent?: string };
-        const displayName = e.subagent ? `${e.subagent}:${e.tool}` : e.tool;
-        setStatus((s) => ({ ...s, mode: `calling ${displayName}` }));
-        setToolCalls((prev) => [
-          ...prev.slice(-4),
-          {
-            id: `${displayName}-${Date.now()}`,
-            name: displayName,
-            args: e.args || {},
-            status: 'running',
-            startTime: new Date(),
-          },
-        ]);
-        return;
-      }
-      if (event.type === 'tool.complete') {
-        const e = event as { tool: string; result?: unknown; subagent?: string };
-        const displayName = e.subagent ? `${e.subagent}:${e.tool}` : e.tool;
-        const modeText = e.subagent
-          ? `${e.subagent} thinking`
-          : mode === 'approving'
-            ? 'executing plan'
-            : 'thinking';
-        setStatus((s) => ({ ...s, mode: modeText }));
-        setToolCalls((prev) =>
-          prev.map((t) =>
-            t.name === displayName
-              ? {
-                  ...t,
-                  status: 'success' as const,
-                  result: e.result,
-                  duration: t.startTime ? Date.now() - t.startTime.getTime() : undefined,
-                }
-              : t,
-          ),
-        );
-        return;
-      }
-      if (event.type === 'tool.blocked') {
-        const e = event as { tool: string; reason?: string; subagent?: string };
-        const displayName = e.subagent ? `${e.subagent}:${e.tool}` : e.tool;
-        setToolCalls((prev) =>
-          prev.map((t) =>
-            t.name === displayName
-              ? {
-                  ...t,
-                  status: 'error' as const,
-                  error: e.reason || 'Blocked',
-                }
-              : t,
-          ),
-        );
-        return;
-      }
-
-      // LLM events
-      if (event.type === 'llm.start') {
-        const e = event as { subagent?: string };
-        const modeText = e.subagent
-          ? `${e.subagent} thinking`
-          : mode === 'approving'
-            ? 'executing plan'
-            : 'thinking';
-        setStatus((s) => ({ ...s, mode: modeText, iter: s.iter + 1 }));
-        return;
-      }
-      if (event.type === 'llm.complete' && eventWithSubagent.subagent && showThinking) {
-        const e = event as { response?: { thinking?: string; content?: string } };
-        const thinking = e.response?.thinking;
-        if (thinking) {
-          const preview = thinking.length > 500 ? thinking.slice(0, 500) + '...' : thinking;
-          addMessage('system', `[${eventWithSubagent.subagent}] ${preview}`);
-        }
-        return;
-      }
-
-      // Error events
-      if (event.type === 'error') {
-        const e = event as { error: string | { message?: string }; subagent?: string };
-        const prefix = e.subagent ? `[${e.subagent} ERROR]` : '[ERROR]';
-        const errorMsg =
-          typeof e.error === 'string' ? e.error : e.error?.message || 'Unknown error';
-        addMessage('error', `${prefix} ${errorMsg}`);
-        return;
-      }
-      if (event.type === 'completion.blocked') {
-        const e = event as {
-          reasons: string[];
-          openTasks?: { pending: number; inProgress: number; blocked: number };
-          diagnostics?: {
-            forceTextOnly?: boolean;
-            availableTasks?: number;
-            pendingWithOwner?: number;
-          };
-        };
-        const details = e.reasons?.length
-          ? e.reasons.join('\n')
-          : 'Completion blocked by unresolved work.';
-        const openTasksLine = e.openTasks
-          ? `Open tasks: ${e.openTasks.pending} pending, ${e.openTasks.inProgress} in_progress, ${e.openTasks.blocked} blocked`
-          : '';
-        const constrainedLine = e.diagnostics?.forceTextOnly
-          ? 'Task continuation is currently suppressed by budget/wrapup force-text mode.'
-          : '';
-        addMessage(
-          'system',
-          `[INCOMPLETE]\n${details}${openTasksLine ? `\n${openTasksLine}` : ''}${constrainedLine ? `\n${constrainedLine}` : ''}`,
-        );
-        setStatus((s) => ({ ...s, mode: 'incomplete' }));
-        return;
-      }
-
-      // Insight events - also track tokens for active agents
-      if (event.type === 'insight.tokens') {
-        const e = event as {
-          inputTokens: number;
-          outputTokens: number;
-          cacheReadTokens?: number;
-          cacheWriteTokens?: number;
-          cost?: number;
-          subagent?: string;
-        };
-        if (showThinking) {
-          let cacheStr = '';
-          if (e.cacheReadTokens && e.cacheReadTokens > 0) {
-            cacheStr += ` [cached: ${e.cacheReadTokens.toLocaleString()}]`;
-          }
-          if (e.cacheWriteTokens && e.cacheWriteTokens > 0) {
-            cacheStr += ` [cache-write: ${e.cacheWriteTokens.toLocaleString()}]`;
-          }
-          addMessage(
-            'system',
-            `${subagentPrefix}* ${e.inputTokens.toLocaleString()} in, ${e.outputTokens.toLocaleString()} out${cacheStr}${e.cost ? ` $${e.cost.toFixed(6)}` : ''}`,
-          );
-        }
-        // Update tokens for active agent if this event is from a subagent
-        // IMPORTANT: Don't update tokens for agents that are timing_out/timeout/error
-        // These agents should have stopped, and any lingering events are from
-        // zombie processes that we don't want to count.
-        if (e.subagent || eventWithSubagent.subagent) {
-          const subagentId =
-            (e as { subagentId?: string }).subagentId ||
-            (eventWithSubagent as { subagentId?: string }).subagentId;
-          const agentName = e.subagent || eventWithSubagent.subagent;
-          setActiveAgents((prev) =>
-            prev.map((a) => {
-              // Use strict ID matching when subagentId is available (prevents duplicate counting
-              // when multiple agents of the same type run in parallel)
-              const matchesAgent = subagentId
-                ? a.id === subagentId
-                : a.type === agentName || a.id.includes(agentName || '');
-              const isStillRunning = a.status === 'running';
-              // Only update tokens if agent is still running
-              if (matchesAgent && isStillRunning) {
-                return { ...a, tokens: a.tokens + (e.inputTokens || 0) + (e.outputTokens || 0) };
-              }
-              return a;
-            }),
-          );
-        }
-        return;
-      }
-
-      // Resilience events
-      if (event.type === 'resilience.retry') {
-        const e = event as { reason: string; attempt: number; maxAttempts: number };
-        addMessage('system', `[RETRY] ${e.reason} (${e.attempt}/${e.maxAttempts})`);
-        return;
-      }
-      if (event.type === 'resilience.recovered') {
-        const e = event as { reason: string; attempts: number };
-        addMessage('system', `[RECOVERED] ${e.reason} after ${e.attempts} attempt(s)`);
-        return;
-      }
-
-      // Subagent visibility events - also update Active Agents Panel
-      if (event.type === 'subagent.iteration') {
-        const e = event as {
-          agentId: string;
-          iteration: number;
-          maxIterations: number;
-          subagentId?: string;
-        };
-        setStatus((s) => ({ ...s, mode: `${e.agentId} iter ${e.iteration}/${e.maxIterations}` }));
-        // Update active agents panel with iteration info
-        // Use subagentId for strict matching when available (parallel same-type agents)
-        setActiveAgents((prev) =>
-          prev.map((a) => {
-            const matches = e.subagentId
-              ? a.id === e.subagentId
-              : a.type === e.agentId || a.id.includes(e.agentId);
-            return matches ? { ...a, iteration: e.iteration, maxIterations: e.maxIterations } : a;
-          }),
-        );
-        return;
-      }
-      if (event.type === 'subagent.phase') {
-        const e = event as { agentId: string; phase: string; subagentId?: string };
-        setStatus((s) => ({ ...s, mode: `${e.agentId} ${e.phase}` }));
-        // Update active agents panel with phase info
-        // Use subagentId for strict matching when available (parallel same-type agents)
-        setActiveAgents((prev) =>
-          prev.map((a) => {
-            const matches = e.subagentId
-              ? a.id === e.subagentId
-              : a.type === e.agentId || a.id.includes(e.agentId);
-            return matches ? { ...a, currentPhase: e.phase } : a;
-          }),
-        );
-        return;
-      }
-
-      // Task events - update Tasks Panel
-      if (event.type === 'task.created') {
-        const e = event as unknown as { task: Task };
-        setTasks((prev) => [...prev, e.task]);
-        addMessage('system', `[TASK] Created: ${e.task.subject}`);
-        return;
-      }
-      if (event.type === 'task.updated') {
-        const e = event as unknown as { task: Task };
-        setTasks((prev) => prev.map((t) => (t.id === e.task.id ? e.task : t)));
-        // Only log status changes
-        addMessage('system', `[TASK] ${e.task.subject}: ${e.task.status}`);
-        return;
-      }
-
-      // Swarm events - update Swarm Status Panel
-      if (event.type === 'swarm.status') {
-        const e = event as { status: SwarmStatus };
-        setSwarmStatus(e.status);
-        return;
-      }
-      if (event.type === 'swarm.start') {
-        const e = event as { taskCount: number; waveCount: number };
-        addMessage('system', `[SWARM] Starting: ${e.taskCount} tasks in ${e.waveCount} waves`);
-        return;
-      }
-      if (event.type === 'swarm.wave.start') {
-        const e = event as { wave: number; totalWaves: number; taskCount: number };
-        addMessage(
-          'system',
-          `[SWARM] Wave ${e.wave}/${e.totalWaves}: dispatching ${e.taskCount} tasks`,
-        );
-        return;
-      }
-      if (event.type === 'swarm.wave.complete') {
-        const e = event as {
-          wave: number;
-          totalWaves: number;
-          completed: number;
-          failed: number;
-          skipped: number;
-        };
-        addMessage(
-          'system',
-          `[SWARM] Wave ${e.wave}/${e.totalWaves} complete: ${e.completed} done${e.failed > 0 ? `, ${e.failed} failed` : ''}${e.skipped > 0 ? `, ${e.skipped} skipped` : ''}`,
-        );
-        return;
-      }
-      if (event.type === 'swarm.task.dispatched') {
-        const e = event as {
-          taskId: string;
-          workerName: string;
-          model: string;
-          description: string;
-        };
-        addMessage(
-          'system',
-          `[SWARM] ${e.taskId} -> ${e.workerName} (${e.model.split('/').pop()}): ${e.description.slice(0, 80)}`,
-        );
-        return;
-      }
-      if (event.type === 'swarm.task.completed') {
-        const e = event as {
-          taskId: string;
-          success: boolean;
-          tokensUsed: number;
-          costUsed: number;
-          durationMs: number;
-        };
-        addMessage(
-          'system',
-          `[SWARM] ${e.taskId} ${e.success ? 'completed' : 'failed'} (${(e.tokensUsed / 1000).toFixed(1)}k tokens, $${e.costUsed.toFixed(4)}, ${(e.durationMs / 1000).toFixed(1)}s)`,
-        );
-        return;
-      }
-      if (event.type === 'swarm.task.failed') {
-        const e = event as { taskId: string; error: string; willRetry: boolean };
-        addMessage(
-          'system',
-          `[SWARM] ${e.taskId} failed: ${e.error}${e.willRetry ? ' (will retry)' : ''}`,
-        );
-        return;
-      }
-      if (event.type === 'swarm.task.skipped') {
-        const e = event as { taskId: string; reason: string };
-        addMessage('system', `[SWARM] ${e.taskId} skipped: ${e.reason}`);
-        return;
-      }
-      if (event.type === 'swarm.quality.rejected') {
-        const e = event as { taskId: string; score: number; feedback: string };
-        addMessage(
-          'system',
-          `[SWARM] ${e.taskId} quality rejected (${e.score}/5): ${e.feedback.slice(0, 100)}`,
-        );
-        return;
-      }
-      if (event.type === 'swarm.complete') {
-        const e = event as {
-          stats: {
-            totalTasks: number;
-            completedTasks: number;
-            failedTasks: number;
-            totalTokens: number;
-            totalCost: number;
-          };
-        };
-        addMessage(
-          'system',
-          `[SWARM] Complete: ${e.stats.completedTasks}/${e.stats.totalTasks} tasks, ${(e.stats.totalTokens / 1000).toFixed(0)}k tokens, $${e.stats.totalCost.toFixed(4)}`,
-        );
-        // Clear swarm status after completion (leave panel visible briefly)
-        setTimeout(() => setSwarmStatus(null), 5000);
-        return;
-      }
-      if (event.type === 'swarm.error') {
-        const e = event as { error: string; phase: string };
-        addMessage('error', `[SWARM ERROR] ${e.phase}: ${e.error}`);
-        return;
-      }
-
-      // -------------------------------------------------------------------------
-      // Processing-only events (normal message submission)
-      // -------------------------------------------------------------------------
-      if (mode === 'processing') {
-        if (event.type === 'plan.change.queued') {
-          const e = event as { tool: string; summary?: string; subagent?: string };
-          const summary = e.summary ? `: ${e.summary}` : '';
-          const prefix = e.subagent ? `[${e.subagent} PLAN]` : '[PLAN]';
-          addMessage('system', `${prefix} Queued ${e.tool}${summary}`);
-          return;
-        }
-        if (event.type === 'plan.change.complete') {
-          const e = event as { changeIndex: number; tool: string; result: unknown; error?: string };
-          if (e.error) {
-            addMessage('system', `[PLAN ${e.changeIndex + 1}] ${e.tool} FAILED: ${e.error}`);
-          } else if (e.tool === 'spawn_agent' && e.result) {
-            const output =
-              typeof e.result === 'object' && e.result !== null && 'output' in e.result
-                ? String((e.result as { output: unknown }).output)
-                : String(e.result);
-            const preview =
-              output.length > 800 ? output.slice(0, 800) + '\n... (truncated)' : output;
-            addMessage('system', `[PLAN ${e.changeIndex + 1}] ${e.tool} result:\n${preview}`);
-          } else {
-            addMessage('system', `[PLAN ${e.changeIndex + 1}] ${e.tool} completed`);
-          }
-          return;
-        }
-        if (event.type === 'cache.hit' && showThinking) {
-          const e = event as { query: string; similarity: number };
-          addMessage('system', `[CACHE HIT] similarity: ${(e.similarity * 100).toFixed(0)}%`);
-          return;
-        }
-        if (event.type === 'cache.miss' && showThinking) {
-          addMessage('system', `[CACHE MISS]`);
-          return;
-        }
-        if (event.type === 'compaction.auto') {
-          const e = event as {
-            tokensBefore: number;
-            tokensAfter: number;
-            messagesCompacted: number;
-          };
-          const before = (e.tokensBefore / 1000).toFixed(1);
-          const after = (e.tokensAfter / 1000).toFixed(1);
-          addMessage(
-            'system',
-            `[COMPACT] ${before}k -> ${after}k tokens (${e.messagesCompacted} messages)`,
-          );
-          return;
-        }
-        if (event.type === 'compaction.warning' && showThinking) {
-          const e = event as { currentTokens: number; threshold: number };
-          const pct = Math.round((e.currentTokens / e.threshold) * 100);
-          addMessage('system', `[!] Context at ${pct}% of threshold`);
-          return;
-        }
-      }
+  const transparencyAggregatorRef = useAgentEvents({
+    agent,
+    refs: { executionModeRef, showThinkingRef, debugExpandedRef },
+    setters: {
+      setStatusThrottled,
+      setToolCalls,
+      setActiveAgents,
+      setTasks,
+      setSwarmStatus,
+      setTransparencyState,
     },
-    [addMessage, showThinking],
-  );
-
-  // Set up transparency aggregator and subscribe to agent events
-  useEffect(() => {
-    const aggregator = new TransparencyAggregator();
-    transparencyAggregatorRef.current = aggregator;
-
-    // Subscribe to state changes
-    const unsubscribeAggregator = aggregator.subscribe((state) => {
-      setTransparencyState(state);
-    });
-
-    // Subscribe to agent events
-    const unsubscribeAgent = agent.subscribe((event: AgentEvent) => {
-      aggregator.processEvent(event);
-      handleAgentEvent(event); // Unified event handler for TUI display
-    });
-
-    return () => {
-      unsubscribeAggregator();
-      unsubscribeAgent();
-    };
-  }, [agent, handleAgentEvent]);
+    addMessage,
+    debugBuffer,
+  });
 
   // =========================================================================
   // COMMAND HANDLER
@@ -2592,7 +2086,6 @@ export function TUIApp({
       currentSessionId,
       formatSessionsTable,
       saveCheckpointToStore,
-      showThinking,
       persistPendingPlanToStore,
     ],
   );
@@ -3133,45 +2626,7 @@ export function TUIApp({
     });
   }, [addMessage]);
 
-  // Update context tokens (include system prompt overhead) and budget health
-  useEffect(() => {
-    const agentState = agent.getState();
-    const estimateTokens = (str: string) => estimateTokenCount(str);
-    const messageTokens = agentState.messages.reduce(
-      (sum: number, m: any) =>
-        sum + estimateTokens(typeof m.content === 'string' ? m.content : JSON.stringify(m.content)),
-      0,
-    );
-    const systemPromptTokens = agent.getSystemPromptTokenEstimate?.() ?? 0;
-    setContextTokens(messageTokens + systemPromptTokens);
-
-    // Update budget health from economics system
-    const budgetUsage = agent.getBudgetUsage?.();
-    if (budgetUsage) {
-      setBudgetPct(Math.round(budgetUsage.percentUsed));
-    }
-  }, [status.tokens, messages.length, agent]);
-
-  // Track elapsed time
-  useEffect(() => {
-    if (isProcessing) {
-      processingStartRef.current = Date.now();
-      setElapsedTime(0);
-      const interval = setInterval(() => {
-        if (processingStartRef.current) {
-          setElapsedTime(Math.floor((Date.now() - processingStartRef.current) / 1000));
-        }
-      }, 1000);
-      return () => clearInterval(interval);
-    } else {
-      processingStartRef.current = null;
-      return undefined;
-    }
-  }, [isProcessing]);
-
-  const modelShort = (model || 'unknown').split('/').pop() || model || 'unknown';
-  const contextPct = Math.round((contextTokens / agent.getMaxContextTokens()) * 100);
-  const costStr = status.cost > 0 ? `$${status.cost.toFixed(4)}` : '$0.00';
+  // modelShort, contextPct, costStr, elapsedTime, budgetPct are now computed inside StatusBar
 
   // =========================================================================
   // RENDER
@@ -3186,109 +2641,15 @@ export function TUIApp({
 
       {/* Dynamic section */}
       <Box flexDirection="column">
-        {toolCalls.length > 0 && (
-          <Box flexDirection="column" marginBottom={1}>
-            <Text color="#DDA0DD" bold>{`Tools ${toolCallsExpanded ? '[-]' : '[+]'}`}</Text>
-            {toolCalls.slice(-5).map((tc) => (
-              <ToolCallItem
-                key={`${tc.id}-${tc.status}`}
-                tc={tc}
-                expanded={toolCallsExpanded}
-                colors={colors}
-              />
-            ))}
-          </Box>
-        )}
+        {/* Tool calls panel (memoized — only re-renders on tool call changes) */}
+        <ToolCallsPanel toolCalls={toolCalls} expanded={toolCallsExpanded} colors={colors} />
 
-        {/* Transparency Panel (toggle with Alt+I) */}
-        {transparencyExpanded && transparencyState && (
-          <Box
-            flexDirection="column"
-            marginBottom={1}
-            borderStyle="single"
-            borderColor={colors.border}
-            paddingX={1}
-          >
-            <Text color={colors.accent} bold>
-              [v] Transparency Panel
-            </Text>
-            <Box marginLeft={2} flexDirection="column">
-              <Text color={colors.text}>REASONING</Text>
-              {transparencyState.lastRouting ? (
-                <>
-                  <Text color={colors.textMuted}>
-                    {' '}
-                    Routing: {transparencyState.lastRouting.model}
-                  </Text>
-                  <Text color={colors.textMuted}> {transparencyState.lastRouting.reason}</Text>
-                </>
-              ) : (
-                <Text color={colors.textMuted}> Routing: (no routing decisions yet)</Text>
-              )}
-              {transparencyState.lastPolicy && (
-                <Text
-                  color={
-                    transparencyState.lastPolicy.decision === 'blocked'
-                      ? colors.error
-                      : transparencyState.lastPolicy.decision === 'prompted'
-                        ? colors.warning
-                        : colors.success
-                  }
-                >
-                  Policy:{' '}
-                  {transparencyState.lastPolicy.decision === 'allowed'
-                    ? '+'
-                    : transparencyState.lastPolicy.decision === 'blocked'
-                      ? 'x'
-                      : '?'}{' '}
-                  {transparencyState.lastPolicy.tool}
-                </Text>
-              )}
-            </Box>
-            <Box marginLeft={2} marginTop={1} flexDirection="column">
-              <Text color={colors.text}>CONTEXT</Text>
-              {transparencyState.contextHealth ? (
-                <>
-                  <Text color={colors.textMuted}>
-                    {'  [' +
-                      '='.repeat(
-                        Math.round((transparencyState.contextHealth.percentUsed / 100) * 20),
-                      ) +
-                      '-'.repeat(
-                        20 - Math.round((transparencyState.contextHealth.percentUsed / 100) * 20),
-                      ) +
-                      '] ' +
-                      transparencyState.contextHealth.percentUsed +
-                      '%'}
-                  </Text>
-                  <Text color={colors.textMuted}>
-                    {'  ' +
-                      (transparencyState.contextHealth.currentTokens / 1000).toFixed(1) +
-                      'k / ' +
-                      (transparencyState.contextHealth.maxTokens / 1000).toFixed(0) +
-                      'k tokens'}
-                  </Text>
-                  <Text color={colors.textMuted}>
-                    {'  ~' +
-                      transparencyState.contextHealth.estimatedExchanges +
-                      ' exchanges remaining'}
-                  </Text>
-                </>
-              ) : (
-                <Text color={colors.textMuted}> (no context data yet)</Text>
-              )}
-            </Box>
-            {transparencyState.activeLearnings.length > 0 && (
-              <Box marginLeft={2} marginTop={1} flexDirection="column">
-                <Text color={colors.text}>MEMORY</Text>
-                <Text color={colors.textMuted}>
-                  {' '}
-                  Learnings applied: {transparencyState.activeLearnings.length}
-                </Text>
-              </Box>
-            )}
-          </Box>
-        )}
+        {/* Transparency Panel (memoized — toggle with Alt+I) */}
+        <TransparencyPanel
+          transparencyState={transparencyState}
+          expanded={transparencyExpanded}
+          colors={colors}
+        />
 
         {/* Approval Dialog (positioned above input when active) */}
         {pendingApproval && (
@@ -3386,94 +2747,16 @@ export function TUIApp({
           />
         )}
 
-        {/* Status bar */}
-        <Box
-          borderStyle="single"
-          borderColor={isProcessing ? colors.info : colors.textMuted}
-          paddingX={1}
-          justifyContent="space-between"
-        >
-          <Box gap={1}>
-            <Text color={isProcessing ? colors.info : '#98FB98'} bold={isProcessing}>
-              {isProcessing ? '[~]' : '[*]'}
-            </Text>
-            <Text color={isProcessing ? colors.info : colors.text} bold={isProcessing}>
-              {status.mode.length > 40 ? status.mode.slice(0, 37) + '...' : status.mode}
-            </Text>
-            {isProcessing && elapsedTime > 0 && (
-              <Text color={colors.textMuted} dimColor>
-                | {elapsedTime}s
-              </Text>
-            )}
-            {status.iter > 0 && (
-              <Text color={colors.textMuted} dimColor>
-                | iter {status.iter}
-              </Text>
-            )}
-          </Box>
-          <Box gap={2}>
-            <Text color="#DDA0DD" dimColor>
-              {modelShort}
-            </Text>
-            {/* Mini context bar: ctx:[====----] 42% */}
-            <Text color={contextPct > 70 ? '#FFD700' : colors.textMuted} dimColor>
-              {'ctx:[' +
-                '='.repeat(Math.min(8, Math.round((contextPct / 100) * 8))) +
-                '-'.repeat(Math.max(0, 8 - Math.round((contextPct / 100) * 8))) +
-                '] ' +
-                contextPct +
-                '%'}
-            </Text>
-            {/* Budget health indicator */}
-            {budgetPct > 0 && (
-              <Text
-                color={budgetPct >= 80 ? '#FF6B6B' : budgetPct >= 50 ? '#FFD700' : colors.textMuted}
-                dimColor
-              >
-                {'bud:' + budgetPct + '%'}
-              </Text>
-            )}
-            <Text color="#98FB98" dimColor>
-              {costStr}
-            </Text>
-            {gitBranch && (
-              <Text color="#87CEEB" dimColor>
-                {gitBranch}
-              </Text>
-            )}
-            {/* Show learnings count if any */}
-            {transparencyState?.activeLearnings && transparencyState.activeLearnings.length > 0 && (
-              <Text color="#87CEEB" dimColor>
-                L:{transparencyState.activeLearnings.length}
-              </Text>
-            )}
-            {/* TSC status indicator (only for TS projects) */}
-            {agent.getTypeCheckerState()?.tsconfigDir &&
-              (() => {
-                const tscRes = transparencyState?.diagnostics?.lastTscResult;
-                if (!tscRes)
-                  return (
-                    <Text color={colors.textMuted} dimColor>
-                      tsc:—
-                    </Text>
-                  );
-                if (tscRes.success)
-                  return (
-                    <Text color="#98FB98" dimColor>
-                      tsc:[ok]
-                    </Text>
-                  );
-                return (
-                  <Text color={colors.error} dimColor>
-                    tsc:[X]{tscRes.errorCount}
-                  </Text>
-                );
-              })()}
-            <Text color={colors.textMuted} dimColor>
-              ^P:help
-            </Text>
-          </Box>
-        </Box>
+        {/* Status bar (memoized — colocates elapsed/context/budget state) */}
+        <StatusBar
+          isProcessing={isProcessing}
+          status={status}
+          colors={colors}
+          model={model}
+          gitBranch={gitBranch}
+          transparencyState={transparencyState}
+          agent={agent}
+        />
       </Box>
     </>
   );
