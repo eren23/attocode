@@ -37,6 +37,7 @@ export interface UseAgentEventsSetters {
       mode: string;
     },
   ) => void;
+  flushStatusThrottle: () => void;
   setToolCalls: React.Dispatch<React.SetStateAction<ToolCallDisplayItem[]>>;
   setActiveAgents: React.Dispatch<React.SetStateAction<import('../components/ActiveAgentsPanel.js').ActiveAgent[]>>;
   setTasks: React.Dispatch<React.SetStateAction<Task[]>>;
@@ -65,6 +66,7 @@ export function useAgentEvents({
   const { executionModeRef, showThinkingRef, debugExpandedRef } = refs;
   const {
     setStatusThrottled,
+    flushStatusThrottle,
     setToolCalls,
     setActiveAgents,
     setTasks,
@@ -73,6 +75,8 @@ export function useAgentEvents({
   } = setters;
 
   const transparencyAggregatorRef = useRef<TransparencyAggregator | null>(null);
+  // Track pending timers for cleanup on unmount (Fix 11)
+  const pendingTimersRef = useRef<Set<ReturnType<typeof setTimeout>>>(new Set());
 
   // =========================================================================
   // UNIFIED EVENT HANDLER
@@ -82,7 +86,7 @@ export function useAgentEvents({
   const handleAgentEvent = useCallback(
     (event: AgentEvent) => {
       const mode = executionModeRef.current;
-      if (mode === 'idle') return; // No active execution, ignore events
+      if (mode === 'idle' || mode === 'draining') return; // No active execution or draining after cancellation
 
       // Log event to debug buffer (use ref to avoid dep churn)
       if (debugExpandedRef.current) {
@@ -126,17 +130,25 @@ export function useAgentEvents({
           'system',
           `[AGENT] Spawning ${e.name}: ${e.task.slice(0, 100)}${e.task.length > 100 ? '...' : ''}`,
         );
-        setActiveAgents((prev) => [
-          ...prev,
-          {
-            id: agentId,
-            type: e.name,
-            task: e.task,
-            status: 'running' as ActiveAgentStatus,
-            tokens: 0,
-            startTime: Date.now(),
-          },
-        ]);
+        setActiveAgents((prev) => {
+          const now = Date.now();
+          // Evict stale completed/errored agents (>30s old) to prevent unbounded growth
+          const active = prev.filter(a =>
+            a.status === 'running' || a.status === 'timing_out' ||
+            (now - (a.completedAt ?? a.startTime)) < 30000
+          );
+          return [
+            ...active,
+            {
+              id: agentId,
+              type: e.name,
+              task: e.task,
+              status: 'running' as ActiveAgentStatus,
+              tokens: 0,
+              startTime: now,
+            },
+          ];
+        });
         return;
       }
       if (event.type === 'agent.complete') {
@@ -165,6 +177,7 @@ export function useAgentEvents({
                   status: e.success
                     ? ('completed' as ActiveAgentStatus)
                     : ('error' as ActiveAgentStatus),
+                  completedAt: Date.now(),
                 }
               : a,
           ),
@@ -184,19 +197,23 @@ export function useAgentEvents({
               a.id === e.agentId ? { ...a, status: 'timing_out' as ActiveAgentStatus } : a,
             ),
           );
-          setTimeout(() => {
+          const timerId = setTimeout(() => {
+            pendingTimersRef.current.delete(timerId);
             setActiveAgents((prev) =>
               prev.map((a) =>
                 a.id === e.agentId && a.status === 'timing_out'
-                  ? { ...a, status: 'timeout' as ActiveAgentStatus }
+                  ? { ...a, status: 'timeout' as ActiveAgentStatus, completedAt: Date.now() }
                   : a,
               ),
             );
           }, 3000);
+          pendingTimersRef.current.add(timerId);
         } else {
           setActiveAgents((prev) =>
             prev.map((a) =>
-              a.id === e.agentId ? { ...a, status: 'error' as ActiveAgentStatus } : a,
+              a.id === e.agentId
+                ? { ...a, status: 'error' as ActiveAgentStatus, completedAt: Date.now() }
+                : a,
             ),
           );
         }
@@ -249,6 +266,8 @@ export function useAgentEvents({
               : t,
           ),
         );
+        // Flush pending status immediately so StatusBar syncs with ToolCallsPanel
+        flushStatusThrottle();
         return;
       }
       if (event.type === 'tool.blocked') {
@@ -527,7 +546,11 @@ export function useAgentEvents({
           'system',
           `[SWARM] Complete: ${e.stats.completedTasks}/${e.stats.totalTasks} tasks, ${(e.stats.totalTokens / 1000).toFixed(0)}k tokens, $${e.stats.totalCost.toFixed(4)}`,
         );
-        setTimeout(() => setSwarmStatus(null), 5000);
+        const swarmTimerId = setTimeout(() => {
+          pendingTimersRef.current.delete(swarmTimerId);
+          setSwarmStatus(null);
+        }, 5000);
+        pendingTimersRef.current.add(swarmTimerId);
         return;
       }
       if (event.type === 'swarm.error') {
@@ -600,6 +623,8 @@ export function useAgentEvents({
         }
       }
     },
+    // State setters (setToolCalls, setActiveAgents, etc.) are intentionally
+    // omitted — React guarantees setter identity stability across renders.
     [addMessage],
   );
 
@@ -608,8 +633,12 @@ export function useAgentEvents({
     const aggregator = new TransparencyAggregator();
     transparencyAggregatorRef.current = aggregator;
 
+    let lastNotifiedState: TransparencyState | null = null;
     const unsubscribeAggregator = aggregator.subscribe((state) => {
-      setTransparencyState(state);
+      if (state !== lastNotifiedState) {
+        lastNotifiedState = state;
+        setTransparencyState(state);
+      }
     });
 
     const unsubscribeAgent = agent.subscribe((event: AgentEvent) => {
@@ -620,6 +649,9 @@ export function useAgentEvents({
     return () => {
       unsubscribeAggregator();
       unsubscribeAgent();
+      // Clean up any pending timers (Fix 11)
+      pendingTimersRef.current.forEach(clearTimeout);
+      pendingTimersRef.current.clear();
     };
   }, [agent, handleAgentEvent]);
 

@@ -112,6 +112,7 @@ export const TransparencyPanel = memo(
   (prevProps, nextProps) => {
     // Skip re-render if expanded state and transparency data haven't changed
     if (prevProps.expanded !== nextProps.expanded) return false;
+    if (prevProps.colors !== nextProps.colors) return false;
     if (!prevProps.expanded && !nextProps.expanded) return true; // Both hidden
     // Check transparency state identity (reference equality is sufficient)
     if (prevProps.transparencyState !== nextProps.transparencyState) return false;

@@ -11,7 +11,7 @@
  * - Timestamp display
  */
 
-import { memo, useState, useRef } from 'react';
+import { memo, useState, useRef, useCallback, useMemo } from 'react';
 import { Box, Text } from 'ink';
 import type { ThemeColors } from '../types.js';
 
@@ -161,7 +161,15 @@ export const DebugPanel = memo(function DebugPanel({
       </Box>
     </Box>
   );
-});
+},
+  (prevProps, nextProps) => {
+    if (prevProps.expanded !== nextProps.expanded) return false;
+    if (prevProps.colors !== nextProps.colors) return false;
+    if (!prevProps.expanded && !nextProps.expanded) return true; // Both hidden — skip render
+    if (prevProps.entries !== nextProps.entries) return false;
+    return true;
+  },
+);
 
 // =============================================================================
 // DEBUG BUFFER HOOK
@@ -174,37 +182,38 @@ export function useDebugBuffer(maxSize: number = 100) {
   const [entries, setEntries] = useState<DebugEntry[]>([]);
   const idCounterRef = useRef(0);
 
-  const addEntry = (
-    level: DebugEntry['level'],
-    message: string,
-    data?: Record<string, unknown>,
-  ) => {
-    const entry: DebugEntry = {
-      id: `debug-${++idCounterRef.current}`,
-      timestamp: new Date(),
-      level,
-      message,
-      data,
-    };
+  const addEntry = useCallback(
+    (level: DebugEntry['level'], message: string, data?: Record<string, unknown>) => {
+      setEntries((prev) => {
+        const entry: DebugEntry = {
+          id: `debug-${++idCounterRef.current}`,
+          timestamp: new Date(),
+          level,
+          message,
+          data,
+        };
+        const newEntries = [...prev, entry];
+        // Keep only the last maxSize entries
+        return newEntries.slice(-maxSize);
+      });
+    },
+    [maxSize],
+  );
 
-    setEntries((prev) => {
-      const newEntries = [...prev, entry];
-      // Keep only the last maxSize entries
-      return newEntries.slice(-maxSize);
-    });
-  };
+  const clear = useCallback(() => setEntries([]), []);
 
-  const clear = () => setEntries([]);
-
-  return {
-    entries,
-    addEntry,
-    clear,
-    debug: (msg: string, data?: Record<string, unknown>) => addEntry('debug', msg, data),
-    info: (msg: string, data?: Record<string, unknown>) => addEntry('info', msg, data),
-    warn: (msg: string, data?: Record<string, unknown>) => addEntry('warn', msg, data),
-    error: (msg: string, data?: Record<string, unknown>) => addEntry('error', msg, data),
-  };
+  return useMemo(
+    () => ({
+      entries,
+      addEntry,
+      clear,
+      debug: (msg: string, data?: Record<string, unknown>) => addEntry('debug', msg, data),
+      info: (msg: string, data?: Record<string, unknown>) => addEntry('info', msg, data),
+      warn: (msg: string, data?: Record<string, unknown>) => addEntry('warn', msg, data),
+      error: (msg: string, data?: Record<string, unknown>) => addEntry('error', msg, data),
+    }),
+    [entries, addEntry, clear],
+  );
 }
 
 export default DebugPanel;

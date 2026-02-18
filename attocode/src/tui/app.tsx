@@ -23,6 +23,7 @@ import { StatusBar } from './components/StatusBar.js';
 import { ToolCallsPanel } from './components/ToolCallsPanel.js';
 import { TransparencyPanel } from './components/TransparencyPanel.js';
 import { useAgentEvents } from './hooks/use-agent-events.js';
+import { useMessagePruning } from './hooks/useMessagePruning.js';
 import type { Task } from '../integrations/tasks/task-manager.js';
 import type { ProductionAgent } from '../agent.js';
 import type { SQLiteStore } from '../integrations/persistence/sqlite-store.js';
@@ -35,12 +36,18 @@ import { ApprovalDialog } from './components/ApprovalDialog.js';
 import type { TUIApprovalBridge } from '../adapters.js';
 import type { ApprovalRequest as TypesApprovalRequest } from '../types.js';
 import type { TransparencyState } from './transparency-aggregator.js';
-import { handleSkillsCommand, formatEnhancedSkillList } from '../commands/skills-commands.js';
-import { handleAgentsCommand, formatEnhancedAgentList } from '../commands/agents-commands.js';
+import { handleSkillsCommand } from '../commands/skills-commands.js';
+import { handleAgentsCommand } from '../commands/agents-commands.js';
 import { handleInitCommand } from '../commands/init-commands.js';
 import type { CommandOutput } from '../commands/types.js';
 import { createHistoryManager, type HistoryManager } from '../integrations/persistence/history.js';
 import type { AgentResult } from '../types.js';
+
+// Module-level constant for DiagnosticsPanel fallback (prevents new object each render)
+const EMPTY_DIAGNOSTICS: { lastTscResult: null; recentSyntaxErrors: { file: string; line: number; message: string }[] } = {
+  lastTscResult: null,
+  recentSyntaxErrors: [],
+};
 
 // =============================================================================
 // PATTERN GENERATION FOR ALWAYS-ALLOW
@@ -728,6 +735,21 @@ export function TUIApp({
   const initialMode = initialModeInfo.name === 'Plan' ? 'ready (plan)' : 'ready';
   const [status, setStatus] = useState({ iter: 0, tokens: 0, cost: 0, mode: initialMode });
 
+  // Quantized status for StatusBar — only produces a new reference when values
+  // cross meaningful thresholds (cost >$0.001, tokens >5k). This makes the memo
+  // comparator in StatusBar effective: React skips calling it entirely when the
+  // useMemo reference is stable.
+  const statusForBar = useMemo(() => ({
+    iter: status.iter,
+    mode: status.mode,
+    cost: Math.round(status.cost * 1000) / 1000,
+    tokens: Math.round(status.tokens / 5000) * 5000,
+  }), [status.iter, status.mode,
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    Math.round(status.cost * 1000),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    Math.round(status.tokens / 5000)]);
+
   // Throttled mode-only setter for handleAgentEvent — rapid mode transitions
   // (thinking→calling X→thinking) collapse into the latest value instead of
   // triggering 5-7 renders per LLM iteration
@@ -761,6 +783,20 @@ export function TUIApp({
     },
     [],
   );
+
+  // Flush any pending throttled status update immediately (used on tool.complete
+  // to keep StatusBar in sync with ToolCallsPanel within the same render frame)
+  const flushStatusThrottle = useCallback(() => {
+    if (statusModeTimerRef.current) {
+      clearTimeout(statusModeTimerRef.current);
+      statusModeTimerRef.current = null;
+    }
+    if (pendingStatusRef.current) {
+      lastStatusModeUpdateRef.current = Date.now();
+      setStatus(pendingStatusRef.current);
+      pendingStatusRef.current = null;
+    }
+  }, []);
 
   // Cleanup throttle timer
   useEffect(() => {
@@ -846,6 +882,15 @@ export function TUIApp({
   messagesLengthRef.current = messages.length;
   pendingApprovalRef.current = pendingApproval;
 
+  // Memoize the approval request object to avoid defeating ApprovalDialog's memo
+  const approvalRequest = useMemo(() => pendingApproval ? {
+    id: pendingApproval.id,
+    tool: pendingApproval.tool || pendingApproval.action,
+    args: pendingApproval.args || {},
+    risk: pendingApproval.risk,
+    context: pendingApproval.context,
+  } : null, [pendingApproval]);
+
   const finishExecutionMode = useCallback(() => {
     if (executionDrainTimerRef.current) {
       clearTimeout(executionDrainTimerRef.current);
@@ -860,15 +905,19 @@ export function TUIApp({
     }, 400);
   }, []);
 
-  // Derive theme and colors
+  // Derive theme and colors (memoized so children relying on reference equality don't break)
   const selectedTheme = getTheme(currentThemeName);
-  const colors = selectedTheme.colors;
+  const colors = useMemo(() => selectedTheme.colors, [currentThemeName]);
+
+  const { pruneIfNeeded } = useMessagePruning({ maxMessages: 500, preserveRecent: 400 });
 
   const messageIdCounter = useRef(0);
   const addMessage = useCallback((role: string, content: string) => {
     const uniqueId = `${role}-${Date.now()}-${++messageIdCounter.current}`;
-    setMessages((prev) => [...prev, { id: uniqueId, role, content, ts: new Date() }]);
-  }, []);
+    setMessages((prev) =>
+      pruneIfNeeded([...prev, { id: uniqueId, role, content, ts: new Date() }]),
+    );
+  }, [pruneIfNeeded]);
 
   const persistPendingPlanToStore = useCallback(() => {
     if (!agent.hasPendingPlan()) return;
@@ -1020,6 +1069,7 @@ export function TUIApp({
     refs: { executionModeRef, showThinkingRef, debugExpandedRef },
     setters: {
       setStatusThrottled,
+      flushStatusThrottle,
       setToolCalls,
       setActiveAgents,
       setTasks,
@@ -2556,6 +2606,7 @@ export function TUIApp({
 
       // Cancel the agent
       agent.cancel('Cancelled by ESC');
+      finishExecutionMode();
       setIsProcessing(false);
       addMessage('system', '[STOP] Cancelled (checkpoint saved)');
     }
@@ -2568,6 +2619,7 @@ export function TUIApp({
     saveCheckpointToStore,
     persistenceDebug,
     persistPendingPlanToStore,
+    finishExecutionMode,
   ]);
 
   const handleToggleToolExpand = useCallback(() => {
@@ -2628,6 +2680,10 @@ export function TUIApp({
 
   // modelShort, contextPct, costStr, elapsedTime, budgetPct are now computed inside StatusBar
 
+  // Memoize DiagnosticsPanel props to avoid method calls in render body
+  const diagTypeCheckerState = useMemo(() => agent.getTypeCheckerState(), [agent]);
+  const diagAstCacheStats = useMemo(() => diagExpanded ? getASTCacheStats() : null, [diagExpanded, transparencyState]);
+
   // =========================================================================
   // RENDER
   // =========================================================================
@@ -2652,16 +2708,10 @@ export function TUIApp({
         />
 
         {/* Approval Dialog (positioned above input when active) */}
-        {pendingApproval && (
+        {pendingApproval && approvalRequest && (
           <ApprovalDialog
             visible={true}
-            request={{
-              id: pendingApproval.id,
-              tool: pendingApproval.tool || pendingApproval.action,
-              args: pendingApproval.args || {},
-              risk: pendingApproval.risk,
-              context: pendingApproval.context,
-            }}
+            request={approvalRequest}
             onApprove={handleApprove}
             onDeny={handleDeny}
             colors={colors}
@@ -2672,11 +2722,9 @@ export function TUIApp({
 
         {/* Diagnostics Panel (toggle with Alt+Y) */}
         <DiagnosticsPanel
-          diagnostics={
-            transparencyState?.diagnostics ?? { lastTscResult: null, recentSyntaxErrors: [] }
-          }
-          typeCheckerState={agent.getTypeCheckerState()}
-          astCacheStats={diagExpanded ? getASTCacheStats() : null}
+          diagnostics={transparencyState?.diagnostics ?? EMPTY_DIAGNOSTICS}
+          typeCheckerState={diagTypeCheckerState}
+          astCacheStats={diagAstCacheStats}
           expanded={diagExpanded}
           colors={colors}
         />
@@ -2750,7 +2798,7 @@ export function TUIApp({
         {/* Status bar (memoized — colocates elapsed/context/budget state) */}
         <StatusBar
           isProcessing={isProcessing}
-          status={status}
+          status={statusForBar}
           colors={colors}
           model={model}
           gitBranch={gitBranch}

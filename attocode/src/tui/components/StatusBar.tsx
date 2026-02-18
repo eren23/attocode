@@ -199,6 +199,7 @@ export const StatusBar = memo(
   },
   (prevProps, nextProps) => {
     // Custom comparator: skip re-render if nothing visually meaningful changed
+    if (prevProps.colors !== nextProps.colors) return false;
     if (prevProps.isProcessing !== nextProps.isProcessing) return false;
     if (prevProps.status.mode !== nextProps.status.mode) return false;
     if (prevProps.status.iter !== nextProps.status.iter) return false;

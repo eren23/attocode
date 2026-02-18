@@ -35,13 +35,18 @@ export const ToolCallsPanel = memo(
     );
   },
   (prevProps, nextProps) => {
-    // Only re-render if tool calls changed or expanded toggled
+    // Only re-render if tool calls changed, expanded toggled, or theme changed
+    if (prevProps.colors !== nextProps.colors) return false;
     if (prevProps.expanded !== nextProps.expanded) return false;
     if (prevProps.toolCalls.length !== nextProps.toolCalls.length) return false;
-    // Check if the last tool call changed (most common case)
-    const prevLast = prevProps.toolCalls[prevProps.toolCalls.length - 1];
-    const nextLast = nextProps.toolCalls[nextProps.toolCalls.length - 1];
-    if (prevLast?.id !== nextLast?.id || prevLast?.status !== nextLast?.status) return false;
+    // Check all visible tool calls (last 5), not just the last one —
+    // parallel tool completions can update mid-list items
+    const prevVisible = prevProps.toolCalls.slice(-5);
+    const nextVisible = nextProps.toolCalls.slice(-5);
+    for (let i = 0; i < nextVisible.length; i++) {
+      if (prevVisible[i]?.id !== nextVisible[i]?.id ||
+          prevVisible[i]?.status !== nextVisible[i]?.status) return false;
+    }
     return true;
   },
 );

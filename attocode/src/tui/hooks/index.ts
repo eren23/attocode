@@ -12,8 +12,6 @@ export {
   type UseMessagePruningResult,
 } from './useMessagePruning.js';
 
-export { useThrottledState, useThrottledCallback } from './use-throttled-state.js';
-
 export {
   useAgentEvents,
   type AgentEventSource,
