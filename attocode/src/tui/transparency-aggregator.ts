@@ -108,7 +108,7 @@ export class TransparencyAggregator {
    * Process an agent event and update state.
    */
   processEvent(event: AgentEvent): void {
-    this.state.eventsProcessed++;
+    let changed = false;
 
     switch (event.type) {
       case 'decision.routing':
@@ -123,6 +123,7 @@ export class TransparencyAggregator {
           summary: `Model: ${event.model}`,
           details: event.reason,
         });
+        changed = true;
         break;
 
       case 'decision.tool':
@@ -138,6 +139,7 @@ export class TransparencyAggregator {
           summary: `${event.tool}: ${event.decision}`,
           details: event.policyMatch,
         });
+        changed = true;
         break;
 
       case 'context.health':
@@ -157,6 +159,7 @@ export class TransparencyAggregator {
             details: `${event.estimatedExchanges} exchanges remaining`,
           });
         }
+        changed = true;
         break;
 
       case 'learning.applied':
@@ -166,6 +169,7 @@ export class TransparencyAggregator {
           if (this.state.activeLearnings.length > 5) {
             this.state.activeLearnings.shift();
           }
+          changed = true;
         }
         break;
 
@@ -177,6 +181,7 @@ export class TransparencyAggregator {
             reason: event.reason,
             timestamp: Date.now(),
           };
+          changed = true;
         }
         break;
 
@@ -189,6 +194,7 @@ export class TransparencyAggregator {
             estimatedExchanges: 0,
             lastUpdate: Date.now(),
           };
+          changed = true;
         }
         break;
 
@@ -198,6 +204,7 @@ export class TransparencyAggregator {
           errorCount: event.errorCount,
           duration: event.duration,
         };
+        changed = true;
         break;
 
       case 'diagnostics.syntax-error':
@@ -211,10 +218,14 @@ export class TransparencyAggregator {
           this.state.diagnostics.recentSyntaxErrors =
             this.state.diagnostics.recentSyntaxErrors.slice(-10);
         }
+        changed = true;
         break;
     }
 
-    this.notifyListeners();
+    if (changed) {
+      this.state.eventsProcessed++;
+      this.notifyListeners();
+    }
   }
 
   /**

@@ -40,6 +40,8 @@ export interface ActiveAgent {
   iteration?: number;
   /** Max iterations */
   maxIterations?: number;
+  /** Timestamp when agent completed/errored (for eviction) */
+  completedAt?: number;
 }
 
 export interface ActiveAgentsPanelProps {

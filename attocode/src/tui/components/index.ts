@@ -62,3 +62,12 @@ export {
   type ErrorDetailPanelProps,
   type StackFrame,
 } from './ErrorDetailPanel.js';
+
+// Status bar (memoized with colocated state)
+export { StatusBar, type StatusBarProps } from './StatusBar.js';
+
+// Tool calls panel (memoized)
+export { ToolCallsPanel, type ToolCallsPanelProps } from './ToolCallsPanel.js';
+
+// Transparency panel (memoized)
+export { TransparencyPanel, type TransparencyPanelProps } from './TransparencyPanel.js';

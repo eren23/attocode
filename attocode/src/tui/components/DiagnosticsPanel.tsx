@@ -145,6 +145,14 @@ export const DiagnosticsPanel = memo(function DiagnosticsPanel({
       </Box>
     </Box>
   );
+}, (prev, next) => {
+  if (prev.expanded !== next.expanded) return false;
+  if (prev.colors !== next.colors) return false;
+  if (!prev.expanded && !next.expanded) return true;
+  if (prev.diagnostics !== next.diagnostics) return false;
+  if (prev.typeCheckerState !== next.typeCheckerState) return false;
+  if (prev.astCacheStats !== next.astCacheStats) return false;
+  return true;
 });
 
 export default DiagnosticsPanel;

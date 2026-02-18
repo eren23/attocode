@@ -163,6 +163,14 @@ export const ApprovalDialog = memo(function ApprovalDialog({
       </Box>
     </Box>
   );
+}, (prev, next) => {
+  if (prev.visible !== next.visible) return false;
+  if (!prev.visible && !next.visible) return true;
+  if (prev.colors !== next.colors) return false;
+  if (prev.request !== next.request) return false;
+  if (prev.denyReasonMode !== next.denyReasonMode) return false;
+  if (prev.denyReason !== next.denyReason) return false;
+  return true;
 });
 
 export default ApprovalDialog;
