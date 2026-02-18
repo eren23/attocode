@@ -579,12 +579,14 @@ export function initializeFeatures(agent: AgentInternals): void {
 
   // Context Engineering (Manus-inspired tricks P, Q, R, S, T)
   // Always enabled - these are performance optimizations
+  const ceConfig = typeof agent.config.contextEngineering === 'object' ? agent.config.contextEngineering : {};
   agent.contextEngineering = createContextEngineering({
     enableCacheOptimization: true,
     enableRecitation: true,
     enableReversibleCompaction: true,
     enableFailureTracking: true,
-    enableDiversity: false, // Off by default - can cause unexpected behavior
+    enableDiversity: ceConfig.enableDiversity ?? false,
+    diversityLevel: ceConfig.diversityLevel,
     staticPrefix: agent.config.systemPrompt,
     recitationFrequency: 5,
     maxFailures: 30,

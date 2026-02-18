@@ -702,6 +702,7 @@ export function buildConfig(
     ),
     subagent: mergeConfig(DEFAULT_SUBAGENT_CONFIG, userConfig.subagent),
     swarm: userConfig.swarm || false,
+    contextEngineering: userConfig.contextEngineering || false,
     providerResilience: mergeConfig(
       DEFAULT_PROVIDER_RESILIENCE_CONFIG,
       userConfig.providerResilience,

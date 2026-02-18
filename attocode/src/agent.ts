@@ -488,6 +488,27 @@ export class ProductionAgent {
         hasActivePlan: !!this.state.plan,
       });
 
+      // For complex tasks, optionally draft a structured plan via interactive planner
+      if (
+        this.interactivePlanner &&
+        !this.interactivePlanner.getPlan() &&
+        (this.lastComplexityAssessment?.tier === 'complex' ||
+          this.lastComplexityAssessment?.tier === 'deep_research')
+      ) {
+        try {
+          const provider = this.provider;
+          await this.interactivePlanner.draft(task, async (systemPrompt, userMessage) => {
+            const response = await provider.chat([
+              { role: 'system', content: systemPrompt },
+              { role: 'user', content: userMessage },
+            ]);
+            return { content: typeof response.content === 'string' ? response.content : '' };
+          });
+        } catch {
+          // Planning is optional — continue with normal execution if it fails
+        }
+      }
+
       // Check if swarm mode should handle this task
       if (this.swarmOrchestrator) {
         const swarmResult = await this.runSwarm(task);
@@ -1565,6 +1586,14 @@ export class ProductionAgent {
   }
 
   /**
+   * Get the interactive planner for structured task planning.
+   * Returns null if interactive planning is not enabled.
+   */
+  getInteractivePlanner(): InteractivePlanner | null {
+    return this.interactivePlanner;
+  }
+
+  /**
    * Get the auto-compaction manager.
    * Returns null if compaction is not enabled.
    */
@@ -2098,6 +2127,18 @@ export class ProductionAgent {
   extendBudget(extension: Partial<ExecutionBudget>): void {
     if (this.economics) {
       this.economics.extendBudget(extension);
+    }
+  }
+
+  /**
+   * Set the budget extension request handler.
+   * When the economics system needs more budget, it calls this handler to ask the user.
+   */
+  setExtensionHandler(
+    handler: (request: import('./integrations/budget/economics.js').ExtensionRequest) => Promise<Partial<ExecutionBudget> | null>,
+  ): void {
+    if (this.economics) {
+      this.economics.setExtensionHandler(handler);
     }
   }
 

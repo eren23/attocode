@@ -460,3 +460,168 @@ export function createTUIApprovalBridge(config: TUIApprovalBridgeConfig = {}): T
 
   return { handler, connect, resolve, hasPending, isConnected };
 }
+
+// =============================================================================
+// BUDGET EXTENSION BRIDGE
+// =============================================================================
+
+import type { ExtensionRequest, ExecutionBudget } from './integrations/budget/economics.js';
+
+export type BudgetExtensionResult = Partial<ExecutionBudget> | null;
+
+export interface TUIBudgetExtensionBridge {
+  handler: (request: ExtensionRequest) => Promise<BudgetExtensionResult>;
+  connect: (callbacks: { onRequest: (request: ExtensionRequest) => void }) => void;
+  resolve: (result: BudgetExtensionResult) => void;
+  hasPending: () => boolean;
+  isConnected: () => boolean;
+}
+
+/**
+ * Create a bridge for budget extension requests between agent and TUI.
+ * Follows the same pattern as TUIApprovalBridge.
+ */
+export function createTUIBudgetExtensionBridge(
+  config: { timeout?: number } = {},
+): TUIBudgetExtensionBridge {
+  const timeoutMs = config.timeout ?? 120000;
+
+  let pendingResolve: ((result: BudgetExtensionResult) => void) | null = null;
+  let pendingTimeoutId: ReturnType<typeof setTimeout> | null = null;
+  let onRequestCallback: ((request: ExtensionRequest) => void) | null = null;
+  let connected = false;
+
+  const clearPendingTimeout = () => {
+    if (pendingTimeoutId) {
+      clearTimeout(pendingTimeoutId);
+      pendingTimeoutId = null;
+    }
+  };
+
+  const handler = async (request: ExtensionRequest): Promise<BudgetExtensionResult> => {
+    return new Promise((resolve) => {
+      pendingResolve = resolve;
+
+      if (onRequestCallback && connected) {
+        onRequestCallback(request);
+
+        pendingTimeoutId = setTimeout(() => {
+          if (pendingResolve) {
+            logger.warn('Budget extension dialog timeout - denying for safety', { timeoutMs });
+            pendingResolve(null);
+            pendingResolve = null;
+            pendingTimeoutId = null;
+          }
+        }, timeoutMs);
+      } else {
+        logger.warn('No TUI connected for budget extension - denying');
+        resolve(null);
+        pendingResolve = null;
+      }
+    });
+  };
+
+  const connect = (callbacks: { onRequest: (request: ExtensionRequest) => void }) => {
+    onRequestCallback = callbacks.onRequest;
+    connected = true;
+  };
+
+  const resolve = (result: BudgetExtensionResult) => {
+    clearPendingTimeout();
+    if (pendingResolve) {
+      pendingResolve(result);
+      pendingResolve = null;
+    }
+  };
+
+  return {
+    handler,
+    connect,
+    resolve,
+    hasPending: () => pendingResolve !== null,
+    isConnected: () => connected,
+  };
+}
+
+// =============================================================================
+// LEARNING VALIDATION BRIDGE
+// =============================================================================
+
+import type { ProposedLearning } from './tui/components/LearningValidationDialog.js';
+
+export type LearningValidationResult = 'approve' | 'reject' | 'skip';
+
+export interface TUILearningValidationBridge {
+  requestValidation: (learning: ProposedLearning) => Promise<LearningValidationResult>;
+  connect: (callbacks: { onRequest: (learning: ProposedLearning) => void }) => void;
+  resolve: (result: LearningValidationResult) => void;
+  hasPending: () => boolean;
+  isConnected: () => boolean;
+}
+
+/**
+ * Create a bridge for learning validation between agent and TUI.
+ * When a learning is proposed (confidence < auto-validate threshold),
+ * this routes it to the TUI for user approval/rejection.
+ */
+export function createTUILearningValidationBridge(
+  config: { timeout?: number } = {},
+): TUILearningValidationBridge {
+  const timeoutMs = config.timeout ?? 60000;
+
+  let pendingResolve: ((result: LearningValidationResult) => void) | null = null;
+  let pendingTimeoutId: ReturnType<typeof setTimeout> | null = null;
+  let onRequestCallback: ((learning: ProposedLearning) => void) | null = null;
+  let connected = false;
+
+  const clearPendingTimeout = () => {
+    if (pendingTimeoutId) {
+      clearTimeout(pendingTimeoutId);
+      pendingTimeoutId = null;
+    }
+  };
+
+  const requestValidation = async (learning: ProposedLearning): Promise<LearningValidationResult> => {
+    return new Promise((resolve) => {
+      pendingResolve = resolve;
+
+      if (onRequestCallback && connected) {
+        onRequestCallback(learning);
+
+        pendingTimeoutId = setTimeout(() => {
+          if (pendingResolve) {
+            logger.warn('Learning validation dialog timeout - skipping', { timeoutMs });
+            pendingResolve('skip');
+            pendingResolve = null;
+            pendingTimeoutId = null;
+          }
+        }, timeoutMs);
+      } else {
+        // No TUI connected — auto-skip
+        resolve('skip');
+        pendingResolve = null;
+      }
+    });
+  };
+
+  const connect = (callbacks: { onRequest: (learning: ProposedLearning) => void }) => {
+    onRequestCallback = callbacks.onRequest;
+    connected = true;
+  };
+
+  const resolve = (result: LearningValidationResult) => {
+    clearPendingTimeout();
+    if (pendingResolve) {
+      pendingResolve(result);
+      pendingResolve = null;
+    }
+  };
+
+  return {
+    requestValidation,
+    connect,
+    resolve,
+    hasPending: () => pendingResolve !== null,
+    isConnected: () => connected,
+  };
+}

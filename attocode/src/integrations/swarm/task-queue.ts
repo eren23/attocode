@@ -20,7 +20,7 @@ import type {
 import { subtaskToSwarmTask } from './types.js';
 
 /** P6: Failure-mode-specific thresholds — more lenient for external failures, stricter for quality. */
-const FAILURE_MODE_THRESHOLDS: Record<TaskFailureMode, number> = {
+export const FAILURE_MODE_THRESHOLDS: Record<TaskFailureMode, number> = {
   timeout: 0.3,
   'rate-limit': 0.3,
   error: 0.5,
@@ -32,7 +32,7 @@ const FAILURE_MODE_THRESHOLDS: Record<TaskFailureMode, number> = {
 /** P6: Get the effective threshold for a task based on its failed dependencies' failure modes.
  *  Uses the most lenient (lowest) threshold among failed deps, since that indicates
  *  the least fault in the workers. Falls back to the configured threshold. */
-function getEffectiveThreshold(failedDeps: SwarmTask[], configuredThreshold: number): number {
+export function getEffectiveThreshold(failedDeps: SwarmTask[], configuredThreshold: number): number {
   if (failedDeps.length === 0) return configuredThreshold;
   let minThreshold = configuredThreshold;
   for (const dep of failedDeps) {

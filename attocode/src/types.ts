@@ -251,6 +251,9 @@ export interface ProductionAgentConfig {
   /** Swarm mode configuration (orchestrator + workers) */
   swarm?: import('./integrations/swarm/types.js').SwarmConfig | false;
 
+  /** Context engineering configuration (serialization diversity, etc.) */
+  contextEngineering?: ContextEngineeringAgentConfig | false;
+
   /** Provider-level resilience (circuit breaker, fallback chain) */
   providerResilience?: ProviderResilienceConfig | false;
 
@@ -1070,6 +1073,18 @@ export interface CompactionAgentConfig {
 
   /** Compaction mode: auto, approval, manual */
   mode?: 'auto' | 'approval' | 'manual';
+}
+
+/**
+ * Context engineering configuration.
+ * Controls serialization diversity and related context techniques.
+ */
+export interface ContextEngineeringAgentConfig {
+  /** Enable serialization diversity for tool results (default: false) */
+  enableDiversity?: boolean;
+
+  /** Diversity level 0-1 (default: 0.2) */
+  diversityLevel?: number;
 }
 
 /**

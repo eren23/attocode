@@ -20,6 +20,19 @@ export {
   type ApprovalRequest,
 } from './ApprovalDialog.js';
 
+// Budget extension dialog
+export {
+  BudgetExtensionDialog,
+  type BudgetExtensionDialogProps,
+} from './BudgetExtensionDialog.js';
+
+// Learning validation dialog
+export {
+  LearningValidationDialog,
+  type LearningValidationDialogProps,
+  type ProposedLearning,
+} from './LearningValidationDialog.js';
+
 // Diff display components with syntax highlighting support
 export { DiffView, type UnifiedDiff, type DiffHunk, type DiffLine } from './DiffView.js';
 export { SideBySideDiff, type SideBySideDiffProps, type AlignedPair } from './SideBySideDiff.js';
@@ -71,3 +84,6 @@ export { ToolCallsPanel, type ToolCallsPanelProps } from './ToolCallsPanel.js';
 
 // Transparency panel (memoized)
 export { TransparencyPanel, type TransparencyPanelProps } from './TransparencyPanel.js';
+
+// Plan panel (interactive planning progress)
+export { PlanPanel, type PlanPanelProps, type ActivePlan } from './PlanPanel.js';

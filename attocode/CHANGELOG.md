@@ -5,6 +5,37 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.6] - 2026-02-18
+
+### Added
+
+#### Token Estimation & Constants
+- **Unified token estimation** — Centralized `CHARS_PER_TOKEN = 3.5` and `estimateTokensFromCharCount()` in `token-estimate.ts`; all execution-loop `/4` estimates replaced with shared function
+- **`EXECUTION_LOOP_DEFAULTS`** — Centralized magic constants (compact preview length, max preserved results, context safety ratio, etc.) in a single exported object
+
+#### TUI Features (4 Previously Unwired Features)
+- **Budget Extension Dialog** — `BudgetExtensionDialog` component with Y/N keyboard shortcuts; `createTUIBudgetExtensionBridge()` bridge in `adapters.ts`; wired via `agent.setExtensionHandler()` in `modes/tui.tsx`
+- **Learning Validation Dialog** — `LearningValidationDialog` component with Y/N/S shortcuts (approve/reject/skip); `createTUILearningValidationBridge()` bridge; subscribed to `learning.proposed` events
+- **Interactive Plan Panel** — `PlanPanel` component showing goal and step progress; subscribed to `interactivePlanner` events; exposed via `agent.getInteractivePlanner()` getter
+- **Serialization Diversity** — `context-engineering.serialize()` routes through `DiverseSerializer` when `enableDiversity` config is true; wired via feature-initializer
+
+#### Execution Loop Testability
+- **Extracted `checkIterationBudget()`** — Budget pre-flight with recovery, testable via narrow `BudgetCheckDeps` interface
+- **Extracted `handleAutoCompaction()`** — Compaction + context recovery, testable via narrow `AutoCompactionDeps` interface
+- **Extracted `applyContextOverflowGuard()`** — Mass tool result truncation, testable via narrow `OverflowGuardDeps` interface
+
+#### Swarm Test Infrastructure
+- **Exported `getEffectiveThreshold()`** and **`FAILURE_MODE_THRESHOLDS`** from `task-queue.ts` for external testing
+
+### Tests
+
+#### New Test Files (~1,885 lines, 82 tests)
+- `tests/core/execution-loop-budget.test.ts` (359L, 16 tests) — checkIterationBudget: budget flags, hard limits, recovery paths, soft limits, fallback without economics
+- `tests/core/execution-loop-compaction.test.ts` (431L, 18 tests) — handleAutoCompaction (11 tests): compaction lifecycle, recovery injection, work log; applyContextOverflowGuard (7 tests): truncation, event emission, callId preservation
+- `tests/swarm/swarm-execution.test.ts` (614L, 37 tests) — getEffectiveThreshold, hasFutureIntentLanguage, isHollowCompletion edge cases, wave scheduling, multi-wave DAG, partial dependency thresholds
+- `tests/swarm/swarm-execution-integration.test.ts` (481L, 11 tests) — multi-wave pipeline, failure+retry, cascade skip, merge with partial context, checkpoint/restore, cascade rescue, fixup injection, stale dispatch
+
+
 ## [0.2.5] - 2026-02-17
 
 ### Added
@@ -639,7 +670,8 @@ A new execution mode where one orchestrator model decomposes tasks into subtask 
 - Sandbox execution for bash commands (macOS Seatbelt)
 - Dangerous operation blocking in strict mode
 
-[Unreleased]: https://github.com/eren23/attocode/compare/v0.2.5...HEAD
+[Unreleased]: https://github.com/eren23/attocode/compare/v0.2.6...HEAD
+[0.2.6]: https://github.com/eren23/attocode/compare/v0.2.5...v0.2.6
 [0.2.5]: https://github.com/eren23/attocode/compare/v0.2.4...v0.2.5
 [0.2.4]: https://github.com/eren23/attocode/compare/v0.2.3...v0.2.4
 [0.2.3]: https://github.com/eren23/attocode/compare/v0.2.2...v0.2.3
