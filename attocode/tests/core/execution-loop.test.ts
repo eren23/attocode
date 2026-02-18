@@ -28,9 +28,9 @@ describe('estimateContextTokens', () => {
 
   it('estimates tokens from text content', () => {
     const messages: Message[] = [
-      { role: 'user', content: 'Hello world!' }, // 12 chars → ceil(12/4) = 3
+      { role: 'user', content: 'Hello world!' }, // 12 chars → ceil(12/3.5) = 4
     ];
-    expect(estimateContextTokens(messages)).toBe(3);
+    expect(estimateContextTokens(messages)).toBe(4);
   });
 
   it('includes tool call name and arguments in estimate', () => {

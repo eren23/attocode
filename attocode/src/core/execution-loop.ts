@@ -11,7 +11,7 @@
 import type { Message, OpenTaskSummary } from '../types.js';
 
 import { isFeatureEnabled } from '../defaults.js';
-import { estimateTokenCount } from '../integrations/utilities/token-estimate.js';
+import { estimateTokenCount, estimateTokensFromCharCount } from '../integrations/utilities/token-estimate.js';
 
 import type { AgentContext, AgentContextMutators } from './types.js';
 import { callLLM } from './response-handler.js';
@@ -51,12 +51,33 @@ export interface ExecutionLoopResult {
 }
 
 // =============================================================================
+// EXECUTION LOOP DEFAULTS
+// =============================================================================
+
+export const EXECUTION_LOOP_DEFAULTS = {
+  /** Preview length when compacting long tool outputs */
+  COMPACT_PREVIEW_LENGTH: 200,
+  /** Max expensive results preserved from compaction */
+  MAX_PRESERVED_EXPENSIVE_RESULTS: 6,
+  /** Messages to keep during emergency truncation */
+  PRESERVE_RECENT: 10,
+  /** Max chars per tool output before truncation */
+  MAX_TOOL_OUTPUT_CHARS: 8000,
+  /** Number of TS edits before triggering a type check */
+  TYPE_CHECK_EDIT_THRESHOLD: 5,
+  /** Safety margin ratio for context overflow guard */
+  CONTEXT_SAFETY_RATIO: 0.9,
+  /** Per-result budget safety margin */
+  PER_RESULT_BUDGET_RATIO: 0.95,
+} as const;
+
+// =============================================================================
 // HELPER FUNCTIONS (extracted from ProductionAgent private methods)
 // =============================================================================
 
 /**
  * Estimate total tokens in a message array.
- * Uses ~4 chars per token heuristic for fast estimation.
+ * Delegates to the shared token estimation utility (~3.5 chars/token).
  */
 export function estimateContextTokens(messages: Message[]): number {
   let totalChars = 0;
@@ -71,15 +92,14 @@ export function estimateContextTokens(messages: Message[]): number {
       }
     }
   }
-  return Math.ceil(totalChars / 4);
+  return estimateTokensFromCharCount(totalChars);
 }
 
 /**
  * Compact tool outputs to save context.
  */
 export function compactToolOutputs(messages: Message[]): void {
-  const COMPACT_PREVIEW_LENGTH = 200;
-  const MAX_PRESERVED_EXPENSIVE_RESULTS = 6;
+  const { COMPACT_PREVIEW_LENGTH, MAX_PRESERVED_EXPENSIVE_RESULTS } = EXECUTION_LOOP_DEFAULTS;
   let compactedCount = 0;
   let savedChars = 0;
 
@@ -106,7 +126,7 @@ export function compactToolOutputs(messages: Message[]): void {
   if (compactedCount > 0 && process.env.DEBUG) {
     log.debug('Compacted tool outputs', {
       compactedCount,
-      savedTokens: Math.round(savedChars / 4),
+      savedTokens: estimateTokensFromCharCount(savedChars),
     });
   }
 }
@@ -147,6 +167,434 @@ function getOpenTaskSummary(ctx: AgentContext): OpenTaskSummary | undefined {
 function getPendingWithOwnerCount(ctx: AgentContext): number {
   if (!ctx.taskManager) return 0;
   return ctx.taskManager.list().filter((t) => t.status === 'pending' && !!t.owner).length;
+}
+
+// =============================================================================
+// EXTRACTED TESTABLE FUNCTIONS
+// =============================================================================
+
+/**
+ * Narrow deps interface for budget pre-flight check.
+ * Keeps the function testable without a full AgentContext.
+ */
+export interface BudgetCheckDeps {
+  economics: {
+    checkBudget(): {
+      canContinue: boolean;
+      forceTextOnly?: boolean;
+      injectedPrompt?: string;
+      allowTaskContinuation?: boolean;
+      percentUsed: number;
+      budgetType?: string;
+      budgetMode?: string;
+      isSoftLimit?: boolean;
+      suggestedAction?: string;
+      reason?: string;
+    };
+    getBudget(): { maxTokens: number; enforcementMode?: string };
+    getUsage(): { tokens: number };
+    updateBaseline(tokens: number): void;
+  } | null;
+  getTotalIterations(): number;
+  maxIterations: number;
+  parentIterations: number;
+  state: { iteration: number; metrics: { retryCount?: number }; messages: Message[] };
+  workLog?: { hasContent(): boolean; toCompactString(): string } | null;
+  observability?: { logger?: { info(msg: string, data?: any): void; warn(msg: string, data?: any): void } | null } | null;
+  traceCollector?: { record(entry: any): void } | null;
+  emit(event: any): void;
+}
+
+export type BudgetCheckResult =
+  | { action: 'continue'; forceTextOnly: boolean; budgetInjectedPrompt?: string; budgetAllowsTaskContinuation: boolean }
+  | { action: 'recovery_success' }
+  | { action: 'stop'; result: ExecutionLoopResult };
+
+/**
+ * Check economics/iteration budget before an iteration.
+ * Returns whether to continue, stop, or whether recovery succeeded.
+ */
+export function checkIterationBudget(deps: BudgetCheckDeps, messages: Message[]): BudgetCheckResult {
+  if (deps.economics) {
+    const budgetCheck = deps.economics.checkBudget();
+
+    const forceTextOnly = budgetCheck.forceTextOnly ?? false;
+    const budgetInjectedPrompt = budgetCheck.injectedPrompt;
+    const budgetAllowsTaskContinuation = budgetCheck.allowTaskContinuation ?? true;
+
+    deps.traceCollector?.record({
+      type: 'budget.check',
+      data: {
+        iteration: deps.state.iteration,
+        canContinue: budgetCheck.canContinue,
+        percentUsed: budgetCheck.percentUsed,
+        budgetType: budgetCheck.budgetType,
+        budgetMode: budgetCheck.budgetMode,
+        forceTextOnly,
+        allowTaskContinuation: budgetAllowsTaskContinuation,
+        enforcementMode: deps.economics.getBudget().enforcementMode ?? 'strict',
+        tokenUsage: deps.economics.getUsage().tokens,
+        maxTokens: deps.economics.getBudget().maxTokens,
+      },
+    });
+
+    if (!budgetCheck.canContinue) {
+      // RECOVERY ATTEMPT: Try emergency context reduction
+      const isTokenLimit =
+        budgetCheck.budgetType === 'tokens' || budgetCheck.budgetType === 'cost';
+      const alreadyTriedRecovery =
+        (deps.state as { _recoveryAttempted?: boolean })._recoveryAttempted === true;
+
+      if (isTokenLimit && !alreadyTriedRecovery) {
+        deps.observability?.logger?.info(
+          'Budget limit reached, attempting recovery via context reduction',
+          { reason: budgetCheck.reason, percentUsed: budgetCheck.percentUsed },
+        );
+
+        deps.emit({
+          type: 'resilience.retry',
+          reason: 'budget_limit_compaction',
+          attempt: 1,
+          maxAttempts: 1,
+        });
+        deps.state.metrics.retryCount = (deps.state.metrics.retryCount ?? 0) + 1;
+        (deps.state as { _recoveryAttempted?: boolean })._recoveryAttempted = true;
+
+        const tokensBefore = estimateContextTokens(messages);
+
+        // Step 1: Compact tool outputs aggressively
+        compactToolOutputs(deps.state.messages);
+
+        // Step 2: Emergency truncation - keep system + last N messages
+        const PRESERVE_RECENT = EXECUTION_LOOP_DEFAULTS.PRESERVE_RECENT;
+        if (messages.length > PRESERVE_RECENT + 2) {
+          const systemMessage = messages.find((m) => m.role === 'system');
+          const recentMessages = messages.slice(-PRESERVE_RECENT);
+
+          messages.length = 0;
+          if (systemMessage) {
+            messages.push(systemMessage);
+          }
+          messages.push({
+            role: 'system',
+            content: `[CONTEXT REDUCED: Earlier messages were removed to stay within budget. Conversation continues from recent context.]`,
+          });
+          messages.push(...recentMessages);
+
+          // Inject work log after emergency truncation
+          if (deps.workLog?.hasContent()) {
+            messages.push({ role: 'user', content: deps.workLog.toCompactString() });
+          }
+
+          // Update state messages too
+          deps.state.messages.length = 0;
+          deps.state.messages.push(...messages);
+        }
+
+        const tokensAfter = estimateContextTokens(messages);
+        const reduction = Math.round((1 - tokensAfter / tokensBefore) * 100);
+
+        if (tokensAfter < tokensBefore * 0.8) {
+          deps.observability?.logger?.info(
+            'Context reduction successful, continuing execution',
+            { tokensBefore, tokensAfter, reduction },
+          );
+
+          deps.emit({ type: 'resilience.recovered', reason: 'budget_limit_compaction', attempts: 1 });
+          deps.emit({ type: 'compaction.auto', tokensBefore, tokensAfter, messagesCompacted: tokensBefore - tokensAfter });
+          deps.economics?.updateBaseline(tokensAfter);
+
+          return { action: 'recovery_success' };
+        }
+
+        deps.observability?.logger?.warn('Context reduction insufficient', {
+          tokensBefore, tokensAfter, reduction,
+        });
+      }
+
+      // Hard limit reached and recovery failed
+      deps.observability?.logger?.warn('Budget limit reached', {
+        reason: budgetCheck.reason,
+        budgetType: budgetCheck.budgetType,
+      });
+
+      if (budgetCheck.budgetType === 'iterations') {
+        const totalIter = deps.getTotalIterations();
+        const iterMsg =
+          deps.parentIterations > 0
+            ? `${deps.state.iteration} + ${deps.parentIterations} parent = ${totalIter}`
+            : `${deps.state.iteration}`;
+        const reason = `Max iterations reached (${iterMsg})`;
+        deps.emit({ type: 'error', error: reason });
+        return { action: 'stop', result: { success: false, terminationReason: 'max_iterations', failureReason: reason } };
+      } else {
+        const reason = budgetCheck.reason || 'Budget exceeded';
+        deps.emit({ type: 'error', error: reason });
+        return { action: 'stop', result: { success: false, terminationReason: 'budget_limit', failureReason: reason } };
+      }
+    }
+
+    // Check for soft limits
+    if (budgetCheck.isSoftLimit && budgetCheck.suggestedAction === 'request_extension') {
+      deps.observability?.logger?.info('Approaching budget limit', {
+        reason: budgetCheck.reason,
+        percentUsed: budgetCheck.percentUsed,
+      });
+    }
+
+    return { action: 'continue', forceTextOnly, budgetInjectedPrompt, budgetAllowsTaskContinuation };
+  } else {
+    // Fallback to simple iteration check
+    if (deps.getTotalIterations() >= deps.maxIterations) {
+      const totalIter = deps.getTotalIterations();
+      const reason = `Max iterations reached (${totalIter})`;
+      deps.observability?.logger?.warn('Max iterations reached', {
+        iteration: deps.state.iteration,
+        parentIterations: deps.parentIterations,
+        total: totalIter,
+      });
+      deps.emit({ type: 'error', error: reason });
+      return { action: 'stop', result: { success: false, terminationReason: 'max_iterations', failureReason: reason } };
+    }
+    return { action: 'continue', forceTextOnly: false, budgetAllowsTaskContinuation: true };
+  }
+}
+
+/**
+ * Narrow deps for auto-compaction handler.
+ */
+export interface AutoCompactionDeps {
+  autoCompactionManager: {
+    checkAndMaybeCompact(input: { currentTokens: number; messages: Message[] }): Promise<{
+      status: string;
+      compactedMessages?: Message[];
+      ratio: number;
+    }>;
+  } | null;
+  economics: {
+    getUsage(): { tokens: number };
+    getBudget(): { maxTokens: number };
+    updateBaseline(tokens: number): void;
+  } | null;
+  compactionPending: boolean;
+  store?: { getGoalsSummary(): string; getJuncturesSummary(arg0: undefined, count: number): string | null } | null;
+  learningStore?: { getLearningContext(opts: { maxLearnings: number }): string | null } | null;
+  workLog?: { hasContent(): boolean; toCompactString(): string } | null;
+  observability?: { logger?: { info(msg: string, data?: any): void } | null } | null;
+  traceCollector?: { record(entry: any): void } | null;
+  emit(event: any): void;
+}
+
+export type AutoCompactionResult =
+  | { status: 'ok' }
+  | { status: 'compaction_prompt_injected' }
+  | { status: 'compacted'; tokensBefore: number; tokensAfter: number }
+  | { status: 'hard_limit'; result: ExecutionLoopResult }
+  | { status: 'simple_compaction_triggered' };
+
+/**
+ * Handle auto-compaction of context when approaching token limits.
+ * Returns the compaction status and whether messages were modified.
+ */
+export async function handleAutoCompaction(
+  deps: AutoCompactionDeps,
+  messages: Message[],
+  stateMessages: Message[],
+  setCompactionPending: (v: boolean) => void,
+): Promise<AutoCompactionResult> {
+  const currentContextTokens = estimateContextTokens(messages);
+
+  if (deps.autoCompactionManager) {
+    const compactionResult = await deps.autoCompactionManager.checkAndMaybeCompact({
+      currentTokens: currentContextTokens,
+      messages: messages,
+    });
+
+    if (compactionResult.status === 'compacted' && compactionResult.compactedMessages) {
+      if (!deps.compactionPending) {
+        setCompactionPending(true);
+        const preCompactionMsg: Message = {
+          role: 'user',
+          content:
+            '[SYSTEM] Context compaction is imminent. Summarize your current progress, key findings, and next steps into a single concise message. This will be preserved after compaction.',
+        };
+        messages.push(preCompactionMsg);
+        stateMessages.push(preCompactionMsg);
+
+        deps.observability?.logger?.info('Pre-compaction agentic turn: injected summary request');
+        return { status: 'compaction_prompt_injected' };
+      } else {
+        setCompactionPending(false);
+
+        // Replace messages with compacted version
+        messages.length = 0;
+        messages.push(...compactionResult.compactedMessages);
+        stateMessages.length = 0;
+        stateMessages.push(...compactionResult.compactedMessages);
+
+        // Inject work log after compaction
+        if (deps.workLog?.hasContent()) {
+          const workLogMessage: Message = { role: 'user', content: deps.workLog.toCompactString() };
+          messages.push(workLogMessage);
+          stateMessages.push(workLogMessage);
+        }
+
+        // Context recovery
+        const recoveryParts: string[] = [];
+
+        if (deps.store) {
+          const goalsSummary = deps.store.getGoalsSummary();
+          if (goalsSummary && goalsSummary !== 'No active goals.' && goalsSummary !== 'Goals feature not available.') {
+            recoveryParts.push(goalsSummary);
+          }
+        }
+
+        if (deps.store) {
+          const juncturesSummary = deps.store.getJuncturesSummary(undefined, 5);
+          if (juncturesSummary) {
+            recoveryParts.push(juncturesSummary);
+          }
+        }
+
+        if (deps.learningStore) {
+          const learnings = deps.learningStore.getLearningContext({ maxLearnings: 3 });
+          if (learnings) {
+            recoveryParts.push(learnings);
+          }
+        }
+
+        if (recoveryParts.length > 0) {
+          const recoveryMessage: Message = {
+            role: 'user',
+            content: `[CONTEXT RECOVERY — Re-injected after compaction]\n\n${recoveryParts.join('\n\n')}`,
+          };
+          messages.push(recoveryMessage);
+          stateMessages.push(recoveryMessage);
+        }
+
+        const compactionTokensAfter = estimateContextTokens(messages);
+        deps.economics?.updateBaseline(compactionTokensAfter);
+
+        const compactionEvent = {
+          type: 'context.compacted',
+          tokensBefore: currentContextTokens,
+          tokensAfter: compactionTokensAfter,
+          recoveryInjected: recoveryParts.length > 0,
+        };
+        deps.emit(compactionEvent as any);
+
+        deps.traceCollector?.record({
+          type: 'context.compacted',
+          data: {
+            tokensBefore: currentContextTokens,
+            tokensAfter: compactionTokensAfter,
+            recoveryInjected: recoveryParts.length > 0,
+          },
+        });
+
+        return { status: 'compacted', tokensBefore: currentContextTokens, tokensAfter: compactionTokensAfter };
+      }
+    } else if (compactionResult.status === 'hard_limit') {
+      const reason = `Context hard limit reached (${Math.round(compactionResult.ratio * 100)}% of max tokens)`;
+      deps.emit({ type: 'error', error: reason });
+      return {
+        status: 'hard_limit',
+        result: { success: false, terminationReason: 'hard_context_limit', failureReason: reason },
+      };
+    }
+  } else if (deps.economics) {
+    // Fallback to simple compaction
+    const currentUsage = deps.economics.getUsage();
+    const budget = deps.economics.getBudget();
+    const percentUsed = (currentUsage.tokens / budget.maxTokens) * 100;
+
+    if (percentUsed >= 70) {
+      deps.observability?.logger?.info('Proactive compaction triggered', {
+        percentUsed: Math.round(percentUsed),
+        currentTokens: currentUsage.tokens,
+        maxTokens: budget.maxTokens,
+      });
+      compactToolOutputs(stateMessages);
+      return { status: 'simple_compaction_triggered' };
+    }
+  }
+
+  return { status: 'ok' };
+}
+
+/**
+ * Narrow deps for context overflow guard.
+ */
+export interface OverflowGuardDeps {
+  economics: {
+    getBudget(): { maxTokens: number };
+  } | null;
+  emit(event: any): void;
+}
+
+export interface ToolResult {
+  callId: string;
+  result: string | unknown;
+}
+
+/**
+ * Guard against mass tool results overflowing the context window.
+ * Truncates tool results that would push total context beyond budget.
+ * Mutates toolResults in-place.
+ */
+export function applyContextOverflowGuard(
+  deps: OverflowGuardDeps,
+  messages: Message[],
+  toolResults: ToolResult[],
+): number {
+  if (!deps.economics || toolResults.length <= 10) return 0;
+
+  const preAccumTokens = estimateContextTokens(messages);
+  const budget = deps.economics.getBudget();
+  const availableTokens = budget.maxTokens * EXECUTION_LOOP_DEFAULTS.CONTEXT_SAFETY_RATIO - preAccumTokens;
+
+  const MAX_TOOL_OUTPUT_CHARS = EXECUTION_LOOP_DEFAULTS.MAX_TOOL_OUTPUT_CHARS;
+
+  let totalResultTokens = 0;
+  for (const r of toolResults) {
+    const c = typeof r.result === 'string' ? r.result : stableStringify(r.result);
+    totalResultTokens += estimateTokensFromCharCount(Math.min(c.length, MAX_TOOL_OUTPUT_CHARS));
+  }
+
+  if (totalResultTokens > availableTokens && availableTokens > 0) {
+    log.warn('Tool results would exceed context budget — truncating batch', {
+      resultCount: toolResults.length,
+      estimatedTokens: totalResultTokens,
+      availableTokens: Math.round(availableTokens),
+    });
+    let tokenBudget = availableTokens;
+    for (let i = 0; i < toolResults.length; i++) {
+      const c =
+        typeof toolResults[i].result === 'string'
+          ? (toolResults[i].result as string)
+          : stableStringify(toolResults[i].result);
+      const tokens = estimateTokensFromCharCount(Math.min(c.length, MAX_TOOL_OUTPUT_CHARS));
+      if (tokens > tokenBudget) {
+        const skipped = toolResults.length - i;
+        for (let j = i; j < toolResults.length; j++) {
+          toolResults[j] = {
+            callId: toolResults[j].callId,
+            result: `[Result omitted: context overflow guard — ${skipped} of ${toolResults.length} results skipped]`,
+          };
+        }
+        deps.emit({
+          type: 'safeguard.context_overflow_guard',
+          estimatedTokens: totalResultTokens,
+          maxTokens: budget.maxTokens,
+          toolResultsSkipped: skipped,
+        });
+        return skipped;
+      }
+      tokenBudget -= tokens;
+    }
+  }
+
+  return 0;
 }
 
 // =============================================================================
@@ -255,193 +703,33 @@ export async function executeDirectly(
       }
 
       // =======================================================================
-      // ECONOMICS CHECK (Token Budget)
+      // ECONOMICS CHECK (Token Budget) — delegated to checkIterationBudget()
       // =======================================================================
       let forceTextOnly = false;
       let budgetInjectedPrompt: string | undefined;
       let budgetAllowsTaskContinuation = true;
 
-      if (ctx.economics) {
-        const budgetCheck = ctx.economics.checkBudget();
+      const budgetResult = checkIterationBudget({
+        economics: ctx.economics,
+        getTotalIterations: () => ctx.getTotalIterations(),
+        maxIterations: ctx.config.maxIterations,
+        parentIterations: ctx.parentIterations,
+        state: ctx.state,
+        workLog: ctx.workLog,
+        observability: ctx.observability,
+        traceCollector: ctx.traceCollector,
+        emit: (event: any) => ctx.emit(event),
+      }, messages);
 
-        forceTextOnly = budgetCheck.forceTextOnly ?? false;
-        budgetInjectedPrompt = budgetCheck.injectedPrompt;
-        budgetAllowsTaskContinuation = budgetCheck.allowTaskContinuation ?? true;
-
-        // Record budget check in trace for debugging premature death
-        ctx.traceCollector?.record({
-          type: 'budget.check',
-          data: {
-            iteration: ctx.state.iteration,
-            canContinue: budgetCheck.canContinue,
-            percentUsed: budgetCheck.percentUsed,
-            budgetType: budgetCheck.budgetType,
-            budgetMode: budgetCheck.budgetMode,
-            forceTextOnly,
-            allowTaskContinuation: budgetAllowsTaskContinuation,
-            enforcementMode: ctx.economics.getBudget().enforcementMode ?? 'strict',
-            tokenUsage: ctx.economics.getUsage().tokens,
-            maxTokens: ctx.economics.getBudget().maxTokens,
-          },
-        });
-
-        if (!budgetCheck.canContinue) {
-          // RECOVERY ATTEMPT: Try emergency context reduction
-          const isTokenLimit =
-            budgetCheck.budgetType === 'tokens' || budgetCheck.budgetType === 'cost';
-          const alreadyTriedRecovery =
-            (ctx.state as { _recoveryAttempted?: boolean })._recoveryAttempted === true;
-
-          if (isTokenLimit && !alreadyTriedRecovery) {
-            ctx.observability?.logger?.info(
-              'Budget limit reached, attempting recovery via context reduction',
-              {
-                reason: budgetCheck.reason,
-                percentUsed: budgetCheck.percentUsed,
-              },
-            );
-
-            ctx.emit({
-              type: 'resilience.retry',
-              reason: 'budget_limit_compaction',
-              attempt: 1,
-              maxAttempts: 1,
-            });
-            ctx.state.metrics.retryCount = (ctx.state.metrics.retryCount ?? 0) + 1;
-
-            (ctx.state as { _recoveryAttempted?: boolean })._recoveryAttempted = true;
-
-            const tokensBefore = estimateContextTokens(messages);
-
-            // Step 1: Compact tool outputs aggressively
-            compactToolOutputs(ctx.state.messages);
-
-            // Step 2: Emergency truncation - keep system + last N messages
-            const PRESERVE_RECENT = 10;
-            if (messages.length > PRESERVE_RECENT + 2) {
-              const systemMessage = messages.find((m) => m.role === 'system');
-              const recentMessages = messages.slice(-PRESERVE_RECENT);
-
-              messages.length = 0;
-              if (systemMessage) {
-                messages.push(systemMessage);
-              }
-              messages.push({
-                role: 'system',
-                content: `[CONTEXT REDUCED: Earlier messages were removed to stay within budget. Conversation continues from recent context.]`,
-              });
-              messages.push(...recentMessages);
-
-              // Inject work log after emergency truncation
-              if (ctx.workLog?.hasContent()) {
-                const workLogMessage: Message = {
-                  role: 'user',
-                  content: ctx.workLog.toCompactString(),
-                };
-                messages.push(workLogMessage);
-              }
-
-              // Update state messages too
-              ctx.state.messages.length = 0;
-              ctx.state.messages.push(...messages);
-            }
-
-            const tokensAfter = estimateContextTokens(messages);
-            const reduction = Math.round((1 - tokensAfter / tokensBefore) * 100);
-
-            if (tokensAfter < tokensBefore * 0.8) {
-              ctx.observability?.logger?.info(
-                'Context reduction successful, continuing execution',
-                {
-                  tokensBefore,
-                  tokensAfter,
-                  reduction,
-                },
-              );
-
-              ctx.emit({
-                type: 'resilience.recovered',
-                reason: 'budget_limit_compaction',
-                attempts: 1,
-              });
-
-              ctx.emit({
-                type: 'compaction.auto',
-                tokensBefore,
-                tokensAfter,
-                messagesCompacted: tokensBefore - tokensAfter,
-              });
-
-              // Update baseline after emergency context reduction so
-              // incremental token accounting reflects the new context size
-              ctx.economics?.updateBaseline(tokensAfter);
-
-              continue;
-            }
-
-            ctx.observability?.logger?.warn('Context reduction insufficient', {
-              tokensBefore,
-              tokensAfter,
-              reduction,
-            });
-          }
-
-          // Hard limit reached and recovery failed
-          ctx.observability?.logger?.warn('Budget limit reached', {
-            reason: budgetCheck.reason,
-            budgetType: budgetCheck.budgetType,
-          });
-
-          if (budgetCheck.budgetType === 'iterations') {
-            const totalIter = ctx.getTotalIterations();
-            const iterMsg =
-              ctx.parentIterations > 0
-                ? `${ctx.state.iteration} + ${ctx.parentIterations} parent = ${totalIter}`
-                : `${ctx.state.iteration}`;
-            const reason = `Max iterations reached (${iterMsg})`;
-            ctx.emit({ type: 'error', error: reason });
-            result = {
-              success: false,
-              terminationReason: 'max_iterations',
-              failureReason: reason,
-            };
-          } else {
-            const reason = budgetCheck.reason || 'Budget exceeded';
-            ctx.emit({ type: 'error', error: reason });
-            result = {
-              success: false,
-              terminationReason: 'budget_limit',
-              failureReason: reason,
-            };
-          }
-          break;
-        }
-
-        // Check for soft limits and potential extension
-        if (budgetCheck.isSoftLimit && budgetCheck.suggestedAction === 'request_extension') {
-          ctx.observability?.logger?.info('Approaching budget limit', {
-            reason: budgetCheck.reason,
-            percentUsed: budgetCheck.percentUsed,
-          });
-        }
+      if (budgetResult.action === 'recovery_success') {
+        continue;
+      } else if (budgetResult.action === 'stop') {
+        result = budgetResult.result;
+        break;
       } else {
-        // Fallback to simple iteration check
-        if (ctx.getTotalIterations() >= ctx.config.maxIterations) {
-          const totalIter = ctx.getTotalIterations();
-          const reason = `Max iterations reached (${totalIter})`;
-          ctx.observability?.logger?.warn('Max iterations reached', {
-            iteration: ctx.state.iteration,
-            parentIterations: ctx.parentIterations,
-            total: totalIter,
-          });
-          ctx.emit({ type: 'error', error: reason });
-          result = {
-            success: false,
-            terminationReason: 'max_iterations',
-            failureReason: reason,
-          };
-          break;
-        }
+        forceTextOnly = budgetResult.forceTextOnly;
+        budgetInjectedPrompt = budgetResult.budgetInjectedPrompt;
+        budgetAllowsTaskContinuation = budgetResult.budgetAllowsTaskContinuation;
       }
 
       // =======================================================================
@@ -529,7 +817,7 @@ export async function executeDirectly(
           log.warn('Recitation returned empty/null messages, keeping original');
         }
 
-        const contextTokens = messages.reduce((sum, m) => sum + (m.content?.length || 0) / 4, 0);
+        const contextTokens = estimateContextTokens(messages);
         ctx.contextEngineering.updateRecitationFrequency(contextTokens);
       }
 
@@ -1387,197 +1675,47 @@ export async function executeDirectly(
       }
 
       // Add tool results to messages (with truncation and proactive budget management)
-      const MAX_TOOL_OUTPUT_CHARS = 8000;
+      const MAX_TOOL_OUTPUT_CHARS = EXECUTION_LOOP_DEFAULTS.MAX_TOOL_OUTPUT_CHARS;
 
-      // PROACTIVE BUDGET CHECK
-      const currentContextTokens = estimateContextTokens(messages);
+      // PROACTIVE BUDGET CHECK — delegate to extracted function
+      const compactionStatus = await handleAutoCompaction(
+        {
+          autoCompactionManager: ctx.autoCompactionManager ?? null,
+          compactionPending: ctx.compactionPending,
+          economics: ctx.economics,
+          workLog: ctx.workLog,
+          store: ctx.store,
+          learningStore: ctx.learningStore,
+          observability: ctx.observability,
+          traceCollector: ctx.traceCollector,
+          emit: (event: any) => ctx.emit(event),
+        },
+        messages,
+        ctx.state.messages,
+        (v) => mutators.setCompactionPending(v),
+      );
 
-      if (ctx.autoCompactionManager) {
-        const compactionResult = await ctx.autoCompactionManager.checkAndMaybeCompact({
-          currentTokens: currentContextTokens,
-          messages: messages,
-        });
-
-        if (compactionResult.status === 'compacted' && compactionResult.compactedMessages) {
-          if (!ctx.compactionPending) {
-            mutators.setCompactionPending(true);
-            const preCompactionMsg: Message = {
-              role: 'user',
-              content:
-                '[SYSTEM] Context compaction is imminent. Summarize your current progress, key findings, and next steps into a single concise message. This will be preserved after compaction.',
-            };
-            messages.push(preCompactionMsg);
-            ctx.state.messages.push(preCompactionMsg);
-
-            ctx.observability?.logger?.info(
-              'Pre-compaction agentic turn: injected summary request',
-            );
-          } else {
-            mutators.setCompactionPending(false);
-
-            // Pre-compaction checkpoint
-            // NOTE: autoCheckpoint is called via the agent's method, not directly here
-            // The agent wires this through the mutators pattern
-
-            // Replace messages with compacted version
-            messages.length = 0;
-            messages.push(...compactionResult.compactedMessages);
-            ctx.state.messages.length = 0;
-            ctx.state.messages.push(...compactionResult.compactedMessages);
-
-            // Inject work log after compaction
-            if (ctx.workLog?.hasContent()) {
-              const workLogMessage: Message = {
-                role: 'user',
-                content: ctx.workLog.toCompactString(),
-              };
-              messages.push(workLogMessage);
-              ctx.state.messages.push(workLogMessage);
-            }
-
-            // Context recovery
-            const recoveryParts: string[] = [];
-
-            if (ctx.store) {
-              const goalsSummary = ctx.store.getGoalsSummary();
-              if (
-                goalsSummary &&
-                goalsSummary !== 'No active goals.' &&
-                goalsSummary !== 'Goals feature not available.'
-              ) {
-                recoveryParts.push(goalsSummary);
-              }
-            }
-
-            if (ctx.store) {
-              const juncturesSummary = ctx.store.getJuncturesSummary(undefined, 5);
-              if (juncturesSummary) {
-                recoveryParts.push(juncturesSummary);
-              }
-            }
-
-            if (ctx.learningStore) {
-              const learnings = ctx.learningStore.getLearningContext({ maxLearnings: 3 });
-              if (learnings) {
-                recoveryParts.push(learnings);
-              }
-            }
-
-            if (recoveryParts.length > 0) {
-              const recoveryMessage: Message = {
-                role: 'user',
-                content: `[CONTEXT RECOVERY — Re-injected after compaction]\n\n${recoveryParts.join('\n\n')}`,
-              };
-              messages.push(recoveryMessage);
-              ctx.state.messages.push(recoveryMessage);
-            }
-
-            // Emit compaction event
-            const compactionTokensAfter = estimateContextTokens(messages);
-            const compactionRecoveryInjected = recoveryParts.length > 0;
-
-            // Update baseline after compaction so incremental token
-            // accounting reflects the reduced context size
-            ctx.economics?.updateBaseline(compactionTokensAfter);
-
-            const compactionEvent = {
-              type: 'context.compacted',
-              tokensBefore: currentContextTokens,
-              tokensAfter: compactionTokensAfter,
-              recoveryInjected: compactionRecoveryInjected,
-            };
-            ctx.emit(compactionEvent as any);
-
-            if (ctx.traceCollector) {
-              ctx.traceCollector.record({
-                type: 'context.compacted',
-                data: {
-                  tokensBefore: currentContextTokens,
-                  tokensAfter: compactionTokensAfter,
-                  recoveryInjected: compactionRecoveryInjected,
-                },
-              });
-            }
-          }
-        } else if (compactionResult.status === 'hard_limit') {
-          const reason = `Context hard limit reached (${Math.round(compactionResult.ratio * 100)}% of max tokens)`;
-          ctx.emit({ type: 'error', error: reason });
-          result = {
-            success: false,
-            terminationReason: 'hard_context_limit',
-            failureReason: reason,
-          };
-          break;
-        }
-      } else if (ctx.economics) {
-        // Fallback to simple compaction
-        const currentUsage = ctx.economics.getUsage();
-        const budget = ctx.economics.getBudget();
-        const percentUsed = (currentUsage.tokens / budget.maxTokens) * 100;
-
-        if (percentUsed >= 70) {
-          ctx.observability?.logger?.info('Proactive compaction triggered', {
-            percentUsed: Math.round(percentUsed),
-            currentTokens: currentUsage.tokens,
-            maxTokens: budget.maxTokens,
-          });
-
-          compactToolOutputs(ctx.state.messages);
-        }
+      if (compactionStatus.status === 'hard_limit') {
+        result = compactionStatus.result;
+        break;
       }
 
-      // SAFEGUARD: Aggregate context guard — prevent mass small results from overflowing
-      if (ctx.economics && toolResults.length > 10) {
-        const preAccumTokens = estimateContextTokens(messages);
-        const budget = ctx.economics.getBudget();
-        const availableTokens = budget.maxTokens * 0.9 - preAccumTokens;
-
-        // Estimate total result tokens
-        let totalResultTokens = 0;
-        for (const r of toolResults) {
-          const c = typeof r.result === 'string' ? r.result : stableStringify(r.result);
-          totalResultTokens += Math.ceil(Math.min(c.length, MAX_TOOL_OUTPUT_CHARS) / 4);
-        }
-
-        if (totalResultTokens > availableTokens && availableTokens > 0) {
-          log.warn('Tool results would exceed context budget — truncating batch', {
-            resultCount: toolResults.length,
-            estimatedTokens: totalResultTokens,
-            availableTokens: Math.round(availableTokens),
-          });
-          let tokenBudget = availableTokens;
-          for (let i = 0; i < toolResults.length; i++) {
-            const c =
-              typeof toolResults[i].result === 'string'
-                ? (toolResults[i].result as string)
-                : stableStringify(toolResults[i].result);
-            const tokens = Math.ceil(Math.min(c.length, MAX_TOOL_OUTPUT_CHARS) / 4);
-            if (tokens > tokenBudget) {
-              const skipped = toolResults.length - i;
-              for (let j = i; j < toolResults.length; j++) {
-                toolResults[j] = {
-                  callId: toolResults[j].callId,
-                  result: `[Result omitted: context overflow guard — ${skipped} of ${toolResults.length} results skipped]`,
-                };
-              }
-              ctx.emit({
-                type: 'safeguard.context_overflow_guard',
-                estimatedTokens: totalResultTokens,
-                maxTokens: budget.maxTokens,
-                toolResultsSkipped: skipped,
-              });
-              break;
-            }
-            tokenBudget -= tokens;
-          }
-        }
-      }
+      // SAFEGUARD: Aggregate context guard — delegate to extracted function
+      applyContextOverflowGuard(
+        { economics: ctx.economics, emit: (event: any) => ctx.emit(event) },
+        messages,
+        toolResults,
+      );
 
       const toolCallNameById = new Map(toolCalls.map((tc) => [tc.id, tc.name]));
 
       for (const result of toolResults) {
         let content =
-          typeof result.result === 'string' ? result.result : stableStringify(result.result);
+          typeof result.result === 'string'
+            ? result.result
+            : ctx.contextEngineering
+              ? ctx.contextEngineering.serialize(result.result)
+              : stableStringify(result.result);
         const sourceToolName = toolCallNameById.get(result.callId);
         const isExpensiveResult =
           sourceToolName === 'spawn_agent' || sourceToolName === 'spawn_agents_parallel';
@@ -1597,7 +1735,7 @@ export async function executeDirectly(
           const currentCtxTokens = estimateContextTokens(messages);
           const budget = ctx.economics.getBudget();
 
-          if (currentCtxTokens + estimatedNewTokens > budget.maxTokens * 0.95) {
+          if (currentCtxTokens + estimatedNewTokens > budget.maxTokens * EXECUTION_LOOP_DEFAULTS.PER_RESULT_BUDGET_RATIO) {
             ctx.observability?.logger?.warn('Skipping tool result to stay within budget', {
               toolCallId: result.callId,
               estimatedTokens: estimatedNewTokens,
@@ -1635,7 +1773,7 @@ export async function executeDirectly(
       }
 
       // Periodic TypeScript compilation check (every 5 TS edits)
-      const TYPE_CHECK_EDIT_THRESHOLD = 5;
+      const TYPE_CHECK_EDIT_THRESHOLD = EXECUTION_LOOP_DEFAULTS.TYPE_CHECK_EDIT_THRESHOLD;
       if (
         ctx.typeCheckerState?.tsconfigDir &&
         ctx.typeCheckerState.tsEditsSinceLastCheck >= TYPE_CHECK_EDIT_THRESHOLD &&

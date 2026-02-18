@@ -14,7 +14,7 @@
  */
 
 import { createProductionAgent } from '../agent/index.js';
-import { ProviderAdapter, convertToolsFromRegistry, createTUIApprovalBridge } from '../adapters.js';
+import { ProviderAdapter, convertToolsFromRegistry, createTUIApprovalBridge, createTUIBudgetExtensionBridge, createTUILearningValidationBridge } from '../adapters.js';
 import { createStandardRegistry } from '../tools/standard.js';
 import { TUIPermissionChecker } from '../tools/permission.js';
 import type { LLMProviderWithTools } from '../providers/types.js';
@@ -288,6 +288,37 @@ export async function startTUIMode(
       }
     });
 
+    // Wire budget extension bridge so economics extension requests route through TUI
+    const budgetExtensionBridge = createTUIBudgetExtensionBridge();
+    agent.setExtensionHandler(budgetExtensionBridge.handler);
+
+    // Wire learning validation bridge so proposed learnings route through TUI
+    const learningValidationBridge = createTUILearningValidationBridge();
+    const learningStore = agent.getLearningStore();
+    let unsubLearningBridge: (() => void) | null = null;
+    if (learningStore) {
+      unsubLearningBridge = learningStore.on((event) => {
+        if (event.type === 'learning.proposed') {
+          const l = event.learning;
+          learningValidationBridge.requestValidation({
+            id: l.id,
+            type: l.type,
+            description: l.description,
+            details: l.details,
+            categories: l.categories,
+            confidence: l.confidence,
+          }).then((result) => {
+            if (result === 'approve') {
+              learningStore.validateLearning(l.id, true);
+            } else if (result === 'reject') {
+              learningStore.validateLearning(l.id, false, 'User rejected');
+            }
+            // 'skip' — leave as proposed
+          });
+        }
+      });
+    }
+
     // Session store was already initialized at the top
     const compactor = createCompactor(adaptedProvider, {
       tokenThreshold: 80000,
@@ -449,6 +480,10 @@ export async function startTUIMode(
       },
       // Approval bridge for TUI permission dialogs (only in interactive mode)
       approvalBridge: approvalBridge || undefined,
+      // Budget extension bridge for economics extension requests
+      budgetExtensionBridge,
+      // Learning validation bridge for proposed learnings
+      learningValidationBridge,
     };
 
     const instance = render(React.createElement(TUIApp, tuiProps));
@@ -473,6 +508,7 @@ export async function startTUIMode(
         }
       }
       unsubAgentOutcome();
+      unsubLearningBridge?.();
       await agent.cleanup();
       await mcpClient.cleanup();
       await lspManager.cleanup();

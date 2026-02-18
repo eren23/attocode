@@ -33,7 +33,11 @@ import type { ThemeColors, CommandPaletteItem } from './types.js';
 import { getTheme, getThemeNames } from './theme/index.js';
 import { ControlledCommandPalette } from './input/CommandPalette.js';
 import { ApprovalDialog } from './components/ApprovalDialog.js';
-import type { TUIApprovalBridge } from '../adapters.js';
+import { BudgetExtensionDialog } from './components/BudgetExtensionDialog.js';
+import { LearningValidationDialog, type ProposedLearning } from './components/LearningValidationDialog.js';
+import { PlanPanel, type ActivePlan } from './components/PlanPanel.js';
+import type { TUIApprovalBridge, TUIBudgetExtensionBridge, TUILearningValidationBridge } from '../adapters.js';
+import type { ExtensionRequest } from '../integrations/budget/economics.js';
 import type { ApprovalRequest as TypesApprovalRequest } from '../types.js';
 import type { TransparencyState } from './transparency-aggregator.js';
 import { handleSkillsCommand } from '../commands/skills-commands.js';
@@ -119,6 +123,10 @@ export interface TUIAppProps {
   };
   /** Approval bridge for TUI permission dialogs (optional) */
   approvalBridge?: TUIApprovalBridge;
+  /** Budget extension bridge for economics extension requests (optional) */
+  budgetExtensionBridge?: TUIBudgetExtensionBridge;
+  /** Learning validation bridge for proposed learning approval (optional) */
+  learningValidationBridge?: TUILearningValidationBridge;
 }
 
 /** TUI message display format */
@@ -322,6 +330,15 @@ interface MemoizedInputAreaProps {
   onApprovalDenyWithReason?: () => void;
   onApprovalCancelDenyReason?: () => void;
   onApprovalDenyReasonInput?: (input: string, key: any) => void;
+  // Budget extension dialog state (controlled from parent)
+  budgetExtensionDialogOpen?: boolean;
+  onBudgetExtensionApprove?: () => void;
+  onBudgetExtensionDeny?: () => void;
+  // Learning validation dialog state (controlled from parent)
+  learningValidationDialogOpen?: boolean;
+  onLearningApprove?: () => void;
+  onLearningReject?: () => void;
+  onLearningSkip?: () => void;
   // History support
   history?: string[];
   onHistorySearch?: (query: string) => string[];
@@ -360,6 +377,13 @@ const MemoizedInputArea = memo(
     onApprovalDenyWithReason,
     onApprovalCancelDenyReason,
     onApprovalDenyReasonInput,
+    budgetExtensionDialogOpen,
+    onBudgetExtensionApprove,
+    onBudgetExtensionDeny,
+    learningValidationDialogOpen,
+    onLearningApprove,
+    onLearningReject,
+    onLearningSkip,
     history = [],
     onHistorySearch,
   }: MemoizedInputAreaProps) {
@@ -401,6 +425,13 @@ const MemoizedInputArea = memo(
       onApprovalDenyWithReason,
       onApprovalCancelDenyReason,
       onApprovalDenyReasonInput,
+      budgetExtensionDialogOpen,
+      onBudgetExtensionApprove,
+      onBudgetExtensionDeny,
+      learningValidationDialogOpen,
+      onLearningApprove,
+      onLearningReject,
+      onLearningSkip,
       onHistorySearch,
     });
     callbacksRef.current = {
@@ -431,6 +462,13 @@ const MemoizedInputArea = memo(
       onApprovalDenyWithReason,
       onApprovalCancelDenyReason,
       onApprovalDenyReasonInput,
+      budgetExtensionDialogOpen,
+      onBudgetExtensionApprove,
+      onBudgetExtensionDeny,
+      learningValidationDialogOpen,
+      onLearningApprove,
+      onLearningReject,
+      onLearningSkip,
       onHistorySearch,
     };
     const disabledRef = useRef(disabled);
@@ -540,6 +578,38 @@ const MemoizedInputArea = memo(
           return;
         }
         // Block other input while approval dialog is open
+        return;
+      }
+
+      // Budget extension dialog keyboard handling (when open)
+      if (cb.budgetExtensionDialogOpen) {
+        if (input === 'y' || input === 'Y') {
+          cb.onBudgetExtensionApprove?.();
+          return;
+        }
+        if (input === 'n' || input === 'N') {
+          cb.onBudgetExtensionDeny?.();
+          return;
+        }
+        // Block other input while dialog is open
+        return;
+      }
+
+      // Learning validation dialog keyboard handling (when open)
+      if (cb.learningValidationDialogOpen) {
+        if (input === 'y' || input === 'Y') {
+          cb.onLearningApprove?.();
+          return;
+        }
+        if (input === 'n' || input === 'N') {
+          cb.onLearningReject?.();
+          return;
+        }
+        if (input === 's' || input === 'S') {
+          cb.onLearningSkip?.();
+          return;
+        }
+        // Block other input while dialog is open
         return;
       }
 
@@ -704,7 +774,9 @@ const MemoizedInputArea = memo(
       prevProps.cursorColor === nextProps.cursorColor &&
       prevProps.commandPaletteOpen === nextProps.commandPaletteOpen &&
       prevProps.approvalDialogOpen === nextProps.approvalDialogOpen &&
-      prevProps.approvalDenyReasonMode === nextProps.approvalDenyReasonMode
+      prevProps.approvalDenyReasonMode === nextProps.approvalDenyReasonMode &&
+      prevProps.budgetExtensionDialogOpen === nextProps.budgetExtensionDialogOpen &&
+      prevProps.learningValidationDialogOpen === nextProps.learningValidationDialogOpen
     );
   },
 );
@@ -727,6 +799,8 @@ export function TUIApp({
   saveCheckpointToStore,
   persistenceDebug,
   approvalBridge,
+  budgetExtensionBridge,
+  learningValidationBridge,
 }: TUIAppProps) {
   const { exit } = useApp();
   const [messages, setMessages] = useState<TUIMessage[]>([]);
@@ -867,6 +941,16 @@ export function TUIApp({
   // Session-scoped always-allowed patterns (e.g., "bash:npm test", "write_file:/path")
   const [alwaysAllowed, setAlwaysAllowed] = useState<Set<string>>(new Set());
 
+  // Budget extension dialog state
+  const [pendingBudgetExtension, setPendingBudgetExtension] = useState<ExtensionRequest | null>(null);
+
+  // Learning validation dialog state
+  const [pendingLearning, setPendingLearning] = useState<ProposedLearning | null>(null);
+
+  // Interactive plan display state
+  const [activePlan, setActivePlan] = useState<ActivePlan | null>(null);
+  const [planExpanded, setPlanExpanded] = useState(true);
+
   // Transparency state
   const [transparencyState, setTransparencyState] = useState<TransparencyState | null>(null);
 
@@ -881,6 +965,10 @@ export function TUIApp({
   isProcessingRef.current = isProcessing;
   messagesLengthRef.current = messages.length;
   pendingApprovalRef.current = pendingApproval;
+  const pendingBudgetExtensionRef = useRef(pendingBudgetExtension);
+  pendingBudgetExtensionRef.current = pendingBudgetExtension;
+  const pendingLearningRef = useRef(pendingLearning);
+  pendingLearningRef.current = pendingLearning;
 
   // Memoize the approval request object to avoid defeating ApprovalDialog's memo
   const approvalRequest = useMemo(() => pendingApproval ? {
@@ -1033,6 +1121,105 @@ export function TUIApp({
       });
     }
   }, [approvalBridge, handleApprovalRequest]);
+
+  // Budget extension handlers
+  const handleBudgetExtensionRequest = useCallback((request: ExtensionRequest) => {
+    setPendingBudgetExtension(request);
+  }, []);
+
+  const handleBudgetExtensionApprove = useCallback(() => {
+    if (budgetExtensionBridge && pendingBudgetExtensionRef.current) {
+      budgetExtensionBridge.resolve(pendingBudgetExtensionRef.current.suggestedExtension);
+      setPendingBudgetExtension(null);
+    }
+  }, [budgetExtensionBridge]);
+
+  const handleBudgetExtensionDeny = useCallback(() => {
+    if (budgetExtensionBridge && pendingBudgetExtensionRef.current) {
+      budgetExtensionBridge.resolve(null);
+      setPendingBudgetExtension(null);
+    }
+  }, [budgetExtensionBridge]);
+
+  // Connect budget extension bridge on mount
+  useEffect(() => {
+    if (budgetExtensionBridge) {
+      budgetExtensionBridge.connect({
+        onRequest: handleBudgetExtensionRequest,
+      });
+    }
+  }, [budgetExtensionBridge, handleBudgetExtensionRequest]);
+
+  // Learning validation handlers
+  const handleLearningRequest = useCallback((learning: ProposedLearning) => {
+    setPendingLearning(learning);
+  }, []);
+
+  const handleLearningApprove = useCallback(() => {
+    if (learningValidationBridge && pendingLearningRef.current) {
+      learningValidationBridge.resolve('approve');
+      setPendingLearning(null);
+    }
+  }, [learningValidationBridge]);
+
+  const handleLearningReject = useCallback(() => {
+    if (learningValidationBridge && pendingLearningRef.current) {
+      learningValidationBridge.resolve('reject');
+      setPendingLearning(null);
+    }
+  }, [learningValidationBridge]);
+
+  const handleLearningSkip = useCallback(() => {
+    if (learningValidationBridge && pendingLearningRef.current) {
+      learningValidationBridge.resolve('skip');
+      setPendingLearning(null);
+    }
+  }, [learningValidationBridge]);
+
+  // Connect learning validation bridge on mount
+  useEffect(() => {
+    if (learningValidationBridge) {
+      learningValidationBridge.connect({
+        onRequest: handleLearningRequest,
+      });
+    }
+  }, [learningValidationBridge, handleLearningRequest]);
+
+  // Subscribe to interactive planner events for plan display
+  useEffect(() => {
+    const planner = agent.getInteractivePlanner();
+    if (!planner) return;
+    const unsub = planner.on((event) => {
+      if (event.type === 'plan.created') {
+        setActivePlan({
+          id: event.plan.id,
+          goal: event.plan.goal,
+          steps: event.plan.steps.map(s => ({
+            id: s.id,
+            number: s.number,
+            description: s.description,
+            status: s.status,
+          })),
+          status: event.plan.status,
+          currentStepIndex: event.plan.currentStepIndex,
+        });
+        setPlanExpanded(true);
+      } else if (event.type === 'step.completed' || event.type === 'step.failed' || event.type === 'step.skipped') {
+        setActivePlan(prev => {
+          if (!prev) return null;
+          return {
+            ...prev,
+            steps: prev.steps.map(s =>
+              s.id === event.step.id ? { ...s, status: event.step.status } : s,
+            ),
+          };
+        });
+      } else if (event.type === 'plan.completed' || event.type === 'plan.cancelled') {
+        setActivePlan(prev => prev ? { ...prev, status: event.type === 'plan.completed' ? 'completed' : 'cancelled' } : null);
+      }
+    });
+    return unsub;
+  }, [agent]);
 
   // Hydrate always-allowed patterns from SQLite on mount
   useEffect(() => {
@@ -2720,6 +2907,29 @@ export function TUIApp({
           />
         )}
 
+        {/* Budget Extension Dialog (positioned above input when active) */}
+        {pendingBudgetExtension && (
+          <BudgetExtensionDialog
+            visible={true}
+            request={pendingBudgetExtension}
+            onApprove={handleBudgetExtensionApprove}
+            onDeny={handleBudgetExtensionDeny}
+            colors={colors}
+          />
+        )}
+
+        {/* Learning Validation Dialog (positioned above input when active) */}
+        {pendingLearning && (
+          <LearningValidationDialog
+            visible={true}
+            learning={pendingLearning}
+            onApprove={handleLearningApprove}
+            onReject={handleLearningReject}
+            onSkip={handleLearningSkip}
+            colors={colors}
+          />
+        )}
+
         {/* Diagnostics Panel (toggle with Alt+Y) */}
         <DiagnosticsPanel
           diagnostics={transparencyState?.diagnostics ?? EMPTY_DIAGNOSTICS}
@@ -2741,10 +2951,13 @@ export function TUIApp({
         {/* Swarm Status Panel (visible when swarm mode is active) */}
         <SwarmStatusPanel status={swarmStatus} colors={colors} expanded={swarmExpanded} />
 
+        {/* Interactive Plan Panel (visible when a plan is active) */}
+        <PlanPanel plan={activePlan} expanded={planExpanded} colors={colors} />
+
         <MemoizedInputArea
           onSubmit={handleSubmit}
-          disabled={isProcessing || !!pendingApproval}
-          borderColor={pendingApproval ? '#FFD700' : '#87CEEB'}
+          disabled={isProcessing || !!pendingApproval || !!pendingBudgetExtension || !!pendingLearning}
+          borderColor={pendingApproval || pendingBudgetExtension ? '#FFD700' : pendingLearning ? '#87CEEB' : '#87CEEB'}
           textColor="#98FB98"
           cursorColor="#87CEEB"
           onCtrlC={handleCtrlC}
@@ -2769,6 +2982,13 @@ export function TUIApp({
           onApprovalDenyWithReason={handleDenyWithReason}
           onApprovalCancelDenyReason={handleCancelDenyReason}
           onApprovalDenyReasonInput={handleApprovalDenyReasonInput}
+          budgetExtensionDialogOpen={!!pendingBudgetExtension}
+          onBudgetExtensionApprove={handleBudgetExtensionApprove}
+          onBudgetExtensionDeny={handleBudgetExtensionDeny}
+          learningValidationDialogOpen={!!pendingLearning}
+          onLearningApprove={handleLearningApprove}
+          onLearningReject={handleLearningReject}
+          onLearningSkip={handleLearningSkip}
           history={historyEntries}
         />
 
