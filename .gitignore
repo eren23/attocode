@@ -6,3 +6,4 @@ node_modules
 .traces/
 .production-agent-sessions/
 .test-sandbox/
+__pycache__/
