@@ -1,0 +1,109 @@
+/* Main application layout — Catppuccin Mocha–inspired theme */
+
+Screen {
+    background: $background;
+    overflow: hidden;
+}
+
+#main-container {
+    layout: vertical;
+    height: 1fr;
+}
+
+#message-log {
+    height: 1fr;
+    min-height: 5;
+    scrollbar-size: 1 1;
+    padding: 0 1;
+}
+
+#typing-indicator {
+    height: 1;
+    padding: 0 1;
+    display: none;
+}
+
+#typing-indicator.visible {
+    display: block;
+}
+
+#streaming-buffer {
+    height: auto;
+    max-height: 15;
+    display: none;
+    padding: 0 1;
+    background: $surface;
+    border-left: wide $accent;
+}
+
+#streaming-buffer.active {
+    display: block;
+}
+
+#thinking-panel {
+    height: auto;
+    max-height: 5;
+    display: none;
+    padding: 0 1;
+    background: $panel;
+    border: dashed $primary-darken-2;
+}
+
+#thinking-panel.active {
+    display: block;
+}
+
+#tool-panel {
+    height: auto;
+    max-height: 12;
+    display: none;
+    background: $surface;
+    border-top: solid $primary-darken-3;
+    padding: 0 1;
+}
+
+#tool-panel.has-tools {
+    display: block;
+}
+
+#plan-panel {
+    height: auto;
+    max-height: 10;
+    display: none;
+}
+
+#tasks-panel {
+    height: auto;
+    max-height: 8;
+    display: none;
+}
+
+#agents-panel {
+    height: auto;
+    max-height: 8;
+    display: none;
+}
+
+#swarm-panel {
+    height: auto;
+    max-height: 10;
+    display: none;
+}
+
+#input-area {
+    height: auto;
+    min-height: 3;
+    max-height: 8;
+    dock: bottom;
+    padding: 0 1;
+    background: $surface;
+    border-top: solid $primary-darken-3;
+}
+
+#status-bar {
+    height: 1;
+    dock: bottom;
+    background: $surface-darken-1;
+    color: $text-muted;
+    padding: 0 1;
+}

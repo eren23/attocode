@@ -1,0 +1,42 @@
+# Attocode Swarm Configuration -- 2 Claude Workers
+# Copy to .attocode/swarm.yaml to use
+#
+# See docs/swarm-guide.md for a full walkthrough.
+
+# Orchestrator model (coordinates decomposition, wave review, synthesis)
+models:
+  orchestrator: anthropic/claude-sonnet-4-20250514
+
+# Worker definitions
+workers:
+  - name: coder
+    model: anthropic/claude-sonnet-4-20250514
+    capabilities: [code, test, refactor]
+    count: 1
+
+  - name: reviewer
+    model: anthropic/claude-sonnet-4-20250514
+    capabilities: [review, research]
+    count: 1
+
+# Budget limits
+budget:
+  totalTokens: 5000000       # 5M tokens across all workers + orchestrator
+  maxCost: 10.0              # Maximum spend in USD
+  maxConcurrency: 2          # Maximum workers running in parallel
+
+# Quality gates (score each task output 1-5, reject below threshold)
+quality:
+  enabled: true
+  # threshold: 3             # Minimum quality score (1-5)
+
+# Feature flags
+features:
+  planning: true             # LLM-assisted task decomposition
+  verification: true         # Run integration checks after all waves
+
+# Retry settings
+# retries:
+#   workerRetries: 2         # Max retries per task
+#   rateLimitRetries: 3      # Max retries on rate limit
+#   enableModelFailover: true

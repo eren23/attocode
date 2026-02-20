@@ -1,0 +1,112 @@
+/* Dialog styles */
+
+ApprovalDialog {
+    align: center middle;
+}
+
+ApprovalDialog #dialog-container {
+    width: 70;
+    max-width: 90%;
+    height: auto;
+    max-height: 80%;
+    border: double $warning;
+    background: $surface;
+    padding: 1 2;
+}
+
+ApprovalDialog.danger-high #dialog-container {
+    border: double $error;
+}
+
+ApprovalDialog.danger-safe #dialog-container {
+    border: double $success;
+}
+
+BudgetDialog {
+    align: center middle;
+}
+
+BudgetDialog #dialog-container {
+    width: 60;
+    max-width: 80%;
+    height: auto;
+    border: double $warning;
+    background: $surface;
+    padding: 1 2;
+}
+
+.dialog-title {
+    text-style: bold;
+    text-align: center;
+    width: 100%;
+    padding: 0 0 1 0;
+}
+
+.dialog-content {
+    height: auto;
+    padding: 0 0 1 0;
+}
+
+.dialog-shortcuts {
+    text-align: center;
+    color: $text-muted;
+}
+
+.dialog-buttons {
+    height: auto;
+    align: center middle;
+    layout: horizontal;
+    padding: 1 0 0 0;
+}
+
+.dialog-buttons Button {
+    margin: 0 1;
+    min-width: 16;
+}
+
+.dialog-buttons Button:focus {
+    text-style: bold reverse;
+}
+
+/* Setup wizard */
+SetupWizard {
+    align: center middle;
+}
+
+SetupWizard #setup-container {
+    width: 70;
+    max-width: 90%;
+    height: auto;
+    max-height: 80%;
+    border: double $accent;
+    background: $surface;
+    padding: 1 2;
+}
+
+SetupWizard .step-indicator {
+    text-align: center;
+    color: $text-muted;
+    padding: 0 0 1 0;
+}
+
+SetupWizard Input {
+    margin: 1 0;
+}
+
+/* API Key dialog */
+ApiKeyDialog {
+    align: center middle;
+}
+
+ApiKeyDialog #apikey-container {
+    width: 60;
+    max-width: 80%;
+    height: auto;
+    border: double $accent;
+    background: $surface;
+    padding: 1 2;
+}
+
+ApiKeyDialog Input {
+    margin: 1 0;
+}
