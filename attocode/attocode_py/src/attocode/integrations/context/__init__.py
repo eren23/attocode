@@ -52,6 +52,10 @@ from attocode.integrations.context.codebase_ast import (
     parse_javascript,
     parse_python,
 )
+from attocode.integrations.context.semantic_cache import (
+    SemanticCacheConfig,
+    SemanticCacheManager,
+)
 
 __all__ = [
     # auto_compaction
@@ -98,4 +102,7 @@ __all__ = [
     "parse_file",
     "parse_javascript",
     "parse_python",
+    # semantic_cache
+    "SemanticCacheConfig",
+    "SemanticCacheManager",
 ]

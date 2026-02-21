@@ -62,6 +62,31 @@ from attocode.integrations.swarm.types import (
     swarm_event,
 )
 
+from attocode.integrations.swarm.request_throttle import (
+    FREE_TIER_THROTTLE,
+    PAID_TIER_THROTTLE,
+    SwarmThrottle,
+    ThrottleConfig,
+    ThrottleStats,
+    ThrottledProvider,
+    create_throttled_provider,
+)
+from attocode.integrations.swarm.swarm_budget import (
+    SwarmBudget,
+    SwarmBudgetConfig,
+    SwarmBudgetStatus,
+    WorkerSpending,
+)
+from attocode.integrations.swarm.failure_classifier import (
+    FailureClassification,
+    SwarmFailureClass,
+    classify_swarm_failure,
+)
+from attocode.integrations.swarm.swarm_state_store import (
+    SwarmStateSnapshot,
+    SwarmStateStore,
+)
+
 __all__ = [
     # Types
     "ArtifactInventory",
@@ -119,4 +144,24 @@ __all__ = [
     "get_fallback_workers",
     "select_alternative_model",
     "select_worker_for_capability",
+    # request_throttle
+    "FREE_TIER_THROTTLE",
+    "PAID_TIER_THROTTLE",
+    "SwarmThrottle",
+    "ThrottleConfig",
+    "ThrottleStats",
+    "ThrottledProvider",
+    "create_throttled_provider",
+    # swarm_budget
+    "SwarmBudget",
+    "SwarmBudgetConfig",
+    "SwarmBudgetStatus",
+    "WorkerSpending",
+    # failure_classifier
+    "FailureClassification",
+    "SwarmFailureClass",
+    "classify_swarm_failure",
+    # swarm_state_store
+    "SwarmStateSnapshot",
+    "SwarmStateStore",
 ]

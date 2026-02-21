@@ -49,6 +49,33 @@ class SelectionConfig:
     query: str = ""  # For relevance strategy
 
 
+@dataclass(slots=True)
+class RankedSearchResult:
+    """Result of a multi-factor ranked search."""
+
+    chunk: CodeChunk
+    total_score: float
+    factors: dict[str, float]  # name -> contribution
+
+    @property
+    def top_factor(self) -> str:
+        """The dominant scoring factor."""
+        if not self.factors:
+            return "none"
+        return max(self.factors, key=self.factors.get)  # type: ignore[arg-type]
+
+
+@dataclass(slots=True)
+class ExpansionStep:
+    """One step in incremental context expansion."""
+
+    chunks_added: int
+    tokens_added: int
+    total_tokens: int
+    strategy: str
+    budget_remaining: int
+
+
 class CodeSelector:
     """Selects code chunks for LLM context inclusion.
 
@@ -254,3 +281,207 @@ class CodeSelector:
                 parts.append(chunk.content)
 
         return "\n".join(parts)
+
+    def get_enhanced_context(
+        self,
+        analyses: list[FileAnalysis],
+        file_infos: list[FileInfo] | None = None,
+        *,
+        lsp_symbols: dict[str, float] | None = None,
+        config: SelectionConfig | None = None,
+    ) -> SelectionResult:
+        """Enhanced context selection with LSP symbol boost.
+
+        When LSP data is available, boosts the importance of chunks
+        that match LSP-resolved symbols (definitions, references).
+
+        Args:
+            analyses: Analyzed files.
+            file_infos: Optional file importance info.
+            lsp_symbols: Map of symbol_name -> boost_factor from LSP.
+            config: Override selection config.
+
+        Returns:
+            SelectionResult with LSP-boosted chunks.
+        """
+        cfg = config or self._config
+
+        # Apply LSP boost to chunk importance
+        if lsp_symbols:
+            for analysis in analyses:
+                for chunk in analysis.chunks:
+                    # Check if chunk name matches any LSP symbol
+                    for symbol, boost in lsp_symbols.items():
+                        if symbol.lower() in chunk.name.lower():
+                            chunk.importance = min(1.0, chunk.importance + boost * 0.3)
+                            break
+
+                    # Check if chunk content references LSP symbols
+                    content_lower = chunk.content.lower()
+                    ref_count = sum(
+                        1 for sym in lsp_symbols
+                        if sym.lower() in content_lower
+                    )
+                    if ref_count > 0:
+                        chunk.importance = min(1.0, chunk.importance + ref_count * 0.05)
+
+        return self.select(analyses, file_infos, config=cfg)
+
+    def incremental_expand(
+        self,
+        analyses: list[FileAnalysis],
+        file_infos: list[FileInfo] | None = None,
+        *,
+        initial_budget: int = 2000,
+        max_budget: int = 8000,
+        step_size: int = 1000,
+        query: str = "",
+    ) -> tuple[SelectionResult, list[ExpansionStep]]:
+        """Budget-aware incremental context expansion.
+
+        Starts with a small token budget and iteratively expands,
+        adding chunks in order of decreasing value. Tracks each
+        expansion step for transparency.
+
+        Args:
+            analyses: Analyzed files.
+            file_infos: Optional file importance info.
+            initial_budget: Starting token budget.
+            max_budget: Maximum token budget.
+            step_size: Tokens to add per expansion step.
+            query: Optional query for relevance scoring.
+
+        Returns:
+            Tuple of (final SelectionResult, list of expansion steps).
+        """
+        steps: list[ExpansionStep] = []
+        current_budget = initial_budget
+        last_result: SelectionResult | None = None
+
+        while current_budget <= max_budget:
+            cfg = SelectionConfig(
+                max_tokens=current_budget,
+                strategy=SelectionStrategy.RELEVANCE if query else SelectionStrategy.IMPORTANCE,
+                query=query,
+                prefer_signatures=current_budget < 4000,  # Signatures only for small budgets
+            )
+
+            result = self.select(analyses, file_infos, config=cfg)
+
+            chunks_added = (
+                len(result.chunks) - len(last_result.chunks) if last_result else len(result.chunks)
+            )
+            tokens_added = (
+                result.total_tokens - last_result.total_tokens if last_result else result.total_tokens
+            )
+
+            steps.append(ExpansionStep(
+                chunks_added=chunks_added,
+                tokens_added=tokens_added,
+                total_tokens=result.total_tokens,
+                strategy=str(cfg.strategy),
+                budget_remaining=current_budget - result.total_tokens,
+            ))
+
+            last_result = result
+
+            # Stop if we didn't add anything new (all chunks exhausted)
+            if chunks_added == 0:
+                break
+
+            current_budget += step_size
+
+        return last_result or SelectionResult(
+            chunks=[], total_tokens=0, files_represented=0,
+            strategy_used=SelectionStrategy.IMPORTANCE, budget_used=0.0,
+        ), steps
+
+    def ranked_search(
+        self,
+        analyses: list[FileAnalysis],
+        query: str,
+        *,
+        file_infos: list[FileInfo] | None = None,
+        recency_scores: dict[str, float] | None = None,
+        edit_frequency: dict[str, int] | None = None,
+        import_graph: dict[str, list[str]] | None = None,
+        max_results: int = 20,
+    ) -> list[RankedSearchResult]:
+        """Multi-factor relevance-ranked search.
+
+        Scores chunks using multiple factors:
+        - Text relevance: keyword matching against query
+        - Importance: base chunk importance score
+        - Recency: how recently the file was modified
+        - Edit frequency: how often the file has been edited this session
+        - Import distance: proximity in the import graph
+
+        Args:
+            analyses: Analyzed files.
+            query: Search query.
+            file_infos: File importance info.
+            recency_scores: file_path -> recency score (0-1, higher=more recent).
+            edit_frequency: file_path -> edit count this session.
+            import_graph: file_path -> list of imported file paths.
+            max_results: Maximum results to return.
+
+        Returns:
+            List of RankedSearchResult sorted by total score.
+        """
+        file_importance = {f.path: f.importance for f in file_infos} if file_infos else {}
+        query_lower = query.lower()
+        query_terms = set(query_lower.split())
+
+        results: list[RankedSearchResult] = []
+
+        for analysis in analyses:
+            for chunk in analysis.chunks:
+                factors: dict[str, float] = {}
+
+                # Factor 1: Text relevance (0-10)
+                text_score = 0.0
+                name_lower = chunk.name.lower()
+                content_lower = chunk.content.lower()
+                for term in query_terms:
+                    if term in name_lower:
+                        text_score += 3.0
+                    if term in content_lower:
+                        text_score += 0.5
+                if query_lower in name_lower:
+                    text_score += 5.0
+                factors["relevance"] = min(10.0, text_score)
+
+                # Factor 2: Importance (0-3)
+                imp = file_importance.get(analysis.path, chunk.importance)
+                factors["importance"] = imp * 3.0
+
+                # Factor 3: Recency (0-2)
+                if recency_scores:
+                    recency = recency_scores.get(analysis.path, 0.0)
+                    factors["recency"] = recency * 2.0
+
+                # Factor 4: Edit frequency (0-2)
+                if edit_frequency:
+                    freq = edit_frequency.get(analysis.path, 0)
+                    factors["edit_frequency"] = min(2.0, freq * 0.5)
+
+                # Factor 5: Import distance (0-1.5)
+                if import_graph:
+                    # Boost files imported by the query's likely location
+                    imported_by_count = sum(
+                        1 for deps in import_graph.values()
+                        if analysis.path in deps
+                    )
+                    factors["import_proximity"] = min(1.5, imported_by_count * 0.3)
+
+                total = sum(factors.values())
+
+                if total > 0.5:  # Minimum threshold
+                    results.append(RankedSearchResult(
+                        chunk=chunk,
+                        total_score=total,
+                        factors=factors,
+                    ))
+
+        results.sort(key=lambda r: -r.total_score)
+        return results[:max_results]

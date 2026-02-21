@@ -133,12 +133,12 @@ class TestSwarmTaskStatus:
 
 class TestTaskFailureMode:
     def test_all_values(self) -> None:
-        expected = {"timeout", "rate-limit", "error", "quality", "hollow", "cascade"}
+        expected = {"timeout", "rate-limit", "error", "quality", "hollow", "cascade", "recoverable", "terminal"}
         actual = {m.value for m in TaskFailureMode}
         assert actual == expected
 
     def test_member_count(self) -> None:
-        assert len(TaskFailureMode) == 6
+        assert len(TaskFailureMode) == 8
 
     def test_string_equality(self) -> None:
         assert TaskFailureMode.TIMEOUT == "timeout"
@@ -340,7 +340,7 @@ class TestFailureModeThresholds:
             assert fm.value in FAILURE_MODE_THRESHOLDS
 
     def test_count(self) -> None:
-        assert len(FAILURE_MODE_THRESHOLDS) == 6
+        assert len(FAILURE_MODE_THRESHOLDS) == 8
 
     def test_timeout_value(self) -> None:
         assert FAILURE_MODE_THRESHOLDS["timeout"] == 0.3

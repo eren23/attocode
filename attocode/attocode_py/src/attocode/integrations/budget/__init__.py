@@ -36,6 +36,12 @@ from attocode.integrations.budget.dynamic_budget import (
     DynamicBudgetStats,
     create_dynamic_budget_pool,
 )
+from attocode.integrations.budget.resources import (
+    ResourceCheck,
+    ResourceConfig,
+    ResourceManager,
+    ResourceStatus,
+)
 
 __all__ = [
     # cancellation
@@ -67,4 +73,9 @@ __all__ = [
     "DynamicBudgetPool",
     "DynamicBudgetStats",
     "create_dynamic_budget_pool",
+    # resources
+    "ResourceCheck",
+    "ResourceConfig",
+    "ResourceManager",
+    "ResourceStatus",
 ]

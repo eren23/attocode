@@ -20,6 +20,14 @@ from attocode.tricks.recursive_context import (
     RecursiveContextRetriever,
     extract_references,
 )
+from attocode.tricks.json_utils import (
+    extract_json,
+    extract_json_array,
+    extract_json_objects,
+    fix_trailing_commas,
+    safe_parse,
+    truncate_json,
+)
 
 __all__ = [
     "CacheAwareContext",
@@ -36,4 +44,11 @@ __all__ = [
     "RecursiveContextResult",
     "RecursiveContextRetriever",
     "extract_references",
+    # json_utils
+    "extract_json",
+    "extract_json_array",
+    "extract_json_objects",
+    "fix_trailing_commas",
+    "safe_parse",
+    "truncate_json",
 ]

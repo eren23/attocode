@@ -16,6 +16,15 @@ from attocode.integrations.mcp.tool_search import (
     create_mcp_tool_search_tool,
 )
 from attocode.integrations.mcp.tool_validator import MCPToolValidator
+from attocode.integrations.mcp.custom_tools import (
+    MCPCustomToolConfig,
+    MCPCustomTools,
+)
+from attocode.integrations.mcp.meta_tools import (
+    MCPContextStats,
+    MCPMetaTools,
+    MCPServerStats,
+)
 
 __all__ = [
     # client
@@ -35,4 +44,11 @@ __all__ = [
     "create_mcp_tool_search_tool",
     # tool_validator
     "MCPToolValidator",
+    # custom_tools
+    "MCPCustomToolConfig",
+    "MCPCustomTools",
+    # meta_tools
+    "MCPContextStats",
+    "MCPMetaTools",
+    "MCPServerStats",
 ]

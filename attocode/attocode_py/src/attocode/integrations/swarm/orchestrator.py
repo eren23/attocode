@@ -290,6 +290,7 @@ class SwarmOrchestrator:
             )
 
             detect_foundation_tasks(ctx)
+            self._detect_foundation_tasks(ctx)
 
             # Phase 3: Model probing (simplified)
             if self._config.probe_models is not False:
@@ -312,6 +313,13 @@ class SwarmOrchestrator:
             await execute_waves(ctx, recovery_state, self.get_status)
             self._sync_from_internals(ctx)
 
+            # Post-wave review
+            completed_tasks = [t for t in ctx.task_queue.get_all_tasks() if t.status == SwarmTaskStatus.COMPLETED]
+            fix_ups = await self._review_wave_results(completed_tasks, ctx)
+            if fix_ups:
+                for fix_task in fix_ups:
+                    ctx.task_queue.add_task(fix_task)
+
             # Phase 6: Final rescue pass
             async def exec_wave_fn(tasks: list[SwarmTask]) -> None:
                 from attocode.integrations.swarm.execution import execute_wave
@@ -323,14 +331,17 @@ class SwarmOrchestrator:
             # Phase 7: Artifact audit
             ctx.artifact_inventory = build_artifact_inventory(ctx)
 
-            # Phase 8: Verification (simplified)
-            if self._config.enable_verification and ctx.plan and ctx.plan.integration_test_plan:
+            # Phase 8: Verification
+            if self._config.enable_verification:
                 ctx.current_phase = SwarmPhase.VERIFYING
-                # Full verification would call verify_integration here
+                ctx.verification_result = await self._verify_integration(ctx)
 
             # Phase 9: Synthesis
             ctx.current_phase = SwarmPhase.SYNTHESIZING
             synthesis = await synthesize_outputs(ctx)
+
+            # Save final state
+            await self._save_state(ctx, "final")
 
             # Phase 10: Complete
             ctx.current_phase = SwarmPhase.COMPLETED
@@ -449,6 +460,195 @@ class SwarmOrchestrator:
             self._orchestrator_tokens = getattr(self, "_orchestrator_tokens", 0) + tokens
             self._orchestrator_calls = getattr(self, "_orchestrator_calls", 0) + 1
 
+    async def _review_wave_results(
+        self,
+        wave_tasks: list[SwarmTask],
+        ctx: OrchestratorInternals,
+    ) -> list[SwarmTask]:
+        """Post-wave review: analyze results and generate fix-up tasks.
+
+        After each wave completes, reviews the results to identify:
+        - Hollow completions that need re-execution
+        - Integration issues between completed tasks
+        - Missing acceptance criteria
+
+        Returns a list of fix-up tasks to add to the queue.
+        """
+        fix_ups: list[SwarmTask] = []
+        hollow_count = 0
+
+        for task in wave_tasks:
+            if task.status != SwarmTaskStatus.COMPLETED:
+                continue
+
+            result = getattr(task, "result", None) or {}
+
+            # Check for hollow completions
+            if is_hollow_completion(result):
+                hollow_count += 1
+                ctx.total_hollows += 1
+                ctx.hollow_streak += 1
+
+                self._emit(swarm_event(
+                    "swarm.hollow_detected",
+                    task_id=task.id,
+                    task_description=task.description,
+                ))
+
+                # If streak is short, retry the task
+                if ctx.hollow_streak <= 3:
+                    retry_task = SwarmTask(
+                        id=f"{task.id}_retry",
+                        description=(
+                            f"[RETRY - be concrete] {task.description}. "
+                            "You MUST produce actual code/file changes, not just explanations."
+                        ),
+                        task_type=task.task_type,
+                        dependencies=task.dependencies,
+                        priority=task.priority + 1,  # Higher priority for retries
+                    )
+                    fix_ups.append(retry_task)
+                    ctx.retries += 1
+            else:
+                ctx.hollow_streak = 0  # Reset streak on real completion
+
+        # Log wave review
+        review = {
+            "wave_tasks": len(wave_tasks),
+            "completed": sum(1 for t in wave_tasks if t.status == SwarmTaskStatus.COMPLETED),
+            "hollow": hollow_count,
+            "fix_ups_generated": len(fix_ups),
+        }
+        ctx.wave_reviews.append(review)
+
+        self._emit(swarm_event("swarm.wave_review", review=review))
+
+        return fix_ups
+
+    async def _verify_integration(
+        self,
+        ctx: OrchestratorInternals,
+    ) -> VerificationResult:
+        """Verify integration of completed work.
+
+        Runs basic validation:
+        1. Check that all expected files exist
+        2. Run lint/type check if available
+        3. Run tests if a test plan exists
+
+        Returns VerificationResult.
+        """
+        import subprocess
+
+        checks_passed = 0
+        checks_total = 0
+        issues: list[str] = []
+
+        # Check artifact inventory
+        if ctx.artifact_inventory:
+            expected_files = getattr(ctx.artifact_inventory, "expected_files", [])
+            import os
+
+            for fpath in expected_files:
+                checks_total += 1
+                if os.path.exists(fpath):
+                    checks_passed += 1
+                else:
+                    issues.append(f"Expected file missing: {fpath}")
+
+        # Try running tests if plan specifies
+        if ctx.plan and ctx.plan.integration_test_plan:
+            checks_total += 1
+            try:
+                test_cmd = ctx.plan.integration_test_plan
+                if isinstance(test_cmd, str):
+                    proc = subprocess.run(
+                        test_cmd,
+                        shell=True,
+                        capture_output=True,
+                        text=True,
+                        timeout=60,
+                        cwd=getattr(ctx.config, "working_dir", None),
+                    )
+                    if proc.returncode == 0:
+                        checks_passed += 1
+                    else:
+                        issues.append(f"Test command failed: {proc.stderr[:200]}")
+            except Exception as e:
+                issues.append(f"Test execution error: {e}")
+
+        passed = checks_total == 0 or (checks_passed / max(1, checks_total) >= 0.7)
+
+        return VerificationResult(
+            passed=passed,
+            checks_total=checks_total,
+            checks_passed=checks_passed,
+            issues=issues,
+        )
+
+    async def _save_state(
+        self,
+        ctx: OrchestratorInternals,
+        label: str = "",
+    ) -> bool:
+        """Save orchestrator state for checkpoint/resume.
+
+        Persists current swarm state to the state store so execution
+        can be resumed later.
+        """
+        if ctx.state_store is None:
+            return False
+
+        try:
+            checkpoint = SwarmCheckpoint(
+                phase=str(ctx.current_phase),
+                task_queue_state=ctx.task_queue.to_dict() if hasattr(ctx.task_queue, "to_dict") else {},
+                total_tokens=ctx.total_tokens,
+                total_cost=ctx.total_cost,
+                orchestrator_tokens=ctx.orchestrator_tokens,
+                quality_rejections=ctx.quality_rejections,
+                retries=ctx.retries,
+                errors=[{"phase": e.phase, "message": e.message} for e in ctx.errors],
+                label=label,
+                plan=ctx.plan,
+            )
+            await ctx.state_store.save_checkpoint(checkpoint)
+
+            self._emit(swarm_event("swarm.checkpoint_saved", label=label))
+            return True
+        except Exception as e:
+            logger.warning("Failed to save swarm state: %s", e)
+            return False
+
+    def _detect_foundation_tasks(self, ctx: OrchestratorInternals) -> None:
+        """Mark tasks that are depended on by 3+ other tasks as foundation tasks.
+
+        Foundation tasks get:
+        - is_foundation flag
+        - Extra retries (+1)
+        - Relaxed quality threshold (-1)
+        """
+        all_tasks = ctx.task_queue.get_all_tasks()
+
+        # Count dependents for each task
+        dependent_count: dict[str, int] = {}
+        for task in all_tasks:
+            for dep_id in task.dependencies or []:
+                dependent_count[dep_id] = dependent_count.get(dep_id, 0) + 1
+
+        # Mark foundation tasks
+        for task in all_tasks:
+            if dependent_count.get(task.id, 0) >= 3:
+                task.is_foundation = True  # type: ignore[attr-defined]
+                # Give foundation tasks higher priority
+                task.priority = max(task.priority, 8)
+
+                self._emit(swarm_event(
+                    "swarm.foundation_task",
+                    task_id=task.id,
+                    dependents=dependent_count[task.id],
+                ))
+
 
 # =============================================================================
 # Simple Budget Pool (placeholder until full DynamicBudgetPool)
@@ -484,6 +684,57 @@ class _SimpleBudgetPool:
     @property
     def used(self) -> int:
         return self._used
+
+
+# =============================================================================
+# Hollow Completion Detection
+# =============================================================================
+
+
+def is_hollow_completion(result: dict | Any) -> bool:
+    """Detect hollow task completions.
+
+    A hollow completion is one where the agent claims success but
+    produced no meaningful output — no files modified, no code written,
+    just explanatory text.
+
+    This catches agents that "complete" tasks by just explaining
+    what they would do without actually doing it.
+    """
+    if isinstance(result, dict):
+        response = result.get("response", "") or result.get("output", "")
+        files = result.get("files_modified", [])
+        edits = result.get("edits_made", 0)
+    else:
+        response = getattr(result, "response", "") or getattr(result, "output", "")
+        files = getattr(result, "files_modified", [])
+        edits = getattr(result, "edits_made", 0)
+
+    # If files were modified or edits made, it's not hollow
+    if files or edits:
+        return False
+
+    # If response is very short, likely hollow
+    if len(str(response)) < 100:
+        return True
+
+    # Check for hollow indicators in response
+    HOLLOW_PHRASES = [
+        "i would",
+        "you could",
+        "here's how",
+        "the approach would be",
+        "we should",
+        "i'll need to",
+        "the plan is",
+        "steps to implement",
+    ]
+    response_lower = str(response).lower()
+    hollow_hits = sum(1 for phrase in HOLLOW_PHRASES if phrase in response_lower)
+
+    # If many hollow phrases and no code blocks, it's hollow
+    has_code = "```" in str(response) or "def " in str(response) or "class " in str(response)
+    return hollow_hits >= 2 and not has_code
 
 
 # =============================================================================

@@ -4,6 +4,16 @@ Includes extracted testable functions:
 - check_iteration_budget() — budget pre-flight with recovery actions
 - handle_auto_compaction() — trigger compaction at thresholds
 - apply_context_overflow_guard() — mass tool result truncation
+- check_external_cancellation() — subagent cancellation + wrapup
+- inject_recitation() — periodic goal reinforcement
+- accumulate_failure_evidence() — compact failure summaries
+- invalidate_ast_on_edit() — AST cache invalidation after edits
+
+Dataclasses:
+- LoopResult — final result of the execution loop
+- BudgetPreflightResult — budget pre-flight check result
+- CompactionResult — auto-compaction attempt result
+- WrapupState — graceful wrapup phase tracking for subagents
 """
 
 from __future__ import annotations
@@ -61,6 +71,38 @@ class CompactionResult:
     messages_after: int = 0
     tokens_saved: int = 0
     error: str | None = None
+
+
+@dataclass(slots=True)
+class WrapupState:
+    """Tracks graceful wrapup phase for subagents."""
+
+    wrapup_requested: bool = False
+    wrapup_start_time: float = 0.0
+    wrapup_timeout: float = 30.0  # seconds to complete after wrapup
+    force_text_only: bool = False
+    wrapup_reason: str = ""
+    wrapup_iterations_remaining: int = 3  # max iterations in wrapup
+
+    def request_wrapup(self, reason: str = "timeout") -> None:
+        """Request graceful wrapup."""
+        if not self.wrapup_requested:
+            self.wrapup_requested = True
+            self.wrapup_start_time = time.monotonic()
+            self.wrapup_reason = reason
+
+    @property
+    def wrapup_expired(self) -> bool:
+        """Check if wrapup timeout has elapsed."""
+        if not self.wrapup_requested:
+            return False
+        elapsed = time.monotonic() - self.wrapup_start_time
+        return elapsed > self.wrapup_timeout or self.wrapup_iterations_remaining <= 0
+
+    def tick(self) -> None:
+        """Called each iteration during wrapup."""
+        if self.wrapup_requested:
+            self.wrapup_iterations_remaining -= 1
 
 
 # ---------------------------------------------------------------------------
@@ -295,6 +337,203 @@ def apply_context_overflow_guard(
     return messages, truncations
 
 
+def check_external_cancellation(ctx: AgentContext, wrapup: WrapupState) -> BudgetPreflightResult | None:
+    """Check external cancellation token and wrapup state.
+
+    For subagents, the parent can signal cancellation via
+    an external cancellation token or wrapup request.
+
+    Returns BudgetPreflightResult if should stop, None if OK.
+    """
+    # Check external cancellation token
+    cancel_token = getattr(ctx, 'external_cancellation_token', None)
+    if cancel_token is not None:
+        is_cancelled = False
+        if callable(getattr(cancel_token, 'is_cancelled', None)):
+            is_cancelled = cancel_token.is_cancelled()
+        elif hasattr(cancel_token, 'is_set'):
+            is_cancelled = cancel_token.is_set()
+
+        if is_cancelled:
+            if not wrapup.force_text_only:
+                wrapup.request_wrapup("parent_cancellation")
+                wrapup.force_text_only = True
+                return None  # Allow one more iteration to wrap up
+            return BudgetPreflightResult(
+                can_continue=False,
+                reason=CompletionReason.CANCELLED,
+                message="Cancelled by parent agent",
+            )
+
+    # Check wrapup expiry
+    if wrapup.wrapup_expired:
+        return BudgetPreflightResult(
+            can_continue=False,
+            reason=CompletionReason.BUDGET_LIMIT,
+            message=f"Wrapup timeout expired (reason: {wrapup.wrapup_reason})",
+        )
+
+    return None
+
+
+def inject_recitation(ctx: AgentContext, iteration: int) -> str | None:
+    """Inject goal recitation if the recitation manager says it's time.
+
+    Returns the recitation content if injected, None otherwise.
+    """
+    if ctx.recitation_manager is None:
+        return None
+
+    try:
+        from attocode.tricks.recitation import RecitationState
+
+        # Build recitation state with available context
+        failure_count = 0
+        if ctx.failure_tracker:
+            try:
+                failure_count = len(ctx.failure_tracker.get_unresolved_failures())
+            except Exception:
+                pass
+
+        files_modified = 0
+        work_log = getattr(ctx, '_work_log', None)
+        if work_log:
+            try:
+                files_modified = work_log.files_modified_count
+            except Exception:
+                pass
+
+        rec_state = RecitationState(
+            iteration=iteration,
+            goal=ctx.goal,
+            failure_count=failure_count,
+            files_modified=files_modified,
+        )
+
+        if ctx.recitation_manager.should_inject(iteration):
+            content = ctx.recitation_manager.build_recitation(rec_state)
+            if content:
+                return content
+    except Exception:
+        pass
+
+    return None
+
+
+def accumulate_failure_evidence(ctx: AgentContext) -> str | None:
+    """Build failure evidence summary for budget check injection.
+
+    When there are unresolved failures, generates a compact summary
+    to inject into the context so the LLM can learn from past mistakes.
+
+    Returns failure summary string or None.
+    """
+    if ctx.failure_tracker is None:
+        return None
+
+    try:
+        unresolved = ctx.failure_tracker.get_unresolved_failures()
+        if not unresolved:
+            return None
+
+        # Build compact summary
+        parts = [f"Unresolved failures ({len(unresolved)}):"]
+        for i, failure in enumerate(unresolved[:5]):  # Max 5
+            action = getattr(failure, 'action', 'unknown')
+            error = getattr(failure, 'error', 'unknown')
+            # Truncate error to keep context small
+            if len(error) > 150:
+                error = error[:147] + "..."
+            parts.append(f"  {i+1}. {action}: {error}")
+
+        if len(unresolved) > 5:
+            parts.append(f"  ... and {len(unresolved) - 5} more")
+
+        return "\n".join(parts)
+    except Exception:
+        return None
+
+
+def invalidate_ast_on_edit(ctx: AgentContext, tool_name: str, tool_args: dict) -> None:
+    """Invalidate codebase AST cache after file-editing tools.
+
+    When the agent edits a file, the cached AST for that file becomes
+    stale. This function invalidates the relevant cache entry.
+    """
+    FILE_EDIT_TOOLS = {"write_file", "edit_file", "create_file", "patch_file", "replace_in_file"}
+
+    if tool_name not in FILE_EDIT_TOOLS:
+        return
+
+    codebase_ast = getattr(ctx, '_codebase_ast', None)
+    if codebase_ast is None:
+        codebase_context = getattr(ctx, 'codebase_context', None)
+        if codebase_context:
+            codebase_ast = getattr(codebase_context, '_ast_manager', None)
+
+    if codebase_ast is None:
+        return
+
+    # Extract file path from tool arguments
+    file_path = tool_args.get("path") or tool_args.get("file_path") or tool_args.get("target")
+    if file_path and hasattr(codebase_ast, 'invalidate'):
+        try:
+            codebase_ast.invalidate(file_path)
+        except Exception:
+            pass
+
+
+def format_wrapup_nudge(wrapup: WrapupState) -> str:
+    """Build the wrapup nudge message based on remaining iterations.
+
+    Adjusts urgency based on how many wrapup iterations remain:
+    - 3+ remaining: gentle reminder
+    - 2 remaining: moderate urgency
+    - 1 remaining: final chance
+    - 0 remaining: should not reach here (wrapup_expired catches it)
+    """
+    remaining = wrapup.wrapup_iterations_remaining
+    reason = wrapup.wrapup_reason
+
+    if remaining >= 3:
+        return (
+            f"Wrapping up (reason: {reason}). "
+            "Please complete your current task and provide a final summary. "
+            f"You have {remaining} iterations remaining."
+        )
+    elif remaining == 2:
+        return (
+            f"Wrapup in progress (reason: {reason}). "
+            "Finish what you are doing now and summarize your work. "
+            "2 iterations remaining."
+        )
+    elif remaining == 1:
+        return (
+            f"FINAL iteration (reason: {reason}). "
+            "You MUST provide your final summary NOW. "
+            "This is your last chance to respond."
+        )
+    else:
+        return (
+            f"Wrapup expired (reason: {reason}). "
+            "Provide your final summary immediately."
+        )
+
+
+def emit_loop_summary(ctx: AgentContext, start_time: float) -> None:
+    """Emit a summary event with loop statistics at the end of the loop."""
+    duration = time.monotonic() - start_time
+    ctx.emit_simple(
+        EventType.COMPLETE,
+        metadata={
+            "total_iterations": ctx.iteration,
+            "total_tokens": ctx.metrics.total_tokens,
+            "duration_s": round(duration, 2),
+            "estimated_cost": ctx.metrics.estimated_cost,
+        },
+    )
+
+
 # ---------------------------------------------------------------------------
 # Main execution loop
 # ---------------------------------------------------------------------------
@@ -308,15 +547,34 @@ async def run_execution_loop(
     """Run the main ReAct execution loop.
 
     Flow per iteration:
-    1. Recitation injection (periodic goal reinforcement)
-    2. Budget pre-flight (iteration + token + economics + recovery)
-    3. Context overflow guard (truncate large tool results)
-    4. Auto-compaction (summarize + compact at threshold)
-    5. Call LLM
-    6. Set economics baseline after first LLM call
-    7. Analyze response for completion
-    8. If tool calls: execute tools, add results to messages, loop
+    0. Recitation injection (periodic goal reinforcement via inject_recitation)
+    1. Budget pre-flight (iteration + token + economics + recovery)
+    1b. External cancellation / wrapup check (subagent lifecycle)
+    2. Context overflow guard (truncate large tool results)
+    3. Auto-compaction (summarize + compact at threshold)
+    4. Call LLM (streaming when provider supports it)
+    5. Record usage in economics and set baseline after first call
+    6. Add assistant message to history
+    7. Analyze response for completion (learning store + self-improvement)
+    8. If tool calls present:
+       a. Execute all tool calls in batch
+       b. Record in economics (loop detection + phase tracking)
+       c. Record failures in failure tracker
+       d. Inject failure context for unresolved failures
+       e. Inject accumulated failure evidence (every 5 iterations)
+       f. Invalidate AST cache for file-editing tools
+       g. Build and add tool result messages
+       h. Record in work log and dead letter queue
+       i. Auto-checkpoint after tool batch
     9. If no tool calls: return final response
+
+    Wrapup Protocol (subagents):
+    When a parent agent signals cancellation via an external token,
+    the loop enters wrapup mode. In wrapup:
+    - force_text_only is set so the LLM produces text, not tools
+    - A nudge is injected asking for a final summary
+    - The wrapup has a limited number of iterations (default 3)
+    - After wrapup expires, the loop terminates
 
     Args:
         ctx: Agent context with all dependencies and state.
@@ -328,6 +586,7 @@ async def run_execution_loop(
     start_time = time.monotonic()
     last_response = ""
     baseline_set = False
+    wrapup = WrapupState()
 
     ctx.emit_simple(EventType.START, task="execution_loop")
 
@@ -343,22 +602,12 @@ async def run_execution_loop(
             )
 
             # 0. Recitation injection (periodic goal reinforcement)
-            if ctx.recitation_manager is not None:
-                try:
-                    from attocode.tricks.recitation import RecitationState
-                    rec_state = RecitationState(
-                        iteration=ctx.iteration,
-                        goal=ctx.goal,
-                    )
-                    if ctx.recitation_manager.should_inject(ctx.iteration):
-                        content = ctx.recitation_manager.build_recitation(rec_state)
-                        if content:
-                            ctx.add_message(Message(
-                                role=Role.USER,
-                                content=f"[Status Recitation]\n{content}",
-                            ))
-                except Exception:
-                    pass  # Recitation failure is non-fatal
+            recitation_content = inject_recitation(ctx, ctx.iteration)
+            if recitation_content:
+                ctx.add_message(Message(
+                    role=Role.USER,
+                    content=f"[Status Recitation]\n{recitation_content}",
+                ))
 
             # 1. Budget pre-flight with recovery
             preflight = check_iteration_budget(ctx)
@@ -379,6 +628,34 @@ async def run_execution_loop(
             # Recovery action: trigger compaction
             if preflight.recovery_action == "compaction":
                 await handle_auto_compaction(ctx)
+
+            # 1b. External cancellation / wrapup check
+            ext_check = check_external_cancellation(ctx, wrapup)
+            if ext_check is not None and not ext_check.can_continue:
+                return LoopResult(
+                    success=False,
+                    response=last_response,
+                    reason=ext_check.reason or CompletionReason.CANCELLED,
+                    message=ext_check.message,
+                )
+
+            # Apply wrapup force_text_only
+            if wrapup.force_text_only:
+                wrapup_nudge = format_wrapup_nudge(wrapup)
+                preflight = BudgetPreflightResult(
+                    can_continue=True,
+                    force_text_only=True,
+                    injected_nudge=preflight.injected_nudge or wrapup_nudge,
+                )
+                ctx.emit_simple(
+                    EventType.BUDGET_CHECK,
+                    metadata={
+                        "wrapup": True,
+                        "wrapup_reason": wrapup.wrapup_reason,
+                        "iterations_remaining": wrapup.wrapup_iterations_remaining,
+                    },
+                )
+                wrapup.tick()
 
             # Inject budget nudge if present
             if preflight.injected_nudge:
@@ -459,6 +736,29 @@ async def run_execution_loop(
             analysis = analyze_completion(response)
 
             if analysis.should_stop and not response.has_tool_calls:
+                # Record completion in learning store
+                if ctx.learning_store is not None:
+                    try:
+                        ctx.learning_store.record_session_outcome(
+                            success=analysis.reason == CompletionReason.COMPLETED,
+                            iterations=ctx.iteration,
+                            tokens=ctx.metrics.total_tokens,
+                        )
+                    except Exception:
+                        pass
+
+                # Run self-improvement analysis
+                self_improvement = getattr(ctx, "_self_improvement", None)
+                if self_improvement is not None:
+                    try:
+                        self_improvement.analyze_session(
+                            iterations=ctx.iteration,
+                            success=analysis.reason == CompletionReason.COMPLETED,
+                            failure_count=len(ctx.failure_tracker.get_unresolved_failures()) if ctx.failure_tracker else 0,
+                        )
+                    except Exception:
+                        pass
+
                 # Agent is done
                 ctx.emit_simple(
                     EventType.COMPLETE,
@@ -478,6 +778,34 @@ async def run_execution_loop(
                     ctx,
                     response.tool_calls,
                 )
+
+                # Record in economics (loop detection + phase tracking)
+                if ctx.economics is not None:
+                    for tc, tr in zip(response.tool_calls, tool_results):
+                        try:
+                            loop_detection, phase_nudge = ctx.economics.record_tool_call(
+                                tc.name,
+                                arguments=tc.arguments,
+                                iteration=ctx.iteration,
+                            )
+                            # Inject loop detection warning
+                            if loop_detection and loop_detection.is_loop:
+                                ctx.add_message(Message(
+                                    role=Role.USER,
+                                    content=(
+                                        f"[System: Doom loop detected! '{tc.name}' called "
+                                        f"{loop_detection.count} times with same args. "
+                                        "Try a DIFFERENT approach.]"
+                                    ),
+                                ))
+                            # Inject phase nudge
+                            if phase_nudge:
+                                ctx.add_message(Message(
+                                    role=Role.USER,
+                                    content=f"[System: {phase_nudge}]",
+                                ))
+                        except Exception:
+                            pass
 
                 # Record failures in failure tracker
                 if ctx.failure_tracker is not None:
@@ -506,12 +834,47 @@ async def run_execution_loop(
                     except Exception:
                         pass
 
+                # Inject accumulated failure evidence into budget check
+                failure_summary = accumulate_failure_evidence(ctx)
+                if failure_summary and ctx.iteration % 5 == 0:  # Every 5 iterations
+                    ctx.add_message(Message(
+                        role=Role.USER,
+                        content=f"[System: {failure_summary}]",
+                    ))
+
+                # Invalidate AST cache for file edits
+                for tc in response.tool_calls:
+                    invalidate_ast_on_edit(ctx, tc.name, tc.arguments or {})
+
                 # Build and add tool result messages
                 tool_messages = build_tool_result_messages(
                     response.tool_calls,
                     tool_results,
                 )
                 ctx.add_messages(tool_messages)
+
+                # Record in work log if available
+                work_log = getattr(ctx, "_work_log", None)
+                if work_log is not None:
+                    try:
+                        for tc, tr in zip(response.tool_calls, tool_results):
+                            work_log.record_tool_call(
+                                tc.name,
+                                success=not tr.is_error,
+                                iteration=ctx.iteration,
+                            )
+                    except Exception:
+                        pass
+
+                # Record in dead letter queue if tool errors
+                dlq = getattr(ctx, "_dead_letter_queue", None)
+                if dlq is not None:
+                    for tc, tr in zip(response.tool_calls, tool_results):
+                        if tr.is_error:
+                            try:
+                                dlq.add(tc.name, tr.error or "Unknown error", tc.arguments)
+                            except Exception:
+                                pass
 
                 # Auto-checkpoint after tool batch
                 if ctx.auto_checkpoint is not None:

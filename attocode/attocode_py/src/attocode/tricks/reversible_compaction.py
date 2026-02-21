@@ -361,6 +361,109 @@ def calculate_relevance(
     return min(1.0, score)
 
 
+def reconstruct_context(
+    summary: str,
+    references: list[Reference],
+    content_provider: Callable[[str], str | None] | None = None,
+    max_tokens: int = 30_000,
+) -> str:
+    """Reconstruct context from summary + references.
+
+    If a content_provider is available, fetches full content for
+    file references. Otherwise formats reference values inline.
+    """
+    parts = [summary]
+
+    if not references:
+        return summary
+
+    # Group references by type for structured reconstruction
+    grouped: dict[str, list[Reference]] = {}
+    for ref in references:
+        grouped.setdefault(ref.type, []).append(ref)
+
+    # For file references, try to fetch content
+    if ReferenceType.FILE in grouped and content_provider:
+        file_refs = grouped[ReferenceType.FILE]
+        token_budget = max_tokens - estimate_tokens(summary)
+        for ref in sorted(file_refs, key=lambda r: r.relevance, reverse=True):
+            if token_budget <= 0:
+                break
+            content = content_provider(ref.value)
+            if content:
+                file_section = f"\n--- {ref.value} ---\n{content[:token_budget * 4]}"
+                parts.append(file_section)
+                token_budget -= estimate_tokens(file_section)
+
+    # For other reference types, format inline
+    for ref_type, refs in grouped.items():
+        if ref_type == ReferenceType.FILE and content_provider:
+            continue  # Already handled
+        header = ref_type.upper() + "S"
+        items = [f"  - {r.value}" for r in refs[:20]]
+        parts.append(f"\n[{header}]\n" + "\n".join(items))
+
+    return "\n".join(parts)
+
+
+def extract_class_references(content: str, source_index: int = 0) -> list[Reference]:
+    """Extract class definition references."""
+    refs: list[Reference] = []
+    for m in re.finditer(r"class\s+(\w+)(?:\([\w.,\s]*\))?:", content):
+        refs.append(_make_ref(ReferenceType.CLASS, m.group(1), source_index))
+    # JS/TS class
+    for m in re.finditer(r"class\s+(\w+)", content):
+        name = m.group(1)
+        if not any(r.value == name for r in refs):
+            refs.append(_make_ref(ReferenceType.CLASS, name, source_index))
+    return refs
+
+
+def extract_decision_references(content: str, source_index: int = 0) -> list[Reference]:
+    """Extract decision/reasoning references from agent output."""
+    refs: list[Reference] = []
+    # "I decided to..." / "The approach is..."
+    for m in re.finditer(
+        r"(?:I (?:decided|chose|will)|The (?:approach|strategy|plan) (?:is|was))\s+(.{10,80})",
+        content,
+    ):
+        refs.append(_make_ref(ReferenceType.DECISION, m.group(0).strip(), source_index))
+    return refs
+
+
+def score_references_batch(
+    references: list[Reference],
+    goal: str | None = None,
+    recent_topics: list[str] | None = None,
+) -> list[Reference]:
+    """Score and sort a batch of references by relevance."""
+    for ref in references:
+        ref.relevance = calculate_relevance(ref, goal, recent_topics)
+    references.sort(key=lambda r: r.relevance, reverse=True)
+    return references
+
+
+def merge_reference_pools(
+    *pools: list[Reference],
+    max_total: int = 100,
+    deduplicate: bool = True,
+) -> list[Reference]:
+    """Merge multiple reference pools into one, deduplicating and capping."""
+    combined: list[Reference] = []
+    seen: set[str] = set()
+
+    for pool in pools:
+        for ref in pool:
+            key = f"{ref.type}:{ref.value}"
+            if deduplicate and key in seen:
+                continue
+            seen.add(key)
+            combined.append(ref)
+
+    combined.sort(key=lambda r: r.relevance, reverse=True)
+    return combined[:max_total]
+
+
 def _make_ref(ref_type: str, value: str, source_index: int) -> Reference:
     """Create a reference with a unique ID."""
     return Reference(

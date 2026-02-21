@@ -291,6 +291,76 @@ def analyze_cache_efficiency(system_prompt: str) -> dict[str, list[str]]:
     return {"warnings": warnings, "suggestions": suggestions}
 
 
+def build_multi_breakpoint_prompt(
+    sections: list[tuple[str, str, bool]],
+) -> list[CacheableContentBlock]:
+    """Build a prompt with multiple cache breakpoints.
+
+    Args:
+        sections: List of (label, content, cacheable) tuples.
+            Cacheable sections get cache_control markers.
+
+    Returns:
+        List of CacheableContentBlock with appropriate cache control.
+    """
+    blocks: list[CacheableContentBlock] = []
+    for label, content, cacheable in sections:
+        text = f"\n---\n## {label}\n{content}" if label else content
+        block = CacheableContentBlock(
+            type="text",
+            text=text,
+            cache_control={"type": "ephemeral"} if cacheable else None,
+        )
+        blocks.append(block)
+    return blocks
+
+
+def estimate_cache_savings(
+    system_prompt_tokens: int,
+    avg_messages_per_turn: int = 3,
+    turns: int = 10,
+    cache_hit_rate: float = 0.85,
+) -> dict[str, float]:
+    """Estimate token savings from KV-cache over a session."""
+    total_without_cache = system_prompt_tokens * turns
+    total_with_cache = system_prompt_tokens + (system_prompt_tokens * (1 - cache_hit_rate) * (turns - 1))
+    savings = total_without_cache - total_with_cache
+    savings_pct = savings / max(1, total_without_cache) * 100
+
+    return {
+        "total_without_cache": total_without_cache,
+        "total_with_cache": total_with_cache,
+        "token_savings": savings,
+        "savings_percentage": savings_pct,
+        "estimated_cost_savings_usd": savings / 1_000_000 * 3.0,  # sonnet input rate
+    }
+
+
+def optimize_message_order(
+    messages: list[dict[str, Any]],
+    system_prompt: str,
+) -> list[dict[str, Any]]:
+    """Reorder messages to maximize cache prefix length.
+
+    Ensures system message is first and static content precedes
+    dynamic content. Does not modify the original list.
+    """
+    result: list[dict[str, Any]] = []
+    system_msgs: list[dict[str, Any]] = []
+    other_msgs: list[dict[str, Any]] = []
+
+    for msg in messages:
+        if msg.get("role") == "system":
+            system_msgs.append(msg)
+        else:
+            other_msgs.append(msg)
+
+    # System messages first
+    result.extend(system_msgs)
+    result.extend(other_msgs)
+    return result
+
+
 def _djb2_hash(s: str) -> int:
     """Simple DJB2 hash for change detection."""
     h = 5381

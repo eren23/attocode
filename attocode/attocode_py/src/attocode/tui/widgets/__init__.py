@@ -20,7 +20,13 @@ from attocode.tui.widgets.diff_view import (
     compute_diff,
     render_diff_line,
 )
-from attocode.tui.widgets.debug_panel import DebugPanel, DiagnosticsPanel
+from attocode.tui.widgets.debug_panel import DebugPanel
+from attocode.tui.widgets.transparency_panel import TransparencyPanel
+from attocode.tui.widgets.error_detail_panel import ErrorDetail, ErrorDetailPanel
+from attocode.tui.widgets.file_change_summary import FileChangeSummary as FileChangeSummaryWidget
+from attocode.tui.widgets.diagnostics_panel import DiagnosticItem, DiagnosticsPanel
+from attocode.tui.widgets.side_by_side_diff import SideBySideDiff, SideBySideLine
+from attocode.tui.widgets.collapsible_diff import CollapsibleDiffView as CollapsibleDiffWidget
 from attocode.tui.widgets.command_palette import (
     CommandEntry,
     CommandPaletteScreen,
@@ -54,7 +60,21 @@ __all__ = [
     "render_diff_line",
     # debug_panel
     "DebugPanel",
+    # transparency_panel
+    "TransparencyPanel",
+    # error_detail_panel
+    "ErrorDetail",
+    "ErrorDetailPanel",
+    # file_change_summary (widget)
+    "FileChangeSummaryWidget",
+    # diagnostics_panel
+    "DiagnosticItem",
     "DiagnosticsPanel",
+    # side_by_side_diff
+    "SideBySideDiff",
+    "SideBySideLine",
+    # collapsible_diff (widget)
+    "CollapsibleDiffWidget",
     # command_palette
     "CommandEntry",
     "CommandPaletteScreen",
