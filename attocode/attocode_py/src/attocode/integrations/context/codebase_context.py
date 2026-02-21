@@ -43,6 +43,37 @@ class RepoMap:
     total_files: int = 0
     total_lines: int = 0
     languages: dict[str, int] = field(default_factory=dict)  # lang -> file count
+    symbols: dict[str, list[str]] = field(default_factory=dict)  # rel_path -> symbol names
+
+
+@dataclass(slots=True)
+class DependencyGraph:
+    """Forward and reverse dependency graph between files."""
+
+    forward: dict[str, set[str]] = field(default_factory=dict)  # file -> files it imports
+    reverse: dict[str, set[str]] = field(default_factory=dict)  # file -> files that import it
+
+    def add_edge(self, source: str, target: str) -> None:
+        """Add a dependency edge: source imports target."""
+        self.forward.setdefault(source, set()).add(target)
+        self.reverse.setdefault(target, set()).add(source)
+
+    def get_importers(self, file_path: str) -> set[str]:
+        """Get files that import the given file."""
+        return self.reverse.get(file_path, set())
+
+    def get_imports(self, file_path: str) -> set[str]:
+        """Get files that the given file imports."""
+        return self.forward.get(file_path, set())
+
+    def hub_score(self, file_path: str) -> float:
+        """Score based on how many files depend on this file (0.0-0.2)."""
+        count = len(self.reverse.get(file_path, set()))
+        return min(0.2, count * 0.04)
+
+    def to_import_graph(self) -> dict[str, list[str]]:
+        """Convert to the dict format expected by CodeSelector.ranked_search."""
+        return {k: list(v) for k, v in self.forward.items()}
 
 
 # Language detection by extension
@@ -87,15 +118,178 @@ CONFIG_PATTERNS = (
     ".github/", ".gitlab-ci",
 )
 
-# Default ignore patterns
+# Default ignore directories
 DEFAULT_IGNORES = {
-    ".git", "__pycache__", "node_modules", ".venv", "venv",
+    # VCS
+    ".git", ".svn", ".hg",
+    # Python
+    "__pycache__", ".venv", "venv", "env", ".env",
     ".mypy_cache", ".pytest_cache", ".ruff_cache",
-    "dist", "build", ".next", ".nuxt",
-    "coverage", ".coverage", "htmlcov",
     ".tox", ".nox", ".eggs", "*.egg-info",
+    "site-packages",
+    # JS/TS
+    "node_modules", "bower_components",
+    ".next", ".nuxt", ".svelte-kit", ".parcel-cache",
+    # Build output
+    "dist", "build", "out", "output", "target",
+    "_build", "cmake-build-debug", "cmake-build-release",
+    # Coverage / test artifacts
+    "coverage", ".coverage", "htmlcov", ".nyc_output",
+    # IDE / editor
+    ".idea", ".vscode", ".vs",
+    # OS
     ".DS_Store", "Thumbs.db",
+    # Containers / infra
+    ".terraform", ".vagrant",
+    # Misc generated
+    ".cache", ".tmp", "tmp",
+    "vendor",  # Go/PHP/Ruby vendor dirs
+    ".gradle", ".maven",
 }
+
+# File extensions to skip (non-source, binary, generated)
+SKIP_EXTENSIONS = {
+    # Compiled / bytecode
+    ".pyc", ".pyo", ".class", ".o", ".obj", ".so", ".dylib", ".dll",
+    ".a", ".lib", ".exe", ".wasm",
+    # Archives
+    ".zip", ".tar", ".gz", ".bz2", ".xz", ".rar", ".7z", ".jar", ".war",
+    # Media
+    ".png", ".jpg", ".jpeg", ".gif", ".bmp", ".ico", ".svg", ".webp",
+    ".mp3", ".mp4", ".wav", ".avi", ".mov", ".webm",
+    ".ttf", ".otf", ".woff", ".woff2", ".eot",
+    # Data / DB
+    ".db", ".sqlite", ".sqlite3",
+    ".parquet", ".feather", ".hdf5", ".h5",
+    # Lock files (large, generated)
+    ".lock",
+    # Maps
+    ".map",
+    # Certificates
+    ".pem", ".crt", ".key", ".p12",
+}
+
+# Filenames to skip (exact match)
+SKIP_FILENAMES = {
+    ".DS_Store", "Thumbs.db", ".gitkeep", ".npmrc",
+    "package-lock.json", "yarn.lock", "pnpm-lock.yaml",
+    "Pipfile.lock", "poetry.lock", "uv.lock",
+    "composer.lock", "Gemfile.lock", "Cargo.lock",
+    "go.sum",
+}
+
+
+def _resolve_python_import(module: str, source_file: str, file_index: dict[str, str]) -> str | None:
+    """Resolve a Python import module name to a relative file path.
+
+    Args:
+        module: Module name (e.g. 'os', 'mypackage.utils', '.sibling').
+        source_file: Relative path of the importing file.
+        file_index: Mapping of relative paths (normalized with /) to relative paths.
+
+    Returns:
+        Resolved relative path or None if not found.
+    """
+    # Skip stdlib / third-party (no dots in path and not found locally)
+    parts = module.split(".")
+
+    # Handle relative imports (leading dots)
+    if module.startswith("."):
+        # Strip leading dots and compute base directory
+        dots = len(module) - len(module.lstrip("."))
+        base = Path(source_file).parent
+        for _ in range(dots - 1):
+            base = base.parent
+        parts = [p for p in module.lstrip(".").split(".") if p]
+        if parts:
+            candidate = str(base / "/".join(parts))
+        else:
+            candidate = str(base / "__init__")
+    else:
+        candidate = "/".join(parts)
+
+    # Try candidate.py, candidate/__init__.py
+    for suffix in (".py", "/__init__.py"):
+        key = candidate + suffix
+        normalized = key.replace(os.sep, "/")
+        if normalized in file_index:
+            return file_index[normalized]
+
+    return None
+
+
+def _resolve_js_import(module: str, source_file: str, file_index: dict[str, str]) -> str | None:
+    """Resolve a JS/TS import path to a relative file path.
+
+    Args:
+        module: Import path (e.g. './utils', '../lib/helpers').
+        source_file: Relative path of the importing file.
+        file_index: Mapping of relative paths (normalized with /) to relative paths.
+
+    Returns:
+        Resolved relative path or None if not found.
+    """
+    # Only resolve relative imports
+    if not module.startswith("."):
+        return None
+
+    base = Path(source_file).parent
+    resolved = str((base / module).as_posix())
+
+    # Try with various extensions
+    for suffix in ("", ".ts", ".tsx", ".js", ".jsx", "/index.ts", "/index.js"):
+        key = resolved + suffix
+        if key in file_index:
+            return file_index[key]
+
+    return None
+
+
+def build_dependency_graph(
+    files: list[FileInfo],
+    root_dir: str,
+) -> DependencyGraph:
+    """Build a dependency graph from file imports.
+
+    Parses each file's imports and resolves them to file paths
+    to build forward (imports) and reverse (imported-by) graphs.
+
+    Args:
+        files: Discovered files with language info.
+        root_dir: Repository root directory.
+
+    Returns:
+        DependencyGraph with forward and reverse edges.
+    """
+    from attocode.integrations.context.codebase_ast import parse_file
+
+    graph = DependencyGraph()
+
+    # Build index: normalized relative path -> relative path
+    file_index: dict[str, str] = {}
+    for f in files:
+        normalized = f.relative_path.replace(os.sep, "/")
+        file_index[normalized] = f.relative_path
+
+    for f in files:
+        if f.language not in ("python", "javascript", "typescript"):
+            continue
+
+        try:
+            ast = parse_file(f.path)
+        except Exception:
+            continue
+
+        for imp in ast.imports:
+            if f.language == "python":
+                target = _resolve_python_import(imp.module, f.relative_path, file_index)
+            else:
+                target = _resolve_js_import(imp.module, f.relative_path, file_index)
+
+            if target is not None and target != f.relative_path:
+                graph.add_edge(f.relative_path, target)
+
+    return graph
 
 
 @dataclass
@@ -107,11 +301,12 @@ class CodebaseContextManager:
     """
 
     root_dir: str
-    max_files: int = 500
+    max_files: int = 2000
     max_context_tokens: int = 8000
     ignore_patterns: set[str] = field(default_factory=lambda: set(DEFAULT_IGNORES))
     _files: list[FileInfo] = field(default_factory=list, repr=False)
     _repo_map: RepoMap | None = field(default=None, repr=False)
+    _dep_graph: DependencyGraph | None = field(default=None, repr=False)
 
     def discover_files(self) -> list[FileInfo]:
         """Discover all relevant files in the repository.
@@ -132,7 +327,10 @@ class CodebaseContextManager:
             for filename in filenames:
                 if filename.startswith("."):
                     continue
-                if any(filename.endswith(p) for p in (".pyc", ".pyo", ".class", ".o")):
+                if filename in SKIP_FILENAMES:
+                    continue
+                ext = Path(filename).suffix.lower()
+                if ext in SKIP_EXTENSIONS:
                     continue
 
                 full_path = os.path.join(dirpath, filename)
@@ -141,7 +339,6 @@ class CodebaseContextManager:
                 except ValueError:
                     continue
 
-                ext = Path(filename).suffix
                 lang = EXTENSION_LANGUAGES.get(ext, "")
 
                 try:
@@ -185,26 +382,56 @@ class CodebaseContextManager:
         for f in files:
             f.importance = self._score_importance(f)
 
+        # Build dependency graph and boost hub files
+        self._dep_graph = build_dependency_graph(files, self.root_dir)
+        for f in files:
+            hub_boost = self._dep_graph.hub_score(f.relative_path)
+            if hub_boost > 0:
+                f.importance = min(1.0, f.importance + hub_boost)
+
         # Sort by importance (highest first)
         files.sort(key=lambda f: f.importance, reverse=True)
 
         self._files = files
         return files
 
-    def get_repo_map(self) -> RepoMap:
+    @property
+    def dependency_graph(self) -> DependencyGraph | None:
+        """Get the dependency graph (available after discover_files)."""
+        return self._dep_graph
+
+    def get_repo_map(self, *, include_symbols: bool = False) -> RepoMap:
         """Generate a repository map.
+
+        Args:
+            include_symbols: If True, annotate files with top-level symbols.
 
         Returns:
             RepoMap with tree view and file information.
         """
-        if self._repo_map is not None:
+        if self._repo_map is not None and not include_symbols:
             return self._repo_map
 
         if not self._files:
             self.discover_files()
 
+        # Collect symbols per file if requested
+        file_symbols: dict[str, list[str]] = {}
+        if include_symbols:
+            from attocode.integrations.context.codebase_ast import parse_file
+
+            for f in self._files:
+                if f.language in ("python", "javascript", "typescript"):
+                    try:
+                        ast = parse_file(f.path)
+                        syms = ast.get_symbols()
+                        if syms:
+                            file_symbols[f.relative_path] = syms[:8]  # Cap at 8 symbols
+                    except Exception:
+                        pass
+
         # Build tree
-        tree = self._build_tree()
+        tree = self._build_tree(file_symbols=file_symbols)
 
         # Compute language stats
         languages: dict[str, int] = {}
@@ -214,14 +441,19 @@ class CodebaseContextManager:
                 languages[f.language] = languages.get(f.language, 0) + 1
             total_lines += f.line_count
 
-        self._repo_map = RepoMap(
+        repo_map = RepoMap(
             tree=tree,
             files=self._files,
             total_files=len(self._files),
             total_lines=total_lines,
             languages=languages,
+            symbols=file_symbols,
         )
-        return self._repo_map
+
+        if not include_symbols:
+            self._repo_map = repo_map
+
+        return repo_map
 
     def get_tree_view(self, max_depth: int = 3) -> str:
         """Get a lightweight tree view of the repository.
@@ -393,13 +625,24 @@ class CodebaseContextManager:
 
         return selected
 
-    def _build_tree(self, max_depth: int = 4) -> str:
-        """Build a text tree view of the repository."""
+    def _build_tree(
+        self,
+        max_depth: int = 4,
+        file_symbols: dict[str, list[str]] | None = None,
+    ) -> str:
+        """Build a text tree view of the repository.
+
+        Args:
+            max_depth: Maximum directory nesting to display.
+            file_symbols: Optional map of relative_path -> symbol names to show.
+        """
         if not self._files:
             return "(no files discovered)"
 
         root = Path(self.root_dir)
         tree_dict: dict[str, Any] = {}
+        # Track relative path per leaf for symbol lookup
+        leaf_rel_paths: dict[str, str] = {}
 
         for f in self._files:
             parts = Path(f.relative_path).parts
@@ -412,9 +655,10 @@ class CodebaseContextManager:
                     current[part] = {}
                 current = current[part]
             current[parts[-1]] = None  # Leaf file
+            leaf_rel_paths[parts[-1]] = f.relative_path
 
         lines = [str(root.name) + "/"]
-        self._format_tree_dict(tree_dict, lines, prefix="")
+        self._format_tree_dict(tree_dict, lines, prefix="", file_symbols=file_symbols, leaf_rel_paths=leaf_rel_paths)
         return "\n".join(lines)
 
     def _format_tree_dict(
@@ -422,6 +666,8 @@ class CodebaseContextManager:
         d: dict[str, Any],
         lines: list[str],
         prefix: str,
+        file_symbols: dict[str, list[str]] | None = None,
+        leaf_rel_paths: dict[str, str] | None = None,
     ) -> None:
         """Recursively format tree dict into lines."""
         items = sorted(d.items(), key=lambda x: (x[1] is not None, x[0]))
@@ -429,8 +675,17 @@ class CodebaseContextManager:
             is_last = i == len(items) - 1
             connector = "└── " if is_last else "├── "
             suffix = "/" if subtree is not None else ""
-            lines.append(f"{prefix}{connector}{name}{suffix}")
+
+            # Annotate leaf files with symbols
+            sym_annotation = ""
+            if file_symbols and subtree is None and leaf_rel_paths:
+                rel_path = leaf_rel_paths.get(name, "")
+                syms = file_symbols.get(rel_path, [])
+                if syms:
+                    sym_annotation = "  [" + ", ".join(syms) + "]"
+
+            lines.append(f"{prefix}{connector}{name}{suffix}{sym_annotation}")
 
             if subtree is not None:
                 next_prefix = prefix + ("    " if is_last else "│   ")
-                self._format_tree_dict(subtree, lines, next_prefix)
+                self._format_tree_dict(subtree, lines, next_prefix, file_symbols, leaf_rel_paths)

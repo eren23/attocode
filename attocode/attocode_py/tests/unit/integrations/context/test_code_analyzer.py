@@ -11,6 +11,7 @@ from attocode.integrations.context.code_analyzer import (
     CodeChunk,
     FileAnalysis,
     _detect_language,
+    _djb2_hash,
     _extract_docstring,
     _extract_imports,
     _has_main_guard,
@@ -344,3 +345,84 @@ class TestHasMainGuard:
 
     def test_non_python(self) -> None:
         assert not _has_main_guard('if __name__ == "__main__":', "javascript")
+
+
+# ============================================================
+# DJB2 Hash Tests
+# ============================================================
+
+
+class TestDjb2Hash:
+    def test_deterministic(self) -> None:
+        assert _djb2_hash("hello") == _djb2_hash("hello")
+
+    def test_different_for_different_input(self) -> None:
+        assert _djb2_hash("hello") != _djb2_hash("world")
+
+    def test_empty_string(self) -> None:
+        assert _djb2_hash("") == 5381
+
+
+# ============================================================
+# Content-Hash Caching Tests
+# ============================================================
+
+
+class TestAnalyzerCache:
+    def test_cache_hit_on_unchanged_file(self, tmp_path: Path) -> None:
+        f = tmp_path / "cached.py"
+        f.write_text("def foo(): pass\n", encoding="utf-8")
+
+        analyzer = CodeAnalyzer()
+        result1 = analyzer.analyze_file(str(f))
+        result2 = analyzer.analyze_file(str(f))
+
+        assert result1 is result2
+        assert analyzer.cache_stats["hits"] == 1
+        assert analyzer.cache_stats["misses"] == 1
+
+    def test_cache_invalidation_on_change(self, tmp_path: Path) -> None:
+        f = tmp_path / "changing.py"
+        f.write_text("def foo(): pass\n", encoding="utf-8")
+
+        analyzer = CodeAnalyzer()
+        result1 = analyzer.analyze_file(str(f))
+
+        f.write_text("def bar(): pass\ndef baz(): pass\n", encoding="utf-8")
+        result2 = analyzer.analyze_file(str(f))
+
+        assert result1 is not result2
+        assert analyzer.cache_stats["hits"] == 0
+        assert analyzer.cache_stats["misses"] == 2
+
+    def test_clear_cache(self, tmp_path: Path) -> None:
+        f = tmp_path / "clear.py"
+        f.write_text("x = 1\n", encoding="utf-8")
+
+        analyzer = CodeAnalyzer()
+        analyzer.analyze_file(str(f))
+        assert analyzer.cache_stats["entries"] == 1
+
+        analyzer.clear_cache()
+        assert analyzer.cache_stats["entries"] == 0
+        assert analyzer.cache_stats["hits"] == 0
+        assert analyzer.cache_stats["misses"] == 0
+
+    def test_cache_stats_property(self) -> None:
+        analyzer = CodeAnalyzer()
+        stats = analyzer.cache_stats
+        assert stats == {"hits": 0, "misses": 0, "entries": 0}
+
+    def test_multiple_files_cached(self, tmp_path: Path) -> None:
+        f1 = tmp_path / "a.py"
+        f2 = tmp_path / "b.py"
+        f1.write_text("def a(): pass\n", encoding="utf-8")
+        f2.write_text("def b(): pass\n", encoding="utf-8")
+
+        analyzer = CodeAnalyzer()
+        analyzer.analyze_file(str(f1))
+        analyzer.analyze_file(str(f2))
+        analyzer.analyze_file(str(f1))  # cache hit
+        analyzer.analyze_file(str(f2))  # cache hit
+
+        assert analyzer.cache_stats == {"hits": 2, "misses": 2, "entries": 2}

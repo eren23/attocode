@@ -150,6 +150,7 @@ def register_default_commands(registry: CommandRegistry) -> None:
         ("/load", "Load a saved session", ""),
         ("/exit", "Exit the agent", "Ctrl+C"),
         ("/plan", "Show current plan", ""),
+        ("/show-plan", "Show detailed plan with diffs", ""),
         ("/approve", "Approve pending plan", ""),
         ("/reject", "Reject pending plan", ""),
         ("/tasks", "Show task list", ""),
@@ -159,6 +160,28 @@ def register_default_commands(registry: CommandRegistry) -> None:
         ("/diff", "Show recent file changes", ""),
         ("/trace", "Show trace summary", ""),
         ("/swarm", "Show swarm status", ""),
+        # Thread commands
+        ("/fork", "Fork conversation into a new thread", ""),
+        ("/threads", "List conversation threads", ""),
+        ("/switch", "Switch to a different thread", ""),
+        ("/rollback", "Remove last N messages", ""),
+        ("/restore", "Restore from a checkpoint", ""),
+        # Goals
+        ("/goals", "Manage session goals", ""),
+        # Agent discovery
+        ("/find", "Search agents by keyword", ""),
+        ("/suggest", "Suggest agent for a task", ""),
+        ("/auto", "Auto-select agent for a task", ""),
+        # Security / debug
+        ("/audit", "Show tool call audit log", ""),
+        ("/powers", "Show agent capabilities", ""),
+        # Session
+        ("/reset", "Reset conversation state", ""),
+        ("/handoff", "Export session handoff summary", ""),
+        # Info
+        ("/sandbox", "Show sandbox configuration", ""),
+        ("/lsp", "Show LSP integration status", ""),
+        ("/tui", "Show TUI feature list", ""),
     ]
     for name, desc, shortcut in defaults:
         registry.register(name, desc, shortcut=shortcut, category="commands")
@@ -182,7 +205,7 @@ class CommandPaletteScreen(ModalScreen[str | None]):
     #palette-container {
         width: 60;
         max-height: 20;
-        border: round $accent;
+        border: round #89b4fa;
         background: $surface;
         padding: 1;
     }
@@ -203,7 +226,7 @@ class CommandPaletteScreen(ModalScreen[str | None]):
     }
 
     .palette-item:hover {
-        background: $accent 20%;
+        background: #89b4fa 20%;
     }
     """
 

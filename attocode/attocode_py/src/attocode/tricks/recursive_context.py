@@ -236,3 +236,106 @@ class RecursiveContextRetriever:
             files_visited=len(visited),
             budget_exhausted=total_tokens >= self._token_budget,
         )
+
+    def retrieve_with_priority(
+        self,
+        seed_files: list[str],
+        priority_files: list[str] | None = None,
+        *,
+        max_content_per_file: int = 10_000,
+    ) -> RecursiveContextResult:
+        """Retrieve with priority files getting budget preference.
+
+        Priority files are loaded first and given more token budget.
+        Remaining budget is used for recursive exploration.
+        """
+        priority = set(priority_files or [])
+        visited: set[str] = set()
+        nodes: list[ContextNode] = []
+        total_tokens = 0
+        max_depth_reached = 0
+
+        # Phase 1: Load priority files first (use 50% of budget)
+        priority_budget = self._token_budget // 2
+        for file_path in (priority_files or []):
+            if file_path in visited:
+                continue
+            content = self._provider.get_content(file_path)
+            if content is None:
+                continue
+            visited.add(file_path)
+            is_truncated = False
+            if len(content) > max_content_per_file:
+                content = content[:max_content_per_file]
+                is_truncated = True
+            est_tokens = len(content) // 4
+            if total_tokens + est_tokens > priority_budget:
+                remaining = priority_budget - total_tokens
+                chars = remaining * 4
+                if chars < 200:
+                    break
+                content = content[:chars]
+                is_truncated = True
+                est_tokens = remaining
+            references = extract_references(content, file_path)
+            nodes.append(ContextNode(
+                file_path=file_path,
+                content=content,
+                depth=0,
+                references=references,
+                estimated_tokens=est_tokens,
+                is_truncated=is_truncated,
+            ))
+            total_tokens += est_tokens
+
+        # Phase 2: BFS from seeds with remaining budget
+        queue: list[tuple[str, int]] = [(f, 0) for f in seed_files if f not in visited]
+        # Also enqueue references from priority files
+        for node in nodes:
+            for ref in node.references:
+                if ref not in visited:
+                    queue.append((ref, 1))
+
+        while queue and total_tokens < self._token_budget and len(visited) < self._max_files:
+            file_path, depth = queue.pop(0)
+            if file_path in visited or depth > self._max_depth:
+                continue
+            visited.add(file_path)
+            content = self._provider.get_content(file_path)
+            if content is None:
+                continue
+            is_truncated = False
+            if len(content) > max_content_per_file:
+                content = content[:max_content_per_file]
+                is_truncated = True
+            est_tokens = len(content) // 4
+            if total_tokens + est_tokens > self._token_budget:
+                remaining = self._token_budget - total_tokens
+                chars = remaining * 4
+                if chars < 200:
+                    break
+                content = content[:chars]
+                is_truncated = True
+                est_tokens = remaining
+            references = extract_references(content, file_path)
+            nodes.append(ContextNode(
+                file_path=file_path,
+                content=content,
+                depth=depth,
+                references=references,
+                estimated_tokens=est_tokens,
+                is_truncated=is_truncated,
+            ))
+            total_tokens += est_tokens
+            max_depth_reached = max(max_depth_reached, depth)
+            for ref in references:
+                if ref not in visited:
+                    queue.append((ref, depth + 1))
+
+        return RecursiveContextResult(
+            nodes=nodes,
+            total_tokens=total_tokens,
+            max_depth_reached=max_depth_reached,
+            files_visited=len(visited),
+            budget_exhausted=total_tokens >= self._token_budget,
+        )

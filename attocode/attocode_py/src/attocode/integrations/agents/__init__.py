@@ -45,6 +45,17 @@ from attocode.integrations.agents.multi_agent import (
     RESEARCHER_ROLE,
 )
 
+from attocode.integrations.agents.async_subagent import (
+    AsyncSubagentConfig,
+    AsyncSubagentManager,
+    SubagentHandle,
+    SubagentStatus,
+)
+from attocode.integrations.agents.subagent_output_store import (
+    SubagentOutput,
+    SubagentOutputStore,
+)
+
 __all__ = [
     # blackboard
     "BlackboardEntry",
@@ -89,4 +100,12 @@ __all__ = [
     "REVIEWER_ROLE",
     "ARCHITECT_ROLE",
     "RESEARCHER_ROLE",
+    # async_subagent
+    "AsyncSubagentConfig",
+    "AsyncSubagentManager",
+    "SubagentHandle",
+    "SubagentStatus",
+    # subagent_output_store
+    "SubagentOutput",
+    "SubagentOutputStore",
 ]

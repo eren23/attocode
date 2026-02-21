@@ -14,6 +14,11 @@ from attocode.integrations.safety.policy_engine import (
     PolicyRule,
 )
 
+from attocode.integrations.safety.edit_validator import (
+    EditValidator,
+    ValidationResult,
+)
+
 __all__ = [
     "CommandClassification",
     "CommandRisk",
@@ -24,4 +29,7 @@ __all__ = [
     "PolicyRule",
     "classify_command",
     "extract_command_name",
+    # edit_validator
+    "EditValidator",
+    "ValidationResult",
 ]

@@ -13,8 +13,10 @@ from attocode.integrations.context.codebase_context import (
     EXTENSION_LANGUAGES,
     TEST_PATTERNS,
     CodebaseContextManager,
+    DependencyGraph,
     FileInfo,
     RepoMap,
+    build_dependency_graph,
 )
 
 
@@ -296,3 +298,157 @@ class TestGetRepoMap:
         map1 = mgr.get_repo_map()
         map2 = mgr.get_repo_map()
         assert map1 is map2
+
+    def test_repo_map_with_symbols(self, tmp_path: Path) -> None:
+        _create_project(tmp_path)
+        mgr = CodebaseContextManager(root_dir=str(tmp_path))
+        repo_map = mgr.get_repo_map(include_symbols=True)
+        assert isinstance(repo_map, RepoMap)
+        # main.py has a 'main' function
+        assert any("main" in syms for syms in repo_map.symbols.values())
+        # Tree should contain symbol annotations
+        assert "[" in repo_map.tree
+
+    def test_repo_map_symbols_in_tree_text(self, tmp_path: Path) -> None:
+        (tmp_path / "lib.py").write_text(
+            "class Foo:\n    pass\n\ndef bar():\n    pass\n",
+            encoding="utf-8",
+        )
+        mgr = CodebaseContextManager(root_dir=str(tmp_path))
+        repo_map = mgr.get_repo_map(include_symbols=True)
+        assert "Foo" in repo_map.tree
+        assert "bar" in repo_map.tree
+
+
+# ============================================================
+# DependencyGraph Tests
+# ============================================================
+
+
+class TestDependencyGraph:
+    def test_add_edge(self) -> None:
+        g = DependencyGraph()
+        g.add_edge("a.py", "b.py")
+        assert "b.py" in g.get_imports("a.py")
+        assert "a.py" in g.get_importers("b.py")
+
+    def test_hub_score(self) -> None:
+        g = DependencyGraph()
+        g.add_edge("a.py", "hub.py")
+        g.add_edge("b.py", "hub.py")
+        g.add_edge("c.py", "hub.py")
+        assert g.hub_score("hub.py") > 0
+        assert g.hub_score("leaf.py") == 0.0
+
+    def test_hub_score_capped(self) -> None:
+        g = DependencyGraph()
+        for i in range(20):
+            g.add_edge(f"f{i}.py", "popular.py")
+        assert g.hub_score("popular.py") == 0.2  # Capped
+
+    def test_to_import_graph(self) -> None:
+        g = DependencyGraph()
+        g.add_edge("a.py", "b.py")
+        g.add_edge("a.py", "c.py")
+        ig = g.to_import_graph()
+        assert set(ig["a.py"]) == {"b.py", "c.py"}
+
+    def test_empty_graph(self) -> None:
+        g = DependencyGraph()
+        assert g.get_imports("x.py") == set()
+        assert g.get_importers("x.py") == set()
+
+
+class TestBuildDependencyGraph:
+    def test_python_imports_resolved(self, tmp_path: Path) -> None:
+        """Relative Python imports are resolved to file paths."""
+        pkg = tmp_path / "pkg"
+        pkg.mkdir()
+        (pkg / "__init__.py").write_text("", encoding="utf-8")
+        (pkg / "main.py").write_text(
+            "from pkg.utils import helper\n\ndef main():\n    helper()\n",
+            encoding="utf-8",
+        )
+        (pkg / "utils.py").write_text(
+            "def helper():\n    return 42\n",
+            encoding="utf-8",
+        )
+
+        mgr = CodebaseContextManager(root_dir=str(tmp_path))
+        files = mgr.discover_files()
+
+        graph = mgr.dependency_graph
+        assert graph is not None
+
+        # pkg/main.py should import pkg/utils.py
+        main_imports = graph.get_imports(os.path.join("pkg", "main.py"))
+        assert any("utils" in p for p in main_imports)
+
+    def test_js_relative_imports(self, tmp_path: Path) -> None:
+        """JS relative imports are resolved to file paths."""
+        (tmp_path / "index.js").write_text(
+            'import { helper } from "./utils";\nconsole.log(helper());\n',
+            encoding="utf-8",
+        )
+        (tmp_path / "utils.js").write_text(
+            "export function helper() { return 42; }\n",
+            encoding="utf-8",
+        )
+
+        mgr = CodebaseContextManager(root_dir=str(tmp_path))
+        files = mgr.discover_files()
+
+        graph = mgr.dependency_graph
+        assert graph is not None
+
+        index_imports = graph.get_imports("index.js")
+        assert "utils.js" in index_imports
+
+    def test_hub_files_get_importance_boost(self, tmp_path: Path) -> None:
+        """Files imported by many others get an importance boost."""
+        (tmp_path / "a.py").write_text("from utils import x\n", encoding="utf-8")
+        (tmp_path / "b.py").write_text("from utils import y\n", encoding="utf-8")
+        (tmp_path / "c.py").write_text("from utils import z\n", encoding="utf-8")
+        (tmp_path / "utils.py").write_text(
+            "x = 1\ny = 2\nz = 3\n",
+            encoding="utf-8",
+        )
+
+        mgr = CodebaseContextManager(root_dir=str(tmp_path))
+        files = mgr.discover_files()
+
+        utils_file = next(f for f in files if "utils.py" in f.relative_path)
+        a_file = next(f for f in files if "a.py" in f.relative_path)
+
+        # utils.py should have higher importance due to being a hub
+        assert utils_file.importance >= a_file.importance
+
+    def test_no_self_edges(self, tmp_path: Path) -> None:
+        """Files should not import themselves."""
+        (tmp_path / "self_ref.py").write_text(
+            "from self_ref import foo\ndef foo(): pass\n",
+            encoding="utf-8",
+        )
+
+        mgr = CodebaseContextManager(root_dir=str(tmp_path))
+        files = mgr.discover_files()
+        graph = mgr.dependency_graph
+        assert graph is not None
+
+        self_imports = graph.get_imports("self_ref.py")
+        assert "self_ref.py" not in self_imports
+
+    def test_unresolvable_imports_skipped(self, tmp_path: Path) -> None:
+        """Third-party / stdlib imports that can't be resolved are skipped."""
+        (tmp_path / "app.py").write_text(
+            "import os\nimport sys\nfrom pathlib import Path\n",
+            encoding="utf-8",
+        )
+
+        mgr = CodebaseContextManager(root_dir=str(tmp_path))
+        files = mgr.discover_files()
+        graph = mgr.dependency_graph
+        assert graph is not None
+
+        # No edges since os/sys/pathlib are not local files
+        assert graph.get_imports("app.py") == set()

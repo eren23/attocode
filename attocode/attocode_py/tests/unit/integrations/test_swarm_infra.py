@@ -2124,7 +2124,7 @@ class TestModelHealthTrackerHollowRate:
 
 class TestFailureModeThresholds:
     def test_all_modes_present(self) -> None:
-        expected_modes = {"timeout", "rate-limit", "error", "quality", "hollow", "cascade"}
+        expected_modes = {"timeout", "rate-limit", "error", "quality", "hollow", "cascade", "recoverable", "terminal"}
         assert set(FAILURE_MODE_THRESHOLDS.keys()) == expected_modes
 
     def test_values_between_0_and_1(self) -> None:

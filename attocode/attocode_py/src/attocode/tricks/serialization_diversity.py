@@ -237,3 +237,111 @@ def are_semantic_equivalent(json1: str, json2: str) -> bool:
         return norm1 == norm2
     except (json.JSONDecodeError, TypeError):
         return False
+
+
+def find_most_compact(data: Any, max_attempts: int = 10) -> tuple[str, SerializationStyle]:
+    """Find the most compact serialization for data.
+
+    Tries multiple styles and returns the shortest output.
+    Useful for minimizing token usage in constrained contexts.
+    """
+    serializer = DiverseSerializer(DiverseSerializerConfig(
+        variation_level=0.8,
+        vary_indentation=True,
+        vary_key_order=True,
+        vary_array_format=True,
+    ))
+
+    best_result = ""
+    best_style = serializer.get_consistent_style()
+    best_len = float("inf")
+
+    # Always try the compact baseline
+    compact_style = SerializationStyle(
+        indent=None,
+        sort_keys=True,
+        key_sort_order="asc",
+        space_after_colon=False,
+        omit_null=True,
+        array_style="compact",
+    )
+    compact_result = serializer.serialize_with_style(data, compact_style)
+    if len(compact_result) < best_len:
+        best_result = compact_result
+        best_style = compact_style
+        best_len = len(compact_result)
+
+    # Try random variations
+    for _ in range(max_attempts):
+        style = serializer.generate_style()
+        result = serializer.serialize_with_style(data, style)
+        if len(result) < best_len:
+            best_result = result
+            best_style = style
+            best_len = len(result)
+
+    return best_result, best_style
+
+
+def measure_compression_ratio(data: Any) -> dict[str, Any]:
+    """Measure the compression ratio between different serialization styles."""
+    # Baseline: pretty-printed
+    pretty = json.dumps(data, indent=2, sort_keys=True)
+    # Compact: no whitespace
+    compact = json.dumps(data, separators=(",", ":"), sort_keys=True)
+
+    # Diverse
+    serializer = DiverseSerializer(DiverseSerializerConfig(variation_level=0.5))
+    diverse = serializer.serialize(data)
+
+    return {
+        "pretty_length": len(pretty),
+        "compact_length": len(compact),
+        "diverse_length": len(diverse),
+        "compact_ratio": len(compact) / max(1, len(pretty)),
+        "diverse_ratio": len(diverse) / max(1, len(pretty)),
+        "savings_chars": len(pretty) - len(compact),
+        "savings_tokens_approx": (len(pretty) - len(compact)) // 4,
+    }
+
+
+class AdaptiveSerializer(DiverseSerializer):
+    """Serializer that adapts variation level based on context.
+
+    Increases variation when the LLM seems to be repeating patterns,
+    decreases it when the output is already diverse.
+    """
+
+    def __init__(self, config: DiverseSerializerConfig | None = None) -> None:
+        super().__init__(config)
+        self._recent_styles: list[str] = []
+        self._max_style_history: int = 20
+
+    def serialize(self, data: Any) -> str:
+        """Serialize with adaptive variation."""
+        # Check if we're in a repetition rut
+        if self._is_style_repetitive():
+            # Temporarily boost variation
+            saved = self._config.variation_level
+            self._config.variation_level = min(1.0, saved + 0.3)
+            result = super().serialize(data)
+            self._config.variation_level = saved
+        else:
+            result = super().serialize(data)
+
+        # Track the style used
+        style = f"{self._stats.total_serializations}"
+        self._recent_styles.append(style)
+        if len(self._recent_styles) > self._max_style_history:
+            self._recent_styles.pop(0)
+
+        return result
+
+    def _is_style_repetitive(self) -> bool:
+        """Check if recent styles are too similar."""
+        if len(self._recent_styles) < 5:
+            return False
+        # Check if the last 5 styles are all the same
+        last_5 = self._recent_styles[-5:]
+        unique = len(set(last_5))
+        return unique <= 2

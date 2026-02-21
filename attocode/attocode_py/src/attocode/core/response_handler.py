@@ -94,8 +94,18 @@ async def call_llm(
             if not e.retryable or attempt >= max_retries:
                 raise
 
-            # Exponential backoff
+            # Exponential backoff with retry event
             delay = min(retry_base_delay * (2 ** attempt), RETRY_MAX_DELAY)
+            ctx.emit_simple(
+                EventType.LLM_RETRY,
+                iteration=ctx.iteration,
+                metadata={
+                    "attempt": attempt + 1,
+                    "max_retries": max_retries,
+                    "delay": delay,
+                    "error": str(e),
+                },
+            )
             await asyncio.sleep(delay)
 
         except Exception as e:
@@ -205,7 +215,18 @@ async def call_llm_streaming(
             if not e.retryable or attempt >= max_retries:
                 raise
 
+            # Exponential backoff with retry event
             delay = min(retry_base_delay * (2 ** attempt), RETRY_MAX_DELAY)
+            ctx.emit_simple(
+                EventType.LLM_RETRY,
+                iteration=ctx.iteration,
+                metadata={
+                    "attempt": attempt + 1,
+                    "max_retries": max_retries,
+                    "delay": delay,
+                    "error": str(e),
+                },
+            )
             await asyncio.sleep(delay)
 
         except Exception as e:

@@ -58,12 +58,12 @@ class PromptInput(Widget):
         height: auto;
         min-height: 3;
         max-height: 7;
-        border: round $accent;
+        border: round #89b4fa;
         padding: 0 1;
     }
 
     PromptInput TextArea:focus {
-        border: round $accent;
+        border: round #89b4fa;
     }
 
     PromptInput.disabled TextArea {

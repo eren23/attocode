@@ -33,6 +33,8 @@ class TaskFailureMode(StrEnum):
     QUALITY = "quality"
     HOLLOW = "hollow"
     CASCADE = "cascade"
+    RECOVERABLE = "recoverable"
+    TERMINAL = "terminal"
 
 
 class WorkerCapability(StrEnum):
@@ -829,6 +831,8 @@ FAILURE_MODE_THRESHOLDS: dict[str, float] = {
     "quality": 0.7,
     "hollow": 0.7,
     "cascade": 0.8,
+    "recoverable": 0.3,
+    "terminal": 1.0,
 }
 
 

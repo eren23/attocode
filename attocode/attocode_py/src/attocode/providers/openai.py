@@ -104,6 +104,7 @@ class OpenAIProvider:
             "model": model,
             "messages": self._format_messages(messages),
             "stream": True,
+            "stream_options": {"include_usage": True},
         }
         if options and options.max_tokens:
             body["max_tokens"] = options.max_tokens

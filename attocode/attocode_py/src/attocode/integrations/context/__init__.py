@@ -9,8 +9,10 @@ from attocode.integrations.context.auto_compaction import (
 )
 from attocode.integrations.context.codebase_context import (
     CodebaseContextManager,
+    DependencyGraph,
     FileInfo,
     RepoMap,
+    build_dependency_graph,
 )
 from attocode.integrations.context.code_analyzer import (
     CodeAnalyzer,
@@ -52,6 +54,10 @@ from attocode.integrations.context.codebase_ast import (
     parse_javascript,
     parse_python,
 )
+from attocode.integrations.context.semantic_cache import (
+    SemanticCacheConfig,
+    SemanticCacheManager,
+)
 
 __all__ = [
     # auto_compaction
@@ -62,8 +68,10 @@ __all__ = [
     "CompactionStrategy",
     # codebase_context
     "CodebaseContextManager",
+    "DependencyGraph",
     "FileInfo",
     "RepoMap",
+    "build_dependency_graph",
     # code_analyzer
     "CodeAnalyzer",
     "CodeChunk",
@@ -98,4 +106,7 @@ __all__ = [
     "parse_file",
     "parse_javascript",
     "parse_python",
+    # semantic_cache
+    "SemanticCacheConfig",
+    "SemanticCacheManager",
 ]

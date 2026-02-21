@@ -14,6 +14,12 @@ from attocode.integrations.persistence.store import (
     UsageLogRecord,
 )
 
+from attocode.integrations.persistence.history import (
+    HistoryEntry,
+    HistoryManager,
+    HistorySearchResult,
+)
+
 __all__ = [
     "CheckpointRecord",
     "CompactionRecord",
@@ -26,4 +32,8 @@ __all__ = [
     "SessionStore",
     "ToolCallRecord",
     "UsageLogRecord",
+    # history
+    "HistoryEntry",
+    "HistoryManager",
+    "HistorySearchResult",
 ]

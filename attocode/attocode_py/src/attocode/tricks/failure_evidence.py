@@ -364,3 +364,131 @@ def create_repeat_warning(action: str, count: int, suggestion: str | None = None
     if suggestion:
         msg += f" {suggestion}"
     return msg
+
+
+@dataclass
+class FailureCascade:
+    """A detected cascade where one failure triggers others."""
+
+    root_failure_id: str
+    root_action: str
+    downstream_failures: list[str]
+    total_impact: int
+    description: str
+
+
+def detect_cascades(failures: list[Failure], time_window_seconds: float = 60.0) -> list[FailureCascade]:
+    """Detect failure cascades — sequences of related failures.
+
+    A cascade is when a failure in one action is quickly followed
+    by failures in related actions (same file, same module, etc.).
+    """
+    if len(failures) < 3:
+        return []
+
+    cascades: list[FailureCascade] = []
+    unresolved = [f for f in failures if not f.resolved]
+
+    for i, root in enumerate(unresolved):
+        downstream: list[str] = []
+        for j in range(i + 1, len(unresolved)):
+            candidate = unresolved[j]
+            # Within time window?
+            if candidate.timestamp - root.timestamp > time_window_seconds:
+                break
+            # Related? (same category or args overlap)
+            if candidate.category == root.category:
+                downstream.append(candidate.id)
+            elif root.args and candidate.args:
+                # Check for overlapping file paths
+                root_files = {v for v in (root.args or {}).values() if isinstance(v, str) and "/" in v}
+                cand_files = {v for v in (candidate.args or {}).values() if isinstance(v, str) and "/" in v}
+                if root_files & cand_files:
+                    downstream.append(candidate.id)
+
+        if len(downstream) >= 2:
+            cascades.append(FailureCascade(
+                root_failure_id=root.id,
+                root_action=root.action,
+                downstream_failures=downstream,
+                total_impact=1 + len(downstream),
+                description=(
+                    f"Cascade from '{root.action}' ({root.category}): "
+                    f"{len(downstream)} downstream failures within {time_window_seconds}s"
+                ),
+            ))
+
+    return cascades
+
+
+def detect_cross_iteration_patterns(
+    failures: list[Failure],
+    min_iterations_span: int = 3,
+) -> list[FailurePattern]:
+    """Detect patterns that span multiple iterations.
+
+    Identifies recurring failures across iterations, suggesting
+    systemic issues rather than one-off errors.
+    """
+    patterns: list[FailurePattern] = []
+    if not failures:
+        return patterns
+
+    # Group by action+category
+    groups: dict[str, list[Failure]] = {}
+    for f in failures:
+        if f.iteration is not None:
+            key = f"{f.action}:{f.category}"
+            groups.setdefault(key, []).append(f)
+
+    for key, group in groups.items():
+        iterations = sorted({f.iteration for f in group if f.iteration is not None})
+        if len(iterations) >= min_iterations_span:
+            span = iterations[-1] - iterations[0]
+            action, category = key.split(":", 1)
+            patterns.append(FailurePattern(
+                type="cross_iteration",
+                description=(
+                    f"'{action}' ({category}) failing across {len(iterations)} iterations "
+                    f"(span: {span} iterations)"
+                ),
+                failure_ids=[f.id for f in group],
+                confidence=min(0.95, 0.4 + len(iterations) * 0.1),
+                suggestion=(
+                    f"Systemic '{category}' issue with '{action}'. "
+                    "Consider fundamentally changing the approach."
+                ),
+            ))
+
+    return patterns
+
+
+def build_failure_summary(
+    failures: list[Failure],
+    max_lines: int = 10,
+) -> str:
+    """Build a compact failure summary suitable for system prompts."""
+    if not failures:
+        return ""
+
+    unresolved = [f for f in failures if not f.resolved]
+    if not unresolved:
+        return ""
+
+    lines = [f"[{len(unresolved)} unresolved failures]"]
+
+    # Category breakdown
+    cats: dict[str, int] = {}
+    for f in unresolved:
+        cats[f.category] = cats.get(f.category, 0) + 1
+    cat_summary = ", ".join(f"{c}: {n}" for c, n in sorted(cats.items(), key=lambda x: -x[1]))
+    lines.append(f"Categories: {cat_summary}")
+
+    # Most recent failures (compact)
+    for f in unresolved[-min(max_lines - 2, len(unresolved)):]:
+        line = f"- {f.action}: {f.error[:60]}"
+        if f.suggestion:
+            line += f" → {f.suggestion[:40]}"
+        lines.append(line)
+
+    return "\n".join(lines)
