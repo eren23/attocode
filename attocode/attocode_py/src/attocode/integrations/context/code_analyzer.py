@@ -13,6 +13,14 @@ from pathlib import Path
 from typing import Any
 
 
+def _djb2_hash(s: str) -> int:
+    """DJB2 hash function for content-based cache invalidation."""
+    h = 5381
+    for ch in s:
+        h = ((h << 5) + h + ord(ch)) & 0xFFFFFFFF
+    return h
+
+
 @dataclass(slots=True)
 class CodeChunk:
     """A chunk of code extracted from a file."""
@@ -65,14 +73,36 @@ class CodeAnalyzer:
     """Analyzes source code files to extract structured chunks.
 
     Uses tree-sitter when available, falls back to regex-based
-    extraction otherwise.
+    extraction otherwise. Caches results using content hashing
+    to avoid re-analysis of unchanged files.
     """
 
     def __init__(self) -> None:
         self._parsers: dict[str, Any] = {}
+        self._cache: dict[str, tuple[int, FileAnalysis]] = {}  # path -> (hash, result)
+        self._cache_hits: int = 0
+        self._cache_misses: int = 0
+
+    @property
+    def cache_stats(self) -> dict[str, int]:
+        """Return cache hit/miss statistics."""
+        return {
+            "hits": self._cache_hits,
+            "misses": self._cache_misses,
+            "entries": len(self._cache),
+        }
+
+    def clear_cache(self) -> None:
+        """Clear the analysis cache."""
+        self._cache.clear()
+        self._cache_hits = 0
+        self._cache_misses = 0
 
     def analyze_file(self, path: str, language: str = "") -> FileAnalysis:
         """Analyze a source file.
+
+        Uses content-hash caching: if the file content hasn't changed
+        since the last analysis, returns the cached result.
 
         Args:
             path: File path to analyze.
@@ -90,6 +120,15 @@ class CodeAnalyzer:
         except OSError:
             return FileAnalysis(path=path, language=language, chunks=[])
 
+        # Check content-hash cache
+        content_hash = _djb2_hash(content)
+        cached = self._cache.get(path)
+        if cached is not None and cached[0] == content_hash:
+            self._cache_hits += 1
+            return cached[1]
+
+        self._cache_misses += 1
+
         if not language:
             language = _detect_language(p.suffix)
 
@@ -106,7 +145,7 @@ class CodeAnalyzer:
         # Check for main entry point
         has_main = _has_main_guard(content, language)
 
-        return FileAnalysis(
+        result = FileAnalysis(
             path=path,
             language=language,
             chunks=chunks,
@@ -114,6 +153,10 @@ class CodeAnalyzer:
             line_count=len(lines),
             has_main=has_main,
         )
+
+        # Store in cache
+        self._cache[path] = (content_hash, result)
+        return result
 
     def analyze_files(self, paths: list[str]) -> list[FileAnalysis]:
         """Analyze multiple files.

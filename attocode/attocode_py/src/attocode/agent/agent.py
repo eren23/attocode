@@ -85,6 +85,9 @@ class ProductionAgent:
         self._subagent_registry: dict[str, Any] = {}
         self._swarm_orchestrator: Any = None
         self._thread_manager: Any = None
+        self._trace_collector: Any = None
+        self._session_store: Any = None       # Persists across runs for /goals, /audit, /grants, etc.
+        self._session_id: str | None = None   # Current session ID
 
     @property
     def status(self) -> AgentStatus:
@@ -246,6 +249,10 @@ class ProductionAgent:
             ctx.multi_agent_manager = self._multi_agent_manager  # type: ignore[attr-defined]
         if self._cancellation_manager:
             ctx.cancellation_manager = self._cancellation_manager  # type: ignore[attr-defined]
+        if self._thread_manager:
+            ctx.thread_manager = self._thread_manager
+        if self._trace_collector:
+            ctx.trace_collector = self._trace_collector
 
         # Register event handlers
         for handler in self._event_handlers:
@@ -257,26 +264,34 @@ class ProductionAgent:
         if getattr(self._config, 'swarm_enabled', False):
             return await self._run_with_swarm(prompt)
 
-        # Initialize session persistence
-        session_id = None
-        session_store = None
-        if self._session_dir:
+        # Initialize session persistence (reuse store across runs)
+        if self._session_dir and self._session_store is None:
             try:
                 from attocode.integrations.persistence.store import SessionStore
                 from pathlib import Path
                 db_path = Path(self._session_dir) / "sessions.db"
-                session_store = SessionStore(db_path)
-                await session_store.initialize()
+                self._session_store = SessionStore(db_path)
+                await self._session_store.initialize()
+            except Exception:
+                self._session_store = None  # Non-fatal
+
+        # Create a new session record for this run
+        if self._session_store:
+            try:
                 session_id = str(uuid.uuid4())[:8]
-                await session_store.create_session(
+                await self._session_store.create_session(
                     session_id,
                     prompt[:200],
                     model=self._config.model or "",
                 )
-                ctx.session_store = session_store
-                ctx.session_id = session_id
+                self._session_id = session_id
             except Exception:
-                session_store = None  # Non-fatal
+                pass
+
+        # Attach to context (always, even on subsequent runs)
+        if self._session_store:
+            ctx.session_store = self._session_store
+            ctx.session_id = self._session_id
 
         # Reuse file change tracker across runs so /diff and /undo show cumulative history
         if self._file_change_tracker is None:
@@ -356,10 +371,10 @@ class ProductionAgent:
             self._total_cost_all_runs += ctx.metrics.estimated_cost
 
             # Update session
-            if session_store and session_id:
+            if self._session_store and self._session_id:
                 try:
-                    await session_store.update_session(
-                        session_id,
+                    await self._session_store.update_session(
+                        self._session_id,
                         status="completed" if result.success else "failed",
                         total_tokens=ctx.metrics.total_tokens,
                         total_cost=ctx.metrics.estimated_cost,
@@ -383,11 +398,6 @@ class ProductionAgent:
             for client in mcp_clients:
                 try:
                     await client.disconnect()
-                except Exception:
-                    pass
-            if session_store:
-                try:
-                    await session_store.close()
                 except Exception:
                     pass
             # NOTE: Do NOT close provider or null _ctx here.
@@ -447,6 +457,15 @@ class ProductionAgent:
                 self._cancellation_manager.cancel()
             except Exception:
                 pass
+
+    async def close(self) -> None:
+        """Close persistent resources (session store, etc.)."""
+        if self._session_store:
+            try:
+                await self._session_store.close()
+            except Exception:
+                pass
+            self._session_store = None
 
     def get_budget_usage(self) -> float:
         """Get the current budget usage as a fraction (0.0 to 1.0).

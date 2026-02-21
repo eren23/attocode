@@ -278,6 +278,7 @@ def _run_tui(config: Any) -> None:
         click.echo("Configuration saved to ~/.attocode/config.json", err=True)
 
     from attocode.agent.builder import AgentBuilder
+    from attocode.tracing import TraceWriter
     from attocode.tui.app import AttocodeApp
     from attocode.tui.events import (
         AgentCompleted,
@@ -285,6 +286,7 @@ def _run_tui(config: Any) -> None:
         BudgetWarning,
         IterationUpdate,
         LLMCompleted,
+        LLMRetry,
         LLMStarted,
         LLMStreamChunk,
         LLMStreamEnd,
@@ -330,6 +332,17 @@ def _run_tui(config: Any) -> None:
         .with_sandbox(True)
         .with_spawn_agent(True)
     )
+
+    if config.session_dir:
+        builder = builder.with_session_dir(config.session_dir)
+
+    # Set up trace writer for recording execution traces
+    trace_writer = TraceWriter(
+        trace_dir=config.working_directory + "/.attocode/traces",
+    )
+    trace_writer.start()
+    builder = builder.with_trace_collector(trace_writer._collector)
+
     if config.system_prompt:
         builder = builder.with_system_prompt(config.system_prompt)
     if config.debug:
@@ -349,6 +362,12 @@ def _run_tui(config: Any) -> None:
 
     def _on_agent_event(event: AgentEvent) -> None:
         """Bridge AgentEvent → TUI Textual messages."""
+        # Record to trace file
+        try:
+            trace_writer.record(event)
+        except Exception:
+            pass
+
         if event.type == EventType.TOOL_START:
             _post_event(ToolStarted(
                 tool_id=event.tool or "unknown",
@@ -373,6 +392,14 @@ def _run_tui(config: Any) -> None:
             _post_event(LLMCompleted(
                 tokens=event.tokens or 0,
                 cost=event.cost or 0.0,
+            ))
+        elif event.type == EventType.LLM_RETRY:
+            meta = event.metadata or {}
+            _post_event(LLMRetry(
+                attempt=meta.get("attempt", 0),
+                max_retries=meta.get("max_retries", 3),
+                delay=meta.get("delay", 0),
+                error=meta.get("error", ""),
             ))
         elif event.type == EventType.LLM_STREAM_START:
             _post_event(LLMStreamStart())
@@ -452,7 +479,10 @@ def _run_tui(config: Any) -> None:
         agent=agent,
         approval_bridge=approval_bridge,
     )
-    app.run()
+    try:
+        app.run()
+    finally:
+        trace_writer.close()
 
 
 def _run_swarm(config: Any, prompt: str) -> None:

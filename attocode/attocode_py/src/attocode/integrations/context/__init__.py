@@ -9,8 +9,10 @@ from attocode.integrations.context.auto_compaction import (
 )
 from attocode.integrations.context.codebase_context import (
     CodebaseContextManager,
+    DependencyGraph,
     FileInfo,
     RepoMap,
+    build_dependency_graph,
 )
 from attocode.integrations.context.code_analyzer import (
     CodeAnalyzer,
@@ -66,8 +68,10 @@ __all__ = [
     "CompactionStrategy",
     # codebase_context
     "CodebaseContextManager",
+    "DependencyGraph",
     "FileInfo",
     "RepoMap",
+    "build_dependency_graph",
     # code_analyzer
     "CodeAnalyzer",
     "CodeChunk",

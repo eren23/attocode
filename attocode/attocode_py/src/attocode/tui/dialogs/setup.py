@@ -50,7 +50,7 @@ class SetupWizard(ModalScreen[SetupResult]):
         max-width: 90%;
         height: auto;
         max-height: 80%;
-        border: double $accent;
+        border: double #89b4fa;
         background: $surface;
         padding: 1 2;
     }
@@ -359,7 +359,7 @@ class ApiKeyDialog(ModalScreen[str]):
         width: 60;
         max-width: 80%;
         height: auto;
-        border: double $accent;
+        border: double #89b4fa;
         background: $surface;
         padding: 1 2;
     }

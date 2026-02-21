@@ -133,7 +133,7 @@ class DiagnosticsPanel(VerticalScroll):
         padding: 0 1;
     }
     DiagnosticsPanel .diag-header {
-        color: $accent;
+        color: #89b4fa;
         text-style: bold;
     }
     DiagnosticsPanel .diag-ok {

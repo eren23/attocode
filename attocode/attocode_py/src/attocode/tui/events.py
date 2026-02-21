@@ -83,6 +83,17 @@ class LLMStreamEnd(Message):
         self.cost = cost
 
 
+class LLMRetry(Message):
+    """LLM call is being retried."""
+
+    def __init__(self, attempt: int, max_retries: int, delay: float, error: str) -> None:
+        super().__init__()
+        self.attempt = attempt
+        self.max_retries = max_retries
+        self.delay = delay
+        self.error = error
+
+
 class BudgetWarning(Message):
     """Budget warning threshold reached."""
 

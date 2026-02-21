@@ -50,6 +50,7 @@ class AgentBuilder:
         self._auto_checkpoint: Any = None
         self._recitation_manager: Any = None
         self._failure_tracker: Any = None
+        self._trace_collector: Any = None
 
     def with_provider(
         self,
@@ -197,6 +198,11 @@ class AgentBuilder:
         self._auto_checkpoint = manager
         return self
 
+    def with_trace_collector(self, collector: Any) -> AgentBuilder:
+        """Set a trace collector for recording execution traces."""
+        self._trace_collector = collector
+        return self
+
     def with_tricks(
         self,
         recitation: Any = None,
@@ -276,6 +282,10 @@ class AgentBuilder:
             recitation_manager=self._recitation_manager,
             failure_tracker=self._failure_tracker,
         )
+
+        # Set trace collector if provided
+        if self._trace_collector:
+            agent._trace_collector = self._trace_collector
 
         # Register event handlers
         for handler in self._event_handlers:

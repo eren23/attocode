@@ -22,6 +22,7 @@ from attocode.tui.events import (
     BudgetWarning,
     IterationUpdate,
     LLMCompleted,
+    LLMRetry,
     LLMStarted,
     LLMStreamChunk,
     LLMStreamEnd,
@@ -37,6 +38,8 @@ from attocode.tui.widgets.message_log import MessageLog
 from attocode.tui.widgets.plan_panel import PlanPanel
 from attocode.tui.widgets.status_bar import StatusBar
 from attocode.tui.widgets.streaming_buffer import StreamingBuffer
+from attocode.tui.widgets.token_sparkline import TokenSparkline
+from attocode.tui.widgets.welcome_banner import WelcomeBanner
 from attocode.tui.widgets.swarm_panel import SwarmPanel
 from attocode.tui.widgets.tasks_panel import TasksPanel
 from attocode.tui.widgets.thinking_panel import ThinkingPanel
@@ -103,12 +106,21 @@ class AttocodeApp(App):
         self._streamed_response = False
         self._last_response = ""
 
+        # Token sparkline history (last ~20 LLM calls)
+        self._token_history: list[int] = []
+
         # Typing indicator state
         self._typing_timer: Timer | None = None
         self._typing_frame_index = 0
 
     def compose(self) -> ComposeResult:
         with Vertical(id="main-container"):
+            yield WelcomeBanner(
+                model=self._model_name,
+                git_branch=self._git_branch,
+                version=self._get_version(),
+                id="welcome-banner",
+            )
             yield MessageLog(id="message-log")
             yield Static("", id="typing-indicator")
             yield StreamingBuffer(id="streaming-buffer")
@@ -118,9 +130,16 @@ class AttocodeApp(App):
             yield TasksPanel(id="tasks-panel")
             yield AgentsPanel(id="agents-panel")
             yield SwarmPanel(id="swarm-panel")
-        yield PromptInput(id="input-area")
-        yield StatusBar(id="status-bar")
+            # Input + status bar inside the Vertical so they stack
+            # (dock:bottom causes overlapping, not stacking)
+            yield PromptInput(id="input-area")
+            yield StatusBar(id="status-bar")
         yield Footer()
+
+    async def on_unmount(self) -> None:
+        """Clean up persistent resources on app teardown."""
+        if self._agent and hasattr(self._agent, "close"):
+            await self._agent.close()
 
     def on_mount(self) -> None:
         """Initialize on mount."""
@@ -128,17 +147,28 @@ class AttocodeApp(App):
         status.model_name = self._model_name
         status.git_branch = self._git_branch
 
+        # Wire project name and max tokens from agent
+        if self._agent:
+            try:
+                wd = getattr(self._agent, "working_dir", None)
+                if wd:
+                    status.project_name = Path(wd).name
+            except Exception:
+                pass
+            try:
+                budget = getattr(self._agent, "budget", None)
+                if budget and hasattr(budget, "max_tokens"):
+                    status.max_tokens = budget.max_tokens
+            except Exception:
+                pass
+
         # Set up bridge handlers
         self.approval_bridge.set_handler(self._show_approval_dialog)
         self.budget_bridge.set_handler(self._show_budget_dialog)
 
-        # Welcome message
+        # Hint below banner
         log = self.query_one("#message-log", MessageLog)
-        welcome = f"Attocode ({self._model_name or 'default model'})"
-        if self._git_branch:
-            welcome += f" on {self._git_branch}"
-        welcome += "\nType a prompt to start, or /help for commands."
-        log.add_system_message(welcome)
+        log.add_system_message("Type a prompt to start, or /help for commands.")
 
         # Focus input
         self.query_one("#input-area", PromptInput).focus_input()
@@ -193,6 +223,9 @@ class AttocodeApp(App):
 
         text = event.value
 
+        # Hide welcome banner on first interaction
+        self._hide_welcome_banner()
+
         # Check for slash commands
         from attocode.commands import is_command
         if is_command(text):
@@ -218,14 +251,30 @@ class AttocodeApp(App):
         log = self.query_one("#message-log", MessageLog)
         log.add_user_message(text)
 
+        cmd = text.strip().split()[0] if text.strip() else ""
+
         async def _run() -> None:
             result = await handle_command(text, agent=self._agent, app=self)
+
+            # Intercept /status and /budget for DataTable modal
+            if cmd in ("/status", "/budget") and self._agent and result.output:
+                rows: list[tuple[str, str]] = []
+                for line in result.output.strip().split("\n"):
+                    if ":" in line:
+                        key, _, val = line.partition(":")
+                        rows.append((key.strip(), val.strip()))
+                if rows:
+                    from attocode.tui.widgets.metrics_table import MetricsScreen
+                    self.push_screen(MetricsScreen(cmd.lstrip("/").title(), rows))
+                    return
+
             log.add_system_message(result.output)
 
         asyncio.ensure_future(_run())
 
     def on_agent_started(self, event: AgentStarted) -> None:
         """Agent execution started."""
+        self._hide_welcome_banner()
         self._processing = True
         self._streamed_response = False
         self.query_one("#input-area", PromptInput).set_enabled(False)
@@ -255,6 +304,16 @@ class AttocodeApp(App):
         self.query_one("#status-bar", StatusBar).stop_processing()
         self.query_one("#tool-panel", ToolCallsPanel).clear_calls()
         self.query_one("#input-area", PromptInput).focus_input()
+
+        # Toast notification
+        if event.success:
+            self.notify("Task completed", severity="information", timeout=3)
+
+        # Hide sparkline
+        try:
+            self.query_one("#token-sparkline", TokenSparkline).remove_class("visible")
+        except Exception:
+            pass
 
     def on_tool_started(self, event: ToolStarted) -> None:
         """Tool call started."""
@@ -287,6 +346,9 @@ class AttocodeApp(App):
             log = self.query_one("#message-log", MessageLog)
             log.add_tool_message(event.name, "error")
 
+        # Refresh file change stats
+        self._update_file_stats()
+
     def on_llm_started(self, event: LLMStarted) -> None:
         """LLM call started."""
         self._start_typing_indicator()
@@ -296,6 +358,7 @@ class AttocodeApp(App):
         """LLM call completed."""
         status = self.query_one("#status-bar", StatusBar)
         status.cost += event.cost
+        status.total_tokens += event.tokens
         if self._agent:
             try:
                 status.budget_pct = self._agent.get_budget_usage()
@@ -308,6 +371,20 @@ class AttocodeApp(App):
                     status.context_pct = check.usage_fraction
             except Exception:
                 pass
+
+        # Update token sparkline
+        self._update_sparkline(event.tokens)
+
+    def on_llm_retry(self, event: LLMRetry) -> None:
+        """LLM call is being retried — show status and toast."""
+        self.query_one("#status-bar", StatusBar).mode = (
+            f"retrying ({event.attempt + 1}/{event.max_retries + 1})"
+        )
+        self.notify(
+            f"LLM retry {event.attempt + 1}/{event.max_retries + 1}: {event.error[:80]}",
+            severity="warning",
+            timeout=event.delay + 2,
+        )
 
     # --- Streaming handlers ---
 
@@ -342,9 +419,10 @@ class AttocodeApp(App):
         buffer.stop()
         thinking_panel.stop_thinking()
 
-        # Update cost and budget
+        # Update cost, budget, and tokens
         status = self.query_one("#status-bar", StatusBar)
         status.cost += event.cost
+        status.total_tokens += event.tokens
         if self._agent:
             try:
                 status.budget_pct = self._agent.get_budget_usage()
@@ -358,6 +436,9 @@ class AttocodeApp(App):
             except Exception:
                 pass
 
+        # Update token sparkline
+        self._update_sparkline(event.tokens)
+
     # --- Other event handlers ---
 
     def on_budget_warning(self, event: BudgetWarning) -> None:
@@ -365,6 +446,10 @@ class AttocodeApp(App):
         log = self.query_one("#message-log", MessageLog)
         log.add_system_message(f"Budget: {event.message}")
         self.query_one("#status-bar", StatusBar).budget_pct = event.usage_fraction
+
+        # Toast notification
+        severity = "warning" if event.usage_fraction < 0.9 else "error"
+        self.notify(f"Budget at {event.usage_fraction:.0%}", severity=severity, timeout=5)
 
     def on_iteration_update(self, event: IterationUpdate) -> None:
         """Iteration counter update."""
@@ -380,6 +465,7 @@ class AttocodeApp(App):
         self.query_one("#status-bar", StatusBar).mode = event.text
         if event.mode == "error":
             self.query_one("#message-log", MessageLog).add_error_message(event.text)
+            self.notify(event.text, severity="error", timeout=6)
         elif event.mode == "info":
             self.query_one("#message-log", MessageLog).add_system_message(event.text)
 
@@ -503,6 +589,74 @@ class AttocodeApp(App):
         """Toggle swarm panel visibility."""
         panel = self.query_one("#swarm-panel", SwarmPanel)
         panel.toggle_class("visible")
+
+    # --- Helpers ---
+
+    def _hide_welcome_banner(self) -> None:
+        """Hide the welcome banner."""
+        try:
+            banner = self.query_one("#welcome-banner", WelcomeBanner)
+            banner.display = False
+        except Exception:
+            pass
+
+    @staticmethod
+    def _get_version() -> str:
+        """Return the package version string."""
+        try:
+            from attocode import __version__
+            return __version__
+        except Exception:
+            return "0.1.0"
+
+    def _update_file_stats(self) -> None:
+        """Read file change tracker and update status bar file stats."""
+        if not self._agent:
+            return
+        tracker = getattr(self._agent, "_file_change_tracker", None)
+        if not tracker or not hasattr(tracker, "changes"):
+            return
+        try:
+            changes = tracker.changes
+            paths = {c.path for c in changes if not c.undone}
+            added = deleted = 0
+            for c in changes:
+                if c.undone:
+                    continue
+                if c.after_content and c.before_content:
+                    added += max(0, c.after_content.count("\n") - c.before_content.count("\n"))
+                    deleted += max(0, c.before_content.count("\n") - c.after_content.count("\n"))
+                elif c.after_content and not c.before_content:
+                    added += c.after_content.count("\n") + 1
+                elif c.before_content and not c.after_content:
+                    deleted += c.before_content.count("\n") + 1
+            status = self.query_one("#status-bar", StatusBar)
+            status.files_changed = len(paths)
+            status.lines_added = added
+            status.lines_removed = deleted
+        except Exception:
+            pass
+
+    def _update_sparkline(self, tokens: int) -> None:
+        """Append a token count to the sparkline history and update the widget."""
+        if tokens <= 0:
+            return
+        self._token_history.append(tokens)
+        if len(self._token_history) > 20:
+            self._token_history = self._token_history[-20:]
+        try:
+            try:
+                sparkline = self.query_one("#token-sparkline", TokenSparkline)
+            except Exception:
+                # First data point — mount inside the Vertical, before the status bar
+                sparkline = TokenSparkline(self._token_history, id="token-sparkline")
+                status_bar = self.query_one("#status-bar", StatusBar)
+                container = self.query_one("#main-container", Vertical)
+                container.mount(sparkline, before=status_bar)
+            sparkline.data = self._token_history
+            sparkline.add_class("visible")
+        except Exception:
+            pass
 
     # --- Public API ---
 

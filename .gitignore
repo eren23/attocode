@@ -7,3 +7,7 @@ node_modules
 .production-agent-sessions/
 .test-sandbox/
 __pycache__/
+attocode/.attocode/traces/
+attocode/.attocode/sessions/
+.attocode/traces/
+.attocode/sessions/

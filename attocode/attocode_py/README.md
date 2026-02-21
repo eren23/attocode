@@ -4,14 +4,15 @@ Production AI coding agent built in Python. Features a Textual-based TUI, multi-
 
 ## Features
 
-- **Interactive TUI** --- Rich terminal interface with live tool status, message history, plan/task panels, and keyboard shortcuts (powered by [Textual](https://textual.textualize.io/))
+- **Interactive TUI** --- Rich terminal interface with live tool status, streaming, plan/task panels, and keyboard shortcuts (powered by [Textual](https://textual.textualize.io/))
 - **Single-turn mode** --- Run one-shot prompts from the command line for scripting and automation
 - **Swarm mode** --- Multi-agent orchestration: decompose tasks, schedule waves, run parallel workers with quality gates and automatic recovery
 - **Budget management** --- Token-based economics with doom-loop detection, phase tracking, and budget extension dialogs
 - **Safety sandbox** --- Platform-aware command isolation (Seatbelt on macOS, Landlock on Linux, Docker, or allowlist fallback)
-- **Session persistence** --- SQLite-backed sessions with checkpoints and resume
+- **Session persistence** --- SQLite-backed sessions, checkpoints, goals, audit logs, and permission grants that persist across prompts
 - **MCP support** --- Connect external tools via the Model Context Protocol
 - **Multi-provider** --- Anthropic, OpenRouter, and OpenAI adapters
+- **Skills & agents** --- Extensible skill and agent system with project-level and user-level customization
 
 ## Requirements
 
@@ -143,9 +144,99 @@ ln -s /absolute/path/to/attocode_py/.venv/bin/attocode ~/.local/bin/attocode
 
 | Key | Action |
 |-----|--------|
-| `Ctrl+C` | Exit |
-| `Ctrl+P` | Command palette |
+| `Ctrl+C` | Exit (press twice to force quit during execution) |
+| `Ctrl+L` | Clear message log |
+| `Ctrl+P` | Open command palette / help |
+| `Ctrl+Y` | Copy last agent response to clipboard |
+| `Ctrl+T` | Toggle tool call details |
+| `Ctrl+W` | Toggle swarm panel |
 | `ESC` | Cancel current operation |
+
+## Slash Commands
+
+The TUI provides ~48 slash commands. Type `/help` in the TUI to see the full list. Here are the most commonly used:
+
+### Core
+
+| Command | Description |
+|---------|-------------|
+| `/help` | Show all available commands |
+| `/status` | Show agent status and metrics |
+| `/budget` | Show budget usage details |
+| `/extend [amount]` | Request budget extension |
+| `/model [name]` | Show or switch the LLM model |
+| `/compact` | Force context compaction |
+| `/save` | Save current session checkpoint |
+| `/clear` | Clear message log |
+| `/quit` | Exit the application |
+
+### Session Persistence
+
+Session data (goals, audit logs, permissions, checkpoints) is stored in SQLite and persists across prompts within the same TUI session.
+
+| Command | Description |
+|---------|-------------|
+| `/sessions` | List recent sessions |
+| `/load <id>` | Load a previous session |
+| `/resume [id]` | Resume most recent (or specific) session |
+| `/checkpoint` | Create a named checkpoint |
+| `/checkpoints [id]` | List checkpoints for a session |
+| `/reset` | Reset conversation (clear messages & metrics) |
+| `/handoff [fmt]` | Export session handoff summary |
+
+### Goals
+
+Track high-level objectives across prompts:
+
+| Command | Description |
+|---------|-------------|
+| `/goals` | List current goals |
+| `/goals add "..."` | Add a new goal |
+| `/goals done <n>` | Mark goal N as complete |
+| `/goals all` | Show all goals including completed |
+
+### Debug & Audit
+
+| Command | Description |
+|---------|-------------|
+| `/audit` | Show recent tool call audit log |
+| `/grants` | Show remembered permission grants |
+| `/trace [subcmd]` | Trace inspection (summary/analyze/issues/export) |
+| `/undo [path]` | Undo last file change (or specific file) |
+| `/diff` | Show file changes made in this session |
+| `/context [breakdown]` | Show context window token details |
+
+### Skills & Agents
+
+| Command | Description |
+|---------|-------------|
+| `/skills` | List available skills |
+| `/skills info <name>` | Show detailed skill info |
+| `/skills new <name>` | Create a new skill scaffold |
+| `/agents` | List available agents |
+| `/agents info <name>` | Show detailed agent info |
+| `/spawn <task>` | Spawn a subagent for a task |
+
+### MCP (Model Context Protocol)
+
+| Command | Description |
+|---------|-------------|
+| `/mcp` | List connected MCP servers |
+| `/mcp tools` | Show tools from MCP servers |
+| `/mcp connect <cmd>` | Connect a new MCP server |
+| `/mcp disconnect <name>` | Disconnect an MCP server |
+
+### Configuration
+
+| Command | Description |
+|---------|-------------|
+| `/init` | Initialize `.attocode/` directory structure |
+| `/config` | Show current config (provider, model, key) |
+| `/config provider <name>` | Switch provider (persists globally) |
+| `/config model <name>` | Switch model (persists globally) |
+| `/config api-key` | Re-enter API key (TUI dialog) |
+| `/setup` | Run the first-time setup wizard |
+| `/theme [name]` | Show or switch theme |
 
 ## Swarm Mode
 
@@ -214,7 +305,7 @@ src/attocode/
     budget/          Economics, budget pools, doom-loop detection
     context/         Context engineering, compaction, codebase analysis
     safety/          Policy engine, sandbox (seatbelt/landlock/docker)
-    persistence/     SQLite session store, checkpoints
+    persistence/     SQLite session store, checkpoints, goals
     agents/          Shared blackboard, delegation protocol
     tasks/           Task decomposition, planning, verification
     skills/          Skill loading and execution

@@ -88,6 +88,12 @@ class AgentContext:
     # File change tracker (optional - for undo capability)
     file_change_tracker: Any = None  # FileChangeTracker instance
 
+    # Thread manager (optional - for conversation forking)
+    thread_manager: Any = None  # ThreadManager instance
+
+    # Trace collector (optional - for execution tracing)
+    trace_collector: Any = None  # TraceCollector instance
+
     def on_event(self, handler: EventHandler) -> None:
         """Register an event handler."""
         self._event_handlers.append(handler)
