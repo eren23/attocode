@@ -347,6 +347,22 @@ mypy src/
 | Test lines | ~20,900 |
 | Total tests | 2,156+ |
 
+## TODO
+
+### Incremental codebase context updates
+
+The codebase context system (`integrations/context/`) currently does a full `os.walk` + re-parse on every `discover_files()` call and caches `_repo_map` / `_dep_graph` with no invalidation. When the agent edits or creates files mid-session, the cached data goes stale silently — symbols, dep graph, and importance scores all reflect the state at discovery time.
+
+What's needed:
+
+- **Hook into tool results.** After `write_file`, `edit_file`, or `bash` (when it creates/deletes files), mark affected entries in `_files` as dirty instead of re-walking the entire tree.
+- **Mtime-based staleness.** Store `mtime` per `FileInfo`. On the next `get_repo_map()` / `select_context()`, stat only dirty files and re-parse them. The `CodeAnalyzer` content-hash cache already handles re-analysis correctly — the gap is that nothing triggers it.
+- **Incremental dep graph.** When a file changes, remove its old edges from `DependencyGraph.forward`/`.reverse`, re-parse its imports, and add new edges. No need to rebuild the entire graph.
+- **Invalidate `_repo_map` on any file mutation.** The tree text and language stats are cheap to regenerate, so just nulling `_repo_map` is fine.
+- **New/deleted file handling.** `discover_files()` is the only way to pick up new files or notice deletions. A lightweight incremental scan (check parent dirs of changed paths) would avoid full re-walks.
+
+The `CodeAnalyzer._cache` (djb2 content hash) already does per-file invalidation correctly — the problem is one layer up in `CodebaseContextManager` which has no change-awareness at all.
+
 ## License
 
 See [LICENSE](LICENSE) for details.

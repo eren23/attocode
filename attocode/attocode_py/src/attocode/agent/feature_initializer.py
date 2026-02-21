@@ -247,7 +247,7 @@ async def initialize_features(
         try:
             from attocode.integrations.context.codebase_context import CodebaseContextManager
             ctx.codebase_context = CodebaseContextManager(  # type: ignore[attr-defined]
-                working_dir=working_dir,
+                root_dir=working_dir,
             )
             results["codebase_context"] = True
         except Exception:

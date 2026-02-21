@@ -894,7 +894,12 @@ class ProductionAgent:
         target = root or self._working_dir
         if self._codebase_context:
             try:
-                await self._codebase_context.analyze(target)
+                if target != self._codebase_context.root_dir:
+                    self._codebase_context.root_dir = target
+                    self._codebase_context._files = []
+                    self._codebase_context._repo_map = None
+                    self._codebase_context._dep_graph = None
+                self._codebase_context.discover_files()
             except Exception:
                 pass  # Analysis failure is non-fatal
 

@@ -118,14 +118,64 @@ CONFIG_PATTERNS = (
     ".github/", ".gitlab-ci",
 )
 
-# Default ignore patterns
+# Default ignore directories
 DEFAULT_IGNORES = {
-    ".git", "__pycache__", "node_modules", ".venv", "venv",
+    # VCS
+    ".git", ".svn", ".hg",
+    # Python
+    "__pycache__", ".venv", "venv", "env", ".env",
     ".mypy_cache", ".pytest_cache", ".ruff_cache",
-    "dist", "build", ".next", ".nuxt",
-    "coverage", ".coverage", "htmlcov",
     ".tox", ".nox", ".eggs", "*.egg-info",
+    "site-packages",
+    # JS/TS
+    "node_modules", "bower_components",
+    ".next", ".nuxt", ".svelte-kit", ".parcel-cache",
+    # Build output
+    "dist", "build", "out", "output", "target",
+    "_build", "cmake-build-debug", "cmake-build-release",
+    # Coverage / test artifacts
+    "coverage", ".coverage", "htmlcov", ".nyc_output",
+    # IDE / editor
+    ".idea", ".vscode", ".vs",
+    # OS
     ".DS_Store", "Thumbs.db",
+    # Containers / infra
+    ".terraform", ".vagrant",
+    # Misc generated
+    ".cache", ".tmp", "tmp",
+    "vendor",  # Go/PHP/Ruby vendor dirs
+    ".gradle", ".maven",
+}
+
+# File extensions to skip (non-source, binary, generated)
+SKIP_EXTENSIONS = {
+    # Compiled / bytecode
+    ".pyc", ".pyo", ".class", ".o", ".obj", ".so", ".dylib", ".dll",
+    ".a", ".lib", ".exe", ".wasm",
+    # Archives
+    ".zip", ".tar", ".gz", ".bz2", ".xz", ".rar", ".7z", ".jar", ".war",
+    # Media
+    ".png", ".jpg", ".jpeg", ".gif", ".bmp", ".ico", ".svg", ".webp",
+    ".mp3", ".mp4", ".wav", ".avi", ".mov", ".webm",
+    ".ttf", ".otf", ".woff", ".woff2", ".eot",
+    # Data / DB
+    ".db", ".sqlite", ".sqlite3",
+    ".parquet", ".feather", ".hdf5", ".h5",
+    # Lock files (large, generated)
+    ".lock",
+    # Maps
+    ".map",
+    # Certificates
+    ".pem", ".crt", ".key", ".p12",
+}
+
+# Filenames to skip (exact match)
+SKIP_FILENAMES = {
+    ".DS_Store", "Thumbs.db", ".gitkeep", ".npmrc",
+    "package-lock.json", "yarn.lock", "pnpm-lock.yaml",
+    "Pipfile.lock", "poetry.lock", "uv.lock",
+    "composer.lock", "Gemfile.lock", "Cargo.lock",
+    "go.sum",
 }
 
 
@@ -251,7 +301,7 @@ class CodebaseContextManager:
     """
 
     root_dir: str
-    max_files: int = 500
+    max_files: int = 2000
     max_context_tokens: int = 8000
     ignore_patterns: set[str] = field(default_factory=lambda: set(DEFAULT_IGNORES))
     _files: list[FileInfo] = field(default_factory=list, repr=False)
@@ -277,7 +327,10 @@ class CodebaseContextManager:
             for filename in filenames:
                 if filename.startswith("."):
                     continue
-                if any(filename.endswith(p) for p in (".pyc", ".pyo", ".class", ".o")):
+                if filename in SKIP_FILENAMES:
+                    continue
+                ext = Path(filename).suffix.lower()
+                if ext in SKIP_EXTENSIONS:
                     continue
 
                 full_path = os.path.join(dirpath, filename)
@@ -286,7 +339,6 @@ class CodebaseContextManager:
                 except ValueError:
                     continue
 
-                ext = Path(filename).suffix
                 lang = EXTENSION_LANGUAGES.get(ext, "")
 
                 try:

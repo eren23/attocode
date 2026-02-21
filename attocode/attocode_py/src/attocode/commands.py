@@ -9,7 +9,7 @@ Provides ~48 slash commands organized into groups:
 - Goals: /goals
 - MCP: /mcp
 - Skills: /skills
-- Context: /context
+- Context: /context, /repomap
 - Debug: /trace, /grants, /audit
 - Capabilities: /powers
 - Info: /sandbox, /lsp, /tui
@@ -207,6 +207,9 @@ async def handle_command(
     if cmd == "/context":
         return _context_command(agent, arg)
 
+    if cmd == "/repomap":
+        return _repomap_command(agent, arg)
+
     # --- Debug commands ---
     if cmd == "/trace":
         return _trace_command(agent, arg)
@@ -312,6 +315,10 @@ def _help_text() -> str:
         "\n"
         "Context:\n"
         "  /context [sub]    Show context info (breakdown for token details)\n"
+        "  /repomap          Show repository tree view\n"
+        "  /repomap symbols  Tree with function/class annotations\n"
+        "  /repomap deps     Dependency graph stats\n"
+        "  /repomap analyze  Force re-discovery (clear caches)\n"
         "\n"
         "Debug:\n"
         "  /trace [subcmd]   Trace inspection (summary/analyze/issues/export)\n"
@@ -1538,6 +1545,110 @@ def _context_breakdown(ctx: Any) -> CommandResult:
         f"  Total:       {total:>8,}",
     ]
     return CommandResult(output="\n".join(lines))
+
+
+def _repomap_command(agent: Any, arg: str) -> CommandResult:
+    """Show repository map, symbols, or dependency info."""
+    # Get or create codebase context manager
+    ctx_mgr = None
+    if agent:
+        ctx_mgr = getattr(agent, "get_codebase_context", lambda: None)()
+    if not ctx_mgr:
+        wd = _get_working_dir(agent)
+        if not wd:
+            return CommandResult(output="No working directory set.")
+        try:
+            from attocode.integrations.context.codebase_context import CodebaseContextManager
+            ctx_mgr = CodebaseContextManager(root_dir=wd)
+        except Exception as e:
+            return CommandResult(output=f"Failed to create context manager: {e}")
+
+    # Ensure files are discovered
+    if not ctx_mgr._files:
+        try:
+            ctx_mgr.discover_files()
+        except Exception as e:
+            return CommandResult(output=f"File discovery failed: {e}")
+
+    subcmd = arg.strip().lower()
+
+    if subcmd == "analyze":
+        # Force re-discovery: clear caches and re-scan
+        ctx_mgr._files = []
+        ctx_mgr._repo_map = None
+        ctx_mgr._dep_graph = None
+        try:
+            ctx_mgr.discover_files()
+        except Exception as e:
+            return CommandResult(output=f"Re-discovery failed: {e}")
+        return CommandResult(
+            output=f"Re-scanned {len(ctx_mgr._files)} files in {ctx_mgr.root_dir}"
+        )
+
+    if subcmd == "symbols":
+        try:
+            repo_map = ctx_mgr.get_repo_map(include_symbols=True)
+            lines = [f"Repository map ({repo_map.total_files} files, {repo_map.total_lines:,} lines):"]
+            lines.append(repo_map.tree)
+            if repo_map.symbols:
+                lines.append("\nSymbols:")
+                for rel_path, syms in sorted(repo_map.symbols.items()):
+                    if syms:
+                        lines.append(f"  {rel_path}: {', '.join(syms[:10])}")
+                        if len(syms) > 10:
+                            lines.append(f"    ... and {len(syms) - 10} more")
+            return CommandResult(output="\n".join(lines))
+        except Exception as e:
+            return CommandResult(output=f"Symbol extraction failed: {e}")
+
+    if subcmd == "deps":
+        try:
+            from attocode.integrations.context.codebase_context import build_dependency_graph
+            graph = ctx_mgr._dep_graph
+            if graph is None:
+                graph = build_dependency_graph(ctx_mgr._files, ctx_mgr.root_dir)
+                ctx_mgr._dep_graph = graph
+
+            total_edges = sum(len(targets) for targets in graph.forward.values())
+            lines = [
+                "Dependency graph:",
+                f"  Files with imports: {len(graph.forward)}",
+                f"  Files imported: {len(graph.reverse)}",
+                f"  Total edges: {total_edges}",
+            ]
+            # Top imported files (hubs)
+            if graph.reverse:
+                hubs = sorted(graph.reverse.items(), key=lambda x: len(x[1]), reverse=True)[:10]
+                lines.append("\n  Most imported (hub files):")
+                for path, importers in hubs:
+                    lines.append(f"    {path}: {len(importers)} importers")
+            # Top importing files
+            if graph.forward:
+                heavy = sorted(graph.forward.items(), key=lambda x: len(x[1]), reverse=True)[:10]
+                lines.append("\n  Most imports (heavy files):")
+                for path, targets in heavy:
+                    lines.append(f"    {path}: {len(targets)} imports")
+            return CommandResult(output="\n".join(lines))
+        except Exception as e:
+            return CommandResult(output=f"Dependency analysis failed: {e}")
+
+    # Default: tree view
+    try:
+        tree = ctx_mgr.get_tree_view()
+        file_count = len(ctx_mgr._files)
+        langs = {}
+        for f in ctx_mgr._files:
+            if f.language:
+                langs[f.language] = langs.get(f.language, 0) + 1
+        lines = [f"Repository: {ctx_mgr.root_dir} ({file_count} files)"]
+        if langs:
+            top = sorted(langs.items(), key=lambda x: x[1], reverse=True)[:5]
+            lines.append("Languages: " + ", ".join(f"{l} ({c})" for l, c in top))
+        lines.append("")
+        lines.append(tree)
+        return CommandResult(output="\n".join(lines))
+    except Exception as e:
+        return CommandResult(output=f"Tree generation failed: {e}")
 
 
 # ============================================================
