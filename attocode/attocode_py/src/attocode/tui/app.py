@@ -32,6 +32,8 @@ from attocode.tui.events import (
     ToolCompleted,
     ToolStarted,
 )
+from attocode.tui.screens.dashboard import DashboardScreen
+from attocode.tui.widgets.dashboard.live_dashboard import LiveTraceAccumulator
 from attocode.tui.widgets.agents_panel import AgentsPanel
 from attocode.tui.widgets.input_area import PromptInput
 from attocode.tui.widgets.message_log import MessageLog
@@ -75,6 +77,7 @@ class AttocodeApp(App):
         # Alt-key toggles (using option-key unicode on macOS)
         Binding("ctrl+t", "toggle_tools", "Toggle Tools", show=False),
         Binding("ctrl+w", "toggle_swarm", "Swarm", show=False),
+        Binding("ctrl+d", "toggle_dashboard", "Dashboard", show=True),
     ]
 
     def __init__(
@@ -108,6 +111,9 @@ class AttocodeApp(App):
 
         # Token sparkline history (last ~20 LLM calls)
         self._token_history: list[int] = []
+
+        # Live dashboard accumulator (shared with DashboardScreen)
+        self._live_accumulator = LiveTraceAccumulator()
 
         # Typing indicator state
         self._typing_timer: Timer | None = None
@@ -346,6 +352,9 @@ class AttocodeApp(App):
             log = self.query_one("#message-log", MessageLog)
             log.add_tool_message(event.name, "error")
 
+        # Feed live dashboard accumulator
+        self._live_accumulator.record_tool(event.name, error=bool(event.error))
+
         # Refresh file change stats
         self._update_file_stats()
 
@@ -371,6 +380,9 @@ class AttocodeApp(App):
                     status.context_pct = check.usage_fraction
             except Exception:
                 pass
+
+        # Feed live dashboard accumulator
+        self._live_accumulator.record_llm(event.tokens, event.cost)
 
         # Update token sparkline
         self._update_sparkline(event.tokens)
@@ -419,6 +431,9 @@ class AttocodeApp(App):
         buffer.stop()
         thinking_panel.stop_thinking()
 
+        # Feed live dashboard accumulator
+        self._live_accumulator.record_llm(event.tokens, event.cost)
+
         # Update cost, budget, and tokens
         status = self.query_one("#status-bar", StatusBar)
         status.cost += event.cost
@@ -447,6 +462,10 @@ class AttocodeApp(App):
         log.add_system_message(f"Budget: {event.message}")
         self.query_one("#status-bar", StatusBar).budget_pct = event.usage_fraction
 
+        # Feed live dashboard accumulator
+        self._live_accumulator.budget_warnings += 1
+        self._live_accumulator.last_budget_pct = event.usage_fraction
+
         # Toast notification
         severity = "warning" if event.usage_fraction < 0.9 else "error"
         self.notify(f"Budget at {event.usage_fraction:.0%}", severity=severity, timeout=5)
@@ -459,6 +478,9 @@ class AttocodeApp(App):
                 self.query_one("#status-bar", StatusBar).budget_pct = self._agent.get_budget_usage()
             except Exception:
                 pass
+
+        # Feed live dashboard accumulator
+        self._live_accumulator.record_iteration(event.iteration)
 
     def on_status_update(self, event: StatusUpdate) -> None:
         """General status update."""
@@ -589,6 +611,21 @@ class AttocodeApp(App):
         """Toggle swarm panel visibility."""
         panel = self.query_one("#swarm-panel", SwarmPanel)
         panel.toggle_class("visible")
+
+    def action_toggle_dashboard(self) -> None:
+        """Toggle the dashboard screen (Ctrl+D)."""
+        trace_dir = ""
+        if self._agent:
+            wd = getattr(self._agent, "working_dir", "") or ""
+            if wd:
+                trace_dir = str(Path(wd) / ".attocode" / "traces")
+        self.push_screen(
+            DashboardScreen(
+                agent=self._agent,
+                trace_dir=trace_dir,
+                accumulator=self._live_accumulator,
+            )
+        )
 
     # --- Helpers ---
 

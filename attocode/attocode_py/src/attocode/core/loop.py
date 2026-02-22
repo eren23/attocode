@@ -455,30 +455,30 @@ def accumulate_failure_evidence(ctx: AgentContext) -> str | None:
 
 
 def invalidate_ast_on_edit(ctx: AgentContext, tool_name: str, tool_args: dict) -> None:
-    """Invalidate codebase AST cache after file-editing tools.
+    """Invalidate and incrementally update codebase AST cache after file-editing tools.
 
-    When the agent edits a file, the cached AST for that file becomes
-    stale. This function invalidates the relevant cache entry.
+    When the agent edits a file, marks it dirty in the CodebaseContextManager
+    for incremental re-parsing.  Also invalidates the CodeAnalyzer cache entry
+    so the next analyze_file() call re-reads from disk.
     """
     FILE_EDIT_TOOLS = {"write_file", "edit_file", "create_file", "patch_file", "replace_in_file"}
 
     if tool_name not in FILE_EDIT_TOOLS:
         return
 
-    codebase_ast = getattr(ctx, '_codebase_ast', None)
-    if codebase_ast is None:
-        codebase_context = getattr(ctx, 'codebase_context', None)
-        if codebase_context:
-            codebase_ast = getattr(codebase_context, '_ast_manager', None)
-
-    if codebase_ast is None:
-        return
-
     # Extract file path from tool arguments
     file_path = tool_args.get("path") or tool_args.get("file_path") or tool_args.get("target")
-    if file_path and hasattr(codebase_ast, 'invalidate'):
+    if not file_path:
+        return
+
+    # Mark dirty in CodebaseContextManager for incremental update
+    codebase_context = getattr(ctx, 'codebase_context', None)
+    if codebase_context is not None and hasattr(codebase_context, 'mark_file_dirty'):
         try:
-            codebase_ast.invalidate(file_path)
+            codebase_context.mark_file_dirty(file_path)
+            codebase_context.invalidate_file(file_path)
+            # Trigger incremental re-parse
+            codebase_context.update_dirty_files()
         except Exception:
             pass
 

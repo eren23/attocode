@@ -33,7 +33,18 @@ import {
   type CodeAnalyzerDeps,
 } from './code-analyzer.js';
 
-import { clearASTCache, fullReparse, djb2Hash } from './codebase-ast.js';
+import {
+  clearASTCache,
+  fullReparse,
+  djb2Hash,
+  diffSymbols,
+  diffDependencies,
+  type ASTSymbol,
+  type ASTParameter,
+  type ParsedFile,
+  type SymbolChange,
+  type FileChangeResult,
+} from './codebase-ast.js';
 import type { SavedCodebaseAnalysis } from '../persistence/codebase-repository.js';
 
 // Selector functions (selection, search, ranking, LSP-enhanced context)
@@ -101,7 +112,23 @@ export interface CodeChunk {
   /** Symbols defined in this chunk */
   symbols: string[];
   /** Structured symbols for visualization and tracing */
-  symbolDetails: Array<{ name: string; kind: string; exported: boolean; line: number }>;
+  symbolDetails: Array<{
+    name: string;
+    kind: string;
+    exported: boolean;
+    line: number;
+    endLine?: number;
+    parameters?: Array<{ name: string; typeAnnotation?: string; hasDefault: boolean; isRest: boolean }>;
+    returnType?: string;
+    visibility?: string;
+    isAsync?: boolean;
+    isGenerator?: boolean;
+    typeParameters?: string[];
+    parentSymbol?: string;
+    isStatic?: boolean;
+    isAbstract?: boolean;
+    decorators?: Array<{ name: string; arguments?: string }>;
+  }>;
   /** Symbols imported/used by this chunk */
   dependencies: string[];
   /** Last modified timestamp */
@@ -222,7 +249,8 @@ export type CodebaseContextEvent =
   | { type: 'analysis.error'; error: Error }
   | { type: 'selection.completed'; selected: number; budget: number }
   | { type: 'cache.hit'; root: string }
-  | { type: 'cache.miss'; root: string };
+  | { type: 'cache.miss'; root: string }
+  | { type: 'symbols.changed'; filePath: string; changes: SymbolChange[]; wasIncremental: boolean };
 
 export type CodebaseContextEventListener = (event: CodebaseContextEvent) => void;
 
@@ -236,7 +264,20 @@ export interface CodebasePersistenceStore {
     chunks: Iterable<{
       filePath: string;
       content: string;
-      symbolDetails: Array<{ name: string; kind: string; exported: boolean; line: number }>;
+      symbolDetails: Array<{
+        name: string;
+        kind: string;
+        exported: boolean;
+        line: number;
+        endLine?: number;
+        parameters?: Array<{ name: string; typeAnnotation?: string; hasDefault: boolean; isRest: boolean }>;
+        returnType?: string;
+        visibility?: string;
+        isAsync?: boolean;
+        parentSymbol?: string;
+        isStatic?: boolean;
+        decorators?: Array<{ name: string; arguments?: string }>;
+      }>;
       dependencies: string[];
       importance: number;
       type: string;
@@ -828,6 +869,17 @@ export class CodebaseContextManager {
           kind: s.kind,
           exported: s.exported,
           line: s.line,
+          endLine: s.endLine,
+          parameters: s.parameters,
+          returnType: s.returnType,
+          visibility: s.visibility,
+          isAsync: s.isAsync,
+          isGenerator: s.isGenerator,
+          typeParameters: s.typeParameters,
+          parentSymbol: s.parentSymbol,
+          isStatic: s.isStatic,
+          isAbstract: s.isAbstract,
+          decorators: s.decorators,
         }));
         existingChunk.dependencies = parsed.dependencies.flatMap((d) =>
           d.names.filter((n) => !n.startsWith('* as ')),
@@ -845,6 +897,102 @@ export class CodebaseContextManager {
       this.repoMap.totalTokens = totalTokens;
     }
     // New files (not in chunks) require a full re-analyze
+  }
+
+  /**
+   * Update a single file using an already-parsed result (from incremental reparse).
+   * Diffs old vs new symbols, emits change events for downstream consumers.
+   */
+  async updateFileIncremental(
+    filePath: string,
+    newContent: string,
+    parsedResult: ParsedFile,
+  ): Promise<FileChangeResult | null> {
+    if (!this.repoMap) return null;
+
+    const relativePath = path.relative(this.config.root, filePath);
+    const existingChunk = this.repoMap.chunks.get(relativePath);
+    if (!existingChunk) return null;
+
+    // Capture old state for diffing
+    const oldSymbols = parsedResult
+      ? existingChunk.symbolDetails.map((s) => ({
+          name: s.name,
+          kind: s.kind as ASTSymbol['kind'],
+          exported: s.exported,
+          line: s.line,
+          endLine: s.endLine,
+          parameters: s.parameters as ASTParameter[] | undefined,
+          returnType: s.returnType,
+          visibility: s.visibility as ASTSymbol['visibility'],
+          isAsync: s.isAsync,
+          isGenerator: s.isGenerator,
+          parentSymbol: s.parentSymbol,
+          isStatic: s.isStatic,
+          isAbstract: s.isAbstract,
+        }))
+      : [];
+
+    // Patch in-place with new parsed data
+    existingChunk.content = newContent;
+    existingChunk.tokenCount = Math.ceil(newContent.length * this.config.tokensPerChar);
+    existingChunk.lastModified = new Date();
+    existingChunk.symbols = parsedResult.symbols.map((s) => s.name);
+    existingChunk.symbolDetails = parsedResult.symbols.map((s) => ({
+      name: s.name,
+      kind: s.kind,
+      exported: s.exported,
+      line: s.line,
+      endLine: s.endLine,
+      parameters: s.parameters,
+      returnType: s.returnType,
+      visibility: s.visibility,
+      isAsync: s.isAsync,
+      isGenerator: s.isGenerator,
+      typeParameters: s.typeParameters,
+      parentSymbol: s.parentSymbol,
+      isStatic: s.isStatic,
+      isAbstract: s.isAbstract,
+      decorators: s.decorators,
+    }));
+    existingChunk.dependencies = parsedResult.dependencies.flatMap((d) =>
+      d.names.filter((n) => !n.startsWith('* as ')),
+    );
+
+    // Update dependency graph edges
+    this.updateDependencyEdges(relativePath, newContent);
+
+    // Recalculate total tokens
+    let totalTokens = 0;
+    for (const chunk of this.repoMap.chunks.values()) {
+      totalTokens += chunk.tokenCount;
+    }
+    this.repoMap.totalTokens = totalTokens;
+
+    // Diff symbols and emit change events
+    const symbolChanges = diffSymbols(oldSymbols, parsedResult.symbols);
+    const depChanges = diffDependencies(
+      oldSymbols.length > 0
+        ? [] // We don't have old deps as ASTDependency, skip dep diff for incremental
+        : [],
+      parsedResult.dependencies,
+    );
+
+    if (symbolChanges.length > 0) {
+      this.emit({
+        type: 'symbols.changed',
+        filePath: relativePath,
+        changes: symbolChanges,
+        wasIncremental: true,
+      });
+    }
+
+    return {
+      filePath: relativePath,
+      symbolChanges,
+      dependencyChanges: depChanges,
+      wasIncremental: true,
+    };
   }
 
   private updateDependencyEdges(filePath: string, content: string): void {

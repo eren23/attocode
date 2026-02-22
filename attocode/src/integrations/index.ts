@@ -550,8 +550,19 @@ export {
   type ScoredChunk,
 } from './context/codebase-context.js';
 
-// AST Cache Stats
-export { getASTCacheStats } from './context/codebase-ast.js';
+// AST Cache Stats + Incremental Reparse
+export {
+  getASTCacheStats,
+  computeTreeEdit,
+  diffSymbols,
+  diffDependencies,
+  type ASTSymbol,
+  type ASTParameter,
+  type ASTDecorator,
+  type ASTDependency,
+  type SymbolChange,
+  type FileChangeResult,
+} from './context/codebase-ast.js';
 
 // Edit Validator (Phase 5.1)
 export {
