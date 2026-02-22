@@ -21,6 +21,7 @@ export interface StatusBarProps {
   model: string;
   gitBranch: string;
   transparencyState: TransparencyState | null;
+  dashboardMode?: boolean;
   agent: {
     getState: () => { messages: Array<{ content: string | unknown }> };
     getMaxContextTokens: () => number;
@@ -45,6 +46,7 @@ export const StatusBar = memo(
     model,
     gitBranch,
     transparencyState,
+    dashboardMode,
     agent,
   }: StatusBarProps) {
     // Colocated state: these are only consumed by StatusBar
@@ -115,6 +117,9 @@ export const StatusBar = memo(
         justifyContent="space-between"
       >
         <Box gap={1}>
+          {dashboardMode && (
+            <Text color="#FFD700" bold>[DASH]</Text>
+          )}
           <Text color={isProcessing ? colors.info : '#98FB98'} bold={isProcessing}>
             {isProcessing ? '[~]' : '[*]'}
           </Text>
@@ -209,6 +214,7 @@ export const StatusBar = memo(
     if (Math.abs(prevProps.status.tokens - nextProps.status.tokens) > 5000) return false;
     if (prevProps.gitBranch !== nextProps.gitBranch) return false;
     if (prevProps.model !== nextProps.model) return false;
+    if (prevProps.dashboardMode !== nextProps.dashboardMode) return false;
     // Transparency state for learnings count and tsc
     const prevLearnings = prevProps.transparencyState?.activeLearnings?.length ?? 0;
     const nextLearnings = nextProps.transparencyState?.activeLearnings?.length ?? 0;

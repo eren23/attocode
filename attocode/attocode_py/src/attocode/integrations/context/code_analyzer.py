@@ -98,6 +98,59 @@ class CodeAnalyzer:
         self._cache_hits = 0
         self._cache_misses = 0
 
+    def invalidate(self, file_path: str) -> None:
+        """Remove cached analysis for a specific file.
+
+        Args:
+            file_path: Path of the file to invalidate.
+        """
+        self._cache.pop(file_path, None)
+
+    def update_file(self, file_path: str, content: str, language: str = "") -> FileAnalysis:
+        """Re-analyze a single file with provided content and update cache.
+
+        Unlike analyze_file() which reads from disk, this accepts content
+        directly — useful when the caller already has the new content
+        (e.g. after an edit tool produces it).
+
+        Args:
+            file_path: File path (for language detection and cache key).
+            content: The new file content to analyze.
+            language: Language hint (auto-detected if empty).
+
+        Returns:
+            Updated FileAnalysis.
+        """
+        # Invalidate old entry
+        self.invalidate(file_path)
+
+        if not language:
+            language = _detect_language(Path(file_path).suffix)
+
+        lines = content.splitlines()
+        content_hash = _djb2_hash(content)
+
+        if _TREE_SITTER_AVAILABLE and language in ("python", "javascript", "typescript"):
+            chunks = self._analyze_with_tree_sitter(content, language, file_path)
+        else:
+            chunks = self._analyze_with_regex(content, language, file_path)
+
+        imports = _extract_imports(content, language)
+        has_main = _has_main_guard(content, language)
+
+        result = FileAnalysis(
+            path=file_path,
+            language=language,
+            chunks=chunks,
+            imports=imports,
+            line_count=len(lines),
+            has_main=has_main,
+        )
+
+        self._cache[file_path] = (content_hash, result)
+        self._cache_misses += 1
+        return result
+
     def analyze_file(self, path: str, language: str = "") -> FileAnalysis:
         """Analyze a source file.
 

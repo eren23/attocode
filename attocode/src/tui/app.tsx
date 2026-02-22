@@ -46,6 +46,11 @@ import { handleInitCommand } from '../commands/init-commands.js';
 import type { CommandOutput } from '../commands/types.js';
 import { createHistoryManager, type HistoryManager } from '../integrations/persistence/history.js';
 import type { AgentResult } from '../types.js';
+import { DashboardContainer } from './dashboard/index.js';
+import { useDashboardState } from './hooks/use-dashboard-state.js';
+import { useLiveTrace } from './hooks/use-live-trace.js';
+import { useSessionBrowser } from './hooks/use-session-browser.js';
+import { useSessionDetail } from './hooks/use-session-detail.js';
 
 // Module-level constant for DiagnosticsPanel fallback (prevents new object each render)
 const EMPTY_DIAGNOSTICS: { lastTscResult: null; recentSyntaxErrors: { file: string; line: number; message: string }[] } = {
@@ -314,6 +319,9 @@ interface MemoizedInputAreaProps {
   onToggleDebug?: () => void;
   onToggleSwarm?: () => void;
   onToggleDiagnostics?: () => void;
+  onToggleDashboard?: () => void;
+  onDashboardInput?: (input: string, key: any) => void;
+  dashboardMode?: boolean;
   onPageUp?: () => void;
   onPageDown?: () => void;
   onHome?: () => void;
@@ -363,6 +371,9 @@ const MemoizedInputArea = memo(
     onToggleDebug,
     onToggleSwarm,
     onToggleDiagnostics,
+    onToggleDashboard,
+    onDashboardInput,
+    dashboardMode,
     onPageUp,
     onPageDown,
     onHome,
@@ -411,6 +422,9 @@ const MemoizedInputArea = memo(
       onToggleDebug,
       onToggleSwarm,
       onToggleDiagnostics,
+      onToggleDashboard,
+      onDashboardInput,
+      dashboardMode,
       onPageUp,
       onPageDown,
       onHome,
@@ -448,6 +462,9 @@ const MemoizedInputArea = memo(
       onToggleDebug,
       onToggleSwarm,
       onToggleDiagnostics,
+      onToggleDashboard,
+      onDashboardInput,
+      dashboardMode,
       onPageUp,
       onPageDown,
       onHome,
@@ -532,6 +549,17 @@ const MemoizedInputArea = memo(
       // Alt+Y / Option+Y - Toggle diagnostics panel
       if (input === '\u00a5' || (key.meta && input === 'y')) {
         cb.onToggleDiagnostics?.();
+        return;
+      }
+      // Alt+B / Option+B - Toggle dashboard mode
+      if (input === '\u222B' || (key.meta && input === 'b')) {
+        cb.onToggleDashboard?.();
+        return;
+      }
+
+      // Dashboard mode keyboard handling (when active)
+      if (cb.dashboardMode && cb.onDashboardInput) {
+        cb.onDashboardInput(input, key);
         return;
       }
 
@@ -911,6 +939,70 @@ export function TUIApp({
   const [debugExpanded, setDebugExpanded] = useState(false);
   const [swarmExpanded, setSwarmExpanded] = useState(true);
   const [diagExpanded, setDiagExpanded] = useState(false);
+
+  // Dashboard mode state and hooks
+  const dashboard = useDashboardState();
+  const liveData = useLiveTrace(dashboard.state.mode === 'dashboard' ? (agent as any) : null);
+  const sessionBrowser = useSessionBrowser();
+  const sessionDetail = useSessionDetail(dashboard.state.selectedSessionId);
+  const [dashboardSelectedIndex, setDashboardSelectedIndex] = useState(0);
+
+  const handleToggleDashboard = useCallback(() => {
+    dashboard.toggleMode();
+  }, [dashboard]);
+
+  const handleDashboardInput = useCallback((input: string, key: any) => {
+    // Tab navigation: 1-6 keys
+    const tabMap: Record<string, 'live' | 'sessions' | 'detail' | 'compare' | 'swarm' | 'topology'> = {
+      '1': 'live', '2': 'sessions', '3': 'detail', '4': 'compare', '5': 'swarm', '6': 'topology',
+    };
+    if (tabMap[input]) {
+      dashboard.setTab(tabMap[input]);
+      return;
+    }
+    // Tab cycling
+    if (key.tab) {
+      const tabs: Array<'live' | 'sessions' | 'detail' | 'compare' | 'swarm' | 'topology'> = [
+        'live', 'sessions', 'detail', 'compare', 'swarm', 'topology',
+      ];
+      const idx = tabs.indexOf(dashboard.state.activeTab);
+      const next = key.shift ? (idx - 1 + tabs.length) % tabs.length : (idx + 1) % tabs.length;
+      dashboard.setTab(tabs[next]);
+      return;
+    }
+    // Detail sub-tab: a-e
+    const subTabMap: Record<string, 'summary' | 'timeline' | 'tree' | 'tokens' | 'issues'> = {
+      'a': 'summary', 'b': 'timeline', 'c': 'tree', 'd': 'tokens', 'e': 'issues',
+    };
+    if (subTabMap[input] && dashboard.state.activeTab === 'detail') {
+      dashboard.setDetailSubTab(subTabMap[input]);
+      return;
+    }
+    // Up/Down for session list navigation
+    if (key.upArrow && dashboard.state.activeTab === 'sessions') {
+      setDashboardSelectedIndex(prev => Math.max(0, prev - 1));
+      return;
+    }
+    if (key.downArrow && dashboard.state.activeTab === 'sessions') {
+      setDashboardSelectedIndex(prev => Math.min(sessionBrowser.sessions.length - 1, prev + 1));
+      return;
+    }
+    // Enter to open session detail
+    if (key.return && dashboard.state.activeTab === 'sessions' && sessionBrowser.sessions[dashboardSelectedIndex]) {
+      dashboard.selectSession(sessionBrowser.sessions[dashboardSelectedIndex].id);
+      return;
+    }
+    // Escape goes back
+    if (key.escape) {
+      dashboard.goBack();
+      return;
+    }
+    // 'r' to refresh session list
+    if (input === 'r') {
+      sessionBrowser.refresh();
+      return;
+    }
+  }, [dashboard, sessionBrowser, dashboardSelectedIndex]);
 
   // Refs for values used inside handleAgentEvent — prevents subscription churn
   // when user toggles these display settings
@@ -2875,84 +2967,115 @@ export function TUIApp({
   // RENDER
   // =========================================================================
 
+  const isDashboardMode = dashboard.state.mode === 'dashboard';
+
   return (
     <>
-      {/* Static messages - rendered once, never re-render */}
-      <Static items={messages}>
-        {(m: TUIMessage) => <MessageItem key={m.id} msg={m} colors={colors} />}
-      </Static>
+      {/* Chat mode: Static messages + panels */}
+      {!isDashboardMode && (
+        <Static items={messages}>
+          {(m: TUIMessage) => <MessageItem key={m.id} msg={m} colors={colors} />}
+        </Static>
+      )}
 
       {/* Dynamic section */}
       <Box flexDirection="column">
-        {/* Tool calls panel (memoized — only re-renders on tool call changes) */}
-        <ToolCallsPanel toolCalls={toolCalls} expanded={toolCallsExpanded} colors={colors} />
-
-        {/* Transparency Panel (memoized — toggle with Alt+I) */}
-        <TransparencyPanel
-          transparencyState={transparencyState}
-          expanded={transparencyExpanded}
-          colors={colors}
-        />
-
-        {/* Approval Dialog (positioned above input when active) */}
-        {pendingApproval && approvalRequest && (
-          <ApprovalDialog
-            visible={true}
-            request={approvalRequest}
-            onApprove={handleApprove}
-            onDeny={handleDeny}
-            colors={colors}
-            denyReasonMode={denyReasonMode}
-            denyReason={denyReason}
+        {/* Dashboard mode: full dashboard view replacing chat */}
+        {isDashboardMode && (
+          <DashboardContainer
+            state={dashboard.state}
+            liveData={liveData}
+            sessions={sessionBrowser.sessions}
+            sessionsLoading={sessionBrowser.loading}
+            sessionDetail={sessionDetail}
+            selectedIndex={dashboardSelectedIndex}
+            onTabChange={dashboard.setTab}
+            onSelectSession={dashboard.selectSession}
+            onDetailSubTabChange={dashboard.setDetailSubTab}
+            swarmData={swarmStatus}
+            agents={activeAgents.map(a => ({
+              id: a.id,
+              type: a.type || 'agent',
+              status: a.status,
+              tokensUsed: a.tokens,
+            }))}
           />
         )}
 
-        {/* Budget Extension Dialog (positioned above input when active) */}
-        {pendingBudgetExtension && (
-          <BudgetExtensionDialog
-            visible={true}
-            request={pendingBudgetExtension}
-            onApprove={handleBudgetExtensionApprove}
-            onDeny={handleBudgetExtensionDeny}
-            colors={colors}
-          />
+        {/* Chat mode panels */}
+        {!isDashboardMode && (
+          <>
+            {/* Tool calls panel (memoized — only re-renders on tool call changes) */}
+            <ToolCallsPanel toolCalls={toolCalls} expanded={toolCallsExpanded} colors={colors} />
+
+            {/* Transparency Panel (memoized — toggle with Alt+I) */}
+            <TransparencyPanel
+              transparencyState={transparencyState}
+              expanded={transparencyExpanded}
+              colors={colors}
+            />
+
+            {/* Approval Dialog (positioned above input when active) */}
+            {pendingApproval && approvalRequest && (
+              <ApprovalDialog
+                visible={true}
+                request={approvalRequest}
+                onApprove={handleApprove}
+                onDeny={handleDeny}
+                colors={colors}
+                denyReasonMode={denyReasonMode}
+                denyReason={denyReason}
+              />
+            )}
+
+            {/* Budget Extension Dialog (positioned above input when active) */}
+            {pendingBudgetExtension && (
+              <BudgetExtensionDialog
+                visible={true}
+                request={pendingBudgetExtension}
+                onApprove={handleBudgetExtensionApprove}
+                onDeny={handleBudgetExtensionDeny}
+                colors={colors}
+              />
+            )}
+
+            {/* Learning Validation Dialog (positioned above input when active) */}
+            {pendingLearning && (
+              <LearningValidationDialog
+                visible={true}
+                learning={pendingLearning}
+                onApprove={handleLearningApprove}
+                onReject={handleLearningReject}
+                onSkip={handleLearningSkip}
+                colors={colors}
+              />
+            )}
+
+            {/* Diagnostics Panel (toggle with Alt+Y) */}
+            <DiagnosticsPanel
+              diagnostics={transparencyState?.diagnostics ?? EMPTY_DIAGNOSTICS}
+              typeCheckerState={diagTypeCheckerState}
+              astCacheStats={diagAstCacheStats}
+              expanded={diagExpanded}
+              colors={colors}
+            />
+
+            {/* Debug Panel (toggle with Alt+D) */}
+            <DebugPanel entries={debugBuffer.entries} expanded={debugExpanded} colors={colors} />
+
+            {/* Tasks Panel (positioned above input for task tracking) */}
+            <TasksPanel tasks={tasks} colors={colors} expanded={tasksExpanded} />
+
+            {/* Active Agents Panel (positioned above input when agents are running) */}
+            <ActiveAgentsPanel agents={activeAgents} colors={colors} expanded={activeAgentsExpanded} />
+
+            {/* Swarm Status Panel (visible when swarm mode is active) */}
+            <SwarmStatusPanel status={swarmStatus} colors={colors} expanded={swarmExpanded} />
+
+            {/* Interactive Plan Panel (visible when a plan is active) */}
+            <PlanPanel plan={activePlan} expanded={planExpanded} colors={colors} />
+          </>
         )}
-
-        {/* Learning Validation Dialog (positioned above input when active) */}
-        {pendingLearning && (
-          <LearningValidationDialog
-            visible={true}
-            learning={pendingLearning}
-            onApprove={handleLearningApprove}
-            onReject={handleLearningReject}
-            onSkip={handleLearningSkip}
-            colors={colors}
-          />
-        )}
-
-        {/* Diagnostics Panel (toggle with Alt+Y) */}
-        <DiagnosticsPanel
-          diagnostics={transparencyState?.diagnostics ?? EMPTY_DIAGNOSTICS}
-          typeCheckerState={diagTypeCheckerState}
-          astCacheStats={diagAstCacheStats}
-          expanded={diagExpanded}
-          colors={colors}
-        />
-
-        {/* Debug Panel (toggle with Alt+D) */}
-        <DebugPanel entries={debugBuffer.entries} expanded={debugExpanded} colors={colors} />
-
-        {/* Tasks Panel (positioned above input for task tracking) */}
-        <TasksPanel tasks={tasks} colors={colors} expanded={tasksExpanded} />
-
-        {/* Active Agents Panel (positioned above input when agents are running) */}
-        <ActiveAgentsPanel agents={activeAgents} colors={colors} expanded={activeAgentsExpanded} />
-
-        {/* Swarm Status Panel (visible when swarm mode is active) */}
-        <SwarmStatusPanel status={swarmStatus} colors={colors} expanded={swarmExpanded} />
-
-        {/* Interactive Plan Panel (visible when a plan is active) */}
-        <PlanPanel plan={activePlan} expanded={planExpanded} colors={colors} />
 
         <MemoizedInputArea
           onSubmit={handleSubmit}
@@ -2972,6 +3095,9 @@ export function TUIApp({
           onToggleDebug={handleToggleDebug}
           onToggleSwarm={handleToggleSwarm}
           onToggleDiagnostics={handleToggleDiagnostics}
+          onToggleDashboard={handleToggleDashboard}
+          onDashboardInput={handleDashboardInput}
+          dashboardMode={isDashboardMode}
           commandPaletteOpen={commandPaletteOpen}
           onCommandPaletteInput={handleCommandPaletteInput}
           approvalDialogOpen={!!pendingApproval}
@@ -3023,6 +3149,7 @@ export function TUIApp({
           model={model}
           gitBranch={gitBranch}
           transparencyState={transparencyState}
+          dashboardMode={isDashboardMode}
           agent={agent}
         />
       </Box>

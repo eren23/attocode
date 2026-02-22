@@ -18,6 +18,8 @@ Submodules
   writer) and the :class:`TraceWriter` compatibility shim.
 - :mod:`attocode.tracing.cache_boundary` -- :class:`CacheBoundaryTracker` for
   monitoring KV-cache hit/miss patterns.
+- :mod:`attocode.tracing.analysis` -- Post-hoc analysis: session metrics,
+  inefficiency detection, token flow analysis.
 """
 
 from __future__ import annotations
@@ -68,4 +70,6 @@ __all__ = [
     "CacheBoundaryTracker",
     "CacheHitRecord",
     "CacheStats",
+    # analysis (subpackage -- import via attocode.tracing.analysis)
+    "analysis",
 ]

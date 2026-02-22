@@ -1,0 +1,177 @@
+/* Dashboard screen styles */
+
+DashboardScreen {
+    layout: vertical;
+}
+
+/* Tab bar */
+#dashboard-tab-bar {
+    height: 3;
+    dock: top;
+    background: $surface;
+    border-bottom: solid $primary;
+}
+
+#dashboard-tab-bar .tab {
+    width: auto;
+    padding: 0 2;
+    margin: 0 1;
+}
+
+#dashboard-tab-bar .tab.active {
+    background: $primary;
+    color: $text;
+    text-style: bold;
+}
+
+#dashboard-tab-bar .tab:hover {
+    background: $primary 30%;
+}
+
+/* Footer keybind bar */
+#dashboard-footer-bar {
+    height: 1;
+    dock: bottom;
+    background: $surface;
+    color: $text-muted;
+}
+
+/* Content area */
+#dashboard-content {
+    height: 1fr;
+}
+
+/* Pane layouts */
+.dashboard-pane {
+    padding: 1 2;
+    overflow-y: auto;
+}
+
+/* Live dashboard */
+#live-dashboard {
+    layout: grid;
+    grid-size: 2 2;
+    grid-gutter: 1;
+}
+
+#live-dashboard .metric-box {
+    border: round $primary;
+    padding: 0 1;
+    height: auto;
+}
+
+/* Session browser */
+#session-browser {
+    layout: vertical;
+}
+
+#session-browser .search-bar {
+    height: 3;
+    dock: top;
+    padding: 0 1;
+}
+
+#session-browser .session-list {
+    height: 1fr;
+    overflow-y: auto;
+}
+
+.session-card {
+    height: 3;
+    padding: 0 1;
+    border-bottom: dashed $surface-lighten-2;
+}
+
+.session-card:hover {
+    background: $primary 15%;
+}
+
+.session-card.selected {
+    background: $primary 25%;
+    border-left: thick $accent;
+}
+
+/* Session detail */
+#session-detail {
+    layout: vertical;
+}
+
+#session-detail .sub-tab-bar {
+    height: 1;
+    dock: top;
+    background: $surface;
+}
+
+#session-detail .detail-content {
+    height: 1fr;
+    overflow-y: auto;
+    padding: 1;
+}
+
+/* Compare pane */
+#compare-pane {
+    layout: horizontal;
+}
+
+#compare-pane .compare-column {
+    width: 1fr;
+    border: round $surface-lighten-2;
+    padding: 0 1;
+    margin: 0 1;
+}
+
+/* Swarm activity */
+#swarm-activity {
+    layout: vertical;
+}
+
+/* Viz widget overrides */
+SparkLine {
+    height: 1;
+    color: $accent;
+}
+
+BarChart {
+    height: auto;
+    min-height: 3;
+    padding: 0 1;
+}
+
+PercentBar {
+    height: 1;
+    margin: 0 1;
+}
+
+ASCIITable {
+    height: auto;
+    padding: 0 1;
+}
+
+TreeRenderer {
+    height: auto;
+    padding: 0 1;
+    overflow-y: auto;
+}
+
+SeverityBadge {
+    height: 1;
+    width: auto;
+}
+
+/* Severity colors */
+.severity-critical {
+    color: $error;
+    text-style: bold;
+}
+
+.severity-high {
+    color: $error;
+}
+
+.severity-medium {
+    color: $warning;
+}
+
+.severity-low {
+    color: $primary;
+}

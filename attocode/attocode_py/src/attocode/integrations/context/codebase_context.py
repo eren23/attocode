@@ -298,6 +298,10 @@ class CodebaseContextManager:
 
     Discovers files, builds repository maps, scores importance,
     and selects relevant context for LLM prompts.
+
+    Supports incremental updates: after file edits, call
+    ``mark_file_dirty()`` then ``update_dirty_files()`` to
+    re-parse only changed files instead of a full ``discover_files()``.
     """
 
     root_dir: str
@@ -307,6 +311,9 @@ class CodebaseContextManager:
     _files: list[FileInfo] = field(default_factory=list, repr=False)
     _repo_map: RepoMap | None = field(default=None, repr=False)
     _dep_graph: DependencyGraph | None = field(default=None, repr=False)
+    _file_mtimes: dict[str, float] = field(default_factory=dict, repr=False)
+    _dirty_files: set[str] = field(default_factory=set, repr=False)
+    _ast_cache: dict[str, Any] = field(default_factory=dict, repr=False)
 
     def discover_files(self) -> list[FileInfo]:
         """Discover all relevant files in the repository.
@@ -544,6 +551,168 @@ class CodebaseContextManager:
             token_count += entry_tokens
 
         return "\n".join(parts)
+
+    # --- Incremental update API ---
+
+    def mark_file_dirty(self, file_path: str) -> None:
+        """Mark a file as needing re-analysis after edit.
+
+        Args:
+            file_path: Absolute or relative path of the edited file.
+        """
+        # Normalize to relative path
+        try:
+            rel = os.path.relpath(file_path, self.root_dir)
+        except ValueError:
+            rel = file_path
+        self._dirty_files.add(rel)
+
+    def invalidate_file(self, file_path: str) -> None:
+        """Remove cached AST and analysis for a specific file.
+
+        Args:
+            file_path: Path of the file to invalidate.
+        """
+        try:
+            rel = os.path.relpath(file_path, self.root_dir)
+        except ValueError:
+            rel = file_path
+        self._ast_cache.pop(rel, None)
+        self._ast_cache.pop(file_path, None)
+        # Also invalidate repo map cache since it may reference stale symbols
+        self._repo_map = None
+
+    def update_dirty_files(self) -> list[Any]:
+        """Re-parse only dirty files and update the dependency graph incrementally.
+
+        Returns:
+            List of FileChangeResult objects describing what changed.
+        """
+        if not self._dirty_files:
+            return []
+
+        from attocode.integrations.context.codebase_ast import (
+            DependencyChanges,
+            FileChangeResult,
+            SymbolChange,
+            diff_file_ast,
+            diff_imports,
+            parse_file,
+        )
+
+        results: list[Any] = []
+        file_index: dict[str, str] = {}
+        for f in self._files:
+            normalized = f.relative_path.replace(os.sep, "/")
+            file_index[normalized] = f.relative_path
+
+        for rel_path in list(self._dirty_files):
+            # Find absolute path
+            abs_path = os.path.join(self.root_dir, rel_path)
+
+            # Handle deleted files
+            if not Path(abs_path).exists():
+                old_ast = self._ast_cache.pop(rel_path, None)
+                # Emit removal changes for all symbols in old AST
+                if old_ast is not None:
+                    for func in old_ast.functions:
+                        results.append(FileChangeResult(
+                            file_path=rel_path,
+                            symbol_changes=[SymbolChange(
+                                kind="removed", symbol_name=func.name,
+                                symbol_kind="function", file_path=rel_path,
+                                previous=func,
+                            )],
+                            dependency_changes=DependencyChanges(),
+                            was_incremental=True,
+                        ))
+                    for cls in old_ast.classes:
+                        results.append(FileChangeResult(
+                            file_path=rel_path,
+                            symbol_changes=[SymbolChange(
+                                kind="removed", symbol_name=cls.name,
+                                symbol_kind="class", file_path=rel_path,
+                                previous=cls,
+                            )],
+                            dependency_changes=DependencyChanges(),
+                            was_incremental=True,
+                        ))
+                # Remove dependency edges
+                if self._dep_graph is not None:
+                    old_imports = self._dep_graph.forward.pop(rel_path, set())
+                    for target in old_imports:
+                        rev = self._dep_graph.reverse.get(target)
+                        if rev:
+                            rev.discard(rel_path)
+                            if not rev:
+                                del self._dep_graph.reverse[target]
+                    # Also remove as a reverse dep target
+                    self._dep_graph.reverse.pop(rel_path, None)
+                self._file_mtimes.pop(rel_path, None)
+                continue
+
+            # Get old AST from cache
+            old_ast = self._ast_cache.get(rel_path)
+
+            # Parse new content
+            try:
+                new_ast = parse_file(abs_path)
+            except Exception:
+                continue
+
+            # Compute diffs
+            if old_ast is not None:
+                symbol_changes = diff_file_ast(old_ast, new_ast)
+                dep_changes = diff_imports(old_ast, new_ast)
+            else:
+                symbol_changes = []
+                dep_changes = DependencyChanges()
+
+            # Update AST cache
+            self._ast_cache[rel_path] = new_ast
+
+            # Update dependency graph incrementally
+            if self._dep_graph is not None and dep_changes:
+                # Remove old edges for this file
+                old_imports = self._dep_graph.forward.pop(rel_path, set())
+                for target in old_imports:
+                    rev = self._dep_graph.reverse.get(target)
+                    if rev:
+                        rev.discard(rel_path)
+                        if not rev:
+                            del self._dep_graph.reverse[target]
+
+                # Add new edges
+                for imp in new_ast.imports:
+                    if new_ast.language == "python":
+                        target = _resolve_python_import(
+                            imp.module, rel_path, file_index
+                        )
+                    else:
+                        target = _resolve_js_import(
+                            imp.module, rel_path, file_index
+                        )
+                    if target is not None and target != rel_path:
+                        self._dep_graph.add_edge(rel_path, target)
+
+            # Update file mtime
+            try:
+                self._file_mtimes[rel_path] = os.path.getmtime(abs_path)
+            except OSError:
+                pass
+
+            results.append(FileChangeResult(
+                file_path=rel_path,
+                symbol_changes=symbol_changes,
+                dependency_changes=dep_changes,
+                was_incremental=True,
+            ))
+
+        # Invalidate repo map (symbols may have changed)
+        self._repo_map = None
+        self._dirty_files.clear()
+
+        return results
 
     def _score_importance(self, file: FileInfo) -> float:
         """Score file importance (0.0 - 1.0).

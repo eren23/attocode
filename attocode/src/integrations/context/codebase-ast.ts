@@ -18,17 +18,66 @@ import * as path from 'path';
 // TYPES
 // =============================================================================
 
+export interface ASTParameter {
+  name: string;
+  typeAnnotation?: string;
+  hasDefault: boolean;
+  isRest: boolean;
+}
+
+export interface ASTDecorator {
+  name: string;
+  arguments?: string;
+}
+
 export interface ASTSymbol {
   name: string;
-  kind: 'function' | 'class' | 'interface' | 'type' | 'variable' | 'enum' | 'method';
+  kind: 'function' | 'class' | 'interface' | 'type' | 'variable' | 'enum' | 'method' | 'property';
   exported: boolean;
   line: number;
+  /** End line of the symbol's scope */
+  endLine?: number;
+  /** Function/method parameters */
+  parameters?: ASTParameter[];
+  /** Return type annotation */
+  returnType?: string;
+  /** Visibility modifier */
+  visibility?: 'public' | 'private' | 'protected';
+  /** Whether the function/method is async */
+  isAsync?: boolean;
+  /** Whether the function/method is a generator */
+  isGenerator?: boolean;
+  /** Generic type parameters (e.g. ['T', 'K extends string']) */
+  typeParameters?: string[];
+  /** Decorators applied to this symbol */
+  decorators?: ASTDecorator[];
+  /** Name of the parent symbol (e.g. class name for methods) */
+  parentSymbol?: string;
+  /** Whether this is a static member */
+  isStatic?: boolean;
+  /** Whether this is abstract */
+  isAbstract?: boolean;
 }
 
 export interface ASTDependency {
   source: string;
   names: string[];
   isRelative: boolean;
+}
+
+/** Result of diffing old vs new symbols after a file edit. */
+export interface SymbolChange {
+  symbol: ASTSymbol;
+  changeKind: 'added' | 'removed' | 'modified';
+  previousSymbol?: ASTSymbol;
+}
+
+/** Result of incremental file update processing. */
+export interface FileChangeResult {
+  filePath: string;
+  symbolChanges: SymbolChange[];
+  dependencyChanges: { added: ASTDependency[]; removed: ASTDependency[] };
+  wasIncremental: boolean;
 }
 
 /** Cached parse result for a single file. */
@@ -55,15 +104,29 @@ export type SyntaxNode = {
   isNamed: boolean;
   childCount: number;
   startPosition: { row: number; column: number };
+  endPosition?: { row: number; column: number };
+  startIndex?: number;
+  endIndex?: number;
+  parent?: SyntaxNode | null;
+  children?: SyntaxNode[];
+  hasChanges?: boolean;
   child(index: number): SyntaxNode | null;
   childForFieldName(name: string): SyntaxNode | null;
   namedChildren: SyntaxNode[];
+  descendantsOfType?(type: string | string[]): SyntaxNode[];
 };
 
 export type Tree = {
   rootNode: SyntaxNode;
   /** tree-sitter's edit method for incremental parsing */
-  edit?(input: TreeEdit): void;
+  edit?(input: TreeEdit): Tree;
+  /** Get ranges that changed between this tree and another */
+  getChangedRanges?(other: Tree): Array<{
+    startPosition: { row: number; column: number };
+    endPosition: { row: number; column: number };
+    startIndex: number;
+    endIndex: number;
+  }>;
 };
 
 export interface TreeEdit {
@@ -339,6 +402,106 @@ export function extractDependenciesAST(content: string, filePath: string): ASTDe
 }
 
 // =============================================================================
+// INCREMENTAL REPARSE UTILITIES
+// =============================================================================
+
+/**
+ * Compute a TreeEdit from old content and a string replacement.
+ * Returns null if the old_string is not found in oldContent.
+ */
+export function computeTreeEdit(
+  oldContent: string,
+  oldString: string,
+  newString: string,
+): TreeEdit | null {
+  const startIndex = oldContent.indexOf(oldString);
+  if (startIndex === -1) return null;
+
+  const oldEndIndex = startIndex + oldString.length;
+  const newEndIndex = startIndex + newString.length;
+
+  const linesBefore = oldContent.slice(0, startIndex).split('\n');
+  const startRow = linesBefore.length - 1;
+  const startCol = linesBefore[linesBefore.length - 1].length;
+
+  const oldEndLines = oldContent.slice(0, oldEndIndex).split('\n');
+  const oldEndRow = oldEndLines.length - 1;
+  const oldEndCol = oldEndLines[oldEndLines.length - 1].length;
+
+  const newContent = oldContent.slice(0, startIndex) + newString + oldContent.slice(oldEndIndex);
+  const newEndLines = newContent.slice(0, newEndIndex).split('\n');
+  const newEndRow = newEndLines.length - 1;
+  const newEndCol = newEndLines[newEndLines.length - 1].length;
+
+  return {
+    startIndex,
+    oldEndIndex,
+    newEndIndex,
+    startPosition: { row: startRow, column: startCol },
+    oldEndPosition: { row: oldEndRow, column: oldEndCol },
+    newEndPosition: { row: newEndRow, column: newEndCol },
+  };
+}
+
+/**
+ * Diff two symbol arrays to detect additions, removals, and modifications.
+ */
+export function diffSymbols(oldSymbols: ASTSymbol[], newSymbols: ASTSymbol[]): SymbolChange[] {
+  const changes: SymbolChange[] = [];
+  const oldByKey = new Map<string, ASTSymbol>();
+  const newByKey = new Map<string, ASTSymbol>();
+
+  const symbolKey = (s: ASTSymbol) => `${s.kind}:${s.parentSymbol || ''}:${s.name}`;
+
+  for (const s of oldSymbols) oldByKey.set(symbolKey(s), s);
+  for (const s of newSymbols) newByKey.set(symbolKey(s), s);
+
+  // Removed symbols
+  for (const [key, sym] of oldByKey) {
+    if (!newByKey.has(key)) {
+      changes.push({ symbol: sym, changeKind: 'removed' });
+    }
+  }
+
+  // Added or modified symbols
+  for (const [key, sym] of newByKey) {
+    const old = oldByKey.get(key);
+    if (!old) {
+      changes.push({ symbol: sym, changeKind: 'added' });
+    } else if (
+      old.line !== sym.line ||
+      old.endLine !== sym.endLine ||
+      old.exported !== sym.exported ||
+      old.returnType !== sym.returnType ||
+      old.isAsync !== sym.isAsync ||
+      old.visibility !== sym.visibility ||
+      JSON.stringify(old.parameters) !== JSON.stringify(sym.parameters)
+    ) {
+      changes.push({ symbol: sym, changeKind: 'modified', previousSymbol: old });
+    }
+  }
+
+  return changes;
+}
+
+/**
+ * Diff two dependency arrays to detect additions and removals.
+ */
+export function diffDependencies(
+  oldDeps: ASTDependency[],
+  newDeps: ASTDependency[],
+): { added: ASTDependency[]; removed: ASTDependency[] } {
+  const depKey = (d: ASTDependency) => `${d.source}:${d.names.sort().join(',')}`;
+  const oldKeys = new Set(oldDeps.map(depKey));
+  const newKeys = new Set(newDeps.map(depKey));
+
+  return {
+    added: newDeps.filter((d) => !oldKeys.has(depKey(d))),
+    removed: oldDeps.filter((d) => !newKeys.has(depKey(d))),
+  };
+}
+
+// =============================================================================
 // INTERNAL: Root-level extraction dispatchers
 // =============================================================================
 
@@ -365,6 +528,172 @@ function extractDependenciesFromRoot(root: SyntaxNode, ext: string): ASTDependen
 // TYPESCRIPT / JAVASCRIPT EXTRACTION
 // =============================================================================
 
+/** Extract parameters from a function/method parameter list node. */
+function extractParameters(paramsNode: SyntaxNode | null): ASTParameter[] {
+  if (!paramsNode) return [];
+  const params: ASTParameter[] = [];
+  for (const child of paramsNode.namedChildren) {
+    if (
+      child.type === 'required_parameter' ||
+      child.type === 'optional_parameter' ||
+      child.type === 'rest_parameter'
+    ) {
+      const patternNode = child.childForFieldName('pattern') ?? child.childForFieldName('name');
+      const typeNode = child.childForFieldName('type');
+      const valueNode = child.childForFieldName('value');
+      params.push({
+        name: patternNode?.text ?? child.text.split(/[?:=]/)[0].replace('...', '').trim(),
+        typeAnnotation: typeNode?.text?.replace(/^:\s*/, ''),
+        hasDefault: valueNode !== null,
+        isRest: child.type === 'rest_parameter',
+      });
+    } else if (child.type === 'identifier') {
+      // Simple JS parameter without type annotation
+      params.push({ name: child.text, hasDefault: false, isRest: false });
+    }
+  }
+  return params;
+}
+
+/** Extract generic type parameters (e.g. <T, K extends string>). */
+function extractTypeParameters(node: SyntaxNode): string[] | undefined {
+  const tpNode = node.childForFieldName('type_parameters');
+  if (!tpNode) return undefined;
+  const params: string[] = [];
+  for (const child of tpNode.namedChildren) {
+    if (child.type === 'type_parameter') {
+      params.push(child.text);
+    }
+  }
+  return params.length > 0 ? params : undefined;
+}
+
+/** Detect async/generator flags from a function/method node. */
+function extractFunctionFlags(node: SyntaxNode): { isAsync?: boolean; isGenerator?: boolean } {
+  const text = node.text;
+  const flags: { isAsync?: boolean; isGenerator?: boolean } = {};
+  // Check for 'async' keyword before the function body
+  for (let i = 0; i < node.childCount; i++) {
+    const child = node.child(i);
+    if (child?.type === 'async') flags.isAsync = true;
+  }
+  if (!flags.isAsync && text.startsWith('async ')) flags.isAsync = true;
+  // Generator: function* or *methodName
+  if (text.includes('function*') || text.includes('* ')) flags.isGenerator = true;
+  return flags;
+}
+
+/** Extract return type annotation from a function/method node. */
+function extractReturnType(node: SyntaxNode): string | undefined {
+  const returnType = node.childForFieldName('return_type');
+  if (returnType) return returnType.text.replace(/^:\s*/, '');
+  return undefined;
+}
+
+/** Detect visibility modifier on a class member. */
+function detectVisibility(node: SyntaxNode): 'public' | 'private' | 'protected' | undefined {
+  // Check for accessibility_modifier child
+  for (let i = 0; i < node.childCount; i++) {
+    const child = node.child(i);
+    if (child?.type === 'accessibility_modifier') {
+      const mod = child.text.trim();
+      if (mod === 'private') return 'private';
+      if (mod === 'protected') return 'protected';
+      if (mod === 'public') return 'public';
+    }
+  }
+  return undefined;
+}
+
+/** Collect decorators applied to a node. */
+function collectDecorators(node: SyntaxNode): ASTDecorator[] | undefined {
+  const decos: ASTDecorator[] = [];
+  // Decorators are siblings preceding the node, or children of type 'decorator'
+  for (let i = 0; i < node.childCount; i++) {
+    const child = node.child(i);
+    if (child?.type === 'decorator') {
+      const nameNode = child.namedChildren[0];
+      if (nameNode) {
+        const argsNode = child.namedChildren.find((c) => c.type === 'arguments');
+        decos.push({
+          name: nameNode.text,
+          arguments: argsNode ? argsNode.text : undefined,
+        });
+      }
+    }
+  }
+  return decos.length > 0 ? decos : undefined;
+}
+
+/** Check if a node has 'static' keyword. */
+function isStaticMember(node: SyntaxNode): boolean {
+  for (let i = 0; i < node.childCount; i++) {
+    const child = node.child(i);
+    if (child?.type === 'static' || child?.text === 'static') return true;
+  }
+  return false;
+}
+
+/** Check if a node has 'abstract' keyword. */
+function isAbstractMember(node: SyntaxNode): boolean {
+  for (let i = 0; i < node.childCount; i++) {
+    const child = node.child(i);
+    if (child?.type === 'abstract' || child?.text === 'abstract') return true;
+  }
+  return false;
+}
+
+/** Get end line from a node (1-indexed). */
+function getEndLine(node: SyntaxNode): number | undefined {
+  return node.endPosition ? node.endPosition.row + 1 : undefined;
+}
+
+/** Build a fully detailed ASTSymbol for a function/class/interface declaration. */
+function buildDetailedSymbol(
+  node: SyntaxNode,
+  kind: ASTSymbol['kind'],
+  exported: boolean,
+  parentSymbol?: string,
+): ASTSymbol | null {
+  const name = getDeclarationName(node);
+  if (!name) return null;
+
+  const sym: ASTSymbol = {
+    name,
+    kind,
+    exported,
+    line: node.startPosition.row + 1,
+    endLine: getEndLine(node),
+  };
+
+  if (parentSymbol) sym.parentSymbol = parentSymbol;
+
+  if (kind === 'function' || kind === 'method') {
+    const paramsNode = node.childForFieldName('parameters');
+    const params = extractParameters(paramsNode);
+    if (params.length > 0) sym.parameters = params;
+    sym.returnType = extractReturnType(node);
+    const flags = extractFunctionFlags(node);
+    if (flags.isAsync) sym.isAsync = true;
+    if (flags.isGenerator) sym.isGenerator = true;
+    sym.typeParameters = extractTypeParameters(node);
+  }
+
+  if (kind === 'class' || kind === 'interface') {
+    sym.typeParameters = extractTypeParameters(node);
+    if (isAbstractMember(node)) sym.isAbstract = true;
+  }
+
+  sym.decorators = collectDecorators(node);
+  if (parentSymbol) {
+    sym.visibility = detectVisibility(node);
+    if (isStaticMember(node)) sym.isStatic = true;
+    if (isAbstractMember(node)) sym.isAbstract = true;
+  }
+
+  return sym;
+}
+
 function extractTSSymbols(root: SyntaxNode): ASTSymbol[] {
   const symbols: ASTSymbol[] = [];
 
@@ -378,14 +707,12 @@ function extractTSSymbols(root: SyntaxNode): ASTSymbol[] {
       // Non-exported top-level declarations
       const kind = declarationKind(node.type);
       if (kind) {
-        const name = getDeclarationName(node);
-        if (name) {
-          symbols.push({
-            name,
-            kind,
-            exported: false,
-            line: node.startPosition.row + 1,
-          });
+        const sym = buildDetailedSymbol(node, kind, false);
+        if (sym) {
+          symbols.push(sym);
+          if (kind === 'class') {
+            extractClassMembersDetailed(node, sym.name, symbols);
+          }
         }
       }
     }
@@ -400,18 +727,11 @@ function extractFromExportStatement(exportNode: SyntaxNode, symbols: ASTSymbol[]
   if (decl) {
     const kind = declarationKind(decl.type);
     if (kind) {
-      const name = getDeclarationName(decl);
-      if (name) {
-        symbols.push({
-          name,
-          kind,
-          exported: true,
-          line: decl.startPosition.row + 1,
-        });
-
-        // Extract class methods
+      const sym = buildDetailedSymbol(decl, kind, true);
+      if (sym) {
+        symbols.push(sym);
         if (kind === 'class') {
-          extractClassMembers(decl, symbols);
+          extractClassMembersDetailed(decl, sym.name, symbols);
         }
       }
     } else if (decl.type === 'lexical_declaration') {
@@ -425,6 +745,7 @@ function extractFromExportStatement(exportNode: SyntaxNode, symbols: ASTSymbol[]
               kind: 'variable',
               exported: true,
               line: child.startPosition.row + 1,
+              endLine: getEndLine(child),
             });
           }
         }
@@ -468,34 +789,46 @@ function extractFromExportStatement(exportNode: SyntaxNode, symbols: ASTSymbol[]
       if (!child) continue;
       const kind = declarationKind(child.type);
       if (kind) {
-        const name = getDeclarationName(child);
-        symbols.push({
-          name: name || 'default',
-          kind,
-          exported: true,
-          line: child.startPosition.row + 1,
-        });
-        if (kind === 'class') {
-          extractClassMembers(child, symbols);
+        const sym = buildDetailedSymbol(child, kind, true);
+        if (sym) {
+          symbols.push(sym);
+          if (kind === 'class') {
+            extractClassMembersDetailed(child, sym.name, symbols);
+          }
         }
       }
     }
   }
 }
 
-function extractClassMembers(classNode: SyntaxNode, symbols: ASTSymbol[]): void {
+function extractClassMembersDetailed(
+  classNode: SyntaxNode,
+  className: string,
+  symbols: ASTSymbol[],
+): void {
   const body = classNode.childForFieldName('body');
   if (!body) return;
 
   for (const member of body.namedChildren) {
-    if (member.type === 'method_definition' || member.type === 'public_field_definition') {
+    if (member.type === 'method_definition') {
+      const sym = buildDetailedSymbol(member, 'method', true, className);
+      if (sym) symbols.push(sym);
+    } else if (member.type === 'public_field_definition') {
+      // Fix: public_field_definition is a property, not a method
       const nameNode = member.childForFieldName('name');
       if (nameNode) {
+        const typeNode = member.childForFieldName('type');
         symbols.push({
           name: nameNode.text,
-          kind: 'method',
+          kind: 'property',
           exported: true,
           line: member.startPosition.row + 1,
+          endLine: getEndLine(member),
+          parentSymbol: className,
+          visibility: detectVisibility(member),
+          isStatic: isStaticMember(member),
+          returnType: typeNode?.text?.replace(/^:\s*/, ''),
+          decorators: collectDecorators(member),
         });
       }
     }
@@ -616,34 +949,145 @@ function findSourceString(node: SyntaxNode): string | null {
 // PYTHON EXTRACTION
 // =============================================================================
 
+/** Extract Python function parameters. */
+function extractPythonParameters(node: SyntaxNode): ASTParameter[] {
+  const paramsNode = node.childForFieldName('parameters');
+  if (!paramsNode) return [];
+  const params: ASTParameter[] = [];
+  for (const child of paramsNode.namedChildren) {
+    if (child.type === 'identifier') {
+      if (child.text !== 'self' && child.text !== 'cls') {
+        params.push({ name: child.text, hasDefault: false, isRest: false });
+      }
+    } else if (child.type === 'typed_parameter') {
+      const nameNode = child.namedChildren[0];
+      const typeNode = child.childForFieldName('type');
+      if (nameNode && nameNode.text !== 'self' && nameNode.text !== 'cls') {
+        params.push({
+          name: nameNode.text,
+          typeAnnotation: typeNode?.text,
+          hasDefault: false,
+          isRest: false,
+        });
+      }
+    } else if (child.type === 'default_parameter' || child.type === 'typed_default_parameter') {
+      const nameNode = child.childForFieldName('name') ?? child.namedChildren[0];
+      const typeNode = child.childForFieldName('type');
+      if (nameNode) {
+        params.push({
+          name: nameNode.text,
+          typeAnnotation: typeNode?.text,
+          hasDefault: true,
+          isRest: false,
+        });
+      }
+    } else if (child.type === 'list_splat_pattern' || child.type === 'dictionary_splat_pattern') {
+      const nameNode = child.namedChildren[0];
+      if (nameNode) {
+        params.push({ name: nameNode.text, hasDefault: false, isRest: true });
+      }
+    }
+  }
+  return params;
+}
+
+/** Extract Python return type annotation. */
+function extractPythonReturnType(node: SyntaxNode): string | undefined {
+  const returnType = node.childForFieldName('return_type');
+  if (returnType) return returnType.text.replace(/^->\s*/, '');
+  return undefined;
+}
+
+/** Collect Python decorators. */
+function collectPythonDecorators(node: SyntaxNode): ASTDecorator[] | undefined {
+  // In Python tree-sitter, decorators are `decorated_definition > decorator`
+  // They appear as siblings or children before the function/class
+  const parent = node.parent;
+  if (!parent || parent.type !== 'decorated_definition') return undefined;
+  const decos: ASTDecorator[] = [];
+  for (const child of parent.namedChildren) {
+    if (child.type === 'decorator') {
+      // decorator text is like "@staticmethod" or "@app.route('/path')"
+      const text = child.text.replace(/^@/, '');
+      const parenIdx = text.indexOf('(');
+      if (parenIdx > 0) {
+        decos.push({
+          name: text.slice(0, parenIdx),
+          arguments: text.slice(parenIdx),
+        });
+      } else {
+        decos.push({ name: text });
+      }
+    }
+  }
+  return decos.length > 0 ? decos : undefined;
+}
+
 function extractPythonSymbols(root: SyntaxNode): ASTSymbol[] {
   const symbols: ASTSymbol[] = [];
 
-  for (let i = 0; i < root.childCount; i++) {
-    const node = root.child(i);
-    if (!node) continue;
-
+  const processNode = (node: SyntaxNode, parentClass?: string): void => {
     if (node.type === 'function_definition') {
-      const name = node.childForFieldName('name');
-      if (name) {
+      const nameNode = node.childForFieldName('name');
+      if (nameNode) {
+        const params = extractPythonParameters(node);
+        const isAsync = node.parent?.type === 'decorated_definition'
+          ? node.parent.text.startsWith('async ')
+          : false;
         symbols.push({
-          name: name.text,
-          kind: 'function',
-          exported: !name.text.startsWith('_'),
+          name: nameNode.text,
+          kind: parentClass ? 'method' : 'function',
+          exported: !nameNode.text.startsWith('_'),
           line: node.startPosition.row + 1,
+          endLine: getEndLine(node),
+          parameters: params.length > 0 ? params : undefined,
+          returnType: extractPythonReturnType(node),
+          isAsync: isAsync || undefined,
+          decorators: collectPythonDecorators(node),
+          parentSymbol: parentClass,
+          isStatic: collectPythonDecorators(node)?.some((d) => d.name === 'staticmethod') || undefined,
         });
       }
     } else if (node.type === 'class_definition') {
-      const name = node.childForFieldName('name');
-      if (name) {
+      const nameNode = node.childForFieldName('name');
+      if (nameNode) {
         symbols.push({
-          name: name.text,
+          name: nameNode.text,
           kind: 'class',
-          exported: !name.text.startsWith('_'),
+          exported: !nameNode.text.startsWith('_'),
           line: node.startPosition.row + 1,
+          endLine: getEndLine(node),
+          decorators: collectPythonDecorators(node),
         });
+        // Extract class methods
+        const body = node.childForFieldName('body');
+        if (body) {
+          for (const child of body.namedChildren) {
+            if (child.type === 'function_definition') {
+              processNode(child, nameNode.text);
+            } else if (child.type === 'decorated_definition') {
+              for (const inner of child.namedChildren) {
+                if (inner.type === 'function_definition') {
+                  processNode(inner, nameNode.text);
+                }
+              }
+            }
+          }
+        }
+      }
+    } else if (node.type === 'decorated_definition') {
+      // Process the inner definition
+      for (const child of node.namedChildren) {
+        if (child.type === 'function_definition' || child.type === 'class_definition') {
+          processNode(child, parentClass);
+        }
       }
     }
+  };
+
+  for (let i = 0; i < root.childCount; i++) {
+    const node = root.child(i);
+    if (node) processNode(node);
   }
 
   return symbols;

@@ -28,7 +28,7 @@ export { detectIncompleteActionResponse } from './completion-analyzer.js';
 import { createComponentLogger } from '../integrations/utilities/logger.js';
 import { validateSyntax } from '../integrations/safety/edit-validator.js';
 import { runTypeCheck, formatTypeCheckNudge } from '../integrations/safety/type-checker.js';
-import { invalidateAST } from '../integrations/context/codebase-ast.js';
+import { invalidateAST, computeTreeEdit, incrementalReparse } from '../integrations/context/codebase-ast.js';
 import * as fs from 'node:fs';
 
 const log = createComponentLogger('ExecutionLoop');
@@ -1628,20 +1628,58 @@ export async function executeDirectly(
         ) {
           const filePath = String(toolCall.arguments.path || '');
           if (filePath) {
-            // Invalidate stale AST cache entry so next analysis/validation reparses
-            invalidateAST(filePath);
             try {
-              const content =
-                toolCall.name === 'write_file'
-                  ? String(toolCall.arguments.content || '')
-                  : await fs.promises.readFile(filePath, 'utf-8');
-              // Update codebase context first — fullReparse caches the AST tree,
-              // so validateSyntax below will use the cached tree (no double-parse)
-              if (ctx.codebaseContext) {
-                try {
-                  await ctx.codebaseContext.updateFile(filePath, content);
-                } catch {
-                  /* non-blocking */
+              let content: string;
+              if (toolCall.name === 'edit_file') {
+                // Incremental reparse path: use tree-sitter's tree.edit() for fast updates
+                const oldString = String(toolCall.arguments.old_string || '');
+                const newString = String(toolCall.arguments.new_string || '');
+                content = await fs.promises.readFile(filePath, 'utf-8');
+
+                if (oldString && ctx.codebaseContext) {
+                  // Compute edit ranges from old_string/new_string
+                  const oldContent = content.replace(newString, oldString); // approximate old content
+                  const treeEdit = computeTreeEdit(oldContent, oldString, newString);
+                  if (treeEdit) {
+                    // Incremental reparse — do NOT invalidateAST first, we need the old tree
+                    const parsed = incrementalReparse(filePath, content, treeEdit);
+                    if (parsed) {
+                      try {
+                        await ctx.codebaseContext.updateFileIncremental(filePath, content, parsed);
+                      } catch {
+                        /* non-blocking */
+                      }
+                    }
+                  } else {
+                    // Fallback: couldn't compute edit, use full reparse
+                    invalidateAST(filePath);
+                    try {
+                      await ctx.codebaseContext.updateFile(filePath, content);
+                    } catch {
+                      /* non-blocking */
+                    }
+                  }
+                } else {
+                  // No old_string or no codebase context
+                  invalidateAST(filePath);
+                  if (ctx.codebaseContext) {
+                    try {
+                      await ctx.codebaseContext.updateFile(filePath, content);
+                    } catch {
+                      /* non-blocking */
+                    }
+                  }
+                }
+              } else {
+                // write_file: full reparse path
+                invalidateAST(filePath);
+                content = String(toolCall.arguments.content || '');
+                if (ctx.codebaseContext) {
+                  try {
+                    await ctx.codebaseContext.updateFile(filePath, content);
+                  } catch {
+                    /* non-blocking */
+                  }
                 }
               }
               const validation = validateSyntax(content, filePath);

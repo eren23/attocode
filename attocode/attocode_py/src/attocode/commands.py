@@ -240,6 +240,9 @@ async def handle_command(
     if cmd == "/tui":
         return _tui_command()
 
+    if cmd == "/dashboard":
+        return _dashboard_command(app)
+
     # --- Config commands ---
     if cmd == "/init":
         return await _init_command(agent)
@@ -332,6 +335,7 @@ def _help_text() -> str:
         "  /sandbox          Show sandbox configuration\n"
         "  /lsp              Show LSP integration status\n"
         "  /tui              Show TUI feature list\n"
+        "  /dashboard        Open the trace analysis dashboard (Ctrl+D)\n"
         "\n"
         "Config:\n"
         "  /init             Initialize .attocode/ directory\n"
@@ -2027,6 +2031,7 @@ def _tui_command() -> CommandResult:
         "  - Status bar (context %, budget %, model)\n"
         "  - Tool call display (expandable)\n"
         "  - Thinking display (toggle with Alt+O)\n"
+        "  - Dashboard (Ctrl+D) — live monitoring, session browser, analysis\n"
         "\n"
         "Dialogs:\n"
         "  - Tool approval dialog\n"
@@ -2038,6 +2043,7 @@ def _tui_command() -> CommandResult:
         "\n"
         "Keyboard shortcuts:\n"
         "  Ctrl+C    Exit\n"
+        "  Ctrl+D    Toggle dashboard (live metrics, sessions, analysis)\n"
         "  Ctrl+L    Clear screen\n"
         "  Ctrl+P    Command palette\n"
         "  Escape    Cancel current operation\n"
@@ -2045,6 +2051,18 @@ def _tui_command() -> CommandResult:
         "  Alt+O     Toggle thinking display\n"
         "  Alt+D     Toggle debug panel"
     ))
+
+
+def _dashboard_command(app: Any) -> CommandResult:
+    """Open the dashboard screen."""
+    if not app:
+        return CommandResult(output="Dashboard requires TUI mode. Use Ctrl+D in TUI.")
+
+    try:
+        app.action_toggle_dashboard()
+        return CommandResult(output="Dashboard opened. Press Escape to return to chat.")
+    except Exception as e:
+        return CommandResult(output=f"Failed to open dashboard: {e}")
 
 
 # ============================================================

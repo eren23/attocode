@@ -117,6 +117,17 @@ export async function processFile(
           kind: s.kind,
           exported: s.exported,
           line: s.line,
+          endLine: s.endLine,
+          parameters: s.parameters,
+          returnType: s.returnType,
+          visibility: s.visibility,
+          isAsync: s.isAsync,
+          isGenerator: s.isGenerator,
+          typeParameters: s.typeParameters,
+          parentSymbol: s.parentSymbol,
+          isStatic: s.isStatic,
+          isAbstract: s.isAbstract,
+          decorators: s.decorators,
         }))
       : extractSymbolDetails(content, relativePath);
     const symbols =
