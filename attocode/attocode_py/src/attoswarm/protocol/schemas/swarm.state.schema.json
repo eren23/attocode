@@ -1,0 +1,14 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "swarm.state.json",
+  "type": "object",
+  "required": ["schema_version", "run_id", "phase", "updated_at", "tasks", "active_agents"],
+  "properties": {
+    "schema_version": {"type": "string", "const": "1.0"},
+    "run_id": {"type": "string"},
+    "phase": {"type": "string"},
+    "updated_at": {"type": "string"},
+    "tasks": {"type": "object"},
+    "active_agents": {"type": "array"}
+  }
+}

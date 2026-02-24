@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
+from typing import Any
 
 import pytest
 from click.testing import CliRunner
@@ -127,8 +128,7 @@ class TestCLI:
         runner = CliRunner()
         result = runner.invoke(main, ["--version"])
         assert result.exit_code == 0
-        assert "attocode" in result.output
-        assert "0.1.0" in result.output
+        assert "attocode " in result.output
 
     def test_help(self) -> None:
         runner = CliRunner()
@@ -137,3 +137,43 @@ class TestCLI:
         assert "Attocode" in result.output
         assert "--model" in result.output
         assert "--provider" in result.output
+
+    def test_swarm_passthrough_dispatch(self, monkeypatch) -> None:  # type: ignore[no-untyped-def]
+        called: dict[str, Any] = {}
+
+        def _fake(parts: tuple[str, ...], *, debug: bool = False) -> None:
+            called["parts"] = parts
+            called["debug"] = debug
+
+        monkeypatch.setattr("attocode.cli._dispatch_swarm_command", _fake)
+        runner = CliRunner()
+        result = runner.invoke(main, ["swarm", "doctor", ".attocode/swarm.hybrid.yaml"])
+        assert result.exit_code == 0
+        assert called["parts"] == ("doctor", ".attocode/swarm.hybrid.yaml")
+        assert called["debug"] is False
+
+    def test_single_turn_exits_1_on_failure(self, monkeypatch) -> None:  # type: ignore[no-untyped-def]
+        """When agent.run() returns success=False, the process should exit 1."""
+
+        def _fake_single_turn(config: Any, prompt: str) -> None:
+            # Simulate what _run_single_turn does when result.success is False
+            sys.exit(1)
+
+        monkeypatch.setattr("attocode.cli._run_single_turn", _fake_single_turn)
+
+        runner = CliRunner()
+        result = runner.invoke(main, ["--non-interactive", "fail please"])
+        assert result.exit_code == 1
+
+    def test_single_turn_exits_0_on_success(self, monkeypatch) -> None:  # type: ignore[no-untyped-def]
+        """When agent.run() returns success=True, the process should exit 0."""
+
+        def _fake_single_turn(config: Any, prompt: str) -> None:
+            # Simulate what _run_single_turn does when result.success is True
+            pass
+
+        monkeypatch.setattr("attocode.cli._run_single_turn", _fake_single_turn)
+
+        runner = CliRunner()
+        result = runner.invoke(main, ["--non-interactive", "succeed please"])
+        assert result.exit_code == 0

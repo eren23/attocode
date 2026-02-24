@@ -37,3 +37,8 @@ tools/trace-dashboard/uploads/
 # Cache
 .cache/
 *.tsbuildinfo
+
+# tests
+attocode_py/tests/unit/tui/__pycache__/
+attocode_py/tests/unit/tui/__snapshots__/
+attocode_py/tests/unit/tui/__snapshots__/

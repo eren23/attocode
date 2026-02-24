@@ -95,6 +95,7 @@ class AttoConfig:
     swarm: bool = False
     swarm_config: str | None = None
     swarm_resume: str | None = None
+    swarm_hybrid: bool = False
     paid_only: bool = False
 
     # System prompt override
@@ -268,6 +269,7 @@ def _apply_dict(config: AttoConfig, data: dict[str, Any]) -> None:
         "swarm": "swarm",
         "swarm_config": "swarm_config",
         "swarm_resume": "swarm_resume",
+        "swarm_hybrid": "swarm_hybrid",
         "paid_only": "paid_only",
         "system_prompt": "system_prompt",
         # Aliases from JSON config

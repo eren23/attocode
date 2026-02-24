@@ -6,7 +6,7 @@ Production AI coding agent built in Python. Features a Textual-based TUI, multi-
 
 - **Interactive TUI** --- Rich terminal interface with live tool status, streaming, plan/task panels, and keyboard shortcuts (powered by [Textual](https://textual.textualize.io/))
 - **Single-turn mode** --- Run one-shot prompts from the command line for scripting and automation
-- **Swarm mode** --- Multi-agent orchestration: decompose tasks, schedule waves, run parallel workers with quality gates and automatic recovery
+- **Swarm mode** --- Multi-agent orchestration with a standalone Python hybrid coordinator (`attoswarm`) and heterogeneous backends
 - **Budget management** --- Token-based economics with doom-loop detection, phase tracking, and budget extension dialogs
 - **Safety sandbox** --- Platform-aware command isolation (Seatbelt on macOS, Landlock on Linux, Docker, or allowlist fallback)
 - **Session persistence** --- SQLite-backed sessions, checkpoints, goals, audit logs, and permission grants that persist across prompts
@@ -86,6 +86,20 @@ attocode
 attocode --swarm "Build a REST API for a todo app with tests"
 ```
 
+**Hybrid swarm mode (recommended)** --- process-boundary orchestration via `attoswarm`:
+
+```bash
+attocode --swarm .attocode/swarm.yaml --hybrid "Build a REST API for a todo app with tests"
+# or directly
+attoswarm run .attocode/swarm.yaml "Build a REST API for a todo app with tests"
+```
+
+Run the standalone dashboard for a run directory:
+
+```bash
+attoswarm tui .agent/hybrid-swarm
+```
+
 ## Running from Anywhere
 
 The `attocode` command always operates on **the current working directory** --- it reads `.attocode/config.json` from where you run it, so the install location doesn't matter.
@@ -135,6 +149,7 @@ ln -s /absolute/path/to/attocode_py/.venv/bin/attocode ~/.local/bin/attocode
 | `--trace` | | Save JSONL execution traces to `.attocode/traces/` |
 | `--swarm` | | Enable swarm mode (optional: path to config YAML) |
 | `--swarm-resume` | | Resume a previous swarm session by ID |
+| `--hybrid` | | Route swarm execution to standalone `attoswarm` orchestrator |
 | `--paid-only` | | Only use paid models (no free tier) |
 | `--debug` | | Enable debug logging |
 | `--non-interactive` | | Run in non-interactive mode |
@@ -240,9 +255,10 @@ Track high-level objectives across prompts:
 
 ## Swarm Mode
 
-Swarm mode decomposes complex tasks into subtasks, schedules them in dependency-aware waves, and dispatches them to parallel worker agents. Each worker runs in its own execution context with configurable budget, model, and tool access.
+Swarm mode decomposes complex tasks into subtasks, schedules them in dependency-aware waves, and dispatches them to parallel worker agents. In hybrid mode (`--hybrid`), orchestration is handled by the standalone Python `attoswarm` package over a filesystem protocol, with workers running as subprocesses.
 
 See [docs/swarm-guide.md](docs/swarm-guide.md) for a detailed walkthrough with examples.
+For day-to-day hybrid execution and observability, see [docs/hybrid-swarm-operations.md](docs/hybrid-swarm-operations.md).
 
 Quick setup:
 

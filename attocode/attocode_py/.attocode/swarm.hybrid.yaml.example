@@ -1,0 +1,72 @@
+version: 1
+run:
+  name: hybrid-demo
+  working_dir: .
+  run_dir: .agent/hybrid-swarm
+  poll_interval_ms: 250
+  max_runtime_seconds: 180
+
+roles:
+  - role_id: orchestrator
+    role_type: orchestrator
+    backend: claude
+    model: claude-opus-4-6
+    count: 1
+    write_access: false
+    workspace_mode: shared_ro
+    task_kinds: [analysis, planning]
+
+  - role_id: implementer
+    role_type: worker
+    backend: codex
+    model: o3
+    count: 2
+    write_access: true
+    workspace_mode: worktree
+    task_kinds: [implement, refactor, test]
+
+  - role_id: judge
+    role_type: judge
+    backend: aider
+    model: sonnet
+    count: 2
+    write_access: false
+    workspace_mode: shared_ro
+    task_kinds: [review, judge]
+
+  - role_id: researcher
+    role_type: researcher
+    backend: attocode
+    model: claude-sonnet-4-20250514
+    count: 1
+    write_access: false
+    workspace_mode: shared_ro
+    task_kinds: [research, analysis]
+
+  - role_id: merger
+    role_type: merger
+    backend: codex
+    model: o3
+    count: 1
+    write_access: true
+    workspace_mode: worktree
+    task_kinds: [merge, synthesize]
+
+budget:
+  max_tokens: 6000000
+  max_cost_usd: 30
+  reserve_ratio: 0.15
+  chars_per_token_fallback: 4.0
+
+merge:
+  authority_role: merger
+  judge_roles: [judge]
+  quality_threshold: 0.75
+  judge_policy: quorum
+  auto_apply_non_conflicting: true
+
+watchdog:
+  heartbeat_timeout_seconds: 45
+
+retries:
+  max_task_attempts: 2

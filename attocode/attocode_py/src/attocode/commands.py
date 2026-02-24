@@ -243,6 +243,9 @@ async def handle_command(
     if cmd == "/dashboard":
         return _dashboard_command(app)
 
+    if cmd == "/swarm-monitor":
+        return _swarm_monitor_command(app, arg)
+
     # --- Config commands ---
     if cmd == "/init":
         return await _init_command(agent)
@@ -336,6 +339,7 @@ def _help_text() -> str:
         "  /lsp              Show LSP integration status\n"
         "  /tui              Show TUI feature list\n"
         "  /dashboard        Open the trace analysis dashboard (Ctrl+D)\n"
+        "  /swarm-monitor    Open multi-run swarm monitor (Ctrl+M)\n"
         "\n"
         "Config:\n"
         "  /init             Initialize .attocode/ directory\n"
@@ -2063,6 +2067,22 @@ def _dashboard_command(app: Any) -> CommandResult:
         return CommandResult(output="Dashboard opened. Press Escape to return to chat.")
     except Exception as e:
         return CommandResult(output=f"Failed to open dashboard: {e}")
+
+
+def _swarm_monitor_command(app: Any, arg: str) -> CommandResult:
+    """Open the swarm fleet monitor screen."""
+    if not app:
+        return CommandResult(output="Swarm Monitor requires TUI mode.")
+    try:
+        if arg.strip():
+            from attocode.tui.screens.swarm_monitor import SwarmMonitorScreen
+
+            app.push_screen(SwarmMonitorScreen(root=arg.strip()))
+        else:
+            app.action_toggle_swarm_monitor()
+        return CommandResult(output="Swarm Monitor opened. Press Escape to return.")
+    except Exception as e:
+        return CommandResult(output=f"Failed to open Swarm Monitor: {e}")
 
 
 # ============================================================
