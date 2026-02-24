@@ -29,6 +29,7 @@ from attocode.config import load_config
 @click.option("--task", "-t", default=None, help="Task description (alternative to positional prompt)")
 @click.option("--swarm", "swarm_config", default=None, help="Enable swarm mode with optional config path")
 @click.option("--swarm-resume", default=None, help="Resume a swarm session")
+@click.option("--hybrid", is_flag=True, help="Use standalone attoswarm hybrid orchestrator")
 @click.option("--paid-only", is_flag=True, help="Only use paid models")
 @click.option("--debug", is_flag=True, help="Enable debug logging")
 @click.option("--version", is_flag=True, help="Show version and exit")
@@ -50,6 +51,7 @@ def main(
     task: str | None,
     swarm_config: str | None,
     swarm_resume: str | None,
+    hybrid: bool,
     paid_only: bool,
     debug: bool,
     version: bool,
@@ -61,6 +63,10 @@ def main(
     """
     if version:
         click.echo(f"attocode {__version__}")
+        return
+
+    if prompt and prompt[0] == "swarm":
+        _dispatch_swarm_command(prompt[1:], debug=debug)
         return
 
     # Build CLI args dict
@@ -102,6 +108,8 @@ def main(
     if swarm_resume:
         cli_args["swarm"] = True
         cli_args["swarm_resume"] = swarm_resume
+    if hybrid:
+        cli_args["swarm_hybrid"] = True
 
     # Load configuration
     config = load_config(cli_args=cli_args)
@@ -221,6 +229,10 @@ def _run_single_turn(config: Any, prompt: str) -> None:
                     f"${m.estimated_cost:.4f}]",
                     err=True,
                 )
+            if not result.success:
+                sys.exit(1)
+        except SystemExit:
+            raise
         except Exception as e:
             click.echo(f"Error: {e}", err=True)
             sys.exit(1)
@@ -487,6 +499,18 @@ def _run_tui(config: Any) -> None:
 
 def _run_swarm(config: Any, prompt: str) -> None:
     """Run in swarm multi-agent mode."""
+    if getattr(config, "swarm_hybrid", False):
+        from attoswarm.cli import main as attoswarm_main
+
+        args: list[str] = ["start"]
+        if config.swarm_config:
+            args.append(config.swarm_config)
+        else:
+            args.append(".attocode/swarm.hybrid.yaml")
+        args.append(prompt)
+        attoswarm_main(args=args, standalone_mode=False)
+        return
+
     import asyncio
 
     async def _run() -> None:
@@ -578,6 +602,20 @@ def _run_swarm(config: Any, prompt: str) -> None:
             sys.exit(1)
 
     asyncio.run(_run())
+
+
+def _dispatch_swarm_command(parts: tuple[str, ...], *, debug: bool = False) -> None:
+    """Support `attocode swarm ...` as a convenience wrapper around attoswarm."""
+    from attoswarm.cli import main as attoswarm_main
+
+    args = list(parts)
+    if not args:
+        args = ["--help"]
+    elif args[0] == "monitor":
+        args[0] = "tui"
+    if debug and args and args[0] in ("start", "run"):
+        args.insert(1, "--debug")
+    attoswarm_main(args=args, standalone_mode=False)
 
 
 if __name__ == "__main__":

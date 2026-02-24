@@ -1,0 +1,12 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "agent-{id}.outbox.json",
+  "type": "object",
+  "required": ["schema_version", "agent_id", "next_seq", "events"],
+  "properties": {
+    "schema_version": {"type": "string", "const": "1.0"},
+    "agent_id": {"type": "string"},
+    "next_seq": {"type": "integer", "minimum": 1},
+    "events": {"type": "array"}
+  }
+}

@@ -33,6 +33,7 @@ from attocode.tui.events import (
     ToolStarted,
 )
 from attocode.tui.screens.dashboard import DashboardScreen
+from attocode.tui.screens.swarm_monitor import SwarmMonitorScreen
 from attocode.tui.widgets.dashboard.live_dashboard import LiveTraceAccumulator
 from attocode.tui.widgets.agents_panel import AgentsPanel
 from attocode.tui.widgets.input_area import PromptInput
@@ -78,6 +79,7 @@ class AttocodeApp(App):
         Binding("ctrl+t", "toggle_tools", "Toggle Tools", show=False),
         Binding("ctrl+w", "toggle_swarm", "Swarm", show=False),
         Binding("ctrl+d", "toggle_dashboard", "Dashboard", show=True),
+        Binding("ctrl+m", "toggle_swarm_monitor", "Swarm Monitor", show=True),
     ]
 
     def __init__(
@@ -626,6 +628,15 @@ class AttocodeApp(App):
                 accumulator=self._live_accumulator,
             )
         )
+
+    def action_toggle_swarm_monitor(self) -> None:
+        """Open fleet-level swarm monitor (Ctrl+M)."""
+        root = "."
+        if self._agent:
+            wd = getattr(self._agent, "working_dir", "") or ""
+            if wd:
+                root = wd
+        self.push_screen(SwarmMonitorScreen(root=root))
 
     # --- Helpers ---
 

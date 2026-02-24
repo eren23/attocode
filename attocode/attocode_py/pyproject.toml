@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "attocode"
-version = "0.1.1"
+version = "0.1.2"
 description = "Production AI coding agent"
 readme = "README.md"
 requires-python = ">=3.12"
@@ -43,9 +43,11 @@ dev = [
 
 [project.scripts]
 attocode = "attocode.cli:main"
+attocodepy = "attocode.cli:main"
+attoswarm = "attoswarm.cli:main"
 
 [tool.hatch.build.targets.wheel]
-packages = ["src/attocode"]
+packages = ["src/attocode", "src/attoswarm", "src/attocode_core"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
@@ -53,6 +55,7 @@ asyncio_mode = "auto"
 markers = [
     "slow: marks tests as slow (deselect with '-m \"not slow\"')",
     "integration: marks integration tests",
+    "live_swarm: opt-in live backend swarm smoke tests",
 ]
 
 [tool.mypy]
@@ -69,11 +72,11 @@ line-length = 100
 select = ["E", "F", "I", "N", "W", "UP", "B", "A", "SIM", "TCH"]
 
 [tool.coverage.run]
-source = ["src/attocode"]
+source = ["src/attocode", "src/attoswarm", "src/attocode_core"]
 omit = ["tests/*"]
 
 [tool.bumpversion]
-current_version = "0.1.1"
+current_version = "0.1.2"
 commit = false
 tag = false
 

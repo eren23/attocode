@@ -7,6 +7,66 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.2] - 2026-02-24
+
+### Added
+
+- **`attoswarm` package** — standalone hybrid swarm orchestrator with file-based coordination protocol
+  - `coordinator/loop.py` — `HybridCoordinator` main loop with task state machine, dependency DAG, watchdog, budget enforcement
+  - `coordinator/scheduler.py` — dependency-aware task assignment matching roles to free agents
+  - `coordinator/merge_queue.py` — completion claim tracking with judge/critic quality gates
+  - `coordinator/state_writer.py` — atomic state snapshot persistence
+  - `coordinator/budget.py` — token + cost tracking with hard-limit enforcement
+  - `coordinator/watchdog.py` — heartbeat-based agent health monitoring
+  - `adapters/` — subprocess-based agent adapters for Claude, Codex, Aider, and Attocode backends with stdin/stdout line protocol
+  - `protocol/` — `TaskSpec`, `RoleSpec`, `SwarmManifest`, `InboxMessage`, `OutboxEvent` models; atomic JSON I/O; file-based locks
+  - `workspace/worktree.py` — git worktree isolation per agent with branch lifecycle and graceful fallback when `.git` missing
+  - `config/` — YAML config loader with `SwarmYamlConfig` schema (roles, budget, merge, orchestration, watchdog, retries)
+  - `cli.py` — Click CLI with `run`, `start`, `tui`, `resume`, `inspect`, `doctor`, `init` commands
+  - `tui/` — Textual dashboard for live run monitoring (phase, tasks, agents, events)
+  - `replay/` — `attocode_bridge.py` for replaying swarm runs
+  - Decomposition modes: `manual`, `fast`, `parallel`, `heuristic`, `llm` (falls back to `parallel`)
+  - Heartbeat wrapper script with `[HEARTBEAT]`/`[TASK_DONE]`/`[TASK_FAILED]` protocol markers and debug mode
+  - Task state machine: `pending → ready → running → reviewing → done/failed` with transition validation
+- **`attocode_core` package** — shared utilities extracted for cross-package use
+  - `ast_index/indexer.py` — `CodeIndex.build()` scans Python/TS/JS files for symbols (functions, classes, imports)
+  - `dependency_graph/graph.py` — `DependencyGraph.from_index()` with `impacted_files()` transitive closure
+- **TUI swarm monitor** (`src/attocode/tui/screens/swarm_monitor.py`) — fleet-level Textual screen
+  - Auto-discovers runs via `**/swarm.state.json` glob
+  - Fleet view with phase, task counts, agent counts, error counts
+  - Per-run detail: tasks table (state, kind, role, attempts, title, error), events table (heartbeat/stderr filtered), agents table (CWD, restarts)
+  - Budget display in title bar (tokens + USD)
+  - File change events shown inline in events table
+  - `Ctrl+M` binding and `/swarm-monitor` command
+- **CLI hybrid swarm integration**
+  - `--hybrid` flag routes to `attoswarm` coordinator
+  - `attocode swarm <subcommand>` passthrough (start, run, doctor, init, tui, inspect, resume)
+  - `attocode swarm monitor` aliased to `attoswarm tui`
+- **`TraceVerifier`** (`tests/helpers/trace_verifier.py`) — post-run integrity checker
+  - 7 checks: poisoned prompts, task transition FSM, terminal events, stuck agents, budget limits, exit code propagation, coding task output evidence
+  - `run_all()` + `summary()` for CI/manual use
+- **`SyntheticRunSpec`** test fixtures (`tests/helpers/fixtures.py`) — builds complete fake run directories for deterministic TUI/integration testing
+- **Example config** (`.attocode/swarm.hybrid.yaml.example`) — ready-to-copy hybrid swarm config
+- **Operations guide** (`docs/hybrid-swarm-operations.md`) — runbook covering prerequisites, commands, observability, configs, test matrix, TUI ops, failure modes
+- **`swarm-verify` skill** (`.attocode/skills/swarm-verify/`) — skill for verifying swarm run integrity
+- **File change detection on task completion** — `_detect_file_changes()` runs `git diff --name-only HEAD` + `git ls-files --others` in agent worktree, emits `task.files_changed` event
+- **Workspace mode in spawn events** — `agent.spawned` events include `cwd`, `workspace_mode`, `workspace_effective`
+
+### Changed
+
+- `_run_single_turn()` now exits with code 1 when `result.success` is False
+- Version test no longer asserts specific version number
+
+### Tests
+
+- **`tests/unit/attoswarm/`** (9 files, ~60 tests) — scheduler dependency resolution, worktree creation/fallback/cleanup, heartbeat wrapper generation, merge queue roundtrip, budget overflow, CLI commands, adapter parsing, resume, spawn logging
+- **`tests/unit/attocode_core/`** (1 file) — `CodeIndex.build()` Python symbol extraction
+- **`tests/unit/tui/test_attoswarm_snapshots.py`** (5 snapshot tests) — empty init, executing, completed, failed with errors, many agents
+- **`tests/unit/test_trace_verifier.py`** (22 tests) — all 7 verifier checks with pass/fail cases
+- **`tests/integration/test_attoswarm_smoke.py`** — deterministic smoke tests using fake worker scripts
+- **`tests/integration/test_attoswarm_live_smoke.py`** — opt-in live backend tests (`ATTO_LIVE_SWARM=1`)
+- **`tests/unit/test_cli.py`** — swarm passthrough dispatch, exit code propagation (success + failure)
+
 ## [0.1.1] - 2026-02-22
 
 ### Fixed

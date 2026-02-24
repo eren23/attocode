@@ -1,0 +1,15 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "swarm.manifest.json",
+  "type": "object",
+  "required": ["schema_version", "run_id", "goal", "roles", "tasks", "budget", "merge_policy"],
+  "properties": {
+    "schema_version": {"type": "string", "const": "1.0"},
+    "run_id": {"type": "string"},
+    "goal": {"type": "string"},
+    "roles": {"type": "array"},
+    "tasks": {"type": "array"},
+    "budget": {"type": "object"},
+    "merge_policy": {"type": "object"}
+  }
+}
