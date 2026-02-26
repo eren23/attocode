@@ -44,6 +44,8 @@ class StatusBar(Static):
     # New reactives
     total_tokens: reactive[int] = reactive(0)
     max_tokens: reactive[int] = reactive(200_000)
+    context_tokens: reactive[int] = reactive(0)
+    context_window: reactive[int] = reactive(200_000)
     files_changed: reactive[int] = reactive(0)
     lines_added: reactive[int] = reactive(0)
     lines_removed: reactive[int] = reactive(0)
@@ -81,9 +83,9 @@ class StatusBar(Static):
         text.append(f" {fraction:.0%}", style=style)
         text.append(" \u2502 ", style="dim")
 
-        # Token ratio
-        text.append(f"{self.total_tokens:,}", style="")
-        text.append(f"/{self.max_tokens:,}", style="dim")
+        # Token ratio (context window usage, not budget)
+        text.append(f"{self.context_tokens:,}", style="")
+        text.append(f"/{self.context_window:,}", style="dim")
         text.append(" \u2502 ", style="dim")
 
         # Git branch + file count
@@ -219,6 +221,12 @@ class StatusBar(Static):
         self.refresh()
 
     def watch_project_name(self) -> None:
+        self.refresh()
+
+    def watch_context_tokens(self) -> None:
+        self.refresh()
+
+    def watch_context_window(self) -> None:
         self.refresh()
 
 

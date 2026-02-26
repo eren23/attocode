@@ -1,0 +1,177 @@
+/* Swarm Dashboard Styles */
+
+/* Agent Grid */
+AgentGrid {
+    height: auto;
+    max-height: 8;
+    padding: 0 1;
+    border-bottom: solid $surface-lighten-1;
+}
+
+AgentGrid > Horizontal {
+    height: auto;
+    overflow-x: auto;
+}
+
+AgentCard {
+    width: 24;
+    height: 5;
+    border: round $surface-lighten-2;
+    padding: 0 1;
+    margin: 0 1 0 0;
+}
+
+AgentCard.running {
+    border: round $accent;
+}
+
+AgentCard.done {
+    border: round $success;
+}
+
+AgentCard.error {
+    border: round $error;
+}
+
+/* Task Board */
+TaskBoard {
+    height: auto;
+    min-height: 10;
+    max-height: 16;
+}
+
+TaskBoard > Horizontal {
+    height: 100%;
+}
+
+KanbanColumn {
+    width: 1fr;
+    height: 100%;
+    border-right: solid $surface-lighten-1;
+    padding: 0 1;
+    overflow-y: auto;
+}
+
+KanbanColumn:last-child {
+    border-right: none;
+}
+
+TaskCard {
+    width: 100%;
+    height: 3;
+    border: round $surface-lighten-1;
+    padding: 0 1;
+    margin: 0 0 1 0;
+}
+
+/* DAG View */
+DependencyDAGView {
+    height: auto;
+    min-height: 4;
+    max-height: 20;
+    overflow-y: auto;
+    padding: 0 1;
+}
+
+/* Event Timeline */
+EventTimeline {
+    height: auto;
+    min-height: 4;
+    max-height: 10;
+    overflow-y: auto;
+    padding: 0 1;
+    border-top: solid $surface-lighten-1;
+}
+
+/* Detail Inspector */
+DetailInspector {
+    height: auto;
+    min-height: 6;
+    max-height: 20;
+    border: round $surface-lighten-1;
+    padding: 1;
+    overflow-y: auto;
+}
+
+/* File Activity Map */
+FileActivityMap {
+    height: auto;
+    min-height: 4;
+    max-height: 14;
+    overflow-y: auto;
+    padding: 0 1;
+    border: round $surface-lighten-1;
+}
+
+/* Swarm Dashboard Screen */
+SwarmDashboardScreen {
+    background: $surface;
+}
+
+SwarmDashboardScreen > Vertical {
+    height: 100%;
+}
+
+#swarm-middle {
+    height: 1fr;
+}
+
+#swarm-left {
+    width: 2fr;
+}
+
+#swarm-right {
+    width: 1fr;
+}
+
+SwarmStatusFooter {
+    dock: bottom;
+    height: 1;
+    background: $surface-lighten-1;
+    color: $text;
+    padding: 0 2;
+}
+
+/* Focus Screen */
+FocusScreen {
+    background: $surface;
+}
+
+#focus-header {
+    height: 3;
+    border-bottom: solid $accent;
+    padding: 0 2;
+}
+
+#focus-body {
+    height: 1fr;
+    overflow-y: auto;
+    padding: 0 2;
+}
+
+#focus-status {
+    dock: bottom;
+    height: 1;
+    background: $surface-lighten-1;
+    padding: 0 2;
+}
+
+/* Narrow terminal (<100 cols): .narrow class toggled via on_resize */
+.narrow DependencyDAGView {
+    display: none;
+}
+.narrow AgentCard {
+    width: 20;
+}
+
+/* Very narrow terminal (<80 cols): .very-narrow class toggled via on_resize */
+.very-narrow #swarm-right {
+    display: none;
+}
+.very-narrow AgentCard {
+    width: 16;
+    height: 4;
+}
+.very-narrow EventTimeline {
+    max-height: 5;
+}

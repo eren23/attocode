@@ -148,36 +148,146 @@ class CapableProvider(LLMProvider, Protocol):
     def supports(self, capability: ProviderCapability) -> bool: ...
 
 
-# Common model pricing data
-KNOWN_PRICING: dict[str, ModelPricing] = {
-    "claude-opus-4-20250514": ModelPricing(
-        input_per_million=15.0, output_per_million=75.0,
-        cache_read_per_million=1.5, cache_write_per_million=18.75,
+# ---------------------------------------------------------------------------
+# Built-in model registry (static fallback when dynamic cache is unavailable)
+# ---------------------------------------------------------------------------
+
+BUILTIN_MODELS: dict[str, ModelInfo] = {
+    "claude-opus-4-20250514": ModelInfo(
+        model_id="claude-opus-4-20250514",
+        provider="anthropic",
+        max_context_tokens=200_000,
+        max_output_tokens=8_192,
+        pricing=ModelPricing(
+            input_per_million=15.0, output_per_million=75.0,
+            cache_read_per_million=1.5, cache_write_per_million=18.75,
+        ),
     ),
-    "claude-sonnet-4-20250514": ModelPricing(
-        input_per_million=3.0, output_per_million=15.0,
-        cache_read_per_million=0.3, cache_write_per_million=3.75,
+    "claude-sonnet-4-20250514": ModelInfo(
+        model_id="claude-sonnet-4-20250514",
+        provider="anthropic",
+        max_context_tokens=200_000,
+        max_output_tokens=8_192,
+        pricing=ModelPricing(
+            input_per_million=3.0, output_per_million=15.0,
+            cache_read_per_million=0.3, cache_write_per_million=3.75,
+        ),
     ),
-    "claude-haiku-4-20250414": ModelPricing(
-        input_per_million=0.80, output_per_million=4.0,
-        cache_read_per_million=0.08, cache_write_per_million=1.0,
+    "claude-haiku-4-20250414": ModelInfo(
+        model_id="claude-haiku-4-20250414",
+        provider="anthropic",
+        max_context_tokens=200_000,
+        max_output_tokens=8_192,
+        pricing=ModelPricing(
+            input_per_million=0.80, output_per_million=4.0,
+            cache_read_per_million=0.08, cache_write_per_million=1.0,
+        ),
     ),
-    "gpt-4o": ModelPricing(
-        input_per_million=2.50, output_per_million=10.0,
+    "claude-haiku-3-5-20241022": ModelInfo(
+        model_id="claude-haiku-3-5-20241022",
+        provider="anthropic",
+        max_context_tokens=200_000,
+        max_output_tokens=8_192,
+        pricing=ModelPricing(
+            input_per_million=0.80, output_per_million=4.0,
+            cache_read_per_million=0.08, cache_write_per_million=1.0,
+        ),
     ),
-    "gpt-4o-mini": ModelPricing(
-        input_per_million=0.15, output_per_million=0.60,
+    "gpt-4o": ModelInfo(
+        model_id="gpt-4o",
+        provider="openai",
+        max_context_tokens=128_000,
+        max_output_tokens=16_384,
+        pricing=ModelPricing(input_per_million=2.50, output_per_million=10.0),
+    ),
+    "gpt-4o-mini": ModelInfo(
+        model_id="gpt-4o-mini",
+        provider="openai",
+        max_context_tokens=128_000,
+        max_output_tokens=16_384,
+        pricing=ModelPricing(input_per_million=0.15, output_per_million=0.60),
+    ),
+    "gpt-4-turbo": ModelInfo(
+        model_id="gpt-4-turbo",
+        provider="openai",
+        max_context_tokens=128_000,
+        max_output_tokens=4_096,
+        pricing=ModelPricing(input_per_million=10.0, output_per_million=30.0),
+    ),
+    "o3-mini": ModelInfo(
+        model_id="o3-mini",
+        provider="openai",
+        max_context_tokens=128_000,
+        max_output_tokens=4_096,
+        pricing=ModelPricing(input_per_million=1.10, output_per_million=4.40),
+    ),
+    "glm-5": ModelInfo(
+        model_id="glm-5",
+        provider="zhipu",
+        max_context_tokens=128_000,
+        max_output_tokens=4_096,
+        pricing=ModelPricing(),
     ),
 }
 
+DEFAULT_CONTEXT_WINDOW = 200_000
+
+# Backward-compat aliases — some callers import these directly
+KNOWN_PRICING: dict[str, ModelPricing] = {
+    mid: info.pricing for mid, info in BUILTIN_MODELS.items()
+}
+MODEL_CONTEXT_WINDOWS: dict[str, int] = {
+    mid: info.max_context_tokens for mid, info in BUILTIN_MODELS.items()
+}
+
+
+# ---------------------------------------------------------------------------
+# Lookup helpers (3-tier: dynamic cache → builtin → default)
+# ---------------------------------------------------------------------------
+
+def _lookup_builtin(model_id: str) -> ModelInfo | None:
+    """Exact match then prefix match against :data:`BUILTIN_MODELS`."""
+    if model_id in BUILTIN_MODELS:
+        return BUILTIN_MODELS[model_id]
+    # Strip provider prefix (e.g. "anthropic/claude-sonnet-4" → "claude-sonnet-4")
+    short_id = model_id.rsplit("/", 1)[-1]
+    if short_id != model_id and short_id in BUILTIN_MODELS:
+        return BUILTIN_MODELS[short_id]
+    # Prefix match (dated variant → base entry)
+    for known_id, info in BUILTIN_MODELS.items():
+        base = known_id.rsplit("-", 1)[0]
+        if model_id.startswith(base) or short_id.startswith(base):
+            return info
+    return None
+
+
+def get_model_context_window(model_id: str) -> int:
+    """Return the context window for *model_id*.
+
+    Resolution: dynamic cache → builtin registry → 200 000 default.
+    """
+    from attocode.providers.model_cache import get_cached_context_length
+
+    cached = get_cached_context_length(model_id)
+    if cached is not None:
+        return cached
+    info = _lookup_builtin(model_id)
+    if info is not None:
+        return info.max_context_tokens
+    return DEFAULT_CONTEXT_WINDOW
+
 
 def get_model_pricing(model_id: str) -> ModelPricing:
-    """Look up pricing for a known model, or return zero pricing."""
-    # Check exact match first
-    if model_id in KNOWN_PRICING:
-        return KNOWN_PRICING[model_id]
-    # Check prefix match (e.g. "claude-sonnet-4" matches dated versions)
-    for known_id, pricing in KNOWN_PRICING.items():
-        if model_id.startswith(known_id.rsplit("-", 1)[0]):
-            return pricing
+    """Return pricing for *model_id*.
+
+    Resolution: dynamic cache → builtin registry → zero pricing.
+    """
+    from attocode.providers.model_cache import get_cached_pricing
+
+    cached = get_cached_pricing(model_id)
+    if cached is not None:
+        return cached
+    info = _lookup_builtin(model_id)
+    if info is not None:
+        return info.pricing
     return ModelPricing()

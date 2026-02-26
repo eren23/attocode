@@ -407,16 +407,28 @@ class CodebaseContextManager:
         """Get the dependency graph (available after discover_files)."""
         return self._dep_graph
 
-    def get_repo_map(self, *, include_symbols: bool = False) -> RepoMap:
+    def get_repo_map(
+        self,
+        *,
+        include_symbols: bool = False,
+        max_tokens: int | None = None,
+    ) -> RepoMap:
         """Generate a repository map.
 
         Args:
             include_symbols: If True, annotate files with top-level symbols.
+            max_tokens: When set, produce a token-budgeted tree using
+                importance tiers.  Files are partitioned into:
+                - **Tier 1** (importance >= 0.7): shown WITH symbols (up to 5)
+                - **Tier 2** (importance >= 0.4): shown WITHOUT symbols
+                - **Tier 3** (below 0.4): collapsed as ``... +N files`` per dir
+                When ``None`` (default), the full unbounded tree is returned
+                (backward-compatible).
 
         Returns:
             RepoMap with tree view and file information.
         """
-        if self._repo_map is not None and not include_symbols:
+        if self._repo_map is not None and not include_symbols and max_tokens is None:
             return self._repo_map
 
         if not self._files:
@@ -425,20 +437,17 @@ class CodebaseContextManager:
         # Collect symbols per file if requested
         file_symbols: dict[str, list[str]] = {}
         if include_symbols:
-            from attocode.integrations.context.codebase_ast import parse_file
+            file_symbols = self._collect_symbols()
 
-            for f in self._files:
-                if f.language in ("python", "javascript", "typescript"):
-                    try:
-                        ast = parse_file(f.path)
-                        syms = ast.get_symbols()
-                        if syms:
-                            file_symbols[f.relative_path] = syms[:8]  # Cap at 8 symbols
-                    except Exception:
-                        pass
-
-        # Build tree
-        tree = self._build_tree(file_symbols=file_symbols)
+        # Build tree — budgeted or full
+        if max_tokens is not None:
+            tree, included_symbols = self._build_budgeted_tree(
+                max_tokens, file_symbols,
+            )
+            # Narrow symbols dict to only included files
+            file_symbols = included_symbols
+        else:
+            tree = self._build_tree(file_symbols=file_symbols)
 
         # Compute language stats
         languages: dict[str, int] = {}
@@ -457,10 +466,57 @@ class CodebaseContextManager:
             symbols=file_symbols,
         )
 
-        if not include_symbols:
+        if not include_symbols and max_tokens is None:
             self._repo_map = repo_map
 
         return repo_map
+
+    def get_preseed_map(self, max_tokens: int = 6000) -> RepoMap:
+        """Convenience wrapper for preseed injection.
+
+        Returns a token-budgeted repo map suitable for injecting into
+        the initial system context without blowing up the context window.
+
+        Args:
+            max_tokens: Token budget for the tree + symbols output.
+        """
+        return self.get_repo_map(include_symbols=True, max_tokens=max_tokens)
+
+    def _collect_symbols(self) -> dict[str, list[str]]:
+        """Collect top-level symbols for all parseable files.
+
+        Prefers the ASTService cache (if available and initialized)
+        over re-parsing each file.
+        """
+        file_symbols: dict[str, list[str]] = {}
+
+        # Try ASTService cache first
+        ast_cache: dict[str, Any] | None = None
+        try:
+            from attocode.integrations.context.ast_service import ASTService
+            svc = ASTService.get_instance(self.root_dir)
+            if svc.initialized:
+                ast_cache = svc._ast_cache
+        except Exception:
+            pass
+
+        from attocode.integrations.context.codebase_ast import parse_file as _parse_file
+
+        for f in self._files:
+            if f.language not in ("python", "javascript", "typescript"):
+                continue
+            try:
+                # Use cached AST when available
+                if ast_cache and f.relative_path in ast_cache:
+                    ast = ast_cache[f.relative_path]
+                else:
+                    ast = _parse_file(f.path)
+                syms = ast.get_symbols()
+                if syms:
+                    file_symbols[f.relative_path] = syms[:8]  # Cap at 8 symbols
+            except Exception:
+                pass
+        return file_symbols
 
     def get_tree_view(self, max_depth: int = 3) -> str:
         """Get a lightweight tree view of the repository.
@@ -793,6 +849,124 @@ class CodebaseContextManager:
                 break
 
         return selected
+
+    # ------ Budgeted tree helpers ------
+
+    def _build_budgeted_tree(
+        self,
+        max_tokens: int,
+        file_symbols: dict[str, list[str]],
+    ) -> tuple[str, dict[str, list[str]]]:
+        """Build a token-budgeted tree using importance tiers.
+
+        Files are partitioned into three tiers based on importance:
+        - **Tier 1** (>= 0.7): appear in tree WITH up to 5 symbols each
+        - **Tier 2** (>= 0.4): appear in tree WITHOUT symbols
+        - **Tier 3** (< 0.4): collapsed as ``... +N files`` per directory
+
+        The builder tracks estimated token count and stops adding entries
+        once *max_tokens* is reached.
+
+        Returns:
+            ``(tree_text, included_symbols)`` — the rendered tree string
+            and the symbols dict narrowed to only Tier 1 files.
+        """
+        from attocode.integrations.utilities.token_estimate import estimate_tokens
+
+        tier1: list[FileInfo] = []
+        tier2: list[FileInfo] = []
+        tier3: list[FileInfo] = []
+
+        for f in self._files:
+            if f.importance >= 0.7:
+                tier1.append(f)
+            elif f.importance >= 0.4:
+                tier2.append(f)
+            else:
+                tier3.append(f)
+
+        # Build included set (Tier 1 + Tier 2 files shown individually)
+        included_set = {f.relative_path for f in tier1} | {f.relative_path for f in tier2}
+
+        # Narrow symbols to Tier 1 only, capped at 5 per file
+        included_symbols: dict[str, list[str]] = {}
+        for f in tier1:
+            syms = file_symbols.get(f.relative_path, [])
+            if syms:
+                included_symbols[f.relative_path] = syms[:5]
+
+        # Count omitted files per directory for collapse annotations
+        omitted_per_dir = self._count_omitted_per_dir(
+            [f.relative_path for f in self._files], included_set,
+        )
+
+        # Build tree dict from included files
+        root = Path(self.root_dir)
+        tree_dict: dict[str, Any] = {}
+        leaf_rel_paths: dict[str, str] = {}
+        max_depth = 4
+
+        for f in tier1 + tier2:
+            parts = Path(f.relative_path).parts
+            if len(parts) > max_depth + 1:
+                parts = parts[:max_depth] + ("...",)
+            current = tree_dict
+            for part in parts[:-1]:
+                if part not in current:
+                    current[part] = {}
+                current = current[part]
+            current[parts[-1]] = None
+            leaf_rel_paths[parts[-1]] = f.relative_path
+
+        # Inject collapse markers (``... +N files``) into directory nodes
+        for dir_path, count in sorted(omitted_per_dir.items()):
+            parts = Path(dir_path).parts if dir_path != "." else ()
+            current = tree_dict
+            for part in parts:
+                if part not in current:
+                    current[part] = {}
+                current = current[part]
+                if current is None:
+                    break
+            if isinstance(current, dict):
+                current[f"... +{count} files"] = None
+
+        lines = [str(root.name) + "/"]
+        self._format_tree_dict(
+            tree_dict, lines, prefix="",
+            file_symbols=included_symbols, leaf_rel_paths=leaf_rel_paths,
+        )
+
+        tree_text = "\n".join(lines)
+
+        # Truncate to budget if still over
+        tokens = estimate_tokens(tree_text)
+        if tokens > max_tokens:
+            # Progressively trim lines from the end (least important)
+            while lines and estimate_tokens("\n".join(lines)) > max_tokens:
+                lines.pop()
+            if lines:
+                lines.append(f"... (truncated, {len(self._files)} total files)")
+            tree_text = "\n".join(lines)
+
+        return tree_text, included_symbols
+
+    @staticmethod
+    def _count_omitted_per_dir(
+        all_paths: list[str],
+        included_set: set[str],
+    ) -> dict[str, int]:
+        """Count how many files per directory were omitted (Tier 3).
+
+        Returns:
+            ``{dir_relative_path: count}`` for directories with omitted files.
+        """
+        counts: dict[str, int] = {}
+        for path in all_paths:
+            if path not in included_set:
+                parent = str(Path(path).parent)
+                counts[parent] = counts.get(parent, 0) + 1
+        return counts
 
     def _build_tree(
         self,

@@ -106,10 +106,12 @@ async def execute_single_tool(
             EventType.TOOL_ERROR,
             tool=tc.name,
             error=denial,
+            args=tc.arguments,
+            iteration=ctx.iteration,
         )
         return ToolResult(call_id=tc.id, error=denial), False
 
-    ctx.emit_simple(EventType.TOOL_START, tool=tc.name, args=tc.arguments)
+    ctx.emit_simple(EventType.TOOL_START, tool=tc.name, args=tc.arguments, iteration=ctx.iteration)
     start = time.monotonic()
 
     # Record tool call in economics if available
@@ -120,6 +122,7 @@ async def execute_single_tool(
         if loop_detection.is_loop:
             ctx.emit_simple(
                 EventType.BUDGET_WARNING,
+                iteration=ctx.iteration,
                 metadata={"doom_loop": True, "tool": tc.name, "count": loop_detection.count},
             )
         if phase_nudge:
@@ -177,6 +180,8 @@ async def execute_single_tool(
                 EventType.TOOL_ERROR,
                 tool=tc.name,
                 error=result.error,
+                args=tc.arguments,
+                iteration=ctx.iteration,
                 metadata={"duration_ms": duration * 1000},
             )
         else:
@@ -184,6 +189,8 @@ async def execute_single_tool(
                 EventType.TOOL_COMPLETE,
                 tool=tc.name,
                 result=_truncate(result_content, 500),
+                args=tc.arguments,
+                iteration=ctx.iteration,
                 metadata={"duration_ms": duration * 1000, "truncated": was_truncated},
             )
 
@@ -200,6 +207,8 @@ async def execute_single_tool(
             EventType.TOOL_ERROR,
             tool=tc.name,
             error=error_msg,
+            args=tc.arguments,
+            iteration=ctx.iteration,
             metadata={"duration_ms": duration * 1000, "timed_out": True},
         )
         return ToolResult(call_id=tc.id, error=error_msg), False
@@ -211,6 +220,8 @@ async def execute_single_tool(
             EventType.TOOL_ERROR,
             tool=tc.name,
             error=error_msg,
+            args=tc.arguments,
+            iteration=ctx.iteration,
             metadata={"duration_ms": duration * 1000},
         )
         return ToolResult(call_id=tc.id, error=error_msg), False

@@ -8,6 +8,7 @@ from typing import Any
 
 from rich.text import Text
 from textual.app import ComposeResult
+from textual.containers import VerticalScroll
 from textual.reactive import reactive
 from textual.timer import Timer
 from textual.widget import Widget
@@ -36,7 +37,11 @@ class ToolCallsPanel(Widget):
     DEFAULT_CSS = """
     ToolCallsPanel {
         height: auto;
-        max-height: 15;
+        max-height: 20;
+    }
+    ToolCallsPanel #tool-scroll {
+        height: auto;
+        max-height: 18;
     }
     ToolCallsPanel Collapsible {
         padding: 0;
@@ -46,7 +51,7 @@ class ToolCallsPanel(Widget):
 
     expanded: reactive[bool] = reactive(False)
 
-    def __init__(self, max_display: int = 5, **kwargs) -> None:
+    def __init__(self, max_display: int = 20, **kwargs) -> None:
         super().__init__(**kwargs)
         self._calls: dict[str, ToolCallInfo] = {}  # widget_id -> info
         self._call_order: list[str] = []  # ordered widget_ids
@@ -59,6 +64,7 @@ class ToolCallsPanel(Widget):
     def compose(self) -> ComposeResult:
         # Header label — hidden when no tools
         yield Static("", id="tool-calls-header")
+        yield VerticalScroll(id="tool-scroll")
 
     def add_call(self, info: ToolCallInfo) -> None:
         """Add a tool call as a new Collapsible."""
@@ -89,7 +95,9 @@ class ToolCallsPanel(Widget):
             collapsed=False,
             id=widget_id,
         )
-        self.mount(collapsible)
+        scroll = self.query_one("#tool-scroll", VerticalScroll)
+        scroll.mount(collapsible)
+        scroll.scroll_end(animate=False)
         self._ensure_spinner()
         self.add_class("has-tools")
         self._update_header()
@@ -137,8 +145,12 @@ class ToolCallsPanel(Widget):
         self._call_order.clear()
         self._tool_id_to_widget_id.clear()
         self._call_counter = 0
-        for collapsible in self.query(Collapsible):
-            collapsible.remove()
+        try:
+            scroll = self.query_one("#tool-scroll", VerticalScroll)
+            for collapsible in scroll.query(Collapsible):
+                collapsible.remove()
+        except Exception:
+            pass
         self._ensure_spinner()
         self.remove_class("has-tools")
         self._update_header()

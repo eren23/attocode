@@ -65,6 +65,7 @@ class AttocodeApp(App):
     CSS_PATH = [
         _STYLES_DIR / "app.tcss",
         _STYLES_DIR / "dialogs.tcss",
+        _STYLES_DIR / "swarm.tcss",
     ]
 
     TITLE = "Attocode"
@@ -80,6 +81,7 @@ class AttocodeApp(App):
         Binding("ctrl+w", "toggle_swarm", "Swarm", show=False),
         Binding("ctrl+d", "toggle_dashboard", "Dashboard", show=True),
         Binding("ctrl+m", "toggle_swarm_monitor", "Swarm Monitor", show=True),
+        Binding("ctrl+s", "swarm_dashboard", "Swarm Dashboard", show=False),
     ]
 
     def __init__(
@@ -155,7 +157,7 @@ class AttocodeApp(App):
         status.model_name = self._model_name
         status.git_branch = self._git_branch
 
-        # Wire project name and max tokens from agent
+        # Wire project name, max tokens, and context window from agent
         if self._agent:
             try:
                 wd = getattr(self._agent, "working_dir", None)
@@ -167,6 +169,14 @@ class AttocodeApp(App):
                 budget = getattr(self._agent, "budget", None)
                 if budget and hasattr(budget, "max_tokens"):
                     status.max_tokens = budget.max_tokens
+            except Exception:
+                pass
+            # Set context window from model registry
+            try:
+                from attocode.providers.base import get_model_context_window
+                model_id = getattr(getattr(self._agent, "config", None), "model", "") or self._model_name
+                if model_id:
+                    status.context_window = get_model_context_window(model_id)
             except Exception:
                 pass
 
@@ -380,6 +390,7 @@ class AttocodeApp(App):
                 if ctx and ctx.compaction_manager:
                     check = ctx.compaction_manager.check(ctx.messages)
                     status.context_pct = check.usage_fraction
+                    status.context_tokens = check.estimated_tokens
             except Exception:
                 pass
 
@@ -450,6 +461,7 @@ class AttocodeApp(App):
                 if ctx and ctx.compaction_manager:
                     check = ctx.compaction_manager.check(ctx.messages)
                     status.context_pct = check.usage_fraction
+                    status.context_tokens = check.estimated_tokens
             except Exception:
                 pass
 
@@ -637,6 +649,18 @@ class AttocodeApp(App):
             if wd:
                 root = wd
         self.push_screen(SwarmMonitorScreen(root=root))
+
+    def action_swarm_dashboard(self) -> None:
+        """Open the AoT swarm dashboard (Ctrl+S)."""
+        from attocode.tui.screens.swarm_dashboard import SwarmDashboardScreen
+
+        state_fn = None
+        if self._agent and hasattr(self._agent, "_swarm_orchestrator"):
+            orch = self._agent._swarm_orchestrator
+            if orch and hasattr(orch, "get_state"):
+                state_fn = orch.get_state
+
+        self.push_screen(SwarmDashboardScreen(state_fn=state_fn))
 
     # --- Helpers ---
 

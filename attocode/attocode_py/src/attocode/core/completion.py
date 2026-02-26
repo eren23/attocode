@@ -50,21 +50,6 @@ def analyze_completion(response: ChatResponse) -> CompletionAnalysis:
     if response.stop_reason == StopReason.MAX_TOKENS:
         return CompletionAnalysis.continue_running()
 
-    # Check for future intent signals in the response content
-    content = response.content.strip().lower() if response.content else ""
-
-    if _has_future_intent(content):
-        return CompletionAnalysis.stop(
-            CompletionReason.FUTURE_INTENT,
-            "Agent indicated future work is needed",
-        )
-
-    if _has_incomplete_action(content):
-        return CompletionAnalysis.stop(
-            CompletionReason.INCOMPLETE_ACTION,
-            "Agent's response suggests incomplete work",
-        )
-
     # Normal completion
     return CompletionAnalysis.stop(CompletionReason.COMPLETED)
 

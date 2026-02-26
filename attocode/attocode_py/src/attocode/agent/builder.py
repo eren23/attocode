@@ -51,6 +51,7 @@ class AgentBuilder:
         self._recitation_manager: Any = None
         self._failure_tracker: Any = None
         self._trace_collector: Any = None
+        self._recording_config: Any = None
 
     def with_provider(
         self,
@@ -203,6 +204,20 @@ class AgentBuilder:
         self._trace_collector = collector
         return self
 
+    def with_recording(self, config: Any = None, *, enabled: bool = True) -> AgentBuilder:
+        """Enable visual debug recording.
+
+        Args:
+            config: A RecordingConfig instance, or None for defaults.
+            enabled: Set to False to explicitly disable recording.
+        """
+        if enabled:
+            if config is None:
+                from attocode.integrations.recording.recorder import RecordingConfig
+                config = RecordingConfig()
+            self._recording_config = config
+        return self
+
     def with_tricks(
         self,
         recitation: Any = None,
@@ -260,7 +275,8 @@ class AgentBuilder:
         compaction_manager = None
         if self._compaction_enabled:
             from attocode.integrations.context.auto_compaction import AutoCompactionManager
-            max_ctx = 200_000  # default
+            from attocode.providers.base import get_model_context_window
+            max_ctx = get_model_context_window(self._config.model or "")
             compaction_manager = AutoCompactionManager(max_context_tokens=max_ctx)
 
         # Build agent
@@ -281,6 +297,7 @@ class AgentBuilder:
             auto_checkpoint=self._auto_checkpoint,
             recitation_manager=self._recitation_manager,
             failure_tracker=self._failure_tracker,
+            recording_config=self._recording_config,
         )
 
         # Set trace collector if provided

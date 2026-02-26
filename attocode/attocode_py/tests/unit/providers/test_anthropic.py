@@ -9,7 +9,8 @@ import httpx
 import pytest
 
 from attocode.errors import ProviderError
-from attocode.providers.anthropic import AnthropicProvider, COST_TABLE
+from attocode.providers.anthropic import AnthropicProvider
+from attocode.providers.base import get_model_pricing
 from attocode.types.messages import (
     ChatOptions,
     ImageContentBlock,
@@ -129,8 +130,8 @@ class TestAnthropicChat:
         opts = ChatOptions(model=model)
         resp = await provider.chat(msgs, opts)
 
-        rates = COST_TABLE[model]
-        expected_cost = 1000 * rates[0] / 1e6 + 500 * rates[1] / 1e6
+        pricing = get_model_pricing(model)
+        expected_cost = pricing.estimate_cost(1000, 500)
         assert abs(resp.usage.cost - expected_cost) < 1e-9
 
     @pytest.mark.asyncio

@@ -7,6 +7,35 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.3] - 2026-02-26
+
+### Added
+
+- **Recording integration** — `integrations/recording/` with `RecordingSessionManager` for session capture; `--record` CLI flag and `record` config option; HTML export for visual replay
+- **Codebase tools** — `tools/codebase.py` with `get_repo_map`, `get_tree_view`; auto-registered when codebase context is available; preseed repo map injected on first run so the LLM has project structure from turn 1
+- **AST services** — `ast_service.py`, `cross_references.py` with `ASTService`, `CrossRefIndex`, `SymbolLocation`, `SymbolRef`; exported from context integration
+- **Model cache** — `providers/model_cache.py` with `init_model_cache()` and model context-window lookup; replaces hardcoded 200k default with per-model values
+- **attoswarm coordinator** — `coordinator/aot_graph.py`, `event_bus.py`, `orchestrator.py`, `subagent_manager.py`; `workspace/file_ledger.py`, `reconciler.py` for multi-agent file coordination
+- **attoswarm TUI** — Swarm dashboard, focus screen, timeline screen; `swarm_bridge.py`; `swarm/` widgets; `swarm.tcss` styles
+- **CLI** — `--version` flag; `--record` flag
+- **Config** — `record` option for session recording
+
+### Changed
+
+- **Conversation persistence** — Messages persist across TUI runs; subsequent prompts carry over prior conversation; `/clear` resets conversation history in addition to screen
+- **Doom loop blocking** — Tool calls identical 5+ times are hard-blocked before execution with `LoopDetector.peek()`; blocked calls return structured error for the LLM
+- **Completion analysis** — Removed future-intent and incomplete-action heuristics from `analyze_completion()`
+- **Tool events** — `TOOL_START`, `TOOL_COMPLETE`, `TOOL_ERROR` now include `args` and `iteration` metadata
+- **Codebase context** — Extended with preseed map, symbol extraction; `get_preseed_map()` for first-turn injection
+
+### Tests
+
+- `test_aot_graph.py`, `test_event_bus.py`, `test_file_ledger.py`, `test_reconciler.py`, `test_stores.py` — attoswarm coordinator and workspace
+- `test_ast_service.py` — AST service
+- `test_model_cache.py` — model cache pricing and context lookup
+- `test_recording/` — recording integration
+- Updated `test_codebase_context.py`, `test_completion.py`, `test_anthropic.py`, `test_attoswarm_snapshots.py`
+
 ## [0.1.2] - 2026-02-24
 
 ### Added

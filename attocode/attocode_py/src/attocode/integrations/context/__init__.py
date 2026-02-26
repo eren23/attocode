@@ -58,6 +58,12 @@ from attocode.integrations.context.semantic_cache import (
     SemanticCacheConfig,
     SemanticCacheManager,
 )
+from attocode.integrations.context.ast_service import ASTService
+from attocode.integrations.context.cross_references import (
+    CrossRefIndex,
+    SymbolLocation,
+    SymbolRef,
+)
 
 __all__ = [
     # auto_compaction
@@ -109,4 +115,10 @@ __all__ = [
     # semantic_cache
     "SemanticCacheConfig",
     "SemanticCacheManager",
+    # ast_service
+    "ASTService",
+    # cross_references
+    "CrossRefIndex",
+    "SymbolLocation",
+    "SymbolRef",
 ]

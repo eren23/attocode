@@ -1,6 +1,7 @@
 """LLM provider adapters."""
 
 from attocode.providers.base import (
+    BUILTIN_MODELS,
     CapableProvider,
     KNOWN_PRICING,
     LLMProvider,
@@ -10,6 +11,7 @@ from attocode.providers.base import (
     ProviderHealth,
     StreamConfig,
     StreamingProvider,
+    get_model_context_window,
     get_model_pricing,
 )
 from attocode.providers.fallback_chain import (
@@ -17,6 +19,10 @@ from attocode.providers.fallback_chain import (
     ProviderFallbackChain,
 )
 from attocode.providers.mock import MockProvider
+from attocode.providers.model_cache import (
+    clear_cache as clear_model_cache,
+    init_model_cache,
+)
 from attocode.providers.registry import ProviderRegistry, create_provider
 from attocode.providers.resilient_provider import (
     ResilientProvider,
@@ -25,6 +31,7 @@ from attocode.providers.resilient_provider import (
 )
 
 __all__ = [
+    "BUILTIN_MODELS",
     "CapableProvider",
     "FallbackStats",
     "KNOWN_PRICING",
@@ -41,6 +48,9 @@ __all__ = [
     "ResilienceStats",
     "StreamConfig",
     "StreamingProvider",
+    "clear_model_cache",
     "create_provider",
+    "get_model_context_window",
     "get_model_pricing",
+    "init_model_cache",
 ]

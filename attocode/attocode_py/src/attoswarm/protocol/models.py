@@ -18,7 +18,7 @@ RoleType = Literal[
     "researcher",
     "merger",
 ]
-WorkspaceMode = Literal["worktree", "shared_ro"]
+WorkspaceMode = Literal["worktree", "shared_ro", "shared"]
 
 
 def utc_now_iso() -> str:
@@ -52,6 +52,13 @@ class TaskSpec:
     artifacts: list[str] = field(default_factory=list)
     status: TaskStatus = "pending"
     task_kind: str = "implement"
+    # --- Shared-workspace fields (used by AoT orchestrator) ---
+    target_files: list[str] = field(default_factory=list)
+    read_files: list[str] = field(default_factory=list)
+    file_version_snapshot: dict[str, str] = field(default_factory=dict)  # path -> hash
+    symbol_scope: list[str] = field(default_factory=list)
+    files_modified: list[str] = field(default_factory=list)
+    result_summary: str = ""
 
 
 @dataclass(slots=True)

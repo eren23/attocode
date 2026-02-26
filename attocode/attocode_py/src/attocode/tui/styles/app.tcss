@@ -61,11 +61,17 @@ Screen {
 
 #tool-panel {
     height: auto;
-    max-height: 12;
+    max-height: 20;
     display: none;
     background: $surface;
     border-top: solid $primary-darken-3;
     padding: 0 1;
+}
+
+#tool-panel #tool-scroll {
+    height: auto;
+    max-height: 18;
+    scrollbar-size: 1 1;
 }
 
 #tool-panel.has-tools {
