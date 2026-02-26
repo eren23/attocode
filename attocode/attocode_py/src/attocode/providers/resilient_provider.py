@@ -27,7 +27,7 @@ class ResilienceConfig:
     max_retries: int = 3
     retry_base_delay: float = 1.0
     retry_max_delay: float = 30.0
-    timeout_seconds: float = 120.0
+    timeout_seconds: float = 600.0
     circuit_breaker_threshold: int = 5
     circuit_breaker_reset_seconds: float = 60.0
 

@@ -115,15 +115,15 @@ class TestIsFeatureEnabled:
 
 class TestSubagentTimeouts:
     def test_known_agent_type(self) -> None:
-        assert get_subagent_timeout("researcher") == 420_000
-        assert get_subagent_timeout("coder") == 300_000
+        assert get_subagent_timeout("researcher") == 1_200_000
+        assert get_subagent_timeout("coder") == 900_000
 
     def test_unknown_agent_type_returns_default(self) -> None:
         assert get_subagent_timeout("unknown_type") == SUBAGENT_TIMEOUTS["default"]
 
     def test_known_max_iterations(self) -> None:
-        assert get_subagent_max_iterations("researcher") == 25
-        assert get_subagent_max_iterations("documenter") == 10
+        assert get_subagent_max_iterations("researcher") == 50
+        assert get_subagent_max_iterations("documenter") == 20
 
     def test_unknown_max_iterations_returns_default(self) -> None:
         assert get_subagent_max_iterations("unknown") == SUBAGENT_MAX_ITERATIONS["default"]

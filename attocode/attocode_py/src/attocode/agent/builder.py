@@ -67,10 +67,13 @@ class AgentBuilder:
         """
         if provider is not None:
             self._provider = provider
+            self._config.provider = getattr(provider, "name", name)
         else:
             self._provider_name = name
+            self._config.provider = name
             if api_key:
                 self._provider_kwargs["api_key"] = api_key
+                self._config.api_key = api_key
             self._provider_kwargs.update(kwargs)
         return self
 

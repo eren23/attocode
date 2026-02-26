@@ -701,12 +701,27 @@ async def run_execution_loop(
                     message="Budget exhausted during LLM call",
                 )
             except Exception as e:
-                return LoopResult(
-                    success=False,
-                    response=last_response,
-                    reason=CompletionReason.ERROR,
-                    message=f"LLM error: {e}",
+                # Streaming failed — attempt a non-streaming fallback before
+                # giving up entirely.  This catches httpx.StreamError and other
+                # mid-stream failures that exhaust streaming retries.
+                ctx.emit_simple(
+                    EventType.LLM_ERROR,
+                    error=f"Streaming failed: {e}; attempting non-streaming fallback",
+                    iteration=ctx.iteration,
                 )
+                try:
+                    response = await call_llm(ctx, max_retries=1, retry_base_delay=2.0)
+                except (CancellationError, asyncio.CancelledError):
+                    raise  # outer handler → CompletionReason.CANCELLED
+                except BudgetExhaustedError:
+                    raise  # outer handler → CompletionReason.BUDGET_LIMIT
+                except Exception as fallback_err:
+                    return LoopResult(
+                        success=False,
+                        response=last_response,
+                        reason=CompletionReason.ERROR,
+                        message=f"LLM error (streaming and non-streaming): {fallback_err}",
+                    )
 
             # 5. Record usage in economics and set baseline
             if response.usage and ctx.economics:

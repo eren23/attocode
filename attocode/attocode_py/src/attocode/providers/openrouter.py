@@ -27,6 +27,21 @@ DEFAULT_API_URL = "https://openrouter.ai/api/v1/chat/completions"
 DEFAULT_MODEL = "anthropic/claude-sonnet-4"
 
 
+def _describe_request_error(e: httpx.RequestError) -> str:
+    """Build a descriptive error message for httpx request errors.
+
+    httpx.ReadTimeout and similar errors often have empty str(e),
+    so we fall back to the exception type name and include the
+    chained cause when available.
+    """
+    msg = str(e)
+    if not msg:
+        msg = type(e).__name__
+    if e.__cause__ and str(e.__cause__):
+        msg = f"{msg} (caused by {type(e.__cause__).__name__}: {e.__cause__})"
+    return msg
+
+
 class OpenRouterProvider:
     """OpenRouter API provider (OpenAI-compatible)."""
 
@@ -35,7 +50,7 @@ class OpenRouterProvider:
         api_key: str | None = None,
         model: str = DEFAULT_MODEL,
         api_url: str = DEFAULT_API_URL,
-        timeout: float = 120.0,
+        timeout: float = 600.0,
         *,
         app_name: str = "attocode",
     ) -> None:
@@ -96,7 +111,10 @@ class OpenRouterProvider:
                 provider="openrouter", status_code=status, retryable=status in (429, 500, 502, 503),
             ) from e
         except httpx.RequestError as e:
-            raise ProviderError(f"OpenRouter request error: {e}", provider="openrouter", retryable=True) from e
+            raise ProviderError(
+                f"OpenRouter request error: {_describe_request_error(e)}",
+                provider="openrouter", retryable=True,
+            ) from e
 
     async def chat_stream(
         self,
@@ -132,7 +150,15 @@ class OpenRouterProvider:
                 provider="openrouter", status_code=status, retryable=status in (429, 500, 502, 503),
             ) from e
         except httpx.RequestError as e:
-            raise ProviderError(f"OpenRouter request error: {e}", provider="openrouter", retryable=True) from e
+            raise ProviderError(
+                f"OpenRouter request error: {_describe_request_error(e)}",
+                provider="openrouter", retryable=True,
+            ) from e
+        except httpx.StreamError as e:
+            raise ProviderError(
+                f"OpenRouter stream error: {type(e).__name__}: {e}",
+                provider="openrouter", retryable=True,
+            ) from e
 
     def _format_messages(self, messages: list[Message | MessageWithStructuredContent]) -> list[dict[str, Any]]:
         result: list[dict[str, Any]] = []

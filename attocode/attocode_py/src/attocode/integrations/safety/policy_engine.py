@@ -57,6 +57,10 @@ DEFAULT_RULES: list[PolicyRule] = [
     PolicyRule(tool_pattern="glob", decision=PolicyDecision.ALLOW, danger_level=DangerLevel.SAFE),
     PolicyRule(tool_pattern="grep", decision=PolicyDecision.ALLOW, danger_level=DangerLevel.SAFE),
     PolicyRule(tool_pattern="list_files", decision=PolicyDecision.ALLOW, danger_level=DangerLevel.SAFE),
+    # Codebase exploration — read-only AST / tree views
+    PolicyRule(tool_pattern="codebase_overview", decision=PolicyDecision.ALLOW, danger_level=DangerLevel.SAFE),
+    PolicyRule(tool_pattern="get_repo_map", decision=PolicyDecision.ALLOW, danger_level=DangerLevel.SAFE),
+    PolicyRule(tool_pattern="get_tree_view", decision=PolicyDecision.ALLOW, danger_level=DangerLevel.SAFE),
     # Write operations need awareness
     PolicyRule(tool_pattern="write_file", decision=PolicyDecision.ALLOW, danger_level=DangerLevel.LOW),
     PolicyRule(tool_pattern="edit_file", decision=PolicyDecision.ALLOW, danger_level=DangerLevel.LOW),

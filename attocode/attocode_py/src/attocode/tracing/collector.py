@@ -270,6 +270,40 @@ class TraceCollector:
     # Specialised recording helpers
     # ------------------------------------------------------------------
 
+    def _increment_counters(
+        self,
+        kind: str,
+        tokens: int = 0,
+        cost: float = 0.0,
+    ) -> None:
+        """Update summary counters for a given event kind.
+
+        Internal API surface for callers (e.g. :class:`TraceWriter`) that
+        route events through the generic ``record()`` path and still need
+        accurate ``get_summary()`` results.
+
+        Args:
+            kind: Event kind string (e.g. "llm", "tool", "error",
+                "iteration", "compaction").
+            tokens: Token count to accumulate (LLM events only).
+            cost: Monetary cost to accumulate (LLM events only).
+        """
+        if kind == "llm":
+            self._llm_count += 1
+            self._total_tokens += tokens
+            self._total_cost += cost
+        elif kind == "iteration":
+            self._iteration_count += 1
+        elif kind == "tool":
+            self._tool_count += 1
+        elif kind == "tool_error":
+            self._tool_count += 1
+            self._error_count += 1
+        elif kind == "error":
+            self._error_count += 1
+        elif kind == "compaction":
+            self._compaction_count += 1
+
     def record_llm_request(
         self,
         iteration: int,
@@ -714,6 +748,26 @@ class TraceWriter:
             data["metadata"] = _safe_serialize(event.metadata)
         if event.iteration is not None:
             data["iteration"] = event.iteration
+
+        # Increment summary counters via the internal API so that events
+        # routed through the generic record() path (via TraceWriter.record
+        # callback) produce accurate get_summary() results.
+        evt_str = str(event.type)
+        if evt_str in ("llm.complete", "llm.stream.end"):
+            self._collector._increment_counters(
+                "llm",
+                tokens=event.tokens or 0,
+                cost=event.cost or 0.0,
+            )
+        elif evt_str == "iteration":
+            self._collector._increment_counters("iteration")
+        elif evt_str in ("tool.complete", "tool.error"):
+            kind = "tool_error" if evt_str == "tool.error" else "tool"
+            self._collector._increment_counters(kind)
+        elif evt_str in ("llm.error", "error"):
+            self._collector._increment_counters("error")
+        elif evt_str == "compaction.complete":
+            self._collector._increment_counters("compaction")
 
         self._collector.record(kind, **data)
 

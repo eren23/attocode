@@ -76,12 +76,12 @@ class AttoConfig:
     temperature: float = DEFAULT_TEMPERATURE
     max_iterations: int = 100
     max_context_tokens: int = 200_000
-    timeout: float = 120.0
+    timeout: float = 600.0
 
     # Budget
     budget_max_tokens: int = 1_000_000
     budget_max_cost: float = 10.0
-    budget_max_duration: float = 3600.0
+    budget_max_duration: float = 7200.0
 
     # Paths
     working_directory: str = ""

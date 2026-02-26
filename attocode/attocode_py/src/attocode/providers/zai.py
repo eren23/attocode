@@ -22,7 +22,7 @@ class ZAIProvider(OpenAIProvider):
         api_key: str | None = None,
         model: str = DEFAULT_MODEL,
         api_url: str = DEFAULT_API_URL,
-        timeout: float = 120.0,
+        timeout: float = 600.0,
     ) -> None:
         resolved_key = api_key or os.environ.get("ZAI_API_KEY", "")
         if not resolved_key:

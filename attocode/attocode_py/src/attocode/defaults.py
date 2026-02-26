@@ -456,7 +456,7 @@ class SubagentConfig:
     """Subagent configuration."""
 
     enabled: bool = True
-    default_timeout: int = 300_000  # 5 minutes
+    default_timeout: int = 900_000  # 15 minutes
     default_max_iterations: int = 15
     inherit_observability: bool = True
     wrapup_window_ms: int = 30_000
@@ -484,26 +484,26 @@ class ProviderResilienceConfig:
 # =============================================================================
 
 SUBAGENT_TIMEOUTS: dict[str, int] = {
-    "researcher": 420_000,  # 7 minutes
-    "coder": 300_000,       # 5 minutes
-    "reviewer": 180_000,    # 3 minutes
-    "architect": 360_000,   # 6 minutes
-    "debugger": 300_000,    # 5 minutes
-    "documenter": 180_000,  # 3 minutes
-    "default": 300_000,     # 5 minutes fallback
+    "researcher": 1_200_000,  # 20 minutes
+    "coder": 900_000,         # 15 minutes
+    "reviewer": 600_000,      # 10 minutes
+    "architect": 1_200_000,   # 20 minutes
+    "debugger": 900_000,      # 15 minutes
+    "documenter": 600_000,    # 10 minutes
+    "default": 900_000,       # 15 minutes fallback
 }
 
 SUBAGENT_MAX_ITERATIONS: dict[str, int] = {
-    "researcher": 25,
-    "coder": 20,
-    "reviewer": 15,
-    "architect": 20,
-    "debugger": 20,
-    "documenter": 10,
-    "default": 15,
+    "researcher": 50,
+    "coder": 40,
+    "reviewer": 25,
+    "architect": 40,
+    "debugger": 40,
+    "documenter": 20,
+    "default": 30,
 }
 
-TIMEOUT_EXTENSION_ON_PROGRESS = 60_000  # +1 minute when making progress
+TIMEOUT_EXTENSION_ON_PROGRESS = 120_000  # +2 minutes when making progress
 
 
 def get_subagent_timeout(agent_type: str) -> int:
