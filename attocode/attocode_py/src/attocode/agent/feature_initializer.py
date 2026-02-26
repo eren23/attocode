@@ -253,6 +253,17 @@ async def initialize_features(
         except Exception:
             results["codebase_context"] = False
 
+    # 15b. Register codebase_overview tool (requires codebase context)
+    cbc = getattr(ctx, "codebase_context", None)
+    if cbc and hasattr(ctx, "registry") and ctx.registry is not None:
+        try:
+            from attocode.tools.codebase import create_codebase_overview_tool
+            overview_tool = create_codebase_overview_tool(cbc)
+            ctx.registry.register(overview_tool)
+            results["codebase_overview_tool"] = True
+        except Exception:
+            results["codebase_overview_tool"] = False
+
     # 16. Interactive planner
     if cfg.enable_interactive_planner and not getattr(ctx, "interactive_planner", None):
         try:

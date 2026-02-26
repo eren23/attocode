@@ -409,6 +409,14 @@ class ProductionAgent:
             try:
                 repo_map = _cbc_mgr.get_preseed_map(max_tokens=6000)
                 parts = [
+                    "## Relevant Code (Pre-Analyzed AST Data)",
+                    "This section contains the repository structure with exported "
+                    "symbols, extracted by static analysis.",
+                    "For broad exploration, read this first before calling "
+                    "glob/read_file.",
+                    "Use the `codebase_overview` tool to get a refreshed or "
+                    "filtered view at any time.",
+                    "",
                     f"Files: {repo_map.total_files} | "
                     f"Lines: {repo_map.total_lines} | "
                     f"Languages: {', '.join(sorted(repo_map.languages.keys()))}",
