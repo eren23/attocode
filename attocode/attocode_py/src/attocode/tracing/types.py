@@ -371,11 +371,18 @@ _EVENT_TYPE_TO_KIND: dict[str, TraceEventKind] | None = None
 def _build_event_type_mapping() -> dict[str, TraceEventKind]:
     """Build a best-effort mapping from EventType values to TraceEventKind."""
     mapping: dict[str, TraceEventKind] = {
+        # --- Execution core (highest-frequency events) ---
+        "iteration": TraceEventKind.ITERATION_START,
+        "thinking": TraceEventKind.LLM_REQUEST,
+        "response": TraceEventKind.LLM_RESPONSE,
         # LLM
         "llm.start": TraceEventKind.LLM_REQUEST,
         "llm.complete": TraceEventKind.LLM_RESPONSE,
         "llm.error": TraceEventKind.LLM_ERROR,
         "llm.retry": TraceEventKind.LLM_RETRY,
+        "llm.stream.start": TraceEventKind.LLM_REQUEST,
+        "llm.stream.chunk": TraceEventKind.LLM_RESPONSE,
+        "llm.stream.end": TraceEventKind.LLM_RESPONSE,
         # Tool
         "tool.start": TraceEventKind.TOOL_START,
         "tool.complete": TraceEventKind.TOOL_END,
@@ -383,19 +390,31 @@ def _build_event_type_mapping() -> dict[str, TraceEventKind]:
         "tool.approval.requested": TraceEventKind.TOOL_APPROVAL,
         "tool.approval.granted": TraceEventKind.TOOL_APPROVAL,
         "tool.approval.denied": TraceEventKind.TOOL_APPROVAL,
+        "tool.blocked": TraceEventKind.TOOL_ERROR,
+        "tool.coerced": TraceEventKind.TOOL_APPROVAL,
         # Budget
         "budget.check": TraceEventKind.BUDGET_CHECK,
         "budget.warning": TraceEventKind.BUDGET_WARNING,
         "budget.exhausted": TraceEventKind.BUDGET_EXHAUSTED,
+        "budget.extension.requested": TraceEventKind.BUDGET_WARNING,
+        "budget.extension.granted": TraceEventKind.BUDGET_CHECK,
+        "budget.extension.denied": TraceEventKind.BUDGET_WARNING,
         # Compaction / context
+        "compaction": TraceEventKind.COMPACTION_START,
         "compaction.start": TraceEventKind.COMPACTION_START,
         "compaction.complete": TraceEventKind.COMPACTION_END,
+        "compaction.error": TraceEventKind.COMPACTION_END,
         "context.overflow": TraceEventKind.CONTEXT_OVERFLOW,
+        "context.breakdown": TraceEventKind.CONTEXT_OVERFLOW,
         # Subagent
         "subagent.spawn": TraceEventKind.SUBAGENT_SPAWN,
         "subagent.complete": TraceEventKind.SUBAGENT_COMPLETE,
         "subagent.error": TraceEventKind.SUBAGENT_ERROR,
         "subagent.timeout.hard_kill": TraceEventKind.SUBAGENT_TIMEOUT,
+        "subagent.iteration": TraceEventKind.SUBAGENT_SPAWN,
+        "subagent.phase": TraceEventKind.SUBAGENT_SPAWN,
+        "subagent.wrapup.started": TraceEventKind.SUBAGENT_COMPLETE,
+        "subagent.wrapup.completed": TraceEventKind.SUBAGENT_COMPLETE,
         # Swarm
         "swarm.start": TraceEventKind.SWARM_START,
         "swarm.complete": TraceEventKind.SWARM_COMPLETE,
@@ -404,24 +423,64 @@ def _build_event_type_mapping() -> dict[str, TraceEventKind]:
         "swarm.task.start": TraceEventKind.SWARM_TASK_START,
         "swarm.task.complete": TraceEventKind.SWARM_TASK_COMPLETE,
         "swarm.task.failed": TraceEventKind.SWARM_TASK_FAILED,
+        "swarm.task.queued": TraceEventKind.SWARM_TASK_START,
+        "swarm.worker.assigned": TraceEventKind.SWARM_WAVE_START,
+        "swarm.worker.released": TraceEventKind.SWARM_WAVE_COMPLETE,
         # Plan
         "plan.created": TraceEventKind.PLAN_CREATED,
         "plan.step.start": TraceEventKind.PLAN_STEP_START,
         "plan.step.complete": TraceEventKind.PLAN_STEP_COMPLETE,
-        # Quality
+        "plan.approved": TraceEventKind.PLAN_STEP_COMPLETE,
+        "plan.rejected": TraceEventKind.PLAN_CREATED,
+        "plan.updated": TraceEventKind.PLAN_CREATED,
+        # Quality / Learning
         "quality.check": TraceEventKind.QUALITY_CHECK,
+        "quality.score": TraceEventKind.QUALITY_CHECK,
         "learning.proposed": TraceEventKind.LEARNING_PROPOSED,
+        "learning.approved": TraceEventKind.LEARNING_PROPOSED,
+        "learning.rejected": TraceEventKind.LEARNING_PROPOSED,
+        "health.check": TraceEventKind.QUALITY_CHECK,
         # Mode
         "mode.changed": TraceEventKind.MODE_CHANGE,
         # MCP
         "mcp.connect": TraceEventKind.MCP_CONNECT,
         "mcp.disconnect": TraceEventKind.MCP_DISCONNECT,
+        "mcp.tool.discovered": TraceEventKind.MCP_CONNECT,
+        "mcp.tool.call": TraceEventKind.TOOL_START,
+        "mcp.tool.error": TraceEventKind.TOOL_ERROR,
         # Session
         "session.checkpoint": TraceEventKind.CHECKPOINT,
+        "session.created": TraceEventKind.SESSION_START,
+        "session.loaded": TraceEventKind.SESSION_START,
+        "session.saved": TraceEventKind.CHECKPOINT,
+        "session.resumed": TraceEventKind.SESSION_START,
+        "session.forked": TraceEventKind.SESSION_START,
         # Lifecycle
         "start": TraceEventKind.SESSION_START,
         "complete": TraceEventKind.SESSION_END,
+        "shutdown": TraceEventKind.SESSION_END,
         "error": TraceEventKind.ERROR,
+        # Policy / Permission
+        "policy.evaluation": TraceEventKind.TOOL_APPROVAL,
+        "policy.override": TraceEventKind.TOOL_APPROVAL,
+        "permission.granted": TraceEventKind.TOOL_APPROVAL,
+        "permission.denied": TraceEventKind.TOOL_APPROVAL,
+        "permission.remembered": TraceEventKind.TOOL_APPROVAL,
+        # Resilience
+        "resilience.retry": TraceEventKind.RECOVERY,
+        "resilience.fallback": TraceEventKind.RECOVERY,
+        "circuit_breaker.open": TraceEventKind.ERROR,
+        "circuit_breaker.half_open": TraceEventKind.RECOVERY,
+        "circuit_breaker.closed": TraceEventKind.RECOVERY,
+        # Undo
+        "undo.tracked": TraceEventKind.FILE_CHANGE,
+        "undo.executed": TraceEventKind.FILE_CHANGE,
+        "undo.failed": TraceEventKind.ERROR,
+        # Insight (economics)
+        "insight.doom_loop": TraceEventKind.BUDGET_WARNING,
+        "insight.saturation": TraceEventKind.BUDGET_WARNING,
+        "insight.nudge": TraceEventKind.BUDGET_CHECK,
+        "insight.phase_change": TraceEventKind.MODE_CHANGE,
     }
     return mapping
 

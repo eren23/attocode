@@ -31,13 +31,6 @@ DEFAULT_MODEL = "claude-sonnet-4-20250514"
 DEFAULT_MAX_TOKENS = 8192
 API_VERSION = "2023-06-01"
 
-COST_TABLE: dict[str, tuple[float, float]] = {
-    "claude-opus-4-20250514": (15.0, 75.0),
-    "claude-sonnet-4-20250514": (3.0, 15.0),
-    "claude-haiku-3-5-20241022": (0.80, 4.0),
-}
-
-
 class AnthropicProvider:
     """Anthropic API provider using httpx."""
 
@@ -158,17 +151,21 @@ class AnthropicProvider:
 
         try:
             async with client.stream("POST", self._api_url, json=body) as response:
-                response.raise_for_status()
+                if response.status_code >= 400:
+                    # Must read body INSIDE async-with before response closes
+                    await response.aread()
+                    status = response.status_code
+                    error_body = response.text[:500]
+                    raise ProviderError(
+                        f"Anthropic API error {status}: {error_body}",
+                        provider="anthropic",
+                        status_code=status,
+                        retryable=status in (429, 500, 502, 503, 529),
+                    )
                 async for chunk in adapt_anthropic_stream(response.aiter_lines()):
                     yield chunk
-        except httpx.HTTPStatusError as e:
-            status = e.response.status_code
-            raise ProviderError(
-                f"Anthropic API error {status}: {e.response.text[:500]}",
-                provider="anthropic",
-                status_code=status,
-                retryable=status in (429, 500, 502, 503, 529),
-            ) from e
+        except ProviderError:
+            raise
         except httpx.TimeoutException as e:
             raise ProviderError("Anthropic API timeout", provider="anthropic", retryable=True) from e
         except httpx.RequestError as e:
@@ -248,9 +245,12 @@ class AnthropicProvider:
             cache_read_tokens=usage_data.get("cache_read_input_tokens", 0),
             cache_creation_tokens=usage_data.get("cache_creation_input_tokens", 0),
         )
-        cost_rates = COST_TABLE.get(model)
-        if cost_rates:
-            usage.cost = usage.input_tokens * cost_rates[0] / 1e6 + usage.output_tokens * cost_rates[1] / 1e6
+        from attocode.providers.base import get_model_pricing
+
+        pricing = get_model_pricing(model)
+        usage.cost = pricing.estimate_cost(
+            usage.input_tokens, usage.output_tokens, usage.cache_read_tokens,
+        )
 
         stop = data.get("stop_reason", "end_turn")
         stop_reason = StopReason.TOOL_USE if stop == "tool_use" else (StopReason.MAX_TOKENS if stop == "max_tokens" else StopReason.END_TURN)

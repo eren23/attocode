@@ -17,6 +17,7 @@ from attoswarm.config.schema import (
     SwarmYamlConfig,
     UIConfig,
     WatchdogConfig,
+    WorkspaceConfig,
 )
 
 
@@ -35,6 +36,7 @@ def load_swarm_yaml(path: str | Path) -> SwarmYamlConfig:
         raw.get("orchestration", {}) if isinstance(raw.get("orchestration"), dict) else {}
     )
     ui_raw = raw.get("ui", {}) if isinstance(raw.get("ui"), dict) else {}
+    workspace_raw = raw.get("workspace", {}) if isinstance(raw.get("workspace"), dict) else {}
 
     run = RunConfig(**_pick(run_raw, RunConfig))
     budget = BudgetConfig(**_pick(budget_raw, BudgetConfig))
@@ -43,6 +45,7 @@ def load_swarm_yaml(path: str | Path) -> SwarmYamlConfig:
     retries = RetryConfig(**_pick(retries_raw, RetryConfig))
     orchestration = OrchestrationConfig(**_pick(orchestration_raw, OrchestrationConfig))
     ui = UIConfig(**_pick(ui_raw, UIConfig))
+    workspace = WorkspaceConfig(**_pick(workspace_raw, WorkspaceConfig))
 
     roles: list[RoleConfig] = []
     raw_roles = raw.get("roles", [])
@@ -62,6 +65,7 @@ def load_swarm_yaml(path: str | Path) -> SwarmYamlConfig:
         retries=retries,
         orchestration=orchestration,
         ui=ui,
+        workspace=workspace,
     )
 
 

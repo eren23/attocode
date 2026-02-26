@@ -31,6 +31,7 @@ from attocode.config import load_config
 @click.option("--swarm-resume", default=None, help="Resume a swarm session")
 @click.option("--hybrid", is_flag=True, help="Use standalone attoswarm hybrid orchestrator")
 @click.option("--paid-only", is_flag=True, help="Only use paid models")
+@click.option("--record", is_flag=True, help="Record session for visual debug replay")
 @click.option("--debug", is_flag=True, help="Enable debug logging")
 @click.option("--version", is_flag=True, help="Show version and exit")
 @click.option("--non-interactive", is_flag=True, help="Run in non-interactive mode")
@@ -53,6 +54,7 @@ def main(
     swarm_resume: str | None,
     hybrid: bool,
     paid_only: bool,
+    record: bool,
     debug: bool,
     version: bool,
     non_interactive: bool,
@@ -89,6 +91,8 @@ def main(
         cli_args["trace"] = True
     if paid_only:
         cli_args["paid_only"] = True
+    if record:
+        cli_args["record"] = True
     if theme:
         cli_args["theme"] = theme
 
@@ -119,6 +123,8 @@ def main(
 
     if config.swarm and (prompt_text or config.swarm_resume):
         # Swarm multi-agent mode
+        if getattr(config, "record", False):
+            click.echo("Warning: --record is not supported in swarm mode (ignored)", err=True)
         _run_swarm(config, prompt_text)
     elif prompt_text or non_interactive:
         # Non-interactive single-turn mode
@@ -152,9 +158,12 @@ def _run_single_turn(config: Any, prompt: str) -> None:
 
     async def _run() -> None:
         from attocode.agent.builder import AgentBuilder
+        from attocode.providers.model_cache import init_model_cache
         from attocode.tracing import TraceWriter
         from attocode.types.budget import ExecutionBudget
         from attocode.types.events import AgentEvent, EventType
+
+        await init_model_cache()
 
         trace_writer: TraceWriter | None = None
 
@@ -184,6 +193,11 @@ def _run_single_turn(config: Any, prompt: str) -> None:
 
             if config.debug:
                 builder = builder.with_debug(True)
+
+            if config.record:
+                from attocode.integrations.recording.recorder import RecordingConfig
+                rec_dir = config.working_directory + "/.attocode/recordings"
+                builder = builder.with_recording(RecordingConfig(output_dir=rec_dir))
 
             # Set up trace writer
             trace_writer = TraceWriter(
@@ -290,6 +304,7 @@ def _run_tui(config: Any) -> None:
         click.echo("Configuration saved to ~/.attocode/config.json", err=True)
 
     from attocode.agent.builder import AgentBuilder
+    from attocode.providers.model_cache import init_model_cache
     from attocode.tracing import TraceWriter
     from attocode.tui.app import AttocodeApp
     from attocode.tui.events import (
@@ -322,6 +337,10 @@ def _run_tui(config: Any) -> None:
             git_branch = result.stdout.strip()
     except Exception:
         pass
+
+    # Populate dynamic model cache (pricing + context windows) before building
+    # the agent.  No event loop is running yet so asyncio.run() is safe here.
+    asyncio.run(init_model_cache())
 
     # Create TUI app first so we can wire approval bridge
     app: AttocodeApp | None = None
@@ -359,6 +378,11 @@ def _run_tui(config: Any) -> None:
         builder = builder.with_system_prompt(config.system_prompt)
     if config.debug:
         builder = builder.with_debug(True)
+
+    if config.record:
+        from attocode.integrations.recording.recorder import RecordingConfig
+        rec_dir = config.working_directory + "/.attocode/recordings"
+        builder = builder.with_recording(RecordingConfig(output_dir=rec_dir))
 
     # Create approval bridge before building agent so we can wire it
     from attocode.tui.bridges.approval_bridge import ApprovalBridge
@@ -521,7 +545,10 @@ def _run_swarm(config: Any, prompt: str) -> None:
             yaml_to_swarm_config,
         )
         from attocode.integrations.swarm.types import DEFAULT_SWARM_CONFIG, SwarmConfig
+        from attocode.providers.model_cache import init_model_cache
         from attocode.providers.registry import create_provider
+
+        await init_model_cache()
 
         # Create the LLM provider
         provider = create_provider(config.provider, api_key=config.api_key, model=config.model)

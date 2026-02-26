@@ -114,7 +114,9 @@ async def handle_command(
     if cmd in ("/clear", "/cls"):
         if app:
             app.action_clear_screen()
-        return CommandResult(output="Screen cleared.")
+        if agent and hasattr(agent, "reset_conversation"):
+            agent.reset_conversation()
+        return CommandResult(output="Screen and conversation history cleared.")
 
     if cmd in ("/quit", "/exit", "/q"):
         if app:

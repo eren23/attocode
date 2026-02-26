@@ -62,6 +62,8 @@ DEFAULT_RULES: list[PolicyRule] = [
     PolicyRule(tool_pattern="edit_file", decision=PolicyDecision.ALLOW, danger_level=DangerLevel.LOW),
     # Bash needs approval
     PolicyRule(tool_pattern="bash", decision=PolicyDecision.PROMPT, danger_level=DangerLevel.MEDIUM),
+    # Subagent spawning — budget-controlled and sandboxed
+    PolicyRule(tool_pattern="spawn_agent", decision=PolicyDecision.ALLOW, danger_level=DangerLevel.LOW),
 ]
 
 

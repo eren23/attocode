@@ -26,7 +26,7 @@ from typing import Any
 from attocode.errors import BudgetExhaustedError, CancellationError
 from attocode.types.agent import AgentCompletionStatus, AgentResult, CompletionReason
 from attocode.types.events import EventType
-from attocode.types.messages import Message, Role
+from attocode.types.messages import Message, Role, ToolResult
 
 from attocode.agent.context import AgentContext
 from attocode.core.completion import CompletionAnalysis, analyze_completion
@@ -774,10 +774,32 @@ async def run_execution_loop(
 
             # 8. Execute tool calls if present
             if response.has_tool_calls:
-                tool_results = await execute_tool_calls(
-                    ctx,
-                    response.tool_calls,
-                )
+                # Pre-filter: hard-block doom loop repeats (>= 5 identical calls)
+                calls_to_execute = list(response.tool_calls)
+                blocked_results: list[ToolResult] = []
+                if ctx.economics is not None:
+                    filtered = []
+                    for tc in calls_to_execute:
+                        detection = ctx.economics.loop_detector.peek(
+                            tc.name, tc.arguments or {},
+                        )
+                        if detection.is_loop and detection.count >= 5:
+                            blocked_results.append(ToolResult(
+                                call_id=tc.id,
+                                error=(
+                                    f"Blocked: '{tc.name}' called {detection.count}x "
+                                    "with identical args. Use different arguments "
+                                    "or a different tool."
+                                ),
+                            ))
+                        else:
+                            filtered.append(tc)
+                    calls_to_execute = filtered
+
+                tool_results: list[ToolResult] = []
+                if calls_to_execute:
+                    tool_results = await execute_tool_calls(ctx, calls_to_execute)
+                tool_results.extend(blocked_results)
 
                 # Record in economics (loop detection + phase tracking)
                 if ctx.economics is not None:

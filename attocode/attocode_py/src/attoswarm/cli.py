@@ -24,6 +24,58 @@ def main() -> None:
     """Attoswarm hybrid swarm orchestrator."""
 
 
+def _make_spawn_fn(cfg: SwarmYamlConfig):  # noqa: ANN202
+    """Build an in-process spawn function using AgentBuilder."""
+    from attoswarm.coordinator.subagent_manager import TaskResult as _TaskResult
+
+    async def _spawn_agent(task: dict) -> _TaskResult:
+        from attocode.agent.builder import AgentBuilder
+        from attocode.types.budget import ExecutionBudget
+
+        wd = cfg.run.working_dir or "."
+        model = cfg.roles[0].model if cfg.roles else ""
+        num_roles = max(len(cfg.roles), 1)
+
+        builder = (
+            AgentBuilder()
+            .with_provider()
+            .with_working_dir(wd)
+            .with_budget(ExecutionBudget(
+                max_tokens=cfg.budget.max_tokens // num_roles,
+                max_cost=cfg.budget.max_cost_usd / num_roles,
+            ))
+            .with_sandbox(True)
+            .with_spawn_agent(False)
+        )
+        if model:
+            builder = builder.with_model(model)
+
+        agent = builder.build()
+
+        target_files = task.get("target_files", [])
+        read_files = task.get("read_files", [])
+        prompt_parts = [f"# Task: {task.get('title', '')}", "", task.get("description", "")]
+        if target_files:
+            prompt_parts.append(f"\nTarget files: {', '.join(target_files)}")
+        if read_files:
+            prompt_parts.append(f"\nReference files: {', '.join(read_files)}")
+        prompt = "\n".join(prompt_parts)
+
+        result = await agent.run(prompt)
+
+        return _TaskResult(
+            task_id=task["task_id"],
+            success=result.success,
+            result_summary=result.response or "",
+            tokens_used=result.metrics.total_tokens if result.metrics else 0,
+            cost_usd=result.metrics.estimated_cost if result.metrics else 0.0,
+            duration_s=result.metrics.duration_ms / 1000 if result.metrics else 0.0,
+            error=result.error or "",
+        )
+
+    return _spawn_agent
+
+
 def _doctor_rows(cfg: SwarmYamlConfig) -> list[dict[str, Any]]:
     rows: list[dict[str, Any]] = []
     for role in cfg.roles:
@@ -75,6 +127,12 @@ def _print_doctor(rows: list[dict[str, Any]]) -> bool:
 @click.option("--resume", "resume_flag", is_flag=True, help="Resume existing run directory state")
 @click.option("--observe", is_flag=True, help="Open TUI after run exits")
 @click.option("--debug", "debug_flag", is_flag=True, help="Enable debug markers in shell wrapper and coordinator events")
+@click.option(
+    "--workspace-mode",
+    type=click.Choice(["shared", "worktree"]),
+    default=None,
+    help="Override workspace mode: 'shared' (AoT+OCC) or 'worktree' (legacy)",
+)
 def run_command(
     config_path: Path,
     goal: tuple[str, ...],
@@ -82,6 +140,7 @@ def run_command(
     resume_flag: bool,
     observe: bool,
     debug_flag: bool,
+    workspace_mode: str | None,
 ) -> None:
     """Run swarm with YAML config and goal."""
     cfg = load_swarm_yaml(config_path)
@@ -89,10 +148,21 @@ def run_command(
         cfg.run.run_dir = run_dir
     if debug_flag:
         cfg.run.debug = True
+    if workspace_mode:
+        cfg.workspace.mode = workspace_mode
     goal_text = " ".join(goal).strip()
     if not goal_text:
         raise click.ClickException("Goal text is required")
-    code = asyncio.run(HybridCoordinator(cfg, goal_text, resume=resume_flag).run())
+
+    # Route to appropriate coordinator
+    if cfg.workspace.mode == "shared":
+        from attoswarm.coordinator.orchestrator import SwarmOrchestrator
+        code = asyncio.run(SwarmOrchestrator(
+            cfg, goal_text, resume=resume_flag, spawn_fn=_make_spawn_fn(cfg),
+        ).run())
+    else:
+        code = asyncio.run(HybridCoordinator(cfg, goal_text, resume=resume_flag).run())
+
     if observe:
         AttoswarmApp(cfg.run.run_dir).run()
     raise SystemExit(code)
@@ -107,6 +177,12 @@ def run_command(
 @click.option("--detach", is_flag=True, help="Start coordinator and return immediately")
 @click.option("--skip-doctor", is_flag=True, help="Skip backend preflight checks")
 @click.option("--debug", "debug_flag", is_flag=True, help="Enable debug markers in shell wrapper and coordinator events")
+@click.option(
+    "--workspace-mode",
+    type=click.Choice(["shared", "worktree"]),
+    default=None,
+    help="Override workspace mode: 'shared' (AoT+OCC) or 'worktree' (legacy)",
+)
 def start_command(
     config_path: Path,
     goal: tuple[str, ...],
@@ -116,6 +192,7 @@ def start_command(
     detach: bool,
     skip_doctor: bool,
     debug_flag: bool,
+    workspace_mode: str | None,
 ) -> None:
     """Single launcher: run coordinator and monitor with one command."""
     cfg = load_swarm_yaml(config_path)
@@ -123,6 +200,8 @@ def start_command(
         cfg.run.run_dir = run_dir
     if debug_flag:
         cfg.run.debug = True
+    if workspace_mode:
+        cfg.workspace.mode = workspace_mode
     goal_text = " ".join(goal).strip()
     if not goal_text:
         raise click.ClickException("Goal text is required")
@@ -156,7 +235,13 @@ def start_command(
         raise SystemExit(0)
 
     if not monitor:
-        code = asyncio.run(HybridCoordinator(cfg, goal_text, resume=resume_flag).run())
+        if cfg.workspace.mode == "shared":
+            from attoswarm.coordinator.orchestrator import SwarmOrchestrator
+            code = asyncio.run(SwarmOrchestrator(
+                cfg, goal_text, resume=resume_flag, spawn_fn=_make_spawn_fn(cfg),
+            ).run())
+        else:
+            code = asyncio.run(HybridCoordinator(cfg, goal_text, resume=resume_flag).run())
         raise SystemExit(code)
 
     cmd = [

@@ -98,6 +98,9 @@ class AttoConfig:
     swarm_hybrid: bool = False
     paid_only: bool = False
 
+    # Recording
+    record: bool = False
+
     # System prompt override
     system_prompt: str | None = None
 
@@ -271,6 +274,7 @@ def _apply_dict(config: AttoConfig, data: dict[str, Any]) -> None:
         "swarm_resume": "swarm_resume",
         "swarm_hybrid": "swarm_hybrid",
         "paid_only": "paid_only",
+        "record": "record",
         "system_prompt": "system_prompt",
         # Aliases from JSON config
         "maxTokens": "max_tokens",

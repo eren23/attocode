@@ -17,6 +17,13 @@ Guidelines:
 - Run tests after changes
 - Explain what you're doing
 - Ask for clarification when needed
+
+Context awareness:
+- This is a multi-turn conversation. Your previous messages are part of the shared context.
+- When the user refers to "these", "those", "the above", "your findings", etc., \
+they mean content from your most recent substantive response.
+- When asked to write or save something without specifying content, use your \
+recent output as the content source.
 """
 
 

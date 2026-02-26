@@ -452,3 +452,129 @@ class TestBuildDependencyGraph:
 
         # No edges since os/sys/pathlib are not local files
         assert graph.get_imports("app.py") == set()
+
+
+# ============================================================
+# Budgeted Repo Map Tests
+# ============================================================
+
+
+def _create_large_project(root: Path, n_files: int = 50) -> None:
+    """Create a project with many files at varying importance levels."""
+    # High-importance: entry points
+    (root / "src").mkdir()
+    (root / "src" / "main.py").write_text(
+        "import sys\n\nclass App:\n    pass\n\ndef main():\n    print('hello')\n\n"
+        "def setup():\n    pass\n\ndef run():\n    pass\n",
+        encoding="utf-8",
+    )
+    (root / "src" / "cli.py").write_text(
+        "def cli():\n    pass\n\ndef parse_args():\n    pass\n",
+        encoding="utf-8",
+    )
+    # Config (high importance)
+    (root / "pyproject.toml").write_text('[project]\nname = "demo"\n', encoding="utf-8")
+    (root / "README.md").write_text("# Demo project\n" * 20, encoding="utf-8")
+
+    # Medium-importance: regular source files
+    for i in range(10):
+        (root / "src" / f"module_{i}.py").write_text(
+            f"class Module{i}:\n    pass\n\ndef func_{i}():\n    return {i}\n" * 3,
+            encoding="utf-8",
+        )
+
+    # Low-importance: test files, deeply nested, tiny files
+    (root / "tests").mkdir()
+    for i in range(15):
+        (root / "tests" / f"test_mod_{i}.py").write_text(
+            f"def test_{i}():\n    assert True\n",
+            encoding="utf-8",
+        )
+
+    # Deeply nested low-importance
+    deep = root / "src" / "internal" / "detail"
+    deep.mkdir(parents=True)
+    for i in range(10):
+        (deep / f"helper_{i}.py").write_text(f"x = {i}\n", encoding="utf-8")
+
+
+class TestBudgetedRepoMap:
+    def test_max_tokens_limits_output(self, tmp_path: Path) -> None:
+        """Budgeted repo map should be significantly smaller than full."""
+        _create_large_project(tmp_path)
+        mgr = CodebaseContextManager(root_dir=str(tmp_path))
+        mgr.discover_files()
+
+        full_map = mgr.get_repo_map(include_symbols=True)
+        budgeted_map = mgr.get_repo_map(include_symbols=True, max_tokens=4000)
+
+        # Budgeted tree should be shorter
+        assert len(budgeted_map.tree) < len(full_map.tree)
+        # Budgeted should have fewer symbols
+        assert len(budgeted_map.symbols) <= len(full_map.symbols)
+
+    def test_tier1_files_have_symbols(self, tmp_path: Path) -> None:
+        """High-importance files should retain symbol annotations."""
+        _create_large_project(tmp_path)
+        mgr = CodebaseContextManager(root_dir=str(tmp_path))
+        mgr.discover_files()
+
+        budgeted_map = mgr.get_repo_map(include_symbols=True, max_tokens=6000)
+
+        # main.py should be in Tier 1 with symbols
+        main_syms = budgeted_map.symbols.get(os.path.join("src", "main.py"), [])
+        assert len(main_syms) > 0, "main.py should have symbols in budgeted map"
+        # Symbols capped at 5 for budgeted
+        assert len(main_syms) <= 5
+
+    def test_low_importance_files_collapsed(self, tmp_path: Path) -> None:
+        """Tier 3 files should appear as collapse markers, not individual entries."""
+        _create_large_project(tmp_path)
+        mgr = CodebaseContextManager(root_dir=str(tmp_path))
+        mgr.discover_files()
+
+        budgeted_map = mgr.get_repo_map(include_symbols=True, max_tokens=4000)
+
+        # Should contain collapse markers for omitted files
+        assert "..." in budgeted_map.tree
+        # The tree should not list every single test file individually
+        # (tests are low importance, most should be collapsed)
+        test_file_count = budgeted_map.tree.count("test_mod_")
+        total_test_files = 15
+        assert test_file_count < total_test_files, (
+            f"Expected fewer than {total_test_files} test files in tree, got {test_file_count}"
+        )
+
+    def test_no_max_tokens_preserves_behavior(self, tmp_path: Path) -> None:
+        """Without max_tokens, output should match original behavior."""
+        _create_large_project(tmp_path)
+        mgr = CodebaseContextManager(root_dir=str(tmp_path))
+        mgr.discover_files()
+
+        full_map = mgr.get_repo_map(include_symbols=True)
+        default_map = mgr.get_repo_map(include_symbols=True, max_tokens=None)
+
+        assert full_map.tree == default_map.tree
+        assert full_map.symbols == default_map.symbols
+        assert full_map.total_files == default_map.total_files
+
+    def test_get_preseed_map(self, tmp_path: Path) -> None:
+        """get_preseed_map() should return a budgeted map."""
+        _create_large_project(tmp_path)
+        mgr = CodebaseContextManager(root_dir=str(tmp_path))
+        mgr.discover_files()
+
+        preseed = mgr.get_preseed_map()
+        full_map = mgr.get_repo_map(include_symbols=True)
+
+        # Preseed should be smaller than full
+        assert len(preseed.tree) < len(full_map.tree)
+        assert preseed.total_files == full_map.total_files  # total_files is still accurate
+
+    def test_count_omitted_per_dir(self) -> None:
+        """Static helper should count omitted files per directory."""
+        all_paths = ["src/a.py", "src/b.py", "src/c.py", "tests/t1.py", "tests/t2.py"]
+        included = {"src/a.py", "src/b.py"}
+        counts = CodebaseContextManager._count_omitted_per_dir(all_paths, included)
+        assert counts["src"] == 1  # c.py omitted
+        assert counts["tests"] == 2  # both test files omitted

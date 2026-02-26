@@ -9,11 +9,12 @@ from typing import Any, Callable
 
 from attocode.agent.context import AgentContext, EventHandler
 from attocode.agent.message_builder import build_initial_messages
-from attocode.providers.base import LLMProvider
+from attocode.providers.base import LLMProvider, get_model_context_window
 from attocode.tools.registry import ToolRegistry
 from attocode.types.agent import AgentConfig, AgentMetrics, AgentResult, AgentStatus
 from attocode.types.budget import ExecutionBudget, STANDARD_BUDGET
 from attocode.types.events import AgentEvent, EventType
+from attocode.types.messages import Message, Role, ToolCall
 
 # Type alias for budget extension handler: receives request dict, returns bool (granted)
 BudgetExtensionHandler = Callable[[dict[str, Any]], Any]
@@ -51,6 +52,7 @@ class ProductionAgent:
         codebase_context: Any = None,
         multi_agent_manager: Any = None,
         cancellation_manager: Any = None,
+        recording_config: Any = None,
     ) -> None:
         self._provider = provider
         self._registry = registry
@@ -77,6 +79,8 @@ class ProductionAgent:
         self._codebase_context = codebase_context
         self._multi_agent_manager = multi_agent_manager
         self._cancellation_manager = cancellation_manager
+        self._recording_config = recording_config
+        self._recorder: Any = None  # RecordingSessionManager instance
         self._file_change_tracker: Any = None  # Persists across runs for /diff, /undo
         self._extension_handler: BudgetExtensionHandler | None = None
         self._run_count: int = 0
@@ -88,6 +92,7 @@ class ProductionAgent:
         self._trace_collector: Any = None
         self._session_store: Any = None       # Persists across runs for /goals, /audit, /grants, etc.
         self._session_id: str | None = None   # Current session ID
+        self._conversation_messages: list[Message] = []  # Persists across TUI runs
 
     @property
     def status(self) -> AgentStatus:
@@ -165,6 +170,11 @@ class ProductionAgent:
         """Get the multi-agent manager."""
         return self._multi_agent_manager
 
+    @property
+    def recorder(self) -> Any:
+        """Get the recording session manager (if active)."""
+        return self._recorder
+
     def get_context_usage(self) -> float:
         """Get context window usage as a fraction (0.0 to 1.0)."""
         if not self._ctx:
@@ -174,7 +184,7 @@ class ProductionAgent:
             for m in self._ctx.messages
         )
         estimated_tokens = total_chars // 4
-        max_context = 200_000  # Default context window
+        max_context = get_model_context_window(self._config.model or "")
         return min(estimated_tokens / max_context, 1.0)
 
     def get_metrics(self) -> AgentMetrics:
@@ -254,9 +264,23 @@ class ProductionAgent:
         if self._trace_collector:
             ctx.trace_collector = self._trace_collector
 
+        # Initialize recording if configured
+        if self._recording_config is not None:
+            try:
+                from attocode.integrations.recording.recorder import RecordingSessionManager
+                self._recorder = RecordingSessionManager(self._recording_config)
+                rec_session_id = str(uuid.uuid4())[:8]
+                self._recorder.start(rec_session_id)
+            except Exception:
+                self._recorder = None  # Non-fatal
+
         # Register event handlers
         for handler in self._event_handlers:
             ctx.on_event(handler)
+
+        # Wire recorder as an event handler so it captures all agent events
+        if self._recorder is not None:
+            ctx.on_event(self._recorder.handle_event)
 
         self._ctx = ctx
 
@@ -339,15 +363,77 @@ class ProductionAgent:
             except Exception:
                 pass
 
-        # Build initial messages
-        messages = build_initial_messages(
-            prompt,
-            system_prompt=self._system_prompt,
-            working_dir=self._working_dir,
-            skills=loaded_skills,
-            learning_context=learning_context,
-        )
-        ctx.add_messages(messages)
+        # Register codebase context tools (if manager is available)
+        if self._codebase_context or getattr(ctx, "codebase_context", None):
+            try:
+                from attocode.tools.codebase import create_codebase_tools
+                mgr = self._codebase_context or ctx.codebase_context
+                for tool in create_codebase_tools(mgr):
+                    self._registry.register(tool)
+            except Exception:
+                pass  # Non-fatal
+
+        # Build messages — carry over previous conversation if this is a subsequent run
+        if self._conversation_messages:
+            # Subsequent run: carry over previous conversation + new user message
+            from attocode.agent.message_builder import build_system_prompt
+            sys_prompt = self._system_prompt or build_system_prompt(
+                working_dir=self._working_dir,
+                skills=loaded_skills,
+                extra_context=learning_context or None,
+            )
+            carried = list(self._conversation_messages)
+            # Replace system message (first msg) with fresh prompt (skills/learnings may have changed)
+            if carried and carried[0].role == Role.SYSTEM:
+                carried[0] = Message(role=Role.SYSTEM, content=sys_prompt)
+            else:
+                carried.insert(0, Message(role=Role.SYSTEM, content=sys_prompt))
+            # Append new user message
+            carried.append(Message(role=Role.USER, content=prompt))
+            ctx.add_messages(carried)
+        else:
+            # First run: build fresh initial messages
+            messages = build_initial_messages(
+                prompt,
+                system_prompt=self._system_prompt,
+                working_dir=self._working_dir,
+                skills=loaded_skills,
+                learning_context=learning_context,
+            )
+            ctx.add_messages(messages)
+
+        # Pre-seed repo map so the LLM has codebase structure from turn 1.
+        # Only on the first run — subsequent runs already have it in history.
+        _cbc_mgr = self._codebase_context or getattr(ctx, "codebase_context", None)
+        if _cbc_mgr and self._run_count == 0:
+            try:
+                repo_map = _cbc_mgr.get_preseed_map(max_tokens=6000)
+                parts = [
+                    f"Files: {repo_map.total_files} | "
+                    f"Lines: {repo_map.total_lines} | "
+                    f"Languages: {', '.join(sorted(repo_map.languages.keys()))}",
+                    "",
+                    "```",
+                    repo_map.tree,
+                    "```",
+                ]
+                if repo_map.symbols:
+                    parts.append("")
+                    parts.append("## Key Symbols")
+                    for rel_path, syms in list(repo_map.symbols.items())[:10]:
+                        parts.append(f"- `{rel_path}`: {', '.join(syms)}")
+
+                call_id = "preseed-repo-map"
+                ctx.add_messages([
+                    Message(
+                        role=Role.ASSISTANT,
+                        content="",
+                        tool_calls=[ToolCall(id=call_id, name="get_repo_map", arguments={})],
+                    ),
+                    Message(role=Role.TOOL, content="\n".join(parts), tool_call_id=call_id),
+                ])
+            except Exception:
+                pass  # Non-fatal — agent can still use tools manually
 
         try:
             # Lazy import to break circular dependency:
@@ -369,6 +455,9 @@ class ProductionAgent:
             self._run_count += 1
             self._total_tokens_all_runs += ctx.metrics.total_tokens
             self._total_cost_all_runs += ctx.metrics.estimated_cost
+
+            # Persist conversation messages for next run
+            self._conversation_messages = list(ctx.messages)
 
             # Update session
             if self._session_store and self._session_id:
@@ -394,6 +483,14 @@ class ProductionAgent:
                 metrics=ctx.metrics,
             )
         finally:
+            # Stop recording and export gallery
+            if self._recorder is not None and self._recorder.is_recording:
+                try:
+                    self._recorder.stop()
+                    self._recorder.export("html")
+                except Exception:
+                    pass  # Recording export is non-fatal
+
             # Disconnect MCP servers
             for client in mcp_clients:
                 try:
@@ -466,6 +563,10 @@ class ProductionAgent:
             except Exception:
                 pass
             self._session_store = None
+
+    def reset_conversation(self) -> None:
+        """Reset conversation history for a fresh start (/clear)."""
+        self._conversation_messages = []
 
     def get_budget_usage(self) -> float:
         """Get the current budget usage as a fraction (0.0 to 1.0).

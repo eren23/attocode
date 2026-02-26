@@ -45,35 +45,40 @@ def _make_stable_app(run_dir: Path) -> "AttoswarmApp":
 
     class StableApp(AttoswarmApp):
         def compose(self) -> ComposeResult:
-            # Override compose to use Header without clock
+            # Override compose to match AttoswarmApp layout but with clock disabled
             from textual.containers import Horizontal, Vertical
-            from textual.widgets import DataTable, Footer, Header, Static, TabbedContent, TabPane
+            from textual.widgets import Footer, Header, Static
+
+            from attocode.tui.widgets.swarm.agent_grid import AgentGrid
+            from attocode.tui.widgets.swarm.task_board import TaskBoard
+            from attocode.tui.widgets.swarm.dag_view import DependencyDAGView
+            from attocode.tui.widgets.swarm.event_timeline import EventTimeline
+            from attocode.tui.widgets.swarm.detail_inspector import DetailInspector
+            from attocode.tui.widgets.swarm.file_activity_map import FileActivityMap
+            from attocode.tui.screens.swarm_dashboard import SwarmStatusFooter
 
             yield Header(show_clock=False)
-            with TabbedContent(initial="overview-tabs") as tabs:
-                with TabPane("Overview", id="overview-tabs"):
-                    yield Horizontal(self._agents, self._tasks, id="overview")
-                with TabPane("Timeline", id="timeline-tab"):
-                    yield self._timeline
-                with TabPane("Task Detail", id="task-detail-tab"):
-                    yield self._task_detail
-                with TabPane("Agent Detail", id="agent-detail-tab"):
-                    yield self._agent_detail
-                with TabPane("Errors", id="errors-tab"):
-                    yield self._errors
-            yield Vertical(
-                self._phase,
-                self._budget,
-                tabs,
-                self._status_log,
-            )
+            with Vertical(id="swarm-outer"):
+                yield AgentGrid(id="swarm-agent-grid")
+                with Horizontal(id="swarm-middle"):
+                    with Vertical(id="swarm-left"):
+                        yield TaskBoard(id="swarm-task-board")
+                    with Vertical(id="swarm-right"):
+                        yield DependencyDAGView(id="swarm-dag-view")
+                        yield DetailInspector(id="swarm-detail")
+                yield EventTimeline(id="swarm-timeline")
+                yield FileActivityMap(id="swarm-file-activity")
+            yield SwarmStatusFooter(id="swarm-status-footer")
+            yield Static("", id="status-log")
             yield Footer()
 
         def on_mount(self) -> None:
             # Call parent on_mount but suppress status log
             super().on_mount()
-            self._show_logs = False
-            self._status_log.update("")
+            try:
+                self.query_one("#status-log", Static).update("")
+            except Exception:
+                pass
 
     return StableApp(str(run_dir))
 

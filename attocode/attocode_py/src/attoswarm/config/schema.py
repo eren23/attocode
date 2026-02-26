@@ -74,6 +74,13 @@ class UIConfig:
 
 
 @dataclass(slots=True)
+class WorkspaceConfig:
+    mode: str = "shared"  # "shared" (new default) | "worktree" (legacy)
+    reconciliation_strategy: str = "ast_merge"  # "ast_merge" | "last_write_wins"
+    max_concurrent_writers: int = 4
+
+
+@dataclass(slots=True)
 class SwarmYamlConfig:
     version: int = 1
     run: RunConfig = field(default_factory=RunConfig)
@@ -84,3 +91,4 @@ class SwarmYamlConfig:
     retries: RetryConfig = field(default_factory=RetryConfig)
     orchestration: OrchestrationConfig = field(default_factory=OrchestrationConfig)
     ui: UIConfig = field(default_factory=UIConfig)
+    workspace: WorkspaceConfig = field(default_factory=WorkspaceConfig)

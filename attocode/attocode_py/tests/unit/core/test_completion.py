@@ -50,32 +50,35 @@ class TestAnalyzeCompletion:
         assert result.should_stop
         assert result.reason == CompletionReason.COMPLETED
 
-    def test_future_intent_detected(self) -> None:
+    def test_future_intent_no_longer_kills_agent(self) -> None:
+        """Future intent text should complete normally (not kill agent)."""
         resp = ChatResponse(
             content="I'll need to continue with the remaining tasks.",
             stop_reason=StopReason.END_TURN,
         )
         result = analyze_completion(resp)
         assert result.should_stop
-        assert result.reason == CompletionReason.FUTURE_INTENT
+        assert result.reason == CompletionReason.COMPLETED
 
-    def test_future_intent_todo(self) -> None:
+    def test_todo_text_no_longer_kills_agent(self) -> None:
+        """TODO text should complete normally (not kill agent)."""
         resp = ChatResponse(
             content="Done with step 1. TODO: implement step 2.",
             stop_reason=StopReason.END_TURN,
         )
         result = analyze_completion(resp)
         assert result.should_stop
-        assert result.reason == CompletionReason.FUTURE_INTENT
+        assert result.reason == CompletionReason.COMPLETED
 
-    def test_incomplete_action_detected(self) -> None:
+    def test_incomplete_action_no_longer_kills_agent(self) -> None:
+        """Incomplete action text should complete normally (not kill agent)."""
         resp = ChatResponse(
             content="I was unable to complete the task due to a missing dependency.",
             stop_reason=StopReason.END_TURN,
         )
         result = analyze_completion(resp)
         assert result.should_stop
-        assert result.reason == CompletionReason.INCOMPLETE_ACTION
+        assert result.reason == CompletionReason.COMPLETED
 
     def test_no_false_positive_on_normal_text(self) -> None:
         resp = ChatResponse(

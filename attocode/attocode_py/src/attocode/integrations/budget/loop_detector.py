@@ -47,6 +47,17 @@ class LoopDetector:
     _counts: Counter[str] = field(default_factory=Counter, repr=False)
     _window_size: int = 20
 
+    def peek(self, tool_name: str, arguments: dict) -> LoopDetection:
+        """Check if a call would trigger loop detection, without recording it."""
+        try:
+            sig = f"{tool_name}:{json.dumps(arguments, sort_keys=True, default=str)}"
+        except (TypeError, ValueError):
+            sig = f"{tool_name}:{str(arguments)}"
+        count = self._counts.get(sig, 0)
+        if count >= self.threshold:
+            return LoopDetection.detected(tool_name, count)
+        return LoopDetection.no_loop()
+
     def record(self, tool_name: str, arguments: dict) -> LoopDetection:
         """Record a tool call and check for loops.
 
