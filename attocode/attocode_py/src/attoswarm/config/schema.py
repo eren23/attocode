@@ -75,7 +75,7 @@ class UIConfig:
 
 @dataclass(slots=True)
 class WorkspaceConfig:
-    mode: str = "shared"  # "shared" (new default) | "worktree" (legacy)
+    mode: str = "shared"  # "shared" (default, AoT+OCC) | "worktree" (legacy subprocess per worktree)
     reconciliation_strategy: str = "ast_merge"  # "ast_merge" | "last_write_wins"
     max_concurrent_writers: int = 4
 
