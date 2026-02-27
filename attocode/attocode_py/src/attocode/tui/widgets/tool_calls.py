@@ -29,6 +29,7 @@ class ToolCallInfo:
     result: str | None = None
     error: str | None = None
     start_time: float = field(default_factory=time.monotonic)
+    duration_ms: float = 0.0
 
 
 class ToolCallsPanel(Widget):
@@ -50,6 +51,7 @@ class ToolCallsPanel(Widget):
     """
 
     expanded: reactive[bool] = reactive(False)
+    filter_mode: reactive[str] = reactive("all")  # all, errors, running
 
     def __init__(self, max_display: int = 20, **kwargs) -> None:
         super().__init__(**kwargs)
@@ -60,6 +62,10 @@ class ToolCallsPanel(Widget):
         self._max_display = max_display
         self._spinner_index = 0
         self._spinner_timer: Timer | None = None
+        # Summary stats
+        self._total_completed: int = 0
+        self._total_errors: int = 0
+        self._total_duration_ms: float = 0.0
 
     def compose(self) -> ComposeResult:
         # Header label — hidden when no tools
@@ -123,6 +129,15 @@ class ToolCallsPanel(Widget):
         if error is not None:
             info.error = error
 
+        # Track duration on completion
+        if status in ("completed", "error"):
+            info.duration_ms = (time.monotonic() - info.start_time) * 1000
+            self._total_duration_ms += info.duration_ms
+            if status == "completed":
+                self._total_completed += 1
+            else:
+                self._total_errors += 1
+
         try:
             collapsible = self.query_one(f"#{widget_id}", Collapsible)
             # Update title
@@ -145,6 +160,10 @@ class ToolCallsPanel(Widget):
         self._call_order.clear()
         self._tool_id_to_widget_id.clear()
         self._call_counter = 0
+        self._total_completed = 0
+        self._total_errors = 0
+        self._total_duration_ms = 0.0
+        self.filter_mode = "all"
         try:
             scroll = self.query_one("#tool-scroll", VerticalScroll)
             for collapsible in scroll.query(Collapsible):
@@ -206,18 +225,64 @@ class ToolCallsPanel(Widget):
         return text
 
     def _update_header(self) -> None:
-        """Update the header label."""
+        """Update the header label with summary stats."""
         try:
             header = self.query_one("#tool-calls-header", Static)
             running_count = sum(1 for c in self._calls.values() if c.status == "running")
             if not self._calls:
                 header.update("")
-            elif running_count > 0:
-                header.update(Text(f"Tools ({running_count} running)", style="bold cyan"))
-            else:
-                header.update(Text("Tools", style="bold cyan"))
+                return
+
+            text = Text()
+            text.append("Tools: ", style="bold cyan")
+
+            parts: list[str] = []
+            if running_count > 0:
+                parts.append(f"{running_count} running")
+            if self._total_completed > 0:
+                parts.append(f"{self._total_completed} completed")
+            if self._total_errors > 0:
+                parts.append(f"{self._total_errors} errors")
+            text.append(", ".join(parts), style="dim")
+
+            # Average duration
+            finished = self._total_completed + self._total_errors
+            if finished > 0:
+                avg_ms = self._total_duration_ms / finished
+                if avg_ms >= 1000:
+                    text.append(f" — Avg: {avg_ms / 1000:.1f}s", style="dim")
+                else:
+                    text.append(f" — Avg: {avg_ms:.0f}ms", style="dim")
+
+            # Filter mode indicator
+            if self.filter_mode != "all":
+                text.append(f" [{self.filter_mode}]", style="yellow")
+
+            header.update(text)
         except Exception:
             pass
+
+    def cycle_filter(self) -> None:
+        """Cycle through filter modes: all -> errors -> running -> all."""
+        modes = ["all", "errors", "running"]
+        current_idx = modes.index(self.filter_mode) if self.filter_mode in modes else 0
+        self.filter_mode = modes[(current_idx + 1) % len(modes)]
+        self._apply_filter()
+
+    def _apply_filter(self) -> None:
+        """Show/hide collapsibles based on filter mode."""
+        for widget_id, info in self._calls.items():
+            try:
+                collapsible = self.query_one(f"#{widget_id}", Collapsible)
+                if self.filter_mode == "all":
+                    collapsible.display = True
+                elif self.filter_mode == "errors":
+                    collapsible.display = info.status == "error"
+                elif self.filter_mode == "running":
+                    collapsible.display = info.status == "running"
+            except Exception:
+                pass
+        self._update_header()
 
     def _ensure_spinner(self) -> None:
         """Start or stop spinner based on running tools."""

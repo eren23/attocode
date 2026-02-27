@@ -17,12 +17,16 @@ from attocode.tui.events import (
     AgentCompleted,
     AgentStarted,
     BudgetWarning,
+    CacheStats,
+    CompactionCompleted,
+    DoomLoopWarning,
     IterationUpdate,
     LLMCompleted,
     LLMStarted,
     LLMStreamChunk,
     LLMStreamEnd,
     LLMStreamStart,
+    PhaseTransition,
     StatusUpdate,
     SwarmStatusUpdate,
     ToolCompleted,
@@ -104,6 +108,8 @@ class AgentEventBridge:
             EventType.LLM_STREAM_START.value: self._on_llm_stream_start,
             EventType.LLM_STREAM_CHUNK.value: self._on_llm_stream_chunk,
             EventType.LLM_STREAM_END.value: self._on_llm_stream_end,
+            EventType.INSIGHT_PHASE_CHANGE.value: self._on_phase_transition,
+            EventType.INSIGHT_DOOM_LOOP.value: self._on_doom_loop,
         }
 
     @property
@@ -226,6 +232,18 @@ class AgentEventBridge:
             tokens=data.get("tokens", 0),
             cost=data.get("cost", 0.0),
         ))
+        # Extract and emit cache stats if present
+        cache_read = data.get("cache_read_tokens", 0) or data.get("cache_read", 0)
+        cache_write = data.get("cache_write_tokens", 0) or data.get("cache_write", 0)
+        input_tokens = data.get("input_tokens", 0)
+        output_tokens = data.get("output_tokens", 0)
+        if cache_read or cache_write or input_tokens or output_tokens:
+            self._post(CacheStats(
+                cache_read=cache_read,
+                cache_write=cache_write,
+                input_tokens=input_tokens,
+                output_tokens=output_tokens,
+            ))
 
     def _on_budget_warning(self, data: dict[str, Any]) -> None:
         self._post(BudgetWarning(
@@ -273,6 +291,22 @@ class AgentEventBridge:
         self._post(StatusUpdate(
             text=f"Compaction complete ({saved:,} tokens saved)",
             mode="info",
+        ))
+        self._post(CompactionCompleted(
+            tokens_saved=saved,
+            new_usage=data.get("new_usage", 0.0),
+        ))
+
+    def _on_phase_transition(self, data: dict[str, Any]) -> None:
+        self._post(PhaseTransition(
+            old_phase=data.get("old_phase", ""),
+            new_phase=data.get("new_phase", ""),
+        ))
+
+    def _on_doom_loop(self, data: dict[str, Any]) -> None:
+        self._post(DoomLoopWarning(
+            tool_name=data.get("tool_name", ""),
+            count=data.get("count", 0),
         ))
 
 

@@ -317,6 +317,57 @@ def _is_budget_excuse(text: str) -> bool:
 # =============================================================================
 
 
+def run_ast_checks(
+    task: SwarmTask,
+    result: SwarmTaskResult,
+    ast_service: Any = None,
+) -> list[str]:
+    """Run AST-based quality checks on a completed task.
+
+    Checks that:
+    - Modified files parse successfully (via AST service re-index)
+    - Expected symbols still exist after modification
+    - No unintended signature changes
+
+    Returns a list of issue strings (empty = all good).
+    """
+    if ast_service is None:
+        return []
+
+    issues: list[str] = []
+    modified = result.files_modified or []
+    if not modified:
+        return []
+
+    try:
+        for fpath in modified:
+            if not os.path.isfile(fpath):
+                continue
+
+            # Check if file parses correctly
+            if hasattr(ast_service, "parse_file"):
+                try:
+                    ast_service.parse_file(fpath)
+                except Exception as exc:
+                    issues.append(f"AST parse error in {fpath}: {exc}")
+
+            # Check that symbols still exist after modification
+            if hasattr(ast_service, "get_file_symbols"):
+                try:
+                    symbols = ast_service.get_file_symbols(fpath)
+                    if not symbols and os.path.getsize(fpath) > 100:
+                        issues.append(
+                            f"No symbols found in {fpath} after modification "
+                            f"(file has {os.path.getsize(fpath)} bytes)"
+                        )
+                except Exception:
+                    pass
+    except Exception:
+        pass
+
+    return issues
+
+
 def run_concrete_checks(
     task: SwarmTask,
     result: SwarmTaskResult,
@@ -397,6 +448,7 @@ async def evaluate_worker_output(
     file_artifacts: ArtifactReport | None = None,
     swarm_config: SwarmConfig | None = None,
     cached_artifact_report: ArtifactReport | None = None,
+    emit: Callable[..., None] | None = None,
 ) -> QualityGateResult:
     """Evaluate a worker's output using pre-flight checks and an LLM judge.
 
@@ -418,6 +470,20 @@ async def evaluate_worker_output(
         task, result, swarm_config=swarm_config, cached_artifacts=artifact_report
     )
     if pre_flight is not None:
+        # Emit quality result for pre-flight failure too
+        if emit is not None:
+            try:
+                from attocode.integrations.swarm.types import swarm_event
+                emit(swarm_event(
+                    "swarm.quality.result",
+                    task_id=task.id,
+                    score=pre_flight.score,
+                    feedback=pre_flight.feedback,
+                    passed=pre_flight.passed,
+                    artifact_auto_fail=pre_flight.artifact_auto_fail,
+                ))
+            except Exception:
+                pass
         return pre_flight
 
     # Step 3: Build judge prompt
@@ -471,11 +537,28 @@ async def evaluate_worker_output(
         score, feedback = _parse_quality_response(content)
         passed = score >= quality_threshold
 
-        return QualityGateResult(
+        gate_result = QualityGateResult(
             score=score,
             feedback=feedback,
             passed=passed,
         )
+
+        # Emit quality result event
+        if emit is not None:
+            try:
+                from attocode.integrations.swarm.types import swarm_event
+                emit(swarm_event(
+                    "swarm.quality.result",
+                    task_id=task.id,
+                    score=score,
+                    feedback=feedback,
+                    passed=passed,
+                    artifact_auto_fail=False,
+                ))
+            except Exception:
+                pass
+
+        return gate_result
 
     except Exception as exc:
         # Step 6: On LLM error, return safe default

@@ -7,6 +7,62 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.4] - 2026-02-27
+
+### Added
+
+- **MCP integration overhaul**
+  - `MCPClient.connect()` now expands `${VAR}` env references via `_expand_env()` and inherits parent `os.environ` (previously child process lost PATH)
+  - Agent uses `MCPClientManager` for MCP lifecycle (eager + lazy loading)
+  - `/mcp list` shows real connection state (connected/failed/pending) instead of always "configured"; failed servers show error message
+  - `/mcp tools`, `/mcp search`, `/mcp stats` fallback to `_registry` when ctx is not yet available
+  - `ToolRegistry.set_tool_resolver()` for lazy MCP tool discovery
+
+- **Swarm system enhancements**
+  - New modules: `cc_spawner.py` (Claude Code subprocess spawner), `critic.py` (wave review + fixup tasks), `roles.py` (role config with scout/critic/judge)
+  - Wave review: critic role can assess completed waves and generate fixup tasks
+  - Scout pre-execution: read-only agent gathers codebase context before implementation tasks
+  - Quality gate wired to execution with LLM judge scoring, threshold relaxation for foundation tasks, retry with feedback
+  - Model failover on consecutive timeouts/rate-limits
+  - Hollow detection emits `swarm.hollow_detected` events
+  - Task completion events now include output, files_modified, tool_calls, session_id, num_turns, stderr
+
+- **`/swarm` command group** — 7 subcommands: `init`, `start`, `status`, `stop`, `dashboard`, `config`, `help`
+  - `/swarm init` auto-generates `.attocode/swarm.yaml` from current model
+  - `/swarm start <task>` launches swarm execution inline
+  - `/swarm status` shows live task/worker/phase state
+
+- **TUI improvements**
+  - Swarm dashboard: 8 new dedicated panes (overview, tasks, workers, quality, files, decisions, model health, AST blackboard)
+  - `swarm_dashboard.tcss` stylesheet
+  - Focus screen refactored with improved layout
+  - Swarm monitor: enhanced rendering and state display
+  - Status bar: new swarm-aware metrics
+  - Tool calls widget: expanded display
+  - Event system: new event types and hooks for swarm integration
+  - `AgentInternalsPanel` widget
+
+- **Timeline screen** — `TimelineScreen` accepts `state_fn` callback for live polling with 0.5s timer and proper `on_unmount` cleanup
+
+- **`AgentConfig`** gains `provider` and `api_key` fields
+- **`PolicyEngine`** — new safe rules for `codebase_overview`, `get_repo_map`, `get_tree_view`
+- **`TraceCollector._increment_counters()`** internal API + `TraceWriter` wired to it
+
+### Changed
+
+- **Timeout defaults** increased from 120s → 600s across all providers (Anthropic, OpenAI, OpenRouter, Azure, ZAI, resilient provider)
+- **Subagent timeouts** tripled (e.g. default 5min → 15min, researcher 7min → 20min)
+- **Subagent max iterations** doubled (e.g. default 15 → 30, researcher 25 → 50)
+- **Timeout extension on progress** 60s → 120s; budget max duration 3600s → 7200s
+- **`AgentBuilder.with_provider()`** now forwards `timeout` kwarg
+- **Streaming failure fallback** — execution loop now falls back to non-streaming before erroring
+- **`httpx.StreamError`** now caught in OpenAI/OpenRouter `chat_stream()`
+- **`_describe_request_error()`** helper for OpenAI/OpenRouter — better error messages for httpx timeouts
+- **`InefficiencyDetector._detect_empty_responses()`** skips events lacking token data (fewer false positives)
+- **Agent's `_run_with_swarm()`** rewritten: uses `cc_spawner`, `SwarmEventBridge`, AST server sharing, proper result mapping
+- **`SwarmConfig`** gains new fields; barrel re-exports for cc_spawner, roles, critic
+- **attoswarm CLI** — major refactor with proper backend command building (`_build_backend_cmd`), environment variable stripping for nested agent sessions (`_STRIP_ENV_VARS`), `RoleConfig` support in schema
+
 ## [0.1.3] - 2026-02-26
 
 ### Added

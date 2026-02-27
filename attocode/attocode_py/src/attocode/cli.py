@@ -384,6 +384,24 @@ def _run_tui(config: Any) -> None:
         rec_dir = config.working_directory + "/.attocode/recordings"
         builder = builder.with_recording(RecordingConfig(output_dir=rec_dir))
 
+    # Load MCP server configs from hierarchy and wire into builder
+    from attocode.integrations.mcp.config import load_mcp_configs
+
+    mcp_configs = load_mcp_configs(config.working_directory)
+    if mcp_configs:
+        mcp_dicts = [
+            {
+                "name": c.name,
+                "command": c.command,
+                "args": c.args,
+                "env": c.env,
+                "enabled": c.enabled,
+                "lazy_load": c.lazy_load,
+            }
+            for c in mcp_configs
+        ]
+        builder = builder.with_mcp_servers(mcp_dicts)
+
     # Create approval bridge before building agent so we can wire it
     from attocode.tui.bridges.approval_bridge import ApprovalBridge
     approval_bridge = ApprovalBridge()

@@ -49,16 +49,36 @@ class TaskCard(Static):
     }
     """
 
-    def __init__(self, task_id: str = "", title: str = "", **kwargs: Any) -> None:
+    def __init__(
+        self,
+        task_id: str = "",
+        title: str = "",
+        quality_score: int | None = None,
+        attempts: int = 0,
+        is_foundation: bool = False,
+        **kwargs: Any,
+    ) -> None:
         super().__init__(**kwargs)
         self.task_id = task_id
         self.title = title
+        self._quality_score = quality_score
+        self._attempts = attempts
+        self._is_foundation = is_foundation
 
     def on_mount(self) -> None:
         text = Text()
+        if self._is_foundation:
+            text.append("\u2605 ", style="yellow")
         text.append(self.task_id, style="bold")
+        # Quality score badge
+        if self._quality_score is not None:
+            score_style = "green" if self._quality_score >= 3 else "red"
+            text.append(f" [{self._quality_score}/5]", style=score_style)
+        # Retry count
+        if self._attempts > 1:
+            text.append(f" r{self._attempts}", style="yellow dim")
         text.append("\n")
-        text.append(self.title[:30], style="dim italic")
+        text.append(self.title[:80], style="dim italic")
         self.update(text)
 
     def on_click(self) -> None:
@@ -105,6 +125,9 @@ class KanbanColumn(Vertical):
             card = TaskCard(
                 task_id=task.get("task_id", "?"),
                 title=task.get("title", ""),
+                quality_score=task.get("quality_score"),
+                attempts=task.get("attempts", 0),
+                is_foundation=task.get("is_foundation", False),
             )
             self.mount(card)
 
@@ -146,11 +169,25 @@ class TaskBoard(Widget):
             "done": [],
             "failed": [],
         }
+        # Status mapping from event bridge values to display buckets
+        status_map = {
+            "pending": "pending",
+            "ready": "pending",
+            "dispatched": "running",
+            "completed": "done",
+            "failed": "failed",
+            "skipped": "failed",
+            "decomposed": "pending",
+        }
         for task in tasks:
-            status = task.get("status", "pending")
-            if status in ("skipped",):
-                status = "failed"
+            raw_status = task.get("status", "pending")
+            status = status_map.get(raw_status, "pending")
             bucket = buckets.get(status, buckets["pending"])
+            # Normalize task_id: event bridge uses "id", some places use "task_id"
+            if "task_id" not in task and "id" in task:
+                task = {**task, "task_id": task["id"]}
+            if "title" not in task and "description" in task:
+                task = {**task, "title": task["description"]}
             bucket.append(task)
 
         for key in ("pending", "running", "done", "failed"):

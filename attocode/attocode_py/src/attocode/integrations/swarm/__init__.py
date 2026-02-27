@@ -86,6 +86,23 @@ from attocode.integrations.swarm.swarm_state_store import (
     SwarmStateSnapshot,
     SwarmStateStore,
 )
+from attocode.integrations.swarm.cc_spawner import (
+    create_cc_spawn_fn,
+    spawn_cc_worker,
+)
+from attocode.integrations.swarm.roles import (
+    BUILTIN_ROLES,
+    RoleConfig,
+    build_role_map,
+    get_critic_config,
+    get_judge_model,
+    get_role_config,
+    get_scout_config,
+)
+from attocode.integrations.swarm.critic import (
+    build_fixup_tasks,
+    review_wave,
+)
 
 __all__ = [
     # Types
@@ -164,4 +181,18 @@ __all__ = [
     # swarm_state_store
     "SwarmStateSnapshot",
     "SwarmStateStore",
+    # cc_spawner
+    "create_cc_spawn_fn",
+    "spawn_cc_worker",
+    # roles
+    "BUILTIN_ROLES",
+    "RoleConfig",
+    "build_role_map",
+    "get_critic_config",
+    "get_judge_model",
+    "get_role_config",
+    "get_scout_config",
+    # critic
+    "build_fixup_tasks",
+    "review_wave",
 ]

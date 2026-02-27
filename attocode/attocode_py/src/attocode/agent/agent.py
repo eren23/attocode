@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import os
 import time
 import uuid
 from typing import Any, Callable
@@ -87,7 +88,10 @@ class ProductionAgent:
         self._total_tokens_all_runs: int = 0
         self._total_cost_all_runs: float = 0.0
         self._subagent_registry: dict[str, Any] = {}
+        self._mcp_client_manager: Any = None  # MCPClientManager, set during _connect_mcp_servers()
         self._swarm_orchestrator: Any = None
+        self._event_bridge: Any = None
+        self._ast_server: Any = None
         self._thread_manager: Any = None
         self._trace_collector: Any = None
         self._session_store: Any = None       # Persists across runs for /goals, /audit, /grants, etc.
@@ -122,6 +126,16 @@ class ProductionAgent:
     def context(self) -> AgentContext | None:
         """The current execution context, if running."""
         return self._ctx
+
+    @property
+    def event_bridge(self) -> Any:
+        """The swarm event bridge, if swarm mode is active."""
+        return self._event_bridge
+
+    @property
+    def swarm_orchestrator(self) -> Any:
+        """The swarm orchestrator, if swarm mode is active."""
+        return self._swarm_orchestrator
 
     def on_event(self, handler: EventHandler) -> None:
         """Register an event handler."""
@@ -511,46 +525,96 @@ class ProductionAgent:
             # can read agent state between prompts.
 
     async def _connect_mcp_servers(self) -> list[Any]:
-        """Connect to MCP servers and register their tools."""
-        from attocode.integrations.mcp.client import MCPClient
+        """Connect to MCP servers and register their tools.
+
+        Uses MCPClientManager for lifecycle management.  Eager servers
+        are connected immediately and their tools registered in the
+        registry.  Lazy servers are deferred — a tool_resolver callback
+        on the registry will connect them on first use.
+        """
+        from attocode.integrations.mcp.client_manager import MCPClientManager
+        from attocode.integrations.mcp.config import MCPServerConfig
         from attocode.tools.base import Tool, ToolSpec
         from attocode.types.messages import DangerLevel
 
-        clients: list[Any] = []
+        manager = MCPClientManager()
+
+        # Convert dicts to MCPServerConfig and register
+        configs: list[MCPServerConfig] = []
         for mcp_cfg in self._mcp_server_configs:
-            try:
-                client = MCPClient(
-                    server_command=mcp_cfg["command"],
-                    server_args=mcp_cfg.get("args", []),
-                    server_name=mcp_cfg.get("name", ""),
-                    env=mcp_cfg.get("env"),
-                )
-                await client.connect()
-                clients.append(client)
-                # Register discovered tools in the registry
-                for mcp_tool in client.tools:
-                    def _make_executor(c: MCPClient, name: str):
-                        async def _exec(args: dict) -> Any:
-                            r = await c.call_tool(name, args)
-                            return r.result if r.success else f"Error: {r.error}"
-                        return _exec
-                    tool_name = (
-                        f"mcp__{client.server_name}__{mcp_tool.name}"
-                        if client.server_name else mcp_tool.name
-                    )
-                    self._registry.register(Tool(
-                        spec=ToolSpec(
-                            name=tool_name,
-                            description=mcp_tool.description,
-                            parameters=mcp_tool.input_schema,
-                            danger_level=DangerLevel.MODERATE,
-                        ),
-                        execute=_make_executor(client, mcp_tool.name),
-                        tags=["mcp", client.server_name],
-                    ))
-            except Exception:
-                pass  # MCP connection failures are non-fatal
-        return clients
+            cfg = MCPServerConfig(
+                name=mcp_cfg.get("name", ""),
+                command=mcp_cfg.get("command", ""),
+                args=mcp_cfg.get("args", []),
+                env=mcp_cfg.get("env", {}),
+                enabled=mcp_cfg.get("enabled", True),
+                lazy_load=mcp_cfg.get("lazy_load", False),
+            )
+            configs.append(cfg)
+
+        manager.register_all(configs)
+        await manager.connect_eager()
+
+        # Store manager so /mcp commands can use it
+        self._mcp_client_manager = manager
+
+        # Helper: build a namespaced tool name
+        def _tool_name(server_name: str, raw_name: str) -> str:
+            return f"mcp__{server_name}__{raw_name}" if server_name else raw_name
+
+        # Helper: wrap an MCP tool as a registry Tool
+        def _make_tool(server_name: str, mcp_tool: Any) -> Tool:
+            def _make_call(mgr: MCPClientManager, name: str):
+                async def _run(args: dict) -> Any:
+                    r = await mgr.call_tool(name, args)
+                    return r.result if r.success else f"Error: {r.error}"
+                return _run
+
+            return Tool(
+                spec=ToolSpec(
+                    name=_tool_name(server_name, mcp_tool.name),
+                    description=mcp_tool.description,
+                    parameters=mcp_tool.input_schema,
+                    danger_level=DangerLevel.MODERATE,
+                ),
+                execute=_make_call(manager, mcp_tool.name),
+                tags=["mcp", server_name],
+            )
+
+        # Register tools from eagerly-connected servers
+        for mcp_tool in manager.get_all_tools():
+            # Find which server owns this tool
+            for sname in manager.server_names:
+                srv_tools = manager.get_tools_for_server(sname)
+                if any(t.name == mcp_tool.name for t in srv_tools):
+                    self._registry.register(_make_tool(sname, mcp_tool))
+                    break
+
+        # Set up lazy resolver for tools on pending (lazy) servers
+        has_lazy = any(c.lazy_load and c.enabled for c in configs)
+        if has_lazy:
+            async def _resolve_tool(tool_name: str) -> Tool | None:
+                """Lazy resolver: connect pending servers to find the requested tool."""
+                # Strip mcp__ prefix to get raw tool name
+                raw_name = tool_name
+                if tool_name.startswith("mcp__"):
+                    parts = tool_name.split("__", 2)
+                    if len(parts) == 3:
+                        raw_name = parts[2]
+
+                # call_tool triggers lazy connect for pending servers
+                await manager.call_tool(raw_name, {})
+
+                # If lazy connect succeeded, find the tool definition
+                for sname in manager.server_names:
+                    for mt in manager.get_tools_for_server(sname):
+                        if mt.name == raw_name:
+                            return _make_tool(sname, mt)
+                return None
+
+            self._registry.set_tool_resolver(_resolve_tool)
+
+        return []  # No longer returning raw clients
 
     def cancel(self) -> None:
         """Cancel the current agent execution."""
@@ -661,20 +725,38 @@ class ProductionAgent:
     async def _run_with_swarm(self, prompt: str) -> AgentResult:
         """Delegate execution to the swarm orchestrator for parallel multi-agent work."""
         try:
-            from attocode.integrations.swarm.orchestrator import (
+            from attocode.integrations.swarm.cc_spawner import create_cc_spawn_fn
+            from attocode.integrations.swarm.event_bridge import SwarmEventBridge
+            from attocode.integrations.swarm.model_selector import get_fallback_workers
+            from attocode.integrations.swarm.orchestrator import SwarmOrchestrator
+            from attocode.integrations.swarm.types import (
                 SwarmConfig,
-                SwarmOrchestrator,
+                SwarmExecutionResult,
+                SwarmWorkerSpec,
+                WorkerCapability,
             )
-            from attocode.integrations.swarm.types import SwarmExecutionResult
 
             # Build swarm configuration from agent config
+            orchestrator_model = self._config.model or "claude-sonnet-4-20250514"
+
+            # Build worker specs from config or defaults
+            workers = self._build_worker_specs(orchestrator_model)
+
             swarm_cfg = SwarmConfig(
-                max_workers=getattr(self._config, "swarm_max_workers", 3),
+                orchestrator_model=orchestrator_model,
+                workers=workers,
                 max_concurrency=getattr(self._config, "swarm_max_concurrency", 2),
                 quality_gates=getattr(self._config, "swarm_quality_gates", True),
-                orchestrator_model=self._config.model or "",
-                worker_models=getattr(self._config, "swarm_worker_models", []),
-                budget=self._budget,
+                total_budget=self._budget.max_tokens * 10,  # workers get their own budgets
+                max_cost=10.0,
+                worker_max_iterations=self._budget.max_iterations,
+            )
+
+            # Create spawn function using CC CLI subprocess
+            spawn_fn = create_cc_spawn_fn(
+                working_dir=self._working_dir,
+                default_model=orchestrator_model,
+                max_iterations=swarm_cfg.worker_max_iterations,
             )
 
             # Create or reuse orchestrator
@@ -682,34 +764,79 @@ class ProductionAgent:
                 self._swarm_orchestrator = SwarmOrchestrator(
                     config=swarm_cfg,
                     provider=self._provider,
-                    registry=self._registry,
-                    working_dir=self._working_dir,
+                    spawn_agent_fn=spawn_fn,
                 )
+
+            # Attach event bridge for TUI consumption
+            if self._event_bridge is None:
+                self._event_bridge = SwarmEventBridge(
+                    output_dir=os.path.join(
+                        self._session_dir or ".agent", "swarm-live"
+                    ),
+                )
+            self._event_bridge.attach(self._swarm_orchestrator)
+
+            # Start AST server for external CC instances
+            if self._ast_server is None and self._working_dir:
+                try:
+                    from attocode.integrations.context.ast_service import ASTService
+                    from attocode.integrations.context.ast_server import ASTServer
+                    from attocode.tools.ast_query import create_ast_query_tool
+
+                    ast_svc = ASTService.get_instance(self._working_dir)
+                    if not ast_svc.initialized:
+                        ast_svc.initialize()
+
+                    # Start socket server
+                    self._ast_server = ASTServer(ast_svc)
+                    await self._ast_server.start()
+
+                    # Register AST query tool for workers
+                    if not self._registry.has("codebase_ast_query"):
+                        self._registry.register(create_ast_query_tool(ast_svc))
+                except Exception:
+                    pass  # Non-critical: swarm works without AST sharing
 
             # Execute the swarm
             swarm_result: SwarmExecutionResult = await self._swarm_orchestrator.execute(
                 prompt
             )
 
+            # Stop AST server after swarm completes
+            if self._ast_server:
+                try:
+                    await self._ast_server.stop()
+                except Exception:
+                    pass
+                self._ast_server = None
+
+            # Close event bridge
+            if self._event_bridge:
+                self._event_bridge.close()
+
             # Convert SwarmExecutionResult to AgentResult
+            stats = swarm_result.stats
             return AgentResult(
                 success=swarm_result.success,
-                response=swarm_result.final_output or "",
-                error=swarm_result.error if not swarm_result.success else None,
+                response=swarm_result.summary or "",
+                error=None if swarm_result.success else (
+                    swarm_result.errors[0].get("message", "Swarm failed")
+                    if swarm_result.errors else "Swarm execution failed"
+                ),
                 metrics=AgentMetrics(
-                    total_tokens=swarm_result.total_tokens,
-                    estimated_cost=swarm_result.total_cost,
-                    llm_calls=swarm_result.total_llm_calls,
-                    tool_calls=swarm_result.total_tool_calls,
-                    duration_seconds=swarm_result.duration_seconds,
+                    total_tokens=stats.total_tokens,
+                    estimated_cost=stats.total_cost,
+                    llm_calls=stats.orchestrator_tokens,
+                    tool_calls=stats.completed_tasks,
+                    duration_ms=float(stats.total_duration_ms),
                 ),
             )
 
-        except ImportError:
+        except ImportError as ie:
             return AgentResult(
                 success=False,
                 response="",
-                error="Swarm module not available. Install swarm dependencies.",
+                error=f"Swarm module not available: {ie}",
             )
         except Exception as e:
             return AgentResult(
@@ -717,6 +844,52 @@ class ProductionAgent:
                 response="",
                 error=f"Swarm execution failed: {e}",
             )
+
+    def _build_worker_specs(self, orchestrator_model: str) -> list:
+        """Build SwarmWorkerSpec list from agent config or defaults."""
+        from attocode.integrations.swarm.types import (
+            SwarmWorkerSpec,
+            WorkerCapability,
+            WorkerRole,
+        )
+
+        # Check if config has explicit worker specs
+        configured_workers = getattr(self._config, "swarm_workers", None)
+        if configured_workers:
+            return configured_workers
+
+        # Check for swarm worker models list (e.g., from CLI)
+        worker_models = getattr(self._config, "swarm_worker_models", None)
+        if worker_models:
+            specs = []
+            for i, model in enumerate(worker_models):
+                specs.append(SwarmWorkerSpec(
+                    name=f"worker-{i}",
+                    model=model,
+                    capabilities=[WorkerCapability.CODE, WorkerCapability.TEST],
+                ))
+            return specs
+
+        # Default: use orchestrator model for 2 builder workers + 1 reviewer
+        return [
+            SwarmWorkerSpec(
+                name="builder-0",
+                model=orchestrator_model,
+                capabilities=[WorkerCapability.CODE, WorkerCapability.TEST],
+            ),
+            SwarmWorkerSpec(
+                name="builder-1",
+                model=orchestrator_model,
+                capabilities=[WorkerCapability.CODE, WorkerCapability.TEST],
+            ),
+            SwarmWorkerSpec(
+                name="reviewer",
+                model=orchestrator_model,
+                capabilities=[WorkerCapability.REVIEW, WorkerCapability.RESEARCH],
+                role=WorkerRole.EXECUTOR,
+                allowed_tools=["Read", "Glob", "Grep"],
+            ),
+        ]
 
     async def spawn_agent(
         self,

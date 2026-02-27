@@ -10,6 +10,7 @@ from textual.app import ComposeResult
 from textual.binding import Binding
 from textual.containers import Horizontal, Vertical
 from textual.screen import Screen
+from textual.timer import Timer
 from textual.widgets import ContentSwitcher, DataTable, Footer, Static
 
 
@@ -31,21 +32,32 @@ def _short_cwd(cwd: str) -> str:
 HIDDEN_EVENT_TYPES = {"heartbeat", "stderr"}
 
 
-def _safe_tail_jsonl(path: Path, limit: int = 300) -> list[dict[str, Any]]:
+def _safe_tail_jsonl(path: Path, limit: int = 100) -> list[dict[str, Any]]:
+    """Read the last *limit* JSON objects from a JSONL file.
+
+    Uses a seek-from-end strategy to avoid reading the entire file.
+    """
     if not path.exists():
         return []
     out: list[dict[str, Any]] = []
     try:
-        lines = path.read_text(encoding="utf-8", errors="replace").splitlines()
+        # Read only the tail of the file to avoid slurping huge event logs
+        file_size = path.stat().st_size
+        read_bytes = min(file_size, limit * 512)  # ~512 bytes per event line
+        with open(path, "rb") as f:
+            if read_bytes < file_size:
+                f.seek(file_size - read_bytes)
+                f.readline()  # skip partial first line
+            data = f.read().decode("utf-8", errors="replace")
+        for line in data.splitlines()[-limit:]:
+            try:
+                item = json.loads(line)
+            except Exception:
+                continue
+            if isinstance(item, dict):
+                out.append(item)
     except Exception:
-        return []
-    for line in lines[-max(limit, 1):]:
-        try:
-            item = json.loads(line)
-        except Exception:
-            continue
-        if isinstance(item, dict):
-            out.append(item)
+        pass
     return out
 
 
@@ -66,6 +78,8 @@ class SwarmMonitorScreen(Screen):
         self._run_dirs: list[Path] = []
         self._selected_run: Path | None = None
         self._active_view = "fleet"
+        self._poll_timer: Timer | None = None
+        self._refresh_count: int = 0
 
     def compose(self) -> ComposeResult:
         with Vertical(id="swarm-monitor"):
@@ -93,8 +107,13 @@ class SwarmMonitorScreen(Screen):
         agents = self.query_one("#run-agents", DataTable)
         agents.add_columns("Agent", "Role", "Type", "Backend", "Status", "Task", "CWD", "Restarts")
 
-        self.set_interval(1.0, self._refresh_all)
+        self._poll_timer = self.set_interval(2.0, self._refresh_all)
         self._refresh_all()
+
+    def on_unmount(self) -> None:
+        if self._poll_timer:
+            self._poll_timer.stop()
+            self._poll_timer = None
 
     def action_close(self) -> None:
         self.dismiss()
@@ -122,17 +141,20 @@ class SwarmMonitorScreen(Screen):
             self._refresh_run_detail()
 
     def _refresh_all(self) -> None:
+        self._refresh_count += 1
+        # Only re-discover run dirs every 5th tick (expensive glob)
+        if self._refresh_count % 5 == 1 or not self._run_dirs:
+            self._run_dirs = self._discover_run_dirs()
         self._refresh_fleet()
         if self._selected_run is not None:
             self._refresh_run_detail()
 
     def _discover_run_dirs(self) -> list[Path]:
-        roots = [self._root]
-        # Prefer workspace-local .agent but also allow deeper scans from root.
         out: list[Path] = []
         seen: set[Path] = set()
-        for root in roots:
-            for state in root.glob("**/swarm.state.json"):
+        # Event bridge writes state.json (not swarm.state.json)
+        for pattern in ("**/state.json", "**/swarm.state.json"):
+            for state in self._root.glob(pattern):
                 run_dir = state.parent
                 if run_dir in seen:
                     continue
@@ -143,62 +165,82 @@ class SwarmMonitorScreen(Screen):
     def _refresh_fleet(self) -> None:
         table = self.query_one("#fleet-table", DataTable)
         table.clear(columns=False)
-        self._run_dirs = self._discover_run_dirs()
         for run_dir in self._run_dirs:
-            state = _safe_read_json(run_dir / "swarm.state.json")
-            phase = str(state.get("phase", "unknown"))
-            tasks = state.get("tasks", {}) if isinstance(state.get("tasks"), dict) else {}
-            task_text = f"r{tasks.get('ready', 0)} ru{tasks.get('running', 0)} d{tasks.get('done', 0)} f{tasks.get('failed', 0)}"
-            agents = state.get("active_agents", []) if isinstance(state.get("active_agents"), list) else []
+            # Try state.json first (event bridge format), fallback to swarm.state.json
+            state = _safe_read_json(run_dir / "state.json")
+            if not state:
+                state = _safe_read_json(run_dir / "swarm.state.json")
+
+            # Handle event bridge schema: status.phase, status.queue, status.active_workers
+            status = state.get("status", {}) if isinstance(state.get("status"), dict) else {}
+            phase = str(status.get("phase", state.get("phase", "unknown")))
+            queue = status.get("queue", {}) if isinstance(status.get("queue"), dict) else {}
+            task_text = (
+                f"r{queue.get('ready', 0)} "
+                f"ru{queue.get('running', 0)} "
+                f"d{queue.get('completed', 0)} "
+                f"f{queue.get('failed', 0)}"
+            )
+            agents = status.get("active_workers", []) if isinstance(status.get("active_workers"), list) else []
             err_count = len(state.get("errors", [])) if isinstance(state.get("errors"), list) else 0
-            updated = str(state.get("updated_at", ""))[-8:]
+            updated = str(state.get("timestamp", ""))[-8:]
             table.add_row(str(run_dir), phase, task_text, str(len(agents)), str(err_count), updated)
 
     def _refresh_run_detail(self) -> None:
         if self._selected_run is None:
             return
-        state = _safe_read_json(self._selected_run / "swarm.state.json")
+        # Try state.json first, fallback to swarm.state.json
+        state = _safe_read_json(self._selected_run / "state.json")
+        if not state:
+            state = _safe_read_json(self._selected_run / "swarm.state.json")
 
-        # --- Title bar: phase + budget ---
-        phase = str(state.get("phase", "unknown"))
-        budget = state.get("budget", {}) if isinstance(state.get("budget"), dict) else {}
+        # Handle event bridge schema: status.phase, status.budget
+        status = state.get("status", {}) if isinstance(state.get("status"), dict) else {}
+        phase = str(status.get("phase", state.get("phase", "unknown")))
+        budget = status.get("budget", {}) if isinstance(status.get("budget"), dict) else {}
         tokens_used = int(budget.get("tokens_used", 0))
-        max_tokens = int(budget.get("max_tokens", 0))
-        cost_used = float(budget.get("cost_used_usd", 0.0))
-        max_cost = float(budget.get("max_cost_usd", 0.0))
+        tokens_total = int(budget.get("tokens_total", 0))
+        cost_used = float(budget.get("cost_used", 0.0))
+        cost_total = float(budget.get("cost_total", 0.0))
         title_text = f"Run: {self._selected_run} | Phase: {phase}"
-        if max_tokens > 0 or max_cost > 0:
-            title_text += f" | Budget: {tokens_used:,}/{max_tokens:,} tok (${cost_used:.2f}/${max_cost:.2f})"
+        if tokens_total > 0 or cost_total > 0:
+            title_text += f" | Budget: {tokens_used:,}/{tokens_total:,} tok (${cost_used:.2f}/${cost_total:.2f})"
         self.query_one("#swarm-monitor-title", Static).update(title_text)
 
-        # --- Tasks table ---
+        # --- Tasks table: read from state.tasks dict ---
         tasks_table = self.query_one("#run-tasks", DataTable)
         tasks_table.clear(columns=False)
-        attempts = state.get("attempts", {}).get("by_task", {}) if isinstance(state.get("attempts"), dict) else {}
-        nodes = state.get("dag", {}).get("nodes", []) if isinstance(state.get("dag"), dict) else []
-        for n in nodes:
-            task_id = str(n.get("task_id", ""))
-            detail = _safe_read_json(self._selected_run / "tasks" / f"task-{task_id}.json")
-            tasks_table.add_row(
-                task_id,
-                str(n.get("status", "")),
-                str(detail.get("task_kind", "")),
-                str(detail.get("role_hint", "")),
-                str(attempts.get(task_id, detail.get("attempts", 0))),
-                str(detail.get("title", ""))[:60],
-                str(detail.get("last_error", "") or "")[:60],
-            )
+        tasks_data = state.get("tasks", {})
+        if isinstance(tasks_data, dict):
+            for task_id, t in tasks_data.items():
+                # Also try reading per-task detail file
+                safe_id = task_id.replace("/", "_").replace("\\", "_")
+                detail = _safe_read_json(self._selected_run / "tasks" / f"{safe_id}.json")
+                tasks_table.add_row(
+                    task_id,
+                    str(t.get("status", "")),
+                    str(t.get("type", "")),
+                    str(detail.get("role_hint", t.get("assigned_model", ""))),
+                    str(t.get("attempts", 0)),
+                    str(t.get("description", ""))[:60],
+                    str(t.get("failure_mode", "") or "")[:60],
+                )
 
-        # --- Events table: filter heartbeat/stderr noise ---
+        # --- Events table: read from events.jsonl ---
         events_table = self.query_one("#run-events", DataTable)
         events_table.clear(columns=False)
-        all_events = _safe_tail_jsonl(self._selected_run / "swarm.events.jsonl", limit=300)
-        heartbeat_count = sum(1 for ev in all_events if ev.get("type") in HIDDEN_EVENT_TYPES)
+        all_events = _safe_tail_jsonl(self._selected_run / "events.jsonl", limit=100)
         visible = [ev for ev in all_events if ev.get("type") not in HIDDEN_EVENT_TYPES]
-        for ev in visible[-80:]:
-            payload = ev.get("payload", {}) if isinstance(ev.get("payload"), dict) else {}
-            message = payload.get("message") or payload.get("reason") or payload.get("event_type") or ""
-            # Show file changes inline
+        for ev in visible[-50:]:
+            # Event bridge writes {seq, timestamp, type, data}
+            data = ev.get("data", {}) if isinstance(ev.get("data"), dict) else {}
+            payload = ev.get("payload", data)  # compat: try payload then data
+            message = (
+                payload.get("message")
+                or payload.get("reason")
+                or payload.get("event_type")
+                or ""
+            )
             files = payload.get("files")
             if isinstance(files, list) and files:
                 message = ", ".join(files[:5])
@@ -207,22 +249,23 @@ class SwarmMonitorScreen(Screen):
             events_table.add_row(
                 str(ev.get("timestamp", ""))[-8:],
                 str(ev.get("type", "")),
-                str(payload.get("agent_id", "")),
+                str(payload.get("agent_id", payload.get("worker_name", ""))),
                 str(payload.get("task_id", "")),
                 str(message)[:80],
             )
 
-        # --- Agents table: add CWD + Restarts ---
+        # --- Agents table: read from status.active_workers ---
         agents_table = self.query_one("#run-agents", DataTable)
         agents_table.clear(columns=False)
-        for agent in state.get("active_agents", []) if isinstance(state.get("active_agents"), list) else []:
+        active_workers = status.get("active_workers", []) if isinstance(status.get("active_workers"), list) else []
+        for agent in active_workers:
             cwd = str(agent.get("cwd", ""))
             agents_table.add_row(
-                str(agent.get("agent_id", "")),
+                str(agent.get("worker_name", agent.get("agent_id", ""))),
                 str(agent.get("role_id", "")),
                 str(agent.get("role_type", "")),
-                str(agent.get("backend", "")),
-                str(agent.get("status", "")),
+                str(agent.get("model", agent.get("backend", ""))),
+                "running" if agent.get("task_id") else "idle",
                 str(agent.get("task_id", "")),
                 _short_cwd(cwd) if cwd else ".",
                 str(agent.get("restart_count", 0)),

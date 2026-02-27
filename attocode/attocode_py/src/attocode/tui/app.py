@@ -20,6 +20,9 @@ from attocode.tui.events import (
     AgentStarted,
     ApprovalRequired,
     BudgetWarning,
+    CacheStats,
+    CompactionCompleted,
+    DoomLoopWarning,
     IterationUpdate,
     LLMCompleted,
     LLMRetry,
@@ -27,6 +30,7 @@ from attocode.tui.events import (
     LLMStreamChunk,
     LLMStreamEnd,
     LLMStreamStart,
+    PhaseTransition,
     StatusUpdate,
     SwarmStatusUpdate,
     ToolCompleted,
@@ -46,6 +50,7 @@ from attocode.tui.widgets.welcome_banner import WelcomeBanner
 from attocode.tui.widgets.swarm_panel import SwarmPanel
 from attocode.tui.widgets.tasks_panel import TasksPanel
 from attocode.tui.widgets.thinking_panel import ThinkingPanel
+from attocode.tui.widgets.agent_internals_panel import AgentInternalsPanel
 from attocode.tui.widgets.tool_calls import ToolCallInfo, ToolCallsPanel
 
 # Path to TCSS files
@@ -66,6 +71,7 @@ class AttocodeApp(App):
         _STYLES_DIR / "app.tcss",
         _STYLES_DIR / "dialogs.tcss",
         _STYLES_DIR / "swarm.tcss",
+        _STYLES_DIR / "swarm_dashboard.tcss",
     ]
 
     TITLE = "Attocode"
@@ -82,6 +88,7 @@ class AttocodeApp(App):
         Binding("ctrl+d", "toggle_dashboard", "Dashboard", show=True),
         Binding("ctrl+m", "toggle_swarm_monitor", "Swarm Monitor", show=True),
         Binding("ctrl+s", "swarm_dashboard", "Swarm Dashboard", show=False),
+        Binding("ctrl+i", "toggle_internals", "Agent Internals", show=False),
     ]
 
     def __init__(
@@ -140,6 +147,7 @@ class AttocodeApp(App):
             yield TasksPanel(id="tasks-panel")
             yield AgentsPanel(id="agents-panel")
             yield SwarmPanel(id="swarm-panel")
+            yield AgentInternalsPanel(id="agent-internals")
             # Input + status bar inside the Vertical so they stack
             # (dock:bottom causes overlapping, not stacking)
             yield PromptInput(id="input-area")
@@ -509,6 +517,73 @@ class AttocodeApp(App):
         """Swarm status snapshot update."""
         self.query_one("#swarm-panel", SwarmPanel).update_status(event.status)
 
+        # Update status bar swarm indicator
+        try:
+            status_bar = self.query_one("#status-bar", StatusBar)
+            s = event.status or {}
+            st = s.get("status", {})
+            queue = st.get("queue", {})
+            budget = st.get("budget", {})
+            phase = st.get("phase", "")
+
+            status_bar.swarm_active = phase not in ("", "idle", "completed", "failed")
+            status_bar.swarm_wave = str(st.get("current_wave", ""))
+            status_bar.swarm_active_workers = len(st.get("active_workers", []))
+            status_bar.swarm_done = queue.get("completed", 0)
+            status_bar.swarm_total = queue.get("total", 0)
+            status_bar.swarm_cost = budget.get("cost_used", 0.0)
+        except Exception:
+            pass
+
+    def on_compaction_completed(self, event: CompactionCompleted) -> None:
+        """Compaction event — update status bar and internals panel."""
+        status = self.query_one("#status-bar", StatusBar)
+        status.compaction_count += 1
+        try:
+            panel = self.query_one("#agent-internals", AgentInternalsPanel)
+            panel.record_compaction(event.tokens_saved)
+        except Exception:
+            pass
+
+    def on_phase_transition(self, event: PhaseTransition) -> None:
+        """Economics phase changed."""
+        self.query_one("#status-bar", StatusBar).phase = event.new_phase
+        try:
+            panel = self.query_one("#agent-internals", AgentInternalsPanel)
+            panel.update_phase(event.new_phase)
+        except Exception:
+            pass
+
+    def on_doom_loop_warning(self, event: DoomLoopWarning) -> None:
+        """Doom loop warning."""
+        self.notify(
+            f"Doom loop: {event.tool_name} called {event.count} times",
+            severity="warning",
+            timeout=5,
+        )
+        try:
+            panel = self.query_one("#agent-internals", AgentInternalsPanel)
+            panel.set_doom_loop(event.tool_name, event.count)
+        except Exception:
+            pass
+
+    def on_cache_stats(self, event: CacheStats) -> None:
+        """Cache stats update — update status bar and internals panel."""
+        try:
+            panel = self.query_one("#agent-internals", AgentInternalsPanel)
+            panel.update_cache_stats(
+                event.cache_read, event.cache_write,
+                event.input_tokens, event.output_tokens,
+            )
+            # Update status bar cache hit rate
+            total = panel.input_tokens + panel.cache_read
+            if total > 0:
+                self.query_one("#status-bar", StatusBar).cache_hit_rate = (
+                    panel.cache_read / total
+                )
+        except Exception:
+            pass
+
     # --- Dialog bridges ---
 
     def _show_approval_dialog(
@@ -626,6 +701,11 @@ class AttocodeApp(App):
         panel = self.query_one("#swarm-panel", SwarmPanel)
         panel.toggle_class("visible")
 
+    def action_toggle_internals(self) -> None:
+        """Toggle agent internals panel (Ctrl+I)."""
+        panel = self.query_one("#agent-internals", AgentInternalsPanel)
+        panel.toggle_class("visible")
+
     def action_toggle_dashboard(self) -> None:
         """Toggle the dashboard screen (Ctrl+D)."""
         trace_dir = ""
@@ -655,12 +735,27 @@ class AttocodeApp(App):
         from attocode.tui.screens.swarm_dashboard import SwarmDashboardScreen
 
         state_fn = None
+        event_bridge = None
+        blackboard = None
+        ast_service = None
+
         if self._agent and hasattr(self._agent, "_swarm_orchestrator"):
             orch = self._agent._swarm_orchestrator
             if orch and hasattr(orch, "get_state"):
                 state_fn = orch.get_state
+            if orch and hasattr(orch, "event_bridge"):
+                event_bridge = orch.event_bridge
+            if orch and hasattr(orch, "blackboard"):
+                blackboard = orch.blackboard
+            if orch and hasattr(orch, "ast_service"):
+                ast_service = orch.ast_service
 
-        self.push_screen(SwarmDashboardScreen(state_fn=state_fn))
+        self.push_screen(SwarmDashboardScreen(
+            state_fn=state_fn,
+            event_bridge=event_bridge,
+            blackboard=blackboard,
+            ast_service=ast_service,
+        ))
 
     # --- Helpers ---
 
