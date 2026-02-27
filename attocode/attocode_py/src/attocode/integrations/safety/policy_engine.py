@@ -127,6 +127,15 @@ class PolicyEngine:
         """Check if a command was previously approved."""
         return command in self._approved_commands
 
+    @property
+    def approved_commands(self) -> set[str]:
+        """Return the set of approved commands (for persistence)."""
+        return set(self._approved_commands)
+
+    def load_grants(self, commands: list[str]) -> None:
+        """Bulk-load pre-approved commands (e.g. from DB)."""
+        self._approved_commands.update(commands)
+
     def approve_all(self) -> None:
         """Set all tools to auto-approve."""
         self.rules = [

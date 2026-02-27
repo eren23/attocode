@@ -165,6 +165,7 @@ class AgentConfig:
     tools: list[str] | None = None
     sandbox_enabled: bool = False
     debug: bool = False
+    resume_session: str | None = None
 
 
 @dataclass

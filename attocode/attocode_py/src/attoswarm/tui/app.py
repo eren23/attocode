@@ -179,14 +179,19 @@ class AttoswarmApp(App[None]):
                 self.query_one("#swarm-detail", DetailInspector).inspect(detail)
             except Exception:
                 pass
+            from attocode.tui.screens.task_detail_screen import TaskDetailScreen
+            self.push_screen(TaskDetailScreen(detail))
 
     def on_task_card_selected(self, event: TaskCard.Selected) -> None:
-        detail = self._store.build_task_detail(event.task_id)
+        state = self._store.read_state()
+        detail = self._store.build_task_detail(event.task_id, state=state)
         if detail:
             try:
                 self.query_one("#swarm-detail", DetailInspector).inspect(detail)
             except Exception:
                 pass
+            from attocode.tui.screens.task_detail_screen import TaskDetailScreen
+            self.push_screen(TaskDetailScreen(detail))
 
     # ── Actions ──────────────────────────────────────────────────────
 

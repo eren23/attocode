@@ -53,9 +53,15 @@ class DetailInspector(Static):
             text.append("\n")
             text.append(f"  Status: {data.get('status', '?')}\n")
             text.append(f"  Task: {data.get('task_id', 'none')}\n")
+            task_title = data.get("task_title", "")
+            if task_title:
+                text.append(f"  Doing: {task_title}\n")
             text.append(f"  Model: {data.get('model', '?')}\n")
             text.append(f"  Tokens: {data.get('tokens_used', 0):,}\n")
             text.append(f"  Elapsed: {data.get('elapsed', '?')}\n")
+            result = data.get("result", "")
+            if result:
+                text.append(f"  Result: {result[:200]}\n", style="dim italic")
 
             files = data.get("files_modified", [])
             if files:
@@ -69,7 +75,18 @@ class DetailInspector(Static):
             text.append("\n")
             text.append(f"  Title: {data.get('title', '?')}\n")
             text.append(f"  Status: {data.get('status', '?')}\n")
-            text.append(f"  Kind: {data.get('task_kind', '?')}\n")
+            task_kind = data.get("task_kind", "")
+            if task_kind:
+                text.append(f"  Kind: {task_kind}\n")
+            agent_id = data.get("agent_id", "")
+            if agent_id:
+                text.append(f"  Agent: {agent_id}\n")
+            model = data.get("model", "")
+            if model:
+                text.append(f"  Model: {model}\n")
+            duration = data.get("duration", "")
+            if duration:
+                text.append(f"  Duration: {duration}\n")
 
             deps = data.get("deps", [])
             if deps:
@@ -81,7 +98,7 @@ class DetailInspector(Static):
                 for f in targets[:10]:
                     text.append(f"    \u2022 {f}\n", style="dim")
 
-            desc = data.get("description", "")
+            desc = data.get("description", "") or data.get("result_summary", "")
             if desc:
                 text.append(f"\n  Description:\n  {desc[:200]}\n", style="dim italic")
 

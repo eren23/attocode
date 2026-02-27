@@ -187,6 +187,8 @@ def _run_single_turn(config: Any, prompt: str) -> None:
 
             if config.session_dir:
                 builder = builder.with_session_dir(config.session_dir)
+            if config.resume_session:
+                builder = builder.with_resume_session(config.resume_session)
 
             if config.system_prompt:
                 builder = builder.with_system_prompt(config.system_prompt)
@@ -366,6 +368,8 @@ def _run_tui(config: Any) -> None:
 
     if config.session_dir:
         builder = builder.with_session_dir(config.session_dir)
+    if config.resume_session:
+        builder = builder.with_resume_session(config.resume_session)
 
     # Set up trace writer for recording execution traces
     trace_writer = TraceWriter(

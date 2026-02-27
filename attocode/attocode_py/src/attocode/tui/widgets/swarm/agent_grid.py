@@ -66,6 +66,7 @@ class AgentCard(Static):
         self._model = ""
         self._tokens = 0
         self._elapsed = ""
+        self._task_title = ""
 
     def update_data(
         self,
@@ -74,12 +75,14 @@ class AgentCard(Static):
         model: str = "",
         tokens: int = 0,
         elapsed: str = "",
+        task_title: str = "",
     ) -> None:
         self._status = status
         self._task_id = task_id
         self._model = model
         self._tokens = tokens
         self._elapsed = elapsed
+        self._task_title = task_title
 
         # Update CSS class
         self.remove_class("running", "done", "error")
@@ -103,7 +106,8 @@ class AgentCard(Static):
             text.append(f" ({self._model})", style="dim")
         text.append("\n")
         if self._task_id:
-            text.append(f"  {self._task_id[:18]}", style="italic")
+            label = self._task_title[:30] if self._task_title else self._task_id[:18]
+            text.append(f"  {label}", style="italic")
         text.append("\n")
         if self._tokens:
             text.append(f"  {self._tokens // 1000}k tok", style="dim")
@@ -151,6 +155,10 @@ class AgentGrid(Widget):
         # Clear existing cards
         row.remove_children()
 
+        if not agents:
+            row.mount(Static(Text("No active agents", style="dim italic")))
+            return
+
         for agent in agents:
             # Event bridge uses "worker_name"; fallback to "agent_id"
             agent_id = agent.get("worker_name") or agent.get("agent_id", "?")
@@ -172,4 +180,5 @@ class AgentGrid(Widget):
                 model=agent.get("model", ""),
                 tokens=agent.get("tokens_used", 0),
                 elapsed=elapsed_str,
+                task_title=agent.get("task_title", ""),
             )

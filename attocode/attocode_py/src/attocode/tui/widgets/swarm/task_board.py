@@ -112,8 +112,10 @@ class KanbanColumn(Vertical):
     def compose(self):
         title = _COLUMN_TITLES.get(self.column_key, self.column_key.upper())
         style = _COLUMN_STYLES.get(self.column_key, "")
-        header = Static(Text(title, style=style), classes="column-header")
-        yield header
+        header_text = Text()
+        header_text.append(title, style=style)
+        header_text.append("  click to inspect", style="dim italic")
+        yield Static(header_text, classes="column-header")
 
     def set_tasks(self, tasks: list[dict[str, Any]]) -> None:
         # Remove old task cards

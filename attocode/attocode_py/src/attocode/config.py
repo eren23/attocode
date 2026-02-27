@@ -91,6 +91,12 @@ class AttoConfig:
     sandbox_mode: str = "auto"
     debug: bool = False
 
+    # Session resume
+    resume_session: str | None = None
+
+    # Permission mode
+    permission_mode: str = "interactive"
+
     # Swarm
     swarm: bool = False
     swarm_config: str | None = None
@@ -276,8 +282,12 @@ def _apply_dict(config: AttoConfig, data: dict[str, Any]) -> None:
         "paid_only": "paid_only",
         "record": "record",
         "system_prompt": "system_prompt",
+        "resume_session": "resume_session",
+        "permission_mode": "permission_mode",
         # Aliases from JSON config
         "maxTokens": "max_tokens",
+        "resumeSession": "resume_session",
+        "permissionMode": "permission_mode",
         "maxIterations": "max_iterations",
         "maxContextTokens": "max_context_tokens",
         "sandboxMode": "sandbox_mode",

@@ -179,6 +179,11 @@ class AgentBuilder:
         self._session_dir = path
         return self
 
+    def with_resume_session(self, session_id: str) -> AgentBuilder:
+        """Set a session ID to resume on first run."""
+        self._config.resume_session = session_id
+        return self
+
     def with_spawn_agent(self, enabled: bool = True) -> AgentBuilder:
         """Enable the spawn_agent tool for subagent delegation."""
         self._enable_spawn_agent = enabled

@@ -18,6 +18,11 @@ from attocode.integrations.recording.exploration_tracker import (
     ExplorationSnapshot,
     tool_to_action,
 )
+from attocode.integrations.recording.graph_types import (
+    EdgeKind,
+    NodeKind,
+    SessionGraph,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -62,6 +67,7 @@ class RecordingSession:
     output_dir: str
     total_frames: int = 0
     agents: list[str] = field(default_factory=list)
+    session_graph: SessionGraph | None = None
 
 
 # Event types that trigger frame capture
@@ -106,6 +112,7 @@ class RecordingSessionManager:
         self._session_dir: Path | None = None
         self._frames: list[RecordingFrame] = []
         self._exploration = ExplorationGraph()
+        self._session_graph = SessionGraph()
         self._frame_counter: int = 0
         self._last_capture_time: float = 0.0
         self._start_time: float = 0.0
@@ -124,6 +131,10 @@ class RecordingSessionManager:
     def exploration_graph(self) -> ExplorationGraph:
         return self._exploration
 
+    @property
+    def session_graph(self) -> SessionGraph:
+        return self._session_graph
+
     def start(self, session_id: str) -> Path:
         """Start a new recording session.
 
@@ -138,6 +149,7 @@ class RecordingSessionManager:
         self._recording = True
         self._frames = []
         self._exploration = ExplorationGraph()
+        self._session_graph = SessionGraph(session_id=session_id)
         self._frame_counter = 0
         self._agents_seen = set()
 
@@ -168,6 +180,7 @@ class RecordingSessionManager:
             output_dir=str(self._session_dir) if self._session_dir else "",
             total_frames=self._frame_counter,
             agents=sorted(self._agents_seen),
+            session_graph=self._session_graph,
         )
 
         # Persist metadata
@@ -197,6 +210,9 @@ class RecordingSessionManager:
         # --- Update exploration graph for file-access tool events ---
         if event_type in ("tool.complete", "tool.start"):
             self._track_exploration(event, agent_id)
+
+        # --- Update session graph for ALL event types ---
+        self._track_session_graph(event, event_type, agent_id)
 
         # --- Determine whether to capture a frame ---
         if not self._should_capture(event_type):
@@ -267,6 +283,132 @@ class RecordingSessionManager:
     # ------------------------------------------------------------------
     # Internal helpers
     # ------------------------------------------------------------------
+
+    def _track_session_graph(self, event: Any, event_type: str, agent_id: str) -> None:
+        """Emit a node into the session graph for every event type."""
+        iteration = getattr(event, "iteration", 0) or 0
+        tool = getattr(event, "tool", "") or ""
+        args = getattr(event, "args", None) or {}
+        meta = getattr(event, "metadata", None) or {}
+
+        # Map event_type → NodeKind
+        if event_type == "tool.start":
+            self._session_graph.add_node(
+                NodeKind.TOOL_CALL,
+                agent_id=agent_id,
+                iteration=iteration,
+                tool_name=tool,
+                tool_args=args if isinstance(args, dict) else {},
+                content=f"start: {tool}",
+            )
+            # If file-access tool, also record FILE_VISIT
+            file_path = args.get("file_path") or args.get("path") or ""
+            if file_path and tool in _FILE_ACCESS_TOOLS:
+                self._session_graph.add_node(
+                    NodeKind.FILE_VISIT,
+                    agent_id=agent_id,
+                    iteration=iteration,
+                    file_path=file_path,
+                    action=tool_to_action(tool),
+                    tool_name=tool,
+                )
+        elif event_type == "tool.complete":
+            result = getattr(event, "result", "") or ""
+            self._session_graph.add_node(
+                NodeKind.TOOL_CALL,
+                agent_id=agent_id,
+                iteration=iteration,
+                tool_name=tool,
+                content=f"complete: {str(result)[:200]}",
+            )
+        elif event_type == "tool.error":
+            error = getattr(event, "error", "") or ""
+            self._session_graph.add_node(
+                NodeKind.ERROR,
+                agent_id=agent_id,
+                iteration=iteration,
+                tool_name=tool,
+                content=str(error)[:200],
+            )
+        elif event_type in ("llm.start", "llm_start"):
+            self._session_graph.add_node(
+                NodeKind.LLM_CALL,
+                agent_id=agent_id,
+                iteration=iteration,
+                model=meta.get("model", ""),
+            )
+        elif event_type in ("llm.complete", "llm_complete"):
+            self._session_graph.add_node(
+                NodeKind.LLM_CALL,
+                agent_id=agent_id,
+                iteration=iteration,
+                model=meta.get("model", ""),
+                input_tokens=getattr(event, "tokens", 0) or 0,
+                output_tokens=meta.get("output_tokens", 0),
+                cost=getattr(event, "cost", 0.0) or 0.0,
+            )
+        elif event_type == "response":
+            content = getattr(event, "message", "") or meta.get("content", "")
+            self._session_graph.add_node(
+                NodeKind.MESSAGE,
+                agent_id=agent_id,
+                iteration=iteration,
+                content=str(content)[:500],
+            )
+        elif event_type == "subagent.spawn":
+            sub_id = meta.get("subagent_id", "") or getattr(event, "agent_id", "")
+            self._session_graph.add_node(
+                NodeKind.SUBAGENT_SPAWN,
+                agent_id=agent_id,
+                iteration=iteration,
+                content=f"spawn: {sub_id}",
+                metadata={"subagent_id": sub_id},
+            )
+        elif event_type == "subagent.complete":
+            self._session_graph.add_node(
+                NodeKind.SUBAGENT_COMPLETE,
+                agent_id=agent_id,
+                iteration=iteration,
+                content="subagent complete",
+            )
+        elif event_type in ("swarm.task.start", "swarm.task.complete"):
+            self._session_graph.add_node(
+                NodeKind.SWARM_TASK,
+                agent_id=agent_id,
+                iteration=iteration,
+                content=meta.get("task", event_type),
+            )
+        elif event_type in ("compaction", "compaction.complete"):
+            self._session_graph.add_node(
+                NodeKind.COMPACTION_EVENT,
+                agent_id=agent_id,
+                iteration=iteration,
+                tokens_saved=meta.get("tokens_saved", 0),
+                messages_removed=meta.get("messages_removed", 0),
+            )
+        elif event_type in ("budget.warning", "budget.exhausted"):
+            self._session_graph.add_node(
+                NodeKind.BUDGET_EVENT,
+                agent_id=agent_id,
+                iteration=iteration,
+                budget_usage=meta.get("usage_fraction", 0.0),
+                content=meta.get("message", event_type),
+            )
+        elif event_type == "iteration":
+            # Iteration boundaries are captured as decision nodes
+            self._session_graph.add_node(
+                NodeKind.DECISION,
+                agent_id=agent_id,
+                iteration=iteration,
+                content=f"iteration {iteration}",
+            )
+        elif event_type == "error":
+            self._session_graph.add_node(
+                NodeKind.ERROR,
+                agent_id=agent_id,
+                iteration=iteration,
+                content=str(getattr(event, "error", ""))[:200],
+            )
 
     def _track_exploration(self, event: Any, agent_id: str) -> None:
         """Update the exploration graph from a tool event."""
@@ -431,6 +573,22 @@ class RecordingSessionManager:
         try:
             (self._session_dir / "exploration.mermaid").write_text(
                 self._exploration.to_mermaid(), encoding="utf-8",
+            )
+        except Exception:
+            pass
+
+        # session_graph.json — full unified graph
+        try:
+            (self._session_dir / "session_graph.json").write_text(
+                json.dumps(self._session_graph.to_dict(), indent=2), encoding="utf-8",
+            )
+        except Exception:
+            pass
+
+        # session_graph.mermaid
+        try:
+            (self._session_dir / "session_graph.mermaid").write_text(
+                self._session_graph.to_mermaid(), encoding="utf-8",
             )
         except Exception:
             pass

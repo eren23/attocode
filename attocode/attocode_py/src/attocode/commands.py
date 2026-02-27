@@ -574,10 +574,48 @@ async def _resume_command(agent: Any, session_id: str) -> CommandResult:
             output="Usage: /resume <session_id>\n"
             "Tip: Use /sessions to see available sessions."
         )
-    return CommandResult(
-        output=f"Session resume for '{session_id}' requires restarting with:\n"
-        f"  attocode --resume {session_id}"
-    )
+
+    ctx = _get_ctx(agent)
+    store = getattr(ctx, "session_store", None) if ctx else None
+
+    if not store:
+        return CommandResult(
+            output=f"Session resume for '{session_id}' requires restarting with:\n"
+            f"  attocode --resume {session_id}"
+        )
+
+    try:
+        resume_data = await store.resume_session(session_id)
+        if not resume_data:
+            return CommandResult(output=f"Session '{session_id}' not found.")
+
+        messages = resume_data.get("messages", [])
+        if not messages:
+            return CommandResult(output=f"Session '{session_id}' has no messages to restore.")
+
+        # Restore messages into the current context
+        from attocode.types.messages import Message, Role
+        ctx.messages.clear()
+        restored = 0
+        for msg_dict in messages:
+            role = msg_dict.get("role", "user")
+            content = msg_dict.get("content", "")
+            ctx.messages.append(Message(role=Role(role), content=content))
+            restored += 1
+
+        # Update session tracking
+        ctx.session_id = session_id
+        session_info = resume_data.get("session", {})
+        task = session_info.get("task", "unknown")
+
+        return CommandResult(
+            output=f"Resumed session {session_id}: {task}\n"
+            f"  Messages restored: {restored}\n"
+            f"  Previous tokens: {session_info.get('total_tokens', 0):,}\n"
+            f"  Previous cost: ${session_info.get('total_cost', 0.0):.4f}"
+        )
+    except Exception as e:
+        return CommandResult(output=f"Error resuming session: {e}")
 
 
 async def _checkpoint_command(agent: Any) -> CommandResult:
@@ -2721,7 +2759,7 @@ def _theme_command(app: Any, arg: str) -> CommandResult:
         return CommandResult(output="Theme switching requires TUI mode.")
 
     if not arg:
-        current = getattr(app, "current_theme", "default")
+        current = getattr(app, "active_theme_name", "default")
         return CommandResult(output=f"Current theme: {current}")
 
     # Try to switch theme

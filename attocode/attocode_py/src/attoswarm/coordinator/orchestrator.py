@@ -207,7 +207,7 @@ class SwarmOrchestrator:
             if parallel:
                 for tid in parallel:
                     self._aot_graph.mark_running(tid)
-                    self._emit("spawn", task_id=tid, message=f"Spawning worker for {tid}")
+                    self._emit("spawn", task_id=tid, agent_id=f"agent-{tid}", message=f"Spawning worker for {tid}")
                 self._persist_state()
 
                 batch_tasks = [self._task_to_dict(tid) for tid in parallel]
@@ -220,7 +220,7 @@ class SwarmOrchestrator:
             # Execute serialized tasks one by one
             for tid in serialized:
                 self._aot_graph.mark_running(tid)
-                self._emit("spawn", task_id=tid, message=f"Spawning worker for {tid} (serialized)")
+                self._emit("spawn", task_id=tid, agent_id=f"agent-{tid}", message=f"Spawning worker for {tid} (serialized)")
                 self._persist_state()
 
                 task_dict = self._task_to_dict(tid)
@@ -282,6 +282,32 @@ class SwarmOrchestrator:
     # Internal
     # ------------------------------------------------------------------
 
+    def _persist_task(self, task_id: str) -> None:
+        """Write per-task JSON file for TUI task detail view."""
+        task = self._tasks.get(task_id)
+        if not task:
+            return
+        node = self._aot_graph.get_node(task_id)
+        data: dict[str, Any] = {
+            "task_id": task.task_id,
+            "title": task.title,
+            "description": task.description,
+            "status": node.status if node else task.status,
+            "task_kind": task.task_kind,
+            "role_hint": task.role_hint or "",
+            "deps": task.deps,
+            "target_files": task.target_files,
+            "read_files": task.read_files,
+            "files_modified": task.files_modified,
+            "result_summary": task.result_summary,
+            "symbol_scope": task.symbol_scope,
+        }
+        path = self._layout["tasks"] / f"task-{task_id}.json"
+        try:
+            write_json_atomic(path, data)
+        except Exception:
+            pass
+
     def _persist_state(self) -> None:
         """Write state snapshot to disk for TUI consumption."""
         self._state_seq += 1
@@ -303,17 +329,23 @@ class SwarmOrchestrator:
                 "status": status,
             })
 
+        # Persist per-task JSON files
+        for tid in self._tasks:
+            self._persist_task(tid)
+
         # All agents from subagent manager (not just running)
-        active_agents: list[dict[str, Any]] = [
-            {
+        active_agents: list[dict[str, Any]] = []
+        for a in self._subagent_mgr.get_all_agents():
+            task = self._tasks.get(a.task_id)
+            active_agents.append({
                 "agent_id": a.agent_id,
                 "task_id": a.task_id,
                 "status": a.status,
                 "tokens_used": a.tokens_used,
                 "started_at_epoch": a.started_at,
-            }
-            for a in self._subagent_mgr.get_all_agents()
-        ]
+                "model": a.model or self._config.run.default_model or "",
+                "task_title": task.title if task else "",
+            })
 
         state: dict[str, Any] = {
             "run_id": self._run_id,
@@ -421,12 +453,14 @@ class SwarmOrchestrator:
         if result.success:
             self._aot_graph.mark_complete(result.task_id)
             self._emit("complete", task_id=result.task_id,
+                        agent_id=f"agent-{result.task_id}",
                         message=f"Task {result.task_id} completed",
                         data={"files_modified": result.files_modified})
             return 1
         else:
             skipped = self._aot_graph.mark_failed(result.task_id)
             self._emit("fail", task_id=result.task_id,
+                        agent_id=f"agent-{result.task_id}",
                         message=f"Task {result.task_id} failed: {result.error}",
                         data={"skipped": skipped})
             if skipped:

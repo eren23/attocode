@@ -8,6 +8,17 @@ from attocode.integrations.recording.exploration_tracker import (
     ExplorationSnapshot,
     tool_to_action,
 )
+from attocode.integrations.recording.graph_types import (
+    EdgeKind,
+    GraphEdge,
+    GraphNode,
+    NodeKind,
+    SessionGraph,
+)
+from attocode.integrations.recording.playback import (
+    PlaybackEngine,
+    PlaybackState,
+)
 from attocode.integrations.recording.recorder import (
     RecordingConfig,
     RecordingFrame,
@@ -24,6 +35,15 @@ __all__ = [
     "ExplorationNode",
     "ExplorationSnapshot",
     "tool_to_action",
+    # graph_types (unified)
+    "EdgeKind",
+    "GraphEdge",
+    "GraphNode",
+    "NodeKind",
+    "SessionGraph",
+    # playback
+    "PlaybackEngine",
+    "PlaybackState",
     # recorder
     "RecordingConfig",
     "RecordingFrame",

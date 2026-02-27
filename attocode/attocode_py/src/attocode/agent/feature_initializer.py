@@ -371,6 +371,8 @@ async def initialize_features(
         try:
             from attocode.integrations.skills.loader import SkillLoader
             from attocode.integrations.skills.executor import SkillExecutor
+            from attocode.integrations.skills.state import SkillStateStore
+            from attocode.integrations.skills.dependency_graph import SkillDependencyGraph
 
             loader = SkillLoader(working_dir)
             # Search additional directories
@@ -383,10 +385,25 @@ async def initialize_features(
                 search_dirs.append(home_skill_dir)
 
             loader.load()
-            executor = SkillExecutor(loader=loader)
+
+            # Wire state store for long-running skill persistence
+            state_store = SkillStateStore(session_dir=session_dir) if session_dir else None
+
+            # Build dependency graph from loaded skills
+            dep_graph = SkillDependencyGraph()
+            for skill in loader.list_skills():
+                dep_graph.add_skill(skill)
+
+            executor = SkillExecutor(
+                loader=loader,
+                state_store=state_store,
+                dependency_graph=dep_graph,
+            )
+
             ctx._skill_manager = {  # type: ignore[attr-defined]
                 "loader": loader,
                 "executor": executor,
+                "dependency_graph": dep_graph,
                 "skills": loader.list_skills(),
             }
             results["skill_manager"] = True

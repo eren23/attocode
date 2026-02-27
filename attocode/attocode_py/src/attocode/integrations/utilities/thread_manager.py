@@ -211,3 +211,81 @@ class ThreadManager:
             info=info,
             messages=list(self._thread_messages.get(tid, [])),
         )
+
+    def snapshot_all(self) -> list[ThreadSnapshot]:
+        """Create snapshots of all threads for bulk persistence."""
+        snapshots = []
+        for tid in self._threads:
+            snap = self.snapshot(tid)
+            if snap:
+                snapshots.append(snap)
+        return snapshots
+
+    def restore_snapshots(self, snapshots: list[ThreadSnapshot]) -> None:
+        """Restore threads from persisted snapshots."""
+        for snap in snapshots:
+            self._threads[snap.info.thread_id] = snap.info
+            self._thread_messages[snap.info.thread_id] = list(snap.messages)
+        # Restore active thread if it exists
+        if self._active_thread_id not in self._threads:
+            self._active_thread_id = "main"
+
+    def to_dict(self) -> dict[str, Any]:
+        """Serialize thread state for DB/JSON persistence."""
+        threads_data = []
+        for tid, info in self._threads.items():
+            threads_data.append({
+                "thread_id": info.thread_id,
+                "label": info.label,
+                "parent_id": info.parent_id,
+                "fork_point": info.fork_point,
+                "created_at": info.created_at,
+                "last_active": info.last_active,
+                "message_count": info.message_count,
+                "is_active": info.is_active,
+                "messages": [
+                    _serialize_msg(m)
+                    for m in self._thread_messages.get(tid, [])
+                ],
+            })
+        return {
+            "session_id": self._session_id,
+            "active_thread_id": self._active_thread_id,
+            "threads": threads_data,
+        }
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> ThreadManager:
+        """Restore thread manager from a serialized dict."""
+        mgr = cls(session_id=data.get("session_id", ""))
+        mgr._threads.clear()
+        mgr._thread_messages.clear()
+
+        for td in data.get("threads", []):
+            info = ThreadInfo(
+                thread_id=td["thread_id"],
+                label=td.get("label", ""),
+                parent_id=td.get("parent_id"),
+                fork_point=td.get("fork_point", 0),
+                created_at=td.get("created_at", 0.0),
+                last_active=td.get("last_active", 0.0),
+                message_count=td.get("message_count", 0),
+                is_active=td.get("is_active", True),
+            )
+            mgr._threads[info.thread_id] = info
+            mgr._thread_messages[info.thread_id] = td.get("messages", [])
+
+        mgr._active_thread_id = data.get("active_thread_id", "main")
+        if mgr._active_thread_id not in mgr._threads:
+            mgr._active_thread_id = "main"
+        return mgr
+
+
+def _serialize_msg(msg: Any) -> Any:
+    """Serialize a message for JSON storage."""
+    if isinstance(msg, dict):
+        return msg
+    return {
+        "role": getattr(msg, "role", "user"),
+        "content": getattr(msg, "content", ""),
+    }
