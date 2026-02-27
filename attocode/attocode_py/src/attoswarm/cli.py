@@ -4,6 +4,9 @@ from __future__ import annotations
 
 import asyncio
 import json
+import logging
+import os
+import re
 import subprocess
 import sys
 import shutil
@@ -13,10 +16,21 @@ from typing import Any
 import click
 
 from attoswarm.config.loader import load_swarm_yaml
-from attoswarm.config.schema import SwarmYamlConfig
+from attoswarm.config.schema import RoleConfig, SwarmYamlConfig
 from attoswarm.coordinator.loop import HybridCoordinator
 from attoswarm.protocol.io import read_json
 from attoswarm.tui.app import AttoswarmApp
+
+
+logger = logging.getLogger(__name__)
+
+# Env vars that interfere with nested agent processes (e.g. running from
+# within Claude Code would set CLAUDECODE=1 causing claude subprocess to
+# refuse with "cannot launch inside another session").
+_STRIP_ENV_VARS = {
+    "CLAUDECODE", "CLAUDE_CODE_ENTRYPOINT", "CLAUDE_REPL",
+    "CLAUDE_CODE_PACKAGE_DIR",
+}
 
 
 @click.group()
@@ -24,33 +38,75 @@ def main() -> None:
     """Attoswarm hybrid swarm orchestrator."""
 
 
-def _make_spawn_fn(cfg: SwarmYamlConfig):  # noqa: ANN202
-    """Build an in-process spawn function using AgentBuilder."""
+def _build_backend_cmd(backend: str, model: str, prompt: str) -> list[str]:
+    """Build subprocess command list for a given backend.
+
+    Mirrors the logic in ``HybridCoordinator._default_command`` but returns
+    a flat argv list suitable for ``asyncio.create_subprocess_exec``.
+    """
+    if backend == "claude":
+        cmd = ["claude", "-p", "--dangerously-skip-permissions"]
+        if model:
+            cmd.extend(["--model", model])
+        cmd.append(prompt)
+        return cmd
+    if backend == "codex":
+        cmd = [
+            "codex", "exec", "--json", "--skip-git-repo-check",
+            "--sandbox", "workspace-write",
+        ]
+        if model:
+            cmd.extend(["--model", model])
+        cmd.append(prompt)
+        return cmd
+    if backend == "aider":
+        cmd = ["aider"]
+        if model:
+            cmd.extend(["--model", model])
+        cmd.extend(["--message", prompt])
+        return cmd
+    if backend == "attocode":
+        cmd = ["attocode"]
+        if model:
+            cmd.extend(["--model", model])
+        cmd.extend(["--non-interactive", prompt])
+        return cmd
+    raise ValueError(f"Unsupported backend: {backend!r}")
+
+
+def _make_subprocess_spawn_fn(cfg: SwarmYamlConfig):  # noqa: ANN202
+    """Build a spawn function that delegates to backend CLIs as subprocesses.
+
+    Selects the correct backend (claude, codex, aider, attocode) based on the
+    task's ``role_hint`` field, falling back to the first configured role's
+    backend (or ``"claude"`` if no roles are defined).
+
+    Strips CLAUDECODE env vars to prevent nested-session errors.
+    """
     from attoswarm.coordinator.subagent_manager import TaskResult as _TaskResult
 
+    # Pre-build role_hint -> RoleConfig lookup
+    role_map: dict[str, RoleConfig] = {r.role_id: r for r in cfg.roles}
+    fallback_backend = cfg.roles[0].backend if cfg.roles else "claude"
+    fallback_model = cfg.roles[0].model if cfg.roles else ""
+
+    # Build a clean env without CLAUDECODE vars
+    clean_env = {k: v for k, v in os.environ.items() if k not in _STRIP_ENV_VARS}
+
     async def _spawn_agent(task: dict) -> _TaskResult:
-        from attocode.agent.builder import AgentBuilder
-        from attocode.types.budget import ExecutionBudget
+        import time as _time
 
         wd = cfg.run.working_dir or "."
-        model = cfg.roles[0].model if cfg.roles else ""
-        num_roles = max(len(cfg.roles), 1)
 
-        builder = (
-            AgentBuilder()
-            .with_provider()
-            .with_working_dir(wd)
-            .with_budget(ExecutionBudget(
-                max_tokens=cfg.budget.max_tokens // num_roles,
-                max_cost=cfg.budget.max_cost_usd / num_roles,
-            ))
-            .with_sandbox(True)
-            .with_spawn_agent(False)
-        )
-        if model:
-            builder = builder.with_model(model)
-
-        agent = builder.build()
+        # Resolve backend + model from role_hint
+        role_hint = task.get("role_hint", "")
+        role_cfg = role_map.get(role_hint)
+        if role_cfg:
+            backend = role_cfg.backend
+            model = role_cfg.model
+        else:
+            backend = fallback_backend
+            model = fallback_model
 
         target_files = task.get("target_files", [])
         read_files = task.get("read_files", [])
@@ -61,19 +117,229 @@ def _make_spawn_fn(cfg: SwarmYamlConfig):  # noqa: ANN202
             prompt_parts.append(f"\nReference files: {', '.join(read_files)}")
         prompt = "\n".join(prompt_parts)
 
-        result = await agent.run(prompt)
+        cmd = _build_backend_cmd(backend, model, prompt)
 
-        return _TaskResult(
-            task_id=task["task_id"],
-            success=result.success,
-            result_summary=result.response or "",
-            tokens_used=result.metrics.total_tokens if result.metrics else 0,
-            cost_usd=result.metrics.estimated_cost if result.metrics else 0.0,
-            duration_s=result.metrics.duration_ms / 1000 if result.metrics else 0.0,
-            error=result.error or "",
-        )
+        t0 = _time.monotonic()
+        try:
+            proc = await asyncio.create_subprocess_exec(
+                *cmd,
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE,
+                cwd=wd,
+                env=clean_env,
+                start_new_session=True,
+            )
+            worker_timeout = max(cfg.run.max_runtime_seconds or 600, 600)
+            stdout_bytes, stderr_bytes = await asyncio.wait_for(
+                proc.communicate(),
+                timeout=worker_timeout,
+            )
+            elapsed = _time.monotonic() - t0
+            stdout_text = (stdout_bytes or b"").decode("utf-8", errors="replace")
+            stderr_text = (stderr_bytes or b"").decode("utf-8", errors="replace")
+
+            if proc.returncode == 0:
+                return _TaskResult(
+                    task_id=task["task_id"],
+                    success=True,
+                    result_summary=stdout_text[:4000],
+                    duration_s=elapsed,
+                )
+            else:
+                return _TaskResult(
+                    task_id=task["task_id"],
+                    success=False,
+                    result_summary=stdout_text[:2000],
+                    error=stderr_text[:2000] or f"{cmd[0]} exited with code {proc.returncode}",
+                    duration_s=elapsed,
+                )
+        except asyncio.TimeoutError:
+            return _TaskResult(
+                task_id=task["task_id"],
+                success=False,
+                error=f"Subprocess timed out after {cfg.run.max_runtime_seconds}s",
+                duration_s=_time.monotonic() - t0,
+            )
+        except FileNotFoundError:
+            return _TaskResult(
+                task_id=task["task_id"],
+                success=False,
+                error=f"'{cmd[0]}' CLI not found. Install it or add it to PATH.",
+                duration_s=_time.monotonic() - t0,
+            )
+        except Exception as exc:
+            return _TaskResult(
+                task_id=task["task_id"],
+                success=False,
+                error=f"Subprocess spawn failed: {exc}",
+                duration_s=_time.monotonic() - t0,
+            )
 
     return _spawn_agent
+
+
+def _make_subprocess_decompose_fn(cfg: SwarmYamlConfig):  # noqa: ANN202
+    """Build a decompose function that calls a backend CLI to split the goal into tasks.
+
+    Uses the orchestrator role's backend/model to invoke LLM-based decomposition.
+    Returns a coroutine matching the ``decompose_fn`` signature expected by
+    ``SwarmOrchestrator._decompose_goal()``.
+    """
+    from attoswarm.protocol.models import TaskSpec as _TaskSpec
+
+    # Pick orchestrator role, falling back to first role or defaults
+    orch_role = next((r for r in cfg.roles if r.role_type == "orchestrator"), None)
+    if orch_role:
+        backend = orch_role.backend
+        model = orch_role.model
+    elif cfg.roles:
+        backend = cfg.roles[0].backend
+        model = cfg.roles[0].model
+    else:
+        backend = "claude"
+        model = ""
+
+    max_tasks = cfg.orchestration.max_tasks or 20
+
+    # Build role descriptions for the prompt
+    role_descriptions = "\n".join(
+        f"  - role_id={r.role_id}, role_type={r.role_type}, task_kinds={r.task_kinds}"
+        for r in cfg.roles
+    )
+
+    clean_env = {k: v for k, v in os.environ.items() if k not in _STRIP_ENV_VARS}
+
+    custom_instructions = (cfg.orchestration.custom_instructions or "").strip()
+
+    def _build_decompose_prompt(goal: str) -> str:
+        prefix = ""
+        if custom_instructions:
+            prefix = f"## Custom Instructions\n{custom_instructions}\n\n"
+        return (
+            prefix
+            + "You are a task decomposition engine for a multi-agent coding swarm.\n\n"
+            "Given the following goal, decompose it into a DAG of concrete, actionable tasks.\n\n"
+            f"## Goal\n{goal}\n\n"
+            f"## Available Roles\n{role_descriptions or '  (none configured -- omit role_hint)'}\n\n"
+            "## Constraints\n"
+            f"- Produce between 2 and {max_tasks} tasks.\n"
+            "- Each task should be completable by a single agent in one pass.\n"
+            "- Tasks should have clear boundaries -- avoid overlapping target files.\n"
+            "- Use deps to express dependencies (task_id references).\n"
+            "- Assign role_hint matching an available role_id when appropriate.\n\n"
+            "## Output Format\n"
+            "Respond with ONLY a JSON array (no markdown fences, no explanation):\n"
+            "[\n"
+            '  {\n'
+            '    "task_id": "task-1",\n'
+            '    "title": "Short title",\n'
+            '    "description": "Detailed description of what to do",\n'
+            '    "deps": [],\n'
+            '    "target_files": ["src/foo.py"],\n'
+            '    "role_hint": "impl",\n'
+            '    "task_kind": "implement"\n'
+            "  }\n"
+            "]\n\n"
+            "task_kind should be one of: analysis, design, implement, test, integrate, judge, critic, merge"
+        )
+
+    def _build_retry_prompt(goal: str) -> str:
+        prefix = ""
+        if custom_instructions:
+            prefix = f"## Custom Instructions\n{custom_instructions}\n\n"
+        return (
+            prefix
+            + "Decompose this goal into 2-4 coding tasks. Return ONLY a JSON array.\n\n"
+            f"Goal: {goal}\n\n"
+            'Format: [{{"task_id": "task-1", "title": "...", "description": "...", '
+            '"deps": [], "target_files": [], "role_hint": "", "task_kind": "implement"}}]'
+        )
+
+    def _parse_tasks(raw: str) -> list[_TaskSpec]:
+        """Parse JSON output into TaskSpec list with validation."""
+        text = raw.strip()
+        # Strip <thinking>...</thinking> tags (Claude extended thinking)
+        text = re.sub(r"<thinking>.*?</thinking>", "", text, flags=re.DOTALL)
+        # Strip markdown fences (```json ... ``` or ``` ... ```)
+        text = re.sub(r"```(?:json|JSON)?\s*\n?", "", text)
+        text = text.strip()
+        # Extract first JSON array from the text
+        match = re.search(r"\[.*\]", text, flags=re.DOTALL)
+        if not match:
+            raise ValueError(f"No JSON array found in output ({len(raw)} chars)")
+        text = match.group(0)
+
+        data = json.loads(text)
+        if not isinstance(data, list) or len(data) < 2:
+            raise ValueError(
+                f"Expected array with >=2 tasks, got {len(data) if isinstance(data, list) else 0} items"
+            )
+
+        # Validate task_ids are unique
+        ids = [t["task_id"] for t in data]
+        if len(ids) != len(set(ids)):
+            raise ValueError(f"Duplicate task_ids: {ids}")
+
+        # Validate dep references
+        id_set = set(ids)
+        for t in data:
+            for dep in t.get("deps", []):
+                if dep not in id_set:
+                    raise ValueError(f"Task {t['task_id']} depends on unknown task {dep}")
+
+        return [
+            _TaskSpec(
+                task_id=t["task_id"],
+                title=t.get("title", t["task_id"]),
+                description=t.get("description", ""),
+                deps=t.get("deps", []),
+                target_files=t.get("target_files", []),
+                role_hint=t.get("role_hint") or None,
+                task_kind=t.get("task_kind", "implement"),
+            )
+            for t in data
+        ]
+
+    async def _run_decompose(prompt: str) -> list[_TaskSpec]:
+        """Run a single decomposition attempt via subprocess."""
+        cmd = _build_backend_cmd(backend, model, prompt)
+        proc = await asyncio.create_subprocess_exec(
+            *cmd,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+            cwd=cfg.run.working_dir or ".",
+            env=clean_env,
+            start_new_session=True,
+        )
+        decompose_timeout = min(cfg.run.max_runtime_seconds or 120, 120)
+        stdout_bytes, stderr_bytes = await asyncio.wait_for(
+            proc.communicate(),
+            timeout=decompose_timeout,
+        )
+        stdout_text = (stdout_bytes or b"").decode("utf-8", errors="replace")
+
+        if proc.returncode != 0:
+            stderr_text = (stderr_bytes or b"").decode("utf-8", errors="replace")
+            raise RuntimeError(
+                f"Decomposition subprocess exited {proc.returncode}: {stderr_text[:500]}"
+            )
+
+        return _parse_tasks(stdout_text)
+
+    async def decompose_fn(
+        goal: str, *, ast_service: Any = None, config: Any = None,
+    ) -> list[_TaskSpec]:
+        """Decompose a goal into TaskSpecs via subprocess LLM call."""
+        # First attempt with full prompt
+        try:
+            return await _run_decompose(_build_decompose_prompt(goal))
+        except Exception as exc:
+            logger.warning("Decomposition attempt 1 failed: %s", exc)
+
+        # Retry with simpler prompt
+        return await _run_decompose(_build_retry_prompt(goal))
+
+    return decompose_fn
 
 
 def _doctor_rows(cfg: SwarmYamlConfig) -> list[dict[str, Any]]:
@@ -158,7 +424,9 @@ def run_command(
     if cfg.workspace.mode == "shared":
         from attoswarm.coordinator.orchestrator import SwarmOrchestrator
         code = asyncio.run(SwarmOrchestrator(
-            cfg, goal_text, resume=resume_flag, spawn_fn=_make_spawn_fn(cfg),
+            cfg, goal_text, resume=resume_flag,
+            decompose_fn=_make_subprocess_decompose_fn(cfg),
+            spawn_fn=_make_subprocess_spawn_fn(cfg),
         ).run())
     else:
         code = asyncio.run(HybridCoordinator(cfg, goal_text, resume=resume_flag).run())
@@ -238,7 +506,9 @@ def start_command(
         if cfg.workspace.mode == "shared":
             from attoswarm.coordinator.orchestrator import SwarmOrchestrator
             code = asyncio.run(SwarmOrchestrator(
-                cfg, goal_text, resume=resume_flag, spawn_fn=_make_spawn_fn(cfg),
+                cfg, goal_text, resume=resume_flag,
+                decompose_fn=_make_subprocess_decompose_fn(cfg),
+                spawn_fn=_make_subprocess_spawn_fn(cfg),
             ).run())
         else:
             code = asyncio.run(HybridCoordinator(cfg, goal_text, resume=resume_flag).run())
@@ -334,16 +604,20 @@ def doctor_command(config_path: Path) -> None:
     raise SystemExit(0 if ok else 1)
 
 
+
 @main.command("init")
 @click.argument("target_dir", type=click.Path(path_type=Path), required=False)
-@click.option("--profile", type=click.Choice(["2cc", "cc-codex", "custom"]), default=None)
+@click.option("--profile", type=click.Choice(["2cc", "cc-codex", "cc-aider", "full-team", "custom"]), default=None)
 @click.option("--mode", type=click.Choice(["minimal", "demo"]), default=None)
 def init_command(target_dir: Path | None, profile: str | None, mode: str | None) -> None:
     """Interactive starter generator for hybrid swarm."""
+    import yaml as _yaml
+
     base = target_dir or Path.cwd()
     attocode_dir = base / ".attocode"
     attocode_dir.mkdir(parents=True, exist_ok=True)
 
+    # --- Step 1: Context detection ---
     has_repo = (base / ".git").exists() or (base / "pyproject.toml").exists() or (base / "package.json").exists()
     click.echo(f"Detected context: {'existing repository' if has_repo else 'fresh directory'} at {base}")
     setup_target = click.prompt(
@@ -351,130 +625,256 @@ def init_command(target_dir: Path | None, profile: str | None, mode: str | None)
         type=click.Choice(["existing-repo", "demo-project"]),
         default="existing-repo" if has_repo else "demo-project",
     )
+
+    # --- Step 2: Profile selection (enhanced) ---
+    if profile is None:
+        click.echo("\nBackend profiles:")
+        click.echo("  [1] 2cc        - Two Claude Code agents (orchestrator + workers)")
+        click.echo("  [2] cc-codex   - Claude orchestrator + Codex workers (fast + cheap)")
+        click.echo("  [3] cc-aider   - Claude orchestrator + Aider workers")
+        click.echo("  [4] full-team  - Orchestrator + workers + judge + merger (quality-focused)")
+        click.echo("  [5] custom     - Configure each role manually")
+        profile = click.prompt(
+            "Select backend profile",
+            type=click.Choice(["2cc", "cc-codex", "cc-aider", "full-team", "custom"]),
+            default="2cc",
+        )
+
+    # --- Step 3: Worker count ---
+    worker_count = click.prompt("How many parallel workers?", type=int, default=2)
+    worker_count = max(1, min(worker_count, 10))
+
+    # --- Step 4: Budget ---
+    click.echo("\nCost cap per run (USD):")
+    click.echo("  [1] $5    - Quick tasks")
+    click.echo("  [2] $25   - Standard")
+    click.echo("  [3] $50   - Large features")
+    click.echo("  [4] Custom amount")
+    budget_choice = click.prompt("Select cost cap", type=click.Choice(["1", "2", "3", "4"]), default="2")
+    budget_map = {"1": 5.0, "2": 25.0, "3": 50.0}
+    if budget_choice in budget_map:
+        cost_cap = budget_map[budget_choice]
+    else:
+        cost_cap = click.prompt("Enter cost cap (USD)", type=float, default=25.0)
+
+    # --- Step 5: Max runtime per task ---
+    click.echo("\nMax runtime per task (seconds):")
+    click.echo("  [1] 120  - Fast (2 min)")
+    click.echo("  [2] 300  - Standard (5 min)")
+    click.echo("  [3] 600  - Long (10 min)")
+    click.echo("  [4] Custom")
+    runtime_choice = click.prompt("Select max runtime", type=click.Choice(["1", "2", "3", "4"]), default="2")
+    runtime_map = {"1": 120, "2": 300, "3": 600}
+    if runtime_choice in runtime_map:
+        task_max_duration = runtime_map[runtime_choice]
+    else:
+        task_max_duration = click.prompt("Enter max runtime (seconds)", type=int, default=300)
+
+    # --- Step 6: Workspace mode ---
+    click.echo("\nWorkspace isolation:")
+    click.echo("  [1] shared   - Faster, agents coordinate via file claims")
+    click.echo("  [2] worktree - Safer, each agent gets isolated git worktree")
+    workspace_mode = click.prompt(
+        "Select workspace mode",
+        type=click.Choice(["shared", "worktree"]),
+        default="shared",
+    )
+
+    # --- Step 7: Quality level ---
+    click.echo("\nQuality gates:")
+    click.echo("  [1] relaxed  - No judges, auto-apply all results")
+    click.echo("  [2] standard - Quality threshold scoring")
+    click.echo("  [3] strict   - Judge + critic roles review all outputs")
+    quality_level = click.prompt(
+        "Select quality level",
+        type=click.Choice(["relaxed", "standard", "strict"]),
+        default="standard",
+    )
+
+    # --- Step 8: Advanced settings ---
+    decomposition = "llm"
+    max_tasks = 20
+    max_depth = 3
+    retry_attempts = 2
+    quality_threshold = 0.75
+    custom_instructions = ""
+
+    if click.confirm("\nConfigure advanced settings?", default=False):
+        decomposition = click.prompt(
+            "Decomposition strategy",
+            type=click.Choice(["llm", "parallel", "heuristic", "fast"]),
+            default="llm",
+        )
+        max_tasks = click.prompt("Max tasks", type=int, default=20)
+        max_depth = click.prompt("Max DAG depth", type=int, default=3)
+        retry_attempts = click.prompt("Retry attempts per task", type=int, default=2)
+        quality_threshold = click.prompt("Quality threshold (0.0-1.0)", type=float, default=0.75)
+        if click.confirm("Add custom orchestrator instructions?", default=False):
+            click.echo("Enter instructions (empty line to finish):")
+            lines: list[str] = []
+            while True:
+                line = click.prompt("", default="", prompt_suffix="")
+                if not line:
+                    break
+                lines.append(line)
+            custom_instructions = "\n".join(lines)
+
+    # --- Step 9: Output mode ---
     if mode is None:
         mode = click.prompt(
             "Select output mode",
             type=click.Choice(["minimal", "demo"]),
             default="minimal" if setup_target == "existing-repo" else "demo",
         )
-    if profile is None:
-        profile = click.prompt(
-            "Select backend profile",
-            type=click.Choice(["2cc", "cc-codex", "custom"]),
-            default="2cc",
-        )
 
-    path = attocode_dir / "swarm.hybrid.yaml"
+    # --- Build roles based on profile ---
+    ws_mode = "worktree" if workspace_mode == "worktree" else "shared_ro"
+
+    def _worker_role(role_id: str, backend: str, model: str, count: int, task_kinds: list[str]) -> dict[str, Any]:
+        return {
+            "role_id": role_id,
+            "role_type": "worker",
+            "backend": backend,
+            "model": model,
+            "count": count,
+            "write_access": True,
+            "workspace_mode": ws_mode,
+            "task_kinds": task_kinds,
+        }
+
+    orch_role: dict[str, Any] = {
+        "role_id": "orchestrator",
+        "role_type": "orchestrator",
+        "backend": "claude",
+        "model": "",
+        "count": 1,
+        "task_kinds": ["analysis", "design"],
+    }
+
+    impl_kinds = ["implement", "test", "integrate"]
+
     if profile == "2cc":
-        yaml_text = """version: 1
-run:
-  working_dir: .
-  run_dir: .agent/hybrid-swarm
-  poll_interval_ms: 250
-  max_runtime_seconds: 300
-roles:
-  - role_id: orchestrator
-    role_type: orchestrator
-    backend: claude
-    model: claude-sonnet-4-20250514
-    count: 1
-    task_kinds: [analysis, design]
-  - role_id: impl
-    role_type: worker
-    backend: claude
-    model: claude-sonnet-4-20250514
-    count: 2
-    write_access: true
-    workspace_mode: worktree
-    task_kinds: [implement, test, integrate]
-  - role_id: judge
-    role_type: judge
-    backend: claude
-    model: claude-sonnet-4-20250514
-    count: 1
-    task_kinds: [judge]
-  - role_id: critic
-    role_type: critic
-    backend: claude
-    model: claude-sonnet-4-20250514
-    count: 1
-    task_kinds: [critic]
-  - role_id: merger
-    role_type: merger
-    backend: claude
-    model: claude-sonnet-4-20250514
-    count: 1
-    write_access: true
-    workspace_mode: worktree
-    task_kinds: [merge]
-merge:
-  authority_role: merger
-  quality_threshold: 0.7
-orchestration:
-  decomposition: llm
-  max_tasks: 24
-"""
+        roles = [orch_role, _worker_role("impl", "claude", "", worker_count, impl_kinds)]
     elif profile == "cc-codex":
-        yaml_text = """version: 1
-run:
-  working_dir: .
-  run_dir: .agent/hybrid-swarm
-  poll_interval_ms: 250
-  max_runtime_seconds: 300
-roles:
-  - role_id: orchestrator
-    role_type: orchestrator
-    backend: claude
-    model: claude-sonnet-4-20250514
-    count: 1
-    task_kinds: [analysis, design]
-  - role_id: impl
-    role_type: worker
-    backend: claude
-    model: claude-sonnet-4-20250514
-    count: 1
-    write_access: true
-    workspace_mode: worktree
-    task_kinds: [implement, test, integrate]
-  - role_id: judge
-    role_type: judge
-    backend: codex
-    model: o3
-    count: 1
-    task_kinds: [judge]
-  - role_id: critic
-    role_type: critic
-    backend: claude
-    model: claude-sonnet-4-20250514
-    count: 1
-    task_kinds: [critic]
-  - role_id: merger
-    role_type: merger
-    backend: codex
-    model: o3
-    count: 1
-    write_access: true
-    workspace_mode: worktree
-    task_kinds: [merge]
-merge:
-  authority_role: merger
-  quality_threshold: 0.7
-orchestration:
-  decomposition: llm
-  max_tasks: 24
-"""
+        # Split workers: half claude, half codex
+        if worker_count <= 1:
+            # Single worker: use primary backend only
+            roles = [orch_role, _worker_role("impl-codex", "codex", "o3", 1, impl_kinds)]
+        else:
+            codex_count = worker_count // 2
+            claude_count = worker_count - codex_count
+            roles = [
+                orch_role,
+                _worker_role("impl-claude", "claude", "", claude_count, impl_kinds),
+                _worker_role("impl-codex", "codex", "o3", codex_count, impl_kinds),
+            ]
+    elif profile == "cc-aider":
+        if worker_count <= 1:
+            # Single worker: use primary backend only
+            roles = [orch_role, _worker_role("impl-aider", "aider", "", 1, impl_kinds)]
+        else:
+            aider_count = worker_count // 2
+            claude_count = worker_count - aider_count
+            roles = [
+                orch_role,
+                _worker_role("impl-claude", "claude", "", claude_count, impl_kinds),
+                _worker_role("impl-aider", "aider", "", aider_count, impl_kinds),
+            ]
+    elif profile == "full-team":
+        roles = [
+            orch_role,
+            _worker_role("impl", "claude", "", worker_count, impl_kinds),
+            {
+                "role_id": "judge",
+                "role_type": "judge",
+                "backend": "claude",
+                "model": "",
+                "count": 1,
+                "task_kinds": ["judge", "critic"],
+            },
+            {
+                "role_id": "merger",
+                "role_type": "merger",
+                "backend": "claude",
+                "model": "",
+                "count": 1,
+                "write_access": True,
+                "workspace_mode": ws_mode,
+                "task_kinds": ["merge", "integrate"],
+            },
+        ]
     else:
-        yaml_text = """version: 1
-run:
-  working_dir: .
-  run_dir: .agent/hybrid-swarm
-roles: []
-orchestration:
-  decomposition: heuristic
-"""
+        # custom: bare config, user fills in roles manually
+        roles = []
 
+    # --- Build config dict ---
+    config: dict[str, Any] = {
+        "version": 1,
+        "run": {
+            "working_dir": ".",
+            "run_dir": ".agent/hybrid-swarm",
+            "poll_interval_ms": 250,
+            "max_runtime_seconds": task_max_duration * max(max_tasks, 5),
+        },
+        "roles": roles,
+        "budget": {
+            "max_cost_usd": cost_cap,
+        },
+        "orchestration": {
+            "decomposition": decomposition,
+            "max_tasks": max_tasks,
+            "max_depth": max_depth,
+        },
+        "workspace": {
+            "mode": workspace_mode,
+        },
+        "watchdog": {
+            "task_max_duration_seconds": float(task_max_duration),
+        },
+        "retries": {
+            "max_task_attempts": retry_attempts,
+        },
+    }
+
+    if custom_instructions:
+        config["orchestration"]["custom_instructions"] = custom_instructions
+
+    # Quality-level-specific settings
+    if quality_level == "relaxed":
+        config["merge"] = {
+            "quality_threshold": 0.0,
+            "auto_apply_non_conflicting": True,
+        }
+    elif quality_level == "standard":
+        config["merge"] = {
+            "quality_threshold": quality_threshold,
+            "auto_apply_non_conflicting": True,
+        }
+    elif quality_level == "strict":
+        config["merge"] = {
+            "quality_threshold": quality_threshold,
+            "judge_policy": "quorum",
+            "auto_apply_non_conflicting": False,
+        }
+        # Ensure judge role exists for strict mode even if profile didn't include it
+        role_ids = {r["role_id"] for r in roles}
+        if "judge" not in role_ids and profile != "custom":
+            roles.append({
+                "role_id": "judge",
+                "role_type": "judge",
+                "backend": "claude",
+                "model": "",
+                "count": 1,
+                "task_kinds": ["judge", "critic"],
+            })
+
+    # --- Write YAML ---
+    path = attocode_dir / "swarm.hybrid.yaml"
+    yaml_text = _yaml.dump(config, default_flow_style=False, sort_keys=False, allow_unicode=True)
     path.write_text(yaml_text, encoding="utf-8")
-    click.echo(f"Created {path}")
+    click.echo(f"\nCreated {path}")
+
+    # --- Demo scaffold ---
     if mode == "demo":
         tasks_dir = base / "tasks"
         scripts_dir = base / "scripts"

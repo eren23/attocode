@@ -40,7 +40,7 @@ class AnthropicProvider:
         model: str = DEFAULT_MODEL,
         max_tokens: int = DEFAULT_MAX_TOKENS,
         api_url: str = DEFAULT_API_URL,
-        timeout: float = 120.0,
+        timeout: float = 600.0,
         *,
         extra_headers: dict[str, str] | None = None,
     ) -> None:

@@ -307,14 +307,22 @@ class InefficiencyDetector:
     # ------------------------------------------------------------------
 
     def _detect_empty_responses(self) -> list[DetectedIssue]:
-        """Detect LLM responses with 0 output tokens."""
+        """Detect LLM responses with 0 output tokens.
+
+        Skips events that lack token data entirely (e.g. stream chunks
+        mapped to LLM_RESPONSE) to avoid false positives.
+        """
         issues: list[DetectedIssue] = []
 
         for event in self._session.events:
             if event.kind != TraceEventKind.LLM_RESPONSE:
                 continue
+            # Skip events that lack token data entirely (stream chunks)
+            if "output_tokens" not in event.data and "tokens" not in event.data:
+                continue
             output_tokens = _int(event.data, "output_tokens")
-            if output_tokens == 0:
+            total_tokens = _int(event.data, "tokens")
+            if output_tokens == 0 and total_tokens == 0:
                 issues.append(
                     DetectedIssue(
                         severity="low",

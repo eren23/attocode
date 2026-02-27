@@ -474,6 +474,9 @@ class SwarmOrchestrator:
 
         Returns a list of fix-up tasks to add to the queue.
         """
+        from attocode.integrations.swarm.helpers import is_hollow_completion as check_hollow
+        from attocode.integrations.swarm.types import FixupTask
+
         fix_ups: list[SwarmTask] = []
         hollow_count = 0
 
@@ -481,10 +484,18 @@ class SwarmOrchestrator:
             if task.status != SwarmTaskStatus.COMPLETED:
                 continue
 
-            result = getattr(task, "result", None) or {}
+            result = task.result
+            if result is None:
+                continue
 
-            # Check for hollow completions
-            if is_hollow_completion(result):
+            # Check for hollow completions using the helpers module
+            spawn_like = {
+                "output": result.output,
+                "files_modified": result.files_modified,
+                "tool_calls": result.tool_calls,
+            }
+            task_type_str = task.type.value if hasattr(task.type, "value") else str(task.type)
+            if check_hollow(spawn_like, task_type_str, self._config):
                 hollow_count += 1
                 ctx.total_hollows += 1
                 ctx.hollow_streak += 1
@@ -497,15 +508,16 @@ class SwarmOrchestrator:
 
                 # If streak is short, retry the task
                 if ctx.hollow_streak <= 3:
-                    retry_task = SwarmTask(
+                    retry_task = FixupTask(
                         id=f"{task.id}_retry",
                         description=(
                             f"[RETRY - be concrete] {task.description}. "
                             "You MUST produce actual code/file changes, not just explanations."
                         ),
-                        task_type=task.task_type,
+                        type=task.type,
                         dependencies=task.dependencies,
-                        priority=task.priority + 1,  # Higher priority for retries
+                        fixes_task_id=task.id,
+                        fix_instructions="Previous attempt was hollow - produce real artifacts",
                     )
                     fix_ups.append(retry_task)
                     ctx.retries += 1
@@ -532,58 +544,71 @@ class SwarmOrchestrator:
         """Verify integration of completed work.
 
         Runs basic validation:
-        1. Check that all expected files exist
-        2. Run lint/type check if available
-        3. Run tests if a test plan exists
+        1. Check that all artifact files exist
+        2. Run integration test plan steps if available
 
         Returns VerificationResult.
         """
         import subprocess
 
-        checks_passed = 0
-        checks_total = 0
-        issues: list[str] = []
+        from attocode.integrations.swarm.types import VerificationStepResult
 
-        # Check artifact inventory
-        if ctx.artifact_inventory:
-            expected_files = getattr(ctx.artifact_inventory, "expected_files", [])
+        steps: list[VerificationStepResult] = []
+        step_index = 0
+
+        # Check artifact inventory files
+        if ctx.artifact_inventory and ctx.artifact_inventory.files:
             import os
 
-            for fpath in expected_files:
-                checks_total += 1
-                if os.path.exists(fpath):
-                    checks_passed += 1
-                else:
-                    issues.append(f"Expected file missing: {fpath}")
+            for artifact in ctx.artifact_inventory.files:
+                exists = os.path.isfile(artifact.path)
+                steps.append(VerificationStepResult(
+                    step_index=step_index,
+                    description=f"Artifact exists: {artifact.path}",
+                    passed=exists,
+                    output="" if exists else f"File not found: {artifact.path}",
+                ))
+                step_index += 1
 
-        # Try running tests if plan specifies
+        # Run integration test plan steps if available
         if ctx.plan and ctx.plan.integration_test_plan:
-            checks_total += 1
-            try:
-                test_cmd = ctx.plan.integration_test_plan
-                if isinstance(test_cmd, str):
+            test_plan = ctx.plan.integration_test_plan
+            for test_step in test_plan.steps:
+                if not test_step.command:
+                    continue
+                try:
+                    # Use exec-style for safety: split command into argv
+                    cmd_parts = test_step.command.split()
                     proc = subprocess.run(
-                        test_cmd,
-                        shell=True,
+                        cmd_parts,
                         capture_output=True,
                         text=True,
                         timeout=60,
-                        cwd=getattr(ctx.config, "working_dir", None),
                     )
-                    if proc.returncode == 0:
-                        checks_passed += 1
-                    else:
-                        issues.append(f"Test command failed: {proc.stderr[:200]}")
-            except Exception as e:
-                issues.append(f"Test execution error: {e}")
+                    passed = proc.returncode == 0
+                    steps.append(VerificationStepResult(
+                        step_index=step_index,
+                        description=test_step.description,
+                        passed=passed,
+                        output=proc.stdout[:500] if passed else proc.stderr[:500],
+                    ))
+                except Exception as e:
+                    steps.append(VerificationStepResult(
+                        step_index=step_index,
+                        description=test_step.description,
+                        passed=False,
+                        output=f"Execution error: {e}",
+                    ))
+                step_index += 1
 
-        passed = checks_total == 0 or (checks_passed / max(1, checks_total) >= 0.7)
+        total = len(steps)
+        passed_count = sum(1 for s in steps if s.passed)
+        overall_passed = total == 0 or (passed_count / max(1, total) >= 0.7)
 
         return VerificationResult(
-            passed=passed,
-            checks_total=checks_total,
-            checks_passed=checks_passed,
-            issues=issues,
+            passed=overall_passed,
+            steps=steps,
+            summary=f"{passed_count}/{total} checks passed",
         )
 
     async def _save_state(
@@ -600,17 +625,29 @@ class SwarmOrchestrator:
             return False
 
         try:
+            import time as _time
+
             checkpoint = SwarmCheckpoint(
+                session_id=ctx.config.resume_session_id or "",
+                timestamp=_time.time(),
                 phase=str(ctx.current_phase),
-                task_queue_state=ctx.task_queue.to_dict() if hasattr(ctx.task_queue, "to_dict") else {},
-                total_tokens=ctx.total_tokens,
-                total_cost=ctx.total_cost,
-                orchestrator_tokens=ctx.orchestrator_tokens,
-                quality_rejections=ctx.quality_rejections,
-                retries=ctx.retries,
-                errors=[{"phase": e.phase, "message": e.message} for e in ctx.errors],
-                label=label,
-                plan=ctx.plan,
+                stats={
+                    "total_tokens": ctx.total_tokens,
+                    "total_cost": ctx.total_cost,
+                    "orchestrator_tokens": ctx.orchestrator_tokens,
+                    "quality_rejections": ctx.quality_rejections,
+                    "retries": ctx.retries,
+                },
+                errors=[
+                    SwarmError(
+                        timestamp=e.timestamp,
+                        phase=e.phase,
+                        message=e.message,
+                        task_id=e.task_id,
+                    )
+                    for e in ctx.errors
+                ],
+                original_prompt=ctx.original_prompt,
             )
             await ctx.state_store.save_checkpoint(checkpoint)
 
@@ -639,9 +676,7 @@ class SwarmOrchestrator:
         # Mark foundation tasks
         for task in all_tasks:
             if dependent_count.get(task.id, 0) >= 3:
-                task.is_foundation = True  # type: ignore[attr-defined]
-                # Give foundation tasks higher priority
-                task.priority = max(task.priority, 8)
+                task.is_foundation = True
 
                 self._emit(swarm_event(
                     "swarm.foundation_task",

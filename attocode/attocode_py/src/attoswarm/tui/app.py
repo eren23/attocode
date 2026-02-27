@@ -249,7 +249,7 @@ class AttoswarmApp(App[None]):
         """Push TimelineScreen for full-screen event view."""
         from attocode.tui.screens.timeline_screen import TimelineScreen
 
-        self.push_screen(TimelineScreen(events=self._last_events))
+        self.push_screen(TimelineScreen(state_fn=self._state_fn_adapter))
 
     def action_cycle_focus(self) -> None:
         """Cycle keyboard focus between panels."""

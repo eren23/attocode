@@ -75,6 +75,15 @@ class SwarmEventBridge:
         self._artifact_inventory: ArtifactInventory | None = None
         self._worker_log_files: list[str] = []
 
+        # Quality / wave / hollow tracking
+        self._quality_results: dict[str, dict[str, Any]] = {}
+        self._wave_reviews: list[dict[str, Any]] = []
+        self._quality_rejections: int = 0
+        self._total_retries: int = 0
+        self._hollow_streak: int = 0
+        self._total_dispatches: int = 0
+        self._total_hollows: int = 0
+
         # Rate-limiting for state writes
         self._pending_write: asyncio.TimerHandle | None = None
         self._min_state_interval: float = (
@@ -192,10 +201,17 @@ class SwarmEventBridge:
             self._on_tasks_loaded(data)
         elif event_type == "swarm.task.dispatched":
             self._on_task_dispatched(data)
+            self._total_dispatches += 1
         elif event_type == "swarm.task.completed":
             self._on_task_completed(data)
+            attempt = data.get("attempt", 1)
+            if attempt > 1:
+                self._total_retries += attempt - 1
         elif event_type == "swarm.task.failed":
             self._on_task_failed(data)
+            attempt = data.get("attempt", 1)
+            if attempt > 1:
+                self._total_retries += attempt - 1
         elif event_type == "swarm.task.skipped":
             self._on_task_skipped(data)
         elif event_type == "swarm.complete":
@@ -208,6 +224,19 @@ class SwarmEventBridge:
             self._on_decision(data)
         elif event_type == "swarm.error":
             self._on_error(data)
+        elif event_type == "swarm.hollow_detected":
+            self._on_hollow_detected(data)
+        elif event_type == "swarm.wave.review":
+            self._on_wave_review(data)
+        elif event_type == "swarm.quality.result":
+            self._on_quality_result(data)
+        elif event_type == "swarm.quality.rejected":
+            self._quality_rejections += 1
+            self._append_timeline(event)
+        elif event_type == "swarm.model.failover":
+            self._append_timeline(event)
+        elif event_type == "swarm.task.attempt":
+            self._append_timeline(event)
         else:
             # Generic timeline entry for all other events
             self._append_timeline(event)
@@ -230,6 +259,13 @@ class SwarmEventBridge:
         self._plan = None
         self._verification = None
         self._artifact_inventory = None
+        self._quality_results.clear()
+        self._wave_reviews.clear()
+        self._quality_rejections = 0
+        self._total_retries = 0
+        self._hollow_streak = 0
+        self._total_dispatches = 0
+        self._total_hollows = 0
         self._seq = 1
 
         self._last_status = SwarmStatus(phase=SwarmPhase.DECOMPOSING)
@@ -436,6 +472,37 @@ class SwarmEventBridge:
         if len(self._errors) > 100:
             self._errors = self._errors[-100:]
 
+    def _on_hollow_detected(self, data: dict[str, Any]) -> None:
+        """Increment hollow streak and total hollows."""
+        self._hollow_streak += 1
+        self._total_hollows += 1
+        self._append_timeline(SwarmEvent(type="swarm.hollow_detected", data=data))
+
+    def _on_wave_review(self, data: dict[str, Any]) -> None:
+        """Append a wave review assessment."""
+        self._wave_reviews.append({
+            "timestamp": time.time(),
+            "wave": data.get("wave"),
+            "assessment": data.get("assessment", ""),
+            "task_assessments": data.get("task_assessments", []),
+            "fixup_count": data.get("fixup_count", 0),
+        })
+        if len(self._wave_reviews) > 50:
+            self._wave_reviews = self._wave_reviews[-50:]
+
+    def _on_quality_result(self, data: dict[str, Any]) -> None:
+        """Store a per-task quality gate result."""
+        task_id = data.get("task_id", "")
+        if task_id:
+            self._quality_results[task_id] = {
+                "score": data.get("score"),
+                "feedback": data.get("feedback", ""),
+                "passed": data.get("passed", False),
+                "artifact_auto_fail": data.get("artifact_auto_fail", False),
+            }
+        if not data.get("passed", True):
+            self._quality_rejections += 1
+
     # ------------------------------------------------------------------
     # State Writing (Rate-Limited)
     # ------------------------------------------------------------------
@@ -501,7 +568,25 @@ class SwarmEventBridge:
                 "attempts": task.attempts,
                 "degraded": task.degraded,
                 "dependencies": task.dependencies or [],
+                "target_files": task.target_files or [],
+                "read_files": task.read_files or [],
+                "failure_mode": (
+                    task.failure_mode.value
+                    if hasattr(task.failure_mode, "value")
+                    else str(task.failure_mode)
+                ) if task.failure_mode else None,
+                "quality_score": (
+                    task.result.quality_score if task.result else None
+                ),
             }
+            # Enrich with result data when available
+            if task.result:
+                tasks_dict[tid]["output"] = (task.result.output or "")[:500]
+                tasks_dict[tid]["files_modified"] = task.result.files_modified
+                tasks_dict[tid]["cost_used"] = task.result.cost_used
+                tasks_dict[tid]["duration_ms"] = task.result.duration_ms
+                tasks_dict[tid]["tool_calls"] = task.result.tool_calls
+                tasks_dict[tid]["tokens_used"] = task.result.tokens_used
 
         status_dict: dict[str, Any] = {}
         if self._last_status:
@@ -567,6 +652,15 @@ class SwarmEventBridge:
                 asdict(self._artifact_inventory) if self._artifact_inventory else None
             ),
             "worker_log_files": self._worker_log_files,
+            "quality_stats": {
+                "total_rejections": self._quality_rejections,
+                "total_retries": self._total_retries,
+                "hollow_streak": self._hollow_streak,
+                "total_dispatches": self._total_dispatches,
+                "total_hollows": self._total_hollows,
+            },
+            "wave_reviews": self._wave_reviews[-50:],
+            "quality_results": self._quality_results,
         }
 
     # ------------------------------------------------------------------
@@ -611,7 +705,13 @@ class SwarmEventBridge:
             "type": event.type,
         }
         # Include select data fields
-        for key in ("task_id", "wave", "model", "reason", "phase", "message"):
+        for key in (
+            "task_id", "wave", "model", "reason", "phase", "message",
+            "score", "feedback", "passed", "success", "duration_ms",
+            "tool_calls", "from_model", "to_model", "failure_mode",
+            "attempt", "output", "files_modified", "session_id",
+            "num_turns", "stderr", "tokens_used", "cost_used",
+        ):
             if key in event.data:
                 entry[key] = event.data[key]
 

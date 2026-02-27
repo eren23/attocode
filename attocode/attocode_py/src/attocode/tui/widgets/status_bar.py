@@ -51,6 +51,19 @@ class StatusBar(Static):
     lines_removed: reactive[int] = reactive(0)
     project_name: reactive[str] = reactive("")
 
+    # Part 2 additions: cache, compaction, phase
+    cache_hit_rate: reactive[float] = reactive(0.0)
+    compaction_count: reactive[int] = reactive(0)
+    phase: reactive[str] = reactive("")
+
+    # Swarm mode
+    swarm_active: reactive[bool] = reactive(False)
+    swarm_wave: reactive[str] = reactive("")
+    swarm_active_workers: reactive[int] = reactive(0)
+    swarm_done: reactive[int] = reactive(0)
+    swarm_total: reactive[int] = reactive(0)
+    swarm_cost: reactive[float] = reactive(0.0)
+
     def __init__(self, **kwargs) -> None:
         super().__init__(**kwargs)
         self._start_time: float = 0.0
@@ -132,6 +145,42 @@ class StatusBar(Static):
             indicator.append(f" {frame} ", style=style)
             indicator.append(_truncate(self.mode, 20), style="dim")
         parts.append(indicator)
+
+        # Phase
+        if self.phase:
+            phase_style = {
+                "exploration": "cyan",
+                "planning": "yellow",
+                "acting": "green",
+                "verifying": "magenta",
+            }.get(self.phase, "dim")
+            parts.append(Text(self.phase, style=phase_style))
+
+        # Swarm indicator
+        if self.swarm_active:
+            swarm_text = Text()
+            swarm_text.append("SWARM ", style="bold magenta")
+            if self.swarm_wave:
+                swarm_text.append(f"W{self.swarm_wave}", style="cyan")
+                swarm_text.append(" | ", style="dim")
+            swarm_text.append(f"{self.swarm_active_workers} active", style="yellow")
+            swarm_text.append(" | ", style="dim")
+            swarm_text.append(
+                f"{self.swarm_done}/{self.swarm_total} done", style="green"
+            )
+            if self.swarm_cost > 0:
+                swarm_text.append(" | ", style="dim")
+                swarm_text.append(f"${self.swarm_cost:.2f}", style="dim")
+            parts.append(swarm_text)
+
+        # Cache hit rate
+        if self.cache_hit_rate > 0:
+            cache_style = "cyan" if self.cache_hit_rate > 0.5 else "dim"
+            parts.append(Text(f"{self.cache_hit_rate:.0%} cache", style=cache_style))
+
+        # Compaction count
+        if self.compaction_count > 0:
+            parts.append(Text(f"{self.compaction_count} compactions", style="dim"))
 
         # File stats (only when files changed)
         if self.files_changed > 0:
@@ -227,6 +276,33 @@ class StatusBar(Static):
         self.refresh()
 
     def watch_context_window(self) -> None:
+        self.refresh()
+
+    def watch_cache_hit_rate(self) -> None:
+        self.refresh()
+
+    def watch_compaction_count(self) -> None:
+        self.refresh()
+
+    def watch_phase(self) -> None:
+        self.refresh()
+
+    def watch_swarm_active(self) -> None:
+        self.refresh()
+
+    def watch_swarm_wave(self) -> None:
+        self.refresh()
+
+    def watch_swarm_active_workers(self) -> None:
+        self.refresh()
+
+    def watch_swarm_done(self) -> None:
+        self.refresh()
+
+    def watch_swarm_total(self) -> None:
+        self.refresh()
+
+    def watch_swarm_cost(self) -> None:
         self.refresh()
 
 

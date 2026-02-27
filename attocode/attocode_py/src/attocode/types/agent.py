@@ -156,6 +156,8 @@ class AgentConfig:
     """Configuration for an agent."""
 
     model: str | None = None
+    provider: str | None = None
+    api_key: str | None = None
     max_iterations: int = 100
     max_tokens: int | None = None
     temperature: float | None = None

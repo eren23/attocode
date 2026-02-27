@@ -141,17 +141,19 @@ async def last_resort_decompose(
     ctx: OrchestratorInternals,
     task: str,
 ) -> SmartDecompositionResult | None:
-    """Simplified LLM decomposition with inline JSON example."""
+    """Simplified LLM decomposition with inline JSON example and AST context."""
+    ast_context = _get_ast_context(ctx)
+    ast_section = f"\n\n{ast_context}\n" if ast_context else ""
+
     prompt = f"""Break this task into 2-5 subtasks. Return ONLY JSON:
 {{
   "subtasks": [
-    {{"id": "st-0", "description": "...", "type": "implement", "complexity": 5, "dependencies": []}},
-    {{"id": "st-1", "description": "...", "type": "test", "complexity": 3, "dependencies": ["st-0"]}}
+    {{"id": "st-0", "description": "...", "type": "implement", "complexity": 5, "dependencies": [], "relevantFiles": []}},
+    {{"id": "st-1", "description": "...", "type": "test", "complexity": 3, "dependencies": ["st-0"], "relevantFiles": []}}
   ],
   "strategy": "sequential",
   "reasoning": "..."
-}}
-
+}}{ast_section}
 Task: {task}"""
 
     try:
@@ -193,6 +195,46 @@ Task: {task}"""
         return None
 
 
+def _get_ast_context(ctx: OrchestratorInternals) -> str:
+    """Build AST codebase context string for decomposition prompts.
+
+    If an AST service is available (via codebase_context), returns a compact
+    summary of file structure and symbol counts. Otherwise returns empty string.
+    """
+    ast_svc = None
+    if ctx.codebase_context and hasattr(ctx.codebase_context, "_ast_service"):
+        ast_svc = ctx.codebase_context._ast_service
+    if ast_svc is None:
+        return ""
+
+    try:
+        lines: list[str] = ["## Codebase Structure (AST)"]
+
+        # File list with symbol counts
+        if hasattr(ast_svc, "_ast_cache"):
+            file_count = len(ast_svc._ast_cache)
+            lines.append(f"Indexed: {file_count} files")
+
+            for rel_path in sorted(ast_svc._ast_cache.keys())[:30]:
+                file_ast = ast_svc._ast_cache[rel_path]
+                funcs = len(getattr(file_ast, "functions", []))
+                classes = len(getattr(file_ast, "classes", []))
+                lines.append(f"  {rel_path} ({funcs}fn, {classes}cls)")
+
+            if file_count > 30:
+                lines.append(f"  ... and {file_count - 30} more files")
+
+        # Suggest related files for the task
+        if hasattr(ast_svc, "suggest_related_files"):
+            related = ast_svc.suggest_related_files([])  # empty = top files
+            if related:
+                lines.append(f"\nKey entry points: {', '.join(related[:5])}")
+
+        return "\n".join(lines)
+    except Exception:
+        return ""
+
+
 async def decompose_task(
     ctx: OrchestratorInternals,
     task: str,
@@ -200,7 +242,7 @@ async def decompose_task(
     """Full decomposition with three-tier fallback.
 
     1. Primary: decomposer.decompose() (if available)
-    2. Last resort: simplified LLM prompt
+    2. Last resort: simplified LLM prompt with AST context
     3. Emergency: deterministic 4-task fallback
     """
     result: SmartDecompositionResult | None = None
@@ -211,15 +253,18 @@ async def decompose_task(
         try:
             result = await ctx.decomposer.decompose(task)
             if result and len(result.subtasks) > 0:
+                # Enrich subtasks with AST-suggested related files
+                _enrich_subtasks_with_ast(ctx, result.subtasks)
                 return {"result": result}
         except Exception as exc:
             failure_reason = str(exc)
             logger.warning("Primary decomposition failed: %s", exc)
 
-    # Tier 2: Last resort
+    # Tier 2: Last resort (with AST context)
     try:
         result = await last_resort_decompose(ctx, task)
         if result and len(result.subtasks) >= 2:
+            _enrich_subtasks_with_ast(ctx, result.subtasks)
             return {"result": result}
     except Exception as exc:
         failure_reason = failure_reason or str(exc)
@@ -608,6 +653,51 @@ def parse_json(content: str) -> dict[str, Any] | None:
             pass
 
     return None
+
+
+# =============================================================================
+# AST Enrichment
+# =============================================================================
+
+
+def _enrich_subtasks_with_ast(
+    ctx: OrchestratorInternals,
+    subtasks: list[SmartSubtask],
+) -> None:
+    """Use AST service to suggest related files for each subtask.
+
+    For each subtask that has target_files or relevant_files, expand the
+    set using ``suggest_related_files()`` from the AST service.
+    """
+    ast_svc = None
+    if ctx.codebase_context and hasattr(ctx.codebase_context, "_ast_service"):
+        ast_svc = ctx.codebase_context._ast_service
+    if ast_svc is None or not hasattr(ast_svc, "suggest_related_files"):
+        return
+
+    try:
+        for sub in subtasks:
+            seed_files: list[str] = []
+            if sub.target_files:
+                seed_files.extend(sub.target_files)
+            if sub.relevant_files:
+                seed_files.extend(sub.relevant_files)
+            if sub.read_files:
+                seed_files.extend(sub.read_files)
+
+            if not seed_files:
+                continue
+
+            related = ast_svc.suggest_related_files(seed_files)
+            if related:
+                existing = set(seed_files)
+                new_files = [f for f in related if f not in existing][:5]
+                if new_files:
+                    if sub.read_files is None:
+                        sub.read_files = []
+                    sub.read_files.extend(new_files)
+    except Exception:
+        pass  # Non-fatal — enrichment is best-effort
 
 
 # =============================================================================

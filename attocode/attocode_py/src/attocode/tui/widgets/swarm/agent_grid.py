@@ -152,12 +152,24 @@ class AgentGrid(Widget):
         row.remove_children()
 
         for agent in agents:
-            card = AgentCard(agent_id=agent.get("agent_id", "?"))
+            # Event bridge uses "worker_name"; fallback to "agent_id"
+            agent_id = agent.get("worker_name") or agent.get("agent_id", "?")
+            card = AgentCard(agent_id=agent_id)
             row.mount(card)
+
+            # Compute elapsed string from started_at timestamp
+            elapsed_str = agent.get("elapsed", "")
+            if not elapsed_str:
+                import time as _time
+                started_at = agent.get("started_at", 0)
+                if started_at:
+                    secs = int(_time.time() - started_at)
+                    elapsed_str = f"{secs}s" if secs < 60 else f"{secs // 60}m{secs % 60:02d}s"
+
             card.update_data(
-                status=agent.get("status", "idle"),
+                status="running" if agent.get("task_id") else "idle",
                 task_id=agent.get("task_id", ""),
                 model=agent.get("model", ""),
                 tokens=agent.get("tokens_used", 0),
-                elapsed=agent.get("elapsed", ""),
+                elapsed=elapsed_str,
             )

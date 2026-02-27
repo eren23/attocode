@@ -309,6 +309,9 @@ class SwarmConfig:
     # Permissions
     permissions: dict[str, Any] = field(default_factory=dict)
 
+    # Roles (configurable role overrides — see roles.py)
+    roles: dict[str, dict[str, Any]] = field(default_factory=dict)
+
     # Policy profiles & extensions
     policy_profiles: dict[str, Any] = field(default_factory=dict)
     profile_extensions: dict[str, Any] = field(default_factory=dict)
@@ -719,6 +722,9 @@ class SpawnResult:
     files_modified: list[str] | None = None
     closure_report: dict[str, Any] | None = None
     metrics: dict[str, Any] | None = None  # {tokens, duration}
+    stderr: str = ""
+    session_id: str = ""
+    num_turns: int = 0
 
 
 # =============================================================================

@@ -170,7 +170,7 @@ def _run_single_turn(config: Any, prompt: str) -> None:
         try:
             builder = (
                 AgentBuilder()
-                .with_provider(config.provider, api_key=config.api_key)
+                .with_provider(config.provider, api_key=config.api_key, timeout=config.timeout)
                 .with_model(config.model)
                 .with_working_dir(config.working_directory)
                 .with_budget(ExecutionBudget(
@@ -349,7 +349,7 @@ def _run_tui(config: Any) -> None:
     # Build agent
     builder = (
         AgentBuilder()
-        .with_provider(config.provider, api_key=config.api_key)
+        .with_provider(config.provider, api_key=config.api_key, timeout=config.timeout)
         .with_model(config.model)
         .with_working_dir(config.working_directory)
         .with_budget(ExecutionBudget(
@@ -383,6 +383,24 @@ def _run_tui(config: Any) -> None:
         from attocode.integrations.recording.recorder import RecordingConfig
         rec_dir = config.working_directory + "/.attocode/recordings"
         builder = builder.with_recording(RecordingConfig(output_dir=rec_dir))
+
+    # Load MCP server configs from hierarchy and wire into builder
+    from attocode.integrations.mcp.config import load_mcp_configs
+
+    mcp_configs = load_mcp_configs(config.working_directory)
+    if mcp_configs:
+        mcp_dicts = [
+            {
+                "name": c.name,
+                "command": c.command,
+                "args": c.args,
+                "env": c.env,
+                "enabled": c.enabled,
+                "lazy_load": c.lazy_load,
+            }
+            for c in mcp_configs
+        ]
+        builder = builder.with_mcp_servers(mcp_dicts)
 
     # Create approval bridge before building agent so we can wire it
     from attocode.tui.bridges.approval_bridge import ApprovalBridge
@@ -551,7 +569,7 @@ def _run_swarm(config: Any, prompt: str) -> None:
         await init_model_cache()
 
         # Create the LLM provider
-        provider = create_provider(config.provider, api_key=config.api_key, model=config.model)
+        provider = create_provider(config.provider, api_key=config.api_key, model=config.model, timeout=config.timeout)
 
         # Load swarm config from YAML or use defaults
         swarm_cfg_overrides: dict = {}

@@ -65,6 +65,7 @@ class OrchestrationConfig:
     decomposition: str = "llm"  # llm | parallel | heuristic | fast | manual
     max_tasks: int = 20
     max_depth: int = 3
+    custom_instructions: str = ""  # Prepended to decompose prompt for domain-specific guidance
 
 
 @dataclass(slots=True)
@@ -75,7 +76,7 @@ class UIConfig:
 
 @dataclass(slots=True)
 class WorkspaceConfig:
-    mode: str = "shared"  # "shared" (new default) | "worktree" (legacy)
+    mode: str = "shared"  # "shared" (default, AoT+OCC) | "worktree" (legacy subprocess per worktree)
     reconciliation_strategy: str = "ast_merge"  # "ast_merge" | "last_write_wins"
     max_concurrent_writers: int = 4
 

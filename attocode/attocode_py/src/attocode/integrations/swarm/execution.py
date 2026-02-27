@@ -112,6 +112,10 @@ async def execute_waves(
             skipped=wave_skipped,
         ))
 
+        # Wave review: run critic if configured
+        if ctx.config.enable_wave_review:
+            await _run_wave_review(ctx, wave_index)
+
         # ALL-FAILED recovery: re-queue retryable tasks
         if wave_completed == 0 and wave_failed > 0:
             ctx.emit(swarm_event("swarm.wave.allFailed", wave=wave_index + 1))
@@ -289,6 +293,11 @@ async def dispatch_task(
         if split_result.get("should_split") and split_result.get("subtasks"):
             ctx.task_queue.replace_with_subtasks(task.id, split_result["subtasks"])
             return
+
+    # Pre-dispatch scout: if scout role is configured, gather codebase context
+    # for implementation tasks on first attempt
+    if task.attempts == 0 and task.type in ("code", "refactor", "test", "feature"):
+        await _run_scout_for_task(ctx, task)
 
     # Select worker
     worker = ctx.worker_pool.select_worker(task)
@@ -473,8 +482,75 @@ async def _handle_successful_completion(
             ctx.task_queue.mark_failed_without_cascade(task_id, max_retries)
             return
 
-    # Quality gate (simplified — full version would call evaluateWorkerOutput)
-    # For now, accept all non-hollow, non-future-intent completions
+    # Quality gate — run pre-flight + LLM judge if enabled
+    if ctx.config.quality_gates:
+        from attocode.integrations.swarm.quality_gate import (
+            QualityGateConfig,
+            evaluate_worker_output,
+        )
+        from attocode.integrations.swarm.roles import get_judge_model
+
+        # Determine judge model from roles
+        roles = _get_role_map(ctx)
+        judge_model = get_judge_model(roles, ctx.config.orchestrator_model)
+
+        judge_cfg = QualityGateConfig(model=judge_model)
+
+        # Determine quality threshold (foundation tasks get relaxed threshold)
+        threshold = ctx.config.quality_threshold
+        if task.is_foundation and threshold > 2:
+            threshold -= 1
+
+        gate_result = await evaluate_worker_output(
+            provider=ctx.provider,
+            orchestrator_model=ctx.config.orchestrator_model,
+            task=task,
+            result=task_result,
+            judge_config=judge_cfg,
+            quality_threshold=threshold,
+            on_usage=lambda u: _track_judge_usage(ctx, u),
+            swarm_config=ctx.config,
+            emit=ctx.emit,
+        )
+
+        if not gate_result.passed:
+            # Quality rejection — retry or fail
+            task_result.quality_score = gate_result.score
+            task_result.quality_feedback = gate_result.feedback
+            ctx.quality_rejections += 1
+            max_retries = ctx.config.worker_retries
+            retried = ctx.task_queue.mark_failed_without_cascade(task_id, max_retries)
+
+            # Set retry context with judge feedback
+            from attocode.integrations.swarm.types import RetryContext
+            task.retry_context = RetryContext(
+                previous_feedback=gate_result.feedback,
+                previous_score=gate_result.score,
+                attempt=task.attempts,
+                previous_model=task.assigned_model,
+            )
+            task.failure_mode = TaskFailureMode.QUALITY
+
+            ctx.emit(swarm_event(
+                "swarm.quality.rejected",
+                task_id=task_id,
+                score=gate_result.score,
+                feedback=gate_result.feedback,
+            ))
+
+            if not retried:
+                from attocode.integrations.swarm.recovery import try_resilience_recovery
+                recovered = await try_resilience_recovery(
+                    ctx, recovery_state, task, task_id, task_result, spawn_result,
+                )
+                if not recovered:
+                    ctx.task_queue.trigger_cascade_skip(task_id)
+            return
+
+        # Store quality score on result
+        task_result.quality_score = gate_result.score
+
+    # Mark completed
     ctx.task_queue.mark_completed(task_id, task_result)
     ctx.hollow_streak = 0
 
@@ -486,6 +562,12 @@ async def _handle_successful_completion(
         cost_used=task_result.cost_used,
         duration_ms=task_result.duration_ms,
         quality_score=task_result.quality_score,
+        output=(spawn_result.output or "")[:1000],
+        files_modified=spawn_result.files_modified,
+        tool_calls=spawn_result.tool_calls,
+        session_id=spawn_result.session_id,
+        num_turns=spawn_result.num_turns,
+        stderr=(spawn_result.stderr or "")[:500],
     ))
 
 
@@ -530,6 +612,43 @@ async def _handle_failed_completion(
                 ctx.task_queue.mark_failed(task_id, 0)
             return
 
+    # Model failover: on consecutive timeouts or rate limits, try an alternative model
+    if (
+        ctx.config.enable_model_failover
+        and task.failure_mode in (TaskFailureMode.TIMEOUT, TaskFailureMode.RATE_LIMIT)
+        and task.attempts >= 2
+    ):
+        from attocode.integrations.swarm.model_selector import select_alternative_model
+        from attocode.integrations.swarm.types import WorkerCapability
+
+        capability = WorkerCapability.CODE
+        type_config = BUILTIN_TASK_TYPE_CONFIGS.get(
+            task.type.value if hasattr(task.type, "value") else str(task.type)
+        )
+        if type_config:
+            capability = type_config.capability
+
+        alt_worker = select_alternative_model(
+            ctx.config.workers,
+            task.assigned_model or "",
+            capability,
+            ctx.health_tracker,
+        )
+        if alt_worker:
+            old_model = task.assigned_model or ""
+            logger.info(
+                "Model failover for task %s: %s -> %s",
+                task_id, old_model, alt_worker.model,
+            )
+            task.assigned_model = alt_worker.model
+            ctx.emit(swarm_event(
+                "swarm.model.failover",
+                task_id=task_id,
+                from_model=old_model,
+                to_model=alt_worker.model,
+                reason=str(task.failure_mode),
+            ))
+
     # Set retry context
     from attocode.integrations.swarm.types import RetryContext
     task.retry_context = RetryContext(
@@ -569,6 +688,12 @@ async def _handle_failed_completion(
         max_attempts=retry_limit + 1,
         will_retry=retried,
         failure_mode=str(task.failure_mode),
+        output=(spawn_result.output or "")[:1000],
+        files_modified=spawn_result.files_modified,
+        tool_calls=spawn_result.tool_calls,
+        session_id=spawn_result.session_id,
+        num_turns=spawn_result.num_turns,
+        stderr=(spawn_result.stderr or "")[:500],
     ))
 
 
@@ -620,6 +745,15 @@ async def _handle_hollow_completion(
     ctx.hollow_streak += 1
     ctx.total_hollows += 1
 
+    # Emit hollow detected event
+    ctx.emit(swarm_event(
+        "swarm.hollow_detected",
+        task_id=task_id,
+        hollow_streak=ctx.hollow_streak,
+        total_hollows=ctx.total_hollows,
+        model=task.assigned_model,
+    ))
+
     # Hollow streak termination
     if ctx.config.enable_hollow_termination:
         # Single model + 3+ hollow streak + unhealthy
@@ -660,3 +794,149 @@ def _classify_failure(output: str) -> str:
         return "timeout"
 
     return "error"
+
+
+def _get_role_map(ctx: OrchestratorInternals) -> dict[str, Any]:
+    """Build role map from config, caching on ctx."""
+    if not hasattr(ctx, "_role_map_cache"):
+        from attocode.integrations.swarm.roles import build_role_map
+        ctx._role_map_cache = build_role_map(ctx.config.roles or None)  # type: ignore[attr-defined]
+    return ctx._role_map_cache  # type: ignore[attr-defined]
+
+
+def _track_judge_usage(ctx: OrchestratorInternals, usage: dict[str, Any]) -> None:
+    """Track judge LLM usage on orchestrator stats."""
+    tokens = usage.get("input_tokens", 0) + usage.get("output_tokens", 0)
+    ctx.orchestrator_tokens += tokens
+    ctx.orchestrator_calls += 1
+
+
+async def _run_wave_review(ctx: OrchestratorInternals, wave_index: int) -> None:
+    """Run critic wave review if the critic role is configured."""
+    from attocode.integrations.swarm.roles import get_critic_config
+
+    roles = _get_role_map(ctx)
+    critic_config = get_critic_config(roles)
+
+    if critic_config is None:
+        # No critic configured — emit a basic summary event
+        stats = ctx.task_queue.get_stats()
+        ctx.emit(swarm_event(
+            "swarm.wave.review",
+            wave=wave_index + 1,
+            assessment="good",
+            task_assessments=[],
+            fixup_count=0,
+        ))
+        return
+
+    # Gather wave tasks
+    wave_tasks = [
+        t for t in ctx.task_queue.get_all_tasks()
+        if t.wave == wave_index
+    ]
+
+    if not wave_tasks:
+        return
+
+    from attocode.integrations.swarm.critic import build_fixup_tasks, review_wave
+
+    review_result = await review_wave(ctx, critic_config, wave_index, wave_tasks)
+
+    # Store the review
+    ctx.wave_reviews.append({
+        "wave": wave_index + 1,
+        "assessment": review_result.assessment,
+        "task_assessments": review_result.task_assessments,
+        "fixup_count": len(review_result.fixup_instructions),
+    })
+
+    # Build fixup tasks and enqueue them
+    if review_result.assessment != "good":
+        fixups = build_fixup_tasks(review_result, wave_index)
+        if fixups:
+            ctx.task_queue.add_fixup_tasks(fixups)
+            logger.info(
+                "Critic created %d fixup tasks for wave %d",
+                len(fixups), wave_index + 1,
+            )
+
+
+# =============================================================================
+# Scout Pre-Execution
+# =============================================================================
+
+
+async def _run_scout_for_task(
+    ctx: OrchestratorInternals,
+    task: SwarmTask,
+) -> None:
+    """Run a read-only scout agent before dispatching an implementation task.
+
+    If the scout role is configured, spawns a lightweight agent to explore
+    relevant files and gathers findings that are injected into the task's
+    ``dependency_context`` to give the builder better situational awareness.
+
+    No-ops if scout is not configured or if the spawn fails.
+    """
+    from attocode.integrations.swarm.roles import get_scout_config
+
+    roles = _get_role_map(ctx)
+    scout_config = get_scout_config(roles)
+    if scout_config is None:
+        return
+
+    # Build a focused scout prompt from the task
+    target_files = ", ".join(task.target_files[:5]) if task.target_files else "N/A"
+    read_files = ", ".join(task.read_files[:5]) if task.read_files else "N/A"
+    scout_prompt = (
+        f"Explore the codebase to gather context for this task:\n\n"
+        f"Task: {task.description}\n"
+        f"Target files: {target_files}\n"
+        f"Reference files: {read_files}\n\n"
+        f"Read the target and reference files. Report:\n"
+        f"1. Key functions/classes in those files\n"
+        f"2. Import dependencies\n"
+        f"3. Any patterns or conventions to follow\n"
+        f"4. Potential gotchas or edge cases\n\n"
+        f"Be concise. Output only findings, no code changes."
+    )
+
+    # Use scout's model (falls back to orchestrator model)
+    scout_model = scout_config.model or ctx.config.orchestrator_model
+
+    try:
+        scout_result = await asyncio.wait_for(
+            ctx.spawn_agent_fn(
+                task=SwarmTask(
+                    id=f"scout-{task.id}",
+                    description=scout_prompt,
+                    type="research",
+                    target_files=task.target_files,
+                    read_files=task.read_files,
+                ),
+                worker=None,
+                system_prompt=scout_config.persona or "You are a read-only codebase explorer.",
+                max_tokens=20_000,
+                timeout_ms=30_000,
+            ),
+            timeout=35.0,
+        )
+
+        if scout_result.success and scout_result.output:
+            # Inject scout findings into the task's dependency context
+            existing = task.dependency_context or ""
+            scout_section = f"\n\n## Scout Findings\n\n{scout_result.output[:3000]}"
+            task.dependency_context = existing + scout_section
+
+            ctx.emit(swarm_event(
+                "swarm.scout.complete",
+                task_id=task.id,
+                findings_length=len(scout_result.output),
+            ))
+            logger.info("Scout gathered %d chars of context for task %s",
+                        len(scout_result.output), task.id)
+
+    except (asyncio.TimeoutError, Exception) as exc:
+        # Scout is best-effort — don't block dispatch on failure
+        logger.debug("Scout for task %s failed: %s", task.id, exc)

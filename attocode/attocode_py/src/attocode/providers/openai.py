@@ -27,6 +27,21 @@ DEFAULT_API_URL = "https://api.openai.com/v1/chat/completions"
 DEFAULT_MODEL = "gpt-4o"
 
 
+def _describe_request_error(e: httpx.RequestError) -> str:
+    """Build a descriptive error message for httpx request errors.
+
+    httpx.ReadTimeout and similar errors often have empty str(e),
+    so we fall back to the exception type name and include the
+    chained cause when available.
+    """
+    msg = str(e)
+    if not msg:
+        msg = type(e).__name__
+    if e.__cause__ and str(e.__cause__):
+        msg = f"{msg} (caused by {type(e.__cause__).__name__}: {e.__cause__})"
+    return msg
+
+
 class OpenAIProvider:
     """OpenAI API provider using httpx."""
 
@@ -35,7 +50,7 @@ class OpenAIProvider:
         api_key: str | None = None,
         model: str = DEFAULT_MODEL,
         api_url: str = DEFAULT_API_URL,
-        timeout: float = 120.0,
+        timeout: float = 600.0,
     ) -> None:
         self._api_key = api_key or os.environ.get("OPENAI_API_KEY", "")
         if not self._api_key:
@@ -88,7 +103,10 @@ class OpenAIProvider:
                 provider="openai", status_code=status, retryable=status in (429, 500, 502, 503),
             ) from e
         except httpx.RequestError as e:
-            raise ProviderError(f"OpenAI request error: {e}", provider="openai", retryable=True) from e
+            raise ProviderError(
+                f"OpenAI request error: {_describe_request_error(e)}",
+                provider="openai", retryable=True,
+            ) from e
 
     async def chat_stream(
         self,
@@ -125,7 +143,15 @@ class OpenAIProvider:
                 provider="openai", status_code=status, retryable=status in (429, 500, 502, 503),
             ) from e
         except httpx.RequestError as e:
-            raise ProviderError(f"OpenAI request error: {e}", provider="openai", retryable=True) from e
+            raise ProviderError(
+                f"OpenAI request error: {_describe_request_error(e)}",
+                provider="openai", retryable=True,
+            ) from e
+        except httpx.StreamError as e:
+            raise ProviderError(
+                f"OpenAI stream error: {type(e).__name__}: {e}",
+                provider="openai", retryable=True,
+            ) from e
 
     def _format_messages(self, messages: list[Message | MessageWithStructuredContent]) -> list[dict[str, Any]]:
         result: list[dict[str, Any]] = []

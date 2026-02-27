@@ -8,8 +8,31 @@ from __future__ import annotations
 
 import asyncio
 import json
+import os
+import re
 from dataclasses import dataclass, field
 from typing import Any
+
+
+def _expand_env(env: dict[str, str] | None) -> dict[str, str] | None:
+    """Expand ``${VAR}`` references and merge with the current environment.
+
+    When *env* is provided, we start from ``os.environ`` (so the child
+    process inherits PATH, HOME, etc.) and overlay the user-supplied
+    values after expanding any ``${VAR_NAME}`` patterns against
+    ``os.environ``.
+    """
+    if not env:
+        return None
+    base = os.environ.copy()
+    for key, val in env.items():
+        expanded = re.sub(
+            r"\$\{(\w+)\}",
+            lambda m: os.environ.get(m.group(1), ""),
+            val,
+        )
+        base[key] = expanded
+    return base
 
 
 @dataclass
@@ -62,7 +85,7 @@ class MCPClient:
             stdin=asyncio.subprocess.PIPE,
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
-            env=self._env,
+            env=_expand_env(self._env),
         )
 
         # Send initialize request

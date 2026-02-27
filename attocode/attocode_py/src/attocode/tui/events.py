@@ -143,3 +143,47 @@ class SwarmStatusUpdate(Message):
     def __init__(self, status: Any) -> None:
         super().__init__()
         self.status = status
+
+
+class CompactionCompleted(Message):
+    """Context compaction completed."""
+
+    def __init__(self, tokens_saved: int, new_usage: float) -> None:
+        super().__init__()
+        self.tokens_saved = tokens_saved
+        self.new_usage = new_usage
+
+
+class PhaseTransition(Message):
+    """Economics phase changed."""
+
+    def __init__(self, old_phase: str, new_phase: str) -> None:
+        super().__init__()
+        self.old_phase = old_phase
+        self.new_phase = new_phase
+
+
+class DoomLoopWarning(Message):
+    """Doom loop detected for a tool."""
+
+    def __init__(self, tool_name: str, count: int) -> None:
+        super().__init__()
+        self.tool_name = tool_name
+        self.count = count
+
+
+class CacheStats(Message):
+    """LLM cache statistics update."""
+
+    def __init__(
+        self,
+        cache_read: int = 0,
+        cache_write: int = 0,
+        input_tokens: int = 0,
+        output_tokens: int = 0,
+    ) -> None:
+        super().__init__()
+        self.cache_read = cache_read
+        self.cache_write = cache_write
+        self.input_tokens = input_tokens
+        self.output_tokens = output_tokens

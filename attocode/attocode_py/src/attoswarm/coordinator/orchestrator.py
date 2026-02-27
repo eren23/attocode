@@ -270,7 +270,7 @@ class SwarmOrchestrator:
             "elapsed_s": time.time() - self._start_time if self._start_time else 0,
             "active_agents": [
                 {"agent_id": a.agent_id, "task_id": a.task_id, "status": a.status}
-                for a in self._subagent_mgr.get_active_agents()
+                for a in self._subagent_mgr.get_all_agents()
             ],
             "events": [
                 {"type": e.event_type, "message": e.message, "timestamp": e.timestamp}
@@ -303,7 +303,7 @@ class SwarmOrchestrator:
                 "status": status,
             })
 
-        # Active agents from subagent manager
+        # All agents from subagent manager (not just running)
         active_agents: list[dict[str, Any]] = [
             {
                 "agent_id": a.agent_id,
@@ -312,7 +312,7 @@ class SwarmOrchestrator:
                 "tokens_used": a.tokens_used,
                 "started_at_epoch": a.started_at,
             }
-            for a in self._subagent_mgr.get_active_agents()
+            for a in self._subagent_mgr.get_all_agents()
         ]
 
         state: dict[str, Any] = {
@@ -382,8 +382,13 @@ class SwarmOrchestrator:
                     return result
             except Exception as exc:
                 logger.warning("Decomposition failed: %s", exc)
+                self._emit(
+                    "warning",
+                    message=f"LLM decomposition failed ({exc}), falling back to single task",
+                )
 
         # Fallback: single task
+        self._emit("info", message="Using single-task fallback (no LLM decomposer available)")
         return [TaskSpec(
             task_id="task-1",
             title=self._goal[:100],

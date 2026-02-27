@@ -36,7 +36,7 @@ class AzureConfig:
     api_key: str = ""
     api_version: str = "2024-06-01"
     deployment: str = ""
-    timeout: float = 120.0
+    timeout: float = 600.0
 
     @classmethod
     def from_env(cls) -> AzureConfig:

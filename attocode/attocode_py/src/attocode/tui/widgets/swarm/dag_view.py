@@ -82,9 +82,12 @@ class DependencyDAGView(Static):
                 if i > 0:
                     text.append("  ", style="dim")
 
+                desc = node.get("description", "")[:40]
                 text.append("[", style="dim")
                 text.append(f"{symbol}", style=color)
                 text.append(f" {tid[:12]}", style=color)
+                if desc:
+                    text.append(f" {desc}", style="dim")
                 text.append("]", style="dim")
 
                 # Draw horizontal edge to next sibling

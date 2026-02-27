@@ -172,6 +172,24 @@ class MCPClientManager:
     # Introspection
     # ------------------------------------------------------------------
 
+    def get_tool_summaries(self) -> list[dict[str, str]]:
+        """Return lightweight {name, description, server} for all tools on connected servers.
+
+        Lazy (pending) servers are skipped — they'll be connected on first
+        tool call via :meth:`call_tool`.  This keeps startup cheap.
+        """
+        summaries: list[dict[str, str]] = []
+        for name, entry in self._servers.items():
+            if entry.client is None or entry.state != ConnectionState.CONNECTED:
+                continue
+            for tool in entry.client.tools:
+                summaries.append({
+                    "name": tool.name,
+                    "description": tool.description,
+                    "server": name,
+                })
+        return summaries
+
     def get_state(self, server_name: str) -> ConnectionState | None:
         """Return the connection state for a server, or None if unknown."""
         entry = self._servers.get(server_name)

@@ -59,6 +59,8 @@ from attocode.integrations.context.semantic_cache import (
     SemanticCacheManager,
 )
 from attocode.integrations.context.ast_service import ASTService
+from attocode.integrations.context.ast_server import ASTServer
+from attocode.integrations.context.ast_client import ASTClient
 from attocode.integrations.context.cross_references import (
     CrossRefIndex,
     SymbolLocation,
@@ -117,6 +119,10 @@ __all__ = [
     "SemanticCacheManager",
     # ast_service
     "ASTService",
+    # ast_server
+    "ASTServer",
+    # ast_client
+    "ASTClient",
     # cross_references
     "CrossRefIndex",
     "SymbolLocation",

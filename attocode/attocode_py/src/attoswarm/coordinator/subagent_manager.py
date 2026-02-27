@@ -142,6 +142,10 @@ class SubagentManager:
         """Return currently active agent statuses."""
         return [s for s in self._agent_statuses.values() if s.status == "running"]
 
+    def get_all_agents(self) -> list[AgentStatus]:
+        """Return all tracked agent statuses regardless of state."""
+        return list(self._agent_statuses.values())
+
     @property
     def max_concurrency(self) -> int:
         return self._max_concurrency

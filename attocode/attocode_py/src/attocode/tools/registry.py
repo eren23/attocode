@@ -3,12 +3,15 @@
 from __future__ import annotations
 
 import asyncio
-from typing import Any
+from typing import Any, Awaitable, Callable
 
 from attocode.errors import ToolNotFoundError, ToolTimeoutError
 from attocode.tools.base import Tool
 from attocode.tools.permission import AllowAllPermissions, PermissionChecker
 from attocode.types.messages import ToolDefinition, ToolResult
+
+# Callback signature: given a tool name, lazily resolve and return a Tool, or None.
+ToolResolver = Callable[[str], Awaitable[Tool | None]]
 
 
 class ToolRegistry:
@@ -23,6 +26,7 @@ class ToolRegistry:
         self._tools: dict[str, Tool] = {}
         self._permission_checker = permission_checker or AllowAllPermissions()
         self._default_timeout = default_timeout
+        self._tool_resolver: ToolResolver | None = None
 
     @property
     def tool_count(self) -> int:
@@ -46,6 +50,10 @@ class ToolRegistry:
     def get_definitions(self) -> list[ToolDefinition]:
         return [tool.to_definition() for tool in self._tools.values()]
 
+    def set_tool_resolver(self, resolver: ToolResolver) -> None:
+        """Set a lazy tool resolver for on-demand tool loading (e.g. MCP lazy servers)."""
+        self._tool_resolver = resolver
+
     async def execute(
         self,
         tool_name: str,
@@ -54,6 +62,12 @@ class ToolRegistry:
         timeout: float | None = None,
     ) -> ToolResult:
         tool = self._tools.get(tool_name)
+        if tool is None and self._tool_resolver is not None:
+            # Lazy resolve: try to load the tool on demand (e.g. from a lazy MCP server)
+            resolved = await self._tool_resolver(tool_name)
+            if resolved is not None:
+                self._tools[resolved.name] = resolved
+                tool = resolved
         if tool is None:
             raise ToolNotFoundError(tool_name)
 

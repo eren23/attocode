@@ -299,6 +299,19 @@ def yaml_to_swarm_config(
         if h_cfg:
             cfg["hierarchy"] = h_cfg
 
+    # --- Roles ---
+    raw_roles = raw.get("roles", {})
+    if isinstance(raw_roles, dict) and raw_roles:
+        roles: dict[str, dict[str, Any]] = {}
+        for role_name, role_data in raw_roles.items():
+            if isinstance(role_data, dict):
+                roles[role_name] = role_data
+            elif isinstance(role_data, str):
+                # Shorthand: role: model_id
+                roles[role_name] = {"model": role_data}
+        if roles:
+            cfg["roles"] = roles
+
     # --- Throttle ---
     throttle = raw.get("throttle")
     if throttle is not None:

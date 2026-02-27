@@ -128,6 +128,12 @@ class SwarmTaskQueue:
         # Detect file conflicts -------------------------------------------------
         self._conflicts = list(dep_graph.conflicts)
 
+        # AST-based conflict detection: if an AST service is available,
+        # detect additional conflicts between tasks with overlapping files
+        ast_conflicts = self._detect_ast_conflicts(result.subtasks, config)
+        if ast_conflicts:
+            self._conflicts.extend(ast_conflicts)
+
         # Serialise conflicting tasks if configured ---------------------------
         if (
             config.file_conflict_strategy == FileConflictStrategy.SERIALIZE
@@ -875,6 +881,45 @@ class SwarmTaskQueue:
     # ------------------------------------------------------------------
     # Private: conflict serialisation
     # ------------------------------------------------------------------
+
+    @staticmethod
+    def _detect_ast_conflicts(
+        subtasks: list[SmartSubtask],
+        config: SwarmConfig,
+    ) -> list[ResourceConflict]:
+        """Use AST service to detect conflicts between subtask file sets.
+
+        If the AST service is available via ``config.codebase_context``,
+        check each pair of subtasks in the same wave for symbol-level
+        conflicts (both write to files that share symbols).
+        """
+        ast_svc = None
+        if config.codebase_context and hasattr(config.codebase_context, "_ast_service"):
+            ast_svc = config.codebase_context._ast_service
+        if ast_svc is None or not hasattr(ast_svc, "detect_conflicts"):
+            return []
+
+        conflicts: list[ResourceConflict] = []
+        try:
+            # Check all pairs of subtasks that have target files
+            tasks_with_files = [
+                (s.id, s.target_files or [])
+                for s in subtasks
+                if s.target_files
+            ]
+            for i, (id_a, files_a) in enumerate(tasks_with_files):
+                for id_b, files_b in tasks_with_files[i + 1:]:
+                    detected = ast_svc.detect_conflicts(files_a, files_b)
+                    for c in detected:
+                        conflicts.append(ResourceConflict(
+                            file_path=c.get("file", ""),
+                            task_ids=[id_a, id_b],
+                            conflict_type=c.get("type", "symbol-overlap"),
+                        ))
+        except Exception:
+            pass  # Non-fatal — fall through to default conflict detection
+
+        return conflicts
 
     @staticmethod
     def _serialize_conflicts(
