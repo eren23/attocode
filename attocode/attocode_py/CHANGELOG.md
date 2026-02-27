@@ -7,6 +7,37 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.5] - 2026-02-28
+
+### Added
+
+- **Session resume & persisted permission grants** — `/resume` works in-session; grants loaded from DB on startup
+- **Skill system overhaul** — long-running lifecycle (init/execute/cleanup), `SkillStateStore` for persistent state, `SkillDependencyGraph` with topological sort and version compatibility
+- **Unified session graph recording** — `SessionGraph` DAG covering all event types (LLM, tools, subagents, budget, compaction); `PlaybackEngine` for frame-by-frame replay with filtering; Mermaid diagram export
+- **Landlock sandbox enforcement** — actual Linux ctypes syscall wrappers (`PR_SET_NO_NEW_PRIVS`, `ruleset_create`/`add_rule`/`restrict_self`) replacing shell fallback
+- **Swarm TUI data enrichment** — per-task JSON persistence, DAG+event fallback reconstruction, agent cards show task titles and model info, `TaskDetailScreen` modal, `agent_id` in all swarm events
+- **Thread manager serialization** — `snapshot_all()`, `restore_snapshots()`, `to_dict()`/`from_dict()` for DB persistence
+- **Policy engine grant loading** — `load_grants()` bulk import, `approved_commands` property
+- **TUI theme management** — `set_theme()` with dark/light/auto, `active_theme_name` property
+- **Documentation** — Architecture, Providers, Sandbox, Budget, MCP, Testing guides; Contributing guide; LICENSE file
+- **CI/CD pipeline** — `.github/workflows/` with GitHub Actions
+- **Package typing markers** — `py.typed` for `attocode_core` and `attoswarm`
+- **Example swarm project** — [attocodepy_swarmtester_3](https://github.com/eren23/attocodepy_swarmtester_3) demonstrates hybrid swarm orchestration
+
+### Changed
+
+- Swarm orchestrator writes enriched `active_agents` (model, task_title) and per-task JSON files
+- `SubagentManager._emit_status()` propagates model through all lifecycle phases
+- `StateStore.build_task_detail()` falls back to DAG+event reconstruction when task files missing
+- `StateStore.build_agent_detail()` enriched with task_title, duration from events, result message
+- Agent grid shows task title (30 chars) instead of raw task_id
+- Task board column headers include "click to inspect" hint
+- Detail inspector shows task_title/duration/result for agents, agent/model/duration for tasks
+
+### Tests
+
+- New test modules for: agent state machine, subagent spawner, blackboard, delegation, budget pool, dynamic budget, graph types, playback, docker/landlock/seatbelt sandboxes, skill dependency graph, skill state, skill executor, thread manager
+
 ## [0.1.4] - 2026-02-27
 
 ### Added

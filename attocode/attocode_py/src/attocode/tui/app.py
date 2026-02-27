@@ -199,6 +199,26 @@ class AttocodeApp(App):
         # Focus input
         self.query_one("#input-area", PromptInput).focus_input()
 
+    # --- Theme management ---
+
+    @property
+    def active_theme_name(self) -> str:
+        """Get the current theme name (string alias safe from Textual's own current_theme)."""
+        return self.theme or "textual-dark"
+
+    def set_theme(self, theme_name: str) -> None:
+        """Switch the app theme at runtime.
+
+        Supports: dark, light, auto, or any registered Textual theme name.
+        """
+        theme_map = {
+            "dark": "textual-dark",
+            "light": "textual-light",
+            "auto": "textual-dark",  # Default to dark for auto
+        }
+        resolved = theme_map.get(theme_name, theme_name)
+        self.theme = resolved
+
     # --- Typing indicator ---
 
     def _start_typing_indicator(self) -> None:

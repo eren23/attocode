@@ -747,30 +747,38 @@ class TestSkillLoader:
 
 class TestParseSkillContent:
     def test_heading_description(self) -> None:
-        desc, body = _parse_skill_content("# My Skill\n\nBody text here.")
+        desc, body, meta = _parse_skill_content("# My Skill\n\nBody text here.")
         assert desc == "My Skill"
         assert body == "Body text here."
 
     def test_frontmatter_description(self) -> None:
         content = "---\ndescription: A cool skill\n---\n\nBody content."
-        desc, body = _parse_skill_content(content)
+        desc, body, meta = _parse_skill_content(content)
         assert desc == "A cool skill"
         assert body == "Body content."
 
     def test_frontmatter_quoted_description(self) -> None:
         content = '---\ndescription: "Quoted desc"\n---\n\nStuff.'
-        desc, body = _parse_skill_content(content)
+        desc, body, meta = _parse_skill_content(content)
         assert desc == "Quoted desc"
 
     def test_empty_content(self) -> None:
-        desc, body = _parse_skill_content("")
+        desc, body, meta = _parse_skill_content("")
         assert desc == ""
         assert body == ""
 
     def test_body_only(self) -> None:
-        desc, body = _parse_skill_content("Just plain text.")
+        desc, body, meta = _parse_skill_content("Just plain text.")
         assert desc == ""
         assert body == "Just plain text."
+
+    def test_frontmatter_with_metadata(self) -> None:
+        content = "---\ndescription: A skill\nversion: 2.0\ndepends_on: base, helper\nlifecycle: long_running\n---\n\nContent."
+        desc, body, meta = _parse_skill_content(content)
+        assert desc == "A skill"
+        assert meta["version"] == "2.0"
+        assert meta["depends_on"] == ["base", "helper"]
+        assert meta["lifecycle"] == "long_running"
 
 
 class TestSkillExecutor:

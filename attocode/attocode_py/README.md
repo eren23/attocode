@@ -260,6 +260,8 @@ Swarm mode decomposes complex tasks into subtasks, schedules them in dependency-
 See [docs/swarm-guide.md](docs/swarm-guide.md) for a detailed walkthrough with examples.
 For day-to-day hybrid execution and observability, see [docs/hybrid-swarm-operations.md](docs/hybrid-swarm-operations.md).
 
+For a complete example project using hybrid swarm orchestration, see [attocodepy_swarmtester_3](https://github.com/eren23/attocodepy_swarmtester_3).
+
 Quick setup:
 
 ```bash
@@ -357,11 +359,11 @@ mypy src/
 
 | Metric | Count |
 |--------|-------|
-| Source files | 179 |
-| Source lines | ~41,400 |
-| Test files | 71 |
-| Test lines | ~20,900 |
-| Total tests | 2,156+ |
+| Source files | 318 |
+| Source lines | ~75,000 |
+| Test files | 116 |
+| Test lines | ~29,300 |
+| Total tests | 2,778+ |
 
 ## TODO
 
@@ -378,6 +380,16 @@ What's needed:
 - **New/deleted file handling.** `discover_files()` is the only way to pick up new files or notice deletions. A lightweight incremental scan (check parent dirs of changed paths) would avoid full re-walks.
 
 The `CodeAnalyzer._cache` (djb2 content hash) already does per-file invalidation correctly — the problem is one layer up in `CodebaseContextManager` which has no change-awareness at all.
+
+## Documentation
+
+- [Architecture](docs/ARCHITECTURE.md) --- Module relationships and data flow
+- [Providers](docs/PROVIDERS.md) --- LLM provider adapter reference
+- [Sandbox](docs/SANDBOX.md) --- Platform-aware command isolation
+- [Budget](docs/BUDGET.md) --- Token economics and doom-loop detection
+- [MCP](docs/MCP.md) --- Model Context Protocol integration
+- [Testing](docs/TESTING.md) --- Test patterns and conventions
+- [Contributing](CONTRIBUTING.md) --- How to contribute
 
 ## License
 

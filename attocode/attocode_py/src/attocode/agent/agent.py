@@ -137,6 +137,36 @@ class ProductionAgent:
         """The swarm orchestrator, if swarm mode is active."""
         return self._swarm_orchestrator
 
+    @property
+    def session_store(self) -> Any:
+        """The session store, if configured."""
+        return self._session_store
+
+    @property
+    def session_id(self) -> str | None:
+        """The current session ID."""
+        return self._session_id
+
+    async def persist_grant(
+        self,
+        tool_name: str,
+        pattern: str = "*",
+        perm_type: str = "allow",
+    ) -> bool:
+        """Persist a tool permission grant to the session store.
+
+        Returns True if the grant was persisted, False otherwise.
+        """
+        if not self._session_store or not self._session_id:
+            return False
+        try:
+            await self._session_store.grant_permission(
+                self._session_id, tool_name, pattern, perm_type,
+            )
+            return True
+        except Exception:
+            return False
+
     def on_event(self, handler: EventHandler) -> None:
         """Register an event handler."""
         self._event_handlers.append(handler)
@@ -313,8 +343,30 @@ class ProductionAgent:
             except Exception:
                 self._session_store = None  # Non-fatal
 
-        # Create a new session record for this run
-        if self._session_store:
+        # Handle session resume if requested
+        resume_session_id = getattr(self._config, "resume_session", None)
+        if resume_session_id and self._session_store and self._run_count == 0:
+            try:
+                resume_data = await self._session_store.resume_session(resume_session_id)
+                if resume_data and resume_data.get("messages"):
+                    # Restore messages into context
+                    from attocode.types.messages import Message, Role
+                    for msg_dict in resume_data["messages"]:
+                        role = msg_dict.get("role", "user")
+                        content = msg_dict.get("content", "")
+                        ctx.messages.append(Message(role=Role(role), content=content))
+                    self._session_id = resume_session_id
+                    # Emit event for UI
+                    ctx.emit(AgentEvent(
+                        type=EventType.STATUS,
+                        message=f"Resumed session {resume_session_id} "
+                                f"({len(resume_data['messages'])} messages)",
+                    ))
+            except Exception:
+                pass  # Non-fatal — fall through to create new session
+
+        # Create a new session record for this run (skip if resuming)
+        if self._session_store and not self._session_id:
             try:
                 session_id = str(uuid.uuid4())[:8]
                 await self._session_store.create_session(
@@ -330,6 +382,17 @@ class ProductionAgent:
         if self._session_store:
             ctx.session_store = self._session_store
             ctx.session_id = self._session_id
+
+        # Load persisted grants from DB into policy engine
+        if (self._session_store and self._session_id
+                and self._policy_engine and hasattr(self._policy_engine, "approve_command")):
+            try:
+                perms = await self._session_store.list_permissions(self._session_id)
+                for p in perms:
+                    if p.permission_type == "allow":
+                        self._policy_engine.approve_command(p.tool_name)
+            except Exception:
+                pass  # Non-fatal
 
         # Reuse file change tracker across runs so /diff and /undo show cumulative history
         if self._file_change_tracker is None:

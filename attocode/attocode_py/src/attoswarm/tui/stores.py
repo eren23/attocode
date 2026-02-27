@@ -10,6 +10,19 @@ from typing import Any
 from attoswarm.protocol.io import read_json
 
 
+def _to_epoch(ts: Any) -> float:
+    """Normalize a timestamp (epoch number or ISO string) to a float epoch."""
+    if isinstance(ts, (int, float)):
+        return float(ts)
+    if isinstance(ts, str) and ts:
+        try:
+            from datetime import datetime
+            return datetime.fromisoformat(ts.replace("Z", "+00:00")).timestamp()
+        except Exception:
+            return 0.0
+    return 0.0
+
+
 class StateStore:
     def __init__(self, run_dir: str) -> None:
         self.run_dir = Path(run_dir)
@@ -58,8 +71,15 @@ class StateStore:
     def build_agent_list(self, state: dict[str, Any]) -> list[dict[str, Any]]:
         """Transform active_agents into AgentGrid-compatible format."""
         now = time.time()
+
+        # Build task_id -> title lookup from DAG
+        title_map: dict[str, str] = {}
+        for node in state.get("dag", {}).get("nodes", []):
+            title_map[str(node.get("task_id", ""))] = str(node.get("title", ""))
+
         out: list[dict[str, Any]] = []
         for row in state.get("active_agents", []):
+            task_id = str(row.get("task_id", ""))
             started = row.get("started_at_epoch", 0)
             if started and isinstance(started, (int, float)):
                 secs = int(now - started)
@@ -69,10 +89,11 @@ class StateStore:
             out.append({
                 "agent_id": str(row.get("agent_id", "?")),
                 "status": str(row.get("status", "idle")),
-                "task_id": str(row.get("task_id", "")),
+                "task_id": task_id,
                 "model": str(row.get("backend", row.get("model", ""))),
                 "tokens_used": int(row.get("tokens_used", 0)),
                 "elapsed": elapsed,
+                "task_title": str(row.get("task_title", "")) or title_map.get(task_id, ""),
             })
         return out
 
@@ -255,20 +276,102 @@ class StateStore:
                 })
         return activity
 
-    def build_task_detail(self, task_id: str) -> dict[str, Any]:
-        """Build DetailInspector-compatible dict for a task."""
+    def build_task_detail(
+        self, task_id: str, state: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        """Build DetailInspector-compatible dict for a task.
+
+        Tries the per-task JSON file first; falls back to reconstructing
+        from the DAG + event log when the file doesn't exist.
+        """
         task = self.read_task(task_id)
-        if not task:
+        if task:
+            return {
+                "kind": "task",
+                "task_id": task_id,
+                "title": task.get("title", ""),
+                "status": task.get("status", ""),
+                "task_kind": task.get("task_kind", ""),
+                "description": task.get("description", ""),
+                "deps": task.get("depends_on", task.get("deps", [])),
+                "target_files": task.get("target_files", []),
+                "files_modified": task.get("files_modified", []),
+                "result_summary": task.get("result_summary", ""),
+            }
+
+        # -- Fallback: reconstruct from state DAG + events ----------------
+        if state is None:
+            state = self.read_state()
+        dag = state.get("dag", {})
+        node = next(
+            (n for n in dag.get("nodes", []) if str(n.get("task_id", "")) == task_id),
+            None,
+        )
+        if not node:
             return {}
+
+        # Scan events for spawn/complete/fail timing + agent info
+        events = self.read_events(limit=500)
+        agent_id = ""
+        spawn_ts = 0.0
+        complete_ts = 0.0
+        result_msg = ""
+        files_modified: list[str] = []
+        for ev in events:
+            ev_task = str(
+                ev.get("task_id", "")
+                or (ev.get("payload", {}) or {}).get("task_id", "")
+            )
+            if ev_task != task_id:
+                continue
+            etype = str(ev.get("event_type", ev.get("type", "")))
+            if etype == "spawn":
+                spawn_ts = _to_epoch(ev.get("timestamp", 0))
+                agent_id = str(ev.get("agent_id", "")) or f"agent-{task_id}"
+            elif etype in ("complete", "task.completed"):
+                complete_ts = _to_epoch(ev.get("timestamp", 0))
+                result_msg = str(ev.get("message", ""))
+                data = ev.get("data", ev.get("payload", {})) or {}
+                files_modified = data.get("files_modified", [])
+            elif etype in ("fail", "task.failed"):
+                complete_ts = _to_epoch(ev.get("timestamp", 0))
+                result_msg = str(ev.get("message", ""))
+
+        # Find matching agent entry for model info
+        model = ""
+        for ag in state.get("active_agents", []):
+            if str(ag.get("task_id", "")) == task_id:
+                model = str(ag.get("model", ag.get("backend", "")))
+                if not agent_id:
+                    agent_id = str(ag.get("agent_id", ""))
+                break
+
+        # Compute duration
+        duration = ""
+        if spawn_ts and complete_ts:
+            secs = int(complete_ts - spawn_ts)
+            duration = f"{secs // 60}m{secs % 60:02d}s" if secs >= 60 else f"{secs}s"
+
+        # Dependencies from edges
+        edges = dag.get("edges", [])
+        deps = [
+            str(e[0])
+            for e in edges
+            if isinstance(e, (list, tuple)) and len(e) >= 2 and str(e[1]) == task_id
+        ]
+
         return {
             "kind": "task",
             "task_id": task_id,
-            "title": task.get("title", ""),
-            "status": task.get("status", ""),
-            "task_kind": task.get("task_kind", ""),
-            "description": task.get("description", ""),
-            "deps": task.get("depends_on", []),
-            "target_files": task.get("target_files", []),
+            "title": str(node.get("title", "")),
+            "status": str(node.get("status", "pending")),
+            "task_kind": "",
+            "description": result_msg,
+            "deps": deps,
+            "target_files": files_modified,
+            "agent_id": agent_id,
+            "model": model,
+            "duration": duration,
         }
 
     def build_agent_detail(
@@ -282,24 +385,69 @@ class StateStore:
         )
         if not row or not isinstance(row, dict):
             return {}
-        # Extract files modified by this agent from event log
+
+        task_id = str(row.get("task_id", ""))
+
+        # Get task title from persisted data or DAG
+        task_title = str(row.get("task_title", ""))
+        if not task_title:
+            for node in state.get("dag", {}).get("nodes", []):
+                if str(node.get("task_id", "")) == task_id:
+                    task_title = str(node.get("title", ""))
+                    break
+
+        # Scan events for timing, result, and files
+        events = self.read_events(limit=500)
+        spawn_ts = 0.0
+        complete_ts = 0.0
+        result_msg = ""
         files: list[str] = []
-        for ev in self.read_events(limit=500):
-            if ev.get("type") != "task.files_changed":
+        for ev in events:
+            ev_task = str(
+                ev.get("task_id", "")
+                or (ev.get("payload", {}) or {}).get("task_id", "")
+            )
+            ev_agent = str(
+                ev.get("agent_id", "")
+                or (ev.get("payload", {}) or {}).get("agent_id", "")
+            )
+            if ev_task != task_id and ev_agent != agent_id:
                 continue
-            payload = ev.get("payload", {}) if isinstance(ev.get("payload"), dict) else {}
-            if str(payload.get("agent_id", "")) != agent_id:
-                continue
-            for fp in payload.get("files", []):
-                if str(fp) not in files:
-                    files.append(str(fp))
+            etype = str(ev.get("event_type", ev.get("type", "")))
+            if etype == "spawn":
+                spawn_ts = _to_epoch(ev.get("timestamp", 0))
+            elif etype in ("complete", "task.completed"):
+                complete_ts = _to_epoch(ev.get("timestamp", 0))
+                result_msg = str(ev.get("message", ""))
+                data = ev.get("data", ev.get("payload", {})) or {}
+                for fp in data.get("files_modified", []):
+                    if str(fp) not in files:
+                        files.append(str(fp))
+            elif etype in ("fail", "task.failed"):
+                complete_ts = _to_epoch(ev.get("timestamp", 0))
+                result_msg = str(ev.get("message", ""))
+            elif etype == "task.files_changed":
+                payload = ev.get("payload", {}) if isinstance(ev.get("payload"), dict) else {}
+                if str(payload.get("agent_id", "")) == agent_id:
+                    for fp in payload.get("files", []):
+                        if str(fp) not in files:
+                            files.append(str(fp))
+
+        # Compute elapsed from events if not already available
+        elapsed = str(row.get("elapsed", ""))
+        if not elapsed and spawn_ts and complete_ts:
+            secs = int(complete_ts - spawn_ts)
+            elapsed = f"{secs // 60}m{secs % 60:02d}s" if secs >= 60 else f"{secs}s"
+
         return {
             "kind": "agent",
             "agent_id": agent_id,
             "status": str(row.get("status", "")),
-            "task_id": str(row.get("task_id", "")),
+            "task_id": task_id,
+            "task_title": task_title,
             "model": str(row.get("backend", row.get("model", ""))),
             "tokens_used": int(row.get("tokens_used", 0)),
-            "elapsed": str(row.get("elapsed", "")),
+            "elapsed": elapsed,
+            "result": result_msg,
             "files_modified": files,
         }

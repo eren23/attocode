@@ -97,7 +97,7 @@ class SkillLoader:
             try:
                 content = skill_file.read_text(encoding="utf-8")
                 name = skill_dir.name
-                description, body = _parse_skill_content(content)
+                description, body, metadata = _parse_skill_content(content)
 
                 self._skills[name] = SkillDefinition(
                     name=name,
@@ -105,36 +105,66 @@ class SkillLoader:
                     content=body,
                     source=source,
                     path=str(skill_file),
+                    metadata=metadata,
                 )
             except Exception:
                 pass
 
 
-def _parse_skill_content(content: str) -> tuple[str, str]:
-    """Parse a SKILL.md file, extracting description and body.
+def _parse_skill_content(content: str) -> tuple[str, str, dict[str, Any]]:
+    """Parse a SKILL.md file, extracting description, body, and metadata.
 
-    Returns (description, body).
+    Returns (description, body, metadata).
+
+    Metadata keys from frontmatter:
+    - description: Human-readable description
+    - version: Semantic version string
+    - depends_on: Comma-separated or list of dependency skill names
+    - compatible_versions: Dict of skill_name → required_version
+    - lifecycle: "simple" | "long_running" (default: "simple")
     """
     lines = content.strip().splitlines()
     if not lines:
-        return "", ""
+        return "", "", {}
 
-    # Look for frontmatter-style description
     description = ""
     body_start = 0
+    metadata: dict[str, Any] = {}
 
     if lines[0].startswith("---"):
         # YAML frontmatter
+        frontmatter_lines: list[str] = []
         for i, line in enumerate(lines[1:], 1):
             if line.startswith("---"):
                 body_start = i + 1
                 break
-            if line.startswith("description:"):
-                description = line.split(":", 1)[1].strip().strip("'\"")
+            frontmatter_lines.append(line)
+
+        # Parse frontmatter key-value pairs
+        for fm_line in frontmatter_lines:
+            if ":" not in fm_line:
+                continue
+            key, _, value = fm_line.partition(":")
+            key = key.strip()
+            value = value.strip().strip("'\"")
+
+            if key == "description":
+                description = value
+            elif key == "version":
+                metadata["version"] = value
+            elif key == "depends_on":
+                # Accept comma-separated or YAML list
+                deps = [d.strip() for d in value.split(",") if d.strip()]
+                metadata["depends_on"] = deps
+            elif key == "lifecycle":
+                metadata["lifecycle"] = value
+            else:
+                metadata[key] = value
+
     elif lines[0].startswith("# "):
         # First heading is description
         description = lines[0][2:].strip()
         body_start = 1
 
     body = "\n".join(lines[body_start:]).strip()
-    return description, body
+    return description, body, metadata

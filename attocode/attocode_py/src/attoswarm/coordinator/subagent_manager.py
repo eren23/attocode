@@ -162,18 +162,19 @@ class SubagentManager:
         task_id = task["task_id"]
         agent_id = f"agent-{task_id}"
         target_files = task.get("target_files", [])
+        task_model = str(task.get("model", ""))
 
         async with self._semaphore:
             start = time.time()
 
             # 1. Claim files
-            self._emit_status(agent_id, task_id, "claiming")
+            self._emit_status(agent_id, task_id, "claiming", model=task_model)
             if self._file_ledger and target_files:
                 for f in target_files:
                     ok = await self._file_ledger.claim_file(f, agent_id, task_id)
                     if not ok:
                         await self._file_ledger.release_all_claims(agent_id)
-                        self._emit_status(agent_id, task_id, "error")
+                        self._emit_status(agent_id, task_id, "error", model=task_model)
                         return TaskResult(
                             task_id=task_id,
                             success=False,
@@ -181,7 +182,7 @@ class SubagentManager:
                         )
 
             # 2. Spawn worker
-            self._emit_status(agent_id, task_id, "running")
+            self._emit_status(agent_id, task_id, "running", model=task_model)
             try:
                 if self._spawn_fn:
                     result = await asyncio.wait_for(
@@ -214,7 +215,7 @@ class SubagentManager:
 
             result.duration_s = time.time() - start
             status = "done" if result.success else "error"
-            self._emit_status(agent_id, task_id, status, tokens=result.tokens_used)
+            self._emit_status(agent_id, task_id, status, tokens=result.tokens_used, model=task_model)
 
             return result
 
@@ -224,6 +225,7 @@ class SubagentManager:
         task_id: str,
         status: str,
         tokens: int = 0,
+        model: str = "",
     ) -> None:
         s = AgentStatus(
             agent_id=agent_id,
@@ -231,6 +233,7 @@ class SubagentManager:
             status=status,
             started_at=time.time(),
             tokens_used=tokens,
+            model=model,
         )
         self._agent_statuses[agent_id] = s
         for cb in self._status_callbacks:
