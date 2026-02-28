@@ -22,11 +22,12 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: astral-sh/setup-uv@v7
         with:
           python-version: '3.12'
-      - run: pip install mkdocs mkdocs-material pymdown-extensions
-      - run: mkdocs build
+      - run: uv sync --extra docs
+        working-directory: attocode/attocode_py
+      - run: uv run mkdocs build
         working-directory: attocode/attocode_py
       - uses: actions/upload-pages-artifact@v3
         with:

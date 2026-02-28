@@ -21,42 +21,59 @@ Production AI coding agent built in Python. Features a Textual-based TUI, multi-
 
 ## Installation
 
-### Development install
+### Development install (recommended)
 
 ```bash
 git clone https://github.com/eren23/attocode.git
 cd attocode/attocode_py
 
-python -m venv .venv
-source .venv/bin/activate   # or .venv/Scripts/activate on Windows
-
-pip install -e ".[dev]"
+uv sync --all-extras          # creates .venv, installs everything
 ```
 
-### Global install with pipx (recommended for end users)
+### Global install (recommended for end users)
 
 ```bash
-# From a local checkout
-pipx install ./attocode_py
-
-# Or directly from git
-pipx install "attocode @ git+https://github.com/eren23/attocode.git#subdirectory=attocode_py"
+# From the repo root (or use ./attocode_py from parent)
+cd attocode/attocode_py
+uv tool install --force . --with anthropic --with openai
 ```
 
-### Global install with pip (user-site)
+This installs three commands globally: `attocode`, `attocodepy`, and `attoswarm`.
+
+To update after pulling new code:
 
 ```bash
-pip install --user ./attocode_py
+uv tool install --force . --with anthropic --with openai
 ```
 
 ### Optional provider extras
 
 ```bash
-pip install -e ".[anthropic]"    # Anthropic SDK (recommended)
-pip install -e ".[openai]"      # OpenAI SDK
-pip install -e ".[tree-sitter]"  # AST parsing for code analysis
-pip install -e ".[dev]"         # Development tools (pytest, mypy, ruff)
+uv sync --extra anthropic     # Anthropic SDK (recommended)
+uv sync --extra openai        # OpenAI SDK
+uv sync --extra tree-sitter   # AST parsing for code analysis
+uv sync --extra dev           # Development tools (pytest, mypy, ruff)
+uv sync --all-extras          # All of the above
 ```
+
+<details>
+<summary>Fallback: pip / pipx (if uv is not available)</summary>
+
+```bash
+# Dev install
+python -m venv .venv
+source .venv/bin/activate   # or .venv/Scripts/activate on Windows
+pip install -e ".[dev]"
+
+# Global install with pipx (installs attocode, attocodepy, attoswarm)
+pipx install --force .
+
+# Provider extras
+pip install -e ".[anthropic]"
+pip install -e ".[openai]"
+```
+
+</details>
 
 Set your API key:
 
@@ -104,7 +121,17 @@ attoswarm tui .agent/hybrid-swarm
 
 The `attocode` command always operates on **the current working directory** --- it reads `.attocode/config.json` from where you run it, so the install location doesn't matter.
 
-**pipx (recommended):** Already on `PATH` after `pipx install` --- works from any directory with no extra setup.
+**`uv tool install` (recommended):** Already on `PATH` after install --- `attocode`, `attocodepy`, and `attoswarm` all work from any directory. Rebuild after code changes with `uv tool install --force . --with anthropic --with openai`.
+
+**`uv run` (from the project directory):**
+
+```bash
+cd /path/to/attocode_py
+uv run attocode "your prompt"
+```
+
+<details>
+<summary>Other options: venv activation, shell alias, symlink</summary>
 
 **Activate the venv:**
 
@@ -128,6 +155,8 @@ alias attocode /absolute/path/to/attocode_py/.venv/bin/attocode
 ```bash
 ln -s /absolute/path/to/attocode_py/.venv/bin/attocode ~/.local/bin/attocode
 ```
+
+</details>
 
 ## CLI Reference
 
@@ -342,17 +371,17 @@ src/attocode/
 
 ```bash
 # Run all tests
-pytest
+uv run pytest
 
 # Run with coverage
-pytest --cov=attocode --cov-report=term-missing
+uv run pytest --cov=attocode --cov-report=term-missing
 
 # Run a specific test file
-pytest tests/unit/tui/test_swarm_panel.py -v
+uv run pytest tests/unit/tui/test_swarm_panel.py -v
 
 # Linting and type checking
-ruff check src/ tests/
-mypy src/
+uv run ruff check src/ tests/
+uv run mypy src/
 ```
 
 ## Project Stats
@@ -364,6 +393,10 @@ mypy src/
 | Test files | 116 |
 | Test lines | ~29,300 |
 | Total tests | 2,778+ |
+
+## Known Issues
+
+- **`snapshot_report.html` in git history:** Commit `207feee` contains a `snapshot_report.html` that exposes a (now-rotated) OpenRouter API key. The file has been untracked and added to `.gitignore`. The key in the history is no longer valid. A future history rewrite (`git filter-repo`) will remove it permanently.
 
 ## TODO
 

@@ -13,7 +13,7 @@ import time
 
 import httpx
 
-from attocode.providers.base import ModelPricing
+from attocode.providers.base import BUILTIN_MODELS, KNOWN_PRICING, MODEL_CONTEXT_WINDOWS, ModelPricing
 
 logger = logging.getLogger(__name__)
 
@@ -35,8 +35,10 @@ async def init_model_cache() -> None:
     """Fetch model data from OpenRouter and populate caches.
 
     Safe to call multiple times — skips if the cache is still fresh.
-    Fails silently when ``OPENROUTER_API_KEY`` is unset or the request
-    errors out so the agent can fall back to built-in data.
+    Fails silently when the request errors out so the agent can fall
+    back to built-in data.  The OpenRouter ``/api/v1/models`` endpoint
+    works without authentication; ``OPENROUTER_API_KEY`` is sent when
+    available (helps with rate limits) but is not required.
     """
     global _pricing_cache, _context_cache, _cache_timestamp  # noqa: PLW0603
 
@@ -45,18 +47,15 @@ async def init_model_cache() -> None:
         return  # cache still fresh
 
     api_key = os.environ.get("OPENROUTER_API_KEY", "")
-    if not api_key:
-        logger.debug("No OPENROUTER_API_KEY — skipping dynamic model cache")
-        return
+    headers: dict[str, str] = {"Content-Type": "application/json"}
+    if api_key:
+        headers["Authorization"] = f"Bearer {api_key}"
 
     try:
         async with httpx.AsyncClient(timeout=httpx.Timeout(15.0)) as client:
             resp = await client.get(
                 "https://openrouter.ai/api/v1/models",
-                headers={
-                    "Authorization": f"Bearer {api_key}",
-                    "Content-Type": "application/json",
-                },
+                headers=headers,
             )
             resp.raise_for_status()
             data = resp.json()
@@ -100,6 +99,54 @@ async def init_model_cache() -> None:
         _context_cache = context
         _cache_timestamp = now
         logger.debug("Loaded %d models from OpenRouter", len(pricing))
+        _reconcile_builtin_models()
+
+
+# ---------------------------------------------------------------------------
+# Reconciliation — keep BUILTIN_MODELS in sync with live data
+# ---------------------------------------------------------------------------
+
+def _reconcile_builtin_models() -> None:
+    """Update stale ``BUILTIN_MODELS`` entries from the dynamic cache.
+
+    Called automatically after a successful cache fetch.  For each builtin
+    model, if the dynamic cache has a different context window or pricing,
+    the builtin entry is patched in-place and a warning is logged so
+    developers know the hardcoded value drifted.
+    """
+    for model_id, info in BUILTIN_MODELS.items():
+        # Context window
+        ctx_key = _fuzzy_lookup(model_id, _context_cache)
+        if ctx_key is not None:
+            live_ctx = _context_cache[ctx_key]
+            if live_ctx != info.max_context_tokens:
+                logger.warning(
+                    "%s: builtin context %d → %d (synced from OpenRouter)",
+                    model_id,
+                    info.max_context_tokens,
+                    live_ctx,
+                )
+                info.max_context_tokens = live_ctx
+                MODEL_CONTEXT_WINDOWS[model_id] = live_ctx
+
+        # Pricing
+        price_key = _fuzzy_lookup(model_id, _pricing_cache)
+        if price_key is not None:
+            live_price = _pricing_cache[price_key]
+            if (
+                live_price.input_per_million != info.pricing.input_per_million
+                or live_price.output_per_million != info.pricing.output_per_million
+            ):
+                logger.warning(
+                    "%s: builtin pricing in=%.2f/out=%.2f → in=%.2f/out=%.2f (synced from OpenRouter)",
+                    model_id,
+                    info.pricing.input_per_million,
+                    info.pricing.output_per_million,
+                    live_price.input_per_million,
+                    live_price.output_per_million,
+                )
+                info.pricing = live_price
+                KNOWN_PRICING[model_id] = live_price
 
 
 # ---------------------------------------------------------------------------

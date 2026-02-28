@@ -6,10 +6,8 @@
 git clone https://github.com/eren23/attocode.git
 cd attocode/attocode_py
 
-python -m venv .venv
-source .venv/bin/activate
-
-pip install -e ".[dev]"
+uv sync --all-extras          # creates .venv, installs everything
+# or: python -m venv .venv && source .venv/bin/activate && pip install -e ".[dev]"
 ```
 
 ## Development Workflow
