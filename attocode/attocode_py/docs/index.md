@@ -46,3 +46,15 @@ attocode --swarm "Build a REST API with tests"
 - [Getting Started](getting-started.md) --- Installation and first run
 - [CLI Reference](cli-reference.md) --- All flags and slash commands
 - [Architecture](ARCHITECTURE.md) --- Module relationships and data flow
+- [TUI Interface](tui-guide.md) --- Keyboard shortcuts, panels, and themes
+- [Sessions & Persistence](sessions-guide.md) --- Checkpoints, resume, and thread forking
+- [Context Engineering](context-engineering.md) --- How long sessions stay effective
+- [AST & Code Intelligence](ast-and-code-intelligence.md) --- Symbol indexing, cross-references, and impact analysis
+- [Advanced Features](advanced-features.md) --- Plan mode, task decomposition, permissions, danger classification
+- [Provider Resilience](provider-resilience.md) --- Retry, circuit breaker, fallback chain, model cache
+- [Skills & Agents](skills-and-agents.md) --- Custom skills and agent definitions
+- [Tracing](tracing-guide.md) --- Execution traces and analysis
+- [Recording & Replay](recording-and-replay.md) --- Session recording and visual debug replay
+- [Internals](internals.md) --- State machine, errors, undo, rules, LSP, shared state
+- [Extending Attocode](extending.md) --- Custom tools, providers, and hooks
+- [Troubleshooting](troubleshooting.md) --- Common issues and solutions
