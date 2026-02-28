@@ -53,13 +53,26 @@ nav:
   - Getting Started: getting-started.md
   - CLI Reference: cli-reference.md
   - Architecture: ARCHITECTURE.md
+  - Features:
+      - TUI Interface: tui-guide.md
+      - Sessions & Persistence: sessions-guide.md
+      - Context Engineering: context-engineering.md
+      - AST & Code Intelligence: ast-and-code-intelligence.md
+      - Advanced Features: advanced-features.md
   - Guides:
       - Providers: PROVIDERS.md
+      - Provider Resilience: provider-resilience.md
       - Sandbox: SANDBOX.md
       - Budget System: BUDGET.md
       - MCP Integration: MCP.md
       - Swarm Mode: swarm-guide.md
       - Hybrid Swarm: hybrid-swarm-operations.md
+      - Skills & Agents: skills-and-agents.md
+      - Tracing: tracing-guide.md
+      - Recording & Replay: recording-and-replay.md
+  - Extending: extending.md
+  - Internals: internals.md
+  - Troubleshooting: troubleshooting.md
   - Development:
       - Testing: TESTING.md
       - Contributing: contributing.md
