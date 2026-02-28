@@ -60,7 +60,7 @@ tests/
   integration/       Slower tests requiring I/O
 ```
 
-See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for detailed module documentation.
+See [Architecture](ARCHITECTURE.md) for detailed module documentation.
 
 ## Adding a New Tool
 
@@ -75,7 +75,7 @@ See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for detailed module documentati
 2. Implement `LLMProvider` base class from `providers/base.py`
 3. Register in `providers/registry.py`
 4. Add model defaults in `config.py`
-5. See [docs/PROVIDERS.md](docs/PROVIDERS.md)
+5. See [Providers](PROVIDERS.md)
 
 ## Adding a New Integration
 
