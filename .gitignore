@@ -7,6 +7,7 @@ node_modules
 .production-agent-sessions/
 .test-sandbox/
 __pycache__/
+.venv/
 attocode/.attocode/traces/
 attocode/.attocode/sessions/
 .attocode/traces/
@@ -16,3 +17,5 @@ attocode/attocode_py/.attocode/sessions/
 attocode/attocode_py/.attocode/traces/
 attocode/attocode_py/.attocode/sessions/
 attocode/attocode_py/.attocode/recordings/
+snapshot_report.html
+attocode/attocode_py/site/

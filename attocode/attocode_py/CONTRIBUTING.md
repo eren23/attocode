@@ -6,10 +6,8 @@
 git clone https://github.com/eren23/attocode.git
 cd attocode/attocode_py
 
-python -m venv .venv
-source .venv/bin/activate
-
-pip install -e ".[dev]"
+uv sync --all-extras          # creates .venv, installs everything
+# or: python -m venv .venv && source .venv/bin/activate && pip install -e ".[dev]"
 ```
 
 ## Development Workflow
@@ -60,7 +58,7 @@ tests/
   integration/       Slower tests requiring I/O
 ```
 
-See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for detailed module documentation.
+See [Architecture](ARCHITECTURE.md) for detailed module documentation.
 
 ## Adding a New Tool
 
@@ -75,7 +73,7 @@ See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for detailed module documentati
 2. Implement `LLMProvider` base class from `providers/base.py`
 3. Register in `providers/registry.py`
 4. Add model defaults in `config.py`
-5. See [docs/PROVIDERS.md](docs/PROVIDERS.md)
+5. See [Providers](PROVIDERS.md)
 
 ## Adding a New Integration
 

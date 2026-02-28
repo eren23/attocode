@@ -7,35 +7,44 @@
 
 ## Installation
 
-### Development install
+### Development install (recommended)
 
 ```bash
 git clone https://github.com/eren23/attocode.git
 cd attocode/attocode_py
 
-python -m venv .venv
-source .venv/bin/activate   # or .venv/Scripts/activate on Windows
-
-pip install -e ".[dev]"
+uv sync --all-extras          # creates .venv, installs everything
 ```
 
-### Global install with pipx (recommended for end users)
+### Global install (recommended for end users)
 
 ```bash
-# From a local checkout
-pipx install ./attocode_py
-
-# Or directly from git
-pipx install "attocode @ git+https://github.com/eren23/attocode.git#subdirectory=attocode_py"
+cd attocode/attocode_py
+uv tool install --force . --with anthropic --with openai
 ```
+
+This installs three commands globally: `attocode`, `attocodepy`, and `attoswarm`. Re-run the same command to update after pulling new code.
 
 ### Optional provider extras
 
 ```bash
-pip install -e ".[anthropic]"    # Anthropic SDK (recommended)
-pip install -e ".[openai]"      # OpenAI SDK
-pip install -e ".[tree-sitter]"  # AST parsing for code analysis
+uv sync --extra anthropic     # Anthropic SDK (recommended)
+uv sync --extra openai        # OpenAI SDK
+uv sync --extra tree-sitter   # AST parsing for code analysis
 ```
+
+<details>
+<summary>Fallback: pip / pipx</summary>
+
+```bash
+# Dev install
+python -m venv .venv && source .venv/bin/activate && pip install -e ".[dev]"
+
+# Global install with pipx (installs attocode, attocodepy, attoswarm)
+pipx install --force .
+```
+
+</details>
 
 ## API Key Setup
 
@@ -133,7 +142,17 @@ attocode
 
 The `attocode` command always operates on **the current working directory** --- it reads `.attocode/config.json` from where you run it, so the install location doesn't matter.
 
-**pipx (recommended):** Already on `PATH` after `pipx install` --- works from any directory with no extra setup.
+**`uv tool install` (recommended):** Already on `PATH` after install --- `attocode`, `attocodepy`, and `attoswarm` all work from any directory.
+
+**`uv run` (from the project directory):**
+
+```bash
+cd /path/to/attocode_py
+uv run attocode "your prompt"
+```
+
+<details>
+<summary>Other options: shell alias, symlink</summary>
 
 **Shell alias:** Add to `~/.bashrc`, `~/.zshrc`, or `~/.config/fish/config.fish`:
 
@@ -144,6 +163,8 @@ alias attocode="/absolute/path/to/attocode_py/.venv/bin/attocode"
 # fish
 alias attocode /absolute/path/to/attocode_py/.venv/bin/attocode
 ```
+
+</details>
 
 ## Next Steps
 
