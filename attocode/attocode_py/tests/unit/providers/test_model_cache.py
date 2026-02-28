@@ -261,6 +261,30 @@ class TestReconciliation:
         assert abs(KNOWN_PRICING["glm-5"].input_per_million - 0.95) < 0.01
 
     @pytest.mark.asyncio
+    async def test_skips_anomalous_context_values(self) -> None:
+        """Anomalous context_length values (0, very small) should not corrupt BUILTIN_MODELS."""
+        response_with_bad_ctx = {
+            "data": [
+                {
+                    "id": "zhipu/glm-5",
+                    "name": "GLM-5",
+                    "pricing": {"prompt": "0.0000005", "completion": "0.000001"},
+                    "context_length": 0,  # anomalous
+                },
+            ],
+        }
+        mock_client = _make_mock_client(response_with_bad_ctx)
+
+        original_ctx = BUILTIN_MODELS["glm-5"].max_context_tokens
+
+        with patch("attocode.providers.model_cache.httpx.AsyncClient", return_value=mock_client):
+            await init_model_cache()
+
+        # Context should NOT have been overwritten by the anomalous value
+        assert BUILTIN_MODELS["glm-5"].max_context_tokens == original_ctx
+        assert MODEL_CONTEXT_WINDOWS["glm-5"] == original_ctx
+
+    @pytest.mark.asyncio
     async def test_no_reconciliation_on_fetch_failure(self) -> None:
         """If the API fetch fails, BUILTIN_MODELS should remain unchanged."""
         import httpx

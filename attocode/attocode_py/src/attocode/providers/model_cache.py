@@ -119,6 +119,15 @@ def _reconcile_builtin_models() -> None:
         ctx_key = _fuzzy_lookup(model_id, _context_cache)
         if ctx_key is not None:
             live_ctx = _context_cache[ctx_key]
+            # Sanity guard: skip if the live value is suspiciously small,
+            # which would indicate bad/anomalous API data from OpenRouter.
+            if live_ctx < 1024:
+                logger.warning(
+                    "%s: skipping anomalous context_length %d from OpenRouter",
+                    model_id,
+                    live_ctx,
+                )
+                continue
             if live_ctx != info.max_context_tokens:
                 logger.warning(
                     "%s: builtin context %d → %d (synced from OpenRouter)",

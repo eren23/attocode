@@ -396,7 +396,7 @@ uv run mypy src/
 
 ## Known Issues
 
-- **`snapshot_report.html` in git history:** Commit `207feee` contains a `snapshot_report.html` that exposes a (now-rotated) OpenRouter API key. The file has been untracked and added to `.gitignore`. The key in the history is no longer valid. A future history rewrite (`git filter-repo`) will remove it permanently.
+- **`snapshot_report.html` in git history:** Commit `207feee` contains a `snapshot_report.html` that exposes a (now-rotated) OpenRouter API key. The file has been untracked and added to `.gitignore`. The key in the history is no longer valid. **Before making this repository public, a history rewrite (`git filter-repo`) must be run to permanently remove the file from all commits.**
 
 ## TODO
 
