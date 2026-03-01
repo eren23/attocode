@@ -42,3 +42,4 @@ tools/trace-dashboard/uploads/
 attocode_py/tests/unit/tui/__pycache__/
 attocode_py/tests/unit/tui/__snapshots__/
 attocode_py/tests/unit/tui/__snapshots__/
+.attocode/recordings/

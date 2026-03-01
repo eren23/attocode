@@ -185,11 +185,17 @@ class OpenAIProvider:
             tool_calls = []
             for tc in raw_tc:
                 func = tc.get("function", {})
+                parse_error = None
                 try:
                     args = json.loads(func.get("arguments", "{}"))
-                except json.JSONDecodeError:
+                except (json.JSONDecodeError, TypeError) as exc:
                     args = {}
-                tool_calls.append(ToolCall(id=tc["id"], name=func["name"], arguments=args))
+                    raw = func.get("arguments", "")
+                    parse_error = f"Failed to parse arguments: {exc}. Raw: {str(raw)[:500]}"
+                tool_calls.append(ToolCall(
+                    id=tc["id"], name=func["name"],
+                    arguments=args, parse_error=parse_error,
+                ))
 
         usage_data = data.get("usage", {})
         usage = TokenUsage(

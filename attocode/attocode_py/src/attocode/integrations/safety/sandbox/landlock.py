@@ -16,6 +16,8 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
+from attocode.errors import ConfigurationError
+
 
 # Landlock constants
 LANDLOCK_CREATE_RULESET_VERSION = 1
@@ -133,7 +135,7 @@ class LandlockSandbox:
             Tuple of (output, exit_code).
         """
         if not self.is_available():
-            raise RuntimeError("Landlock not available on this platform")
+            raise ConfigurationError("Landlock not available on this platform")
 
         cwd = working_dir or os.getcwd()
 

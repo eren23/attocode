@@ -14,6 +14,8 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
+from attocode.errors import ConfigurationError
+
 
 @dataclass(slots=True)
 class DockerOptions:
@@ -81,7 +83,7 @@ class DockerSandbox:
             Tuple of (output, exit_code).
         """
         if not self.is_available():
-            raise RuntimeError("Docker not available")
+            raise ConfigurationError("Docker not available")
 
         cwd = working_dir or os.getcwd()
 

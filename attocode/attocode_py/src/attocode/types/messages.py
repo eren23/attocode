@@ -44,14 +44,14 @@ class StreamChunkType(StrEnum):
     DONE = "done"
 
 
-@dataclass
+@dataclass(slots=True)
 class CacheControl:
     """Cache control for content blocks."""
 
     type: str = "ephemeral"
 
 
-@dataclass
+@dataclass(slots=True)
 class ToolCall:
     """A tool invocation requested by the LLM."""
 
@@ -61,7 +61,7 @@ class ToolCall:
     parse_error: str | None = None
 
 
-@dataclass
+@dataclass(slots=True)
 class ToolResult:
     """Result of executing a tool call."""
 
@@ -74,7 +74,7 @@ class ToolResult:
         return self.error is not None
 
 
-@dataclass
+@dataclass(slots=True)
 class ToolDefinition:
     """Schema definition for a tool."""
 
@@ -92,7 +92,7 @@ class ToolDefinition:
         }
 
 
-@dataclass
+@dataclass(slots=True)
 class TokenUsage:
     """Token consumption metrics."""
 
@@ -104,7 +104,7 @@ class TokenUsage:
     cost: float = 0.0
 
 
-@dataclass
+@dataclass(slots=True)
 class ImageSource:
     """Source data for an image content block."""
 
@@ -120,7 +120,7 @@ class ImageSourceType(StrEnum):
     URL = "url"
 
 
-@dataclass
+@dataclass(slots=True)
 class TextContentBlock:
     """A text content block."""
 
@@ -129,7 +129,7 @@ class TextContentBlock:
     cache_control: CacheControl | None = None
 
 
-@dataclass
+@dataclass(slots=True)
 class ImageContentBlock:
     """An image content block."""
 
@@ -141,7 +141,7 @@ class ImageContentBlock:
 ContentBlock = TextContentBlock | ImageContentBlock
 
 
-@dataclass
+@dataclass(slots=True)
 class Message:
     """A conversation message."""
 
@@ -157,7 +157,7 @@ class Message:
         return bool(self.tool_calls)
 
 
-@dataclass
+@dataclass(slots=True)
 class MessageWithStructuredContent:
     """A message that can contain structured content blocks."""
 
@@ -169,7 +169,7 @@ class MessageWithStructuredContent:
     metadata: dict[str, Any] | None = None
 
 
-@dataclass
+@dataclass(slots=True)
 class ChatOptions:
     """Options for an LLM chat request."""
 
@@ -183,7 +183,7 @@ class ChatOptions:
     stream: bool = False
 
 
-@dataclass
+@dataclass(slots=True)
 class ChatResponse:
     """Response from an LLM chat request."""
 
@@ -199,7 +199,7 @@ class ChatResponse:
         return bool(self.tool_calls)
 
 
-@dataclass
+@dataclass(slots=True)
 class StreamChunk:
     """A chunk from a streaming LLM response."""
 

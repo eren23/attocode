@@ -242,6 +242,9 @@ _TEMPLATE = """\
   .frame-ascii {{ max-height: 400px; overflow: auto; }}
   .no-screenshot {{ color: var(--muted); font-style: italic; }}
 
+  .mermaid {{ background: var(--bg); padding: 1rem; border-radius: 4px; text-align: center; }}
+  .mermaid svg {{ max-width: 100%; }}
+
   .empty {{ color: var(--muted); font-style: italic; padding: 1rem; }}
   ul {{ list-style: none; padding-left: 0.5rem; }}
   li::before {{ content: "\\2022 "; color: var(--accent); }}
@@ -269,7 +272,7 @@ _TEMPLATE = """\
 
 <div class="section">
   <h2>Exploration Graph</h2>
-  <pre>{mermaid_text}</pre>
+  <div class="mermaid">{mermaid_text}</div>
   <details>
     <summary style="cursor:pointer;color:var(--muted);margin-top:0.5rem">ASCII DAG</summary>
     <pre>{ascii_dag}</pre>
@@ -301,6 +304,11 @@ _TEMPLATE = """\
       }}
     }});
   }}
+</script>
+
+<script src="https://unpkg.com/mermaid@11/dist/mermaid.min.js"></script>
+<script>
+  mermaid.initialize({{ startOnLoad: true, theme: 'dark' }});
 </script>
 
 </body>

@@ -247,7 +247,7 @@ class VerificationGate:
                 temperature=0.1,
             )
             content = _extract_content(response)
-            passed = "PASSED: true" in content.lower()
+            passed = "passed: true" in content.lower()
             # Extract feedback line
             feedback = content
             for line in content.splitlines():

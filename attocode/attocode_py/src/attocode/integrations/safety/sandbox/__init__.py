@@ -12,6 +12,7 @@ Use create_sandbox() to auto-detect the best available sandbox.
 import sys
 from typing import Any
 
+from attocode.errors import ConfigurationError
 from attocode.integrations.safety.sandbox.basic import (
     BasicSandbox,
     SandboxOptions,
@@ -84,19 +85,19 @@ def create_sandbox(
         cls = _load_seatbelt()
         if cls and cls.is_available():
             return cls(**kwargs)
-        raise RuntimeError("Seatbelt sandbox not available")
+        raise ConfigurationError("Seatbelt sandbox not available")
 
     if mode == "landlock":
         cls = _load_landlock()
         if cls and cls.is_available():
             return cls(**kwargs)
-        raise RuntimeError("Landlock sandbox not available")
+        raise ConfigurationError("Landlock sandbox not available")
 
     if mode == "docker":
         cls = _load_docker()
         if cls and cls.is_available():
             return cls(**kwargs)
-        raise RuntimeError("Docker sandbox not available")
+        raise ConfigurationError("Docker sandbox not available")
 
     # Auto-detect
     if sys.platform == "darwin":

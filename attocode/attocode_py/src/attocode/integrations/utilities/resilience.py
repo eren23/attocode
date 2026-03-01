@@ -16,6 +16,8 @@ from dataclasses import dataclass, field
 from enum import StrEnum
 from typing import Any, Callable, TypeVar
 
+from attocode.errors import ProviderError
+
 T = TypeVar("T")
 
 
@@ -282,7 +284,7 @@ async def resilient_fetch(
 
     if last_error:
         raise last_error
-    raise RuntimeError("Resilient fetch failed with no error recorded")
+    raise ProviderError("Resilient fetch failed with no error recorded", retryable=False)
 
 
 # ============================================================
@@ -326,7 +328,7 @@ class FallbackChain:
             Result from the first successful provider.
 
         Raises:
-            RuntimeError: All providers failed.
+            ProviderError: All providers failed.
         """
         errors: list[str] = []
 
@@ -349,7 +351,7 @@ class FallbackChain:
                     breaker.record_failure()
                 errors.append(f"{name}: {e}")
 
-        raise RuntimeError(
+        raise ProviderError(
             f"All providers failed:\n" + "\n".join(f"  - {e}" for e in errors)
         )
 
@@ -421,7 +423,7 @@ class Router:
             RuntimeError: No providers available.
         """
         if not self.providers:
-            raise RuntimeError("No providers available")
+            raise ProviderError("No providers available")
 
         if len(self.providers) == 1:
             return self.providers[0]

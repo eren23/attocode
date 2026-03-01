@@ -693,8 +693,10 @@ class TestRealAgentEvents:
         assert len(mgr.exploration_graph.nodes) >= 1
 
     def test_export_without_session_raises(self) -> None:
+        from attocode.errors import AgentError
+
         mgr = RecordingSessionManager()
-        with pytest.raises(RuntimeError, match="No recording session"):
+        with pytest.raises(AgentError, match="No recording session"):
             mgr.export("html")
 
 

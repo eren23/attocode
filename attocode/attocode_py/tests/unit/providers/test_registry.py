@@ -66,12 +66,16 @@ class TestCreateProvider:
         assert provider.name == "mock"
 
     def test_auto_detect_no_keys(self) -> None:
+        from attocode.errors import ConfigurationError
+
         with patch.dict(os.environ, {}, clear=True):
-            with pytest.raises(ValueError, match="No LLM provider found"):
+            with pytest.raises(ConfigurationError, match="No LLM provider found"):
                 create_provider()
 
     def test_unknown_provider(self) -> None:
-        with pytest.raises(ValueError, match="Unknown provider"):
+        from attocode.errors import ConfigurationError
+
+        with pytest.raises(ConfigurationError, match="Unknown provider"):
             create_provider("nonexistent")
 
     def test_create_anthropic(self) -> None:

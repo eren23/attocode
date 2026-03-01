@@ -171,20 +171,59 @@ async def adapt_openrouter_stream(
     """Convert OpenRouter/OpenAI SSE lines to StreamChunk iterator.
 
     Expects lines from an httpx streaming response (response.aiter_lines()).
+    Accumulates tool call deltas across chunks (name and arguments may
+    arrive in separate SSE events) before yielding complete ToolCalls.
     """
     import json
+
+    # Accumulate tool call deltas by index across SSE chunks.
+    # Each entry tracks: id, name, and an arguments buffer.
+    pending_tool_calls: dict[int, dict[str, Any]] = {}
+
+    def _flush_tool_calls() -> list[StreamChunk]:
+        """Yield StreamChunks for all accumulated tool calls and clear state."""
+        chunks: list[StreamChunk] = []
+        for _idx in sorted(pending_tool_calls):
+            tc = pending_tool_calls[_idx]
+            name = tc.get("name", "")
+            if not name:
+                continue
+            args_str = tc.get("arguments", "")
+            parse_error = None
+            try:
+                args = json.loads(args_str) if args_str else {}
+            except (json.JSONDecodeError, TypeError) as exc:
+                args = {}
+                parse_error = f"Failed to parse arguments: {exc}. Raw: {str(args_str)[:500]}"
+            chunks.append(
+                StreamChunk(
+                    type=StreamChunkType.TOOL_CALL,
+                    tool_call=ToolCall(
+                        id=tc.get("id", ""),
+                        name=name,
+                        arguments=args,
+                        parse_error=parse_error,
+                    ),
+                )
+            )
+        pending_tool_calls.clear()
+        return chunks
 
     async for line in lines:
         if not line.startswith("data: "):
             continue
         data = line[6:]
         if data == "[DONE]":
+            for chunk in _flush_tool_calls():
+                yield chunk
             yield StreamChunk(type=StreamChunkType.DONE)
             return
 
         try:
             parsed = json.loads(data)
-            delta = (parsed.get("choices") or [{}])[0].get("delta", {})
+            choice = (parsed.get("choices") or [{}])[0]
+            delta = choice.get("delta", {})
+            finish_reason = choice.get("finish_reason")
 
             if delta.get("content"):
                 yield StreamChunk(
@@ -192,21 +231,27 @@ async def adapt_openrouter_stream(
                 )
 
             if delta.get("tool_calls"):
-                for tc in delta["tool_calls"]:
-                    fn = tc.get("function", {})
-                    if fn.get("name") and fn.get("arguments"):
-                        try:
-                            args = json.loads(fn["arguments"])
-                        except (json.JSONDecodeError, TypeError):
-                            args = {}
-                        yield StreamChunk(
-                            type=StreamChunkType.TOOL_CALL,
-                            tool_call=ToolCall(
-                                id=tc.get("id", ""),
-                                name=fn["name"],
-                                arguments=args,
-                            ),
-                        )
+                for tc_delta in delta["tool_calls"]:
+                    idx = tc_delta.get("index", 0)
+                    if idx not in pending_tool_calls:
+                        pending_tool_calls[idx] = {
+                            "id": "",
+                            "name": "",
+                            "arguments": "",
+                        }
+                    entry = pending_tool_calls[idx]
+                    if tc_delta.get("id"):
+                        entry["id"] = tc_delta["id"]
+                    fn = tc_delta.get("function", {})
+                    if fn.get("name"):
+                        entry["name"] = fn["name"]
+                    if "arguments" in fn:
+                        entry["arguments"] += fn["arguments"]
+
+            # Flush accumulated tool calls when the model signals stop
+            if finish_reason == "tool_calls":
+                for chunk in _flush_tool_calls():
+                    yield chunk
 
             usage = parsed.get("usage")
             if usage:
@@ -218,9 +263,12 @@ async def adapt_openrouter_stream(
                         total_tokens=usage.get("total_tokens", 0),
                     ),
                 )
-        except (json.JSONDecodeError, KeyError, IndexError):
+        except (json.JSONDecodeError, KeyError, IndexError, TypeError):
             pass
 
+    # Stream ended without [DONE] — flush any remaining tool calls
+    for chunk in _flush_tool_calls():
+        yield chunk
     yield StreamChunk(type=StreamChunkType.DONE)
 
 

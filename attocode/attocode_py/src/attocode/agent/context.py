@@ -94,6 +94,29 @@ class AgentContext:
     # Trace collector (optional - for execution tracing)
     trace_collector: Any = None  # TraceCollector instance
 
+    # --- Integration slots (initialized by feature_initializer) ---
+    cancellation_manager: Any = None  # CancellationManager instance
+    codebase_context: Any = None  # CodebaseContextManager instance
+    interactive_planner: Any = None  # InteractivePlanner instance
+    task_manager: Any = None  # TaskManager instance
+    _context_engineering: Any = None  # ContextEngineeringManager instance
+    _dead_letter_queue: Any = None  # DeadLetterQueue instance
+    _execution_policy: Any = None  # ExecutionPolicy instance
+    _health_check: Any = None  # HealthCheckManager instance
+    _hook_manager: Any = None  # HookManager instance
+    _ignore_manager: Any = None  # IgnoreManager instance
+    _injection_budget: Any = None  # InjectionBudgetManager instance
+    _loaded_rules: list[str] = field(default_factory=list)
+    _lsp_manager: Any = None  # LSPManager instance
+    _pending_plan: Any = None  # PendingPlanManager instance
+    _planning_manager: Any = None  # PlanningManager instance
+    _safety_policy_engine: Any = None  # PolicyEngine instance
+    _self_improvement: Any = None  # SelfImprovementManager instance
+    _semantic_cache: Any = None  # SemanticCacheManager instance
+    _skill_manager: Any = None  # dict with loader/executor/dependency_graph/skills
+    _state_machine: Any = None  # AgentStateMachine instance
+    _work_log: Any = None  # WorkLog instance
+
     def on_event(self, handler: EventHandler) -> None:
         """Register an event handler."""
         self._event_handlers.append(handler)

@@ -5,6 +5,7 @@ from __future__ import annotations
 import os
 from typing import Any
 
+from attocode.errors import ConfigurationError
 from attocode.providers.base import LLMProvider
 
 
@@ -48,7 +49,7 @@ def create_provider(
     if name is None:
         available = ProviderRegistry.detect_available()
         if not available:
-            raise ValueError("No LLM provider found. Set ANTHROPIC_API_KEY, OPENROUTER_API_KEY, or OPENAI_API_KEY.")
+            raise ConfigurationError("No LLM provider found. Set ANTHROPIC_API_KEY, OPENROUTER_API_KEY, or OPENAI_API_KEY.")
         name = available[0]
 
     if name == "mock":
@@ -75,4 +76,4 @@ def create_provider(
         from attocode.providers.zai import ZAIProvider
         return ZAIProvider(**provider_kwargs)
 
-    raise ValueError(f"Unknown provider: {name}")
+    raise ConfigurationError(f"Unknown provider: {name}")

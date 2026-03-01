@@ -93,6 +93,14 @@ class PolicyEngine:
         Returns:
             PolicyResult with the decision.
         """
+        # Check session-approved commands (from "Always Allow")
+        if tool_name in self._approved_commands:
+            return PolicyResult(
+                decision=PolicyDecision.ALLOW,
+                danger_level=DangerLevel.SAFE,
+                tool_name=tool_name,
+            )
+
         # Check auto-approve patterns first
         for pattern in self.auto_approve_patterns:
             if re.match(pattern, tool_name):

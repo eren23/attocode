@@ -23,6 +23,8 @@ import logging
 import os
 from typing import Any
 
+from attocode.errors import ToolError
+
 logger = logging.getLogger(__name__)
 
 
@@ -170,7 +172,7 @@ class ASTServer:
         """
         file_path = params.get("file", "")
         if not file_path:
-            raise ValueError("'file' parameter required")
+            raise ToolError("'file' parameter required", tool_name="ast_query")
 
         locations = self._ast_service.get_file_symbols(file_path)
         return [
@@ -192,7 +194,7 @@ class ASTServer:
         """
         symbol = params.get("symbol", "")
         if not symbol:
-            raise ValueError("'symbol' parameter required")
+            raise ToolError("'symbol' parameter required", tool_name="ast_query")
 
         refs = self._ast_service.get_callers(symbol)
         return [
@@ -216,7 +218,7 @@ class ASTServer:
             if single:
                 files = [single]
         if not files:
-            raise ValueError("'files' or 'file' parameter required")
+            raise ToolError("'files' or 'file' parameter required", tool_name="ast_query")
 
         return sorted(self._ast_service.get_impact(files))
 
@@ -254,7 +256,7 @@ class ASTServer:
         """
         query = params.get("query", "")
         if not query:
-            raise ValueError("'query' parameter required")
+            raise ToolError("'query' parameter required", tool_name="ast_query")
 
         locations = self._ast_service.find_symbol(query)
         return [
@@ -276,7 +278,7 @@ class ASTServer:
         """
         file_path = params.get("file", "")
         if not file_path:
-            raise ValueError("'file' parameter required")
+            raise ToolError("'file' parameter required", tool_name="ast_query")
 
         return sorted(self._ast_service.get_dependencies(file_path))
 
@@ -287,6 +289,6 @@ class ASTServer:
         """
         file_path = params.get("file", "")
         if not file_path:
-            raise ValueError("'file' parameter required")
+            raise ToolError("'file' parameter required", tool_name="ast_query")
 
         return sorted(self._ast_service.get_dependents(file_path))

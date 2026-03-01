@@ -12,6 +12,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
+from attocode.errors import ToolError
 from attocode.integrations.streaming.handler import (
     StreamCallback,
     StreamConfig,
@@ -606,8 +607,8 @@ class TestAdaptOpenRouterStream:
         assert len(tc_chunks) == 0
 
     @pytest.mark.asyncio
-    async def test_tool_call_without_arguments_not_yielded(self) -> None:
-        """Tool call delta with name but no arguments should not yield TOOL_CALL."""
+    async def test_tool_call_with_name_only_yields_empty_args(self) -> None:
+        """Tool call delta with name but no arguments yields call with empty args."""
         data = {
             "choices": [{
                 "delta": {
@@ -621,7 +622,10 @@ class TestAdaptOpenRouterStream:
         line = f"data: {json.dumps(data)}"
         chunks = [c async for c in adapt_openrouter_stream(async_iter([line]))]
         tc_chunks = [c for c in chunks if c.type == StreamChunkType.TOOL_CALL]
-        assert len(tc_chunks) == 0
+        assert len(tc_chunks) == 1
+        assert tc_chunks[0].tool_call is not None
+        assert tc_chunks[0].tool_call.name == "some_tool"
+        assert tc_chunks[0].tool_call.arguments == {}
 
 
 # ======================================================================
@@ -1162,7 +1166,9 @@ class TestPTYShellManagerAsync:
         with patch("asyncio.create_subprocess_shell", new_callable=AsyncMock) as mock_spawn:
             mock_spawn.return_value = mock_process
             with patch("asyncio.sleep", new_callable=AsyncMock):
-                with pytest.raises(RuntimeError, match="Failed to start shell"):
+                from attocode.errors import ToolError
+
+                with pytest.raises(ToolError, match="Failed to start shell"):
                     await mgr.start()
 
 
@@ -1627,7 +1633,7 @@ class TestLSPClientHandleMessage:
             "error": {"message": "Method not found"},
         })
         assert future.done()
-        with pytest.raises(RuntimeError, match="Method not found"):
+        with pytest.raises(ToolError, match="Method not found"):
             future.result()
         loop.close()
 
@@ -1918,15 +1924,19 @@ class TestLSPManagerAsync:
 
     @pytest.mark.asyncio
     async def test_start_server_unknown_language_raises(self) -> None:
+        from attocode.errors import ConfigurationError
+
         mgr = LSPManager()
-        with pytest.raises(ValueError, match="No server configuration"):
+        with pytest.raises(ConfigurationError, match="No server configuration"):
             await mgr.start_server("klingon")
 
     @pytest.mark.asyncio
     async def test_start_server_missing_binary_raises(self) -> None:
+        from attocode.errors import ConfigurationError
+
         mgr = LSPManager()
         with patch("shutil.which", return_value=None):
-            with pytest.raises(RuntimeError, match="Language server not found"):
+            with pytest.raises(ConfigurationError, match="Language server not found"):
                 await mgr.start_server("python")
 
     @pytest.mark.asyncio

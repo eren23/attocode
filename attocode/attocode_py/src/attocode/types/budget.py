@@ -23,7 +23,7 @@ class BudgetStatus(StrEnum):
     EXHAUSTED = "exhausted"
 
 
-@dataclass
+@dataclass(slots=True)
 class ExecutionBudget:
     """Budget constraints for an agent run."""
 
@@ -41,7 +41,7 @@ class ExecutionBudget:
         return None
 
 
-@dataclass
+@dataclass(slots=True)
 class BudgetCheckResult:
     """Result of a budget check."""
 

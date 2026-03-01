@@ -140,7 +140,10 @@ def create_file_tools(working_dir: str | None = None) -> list[Tool]:
         Tool(
             spec=ToolSpec(
                 name="read_file",
-                description="Read a file from the filesystem.",
+                description=(
+                    "Read a file and return its contents with line numbers."
+                    " Use 'path' for the file path."
+                ),
                 parameters={
                     "type": "object",
                     "properties": {
@@ -157,7 +160,11 @@ def create_file_tools(working_dir: str | None = None) -> list[Tool]:
         Tool(
             spec=ToolSpec(
                 name="write_file",
-                description="Write content to a file.",
+                description=(
+                    "Create or overwrite a file."
+                    " Use parameter 'path' for the file path"
+                    " and 'content' for the full text to write."
+                ),
                 parameters={
                     "type": "object",
                     "properties": {
@@ -174,7 +181,12 @@ def create_file_tools(working_dir: str | None = None) -> list[Tool]:
         Tool(
             spec=ToolSpec(
                 name="edit_file",
-                description="Edit a file by replacing old_string with new_string.",
+                description=(
+                    "Edit a file by replacing exact text."
+                    " Use 'path' for file path,"
+                    " 'old_string' for the exact text to find,"
+                    " 'new_string' for the replacement text."
+                ),
                 parameters={
                     "type": "object",
                     "properties": {
@@ -193,7 +205,10 @@ def create_file_tools(working_dir: str | None = None) -> list[Tool]:
         Tool(
             spec=ToolSpec(
                 name="list_files",
-                description="List files in a directory.",
+                description=(
+                    "List files and subdirectories."
+                    " Use 'path' for the directory (default: current dir)."
+                ),
                 parameters={
                     "type": "object",
                     "properties": {
@@ -207,7 +222,10 @@ def create_file_tools(working_dir: str | None = None) -> list[Tool]:
         Tool(
             spec=ToolSpec(
                 name="glob_files",
-                description="Find files matching a glob pattern.",
+                description=(
+                    "Find files matching a glob pattern."
+                    " Use 'pattern' for the glob (e.g., '**/*.py')."
+                ),
                 parameters={
                     "type": "object",
                     "properties": {

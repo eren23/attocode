@@ -13,6 +13,7 @@ import time
 from dataclasses import dataclass, field
 from typing import Any, Protocol
 
+from attocode.errors import AgentError
 from attocode.integrations.tasks.planning import (
     InteractivePlan,
     PlanCheckpoint,
@@ -247,7 +248,7 @@ class InteractivePlanner:
     def approve(self, plan: InteractivePlan) -> InteractivePlan:
         """Mark *plan* as approved and ready for execution."""
         if plan.phase in (PlanPhase.COMPLETED, PlanPhase.REJECTED):
-            raise ValueError(f"Cannot approve a plan in phase '{plan.phase.value}'")
+            raise AgentError(f"Cannot approve a plan in phase '{plan.phase.value}'")
         plan.phase = PlanPhase.APPROVED
         plan.approved_at = time.monotonic()
         return plan
@@ -264,7 +265,7 @@ class InteractivePlanner:
         Marks the first ready step as :attr:`TaskStatus.IN_PROGRESS`.
         """
         if plan.phase not in (PlanPhase.APPROVED, PlanPhase.CHECKPOINTING):
-            raise ValueError(
+            raise AgentError(
                 f"Cannot start execution from phase '{plan.phase.value}'"
             )
         plan.phase = PlanPhase.EXECUTING
