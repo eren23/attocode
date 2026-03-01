@@ -28,13 +28,13 @@ from attocode.integrations.quality.health_check import (
     HealthReport,
     format_health_report,
 )
-from attocode.integrations.quality.tool_recommendation import (
-    ToolRecommendation,
-    ToolRecommendationEngine,
-)
 from attocode.integrations.quality.dead_letter_queue import (
     DeadLetter,
     DeadLetterQueue,
+)
+from attocode.integrations.quality.tool_recommendation import (
+    ToolRecommendation,
+    ToolRecommendationEngine,
 )
 
 __all__ = [
@@ -60,7 +60,6 @@ __all__ = [
     "HealthCheckerConfig",
     "HealthReport",
     "format_health_report",
-    # tool_recommendation
     "ToolRecommendation",
     "ToolRecommendationEngine",
 ]

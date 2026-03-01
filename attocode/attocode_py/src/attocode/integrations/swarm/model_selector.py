@@ -1,7 +1,8 @@
-"""Swarm model selector — auto-detect workers and health tracking."""
+"""Swarm model selector — auto-detect workers, health tracking, and model probing."""
 
 from __future__ import annotations
 
+import asyncio
 import logging
 import time
 from dataclasses import dataclass, field
@@ -683,3 +684,169 @@ class ModelHealthTracker:
                 quality_rejections=record.quality_rejections,
                 success_rate=record.success_rate,
             )
+
+
+# =============================================================================
+# Model Probing
+# =============================================================================
+
+_PROBE_PROMPT = "Respond with exactly: OK"
+
+
+@dataclass(slots=True)
+class ProbeResult:
+    """Result of probing a single model."""
+
+    model: str
+    success: bool
+    latency_ms: float = 0.0
+    error: str = ""
+
+
+async def probe_model(
+    provider: Any,
+    model: str,
+    timeout_ms: int = 60_000,
+) -> ProbeResult:
+    """Probe a single model with a minimal LLM call.
+
+    Sends a tiny prompt and measures latency. Returns a ProbeResult
+    with success status and latency.
+    """
+    from attocode.types.messages import ChatOptions, Message, Role
+
+    start = time.monotonic()
+    try:
+        messages = [Message(role=Role.USER, content=_PROBE_PROMPT)]
+        options = ChatOptions(
+            model=model,
+            max_tokens=10,
+            temperature=0.0,
+        )
+
+        response = await asyncio.wait_for(
+            provider.chat(messages, options),
+            timeout=timeout_ms / 1000.0,
+        )
+
+        latency_ms = (time.monotonic() - start) * 1000
+        content = (response.content or "").strip().lower()
+
+        # Accept any non-empty response as proof the model works
+        if not content:
+            return ProbeResult(
+                model=model,
+                success=False,
+                latency_ms=latency_ms,
+                error="Empty response from model",
+            )
+
+        return ProbeResult(
+            model=model,
+            success=True,
+            latency_ms=latency_ms,
+        )
+
+    except asyncio.TimeoutError:
+        latency_ms = (time.monotonic() - start) * 1000
+        return ProbeResult(
+            model=model,
+            success=False,
+            latency_ms=latency_ms,
+            error=f"Probe timed out after {timeout_ms}ms",
+        )
+    except Exception as exc:
+        latency_ms = (time.monotonic() - start) * 1000
+        return ProbeResult(
+            model=model,
+            success=False,
+            latency_ms=latency_ms,
+            error=str(exc),
+        )
+
+
+async def probe_worker_models(
+    provider: Any,
+    workers: list[SwarmWorkerSpec],
+    health_tracker: ModelHealthTracker,
+    *,
+    timeout_ms: int = 60_000,
+    failure_strategy: str = "warn-and-try",
+) -> list[ProbeResult]:
+    """Probe all unique worker models in parallel.
+
+    For each unique model in the worker specs, sends a minimal LLM call
+    to verify the model is reachable and responsive. Updates the health
+    tracker with results.
+
+    Args:
+        provider: LLM provider to use for probing.
+        workers: Worker specs to extract models from.
+        health_tracker: Health tracker to update with probe results.
+        timeout_ms: Per-model probe timeout in milliseconds.
+        failure_strategy: ``"abort"`` raises on any failure,
+            ``"warn-and-try"`` marks unhealthy and continues.
+
+    Returns:
+        List of ProbeResults for each unique model probed.
+
+    Raises:
+        RuntimeError: If failure_strategy is "abort" and any probe fails.
+    """
+    # Collect unique models
+    unique_models: list[str] = []
+    seen: set[str] = set()
+    for w in workers:
+        if w.model not in seen:
+            seen.add(w.model)
+            unique_models.append(w.model)
+
+    if not unique_models:
+        return []
+
+    logger.info("Probing %d worker models: %s", len(unique_models), unique_models)
+
+    # Probe all models concurrently
+    tasks = [
+        probe_model(provider, model, timeout_ms=timeout_ms)
+        for model in unique_models
+    ]
+    results = await asyncio.gather(*tasks, return_exceptions=True)
+
+    # Process results
+    probe_results: list[ProbeResult] = []
+    failures: list[str] = []
+
+    for i, result in enumerate(results):
+        model = unique_models[i]
+
+        if isinstance(result, Exception):
+            pr = ProbeResult(
+                model=model,
+                success=False,
+                error=str(result),
+            )
+        else:
+            pr = result
+
+        probe_results.append(pr)
+
+        if pr.success:
+            health_tracker.record_success(model, pr.latency_ms)
+            logger.info(
+                "Probe OK: %s (%.0fms)", model, pr.latency_ms,
+            )
+        else:
+            health_tracker.mark_unhealthy(model)
+            failures.append(f"{model}: {pr.error}")
+            logger.warning(
+                "Probe FAILED: %s — %s", model, pr.error,
+            )
+
+    if failures and failure_strategy == "abort":
+        raise RuntimeError(
+            f"Model probing failed for {len(failures)} model(s): "
+            + "; ".join(failures)
+        )
+
+    return probe_results

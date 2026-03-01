@@ -41,6 +41,7 @@ class AgentBuilder:
         self._policy_engine: Any = None
         self._approval_callback: Any = None
         self._sandbox_enabled: bool = False
+        self._sandbox_mode: str = "auto"
         self._economics_enabled: bool = True
         self._compaction_enabled: bool = True
         self._session_dir: str | None = None
@@ -159,9 +160,20 @@ class AgentBuilder:
         self._approval_callback = callback
         return self
 
-    def with_sandbox(self, enabled: bool = True) -> AgentBuilder:
-        """Enable basic sandbox for bash commands."""
+    def with_sandbox(
+        self,
+        enabled: bool = True,
+        mode: str = "auto",
+    ) -> AgentBuilder:
+        """Enable sandbox for bash commands.
+
+        Args:
+            enabled: Whether to enable sandbox.
+            mode: Sandbox mode - 'auto', 'basic', 'seatbelt', 'landlock', 'docker'.
+                  'auto' detects the best available sandbox for the platform.
+        """
         self._sandbox_enabled = enabled
+        self._sandbox_mode = mode
         return self
 
     def with_economics(self, enabled: bool = True) -> AgentBuilder:
@@ -246,11 +258,11 @@ class AgentBuilder:
                 **self._provider_kwargs,
             )
 
-        # Resolve sandbox
+        # Resolve sandbox (auto-detects platform: Seatbelt on macOS, Landlock on Linux)
         sandbox = None
         if self._sandbox_enabled:
-            from attocode.integrations.safety.sandbox.basic import BasicSandbox
-            sandbox = BasicSandbox()
+            from attocode.integrations.safety.sandbox import create_sandbox
+            sandbox = create_sandbox(mode=self._sandbox_mode)
 
         # Resolve registry — pass sandbox + spawn_agent credentials
         registry = self._registry

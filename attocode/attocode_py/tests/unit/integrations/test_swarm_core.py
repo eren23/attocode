@@ -238,6 +238,7 @@ def _make_ctx(
         shared_economics_state=None,
         shared_context_engine=None,
         blackboard=None,
+        message_bus=None,
         state_store=None,
         spawn_agent_fn=AsyncMock(),
         codebase_context=None,

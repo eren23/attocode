@@ -44,6 +44,8 @@ class ToolRecommendationEngine:
 
     def __init__(self, max_history: int = 5000) -> None:
         self._max_history = max_history
+        self._max_success_window = 500
+        self._max_keywords = 200
         self._records: list[ToolUsageRecord] = []
 
         # Learned patterns
@@ -77,10 +79,19 @@ class ToolRecommendationEngine:
 
         # Update patterns
         self._task_tool_freq[task_type][tool_name] += 1
-        self._tool_success_rate[tool_name].append(success)
+        rate_list = self._tool_success_rate[tool_name]
+        rate_list.append(success)
+        if len(rate_list) > self._max_success_window:
+            self._tool_success_rate[tool_name] = rate_list[-self._max_success_window:]
 
         for kw in keywords:
             self._keyword_tool_map[kw.lower()][tool_name] += 1
+
+        # Evict oldest keyword entries when over limit
+        if len(self._keyword_tool_map) > self._max_keywords:
+            excess = len(self._keyword_tool_map) - self._max_keywords
+            for old_key in list(self._keyword_tool_map)[:excess]:
+                del self._keyword_tool_map[old_key]
 
         # Trim history
         if len(self._records) > self._max_history:
@@ -124,15 +135,19 @@ class ToolRecommendationEngine:
                     scores[tool] += score * 0.3
                     reasons[tool].append(f"Commonly follows {last_tool}")
 
-        # 3. Keyword matching
+        # 3. Keyword matching (capped at 0.3 per tool)
         if context:
+            keyword_scores: dict[str, float] = defaultdict(float)
             words = context.lower().split()
             for word in words:
                 if word in self._keyword_tool_map:
                     for tool, count in self._keyword_tool_map[word].most_common(3):
-                        scores[tool] += 0.1
-                        if f"Matches keyword '{word}'" not in reasons[tool]:
-                            reasons[tool].append(f"Matches keyword '{word}'")
+                        if keyword_scores[tool] < 0.3:
+                            keyword_scores[tool] += 0.1
+                            if f"Matches keyword '{word}'" not in reasons[tool]:
+                                reasons[tool].append(f"Matches keyword '{word}'")
+            for tool, kw_score in keyword_scores.items():
+                scores[tool] += min(0.3, kw_score)
 
         # 4. Success rate bonus
         for tool in scores:

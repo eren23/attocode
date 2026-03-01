@@ -345,6 +345,8 @@ def yaml_to_swarm_config(
         "philosophy": ("philosophy", str),
         "probe_models": ("probe_models", bool),
         "probeModels": ("probe_models", bool),
+        "enable_worktree_isolation": ("enable_worktree_isolation", bool),
+        "enableWorktreeIsolation": ("enable_worktree_isolation", bool),
         "hollow_termination_ratio": ("hollow_termination_ratio", float),
         "hollowTerminationRatio": ("hollow_termination_ratio", float),
         "enable_hollow_termination": ("enable_hollow_termination", bool),

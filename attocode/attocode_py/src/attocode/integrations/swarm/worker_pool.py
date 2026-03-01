@@ -86,6 +86,22 @@ class SwarmWorkerPool:
         # Signaled whenever a worker finishes so wait_for_any() can wake up
         self._completion_event: asyncio.Event = asyncio.Event()
 
+        # Worktree manager for file isolation
+        self._worktree_manager: Any | None = None
+        if config.enable_worktree_isolation:
+            try:
+                from attocode.integrations.swarm.worktree_manager import WorktreeManager
+                import os
+                repo_root = os.getcwd()
+                mgr = WorktreeManager(repo_root)
+                if mgr.is_git_repo():
+                    self._worktree_manager = mgr
+                    logger.info("Worktree isolation enabled (repo: %s)", repo_root)
+                else:
+                    logger.warning("Worktree isolation requested but not in a git repo")
+            except Exception as exc:
+                logger.warning("Failed to initialize worktree manager: %s", exc)
+
     # --------------------------------------------------------------------- #
     # Properties
     # --------------------------------------------------------------------- #
@@ -293,11 +309,17 @@ class SwarmWorkerPool:
         """Clear all internal state.
 
         Does NOT cancel running tasks -- call :meth:`cancel_all` first
-        for a graceful shutdown.
+        for a graceful shutdown. Also cleans up any remaining worktrees.
         """
         self._active_workers.clear()
         self._completed_results.clear()
         self._completion_event.clear()
+
+        if self._worktree_manager is not None:
+            try:
+                self._worktree_manager.cleanup_all()
+            except Exception:
+                pass
 
     # --------------------------------------------------------------------- #
     # Internal: Worker Execution
@@ -314,18 +336,38 @@ class SwarmWorkerPool:
 
         This is the coroutine executed by the asyncio.Task created in
         :meth:`dispatch`.
+
+        If worktree isolation is enabled, creates a dedicated git worktree
+        for the worker and passes it as ``working_dir``.
         """
         timeout_s = budget.get("timeout_ms", _DEFAULT_WORKER_TIMEOUT_MS) / 1000
 
+        # Create worktree for file isolation if enabled
+        worktree_path: str | None = None
+        if self._worktree_manager is not None:
+            try:
+                wt_info = self._worktree_manager.create_worktree(task.id)
+                if wt_info.created:
+                    worktree_path = wt_info.worktree_path
+            except Exception as exc:
+                logger.warning(
+                    "Worktree creation failed for task %s, running in shared dir: %s",
+                    task.id, exc,
+                )
+
         try:
+            spawn_kwargs: dict[str, Any] = {
+                "task": task,
+                "worker": worker,
+                "system_prompt": system_prompt,
+                "max_tokens": budget["max_tokens"],
+                "timeout_ms": budget.get("timeout_ms", _DEFAULT_WORKER_TIMEOUT_MS),
+            }
+            if worktree_path:
+                spawn_kwargs["working_dir"] = worktree_path
+
             result: SpawnResult = await asyncio.wait_for(
-                self._spawn_agent_fn(
-                    task=task,
-                    worker=worker,
-                    system_prompt=system_prompt,
-                    max_tokens=budget["max_tokens"],
-                    timeout_ms=budget.get("timeout_ms", _DEFAULT_WORKER_TIMEOUT_MS),
-                ),
+                self._spawn_agent_fn(**spawn_kwargs),
                 timeout=timeout_s,
             )
         except asyncio.TimeoutError:
@@ -349,6 +391,32 @@ class SwarmWorkerPool:
                 output=f"Worker error: {exc}",
                 tool_calls=0,
             )
+
+        # Merge worktree back if successful
+        if worktree_path and self._worktree_manager is not None:
+            if result.success:
+                try:
+                    merge_result = self._worktree_manager.merge_worktree(task.id)
+                    if not merge_result.success and merge_result.conflict_files:
+                        result = SpawnResult(
+                            success=result.success,
+                            output=result.output,
+                            tool_calls=result.tool_calls,
+                            files_modified=merge_result.conflict_files,
+                            closure_report=result.closure_report,
+                            metrics=result.metrics,
+                            stderr=f"Merge conflicts: {', '.join(merge_result.conflict_files)}",
+                            session_id=result.session_id,
+                            num_turns=result.num_turns,
+                        )
+                except Exception as exc:
+                    logger.warning("Worktree merge failed for task %s: %s", task.id, exc)
+
+            # Always cleanup worktree
+            try:
+                self._worktree_manager.cleanup_worktree(task.id)
+            except Exception:
+                pass
 
         return result
 

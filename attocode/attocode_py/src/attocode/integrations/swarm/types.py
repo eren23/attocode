@@ -270,6 +270,9 @@ class SwarmConfig:
     tool_access_mode: str = "all"  # 'whitelist' | 'all'
     worker_enforcement_mode: str = "doomloop_only"
 
+    # Worker isolation
+    enable_worktree_isolation: bool = False  # git worktree per worker
+
     # Model probing
     probe_models: bool = True
     probe_failure_strategy: ProbeFailureStrategy = ProbeFailureStrategy.WARN_AND_TRY

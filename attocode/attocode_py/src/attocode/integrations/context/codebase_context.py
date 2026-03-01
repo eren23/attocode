@@ -608,6 +608,55 @@ class CodebaseContextManager:
 
         return "\n".join(parts)
 
+    # --- Recursive context retrieval ---
+
+    def get_recursive_context(
+        self,
+        seed_files: list[str],
+        token_budget: int = 20_000,
+        max_depth: int = 3,
+        max_files: int = 15,
+    ) -> str:
+        """Gather context by recursively following imports from seed files.
+
+        Uses the RecursiveContextRetriever to mechanically follow Python/JS
+        imports starting from seed files, gathering content up to a depth
+        and token budget. Zero LLM cost.
+
+        Args:
+            seed_files: Files to start traversal from.
+            token_budget: Maximum tokens to gather.
+            max_depth: Maximum import-following depth.
+            max_files: Maximum files to visit.
+
+        Returns:
+            Combined content from all gathered files.
+        """
+        from attocode.tricks.recursive_context import RecursiveContextRetriever
+
+        class _FileProvider:
+            def __init__(self, root: str) -> None:
+                self._root = os.path.realpath(root)
+
+            def get_content(self, path: str) -> str | None:
+                candidate = os.path.normpath(os.path.join(self._root, path))
+                if not candidate.startswith(self._root):
+                    return None  # Path traversal rejected
+                try:
+                    with open(candidate, encoding="utf-8", errors="replace") as f:
+                        return f.read()
+                except (OSError, UnicodeDecodeError):
+                    return None
+
+        retriever = RecursiveContextRetriever(
+            _FileProvider(self.root_dir),
+            max_depth=max_depth,
+            token_budget=token_budget,
+            max_files=max_files,
+        )
+        result = retriever.retrieve(seed_files)
+        return result.content
+
     # --- Incremental update API ---
 
     def mark_file_dirty(self, file_path: str) -> None:

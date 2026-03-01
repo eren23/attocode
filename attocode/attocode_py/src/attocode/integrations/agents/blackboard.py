@@ -524,6 +524,67 @@ class SharedBlackboard:
     # Internal Helpers
     # =========================================================================
 
+    # =========================================================================
+    # File Conflict Tracking (for swarm workers)
+    # =========================================================================
+
+    _FILE_REGISTRY_PREFIX = "__file_registry__:"
+
+    def register_file_modifications(
+        self,
+        worker_id: str,
+        files: list[str],
+    ) -> list[str]:
+        """Register files modified by a worker and return any conflicts.
+
+        Returns a list of file paths that were already modified by a
+        different worker (conflict detected).
+        """
+        conflicts: list[str] = []
+        now = time.monotonic()
+
+        for file_path in files:
+            key = f"{self._FILE_REGISTRY_PREFIX}{file_path}"
+            existing = self._store.get(key)
+
+            if existing is not None and not existing.is_expired:
+                # Another worker already modified this file
+                if existing.owner != worker_id:
+                    conflicts.append(file_path)
+                    # Update metadata to track conflict
+                    existing.metadata.setdefault("conflicting_workers", [])
+                    if worker_id not in existing.metadata["conflicting_workers"]:
+                        existing.metadata["conflicting_workers"].append(worker_id)
+                    continue
+
+            # Register this worker as the modifier
+            self.publish(
+                key,
+                {"worker": worker_id, "modified_at": now},
+                owner=worker_id,
+                ttl=0,  # No expiry — persists for the swarm session
+            )
+
+        return conflicts
+
+    def get_file_conflicts(self) -> dict[str, list[str]]:
+        """Get all files with conflicts.
+
+        Returns dict of file_path -> list of conflicting worker IDs.
+        """
+        conflicts: dict[str, list[str]] = {}
+        prefix = self._FILE_REGISTRY_PREFIX
+
+        for key, entry in self._store.items():
+            if not key.startswith(prefix):
+                continue
+            conflicting = entry.metadata.get("conflicting_workers", [])
+            if conflicting:
+                file_path = key[len(prefix):]
+                conflicts[file_path] = [entry.owner] + conflicting
+
+        return conflicts
+
     @staticmethod
     def _extract_namespace(key: str) -> str:
         """Extract namespace from a key (part before first separator)."""

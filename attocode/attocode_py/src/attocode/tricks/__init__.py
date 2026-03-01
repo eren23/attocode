@@ -6,7 +6,7 @@ Techniques for optimizing LLM context usage:
 - Reversible compaction with reference preservation
 - Failure evidence tracking
 - Serialization diversity for cache-busting
-- Recursive context retrieval
+- JSON extraction utilities
 """
 
 from attocode.tricks.kv_cache import CacheAwareContext, CacheStats, CacheableContentBlock
@@ -18,7 +18,6 @@ from attocode.tricks.recursive_context import (
     ContextNode,
     RecursiveContextResult,
     RecursiveContextRetriever,
-    extract_references,
 )
 from attocode.tricks.json_utils import (
     extract_json,
@@ -40,10 +39,10 @@ __all__ = [
     "FailureTracker",
     "Failure",
     "DiverseSerializer",
+    # recursive_context
     "ContextNode",
     "RecursiveContextResult",
     "RecursiveContextRetriever",
-    "extract_references",
     # json_utils
     "extract_json",
     "extract_json_array",
