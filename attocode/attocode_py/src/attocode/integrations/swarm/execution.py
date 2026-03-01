@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import os
 import time
 from typing import TYPE_CHECKING, Any
 
@@ -111,6 +112,20 @@ async def execute_waves(
             failed=wave_failed,
             skipped=wave_skipped,
         ))
+
+        # Process escalations from message bus
+        if ctx.message_bus is not None:
+            try:
+                escalations = ctx.message_bus.get_escalations()
+                for esc in escalations:
+                    ctx.emit(swarm_event(
+                        "swarm.escalation",
+                        sender=esc.sender,
+                        issue=esc.payload.get("issue", ""),
+                        severity=esc.payload.get("severity", "medium"),
+                    ))
+            except Exception:
+                pass
 
         # Wave review: run critic if configured
         if ctx.config.enable_wave_review:
@@ -308,6 +323,14 @@ async def dispatch_task(
 
     ctx.total_dispatches += 1
     ctx.task_queue.mark_dispatched(task.id, worker.model)
+
+    # Message bus: lock target files before dispatch
+    if ctx.message_bus is not None and task.target_files:
+        try:
+            for fpath in task.target_files[:20]:
+                ctx.message_bus.lock_file(fpath, task.id)
+        except Exception:
+            pass
 
     try:
         await ctx.worker_pool.dispatch(task, worker)
@@ -550,9 +573,91 @@ async def _handle_successful_completion(
         # Store quality score on result
         task_result.quality_score = gate_result.score
 
+    # Verification gate — run automated checks (tests, types, lint)
+    if ctx.config.quality_gates:
+        try:
+            from attocode.integrations.tasks.verification_gate import VerificationGate
+            from attocode.integrations.tasks.task_splitter import SubTask
+
+            working_dir = getattr(ctx, "working_dir", None) or "."
+            gate = VerificationGate(
+                provider=ctx.provider if ctx.config.enable_wave_review else None,
+                model=ctx.config.orchestrator_model,
+                working_dir=working_dir,
+            )
+            # Only run tests for action tasks that modify files
+            type_config = BUILTIN_TASK_TYPE_CONFIGS.get(task.type, None)
+            should_run_tests = bool(
+                type_config and type_config.requires_tool_calls
+                and spawn_result.files_modified
+            )
+            # Adapt SwarmTask → SubTask for the verification gate interface
+            sub_task = SubTask(id=task.id, description=task.description)
+            verification = await gate.verify(
+                sub_task,
+                spawn_result.output or "",
+                run_tests=should_run_tests,
+                run_types=should_run_tests,
+                run_lint=should_run_tests,
+                run_llm=False,  # Quality gate LLM judge already ran above
+            )
+            if not verification.passed:
+                task_result.quality_feedback = "; ".join(
+                    verification.suggestions[:3],
+                )
+                max_retries = ctx.config.worker_retries
+                retried = ctx.task_queue.mark_failed_without_cascade(task_id, max_retries)
+                ctx.emit(swarm_event(
+                    "swarm.verification.failed",
+                    task_id=task_id,
+                    checks=[
+                        {"name": c.name, "passed": c.passed, "message": c.message[:200]}
+                        for c in verification.checks
+                    ],
+                ))
+                if not retried:
+                    ctx.task_queue.trigger_cascade_skip(task_id)
+                return
+        except Exception as exc:
+            logger.debug("Verification gate error (non-fatal): %s", exc)
+
+    # File conflict detection via blackboard
+    blackboard = getattr(ctx, "blackboard", None)
+    if blackboard is not None and spawn_result.files_modified:
+        try:
+            conflicts = blackboard.register_file_modifications(
+                task_id, spawn_result.files_modified,
+            )
+            if conflicts:
+                ctx.emit(swarm_event(
+                    "swarm.file_conflict",
+                    task_id=task_id,
+                    conflicting_files=conflicts,
+                    worker_id=task_id,
+                ))
+                logger.warning(
+                    "File conflict detected: task %s modified files also "
+                    "modified by other workers: %s",
+                    task_id, conflicts,
+                )
+        except Exception:
+            pass
+
     # Mark completed
     ctx.task_queue.mark_completed(task_id, task_result)
     ctx.hollow_streak = 0
+
+    # Message bus: broadcast worker_done and release file locks
+    if ctx.message_bus is not None:
+        try:
+            ctx.message_bus.broadcast_done(
+                task_id,
+                summary=(spawn_result.output or "")[:1000],
+                files_modified=spawn_result.files_modified,
+            )
+            ctx.message_bus.release_all_locks(task_id)
+        except Exception:
+            pass
 
     ctx.emit(swarm_event(
         "swarm.task.completed",
@@ -679,6 +784,13 @@ async def _handle_failed_completion(
         )
         if not recovered:
             ctx.task_queue.trigger_cascade_skip(task_id)
+
+    # Message bus: release file locks on failure
+    if ctx.message_bus is not None:
+        try:
+            ctx.message_bus.release_all_locks(task_id)
+        except Exception:
+            pass
 
     ctx.emit(swarm_event(
         "swarm.task.failed",
@@ -879,6 +991,49 @@ async def _run_scout_for_task(
 
     No-ops if scout is not configured or if the spawn fails.
     """
+    # Fast mechanical scout: recursively gather context from target + ref files
+    # If sufficient context is gathered, skip the expensive LLM scout entirely
+    try:
+        from attocode.tricks.recursive_context import RecursiveContextRetriever
+
+        class _FileContentProvider:
+            def __init__(self, root: str) -> None:
+                self._root = os.path.realpath(root) if root else ""
+
+            def get_content(self, path: str) -> str | None:
+                try:
+                    if self._root:
+                        candidate = os.path.normpath(os.path.join(self._root, path))
+                        if not candidate.startswith(self._root):
+                            return None  # Path traversal rejected
+                        path = candidate
+                    with open(path, encoding="utf-8", errors="replace") as f:
+                        return f.read()
+                except (OSError, UnicodeDecodeError):
+                    return None
+
+        working_dir = getattr(ctx, "working_dir", None) or "."
+        retriever = RecursiveContextRetriever(
+            _FileContentProvider(working_dir),
+            max_depth=2,
+            token_budget=15_000,
+            max_files=10,
+        )
+        seed_files = list((task.target_files or [])[:5]) + list((task.read_files or [])[:5])
+        if seed_files:
+            result = retriever.retrieve(seed_files)
+            if result.nodes and result.total_tokens > 500:
+                existing = task.dependency_context or ""
+                scout_section = "\n\n## File Context (auto-gathered)\n\n" + result.content[:5000]
+                task.dependency_context = existing + scout_section
+                logger.info(
+                    "Mechanical scout gathered %d files (%d tokens) for task %s",
+                    result.files_visited, result.total_tokens, task.id,
+                )
+                return  # Skip LLM scout — mechanical context is sufficient
+    except Exception:
+        pass  # Fall through to LLM scout
+
     from attocode.integrations.swarm.roles import get_scout_config
 
     roles = _get_role_map(ctx)

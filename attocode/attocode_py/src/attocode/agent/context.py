@@ -112,6 +112,7 @@ class AgentContext:
     _planning_manager: Any = None  # PlanningManager instance
     _safety_policy_engine: Any = None  # PolicyEngine instance
     _self_improvement: Any = None  # SelfImprovementManager instance
+    _tool_recommender: Any = None  # ToolRecommendationEngine instance
     _semantic_cache: Any = None  # SemanticCacheManager instance
     _skill_manager: Any = None  # dict with loader/executor/dependency_graph/skills
     _state_machine: Any = None  # AgentStateMachine instance

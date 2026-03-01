@@ -51,6 +51,7 @@ class FeatureConfig:
     enable_skill_manager: bool = True
     enable_work_log: bool = True
     enable_pending_plan: bool = True
+    enable_tool_recommendation: bool = True
     enable_diverse_serialization: bool = False  # Off by default
 
     # Tuning
@@ -296,8 +297,12 @@ async def initialize_features(
     # 17. LSP manager (opt-in)
     if cfg.enable_lsp and working_dir and not getattr(ctx, "_lsp_manager", None):
         try:
-            from attocode.integrations.lsp.client import LSPManager
-            lsp = LSPManager(working_dir=working_dir)
+            from attocode.integrations.lsp.client import LSPConfig, LSPManager
+            lsp_config = LSPConfig(
+                enabled=True,
+                root_uri=f"file://{os.path.abspath(working_dir)}",
+            )
+            lsp = LSPManager(config=lsp_config)
             ctx._lsp_manager = lsp
             results["lsp"] = True
         except Exception:
@@ -327,24 +332,34 @@ async def initialize_features(
     # 20. Self-improvement
     if cfg.enable_self_improvement and not getattr(ctx, "_self_improvement", None):
         try:
-            from attocode.integrations.quality.self_improvement import SelfImprovementManager
-            ctx._self_improvement = SelfImprovementManager()
+            from attocode.integrations.quality.self_improvement import SelfImprovementProtocol
+            ctx._self_improvement = SelfImprovementProtocol()
             results["self_improvement"] = True
         except Exception:
             logger.warning("feature_init_failed", extra={"feature": "self_improvement"}, exc_info=True)
             results["self_improvement"] = False
 
-    # 21. Health check
+    # 21. Tool recommendation engine
+    if cfg.enable_tool_recommendation and not getattr(ctx, "_tool_recommender", None):
+        try:
+            from attocode.integrations.quality.tool_recommendation import ToolRecommendationEngine
+            ctx._tool_recommender = ToolRecommendationEngine()
+            results["tool_recommendation"] = True
+        except Exception:
+            logger.warning("feature_init_failed", extra={"feature": "tool_recommendation"}, exc_info=True)
+            results["tool_recommendation"] = False
+
+    # 22. Health check
     if cfg.enable_health_check and not getattr(ctx, "_health_check", None):
         try:
-            from attocode.integrations.quality.health_check import HealthCheckManager
-            ctx._health_check = HealthCheckManager()
+            from attocode.integrations.quality.health_check import HealthChecker
+            ctx._health_check = HealthChecker()
             results["health_check"] = True
         except Exception:
             logger.warning("feature_init_failed", extra={"feature": "health_check"}, exc_info=True)
             results["health_check"] = False
 
-    # 22. Injection budget manager
+    # 23. Injection budget manager
     if cfg.enable_injection_budget and not getattr(ctx, "_injection_budget", None):
         try:
             from attocode.integrations.budget.injection_budget import InjectionBudgetManager
@@ -354,7 +369,7 @@ async def initialize_features(
             logger.warning("feature_init_failed", extra={"feature": "injection_budget"}, exc_info=True)
             results["injection_budget"] = False
 
-    # 23. State machine
+    # 24. State machine
     if cfg.enable_state_machine and not getattr(ctx, '_state_machine', None):
         try:
             from attocode.integrations.utilities.state_machine import AgentStateMachine
@@ -364,21 +379,26 @@ async def initialize_features(
             logger.warning("feature_init_failed", extra={"feature": "state_machine"}, exc_info=True)
             results["state_machine"] = False
 
-    # 24. Semantic cache
+    # 25. Semantic cache
     if cfg.enable_semantic_cache and not getattr(ctx, '_semantic_cache', None):
         try:
-            from attocode.integrations.context.semantic_cache import SemanticCacheManager
-            ctx._semantic_cache = SemanticCacheManager(
-                max_entries=cfg.semantic_cache_max_entries,
-                ttl_seconds=cfg.semantic_cache_ttl_seconds,
-                similarity_threshold=cfg.semantic_cache_similarity_threshold,
+            from attocode.integrations.context.semantic_cache import (
+                SemanticCacheConfig,
+                SemanticCacheManager,
             )
+            cache_config = SemanticCacheConfig(
+                enabled=True,
+                max_size=cfg.semantic_cache_max_entries,
+                ttl=int(cfg.semantic_cache_ttl_seconds),
+                threshold=cfg.semantic_cache_similarity_threshold,
+            )
+            ctx._semantic_cache = SemanticCacheManager(config=cache_config)
             results["semantic_cache"] = True
         except Exception:
             logger.warning("feature_init_failed", extra={"feature": "semantic_cache"}, exc_info=True)
             results["semantic_cache"] = False
 
-    # 25. Context engineering manager
+    # 26. Context engineering manager
     if cfg.enable_context_engineering and not getattr(ctx, '_context_engineering', None):
         try:
             from attocode.integrations.context.context_engineering import ContextEngineeringManager
@@ -395,7 +415,7 @@ async def initialize_features(
             logger.warning("feature_init_failed", extra={"feature": "context_engineering"}, exc_info=True)
             results["context_engineering"] = False
 
-    # 26. Skill manager (full lifecycle)
+    # 27. Skill manager (full lifecycle)
     if cfg.enable_skill_manager and working_dir and not getattr(ctx, '_skill_manager', None):
         try:
             from attocode.integrations.skills.loader import SkillLoader
@@ -440,7 +460,7 @@ async def initialize_features(
             logger.warning("feature_init_failed", extra={"feature": "skill_manager"}, exc_info=True)
             results["skill_manager"] = False
 
-    # 27. Work log
+    # 28. Work log
     if cfg.enable_work_log and not getattr(ctx, '_work_log', None):
         try:
             from attocode.integrations.tasks.work_log import WorkLog
@@ -450,7 +470,7 @@ async def initialize_features(
             logger.warning("feature_init_failed", extra={"feature": "work_log"}, exc_info=True)
             results["work_log"] = False
 
-    # 28. Pending plan manager
+    # 29. Pending plan manager
     if cfg.enable_pending_plan and not getattr(ctx, '_pending_plan', None):
         try:
             from attocode.integrations.tasks.pending_plan import PendingPlanManager

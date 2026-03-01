@@ -19,10 +19,23 @@ from attocode.integrations.swarm.model_selector import (
     FALLBACK_WORKERS,
     ModelHealthTracker,
     ModelSelectorOptions,
+    ProbeResult,
     auto_detect_worker_models,
     get_fallback_workers,
+    probe_worker_models,
     select_alternative_model,
     select_worker_for_capability,
+)
+from attocode.integrations.swarm.worktree_manager import (
+    MergeResult,
+    WorktreeInfo,
+    WorktreeManager,
+)
+from attocode.integrations.swarm.message_bus import (
+    FileLock,
+    MessageType,
+    SwarmMessage,
+    SwarmMessageBus,
 )
 from attocode.integrations.swarm.orchestrator import (
     OrchestratorInternals,
@@ -157,10 +170,21 @@ __all__ = [
     "FALLBACK_WORKERS",
     "ModelHealthTracker",
     "ModelSelectorOptions",
+    "ProbeResult",
     "auto_detect_worker_models",
     "get_fallback_workers",
+    "probe_worker_models",
     "select_alternative_model",
     "select_worker_for_capability",
+    # Worktree manager
+    "MergeResult",
+    "WorktreeInfo",
+    "WorktreeManager",
+    # Message bus
+    "FileLock",
+    "MessageType",
+    "SwarmMessage",
+    "SwarmMessageBus",
     # request_throttle
     "FREE_TIER_THROTTLE",
     "PAID_TIER_THROTTLE",

@@ -122,7 +122,7 @@ def build_role_map(
 ) -> dict[str, RoleConfig]:
     """Build a complete role map from config.
 
-    Always includes ``orchestrator`` and ``judge``.
+    Always includes ``orchestrator``, ``judge``, ``builder``, and ``critic``.
     Additional roles are added from ``roles_config``.
 
     Args:
@@ -145,6 +145,10 @@ def build_role_map(
     # If no builder configured, add default
     if "builder" not in roles:
         roles["builder"] = get_role_config("builder")
+
+    # Include critic by default for wave review
+    if "critic" not in roles:
+        roles["critic"] = get_role_config("critic")
 
     return roles
 

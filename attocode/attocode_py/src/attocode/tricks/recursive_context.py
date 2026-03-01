@@ -15,8 +15,11 @@ Strategy:
 from __future__ import annotations
 
 import re
+from collections import deque
 from dataclasses import dataclass, field
 from typing import Any, Protocol
+
+from attocode.integrations.utilities.token_estimate import estimate_tokens as _estimate_tokens
 
 
 class ContentProvider(Protocol):
@@ -38,7 +41,7 @@ class ContextNode:
 
     def __post_init__(self) -> None:
         if self.estimated_tokens == 0 and self.content:
-            self.estimated_tokens = len(self.content) // 4
+            self.estimated_tokens = _estimate_tokens(self.content)
 
 
 @dataclass(slots=True)
@@ -75,11 +78,14 @@ def extract_python_references(content: str, current_file: str = "") -> list[str]
         path = module.replace(".", "/") + ".py"
         references.append(path)
 
-    # import X
-    for match in re.finditer(r"^import\s+([\w.]+)", content, re.MULTILINE):
-        module = match.group(1)
-        path = module.replace(".", "/") + ".py"
-        references.append(path)
+    # import X  or  import X, Y, Z
+    for match in re.finditer(r"^import\s+([\w.,\s]+)", content, re.MULTILINE):
+        modules_str = match.group(1)
+        for module in modules_str.split(","):
+            module = module.strip()
+            if module and re.fullmatch(r"[\w.]+", module):
+                path = module.replace(".", "/") + ".py"
+                references.append(path)
 
     return references
 
@@ -96,6 +102,16 @@ def extract_js_references(content: str, current_file: str = "") -> list[str]:
         ref = match.group(1)
         if ref.startswith("."):
             # Relative import
+            if not ref.endswith((".js", ".ts", ".tsx", ".jsx")):
+                references.append(ref + ".ts")
+                references.append(ref + ".js")
+            else:
+                references.append(ref)
+
+    # export { X } from './y' (barrel re-exports)
+    for match in re.finditer(r"""export\s+\{[^}]*\}\s+from\s+['"]([^'"]+)['"]""", content):
+        ref = match.group(1)
+        if ref.startswith("."):
             if not ref.endswith((".js", ".ts", ".tsx", ".jsx")):
                 references.append(ref + ".ts")
                 references.append(ref + ".js")
@@ -167,10 +183,10 @@ class RecursiveContextRetriever:
         max_depth_reached = 0
 
         # BFS queue: (file_path, depth)
-        queue: list[tuple[str, int]] = [(f, 0) for f in seed_files]
+        queue: deque[tuple[str, int]] = deque((f, 0) for f in seed_files)
 
         while queue:
-            file_path, depth = queue.pop(0)
+            file_path, depth = queue.popleft()
 
             # Skip if already visited
             if file_path in visited:
@@ -198,7 +214,7 @@ class RecursiveContextRetriever:
                 is_truncated = True
 
             # Check if adding this would exceed budget
-            est_tokens = len(content) // 4
+            est_tokens = _estimate_tokens(content)
             if total_tokens + est_tokens > self._token_budget:
                 # Try to fit with truncation
                 remaining = self._token_budget - total_tokens
@@ -207,7 +223,7 @@ class RecursiveContextRetriever:
                     break
                 content = content[:chars]
                 is_truncated = True
-                est_tokens = remaining
+                est_tokens = _estimate_tokens(content)
 
             # Extract references for next depth
             references = extract_references(content, file_path)
@@ -268,7 +284,7 @@ class RecursiveContextRetriever:
             if len(content) > max_content_per_file:
                 content = content[:max_content_per_file]
                 is_truncated = True
-            est_tokens = len(content) // 4
+            est_tokens = _estimate_tokens(content)
             if total_tokens + est_tokens > priority_budget:
                 remaining = priority_budget - total_tokens
                 chars = remaining * 4
@@ -276,7 +292,7 @@ class RecursiveContextRetriever:
                     break
                 content = content[:chars]
                 is_truncated = True
-                est_tokens = remaining
+                est_tokens = _estimate_tokens(content)
             references = extract_references(content, file_path)
             nodes.append(ContextNode(
                 file_path=file_path,
@@ -289,7 +305,9 @@ class RecursiveContextRetriever:
             total_tokens += est_tokens
 
         # Phase 2: BFS from seeds with remaining budget
-        queue: list[tuple[str, int]] = [(f, 0) for f in seed_files if f not in visited]
+        queue: deque[tuple[str, int]] = deque(
+            (f, 0) for f in seed_files if f not in visited
+        )
         # Also enqueue references from priority files
         for node in nodes:
             for ref in node.references:
@@ -297,7 +315,7 @@ class RecursiveContextRetriever:
                     queue.append((ref, 1))
 
         while queue and total_tokens < self._token_budget and len(visited) < self._max_files:
-            file_path, depth = queue.pop(0)
+            file_path, depth = queue.popleft()
             if file_path in visited or depth > self._max_depth:
                 continue
             visited.add(file_path)
@@ -308,7 +326,7 @@ class RecursiveContextRetriever:
             if len(content) > max_content_per_file:
                 content = content[:max_content_per_file]
                 is_truncated = True
-            est_tokens = len(content) // 4
+            est_tokens = _estimate_tokens(content)
             if total_tokens + est_tokens > self._token_budget:
                 remaining = self._token_budget - total_tokens
                 chars = remaining * 4
@@ -316,7 +334,7 @@ class RecursiveContextRetriever:
                     break
                 content = content[:chars]
                 is_truncated = True
-                est_tokens = remaining
+                est_tokens = _estimate_tokens(content)
             references = extract_references(content, file_path)
             nodes.append(ContextNode(
                 file_path=file_path,

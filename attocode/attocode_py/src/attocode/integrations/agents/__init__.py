@@ -1,4 +1,4 @@
-"""Agent management: registry, blackboard, delegation, synthesis, coordination."""
+"""Agent management: registry, blackboard, delegation, synthesis."""
 
 from attocode.integrations.agents.blackboard import (
     BlackboardEntry,
@@ -30,21 +30,6 @@ from attocode.integrations.agents.result_synthesizer import (
     build_synthesis_prompt,
     create_result_synthesizer,
 )
-from attocode.integrations.agents.multi_agent import (
-    AgentRole,
-    AgentTaskResult,
-    CoordinationEvent,
-    CoordinationEventType,
-    ConsensusStrategy,
-    Decision,
-    MultiAgentCoordinator,
-    TeamResult,
-    CODER_ROLE,
-    REVIEWER_ROLE,
-    ARCHITECT_ROLE,
-    RESEARCHER_ROLE,
-)
-
 from attocode.integrations.agents.async_subagent import (
     AsyncSubagentConfig,
     AsyncSubagentManager,
@@ -87,19 +72,6 @@ __all__ = [
     "SynthesisStats",
     "build_synthesis_prompt",
     "create_result_synthesizer",
-    # multi_agent
-    "AgentRole",
-    "AgentTaskResult",
-    "CoordinationEvent",
-    "CoordinationEventType",
-    "ConsensusStrategy",
-    "Decision",
-    "MultiAgentCoordinator",
-    "TeamResult",
-    "CODER_ROLE",
-    "REVIEWER_ROLE",
-    "ARCHITECT_ROLE",
-    "RESEARCHER_ROLE",
     # async_subagent
     "AsyncSubagentConfig",
     "AsyncSubagentManager",

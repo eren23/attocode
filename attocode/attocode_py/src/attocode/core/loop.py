@@ -209,20 +209,80 @@ async def handle_auto_compaction(ctx: AgentContext) -> CompactionResult:
     )
 
     try:
-        # Stage 1: Ask LLM for summary
+        # Stage 0: Extract references for reversible compaction
+        from attocode.tricks.reversible_compaction import (
+            ReversibleCompactor,
+            extract_references,
+        )
+        preserved_refs_block = ""
+        try:
+            compactor = getattr(ctx, "_reversible_compactor", None)
+            if compactor is None:
+                compactor = ReversibleCompactor()
+                ctx._reversible_compactor = compactor  # type: ignore[attr-defined]
+
+            # Extract references from messages being compacted
+            all_refs = []
+            for i, msg in enumerate(ctx.messages):
+                content = getattr(msg, "content", "")
+                if isinstance(content, str) and content:
+                    refs = extract_references(
+                        content,
+                        ["file", "url", "function", "error"],
+                        source_index=i,
+                    )
+                    all_refs.extend(refs)
+
+            # Deduplicate
+            seen: set[str] = set()
+            deduped = []
+            for ref in all_refs:
+                key = f"{ref.type}:{ref.value}"
+                if key not in seen:
+                    seen.add(key)
+                    deduped.append(ref)
+
+            if deduped:
+                preserved_refs_block = compactor.format_references_block(deduped[:100])
+                # Store references on compactor for potential later retrieval
+                compactor._references.extend(deduped[:100])
+        except Exception:
+            pass
+
+        # Stage 1: Ask LLM for summary (with semantic cache)
         summary_prompt = ctx.compaction_manager.create_summary_prompt()
-        ctx.add_message(Message(role=Role.USER, content=summary_prompt))
 
-        summary_response = await call_llm(ctx, max_retries=1)
-        summary_text = summary_response.content or ""
+        # Check semantic cache for a similar summary
+        semantic_cache = getattr(ctx, "_semantic_cache", None)
+        cached_summary = None
+        if semantic_cache is not None:
+            try:
+                cached_summary = semantic_cache.get(summary_prompt)
+            except Exception:
+                pass
 
-        # Record summary LLM usage
-        if summary_response.usage and ctx.economics:
-            ctx.economics.record_llm_usage(
-                summary_response.usage.input_tokens,
-                summary_response.usage.output_tokens,
-                summary_response.usage.cost,
-            )
+        if cached_summary and isinstance(cached_summary, str):
+            summary_text = cached_summary
+        else:
+            ctx.add_message(Message(role=Role.USER, content=summary_prompt))
+
+            summary_response = await call_llm(ctx, max_retries=1)
+            summary_text = summary_response.content or ""
+
+            # Record summary LLM usage
+            if summary_response.usage and ctx.economics:
+                ctx.economics.record_llm_usage(
+                    summary_response.usage.input_tokens,
+                    summary_response.usage.output_tokens,
+                    summary_response.usage.cost,
+                )
+
+            # Cache the summary for future use
+            if semantic_cache is not None and summary_text:
+                try:
+                    semantic_cache.put(summary_prompt, summary_text)
+                except Exception:
+                    pass
 
         # Stage 2: Compact messages with the summary
         # Gather extra context (work log, goals) if available
@@ -233,6 +293,14 @@ async def handle_auto_compaction(ctx: AgentContext) -> CompactionResult:
         compacted = ctx.compaction_manager.compact(
             ctx.messages, summary_text, extra_context=extra_context or None,
         )
+
+        # Stage 3: Append preserved references block after compaction
+        if preserved_refs_block:
+            compacted.append(Message(
+                role=Role.USER,
+                content=f"[System: {preserved_refs_block}]",
+            ))
+
         messages_after = len(compacted)
         ctx.messages = compacted
 
@@ -483,6 +551,72 @@ def invalidate_ast_on_edit(ctx: AgentContext, tool_name: str, tool_args: dict) -
             pass
 
 
+async def collect_lsp_diagnostics(
+    ctx: AgentContext,
+    tool_name: str,
+    tool_args: dict,
+) -> str | None:
+    """Collect LSP diagnostics after file-editing tool calls.
+
+    Notifies the LSP server of the file change, waits briefly for
+    diagnostics, and returns a formatted string of errors/warnings
+    to inject into context. Returns None if no diagnostics or LSP
+    is not available.
+    """
+    FILE_EDIT_TOOLS = {"write_file", "edit_file", "create_file", "patch_file", "replace_in_file"}
+
+    if tool_name not in FILE_EDIT_TOOLS:
+        return None
+
+    lsp_manager = getattr(ctx, "_lsp_manager", None)
+    if lsp_manager is None:
+        return None
+
+    file_path = tool_args.get("path") or tool_args.get("file_path") or tool_args.get("target")
+    if not file_path:
+        return None
+
+    try:
+        import os
+        abs_path = os.path.abspath(file_path)
+
+        # Read updated file content and notify LSP
+        try:
+            with open(abs_path, encoding="utf-8", errors="replace") as f:
+                content = f.read()
+        except OSError:
+            return None
+
+        lsp_manager.notify_file_changed(abs_path, content)
+
+        # Brief wait for the LSP server to publish diagnostics
+        await asyncio.sleep(0.3)
+
+        diagnostics = lsp_manager.get_diagnostics(abs_path)
+        if not diagnostics:
+            return None
+
+        # Filter to errors and warnings only
+        important = [d for d in diagnostics if d.severity in ("error", "warning")]
+        if not important:
+            return None
+
+        # Format diagnostics for injection
+        parts = [f"LSP diagnostics for {os.path.basename(abs_path)} ({len(important)} issue{'s' if len(important) != 1 else ''}):"]
+        for d in important[:10]:  # Cap at 10
+            line = d.range.start.line + 1  # 0-indexed to 1-indexed
+            parts.append(f"  L{line} [{d.severity}]: {d.message}")
+            if d.source:
+                parts[-1] += f" ({d.source})"
+
+        if len(important) > 10:
+            parts.append(f"  ... and {len(important) - 10} more issues")
+
+        return "\n".join(parts)
+    except Exception:
+        return None
+
+
 def format_wrapup_nudge(wrapup: WrapupState) -> str:
     """Build the wrapup nudge message based on remaining iterations.
 
@@ -518,6 +652,25 @@ def format_wrapup_nudge(wrapup: WrapupState) -> str:
             f"Wrapup expired (reason: {reason}). "
             "Provide your final summary immediately."
         )
+
+
+def _extract_keywords(args: dict[str, Any]) -> list[str]:
+    """Extract meaningful keywords from tool arguments for recommendation tracking."""
+    keywords: list[str] = []
+    for key in ("path", "file_path", "pattern", "query", "glob"):
+        val = args.get(key)
+        if isinstance(val, str) and val and not val.startswith("*"):
+            parts = val.replace("\\", "/").split("/")
+            kw = parts[-1] if parts else val
+            if len(kw) >= 3:
+                keywords.append(kw)
+    # Extract base command (e.g. "npm" from "npm test")
+    cmd = args.get("command")
+    if isinstance(cmd, str) and cmd:
+        base = cmd.strip().split()[0]
+        if base:
+            keywords.append(base)
+    return list(dict.fromkeys(keywords))  # deduplicate preserving order
 
 
 def emit_loop_summary(ctx: AgentContext, start_time: float) -> None:
@@ -587,6 +740,7 @@ async def run_execution_loop(
     last_response = ""
     baseline_set = False
     wrapup = WrapupState()
+    consecutive_tool_errors = 0
 
     ctx.emit_simple(EventType.START, task="execution_loop")
 
@@ -762,17 +916,8 @@ async def run_execution_loop(
                     except Exception:
                         pass
 
-                # Run self-improvement analysis
-                self_improvement = getattr(ctx, "_self_improvement", None)
-                if self_improvement is not None:
-                    try:
-                        self_improvement.analyze_session(
-                            iterations=ctx.iteration,
-                            success=analysis.reason == CompletionReason.COMPLETED,
-                            failure_count=len(ctx.failure_tracker.get_unresolved_failures()) if ctx.failure_tracker else 0,
-                        )
-                    except Exception:
-                        pass
+                # Note: self-improvement diagnosis happens per-tool-call
+                # in the tool execution section below (SelfImprovementProtocol)
 
                 # Agent is done
                 ctx.emit_simple(
@@ -844,7 +989,7 @@ async def run_execution_loop(
                         except Exception:
                             pass
 
-                # Record failures in failure tracker
+                # Record failures in failure tracker + self-improvement diagnosis
                 if ctx.failure_tracker is not None:
                     from attocode.tricks.failure_evidence import FailureInput
                     for tc, tr in zip(response.tool_calls, tool_results):
@@ -858,6 +1003,32 @@ async def run_execution_loop(
                                 ))
                             except Exception:
                                 pass
+
+                # Self-improvement: diagnose tool failures, record successes
+                self_improvement = getattr(ctx, "_self_improvement", None)
+                if self_improvement is not None:
+                    for tc, tr in zip(response.tool_calls, tool_results):
+                        try:
+                            if tr.is_error and tr.error:
+                                enhanced = self_improvement.enhance_error_message(
+                                    tc.name,
+                                    tr.error,
+                                    tc.arguments or {},
+                                )
+                                # Inject diagnosis as system message if it adds info
+                                if enhanced and enhanced != tr.error:
+                                    ctx.add_message(Message(
+                                        role=Role.USER,
+                                        content=f"[System: Self-diagnosis for {tc.name} failure]\n{enhanced}",
+                                    ))
+                            else:
+                                self_improvement.record_success(
+                                    tc.name,
+                                    tc.arguments or {},
+                                    context=f"iteration_{ctx.iteration}",
+                                )
+                        except Exception:
+                            pass
 
                 # Inject failure context if there are unresolved failures
                 if ctx.failure_tracker is not None:
@@ -883,12 +1054,34 @@ async def run_execution_loop(
                 for tc in response.tool_calls:
                     invalidate_ast_on_edit(ctx, tc.name, tc.arguments or {})
 
+                # Collect LSP diagnostics after file edits
+                lsp_diagnostics_parts: list[str] = []
+                if getattr(ctx, "_lsp_manager", None) is not None:
+                    for tc, tr in zip(response.tool_calls, tool_results):
+                        if not tr.is_error:
+                            try:
+                                diag_msg = await collect_lsp_diagnostics(
+                                    ctx, tc.name, tc.arguments or {},
+                                )
+                                if diag_msg:
+                                    lsp_diagnostics_parts.append(diag_msg)
+                            except Exception:
+                                pass
+
                 # Build and add tool result messages
                 tool_messages = build_tool_result_messages(
                     response.tool_calls,
                     tool_results,
                 )
                 ctx.add_messages(tool_messages)
+
+                # Inject LSP diagnostics as system feedback
+                if lsp_diagnostics_parts:
+                    combined = "\n".join(lsp_diagnostics_parts)
+                    ctx.add_message(Message(
+                        role=Role.USER,
+                        content=f"[System: {combined}]",
+                    ))
 
                 # Record in work log if available
                 work_log = getattr(ctx, "_work_log", None)
@@ -912,6 +1105,51 @@ async def run_execution_loop(
                                 dlq.add(tc.name, tr.error or "Unknown error", tc.arguments)
                             except Exception:
                                 pass
+
+                # Track consecutive tool error batches (independent of recommender)
+                batch_has_error = any(tr.is_error for tr in tool_results)
+                if batch_has_error:
+                    consecutive_tool_errors += 1
+                else:
+                    consecutive_tool_errors = 0
+
+                # Tool recommendation: record usage and inject hints on repeated failures
+                recommender = getattr(ctx, "_tool_recommender", None)
+                if recommender is not None:
+                    try:
+                        # Determine current phase for task_type
+                        phase = "unknown"
+                        if ctx.economics is not None:
+                            pt = getattr(ctx.economics, "phase_tracker", None)
+                            if pt is not None:
+                                phase = getattr(pt, "current_phase", "unknown")
+
+                        for tc, tr in zip(response.tool_calls, tool_results):
+                            recommender.record_usage(
+                                tool_name=tc.name,
+                                task_type=phase,
+                                success=not tr.is_error,
+                                context_keywords=_extract_keywords(tc.arguments or {}),
+                            )
+
+                        # Inject tool recommendations after 3+ consecutive error batches
+                        if consecutive_tool_errors >= 3:
+                            recs = recommender.recommend(
+                                task_type=phase,
+                                context=(ctx.goal or "")[:500],
+                                current_tools=[tc.name for tc in response.tool_calls],
+                                max_results=3,
+                            )
+                            if recs:
+                                hint = "Suggested tools based on patterns: " + ", ".join(
+                                    f"{r.tool_name} ({r.reason})" for r in recs
+                                )
+                                ctx.add_message(Message(
+                                    role=Role.USER,
+                                    content=f"[System: {hint}]",
+                                ))
+                    except Exception:
+                        pass
 
                 # Auto-checkpoint after tool batch
                 if ctx.auto_checkpoint is not None:

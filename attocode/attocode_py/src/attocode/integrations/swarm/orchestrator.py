@@ -62,6 +62,7 @@ class OrchestratorInternals:
     shared_economics_state: Any  # SharedEconomicsState
     shared_context_engine: Any  # SharedContextEngine
     blackboard: Any | None  # SharedBlackboard
+    message_bus: Any | None  # SwarmMessageBus
     state_store: Any | None  # SwarmStateStore
     spawn_agent_fn: Any  # SpawnAgentFn
     codebase_context: Any | None  # CodebaseContextManager
@@ -138,6 +139,7 @@ class SwarmOrchestrator:
         self._shared_context_engine: Any = None
         self._state_store: Any = None
         self._event_bridge: Any = None
+        self._message_bus: Any = None
 
     def _initialize_subsystems(self) -> None:
         """Create all subsystems. Called before execute()."""
@@ -160,6 +162,21 @@ class SwarmOrchestrator:
             health_tracker=self._health_tracker,
         )
 
+        # Initialize message bus for inter-worker communication
+        try:
+            from attocode.integrations.swarm.message_bus import SwarmMessageBus
+            import os
+            bus_path = os.path.join(self._config.state_dir, "message_bus.db")
+            os.makedirs(os.path.dirname(bus_path), exist_ok=True)
+            self._message_bus = SwarmMessageBus(bus_path)
+        except Exception:
+            logger.debug("Message bus initialization failed; using in-memory fallback")
+            try:
+                from attocode.integrations.swarm.message_bus import SwarmMessageBus
+                self._message_bus = SwarmMessageBus(":memory:")
+            except Exception:
+                pass
+
     def _get_internals(self) -> OrchestratorInternals:
         """Create a snapshot of orchestrator internals for delegation."""
         ctx = OrchestratorInternals(
@@ -175,6 +192,7 @@ class SwarmOrchestrator:
             shared_economics_state=self._shared_economics_state,
             shared_context_engine=self._shared_context_engine,
             blackboard=self._blackboard,
+            message_bus=self._message_bus,
             state_store=self._state_store,
             spawn_agent_fn=self._spawn_agent_fn,
             codebase_context=self._config.codebase_context,
@@ -292,9 +310,30 @@ class SwarmOrchestrator:
             detect_foundation_tasks(ctx)
             self._detect_foundation_tasks(ctx)
 
-            # Phase 3: Model probing (simplified)
+            # Phase 3: Model probing
             if self._config.probe_models is not False:
-                logger.info("Skipping model probing in Python port (not yet implemented)")
+                try:
+                    from attocode.integrations.swarm.model_selector import probe_worker_models
+
+                    probe_results = await probe_worker_models(
+                        provider=self._provider,
+                        workers=self._config.workers,
+                        health_tracker=self._health_tracker,
+                        timeout_ms=self._config.probe_timeout_ms,
+                        failure_strategy=self._config.probe_failure_strategy.value,
+                    )
+                    failed_count = sum(1 for r in probe_results if not r.success)
+                    if failed_count > 0:
+                        logger.warning(
+                            "Model probing: %d/%d models failed",
+                            failed_count, len(probe_results),
+                        )
+                except RuntimeError as probe_err:
+                    # abort strategy raises RuntimeError
+                    self._sync_from_internals(ctx)
+                    return build_error_result(ctx, f"Model probing failed: {probe_err}")
+                except Exception as probe_err:
+                    logger.warning("Model probing failed: %s", probe_err)
 
             # Phase 4: Planning (concurrent, non-blocking)
             if self._config.enable_planning:
