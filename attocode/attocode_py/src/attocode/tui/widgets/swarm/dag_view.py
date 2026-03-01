@@ -5,9 +5,10 @@ from __future__ import annotations
 from typing import Any
 
 from rich.text import Text
+from textual.message import Message
 from textual.reactive import reactive
 from textual.widget import Widget
-from textual.widgets import Static
+from textual.widgets import Static, Tree
 
 
 _STATUS_SYMBOLS = {
@@ -98,3 +99,124 @@ class DependencyDAGView(Static):
             text.append("\n")
 
         self.update(text)
+
+
+class DependencyTree(Widget):
+    """Tree widget showing task dependency hierarchy.
+
+    Roots = tasks with no deps.  Children = tasks that depend on parent.
+    Posts ``DependencyTree.NodeSelected`` on tree node selection.
+    """
+
+    class NodeSelected(Message):
+        """Posted when a tree node is selected."""
+
+        def __init__(self, task_id: str) -> None:
+            super().__init__()
+            self.task_id = task_id
+
+    DEFAULT_CSS = """
+    DependencyTree {
+        height: 1fr;
+    }
+    DependencyTree > Tree {
+        height: 1fr;
+    }
+    """
+
+    def __init__(self, **kwargs: Any) -> None:
+        super().__init__(**kwargs)
+        self._dag_nodes: list[dict[str, Any]] = []
+
+    def compose(self):
+        tree: Tree[str] = Tree("Tasks", id="dep-tree")
+        tree.show_root = False
+        yield tree
+
+    def update_dag(self, nodes: list[dict[str, Any]], edges: list[Any] | None = None) -> None:
+        """Rebuild the tree from nodes and edges."""
+        self._dag_nodes = nodes
+        self._rebuild(edges)
+
+    def _rebuild(self, edges: list[Any] | None = None) -> None:
+        try:
+            tree = self.query_one("#dep-tree", Tree)
+        except Exception:
+            return
+
+        tree.clear()
+
+        if not self._dag_nodes:
+            return
+
+        # Build dependency map: task_id -> [dep task_ids]
+        deps_map: dict[str, list[str]] = {}
+        for n in self._dag_nodes:
+            tid = str(n.get("task_id", ""))
+            deps = n.get("depends_on", [])
+            if isinstance(deps, list):
+                deps_map[tid] = [str(d) for d in deps]
+            else:
+                deps_map[tid] = []
+
+        # Also parse edges if provided
+        if edges:
+            for edge in edges:
+                if isinstance(edge, (list, tuple)) and len(edge) >= 2:
+                    src, tgt = str(edge[0]), str(edge[1])
+                elif isinstance(edge, dict):
+                    src = str(edge.get("source", edge.get("from", "")))
+                    tgt = str(edge.get("target", edge.get("to", "")))
+                else:
+                    continue
+                if tgt:
+                    deps_map.setdefault(tgt, []).append(src)
+
+        # Build reverse map: parent -> [children who depend on parent]
+        children_map: dict[str, list[str]] = {}
+        for tid, deps in deps_map.items():
+            for dep in deps:
+                children_map.setdefault(dep, []).append(tid)
+
+        # Roots = nodes with no deps
+        node_map = {str(n.get("task_id", "")): n for n in self._dag_nodes}
+        roots = [tid for tid in node_map if not deps_map.get(tid)]
+
+        # If no roots (circular), use all nodes
+        if not roots:
+            roots = list(node_map.keys())
+
+        added: set[str] = set()
+
+        def _add_node(parent_branch: Any, task_id: str, depth: int = 0) -> None:
+            if task_id in added or depth > 20:
+                return
+            added.add(task_id)
+
+            node = node_map.get(task_id, {})
+            status = node.get("status", "pending")
+            title = node.get("title", "")[:40]
+
+            icon = _STATUS_SYMBOLS.get(status, "?")
+            color = _STATUS_COLORS.get(status, "")
+
+            label = Text()
+            label.append(f"{icon} ", style=color)
+            label.append(task_id, style="bold")
+            label.append(f" \u2014 {title}", style="dim")
+            label.append(f" [{status}]", style=color)
+
+            kids = children_map.get(task_id, [])
+            if kids:
+                branch = parent_branch.add(label, data=task_id, expand=True)
+                for child_id in kids:
+                    _add_node(branch, child_id, depth + 1)
+            else:
+                parent_branch.add_leaf(label, data=task_id)
+
+        for root_id in roots:
+            _add_node(tree.root, root_id)
+
+    def on_tree_node_selected(self, event: Tree.NodeSelected) -> None:
+        if event.node.data:
+            self.post_message(self.NodeSelected(str(event.node.data)))

@@ -374,7 +374,7 @@ Return JSON:
 async def synthesize_outputs(ctx: OrchestratorInternals) -> SynthesisResult | None:
     """Collect all completed task outputs and synthesize."""
     completed_tasks = [
-        t for t in ctx.task_queue.get_all_tasks()
+        t for t in ctx.task_queue.get_all_tasks().values()
         if t.status == SwarmTaskStatus.COMPLETED and t.result
     ]
 
@@ -415,7 +415,7 @@ def build_stats(ctx: OrchestratorInternals) -> SwarmExecutionStats:
     all_tasks = ctx.task_queue.get_all_tasks()
 
     total_duration = 0
-    for t in all_tasks:
+    for t in all_tasks.values():
         if t.result:
             total_duration += t.result.duration_ms
 
@@ -487,11 +487,11 @@ def detect_foundation_tasks(ctx: OrchestratorInternals) -> None:
     all_tasks = ctx.task_queue.get_all_tasks()
     dep_counts: dict[str, int] = {}
 
-    for task in all_tasks:
+    for task in all_tasks.values():
         for dep_id in task.dependencies:
             dep_counts[dep_id] = dep_counts.get(dep_id, 0) + 1
 
-    for task in all_tasks:
+    for task in all_tasks.values():
         if dep_counts.get(task.id, 0) >= 2:
             task.is_foundation = True
 
@@ -507,7 +507,7 @@ def build_artifact_inventory(ctx: OrchestratorInternals) -> ArtifactInventory:
     seen_paths: set[str] = set()
     files: list[ArtifactFile] = []
 
-    for task in all_tasks:
+    for task in all_tasks.values():
         paths: list[str] = []
         if task.target_files:
             paths.extend(task.target_files)
@@ -568,7 +568,7 @@ def save_checkpoint(ctx: OrchestratorInternals, label: str) -> None:
 
 def skip_remaining_tasks(ctx: OrchestratorInternals, reason: str) -> None:
     """Skip all pending and ready tasks."""
-    for task in ctx.task_queue.get_all_tasks():
+    for task in ctx.task_queue.get_all_tasks().values():
         if task.status in (SwarmTaskStatus.PENDING, SwarmTaskStatus.READY):
             task.status = SwarmTaskStatus.SKIPPED
             ctx.emit(swarm_event(
@@ -601,7 +601,7 @@ def get_effective_retries(ctx: OrchestratorInternals, task: SwarmTask) -> int:
 def get_swarm_progress_summary(ctx: OrchestratorInternals) -> str:
     """Human-readable summary of completed tasks for retry context."""
     completed = [
-        t for t in ctx.task_queue.get_all_tasks()
+        t for t in ctx.task_queue.get_all_tasks().values()
         if t.status == SwarmTaskStatus.COMPLETED
     ]
 

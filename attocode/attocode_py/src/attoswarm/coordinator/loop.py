@@ -6,6 +6,7 @@ import asyncio
 import logging
 import os
 import shlex
+import shutil
 import subprocess
 import time
 import uuid
@@ -102,10 +103,36 @@ class HybridCoordinator:
     async def run(self) -> int:
         try:
             self._ensure_layout()
+
+            # Clear stale events on fresh (non-resume) runs
+            if not self.resume:
+                events_path = self.layout["events"]
+                if events_path.exists():
+                    events_path.write_text("")
+
             if self.resume and self.layout["manifest"].exists():
                 self._load_existing_run()
             else:
                 self._bootstrap_manifest()
+
+            # Log effective config so it's visible in events
+            effective_duration = max(300.0, float(self.config.watchdog.task_max_duration_seconds))
+            self._append_event("config.effective", {
+                "task_max_duration_seconds": effective_duration,
+                "max_runtime_seconds": self.config.run.max_runtime_seconds,
+                "max_task_attempts": self.config.retries.max_task_attempts,
+                "workspace_mode": self.config.workspace.mode,
+                "roles": [r.role_id for r in self.config.roles],
+            })
+
+            # Validate backend binaries before spawning
+            if not self._preflight_check():
+                self._error("preflight", "No backend binaries found on PATH — cannot spawn any agents")
+                self._append_event("preflight.fatal", {
+                    "error": "No backend binaries found on PATH",
+                })
+                return 1
+
             await self._spawn_agents()
             await self._run_loop()
             await self._shutdown_agents()
@@ -123,6 +150,29 @@ class HybridCoordinator:
             if key in {"manifest", "state", "events"}:
                 continue
             path.mkdir(parents=True, exist_ok=True)
+
+    def _preflight_check(self) -> bool:
+        """Check that required backend binaries are available. Returns False if none are available."""
+        assert self.manifest is not None
+        backends_ok = 0
+        for role in self.manifest.roles:
+            cfg = self.role_cfg_by_role_id.get(role.role_id)
+            if cfg and cfg.command:
+                binary = cfg.command[0] if cfg.command[0] != "sh" else None
+            else:
+                # Default commands wrap in sh -c; check the actual backend binary
+                binary = role.backend if role.backend in {"claude", "codex", "aider", "attocode"} else None
+            if binary and not shutil.which(binary):
+                self._append_event("preflight.warning", {
+                    "role_id": role.role_id,
+                    "backend": role.backend,
+                    "binary": binary,
+                    "error": f"'{binary}' not found on PATH",
+                })
+                self._error("preflight", f"Backend binary '{binary}' not found for role {role.role_id}")
+            else:
+                backends_ok += 1
+        return backends_ok > 0
 
     def _bootstrap_manifest(self) -> None:
         roles = [
@@ -260,71 +310,88 @@ class HybridCoordinator:
         for role in self.manifest.roles:
             for i in range(role.count):
                 agent_id = f"{role.role_id}-{i+1}"
-                cmd = self._role_command(role)
-                workspace = ensure_workspace_for_agent(
-                    repo_root=Path(self.config.run.working_dir),
-                    worktrees_root=self.layout["worktrees"],
-                    agent_id=agent_id,
-                    workspace_mode=role.workspace_mode,
-                    write_access=role.write_access,
-                )
-                spec = AgentProcessSpec(
-                    agent_id=agent_id,
-                    backend=role.backend,
-                    binary=cmd[0],
-                    args=cmd[1:],
-                    cwd=str(workspace),
-                    role=role.role_id,
-                    model=role.model,
-                    write_access=role.write_access,
-                    env={
-                        **{k: v for k, v in os.environ.items()
-                           if k not in _STRIP_ENV_VARS},
-                        "ATTO_AGENT_ID": agent_id,
-                        "ATTO_MODEL": role.model,
-                    },
-                    log_file=str(self.layout["logs"] / f"agent-{agent_id}.log"),
-                )
-                adapter = get_adapter(role.backend)
-                handle = await adapter.spawn(spec)
-                self.adapters[agent_id] = adapter
-                self.handles[agent_id] = handle
-                self.role_by_agent[agent_id] = role
-                self.outbox_cursors.setdefault(agent_id, 0)
-                self.agent_restart_count.setdefault(agent_id, 0)
+                try:
+                    cmd = self._role_command(role)
+                    workspace = ensure_workspace_for_agent(
+                        repo_root=Path(self.config.run.working_dir),
+                        worktrees_root=self.layout["worktrees"],
+                        agent_id=agent_id,
+                        workspace_mode=role.workspace_mode,
+                        write_access=role.write_access,
+                    )
+                    spec = AgentProcessSpec(
+                        agent_id=agent_id,
+                        backend=role.backend,
+                        binary=cmd[0],
+                        args=cmd[1:],
+                        cwd=str(workspace),
+                        role=role.role_id,
+                        model=role.model,
+                        write_access=role.write_access,
+                        env={
+                            **{k: v for k, v in os.environ.items()
+                               if k not in _STRIP_ENV_VARS},
+                            "ATTO_AGENT_ID": agent_id,
+                            "ATTO_MODEL": role.model,
+                        },
+                        log_file=str(self.layout["logs"] / f"agent-{agent_id}.log"),
+                    )
+                    adapter = get_adapter(role.backend)
+                    handle = await adapter.spawn(spec)
+                    self.adapters[agent_id] = adapter
+                    self.handles[agent_id] = handle
+                    self.role_by_agent[agent_id] = role
+                    self.outbox_cursors.setdefault(agent_id, 0)
+                    self.agent_restart_count.setdefault(agent_id, 0)
 
-                inbox_path = self.layout["agents"] / f"agent-{agent_id}.inbox.json"
-                outbox_path = self.layout["agents"] / f"agent-{agent_id}.outbox.json"
-                if not inbox_path.exists():
-                    write_json_atomic(inbox_path, AgentInbox(agent_id=agent_id).to_dict())
-                if not outbox_path.exists():
-                    write_json_atomic(outbox_path, AgentOutbox(agent_id=agent_id).to_dict())
+                    inbox_path = self.layout["agents"] / f"agent-{agent_id}.inbox.json"
+                    outbox_path = self.layout["agents"] / f"agent-{agent_id}.outbox.json"
+                    if not inbox_path.exists():
+                        write_json_atomic(inbox_path, AgentInbox(agent_id=agent_id).to_dict())
+                    if not outbox_path.exists():
+                        write_json_atomic(outbox_path, AgentOutbox(agent_id=agent_id).to_dict())
 
-                workspace_effective = (
-                    "worktree" if str(workspace) != str(Path(self.config.run.working_dir)) else "shared"
-                )
-                self._append_event(
-                    "agent.spawned",
-                    {
+                    workspace_effective = (
+                        "worktree" if str(workspace) != str(Path(self.config.run.working_dir)) else "shared"
+                    )
+                    self._append_event(
+                        "agent.spawned",
+                        {
+                            "agent_id": agent_id,
+                            "role_id": role.role_id,
+                            "backend": role.backend,
+                            "model": role.model,
+                            "cwd": str(workspace),
+                            "workspace_mode": role.workspace_mode,
+                            "workspace_effective": workspace_effective,
+                        },
+                    )
+                    if self.config.run.debug:
+                        self._append_event(
+                            "debug.agent.command",
+                            {
+                                "agent_id": agent_id,
+                                "command": [spec.binary, *spec.args],
+                                "cwd": spec.cwd,
+                                "env_keys": sorted(spec.env.keys()),
+                            },
+                        )
+                except FileNotFoundError:
+                    self._error("spawn_failed", f"Backend binary not found for {role.backend} (agent {agent_id})")
+                    self._append_event("agent.spawn_failed", {
                         "agent_id": agent_id,
                         "role_id": role.role_id,
                         "backend": role.backend,
-                        "model": role.model,
-                        "cwd": str(workspace),
-                        "workspace_mode": role.workspace_mode,
-                        "workspace_effective": workspace_effective,
-                    },
-                )
-                if self.config.run.debug:
-                    self._append_event(
-                        "debug.agent.command",
-                        {
-                            "agent_id": agent_id,
-                            "command": [spec.binary, *spec.args],
-                            "cwd": spec.cwd,
-                            "env_keys": sorted(spec.env.keys()),
-                        },
-                    )
+                        "error": f"Binary not found on PATH for backend '{role.backend}'",
+                    })
+                except Exception as exc:
+                    self._error("spawn_failed", f"Failed to spawn {agent_id}: {exc}")
+                    self._append_event("agent.spawn_failed", {
+                        "agent_id": agent_id,
+                        "role_id": role.role_id,
+                        "backend": role.backend,
+                        "error": str(exc),
+                    })
 
     async def _run_loop(self) -> None:
         assert self.manifest is not None
@@ -390,6 +457,7 @@ class HybridCoordinator:
                     "latest_seq": self.state_seq,
                 },
                 agent_messages_index={"agents_dir": self.layout["agents"].name},
+                elapsed_s=time.monotonic() - started_at,
             )
             if phase in {"completed", "failed"}:
                 break
@@ -813,7 +881,7 @@ class HybridCoordinator:
             )
 
     async def _enforce_task_duration_limits(self) -> None:
-        max_duration = max(30.0, float(self.config.watchdog.task_max_duration_seconds))
+        max_duration = max(300.0, float(self.config.watchdog.task_max_duration_seconds))
         now = time.monotonic()
         for agent_id, task_id in list(self.running_task_by_agent.items()):
             started = self.running_task_started_at.get(task_id)
@@ -857,6 +925,7 @@ class HybridCoordinator:
                     "role_id": role.role_id,
                     "role_type": role.role_type,
                     "backend": role.backend,
+                    "model": role.model or role.backend,
                     "execution_mode": role.execution_mode,
                     "status": "running" if handle.process.returncode is None else "exited",
                     "task_id": self.running_task_by_agent.get(agent_id),
@@ -1217,12 +1286,19 @@ class HybridCoordinator:
             self._error("invalid_transition", f"{task_id}: {current}->{to_state} by {actor}")
             return
         self.task_state[task_id] = to_state
+        # Find assigned agent for this task
+        assigned_agent = ""
+        for aid, tid in self.running_task_by_agent.items():
+            if tid == task_id:
+                assigned_agent = aid
+                break
         transition = {
             "task_id": task_id,
             "from_state": current,
             "to_state": to_state,
             "actor": actor,
             "reason": reason,
+            "assigned_agent": assigned_agent,
             "timestamp": utc_now_iso(),
         }
         self.transition_log.append(transition)

@@ -1,8 +1,11 @@
 """Textual app for attoswarm dashboard (operations view).
 
-Replaces the original DataTable-based layout with rich widgets:
-AgentGrid, TaskBoard, DependencyDAGView, EventTimeline,
-DetailInspector, FileActivityMap, and SwarmStatusFooter.
+TabbedContent layout with 5 tabs:
+  1. Overview  — Dependency tree + last 10 events
+  2. Tasks     — DataTable + detail panel
+  3. Agents    — DataTable + detail panel
+  4. Events    — RichLog with color-coded events
+  5. Messages  — Orchestrator-worker inbox/outbox
 """
 
 from __future__ import annotations
@@ -10,25 +13,75 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
+from rich.text import Text
 from textual import events
 from textual.app import App, ComposeResult
 from textual.binding import Binding
 from textual.containers import Horizontal, Vertical
-from textual.widgets import Footer, Header, Static
+from textual.widgets import (
+    Footer,
+    Header,
+    ProgressBar,
+    Static,
+    TabbedContent,
+    TabPane,
+)
 
 from attoswarm.protocol.io import read_json, write_json_atomic
 from attoswarm.protocol.models import utc_now_iso
 from attoswarm.tui.stores import StateStore
 
-from attocode.tui.widgets.swarm.agent_grid import AgentCard, AgentGrid
-from attocode.tui.widgets.swarm.task_board import TaskBoard, TaskCard
-from attocode.tui.widgets.swarm.dag_view import DependencyDAGView
-from attocode.tui.widgets.swarm.event_timeline import EventTimeline
+from attocode.tui.widgets.swarm.agent_grid import AgentsDataTable
+from attocode.tui.widgets.swarm.dag_view import DependencyTree
 from attocode.tui.widgets.swarm.detail_inspector import DetailInspector
-from attocode.tui.widgets.swarm.file_activity_map import FileActivityMap
-from attocode.tui.screens.swarm_dashboard import SwarmStatusFooter
+from attocode.tui.widgets.swarm.event_timeline import EventsLog
+from attocode.tui.widgets.swarm.messages_log import MessagesLog
+from attocode.tui.widgets.swarm.task_board import TasksDataTable
 
 _CSS_PATH = Path(__file__).resolve().parent / "styles" / "swarm.tcss"
+
+
+class SwarmSummaryBar(Static):
+    """Always-visible 1-line summary: phase, counts, cost, elapsed."""
+
+    def update_summary(
+        self,
+        phase: str = "",
+        running: int = 0,
+        done: int = 0,
+        total: int = 0,
+        failed: int = 0,
+        cost: float = 0.0,
+        elapsed: str = "",
+    ) -> None:
+        text = Text()
+        # Phase
+        phase_style = {
+            "executing": "green bold",
+            "completed": "green",
+            "failed": "red bold",
+            "paused": "yellow",
+        }.get(phase, "bold")
+        text.append(f" {phase.upper()} ", style=phase_style)
+        text.append(" \u2502 ", style="dim")
+        # Running
+        text.append(f"{running} running ", style="cyan")
+        text.append("\u2502 ", style="dim")
+        # Done/Total
+        text.append(f"{done}/{total} done ", style="green")
+        # Failed
+        if failed:
+            text.append("\u2502 ", style="dim")
+            text.append(f"{failed} failed ", style="red")
+        text.append("\u2502 ", style="dim")
+        # Cost
+        text.append(f"${cost:.2f} ", style="yellow")
+        # Elapsed
+        if elapsed:
+            text.append("\u2502 ", style="dim")
+            text.append(f"{elapsed} ", style="dim")
+
+        self.update(text)
 
 
 class AttoswarmApp(App[None]):
@@ -37,12 +90,15 @@ class AttoswarmApp(App[None]):
     CSS = _CSS_PATH.read_text(encoding="utf-8") if _CSS_PATH.exists() else ""
 
     BINDINGS = [
+        Binding("1", "tab_overview", "Overview", show=False),
+        Binding("2", "tab_tasks", "Tasks", show=False),
+        Binding("3", "tab_agents", "Agents", show=False),
+        Binding("4", "tab_events", "Events", show=False),
+        Binding("5", "tab_messages", "Messages", show=False),
         Binding("p", "pause_resume", "Pause/Resume"),
         Binding("i", "inject_message", "Inject Message"),
         Binding("r", "refresh_now", "Refresh"),
         Binding("f", "focus_agent", "Focus Agent"),
-        Binding("t", "fullscreen_timeline", "Timeline"),
-        Binding("tab", "cycle_focus", "Cycle Panel"),
         Binding("q", "quit", "Quit"),
     ]
 
@@ -53,24 +109,46 @@ class AttoswarmApp(App[None]):
 
     def compose(self) -> ComposeResult:
         yield Header(show_clock=True)
+
         with Vertical(id="swarm-outer"):
-            # Top: Agent Grid
-            yield AgentGrid(id="swarm-agent-grid")
+            # Summary bar + budget progress
+            yield SwarmSummaryBar(id="summary-bar")
+            yield ProgressBar(id="budget-progress", total=100, show_eta=False, show_percentage=True)
 
-            # Middle: Task Board + DAG / Detail Inspector
-            with Horizontal(id="swarm-middle"):
-                with Vertical(id="swarm-left"):
-                    yield TaskBoard(id="swarm-task-board")
-                with Vertical(id="swarm-right"):
-                    yield DependencyDAGView(id="swarm-dag-view")
-                    yield DetailInspector(id="swarm-detail")
+            # Tabbed content
+            with TabbedContent(id="swarm-tabs"):
+                # Tab 1: Overview
+                with TabPane("Overview", id="tab-overview"):
+                    with Horizontal(id="overview-container"):
+                        with Vertical(id="overview-left"):
+                            yield DependencyTree(id="dep-tree-widget")
+                        with Vertical(id="overview-right"):
+                            yield EventsLog(id="overview-events")
 
-            # Bottom: Event Timeline + File Activity
-            yield EventTimeline(id="swarm-timeline")
-            yield FileActivityMap(id="swarm-file-activity")
+                # Tab 2: Tasks
+                with TabPane("Tasks", id="tab-tasks"):
+                    with Horizontal(id="tasks-container"):
+                        with Vertical(id="tasks-table-container"):
+                            yield TasksDataTable(id="tasks-dt")
+                        with Vertical(id="task-detail-container"):
+                            yield DetailInspector(id="task-detail")
 
-        yield SwarmStatusFooter(id="swarm-status-footer")
-        yield Static("", id="status-log")
+                # Tab 3: Agents
+                with TabPane("Agents", id="tab-agents"):
+                    with Horizontal(id="agents-container"):
+                        with Vertical(id="agents-table-container"):
+                            yield AgentsDataTable(id="agents-dt")
+                        with Vertical(id="agent-detail-container"):
+                            yield DetailInspector(id="agent-detail")
+
+                # Tab 4: Events
+                with TabPane("Events", id="tab-events"):
+                    yield EventsLog(id="events-full")
+
+                # Tab 5: Messages
+                with TabPane("Messages", id="tab-messages"):
+                    yield MessagesLog(id="messages-log-widget")
+
         yield Footer()
 
     def on_mount(self) -> None:
@@ -91,52 +169,12 @@ class AttoswarmApp(App[None]):
         if not state:
             state = {}
 
-        # Agent Grid
-        try:
-            agents = self._store.build_agent_list(state)
-            self.query_one("#swarm-agent-grid", AgentGrid).update_agents(agents)
-        except Exception:
-            pass
-
-        # Task Board
-        try:
-            tasks = self._store.build_task_list(state)
-            self.query_one("#swarm-task-board", TaskBoard).update_tasks(tasks)
-        except Exception:
-            pass
-
-        # DAG View
-        try:
-            dag_nodes = self._store.build_dag_nodes(state)
-            self.query_one("#swarm-dag-view", DependencyDAGView).update_dag(dag_nodes)
-        except Exception:
-            pass
-
-        # Event Timeline
-        try:
-            raw_events = self._store.read_events(limit=200)
-            self._last_events = self._store.build_event_list(raw_events)
-            self.query_one("#swarm-timeline", EventTimeline).update_events(
-                self._last_events[-60:]
-            )
-        except Exception:
-            pass
-
-        # File Activity Map
-        try:
-            activity = self._store.read_file_activity()
-            self.query_one("#swarm-file-activity", FileActivityMap).update_activity(
-                activity
-            )
-        except Exception:
-            pass
-
-        # Status Footer
-        budget = state.get("budget", {})
-        merge = state.get("merge_queue", {})
+        # ── Summary bar ──────────────────────────────────────────────
         dag_summary = state.get("dag_summary", {})
         elapsed_s = state.get("elapsed_s", 0)
-        if isinstance(elapsed_s, (int, float)):
+        budget = state.get("budget", {})
+
+        if isinstance(elapsed_s, (int, float)) and elapsed_s > 0:
             mins = int(elapsed_s) // 60
             secs = int(elapsed_s) % 60
             elapsed_str = f"{mins}m{secs:02d}s"
@@ -144,56 +182,139 @@ class AttoswarmApp(App[None]):
             elapsed_str = ""
 
         total_tasks = sum(dag_summary.values()) if isinstance(dag_summary, dict) else 0
+        running = dag_summary.get("running", 0) if isinstance(dag_summary, dict) else 0
+        done = dag_summary.get("done", 0) if isinstance(dag_summary, dict) else 0
+        failed = dag_summary.get("failed", 0) if isinstance(dag_summary, dict) else 0
+
         try:
-            self.query_one("#swarm-status-footer", SwarmStatusFooter).update_status(
+            self.query_one("#summary-bar", SwarmSummaryBar).update_summary(
                 phase=state.get("phase", "unknown"),
-                level=str(state.get("current_level", "?")),
-                active=dag_summary.get("running", 0) if isinstance(dag_summary, dict) else 0,
-                done=dag_summary.get("done", 0) if isinstance(dag_summary, dict) else 0,
+                running=running,
+                done=done,
                 total=total_tasks,
+                failed=failed,
                 cost=float(budget.get("cost_used_usd", 0.0)),
                 elapsed=elapsed_str,
             )
         except Exception:
             pass
 
-        # Status log line
+        # Budget progress bar
         try:
-            raw_events_count = len(self._last_events)
-            self.query_one("#status-log", Static).update(
-                f"run_dir={self._store.run_dir} | events={raw_events_count} "
-                f"| seq={state.get('state_seq', 0)} "
-                f"| merge: pending={merge.get('pending', 0)} "
-                f"review={merge.get('in_review', 0)} merged={merge.get('merged', 0)}"
+            max_cost = float(budget.get("max_cost_usd", 1.0)) or 1.0
+            cost_used = float(budget.get("cost_used_usd", 0.0))
+            pct = min(100, int(cost_used / max_cost * 100))
+            bar = self.query_one("#budget-progress", ProgressBar)
+            bar.update(progress=pct)
+        except Exception:
+            pass
+
+        # ── Task list (for Tasks tab + Overview tree) ────────────────
+        tasks = self._store.build_task_list(state)
+        dag_data = state.get("dag", {})
+
+        try:
+            self.query_one("#tasks-dt", TasksDataTable).update_tasks(tasks)
+        except Exception:
+            pass
+
+        # ── Dependency tree (Overview tab) ───────────────────────────
+        try:
+            dag_nodes = self._store.build_dag_nodes(state)
+            edges = dag_data.get("edges", [])
+            self.query_one("#dep-tree-widget", DependencyTree).update_dag(dag_nodes, edges)
+        except Exception:
+            pass
+
+        # ── Agent list (Agents tab) ──────────────────────────────────
+        try:
+            agents = self._store.build_agent_list(state)
+            self.query_one("#agents-dt", AgentsDataTable).update_agents(agents)
+        except Exception:
+            pass
+
+        # ── Events ───────────────────────────────────────────────────
+        try:
+            raw_events = self._store.read_events(limit=500)
+            self._last_events = self._store.build_event_list(raw_events)
+
+            # Overview tab: last 10 events
+            self.query_one("#overview-events", EventsLog).update_events(
+                self._last_events[-10:]
             )
+            # Full events tab
+            self.query_one("#events-full", EventsLog).update_events(self._last_events)
+        except Exception:
+            pass
+
+        # ── Messages ─────────────────────────────────────────────────
+        try:
+            messages = self._store.read_all_messages()
+            self.query_one("#messages-log-widget", MessagesLog).update_messages(messages)
         except Exception:
             pass
 
     # ── Selection handlers ───────────────────────────────────────────
 
-    def on_agent_card_selected(self, event: AgentCard.Selected) -> None:
-        state = self._store.read_state()
-        detail = self._store.build_agent_detail(event.agent_id, state)
-        if detail:
-            try:
-                self.query_one("#swarm-detail", DetailInspector).inspect(detail)
-            except Exception:
-                pass
-            from attocode.tui.screens.task_detail_screen import TaskDetailScreen
-            self.push_screen(TaskDetailScreen(detail))
-
-    def on_task_card_selected(self, event: TaskCard.Selected) -> None:
+    def on_tasks_data_table_task_selected(
+        self, event: TasksDataTable.TaskSelected
+    ) -> None:
         state = self._store.read_state()
         detail = self._store.build_task_detail(event.task_id, state=state)
         if detail:
             try:
-                self.query_one("#swarm-detail", DetailInspector).inspect(detail)
+                self.query_one("#task-detail", DetailInspector).inspect(detail)
             except Exception:
                 pass
-            from attocode.tui.screens.task_detail_screen import TaskDetailScreen
-            self.push_screen(TaskDetailScreen(detail))
 
-    # ── Actions ──────────────────────────────────────────────────────
+    def on_agents_data_table_agent_selected(
+        self, event: AgentsDataTable.AgentSelected
+    ) -> None:
+        state = self._store.read_state()
+        detail = self._store.build_agent_detail(event.agent_id, state)
+        if detail:
+            try:
+                self.query_one("#agent-detail", DetailInspector).inspect(detail)
+            except Exception:
+                pass
+
+    def on_dependency_tree_node_selected(
+        self, event: DependencyTree.NodeSelected
+    ) -> None:
+        """When a tree node is selected, show task detail and switch to Tasks tab."""
+        state = self._store.read_state()
+        detail = self._store.build_task_detail(event.task_id, state=state)
+        if detail:
+            try:
+                self.query_one("#task-detail", DetailInspector).inspect(detail)
+            except Exception:
+                pass
+
+    # ── Tab switching actions ─────────────────────────────────────────
+
+    def _switch_tab(self, tab_id: str) -> None:
+        try:
+            tabs = self.query_one("#swarm-tabs", TabbedContent)
+            tabs.active = tab_id
+        except Exception:
+            pass
+
+    def action_tab_overview(self) -> None:
+        self._switch_tab("tab-overview")
+
+    def action_tab_tasks(self) -> None:
+        self._switch_tab("tab-tasks")
+
+    def action_tab_agents(self) -> None:
+        self._switch_tab("tab-agents")
+
+    def action_tab_events(self) -> None:
+        self._switch_tab("tab-events")
+
+    def action_tab_messages(self) -> None:
+        self._switch_tab("tab-messages")
+
+    # ── Other actions ─────────────────────────────────────────────────
 
     def action_refresh_now(self) -> None:
         self._refresh()
@@ -210,12 +331,7 @@ class AttoswarmApp(App[None]):
         state = self._store.read_state()
         agent_rows = state.get("active_agents", [])
         if not agent_rows:
-            try:
-                self.query_one("#status-log", Static).update(
-                    "No agents available for message injection"
-                )
-            except Exception:
-                pass
+            self.notify("No agents available for message injection", severity="warning")
             return
         agent_id = str(agent_rows[0].get("agent_id", ""))
         inbox_path = Path(self._store.run_dir) / "agents" / f"agent-{agent_id}.inbox.json"
@@ -237,12 +353,7 @@ class AttoswarmApp(App[None]):
         )
         inbox["next_seq"] = next_seq + 1
         write_json_atomic(inbox_path, inbox)
-        try:
-            self.query_one("#status-log", Static).update(
-                f"Injected control message to {agent_id}"
-            )
-        except Exception:
-            pass
+        self.notify(f"Injected control message to {agent_id}")
 
     def action_focus_agent(self) -> None:
         """Push FocusScreen for single-agent stream view."""
@@ -250,24 +361,10 @@ class AttoswarmApp(App[None]):
 
         self.push_screen(FocusScreen(state_fn=self._state_fn_adapter))
 
-    def action_fullscreen_timeline(self) -> None:
-        """Push TimelineScreen for full-screen event view."""
-        from attocode.tui.screens.timeline_screen import TimelineScreen
-
-        self.push_screen(TimelineScreen(state_fn=self._state_fn_adapter))
-
-    def action_cycle_focus(self) -> None:
-        """Cycle keyboard focus between panels."""
-        self.focus_next()
-
     # ── Helpers ──────────────────────────────────────────────────────
 
     def _state_fn_adapter(self) -> dict[str, Any]:
-        """Adapter that wraps StateStore for FocusScreen/TimelineScreen.
-
-        These screens expect a ``state_fn()`` callable returning a state dict
-        with ``active_agents`` and ``events`` keys.
-        """
+        """Adapter that wraps StateStore for FocusScreen/TimelineScreen."""
         state = self._store.read_state()
         state["events"] = self._last_events
         return state

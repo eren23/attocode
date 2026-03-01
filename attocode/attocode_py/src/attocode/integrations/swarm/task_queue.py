@@ -106,6 +106,7 @@ class SwarmTaskQueue:
         self.working_directory: str = working_directory or os.getcwd()
         self._conflicts: list[ResourceConflict] = []
         self._on_cascade_skip: Callable[[str, list[str]], None] | None = None
+        self._async_lock: Any = None  # Lazy asyncio.Lock for async wrappers
 
     # ------------------------------------------------------------------
     # Loading / initialisation
@@ -448,6 +449,39 @@ class SwarmTaskQueue:
 
     def get_skipped_tasks(self) -> list[SwarmTask]:
         return [t for t in self.tasks.values() if t.status == SwarmTaskStatus.SKIPPED]
+
+    # ------------------------------------------------------------------
+    # Async-safe wrappers
+    #
+    # These are provided for future use when callers migrate to async
+    # paths. Currently all callers in execution.py use the synchronous
+    # methods, which are already safe under asyncio's cooperative
+    # single-threaded model (no true concurrent access within one
+    # event loop tick).
+    # ------------------------------------------------------------------
+
+    def _get_lock(self) -> Any:
+        """Lazily create an asyncio.Lock for async wrappers."""
+        import asyncio
+
+        if self._async_lock is None:
+            self._async_lock = asyncio.Lock()
+        return self._async_lock
+
+    async def mark_completed_async(self, task_id: str, result: SwarmTaskResult) -> None:
+        """Thread-safe async wrapper for :meth:`mark_completed`."""
+        async with self._get_lock():
+            self.mark_completed(task_id, result)
+
+    async def trigger_cascade_skip_async(self, task_id: str) -> None:
+        """Thread-safe async wrapper for :meth:`trigger_cascade_skip`."""
+        async with self._get_lock():
+            self.trigger_cascade_skip(task_id)
+
+    async def mark_failed_async(self, task_id: str, max_retries: int) -> bool:
+        """Thread-safe async wrapper for :meth:`mark_failed`."""
+        async with self._get_lock():
+            return self.mark_failed(task_id, max_retries)
 
     # ------------------------------------------------------------------
     # Checkpoint persistence

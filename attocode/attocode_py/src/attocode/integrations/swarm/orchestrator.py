@@ -18,6 +18,7 @@ from attocode.integrations.swarm.types import (
     ModelHealthRecord,
     OrchestratorDecision,
     SmartDecompositionResult,
+    SpawnResult,
     SwarmCheckpoint,
     SwarmConfig,
     SwarmError,
@@ -175,7 +176,11 @@ class SwarmOrchestrator:
                 from attocode.integrations.swarm.message_bus import SwarmMessageBus
                 self._message_bus = SwarmMessageBus(":memory:")
             except Exception:
-                pass
+                self._message_bus = None
+                logger.warning(
+                    "Message bus initialization failed completely; "
+                    "inter-worker communication will be unavailable"
+                )
 
     def _get_internals(self) -> OrchestratorInternals:
         """Create a snapshot of orchestrator internals for delegation."""
@@ -247,7 +252,6 @@ class SwarmOrchestrator:
             build_stats,
             build_summary,
             decompose_task,
-            detect_foundation_tasks,
             save_checkpoint,
             synthesize_outputs,
         )
@@ -307,7 +311,6 @@ class SwarmOrchestrator:
                 reserve, subtask_count,
             )
 
-            detect_foundation_tasks(ctx)
             self._detect_foundation_tasks(ctx)
 
             # Phase 3: Model probing
@@ -353,7 +356,7 @@ class SwarmOrchestrator:
             self._sync_from_internals(ctx)
 
             # Post-wave review
-            completed_tasks = [t for t in ctx.task_queue.get_all_tasks() if t.status == SwarmTaskStatus.COMPLETED]
+            completed_tasks = [t for t in ctx.task_queue.get_all_tasks().values() if t.status == SwarmTaskStatus.COMPLETED]
             fix_ups = await self._review_wave_results(completed_tasks, ctx)
             if fix_ups:
                 for fix_task in fix_ups:
@@ -528,11 +531,12 @@ class SwarmOrchestrator:
                 continue
 
             # Check for hollow completions using the helpers module
-            spawn_like = {
-                "output": result.output,
-                "files_modified": result.files_modified,
-                "tool_calls": result.tool_calls,
-            }
+            spawn_like = SpawnResult(
+                output=result.output,
+                files_modified=result.files_modified or [],
+                tool_calls=result.tool_calls or 0,
+                success=result.success if hasattr(result, "success") else True,
+            )
             task_type_str = task.type.value if hasattr(task.type, "value") else str(task.type)
             if check_hollow(spawn_like, task_type_str, self._config):
                 hollow_count += 1
@@ -616,8 +620,9 @@ class SwarmOrchestrator:
                 if not test_step.command:
                     continue
                 try:
-                    # Use exec-style for safety: split command into argv
-                    cmd_parts = test_step.command.split()
+                    import shlex
+                    # Use shlex.split for proper shell-like argument parsing
+                    cmd_parts = shlex.split(test_step.command)
                     proc = subprocess.run(
                         cmd_parts,
                         capture_output=True,
@@ -708,12 +713,12 @@ class SwarmOrchestrator:
 
         # Count dependents for each task
         dependent_count: dict[str, int] = {}
-        for task in all_tasks:
+        for task in all_tasks.values():
             for dep_id in task.dependencies or []:
                 dependent_count[dep_id] = dependent_count.get(dep_id, 0) + 1
 
         # Mark foundation tasks
-        for task in all_tasks:
+        for task in all_tasks.values():
             if dependent_count.get(task.id, 0) >= 3:
                 task.is_foundation = True
 
@@ -730,11 +735,17 @@ class SwarmOrchestrator:
 
 
 class _SimpleBudgetPool:
-    """Simple budget pool for token allocation."""
+    """Simple budget pool for token allocation.
+
+    Supports both the legacy ``allocate(amount)``/``release(amount)`` API
+    and the per-task ``acquire(task_id, amount)``/``release(task_id)`` API
+    used by :class:`SwarmWorkerPool`.
+    """
 
     def __init__(self, total_budget: int) -> None:
         self._total = total_budget
         self._used = 0
+        self._task_allocations: dict[str, int] = {}
 
     def has_capacity(self, amount: int = 1000) -> bool:
         return self._used + amount < self._total
@@ -745,8 +756,21 @@ class _SimpleBudgetPool:
         self._used += amount
         return True
 
-    def release(self, amount: int) -> None:
-        self._used = max(0, self._used - amount)
+    def acquire(self, task_id: str, amount: int) -> bool:
+        """Acquire *amount* tokens for *task_id* with per-task tracking."""
+        if not self.has_capacity(amount):
+            return False
+        self._used += amount
+        self._task_allocations[task_id] = amount
+        return True
+
+    def release(self, task_id_or_amount: str | int) -> None:
+        """Release budget — accepts either a task_id (str) or raw amount (int)."""
+        if isinstance(task_id_or_amount, str):
+            amount = self._task_allocations.pop(task_id_or_amount, 0)
+            self._used = max(0, self._used - amount)
+        else:
+            self._used = max(0, self._used - task_id_or_amount)
 
     def reallocate_unused(self) -> None:
         pass
@@ -758,57 +782,6 @@ class _SimpleBudgetPool:
     @property
     def used(self) -> int:
         return self._used
-
-
-# =============================================================================
-# Hollow Completion Detection
-# =============================================================================
-
-
-def is_hollow_completion(result: dict | Any) -> bool:
-    """Detect hollow task completions.
-
-    A hollow completion is one where the agent claims success but
-    produced no meaningful output — no files modified, no code written,
-    just explanatory text.
-
-    This catches agents that "complete" tasks by just explaining
-    what they would do without actually doing it.
-    """
-    if isinstance(result, dict):
-        response = result.get("response", "") or result.get("output", "")
-        files = result.get("files_modified", [])
-        edits = result.get("edits_made", 0)
-    else:
-        response = getattr(result, "response", "") or getattr(result, "output", "")
-        files = getattr(result, "files_modified", [])
-        edits = getattr(result, "edits_made", 0)
-
-    # If files were modified or edits made, it's not hollow
-    if files or edits:
-        return False
-
-    # If response is very short, likely hollow
-    if len(str(response)) < 100:
-        return True
-
-    # Check for hollow indicators in response
-    HOLLOW_PHRASES = [
-        "i would",
-        "you could",
-        "here's how",
-        "the approach would be",
-        "we should",
-        "i'll need to",
-        "the plan is",
-        "steps to implement",
-    ]
-    response_lower = str(response).lower()
-    hollow_hits = sum(1 for phrase in HOLLOW_PHRASES if phrase in response_lower)
-
-    # If many hollow phrases and no code blocks, it's hollow
-    has_code = "```" in str(response) or "def " in str(response) or "class " in str(response)
-    return hollow_hits >= 2 and not has_code
 
 
 # =============================================================================

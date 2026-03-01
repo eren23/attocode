@@ -69,7 +69,7 @@ class StateStore:
     # ── Data transform helpers for rich widgets ──────────────────────
 
     def build_agent_list(self, state: dict[str, Any]) -> list[dict[str, Any]]:
-        """Transform active_agents into AgentGrid-compatible format."""
+        """Transform active_agents into AgentsDataTable-compatible format."""
         now = time.time()
 
         # Build task_id -> title lookup from DAG
@@ -90,15 +90,28 @@ class StateStore:
                 "agent_id": str(row.get("agent_id", "?")),
                 "status": str(row.get("status", "idle")),
                 "task_id": task_id,
-                "model": str(row.get("backend", row.get("model", ""))),
+                "backend": str(row.get("backend", "")),
+                "model": str(row.get("model", row.get("backend", ""))),
+                "role_type": str(row.get("role_type", "")),
+                "execution_mode": str(row.get("execution_mode", "")),
                 "tokens_used": int(row.get("tokens_used", 0)),
                 "elapsed": elapsed,
                 "task_title": str(row.get("task_title", "")) or title_map.get(task_id, ""),
+                "cwd": str(row.get("cwd", "")),
+                "exit_code": row.get("exit_code"),
+                "restart_count": int(row.get("restart_count", 0)),
+                "stderr_tail": str(row.get("stderr_tail", "")),
+                "command": str(row.get("command", "")),
             })
         return out
 
     def build_task_list(self, state: dict[str, Any]) -> list[dict[str, Any]]:
-        """Transform dag.nodes into TaskBoard-compatible format."""
+        """Transform dag.nodes into TaskBoard/TasksDataTable-compatible format.
+
+        Prefers enriched data from DAG nodes (written by state_writer) to avoid
+        N+1 per-task file reads.  Falls back to per-task JSON when enriched
+        fields are missing.
+        """
         dag = state.get("dag", {})
         nodes = dag.get("nodes", [])
         edges = dag.get("edges", [])
@@ -111,14 +124,27 @@ class StateStore:
         out: list[dict[str, Any]] = []
         for node in nodes:
             task_id = str(node.get("task_id", ""))
-            detail = self._read_task_cached(task_id)
+
+            # Use enriched DAG node data; fall back to per-task JSON only if needed
+            task_kind = node.get("task_kind", "")
+            role_hint = node.get("role_hint", "")
+            assigned_agent = node.get("assigned_agent", "")
+            if not task_kind and not role_hint:
+                detail = self._read_task_cached(task_id)
+                task_kind = task_kind or detail.get("task_kind", "")
+                role_hint = role_hint or detail.get("role_hint", "")
+
             out.append({
                 "task_id": task_id,
-                "title": str(node.get("title", detail.get("title", ""))),
+                "title": str(node.get("title", "")),
                 "status": str(node.get("status", "pending")),
-                "task_kind": str(detail.get("task_kind", "")),
-                "role_hint": str(detail.get("role_hint", "")),
-                "attempts": int(by_task.get(task_id, detail.get("attempts", 0))),
+                "description": str(node.get("description", ""))[:200],
+                "task_kind": str(task_kind),
+                "role_hint": str(role_hint),
+                "assigned_agent": str(assigned_agent),
+                "target_files": node.get("target_files", []),
+                "result_summary": str(node.get("result_summary", "")),
+                "attempts": int(node.get("attempts", 0)) or int(by_task.get(task_id, 0)),
                 "depends_on": deps_map.get(task_id, []),
             })
         return out
@@ -275,6 +301,65 @@ class StateStore:
                     "action": "write",
                 })
         return activity
+
+    def read_all_messages(self) -> list[dict[str, Any]]:
+        """Read all agent inbox/outbox messages and produce unified timeline.
+
+        Returns list of dicts with: direction, agent_id, kind, task_id,
+        timestamp, payload_preview — sorted by timestamp.
+        """
+        agents_dir = self.run_dir / "agents"
+        if not agents_dir.exists():
+            return []
+
+        now = time.time()
+        cache_key = "_messages_cache"
+        cached = getattr(self, cache_key, None)
+        if cached and now - cached[0] < 1.5:
+            return cached[1]
+
+        messages: list[dict[str, Any]] = []
+
+        for path in agents_dir.iterdir():
+            if not path.name.endswith(".json"):
+                continue
+            name = path.name
+
+            # Parse agent-{id}.inbox.json or agent-{id}.outbox.json
+            if ".inbox.json" in name:
+                direction_label = "coordinator\u2192agent"
+                agent_id = name.replace("agent-", "").replace(".inbox.json", "")
+            elif ".outbox.json" in name:
+                direction_label = "agent\u2192coordinator"
+                agent_id = name.replace("agent-", "").replace(".outbox.json", "")
+            else:
+                continue
+
+            data = read_json(path, default={})
+            for msg in data.get("messages", []):
+                if not isinstance(msg, dict):
+                    continue
+                payload = msg.get("payload", {})
+                payload_str = ""
+                if isinstance(payload, dict):
+                    payload_str = str(payload)[:200]
+                elif isinstance(payload, str):
+                    payload_str = payload[:200]
+
+                messages.append({
+                    "direction": direction_label,
+                    "agent_id": agent_id,
+                    "kind": msg.get("kind", ""),
+                    "task_id": str(msg.get("task_id", "") or ""),
+                    "timestamp": msg.get("timestamp", ""),
+                    "payload_preview": payload_str,
+                })
+
+        # Sort by timestamp
+        messages.sort(key=lambda m: _to_epoch(m.get("timestamp", "")))
+
+        setattr(self, cache_key, (now, messages))
+        return messages
 
     def build_task_detail(
         self, task_id: str, state: dict[str, Any] | None = None,
@@ -445,9 +530,16 @@ class StateStore:
             "status": str(row.get("status", "")),
             "task_id": task_id,
             "task_title": task_title,
-            "model": str(row.get("backend", row.get("model", ""))),
+            "backend": str(row.get("backend", "")),
+            "model": str(row.get("model", row.get("backend", ""))),
+            "role_type": str(row.get("role_type", "")),
+            "execution_mode": str(row.get("execution_mode", "")),
             "tokens_used": int(row.get("tokens_used", 0)),
             "elapsed": elapsed,
             "result": result_msg,
             "files_modified": files,
+            "cwd": str(row.get("cwd", "")),
+            "exit_code": row.get("exit_code"),
+            "restart_count": int(row.get("restart_count", 0)),
+            "stderr_tail": str(row.get("stderr_tail", "")),
         }

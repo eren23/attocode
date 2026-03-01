@@ -8,7 +8,7 @@ from typing import Any
 from rich.text import Text
 from textual.reactive import reactive
 from textual.widget import Widget
-from textual.widgets import Static
+from textual.widgets import RichLog, Static
 
 
 _EVENT_STYLES = {
@@ -100,3 +100,82 @@ class EventTimeline(Static):
             text.append(f"{message}\n")
 
         self.update(text)
+
+
+# ── Color map for EventsLog ──────────────────────────────────────────
+
+_LOG_COLORS: dict[str, str] = {
+    "spawn": "cyan",
+    "claim": "yellow",
+    "write": "green",
+    "conflict": "red bold",
+    "complete": "green bold",
+    "fail": "red",
+    "skip": "yellow dim",
+    "budget": "magenta",
+    "transition": "blue",
+    "info": "dim",
+}
+
+
+class EventsLog(Widget):
+    """RichLog-based event viewer with delta-append and auto-scroll.
+
+    Unlike EventTimeline (which re-renders all content on every update),
+    this widget only appends new events, avoiding flicker and supporting
+    auto-scroll in long sessions.
+    """
+
+    DEFAULT_CSS = """
+    EventsLog {
+        height: 1fr;
+    }
+    EventsLog > RichLog {
+        height: 1fr;
+    }
+    """
+
+    def __init__(self, **kwargs: Any) -> None:
+        super().__init__(**kwargs)
+        self._seen_count: int = 0
+
+    def compose(self):
+        yield RichLog(id="events-log", auto_scroll=True, markup=True)
+
+    def update_events(self, events: list[dict[str, Any]]) -> None:
+        """Append only new events since last call."""
+        if not events:
+            return
+        new_events = events[self._seen_count:]
+        if not new_events:
+            return
+        self._seen_count = len(events)
+
+        try:
+            log = self.query_one("#events-log", RichLog)
+        except Exception:
+            return
+
+        for event in new_events:
+            ts = event.get("timestamp", 0)
+            if ts:
+                time_str = time.strftime("%H:%M:%S", time.localtime(ts))
+            else:
+                time_str = "??:??:??"
+
+            etype = event.get("type", "info")
+            color = _LOG_COLORS.get(etype, "dim")
+            agent_id = event.get("agent_id", "")
+            task_id = event.get("task_id", "")
+            message = event.get("message", "")
+
+            line = Text()
+            line.append(f"{time_str} ", style="dim")
+            line.append(f"[{etype.upper():12s}] ", style=color)
+            if agent_id:
+                line.append(f"{agent_id} ", style="cyan dim")
+            if task_id:
+                line.append(f"{task_id} ", style="green dim")
+            line.append(message)
+
+            log.write(line)

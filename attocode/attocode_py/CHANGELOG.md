@@ -7,6 +7,38 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Planned (0.1.8)
+
+- Fix `attoswarm tui` not picking up new TUI widgets when installed via `uv tool install` (packaging/editable install issue)
+- Enabling code understanding tools of attocode to other AI coders as a skill system
+
+## [0.1.7] - 2026-03-01
+
+### Added
+
+- **Swarm TUI overhaul** — TabbedContent layout with 5 tabs (Overview, Tasks, Agents, Events, Messages)
+- `TasksDataTable`, `AgentsDataTable` — DataTable widgets with row selection and status icons
+- `EventsLog` — RichLog with delta-append, auto-scroll, color-coded events
+- `DependencyTree` — Tree widget with collapsible task dependency hierarchy
+- `MessagesLog` — orchestrator-worker inbox/outbox message viewer
+- `SwarmSummaryBar` — always-visible phase/counts/cost/elapsed summary
+- `dag_summary` and `elapsed_s` fields in SwarmState
+- Enriched DAG nodes with description, task_kind, role_hint, assigned_agent, target_files, result_summary, attempts
+- `read_all_messages()` in StateStore for unified inbox/outbox timeline
+- Richer task transition events with `assigned_agent`; `model` field in `_active_agents()`
+
+### Fixed
+
+- Tasks stuck in PENDING column — status_map missing `running`, `reviewing`, `blocked`, `done` statuses
+- Agent status override (was always "running"/"idle", now uses actual status from state)
+- Footer showing 0/0 (dag_summary and elapsed_s not written to state)
+- Event timeline flicker (switched from Static full-rerender to RichLog delta-append)
+- Double-click requirement for task/agent selection (switched to DataTable cursor_type="row")
+
+### Known Bugs
+
+- `attoswarm tui` shows old layout when installed via `uv tool install .` — tool snapshot doesn't pick up working-tree widget changes from `attocode` package. Workaround: use `uv run attoswarm tui` from project dir, or commit and reinstall.
+
 ## [0.1.6] - 2026-03-01
 
 ### Added

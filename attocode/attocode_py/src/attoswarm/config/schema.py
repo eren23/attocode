@@ -14,6 +14,7 @@ class RunConfig:
     max_runtime_seconds: int = 600
     monitor_detach_on_exit: bool = True
     debug: bool = False
+    default_model: str = ""  # fallback model when agent has no model set
 
 
 @dataclass(slots=True)
