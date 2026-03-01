@@ -178,12 +178,23 @@ class CompletionGuardConfig:
 # =============================================================================
 
 
+class ModelValidationMode(StrEnum):
+    STRICT = "strict"
+    AUTOCORRECT = "autocorrect"
+    SKIP = "skip"
+
+
+class InvalidModelAction(StrEnum):
+    WARN = "warn"
+    ERROR = "error"
+
+
 @dataclass
 class ModelValidationConfig:
     """Configuration for model ID validation."""
 
-    mode: str = "autocorrect"  # 'strict' | 'autocorrect' | 'skip'
-    on_invalid: str = "warn"  # 'warn' | 'error'
+    mode: ModelValidationMode | str = ModelValidationMode.AUTOCORRECT
+    on_invalid: InvalidModelAction | str = InvalidModelAction.WARN
 
 
 # =============================================================================
@@ -241,6 +252,11 @@ class SwarmConfig:
     rate_limit_retries: int = 3
     enable_model_failover: bool = True
     worker_stuck_threshold: int = 3
+
+    # Circuit breaker
+    circuit_breaker_window_ms: int = 30_000
+    circuit_breaker_threshold: int = 3
+    circuit_breaker_pause_ms: int = 15_000
 
     # Scheduling
     file_conflict_strategy: FileConflictStrategy = FileConflictStrategy.CLAIM_BASED

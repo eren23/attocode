@@ -35,52 +35,68 @@ if TYPE_CHECKING:
 def _make_stable_app(run_dir: Path) -> "AttoswarmApp":
     """Create an AttoswarmApp subclass with deterministic output.
 
-    Disables the clock and status log at composition time so the SVG
-    content doesn't vary between runs.
+    Disables the clock at composition time so the SVG content doesn't
+    vary between runs.
     """
     from textual.app import ComposeResult
     from textual.widgets import Header
 
-    from attoswarm.tui.app import AttoswarmApp
+    from attoswarm.tui.app import AttoswarmApp, SwarmSummaryBar
 
     class StableApp(AttoswarmApp):
         def compose(self) -> ComposeResult:
             # Override compose to match AttoswarmApp layout but with clock disabled
             from textual.containers import Horizontal, Vertical
-            from textual.widgets import Footer, Header, Static
+            from textual.widgets import Footer, Header, ProgressBar, TabbedContent, TabPane
 
-            from attocode.tui.widgets.swarm.agent_grid import AgentGrid
-            from attocode.tui.widgets.swarm.task_board import TaskBoard
-            from attocode.tui.widgets.swarm.dag_view import DependencyDAGView
-            from attocode.tui.widgets.swarm.event_timeline import EventTimeline
+            from attocode.tui.widgets.swarm.agent_grid import AgentsDataTable
+            from attocode.tui.widgets.swarm.dag_view import DependencyTree
             from attocode.tui.widgets.swarm.detail_inspector import DetailInspector
-            from attocode.tui.widgets.swarm.file_activity_map import FileActivityMap
-            from attocode.tui.screens.swarm_dashboard import SwarmStatusFooter
+            from attocode.tui.widgets.swarm.event_timeline import EventsLog
+            from attocode.tui.widgets.swarm.messages_log import MessagesLog
+            from attocode.tui.widgets.swarm.task_board import TasksDataTable
 
             yield Header(show_clock=False)
             with Vertical(id="swarm-outer"):
-                yield AgentGrid(id="swarm-agent-grid")
-                with Horizontal(id="swarm-middle"):
-                    with Vertical(id="swarm-left"):
-                        yield TaskBoard(id="swarm-task-board")
-                    with Vertical(id="swarm-right"):
-                        yield DependencyDAGView(id="swarm-dag-view")
-                        yield DetailInspector(id="swarm-detail")
-                yield EventTimeline(id="swarm-timeline")
-                yield FileActivityMap(id="swarm-file-activity")
-            yield SwarmStatusFooter(id="swarm-status-footer")
-            yield Static("", id="status-log")
+                yield SwarmSummaryBar(id="summary-bar")
+                yield ProgressBar(id="budget-progress", total=100, show_eta=False, show_percentage=True)
+                with TabbedContent(id="swarm-tabs"):
+                    with TabPane("Overview", id="tab-overview"):
+                        with Horizontal(id="overview-container"):
+                            with Vertical(id="overview-left"):
+                                yield DependencyTree(id="dep-tree-widget")
+                            with Vertical(id="overview-right"):
+                                yield EventsLog(id="overview-events")
+                    with TabPane("Tasks", id="tab-tasks"):
+                        with Horizontal(id="tasks-container"):
+                            with Vertical(id="tasks-table-container"):
+                                yield TasksDataTable(id="tasks-dt")
+                            with Vertical(id="task-detail-container"):
+                                yield DetailInspector(id="task-detail")
+                    with TabPane("Agents", id="tab-agents"):
+                        with Horizontal(id="agents-container"):
+                            with Vertical(id="agents-table-container"):
+                                yield AgentsDataTable(id="agents-dt")
+                            with Vertical(id="agent-detail-container"):
+                                yield DetailInspector(id="agent-detail")
+                    with TabPane("Events", id="tab-events"):
+                        yield EventsLog(id="events-full")
+                    with TabPane("Messages", id="tab-messages"):
+                        yield MessagesLog(id="messages-log-widget")
             yield Footer()
 
         def on_mount(self) -> None:
-            # Call parent on_mount but suppress status log
-            super().on_mount()
+            # Single refresh only (no interval timer) to avoid race conditions
+            # during Textual snapshot capture.  Wrap in try/except because
+            # Textual 8.0 Tree/DataTable widget data can cause
+            # AttributeError during _prune/walk_children on shutdown.
             try:
-                self.query_one("#status-log", Static).update("")
+                self._refresh()
             except Exception:
                 pass
 
     return StableApp(str(run_dir))
+
 
 
 # ---------------------------------------------------------------------------
@@ -99,6 +115,7 @@ def test_snapshot_empty_init(snap_compare: "Callable", tmp_path: Path) -> None:
     run_dir = create_synthetic_run(tmp_path, spec)
     app = _make_stable_app(run_dir)
     assert snap_compare(app, terminal_size=(120, 30))
+
 
 
 def test_snapshot_executing(snap_compare: "Callable", tmp_path: Path) -> None:
@@ -139,6 +156,7 @@ def test_snapshot_executing(snap_compare: "Callable", tmp_path: Path) -> None:
     assert snap_compare(app, terminal_size=(120, 30))
 
 
+
 def test_snapshot_completed(snap_compare: "Callable", tmp_path: Path) -> None:
     """Completed state — all tasks done, budget summary."""
     agents = [
@@ -164,6 +182,7 @@ def test_snapshot_completed(snap_compare: "Callable", tmp_path: Path) -> None:
     run_dir = create_synthetic_run(tmp_path, spec)
     app = _make_stable_app(run_dir)
     assert snap_compare(app, terminal_size=(120, 30))
+
 
 
 def test_snapshot_failed_with_errors(snap_compare: "Callable", tmp_path: Path) -> None:
@@ -196,6 +215,7 @@ def test_snapshot_failed_with_errors(snap_compare: "Callable", tmp_path: Path) -
     run_dir = create_synthetic_run(tmp_path, spec)
     app = _make_stable_app(run_dir)
     assert snap_compare(app, terminal_size=(120, 30))
+
 
 
 def test_snapshot_many_agents(snap_compare: "Callable", tmp_path: Path) -> None:

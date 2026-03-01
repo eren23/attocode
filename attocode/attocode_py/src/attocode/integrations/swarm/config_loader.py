@@ -3,12 +3,15 @@
 from __future__ import annotations
 
 import json
+import logging
 import os
 from dataclasses import asdict, fields
 from pathlib import Path
 from typing import Any
 
 import yaml
+
+logger = logging.getLogger(__name__)
 
 from attocode.integrations.swarm.types import (
     AutoSplitConfig,
@@ -89,17 +92,23 @@ def _load_config_file(path: str) -> dict[str, Any] | None:
     try:
         with open(path, encoding="utf-8") as f:
             content = f.read()
-    except OSError:
+    except OSError as exc:
+        logger.warning("Failed to read swarm config file %s: %s", path, exc)
         return None
 
     if path.endswith(".json"):
         try:
             result = json.loads(content)
             return result if isinstance(result, dict) else {}
-        except json.JSONDecodeError:
+        except json.JSONDecodeError as exc:
+            logger.warning("Invalid JSON in swarm config %s: %s", path, exc)
             return None
 
-    return parse_swarm_yaml(content)
+    try:
+        return parse_swarm_yaml(content)
+    except Exception as exc:
+        logger.warning("Failed to parse YAML swarm config %s: %s", path, exc)
+        return None
 
 
 # =============================================================================
@@ -351,6 +360,12 @@ def yaml_to_swarm_config(
         "hollowTerminationRatio": ("hollow_termination_ratio", float),
         "enable_hollow_termination": ("enable_hollow_termination", bool),
         "enableHollowTermination": ("enable_hollow_termination", bool),
+        "circuit_breaker_window_ms": ("circuit_breaker_window_ms", int),
+        "circuitBreakerWindowMs": ("circuit_breaker_window_ms", int),
+        "circuit_breaker_threshold": ("circuit_breaker_threshold", int),
+        "circuitBreakerThreshold": ("circuit_breaker_threshold", int),
+        "circuit_breaker_pause_ms": ("circuit_breaker_pause_ms", int),
+        "circuitBreakerPauseMs": ("circuit_breaker_pause_ms", int),
     }
     for yaml_key, (config_key, coerce) in _direct_mappings.items():
         if yaml_key in raw and config_key not in cfg:

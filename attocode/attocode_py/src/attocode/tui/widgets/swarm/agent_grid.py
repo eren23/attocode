@@ -9,7 +9,7 @@ from textual.containers import Horizontal
 from textual.message import Message
 from textual.reactive import reactive
 from textual.widget import Widget
-from textual.widgets import Static
+from textual.widgets import DataTable, Static
 
 
 _STATUS_ICONS = {
@@ -175,10 +175,101 @@ class AgentGrid(Widget):
                     elapsed_str = f"{secs}s" if secs < 60 else f"{secs // 60}m{secs % 60:02d}s"
 
             card.update_data(
-                status="running" if agent.get("task_id") else "idle",
+                status=agent.get("status", "running" if agent.get("task_id") else "idle"),
                 task_id=agent.get("task_id", ""),
                 model=agent.get("model", ""),
                 tokens=agent.get("tokens_used", 0),
                 elapsed=elapsed_str,
                 task_title=agent.get("task_title", ""),
             )
+
+
+_AGENT_STATUS_ICONS = {
+    "running": "\u21bb",   # ↻
+    "idle": "\u2501",      # ━
+    "exited": "\u2717",    # ✗
+}
+
+
+class AgentsDataTable(Widget):
+    """DataTable-based agent list with single-click row selection.
+
+    Posts ``AgentsDataTable.AgentSelected`` when a row is selected.
+    """
+
+    class AgentSelected(Message):
+        """Posted when an agent row is selected."""
+
+        def __init__(self, agent_id: str) -> None:
+            super().__init__()
+            self.agent_id = agent_id
+
+    DEFAULT_CSS = """
+    AgentsDataTable {
+        height: 1fr;
+    }
+    AgentsDataTable > DataTable {
+        height: 1fr;
+    }
+    """
+
+    def __init__(self, **kwargs: Any) -> None:
+        super().__init__(**kwargs)
+        self._agent_rows: list[dict[str, Any]] = []
+
+    def compose(self):
+        table = DataTable(id="agents-table", cursor_type="row")
+        table.add_columns("Status", "Agent", "Backend", "Model", "Task", "Elapsed", "Restarts")
+        yield table
+
+    def update_agents(self, agents: list[dict[str, Any]]) -> None:
+        """Replace all agent rows."""
+        self._agent_rows = agents
+        self._rebuild()
+
+    def _rebuild(self) -> None:
+        try:
+            table = self.query_one("#agents-table", DataTable)
+        except Exception:
+            return
+
+        table.clear()
+
+        for agent in self._agent_rows:
+            agent_id = agent.get("worker_name") or agent.get("agent_id", "?")
+            status = agent.get("status", "idle")
+            icon = _AGENT_STATUS_ICONS.get(status, "?")
+
+            status_style = {
+                "running": "cyan bold",
+                "idle": "dim",
+                "exited": "red",
+            }.get(status, "dim")
+
+            status_text = Text(f"{icon} {status}", style=status_style)
+            backend = agent.get("backend", "")
+            model = agent.get("model", backend)
+            task_id = agent.get("task_id", "")
+            elapsed = agent.get("elapsed", "")
+            restarts = agent.get("restart_count", 0)
+            exit_code = agent.get("exit_code")
+
+            # Show exit code for exited agents
+            restarts_str = str(restarts) if restarts else ""
+            if exit_code is not None and status == "exited":
+                restarts_str = f"{restarts} (exit:{exit_code})"
+
+            table.add_row(
+                status_text,
+                agent_id,
+                backend,
+                model,
+                task_id or "",
+                elapsed,
+                restarts_str,
+                key=agent_id,
+            )
+
+    def on_data_table_row_selected(self, event: DataTable.RowSelected) -> None:
+        if event.row_key and event.row_key.value:
+            self.post_message(self.AgentSelected(str(event.row_key.value)))

@@ -109,7 +109,11 @@ class SwarmEventBridge:
 
         # Open events file in append mode
         events_path = os.path.join(self._output_dir, "events.jsonl")
-        self._events_file = open(events_path, "a", encoding="utf-8")  # noqa: SIM115
+        try:
+            self._events_file = open(events_path, "a", encoding="utf-8")  # noqa: SIM115
+        except OSError as exc:
+            self._events_file = None
+            logger.warning("Failed to open events file %s: %s", events_path, exc)
 
         # Try subscribe(callback) first, then on("*", callback)
         if hasattr(orchestrator, "subscribe"):

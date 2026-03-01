@@ -1,11 +1,12 @@
 """Swarm dashboard widgets."""
 
-from attocode.tui.widgets.swarm.agent_grid import AgentGrid
-from attocode.tui.widgets.swarm.task_board import TaskBoard
-from attocode.tui.widgets.swarm.dag_view import DependencyDAGView
-from attocode.tui.widgets.swarm.event_timeline import EventTimeline
+from attocode.tui.widgets.swarm.agent_grid import AgentGrid, AgentsDataTable
+from attocode.tui.widgets.swarm.task_board import TaskBoard, TasksDataTable
+from attocode.tui.widgets.swarm.dag_view import DependencyDAGView, DependencyTree
+from attocode.tui.widgets.swarm.event_timeline import EventTimeline, EventsLog
 from attocode.tui.widgets.swarm.detail_inspector import DetailInspector
 from attocode.tui.widgets.swarm.file_activity_map import FileActivityMap
+from attocode.tui.widgets.swarm.messages_log import MessagesLog
 from attocode.tui.widgets.swarm.overview_pane import OverviewPane
 from attocode.tui.widgets.swarm.workers_pane import WorkerDetailCard, WorkerStreamView, WorkersPane
 from attocode.tui.widgets.swarm.tasks_pane import TasksPane
@@ -17,11 +18,16 @@ from attocode.tui.widgets.swarm.ast_blackboard_pane import ASTBlackboardPane
 
 __all__ = [
     "AgentGrid",
+    "AgentsDataTable",
     "TaskBoard",
+    "TasksDataTable",
     "DependencyDAGView",
+    "DependencyTree",
     "EventTimeline",
+    "EventsLog",
     "DetailInspector",
     "FileActivityMap",
+    "MessagesLog",
     # Dashboard tab panes
     "OverviewPane",
     "WorkerDetailCard",

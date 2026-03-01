@@ -9,7 +9,7 @@ from textual.containers import Horizontal, Vertical
 from textual.message import Message
 from textual.reactive import reactive
 from textual.widget import Widget
-from textual.widgets import Static
+from textual.widgets import DataTable, Static
 
 
 _COLUMN_TITLES = {
@@ -171,11 +171,15 @@ class TaskBoard(Widget):
             "done": [],
             "failed": [],
         }
-        # Status mapping from event bridge values to display buckets
+        # Status mapping from coordinator/event bridge values to display buckets
         status_map = {
             "pending": "pending",
             "ready": "pending",
+            "blocked": "pending",
+            "running": "running",
+            "reviewing": "running",
             "dispatched": "running",
+            "done": "done",
             "completed": "done",
             "failed": "failed",
             "skipped": "failed",
@@ -198,3 +202,119 @@ class TaskBoard(Widget):
                 col.set_tasks(buckets[key])
             except Exception:
                 pass
+
+
+# ── Status display mapping (shared) ──────────────────────────────────
+
+_TASK_STATUS_MAP = {
+    "pending": "pending",
+    "ready": "pending",
+    "blocked": "pending",
+    "running": "running",
+    "reviewing": "running",
+    "dispatched": "running",
+    "done": "done",
+    "completed": "done",
+    "failed": "failed",
+    "skipped": "failed",
+    "decomposed": "pending",
+}
+
+_STATUS_ICONS = {
+    "pending": "\u25cb",   # ○
+    "running": "\u21bb",   # ↻
+    "done": "\u2713",      # ✓
+    "failed": "\u2717",    # ✗
+}
+
+_STATUS_SORT_ORDER = {"running": 0, "pending": 1, "done": 2, "failed": 3}
+
+
+class TasksDataTable(Widget):
+    """DataTable-based task list with single-click row selection.
+
+    Posts ``TasksDataTable.TaskSelected`` when a row is selected.
+    """
+
+    class TaskSelected(Message):
+        """Posted when a task row is selected."""
+
+        def __init__(self, task_id: str) -> None:
+            super().__init__()
+            self.task_id = task_id
+
+    DEFAULT_CSS = """
+    TasksDataTable {
+        height: 1fr;
+    }
+    TasksDataTable > DataTable {
+        height: 1fr;
+    }
+    """
+
+    def __init__(self, **kwargs: Any) -> None:
+        super().__init__(**kwargs)
+        self._task_rows: list[dict[str, Any]] = []
+
+    def compose(self):
+        table = DataTable(id="tasks-table", cursor_type="row")
+        table.add_columns("Status", "ID", "Title", "Kind", "Agent", "Attempts", "Deps")
+        yield table
+
+    def update_tasks(self, tasks: list[dict[str, Any]]) -> None:
+        """Replace all task rows."""
+        self._task_rows = tasks
+        self._rebuild()
+
+    def _rebuild(self) -> None:
+        try:
+            table = self.query_one("#tasks-table", DataTable)
+        except Exception:
+            return
+
+        table.clear()
+
+        # Sort: running first, then pending, done, failed
+        sorted_tasks = sorted(
+            self._task_rows,
+            key=lambda t: _STATUS_SORT_ORDER.get(
+                _TASK_STATUS_MAP.get(t.get("status", "pending"), "pending"), 99
+            ),
+        )
+
+        for task in sorted_tasks:
+            raw_status = task.get("status", "pending")
+            bucket = _TASK_STATUS_MAP.get(raw_status, "pending")
+            icon = _STATUS_ICONS.get(bucket, "?")
+
+            status_text = Text(f"{icon} {raw_status}", style={
+                "pending": "dim",
+                "running": "cyan bold",
+                "done": "green",
+                "failed": "red bold",
+            }.get(bucket, ""))
+
+            task_id = task.get("task_id", task.get("id", "?"))
+            title = task.get("title", task.get("description", ""))[:50]
+            kind = task.get("task_kind", "")
+            agent = task.get("assigned_agent", "")
+            attempts = task.get("attempts", 0)
+            deps = task.get("depends_on", task.get("deps", []))
+            deps_str = ", ".join(str(d) for d in deps[:3])
+            if len(deps) > 3:
+                deps_str += f" +{len(deps) - 3}"
+
+            table.add_row(
+                status_text,
+                task_id,
+                title,
+                kind,
+                agent,
+                str(attempts) if attempts else "",
+                deps_str,
+                key=task_id,
+            )
+
+    def on_data_table_row_selected(self, event: DataTable.RowSelected) -> None:
+        if event.row_key and event.row_key.value:
+            self.post_message(self.TaskSelected(str(event.row_key.value)))

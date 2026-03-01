@@ -131,18 +131,23 @@ async def execute_waves(
         if ctx.config.enable_wave_review:
             await _run_wave_review(ctx, wave_index)
 
-        # ALL-FAILED recovery: re-queue retryable tasks
-        if wave_completed == 0 and wave_failed > 0:
-            ctx.emit(swarm_event("swarm.wave.allFailed", wave=wave_index + 1))
+        # MAJORITY-FAILED recovery: re-queue retryable tasks when success rate < 50%
+        total_wave_attempted = wave_completed + wave_failed
+        wave_success_rate = wave_completed / max(1, total_wave_attempted)
+        if wave_success_rate < 0.5 and wave_failed > 0:
+            if wave_completed == 0:
+                ctx.emit(swarm_event("swarm.wave.allFailed", wave=wave_index + 1))
             # Re-queue tasks with remaining attempts
             requeued = []
-            for task in ctx.task_queue.get_all_tasks():
+            all_tasks = ctx.task_queue.get_all_tasks()
+            for task in (all_tasks.values() if isinstance(all_tasks, dict) else all_tasks):
                 if (
                     task.wave == wave_index
                     and task.status == SwarmTaskStatus.FAILED
-                    and task.attempts < ctx.config.worker_retries + 1
+                    and task.attempts <= ctx.config.worker_retries + 1
                 ):
                     task.status = SwarmTaskStatus.READY
+                    task.attempts = max(0, task.attempts - 1)  # Grant one bonus retry
                     requeued.append(task)
 
             if requeued:
@@ -311,7 +316,7 @@ async def dispatch_task(
 
     # Pre-dispatch scout: if scout role is configured, gather codebase context
     # for implementation tasks on first attempt
-    if task.attempts == 0 and task.type in ("code", "refactor", "test", "feature"):
+    if task.attempts == 0 and task.type in ("implement", "refactor", "test", "integrate"):
         await _run_scout_for_task(ctx, task)
 
     # Select worker
@@ -944,7 +949,7 @@ async def _run_wave_review(ctx: OrchestratorInternals, wave_index: int) -> None:
 
     # Gather wave tasks
     wave_tasks = [
-        t for t in ctx.task_queue.get_all_tasks()
+        t for t in ctx.task_queue.get_all_tasks().values()
         if t.wave == wave_index
     ]
 

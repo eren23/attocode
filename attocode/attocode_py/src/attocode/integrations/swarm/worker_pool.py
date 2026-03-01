@@ -210,7 +210,12 @@ class SwarmWorkerPool:
         budget = self._compute_worker_budget(task, worker)
         if self._budget_pool is not None:
             try:
-                self._budget_pool.acquire(task.id, budget["max_tokens"])
+                acquired = self._budget_pool.acquire(task.id, budget["max_tokens"])
+                if not acquired:
+                    logger.warning(
+                        "Budget pool exhausted for task %s; dispatching anyway",
+                        task.id,
+                    )
             except Exception:
                 logger.warning(
                     "Budget acquisition failed for task %s; dispatching anyway",
@@ -271,8 +276,16 @@ class SwarmWorkerPool:
             if not self._active_workers:
                 return None
 
-            # Wait for the next completion signal
+            # Wait for the next completion signal.
+            # Double-check pattern: clear() then re-check before wait()
+            # to avoid losing a signal fired between clear() and wait().
             self._completion_event.clear()
+
+            # Re-check after clear — a callback may have fired between
+            # the first check and clear().
+            if self._completed_results:
+                continue
+
             await self._completion_event.wait()
 
     # --------------------------------------------------------------------- #
@@ -318,8 +331,8 @@ class SwarmWorkerPool:
         if self._worktree_manager is not None:
             try:
                 self._worktree_manager.cleanup_all()
-            except Exception:
-                pass
+            except Exception as exc:
+                logger.warning("Worktree cleanup_all failed: %s", exc)
 
     # --------------------------------------------------------------------- #
     # Internal: Worker Execution
@@ -415,8 +428,11 @@ class SwarmWorkerPool:
             # Always cleanup worktree
             try:
                 self._worktree_manager.cleanup_worktree(task.id)
-            except Exception:
-                pass
+            except Exception as exc:
+                logger.warning(
+                    "Worktree cleanup failed for task %s (path=%s): %s",
+                    task.id, worktree_path, exc,
+                )
 
         return result
 

@@ -262,12 +262,15 @@ async def spawn_cc_worker(
                 timeout=timeout_s,
             )
         except asyncio.TimeoutError:
-            # Kill the process
+            # Kill the process with a bounded wait
             try:
                 proc.kill()
-                await proc.wait()
-            except Exception:
-                pass
+            except OSError:
+                pass  # Process already exited
+            try:
+                await asyncio.wait_for(proc.wait(), timeout=5.0)
+            except asyncio.TimeoutError:
+                logger.warning("Process for task %s did not exit after kill", task.id)
             elapsed_ms = int((time.monotonic() - started_at) * 1000)
             return SpawnResult(
                 success=False,

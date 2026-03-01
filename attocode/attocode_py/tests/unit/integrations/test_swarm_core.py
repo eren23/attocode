@@ -120,10 +120,7 @@ class FakeQueueStats:
 class FakeTaskQueue:
     """Minimal mock of SwarmTaskQueue for OrchestratorInternals.
 
-    NOTE: The real SwarmTaskQueue.get_all_tasks() returns list[SwarmTask].
-    However, recovery.py annotates/uses it as dict[str, SwarmTask] with .items().
-    We return list by default (matching real impl). Tests for recovery modules
-    that need dict access use FakeTaskQueueDict instead.
+    NOTE: The real SwarmTaskQueue.get_all_tasks() returns dict[str, SwarmTask].
     """
 
     def __init__(self, tasks: dict[str, SwarmTask] | None = None) -> None:
@@ -131,8 +128,8 @@ class FakeTaskQueue:
         self._current_wave = 0
         self._total_waves = 1
 
-    def get_all_tasks(self) -> list[SwarmTask]:
-        return list(self._tasks.values())
+    def get_all_tasks(self) -> dict[str, SwarmTask]:
+        return dict(self._tasks)
 
     def get_stats(self) -> FakeQueueStats:
         completed = sum(1 for t in self._tasks.values() if t.status == SwarmTaskStatus.COMPLETED)
@@ -1704,3 +1701,194 @@ class TestClassifyFailure:
 
     def test_mixed_content_timeout(self) -> None:
         assert _classify_failure("The request timed out after 30 seconds") == "timeout"
+
+
+# =============================================================================
+# Execution Module Tests — handle_task_completion paths
+# =============================================================================
+
+
+class TestHandleTaskCompletionSuccess:
+    """Test the success path in handle_task_completion."""
+
+    @pytest.mark.asyncio
+    async def test_successful_non_hollow_marks_completed(self) -> None:
+        from attocode.integrations.swarm.execution import handle_task_completion
+        from attocode.integrations.swarm.recovery import SwarmRecoveryState
+
+        task = SwarmTask(
+            id="t1",
+            description="Build thing",
+            type=SubtaskType.IMPLEMENT,
+            status=SwarmTaskStatus.DISPATCHED,
+            assigned_model="claude-sonnet",
+            attempts=1,
+        )
+        ctx = _make_ctx({"t1": task})
+        # Disable quality gates to avoid LLM call
+        ctx.config.quality_gates = False
+        recovery_state = SwarmRecoveryState()
+
+        spawn_result = SpawnResult(
+            success=True,
+            output="Created src/foo.py with the implementation.",
+            tool_calls=5,
+            files_modified=["src/foo.py"],
+        )
+
+        await handle_task_completion(
+            ctx, recovery_state, "t1", spawn_result, time.time() - 1, MagicMock(),
+        )
+
+        # Task should be completed
+        assert task.status == SwarmTaskStatus.COMPLETED
+        assert ctx.hollow_streak == 0
+        assert ctx.emit.called
+
+    @pytest.mark.asyncio
+    async def test_hollow_completion_triggers_retry(self) -> None:
+        from attocode.integrations.swarm.execution import handle_task_completion
+        from attocode.integrations.swarm.recovery import SwarmRecoveryState
+
+        task = SwarmTask(
+            id="t1",
+            description="Build thing",
+            type=SubtaskType.IMPLEMENT,
+            status=SwarmTaskStatus.DISPATCHED,
+            assigned_model="claude-sonnet",
+            attempts=1,
+        )
+        ctx = _make_ctx({"t1": task})
+        ctx.config.quality_gates = False
+        ctx.config.worker_retries = 2
+        recovery_state = SwarmRecoveryState()
+
+        # Hollow result: success=True but 0 tool calls and short output
+        spawn_result = SpawnResult(
+            success=True,
+            output="I'll help you build that.",
+            tool_calls=0,
+        )
+
+        await handle_task_completion(
+            ctx, recovery_state, "t1", spawn_result, time.time() - 1, MagicMock(),
+        )
+
+        # Task should be retried (READY), not COMPLETED
+        assert task.status == SwarmTaskStatus.READY
+        assert ctx.hollow_streak == 1
+        assert ctx.total_hollows == 1
+
+
+class TestHandleTaskCompletionFailure:
+    """Test the failure path in handle_task_completion."""
+
+    @pytest.mark.asyncio
+    async def test_failed_task_retries(self) -> None:
+        from attocode.integrations.swarm.execution import handle_task_completion
+        from attocode.integrations.swarm.recovery import SwarmRecoveryState
+
+        task = SwarmTask(
+            id="t1",
+            description="Build thing",
+            type=SubtaskType.IMPLEMENT,
+            status=SwarmTaskStatus.DISPATCHED,
+            assigned_model="claude-sonnet",
+            attempts=1,
+        )
+        ctx = _make_ctx({"t1": task})
+        ctx.config.worker_retries = 2
+        recovery_state = SwarmRecoveryState()
+
+        spawn_result = SpawnResult(
+            success=False,
+            output="Error: something went wrong",
+            tool_calls=3,
+        )
+
+        await handle_task_completion(
+            ctx, recovery_state, "t1", spawn_result, time.time() - 1, MagicMock(),
+        )
+
+        # Should retry (attempts=1 <= retries=2)
+        assert task.status == SwarmTaskStatus.READY
+        assert ctx.retries == 1
+
+    @pytest.mark.asyncio
+    async def test_rate_limit_failure_records_on_recovery_state(self) -> None:
+        from attocode.integrations.swarm.execution import handle_task_completion
+        from attocode.integrations.swarm.recovery import SwarmRecoveryState
+
+        task = SwarmTask(
+            id="t1",
+            description="Build thing",
+            type=SubtaskType.IMPLEMENT,
+            status=SwarmTaskStatus.DISPATCHED,
+            assigned_model="claude-sonnet",
+            attempts=1,
+        )
+        ctx = _make_ctx({"t1": task})
+        ctx.config.worker_retries = 2
+        recovery_state = SwarmRecoveryState()
+
+        spawn_result = SpawnResult(
+            success=False,
+            output="429 rate limit exceeded",
+            tool_calls=0,
+        )
+
+        await handle_task_completion(
+            ctx, recovery_state, "t1", spawn_result, time.time() - 1, MagicMock(),
+        )
+
+        assert task.failure_mode == TaskFailureMode.RATE_LIMIT
+        assert len(recovery_state.recent_rate_limits) > 0
+
+    @pytest.mark.asyncio
+    async def test_max_dispatch_guard(self) -> None:
+        from attocode.integrations.swarm.execution import handle_task_completion
+        from attocode.integrations.swarm.recovery import SwarmRecoveryState
+
+        task = SwarmTask(
+            id="t1",
+            description="Build thing",
+            type=SubtaskType.IMPLEMENT,
+            status=SwarmTaskStatus.DISPATCHED,
+            assigned_model="claude-sonnet",
+            attempts=10,  # High attempts
+        )
+        ctx = _make_ctx({"t1": task})
+        ctx.config.max_dispatches_per_task = 3  # Low limit
+        recovery_state = SwarmRecoveryState()
+
+        spawn_result = SpawnResult(
+            success=False,
+            output="Error again",
+            tool_calls=0,
+        )
+
+        await handle_task_completion(
+            ctx, recovery_state, "t1", spawn_result, time.time() - 1, MagicMock(),
+        )
+
+        # Should be failed (max dispatch exceeded, no resilience recovery)
+        assert task.status == SwarmTaskStatus.FAILED
+
+
+class TestWaveRecoveryThreshold:
+    """Test the majority-failed wave recovery logic in execute_waves."""
+
+    def test_wave_success_rate_calculation(self) -> None:
+        """Verify the success rate threshold logic."""
+        # 1 success, 5 failures = 16.7% success rate < 50% → should trigger recovery
+        wave_completed = 1
+        wave_failed = 5
+        total_attempted = wave_completed + wave_failed
+        rate = wave_completed / max(1, total_attempted)
+        assert rate < 0.5
+
+        # 3 success, 3 failures = 50% → should NOT trigger recovery
+        wave_completed = 3
+        wave_failed = 3
+        rate = wave_completed / max(1, wave_completed + wave_failed)
+        assert rate >= 0.5

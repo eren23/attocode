@@ -177,6 +177,8 @@ class SwarmState:
     task_transition_log: list[dict[str, Any]] = field(default_factory=list)
     event_timeline: dict[str, Any] = field(default_factory=dict)
     agent_messages_index: dict[str, Any] = field(default_factory=dict)
+    dag_summary: dict[str, int] = field(default_factory=dict)
+    elapsed_s: float = 0.0
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)

@@ -69,33 +69,41 @@ def record_rate_limit(state: SwarmRecoveryState, ctx: Any) -> None:
     Pushes the current timestamp into the rolling window, increases the
     adaptive stagger, prunes entries outside the window, and trips the
     breaker if the threshold is reached.
+
+    Uses configurable thresholds from ``ctx.config`` with module-level
+    constants as defaults.
     """
     now = time.time()
     state.recent_rate_limits.append(now)
     increase_stagger(state)
 
+    config = getattr(ctx, "config", None)
+    window_ms = getattr(config, "circuit_breaker_window_ms", CIRCUIT_BREAKER_WINDOW_MS)
+    threshold = getattr(config, "circuit_breaker_threshold", CIRCUIT_BREAKER_THRESHOLD)
+    pause_ms = getattr(config, "circuit_breaker_pause_ms", CIRCUIT_BREAKER_PAUSE_MS)
+
     # Prune entries outside the window
-    window_start = now - (CIRCUIT_BREAKER_WINDOW_MS / 1000.0)
+    window_start = now - (window_ms / 1000.0)
     state.recent_rate_limits = [
         ts for ts in state.recent_rate_limits if ts >= window_start
     ]
 
     # Trip breaker if threshold reached
-    if len(state.recent_rate_limits) >= CIRCUIT_BREAKER_THRESHOLD:
-        pause_until = now + (CIRCUIT_BREAKER_PAUSE_MS / 1000.0)
+    if len(state.recent_rate_limits) >= threshold:
+        pause_until = now + (pause_ms / 1000.0)
         state.circuit_breaker_until = pause_until
         ctx.emit(
             swarm_event(
                 "swarm.circuit.open",
-                pause_ms=CIRCUIT_BREAKER_PAUSE_MS,
+                pause_ms=pause_ms,
                 rate_limit_count=len(state.recent_rate_limits),
             )
         )
         logger.warning(
             "Circuit breaker OPEN: %d rate limits in %dms window, pausing for %dms",
             len(state.recent_rate_limits),
-            CIRCUIT_BREAKER_WINDOW_MS,
-            CIRCUIT_BREAKER_PAUSE_MS,
+            window_ms,
+            pause_ms,
         )
 
 
@@ -531,23 +539,39 @@ async def mid_swarm_replan(ctx: Any) -> None:
         subtasks = parsed.get("subtasks", [])
 
         if subtasks:
-            ctx.task_queue.add_replan_tasks(subtasks)
+            # Convert dicts to SmartSubtask objects
+            from attocode.integrations.swarm.types import SmartSubtask
+
+            smart_subtasks: list[SmartSubtask] = []
+            for s in subtasks:
+                smart_subtasks.append(SmartSubtask(
+                    id=s.get("id", f"replan-{len(smart_subtasks)}"),
+                    description=s.get("description", ""),
+                    type=s.get("type", "implement"),
+                    complexity=s.get("complexity", 5),
+                    dependencies=s.get("dependencies", []),
+                    target_files=s.get("target_files"),
+                    read_files=s.get("read_files"),
+                    relevant_files=s.get("relevant_files"),
+                ))
+
+            current_wave = ctx.task_queue.get_current_wave()
+            ctx.task_queue.add_replan_tasks(smart_subtasks, current_wave)
             ctx.emit(
                 swarm_event(
                     "swarm.replan",
-                    new_task_count=len(subtasks),
+                    new_task_count=len(smart_subtasks),
                 )
             )
             ctx.log_decision(
                 "recovery",
-                f"mid-swarm replan: {len(subtasks)} new tasks",
+                f"mid-swarm replan: {len(smart_subtasks)} new tasks",
                 "stall recovery",
             )
-            logger.info("Mid-swarm replan added %d tasks", len(subtasks))
+            logger.info("Mid-swarm replan added %d tasks", len(smart_subtasks))
+            ctx.has_replanned = True
     except Exception:
         logger.warning("Mid-swarm replan LLM call failed", exc_info=True)
-    finally:
-        ctx.has_replanned = True
 
 
 # =============================================================================
