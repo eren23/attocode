@@ -17,6 +17,8 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
+from attocode.errors import ConfigurationError, ToolError
+
 
 # =============================================================================
 # Types
@@ -187,7 +189,7 @@ class _LSPClient:
         )
 
         if not self._process.stdout or not self._process.stdin:
-            raise RuntimeError(f"Failed to spawn {self._config.command}")
+            raise ToolError(f"Failed to spawn {self._config.command}", tool_name="lsp")
 
         # Start reading responses in background
         self._reader_task = asyncio.create_task(self._read_loop())
@@ -395,7 +397,7 @@ class _LSPClient:
     async def _request(self, method: str, params: Any) -> Any:
         """Send a JSON-RPC request and wait for response."""
         if not self._process or not self._process.stdin:
-            raise RuntimeError("LSP server not running")
+            raise ToolError("LSP server not running", tool_name="lsp")
 
         self._request_id += 1
         req_id = self._request_id
@@ -411,7 +413,7 @@ class _LSPClient:
             return await asyncio.wait_for(future, timeout=self._timeout)
         except asyncio.TimeoutError:
             self._pending.pop(req_id, None)
-            raise RuntimeError(f"Request {method} timed out") from None
+            raise ToolError(f"Request {method} timed out", tool_name="lsp") from None
 
     def _notify(self, method: str, params: Any) -> None:
         """Send a JSON-RPC notification (no response expected)."""
@@ -481,7 +483,7 @@ class _LSPClient:
             error = message.get("error")
             if error:
                 future.set_exception(
-                    RuntimeError(error.get("message", "Unknown error"))
+                    ToolError(error.get("message", "Unknown error"), tool_name="lsp")
                 )
             else:
                 future.set_result(message.get("result"))
@@ -578,12 +580,12 @@ class LSPManager:
 
         server_config = self._servers.get(language_id)
         if not server_config:
-            raise ValueError(
+            raise ConfigurationError(
                 f"No server configuration for language: {language_id}"
             )
 
         if not shutil.which(server_config.command):
-            raise RuntimeError(
+            raise ConfigurationError(
                 f"Language server not found: {server_config.command}"
             )
 

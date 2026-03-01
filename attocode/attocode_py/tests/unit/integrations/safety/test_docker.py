@@ -53,8 +53,10 @@ class TestDockerExecute:
     @pytest.mark.asyncio
     @patch.object(DockerSandbox, "is_available", return_value=False)
     async def test_raises_when_unavailable(self, _mock: MagicMock) -> None:
+        from attocode.errors import ConfigurationError
+
         sb = DockerSandbox()
-        with pytest.raises(RuntimeError, match="not available"):
+        with pytest.raises(ConfigurationError, match="not available"):
             await sb.execute("echo hi")
 
     @pytest.mark.asyncio

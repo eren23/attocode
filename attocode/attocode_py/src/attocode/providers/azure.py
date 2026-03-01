@@ -9,7 +9,10 @@ from __future__ import annotations
 import json
 import os
 from dataclasses import dataclass, field
-from typing import Any
+from typing import TYPE_CHECKING, Any
+
+if TYPE_CHECKING:
+    from collections.abc import AsyncIterator
 
 import httpx
 
@@ -22,6 +25,7 @@ from attocode.types.messages import (
     MessageWithStructuredContent,
     Role,
     StopReason,
+    StreamChunk,
     TokenUsage,
     ToolCall,
     ToolDefinition,
@@ -139,6 +143,67 @@ class AzureOpenAIProvider:
 
         return _parse_response(data)
 
+    async def chat_stream(
+        self,
+        messages: list[Message | MessageWithStructuredContent],
+        options: ChatOptions | None = None,
+    ) -> AsyncIterator[StreamChunk]:
+        """Stream a chat completion response from Azure OpenAI."""
+        from attocode.integrations.streaming.handler import adapt_openrouter_stream
+
+        client = self._ensure_client()
+        opts = options or ChatOptions()
+
+        deployment = opts.model or self._config.deployment
+        if not deployment:
+            raise ProviderError(
+                "Deployment name is required", provider="azure", retryable=False,
+            )
+
+        url = (
+            f"/openai/deployments/{deployment}/chat/completions"
+            f"?api-version={self._config.api_version}"
+        )
+
+        body: dict[str, Any] = {
+            "messages": [_format_message(m) for m in messages],
+            "stream": True,
+            "stream_options": {"include_usage": True},
+        }
+        if opts.max_tokens:
+            body["max_tokens"] = opts.max_tokens
+        if opts.temperature is not None:
+            body["temperature"] = opts.temperature
+        if opts.tools:
+            body["tools"] = [_format_tool(t) for t in opts.tools]
+
+        try:
+            async with client.stream("POST", url, json=body) as response:
+                response.raise_for_status()
+                async for chunk in adapt_openrouter_stream(response.aiter_lines()):
+                    yield chunk
+        except httpx.HTTPStatusError as e:
+            status = e.response.status_code
+            retryable = status in (429, 500, 502, 503, 504)
+            raise ProviderError(
+                f"Azure streaming API error: {status}",
+                provider="azure",
+                status_code=status,
+                retryable=retryable,
+            ) from e
+        except httpx.RequestError as e:
+            raise ProviderError(
+                f"Azure request error: {e}",
+                provider="azure",
+                retryable=True,
+            ) from e
+        except httpx.StreamError as e:
+            raise ProviderError(
+                f"Azure stream error: {type(e).__name__}: {e}",
+                provider="azure",
+                retryable=True,
+            ) from e
+
     async def close(self) -> None:
         """Close the HTTP client."""
         if self._client:
@@ -190,7 +255,7 @@ def _parse_response(data: dict[str, Any]) -> ChatResponse:
     message = choice.get("message", {})
 
     content = message.get("content", "")
-    stop_reason = StopReason.STOP
+    stop_reason = StopReason.END_TURN
 
     finish_reason = choice.get("finish_reason", "")
     if finish_reason == "tool_calls":

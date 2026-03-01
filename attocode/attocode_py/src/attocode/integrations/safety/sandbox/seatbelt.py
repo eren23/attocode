@@ -14,6 +14,8 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
+from attocode.errors import ConfigurationError
+
 
 @dataclass(slots=True)
 class SeatbeltOptions:
@@ -145,7 +147,7 @@ class SeatbeltSandbox:
             Tuple of (output, exit_code).
         """
         if not self.is_available():
-            raise RuntimeError("Seatbelt sandbox not available on this platform")
+            raise ConfigurationError("Seatbelt sandbox not available on this platform")
 
         cwd = working_dir or os.getcwd()
         profile = _generate_profile(self.options, cwd)

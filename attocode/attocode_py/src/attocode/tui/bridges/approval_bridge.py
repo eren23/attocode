@@ -40,11 +40,8 @@ class ApprovalBridge:
 
         Returns ApprovalResult. Raises asyncio.TimeoutError if timeout exceeded.
         """
-        # Check always-allowed patterns
-        pattern = f"{tool_name}:{_first_arg(args)}"
-        if danger_level in ("safe", "low") and (
-            tool_name in self._always_allowed or pattern in self._always_allowed
-        ):
+        # Check always-allowed tools (bare tool name, any args/danger level)
+        if tool_name in self._always_allowed:
             return ApprovalResult(approved=True, always_allow=True)
 
         # Create future for this request
@@ -64,7 +61,7 @@ class ApprovalBridge:
 
         # Record always-allow
         if result.always_allow:
-            self._always_allowed.add(pattern)
+            self._always_allowed.add(tool_name)
 
         return result
 

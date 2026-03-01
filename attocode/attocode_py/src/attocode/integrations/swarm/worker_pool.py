@@ -12,6 +12,7 @@ import logging
 import time
 from typing import Any
 
+from attocode.errors import AgentError
 from attocode.integrations.swarm.types import (
     BUILTIN_TASK_TYPE_CONFIGS,
     SpawnAgentFn,
@@ -185,7 +186,7 @@ class SwarmWorkerPool:
         if worker is None:
             worker = self.select_worker(task)
         if worker is None:
-            raise RuntimeError(
+            raise AgentError(
                 f"No worker available for task {task.id} (type={task.type})"
             )
 

@@ -7,6 +7,7 @@ recitation, failure tracking, and other optional integrations.
 
 from __future__ import annotations
 
+import logging
 import os
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -14,6 +15,8 @@ from typing import Any
 
 from attocode.agent.context import AgentContext
 from attocode.types.budget import BudgetEnforcementMode, ExecutionBudget
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -92,6 +95,7 @@ async def initialize_features(
             )
             results["economics"] = True
         except Exception:
+            logger.warning("feature_init_failed", extra={"feature": "economics"}, exc_info=True)
             results["economics"] = False
 
     # 2. Auto-compaction
@@ -105,6 +109,7 @@ async def initialize_features(
             )
             results["compaction"] = True
         except Exception:
+            logger.warning("feature_init_failed", extra={"feature": "compaction"}, exc_info=True)
             results["compaction"] = False
 
     # 3. Recitation manager
@@ -116,6 +121,7 @@ async def initialize_features(
             )
             results["recitation"] = True
         except Exception:
+            logger.warning("feature_init_failed", extra={"feature": "recitation"}, exc_info=True)
             results["recitation"] = False
 
     # 4. Failure tracker
@@ -127,6 +133,7 @@ async def initialize_features(
             )
             results["failure_tracking"] = True
         except Exception:
+            logger.warning("feature_init_failed", extra={"feature": "failure_tracking"}, exc_info=True)
             results["failure_tracking"] = False
 
     # 5. Learning store
@@ -141,6 +148,7 @@ async def initialize_features(
             else:
                 results["learning"] = False
         except Exception:
+            logger.warning("feature_init_failed", extra={"feature": "learning"}, exc_info=True)
             results["learning"] = False
 
     # 6. Auto-checkpoint
@@ -154,6 +162,7 @@ async def initialize_features(
             )
             results["auto_checkpoint"] = True
         except Exception:
+            logger.warning("feature_init_failed", extra={"feature": "auto_checkpoint"}, exc_info=True)
             results["auto_checkpoint"] = False
 
     # 7. Rules
@@ -164,9 +173,10 @@ async def initialize_features(
             rules = rules_mgr.load_rules()
             if rules:
                 # Rules are added to system prompt via message_builder
-                ctx._loaded_rules = rules  # type: ignore[attr-defined]
+                ctx._loaded_rules = rules
             results["rules"] = True
         except Exception:
+            logger.warning("feature_init_failed", extra={"feature": "rules"}, exc_info=True)
             results["rules"] = False
 
     # 8. Ignore patterns
@@ -175,9 +185,10 @@ async def initialize_features(
             from attocode.integrations.utilities.ignore import IgnoreManager
             ignore_mgr = IgnoreManager(working_dir)
             ignore_mgr.load()
-            ctx._ignore_manager = ignore_mgr  # type: ignore[attr-defined]
+            ctx._ignore_manager = ignore_mgr
             results["ignore"] = True
         except Exception:
+            logger.warning("feature_init_failed", extra={"feature": "ignore"}, exc_info=True)
             results["ignore"] = False
 
     # 9. Hooks
@@ -186,9 +197,10 @@ async def initialize_features(
             from attocode.integrations.utilities.hooks import HookManager
             hooks_mgr = HookManager(working_dir)
             hooks_mgr.load()
-            ctx._hook_manager = hooks_mgr  # type: ignore[attr-defined]
+            ctx._hook_manager = hooks_mgr
             results["hooks"] = True
         except Exception:
+            logger.warning("feature_init_failed", extra={"feature": "hooks"}, exc_info=True)
             results["hooks"] = False
 
     # 10. Mode manager
@@ -198,6 +210,7 @@ async def initialize_features(
             ctx.mode_manager = ModeManager()
             results["mode_manager"] = True
         except Exception:
+            logger.warning("feature_init_failed", extra={"feature": "mode_manager"}, exc_info=True)
             results["mode_manager"] = False
 
     # 11. File change tracker (for undo)
@@ -207,6 +220,7 @@ async def initialize_features(
             ctx.file_change_tracker = FileChangeTracker()
             results["file_tracking"] = True
         except Exception:
+            logger.warning("feature_init_failed", extra={"feature": "file_tracking"}, exc_info=True)
             results["file_tracking"] = False
 
     # 12. Safety manager (policy engine + execution policy)
@@ -218,39 +232,43 @@ async def initialize_features(
             policy_engine = PolicyEngine()
             exec_policy = ExecutionPolicy()
             # Store on context for the execution loop to use
-            ctx._safety_policy_engine = policy_engine  # type: ignore[attr-defined]
-            ctx._execution_policy = exec_policy  # type: ignore[attr-defined]
+            ctx._safety_policy_engine = policy_engine
+            ctx._execution_policy = exec_policy
             results["safety"] = True
         except Exception:
+            logger.warning("feature_init_failed", extra={"feature": "safety"}, exc_info=True)
             results["safety"] = False
 
     # 13. Planning manager
     if cfg.enable_planning and not getattr(ctx, "_planning_manager", None):
         try:
             from attocode.integrations.tasks.planning import PlanningManager
-            ctx._planning_manager = PlanningManager()  # type: ignore[attr-defined]
+            ctx._planning_manager = PlanningManager()
             results["planning"] = True
         except Exception:
+            logger.warning("feature_init_failed", extra={"feature": "planning"}, exc_info=True)
             results["planning"] = False
 
     # 14. Task manager
     if cfg.enable_task_manager and not getattr(ctx, "task_manager", None):
         try:
             from attocode.integrations.tasks.task_manager import TaskManager
-            ctx.task_manager = TaskManager()  # type: ignore[attr-defined]
+            ctx.task_manager = TaskManager()
             results["task_manager"] = True
         except Exception:
+            logger.warning("feature_init_failed", extra={"feature": "task_manager"}, exc_info=True)
             results["task_manager"] = False
 
     # 15. Codebase context
     if cfg.enable_codebase_context and working_dir and not getattr(ctx, "codebase_context", None):
         try:
             from attocode.integrations.context.codebase_context import CodebaseContextManager
-            ctx.codebase_context = CodebaseContextManager(  # type: ignore[attr-defined]
+            ctx.codebase_context = CodebaseContextManager(
                 root_dir=working_dir,
             )
             results["codebase_context"] = True
         except Exception:
+            logger.warning("feature_init_failed", extra={"feature": "codebase_context"}, exc_info=True)
             results["codebase_context"] = False
 
     # 15b. Register codebase_overview tool (requires codebase context)
@@ -262,15 +280,17 @@ async def initialize_features(
             ctx.registry.register(overview_tool)
             results["codebase_overview_tool"] = True
         except Exception:
+            logger.warning("feature_init_failed", extra={"feature": "codebase_overview_tool"}, exc_info=True)
             results["codebase_overview_tool"] = False
 
     # 16. Interactive planner
     if cfg.enable_interactive_planner and not getattr(ctx, "interactive_planner", None):
         try:
             from attocode.integrations.tasks.interactive_planning import InteractivePlanner
-            ctx.interactive_planner = InteractivePlanner()  # type: ignore[attr-defined]
+            ctx.interactive_planner = InteractivePlanner()
             results["interactive_planner"] = True
         except Exception:
+            logger.warning("feature_init_failed", extra={"feature": "interactive_planner"}, exc_info=True)
             results["interactive_planner"] = False
 
     # 17. LSP manager (opt-in)
@@ -278,76 +298,84 @@ async def initialize_features(
         try:
             from attocode.integrations.lsp.client import LSPManager
             lsp = LSPManager(working_dir=working_dir)
-            ctx._lsp_manager = lsp  # type: ignore[attr-defined]
+            ctx._lsp_manager = lsp
             results["lsp"] = True
         except Exception:
+            logger.debug("feature_init_failed", extra={"feature": "lsp"}, exc_info=True)
             results["lsp"] = False
 
     # 18. Cancellation manager
     if cfg.enable_cancellation and not getattr(ctx, "cancellation_manager", None):
         try:
             from attocode.integrations.budget.cancellation import CancellationManager
-            ctx.cancellation_manager = CancellationManager()  # type: ignore[attr-defined]
+            ctx.cancellation_manager = CancellationManager()
             results["cancellation"] = True
         except Exception:
+            logger.warning("feature_init_failed", extra={"feature": "cancellation"}, exc_info=True)
             results["cancellation"] = False
 
     # 19. Dead letter queue
     if cfg.enable_dead_letter_queue and not getattr(ctx, "_dead_letter_queue", None):
         try:
             from attocode.integrations.quality.dead_letter_queue import DeadLetterQueue
-            ctx._dead_letter_queue = DeadLetterQueue()  # type: ignore[attr-defined]
+            ctx._dead_letter_queue = DeadLetterQueue()
             results["dead_letter_queue"] = True
         except Exception:
+            logger.warning("feature_init_failed", extra={"feature": "dead_letter_queue"}, exc_info=True)
             results["dead_letter_queue"] = False
 
     # 20. Self-improvement
     if cfg.enable_self_improvement and not getattr(ctx, "_self_improvement", None):
         try:
             from attocode.integrations.quality.self_improvement import SelfImprovementManager
-            ctx._self_improvement = SelfImprovementManager()  # type: ignore[attr-defined]
+            ctx._self_improvement = SelfImprovementManager()
             results["self_improvement"] = True
         except Exception:
+            logger.warning("feature_init_failed", extra={"feature": "self_improvement"}, exc_info=True)
             results["self_improvement"] = False
 
     # 21. Health check
     if cfg.enable_health_check and not getattr(ctx, "_health_check", None):
         try:
             from attocode.integrations.quality.health_check import HealthCheckManager
-            ctx._health_check = HealthCheckManager()  # type: ignore[attr-defined]
+            ctx._health_check = HealthCheckManager()
             results["health_check"] = True
         except Exception:
+            logger.warning("feature_init_failed", extra={"feature": "health_check"}, exc_info=True)
             results["health_check"] = False
 
     # 22. Injection budget manager
     if cfg.enable_injection_budget and not getattr(ctx, "_injection_budget", None):
         try:
             from attocode.integrations.budget.injection_budget import InjectionBudgetManager
-            ctx._injection_budget = InjectionBudgetManager()  # type: ignore[attr-defined]
+            ctx._injection_budget = InjectionBudgetManager()
             results["injection_budget"] = True
         except Exception:
+            logger.warning("feature_init_failed", extra={"feature": "injection_budget"}, exc_info=True)
             results["injection_budget"] = False
 
     # 23. State machine
     if cfg.enable_state_machine and not getattr(ctx, '_state_machine', None):
         try:
             from attocode.integrations.utilities.state_machine import AgentStateMachine
-            ctx._state_machine = AgentStateMachine()  # type: ignore[attr-defined]
+            ctx._state_machine = AgentStateMachine()
             results["state_machine"] = True
         except Exception:
+            logger.warning("feature_init_failed", extra={"feature": "state_machine"}, exc_info=True)
             results["state_machine"] = False
 
     # 24. Semantic cache
     if cfg.enable_semantic_cache and not getattr(ctx, '_semantic_cache', None):
         try:
             from attocode.integrations.context.semantic_cache import SemanticCacheManager
-            ctx._semantic_cache = SemanticCacheManager(  # type: ignore[attr-defined]
+            ctx._semantic_cache = SemanticCacheManager(
                 max_entries=cfg.semantic_cache_max_entries,
                 ttl_seconds=cfg.semantic_cache_ttl_seconds,
                 similarity_threshold=cfg.semantic_cache_similarity_threshold,
             )
             results["semantic_cache"] = True
         except Exception:
+            logger.warning("feature_init_failed", extra={"feature": "semantic_cache"}, exc_info=True)
             results["semantic_cache"] = False
 
     # 25. Context engineering manager
@@ -360,10 +388,11 @@ async def initialize_features(
                     from attocode.tricks.serialization_diversity import DiverseSerializer
                     ce_kwargs["serializer"] = DiverseSerializer()
                 except Exception:
-                    pass
-            ctx._context_engineering = ContextEngineeringManager(**ce_kwargs)  # type: ignore[attr-defined]
+                    logger.debug("feature_init_failed", extra={"feature": "diverse_serialization"}, exc_info=True)
+            ctx._context_engineering = ContextEngineeringManager(**ce_kwargs)
             results["context_engineering"] = True
         except Exception:
+            logger.warning("feature_init_failed", extra={"feature": "context_engineering"}, exc_info=True)
             results["context_engineering"] = False
 
     # 26. Skill manager (full lifecycle)
@@ -400,7 +429,7 @@ async def initialize_features(
                 dependency_graph=dep_graph,
             )
 
-            ctx._skill_manager = {  # type: ignore[attr-defined]
+            ctx._skill_manager = {
                 "loader": loader,
                 "executor": executor,
                 "dependency_graph": dep_graph,
@@ -408,24 +437,27 @@ async def initialize_features(
             }
             results["skill_manager"] = True
         except Exception:
+            logger.warning("feature_init_failed", extra={"feature": "skill_manager"}, exc_info=True)
             results["skill_manager"] = False
 
     # 27. Work log
     if cfg.enable_work_log and not getattr(ctx, '_work_log', None):
         try:
             from attocode.integrations.tasks.work_log import WorkLog
-            ctx._work_log = WorkLog()  # type: ignore[attr-defined]
+            ctx._work_log = WorkLog()
             results["work_log"] = True
         except Exception:
+            logger.warning("feature_init_failed", extra={"feature": "work_log"}, exc_info=True)
             results["work_log"] = False
 
     # 28. Pending plan manager
     if cfg.enable_pending_plan and not getattr(ctx, '_pending_plan', None):
         try:
             from attocode.integrations.tasks.pending_plan import PendingPlanManager
-            ctx._pending_plan = PendingPlanManager()  # type: ignore[attr-defined]
+            ctx._pending_plan = PendingPlanManager()
             results["pending_plan"] = True
         except Exception:
+            logger.warning("feature_init_failed", extra={"feature": "pending_plan"}, exc_info=True)
             results["pending_plan"] = False
 
     # Wire cross-references between features
@@ -459,7 +491,7 @@ def wire_cross_references(ctx: AgentContext, results: dict[str, bool]) -> None:
             try:
                 ctx.compaction_manager.economics = ctx.economics
             except Exception:
-                pass
+                logger.warning("cross_ref_failed", extra={"ref": "economics->compaction"}, exc_info=True)
 
     # Wire failure tracker into learning store for failure-based learnings
     if results.get("failure_tracking") and results.get("learning"):
@@ -467,7 +499,7 @@ def wire_cross_references(ctx: AgentContext, results: dict[str, bool]) -> None:
             try:
                 ctx.learning_store.failure_tracker = ctx.failure_tracker
             except Exception:
-                pass
+                logger.warning("cross_ref_failed", extra={"ref": "failure->learning"}, exc_info=True)
 
     # Wire work log into economics for progress tracking
     if results.get("work_log") and results.get("economics"):
@@ -476,7 +508,7 @@ def wire_cross_references(ctx: AgentContext, results: dict[str, bool]) -> None:
             try:
                 ctx.economics._progress_source = work_log  # type: ignore[attr-defined]
             except Exception:
-                pass
+                logger.warning("cross_ref_failed", extra={"ref": "work_log->economics"}, exc_info=True)
 
     # Wire semantic cache into context engineering
     if results.get("semantic_cache") and results.get("context_engineering"):
@@ -486,7 +518,7 @@ def wire_cross_references(ctx: AgentContext, results: dict[str, bool]) -> None:
             try:
                 ce.semantic_cache = cache
             except Exception:
-                pass
+                logger.warning("cross_ref_failed", extra={"ref": "semantic_cache->context_engineering"}, exc_info=True)
 
     # Wire task manager into interactive planner
     if results.get("task_manager") and results.get("interactive_planner"):
@@ -496,4 +528,4 @@ def wire_cross_references(ctx: AgentContext, results: dict[str, bool]) -> None:
             try:
                 planner.task_manager = task_mgr
             except Exception:
-                pass
+                logger.warning("cross_ref_failed", extra={"ref": "task_manager->interactive_planner"}, exc_info=True)

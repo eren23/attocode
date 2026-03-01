@@ -227,7 +227,7 @@ def get_event_category(event_type: EventType) -> EventCategory:
     return EVENT_CATEGORIES.get(event_type, EventCategory.EXECUTION)
 
 
-@dataclass
+@dataclass(slots=True)
 class AgentEvent:
     """An event emitted during agent execution."""
 

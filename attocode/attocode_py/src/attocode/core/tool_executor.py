@@ -7,6 +7,7 @@ Features:
 - Permission checks before execution
 - Economics integration (loop detection, phase tracking)
 - Batched execution with configurable concurrency
+- Argument normalization for non-Anthropic LLMs (alias mapping + fuzzy match)
 """
 
 from __future__ import annotations
@@ -28,6 +29,106 @@ if __name__ != "__main__":
 DEFAULT_TOOL_TIMEOUT = 120.0  # 2 minutes per tool
 MAX_RESULT_CHARS = 100_000  # Cap individual tool results
 MAX_CONCURRENT_TOOLS = 10  # Max parallel tool executions
+
+# ---------------------------------------------------------------------------
+# Argument normalization — alias maps for built-in tools
+# ---------------------------------------------------------------------------
+# Non-Anthropic LLMs (e.g. GLM-5) frequently guess wrong parameter names.
+# These maps translate common wrong names to the canonical parameter names.
+
+_PARAM_ALIASES: dict[str, dict[str, str]] = {
+    "write_file": {
+        "file_path": "path", "filepath": "path", "filename": "path",
+        "file": "path", "file_name": "path",
+        "text": "content", "body": "content", "data": "content",
+        "file_content": "content", "code": "content", "source": "content",
+    },
+    "edit_file": {
+        "file_path": "path", "filepath": "path", "filename": "path",
+        "file": "path", "file_name": "path",
+        "old_text": "old_string", "original": "old_string",
+        "search": "old_string", "find": "old_string",
+        "old_content": "old_string", "old": "old_string",
+        "before": "old_string", "target": "old_string",
+        "new_text": "new_string", "replacement": "new_string",
+        "replace": "new_string", "new_content": "new_string",
+        "new": "new_string", "after": "new_string",
+    },
+    "read_file": {
+        "file_path": "path", "filepath": "path", "filename": "path",
+        "file": "path", "file_name": "path",
+    },
+    "bash": {
+        "cmd": "command", "shell_command": "command",
+        "script": "command", "shell": "command",
+        "bash_command": "command", "exec": "command",
+    },
+    "grep": {
+        "query": "pattern", "search_pattern": "pattern",
+        "regex": "pattern", "term": "pattern",
+    },
+    "glob_files": {
+        "glob": "pattern", "file_pattern": "pattern",
+        "glob_pattern": "pattern",
+    },
+}
+
+
+def _normalize_tool_arguments(
+    tool_name: str,
+    arguments: dict[str, Any],
+    schema: dict[str, Any],
+) -> dict[str, Any]:
+    """Normalize tool arguments so non-Anthropic LLMs can use tools correctly.
+
+    Three phases:
+      1. Known alias mapping — rename well-known wrong param names for built-in tools.
+      2. Generic fuzzy match — for any remaining missing required params, check if an
+         unrecognized argument name contains (or is contained by) the missing param name.
+      3. Type coercion — delegate to ``coerce_tool_arguments`` for type fixups.
+
+    Args:
+        tool_name: Canonical tool name (e.g. ``"write_file"``).
+        arguments: Raw arguments dict from the LLM.
+        schema: Tool's JSON-Schema ``parameters`` dict.
+
+    Returns:
+        A *new* dict with normalized keys and coerced types.
+    """
+    args = dict(arguments)  # shallow copy — don't mutate the original
+
+    # --- Phase 1: known alias map -------------------------------------------
+    aliases = _PARAM_ALIASES.get(tool_name, {})
+    for wrong_name, canonical in aliases.items():
+        if wrong_name in args and canonical not in args:
+            args[canonical] = args.pop(wrong_name)
+
+    # --- Phase 2: generic fuzzy match for still-missing required params ------
+    required = schema.get("required", [])
+    properties = schema.get("properties", {})
+    known_params = set(properties.keys())
+
+    for param in required:
+        if param in args:
+            continue  # already present
+        # Look for an unrecognized arg whose name *contains* or *is contained by* the
+        # missing param name (e.g. "file_path" contains "path").
+        unrecognized = [k for k in args if k not in known_params]
+        for unrec in unrecognized:
+            lower_unrec = unrec.lower()
+            lower_param = param.lower()
+            if lower_param in lower_unrec or lower_unrec in lower_param:
+                args[param] = args.pop(unrec)
+                break
+
+    # --- Phase 3: type coercion ----------------------------------------------
+    try:
+        from attocode.integrations.utilities.tool_coercion import coerce_tool_arguments
+        args = coerce_tool_arguments(args, schema)
+    except Exception:
+        pass  # coercion is best-effort
+
+    return args
 
 
 @dataclass(slots=True)
@@ -68,6 +169,8 @@ async def _check_permission(ctx: AgentContext, tc: ToolCall) -> str | None:
                 result.reason,
             )
             if hasattr(approval, "approved") and approval.approved:
+                if getattr(approval, "always_allow", False) and ctx.policy_engine:
+                    ctx.policy_engine.approve_command(tc.name)
                 return None
             return f"Tool '{tc.name}' was denied by user"
         except Exception:
@@ -99,6 +202,46 @@ async def execute_single_tool(
     Returns:
         Tuple of (ToolResult, was_truncated).
     """
+    # Early exit if arguments couldn't be parsed
+    if tc.parse_error:
+        error_msg = (
+            f"Tool '{tc.name}' arguments could not be parsed from the model's response. "
+            f"{tc.parse_error} — please retry with valid JSON."
+        )
+        ctx.emit_simple(
+            EventType.TOOL_ERROR,
+            tool=tc.name,
+            error=error_msg,
+            args=tc.arguments,
+            iteration=ctx.iteration,
+        )
+        return ToolResult(call_id=tc.id, error=error_msg), False
+
+    # Normalize arguments (alias mapping + fuzzy match + type coercion)
+    tool = ctx.registry.get(tc.name)
+    if tool and tool.spec.parameters:
+        tc.arguments = _normalize_tool_arguments(
+            tc.name, tc.arguments, tool.spec.parameters,
+        )
+
+    # Validate required parameters exist
+    if tool and tool.spec.parameters:
+        required = tool.spec.parameters.get("required", [])
+        missing = [p for p in required if p not in tc.arguments]
+        if missing:
+            error_msg = (
+                f"Tool '{tc.name}' missing required parameters: {missing}. "
+                f"Received: {list(tc.arguments.keys())}"
+            )
+            ctx.emit_simple(
+                EventType.TOOL_ERROR,
+                tool=tc.name,
+                error=error_msg,
+                args=tc.arguments,
+                iteration=ctx.iteration,
+            )
+            return ToolResult(call_id=tc.id, error=error_msg), False
+
     # Permission check
     denial = await _check_permission(ctx, tc)
     if denial:

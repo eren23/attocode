@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import logging
 import os
 import time
 import uuid
@@ -16,6 +17,8 @@ from attocode.types.agent import AgentConfig, AgentMetrics, AgentResult, AgentSt
 from attocode.types.budget import ExecutionBudget, STANDARD_BUDGET
 from attocode.types.events import AgentEvent, EventType
 from attocode.types.messages import Message, Role, ToolCall
+
+logger = logging.getLogger(__name__)
 
 # Type alias for budget extension handler: receives request dict, returns bool (granted)
 BudgetExtensionHandler = Callable[[dict[str, Any]], Any]
@@ -165,6 +168,7 @@ class ProductionAgent:
             )
             return True
         except Exception:
+            logger.debug("grant_permission failed", exc_info=True)
             return False
 
     def on_event(self, handler: EventHandler) -> None:
@@ -316,6 +320,7 @@ class ProductionAgent:
                 rec_session_id = str(uuid.uuid4())[:8]
                 self._recorder.start(rec_session_id)
             except Exception:
+                logger.warning("recorder_init_failed", exc_info=True)
                 self._recorder = None  # Non-fatal
 
         # Register event handlers
@@ -341,6 +346,7 @@ class ProductionAgent:
                 self._session_store = SessionStore(db_path)
                 await self._session_store.initialize()
             except Exception:
+                logger.warning("session_store_init_failed", exc_info=True)
                 self._session_store = None  # Non-fatal
 
         # Handle session resume if requested
@@ -350,7 +356,6 @@ class ProductionAgent:
                 resume_data = await self._session_store.resume_session(resume_session_id)
                 if resume_data and resume_data.get("messages"):
                     # Restore messages into context
-                    from attocode.types.messages import Message, Role
                     for msg_dict in resume_data["messages"]:
                         role = msg_dict.get("role", "user")
                         content = msg_dict.get("content", "")
@@ -363,7 +368,7 @@ class ProductionAgent:
                                 f"({len(resume_data['messages'])} messages)",
                     ))
             except Exception:
-                pass  # Non-fatal — fall through to create new session
+                logger.warning("session_resume_failed", exc_info=True)
 
         # Create a new session record for this run (skip if resuming)
         if self._session_store and not self._session_id:
@@ -376,7 +381,7 @@ class ProductionAgent:
                 )
                 self._session_id = session_id
             except Exception:
-                pass
+                logger.warning("session_create_failed", exc_info=True)
 
         # Attach to context (always, even on subsequent runs)
         if self._session_store:
@@ -392,7 +397,7 @@ class ProductionAgent:
                     if p.permission_type == "allow":
                         self._policy_engine.approve_command(p.tool_name)
             except Exception:
-                pass  # Non-fatal
+                logger.debug("permission_grants_load_failed", exc_info=True)
 
         # Reuse file change tracker across runs so /diff and /undo show cumulative history
         if self._file_change_tracker is None:
@@ -400,7 +405,7 @@ class ProductionAgent:
                 from attocode.integrations.utilities.undo import FileChangeTracker
                 self._file_change_tracker = FileChangeTracker()
             except Exception:
-                pass
+                logger.debug("file_change_tracker_init_failed", exc_info=True)
         if self._file_change_tracker is not None:
             ctx.file_change_tracker = self._file_change_tracker
 
@@ -409,7 +414,7 @@ class ProductionAgent:
             from attocode.agent.feature_initializer import initialize_features
             await initialize_features(ctx, working_dir=self._working_dir)
         except Exception:
-            pass  # Non-fatal — features degrade gracefully
+            logger.warning("feature_init_failed", exc_info=True)
 
         # Load skills
         loaded_skills = None
@@ -422,7 +427,7 @@ class ProductionAgent:
                 if all_skills:
                     loaded_skills = all_skills
             except Exception:
-                pass  # Skills are optional
+                logger.debug("skills_load_failed", exc_info=True)
 
         # Connect MCP servers and register their tools
         mcp_clients: list[Any] = []
@@ -438,7 +443,7 @@ class ProductionAgent:
                     max_learnings=5,
                 )
             except Exception:
-                pass
+                logger.debug("learnings_load_failed", exc_info=True)
 
         # Register codebase context tools (if manager is available)
         if self._codebase_context or getattr(ctx, "codebase_context", None):
@@ -448,7 +453,7 @@ class ProductionAgent:
                 for tool in create_codebase_tools(mgr):
                     self._registry.register(tool)
             except Exception:
-                pass  # Non-fatal
+                logger.debug("codebase_tools_register_failed", exc_info=True)
 
         # Build messages — carry over previous conversation if this is a subsequent run
         if self._conversation_messages:
@@ -518,7 +523,7 @@ class ProductionAgent:
                     Message(role=Role.TOOL, content="\n".join(parts), tool_call_id=call_id),
                 ])
             except Exception:
-                pass  # Non-fatal — agent can still use tools manually
+                logger.debug("preseed_repo_map_failed", exc_info=True)
 
         try:
             # Lazy import to break circular dependency:
@@ -555,11 +560,12 @@ class ProductionAgent:
                         iterations=ctx.iteration,
                     )
                 except Exception:
-                    pass
+                    logger.debug("session_update_failed", exc_info=True)
 
             return result
 
         except Exception as e:
+            logger.error("agent_run_failed", exc_info=True)
             self._status = AgentStatus.FAILED
             return AgentResult(
                 success=False,
@@ -568,20 +574,24 @@ class ProductionAgent:
                 metrics=ctx.metrics,
             )
         finally:
+            # Safety: reset status if still RUNNING (unhandled exception path)
+            if self._status == AgentStatus.RUNNING:
+                self._status = AgentStatus.FAILED
+
             # Stop recording and export gallery
             if self._recorder is not None and self._recorder.is_recording:
                 try:
                     self._recorder.stop()
                     self._recorder.export("html")
                 except Exception:
-                    pass  # Recording export is non-fatal
+                    logger.debug("recorder_export_failed", exc_info=True)
 
             # Disconnect MCP servers
             for client in mcp_clients:
                 try:
                     await client.disconnect()
                 except Exception:
-                    pass
+                    logger.debug("mcp_disconnect_failed", exc_info=True)
             # NOTE: Do NOT close provider or null _ctx here.
             # The provider must stay alive for TUI session reuse.
             # _ctx is kept so slash commands (/diff, /status, /budget, etc.)
@@ -688,7 +698,7 @@ class ProductionAgent:
             try:
                 self._cancellation_manager.cancel()
             except Exception:
-                pass
+                logger.debug("cancellation_failed", exc_info=True)
 
     async def close(self) -> None:
         """Close persistent resources (session store, etc.)."""
@@ -696,7 +706,7 @@ class ProductionAgent:
             try:
                 await self._session_store.close()
             except Exception:
-                pass
+                logger.debug("session_store_close_failed", exc_info=True)
             self._session_store = None
 
     def reset_conversation(self) -> None:
@@ -781,6 +791,7 @@ class ProductionAgent:
                     self._ctx.economics.budget = self._budget
             return bool(granted)
         except Exception:
+            logger.warning("budget_extension_failed", exc_info=True)
             return False
 
     # --- Swarm / multi-agent execution ---
@@ -858,7 +869,7 @@ class ProductionAgent:
                     if not self._registry.has("codebase_ast_query"):
                         self._registry.register(create_ast_query_tool(ast_svc))
                 except Exception:
-                    pass  # Non-critical: swarm works without AST sharing
+                    logger.debug("ast_server_init_failed", exc_info=True)
 
             # Execute the swarm
             swarm_result: SwarmExecutionResult = await self._swarm_orchestrator.execute(
@@ -870,7 +881,7 @@ class ProductionAgent:
                 try:
                     await self._ast_server.stop()
                 except Exception:
-                    pass
+                    logger.debug("ast_server_stop_failed", exc_info=True)
                 self._ast_server = None
 
             # Close event bridge
@@ -902,6 +913,7 @@ class ProductionAgent:
                 error=f"Swarm module not available: {ie}",
             )
         except Exception as e:
+            logger.error("swarm_execution_failed", exc_info=True)
             return AgentResult(
                 success=False,
                 response="",
@@ -1006,6 +1018,7 @@ class ProductionAgent:
             return result
 
         except Exception as e:
+            logger.warning("subagent_spawn_failed", exc_info=True)
             err = "Subagent module not available" if isinstance(e, ImportError) else str(e)
             return {"success": False, "response": "", "tokens_used": 0,
                     "agent_name": agent_name, "error": err}
@@ -1113,9 +1126,9 @@ class ProductionAgent:
                             should_delegate = False
                             delegate_agent = None
                     except Exception:
-                        pass  # LLM classification is best-effort
+                        logger.debug("llm_classification_failed", exc_info=True)
             except Exception:
-                pass
+                logger.debug("agent_suggestion_failed", exc_info=True)
 
         # Fallback: keyword heuristic when no multi-agent manager
         if not suggestions:
@@ -1163,7 +1176,7 @@ class ProductionAgent:
                     messages=self._ctx.messages,
                 )
             except Exception:
-                pass  # Checkpoint persistence is best-effort
+                logger.debug("checkpoint_persist_failed", exc_info=True)
 
         return {
             "checkpoint_id": checkpoint_id,
@@ -1191,7 +1204,7 @@ class ProductionAgent:
                 self._ctx.messages.extend(checkpoint_data["messages"])
                 return True
         except Exception:
-            pass
+            logger.warning("checkpoint_restore_failed", exc_info=True)
 
         return False
 
@@ -1214,7 +1227,7 @@ class ProductionAgent:
                     content_after=content_after,
                 )
             except Exception:
-                pass  # Tracking failure should not block execution
+                logger.debug("file_change_track_failed", exc_info=True)
 
     def undo_last_change(self) -> dict[str, Any] | None:
         """Undo the most recent file change, restoring previous content."""
@@ -1230,6 +1243,7 @@ class ProductionAgent:
                 "success": undo_result.get("success", False),
             }
         except Exception:
+            logger.debug("undo_failed", exc_info=True)
             return None
 
     # --- Codebase analysis ---
@@ -1246,7 +1260,7 @@ class ProductionAgent:
                     self._codebase_context._dep_graph = None
                 self._codebase_context.discover_files()
             except Exception:
-                pass  # Analysis failure is non-fatal
+                logger.debug("codebase_analysis_failed", exc_info=True)
 
     # --- Task complexity classification ---
 

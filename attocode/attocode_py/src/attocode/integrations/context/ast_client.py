@@ -18,6 +18,8 @@ import json
 import logging
 from typing import Any
 
+from attocode.errors import ToolError
+
 logger = logging.getLogger(__name__)
 
 
@@ -106,7 +108,7 @@ class ASTClient:
             response = json.loads(response_line.decode("utf-8").strip())
 
             if not response.get("ok", False):
-                raise RuntimeError(response.get("error", "Unknown error"))
+                raise ToolError(response.get("error", "Unknown error"), tool_name="ast_query")
 
             return response.get("result")
         finally:

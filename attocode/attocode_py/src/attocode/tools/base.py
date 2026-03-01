@@ -36,7 +36,7 @@ class ToolSpec:
         )
 
 
-@dataclass
+@dataclass(slots=True)
 class Tool:
     """A registered tool with its execute function."""
 

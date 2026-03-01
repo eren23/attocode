@@ -12,7 +12,7 @@ import time
 from dataclasses import dataclass, field
 from typing import Any
 
-from attocode.errors import ProviderError
+from attocode.errors import ConfigurationError, ProviderError
 from attocode.types.messages import (
     ChatOptions,
     ChatResponse,
@@ -72,7 +72,7 @@ class ProviderFallbackChain:
             on_fallback: Callback(provider_name, error) on fallback.
         """
         if not providers:
-            raise ValueError("At least one provider is required")
+            raise ConfigurationError("At least one provider is required")
         self._providers = list(providers)
         self._circuit_breakers = circuit_breakers or {}
         self._on_fallback = on_fallback

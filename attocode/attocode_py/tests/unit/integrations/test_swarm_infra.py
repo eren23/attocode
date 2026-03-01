@@ -1470,7 +1470,9 @@ class TestWorkerPoolDispatch:
         pool = SwarmWorkerPool(
             config=config, spawn_agent_fn=AsyncMock(), budget_pool=None
         )
-        with pytest.raises(RuntimeError, match="No worker"):
+        from attocode.errors import AgentError
+
+        with pytest.raises(AgentError, match="No worker"):
             await pool.dispatch(_make_task())
 
 

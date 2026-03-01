@@ -15,6 +15,8 @@ from collections.abc import Callable
 from dataclasses import dataclass, field
 from typing import Any
 
+from attocode.errors import ToolError
+
 
 # =============================================================================
 # Types
@@ -118,7 +120,7 @@ class PTYShellManager:
                 "shell": self._shell,
             })
         else:
-            raise RuntimeError("Failed to start shell")
+            raise ToolError("Failed to start shell", tool_name="bash")
 
     async def run_command(self, command: str) -> CommandResult:
         """Run a command in the persistent shell.

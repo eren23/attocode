@@ -53,7 +53,7 @@ class AgentState(StrEnum):
     WRAPPING_UP = "wrapping_up"
 
 
-@dataclass
+@dataclass(slots=True)
 class AgentMetrics:
     """Cumulative metrics for an agent run."""
 
@@ -79,7 +79,7 @@ class AgentMetrics:
         self.estimated_cost += cost
 
 
-@dataclass
+@dataclass(slots=True)
 class PlanTask:
     """A single task in an agent plan."""
 
@@ -90,7 +90,7 @@ class PlanTask:
     result: str | None = None
 
 
-@dataclass
+@dataclass(slots=True)
 class OpenTaskSummary:
     """Summary of open tasks."""
 
@@ -107,7 +107,7 @@ class OpenTaskSummary:
         return self.total > 0
 
 
-@dataclass
+@dataclass(slots=True)
 class AgentPlan:
     """The agent current plan."""
 
@@ -133,7 +133,7 @@ class AgentPlan:
         return None
 
 
-@dataclass
+@dataclass(slots=True)
 class AgentCompletionStatus:
     """Completion status of an agent run."""
 
@@ -142,7 +142,7 @@ class AgentCompletionStatus:
     details: str | None = None
 
 
-@dataclass
+@dataclass(slots=True)
 class RecoveryInfo:
     """Information about agent recovery from errors."""
 
@@ -151,7 +151,7 @@ class RecoveryInfo:
     last_error: str | None = None
 
 
-@dataclass
+@dataclass(slots=True)
 class AgentConfig:
     """Configuration for an agent."""
 
@@ -168,7 +168,7 @@ class AgentConfig:
     resume_session: str | None = None
 
 
-@dataclass
+@dataclass(slots=True)
 class AgentResult:
     """Result of an agent run."""
 

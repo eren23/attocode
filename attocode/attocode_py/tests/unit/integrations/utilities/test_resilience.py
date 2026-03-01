@@ -311,10 +311,12 @@ class TestFallbackChain:
         assert result == "p2: hello"
 
     async def test_all_fail_raises(self) -> None:
+        from attocode.errors import ProviderError
+
         chain = FallbackChain()
         chain.add_provider(_MockProvider("p1", fail=True))
         chain.add_provider(_MockProvider("p2", fail=True))
-        with pytest.raises(RuntimeError, match="All providers failed"):
+        with pytest.raises(ProviderError, match="All providers failed"):
             await chain.execute("chat", "hello")
 
     async def test_skips_open_circuit_breaker(self) -> None:
@@ -345,8 +347,10 @@ class _ScoredProvider:
 
 class TestRouter:
     def test_no_providers_raises(self) -> None:
+        from attocode.errors import ProviderError
+
         router = Router()
-        with pytest.raises(RuntimeError, match="No providers"):
+        with pytest.raises(ProviderError, match="No providers"):
             router.select_provider()
 
     def test_single_provider(self) -> None:

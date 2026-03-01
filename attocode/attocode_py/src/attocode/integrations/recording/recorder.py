@@ -13,6 +13,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
+from attocode.errors import AgentError
 from attocode.integrations.recording.exploration_tracker import (
     ExplorationGraph,
     ExplorationSnapshot,
@@ -262,7 +263,7 @@ class RecordingSessionManager:
             Path to the exported file.
         """
         if not self._session_dir:
-            raise RuntimeError("No recording session to export")
+            raise AgentError("No recording session to export")
 
         if format == "mermaid":
             path = self._session_dir / "exploration.mermaid"

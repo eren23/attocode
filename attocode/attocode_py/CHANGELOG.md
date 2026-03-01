@@ -7,6 +7,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.6] - 2026-03-01
+
+### Added
+
+- **Tool argument normalization** — `_normalize_tool_arguments()` with alias mapping, fuzzy matching, and type coercion for non-Anthropic LLMs (GLM-5 etc.)
+- **Improved tool descriptions** — explicit parameter names in write_file, edit_file, read_file, list_files, glob_files, bash
+- **New provider tests** — Azure, OpenAI, OpenRouter, fallback chain, resilient provider
+- **New integration tests** — MCP split, quality, tasks, verification gate, interactive planning
+- **New tricks tests** — failure evidence, KV cache, recitation, reversible compaction
+
+### Changed
+
+- Tool executor wires `coerce_tool_arguments()` into execution pipeline (was built but never called)
+- Various provider, integration, and safety module improvements
+
+### Fixed
+
+- Mermaid diagrams not rendering on GitHub Pages documentation (added mermaid.js CDN + init script)
+- Recording gallery HTML not rendering exploration graph mermaid diagrams (switched to `<div class="mermaid">` + mermaid.js)
+
 ## [0.1.5] - 2026-02-28
 
 ### Added

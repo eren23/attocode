@@ -195,7 +195,10 @@ def create_bash_tool(
     return Tool(
         spec=ToolSpec(
             name="bash",
-            description="Execute a bash command.",
+            description=(
+                "Execute a shell command and return stdout/stderr."
+                " Use 'command' for the shell command string."
+            ),
             parameters={
                 "type": "object",
                 "properties": {

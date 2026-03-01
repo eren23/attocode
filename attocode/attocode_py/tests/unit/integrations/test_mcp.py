@@ -58,8 +58,14 @@ class TestLoadMCPConfigs:
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(json.dumps({"servers": servers}), encoding="utf-8")
 
-    def test_empty_when_no_files(self, tmp_path: Path) -> None:
-        configs = load_mcp_configs(str(tmp_path))
+    def test_empty_when_no_files(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+        # Mock home to an empty dir so user-level configs are not picked up
+        fake_home = tmp_path / "fake_home"
+        fake_home.mkdir()
+        monkeypatch.setattr(Path, "home", classmethod(lambda cls: fake_home))
+        project = tmp_path / "project"
+        project.mkdir()
+        configs = load_mcp_configs(str(project))
         assert configs == []
 
     def test_loads_user_level(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:

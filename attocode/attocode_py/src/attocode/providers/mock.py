@@ -23,6 +23,7 @@ from attocode.types.messages import (
 class MockProvider:
     """Mock LLM provider for testing."""
 
+    model: str = "mock-model"
     responses: list[ChatResponse] = field(default_factory=list)
     response_fn: Callable[
         [list[Message | MessageWithStructuredContent], ChatOptions | None],
