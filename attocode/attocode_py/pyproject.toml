@@ -23,12 +23,14 @@ dependencies = [
     "structlog>=24.1",
     "tenacity>=9.0",
     "psutil>=6.0",
+    "mcp>=1.0",
 ]
 
 [project.optional-dependencies]
 anthropic = ["anthropic>=0.40"]
 openai = ["openai>=1.50"]
 tree-sitter = ["tree-sitter>=0.23", "tree-sitter-python", "tree-sitter-javascript"]
+code-intel = []  # mcp moved to required deps (entry point always registered)
 docs = [
     "mkdocs>=1.6",
     "mkdocs-material>=9.5",
@@ -47,9 +49,10 @@ dev = [
 ]
 
 [project.scripts]
-attocode = "attocode.cli:main"
-attocodepy = "attocode.cli:main"
+attocode = "attocode.cli:_entry_point"
+attocodepy = "attocode.cli:_entry_point"
 attoswarm = "attoswarm.cli:main"
+attocode-code-intel = "attocode.code_intel.server:main"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/attocode", "src/attoswarm", "src/attocode_core"]
