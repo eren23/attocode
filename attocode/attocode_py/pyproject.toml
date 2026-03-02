@@ -9,6 +9,20 @@ description = "Production AI coding agent"
 readme = "README.md"
 requires-python = ">=3.12"
 license = "MIT"
+authors = [{ name = "eren23" }]
+keywords = ["ai", "coding-agent", "cli", "tui", "mcp", "llm", "developer-tools"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Environment :: Console",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Software Development",
+    "Topic :: Software Development :: Code Generators",
+    "Typing :: Typed",
+]
 dependencies = [
     "textual>=1.0.0",
     "rich>=13.0.0",
@@ -54,6 +68,12 @@ attocode = "attocode.cli:_entry_point"
 attocodepy = "attocode.cli:_entry_point"
 attoswarm = "attoswarm.cli:main"
 attocode-code-intel = "attocode.code_intel.server:main"
+
+[project.urls]
+Homepage = "https://github.com/eren23/attocode"
+Repository = "https://github.com/eren23/attocode"
+"Bug Tracker" = "https://github.com/eren23/attocode/issues"
+Changelog = "https://github.com/eren23/attocode/blob/main/attocode_py/CHANGELOG.md"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/attocode", "src/attoswarm", "src/attocode_core"]
