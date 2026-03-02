@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import tomllib
 from typing import TYPE_CHECKING
 from unittest.mock import MagicMock
 
@@ -982,6 +983,68 @@ class TestInstaller:
         assert len(captured_cmds) == 1
         assert "--project" in captured_cmds[0]
         assert "/some/path" in captured_cmds[0]
+
+    def test_install_codex_local(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+        from attocode.code_intel.installer import install_codex
+
+        monkeypatch.setattr("shutil.which", lambda x: None)
+
+        result = install_codex(project_dir=str(tmp_path))
+        assert result is True
+
+        config_path = tmp_path / ".codex" / "config.toml"
+        assert config_path.exists()
+
+        data = tomllib.loads(config_path.read_text())
+        assert "attocode-code-intel" in data["mcp_servers"]
+        server = data["mcp_servers"]["attocode-code-intel"]
+        assert "--project" in server["args"]
+
+    def test_install_codex_user(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+        from attocode.code_intel.installer import install_codex
+
+        monkeypatch.setattr("shutil.which", lambda x: None)
+        monkeypatch.setattr("pathlib.Path.home", lambda: tmp_path)
+
+        result = install_codex(project_dir="/some/project", scope="user")
+        assert result is True
+
+        config_path = tmp_path / ".codex" / "config.toml"
+        assert config_path.exists()
+
+        data = tomllib.loads(config_path.read_text())
+        assert "attocode-code-intel" in data["mcp_servers"]
+
+    def test_install_codex_merges_existing(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+        import tomli_w
+
+        from attocode.code_intel.installer import install_codex
+
+        monkeypatch.setattr("shutil.which", lambda x: None)
+
+        # Pre-existing config with another server
+        codex_dir = tmp_path / ".codex"
+        codex_dir.mkdir()
+        existing = {"mcp_servers": {"other-server": {"command": "other", "args": []}}}
+        (codex_dir / "config.toml").write_text(tomli_w.dumps(existing))
+
+        install_codex(project_dir=str(tmp_path))
+
+        data = tomllib.loads((codex_dir / "config.toml").read_text())
+        assert "other-server" in data["mcp_servers"]
+        assert "attocode-code-intel" in data["mcp_servers"]
+
+    def test_uninstall_codex(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+        from attocode.code_intel.installer import install_codex, uninstall_codex
+
+        monkeypatch.setattr("shutil.which", lambda x: None)
+
+        install_codex(project_dir=str(tmp_path))
+        result = uninstall_codex(project_dir=str(tmp_path))
+        assert result is True
+
+        data = tomllib.loads((tmp_path / ".codex" / "config.toml").read_text())
+        assert "attocode-code-intel" not in data.get("mcp_servers", {})
 
     def test_install_claude_local_includes_project(self, monkeypatch: pytest.MonkeyPatch):
         """Local install should always include --project."""

@@ -5,6 +5,7 @@ Dispatched from the main CLI when the first positional argument is "code-intel".
 Usage::
 
     attocode code-intel install claude [--global] [--project .]
+    attocode code-intel install codex [--global] [--project .]
     attocode code-intel uninstall claude
     attocode code-intel serve [--project .]
     attocode code-intel status
@@ -51,7 +52,7 @@ def _print_help() -> None:
         "Usage: attocode code-intel <command>\n"
         "\n"
         "Commands:\n"
-        "  install <target>    Install MCP server (claude, cursor, windsurf)\n"
+        "  install <target>    Install MCP server (claude, cursor, windsurf, codex)\n"
         "  uninstall <target>  Remove MCP server\n"
         "  serve               Run MCP server directly (stdio)\n"
         "  status              Check installation status\n"
@@ -98,7 +99,7 @@ def _cmd_install(args: list[str]) -> None:
 
     target, project_dir, scope = _parse_opts(args)
     if not target:
-        print("Error: specify a target (claude, cursor, windsurf)", file=sys.stderr)
+        print("Error: specify a target (claude, cursor, windsurf, codex)", file=sys.stderr)
         sys.exit(1)
 
     success = install(target, project_dir=project_dir, scope=scope)
@@ -111,7 +112,7 @@ def _cmd_uninstall(args: list[str]) -> None:
 
     target, project_dir, scope = _parse_opts(args)
     if not target:
-        print("Error: specify a target (claude, cursor, windsurf)", file=sys.stderr)
+        print("Error: specify a target (claude, cursor, windsurf, codex)", file=sys.stderr)
         sys.exit(1)
 
     success = uninstall(target, project_dir=project_dir, scope=scope)
@@ -186,6 +187,34 @@ def _cmd_status() -> None:
             print("  Windsurf: unable to check")
     else:
         print("  Windsurf: not installed")
+
+    # Check Codex (project-level)
+    codex_cfg = Path(".codex/config.toml")
+    if codex_cfg.exists():
+        try:
+            import tomllib
+            data = tomllib.loads(codex_cfg.read_text())
+            if "attocode-code-intel" in data.get("mcp_servers", {}):
+                print("  Codex: installed")
+            else:
+                print("  Codex: not installed")
+        except Exception:
+            print("  Codex: unable to check")
+    else:
+        # Also check user-level
+        codex_user_cfg = Path.home() / ".codex" / "config.toml"
+        if codex_user_cfg.exists():
+            try:
+                import tomllib
+                data = tomllib.loads(codex_user_cfg.read_text())
+                if "attocode-code-intel" in data.get("mcp_servers", {}):
+                    print("  Codex: installed (user)")
+                else:
+                    print("  Codex: not installed")
+            except Exception:
+                print("  Codex: unable to check")
+        else:
+            print("  Codex: not installed")
 
     # Check if entry point is available
     print()

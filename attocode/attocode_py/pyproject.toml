@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "attocode"
-version = "0.1.7"
+version = "0.1.8"
 description = "Production AI coding agent"
 readme = "README.md"
 requires-python = ">=3.12"
@@ -24,6 +24,7 @@ dependencies = [
     "tenacity>=9.0",
     "psutil>=6.0",
     "mcp>=1.0",
+    "tomli_w>=1.0",
 ]
 
 [project.optional-dependencies]
@@ -84,7 +85,7 @@ source = ["src/attocode", "src/attoswarm", "src/attocode_core"]
 omit = ["tests/*"]
 
 [tool.bumpversion]
-current_version = "0.1.7"
+current_version = "0.1.8"
 commit = false
 tag = false
 

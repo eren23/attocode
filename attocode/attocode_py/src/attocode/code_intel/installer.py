@@ -4,6 +4,7 @@ Supports:
 - Claude Code: via `claude mcp add` CLI
 - Cursor: via `.cursor/mcp.json`
 - Windsurf: via `.windsurf/mcp.json`
+- Codex: via `.codex/config.toml`
 """
 
 from __future__ import annotations
@@ -13,7 +14,10 @@ import os
 import shutil
 import subprocess
 import sys
+import tomllib
 from pathlib import Path
+
+import tomli_w
 
 
 def _find_command() -> str:
@@ -195,6 +199,73 @@ def uninstall_json_config(target: str, project_dir: str = ".") -> bool:
     return True
 
 
+def install_codex(project_dir: str = ".", scope: str = "local") -> bool:
+    """Install into OpenAI Codex CLI via `.codex/config.toml`.
+
+    Args:
+        project_dir: Path to the project to index.
+        scope: "local" (project) or "user" (global ~/.codex/).
+
+    Returns:
+        True if installation succeeded.
+    """
+    if scope == "user":
+        config_path = Path.home() / ".codex" / "config.toml"
+    else:
+        config_path = Path(project_dir) / ".codex" / "config.toml"
+
+    config_path.parent.mkdir(parents=True, exist_ok=True)
+
+    # Load existing config or start fresh
+    existing: dict = {}
+    if config_path.exists():
+        import contextlib
+        with contextlib.suppress(tomllib.TOMLDecodeError, OSError):
+            existing = tomllib.loads(config_path.read_text(encoding="utf-8"))
+
+    entry = _build_server_entry(project_dir)
+    servers = existing.setdefault("mcp_servers", {})
+    servers["attocode-code-intel"] = {
+        "command": entry["command"],
+        "args": entry["args"],
+    }
+
+    config_path.write_text(
+        tomli_w.dumps(existing),
+        encoding="utf-8",
+    )
+    print(f"Installed attocode-code-intel into {config_path}")
+    return True
+
+
+def uninstall_codex(project_dir: str = ".", scope: str = "local") -> bool:
+    """Uninstall from OpenAI Codex CLI."""
+    if scope == "user":
+        config_path = Path.home() / ".codex" / "config.toml"
+    else:
+        config_path = Path(project_dir) / ".codex" / "config.toml"
+
+    if not config_path.exists():
+        print(f"No config found at {config_path}")
+        return True
+
+    try:
+        existing = tomllib.loads(config_path.read_text(encoding="utf-8"))
+    except (tomllib.TOMLDecodeError, OSError):
+        return True
+
+    servers = existing.get("mcp_servers", {})
+    if "attocode-code-intel" in servers:
+        del servers["attocode-code-intel"]
+        config_path.write_text(
+            tomli_w.dumps(existing),
+            encoding="utf-8",
+        )
+        print(f"Removed attocode-code-intel from {config_path}")
+
+    return True
+
+
 def install(target: str, project_dir: str = ".", scope: str = "local") -> bool:
     """Install into the given target.
 
@@ -207,8 +278,13 @@ def install(target: str, project_dir: str = ".", scope: str = "local") -> bool:
         return install_claude(project_dir, scope=scope)
     elif target in ("cursor", "windsurf"):
         return install_json_config(target, project_dir)
+    elif target == "codex":
+        return install_codex(project_dir, scope=scope)
     else:
-        print(f"Error: Unknown target '{target}'. Use: claude, cursor, windsurf", file=sys.stderr)
+        print(
+            f"Error: Unknown target '{target}'. Use: claude, cursor, windsurf, codex",
+            file=sys.stderr,
+        )
         return False
 
 
@@ -218,6 +294,11 @@ def uninstall(target: str, project_dir: str = ".", scope: str = "local") -> bool
         return uninstall_claude(scope=scope)
     elif target in ("cursor", "windsurf"):
         return uninstall_json_config(target, project_dir)
+    elif target == "codex":
+        return uninstall_codex(project_dir, scope=scope)
     else:
-        print(f"Error: Unknown target '{target}'. Use: claude, cursor, windsurf", file=sys.stderr)
+        print(
+            f"Error: Unknown target '{target}'. Use: claude, cursor, windsurf, codex",
+            file=sys.stderr,
+        )
         return False

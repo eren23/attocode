@@ -258,6 +258,99 @@ The `analyze` mode identifies central files based on incoming dependency edges (
 
 Displays active context blocks (system prompt, goal recitation, failure evidence, file context) with their priority levels and estimated token counts.
 
+## MCP Server for External Tools
+
+The `attocode-code-intel` entry point exposes Attocode's AST and code intelligence system as an [MCP (Model Context Protocol)](https://modelcontextprotocol.io/) server. This lets any MCP-compatible AI coding assistant --- Claude Code, Cursor, Windsurf, Codex, etc. --- use Attocode's code understanding capabilities without running the full agent.
+
+### Quick Install
+
+```bash
+# Install attocode first
+uv tool install attocode
+# or: pip install attocode
+
+# Then install the MCP server into your tool of choice
+attocode code-intel install claude       # Claude Code (project-level)
+attocode code-intel install claude --global  # Claude Code (user-level)
+attocode code-intel install cursor       # Cursor
+attocode code-intel install windsurf     # Windsurf
+attocode code-intel install codex        # OpenAI Codex CLI
+attocode code-intel install codex --global   # Codex (user-level)
+```
+
+### Installation Targets
+
+| Target | Command | Config File | Format |
+|--------|---------|------------|--------|
+| Claude Code | `install claude` | Via `claude mcp add` CLI | N/A (managed) |
+| Cursor | `install cursor` | `.cursor/mcp.json` | JSON |
+| Windsurf | `install windsurf` | `.windsurf/mcp.json` | JSON |
+| Codex | `install codex` | `.codex/config.toml` | TOML |
+
+All targets support `--project <path>` to specify the project directory (defaults to `.`). Claude Code and Codex support `--global` for user-level installation.
+
+### Available Tools
+
+The MCP server exposes 11 tools:
+
+| Tool | Parameters | Description |
+|------|-----------|-------------|
+| `repo_map` | `include_symbols`, `max_tokens` | Token-budgeted file tree with top-level symbols |
+| `symbols` | `path` | List all symbols (functions, classes, methods) in a file |
+| `search_symbols` | `name` | Fuzzy symbol search across the entire codebase |
+| `dependencies` | `path` | Show what a file imports from and what imports it |
+| `impact_analysis` | `changed_files` | Transitive impact set via BFS on reverse dependency graph |
+| `cross_references` | `symbol_name` | Find where a symbol is defined and all its usage sites |
+| `file_analysis` | `path` | Detailed single-file analysis: chunks, imports, exports |
+| `dependency_graph` | `start_file`, `depth` | Dependency graph radiating outward from a file |
+| `project_summary` | --- | High-level project overview (languages, structure, entry points) |
+| `hotspots` | --- | Risk/complexity analysis with percentile-ranked hotspots |
+| `conventions` | --- | Code style and convention detection (naming, typing, patterns) |
+
+### CLI Reference
+
+```bash
+# Install MCP server into a target
+attocode code-intel install <target> [--project <path>] [--global]
+
+# Remove MCP server from a target
+attocode code-intel uninstall <target>
+
+# Run the MCP server directly (stdio transport)
+attocode code-intel serve [--project <path>]
+
+# Check installation status across all targets
+attocode code-intel status
+```
+
+### Checking Status
+
+```bash
+$ attocode code-intel status
+attocode-code-intel status:
+
+  Claude Code: installed
+  Cursor: not installed
+  Windsurf: not installed
+  Codex: installed (user)
+
+  Entry point: attocode-code-intel (on PATH)
+```
+
+### Direct Usage
+
+If you want to run the server manually (e.g. for debugging or custom integrations):
+
+```bash
+# Via entry point
+attocode-code-intel --project /path/to/repo
+
+# Via Python module
+python -m attocode.code_intel.server --project /path/to/repo
+```
+
+The server uses stdio transport and speaks the MCP protocol. Any MCP client can connect to it.
+
 ## Related Pages
 
 - [Context Engineering](context-engineering.md) --- How context blocks and code context work together

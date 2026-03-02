@@ -32,6 +32,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Conventions: `slots=True` / `frozen=True`** — enhanced dataclass decorator parsing
 - **Conventions: visibility distribution** — reports public/private function percentages
 - **Conventions: method types** — reports @staticmethod, @classmethod, @property counts
+- **Code-intel MCP server** — `attocode-code-intel` standalone MCP server exposing 11
+  code intelligence tools (repo_map, symbols, search_symbols, dependencies,
+  impact_analysis, cross_references, file_analysis, dependency_graph,
+  project_summary, hotspots, conventions) for use by any MCP-compatible AI assistant
+- **Code-intel installer** — `attocode code-intel install <target>` installs the MCP
+  server into Claude Code, Cursor, Windsurf, or Codex; `uninstall` and `status` commands
+- **Codex installer support** — `attocode code-intel install codex` writes
+  `.codex/config.toml` (TOML-based config) with `--global` for user-level install
+- **`tomli_w` dependency** — added for TOML writing support (Codex config)
 
 ## [0.1.7] - 2026-03-01
 
