@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import contextlib
 from typing import Any
 
 from rich.text import Text
@@ -194,11 +195,12 @@ _AGENT_STATUS_ICONS = {
 class AgentsDataTable(Widget):
     """DataTable-based agent list with single-click row selection.
 
-    Posts ``AgentsDataTable.AgentSelected`` when a row is selected.
+    Posts ``AgentsDataTable.AgentSelected`` when a row is highlighted or selected.
+    Uses differential updates to preserve cursor position across refreshes.
     """
 
     class AgentSelected(Message):
-        """Posted when an agent row is selected."""
+        """Posted when an agent row is selected or highlighted."""
 
         def __init__(self, agent_id: str) -> None:
             super().__init__()
@@ -216,16 +218,56 @@ class AgentsDataTable(Widget):
     def __init__(self, **kwargs: Any) -> None:
         super().__init__(**kwargs)
         self._agent_rows: list[dict[str, Any]] = []
+        self._prev_agent_map: dict[str, dict[str, str]] = {}
+        self._selected_key: str | None = None
+        self._prev_order: list[str] = []
+        self._restoring_cursor: bool = False
 
     def compose(self):
         table = DataTable(id="agents-table", cursor_type="row")
-        table.add_columns("Status", "Agent", "Backend", "Model", "Task", "Elapsed", "Restarts")
+        table.add_columns("Status", "Agent", "Task", "Activity", "Model", "Elapsed", "Tokens")
         yield table
 
     def update_agents(self, agents: list[dict[str, Any]]) -> None:
-        """Replace all agent rows."""
+        """Replace all agent rows with differential updates."""
         self._agent_rows = agents
         self._rebuild()
+
+    @staticmethod
+    def _make_row_data(agent: dict[str, Any]) -> dict[str, str]:
+        """Extract display values from an agent dict."""
+        agent_id = agent.get("worker_name") or agent.get("agent_id", "?")
+        status = agent.get("status", "idle")
+        model = agent.get("model", agent.get("backend", ""))
+        task_id = agent.get("task_id", "")
+        elapsed = agent.get("elapsed", "")
+        activity = agent.get("activity", "")
+        tokens = agent.get("tokens_used", 0)
+        if tokens and tokens >= 1000:
+            tokens_str = f"{tokens // 1000}k"
+        elif tokens:
+            tokens_str = str(tokens)
+        else:
+            tokens_str = ""
+        return {
+            "agent_id": agent_id,
+            "status": status,
+            "task_id": task_id,
+            "activity": activity,
+            "model": model,
+            "elapsed": elapsed,
+            "tokens": tokens_str,
+        }
+
+    @staticmethod
+    def _status_text(status: str) -> Text:
+        icon = _AGENT_STATUS_ICONS.get(status, "?")
+        style = {
+            "running": "cyan bold",
+            "idle": "dim",
+            "exited": "red",
+        }.get(status, "dim")
+        return Text(f"{icon} {status}", style=style)
 
     def _rebuild(self) -> None:
         try:
@@ -233,43 +275,94 @@ class AgentsDataTable(Widget):
         except Exception:
             return
 
-        table.clear()
-
+        new_map: dict[str, dict[str, str]] = {}
+        new_order: list[str] = []
         for agent in self._agent_rows:
-            agent_id = agent.get("worker_name") or agent.get("agent_id", "?")
-            status = agent.get("status", "idle")
-            icon = _AGENT_STATUS_ICONS.get(status, "?")
+            rd = self._make_row_data(agent)
+            aid = rd["agent_id"]
+            new_map[aid] = rd
+            new_order.append(aid)
 
-            status_style = {
-                "running": "cyan bold",
-                "idle": "dim",
-                "exited": "red",
-            }.get(status, "dim")
+        old_keys = set(self._prev_agent_map)
+        new_keys = set(new_map)
 
-            status_text = Text(f"{icon} {status}", style=status_style)
-            backend = agent.get("backend", "")
-            model = agent.get("model", backend)
-            task_id = agent.get("task_id", "")
-            elapsed = agent.get("elapsed", "")
-            restarts = agent.get("restart_count", 0)
-            exit_code = agent.get("exit_code")
+        # Detect if order changed (requires full rebuild)
+        order_changed = new_order != self._prev_order
 
-            # Show exit code for exited agents
-            restarts_str = str(restarts) if restarts else ""
-            if exit_code is not None and status == "exited":
-                restarts_str = f"{restarts} (exit:{exit_code})"
+        if order_changed or not self._prev_agent_map:
+            # First build — full populate
+            table.clear()
+            for aid in new_order:
+                rd = new_map[aid]
+                table.add_row(
+                    self._status_text(rd["status"]),
+                    rd["agent_id"],
+                    rd["task_id"],
+                    rd["activity"],
+                    rd["model"],
+                    rd["elapsed"],
+                    rd["tokens"],
+                    key=aid,
+                )
+        else:
+            # Differential update
+            for removed_key in old_keys - new_keys:
+                with contextlib.suppress(Exception):
+                    table.remove_row(removed_key)
 
-            table.add_row(
-                status_text,
-                agent_id,
-                backend,
-                model,
-                task_id or "",
-                elapsed,
-                restarts_str,
-                key=agent_id,
-            )
+            for added_key in new_keys - old_keys:
+                rd = new_map[added_key]
+                table.add_row(
+                    self._status_text(rd["status"]),
+                    rd["agent_id"],
+                    rd["task_id"],
+                    rd["activity"],
+                    rd["model"],
+                    rd["elapsed"],
+                    rd["tokens"],
+                    key=added_key,
+                )
 
-    def on_data_table_row_selected(self, event: DataTable.RowSelected) -> None:
+            col_keys = list(table.columns.keys())
+            for aid in old_keys & new_keys:
+                old_rd = self._prev_agent_map[aid]
+                new_rd = new_map[aid]
+                field_to_col = [
+                    ("status", 0),
+                    ("agent_id", 1),
+                    ("task_id", 2),
+                    ("activity", 3),
+                    ("model", 4),
+                    ("elapsed", 5),
+                    ("tokens", 6),
+                ]
+                for field, col_idx in field_to_col:
+                    if old_rd.get(field) != new_rd.get(field):
+                        try:
+                            if col_idx < len(col_keys):
+                                value: Any = new_rd[field]
+                                if field == "status":
+                                    value = self._status_text(new_rd["status"])
+                                table.update_cell(aid, col_keys[col_idx], value)
+                        except Exception:
+                            pass
+
+        self._prev_agent_map = new_map
+        self._prev_order = new_order
+
+        # Restore cursor position
+        if self._selected_key and self._selected_key in new_keys:
+            try:
+                row_idx = new_order.index(self._selected_key)
+                self._restoring_cursor = True
+                table.move_cursor(row=row_idx)
+                self._restoring_cursor = False
+            except (ValueError, Exception):
+                self._restoring_cursor = False
+
+    def on_data_table_row_highlighted(self, event: DataTable.RowHighlighted) -> None:
+        if self._restoring_cursor:
+            return
         if event.row_key and event.row_key.value:
-            self.post_message(self.AgentSelected(str(event.row_key.value)))
+            self._selected_key = str(event.row_key.value)
+            self.post_message(self.AgentSelected(self._selected_key))

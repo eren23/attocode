@@ -318,7 +318,13 @@ class SwarmOrchestrator:
             for dep in task.deps:
                 dag_edges.append([dep, tid])
 
-        # Build dag nodes with status from AoT graph
+        # Build dag nodes with status from AoT graph (enriched for TUI)
+        # Build agent lookup from subagent manager
+        agent_for_task: dict[str, str] = {}
+        for a in self._subagent_mgr.get_all_agents():
+            if a.task_id:
+                agent_for_task[a.task_id] = a.agent_id
+
         dag_nodes: list[dict[str, Any]] = []
         for tid, task in self._tasks.items():
             node = self._aot_graph.get_node(tid)
@@ -327,6 +333,12 @@ class SwarmOrchestrator:
                 "task_id": tid,
                 "title": task.title,
                 "status": status,
+                "description": task.description[:200] if task.description else "",
+                "task_kind": task.task_kind,
+                "role_hint": task.role_hint or "",
+                "assigned_agent": agent_for_task.get(tid, ""),
+                "target_files": task.target_files[:5],
+                "result_summary": task.result_summary[:200] if task.result_summary else "",
             })
 
         # Persist per-task JSON files
@@ -458,7 +470,8 @@ class SwarmOrchestrator:
                         data={"files_modified": result.files_modified})
             return 1
         else:
-            skipped = self._aot_graph.mark_failed(result.task_id)
+            self._aot_graph.mark_failed(result.task_id)
+            skipped = self._aot_graph.cascade_skip_blocked()
             self._emit("fail", task_id=result.task_id,
                         agent_id=f"agent-{result.task_id}",
                         message=f"Task {result.task_id} failed: {result.error}",

@@ -36,6 +36,17 @@ def compute_ready_tasks(tasks: list[TaskSpec], task_state: dict[str, str]) -> li
             deps_done = all(task_state.get(dep, "pending") == "done" for dep in t.deps)
         if deps_done:
             ready.append(t)
+            continue
+        # Partial-dependency execution: all deps terminal, >= 50% done
+        if t.deps and t.task_kind not in {"merge", "judge", "critic"}:
+            all_terminal = all(
+                task_state.get(dep, "pending") in {"done", "failed", "skipped"}
+                for dep in t.deps
+            )
+            if all_terminal:
+                done_count = sum(1 for d in t.deps if task_state.get(d) == "done")
+                if done_count / len(t.deps) >= 0.5:
+                    ready.append(t)
     ready.sort(key=lambda t: (-t.priority, len(t.deps), t.task_id))
     return ready
 

@@ -68,7 +68,64 @@ class StateStore:
 
     # ── Data transform helpers for rich widgets ──────────────────────
 
-    def build_agent_list(self, state: dict[str, Any]) -> list[dict[str, Any]]:
+    _ACTIVITY_LABELS: dict[str, str] = {
+        "spawn": "Starting...",
+        "agent.spawned": "Starting...",
+        "claim": "Claiming task",
+        "task.claimed": "Claiming task",
+        "complete": "Completed",
+        "task.completed": "Completed",
+        "fail": "Failed",
+        "task.failed": "Failed",
+    }
+
+    def build_agent_activity(
+        self, raw_events: list[dict[str, Any]],
+    ) -> dict[str, str]:
+        """Scan events for per-agent latest activity.
+
+        Returns ``{agent_id: activity_string}`` with human-readable descriptions.
+        """
+        activity: dict[str, str] = {}
+        for ev in raw_events:
+            payload = ev.get("payload", {}) if isinstance(ev.get("payload"), dict) else {}
+            agent_id = str(
+                ev.get("agent_id", "")
+                or payload.get("agent_id", "")
+            )
+            if not agent_id:
+                continue
+
+            etype = str(ev.get("type", ev.get("event_type", "")))
+
+            if etype == "task.files_changed":
+                files = payload.get("files", [])
+                if isinstance(files, list) and files:
+                    first = str(files[0]).rsplit("/", 1)[-1]
+                    extra = f" +{len(files) - 1}" if len(files) > 1 else ""
+                    activity[agent_id] = f"Editing {first}{extra}"
+                continue
+
+            label = self._ACTIVITY_LABELS.get(etype)
+            if label:
+                activity[agent_id] = label
+            else:
+                # Fallback to event message — don't use raw etype as it
+                # overwrites previously-set meaningful labels
+                msg = str(
+                    ev.get("message", "")
+                    or payload.get("message", "")
+                )[:60]
+                if msg:
+                    activity[agent_id] = msg
+
+        return activity
+
+    def build_agent_list(
+        self,
+        state: dict[str, Any],
+        activity: dict[str, str] | None = None,
+    ) -> list[dict[str, Any]]:
         """Transform active_agents into AgentsDataTable-compatible format."""
         now = time.time()
 
@@ -79,6 +136,7 @@ class StateStore:
 
         out: list[dict[str, Any]] = []
         for row in state.get("active_agents", []):
+            agent_id = str(row.get("agent_id", "?"))
             task_id = str(row.get("task_id", ""))
             started = row.get("started_at_epoch", 0)
             if started and isinstance(started, (int, float)):
@@ -87,7 +145,7 @@ class StateStore:
             else:
                 elapsed = ""
             out.append({
-                "agent_id": str(row.get("agent_id", "?")),
+                "agent_id": agent_id,
                 "status": str(row.get("status", "idle")),
                 "task_id": task_id,
                 "backend": str(row.get("backend", "")),
@@ -97,6 +155,7 @@ class StateStore:
                 "tokens_used": int(row.get("tokens_used", 0)),
                 "elapsed": elapsed,
                 "task_title": str(row.get("task_title", "")) or title_map.get(task_id, ""),
+                "activity": (activity or {}).get(agent_id, ""),
                 "cwd": str(row.get("cwd", "")),
                 "exit_code": row.get("exit_code"),
                 "restart_count": int(row.get("restart_count", 0)),
@@ -133,6 +192,7 @@ class StateStore:
                 detail = self._read_task_cached(task_id)
                 task_kind = task_kind or detail.get("task_kind", "")
                 role_hint = role_hint or detail.get("role_hint", "")
+                assigned_agent = assigned_agent or detail.get("assigned_agent", "")
 
             out.append({
                 "task_id": task_id,

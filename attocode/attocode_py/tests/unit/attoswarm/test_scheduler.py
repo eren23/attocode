@@ -122,9 +122,9 @@ def _make_coordinator(task_max_duration: float = 60.0) -> HybridCoordinator:
 @pytest.mark.asyncio
 async def test_enforce_task_duration_limits_kills_stuck_task() -> None:
     """Task exceeding wall-clock duration limit should be failed."""
-    coord = _make_coordinator(task_max_duration=60.0)
+    coord = _make_coordinator(task_max_duration=300.0)
     coord.running_task_by_agent["agent-1"] = "t0"
-    coord.running_task_started_at["t0"] = time.monotonic() - 120  # 120s ago, limit is 60
+    coord.running_task_started_at["t0"] = time.monotonic() - 400  # 400s ago, limit is 300
     coord.running_task_last_progress["t0"] = time.monotonic()  # heartbeats kept it "alive"
     coord.task_state["t0"] = "running"
     coord.task_attempts["t0"] = 1

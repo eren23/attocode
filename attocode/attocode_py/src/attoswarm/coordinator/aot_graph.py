@@ -144,17 +144,39 @@ class AoTGraph:
     # ------------------------------------------------------------------
 
     def get_ready_batch(self) -> list[str]:
-        """Return task IDs whose dependencies are all complete (done)."""
+        """Return task IDs whose dependencies are satisfied.
+
+        A task is ready when:
+        - All deps are done (standard), OR
+        - All deps are terminal and >= 50% succeeded (partial-dependency execution)
+        """
         ready: list[str] = []
         for node in self._nodes.values():
             if node.status != "pending":
                 continue
-            deps_met = all(
+            if not node.depends_on:
+                ready.append(node.task_id)
+                continue
+            all_done = all(
                 self._nodes.get(d) is not None and self._nodes[d].status == "done"
                 for d in node.depends_on
             )
-            if deps_met:
+            if all_done:
                 ready.append(node.task_id)
+                continue
+            # Partial: all deps terminal, >= 50% succeeded
+            all_terminal = all(
+                self._nodes.get(d) is not None
+                and self._nodes[d].status in ("done", "failed", "skipped")
+                for d in node.depends_on
+            )
+            if all_terminal and node.depends_on:
+                done_count = sum(
+                    1 for d in node.depends_on
+                    if self._nodes.get(d) and self._nodes[d].status == "done"
+                )
+                if done_count / len(node.depends_on) >= 0.5:
+                    ready.append(node.task_id)
         return ready
 
     def check_parallel_safety(
@@ -198,31 +220,51 @@ class AoTGraph:
         if node:
             node.status = "running"
 
-    def mark_failed(self, task_id: str) -> list[str]:
-        """Mark a task as failed and cascade-skip dependents.
+    def mark_failed(self, task_id: str) -> None:
+        """Mark a task as failed WITHOUT cascade-skipping dependents.
 
-        Returns a list of task IDs that were skipped.
+        Use :meth:`cascade_skip_blocked` afterwards to skip only tasks
+        that have no viable path to execution.
         """
         node = self._nodes.get(task_id)
-        if node is None:
-            return []
-        node.status = "failed"
+        if node:
+            node.status = "failed"
 
-        # Cascade: skip all transitive dependents
+    def cascade_skip_blocked(self) -> list[str]:
+        """Skip tasks whose dependencies are ALL failed/skipped (no viable path).
+
+        Only skips when there is truly no possibility of the task running.
+        Tasks with >= 50% successful deps are left pending for partial execution.
+
+        Returns list of newly skipped task IDs.
+        """
         skipped: list[str] = []
-        queue: deque[str] = deque(node.depended_by)
-        visited: set[str] = set()
-        while queue:
-            child_id = queue.popleft()
-            if child_id in visited:
-                continue
-            visited.add(child_id)
-            child = self._nodes.get(child_id)
-            if child and child.status == "pending":
-                child.status = "skipped"
-                skipped.append(child_id)
-                queue.extend(child.depended_by)
-
+        changed = True
+        while changed:
+            changed = False
+            for node in self._nodes.values():
+                if node.status != "pending":
+                    continue
+                if not node.depends_on:
+                    continue
+                # Check if ANY dependency can still succeed
+                has_viable = any(
+                    self._nodes.get(d) is not None
+                    and self._nodes[d].status in ("pending", "running", "done")
+                    for d in node.depends_on
+                )
+                if has_viable:
+                    continue
+                # All deps terminal — check if enough succeeded for partial execution
+                done_count = sum(
+                    1 for d in node.depends_on
+                    if self._nodes.get(d) and self._nodes[d].status == "done"
+                )
+                if node.depends_on and done_count / len(node.depends_on) >= 0.5:
+                    continue  # Let it run with partial context
+                node.status = "skipped"
+                skipped.append(node.task_id)
+                changed = True
         return skipped
 
     # ------------------------------------------------------------------
