@@ -667,5 +667,36 @@ def _dispatch_swarm_command(parts: tuple[str, ...], *, debug: bool = False) -> N
     attoswarm_main(args=args, standalone_mode=False)
 
 
-if __name__ == "__main__":
+def _entry_point() -> None:
+    """Entry point that pre-dispatches subcommands before Click.
+
+    Click would reject subcommand-specific flags (e.g. ``--global``) as
+    unknown top-level options.  By intercepting ``code-intel`` here we
+    hand its arguments directly to ``dispatch_code_intel`` untouched.
+    """
+    args = sys.argv[1:]
+    # Walk past top-level flags to find the first positional arg.
+    i = 0
+    debug = False
+    while i < len(args):
+        if args[i] == "--debug":
+            debug = True
+            i += 1
+        elif args[i].startswith("-"):
+            # Skip flag + potential value (e.g. --model foo)
+            i += 1
+            if i < len(args) and not args[i].startswith("-"):
+                i += 1
+        else:
+            break
+
+    if i < len(args) and args[i] == "code-intel":
+        from attocode.code_intel.cli import dispatch_code_intel
+        dispatch_code_intel(args[i + 1:], debug=debug)
+        return
+
     main()
+
+
+if __name__ == "__main__":
+    _entry_point()

@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "attocode"
-version = "0.1.7"
+version = "0.1.8"
 description = "Production AI coding agent"
 readme = "README.md"
 requires-python = ">=3.12"
@@ -23,12 +23,15 @@ dependencies = [
     "structlog>=24.1",
     "tenacity>=9.0",
     "psutil>=6.0",
+    "mcp>=1.0",
+    "tomli_w>=1.0",
 ]
 
 [project.optional-dependencies]
 anthropic = ["anthropic>=0.40"]
 openai = ["openai>=1.50"]
 tree-sitter = ["tree-sitter>=0.23", "tree-sitter-python", "tree-sitter-javascript"]
+code-intel = []  # mcp moved to required deps (entry point always registered)
 docs = [
     "mkdocs>=1.6",
     "mkdocs-material>=9.5",
@@ -47,9 +50,10 @@ dev = [
 ]
 
 [project.scripts]
-attocode = "attocode.cli:main"
-attocodepy = "attocode.cli:main"
+attocode = "attocode.cli:_entry_point"
+attocodepy = "attocode.cli:_entry_point"
 attoswarm = "attoswarm.cli:main"
+attocode-code-intel = "attocode.code_intel.server:main"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/attocode", "src/attoswarm", "src/attocode_core"]
@@ -81,7 +85,7 @@ source = ["src/attocode", "src/attoswarm", "src/attocode_core"]
 omit = ["tests/*"]
 
 [tool.bumpversion]
-current_version = "0.1.7"
+current_version = "0.1.8"
 commit = false
 tag = false
 

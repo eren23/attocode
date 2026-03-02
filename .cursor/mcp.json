@@ -1,0 +1,11 @@
+{
+  "mcpServers": {
+    "attocode-code-intel": {
+      "command": "attocode-code-intel",
+      "args": [
+        "--project",
+        "/Users/eren/Documents/AI/first-principles-agent"
+      ]
+    }
+  }
+}
