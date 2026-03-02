@@ -7,10 +7,31 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### Planned (0.1.8)
+### Planned
 
-- Fix `attoswarm tui` not picking up new TUI widgets when installed via `uv tool install` (packaging/editable install issue)
+- Fix `attoswarm tui` not picking up new TUI widgets when installed via `uv tool install`
 - Enabling code understanding tools of attocode to other AI coders as a skill system
+
+## [0.1.8] - 2026-03-02
+
+### Added
+
+- **Hotspots: percentile-based scoring** — composite scores now use project-relative
+  percentile ranks (0.0-1.0) instead of raw values, adapting to any project size
+- **Hotspots: adaptive category thresholds** — god-file, hub, coupling-magnet, and
+  new wide-api categories use P90 of project distribution with minimum floors
+- **Hotspots: function-level hotspots** — "Longest functions" section shows top 10
+  functions by composite complexity (length + params + missing return type)
+- **Hotspots: public API surface** — `pub=N` metric per file, `wide-api` category
+  for files with many public symbols
+- **Conventions: per-directory divergence** — detects when directories (e.g. tests/)
+  diverge > 20pp from project-wide type hint or docstring rates
+- **Conventions: error hierarchy detection** — scans for Exception subclasses,
+  reports root exceptions and subtypes
+- **Conventions: `__all__` detection** — counts files defining `__all__` exports
+- **Conventions: `slots=True` / `frozen=True`** — enhanced dataclass decorator parsing
+- **Conventions: visibility distribution** — reports public/private function percentages
+- **Conventions: method types** — reports @staticmethod, @classmethod, @property counts
 
 ## [0.1.7] - 2026-03-01
 
