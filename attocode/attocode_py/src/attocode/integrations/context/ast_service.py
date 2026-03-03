@@ -91,6 +91,11 @@ class ASTService:
     def initialized(self) -> bool:
         return self._initialized
 
+    def _ensure_initialized(self) -> None:
+        """Auto-initialize if not yet done.  Called by all query methods."""
+        if not self._initialized:
+            self.initialize()
+
     # ------------------------------------------------------------------
     # Lifecycle
     # ------------------------------------------------------------------
@@ -214,6 +219,7 @@ class ASTService:
 
     def get_file_symbols(self, path: str) -> list[SymbolLocation]:
         """Return all symbols defined in *path*."""
+        self._ensure_initialized()
         rel = self._to_rel(path)
         qnames = self._index.file_symbols.get(rel, set())
         result: list[SymbolLocation] = []
@@ -223,19 +229,23 @@ class ASTService:
 
     def find_symbol(self, name: str) -> list[SymbolLocation]:
         """Find definitions for *name* (exact or suffix match)."""
+        self._ensure_initialized()
         return self._index.get_definitions(name)
 
     def get_callers(self, symbol: str) -> list[SymbolRef]:
         """Return all call sites / references for *symbol*."""
+        self._ensure_initialized()
         return self._index.get_references(symbol)
 
     def get_dependencies(self, path: str) -> set[str]:
         """Files that *path* imports from."""
+        self._ensure_initialized()
         rel = self._to_rel(path)
         return self._index.get_dependencies(rel)
 
     def get_dependents(self, path: str) -> set[str]:
         """Files that import *path*."""
+        self._ensure_initialized()
         rel = self._to_rel(path)
         return self._index.get_dependents(rel)
 
@@ -244,6 +254,7 @@ class ASTService:
 
         Uses BFS on the reverse dependency graph starting from *changed*.
         """
+        self._ensure_initialized()
         visited: set[str] = set()
         queue = [self._to_rel(p) for p in changed]
         while queue:
@@ -279,6 +290,7 @@ class ASTService:
         - ``symbol``: tasks modify different files but share a symbol
         - ``dependency``: one task's output file is imported by the other's
         """
+        self._ensure_initialized()
         a_set = {self._to_rel(p) for p in a_files}
         b_set = {self._to_rel(p) for p in b_files}
         conflicts: list[dict[str, Any]] = []
@@ -333,6 +345,7 @@ class ASTService:
 
         Uses the dependency graph (imports + imported-by) up to 1 hop.
         """
+        self._ensure_initialized()
         related: set[str] = set()
         target_set = {self._to_rel(p) for p in target}
 
@@ -423,10 +436,32 @@ class ASTService:
             return
 
         # Build a regex pattern for call sites: symbol_name(
-        # Only scan for symbols that are actually defined somewhere
+        # Only scan for symbols that are actually defined somewhere.
+        # Skip comment lines and string literals to reduce false positives.
+        in_multiline_string = False
         for i, line in enumerate(content.split("\n"), 1):
+            stripped = line.lstrip()
+
+            # Track triple-quote multiline strings
+            triple_count = line.count('"""') + line.count("'''")
+            if in_multiline_string:
+                if triple_count % 2 == 1:
+                    in_multiline_string = False
+                continue
+            if triple_count % 2 == 1:
+                in_multiline_string = True
+                continue
+
+            # Skip single-line comments
+            if stripped.startswith("#"):
+                continue
+
+            # Strip inline comments and string literals for matching
+            # Remove quoted strings to avoid matching inside them
+            clean_line = re.sub(r'(["\'])(?:(?!\1).)*\1', '""', line)
+
             # Find function/method calls: name(
-            for m in re.finditer(r"\b(\w+)\s*\(", line):
+            for m in re.finditer(r"\b(\w+)\s*\(", clean_line):
                 name = m.group(1)
                 if name in known_symbols and name not in ("if", "for", "while", "return", "print"):
                     ref = SymbolRef(
@@ -438,7 +473,7 @@ class ASTService:
                     self._index.add_reference(ref)
 
             # Find attribute access: obj.method(
-            for m in re.finditer(r"\b\w+\.(\w+)\s*\(", line):
+            for m in re.finditer(r"\b\w+\.(\w+)\s*\(", clean_line):
                 attr_name = m.group(1)
                 if attr_name in known_symbols:
                     ref = SymbolRef(

@@ -180,6 +180,33 @@ async def _check_permission(ctx: AgentContext, tc: ToolCall) -> str | None:
     return None
 
 
+def _notify_file_changed(ctx: AgentContext, path: str) -> None:
+    """Notify code intelligence systems of a file change."""
+    # Notify codebase context manager
+    cbc = getattr(ctx, "codebase_context", None)
+    if cbc:
+        try:
+            cbc.mark_file_dirty(path)
+        except Exception:
+            pass
+
+    # Invalidate hierarchical explorer cache
+    explorer = getattr(ctx, "_hierarchical_explorer", None)
+    if explorer:
+        try:
+            explorer.invalidate()
+        except Exception:
+            pass
+
+    # Notify AST service of file change (invalidate AST cache + cross-refs)
+    ast_svc = getattr(ctx, "_ast_service", None)
+    if ast_svc:
+        try:
+            ast_svc.notify_file_changed(path)
+        except Exception:
+            pass
+
+
 def _cap_result(content: str, max_chars: int = MAX_RESULT_CHARS) -> tuple[str, bool]:
     """Cap a tool result string to max_chars. Returns (content, was_truncated)."""
     if len(content) <= max_chars:
@@ -312,6 +339,10 @@ async def execute_single_tool(
                 )
             except Exception:
                 pass
+
+        # Notify code intel of file changes (AST, codebase context, explorer)
+        if _track_path and not result.is_error:
+            _notify_file_changed(ctx, _track_path)
 
         # Cap result size
         result_content = result.result or ""

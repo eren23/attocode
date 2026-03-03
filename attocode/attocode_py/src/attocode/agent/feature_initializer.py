@@ -19,7 +19,7 @@ from attocode.types.budget import BudgetEnforcementMode, ExecutionBudget
 logger = logging.getLogger(__name__)
 
 
-@dataclass
+@dataclass(slots=True)
 class FeatureConfig:
     """Configuration for which features to initialize."""
 
@@ -39,7 +39,7 @@ class FeatureConfig:
     enable_task_manager: bool = True
     enable_codebase_context: bool = True
     enable_interactive_planner: bool = True
-    enable_lsp: bool = False  # Off by default — heavy dependency
+    enable_lsp: bool = True  # Lazy init = no cost until first LSP tool call
     enable_cancellation: bool = True
     enable_dead_letter_queue: bool = True
     enable_self_improvement: bool = True
@@ -309,6 +309,42 @@ async def initialize_features(
             logger.debug("feature_init_failed", extra={"feature": "lsp"}, exc_info=True)
             results["lsp"] = False
 
+    # 17b. Register LSP tools (requires lsp_manager and registry)
+    lsp = getattr(ctx, "_lsp_manager", None)
+    if lsp and hasattr(ctx, "registry") and ctx.registry is not None:
+        try:
+            from attocode.tools.lsp import create_lsp_tools
+            for tool in create_lsp_tools(lsp):
+                ctx.registry.register(tool)
+            results["lsp_tools"] = True
+        except Exception:
+            logger.debug("feature_init_failed", extra={"feature": "lsp_tools"}, exc_info=True)
+            results["lsp_tools"] = False
+
+    # 15c. Register hierarchical explorer tool (requires codebase context)
+    if cbc and hasattr(ctx, "registry") and ctx.registry is not None:
+        try:
+            from attocode.integrations.context.hierarchical_explorer import HierarchicalExplorer
+            from attocode.tools.explore import create_explore_tool
+            from attocode.integrations.context.ast_service import ASTService
+
+            ast_svc = None
+            try:
+                ast_svc = ASTService.get_instance(working_dir) if working_dir else None
+            except Exception:
+                pass
+
+            if ast_svc:
+                ctx._ast_service = ast_svc
+            explorer = HierarchicalExplorer(cbc, ast_service=ast_svc)
+            ctx._hierarchical_explorer = explorer
+            explore_tool = create_explore_tool(explorer)
+            ctx.registry.register(explore_tool)
+            results["hierarchical_explorer"] = True
+        except Exception:
+            logger.debug("feature_init_failed", extra={"feature": "hierarchical_explorer"}, exc_info=True)
+            results["hierarchical_explorer"] = False
+
     # 18. Cancellation manager
     if cfg.enable_cancellation and not getattr(ctx, "cancellation_manager", None):
         try:
@@ -479,6 +515,37 @@ async def initialize_features(
         except Exception:
             logger.warning("feature_init_failed", extra={"feature": "pending_plan"}, exc_info=True)
             results["pending_plan"] = False
+
+    # 30. Security scanner
+    if working_dir and hasattr(ctx, "registry") and ctx.registry is not None:
+        try:
+            from attocode.integrations.security.scanner import SecurityScanner
+            from attocode.tools.security import create_security_scan_tool
+
+            scanner = SecurityScanner(root_dir=working_dir)
+            ctx._security_scanner = scanner
+            sec_tool = create_security_scan_tool(scanner)
+            ctx.registry.register(sec_tool)
+            results["security_scanner"] = True
+        except Exception:
+            logger.debug("feature_init_failed", extra={"feature": "security_scanner"}, exc_info=True)
+            results["security_scanner"] = False
+
+    # 31. Semantic search (optional — degrades gracefully if no embedding provider)
+    if working_dir and hasattr(ctx, "registry") and ctx.registry is not None:
+        try:
+            from attocode.integrations.context.semantic_search import SemanticSearchManager
+            from attocode.tools.semantic_search import create_semantic_search_tool
+
+            sem_mgr = SemanticSearchManager(root_dir=working_dir)
+            ctx._semantic_search = sem_mgr
+            sem_tool = create_semantic_search_tool(sem_mgr)
+            ctx.registry.register(sem_tool)
+            results["semantic_search"] = True
+            logger.info("Semantic search: provider=%s", sem_mgr.provider_name)
+        except Exception:
+            logger.debug("feature_init_failed", extra={"feature": "semantic_search"}, exc_info=True)
+            results["semantic_search"] = False
 
     # Wire cross-references between features
     wire_cross_references(ctx, results)

@@ -53,6 +53,7 @@ class SwarmSummaryBar(Static):
         failed: int = 0,
         cost: float = 0.0,
         elapsed: str = "",
+        active_agents: int = 0,
     ) -> None:
         text = Text()
         # Phase
@@ -64,6 +65,11 @@ class SwarmSummaryBar(Static):
         }.get(phase, "bold")
         text.append(f" {phase.upper()} ", style=phase_style)
         text.append(" \u2502 ", style="dim")
+        # Active agents
+        if active_agents:
+            suffix = "s" if active_agents != 1 else ""
+            text.append(f"{active_agents} agent{suffix} ", style="magenta")
+            text.append("\u2502 ", style="dim")
         # Running
         text.append(f"{running} running ", style="cyan")
         text.append("\u2502 ", style="dim")
@@ -169,6 +175,24 @@ class AttoswarmApp(App[None]):
         if not state:
             state = {}
 
+        # ── Events (read FIRST so activity data is available) ────────
+        raw_events: list[dict[str, Any]] = []
+        try:
+            raw_events = self._store.read_events(limit=500)
+            self._last_events = self._store.build_event_list(raw_events)
+
+            # Overview tab: last 10 events
+            self.query_one("#overview-events", EventsLog).update_events(
+                self._last_events[-10:]
+            )
+            # Full events tab
+            self.query_one("#events-full", EventsLog).update_events(self._last_events)
+        except Exception:
+            pass
+
+        # Build agent activity from events
+        activity = self._store.build_agent_activity(raw_events)
+
         # ── Summary bar ──────────────────────────────────────────────
         dag_summary = state.get("dag_summary", {})
         elapsed_s = state.get("elapsed_s", 0)
@@ -185,6 +209,10 @@ class AttoswarmApp(App[None]):
         running = dag_summary.get("running", 0) if isinstance(dag_summary, dict) else 0
         done = dag_summary.get("done", 0) if isinstance(dag_summary, dict) else 0
         failed = dag_summary.get("failed", 0) if isinstance(dag_summary, dict) else 0
+        active_agents = len([
+            a for a in state.get("active_agents", [])
+            if a.get("status") in ("running", "claiming")
+        ])
 
         try:
             self.query_one("#summary-bar", SwarmSummaryBar).update_summary(
@@ -195,6 +223,7 @@ class AttoswarmApp(App[None]):
                 failed=failed,
                 cost=float(budget.get("cost_used_usd", 0.0)),
                 elapsed=elapsed_str,
+                active_agents=active_agents,
             )
         except Exception:
             pass
@@ -218,32 +247,21 @@ class AttoswarmApp(App[None]):
         except Exception:
             pass
 
-        # ── Dependency tree (Overview tab) ───────────────────────────
-        try:
-            dag_nodes = self._store.build_dag_nodes(state)
-            edges = dag_data.get("edges", [])
-            self.query_one("#dep-tree-widget", DependencyTree).update_dag(dag_nodes, edges)
-        except Exception:
-            pass
+        # ── Agent list (Agents tab + Overview tree) — compute once ────
+        agents = self._store.build_agent_list(state, activity=activity)
 
-        # ── Agent list (Agents tab) ──────────────────────────────────
         try:
-            agents = self._store.build_agent_list(state)
             self.query_one("#agents-dt", AgentsDataTable).update_agents(agents)
         except Exception:
             pass
 
-        # ── Events ───────────────────────────────────────────────────
+        # ── Dependency tree (Overview tab) — reuse agents list
         try:
-            raw_events = self._store.read_events(limit=500)
-            self._last_events = self._store.build_event_list(raw_events)
-
-            # Overview tab: last 10 events
-            self.query_one("#overview-events", EventsLog).update_events(
-                self._last_events[-10:]
+            dag_nodes = self._store.build_dag_nodes(state)
+            edges = dag_data.get("edges", [])
+            self.query_one("#dep-tree-widget", DependencyTree).update_dag(
+                dag_nodes, edges, agents=agents,
             )
-            # Full events tab
-            self.query_one("#events-full", EventsLog).update_events(self._last_events)
         except Exception:
             pass
 

@@ -127,15 +127,36 @@ class DependencyTree(Widget):
     def __init__(self, **kwargs: Any) -> None:
         super().__init__(**kwargs)
         self._dag_nodes: list[dict[str, Any]] = []
+        self._agent_map: dict[str, dict[str, str]] = {}
 
     def compose(self):
         tree: Tree[str] = Tree("Tasks", id="dep-tree")
         tree.show_root = False
         yield tree
 
-    def update_dag(self, nodes: list[dict[str, Any]], edges: list[Any] | None = None) -> None:
-        """Rebuild the tree from nodes and edges."""
+    def update_dag(
+        self,
+        nodes: list[dict[str, Any]],
+        edges: list[Any] | None = None,
+        agents: list[dict[str, Any]] | None = None,
+    ) -> None:
+        """Rebuild the tree from nodes and edges.
+
+        Args:
+            agents: Optional agent list (from build_agent_list) to annotate
+                    tree nodes with agent assignment and activity.
+        """
         self._dag_nodes = nodes
+        # Build task_id -> agent info lookup
+        self._agent_map = {}
+        if agents:
+            for ag in agents:
+                task_id = ag.get("task_id", "")
+                if task_id:
+                    self._agent_map[task_id] = {
+                        "agent_id": ag.get("agent_id", ""),
+                        "activity": ag.get("activity", ""),
+                    }
         self._rebuild(edges)
 
     def _rebuild(self, edges: list[Any] | None = None) -> None:
@@ -205,6 +226,16 @@ class DependencyTree(Widget):
             label.append(task_id, style="bold")
             label.append(f" \u2014 {title}", style="dim")
             label.append(f" [{status}]", style=color)
+
+            # Agent annotation
+            agent_info = self._agent_map.get(task_id)
+            if agent_info:
+                aid = agent_info.get("agent_id", "")
+                act = agent_info.get("activity", "")
+                if aid:
+                    label.append(f" @{aid}", style="cyan")
+                if act:
+                    label.append(f" ({act})", style="italic dim")
 
             kids = children_map.get(task_id, [])
             if kids:

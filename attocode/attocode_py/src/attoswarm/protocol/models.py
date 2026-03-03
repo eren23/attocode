@@ -59,6 +59,7 @@ class TaskSpec:
     symbol_scope: list[str] = field(default_factory=list)
     files_modified: list[str] = field(default_factory=list)
     result_summary: str = ""
+    timeout_override: int | None = None  # per-task timeout (seconds); overrides watchdog default
 
 
 @dataclass(slots=True)

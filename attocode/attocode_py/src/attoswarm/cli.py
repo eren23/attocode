@@ -211,48 +211,26 @@ def _make_subprocess_decompose_fn(cfg: SwarmYamlConfig):  # noqa: ANN202
 
     custom_instructions = (cfg.orchestration.custom_instructions or "").strip()
 
-    def _build_decompose_prompt(goal: str) -> str:
-        prefix = ""
-        if custom_instructions:
-            prefix = f"## Custom Instructions\n{custom_instructions}\n\n"
-        return (
-            prefix
-            + "You are a task decomposition engine for a multi-agent coding swarm.\n\n"
-            "Given the following goal, decompose it into a DAG of concrete, actionable tasks.\n\n"
-            f"## Goal\n{goal}\n\n"
-            f"## Available Roles\n{role_descriptions or '  (none configured -- omit role_hint)'}\n\n"
-            "## Constraints\n"
-            f"- Produce between 2 and {max_tasks} tasks.\n"
-            "- Each task should be completable by a single agent in one pass.\n"
-            "- Tasks should have clear boundaries -- avoid overlapping target files.\n"
-            "- Use deps to express dependencies (task_id references).\n"
-            "- Assign role_hint matching an available role_id when appropriate.\n\n"
-            "## Output Format\n"
-            "Respond with ONLY a JSON array (no markdown fences, no explanation):\n"
-            "[\n"
-            '  {\n'
-            '    "task_id": "task-1",\n'
-            '    "title": "Short title",\n'
-            '    "description": "Detailed description of what to do",\n'
-            '    "deps": [],\n'
-            '    "target_files": ["src/foo.py"],\n'
-            '    "role_hint": "impl",\n'
-            '    "task_kind": "implement"\n'
-            "  }\n"
-            "]\n\n"
-            "task_kind should be one of: analysis, design, implement, test, integrate, judge, critic, merge"
+    def _build_decompose_prompt(goal: str, complexity: str = "") -> str:
+        from attoswarm.coordinator.decompose import build_decompose_prompt, classify_goal_complexity
+        if not complexity:
+            complexity = classify_goal_complexity(goal)
+        return build_decompose_prompt(
+            goal,
+            complexity=complexity,
+            max_tasks=max_tasks,
+            role_descriptions=role_descriptions,
+            custom_instructions=custom_instructions,
         )
 
-    def _build_retry_prompt(goal: str) -> str:
-        prefix = ""
-        if custom_instructions:
-            prefix = f"## Custom Instructions\n{custom_instructions}\n\n"
-        return (
-            prefix
-            + "Decompose this goal into 2-4 coding tasks. Return ONLY a JSON array.\n\n"
-            f"Goal: {goal}\n\n"
-            'Format: [{{"task_id": "task-1", "title": "...", "description": "...", '
-            '"deps": [], "target_files": [], "role_hint": "", "task_kind": "implement"}}]'
+    def _build_retry_prompt(goal: str, complexity: str = "") -> str:
+        from attoswarm.coordinator.decompose import build_retry_prompt, classify_goal_complexity
+        if not complexity:
+            complexity = classify_goal_complexity(goal)
+        return build_retry_prompt(
+            goal,
+            complexity=complexity,
+            custom_instructions=custom_instructions,
         )
 
     def _parse_tasks(raw: str) -> list[_TaskSpec]:
@@ -330,14 +308,26 @@ def _make_subprocess_decompose_fn(cfg: SwarmYamlConfig):  # noqa: ANN202
         goal: str, *, ast_service: Any = None, config: Any = None,
     ) -> list[_TaskSpec]:
         """Decompose a goal into TaskSpecs via subprocess LLM call."""
-        # First attempt with full prompt
+        from attoswarm.coordinator.decompose import classify_goal_complexity, validate_decomposition
+
+        complexity = classify_goal_complexity(goal)
+        logger.info("Goal complexity: %s (word_count=%d)", complexity, len(goal.split()))
+
+        # First attempt with complexity-aware prompt
         try:
-            return await _run_decompose(_build_decompose_prompt(goal))
+            tasks = await _run_decompose(_build_decompose_prompt(goal, complexity))
+            warnings = validate_decomposition(
+                [{"task_id": t.task_id, "title": t.title, "description": t.description} for t in tasks],
+                complexity,
+            )
+            for w in warnings:
+                logger.warning("Decomposition: %s", w.get("message", ""))
+            return tasks
         except Exception as exc:
             logger.warning("Decomposition attempt 1 failed: %s", exc)
 
         # Retry with simpler prompt
-        return await _run_decompose(_build_retry_prompt(goal))
+        return await _run_decompose(_build_retry_prompt(goal, complexity))
 
     return decompose_fn
 

@@ -120,16 +120,53 @@ class TestReadyBatch:
 
 class TestFailureCascade:
     def test_mark_failed_cascades(self) -> None:
+        """mark_failed + cascade_skip_blocked skips transitive dependents."""
         g = AoTGraph()
         g.add_task(_node("t1"))
         g.add_task(_node("t2", deps=["t1"]))
         g.add_task(_node("t3", deps=["t2"]))
         g.compute_levels()
-        skipped = g.mark_failed("t1")
+        g.mark_failed("t1")
+        skipped = g.cascade_skip_blocked()
         assert "t2" in skipped
         assert "t3" in skipped
         assert g.nodes["t2"].status == "skipped"
         assert g.nodes["t3"].status == "skipped"
+
+    def test_partial_deps_not_skipped(self) -> None:
+        """Tasks with >= 50% successful deps are NOT skipped."""
+        g = AoTGraph()
+        g.add_task(_node("t1"))
+        g.add_task(_node("t2"))
+        g.add_task(_node("t3", deps=["t1", "t2"]))
+        g.compute_levels()
+        g.mark_complete("t1")
+        g.mark_failed("t2")
+        skipped = g.cascade_skip_blocked()
+        assert skipped == []  # t3 has 50% done deps → still pending
+        assert g.nodes["t3"].status == "pending"
+
+    def test_partial_deps_ready_batch(self) -> None:
+        """get_ready_batch returns tasks with >= 50% successful deps."""
+        g = AoTGraph()
+        g.add_task(_node("t1"))
+        g.add_task(_node("t2"))
+        g.add_task(_node("t3", deps=["t1", "t2"]))
+        g.compute_levels()
+        g.mark_complete("t1")
+        g.mark_failed("t2")
+        ready = g.get_ready_batch()
+        assert "t3" in ready
+
+    def test_all_deps_failed_skips(self) -> None:
+        """Tasks where ALL deps failed are skipped."""
+        g = AoTGraph()
+        g.add_task(_node("t1"))
+        g.add_task(_node("t2", deps=["t1"]))
+        g.compute_levels()
+        g.mark_failed("t1")
+        skipped = g.cascade_skip_blocked()
+        assert "t2" in skipped
 
 
 class TestCriticalPath:

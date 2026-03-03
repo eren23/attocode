@@ -54,13 +54,13 @@ _STRIP_ENV_VARS = {
 SKIP_REVIEW_KINDS: frozenset[str] = frozenset({"judge", "critic", "merge", "analysis", "design"})
 
 TRANSITIONS: dict[str, set[str]] = {
-    "pending": {"ready", "running", "failed", "blocked"},
-    "ready": {"running", "failed", "blocked"},
+    "pending": {"ready", "running", "failed", "blocked", "skipped"},
+    "ready": {"running", "failed", "blocked", "skipped"},
     "running": {"reviewing", "done", "failed", "ready"},
     "reviewing": {"done", "failed", "ready"},
     "done": set(),
     "failed": set(),
-    "blocked": {"ready", "failed"},
+    "blocked": {"ready", "failed", "skipped"},
     "skipped": set(),
 }
 
@@ -79,6 +79,7 @@ class HybridCoordinator:
         self.running_task_by_agent: dict[str, str] = {}
         self.running_task_last_progress: dict[str, float] = {}
         self.running_task_started_at: dict[str, float] = {}
+        self._task_timeout_overrides: dict[str, int] = {}
         self.outbox_cursors: dict[str, int] = {}
 
         self.adapters: dict[str, object] = {}
@@ -252,8 +253,11 @@ class HybridCoordinator:
                 artifacts=[str(x) for x in t.get("artifacts", []) if isinstance(x, str)],
                 status=str(t.get("status", "pending")),  # type: ignore[arg-type]
                 task_kind=str(t.get("task_kind", "implement")),
+                timeout_override=int(t["timeout_override"]) if t.get("timeout_override") is not None else None,
             )
             tasks.append(task)
+            if task.timeout_override is not None:
+                self._task_timeout_overrides[task.task_id] = task.timeout_override
             task_raw = read_json(self.layout["tasks"] / f"task-{task.task_id}.json", default={})
             status = str(task_raw.get("status", task.status))
             self.task_state[task.task_id] = "ready" if status == "running" else status
@@ -828,28 +832,107 @@ class HybridCoordinator:
         self.running_task_by_agent.pop(agent_id, None)
         self.running_task_last_progress.pop(task_id, None)
         self.running_task_started_at.pop(task_id, None)
+
+        # Capture partial progress from agent outbox before it's lost
+        partial_output = self._capture_partial_output(agent_id)
+
         self._append_event(
             "agent.task.exit",
             {"agent_id": agent_id, "task_id": task_id, "result": "task_failed"},
         )
         self._append_event(
             "agent.task.classified",
-            {"agent_id": agent_id, "task_id": task_id, "classification": "failure", "reason": reason},
+            {
+                "agent_id": agent_id,
+                "task_id": task_id,
+                "classification": "failure",
+                "reason": reason,
+                "partial_output": partial_output[:500] if partial_output else "",
+            },
         )
         task = self._find_task(task_id)
         if task is None:
             return
         if self.task_attempts.get(task_id, 0) < self.config.retries.max_task_attempts:
+            # For duration-exceeded failures, increase timeout on retry
+            if "duration_exceeded" in reason and task.timeout_override is None:
+                task.timeout_override = int(
+                    self.config.watchdog.task_max_duration_seconds * 1.5
+                )
+                self._task_timeout_overrides[task_id] = task.timeout_override
             self._transition_task(task_id, "ready", "coordinator", reason)
             self._persist_task(task, status="ready", last_error=reason)
         else:
             self._transition_task(task_id, "failed", "coordinator", reason)
             self._persist_task(task, status="failed", last_error=reason)
+            # Only cascade-skip tasks whose ALL deps are failed/skipped
+            self._cascade_skip_blocked()
 
     async def _mark_running_task_failed(self, agent_id: str, reason: str) -> None:
         task_id = self.running_task_by_agent.get(agent_id)
         if task_id:
             await self._handle_task_failed(agent_id, task_id, reason)
+
+    def _capture_partial_output(self, agent_id: str) -> str:
+        """Best-effort capture of partial progress from an agent's outbox."""
+        try:
+            outbox_path = self.layout["agents"] / f"agent-{agent_id}.outbox.json"
+            outbox = read_json(outbox_path, {})
+            events = outbox.get("events", [])
+            if events:
+                last_events = events[-3:]
+                return "; ".join(
+                    str(
+                        e.get("payload", {}).get("line")
+                        or e.get("payload", {}).get("message")
+                        or e.get("payload", {}).get("result")
+                        or e.get("type", "")
+                    )[:100]
+                    for e in last_events
+                    if isinstance(e, dict)
+                )
+        except Exception:
+            pass
+        return ""
+
+    def _cascade_skip_blocked(self) -> list[str]:
+        """Skip tasks whose ALL dependencies are failed/skipped (no viable path).
+
+        Unlike immediate cascade, this only skips when there is truly no
+        possibility of the task running (all deps terminal and none succeeded).
+        """
+        if self.manifest is None:
+            return []
+        skipped: list[str] = []
+        changed = True
+        while changed:
+            changed = False
+            for task in self.manifest.tasks:
+                status = self.task_state.get(task.task_id, task.status)
+                if status not in ("pending", "ready"):
+                    continue
+                if not task.deps:
+                    continue
+                # Check if ANY dependency can still succeed
+                has_viable = any(
+                    self.task_state.get(d, "pending") in ("pending", "ready", "running", "reviewing")
+                    for d in task.deps
+                )
+                if not has_viable:
+                    # All deps are terminal — check if enough succeeded for partial execution
+                    done_count = sum(1 for d in task.deps if self.task_state.get(d) == "done")
+                    if task.deps and done_count / len(task.deps) >= 0.5:
+                        continue  # 50%+ deps succeeded — let it run with partial context
+                    self._transition_task(task.task_id, "skipped", "coordinator", "all_deps_failed")
+                    self._persist_task(task, status="skipped", last_error="all_deps_failed")
+                    skipped.append(task.task_id)
+                    changed = True
+        if skipped:
+            self._append_event("task.cascade_skip", {
+                "skipped": skipped,
+                "reason": "all_deps_failed",
+            })
+        return skipped
 
     async def _enforce_task_silence_timeouts(self) -> None:
         timeout = max(5.0, float(self.config.watchdog.task_silence_timeout_seconds))
@@ -881,12 +964,15 @@ class HybridCoordinator:
             )
 
     async def _enforce_task_duration_limits(self) -> None:
-        max_duration = max(300.0, float(self.config.watchdog.task_max_duration_seconds))
+        default_max = max(300.0, float(self.config.watchdog.task_max_duration_seconds))
         now = time.monotonic()
         for agent_id, task_id in list(self.running_task_by_agent.items()):
             started = self.running_task_started_at.get(task_id)
             if started is None:
                 continue
+            # Respect per-task timeout_override (set on retry for timed-out tasks)
+            override = self._task_timeout_overrides.get(task_id)
+            max_duration = float(override) if override is not None else default_max
             elapsed = now - started
             if self.config.run.debug:
                 self._append_event(
@@ -919,6 +1005,11 @@ class HybridCoordinator:
         for agent_id, handle in self.handles.items():
             role = self.role_by_agent[agent_id]
             command = " ".join([handle.spec.binary, *handle.spec.args]).strip()
+            task_id = self.running_task_by_agent.get(agent_id)
+            task = self._find_task(task_id) if task_id else None
+            started_at = self.running_task_started_at.get(task_id, 0) if task_id else 0
+            # Convert monotonic to epoch for TUI consumption
+            started_epoch = time.time() - (time.monotonic() - started_at) if started_at else 0
             active.append(
                 {
                     "agent_id": agent_id,
@@ -928,7 +1019,8 @@ class HybridCoordinator:
                     "model": role.model or role.backend,
                     "execution_mode": role.execution_mode,
                     "status": "running" if handle.process.returncode is None else "exited",
-                    "task_id": self.running_task_by_agent.get(agent_id),
+                    "task_id": task_id,
+                    "task_title": task.title if task else "",
                     "last_heartbeat_ts": handle.last_heartbeat_ts,
                     "cwd": handle.spec.cwd,
                     "command": command,
@@ -937,6 +1029,7 @@ class HybridCoordinator:
                     "stderr_tail": handle.stderr_tail[-800:],
                     "tokens_used": 0,
                     "cost_usd": 0.0,
+                    "started_at_epoch": started_epoch,
                 }
             )
         return active
