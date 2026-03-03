@@ -410,7 +410,7 @@ sequenceDiagram
     participant LLM as LLM Provider
 
     Loop->>AC: check(messages)
-    alt Usage > 80%
+    alt Usage above 80 percent
         AC->>LLM: Summarize progress
         LLM-->>AC: Summary
         AC->>Loop: Compacted messages
