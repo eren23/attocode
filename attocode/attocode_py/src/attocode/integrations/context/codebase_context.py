@@ -11,6 +11,7 @@ Provides intelligent code understanding through:
 from __future__ import annotations
 
 import os
+import time
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
@@ -179,6 +180,141 @@ SKIP_FILENAMES = {
 }
 
 
+def _detect_source_prefixes(root_dir: str) -> list[str]:
+    """Detect source directory prefixes for import resolution.
+
+    Many Python projects use a ``src/`` layout where packages live under
+    ``src/`` (e.g., ``src/mypackage/``).  When files are discovered with
+    relative paths like ``src/mypackage/foo.py``, absolute imports such as
+    ``from mypackage.foo import ...`` fail because the resolver generates
+    candidate ``mypackage/foo.py`` which doesn't match the ``src/``-prefixed
+    key in the file index.
+
+    This function detects such prefixes by examining:
+    1. ``pyproject.toml`` — hatchling ``packages`` or setuptools ``package-dir``
+    2. ``setup.cfg`` — ``[options] package_dir``
+    3. Filesystem fallback — ``src/`` containing Python packages
+
+    Returns:
+        Sorted list of prefix strings ending with ``/`` (e.g., ``["src/"]``).
+    """
+    prefixes: set[str] = set()
+    root = Path(root_dir)
+
+    # --- pyproject.toml ---
+    pyproject = root / "pyproject.toml"
+    if pyproject.exists():
+        tomllib = None
+        try:
+            import tomllib  # Python 3.11+
+        except ImportError:
+            try:
+                import tomli as tomllib  # type: ignore[no-redef]
+            except ImportError:
+                pass
+
+        if tomllib is not None:
+            try:
+                with open(pyproject, "rb") as fh:
+                    data = tomllib.load(fh)
+
+                # Hatchling: [tool.hatch.build.targets.wheel] packages = ["src/pkg"]
+                hatch_packages = (
+                    data.get("tool", {})
+                    .get("hatch", {})
+                    .get("build", {})
+                    .get("targets", {})
+                    .get("wheel", {})
+                    .get("packages", [])
+                )
+                for pkg in hatch_packages:
+                    parts = Path(pkg).parts
+                    if len(parts) >= 2:
+                        prefixes.add(parts[0] + "/")
+
+                # Setuptools: [tool.setuptools] package-dir = {"" = "src"}
+                setup_pkg_dir = (
+                    data.get("tool", {})
+                    .get("setuptools", {})
+                    .get("package-dir", {})
+                )
+                for _key, src_dir in setup_pkg_dir.items():
+                    if src_dir:
+                        prefixes.add(src_dir.rstrip("/") + "/")
+            except Exception:
+                pass
+
+    # --- setup.cfg ---
+    if not prefixes:
+        setup_cfg = root / "setup.cfg"
+        if setup_cfg.exists():
+            try:
+                import configparser
+
+                cfg = configparser.ConfigParser()
+                cfg.read(str(setup_cfg))
+                pkg_dir = cfg.get("options", "package_dir", fallback="")
+                if "=" in pkg_dir:
+                    src_dir = pkg_dir.split("=", 1)[1].strip()
+                    if src_dir:
+                        prefixes.add(src_dir.rstrip("/") + "/")
+            except Exception:
+                pass
+
+    # --- Filesystem fallback ---
+    if not prefixes:
+        src_dir_path = root / "src"
+        if src_dir_path.is_dir():
+            for child in src_dir_path.iterdir():
+                if child.is_dir() and (child / "__init__.py").exists():
+                    prefixes.add("src/")
+                    break
+
+    return sorted(prefixes)
+
+
+def _build_file_index(
+    files: list[FileInfo],
+    root_dir: str,
+) -> dict[str, str]:
+    """Build a file index mapping normalized paths to relative paths.
+
+    In addition to the standard ``relative_path`` keys, this function
+    adds prefix-stripped alternate keys for projects using a ``src/``
+    layout (or similar).  For example, if the index contains
+    ``src/attocode/core/loop.py``, an alternate key
+    ``attocode/core/loop.py`` is also added so that
+    ``_resolve_python_import`` can find it when resolving
+    ``from attocode.core.loop import ...``.
+
+    Args:
+        files: Discovered files with relative paths.
+        root_dir: Repository root directory.
+
+    Returns:
+        Mapping of normalized paths (with ``/``) to relative paths.
+    """
+    file_index: dict[str, str] = {}
+    for f in files:
+        normalized = f.relative_path.replace(os.sep, "/")
+        file_index[normalized] = f.relative_path
+
+    # Detect source prefixes and add stripped alternate keys
+    source_prefixes = _detect_source_prefixes(root_dir)
+    if source_prefixes:
+        extra: dict[str, str] = {}
+        for normalized, rel_path in file_index.items():
+            for prefix in source_prefixes:
+                if normalized.startswith(prefix):
+                    stripped = normalized[len(prefix):]
+                    # Don't override direct matches
+                    if stripped not in file_index:
+                        extra[stripped] = rel_path
+        file_index.update(extra)
+
+    return file_index
+
+
 def _resolve_python_import(module: str, source_file: str, file_index: dict[str, str]) -> str | None:
     """Resolve a Python import module name to a relative file path.
 
@@ -265,11 +401,8 @@ def build_dependency_graph(
 
     graph = DependencyGraph()
 
-    # Build index: normalized relative path -> relative path
-    file_index: dict[str, str] = {}
-    for f in files:
-        normalized = f.relative_path.replace(os.sep, "/")
-        file_index[normalized] = f.relative_path
+    # Build index with prefix-stripped alternate keys for src/ layout
+    file_index = _build_file_index(files, root_dir)
 
     for f in files:
         if f.language not in ("python", "javascript", "typescript"):
@@ -314,6 +447,20 @@ class CodebaseContextManager:
     _file_mtimes: dict[str, float] = field(default_factory=dict, repr=False)
     _dirty_files: set[str] = field(default_factory=set, repr=False)
     _ast_cache: dict[str, Any] = field(default_factory=dict, repr=False)
+    _last_refresh_time: float = field(default=0.0, repr=False)
+    _staleness_threshold: float = field(default=300.0, repr=False)  # 5 minutes
+
+    @property
+    def is_stale(self) -> bool:
+        """Check if the file discovery cache is older than the staleness threshold."""
+        if not self._files or self._last_refresh_time == 0.0:
+            return True
+        return (time.monotonic() - self._last_refresh_time) > self._staleness_threshold
+
+    def _ensure_fresh(self) -> None:
+        """Auto-refresh if the cache is stale."""
+        if self.is_stale:
+            self.discover_files()
 
     def discover_files(self) -> list[FileInfo]:
         """Discover all relevant files in the repository.
@@ -400,6 +547,7 @@ class CodebaseContextManager:
         files.sort(key=lambda f: f.importance, reverse=True)
 
         self._files = files
+        self._last_refresh_time = time.monotonic()
         return files
 
     @property
@@ -545,8 +693,7 @@ class CodebaseContextManager:
         Returns:
             Selected files.
         """
-        if not self._files:
-            self.discover_files()
+        self._ensure_fresh()
 
         if strategy == "relevance" and query:
             return self._select_by_relevance(query, max_files)
@@ -706,10 +853,7 @@ class CodebaseContextManager:
         )
 
         results: list[Any] = []
-        file_index: dict[str, str] = {}
-        for f in self._files:
-            normalized = f.relative_path.replace(os.sep, "/")
-            file_index[normalized] = f.relative_path
+        file_index = _build_file_index(self._files, self.root_dir)
 
         for rel_path in list(self._dirty_files):
             # Find absolute path

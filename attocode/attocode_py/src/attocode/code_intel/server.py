@@ -1,6 +1,6 @@
 """MCP server exposing Attocode's code intelligence capabilities.
 
-Provides 11 tools for deep codebase understanding:
+Provides 18 tools for deep codebase understanding:
 - repo_map: Token-budgeted file tree with symbols
 - symbols: List symbols in a file
 - search_symbols: Fuzzy symbol search across codebase
@@ -12,6 +12,13 @@ Provides 11 tools for deep codebase understanding:
 - project_summary: High-level project overview (CLAUDE.md bootstrap)
 - hotspots: Risk/complexity analysis with ranked hotspots
 - conventions: Code style and convention detection
+- lsp_definition: Type-resolved go-to-definition
+- lsp_references: All references with type awareness
+- lsp_hover: Type signature + docs for symbol
+- lsp_diagnostics: Errors/warnings from language server
+- explore_codebase: Hierarchical drill-down navigation
+- security_scan: Secret/anti-pattern/dependency scanning
+- semantic_search: Natural language code search
 
 Usage::
 
@@ -1250,6 +1257,285 @@ def conventions(sample_size: int = 50) -> str:
 
     header = f"Conventions detected across {len(sample_rels)} files:\n"
     return header + _format_conventions(stats, dir_stats=dir_stats)
+
+
+# ---------------------------------------------------------------------------
+# LSP tools (lazy LSP manager singleton)
+# ---------------------------------------------------------------------------
+
+_lsp_manager = None
+
+
+def _get_lsp_manager():
+    """Lazily initialize the LSP manager for MCP server use."""
+    global _lsp_manager
+    if _lsp_manager is None:
+        from attocode.integrations.lsp.client import LSPConfig, LSPManager
+
+        project_dir = _get_project_dir()
+        config = LSPConfig(
+            enabled=True,
+            root_uri=f"file://{project_dir}",
+        )
+        _lsp_manager = LSPManager(config=config)
+    return _lsp_manager
+
+
+@mcp.tool()
+async def lsp_definition(file: str, line: int, col: int = 0) -> str:
+    """Get the type-resolved definition location of a symbol.
+
+    More accurate than regex cross-references — uses the language server
+    for true type-resolved go-to-definition.
+
+    Args:
+        file: File path (relative to project root or absolute).
+        line: Line number (0-indexed).
+        col: Column number (0-indexed, default 0).
+    """
+    lsp = _get_lsp_manager()
+    project_dir = _get_project_dir()
+
+    if not os.path.isabs(file):
+        file = os.path.join(project_dir, file)
+
+    try:
+        loc = await lsp.get_definition(file, line, col)
+    except Exception as e:
+        return f"LSP not available: {e}"
+
+    if loc is None:
+        return f"No definition found at {file}:{line}:{col}"
+
+    uri = loc.uri
+    if uri.startswith("file://"):
+        uri = uri[7:]
+    try:
+        uri = os.path.relpath(uri, project_dir)
+    except ValueError:
+        pass
+    return f"Definition: {uri}:{loc.range.start.line + 1}:{loc.range.start.character + 1}"
+
+
+@mcp.tool()
+async def lsp_references(
+    file: str, line: int, col: int = 0, include_declaration: bool = True,
+) -> str:
+    """Find all references to a symbol at position with type awareness.
+
+    Args:
+        file: File path (relative to project root or absolute).
+        line: Line number (0-indexed).
+        col: Column number (0-indexed, default 0).
+        include_declaration: Whether to include the declaration itself.
+    """
+    lsp = _get_lsp_manager()
+    project_dir = _get_project_dir()
+
+    if not os.path.isabs(file):
+        file = os.path.join(project_dir, file)
+
+    try:
+        locs = await lsp.get_references(file, line, col, include_declaration=include_declaration)
+    except Exception as e:
+        return f"LSP not available: {e}"
+
+    if not locs:
+        return f"No references found at {file}:{line}:{col}"
+
+    lines = [f"References ({len(locs)}):"]
+    for loc in locs[:50]:
+        uri = loc.uri
+        if uri.startswith("file://"):
+            uri = uri[7:]
+        try:
+            uri = os.path.relpath(uri, project_dir)
+        except ValueError:
+            pass
+        lines.append(f"  {uri}:{loc.range.start.line + 1}:{loc.range.start.character + 1}")
+    if len(locs) > 50:
+        lines.append(f"  ... and {len(locs) - 50} more")
+    return "\n".join(lines)
+
+
+@mcp.tool()
+async def lsp_hover(file: str, line: int, col: int = 0) -> str:
+    """Get type signature and documentation for a symbol at position.
+
+    Args:
+        file: File path (relative to project root or absolute).
+        line: Line number (0-indexed).
+        col: Column number (0-indexed, default 0).
+    """
+    lsp = _get_lsp_manager()
+    project_dir = _get_project_dir()
+
+    if not os.path.isabs(file):
+        file = os.path.join(project_dir, file)
+
+    try:
+        info = await lsp.get_hover(file, line, col)
+    except Exception as e:
+        return f"LSP not available: {e}"
+
+    if info is None:
+        return f"No hover information at {file}:{line}:{col}"
+    return f"Hover at {file}:{line}:{col}:\n{info}"
+
+
+@mcp.tool()
+async def lsp_diagnostics(file: str) -> str:
+    """Get errors and warnings from the language server for a file.
+
+    Args:
+        file: File path to check for diagnostics.
+    """
+    lsp = _get_lsp_manager()
+    project_dir = _get_project_dir()
+
+    if not os.path.isabs(file):
+        file = os.path.join(project_dir, file)
+
+    try:
+        diags = lsp.get_diagnostics(file)
+    except Exception as e:
+        return f"LSP not available: {e}"
+
+    if not diags:
+        return f"No diagnostics for {file}"
+
+    lines = [f"Diagnostics ({len(diags)}):"]
+    for d in diags[:30]:
+        source = f" [{d.source}]" if d.source else ""
+        code = f" ({d.code})" if d.code else ""
+        lines.append(
+            f"  [{d.severity}]{source}{code} "
+            f"L{d.range.start.line + 1}:{d.range.start.character + 1}: "
+            f"{d.message}"
+        )
+    if len(diags) > 30:
+        lines.append(f"  ... and {len(diags) - 30} more")
+    return "\n".join(lines)
+
+
+# ---------------------------------------------------------------------------
+# Hierarchical explorer tool
+# ---------------------------------------------------------------------------
+
+_explorer = None
+
+
+def _get_explorer():
+    """Lazily initialize the hierarchical explorer."""
+    global _explorer
+    if _explorer is None:
+        from attocode.integrations.context.hierarchical_explorer import HierarchicalExplorer
+        ctx = _get_context_mgr()
+        ast_svc = _get_ast_service()
+        _explorer = HierarchicalExplorer(ctx, ast_service=ast_svc)
+    return _explorer
+
+
+@mcp.tool()
+def explore_codebase(
+    path: str = "",
+    max_items: int = 30,
+    importance_threshold: float = 0.3,
+) -> str:
+    """Explore the codebase one directory level at a time.
+
+    Returns directories with file counts and languages, and files with
+    importance scores and top symbols. Use for drill-down navigation
+    on large codebases instead of the full repo map.
+
+    Args:
+        path: Relative directory path ("" for root, e.g. "src/attocode/integrations").
+        max_items: Maximum items (dirs + files) to return (default 30).
+        importance_threshold: Minimum file importance to show (0.0-1.0, default 0.3).
+    """
+    explorer = _get_explorer()
+    result = explorer.explore(
+        path,
+        max_items=max_items,
+        importance_threshold=importance_threshold,
+    )
+    return explorer.format_result(result)
+
+
+# ---------------------------------------------------------------------------
+# Security scanning tool
+# ---------------------------------------------------------------------------
+
+_security_scanner = None
+
+
+def _get_security_scanner():
+    """Lazily initialize the security scanner."""
+    global _security_scanner
+    if _security_scanner is None:
+        from attocode.integrations.security.scanner import SecurityScanner
+        project_dir = _get_project_dir()
+        _security_scanner = SecurityScanner(root_dir=project_dir)
+    return _security_scanner
+
+
+@mcp.tool()
+def security_scan(
+    mode: str = "full",
+    path: str = "",
+) -> str:
+    """Scan the codebase for security issues.
+
+    Detects hardcoded secrets, code anti-patterns, and dependency
+    pinning issues. All scanning is local (no external API calls).
+    Returns a compliance score (0-100) and categorized findings.
+
+    Args:
+        mode: Scan mode — 'quick' (secrets), 'full' (all), 'secrets', 'patterns', 'dependencies'.
+        path: Subdirectory to scan (relative to project root, empty for all).
+    """
+    scanner = _get_security_scanner()
+    report = scanner.scan(mode=mode, path=path)
+    return scanner.format_report(report)
+
+
+# ---------------------------------------------------------------------------
+# Semantic search tool
+# ---------------------------------------------------------------------------
+
+_semantic_search = None
+
+
+def _get_semantic_search():
+    """Lazily initialize the semantic search manager."""
+    global _semantic_search
+    if _semantic_search is None:
+        from attocode.integrations.context.semantic_search import SemanticSearchManager
+        project_dir = _get_project_dir()
+        _semantic_search = SemanticSearchManager(root_dir=project_dir)
+    return _semantic_search
+
+
+@mcp.tool()
+def semantic_search(
+    query: str,
+    top_k: int = 10,
+    file_filter: str = "",
+) -> str:
+    """Search the codebase using natural language queries.
+
+    Finds relevant files, functions, and classes by meaning — not just
+    keyword matching. Uses embeddings when available (sentence-transformers
+    or OpenAI), falls back to keyword matching otherwise.
+
+    Args:
+        query: Natural language search query (e.g. "authentication middleware").
+        top_k: Number of results to return (default 10).
+        file_filter: Optional glob pattern to filter files (e.g. "*.py").
+    """
+    mgr = _get_semantic_search()
+    results = mgr.search(query, top_k=top_k, file_filter=file_filter)
+    return mgr.format_results(results)
 
 
 # ---------------------------------------------------------------------------

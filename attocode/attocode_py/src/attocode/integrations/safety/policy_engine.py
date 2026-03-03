@@ -61,6 +61,16 @@ DEFAULT_RULES: list[PolicyRule] = [
     PolicyRule(tool_pattern="codebase_overview", decision=PolicyDecision.ALLOW, danger_level=DangerLevel.SAFE),
     PolicyRule(tool_pattern="get_repo_map", decision=PolicyDecision.ALLOW, danger_level=DangerLevel.SAFE),
     PolicyRule(tool_pattern="get_tree_view", decision=PolicyDecision.ALLOW, danger_level=DangerLevel.SAFE),
+    PolicyRule(tool_pattern="explore_codebase", decision=PolicyDecision.ALLOW, danger_level=DangerLevel.SAFE),
+    # LSP tools — read-only language server queries
+    PolicyRule(tool_pattern="lsp_definition", decision=PolicyDecision.ALLOW, danger_level=DangerLevel.SAFE),
+    PolicyRule(tool_pattern="lsp_references", decision=PolicyDecision.ALLOW, danger_level=DangerLevel.SAFE),
+    PolicyRule(tool_pattern="lsp_hover", decision=PolicyDecision.ALLOW, danger_level=DangerLevel.SAFE),
+    PolicyRule(tool_pattern="lsp_diagnostics", decision=PolicyDecision.ALLOW, danger_level=DangerLevel.SAFE),
+    # Security scanning — read-only analysis
+    PolicyRule(tool_pattern="security_scan", decision=PolicyDecision.ALLOW, danger_level=DangerLevel.SAFE),
+    # Semantic search — read-only
+    PolicyRule(tool_pattern="semantic_search", decision=PolicyDecision.ALLOW, danger_level=DangerLevel.SAFE),
     # Write operations need awareness
     PolicyRule(tool_pattern="write_file", decision=PolicyDecision.ALLOW, danger_level=DangerLevel.LOW),
     PolicyRule(tool_pattern="edit_file", decision=PolicyDecision.ALLOW, danger_level=DangerLevel.LOW),
@@ -71,7 +81,7 @@ DEFAULT_RULES: list[PolicyRule] = [
 ]
 
 
-@dataclass
+@dataclass(slots=True)
 class PolicyEngine:
     """Evaluates tool calls against policies.
 

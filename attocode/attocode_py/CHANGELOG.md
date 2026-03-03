@@ -12,6 +12,59 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Fix `attoswarm tui` not picking up new TUI widgets when installed via `uv tool install`
 - Enabling code understanding tools of attocode to other AI coders as a skill system
 
+## [0.1.9] - 2026-03-03
+
+### Added
+
+- **7 new MCP code-intel tools** (18 total): `lsp_definition`, `lsp_references`, `lsp_hover`,
+  `lsp_diagnostics`, `explore_codebase`, `security_scan`, `semantic_search`
+- **Import resolution fix for `src/` layout** — `_detect_source_prefixes()` +
+  `_build_file_index()` in `codebase_context.py` fixes dependency graph for projects using
+  `src/` package layout (orphan rate: ~100% → 8%, edges: 0 → 1,062)
+- **Hierarchical codebase explorer** — `hierarchical_explorer.py` with single-level drill-down,
+  importance scores, and symbol annotations
+- **Security scanner** — `integrations/security/` with pattern-based secret detection,
+  anti-pattern scanning, dependency audit
+- **Semantic search** — `integrations/context/semantic_search.py` with keyword-based fallback
+  (embedding support optional)
+- **Vector store + embeddings** — `vector_store.py` and `embeddings.py` for optional
+  embedding-powered search
+- **LSP tools** — `tools/lsp.py` registers go-to-definition, references, hover, diagnostics
+  as agent tools
+- **Explore tool** — `tools/explore.py` for hierarchical codebase navigation
+- **Security tool** — `tools/security.py` for codebase security scanning
+- **Semantic search tool** — `tools/semantic_search.py` for natural language code search
+- **File change notifications** — `_notify_file_changed()` in tool executor notifies codebase
+  context, hierarchical explorer, and AST service on file writes/edits
+- **LSP enabled by default** — lazy initialization means no cost until first LSP tool call
+- **Swarm TUI differential updates** — `AgentsDataTable` and `TasksDataTable` preserve cursor
+  position across refreshes
+- **AoT graph enhancements** — partial-dependency execution support, timeout overrides per task,
+  agent assignment annotations in `DependencyTree`
+- **attoswarm decomposer** — new `coordinator/decompose.py` module
+- **Project metadata** — authors, keywords, classifiers, and project URLs added to `pyproject.toml`
+
+### Changed
+
+- MCP code-intel server expanded from 11 to 18 tools
+- `FeatureConfig.enable_lsp` default changed from `False` to `True`
+- `PolicyEngine` — new safe tool rules for explore, security, and LSP tools
+- Barrel exports updated in `integrations/__init__.py` and `integrations/context/__init__.py`
+
+### Fixed
+
+- **Dependency graph completely broken for `src/` layout projects** — imports like
+  `from attocode.core.loop import ...` were unresolvable because the file index only contained
+  `src/attocode/core/loop.py` keys; the resolver looked up `attocode/core/loop.py` which didn't
+  match. Now `_build_file_index()` adds prefix-stripped alternate keys. This fixes
+  `dependency_graph`, `dependencies`, `impact_analysis`, `hotspots`, and `project_summary`
+  MCP tools.
+
+### Tests
+
+- `test_decompose.py` — new decomposer tests
+- Updated `test_aot_graph.py`, `test_scheduler.py`
+
 ## [0.1.8] - 2026-03-02
 
 ### Added

@@ -66,6 +66,26 @@ from attocode.integrations.context.cross_references import (
     SymbolLocation,
     SymbolRef,
 )
+from attocode.integrations.context.hierarchical_explorer import (
+    DirectoryNode,
+    ExplorerResult,
+    FileNode,
+    HierarchicalExplorer,
+)
+from attocode.integrations.context.semantic_search import (
+    SemanticSearchManager,
+    SemanticSearchResult,
+)
+from attocode.integrations.context.vector_store import (
+    SearchResult as VectorSearchResult,
+    VectorEntry,
+    VectorStore,
+)
+from attocode.integrations.context.embeddings import (
+    EmbeddingProvider,
+    NullEmbeddingProvider,
+    create_embedding_provider,
+)
 
 __all__ = [
     # auto_compaction
@@ -127,4 +147,20 @@ __all__ = [
     "CrossRefIndex",
     "SymbolLocation",
     "SymbolRef",
+    # hierarchical_explorer
+    "DirectoryNode",
+    "ExplorerResult",
+    "FileNode",
+    "HierarchicalExplorer",
+    # semantic_search
+    "SemanticSearchManager",
+    "SemanticSearchResult",
+    # vector_store
+    "VectorSearchResult",
+    "VectorEntry",
+    "VectorStore",
+    # embeddings
+    "EmbeddingProvider",
+    "NullEmbeddingProvider",
+    "create_embedding_provider",
 ]
