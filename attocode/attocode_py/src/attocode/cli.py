@@ -183,6 +183,11 @@ def _run_single_turn(config: Any, prompt: str) -> None:
                 .with_temperature(config.temperature)
                 .with_sandbox(True)
                 .with_spawn_agent(True)
+                .with_compaction(
+                    True,
+                    warning_threshold=config.compaction_warning_threshold,
+                    compaction_threshold=config.compaction_threshold,
+                )
             )
 
             if config.session_dir:
@@ -364,6 +369,11 @@ def _run_tui(config: Any) -> None:
         .with_temperature(config.temperature)
         .with_sandbox(True)
         .with_spawn_agent(True)
+        .with_compaction(
+            True,
+            warning_threshold=config.compaction_warning_threshold,
+            compaction_threshold=config.compaction_threshold,
+        )
     )
 
     if config.session_dir:
@@ -412,6 +422,31 @@ def _run_tui(config: Any) -> None:
     builder = builder.with_approval_callback(approval_bridge.request_approval)
 
     agent = builder.build()
+
+    async def _request_budget_extension(
+        current_tokens: int,
+        max_tokens: int,
+        requested: int,
+        reason: str = "",
+    ) -> bool:
+        if app is None:
+            return False
+        used_pct = (current_tokens / max_tokens) if max_tokens > 0 else 0.0
+        return await app.budget_bridge.request_extension(
+            current_tokens=current_tokens,
+            used_pct=used_pct,
+            requested_tokens=requested,
+            reason=reason,
+        )
+
+    agent.set_extension_handler(
+        lambda req: _request_budget_extension(
+            int(req.get("current_tokens", 0)),
+            int(req.get("max_tokens", 0)),
+            int(req.get("requested_additional", 0)),
+            str(req.get("reason", "")),
+        )
+    )
 
     def _post_event(msg: Any) -> None:
         """Thread-safe post of a Textual message to the app."""
@@ -485,6 +520,15 @@ def _run_tui(config: Any) -> None:
                 message=event.metadata.get("message", "") if event.metadata else "",
                 usage_fraction=1.0,
             ))
+        elif event.type == EventType.BUDGET_EXTENSION_GRANTED:
+            meta = event.metadata or {}
+            new_max = int(meta.get("new_max_tokens", 0))
+            _post_event(StatusUpdate(
+                f"Budget extended. New max: {new_max:,} tokens" if new_max else "Budget extended.",
+                mode="info",
+            ))
+        elif event.type == EventType.BUDGET_EXTENSION_DENIED:
+            _post_event(StatusUpdate("Budget extension denied.", mode="info"))
         elif event.type == EventType.COMPACTION_START:
             _post_event(StatusUpdate("Compacting context...", mode="info"))
         elif event.type == EventType.COMPACTION_COMPLETE:

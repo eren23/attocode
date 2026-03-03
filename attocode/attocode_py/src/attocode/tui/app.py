@@ -188,6 +188,9 @@ class AttocodeApp(App):
             except Exception:
                 pass
 
+        # Prime all status metrics on first paint.
+        self._sync_status_metrics(refresh_context_window=True)
+
         # Set up bridge handlers
         self.approval_bridge.set_handler(self._show_approval_dialog)
         self.budget_bridge.set_handler(self._show_budget_dialog)
@@ -198,6 +201,40 @@ class AttocodeApp(App):
 
         # Focus input
         self.query_one("#input-area", PromptInput).focus_input()
+
+    def _sync_status_metrics(self, *, refresh_context_window: bool = False) -> None:
+        """Sync status bar context+budget values from the active agent."""
+        if not self._agent:
+            return
+        status = self.query_one("#status-bar", StatusBar)
+        try:
+            budget = getattr(self._agent, "budget", None)
+            if budget and hasattr(budget, "max_tokens"):
+                status.max_tokens = int(budget.max_tokens)
+        except Exception:
+            pass
+        try:
+            ctx = self._agent.context
+            if ctx:
+                status.total_tokens = int(getattr(ctx.metrics, "total_tokens", 0))
+                if ctx.compaction_manager:
+                    check = ctx.compaction_manager.check(ctx.messages)
+                    status.context_pct = check.usage_fraction
+                    status.context_tokens = check.estimated_tokens
+        except Exception:
+            pass
+        try:
+            status.budget_pct = self._agent.get_budget_usage()
+        except Exception:
+            pass
+        if refresh_context_window:
+            try:
+                from attocode.providers.base import get_model_context_window
+                model_id = getattr(getattr(self._agent, "config", None), "model", "") or self._model_name
+                if model_id:
+                    status.context_window = get_model_context_window(model_id)
+            except Exception:
+                pass
 
     # --- Theme management ---
 
@@ -312,9 +349,11 @@ class AttocodeApp(App):
                 if rows:
                     from attocode.tui.widgets.metrics_table import MetricsScreen
                     self.push_screen(MetricsScreen(cmd.lstrip("/").title(), rows))
+                    self._sync_status_metrics()
                     return
 
             log.add_system_message(result.output)
+            self._sync_status_metrics()
 
         asyncio.ensure_future(_run())
 
@@ -408,19 +447,7 @@ class AttocodeApp(App):
         status = self.query_one("#status-bar", StatusBar)
         status.cost += event.cost
         status.total_tokens += event.tokens
-        if self._agent:
-            try:
-                status.budget_pct = self._agent.get_budget_usage()
-            except Exception:
-                pass
-            try:
-                ctx = self._agent.context
-                if ctx and ctx.compaction_manager:
-                    check = ctx.compaction_manager.check(ctx.messages)
-                    status.context_pct = check.usage_fraction
-                    status.context_tokens = check.estimated_tokens
-            except Exception:
-                pass
+        self._sync_status_metrics()
 
         # Feed live dashboard accumulator
         self._live_accumulator.record_llm(event.tokens, event.cost)
@@ -479,19 +506,7 @@ class AttocodeApp(App):
         status = self.query_one("#status-bar", StatusBar)
         status.cost += event.cost
         status.total_tokens += event.tokens
-        if self._agent:
-            try:
-                status.budget_pct = self._agent.get_budget_usage()
-            except Exception:
-                pass
-            try:
-                ctx = self._agent.context
-                if ctx and ctx.compaction_manager:
-                    check = ctx.compaction_manager.check(ctx.messages)
-                    status.context_pct = check.usage_fraction
-                    status.context_tokens = check.estimated_tokens
-            except Exception:
-                pass
+        self._sync_status_metrics()
 
         # Update token sparkline
         self._update_sparkline(event.tokens)
@@ -515,11 +530,7 @@ class AttocodeApp(App):
     def on_iteration_update(self, event: IterationUpdate) -> None:
         """Iteration counter update."""
         self.query_one("#status-bar", StatusBar).iteration = event.iteration
-        if self._agent:
-            try:
-                self.query_one("#status-bar", StatusBar).budget_pct = self._agent.get_budget_usage()
-            except Exception:
-                pass
+        self._sync_status_metrics()
 
         # Feed live dashboard accumulator
         self._live_accumulator.record_iteration(event.iteration)
@@ -532,6 +543,7 @@ class AttocodeApp(App):
             self.notify(event.text, severity="error", timeout=6)
         elif event.mode == "info":
             self.query_one("#message-log", MessageLog).add_system_message(event.text)
+        self._sync_status_metrics()
 
     def on_swarm_status_update(self, event: SwarmStatusUpdate) -> None:
         """Swarm status snapshot update."""

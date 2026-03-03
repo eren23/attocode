@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from dataclasses import dataclass
+
 import pytest
 
 from attocode.tui.app import AttocodeApp
@@ -17,6 +19,23 @@ from attocode.tui.widgets.input_area import PromptInput
 from attocode.tui.widgets.message_log import MessageLog
 from attocode.tui.widgets.status_bar import StatusBar
 from attocode.tui.widgets.tool_calls import ToolCallsPanel
+
+
+@dataclass
+class _FakeBudget:
+    max_tokens: int
+
+
+@dataclass
+class _FakeConfig:
+    model: str
+
+
+class _FakeAgent:
+    def __init__(self) -> None:
+        self.working_dir = "/tmp/demo-project"
+        self.budget = _FakeBudget(max_tokens=1_000_000)
+        self.config = _FakeConfig(model="openrouter/test-model")
 
 
 class TestAttocodeAppComposition:
@@ -143,3 +162,15 @@ class TestAttocodeAppPilot:
             status = app.query_one("#status-bar", StatusBar)
             assert status.budget_pct == pytest.approx(0.5)
             assert status.context_pct == pytest.approx(0.3)
+
+    @pytest.mark.asyncio
+    async def test_on_mount_wires_dynamic_context_window(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        from attocode import providers
+
+        monkeypatch.setattr(providers.base, "get_model_context_window", lambda _model_id: 333_000)
+
+        app = AttocodeApp(agent=_FakeAgent(), model_name="openrouter/test-model", git_branch="main")
+        async with app.run_test() as pilot:
+            status = app.query_one("#status-bar", StatusBar)
+            assert status.context_window == 333_000
+            assert status.max_tokens == 1_000_000

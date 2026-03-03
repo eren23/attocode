@@ -46,6 +46,24 @@ def _get_ctx(agent: Any) -> Any:
     return getattr(agent, "context", None) if agent else None
 
 
+async def _get_or_init_session_store(agent: Any) -> Any:
+    """Get session store from context/agent or lazily initialize via agent."""
+    ctx = _get_ctx(agent)
+    if ctx and getattr(ctx, "session_store", None):
+        return ctx.session_store
+
+    store = getattr(agent, "session_store", None) if agent else None
+    if store:
+        return store
+
+    if agent and hasattr(agent, "ensure_session_store"):
+        try:
+            return await agent.ensure_session_store()
+        except Exception:
+            return None
+    return None
+
+
 def _get_working_dir(agent: Any) -> str:
     ctx = _get_ctx(agent)
     wd = getattr(ctx, "working_dir", None) if ctx else None
@@ -434,12 +452,17 @@ async def _extend_budget_command(agent: Any, arg: str) -> CommandResult:
     if not ctx:
         return CommandResult(output="No active context.")
 
-    ctx.budget = ctx.budget.__class__(
-        max_tokens=ctx.budget.max_tokens + amount,
-        max_iterations=ctx.budget.max_iterations,
-        max_cost=ctx.budget.max_cost,
-    )
-    return CommandResult(output=f"Budget extended by {amount:,} tokens. New max: {ctx.budget.max_tokens:,}")
+    if hasattr(agent, "apply_budget_extension"):
+        new_max = agent.apply_budget_extension(amount)
+    else:
+        # Fallback for legacy test doubles.
+        ctx.budget = ctx.budget.__class__(
+            max_tokens=ctx.budget.max_tokens + amount,
+            max_iterations=ctx.budget.max_iterations,
+            max_cost=ctx.budget.max_cost,
+        )
+        new_max = ctx.budget.max_tokens
+    return CommandResult(output=f"Budget extended by {amount:,} tokens. New max: {new_max:,}")
 
 
 def _model_command(agent: Any, arg: str) -> CommandResult:
@@ -511,8 +534,7 @@ async def _save_command(agent: Any) -> CommandResult:
 # ============================================================
 
 async def _sessions_command(agent: Any, arg: str) -> CommandResult:
-    ctx = _get_ctx(agent)
-    store = getattr(ctx, "session_store", None) if ctx else None
+    store = await _get_or_init_session_store(agent)
 
     if not store:
         return CommandResult(output="Session persistence not configured.")
@@ -542,8 +564,16 @@ async def _load_command(agent: Any, session_id: str) -> CommandResult:
     if not session_id:
         return CommandResult(output="Usage: /load <session_id>")
 
+    if session_id.startswith("trace-"):
+        return CommandResult(
+            output=(
+                f"'{session_id}' is a trace session from Dashboard analysis, not a resumable DB session.\n"
+                "Use /sessions to list resumable session IDs from SQLite."
+            )
+        )
+
     ctx = _get_ctx(agent)
-    store = getattr(ctx, "session_store", None) if ctx else None
+    store = await _get_or_init_session_store(agent)
 
     if not store:
         return CommandResult(output="Session persistence not configured.")
@@ -557,12 +587,21 @@ async def _load_command(agent: Any, session_id: str) -> CommandResult:
         if not checkpoint:
             return CommandResult(output=f"No checkpoint found for session '{session_id}'.")
 
+        if not ctx:
+            if agent and hasattr(agent, "config"):
+                agent.config.resume_session = session_id
+            return CommandResult(
+                output=f"Session {session_id} staged for resume: {session.task}\n"
+                f"  Messages: {len(checkpoint.messages)}\n"
+                "  Send your next prompt to continue this session."
+            )
+
         return CommandResult(
             output=f"Loaded session {session_id}: {session.task}\n"
             f"  Status: {session.status}\n"
             f"  Messages: {len(checkpoint.messages)}\n"
             f"  Tokens: {session.total_tokens:,}\n"
-            f"  Note: Full resume requires agent restart with --resume flag."
+            "  Note: Use /resume <session_id> to restore messages now."
         )
     except Exception as e:
         return CommandResult(output=f"Error loading session: {e}")
@@ -570,19 +609,50 @@ async def _load_command(agent: Any, session_id: str) -> CommandResult:
 
 async def _resume_command(agent: Any, session_id: str) -> CommandResult:
     if not session_id:
+        store = await _get_or_init_session_store(agent)
+        if not store:
+            return CommandResult(
+                output="Usage: /resume <session_id>\n"
+                "Tip: Use /sessions to see available sessions."
+            )
+        try:
+            recent = await store.list_sessions(limit=1)
+            if not recent:
+                return CommandResult(output="No sessions found. Use /sessions to list available IDs.")
+            session_id = recent[0].id
+        except Exception as e:
+            return CommandResult(output=f"Error listing sessions: {e}")
+
+    if session_id.startswith("trace-"):
         return CommandResult(
-            output="Usage: /resume <session_id>\n"
-            "Tip: Use /sessions to see available sessions."
+            output=(
+                f"'{session_id}' is a trace session from Dashboard analysis, not a resumable DB session.\n"
+                "Use /sessions to list resumable session IDs from SQLite."
+            )
         )
 
     ctx = _get_ctx(agent)
-    store = getattr(ctx, "session_store", None) if ctx else None
+    store = await _get_or_init_session_store(agent)
 
     if not store:
         return CommandResult(
             output=f"Session resume for '{session_id}' requires restarting with:\n"
             f"  attocode --resume {session_id}"
         )
+
+    if not ctx:
+        try:
+            session = await store.get_session(session_id)
+            if not session:
+                return CommandResult(output=f"Session '{session_id}' not found.")
+            if agent and hasattr(agent, "config"):
+                agent.config.resume_session = session_id
+            return CommandResult(
+                output=f"Session {session_id} staged for resume: {session.task}\n"
+                "Send your next prompt to continue this session."
+            )
+        except Exception as e:
+            return CommandResult(output=f"Error resuming session: {e}")
 
     try:
         resume_data = await store.resume_session(session_id)
@@ -624,7 +694,7 @@ async def _checkpoint_command(agent: Any) -> CommandResult:
 
 async def _checkpoints_command(agent: Any, session_id: str) -> CommandResult:
     ctx = _get_ctx(agent)
-    store = getattr(ctx, "session_store", None) if ctx else None
+    store = await _get_or_init_session_store(agent)
 
     if not store:
         return CommandResult(output="Session persistence not configured.")

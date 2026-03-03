@@ -147,7 +147,7 @@ class SessionBrowserPane(Container):
         self.marked_for_compare: list[str] = []
 
     def compose(self) -> ComposeResult:
-        yield Input(placeholder="Filter sessions... (/)", id="session-search", classes="search-bar")
+        yield Input(placeholder="Filter trace sessions... (/)", id="session-search", classes="search-bar")
         yield Static("ID                    Goal                                          Time    Cost   Score", classes="session-header")
         with Vertical(id="session-list-container", classes="session-list"):
             yield Static("Loading sessions...", classes="empty-message", id="loading-msg")

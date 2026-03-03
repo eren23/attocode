@@ -184,7 +184,12 @@ def check_iteration_budget(ctx: AgentContext) -> BudgetPreflightResult:
     return BudgetPreflightResult(can_continue=True)
 
 
-async def handle_auto_compaction(ctx: AgentContext) -> CompactionResult:
+async def handle_auto_compaction(
+    ctx: AgentContext,
+    *,
+    force: bool = False,
+    reason: str = "auto",
+) -> CompactionResult:
     """Trigger compaction at thresholds.
 
     Two-stage protocol:
@@ -197,18 +202,81 @@ async def handle_auto_compaction(ctx: AgentContext) -> CompactionResult:
         return CompactionResult(compacted=False)
 
     check = ctx.compaction_manager.check(ctx.messages)
+    context_usage = check.usage_fraction
+    budget_usage = 0.0
+    if ctx.economics is not None:
+        try:
+            budget_usage = float(getattr(ctx.economics, "usage_fraction", 0.0))
+        except Exception:
+            budget_usage = 0.0
+    threshold = float(getattr(ctx.compaction_manager, "compaction_threshold", 0.8))
+    effective_usage = max(context_usage, budget_usage)
 
-    if check.status.value not in ("needs_compaction",):
+    context_trigger = check.status.value in ("needs_compaction",) or context_usage >= threshold
+    budget_trigger = budget_usage >= threshold
+    needs_compaction = force or context_trigger or budget_trigger
+    if not needs_compaction:
         return CompactionResult(compacted=False)
 
     messages_before = len(ctx.messages)
+    trigger_basis = "both" if context_trigger and budget_trigger else ("context" if context_trigger else ("budget" if budget_trigger else "forced"))
 
     ctx.emit_simple(
         EventType.COMPACTION_START,
-        metadata={"usage": check.usage_fraction, "messages": messages_before},
+        metadata={
+            "usage": effective_usage,
+            "context_usage": context_usage,
+            "budget_usage": budget_usage,
+            "messages": messages_before,
+            "trigger_basis": trigger_basis,
+            "force": force,
+            "reason": reason,
+        },
     )
 
     try:
+        use_emergency = force and check.status.value not in ("needs_compaction",)
+        if use_emergency:
+            compacted = ctx.compaction_manager.emergency_compact(ctx.messages)
+            messages_after = len(compacted)
+            ctx.messages = compacted
+            tokens_after = ctx.compaction_manager.check(ctx.messages).estimated_tokens
+            tokens_saved = max(0, check.estimated_tokens - tokens_after)
+
+            if ctx.economics:
+                ctx.economics.update_baseline(ctx.metrics.total_tokens)
+
+            if ctx.session_store and ctx.session_id:
+                try:
+                    await ctx.session_store.log_compaction(
+                        ctx.session_id,
+                        ctx.iteration,
+                        messages_before,
+                        messages_after,
+                        tokens_saved=tokens_saved,
+                        strategy="auto_emergency",
+                    )
+                except Exception:
+                    pass
+
+            ctx.emit_simple(
+                EventType.COMPACTION_COMPLETE,
+                metadata={
+                    "messages_before": messages_before,
+                    "messages_after": messages_after,
+                    "tokens_saved": tokens_saved,
+                    "trigger_basis": trigger_basis,
+                    "strategy": "emergency",
+                },
+            )
+
+            return CompactionResult(
+                compacted=True,
+                messages_before=messages_before,
+                messages_after=messages_after,
+                tokens_saved=tokens_saved,
+            )
+
         # Stage 0: Extract references for reversible compaction
         from attocode.tricks.reversible_compaction import (
             ReversibleCompactor,
@@ -303,6 +371,8 @@ async def handle_auto_compaction(ctx: AgentContext) -> CompactionResult:
 
         messages_after = len(compacted)
         ctx.messages = compacted
+        tokens_after = ctx.compaction_manager.check(ctx.messages).estimated_tokens
+        tokens_saved = max(0, check.estimated_tokens - tokens_after)
 
         # Update economics baseline after compaction
         if ctx.economics:
@@ -316,7 +386,7 @@ async def handle_auto_compaction(ctx: AgentContext) -> CompactionResult:
                     ctx.iteration,
                     messages_before,
                     messages_after,
-                    tokens_saved=0,  # estimate later
+                    tokens_saved=tokens_saved,
                     strategy="auto",
                 )
             except Exception:
@@ -327,6 +397,9 @@ async def handle_auto_compaction(ctx: AgentContext) -> CompactionResult:
             metadata={
                 "messages_before": messages_before,
                 "messages_after": messages_after,
+                "tokens_saved": tokens_saved,
+                "trigger_basis": trigger_basis,
+                "strategy": "summary",
             },
         )
 
@@ -334,6 +407,7 @@ async def handle_auto_compaction(ctx: AgentContext) -> CompactionResult:
             compacted=True,
             messages_before=messages_before,
             messages_after=messages_after,
+            tokens_saved=tokens_saved,
         )
 
     except Exception as e:
@@ -741,6 +815,8 @@ async def run_execution_loop(
     baseline_set = False
     wrapup = WrapupState()
     consecutive_tool_errors = 0
+    incomplete_auto_retries = 0
+    max_incomplete_auto_retries = 2
 
     ctx.emit_simple(EventType.START, task="execution_loop")
 
@@ -781,7 +857,7 @@ async def run_execution_loop(
 
             # Recovery action: trigger compaction
             if preflight.recovery_action == "compaction":
-                await handle_auto_compaction(ctx)
+                await handle_auto_compaction(ctx, force=True, reason="budget_recovery")
 
             # 1b. External cancellation / wrapup check
             ext_check = check_external_cancellation(ctx, wrapup)
@@ -905,6 +981,26 @@ async def run_execution_loop(
             analysis = analyze_completion(response)
 
             if analysis.should_stop and not response.has_tool_calls:
+                if analysis.reason in (CompletionReason.FUTURE_INTENT, CompletionReason.INCOMPLETE_ACTION):
+                    if incomplete_auto_retries < max_incomplete_auto_retries:
+                        incomplete_auto_retries += 1
+                        ctx.add_message(Message(
+                            role=Role.USER,
+                            content=(
+                                "[System: Your previous response says work remains. "
+                                "Do not wrap up yet. Continue implementation by calling the next "
+                                "required tools now. If blocked, report the exact blocker with "
+                                "the failing command/tool and error output.]"
+                            ),
+                        ))
+                        continue
+                    return LoopResult(
+                        success=False,
+                        response=last_response,
+                        reason=analysis.reason,
+                        message=analysis.message or "Model repeatedly returned narrative-only incomplete output.",
+                    )
+
                 # Record completion in learning store
                 if ctx.learning_store is not None:
                     try:
@@ -934,6 +1030,7 @@ async def run_execution_loop(
 
             # 8. Execute tool calls if present
             if response.has_tool_calls:
+                incomplete_auto_retries = 0
                 # Pre-filter: hard-block doom loop repeats (>= 5 identical calls)
                 calls_to_execute = list(response.tool_calls)
                 blocked_results: list[ToolResult] = []

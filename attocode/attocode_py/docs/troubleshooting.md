@@ -27,6 +27,35 @@ Or run the setup wizard:
 /setup
 ```
 
+## Edited Code But TUI Still Shows Old Behavior
+
+**Symptom:** You changed code locally, but `attocode` still behaves like an old version.
+
+**Cause:** Your PATH command is pointing at a previously installed tool environment.
+
+**Fix (editable local install):**
+
+```bash
+uv tool install --force --editable --no-cache --from /absolute/path/to/attocode/attocode_py attocode
+```
+
+Example:
+
+```bash
+uv tool install --force --editable --no-cache --from /Users/eren/Documents/AI/first-principles-agent/attocode/attocode_py attocode
+```
+
+Then restart the running TUI process.
+
+Useful checks:
+
+```bash
+command -v attocode
+head -n 1 "$(command -v attocode)"
+```
+
+Note: the install command must be one line; terminal wrapping of long paths is only visual.
+
 ## Rate Limits
 
 **Symptom:** `ProviderError: Rate limit exceeded` or `429 Too Many Requests`

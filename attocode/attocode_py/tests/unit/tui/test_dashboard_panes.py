@@ -61,7 +61,7 @@ class TestDashboardTabDefinitions:
 
     def test_tab_labels(self) -> None:
         labels = [t[1] for t in _TABS]
-        assert labels == ["Live", "Sessions", "Detail", "Compare", "Swarm"]
+        assert labels == ["Live", "Trace Sessions", "Detail", "Compare", "Swarm"]
 
     def test_tab_pane_ids(self) -> None:
         pane_ids = [t[2] for t in _TABS]

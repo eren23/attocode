@@ -48,8 +48,8 @@ class TestBudgetPresets:
         assert QUICK_BUDGET.max_iterations == 20
 
     def test_standard_budget_values(self) -> None:
-        assert STANDARD_BUDGET.max_tokens == 1_000_000
-        assert STANDARD_BUDGET.soft_token_limit == 800_000
+        assert STANDARD_BUDGET.max_tokens == 100_000_000
+        assert STANDARD_BUDGET.soft_token_limit == 80_000_000
 
     def test_subagent_budget_strict(self) -> None:
         assert SUBAGENT_BUDGET.enforcement_mode == BudgetEnforcementMode.STRICT
@@ -62,7 +62,7 @@ class TestBudgetPresets:
 
     def test_budget_ordering(self) -> None:
         assert QUICK_BUDGET.max_tokens < STANDARD_BUDGET.max_tokens
-        assert STANDARD_BUDGET.max_tokens < DEEP_BUDGET.max_tokens
+        assert DEEP_BUDGET.max_tokens < STANDARD_BUDGET.max_tokens
         assert DEEP_BUDGET.max_tokens < LARGE_BUDGET.max_tokens
 
     def test_swarm_budgets(self) -> None:

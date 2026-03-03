@@ -320,7 +320,7 @@ class TestBudgetEnforcementMode:
 class TestExecutionBudget:
     def test_defaults(self) -> None:
         b = ExecutionBudget()
-        assert b.max_tokens == 1_000_000
+        assert b.max_tokens == 100_000_000
         assert b.enforcement_mode == BudgetEnforcementMode.STRICT
 
     def test_soft_ratio(self) -> None:
@@ -364,7 +364,7 @@ class TestPresetBudgets:
         assert QUICK_BUDGET.max_iterations == 20
 
     def test_standard(self) -> None:
-        assert STANDARD_BUDGET.max_tokens == 1_000_000
+        assert STANDARD_BUDGET.max_tokens == 100_000_000
 
     def test_deep(self) -> None:
         assert DEEP_BUDGET.max_tokens == 5_000_000

@@ -25,6 +25,22 @@ uv tool install --force . --with anthropic --with openai
 
 This installs three commands globally: `attocode`, `attocodepy`, and `attoswarm`. Re-run the same command to update after pulling new code.
 
+### Editable tool install (recommended for local development)
+
+Use this when you want `attocode` on PATH to run your local workspace directly:
+
+```bash
+uv tool install --force --editable --no-cache --from /absolute/path/to/attocode/attocode_py attocode
+```
+
+Example:
+
+```bash
+uv tool install --force --editable --no-cache --from /Users/eren/Documents/AI/first-principles-agent/attocode/attocode_py attocode
+```
+
+Note: this is a single command. If your terminal wraps lines, do not split the path.
+
 ### Optional provider extras
 
 ```bash
@@ -143,6 +159,11 @@ attocode
 The `attocode` command always operates on **the current working directory** --- it reads `.attocode/config.json` from where you run it, so the install location doesn't matter.
 
 **`uv tool install` (recommended):** Already on `PATH` after install --- `attocode`, `attocodepy`, and `attoswarm` all work from any directory.
+For editable local development installs, use:
+
+```bash
+uv tool install --force --editable --no-cache --from /absolute/path/to/attocode/attocode_py attocode
+```
 
 **`uv run` (from the project directory):**
 

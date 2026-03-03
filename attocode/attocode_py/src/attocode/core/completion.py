@@ -50,6 +50,20 @@ def analyze_completion(response: ChatResponse) -> CompletionAnalysis:
     if response.stop_reason == StopReason.MAX_TOKENS:
         return CompletionAnalysis.continue_running()
 
+    content = (response.content or "").strip().lower()
+
+    if _has_incomplete_action(content):
+        return CompletionAnalysis.stop(
+            CompletionReason.INCOMPLETE_ACTION,
+            "Model response indicates the task is incomplete.",
+        )
+
+    if _has_future_intent(content):
+        return CompletionAnalysis.stop(
+            CompletionReason.FUTURE_INTENT,
+            "Model response indicates remaining work.",
+        )
+
     # Normal completion
     return CompletionAnalysis.stop(CompletionReason.COMPLETED)
 

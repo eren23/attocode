@@ -88,17 +88,24 @@ class StatusBar(Static):
             text.append(f" {short_model}", style="bold")
             text.append(" \u2502 ", style="dim")
 
-        # Progress bar (20 chars, colored by threshold)
-        fraction = max(self.context_pct, self.budget_pct)
-        bar = _render_progress_bar(fraction, _BAR_WIDTH)
-        style = _usage_style(fraction)
-        text.append(bar, style=style)
-        text.append(f" {fraction:.0%}", style=style)
+        # Progress bar tracks context usage (compaction signal).
+        ctx_style = _usage_style(self.context_pct)
+        bud_style = _usage_style(self.budget_pct)
+        bar = _render_progress_bar(self.context_pct, _BAR_WIDTH)
+        text.append(bar, style=ctx_style)
+        text.append(f" ctx {self.context_pct:.0%}", style=ctx_style)
+        text.append(" ", style="dim")
+        text.append(f"bud {self.budget_pct:.0%}", style=bud_style)
         text.append(" \u2502 ", style="dim")
 
-        # Token ratio (context window usage, not budget)
+        # Show both context and budget token ratios together.
+        text.append("ctx ", style="dim")
         text.append(f"{self.context_tokens:,}", style="")
         text.append(f"/{self.context_window:,}", style="dim")
+        text.append(" \u00b7 ", style="dim")
+        text.append("bud ", style="dim")
+        text.append(f"{self.total_tokens:,}", style="")
+        text.append(f"/{self.max_tokens:,}", style="dim")
         text.append(" \u2502 ", style="dim")
 
         # Git branch + file count
@@ -258,6 +265,9 @@ class StatusBar(Static):
         self.refresh()
 
     def watch_total_tokens(self) -> None:
+        self.refresh()
+
+    def watch_max_tokens(self) -> None:
         self.refresh()
 
     def watch_files_changed(self) -> None:
