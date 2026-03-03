@@ -12,6 +12,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Fix `attoswarm tui` not picking up new TUI widgets when installed via `uv tool install`
 - Enabling code understanding tools of attocode to other AI coders as a skill system
 
+## [0.1.11] - 2026-03-03
+
+### Added
+
+- **6 new IDE integration targets for code-intel MCP server** — `attocode code-intel install`
+  now supports 10 targets (up from 4):
+  - **VS Code / GitHub Copilot** (`vscode`) — writes `.vscode/mcp.json`
+  - **Claude Desktop** (`claude-desktop`) — writes `claude_desktop_config.json` at
+    platform-specific path (macOS, Linux, Windows)
+  - **Cline** (`cline`) — writes `cline_mcp_settings.json` in VS Code globalStorage
+  - **Zed** (`zed`) — writes `.zed/settings.json` with Zed's `context_servers` format;
+    supports `--global` for user-level install
+  - **IntelliJ IDEA** (`intellij`) — prints step-by-step manual setup instructions
+  - **OpenCode** (`opencode`) — prints step-by-step manual setup instructions
+- **Platform-aware config resolver** — `_get_user_config_dir()` resolves correct config
+  paths for Claude Desktop and Cline across macOS, Linux, and Windows
+- **Target constants** — `AUTO_INSTALL_TARGETS`, `MANUAL_TARGETS`, `ALL_TARGETS` exported
+  from installer module for programmatic use
+- **Expanded `code-intel status`** — now checks all 8 auto-install targets (was 4)
+
 ## [0.1.10] - 2026-03-03
 
 ### Fixed
