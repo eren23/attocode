@@ -52,14 +52,28 @@ def _print_help() -> None:
         "Usage: attocode code-intel <command>\n"
         "\n"
         "Commands:\n"
-        "  install <target>    Install MCP server (claude, cursor, windsurf, codex)\n"
-        "  uninstall <target>  Remove MCP server\n"
+        "  install <target>    Install MCP server into a coding assistant\n"
+        "  uninstall <target>  Remove MCP server from a coding assistant\n"
         "  serve               Run MCP server directly (stdio)\n"
-        "  status              Check installation status\n"
+        "  status              Check installation status across all targets\n"
+        "\n"
+        "Targets (auto-install):\n"
+        "  claude              Claude Code (via `claude mcp add` CLI)\n"
+        "  cursor              Cursor (.cursor/mcp.json)\n"
+        "  windsurf            Windsurf (.windsurf/mcp.json)\n"
+        "  vscode              VS Code / GitHub Copilot (.vscode/mcp.json)\n"
+        "  codex               OpenAI Codex CLI (.codex/config.toml)\n"
+        "  claude-desktop      Claude Desktop (platform-specific config)\n"
+        "  cline               Cline VS Code extension (globalStorage)\n"
+        "  zed                 Zed (.zed/settings.json)\n"
+        "\n"
+        "Targets (manual instructions):\n"
+        "  intellij            IntelliJ IDEA (prints setup steps)\n"
+        "  opencode            OpenCode (prints setup steps)\n"
         "\n"
         "Options:\n"
         "  --project <path>    Project directory to index (default: .)\n"
-        "  --global            Install globally (Claude only)\n"
+        "  --global            Install globally (Claude, Codex, Zed)\n"
     )
 
 
@@ -95,11 +109,11 @@ def _parse_opts(args: list[str]) -> tuple[str | None, str, str]:
 
 
 def _cmd_install(args: list[str]) -> None:
-    from attocode.code_intel.installer import install
+    from attocode.code_intel.installer import ALL_TARGETS_STR, install
 
     target, project_dir, scope = _parse_opts(args)
     if not target:
-        print("Error: specify a target (claude, cursor, windsurf, codex)", file=sys.stderr)
+        print(f"Error: specify a target ({ALL_TARGETS_STR})", file=sys.stderr)
         sys.exit(1)
 
     success = install(target, project_dir=project_dir, scope=scope)
@@ -108,11 +122,11 @@ def _cmd_install(args: list[str]) -> None:
 
 
 def _cmd_uninstall(args: list[str]) -> None:
-    from attocode.code_intel.installer import uninstall
+    from attocode.code_intel.installer import ALL_TARGETS_STR, uninstall
 
     target, project_dir, scope = _parse_opts(args)
     if not target:
-        print("Error: specify a target (claude, cursor, windsurf, codex)", file=sys.stderr)
+        print(f"Error: specify a target ({ALL_TARGETS_STR})", file=sys.stderr)
         sys.exit(1)
 
     success = uninstall(target, project_dir=project_dir, scope=scope)
@@ -141,6 +155,8 @@ def _cmd_status() -> None:
     import json
     from pathlib import Path
 
+    from attocode.code_intel.installer import _get_user_config_dir
+
     print("attocode-code-intel status:\n")
 
     # Check Claude Code
@@ -160,33 +176,20 @@ def _cmd_status() -> None:
     else:
         print("  Claude Code: CLI not found")
 
-    # Check Cursor
-    cursor_cfg = Path(".cursor/mcp.json")
-    if cursor_cfg.exists():
-        try:
-            data = json.loads(cursor_cfg.read_text())
-            if "attocode-code-intel" in data.get("mcpServers", {}):
-                print("  Cursor: installed")
-            else:
-                print("  Cursor: not installed")
-        except Exception:
-            print("  Cursor: unable to check")
-    else:
-        print("  Cursor: not installed")
-
-    # Check Windsurf
-    windsurf_cfg = Path(".windsurf/mcp.json")
-    if windsurf_cfg.exists():
-        try:
-            data = json.loads(windsurf_cfg.read_text())
-            if "attocode-code-intel" in data.get("mcpServers", {}):
-                print("  Windsurf: installed")
-            else:
-                print("  Windsurf: not installed")
-        except Exception:
-            print("  Windsurf: unable to check")
-    else:
-        print("  Windsurf: not installed")
+    # Check JSON-config targets (Cursor, Windsurf, VS Code)
+    for name, config_dir in [("Cursor", ".cursor"), ("Windsurf", ".windsurf"), ("VS Code", ".vscode")]:
+        cfg = Path(config_dir) / "mcp.json"
+        if cfg.exists():
+            try:
+                data = json.loads(cfg.read_text())
+                if "attocode-code-intel" in data.get("mcpServers", {}):
+                    print(f"  {name}: installed")
+                else:
+                    print(f"  {name}: not installed")
+            except Exception:
+                print(f"  {name}: unable to check")
+        else:
+            print(f"  {name}: not installed")
 
     # Check Codex (project-level)
     codex_cfg = Path(".codex/config.toml")
@@ -215,6 +218,59 @@ def _cmd_status() -> None:
                 print("  Codex: unable to check")
         else:
             print("  Codex: not installed")
+
+    # Check Claude Desktop
+    claude_desktop_dir = _get_user_config_dir("claude-desktop")
+    if claude_desktop_dir is not None:
+        cfg = claude_desktop_dir / "claude_desktop_config.json"
+        if cfg.exists():
+            try:
+                data = json.loads(cfg.read_text())
+                if "attocode-code-intel" in data.get("mcpServers", {}):
+                    print("  Claude Desktop: installed")
+                else:
+                    print("  Claude Desktop: not installed")
+            except Exception:
+                print("  Claude Desktop: unable to check")
+        else:
+            print("  Claude Desktop: not installed")
+    else:
+        print("  Claude Desktop: not supported on this platform")
+
+    # Check Cline
+    cline_dir = _get_user_config_dir("cline")
+    if cline_dir is not None:
+        cfg = cline_dir / "cline_mcp_settings.json"
+        if cfg.exists():
+            try:
+                data = json.loads(cfg.read_text())
+                if "attocode-code-intel" in data.get("mcpServers", {}):
+                    print("  Cline: installed")
+                else:
+                    print("  Cline: not installed")
+            except Exception:
+                print("  Cline: unable to check")
+        else:
+            print("  Cline: not installed")
+    else:
+        print("  Cline: not supported on this platform")
+
+    # Check Zed (project-level, then user-level)
+    zed_local = Path(".zed/settings.json")
+    zed_user = Path(os.environ.get("XDG_CONFIG_HOME", Path.home() / ".config")) / "zed" / "settings.json"
+    zed_found = False
+    for zed_path, label in [(zed_local, "installed"), (zed_user, "installed (user)")]:
+        if zed_path.exists():
+            try:
+                data = json.loads(zed_path.read_text())
+                if "attocode-code-intel" in data.get("context_servers", {}):
+                    print(f"  Zed: {label}")
+                    zed_found = True
+                    break
+            except Exception:
+                pass
+    if not zed_found:
+        print("  Zed: not installed")
 
     # Check if entry point is available
     print()
