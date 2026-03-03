@@ -28,8 +28,8 @@ flowchart TB
     end
 
     subgraph Commands["Slash Commands"]
-        Repomap[/repomap]
-        Context[/context]
+        Repomap["/repomap"]
+        Context["/context"]
     end
 
     Parser --> Service

@@ -18,8 +18,8 @@ Plan mode switches the agent to a read-only state where file writes are intercep
 ```mermaid
 flowchart LR
     Draft[Draft Plan] --> Discuss[Discuss / Refine]
-    Discuss --> Approve[/approve]
-    Discuss --> Reject[/reject]
+    Discuss --> Approve["/approve"]
+    Discuss --> Reject["/reject"]
     Approve --> Execute[Execute Steps]
     Execute --> Complete[Done]
     Reject --> Draft
