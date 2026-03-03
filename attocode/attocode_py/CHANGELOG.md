@@ -12,6 +12,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Fix `attoswarm tui` not picking up new TUI widgets when installed via `uv tool install`
 - Enabling code understanding tools of attocode to other AI coders as a skill system
 
+## [0.1.10] - 2026-03-03
+
+### Fixed
+
+- **PyPI token leak via sdist over-inclusion** — `snapshot_report.html` (pytest-textual-snapshot
+  HTML report) captured environment variables including a PyPI API token. Hatchling's sdist builder
+  couldn't resolve `.gitignore` for the nested project layout, so it included everything. Added
+  explicit `[tool.hatch.build.targets.sdist]` exclude rules for snapshot reports, session DBs,
+  trace files, recordings, and other non-source artifacts.
+
+### Security
+
+- Deleted `snapshot_report.html` containing leaked (auto-revoked) PyPI token
+- Added sdist exclusions: `*.db`, `*.jsonl`, `.attocode/traces/`, `.attocode/sessions/`,
+  `.attocode/recordings/`, `.claude/`, `.agent/`, `.traces/`, `site/`, `dist/`, `.venv/`
+
 ## [0.1.9] - 2026-03-03
 
 ### Added

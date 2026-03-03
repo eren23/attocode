@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "attocode"
-version = "0.1.9"
+version = "0.1.10"
 description = "Production AI coding agent"
 readme = "README.md"
 requires-python = ">=3.12"
@@ -79,6 +79,23 @@ Changelog = "https://github.com/eren23/attocode/blob/main/attocode_py/CHANGELOG.
 [tool.hatch.build.targets.wheel]
 packages = ["src/attocode", "src/attoswarm", "src/attocode_core"]
 
+[tool.hatch.build.targets.sdist]
+exclude = [
+    "snapshot_report.html",
+    ".attocode/traces/",
+    ".attocode/sessions/",
+    ".attocode/recordings/",
+    ".claude/",
+    ".agent/",
+    ".traces/",
+    "site/",
+    "dist/",
+    ".venv/",
+    "__pycache__/",
+    "*.db",
+    "*.jsonl",
+]
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 asyncio_mode = "auto"
@@ -106,7 +123,7 @@ source = ["src/attocode", "src/attoswarm", "src/attocode_core"]
 omit = ["tests/*"]
 
 [tool.bumpversion]
-current_version = "0.1.9"
+current_version = "0.1.10"
 commit = false
 tag = false
 
