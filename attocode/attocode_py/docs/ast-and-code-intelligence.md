@@ -270,12 +270,19 @@ uv tool install attocode
 # or: pip install attocode
 
 # Then install the MCP server into your tool of choice
-attocode code-intel install claude       # Claude Code (project-level)
+attocode code-intel install claude           # Claude Code (project-level)
 attocode code-intel install claude --global  # Claude Code (user-level)
-attocode code-intel install cursor       # Cursor
-attocode code-intel install windsurf     # Windsurf
-attocode code-intel install codex        # OpenAI Codex CLI
+attocode code-intel install cursor           # Cursor
+attocode code-intel install windsurf         # Windsurf
+attocode code-intel install vscode           # VS Code / GitHub Copilot
+attocode code-intel install codex            # OpenAI Codex CLI
 attocode code-intel install codex --global   # Codex (user-level)
+attocode code-intel install claude-desktop   # Claude Desktop
+attocode code-intel install cline            # Cline (VS Code extension)
+attocode code-intel install zed              # Zed (project-level)
+attocode code-intel install zed --global     # Zed (user-level)
+attocode code-intel install intellij         # IntelliJ (prints manual steps)
+attocode code-intel install opencode         # OpenCode (prints manual steps)
 ```
 
 ### Installation Targets
@@ -285,9 +292,17 @@ attocode code-intel install codex --global   # Codex (user-level)
 | Claude Code | `install claude` | Via `claude mcp add` CLI | N/A (managed) |
 | Cursor | `install cursor` | `.cursor/mcp.json` | JSON |
 | Windsurf | `install windsurf` | `.windsurf/mcp.json` | JSON |
+| VS Code | `install vscode` | `.vscode/mcp.json` | JSON |
 | Codex | `install codex` | `.codex/config.toml` | TOML |
+| Claude Desktop | `install claude-desktop` | `~/Library/.../claude_desktop_config.json` | JSON |
+| Cline | `install cline` | VS Code globalStorage `cline_mcp_settings.json` | JSON |
+| Zed | `install zed` | `.zed/settings.json` | JSON (`context_servers`) |
+| IntelliJ | `install intellij` | N/A (manual setup) | --- |
+| OpenCode | `install opencode` | N/A (manual setup) | --- |
 
-All targets support `--project <path>` to specify the project directory (defaults to `.`). Claude Code and Codex support `--global` for user-level installation.
+All targets support `--project <path>` to specify the project directory (defaults to `.`). Claude Code, Codex, and Zed support `--global` for user-level installation.
+
+> **Note:** IntelliJ and OpenCode do not support file-based MCP configuration. Running `install intellij` or `install opencode` prints step-by-step manual setup instructions instead.
 
 ### Available Tools
 

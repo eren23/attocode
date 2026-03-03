@@ -1071,6 +1071,281 @@ class TestInstaller:
         assert len(captured_cmds) == 1
         assert "--project" in captured_cmds[0]
 
+    # -- VS Code --
+
+    def test_install_json_vscode(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+        from attocode.code_intel.installer import install_json_config
+
+        monkeypatch.setattr("shutil.which", lambda x: None)
+
+        result = install_json_config("vscode", project_dir=str(tmp_path))
+        assert result is True
+
+        config_path = tmp_path / ".vscode" / "mcp.json"
+        assert config_path.exists()
+
+        data = json.loads(config_path.read_text())
+        assert "attocode-code-intel" in data["mcpServers"]
+        server = data["mcpServers"]["attocode-code-intel"]
+        assert "--project" in server["args"]
+
+    def test_uninstall_json_vscode(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+        from attocode.code_intel.installer import install_json_config, uninstall_json_config
+
+        monkeypatch.setattr("shutil.which", lambda x: None)
+
+        install_json_config("vscode", project_dir=str(tmp_path))
+        result = uninstall_json_config("vscode", project_dir=str(tmp_path))
+        assert result is True
+
+        data = json.loads((tmp_path / ".vscode" / "mcp.json").read_text())
+        assert "attocode-code-intel" not in data.get("mcpServers", {})
+
+    # -- Claude Desktop --
+
+    def test_install_claude_desktop(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+        from attocode.code_intel.installer import install_claude_desktop
+
+        monkeypatch.setattr("shutil.which", lambda x: None)
+        monkeypatch.setattr(
+            "attocode.code_intel.installer._get_user_config_dir",
+            lambda app: tmp_path / "claude-desktop" if app == "claude-desktop" else None,
+        )
+
+        result = install_claude_desktop(project_dir=str(tmp_path))
+        assert result is True
+
+        config_path = tmp_path / "claude-desktop" / "claude_desktop_config.json"
+        assert config_path.exists()
+
+        data = json.loads(config_path.read_text())
+        assert "attocode-code-intel" in data["mcpServers"]
+
+    def test_uninstall_claude_desktop(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+        from attocode.code_intel.installer import install_claude_desktop, uninstall_claude_desktop
+
+        monkeypatch.setattr("shutil.which", lambda x: None)
+        monkeypatch.setattr(
+            "attocode.code_intel.installer._get_user_config_dir",
+            lambda app: tmp_path / "claude-desktop" if app == "claude-desktop" else None,
+        )
+
+        install_claude_desktop(project_dir=str(tmp_path))
+        result = uninstall_claude_desktop()
+        assert result is True
+
+        data = json.loads(
+            (tmp_path / "claude-desktop" / "claude_desktop_config.json").read_text()
+        )
+        assert "attocode-code-intel" not in data.get("mcpServers", {})
+
+    def test_install_claude_desktop_unsupported_platform(self, monkeypatch: pytest.MonkeyPatch):
+        from attocode.code_intel.installer import install_claude_desktop
+
+        monkeypatch.setattr(
+            "attocode.code_intel.installer._get_user_config_dir",
+            lambda app: None,
+        )
+
+        result = install_claude_desktop()
+        assert result is False
+
+    # -- Cline --
+
+    def test_install_cline(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+        from attocode.code_intel.installer import install_cline
+
+        monkeypatch.setattr("shutil.which", lambda x: None)
+        monkeypatch.setattr(
+            "attocode.code_intel.installer._get_user_config_dir",
+            lambda app: tmp_path / "cline" if app == "cline" else None,
+        )
+
+        result = install_cline(project_dir=str(tmp_path))
+        assert result is True
+
+        config_path = tmp_path / "cline" / "cline_mcp_settings.json"
+        assert config_path.exists()
+
+        data = json.loads(config_path.read_text())
+        assert "attocode-code-intel" in data["mcpServers"]
+
+    def test_uninstall_cline(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+        from attocode.code_intel.installer import install_cline, uninstall_cline
+
+        monkeypatch.setattr("shutil.which", lambda x: None)
+        monkeypatch.setattr(
+            "attocode.code_intel.installer._get_user_config_dir",
+            lambda app: tmp_path / "cline" if app == "cline" else None,
+        )
+
+        install_cline(project_dir=str(tmp_path))
+        result = uninstall_cline()
+        assert result is True
+
+        data = json.loads(
+            (tmp_path / "cline" / "cline_mcp_settings.json").read_text()
+        )
+        assert "attocode-code-intel" not in data.get("mcpServers", {})
+
+    # -- Zed --
+
+    def test_install_zed_local(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+        from attocode.code_intel.installer import install_zed
+
+        monkeypatch.setattr("shutil.which", lambda x: None)
+
+        result = install_zed(project_dir=str(tmp_path), scope="local")
+        assert result is True
+
+        config_path = tmp_path / ".zed" / "settings.json"
+        assert config_path.exists()
+
+        data = json.loads(config_path.read_text())
+        assert "attocode-code-intel" in data["context_servers"]
+        entry = data["context_servers"]["attocode-code-intel"]
+        assert "command" in entry
+        assert "path" in entry["command"]
+        assert "args" in entry["command"]
+
+    def test_install_zed_user(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+        from attocode.code_intel.installer import install_zed
+
+        monkeypatch.setattr("shutil.which", lambda x: None)
+        monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path / "xdg"))
+
+        result = install_zed(project_dir=str(tmp_path), scope="user")
+        assert result is True
+
+        config_path = tmp_path / "xdg" / "zed" / "settings.json"
+        assert config_path.exists()
+
+        data = json.loads(config_path.read_text())
+        assert "attocode-code-intel" in data["context_servers"]
+
+    def test_uninstall_zed(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+        from attocode.code_intel.installer import install_zed, uninstall_zed
+
+        monkeypatch.setattr("shutil.which", lambda x: None)
+
+        install_zed(project_dir=str(tmp_path), scope="local")
+        result = uninstall_zed(project_dir=str(tmp_path), scope="local")
+        assert result is True
+
+        data = json.loads((tmp_path / ".zed" / "settings.json").read_text())
+        assert "attocode-code-intel" not in data.get("context_servers", {})
+
+    def test_install_zed_merges_existing(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+        from attocode.code_intel.installer import install_zed
+
+        monkeypatch.setattr("shutil.which", lambda x: None)
+
+        # Pre-existing settings
+        zed_dir = tmp_path / ".zed"
+        zed_dir.mkdir()
+        existing = {
+            "theme": "One Dark",
+            "context_servers": {"other-server": {"command": {"path": "other"}}},
+        }
+        (zed_dir / "settings.json").write_text(json.dumps(existing))
+
+        install_zed(project_dir=str(tmp_path), scope="local")
+
+        data = json.loads((zed_dir / "settings.json").read_text())
+        assert data["theme"] == "One Dark"
+        assert "other-server" in data["context_servers"]
+        assert "attocode-code-intel" in data["context_servers"]
+
+    # -- IntelliJ / OpenCode (manual instructions) --
+
+    def test_print_manual_instructions_intellij(self, capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch):
+        from attocode.code_intel.installer import print_manual_instructions
+
+        monkeypatch.setattr("shutil.which", lambda x: None)
+
+        result = print_manual_instructions("intellij")
+        assert result is True
+
+        captured = capsys.readouterr()
+        assert "IntelliJ" in captured.out
+        assert "MCP Servers" in captured.out
+
+    def test_print_manual_instructions_opencode(self, capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch):
+        from attocode.code_intel.installer import print_manual_instructions
+
+        monkeypatch.setattr("shutil.which", lambda x: None)
+
+        result = print_manual_instructions("opencode")
+        assert result is True
+
+        captured = capsys.readouterr()
+        assert "OpenCode" in captured.out
+        assert "mcpServers" in captured.out
+
+    def test_install_dispatch_intellij(self, capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch):
+        """install('intellij') should print instructions, not fail."""
+        from attocode.code_intel.installer import install
+
+        monkeypatch.setattr("shutil.which", lambda x: None)
+
+        result = install("intellij")
+        assert result is True
+
+        captured = capsys.readouterr()
+        assert "IntelliJ" in captured.out
+
+    def test_uninstall_dispatch_manual_target(self, capsys: pytest.CaptureFixture[str]):
+        """uninstall('intellij') should succeed with a message."""
+        from attocode.code_intel.installer import uninstall
+
+        result = uninstall("intellij")
+        assert result is True
+
+        captured = capsys.readouterr()
+        assert "manual" in captured.out.lower()
+
+    # -- _get_user_config_dir --
+
+    def test_get_user_config_dir_claude_desktop_darwin(self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path):
+        from attocode.code_intel.installer import _get_user_config_dir
+
+        monkeypatch.setattr("attocode.code_intel.installer.platform.system", lambda: "Darwin")
+        monkeypatch.setattr("pathlib.Path.home", lambda: tmp_path)
+
+        result = _get_user_config_dir("claude-desktop")
+        assert result is not None
+        assert "Application Support" in str(result)
+        assert "Claude" in str(result)
+
+    def test_get_user_config_dir_claude_desktop_linux(self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path):
+        from attocode.code_intel.installer import _get_user_config_dir
+
+        monkeypatch.setattr("attocode.code_intel.installer.platform.system", lambda: "Linux")
+        monkeypatch.setattr("pathlib.Path.home", lambda: tmp_path)
+        monkeypatch.delenv("XDG_CONFIG_HOME", raising=False)
+
+        result = _get_user_config_dir("claude-desktop")
+        assert result is not None
+        assert ".config" in str(result)
+        assert "Claude" in str(result)
+
+    def test_get_user_config_dir_cline_darwin(self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path):
+        from attocode.code_intel.installer import _get_user_config_dir
+
+        monkeypatch.setattr("attocode.code_intel.installer.platform.system", lambda: "Darwin")
+        monkeypatch.setattr("pathlib.Path.home", lambda: tmp_path)
+
+        result = _get_user_config_dir("cline")
+        assert result is not None
+        assert "globalStorage" in str(result)
+        assert "saoudrizwan.claude-dev" in str(result)
+
+    def test_get_user_config_dir_unknown_app(self):
+        from attocode.code_intel.installer import _get_user_config_dir
+
+        result = _get_user_config_dir("unknown-app")
+        assert result is None
+
 
 # ---------------------------------------------------------------------------
 # CLI dispatch
@@ -1097,6 +1372,20 @@ class TestCLIDispatch:
         dispatch_code_intel(["status"])
         captured = capsys.readouterr()
         assert "attocode-code-intel status" in captured.out
+
+    def test_status_shows_all_targets(
+        self, capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch,
+    ):
+        """Status output should mention all supported targets."""
+        from attocode.code_intel.cli import dispatch_code_intel
+
+        monkeypatch.setattr("shutil.which", lambda x: None)
+
+        dispatch_code_intel(["status"])
+        captured = capsys.readouterr()
+        for target_name in ["Claude Code", "Cursor", "Windsurf", "VS Code", "Codex",
+                            "Claude Desktop", "Cline", "Zed"]:
+            assert target_name in captured.out, f"Missing '{target_name}' in status output"
 
     def test_dispatch_unknown(self):
         from attocode.code_intel.cli import dispatch_code_intel
