@@ -27,8 +27,8 @@ QUICK_BUDGET = ExecutionBudget(
 )
 
 STANDARD_BUDGET = ExecutionBudget(
-    max_tokens=1_000_000,
-    soft_token_limit=800_000,
+    max_tokens=100_000_000,
+    soft_token_limit=80_000_000,
     max_iterations=100,
 )
 

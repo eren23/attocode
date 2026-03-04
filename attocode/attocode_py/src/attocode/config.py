@@ -76,10 +76,12 @@ class AttoConfig:
     temperature: float = DEFAULT_TEMPERATURE
     max_iterations: int = 100
     max_context_tokens: int = 200_000
+    compaction_warning_threshold: float = 0.7
+    compaction_threshold: float = 0.8
     timeout: float = 600.0
 
     # Budget
-    budget_max_tokens: int = 1_000_000
+    budget_max_tokens: int = 100_000_000
     budget_max_cost: float = 10.0
     budget_max_duration: float = 7200.0
 
@@ -268,6 +270,8 @@ def _apply_dict(config: AttoConfig, data: dict[str, Any]) -> None:
         "max_iterations": "max_iterations",
         "max_context_tokens": "max_context_tokens",
         "timeout": "timeout",
+        "compaction_warning_threshold": "compaction_warning_threshold",
+        "compaction_threshold": "compaction_threshold",
         "budget_max_tokens": "budget_max_tokens",
         "budget_max_cost": "budget_max_cost",
         "budget_max_duration": "budget_max_duration",
@@ -290,9 +294,20 @@ def _apply_dict(config: AttoConfig, data: dict[str, Any]) -> None:
         "permissionMode": "permission_mode",
         "maxIterations": "max_iterations",
         "maxContextTokens": "max_context_tokens",
+        "compactionWarningThreshold": "compaction_warning_threshold",
+        "compactionThreshold": "compaction_threshold",
         "sandboxMode": "sandbox_mode",
         "systemPrompt": "system_prompt",
     }
+    compaction_block = data.get("compaction")
+    if isinstance(compaction_block, dict):
+        warning = compaction_block.get("warning_threshold", compaction_block.get("warningThreshold"))
+        threshold = compaction_block.get("compaction_threshold", compaction_block.get("compactionThreshold"))
+        if warning is not None:
+            setattr(config, "compaction_warning_threshold", float(warning))
+        if threshold is not None:
+            setattr(config, "compaction_threshold", float(threshold))
+
     for key, attr in field_map.items():
         if key in data and data[key] is not None:
             setattr(config, attr, data[key])

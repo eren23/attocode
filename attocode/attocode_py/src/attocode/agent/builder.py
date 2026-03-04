@@ -44,6 +44,8 @@ class AgentBuilder:
         self._sandbox_mode: str = "auto"
         self._economics_enabled: bool = True
         self._compaction_enabled: bool = True
+        self._compaction_warning_threshold: float = 0.7
+        self._compaction_threshold: float = 0.8
         self._session_dir: str | None = None
         self._enable_spawn_agent: bool = True
         self._mcp_server_configs: list[dict[str, Any]] = []
@@ -181,9 +183,19 @@ class AgentBuilder:
         self._economics_enabled = enabled
         return self
 
-    def with_compaction(self, enabled: bool = True) -> AgentBuilder:
+    def with_compaction(
+        self,
+        enabled: bool = True,
+        *,
+        warning_threshold: float | None = None,
+        compaction_threshold: float | None = None,
+    ) -> AgentBuilder:
         """Enable/disable auto-compaction."""
         self._compaction_enabled = enabled
+        if warning_threshold is not None:
+            self._compaction_warning_threshold = float(warning_threshold)
+        if compaction_threshold is not None:
+            self._compaction_threshold = float(compaction_threshold)
         return self
 
     def with_session_dir(self, path: str) -> AgentBuilder:
@@ -297,7 +309,11 @@ class AgentBuilder:
             from attocode.integrations.context.auto_compaction import AutoCompactionManager
             from attocode.providers.base import get_model_context_window
             max_ctx = get_model_context_window(self._config.model or "")
-            compaction_manager = AutoCompactionManager(max_context_tokens=max_ctx)
+            compaction_manager = AutoCompactionManager(
+                max_context_tokens=max_ctx,
+                warning_threshold=self._compaction_warning_threshold,
+                compaction_threshold=self._compaction_threshold,
+            )
 
         # Build agent
         agent = ProductionAgent(

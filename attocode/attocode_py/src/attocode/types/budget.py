@@ -27,7 +27,7 @@ class BudgetStatus(StrEnum):
 class ExecutionBudget:
     """Budget constraints for an agent run."""
 
-    max_tokens: int = 1_000_000
+    max_tokens: int = 100_000_000
     soft_token_limit: int | None = None
     max_cost: float | None = None
     max_duration_seconds: float | None = None
@@ -70,8 +70,8 @@ QUICK_BUDGET = ExecutionBudget(
 )
 
 STANDARD_BUDGET = ExecutionBudget(
-    max_tokens=1_000_000,
-    soft_token_limit=800_000,
+    max_tokens=100_000_000,
+    soft_token_limit=80_000_000,
     max_iterations=100,
 )
 

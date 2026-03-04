@@ -184,6 +184,55 @@ class ProductionAgent:
         """
         self._extension_handler = handler
 
+    async def ensure_session_store(self) -> Any:
+        """Ensure session persistence store is initialized and return it."""
+        if self._session_store is not None:
+            return self._session_store
+        if not self._session_dir:
+            return None
+        try:
+            from pathlib import Path
+            from attocode.integrations.persistence.store import SessionStore
+
+            db_path = Path(self._session_dir) / "sessions.db"
+            self._session_store = SessionStore(db_path)
+            await self._session_store.initialize()
+            return self._session_store
+        except Exception:
+            logger.warning("session_store_init_failed", exc_info=True)
+            self._session_store = None
+            return None
+
+    def apply_budget_extension(self, additional_tokens: int) -> int:
+        """Extend token budget and sync agent/context/economics references.
+
+        Returns the new max token budget.
+        """
+        if additional_tokens <= 0:
+            return self._budget.max_tokens
+
+        old_budget = self._budget
+        new_max = old_budget.max_tokens + additional_tokens
+        new_soft: int | None = None
+        if old_budget.soft_token_limit is not None and old_budget.max_tokens > 0:
+            ratio = old_budget.soft_token_limit / old_budget.max_tokens
+            new_soft = int(new_max * ratio)
+
+        new_budget = ExecutionBudget(
+            max_tokens=new_max,
+            soft_token_limit=new_soft,
+            max_cost=old_budget.max_cost,
+            max_duration_seconds=old_budget.max_duration_seconds,
+            max_iterations=old_budget.max_iterations,
+            enforcement_mode=old_budget.enforcement_mode,
+        )
+        self._budget = new_budget
+        if self._ctx:
+            self._ctx.budget = new_budget
+            if self._ctx.economics:
+                self._ctx.economics.budget = new_budget
+        return new_max
+
     # --- Integration getters ---
 
     def get_economics(self) -> Any:
@@ -338,16 +387,7 @@ class ProductionAgent:
             return await self._run_with_swarm(prompt)
 
         # Initialize session persistence (reuse store across runs)
-        if self._session_dir and self._session_store is None:
-            try:
-                from attocode.integrations.persistence.store import SessionStore
-                from pathlib import Path
-                db_path = Path(self._session_dir) / "sessions.db"
-                self._session_store = SessionStore(db_path)
-                await self._session_store.initialize()
-            except Exception:
-                logger.warning("session_store_init_failed", exc_info=True)
-                self._session_store = None  # Non-fatal
+        await self.ensure_session_store()
 
         # Handle session resume if requested
         resume_session_id = getattr(self._config, "resume_session", None)
@@ -769,6 +809,16 @@ class ProductionAgent:
         if not self._extension_handler:
             return False
         try:
+            if self._ctx:
+                self._ctx.emit_simple(
+                    EventType.BUDGET_EXTENSION_REQUESTED,
+                    metadata={
+                        "requested_additional": additional_tokens,
+                        "reason": reason,
+                        "current_tokens": self._ctx.metrics.total_tokens,
+                        "max_tokens": self._budget.max_tokens,
+                    },
+                )
             result = self._extension_handler({
                 "current_tokens": self._ctx.metrics.total_tokens if self._ctx else 0,
                 "max_tokens": self._budget.max_tokens,
@@ -781,14 +831,24 @@ class ProductionAgent:
             else:
                 granted = result
             if granted:
-                self._budget = ExecutionBudget(
-                    max_tokens=self._budget.max_tokens + additional_tokens,
-                    max_iterations=self._budget.max_iterations,
-                    soft_ratio=self._budget.soft_ratio,
-                    enforcement_mode=self._budget.enforcement_mode,
+                new_max = self.apply_budget_extension(additional_tokens)
+                if self._ctx:
+                    self._ctx.emit_simple(
+                        EventType.BUDGET_EXTENSION_GRANTED,
+                        metadata={
+                            "requested_additional": additional_tokens,
+                            "new_max_tokens": new_max,
+                            "usage_fraction": self.get_budget_usage(),
+                        },
+                    )
+            elif self._ctx:
+                self._ctx.emit_simple(
+                    EventType.BUDGET_EXTENSION_DENIED,
+                    metadata={
+                        "requested_additional": additional_tokens,
+                        "usage_fraction": self.get_budget_usage(),
+                    },
                 )
-                if self._ctx and self._ctx.economics:
-                    self._ctx.economics.budget = self._budget
             return bool(granted)
         except Exception:
             logger.warning("budget_extension_failed", exc_info=True)

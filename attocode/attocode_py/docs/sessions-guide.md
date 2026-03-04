@@ -79,6 +79,9 @@ The resume restores:
 /sessions 50       # Show more
 ```
 
+`/sessions`, `/load`, and `/resume` work before your first prompt in TUI.  
+If no active context exists yet, Attocode initializes the SQLite session store lazily and stages resume for the next prompt.
+
 Each session shows:
 
 - Session ID
@@ -96,6 +99,14 @@ Each session shows:
 ```
 
 This restores the full session state from the latest checkpoint.
+
+## Dashboard Trace Sessions vs Resumable Sessions
+
+The Dashboard "Trace Sessions" tab shows trace files (`trace-*`) for analysis/visualization.  
+Slash commands `/sessions`, `/load`, and `/resume` use resumable SQLite session IDs from `.attocode/sessions/sessions.db`.
+
+- `trace-*` IDs are not resumable conversation IDs.
+- Use `/sessions` to get resumable IDs.
 
 ## Goals
 

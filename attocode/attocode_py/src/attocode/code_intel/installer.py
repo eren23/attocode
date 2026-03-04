@@ -692,3 +692,136 @@ def uninstall(target: str, project_dir: str = ".", scope: str = "local") -> bool
             file=sys.stderr,
         )
         return False
+
+
+# ---------------------------------------------------------------------------
+# Hooks installation (Claude Code PostToolUse)
+# ---------------------------------------------------------------------------
+
+#: The hook matcher pattern — matches file-editing tools.
+_HOOK_MATCHER = "Edit|Write|NotebookEdit"
+
+#: Tag used to identify our hooks in settings.local.json.
+_HOOK_TAG = "attocode-code-intel"
+
+
+def _build_hook_config() -> dict:
+    """Build the Claude Code PostToolUse hook configuration."""
+    return {
+        "matcher": _HOOK_MATCHER,
+        "hooks": [
+            {
+                "type": "command",
+                "command": "attocode-code-intel notify --stdin",
+            },
+        ],
+    }
+
+
+def install_hooks(target: str, project_dir: str = ".") -> bool:
+    """Install PostToolUse hooks for automatic index updates.
+
+    Currently only supported for Claude Code (``claude`` target).
+    Writes hooks to ``.claude/settings.local.json``.
+
+    Args:
+        target: Installation target (only "claude" is supported).
+        project_dir: Project directory.
+
+    Returns:
+        True if hooks were installed.
+    """
+    if target != "claude":
+        print(
+            f"Hooks not supported for {target}. "
+            "The file watcher handles automatic updates. "
+            "Alternatively, have your agent call the `notify_file_changed` "
+            "MCP tool after edits.",
+        )
+        return False
+
+    settings_path = Path(project_dir) / ".claude" / "settings.local.json"
+    settings_path.parent.mkdir(parents=True, exist_ok=True)
+
+    existing: dict = {}
+    if settings_path.exists():
+        import contextlib
+        with contextlib.suppress(json.JSONDecodeError, OSError):
+            existing = json.loads(settings_path.read_text(encoding="utf-8"))
+
+    hooks = existing.setdefault("hooks", {})
+    post_tool_use = hooks.setdefault("PostToolUse", [])
+
+    # Remove any existing attocode hooks (handles old formats too)
+    filtered = [
+        entry for entry in post_tool_use
+        if not any(_HOOK_TAG in h.get("command", "") for h in entry.get("hooks", []))
+    ]
+
+    expected = _build_hook_config()
+
+    # Already up-to-date?
+    if len(filtered) < len(post_tool_use) and expected in post_tool_use:
+        print("Hooks already installed in .claude/settings.local.json")
+        return True
+
+    hooks["PostToolUse"] = filtered + [expected]
+
+    settings_path.write_text(
+        json.dumps(existing, indent=2) + "\n",
+        encoding="utf-8",
+    )
+    print(f"Installed PostToolUse hooks in {settings_path}")
+    return True
+
+
+def uninstall_hooks(target: str, project_dir: str = ".") -> bool:
+    """Remove attocode PostToolUse hooks.
+
+    Args:
+        target: Installation target (only "claude" is supported).
+        project_dir: Project directory.
+
+    Returns:
+        True if hooks were removed (or didn't exist).
+    """
+    if target != "claude":
+        return True
+
+    settings_path = Path(project_dir) / ".claude" / "settings.local.json"
+    if not settings_path.exists():
+        return True
+
+    try:
+        existing = json.loads(settings_path.read_text(encoding="utf-8"))
+    except (json.JSONDecodeError, OSError):
+        return True
+
+    hooks = existing.get("hooks", {})
+    post_tool_use = hooks.get("PostToolUse", [])
+    if not post_tool_use:
+        return True
+
+    # Remove entries that reference attocode-code-intel
+    filtered = []
+    removed = False
+    for entry in post_tool_use:
+        is_ours = False
+        for h in entry.get("hooks", []):
+            if _HOOK_TAG in h.get("command", ""):
+                is_ours = True
+                break
+        if is_ours:
+            removed = True
+        else:
+            filtered.append(entry)
+
+    if removed:
+        hooks["PostToolUse"] = filtered
+        settings_path.write_text(
+            json.dumps(existing, indent=2) + "\n",
+            encoding="utf-8",
+        )
+        print(f"Removed attocode hooks from {settings_path}")
+
+    return True

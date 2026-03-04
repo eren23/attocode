@@ -241,6 +241,55 @@ class TestProductionAgent:
         sent_msgs = provider.call_history[0][0]
         assert any("Python expert" in str(m.content) for m in sent_msgs)
 
+    @pytest.mark.asyncio
+    async def test_apply_budget_extension_syncs_context_and_economics(self) -> None:
+        class _Econ:
+            def __init__(self) -> None:
+                self.budget: ExecutionBudget | None = None
+
+        provider = MockProvider()
+        provider.add_response(
+            content="Done",
+            usage=TokenUsage(input_tokens=10, output_tokens=5, total_tokens=15),
+        )
+        econ = _Econ()
+        agent = ProductionAgent(
+            provider=provider,
+            registry=ToolRegistry(),
+            budget=ExecutionBudget(max_tokens=1_000_000, soft_token_limit=800_000),
+            economics=econ,
+        )
+
+        await agent.run("test")
+        new_max = agent.apply_budget_extension(500_000)
+
+        assert new_max == 1_500_000
+        assert agent.budget.max_tokens == 1_500_000
+        assert agent.budget.soft_token_limit == 1_200_000
+        assert agent.context is not None
+        assert agent.context.budget.max_tokens == 1_500_000
+        assert econ.budget is not None
+        assert econ.budget.max_tokens == 1_500_000
+
+    @pytest.mark.asyncio
+    async def test_request_budget_extension_uses_apply_path(self) -> None:
+        provider = MockProvider()
+        agent = ProductionAgent(
+            provider=provider,
+            registry=ToolRegistry(),
+            budget=ExecutionBudget(max_tokens=1_000_000, soft_token_limit=800_000),
+        )
+
+        async def grant(_request: dict[str, Any]) -> bool:
+            return True
+
+        agent.set_extension_handler(grant)
+        granted = await agent.request_budget_extension(additional_tokens=250_000, reason="test")
+
+        assert granted
+        assert agent.budget.max_tokens == 1_250_000
+        assert agent.budget.soft_token_limit == 1_000_000
+
 
 # --- AgentBuilder Tests ---
 

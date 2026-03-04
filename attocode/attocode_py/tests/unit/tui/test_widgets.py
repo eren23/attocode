@@ -93,3 +93,21 @@ class TestPlanTask:
         assert plan.is_complete
         assert plan.progress == 1.0
         assert plan.current_task is None
+
+
+class TestStatusBar:
+    def test_line1_shows_context_and_budget_together(self) -> None:
+        status = StatusBar()
+        status.context_pct = 0.25
+        status.budget_pct = 0.90
+        status.context_tokens = 25_000
+        status.context_window = 200_000
+        status.total_tokens = 900_000
+        status.max_tokens = 1_000_000
+
+        line1 = status._render_line1().plain
+
+        assert "ctx 25%" in line1
+        assert "bud 90%" in line1
+        assert "ctx 25,000/200,000" in line1
+        assert "bud 900,000/1,000,000" in line1

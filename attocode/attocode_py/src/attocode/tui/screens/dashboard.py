@@ -27,7 +27,7 @@ from attocode.tui.widgets.dashboard.swarm_activity_pane import SwarmActivityPane
 # Tab definitions: (number key, label, pane widget id)
 _TABS = [
     ("1", "Live", "pane-live"),
-    ("2", "Sessions", "pane-sessions"),
+    ("2", "Trace Sessions", "pane-sessions"),
     ("3", "Detail", "pane-detail"),
     ("4", "Compare", "pane-compare"),
     ("5", "Swarm", "pane-swarm"),
@@ -39,7 +39,7 @@ class DashboardScreen(Screen):
 
     Tabs:
       1. Live — real-time agent metrics (tokens, cache, tools)
-      2. Sessions — browse past trace sessions
+      2. Trace Sessions — browse past trace sessions
       3. Detail — deep-dive into a single session (5 sub-views)
       4. Compare — side-by-side session comparison
       5. Swarm — multi-agent orchestration monitoring
@@ -58,7 +58,7 @@ class DashboardScreen(Screen):
     BINDINGS = [
         Binding("escape", "go_back", "Back", show=True, priority=True),
         Binding("1", "tab_1", "Live", show=True),
-        Binding("2", "tab_2", "Sessions", show=True),
+        Binding("2", "tab_2", "Trace Sessions", show=True),
         Binding("3", "tab_3", "Detail", show=False),
         Binding("4", "tab_4", "Compare", show=False),
         Binding("5", "tab_5", "Swarm", show=False),

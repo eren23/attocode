@@ -106,8 +106,17 @@ class ASTService:
         self._index = CrossRefIndex()
         self._ast_cache.clear()
 
+        # Supported languages: Python, JS, TS always; others when tree-sitter available
+        _ts_langs: set[str] = set()
+        try:
+            from attocode.integrations.context.ts_parser import supported_languages
+            _ts_langs = set(supported_languages())
+        except ImportError:
+            pass
+        _supported = {"python", "javascript", "typescript"} | _ts_langs
+
         for fi in files:
-            if fi.language not in ("python", "javascript", "typescript"):
+            if fi.language not in _supported:
                 continue
             try:
                 ast = parse_file(fi.path)

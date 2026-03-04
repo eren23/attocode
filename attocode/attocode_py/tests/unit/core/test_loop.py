@@ -125,6 +125,70 @@ class TestExecutionLoopBasic:
         assert ctx.iteration == 4
         assert ctx.metrics.tool_calls == 3
 
+    @pytest.mark.asyncio
+    async def test_incomplete_narrative_auto_continues(self) -> None:
+        async def noop(args: dict[str, Any]) -> str:
+            return "ok"
+
+        reg = ToolRegistry()
+        reg.register(Tool(
+            spec=ToolSpec(name="step", description="step", parameters={}),
+            execute=noop,
+        ))
+
+        provider = MockProvider()
+        usage = TokenUsage(input_tokens=10, output_tokens=5, total_tokens=15)
+        provider.add_response(
+            content="I still need to implement the remaining work.",
+            stop_reason=StopReason.END_TURN,
+            usage=usage,
+        )
+        provider.add_response(
+            content="Executing next step",
+            tool_calls=[ToolCall(id="tc_1", name="step", arguments={})],
+            stop_reason=StopReason.TOOL_USE,
+            usage=usage,
+        )
+        provider.add_response(
+            content="Done.",
+            stop_reason=StopReason.END_TURN,
+            usage=usage,
+        )
+
+        ctx = _make_ctx(provider, reg)
+        result = await run_execution_loop(ctx)
+
+        assert result.success
+        assert result.reason == CompletionReason.COMPLETED
+        assert ctx.metrics.tool_calls == 1
+        assert ctx.iteration == 3
+
+    @pytest.mark.asyncio
+    async def test_incomplete_narrative_fails_after_retries(self) -> None:
+        provider = MockProvider()
+        usage = TokenUsage(input_tokens=10, output_tokens=5, total_tokens=15)
+        provider.add_response(
+            content="I couldn't finish the implementation yet.",
+            stop_reason=StopReason.END_TURN,
+            usage=usage,
+        )
+        provider.add_response(
+            content="We still need to do more work.",
+            stop_reason=StopReason.END_TURN,
+            usage=usage,
+        )
+        provider.add_response(
+            content="The remaining work needs attention.",
+            stop_reason=StopReason.END_TURN,
+            usage=usage,
+        )
+
+        ctx = _make_ctx(provider)
+        result = await run_execution_loop(ctx)
+
+        assert not result.success
+        assert result.reason in (CompletionReason.INCOMPLETE_ACTION, CompletionReason.FUTURE_INTENT)
+
 
 class TestExecutionLoopBudget:
     @pytest.mark.asyncio

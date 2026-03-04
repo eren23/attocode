@@ -27,6 +27,8 @@ class TestAttoConfig:
         assert c.provider == "anthropic"
         assert c.model == "claude-sonnet-4-20250514"
         assert c.max_iterations == 100
+        assert c.compaction_warning_threshold == pytest.approx(0.7)
+        assert c.compaction_threshold == pytest.approx(0.8)
         assert c.debug is False
         assert c.swarm is False
 
@@ -114,9 +116,35 @@ class TestLoadConfig:
         assert config.max_iterations == 100
 
     def test_cli_args_override(self) -> None:
-        config = load_config(cli_args={"model": "gpt-4o", "debug": True})
+        config = load_config(
+            cli_args={
+                "model": "gpt-4o",
+                "debug": True,
+                "compaction_threshold": 0.91,
+            }
+        )
         assert config.model == "gpt-4o"
         assert config.debug is True
+        assert config.compaction_threshold == pytest.approx(0.91)
+
+    def test_project_compaction_block(self, tmp_path: Path) -> None:
+        project_root = tmp_path / "repo"
+        workdir = project_root / "subdir"
+        (project_root / ".attocode").mkdir(parents=True)
+        workdir.mkdir(parents=True)
+        (project_root / ".attocode" / "config.json").write_text(
+            json.dumps({
+                "compaction": {
+                    "warningThreshold": 0.61,
+                    "compactionThreshold": 0.77,
+                },
+            }),
+            encoding="utf-8",
+        )
+
+        config = load_config(working_dir=str(workdir))
+        assert config.compaction_warning_threshold == pytest.approx(0.61)
+        assert config.compaction_threshold == pytest.approx(0.77)
 
     def test_working_dir(self, tmp_path: Path) -> None:
         config = load_config(working_dir=str(tmp_path))
