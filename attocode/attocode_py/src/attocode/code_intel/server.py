@@ -76,9 +76,6 @@ def guidelines_resource() -> str:
 _ast_service = None
 _context_mgr = None
 _code_analyzer = None
-_memory_store = None
-
-
 def _get_project_dir() -> str:
     """Get the project directory from env var or raise."""
     project_dir = os.environ.get("ATTOCODE_PROJECT_DIR", "")
@@ -1909,13 +1906,19 @@ def semantic_search(
 # ---------------------------------------------------------------------------
 
 
+_memory_store = None
+_memory_store_lock = threading.Lock()
+
+
 def _get_memory_store():
-    """Lazily initialize and return the MemoryStore singleton."""
+    """Lazily initialize and return the MemoryStore singleton (thread-safe)."""
     global _memory_store
     if _memory_store is None:
-        from attocode.integrations.context.memory_store import MemoryStore
+        with _memory_store_lock:
+            if _memory_store is None:
+                from attocode.integrations.context.memory_store import MemoryStore
 
-        _memory_store = MemoryStore(_get_project_dir())
+                _memory_store = MemoryStore(_get_project_dir())
     return _memory_store
 
 
@@ -1943,9 +1946,12 @@ def recall(query: str, scope: str = "", max_results: int = 10) -> str:
         if r["details"]:
             lines.append(f"  _{r['details']}_")
 
-    # Increment apply_count for returned learnings
+    # Increment apply_count for returned learnings (best-effort)
     for r in results:
-        store.record_applied(r["id"])
+        try:
+            store.record_applied(r["id"])
+        except Exception:
+            logger.debug("Failed to record_applied for learning %d", r["id"])
 
     return "\n".join(lines)
 

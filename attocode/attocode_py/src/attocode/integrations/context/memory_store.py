@@ -54,6 +54,7 @@ class MemoryStore:
     project_dir: str
     db_path: str = field(default="", repr=False)
     _conn: sqlite3.Connection | None = field(default=None, repr=False)
+    _last_decay_at: float = field(default=0.0, repr=False)
 
     def __post_init__(self) -> None:
         if not self.db_path:
@@ -180,9 +181,9 @@ class MemoryStore:
                      AND l.type = ?
                      AND l.scope = ?
                      AND l.status = 'active'
-                   ORDER BY rank
+                   ORDER BY rank DESC
                    LIMIT 1""",
-                (description, type, scope),
+                (self._escape_fts_query(description), type, scope),
             )
             row = cursor.fetchone()
             if row and row[1] > _DEDUP_RANK_THRESHOLD:
@@ -247,6 +248,13 @@ class MemoryStore:
         if not updates:
             return
 
+        if "type" in updates and updates["type"] not in VALID_TYPES:
+            raise ValueError(f"Invalid type '{updates['type']}'. Must be one of: {VALID_TYPES}")
+        if "status" in updates and updates["status"] not in VALID_STATUSES:
+            raise ValueError(
+                f"Invalid status '{updates['status']}'. Must be one of: {VALID_STATUSES}"
+            )
+
         now = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
         updates["updated_at"] = now
 
@@ -296,9 +304,9 @@ class MemoryStore:
                        JOIN learnings l ON l.id = f.rowid
                        WHERE learnings_fts MATCH ?
                          AND l.status = 'active'
-                       ORDER BY rank
+                       ORDER BY rank DESC
                        LIMIT ?""",
-                    (query, max_results * 3),  # Over-fetch for scope filtering
+                    (self._escape_fts_query(query), max_results * 3),
                 )
                 for row in cursor:
                     entry = self._row_to_dict(row[:11])
@@ -361,6 +369,11 @@ class MemoryStore:
     # Helpers
     # ------------------------------------------------------------------
 
+    def _escape_fts_query(self, query: str) -> str:
+        """Escape FTS5 special characters by quoting each term."""
+        terms = query.split()
+        return " ".join(f'"{t}"' for t in terms if t)
+
     def _row_to_dict(self, row: tuple) -> dict:
         """Convert a row tuple to a dict."""
         return {
@@ -412,7 +425,16 @@ class MemoryStore:
         return results
 
     def _apply_decay(self) -> None:
-        """Apply very slow confidence decay to all active learnings."""
+        """Apply very slow confidence decay to all active learnings.
+
+        Time-gated to once per hour to prevent excessive decay in
+        swarm mode where multiple workers call recall() frequently.
+        """
+        now = time.time()
+        if now - self._last_decay_at < 3600:
+            return
+        self._last_decay_at = now
+
         assert self._conn is not None
         self._conn.execute(
             """UPDATE learnings
@@ -433,6 +455,12 @@ class MemoryStore:
     # ------------------------------------------------------------------
     # Lifecycle
     # ------------------------------------------------------------------
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *exc):
+        self.close()
 
     def close(self) -> None:
         """Close the database connection."""

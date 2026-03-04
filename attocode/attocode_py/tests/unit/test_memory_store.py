@@ -8,6 +8,7 @@ import pytest
 
 from attocode.integrations.context.memory_store import (
     _CONFIDENCE_CAP,
+    _CONFIDENCE_FLOOR,
     _UNHELPFUL_AUTO_ARCHIVE,
     MemoryStore,
 )
@@ -85,13 +86,18 @@ class TestScopeHierarchy:
 
     def test_unrelated_scope_excluded(self, store: MemoryStore):
         store.add("convention", "Tests use pytest fixtures", scope="tests/")
+        store.add("convention", "Global convention always present", scope="")
 
         results = store.recall("pytest fixtures", scope="src/api/")
-        # Should not match — tests/ is not a parent of src/api/
-        # May still match via FTS, but scope-only results won't include it
-        # We verify that global learnings are preferred over unrelated scopes
-        for r in results:
-            assert r["scope"] in ("", "tests/")
+        # tests/ is not a parent of src/api/ so scope-only won't include it.
+        # FTS may still find the tests/ entry, but global should rank higher.
+        if len(results) >= 2:
+            # Global/parent scope entries should outrank unrelated scopes
+            global_idx = next((i for i, r in enumerate(results) if r["scope"] == ""), len(results))
+            tests_idx = next(
+                (i for i, r in enumerate(results) if r["scope"] == "tests/"), len(results),
+            )
+            assert global_idx < tests_idx, "Global scope should rank above unrelated tests/ scope"
 
 
 class TestDeduplication:
@@ -203,3 +209,102 @@ class TestListAll:
         results = store.list_all()
         match = [lr for lr in results if lr["id"] == lid]
         assert match[0]["description"] == "Updated description"
+
+
+class TestFTSSpecialCharacters:
+    """FTS5 special characters should not crash queries."""
+
+    def test_query_with_asterisk(self, store: MemoryStore):
+        store.add("pattern", "Use C++ templates for generics")
+        # Should not crash on FTS special char
+        results = store.recall("C++ templates")
+        assert isinstance(results, list)
+
+    def test_query_with_colon(self, store: MemoryStore):
+        store.add("convention", "Use key value pairs in config")
+        results = store.recall("key:value config")
+        assert isinstance(results, list)
+
+    def test_query_with_quotes(self, store: MemoryStore):
+        store.add("gotcha", "Escape double quotes in JSON")
+        results = store.recall('"JSON" escaping')
+        assert isinstance(results, list)
+
+    def test_query_with_parentheses(self, store: MemoryStore):
+        store.add("pattern", "Use grouping in regex")
+        results = store.recall("regex (grouping)")
+        assert isinstance(results, list)
+
+
+class TestEdgeCases:
+    """Edge cases and boundary conditions."""
+
+    def test_recall_empty_query(self, store: MemoryStore):
+        store.add("pattern", "Some learning", scope="src/")
+        # Empty query should still return scope-matched results
+        results = store.recall("", scope="src/")
+        assert isinstance(results, list)
+
+    def test_recall_whitespace_query(self, store: MemoryStore):
+        store.add("pattern", "Some learning", scope="src/")
+        results = store.recall("   ", scope="src/")
+        assert isinstance(results, list)
+
+    def test_confidence_clamped_high(self, store: MemoryStore):
+        lid = store.add("pattern", "Over-confident learning", confidence=5.0)
+        results = store.list_all()
+        match = [lr for lr in results if lr["id"] == lid]
+        assert match[0]["confidence"] <= _CONFIDENCE_CAP
+
+    def test_confidence_clamped_low(self, store: MemoryStore):
+        lid = store.add("pattern", "Under-confident learning", confidence=-1.0)
+        results = store.list_all()
+        match = [lr for lr in results if lr["id"] == lid]
+        assert match[0]["confidence"] >= _CONFIDENCE_FLOOR
+
+    def test_scope_without_trailing_slash(self, store: MemoryStore):
+        store.add("convention", "API uses REST", scope="src/api/")
+        # Query with scope missing trailing slash should still work
+        results = store.recall("REST API", scope="src/api")
+        assert isinstance(results, list)
+
+    def test_update_invalid_type_raises(self, store: MemoryStore):
+        lid = store.add("pattern", "Valid learning")
+        with pytest.raises(ValueError, match="Invalid type"):
+            store.update(lid, type="bogus")
+
+    def test_update_invalid_status_raises(self, store: MemoryStore):
+        lid = store.add("pattern", "Valid learning")
+        with pytest.raises(ValueError, match="Invalid status"):
+            store.update(lid, status="bogus")
+
+    def test_update_unknown_fields_ignored(self, store: MemoryStore):
+        lid = store.add("pattern", "Valid learning")
+        # Unknown field should be silently dropped, not error
+        store.update(lid, nonexistent_field="value")
+        results = store.list_all()
+        match = [lr for lr in results if lr["id"] == lid]
+        assert match[0]["description"] == "Valid learning"
+
+    def test_context_manager_protocol(self, tmp_path):
+        with MemoryStore(project_dir=str(tmp_path)) as store:
+            lid = store.add("pattern", "Context manager works")
+            assert lid > 0
+        # Connection should be closed after exiting
+        assert store._conn is None
+
+    def test_decay_time_gated(self, store: MemoryStore):
+        """Decay should only run once per hour, not on every recall."""
+        lid = store.add("pattern", "Stable learning", confidence=0.5)
+
+        # First recall triggers decay
+        store.recall("anything")
+        r1 = store.list_all()
+        c1 = [lr for lr in r1 if lr["id"] == lid][0]["confidence"]
+
+        # Second recall within the hour should NOT decay again
+        store.recall("something else")
+        r2 = store.list_all()
+        c2 = [lr for lr in r2 if lr["id"] == lid][0]["confidence"]
+
+        assert c1 == c2, "Decay should be time-gated, not applied on every recall"
