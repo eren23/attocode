@@ -72,6 +72,72 @@ class DependencyGraph:
         count = len(self.reverse.get(file_path, set()))
         return min(0.2, count * 0.04)
 
+    def pagerank(
+        self,
+        damping: float = 0.85,
+        iterations: int = 20,
+        tolerance: float = 1e-6,
+    ) -> dict[str, float]:
+        """Compute PageRank scores for all files in the dependency graph.
+
+        Uses the reverse (importer) graph: a file is important if important
+        files import it. Returns scores normalized to 0.0-1.0 range.
+
+        Args:
+            damping: Damping factor (probability of following a link). Default 0.85.
+            iterations: Maximum power-iteration rounds. Default 20.
+            tolerance: Early-stop when max score change < tolerance.
+
+        Returns:
+            Dict mapping file paths to PageRank scores (0.0-1.0 normalized).
+        """
+        # Collect all nodes from both forward and reverse graphs
+        all_nodes: set[str] = set()
+        all_nodes.update(self.forward.keys())
+        all_nodes.update(self.reverse.keys())
+        for targets in self.forward.values():
+            all_nodes.update(targets)
+        for sources in self.reverse.values():
+            all_nodes.update(sources)
+
+        if not all_nodes:
+            return {}
+
+        n = len(all_nodes)
+        base = 1.0 / n
+        scores: dict[str, float] = {node: base for node in all_nodes}
+
+        # Pre-compute out-degree (forward edges = this file imports N others)
+        out_degree: dict[str, int] = {}
+        for node in all_nodes:
+            out_degree[node] = len(self.forward.get(node, set()))
+
+        for _ in range(iterations):
+            new_scores: dict[str, float] = {}
+            for node in all_nodes:
+                # Sum contributions from files that import this node
+                rank_sum = 0.0
+                for importer in self.reverse.get(node, set()):
+                    od = out_degree.get(importer, 0)
+                    if od > 0:
+                        rank_sum += scores[importer] / od
+                new_scores[node] = (1 - damping) / n + damping * rank_sum
+
+            # Check convergence
+            max_diff = max(
+                abs(new_scores[node] - scores[node]) for node in all_nodes
+            )
+            scores = new_scores
+            if max_diff < tolerance:
+                break
+
+        # Normalize to 0.0-1.0
+        max_score = max(scores.values()) if scores else 1.0
+        if max_score > 0:
+            scores = {k: v / max_score for k, v in scores.items()}
+
+        return scores
+
     def to_import_graph(self) -> dict[str, list[str]]:
         """Convert to the dict format expected by CodeSelector.ranked_search."""
         return {k: list(v) for k, v in self.forward.items()}
@@ -536,11 +602,14 @@ class CodebaseContextManager:
         for f in files:
             f.importance = self._score_importance(f)
 
-        # Build dependency graph and boost hub files
+        # Build dependency graph and boost hub files using PageRank
         self._dep_graph = build_dependency_graph(files, self.root_dir)
+        pr_scores = self._dep_graph.pagerank()
         for f in files:
-            hub_boost = self._dep_graph.hub_score(f.relative_path)
-            if hub_boost > 0:
+            pr = pr_scores.get(f.relative_path, 0.0)
+            # Normalize PageRank to 0.0-0.3 boost range (stronger than old linear 0.0-0.2)
+            hub_boost = pr * 0.3
+            if hub_boost > 0.01:
                 f.importance = min(1.0, f.importance + hub_boost)
 
         # Sort by importance (highest first)

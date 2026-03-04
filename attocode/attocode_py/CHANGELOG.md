@@ -12,6 +12,73 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Fix `attoswarm tui` not picking up new TUI widgets when installed via `uv tool install`
 - Enabling code understanding tools of attocode to other AI coders as a skill system
 
+## [0.1.12] - 2026-03-04
+
+### Added
+
+- **2 new MCP code-intel tools** (20 total): `bootstrap` (all-in-one codebase orientation — summary + repo map + conventions + search in one call) and `relevant_context` (subgraph capsule — BFS from center file(s) with neighbor symbols)
+- **`notify_file_changed` MCP tool** — agents can explicitly notify the server about file changes, updating AST index and invalidating stale embeddings immediately
+- **`attocode://guidelines` MCP resource** — serves `GUIDELINES.md` (tool inventory, progressive disclosure strategy, task workflows, anti-patterns) to any MCP client
+- **File watcher + notification queue** — background `watchfiles` watcher auto-updates AST index; fallback queue file (`.attocode/cache/file_changes`) for CLI-based notifications
+- **`notify` CLI subcommand** — `attocode-code-intel notify --stdin` reads JSON from PostToolUse hooks or raw file paths; `--file <path>` for explicit notifications; uses `fcntl` file locking
+- **PostToolUse hook management** — `install_hooks()` / `uninstall_hooks()` for Claude Code; `--hooks` flag on `attocode code-intel install claude`; tag-based idempotent dedup; matcher format: plain string (`"Edit|Write|NotebookEdit"`)
+- **Agent guidelines** (`GUIDELINES.md`) — shipped inside package: tool inventory with token costs, progressive disclosure levels, codebase-size strategies, task-specific workflows, parallel call groupings, LSP fallback table, 10 anti-patterns
+- **Tree-sitter parser** (`ts_parser.py`) — unified parser for 9 languages (Python, JS, TS, Go, Rust, Java, Ruby, C, C++) with graceful degradation when `tree-sitter` not installed
+- **AST chunker** (`ast_chunker.py`) — structural code chunking at function/method/class boundaries with source extraction; reciprocal rank fusion (RRF) for merging ranked results
+- **Graph store** (`graph_store.py`) — SQLite-backed persistent cache for dependency graph, file metadata, and symbol index; content hashing via xxhash; reduces cold start from 5-15s to 0.5-2s
+- **Two-stage semantic search** — wide recall (vector top-50 + keyword top-50) merged with RRF; outperforms single-stage on code retrieval benchmarks
+- **Incomplete action retry** — execution loop detects narrative-only responses (no tool calls despite claiming work remains) and auto-retries up to 2 times with a system nudge
+- **Configurable compaction thresholds** — `compaction_warning_threshold` and `compaction_threshold` in config, `AgentBuilder.with_compaction()` kwargs, wired through CLI
+- **Dual-trigger compaction** — monitors both context window usage and economics budget usage; either hitting threshold triggers compaction
+- **Force compaction** — `handle_auto_compaction(force=True)` uses `emergency_compact()` for budget recovery; accurate `tokens_saved` computation
+- **`apply_budget_extension()`** — atomic budget extension that correctly syncs soft-limit ratio across `_ctx.budget` and `_ctx.economics.budget`; emits `BUDGET_EXTENSION_REQUESTED/GRANTED/DENIED` trace events
+- **Budget extension wired in TUI** — `set_extension_handler()` connected to `BudgetExtensionDialog` in `_run_tui()`
+- **Lazy session store** — `ensure_session_store()` allows `/sessions`, `/load`, `/resume` to work before the first prompt
+- **`/resume` auto-latest** — calling `/resume` with no argument resumes the most recent session
+- **`trace-*` session ID guard** — `/load` and `/resume` return clear errors for dashboard trace session IDs (not resumable)
+- **TUI status bar dual metrics** — shows `ctx X%` (context window) and `bud X%` (economics budget) separately, each color-coded by threshold; token section shows both `ctx N/M` and `bud N/M`
+- **`_sync_status_metrics()`** — single consolidated method replacing 5 duplicated inline status sync blocks in TUI app
+- **`tree-sitter` optional extra** — `pip install attocode[tree-sitter]` for 9 language grammars
+- **`watch` optional extra** — `pip install attocode[watch]` for `watchfiles` background watcher
+- **PageRank importance scoring** — `DependencyGraph.pagerank()` using power iteration (damping=0.85, 20 iterations)
+
+### Changed
+
+- MCP code-intel server expanded from 18 to 20 tools
+- `STANDARD_BUDGET.max_tokens`: 1M → 100M tokens (cost `budget_max_cost=10.0` is now the primary constraint)
+- `conventions` tool now supports optional directory scoping
+- `semantic_search.index()` expands language coverage when tree-sitter grammars are installed
+- `ast_service.initialize()` picks up tree-sitter supported languages dynamically
+- `/extend` command now calls `agent.apply_budget_extension()` preserving soft-limit ratio
+- `tomli_w>=1.0` moved to required dependencies (Codex TOML installer)
+- `mcp` moved from `code-intel` extra to required dependencies
+
+### Fixed
+
+- **Hook matcher format** — `_build_hook_config()` produces `"matcher": "Edit|Write|NotebookEdit"` (string), not `{"tool_name": ...}` (dict) which Claude Code rejected with "matcher: Expected string, but received object"
+- **Hook dedup on reinstall** — tag-based detection (`_HOOK_TAG` in command) replaces old `entry.get("matcher") == _HOOK_MATCHER` which couldn't match across format changes, causing duplicates
+- **Compaction `tokens_saved` always 0** — now accurately computed as `tokens_before - tokens_after`
+- **Budget extension discarding soft limit** — previous inline `ExecutionBudget(...)` construction lost the soft-limit ratio; `apply_budget_extension()` preserves it
+- **Status bar showing stale/partial metrics** — consolidated `_sync_status_metrics()` ensures all fields update atomically
+
+### Documentation
+
+- README: editable tool install section (`uv tool install --force --editable ...`)
+- `docs/getting-started.md`: same editable install section
+- `docs/sessions-guide.md`: lazy init note, trace-vs-resumable session clarification
+- `docs/troubleshooting.md`: "Edited code but TUI still shows old behavior" section
+
+### Tests
+
+- `test_code_intel.py`: 1,309 new lines — bootstrap, relevant_context, notify, hooks, guidelines resource, file watcher, notification queue
+- `test_agent.py`: `apply_budget_extension()`, `ensure_session_store()`, budget extension events
+- `test_completion.py`: `_has_incomplete_action`, `_has_future_intent`, new `analyze_completion` checks
+- `test_loop.py`: incomplete action retry logic, force compaction, dual-trigger compaction
+- `test_cli.py`: compaction threshold wiring
+- `test_commands_sessions.py`: lazy store init, `/load trace-*` error, `/resume` auto-latest
+- `test_app.py`: `_sync_status_metrics()` consolidation
+- `test_widgets.py`: status bar dual-metric display
+
 ## [0.1.11] - 2026-03-03
 
 ### Added

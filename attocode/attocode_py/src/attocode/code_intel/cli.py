@@ -41,6 +41,8 @@ def dispatch_code_intel(parts: tuple[str, ...] | list[str], *, debug: bool = Fal
         _cmd_serve(args[1:], debug=debug)
     elif cmd == "status":
         _cmd_status()
+    elif cmd == "notify":
+        _cmd_notify(args[1:])
     else:
         print(f"Unknown code-intel command: {cmd}", file=sys.stderr)
         _print_help()
@@ -56,6 +58,7 @@ def _print_help() -> None:
         "  uninstall <target>  Remove MCP server from a coding assistant\n"
         "  serve               Run MCP server directly (stdio)\n"
         "  status              Check installation status across all targets\n"
+        "  notify              Notify server about changed files (for hooks)\n"
         "\n"
         "Targets (auto-install):\n"
         "  claude              Claude Code (via `claude mcp add` CLI)\n"
@@ -74,18 +77,24 @@ def _print_help() -> None:
         "Options:\n"
         "  --project <path>    Project directory to index (default: .)\n"
         "  --global            Install globally (Claude, Codex, Zed)\n"
+        "  --hooks             Also install PostToolUse hooks (Claude Code)\n"
+        "\n"
+        "Notify options:\n"
+        "  --file <path>       File that changed (repeatable)\n"
+        "  --stdin             Read changed file paths from stdin (JSON or lines)\n"
     )
 
 
-def _parse_opts(args: list[str]) -> tuple[str | None, str, str]:
-    """Parse target, --project, and --global from args.
+def _parse_opts(args: list[str]) -> tuple[str | None, str, str, bool]:
+    """Parse target, --project, --global, and --hooks from args.
 
     Returns:
-        (target, project_dir, scope)
+        (target, project_dir, scope, hooks)
     """
     target = None
     project_dir = "."
     scope = "local"
+    hooks = False
 
     i = 0
     while i < len(args):
@@ -99,19 +108,22 @@ def _parse_opts(args: list[str]) -> tuple[str | None, str, str]:
         elif arg == "--global":
             scope = "user"
             i += 1
+        elif arg == "--hooks":
+            hooks = True
+            i += 1
         elif not arg.startswith("-") and target is None:
             target = arg
             i += 1
         else:
             i += 1
 
-    return target, project_dir, scope
+    return target, project_dir, scope, hooks
 
 
 def _cmd_install(args: list[str]) -> None:
-    from attocode.code_intel.installer import ALL_TARGETS_STR, install
+    from attocode.code_intel.installer import ALL_TARGETS_STR, install, install_hooks
 
-    target, project_dir, scope = _parse_opts(args)
+    target, project_dir, scope, hooks = _parse_opts(args)
     if not target:
         print(f"Error: specify a target ({ALL_TARGETS_STR})", file=sys.stderr)
         sys.exit(1)
@@ -120,14 +132,20 @@ def _cmd_install(args: list[str]) -> None:
     if not success:
         sys.exit(1)
 
+    if hooks:
+        install_hooks(target, project_dir=project_dir)
+
 
 def _cmd_uninstall(args: list[str]) -> None:
-    from attocode.code_intel.installer import ALL_TARGETS_STR, uninstall
+    from attocode.code_intel.installer import ALL_TARGETS_STR, uninstall, uninstall_hooks
 
-    target, project_dir, scope = _parse_opts(args)
+    target, project_dir, scope, _hooks = _parse_opts(args)
     if not target:
         print(f"Error: specify a target ({ALL_TARGETS_STR})", file=sys.stderr)
         sys.exit(1)
+
+    # Always attempt to remove hooks on uninstall
+    uninstall_hooks(target, project_dir=project_dir)
 
     success = uninstall(target, project_dir=project_dir, scope=scope)
     if not success:
@@ -135,7 +153,7 @@ def _cmd_uninstall(args: list[str]) -> None:
 
 
 def _cmd_serve(args: list[str], *, debug: bool = False) -> None:
-    _, project_dir, _ = _parse_opts(args)
+    _, project_dir, _, _ = _parse_opts(args)
 
     os.environ["ATTOCODE_PROJECT_DIR"] = os.path.abspath(project_dir)
 
@@ -278,3 +296,84 @@ def _cmd_status() -> None:
         print("  Entry point: attocode-code-intel (on PATH)")
     else:
         print(f"  Entry point: {sys.executable} -m attocode.code_intel.server")
+
+
+def _cmd_notify(args: list[str]) -> None:
+    """Notify the server about changed files via the notification queue.
+
+    Writes file paths to .attocode/cache/file_changes for the server to pick up.
+    """
+    import json as json_mod
+    from pathlib import Path
+
+    _, project_dir, _, _ = _parse_opts(args)
+    project_dir = os.path.abspath(project_dir)
+
+    files: list[str] = []
+
+    # Parse --file flags
+    i = 0
+    while i < len(args):
+        if args[i] == "--file" and i + 1 < len(args):
+            files.append(args[i + 1])
+            i += 2
+        elif args[i].startswith("--file="):
+            files.append(args[i].split("=", 1)[1])
+            i += 1
+        elif args[i] == "--stdin":
+            # Read from stdin: support both raw lines and JSON with tool_input
+            for line in sys.stdin:
+                line = line.strip()
+                if not line:
+                    continue
+                if line.startswith("{"):
+                    try:
+                        data = json_mod.loads(line)
+                        fp = (
+                            data.get("tool_input", {}).get("file_path")
+                            or data.get("file_path")
+                        )
+                        if fp:
+                            files.append(fp)
+                    except json_mod.JSONDecodeError:
+                        pass
+                else:
+                    files.append(line)
+            i += 1
+        else:
+            i += 1
+
+    if not files:
+        print("No files specified. Use --file <path> or --stdin.", file=sys.stderr)
+        sys.exit(1)
+
+    # Resolve to relative paths and write to queue
+    queue_path = Path(project_dir) / ".attocode" / "cache" / "file_changes"
+    queue_path.parent.mkdir(parents=True, exist_ok=True)
+
+    rel_paths: list[str] = []
+    for f in files:
+        p = Path(f)
+        if p.is_absolute():
+            try:
+                rel = os.path.relpath(str(p), project_dir)
+            except ValueError:
+                rel = str(p)
+        else:
+            rel = str(p)
+        rel_paths.append(rel)
+
+    # Append to queue file under exclusive lock
+    try:
+        import fcntl
+        with queue_path.open("a", encoding="utf-8") as fh:
+            fcntl.flock(fh, fcntl.LOCK_EX)
+            for rp in rel_paths:
+                fh.write(rp + "\n")
+    except ImportError:
+        # Windows: fall back to non-locked append
+        with queue_path.open("a", encoding="utf-8") as fh:
+            for rp in rel_paths:
+                fh.write(rp + "\n")
+
+    print(f"Queued {len(rel_paths)} file(s) for index update.")

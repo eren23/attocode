@@ -709,10 +709,82 @@ def parse_javascript(content: str, path: str = "") -> FileAST:
     return ast
 
 
+def _ts_result_to_file_ast(result: dict, file_path: str) -> FileAST:
+    """Convert tree-sitter parse result dict into a FileAST dataclass."""
+    language = result.get("language", "unknown")
+
+    # Convert function dicts to FunctionDef
+    functions: list[FunctionDef] = []
+    for fn in result.get("functions", []):
+        params = fn.get("parameters", [])
+        param_defs = [
+            ParamDef(name=p) if isinstance(p, str) else p
+            for p in params
+        ]
+        functions.append(FunctionDef(
+            name=fn["name"],
+            start_line=fn.get("start_line", 0),
+            end_line=fn.get("end_line", 0),
+            parameters=param_defs,
+            return_type=fn.get("return_type", ""),
+            decorators=fn.get("decorators", []),
+            is_async=fn.get("is_async", False),
+            visibility=fn.get("visibility", "public"),
+        ))
+
+    # Convert class dicts to ClassDef
+    classes: list[ClassDef] = []
+    for cls in result.get("classes", []):
+        methods: list[FunctionDef] = []
+        for m in cls.get("methods", []):
+            m_params = m.get("parameters", [])
+            m_param_defs = [
+                ParamDef(name=p) if isinstance(p, str) else p
+                for p in m_params
+            ]
+            methods.append(FunctionDef(
+                name=m["name"],
+                start_line=m.get("start_line", 0),
+                end_line=m.get("end_line", 0),
+                parameters=m_param_defs,
+                return_type=m.get("return_type", ""),
+                decorators=m.get("decorators", []),
+                is_async=m.get("is_async", False),
+                visibility=m.get("visibility", "public"),
+            ))
+        classes.append(ClassDef(
+            name=cls["name"],
+            start_line=cls.get("start_line", 0),
+            end_line=cls.get("end_line", 0),
+            bases=cls.get("bases", []),
+            methods=methods,
+            decorators=cls.get("decorators", []),
+        ))
+
+    # Convert import dicts to ImportDef
+    imports: list[ImportDef] = []
+    for imp in result.get("imports", []):
+        imports.append(ImportDef(
+            module=imp.get("module", ""),
+            is_from=imp.get("is_from", False),
+        ))
+
+    return FileAST(
+        path=file_path,
+        language=language,
+        functions=functions,
+        classes=classes,
+        imports=imports,
+        top_level_vars=result.get("top_level_vars", []),
+        line_count=result.get("line_count", 0),
+    )
+
+
 def parse_file(file_path: str, content: str | None = None) -> FileAST:
     """Parse a source file and return its AST.
 
-    Uses regex-based parsers. Falls back gracefully for
+    Tries tree-sitter first (supports 8+ languages), then falls back to
+    regex-based parsers for Python/JS/TS. Returns a minimal FileAST for
     unsupported languages.
     """
     if content is None:
@@ -723,6 +795,17 @@ def parse_file(file_path: str, content: str | None = None) -> FileAST:
 
     lang = detect_language(file_path)
 
+    # Try tree-sitter first (works for all 8+ supported languages)
+    try:
+        from attocode.integrations.context.ts_parser import ts_parse_file
+
+        ts_result = ts_parse_file(file_path, content=content, language=lang)
+        if ts_result is not None:
+            return _ts_result_to_file_ast(ts_result, file_path)
+    except ImportError:
+        pass  # tree-sitter not installed
+
+    # Regex fallback for Python and JavaScript/TypeScript
     if lang == "python":
         return parse_python(content, file_path)
     elif lang in ("javascript", "typescript"):

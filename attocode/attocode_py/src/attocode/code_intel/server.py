@@ -1,6 +1,8 @@
 """MCP server exposing Attocode's code intelligence capabilities.
 
-Provides 18 tools for deep codebase understanding:
+Provides 24 tools for deep codebase understanding:
+- bootstrap: All-in-one orientation (summary + map + conventions + search)
+- relevant_context: Subgraph capsule for file(s) with neighbors and symbols
 - repo_map: Token-budgeted file tree with symbols
 - symbols: List symbols in a file
 - search_symbols: Fuzzy symbol search across codebase
@@ -11,7 +13,7 @@ Provides 18 tools for deep codebase understanding:
 - dependency_graph: Dependency graph from a starting file
 - project_summary: High-level project overview (CLAUDE.md bootstrap)
 - hotspots: Risk/complexity analysis with ranked hotspots
-- conventions: Code style and convention detection
+- conventions: Code style and convention detection (with optional directory scoping)
 - lsp_definition: Type-resolved go-to-definition
 - lsp_references: All references with type awareness
 - lsp_hover: Type signature + docs for symbol
@@ -19,6 +21,10 @@ Provides 18 tools for deep codebase understanding:
 - explore_codebase: Hierarchical drill-down navigation
 - security_scan: Secret/anti-pattern/dependency scanning
 - semantic_search: Natural language code search
+- recall: Retrieve relevant project learnings
+- record_learning: Record patterns/conventions/gotchas
+- learning_feedback: Mark learnings as helpful/unhelpful
+- list_learnings: Browse stored learnings
 
 Usage::
 
@@ -31,8 +37,10 @@ import logging
 import os
 import re
 import sys
+import threading
 from collections import Counter
 from dataclasses import dataclass, field
+from pathlib import Path
 
 try:
     from mcp.server.fastmcp import FastMCP
@@ -48,10 +56,27 @@ logger = logging.getLogger(__name__)
 
 mcp = FastMCP("attocode-code-intel")
 
+# ---------------------------------------------------------------------------
+# MCP Resource: Agent Guidelines
+# ---------------------------------------------------------------------------
+
+_GUIDELINES_PATH = Path(__file__).parent / "GUIDELINES.md"
+
+
+@mcp.resource("attocode://guidelines")
+def guidelines_resource() -> str:
+    """Agent guidelines for using code intelligence tools effectively."""
+    try:
+        return _GUIDELINES_PATH.read_text(encoding="utf-8")
+    except OSError:
+        return "Guidelines file not found."
+
+
 # Lazily initialized singletons
 _ast_service = None
 _context_mgr = None
 _code_analyzer = None
+_memory_store = None
 
 
 def _get_project_dir() -> str:
@@ -1022,6 +1047,135 @@ def dependency_graph(start_file: str, depth: int = 2) -> str:
     return "\n".join(lines)
 
 
+@mcp.tool()
+def relevant_context(
+    files: list[str],
+    depth: int = 1,
+    max_tokens: int = 4000,
+    include_symbols: bool = True,
+) -> str:
+    """Get a subgraph capsule — a file and its neighbors with symbols.
+
+    BFS from center file(s) in both directions (imports and importers) up to
+    `depth` hops. For each file shows: language, line count, importance,
+    relationship to center, and top symbols. Replaces N+1 sequential calls
+    (dependency_graph + symbols on each neighbor).
+
+    Args:
+        files: Center file paths (relative to project root or absolute).
+        depth: How many hops to traverse (default 1, max 2).
+        max_tokens: Token budget for the output (default 4000).
+        include_symbols: Whether to include symbol lists (default True).
+    """
+    svc = _get_ast_service()
+    ctx = _get_context_mgr()
+    ast_cache = svc._ast_cache
+    all_files = {fi.relative_path: fi for fi in ctx._files}
+
+    depth = min(depth, 2)  # Cap at 2 to avoid explosion
+
+    # Normalize center files to relative paths
+    center_rels: list[str] = []
+    for f in files:
+        rel = svc._to_rel(f)
+        if rel:
+            center_rels.append(rel)
+
+    if not center_rels:
+        return "No valid files provided."
+
+    center_set = set(center_rels)
+
+    # BFS in both directions
+    visited: dict[str, tuple[int, str]] = {}  # rel -> (distance, relationship)
+    queue: list[tuple[str, int, str]] = []
+
+    for rel in center_rels:
+        visited[rel] = (0, "center")
+        queue.append((rel, 0, "center"))
+
+    while queue:
+        current, d, _rel_type = queue.pop(0)
+        if d >= depth:
+            continue
+
+        # Forward: files this one imports
+        for dep in svc.get_dependencies(current):
+            if dep not in visited:
+                relationship = "imported-by-center" if d == 0 else "transitive-import"
+                visited[dep] = (d + 1, relationship)
+                queue.append((dep, d + 1, relationship))
+
+        # Reverse: files that import this one
+        for dep in svc.get_dependents(current):
+            if dep not in visited:
+                relationship = "imports-center" if d == 0 else "transitive-importer"
+                visited[dep] = (d + 1, relationship)
+                queue.append((dep, d + 1, relationship))
+
+    # Sort: center first, then by distance, then by importance
+    def _sort_key(item: tuple[str, tuple[int, str]]) -> tuple[int, float]:
+        rel, (dist, _) = item
+        fi = all_files.get(rel)
+        importance = fi.importance if fi else 0.0
+        return (dist, -importance)
+
+    sorted_files = sorted(visited.items(), key=_sort_key)
+
+    # Build output with token budget
+    sections: list[str] = []
+    token_est = 0
+    max_symbols_center = 8
+    max_symbols_neighbor = 5
+
+    for rel, (dist, relationship) in sorted_files:
+        fi = all_files.get(rel)
+        file_ast = ast_cache.get(rel)
+
+        lang = fi.language if fi else ""
+        line_count = fi.line_count if fi else 0
+        importance = fi.importance if fi else 0.0
+
+        header = f"{'  ' * dist}{rel}"
+        meta = f"  {lang}, {line_count}L, importance={importance:.2f}, {relationship}"
+
+        file_section = [header, meta]
+
+        if include_symbols and file_ast:
+            max_sym = max_symbols_center if dist == 0 else max_symbols_neighbor
+            sym_lines: list[str] = []
+            for fn in file_ast.functions[:max_sym]:
+                params = ", ".join(p.name for p in fn.parameters[:4])
+                ret = f" -> {fn.return_type}" if fn.return_type else ""
+                sym_lines.append(f"    fn {fn.name}({params}){ret}")
+            for cls in file_ast.classes[:max_sym]:
+                bases = f"({', '.join(cls.bases[:3])})" if cls.bases else ""
+                methods_preview = ", ".join(m.name for m in cls.methods[:4])
+                sym_lines.append(f"    class {cls.name}{bases}: {methods_preview}")
+            # Trim if too many total
+            remaining = max_sym - len(sym_lines)
+            if remaining < 0:
+                sym_lines = sym_lines[:max_sym]
+                sym_lines.append(f"    ... and more")
+            file_section.extend(sym_lines)
+
+        section_text = "\n".join(file_section)
+        section_tokens = int(len(section_text) / 3.5)
+
+        if token_est + section_tokens > max_tokens and sections:
+            sections.append(f"  ... and {len(sorted_files) - len(sections)} more files (truncated)")
+            break
+
+        sections.append(section_text)
+        token_est += section_tokens
+
+    header = (
+        f"Subgraph capsule for {', '.join(center_rels)} "
+        f"(depth={depth}, {len(visited)} files):\n"
+    )
+    return header + "\n".join(sections)
+
+
 # ---------------------------------------------------------------------------
 # Synthesis tools
 # ---------------------------------------------------------------------------
@@ -1143,6 +1297,141 @@ def project_summary(max_tokens: int = 4000) -> str:
 
 
 @mcp.tool()
+def bootstrap(task_hint: str = "", max_tokens: int = 8000) -> str:
+    """All-in-one codebase orientation — the best first tool call.
+
+    Detects codebase size and returns an optimized bundle:
+    - Project summary (identity, stats, entry points, architecture)
+    - Repository map OR hierarchical exploration (size-dependent)
+    - Coding conventions (25-file sample)
+    - Relevant search results (if task_hint provided)
+    - Navigation guidance tailored to codebase size
+
+    Replaces 2-4 sequential calls (project_summary + repo_map + conventions
+    + semantic_search) with a single call. Inspired by Stripe's pre-hydration
+    pattern.
+
+    Args:
+        task_hint: Optional description of what you're trying to do.
+            When provided, includes semantic search results for relevant code.
+        max_tokens: Token budget for the entire output (default 8000).
+    """
+    ctx = _get_context_mgr()
+    files = ctx._files
+
+    if not files:
+        return "No files discovered in this project."
+
+    total_files = len(files)
+
+    # Determine codebase size tier
+    if total_files < 100:
+        size_tier = "small"
+    elif total_files < 2000:
+        size_tier = "medium"
+    else:
+        size_tier = "large"
+
+    # Budget allocation: summary 38%, structure 38%, conventions 12%, search 12%
+    summary_budget = int(max_tokens * 0.38)
+    structure_budget = int(max_tokens * 0.38)
+    conventions_budget = int(max_tokens * 0.12)
+    search_budget = int(max_tokens * 0.12) if task_hint else 0
+    # Redistribute search budget if no task_hint
+    if not task_hint:
+        summary_budget = int(max_tokens * 0.40)
+        structure_budget = int(max_tokens * 0.44)
+        conventions_budget = int(max_tokens * 0.16)
+
+    sections: list[str] = []
+
+    # Section 1: Project summary
+    summary_text = project_summary(max_tokens=summary_budget)
+    sections.append(summary_text)
+
+    # Section 2: Structure (size-dependent)
+    if size_tier == "small":
+        # Full repo map for small codebases
+        map_text = repo_map(include_symbols=True, max_tokens=structure_budget)
+        sections.append(f"## Repository Map\n{map_text}")
+    elif size_tier == "medium":
+        # Repo map without symbols + top hotspots
+        map_text = repo_map(include_symbols=True, max_tokens=int(structure_budget * 0.7))
+        hs_text = hotspots(top_n=10)
+        sections.append(f"## Repository Map\n{map_text}")
+        sections.append(f"## Hotspots\n{hs_text}")
+    else:
+        # Large: hierarchical exploration + hotspots (no full map)
+        explorer = _get_explorer()
+        root_result = explorer.explore("", max_items=20, importance_threshold=0.3)
+        explore_text = explorer.format_result(root_result)
+        hs_text = hotspots(top_n=10)
+        sections.append(f"## Top-Level Structure\n{explore_text}")
+        sections.append(f"## Hotspots\n{hs_text}")
+
+    # Section 3: Conventions (small sample)
+    svc = _get_ast_service()
+    ast_cache = svc._ast_cache
+    if ast_cache:
+        candidates = sorted(
+            [fi for fi in files if fi.relative_path in ast_cache],
+            key=lambda fi: fi.importance,
+            reverse=True,
+        )
+        sample_rels = [fi.relative_path for fi in candidates[:25]]
+        if sample_rels:
+            stats = _analyze_conventions(ast_cache, sample_rels)
+            conv_text = _format_conventions(stats)
+            # Truncate if over budget
+            conv_chars = conventions_budget * 4  # ~3.5 chars per token
+            if len(conv_text) > conv_chars:
+                conv_text = conv_text[:conv_chars] + "\n  ..."
+            sections.append(f"## Conventions\n{conv_text}")
+
+    # Section 4: Task-relevant search (if task_hint provided)
+    if task_hint:
+        try:
+            mgr = _get_semantic_search()
+            results = mgr.search(task_hint, top_k=5)
+            if results:
+                search_text = mgr.format_results(results)
+                # Truncate if over budget
+                search_chars = search_budget * 4
+                if len(search_text) > search_chars:
+                    search_text = search_text[:search_chars] + "\n  ..."
+                sections.append(f"## Relevant Code for: {task_hint}\n{search_text}")
+        except Exception:
+            pass  # Graceful degradation — search is optional
+
+    # Navigation guidance
+    if size_tier == "small":
+        guidance = (
+            "## Navigation Guidance\n"
+            "Small codebase — the repo map above shows everything.\n"
+            "Next: `symbols(file)` or `file_analysis(file)` on files of interest."
+        )
+    elif size_tier == "medium":
+        guidance = (
+            "## Navigation Guidance\n"
+            "Medium codebase — use `explore_codebase(dir)` to drill into directories.\n"
+            "For specific symbols: `search_symbols(name)` or `semantic_search(query)`.\n"
+            "Before modifying: `impact_analysis([files])` to check blast radius."
+        )
+    else:
+        guidance = (
+            "## Navigation Guidance\n"
+            "Large codebase — do NOT request full `repo_map`, it wastes tokens.\n"
+            "Use `explore_codebase(dir)` to drill down level by level.\n"
+            "For specific symbols: `search_symbols(name)` or `semantic_search(query)`.\n"
+            "Use `relevant_context([file])` to understand a file with its neighbors.\n"
+            "Before modifying: `impact_analysis([files])` to check blast radius."
+        )
+    sections.append(guidance)
+
+    return "\n\n".join(sections)
+
+
+@mcp.tool()
 def hotspots(top_n: int = 15) -> str:
     """Identify files with highest complexity, coupling, and risk.
 
@@ -1211,15 +1500,22 @@ def hotspots(top_n: int = 15) -> str:
 
 
 @mcp.tool()
-def conventions(sample_size: int = 50) -> str:
+def conventions(sample_size: int = 50, path: str = "") -> str:
     """Detect coding conventions and style patterns in the project.
 
     Analyzes function naming, type hints, docstrings, async usage,
     import style, popular decorators, class patterns, and module
     organization across a sample of the most important files.
 
+    When ``path`` is set, only samples files within that directory subtree
+    and appends a comparison to project-wide conventions. This follows
+    Stripe's "scoped rules" pattern — different directories may follow
+    different conventions.
+
     Args:
         sample_size: Number of files to sample (default 50).
+        path: Optional directory path to scope the analysis to (e.g. "src/core").
+            When empty, analyzes the entire project.
     """
     svc = _get_ast_service()
     ast_cache = svc._ast_cache
@@ -1230,7 +1526,74 @@ def conventions(sample_size: int = 50) -> str:
     ctx = _get_context_mgr()
     files = ctx._files
 
-    # Sample top files by importance that exist in AST cache
+    # Filter by path if specified
+    path_prefix = path.rstrip("/") + "/" if path else ""
+
+    if path_prefix:
+        # Scoped analysis: files in the target directory
+        scoped_candidates = sorted(
+            [
+                fi for fi in files
+                if fi.relative_path in ast_cache
+                and fi.relative_path.startswith(path_prefix)
+            ],
+            key=lambda fi: fi.importance,
+            reverse=True,
+        )
+        scoped_rels = [fi.relative_path for fi in scoped_candidates[:sample_size]]
+
+        if not scoped_rels:
+            return f"No parsed files found in '{path}'."
+
+        scoped_stats = _analyze_conventions(ast_cache, scoped_rels)
+
+        # Also compute global conventions for comparison
+        global_candidates = sorted(
+            [fi for fi in files if fi.relative_path in ast_cache],
+            key=lambda fi: fi.importance,
+            reverse=True,
+        )
+        global_rels = [fi.relative_path for fi in global_candidates[:sample_size]]
+        global_stats = _analyze_conventions(ast_cache, global_rels)
+
+        # Format scoped conventions with global comparison
+        header = f"Conventions in {path}/ ({len(scoped_rels)} files):\n"
+        scoped_text = _format_conventions(scoped_stats)
+
+        # Build comparison section
+        comparison_parts: list[str] = []
+        scoped_fn = scoped_stats["total_functions"]
+        global_fn = global_stats["total_functions"]
+
+        if scoped_fn > 0 and global_fn > 0:
+            scoped_type_pct = scoped_stats["typed_return"] / scoped_fn * 100
+            global_type_pct = global_stats["typed_return"] / global_fn * 100
+            if abs(scoped_type_pct - global_type_pct) > 10:
+                comparison_parts.append(
+                    f"  Type hints: {scoped_type_pct:.0f}% here vs {global_type_pct:.0f}% project-wide"
+                )
+
+            scoped_doc_pct = scoped_stats["has_docstring_fn"] / scoped_fn * 100
+            global_doc_pct = global_stats["has_docstring_fn"] / global_fn * 100
+            if abs(scoped_doc_pct - global_doc_pct) > 10:
+                comparison_parts.append(
+                    f"  Docstrings: {scoped_doc_pct:.0f}% here vs {global_doc_pct:.0f}% project-wide"
+                )
+
+            scoped_async_pct = scoped_stats["async_count"] / scoped_fn * 100
+            global_async_pct = global_stats["async_count"] / global_fn * 100
+            if abs(scoped_async_pct - global_async_pct) > 10:
+                comparison_parts.append(
+                    f"  Async: {scoped_async_pct:.0f}% here vs {global_async_pct:.0f}% project-wide"
+                )
+
+        if comparison_parts:
+            header += scoped_text + "\n\nDivergence from project conventions:\n" + "\n".join(comparison_parts)
+        else:
+            header += scoped_text + "\n\n(Matches project-wide conventions.)"
+        return header
+
+    # Global (unscoped) analysis
     candidates = sorted(
         [fi for fi in files if fi.relative_path in ast_cache],
         key=lambda fi: fi.importance,
@@ -1504,15 +1867,18 @@ def security_scan(
 # ---------------------------------------------------------------------------
 
 _semantic_search = None
+_semantic_search_lock = threading.Lock()
 
 
 def _get_semantic_search():
-    """Lazily initialize the semantic search manager."""
+    """Lazily initialize the semantic search manager (thread-safe)."""
     global _semantic_search
     if _semantic_search is None:
-        from attocode.integrations.context.semantic_search import SemanticSearchManager
-        project_dir = _get_project_dir()
-        _semantic_search = SemanticSearchManager(root_dir=project_dir)
+        with _semantic_search_lock:
+            if _semantic_search is None:
+                from attocode.integrations.context.semantic_search import SemanticSearchManager
+                project_dir = _get_project_dir()
+                _semantic_search = SemanticSearchManager(root_dir=project_dir)
     return _semantic_search
 
 
@@ -1539,15 +1905,424 @@ def semantic_search(
 
 
 # ---------------------------------------------------------------------------
+# Memory / Recall tools (cross-agent learning)
+# ---------------------------------------------------------------------------
+
+
+def _get_memory_store():
+    """Lazily initialize and return the MemoryStore singleton."""
+    global _memory_store
+    if _memory_store is None:
+        from attocode.integrations.context.memory_store import MemoryStore
+
+        _memory_store = MemoryStore(_get_project_dir())
+    return _memory_store
+
+
+@mcp.tool()
+def recall(query: str, scope: str = "", max_results: int = 10) -> str:
+    """Retrieve relevant project learnings (patterns, conventions, gotchas).
+
+    Call this at the start of a task or when working in unfamiliar code.
+    Scope narrows results to a directory subtree (e.g. 'src/api/').
+
+    Args:
+        query: Natural language description of what you're working on.
+        scope: Optional directory scope to filter learnings.
+        max_results: Maximum number of learnings to return.
+    """
+    store = _get_memory_store()
+    results = store.recall(query, scope=scope, max_results=max_results)
+    if not results:
+        return "No relevant learnings found for this project."
+
+    lines = [f"## Project Learnings ({len(results)} relevant)\n"]
+    for r in results:
+        lines.append(f"- **[{r['type']}]** (confidence: {r['confidence']:.0%}, id: {r['id']})")
+        lines.append(f"  {r['description']}")
+        if r["details"]:
+            lines.append(f"  _{r['details']}_")
+
+    # Increment apply_count for returned learnings
+    for r in results:
+        store.record_applied(r["id"])
+
+    return "\n".join(lines)
+
+
+@mcp.tool()
+def record_learning(
+    type: str,  # noqa: A002
+    description: str,
+    details: str = "",
+    scope: str = "",
+    confidence: float = 0.7,
+) -> str:
+    """Record a project learning for future recall.
+
+    Call this when you discover something important about the codebase:
+    patterns, conventions, gotchas, workarounds, or anti-patterns.
+
+    Args:
+        type: One of 'pattern', 'antipattern', 'workaround', 'convention', 'gotcha'.
+        description: Short description (1-2 sentences).
+        details: Optional longer explanation or example.
+        scope: Optional directory scope (e.g. 'src/api/').
+        confidence: Initial confidence 0.0-1.0 (default 0.7).
+    """
+    store = _get_memory_store()
+    try:
+        learning_id = store.add(
+            type=type, description=description,
+            details=details, scope=scope, confidence=confidence,
+        )
+    except ValueError as e:
+        return f"Error: {e}"
+    return f"Recorded learning #{learning_id}: [{type}] {description}"
+
+
+@mcp.tool()
+def learning_feedback(learning_id: int, helpful: bool) -> str:
+    """Mark a previously recalled learning as helpful or unhelpful.
+
+    Call this after a recalled learning influenced your work, to improve
+    future recall quality. Unhelpful learnings are eventually auto-archived.
+
+    Args:
+        learning_id: The ID from a previous recall result.
+        helpful: Whether the learning was actually useful.
+    """
+    store = _get_memory_store()
+    store.record_feedback(learning_id, helpful)
+    action = "boosted" if helpful else "reduced"
+    return f"Feedback recorded — confidence {action} for learning #{learning_id}."
+
+
+@mcp.tool()
+def list_learnings(
+    status: str = "active",
+    type: str = "",  # noqa: A002
+    scope: str = "",
+) -> str:
+    """List all stored project learnings.
+
+    Args:
+        status: Filter by status: 'active' or 'archived'.
+        type: Optional filter by type (pattern/antipattern/workaround/convention/gotcha).
+        scope: Optional filter by directory scope.
+    """
+    store = _get_memory_store()
+    results = store.list_all(status=status, type=type or None)
+    if scope:
+        results = [r for r in results if r["scope"].startswith(scope) or r["scope"] == ""]
+    if not results:
+        return "No learnings found matching the filters."
+
+    lines = [f"## Learnings ({len(results)} total)\n"]
+    lines.append("| ID | Type | Description | Confidence | Applied | Scope |")
+    lines.append("|---|---|---|---|---|---|")
+    for r in results:
+        desc = r["description"][:60] + ("..." if len(r["description"]) > 60 else "")
+        lines.append(
+            f"| {r['id']} | {r['type']} | {desc} "
+            f"| {r['confidence']:.0%} | {r['apply_count']}x "
+            f"| {r['scope'] or '(global)'} |"
+        )
+    return "\n".join(lines)
+
+
+@mcp.resource("attocode://learnings")
+def learnings_resource() -> str:
+    """All active project learnings. Read this for full project knowledge base."""
+    store = _get_memory_store()
+    results = store.list_all(status="active")
+    if not results:
+        return "No project learnings recorded yet."
+
+    lines = ["# Project Learnings\n"]
+    by_type: dict[str, list[dict]] = {}
+    for r in results:
+        by_type.setdefault(r["type"], []).append(r)
+
+    for type_name, entries in sorted(by_type.items()):
+        lines.append(f"\n## {type_name.title()} ({len(entries)})\n")
+        for r in entries:
+            scope_tag = f" [{r['scope']}]" if r["scope"] else ""
+            conf = f"{r['confidence']:.0%}"
+            lines.append(f"- **{r['description']}**{scope_tag} (id: {r['id']}, confidence: {conf})")
+            if r["details"]:
+                lines.append(f"  {r['details']}")
+    return "\n".join(lines)
+
+
+# ---------------------------------------------------------------------------
+# Notification tool (explicit index update)
+# ---------------------------------------------------------------------------
+
+
+@mcp.tool()
+def notify_file_changed(files: list[str]) -> str:
+    """Notify the server that files have been modified externally.
+
+    Call this after editing files to immediately update the AST index
+    and invalidate stale semantic search embeddings. Useful when the
+    file watcher is unavailable or for batch updates.
+
+    Args:
+        files: List of file paths (relative or absolute) that changed.
+    """
+    if not files:
+        return "No files specified."
+
+    project_dir = _get_project_dir()
+    svc = _get_ast_service()
+    updated = 0
+
+    for f in files:
+        try:
+            p = Path(f)
+            if p.is_absolute():
+                rel = os.path.relpath(str(p), project_dir)
+            else:
+                rel = str(p)
+            # Guard against path traversal
+            rel = os.path.normpath(rel)
+            if rel.startswith(".."):
+                continue
+            svc.notify_file_changed(rel)
+            # Also invalidate semantic search embeddings
+            try:
+                smgr = _get_semantic_search()
+                abs_path = os.path.join(project_dir, rel)
+                smgr.invalidate_file(abs_path)
+            except Exception:
+                pass
+            updated += 1
+        except Exception as exc:
+            logger.debug("notify_file_changed: error for %s: %s", f, exc)
+
+    # Also drain the notification queue (CLI-written)
+    queued = _process_notification_queue()
+
+    total = updated + queued
+    return f"Updated {total} file(s). AST index refreshed."
+
+
+# ---------------------------------------------------------------------------
+# Notification queue (CLI → server communication)
+# ---------------------------------------------------------------------------
+
+
+def _get_queue_path() -> Path:
+    """Return the path to the notification queue file."""
+    return Path(_get_project_dir()) / ".attocode" / "cache" / "file_changes"
+
+
+_queue_lock = threading.Lock()
+
+
+def _process_notification_queue() -> int:
+    """Check the notification queue file and process pending changes.
+
+    Returns number of files processed.
+    """
+    with _queue_lock:
+        return _process_notification_queue_locked()
+
+
+def _process_notification_queue_locked() -> int:
+    """Inner implementation — must be called under ``_queue_lock``."""
+    try:
+        queue_path = _get_queue_path()
+    except RuntimeError:
+        return 0
+
+    if not queue_path.exists():
+        return 0
+
+    try:
+        # Atomic read-and-truncate under exclusive lock to avoid TOCTOU
+        try:
+            import fcntl
+            with open(queue_path, "r+", encoding="utf-8") as fh:
+                fcntl.flock(fh, fcntl.LOCK_EX)
+                content = fh.read()
+                fh.seek(0)
+                fh.truncate()
+        except ImportError:
+            # Windows: fall back to non-locked read+truncate
+            content = queue_path.read_text(encoding="utf-8")
+            queue_path.write_text("", encoding="utf-8")
+    except OSError:
+        return 0
+
+    paths = [line.strip() for line in content.splitlines() if line.strip()]
+    if not paths:
+        return 0
+
+    project_dir = _get_project_dir()
+    svc = _get_ast_service()
+    count = 0
+
+    for rel in paths:
+        # Guard against path traversal (e.g. ../../etc/passwd)
+        norm = os.path.normpath(rel)
+        if norm.startswith(".."):
+            continue
+        try:
+            svc.notify_file_changed(norm)
+            try:
+                smgr = _get_semantic_search()
+                abs_path = os.path.join(project_dir, norm)
+                smgr.invalidate_file(abs_path)
+            except Exception:
+                pass
+            count += 1
+        except Exception:
+            pass
+
+    if count:
+        logger.debug("Processed %d queued file notification(s)", count)
+    return count
+
+
+_queue_thread: threading.Thread | None = None
+
+
+def _start_queue_poller(project_dir: str) -> None:
+    """Start a background thread that polls the notification queue every 2s."""
+    global _queue_thread
+
+    if _queue_thread is not None:
+        return
+
+    def _poll_loop() -> None:
+        while not _watcher_stop.is_set():
+            try:
+                _process_notification_queue()
+            except Exception:
+                pass
+            _watcher_stop.wait(2.0)
+
+    _queue_thread = threading.Thread(
+        target=_poll_loop, daemon=True, name="code-intel-queue-poller"
+    )
+    _queue_thread.start()
+    logger.debug("Notification queue poller started")
+
+
+# ---------------------------------------------------------------------------
+# File watcher (background thread)
+# ---------------------------------------------------------------------------
+
+_CODE_EXTENSIONS = {
+    ".py", ".js", ".jsx", ".ts", ".tsx", ".go", ".rs", ".java",
+    ".rb", ".c", ".cpp", ".h", ".hpp", ".cs", ".swift", ".kt",
+}
+
+_watcher_thread: threading.Thread | None = None
+_watcher_stop = threading.Event()
+
+
+def _start_file_watcher(project_dir: str) -> None:
+    """Start a background file watcher that updates the AST index on changes.
+
+    Uses watchfiles (Rust-backed, ~200ms debounce) if available, otherwise
+    skips silently. Calls ASTService.notify_file_changed() for modified code files.
+    """
+    global _watcher_thread
+
+    if _watcher_thread is not None:
+        return  # Already running
+
+    try:
+        from watchfiles import watch, Change
+    except ImportError:
+        logger.debug("watchfiles not installed — file watcher disabled")
+        return
+
+    def _watcher_loop() -> None:
+        try:
+            for changes in watch(
+                project_dir,
+                stop_event=_watcher_stop,
+                recursive=True,
+                # Ignore hidden dirs, node_modules, __pycache__, .git
+                watch_filter=lambda _, path: (
+                    not any(
+                        part.startswith(".") or part in ("node_modules", "__pycache__", ".git")
+                        for part in Path(path).parts
+                    )
+                    and Path(path).suffix.lower() in _CODE_EXTENSIONS
+                ),
+            ):
+                if _watcher_stop.is_set():
+                    break
+
+                svc = _get_ast_service()
+                for change_type, path_str in changes:
+                    if change_type in (Change.modified, Change.added, Change.deleted):
+                        try:
+                            rel = os.path.relpath(path_str, project_dir)
+                            svc.notify_file_changed(rel)
+                            # Also invalidate semantic search embeddings
+                            try:
+                                smgr = _get_semantic_search()
+                                smgr.invalidate_file(path_str)
+                            except Exception:
+                                pass
+                            logger.debug("File watcher: updated %s", rel)
+                        except Exception:
+                            pass  # Best-effort — don't crash the watcher
+        except Exception:
+            logger.debug("File watcher stopped", exc_info=True)
+
+    _watcher_thread = threading.Thread(
+        target=_watcher_loop, daemon=True, name="code-intel-watcher"
+    )
+    _watcher_thread.start()
+    logger.info("File watcher started for %s", project_dir)
+
+
+def _stop_file_watcher() -> None:
+    """Stop the background file watcher and queue poller."""
+    global _watcher_thread, _queue_thread
+    _watcher_stop.set()
+    for t in (_watcher_thread, _queue_thread):
+        if t is not None:
+            t.join(timeout=2.0)
+    _watcher_thread = None
+    _queue_thread = None
+
+
+# ---------------------------------------------------------------------------
 # Entry point
 # ---------------------------------------------------------------------------
 
 
+# Subcommands that should be dispatched to the CLI handler instead of
+# starting the MCP server.
+_CLI_SUBCOMMANDS = {"install", "uninstall", "serve", "status", "notify", "help", "--help", "-h"}
+
+
 def main() -> None:
-    """CLI entry point for the MCP server."""
-    # Parse --project from sys.argv
-    project_dir = "."
+    """CLI entry point for the MCP server.
+
+    If the first positional argument is a known subcommand (install, uninstall,
+    notify, status, serve, help), delegates to ``cli.dispatch_code_intel``.
+    Otherwise starts the MCP server on stdio.
+    """
     args = sys.argv[1:]
+
+    # Detect subcommands — delegate to CLI dispatcher
+    if args and args[0] in _CLI_SUBCOMMANDS:
+        from attocode.code_intel.cli import dispatch_code_intel
+
+        dispatch_code_intel(args)
+        return
+
+    # No subcommand — start MCP server
+    project_dir = "."
     for i, arg in enumerate(args):
         if arg == "--project" and i + 1 < len(args):
             project_dir = args[i + 1]
@@ -1556,10 +2331,18 @@ def main() -> None:
             project_dir = arg.split("=", 1)[1]
             break
 
-    os.environ["ATTOCODE_PROJECT_DIR"] = os.path.abspath(project_dir)
+    project_dir = os.path.abspath(project_dir)
+    os.environ["ATTOCODE_PROJECT_DIR"] = project_dir
+
+    # Start file watcher and notification queue poller in background
+    _start_file_watcher(project_dir)
+    _start_queue_poller(project_dir)
 
     logger.info("Starting attocode-code-intel for %s", project_dir)
-    mcp.run(transport="stdio")
+    try:
+        mcp.run(transport="stdio")
+    finally:
+        _stop_file_watcher()
 
 
 if __name__ == "__main__":

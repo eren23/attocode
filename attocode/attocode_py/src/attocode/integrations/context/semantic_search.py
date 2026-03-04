@@ -95,8 +95,17 @@ class SemanticSearchManager:
 
         chunks: list[tuple[str, str, str, str]] = []  # (id, file_path, chunk_type, text)
 
+        # Supported languages: Python, JS, TS always; others when tree-sitter available
+        _ts_langs: set[str] = set()
+        try:
+            from attocode.integrations.context.ts_parser import supported_languages
+            _ts_langs = set(supported_languages())
+        except ImportError:
+            pass
+        _supported = {"python", "javascript", "typescript"} | _ts_langs
+
         for f in ctx._files:
-            if f.language not in ("python", "javascript", "typescript"):
+            if f.language not in _supported:
                 continue
 
             # File-level summary
@@ -201,13 +210,22 @@ class SemanticSearchManager:
         query: str,
         top_k: int = 10,
         file_filter: str = "",
+        two_stage: bool = True,
     ) -> list[SemanticSearchResult]:
         """Search the codebase by natural language query.
+
+        Uses two-stage retrieval when vector search is available:
+        1. Wide recall: vector top-50 + keyword top-50
+        2. Merge with Reciprocal Rank Fusion (RRF)
+
+        This approach outperforms single-stage search on code retrieval
+        benchmarks by combining semantic similarity with keyword matching.
 
         Args:
             query: Natural language search query.
             top_k: Number of results to return.
             file_filter: Optional glob pattern (e.g. "*.py").
+            two_stage: Whether to use two-stage retrieval (default True).
 
         Returns:
             List of search results sorted by relevance.
@@ -231,19 +249,56 @@ class SemanticSearchManager:
             logger.warning("Query embedding failed, falling back to keyword", exc_info=True)
             return self._keyword_search(query, top_k, file_filter)
 
-        # Search vector store
-        raw_results = self._store.search(query_vec, top_k=top_k, file_filter=file_filter)
+        # Stage 1a: Vector search (wide recall)
+        wide_k = max(top_k * 5, 50) if two_stage else top_k
+        raw_results = self._store.search(query_vec, top_k=wide_k, file_filter=file_filter)
 
-        return [
-            SemanticSearchResult(
+        if not two_stage or not raw_results:
+            return [
+                SemanticSearchResult(
+                    file_path=r.file_path,
+                    chunk_type=r.chunk_type,
+                    name=r.name,
+                    text=r.text,
+                    score=r.score,
+                )
+                for r in raw_results[:top_k]
+            ]
+
+        # Stage 1b: Keyword search (complementary recall)
+        keyword_results = self._keyword_search(query, top_k=wide_k, file_filter=file_filter)
+
+        # Stage 2: Reciprocal Rank Fusion
+        from attocode.integrations.context.ast_chunker import reciprocal_rank_fusion
+
+        vector_ranked = [(r.id, r.score) for r in raw_results]
+        keyword_ranked = [(r.file_path, r.score) for r in keyword_results]
+
+        fused = reciprocal_rank_fusion(vector_ranked, keyword_ranked)
+
+        # Build result lookup for fast access
+        result_map: dict[str, SemanticSearchResult] = {}
+        for r in raw_results:
+            result_map[r.id] = SemanticSearchResult(
                 file_path=r.file_path,
                 chunk_type=r.chunk_type,
                 name=r.name,
                 text=r.text,
                 score=r.score,
             )
-            for r in raw_results
-        ]
+        for r in keyword_results:
+            if r.file_path not in result_map:
+                result_map[r.file_path] = r
+
+        # Return top-k by fused score
+        merged: list[SemanticSearchResult] = []
+        for item_id, fused_score in fused[:top_k]:
+            result = result_map.get(item_id)
+            if result:
+                result.score = round(fused_score, 4)
+                merged.append(result)
+
+        return merged
 
     def _keyword_search(
         self,

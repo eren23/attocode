@@ -40,10 +40,16 @@ class TestServerTools:
         srv._ast_service = None
         srv._context_mgr = None
         srv._code_analyzer = None
+        srv._semantic_search = None
+        srv._memory_store = None
         yield
         srv._ast_service = None
         srv._context_mgr = None
         srv._code_analyzer = None
+        srv._semantic_search = None
+        if srv._memory_store is not None:
+            srv._memory_store.close()
+            srv._memory_store = None
 
     def _make_mock_ast_service(self):
         from attocode.integrations.context.cross_references import SymbolLocation, SymbolRef
@@ -1402,18 +1408,20 @@ class TestCLIDispatch:
     def test_parse_opts(self):
         from attocode.code_intel.cli import _parse_opts
 
-        target, project, scope = _parse_opts(["claude", "--project", "/foo", "--global"])
+        target, project, scope, hooks = _parse_opts(["claude", "--project", "/foo", "--global"])
         assert target == "claude"
         assert project == "/foo"
         assert scope == "user"
+        assert hooks is False
 
     def test_parse_opts_defaults(self):
         from attocode.code_intel.cli import _parse_opts
 
-        target, project, scope = _parse_opts(["cursor"])
+        target, project, scope, hooks = _parse_opts(["cursor"])
         assert target == "cursor"
         assert project == "."
         assert scope == "local"
+        assert hooks is False
 
 
 # ---------------------------------------------------------------------------
@@ -1478,3 +1486,1428 @@ class TestMainCLIDispatch:
 
         assert len(dispatched) == 1
         assert dispatched[0][1] is True  # debug=True
+
+
+# ---------------------------------------------------------------------------
+# PageRank importance scoring (P2)
+# ---------------------------------------------------------------------------
+
+
+class TestPageRank:
+    """Test PageRank scoring on the DependencyGraph."""
+
+    def test_empty_graph(self):
+        from attocode.integrations.context.codebase_context import DependencyGraph
+
+        g = DependencyGraph()
+        scores = g.pagerank()
+        assert scores == {}
+
+    def test_single_node(self):
+        from attocode.integrations.context.codebase_context import DependencyGraph
+
+        g = DependencyGraph()
+        g.add_edge("a.py", "b.py")
+        scores = g.pagerank()
+        assert "a.py" in scores
+        assert "b.py" in scores
+        # b.py is imported by a.py, so b.py should have higher PageRank
+        assert scores["b.py"] >= scores["a.py"]
+
+    def test_hub_file_ranks_highest(self):
+        from attocode.integrations.context.codebase_context import DependencyGraph
+
+        g = DependencyGraph()
+        # types.py is imported by many files
+        for i in range(10):
+            g.add_edge(f"module{i}.py", "types.py")
+        # utils.py imported by fewer
+        for i in range(3):
+            g.add_edge(f"module{i}.py", "utils.py")
+
+        scores = g.pagerank()
+        assert scores["types.py"] > scores["utils.py"]
+        # types.py should be the highest scored
+        assert scores["types.py"] == 1.0  # normalized max
+
+    def test_transitive_importance(self):
+        """File imported by important files should rank higher than
+        file imported by leaf files."""
+        from attocode.integrations.context.codebase_context import DependencyGraph
+
+        g = DependencyGraph()
+        # hub.py is imported by many
+        for i in range(10):
+            g.add_edge(f"m{i}.py", "hub.py")
+        # hub.py imports core.py (transitive importance)
+        g.add_edge("hub.py", "core.py")
+        # leaf.py also imports helper.py
+        g.add_edge("leaf.py", "helper.py")
+
+        scores = g.pagerank()
+        # core.py should rank higher than helper.py because hub.py (important) imports it
+        assert scores["core.py"] > scores["helper.py"]
+
+    def test_convergence(self):
+        from attocode.integrations.context.codebase_context import DependencyGraph
+
+        g = DependencyGraph()
+        # Cycle
+        g.add_edge("a.py", "b.py")
+        g.add_edge("b.py", "c.py")
+        g.add_edge("c.py", "a.py")
+
+        scores = g.pagerank()
+        # All nodes should have similar scores in a cycle
+        values = list(scores.values())
+        assert max(values) - min(values) < 0.2
+
+    def test_normalized_range(self):
+        from attocode.integrations.context.codebase_context import DependencyGraph
+
+        g = DependencyGraph()
+        for i in range(20):
+            g.add_edge(f"src{i}.py", "base.py")
+            if i > 0:
+                g.add_edge(f"src{i}.py", f"src{i-1}.py")
+
+        scores = g.pagerank()
+        for v in scores.values():
+            assert 0.0 <= v <= 1.0
+
+
+# ---------------------------------------------------------------------------
+# Bootstrap tool (P1)
+# ---------------------------------------------------------------------------
+
+
+class TestBootstrapTool:
+    """Test the bootstrap all-in-one orientation tool."""
+
+    @pytest.fixture(autouse=True)
+    def _setup_env(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+        monkeypatch.setenv("ATTOCODE_PROJECT_DIR", str(tmp_path))
+
+        import attocode.code_intel.server as srv
+
+        srv._ast_service = None
+        srv._context_mgr = None
+        srv._code_analyzer = None
+        srv._explorer = None
+        srv._semantic_search = None
+        yield
+        srv._ast_service = None
+        srv._context_mgr = None
+        srv._code_analyzer = None
+        srv._explorer = None
+        srv._semantic_search = None
+
+    def _make_mock_context(self, file_count: int):
+        """Create mock context manager with given file count."""
+        files = []
+        for i in range(file_count):
+            fi = MagicMock()
+            fi.relative_path = f"src/mod{i}.py"
+            fi.importance = 0.5 + (i % 5) * 0.1
+            fi.language = "python"
+            fi.line_count = 100
+            fi.is_test = False
+            fi.is_config = False
+            fi.size = 5000
+            files.append(fi)
+
+        ctx = MagicMock()
+        ctx._files = files
+        return ctx
+
+    def _make_mock_services(self, file_count: int):
+        """Set up mocked server singletons for bootstrap tests."""
+        import attocode.code_intel.server as srv
+
+        ctx = self._make_mock_context(file_count)
+
+        # Need a real-ish RepoMap for project_summary to work
+        repo_map = RepoMap(
+            tree="src/\n  mod.py",
+            files=[],
+            total_files=file_count,
+            total_lines=file_count * 100,
+            languages={"python": file_count},
+        )
+        ctx.get_repo_map = MagicMock(return_value=repo_map)
+
+        srv._context_mgr = ctx
+
+        svc = MagicMock()
+        svc.initialized = True
+        svc._ast_cache = {}
+        svc._index = MagicMock()
+        svc._index.file_dependents = {}
+        svc._index.file_dependencies = {}
+        svc._index.definitions = {}
+        svc._index.file_symbols = {}
+        srv._ast_service = svc
+
+        return ctx, svc
+
+    def test_bootstrap_small_codebase(self):
+        import attocode.code_intel.server as srv
+
+        self._make_mock_services(50)
+
+        result = srv.bootstrap(max_tokens=4000)
+        # Should contain project overview
+        assert "Project:" in result or "Overview" in result or "Navigation" in result
+
+    def test_bootstrap_detects_large_codebase(self):
+        import attocode.code_intel.server as srv
+
+        self._make_mock_services(3000)
+
+        # Mock explorer for large codebase path
+        explorer = MagicMock()
+        explorer.explore.return_value = MagicMock()
+        explorer.format_result.return_value = "src/ (3000 files)"
+        srv._explorer = explorer
+
+        result = srv.bootstrap(max_tokens=4000)
+        assert "Navigation" in result
+        # Should mention NOT using repo_map
+        assert "do NOT" in result or "drill" in result.lower()
+
+    def test_bootstrap_empty_codebase(self):
+        import attocode.code_intel.server as srv
+
+        ctx = MagicMock()
+        ctx._files = []
+        srv._context_mgr = ctx
+
+        svc = MagicMock()
+        svc.initialized = True
+        svc._ast_cache = {}
+        srv._ast_service = svc
+
+        result = srv.bootstrap()
+        assert "No files" in result
+
+
+# ---------------------------------------------------------------------------
+# Relevant context tool (P3)
+# ---------------------------------------------------------------------------
+
+
+class TestRelevantContextTool:
+    """Test the relevant_context subgraph capsule tool."""
+
+    @pytest.fixture(autouse=True)
+    def _setup_env(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+        monkeypatch.setenv("ATTOCODE_PROJECT_DIR", str(tmp_path))
+
+        import attocode.code_intel.server as srv
+
+        srv._ast_service = None
+        srv._context_mgr = None
+        yield
+        srv._ast_service = None
+        srv._context_mgr = None
+
+    def test_relevant_context_basic(self):
+        import attocode.code_intel.server as srv
+
+        # Mock AST service
+        svc = MagicMock()
+        svc.initialized = True
+        svc._to_rel.side_effect = lambda p: p
+        svc.get_dependencies.return_value = {"dep1.py", "dep2.py"}
+        svc.get_dependents.return_value = {"user1.py"}
+
+        file_ast = MagicMock()
+        file_ast.functions = []
+        file_ast.classes = []
+        svc._ast_cache = {
+            "target.py": file_ast,
+            "dep1.py": file_ast,
+            "dep2.py": file_ast,
+            "user1.py": file_ast,
+        }
+        srv._ast_service = svc
+
+        # Mock context manager
+        fi = MagicMock()
+        fi.relative_path = "target.py"
+        fi.importance = 0.8
+        fi.language = "python"
+        fi.line_count = 200
+
+        fi2 = MagicMock()
+        fi2.relative_path = "dep1.py"
+        fi2.importance = 0.6
+        fi2.language = "python"
+        fi2.line_count = 100
+
+        fi3 = MagicMock()
+        fi3.relative_path = "dep2.py"
+        fi3.importance = 0.5
+        fi3.language = "python"
+        fi3.line_count = 50
+
+        fi4 = MagicMock()
+        fi4.relative_path = "user1.py"
+        fi4.importance = 0.7
+        fi4.language = "python"
+        fi4.line_count = 150
+
+        ctx = MagicMock()
+        ctx._files = [fi, fi2, fi3, fi4]
+        srv._context_mgr = ctx
+
+        result = srv.relevant_context(["target.py"])
+        assert "target.py" in result
+        assert "dep1.py" in result
+        assert "dep2.py" in result
+        assert "user1.py" in result
+        assert "center" in result
+
+    def test_relevant_context_empty_files(self):
+        import attocode.code_intel.server as srv
+
+        svc = MagicMock()
+        svc._to_rel.return_value = ""
+        srv._ast_service = svc
+
+        ctx = MagicMock()
+        ctx._files = []
+        srv._context_mgr = ctx
+
+        result = srv.relevant_context([])
+        assert "No valid files" in result
+
+    def test_relevant_context_depth_cap(self):
+        import attocode.code_intel.server as srv
+
+        svc = MagicMock()
+        svc.initialized = True
+        svc._to_rel.side_effect = lambda p: p
+        svc.get_dependencies.return_value = set()
+        svc.get_dependents.return_value = set()
+        svc._ast_cache = {}
+        srv._ast_service = svc
+
+        ctx = MagicMock()
+        ctx._files = []
+        srv._context_mgr = ctx
+
+        # depth > 2 should be capped to 2
+        result = srv.relevant_context(["a.py"], depth=5)
+        assert "depth=2" in result
+
+
+# ---------------------------------------------------------------------------
+# Scoped conventions (P5)
+# ---------------------------------------------------------------------------
+
+
+class TestScopedConventions:
+    """Test path-scoped convention detection."""
+
+    @pytest.fixture(autouse=True)
+    def _setup_env(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+        monkeypatch.setenv("ATTOCODE_PROJECT_DIR", str(tmp_path))
+
+        import attocode.code_intel.server as srv
+
+        srv._ast_service = None
+        srv._context_mgr = None
+        yield
+        srv._ast_service = None
+        srv._context_mgr = None
+
+    def _make_file_ast(self, funcs: list[str], typed: int = 0, docstrings: int = 0):
+        """Create a FileAST-like mock for convention tests."""
+        functions = []
+        for i, name in enumerate(funcs):
+            fn = MagicMock()
+            fn.name = name
+            fn.return_type = "str" if i < typed else ""
+            fn.docstring = "A function." if i < docstrings else ""
+            fn.is_async = False
+            fn.visibility = "public"
+            fn.is_staticmethod = False
+            fn.is_classmethod = False
+            fn.is_property = False
+            fn.decorators = []
+            fn.parameters = []
+            functions.append(fn)
+
+        ast = MagicMock()
+        ast.functions = functions
+        ast.classes = []
+        ast.imports = []
+        ast.top_level_vars = []
+        ast.line_count = 100
+        return ast
+
+    def test_scoped_conventions_filters_by_path(self):
+        import attocode.code_intel.server as srv
+
+        # Create two directories with different styles
+        core_ast = self._make_file_ast(["handle_request", "validate_input"], typed=2, docstrings=2)
+        tools_ast = self._make_file_ast(["run_tool", "get_result"], typed=0, docstrings=0)
+
+        svc = MagicMock()
+        svc._ast_cache = {
+            "src/core/handler.py": core_ast,
+            "src/core/validator.py": core_ast,
+            "src/core/router.py": core_ast,
+            "src/tools/bash.py": tools_ast,
+            "src/tools/grep.py": tools_ast,
+            "src/tools/glob.py": tools_ast,
+        }
+        srv._ast_service = svc
+
+        fi_list = []
+        for path in svc._ast_cache:
+            fi = MagicMock()
+            fi.relative_path = path
+            fi.importance = 0.6
+            fi_list.append(fi)
+
+        ctx = MagicMock()
+        ctx._files = fi_list
+        srv._context_mgr = ctx
+
+        # Test scoped to src/core
+        result = srv.conventions(path="src/core")
+        assert "src/core/" in result
+        assert "3 files" in result
+
+    def test_scoped_conventions_empty_dir(self):
+        import attocode.code_intel.server as srv
+
+        svc = MagicMock()
+        svc._ast_cache = {"src/main.py": object()}
+        srv._ast_service = svc
+
+        ctx = MagicMock()
+        fi = MagicMock()
+        fi.relative_path = "src/main.py"
+        fi.importance = 0.6
+        ctx._files = [fi]
+        srv._context_mgr = ctx
+
+        result = srv.conventions(path="nonexistent")
+        assert "No parsed files found" in result
+
+
+# ---------------------------------------------------------------------------
+# Tree-sitter parser (P4)
+# ---------------------------------------------------------------------------
+
+
+class TestTreeSitterParser:
+    """Test the unified tree-sitter parser."""
+
+    def test_language_configs_defined(self):
+        from attocode.integrations.context.ts_parser import LANGUAGE_CONFIGS
+
+        # Should have configs for at least 8 languages
+        assert len(LANGUAGE_CONFIGS) >= 8
+        assert "python" in LANGUAGE_CONFIGS
+        assert "go" in LANGUAGE_CONFIGS
+        assert "rust" in LANGUAGE_CONFIGS
+        assert "java" in LANGUAGE_CONFIGS
+        assert "ruby" in LANGUAGE_CONFIGS
+        assert "c" in LANGUAGE_CONFIGS
+        assert "cpp" in LANGUAGE_CONFIGS
+
+    def test_supported_languages(self):
+        from attocode.integrations.context.ts_parser import supported_languages
+
+        langs = supported_languages()
+        assert "python" in langs
+        assert "javascript" in langs
+        assert "go" in langs
+
+    def test_unsupported_language_returns_none(self):
+        from attocode.integrations.context.ts_parser import ts_parse_file
+
+        result = ts_parse_file("test.xyz", content="hello", language="xyz")
+        assert result is None
+
+    def test_parse_python_if_available(self):
+        """Test tree-sitter Python parsing if the grammar is installed."""
+        from attocode.integrations.context.ts_parser import is_available, ts_parse_file
+
+        if not is_available("python"):
+            pytest.skip("tree-sitter-python not installed")
+
+        code = '''
+def hello(name: str) -> str:
+    """Greet someone."""
+    return f"Hello, {name}!"
+
+class Greeter:
+    def greet(self, name):
+        return hello(name)
+'''
+        result = ts_parse_file("test.py", content=code, language="python")
+        assert result is not None
+        assert len(result["functions"]) >= 1
+        assert result["functions"][0]["name"] == "hello"
+        assert len(result["classes"]) >= 1
+        assert result["classes"][0]["name"] == "Greeter"
+
+    def test_ts_result_to_file_ast(self):
+        """Test conversion from tree-sitter result dict to FileAST."""
+        from attocode.integrations.context.codebase_ast import _ts_result_to_file_ast
+
+        result = {
+            "language": "python",
+            "functions": [
+                {
+                    "name": "foo",
+                    "parameters": ["x", "y"],
+                    "return_type": "int",
+                    "start_line": 1,
+                    "end_line": 5,
+                    "is_async": False,
+                    "decorators": [],
+                    "visibility": "public",
+                }
+            ],
+            "classes": [
+                {
+                    "name": "Bar",
+                    "bases": ["Base"],
+                    "methods": [
+                        {
+                            "name": "baz",
+                            "parameters": ["self"],
+                            "return_type": "",
+                            "start_line": 8,
+                            "end_line": 10,
+                            "is_async": False,
+                            "decorators": [],
+                            "visibility": "public",
+                        }
+                    ],
+                    "decorators": [],
+                    "start_line": 7,
+                    "end_line": 10,
+                }
+            ],
+            "imports": [{"module": "os", "is_from": False}],
+            "top_level_vars": ["MAX_SIZE"],
+            "line_count": 10,
+        }
+
+        ast = _ts_result_to_file_ast(result, "test.py")
+        assert ast.language == "python"
+        assert len(ast.functions) == 1
+        assert ast.functions[0].name == "foo"
+        assert ast.functions[0].return_type == "int"
+        assert len(ast.classes) == 1
+        assert ast.classes[0].name == "Bar"
+        assert len(ast.classes[0].methods) == 1
+        assert ast.imports[0].module == "os"
+        assert "MAX_SIZE" in ast.top_level_vars
+
+
+# ---------------------------------------------------------------------------
+# AST-aware chunking (P7)
+# ---------------------------------------------------------------------------
+
+
+class TestASTChunker:
+    """Test AST-aware code chunking for semantic search."""
+
+    def test_reciprocal_rank_fusion(self):
+        from attocode.integrations.context.ast_chunker import reciprocal_rank_fusion
+
+        list_a = [("doc1", 0.9), ("doc2", 0.8), ("doc3", 0.7)]
+        list_b = [("doc2", 0.95), ("doc4", 0.85), ("doc1", 0.75)]
+
+        merged = reciprocal_rank_fusion(list_a, list_b)
+
+        # doc1 and doc2 appear in both lists, should rank highest
+        ids = [item_id for item_id, _ in merged]
+        assert "doc2" in ids[:2]  # doc2 is rank 1 in one, rank 2 in other
+        assert "doc1" in ids[:3]
+
+    def test_rrf_single_list(self):
+        from attocode.integrations.context.ast_chunker import reciprocal_rank_fusion
+
+        results = [("a", 1.0), ("b", 0.5)]
+        merged = reciprocal_rank_fusion(results)
+        assert merged[0][0] == "a"
+        assert merged[1][0] == "b"
+
+    def test_rrf_empty(self):
+        from attocode.integrations.context.ast_chunker import reciprocal_rank_fusion
+
+        merged = reciprocal_rank_fusion()
+        assert merged == []
+
+    def test_chunk_file_basic(self, tmp_path: Path):
+        from attocode.integrations.context.ast_chunker import chunk_file
+
+        code = '''"""Module docstring."""
+
+import os
+
+def hello(name: str) -> str:
+    """Greet someone."""
+    return f"Hello, {name}!"
+
+class Greeter:
+    """A greeter class."""
+    def greet(self, name):
+        return hello(name)
+'''
+        test_file = tmp_path / "test.py"
+        test_file.write_text(code)
+
+        chunks = chunk_file(str(test_file), "test.py")
+
+        # Should have: 1 file + 1 function + 1 class + 1 method = 4 chunks
+        chunk_types = [c.chunk_type for c in chunks]
+        assert "file" in chunk_types
+        assert "function" in chunk_types
+        assert "class" in chunk_types
+
+        # File chunk should contain actual code
+        file_chunk = [c for c in chunks if c.chunk_type == "file"][0]
+        assert "import os" in file_chunk.text
+
+        # Function chunk should contain actual code
+        func_chunks = [c for c in chunks if c.chunk_type == "function"]
+        assert len(func_chunks) >= 1
+        assert "hello" in func_chunks[0].name
+
+    def test_chunk_file_nonexistent(self):
+        from attocode.integrations.context.ast_chunker import chunk_file
+
+        chunks = chunk_file("/nonexistent/file.py", "file.py")
+        assert chunks == []
+
+
+# ---------------------------------------------------------------------------
+# Graph store (P8)
+# ---------------------------------------------------------------------------
+
+
+class TestGraphStore:
+    """Test the persistent SQLite graph store."""
+
+    def test_lifecycle(self, tmp_path: Path):
+        from attocode.integrations.context.graph_store import CachedFileInfo, GraphStore
+
+        store = GraphStore(
+            project_dir=str(tmp_path),
+            db_path=str(tmp_path / "test_graph.db"),
+        )
+
+        # Initially empty
+        assert store.file_count == 0
+        assert store.get_cached_files() == {}
+
+        # Upsert a file
+        info = CachedFileInfo(
+            relative_path="src/main.py",
+            content_hash="abc123",
+            language="python",
+            line_count=100,
+            importance=0.8,
+            mtime=1000.0,
+        )
+        store.upsert_file(info)
+        store.commit()
+
+        assert store.file_count == 1
+        cached = store.get_cached_files()
+        assert "src/main.py" in cached
+        assert cached["src/main.py"].content_hash == "abc123"
+
+        # Remove file
+        store.remove_file("src/main.py")
+        store.commit()
+        assert store.file_count == 0
+
+        store.close()
+
+    def test_dependencies(self, tmp_path: Path):
+        from attocode.integrations.context.graph_store import GraphStore
+
+        store = GraphStore(
+            project_dir=str(tmp_path),
+            db_path=str(tmp_path / "test_deps.db"),
+        )
+
+        store.set_dependencies("a.py", ["b.py", "c.py"])
+        store.set_dependencies("b.py", ["c.py"])
+        store.commit()
+
+        forward = store.get_forward_deps()
+        assert forward["a.py"] == {"b.py", "c.py"}
+        assert forward["b.py"] == {"c.py"}
+
+        reverse = store.get_reverse_deps()
+        assert "a.py" in reverse["b.py"]
+        assert "a.py" in reverse["c.py"]
+        assert "b.py" in reverse["c.py"]
+
+        store.close()
+
+    def test_symbols(self, tmp_path: Path):
+        from attocode.integrations.context.graph_store import GraphStore
+
+        store = GraphStore(
+            project_dir=str(tmp_path),
+            db_path=str(tmp_path / "test_sym.db"),
+        )
+
+        store.set_symbols("main.py", [
+            {"name": "main", "qualified_name": "main", "kind": "function",
+             "start_line": 1, "end_line": 10},
+            {"name": "Config", "qualified_name": "Config", "kind": "class",
+             "start_line": 12, "end_line": 30},
+        ])
+        store.commit()
+
+        syms = store.get_symbols_for_file("main.py")
+        assert len(syms) == 2
+        assert syms[0]["name"] == "main"
+        assert syms[1]["name"] == "Config"
+
+        store.close()
+
+    def test_diff_filesystem(self, tmp_path: Path):
+        from attocode.integrations.context.graph_store import CachedFileInfo, GraphStore
+
+        store = GraphStore(
+            project_dir=str(tmp_path),
+            db_path=str(tmp_path / "test_diff.db"),
+        )
+
+        # Cache two files
+        store.upsert_file(CachedFileInfo("a.py", "hash_a", "python", 50, 0.5, 0))
+        store.upsert_file(CachedFileInfo("b.py", "hash_b", "python", 30, 0.4, 0))
+        store.commit()
+
+        # Current filesystem: a.py changed, b.py same, c.py new
+        current = {
+            "a.py": "hash_a_new",  # modified
+            "b.py": "hash_b",  # unchanged
+            "c.py": "hash_c",  # new
+        }
+
+        added, modified, removed = store.diff_filesystem(current)
+        assert added == ["c.py"]
+        assert modified == ["a.py"]
+        assert removed == []  # b.py still exists
+
+        # Now remove b.py from current
+        current.pop("b.py")
+        added, modified, removed = store.diff_filesystem(current)
+        assert "b.py" in removed
+
+        store.close()
+
+    def test_metadata(self, tmp_path: Path):
+        from attocode.integrations.context.graph_store import GraphStore
+
+        store = GraphStore(
+            project_dir=str(tmp_path),
+            db_path=str(tmp_path / "test_meta.db"),
+        )
+
+        assert store.get_meta("version") is None
+        store.set_meta("version", "1.0")
+        store.commit()
+        assert store.get_meta("version") == "1.0"
+
+        store.close()
+
+    def test_clear(self, tmp_path: Path):
+        from attocode.integrations.context.graph_store import CachedFileInfo, GraphStore
+
+        store = GraphStore(
+            project_dir=str(tmp_path),
+            db_path=str(tmp_path / "test_clear.db"),
+        )
+
+        store.upsert_file(CachedFileInfo("x.py", "h", "py", 10, 0.5, 0))
+        store.set_dependencies("x.py", ["y.py"])
+        store.set_symbols("x.py", [{"name": "f", "kind": "function"}])
+        store.commit()
+
+        assert store.file_count == 1
+
+        store.clear()
+        assert store.file_count == 0
+        assert store.get_forward_deps() == {}
+        assert store.get_symbols_for_file("x.py") == []
+
+        store.close()
+
+
+# ---------------------------------------------------------------------------
+# File watcher (P6)
+# ---------------------------------------------------------------------------
+
+
+class TestFileWatcher:
+    """Test file watcher setup/teardown."""
+
+    def test_watcher_graceful_without_watchfiles(self, monkeypatch: pytest.MonkeyPatch):
+        """File watcher should not crash when watchfiles is not installed."""
+        import attocode.code_intel.server as srv
+
+        # Force import error
+        original_import = __builtins__.__import__ if hasattr(__builtins__, '__import__') else __import__
+
+        def mock_import(name, *args, **kwargs):
+            if name == "watchfiles":
+                raise ImportError("mocked")
+            return original_import(name, *args, **kwargs)
+
+        monkeypatch.setattr("builtins.__import__", mock_import)
+
+        # Should not raise
+        srv._start_file_watcher("/tmp/test")
+        assert srv._watcher_thread is None
+
+    def test_watcher_stop_without_start(self):
+        """Stopping without starting should not crash."""
+        import attocode.code_intel.server as srv
+
+        srv._watcher_thread = None
+        srv._stop_file_watcher()
+        assert srv._watcher_thread is None
+
+
+# ---------------------------------------------------------------------------
+# GUIDELINES.md resource (P1)
+# ---------------------------------------------------------------------------
+
+
+class TestGuidelinesResource:
+    """Test that GUIDELINES.md exists and is exposed as MCP resource."""
+
+    def test_guidelines_file_exists(self):
+        from pathlib import Path
+
+        guidelines = Path(__file__).parent.parent.parent / "src" / "attocode" / "code_intel" / "GUIDELINES.md"
+        assert guidelines.exists(), f"GUIDELINES.md not found at {guidelines}"
+
+    def test_guidelines_contains_tool_inventory(self):
+        from pathlib import Path
+
+        guidelines = Path(__file__).parent.parent.parent / "src" / "attocode" / "code_intel" / "GUIDELINES.md"
+        content = guidelines.read_text()
+        assert "Tool Inventory" in content
+        assert "bootstrap" in content
+        assert "relevant_context" in content
+        assert "Progressive Disclosure" in content
+
+    def test_guidelines_resource_function(self, monkeypatch: pytest.MonkeyPatch):
+        from attocode.code_intel.server import guidelines_resource
+
+        result = guidelines_resource()
+        assert isinstance(result, str)
+        assert len(result) > 100
+        assert "Tool Inventory" in result
+
+    def test_guidelines_contains_index_freshness(self):
+        from pathlib import Path
+
+        guidelines = Path(__file__).parent.parent.parent / "src" / "attocode" / "code_intel" / "GUIDELINES.md"
+        content = guidelines.read_text()
+        assert "Keeping the Index Fresh" in content
+        assert "notify_file_changed" in content
+
+
+# ---------------------------------------------------------------------------
+# notify_file_changed MCP tool
+# ---------------------------------------------------------------------------
+
+
+class TestNotifyFileChanged:
+    """Test the notify_file_changed MCP tool."""
+
+    @pytest.fixture(autouse=True)
+    def _setup_env(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+        monkeypatch.setenv("ATTOCODE_PROJECT_DIR", str(tmp_path))
+        self.tmp_path = tmp_path
+
+        import attocode.code_intel.server as srv
+
+        srv._ast_service = None
+        srv._context_mgr = None
+        srv._code_analyzer = None
+        srv._semantic_search = None
+        yield
+        srv._ast_service = None
+        srv._context_mgr = None
+        srv._code_analyzer = None
+        srv._semantic_search = None
+
+    def test_notify_empty_list(self):
+        from attocode.code_intel.server import notify_file_changed
+
+        result = notify_file_changed([])
+        assert result == "No files specified."
+
+    def test_notify_updates_ast_and_embeddings(self):
+        import attocode.code_intel.server as srv
+        from attocode.code_intel.server import notify_file_changed
+
+        mock_svc = MagicMock()
+        mock_svc.initialized = True
+        srv._ast_service = mock_svc
+
+        mock_smgr = MagicMock()
+        srv._semantic_search = mock_smgr
+
+        result = notify_file_changed(["src/foo.py", "src/bar.py"])
+
+        assert "2 file(s)" in result
+        assert mock_svc.notify_file_changed.call_count == 2
+        assert mock_smgr.invalidate_file.call_count == 2
+
+    def test_notify_handles_absolute_paths(self):
+        import attocode.code_intel.server as srv
+        from attocode.code_intel.server import notify_file_changed
+
+        mock_svc = MagicMock()
+        mock_svc.initialized = True
+        srv._ast_service = mock_svc
+
+        mock_smgr = MagicMock()
+        srv._semantic_search = mock_smgr
+
+        abs_path = str(self.tmp_path / "src" / "test.py")
+        result = notify_file_changed([abs_path])
+
+        assert "1 file(s)" in result
+        # Should have been converted to relative path
+        call_arg = mock_svc.notify_file_changed.call_args[0][0]
+        assert not call_arg.startswith("/")
+
+    def test_notify_resilient_to_errors(self):
+        import attocode.code_intel.server as srv
+        from attocode.code_intel.server import notify_file_changed
+
+        mock_svc = MagicMock()
+        mock_svc.initialized = True
+        mock_svc.notify_file_changed.side_effect = [None, RuntimeError("boom")]
+        srv._ast_service = mock_svc
+
+        mock_smgr = MagicMock()
+        srv._semantic_search = mock_smgr
+
+        result = notify_file_changed(["good.py", "bad.py"])
+        # Should still report 1 success (the first one)
+        assert "1 file(s)" in result
+
+
+# ---------------------------------------------------------------------------
+# Notification queue
+# ---------------------------------------------------------------------------
+
+
+class TestNotificationQueue:
+    """Test the notification queue processing."""
+
+    @pytest.fixture(autouse=True)
+    def _setup_env(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+        monkeypatch.setenv("ATTOCODE_PROJECT_DIR", str(tmp_path))
+        self.tmp_path = tmp_path
+
+        import attocode.code_intel.server as srv
+
+        srv._ast_service = None
+        srv._context_mgr = None
+        srv._code_analyzer = None
+        srv._semantic_search = None
+        yield
+        srv._ast_service = None
+        srv._context_mgr = None
+        srv._code_analyzer = None
+        srv._semantic_search = None
+
+    def test_empty_queue(self):
+        from attocode.code_intel.server import _process_notification_queue
+
+        result = _process_notification_queue()
+        assert result == 0
+
+    def test_process_queued_files(self):
+        import attocode.code_intel.server as srv
+        from attocode.code_intel.server import _process_notification_queue
+
+        mock_svc = MagicMock()
+        mock_svc.initialized = True
+        srv._ast_service = mock_svc
+
+        mock_smgr = MagicMock()
+        srv._semantic_search = mock_smgr
+
+        # Write queue file
+        queue_path = self.tmp_path / ".attocode" / "cache" / "file_changes"
+        queue_path.parent.mkdir(parents=True, exist_ok=True)
+        queue_path.write_text("src/a.py\nsrc/b.py\n", encoding="utf-8")
+
+        result = _process_notification_queue()
+        assert result == 2
+        assert mock_svc.notify_file_changed.call_count == 2
+        assert mock_smgr.invalidate_file.call_count == 2
+
+        # Queue should be truncated
+        assert queue_path.read_text() == ""
+
+    def test_queue_skips_blank_lines(self):
+        import attocode.code_intel.server as srv
+        from attocode.code_intel.server import _process_notification_queue
+
+        mock_svc = MagicMock()
+        mock_svc.initialized = True
+        srv._ast_service = mock_svc
+        srv._semantic_search = MagicMock()
+
+        queue_path = self.tmp_path / ".attocode" / "cache" / "file_changes"
+        queue_path.parent.mkdir(parents=True, exist_ok=True)
+        queue_path.write_text("\n\nsrc/a.py\n\n", encoding="utf-8")
+
+        result = _process_notification_queue()
+        assert result == 1
+
+
+# ---------------------------------------------------------------------------
+# Install hooks
+# ---------------------------------------------------------------------------
+
+
+class TestInstallHooks:
+    """Test hook installation for Claude Code."""
+
+    def test_install_hooks_claude(self, tmp_path: Path):
+        from attocode.code_intel.installer import install_hooks
+
+        result = install_hooks("claude", project_dir=str(tmp_path))
+        assert result is True
+
+        settings_path = tmp_path / ".claude" / "settings.local.json"
+        assert settings_path.exists()
+
+        data = json.loads(settings_path.read_text())
+        hooks = data["hooks"]["PostToolUse"]
+        assert len(hooks) == 1
+        assert hooks[0]["matcher"] == "Edit|Write|NotebookEdit"
+        assert hooks[0]["hooks"][0]["command"] == "attocode-code-intel notify --stdin"
+
+    def test_install_hooks_idempotent(self, tmp_path: Path):
+        from attocode.code_intel.installer import install_hooks
+
+        install_hooks("claude", project_dir=str(tmp_path))
+        install_hooks("claude", project_dir=str(tmp_path))
+
+        settings_path = tmp_path / ".claude" / "settings.local.json"
+        data = json.loads(settings_path.read_text())
+        hooks = data["hooks"]["PostToolUse"]
+        assert len(hooks) == 1  # Not duplicated
+
+    def test_install_hooks_preserves_existing(self, tmp_path: Path):
+        from attocode.code_intel.installer import install_hooks
+
+        settings_path = tmp_path / ".claude" / "settings.local.json"
+        settings_path.parent.mkdir(parents=True, exist_ok=True)
+        settings_path.write_text(json.dumps({
+            "existing_key": "value",
+            "hooks": {
+                "PostToolUse": [
+                    {"matcher": {"tool_name": "Bash"}, "hooks": [{"type": "command", "command": "echo hi"}]}
+                ]
+            }
+        }))
+
+        install_hooks("claude", project_dir=str(tmp_path))
+
+        data = json.loads(settings_path.read_text())
+        assert data["existing_key"] == "value"
+        assert len(data["hooks"]["PostToolUse"]) == 2  # Existing + ours
+
+    def test_install_hooks_unsupported_target(self, tmp_path: Path, capsys):
+        from attocode.code_intel.installer import install_hooks
+
+        result = install_hooks("cursor", project_dir=str(tmp_path))
+        assert result is False
+        captured = capsys.readouterr()
+        assert "not supported" in captured.out.lower()
+
+    def test_uninstall_hooks_claude(self, tmp_path: Path):
+        from attocode.code_intel.installer import install_hooks, uninstall_hooks
+
+        install_hooks("claude", project_dir=str(tmp_path))
+        result = uninstall_hooks("claude", project_dir=str(tmp_path))
+        assert result is True
+
+        settings_path = tmp_path / ".claude" / "settings.local.json"
+        data = json.loads(settings_path.read_text())
+        assert len(data["hooks"]["PostToolUse"]) == 0
+
+    def test_uninstall_hooks_no_file(self, tmp_path: Path):
+        from attocode.code_intel.installer import uninstall_hooks
+
+        result = uninstall_hooks("claude", project_dir=str(tmp_path))
+        assert result is True
+
+    def test_install_hooks_upgrades_old_format(self, tmp_path: Path):
+        """Reinstall should replace old dict-matcher hook, not duplicate."""
+        from attocode.code_intel.installer import install_hooks
+
+        settings_path = tmp_path / ".claude" / "settings.local.json"
+        settings_path.parent.mkdir(parents=True, exist_ok=True)
+
+        # Old format: dict matcher + jq/xargs command
+        old_hook = {
+            "matcher": {"tool_name": "Edit|Write|NotebookEdit"},
+            "hooks": [
+                {
+                    "type": "command",
+                    "command": "jq -r .tool_input.file_path | xargs attocode-code-intel notify",
+                }
+            ],
+        }
+        settings_path.write_text(json.dumps({
+            "hooks": {"PostToolUse": [old_hook]}
+        }))
+
+        result = install_hooks("claude", project_dir=str(tmp_path))
+        assert result is True
+
+        data = json.loads(settings_path.read_text())
+        hooks = data["hooks"]["PostToolUse"]
+        assert len(hooks) == 1  # Replaced, not duplicated
+        assert hooks[0]["matcher"] == "Edit|Write|NotebookEdit"  # String, not dict
+        assert hooks[0]["hooks"][0]["command"] == "attocode-code-intel notify --stdin"
+
+
+# ---------------------------------------------------------------------------
+# CLI notify subcommand
+# ---------------------------------------------------------------------------
+
+
+class TestNotifyCLI:
+    """Test the CLI notify subcommand."""
+
+    def test_notify_with_file_flag(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+        from attocode.code_intel.cli import _cmd_notify
+
+        monkeypatch.setenv("ATTOCODE_PROJECT_DIR", str(tmp_path))
+
+        _cmd_notify(["--project", str(tmp_path), "--file", "src/foo.py"])
+
+        queue_path = tmp_path / ".attocode" / "cache" / "file_changes"
+        assert queue_path.exists()
+        content = queue_path.read_text()
+        assert "src/foo.py" in content
+
+    def test_notify_multiple_files(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+        from attocode.code_intel.cli import _cmd_notify
+
+        monkeypatch.setenv("ATTOCODE_PROJECT_DIR", str(tmp_path))
+
+        _cmd_notify(["--project", str(tmp_path), "--file", "a.py", "--file", "b.py"])
+
+        queue_path = tmp_path / ".attocode" / "cache" / "file_changes"
+        content = queue_path.read_text()
+        assert "a.py" in content
+        assert "b.py" in content
+
+    def test_notify_no_files_exits(self, monkeypatch: pytest.MonkeyPatch):
+        from attocode.code_intel.cli import _cmd_notify
+
+        monkeypatch.setenv("ATTOCODE_PROJECT_DIR", "/tmp/test")
+
+        with pytest.raises(SystemExit):
+            _cmd_notify(["--project", "/tmp/test"])
+
+    def test_notify_stdin_json(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+        """--stdin should parse JSON with tool_input.file_path from Claude Code hooks."""
+        import io
+        from attocode.code_intel.cli import _cmd_notify
+
+        monkeypatch.setenv("ATTOCODE_PROJECT_DIR", str(tmp_path))
+
+        json_payload = '{"tool_name":"Edit","tool_input":{"file_path":"src/edited.py","old_string":"a","new_string":"b"}}\n'
+        monkeypatch.setattr("sys.stdin", io.StringIO(json_payload))
+
+        _cmd_notify(["--project", str(tmp_path), "--stdin"])
+
+        queue_path = tmp_path / ".attocode" / "cache" / "file_changes"
+        content = queue_path.read_text()
+        assert "src/edited.py" in content
+
+    def test_notify_stdin_plain_lines(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+        """--stdin should also accept plain file paths (one per line)."""
+        import io
+        from attocode.code_intel.cli import _cmd_notify
+
+        monkeypatch.setenv("ATTOCODE_PROJECT_DIR", str(tmp_path))
+
+        monkeypatch.setattr("sys.stdin", io.StringIO("src/a.py\nsrc/b.py\n"))
+
+        _cmd_notify(["--project", str(tmp_path), "--stdin"])
+
+        queue_path = tmp_path / ".attocode" / "cache" / "file_changes"
+        content = queue_path.read_text()
+        assert "src/a.py" in content
+        assert "src/b.py" in content
+
+    def test_parse_opts_hooks_flag(self):
+        from attocode.code_intel.cli import _parse_opts
+
+        target, project_dir, scope, hooks = _parse_opts(["claude", "--hooks"])
+        assert target == "claude"
+        assert hooks is True
+
+        target2, _, _, hooks2 = _parse_opts(["cursor"])
+        assert target2 == "cursor"
+        assert hooks2 is False
+
+
+# ---------------------------------------------------------------------------
+# Path traversal guard
+# ---------------------------------------------------------------------------
+
+
+class TestPathTraversalGuard:
+    """Ensure ../paths are rejected by the notification system."""
+
+    @pytest.fixture(autouse=True)
+    def _setup_env(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+        monkeypatch.setenv("ATTOCODE_PROJECT_DIR", str(tmp_path))
+        self.tmp_path = tmp_path
+
+        import attocode.code_intel.server as srv
+
+        srv._ast_service = None
+        srv._context_mgr = None
+        srv._code_analyzer = None
+        srv._semantic_search = None
+        yield
+        srv._ast_service = None
+        srv._context_mgr = None
+        srv._code_analyzer = None
+        srv._semantic_search = None
+
+    def test_notify_rejects_traversal_path(self):
+        import attocode.code_intel.server as srv
+        from attocode.code_intel.server import notify_file_changed
+
+        mock_svc = MagicMock()
+        mock_svc.initialized = True
+        srv._ast_service = mock_svc
+        srv._semantic_search = MagicMock()
+
+        result = notify_file_changed(["../../etc/passwd", "src/ok.py"])
+
+        # Only the safe path should be processed
+        assert "1 file(s)" in result
+        call_arg = mock_svc.notify_file_changed.call_args[0][0]
+        assert "passwd" not in call_arg
+
+    def test_queue_rejects_traversal_path(self):
+        import attocode.code_intel.server as srv
+        from attocode.code_intel.server import _process_notification_queue
+
+        mock_svc = MagicMock()
+        mock_svc.initialized = True
+        srv._ast_service = mock_svc
+        srv._semantic_search = MagicMock()
+
+        queue_path = self.tmp_path / ".attocode" / "cache" / "file_changes"
+        queue_path.parent.mkdir(parents=True, exist_ok=True)
+        queue_path.write_text("../../etc/passwd\nsrc/safe.py\n", encoding="utf-8")
+
+        result = _process_notification_queue()
+        assert result == 1
+        call_arg = mock_svc.notify_file_changed.call_args[0][0]
+        assert call_arg == "src/safe.py"
+
+
+# ---------------------------------------------------------------------------
+# Queue poller lifecycle
+# ---------------------------------------------------------------------------
+
+
+class TestQueuePoller:
+    """Test the background queue poller thread lifecycle."""
+
+    def test_start_queue_poller(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+        import attocode.code_intel.server as srv
+
+        monkeypatch.setenv("ATTOCODE_PROJECT_DIR", str(tmp_path))
+
+        # Reset state
+        srv._queue_thread = None
+        srv._watcher_stop.clear()
+
+        srv._start_queue_poller(str(tmp_path))
+        assert srv._queue_thread is not None
+        assert srv._queue_thread.is_alive()
+
+        # Idempotent — second call is a no-op
+        first_thread = srv._queue_thread
+        srv._start_queue_poller(str(tmp_path))
+        assert srv._queue_thread is first_thread
+
+        # Clean up
+        srv._watcher_stop.set()
+        srv._queue_thread.join(timeout=5.0)
+        srv._queue_thread = None
+        srv._watcher_stop.clear()
+
+    def test_stop_joins_queue_thread(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+        import attocode.code_intel.server as srv
+
+        monkeypatch.setenv("ATTOCODE_PROJECT_DIR", str(tmp_path))
+
+        srv._queue_thread = None
+        srv._watcher_thread = None
+        srv._watcher_stop.clear()
+
+        srv._start_queue_poller(str(tmp_path))
+        assert srv._queue_thread is not None
+
+        srv._stop_file_watcher()
+        assert srv._queue_thread is None
+        assert srv._watcher_stop.is_set()
+
+        # Reset for other tests
+        srv._watcher_stop.clear()
+
+
+# ---------------------------------------------------------------------------
+# Memory / Recall MCP tool tests
+# ---------------------------------------------------------------------------
+
+
+class TestMemoryTools:
+    """Test the memory/recall MCP tools."""
+
+    @pytest.fixture(autouse=True)
+    def _setup_env(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+        """Set up project dir and reset memory store singleton."""
+        monkeypatch.setenv("ATTOCODE_PROJECT_DIR", str(tmp_path))
+        import attocode.code_intel.server as srv
+
+        srv._memory_store = None
+        yield
+        if srv._memory_store is not None:
+            srv._memory_store.close()
+            srv._memory_store = None
+
+    def test_recall_empty(self):
+        from attocode.code_intel.server import recall
+
+        result = recall("anything")
+        assert "No relevant learnings" in result
+
+    def test_record_and_recall(self):
+        from attocode.code_intel.server import recall, record_learning
+
+        result = record_learning(
+            type="convention",
+            description="Always use snake_case for function names",
+        )
+        assert "Recorded learning #" in result
+        assert "convention" in result
+
+        recalled = recall("function naming")
+        assert "snake_case" in recalled
+        assert "convention" in recalled
+
+    def test_record_invalid_type(self):
+        from attocode.code_intel.server import record_learning
+
+        result = record_learning(type="invalid", description="test")
+        assert "Error" in result
+
+    def test_learning_feedback_helpful(self):
+        from attocode.code_intel.server import learning_feedback, record_learning
+
+        record_learning(type="pattern", description="Cache DB queries for speed")
+        result = learning_feedback(learning_id=1, helpful=True)
+        assert "boosted" in result
+
+    def test_learning_feedback_unhelpful(self):
+        from attocode.code_intel.server import learning_feedback, record_learning
+
+        record_learning(type="gotcha", description="Watch out for race conditions")
+        result = learning_feedback(learning_id=1, helpful=False)
+        assert "reduced" in result
+
+    def test_list_learnings_empty(self):
+        from attocode.code_intel.server import list_learnings
+
+        result = list_learnings()
+        assert "No learnings found" in result
+
+    def test_list_learnings_with_data(self):
+        from attocode.code_intel.server import list_learnings, record_learning
+
+        record_learning(type="pattern", description="Use dataclass slots")
+        record_learning(type="gotcha", description="FTS5 quoting rules")
+
+        result = list_learnings()
+        assert "dataclass" in result
+        assert "FTS5" in result
+        assert "| ID |" in result  # Table header
+
+    def test_list_learnings_type_filter(self):
+        from attocode.code_intel.server import list_learnings, record_learning
+
+        record_learning(type="pattern", description="Pattern learning")
+        record_learning(type="gotcha", description="Gotcha learning")
+
+        result = list_learnings(type="pattern")
+        assert "Pattern learning" in result
+        assert "Gotcha learning" not in result
+
+    def test_learnings_resource(self):
+        from attocode.code_intel.server import learnings_resource, record_learning
+
+        # Empty
+        result = learnings_resource()
+        assert "No project learnings" in result
+
+        # With data
+        record_learning(type="convention", description="Use type hints everywhere")
+        result = learnings_resource()
+        assert "Convention" in result
+        assert "type hints" in result
+
+    def test_record_with_scope_and_details(self):
+        from attocode.code_intel.server import recall, record_learning
+
+        record_learning(
+            type="workaround",
+            description="Mock the DB in integration tests",
+            details="Use monkeypatch to swap the connection factory",
+            scope="tests/integration/",
+        )
+
+        result = recall("database mocking", scope="tests/integration/")
+        assert "Mock the DB" in result
+
+    def test_list_learnings_scope_filter(self):
+        from attocode.code_intel.server import list_learnings, record_learning
+
+        record_learning(type="pattern", description="Scoped learning", scope="src/api/")
+        record_learning(type="pattern", description="Global learning", scope="")
+
+        result = list_learnings(scope="src/api/")
+        assert "Scoped learning" in result
+        assert "Global learning" in result  # Global is always included

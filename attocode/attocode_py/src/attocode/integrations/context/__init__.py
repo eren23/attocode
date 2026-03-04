@@ -86,6 +86,7 @@ from attocode.integrations.context.embeddings import (
     NullEmbeddingProvider,
     create_embedding_provider,
 )
+from attocode.integrations.context.memory_store import MemoryStore
 
 __all__ = [
     # auto_compaction
@@ -163,4 +164,6 @@ __all__ = [
     "EmbeddingProvider",
     "NullEmbeddingProvider",
     "create_embedding_provider",
+    # memory_store
+    "MemoryStore",
 ]
