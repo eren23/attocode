@@ -6,10 +6,13 @@ from typing import Any
 
 from rich.text import Text
 from textual.app import ComposeResult
+from textual.binding import Binding
 from textual.containers import Horizontal, Vertical
 from textual.reactive import reactive
 from textual.widget import Widget
 from textual.widgets import DataTable, Static
+
+from attocode.tui.widgets.swarm.control_bar import RetryTaskRequested, SkipTaskRequested
 
 
 _STATUS_COLORS = {
@@ -139,6 +142,11 @@ class TaskDeepInspector(Widget):
 class TasksPane(Widget):
     """Left: TaskDetailTable (DataTable), Right: TaskDeepInspector."""
 
+    BINDINGS = [
+        Binding("s", "skip_task", "Skip", show=False),
+        Binding("r", "retry_task", "Retry", show=False),
+    ]
+
     DEFAULT_CSS = """
     TasksPane {
         height: 1fr;
@@ -212,7 +220,7 @@ class TasksPane(Widget):
             table = self.query_one("#tasks-datatable", DataTable)
             # Move cursor to the row with this key
             for idx, row_key in enumerate(table.rows):
-                if str(row_key) == task_id:
+                if str(row_key.value) == task_id:
                     table.move_cursor(row=idx)
                     break
             # Update inspector
@@ -235,3 +243,30 @@ class TasksPane(Widget):
                 )
             except Exception:
                 pass
+
+    def _get_selected_task_id(self) -> str | None:
+        """Return the currently highlighted task ID, or None."""
+        try:
+            table = self.query_one("#tasks-datatable", DataTable)
+            row_keys = list(table.rows.keys())
+            if 0 <= table.cursor_row < len(row_keys):
+                return str(row_keys[table.cursor_row].value)
+        except Exception:
+            pass
+        return None
+
+    def action_skip_task(self) -> None:
+        """Skip the currently selected task."""
+        tid = self._get_selected_task_id()
+        if tid:
+            task = self._tasks.get(tid, {})
+            if task.get("status") in ("pending", "ready"):
+                self.post_message(SkipTaskRequested(tid))
+
+    def action_retry_task(self) -> None:
+        """Retry the currently selected failed task."""
+        tid = self._get_selected_task_id()
+        if tid:
+            task = self._tasks.get(tid, {})
+            if task.get("status") == "failed":
+                self.post_message(RetryTaskRequested(tid))

@@ -94,6 +94,7 @@ class ProductionAgent:
         self._mcp_client_manager: Any = None  # MCPClientManager, set during _connect_mcp_servers()
         self._swarm_orchestrator: Any = None
         self._event_bridge: Any = None
+        self._tui_swarm_callback: Callable[[dict], None] | None = None
         self._ast_server: Any = None
         self._thread_manager: Any = None
         self._trace_collector: Any = None
@@ -139,6 +140,10 @@ class ProductionAgent:
     def swarm_orchestrator(self) -> Any:
         """The swarm orchestrator, if swarm mode is active."""
         return self._swarm_orchestrator
+
+    def set_tui_swarm_callback(self, cb: Callable[[dict], None] | None) -> None:
+        """Set a callback that receives swarm events for TUI rendering."""
+        self._tui_swarm_callback = cb
 
     @property
     def session_store(self) -> Any:
@@ -901,14 +906,21 @@ class ProductionAgent:
                     spawn_agent_fn=spawn_fn,
                 )
 
-            # Attach event bridge for TUI consumption
-            if self._event_bridge is None:
-                self._event_bridge = SwarmEventBridge(
-                    output_dir=os.path.join(
-                        self._session_dir or ".agent", "swarm-live"
-                    ),
-                )
+            # Attach event bridge for TUI consumption — create fresh each run
+            # to avoid duplicate listeners from repeated swarm executions
+            if self._event_bridge is not None:
+                self._event_bridge.close()
+                self._event_bridge = None
+            self._event_bridge = SwarmEventBridge(
+                output_dir=os.path.join(
+                    self._session_dir or ".agent", "swarm-live"
+                ),
+            )
             self._event_bridge.attach(self._swarm_orchestrator)
+
+            # Wire TUI callback if set
+            if self._tui_swarm_callback:
+                self._event_bridge.set_tui_callback(self._tui_swarm_callback)
 
             # Start AST server for external CC instances
             if self._ast_server is None and self._working_dir:
@@ -1280,11 +1292,11 @@ class ProductionAgent:
         """Record a file change for /diff review and /undo capability."""
         if self._file_change_tracker is not None:
             try:
-                self._file_change_tracker.record(
+                self._file_change_tracker.track_change(
                     path=path,
-                    action=action,
-                    content_before=content_before,
-                    content_after=content_after,
+                    before_content=content_before,
+                    after_content=content_after,
+                    tool_name=action,
                 )
             except Exception:
                 logger.debug("file_change_track_failed", exc_info=True)
@@ -1294,13 +1306,12 @@ class ProductionAgent:
         if self._file_change_tracker is None:
             return None
         try:
-            undo_result = self._file_change_tracker.undo()
-            if undo_result is None:
+            result_msg = self._file_change_tracker.undo_last_change()
+            if not result_msg or result_msg == "No changes to undo.":
                 return None
             return {
-                "path": undo_result.get("path", ""),
-                "action": undo_result.get("action", ""),
-                "success": undo_result.get("success", False),
+                "message": result_msg,
+                "success": "restored" in result_msg.lower() or "undone" in result_msg.lower(),
             }
         except Exception:
             logger.debug("undo_failed", exc_info=True)

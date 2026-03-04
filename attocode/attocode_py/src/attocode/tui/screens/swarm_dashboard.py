@@ -27,6 +27,15 @@ from textual.timer import Timer
 from textual.widgets import ContentSwitcher, Footer, Header, Static
 
 from attocode.tui.widgets.swarm.ast_blackboard_pane import ASTBlackboardPane
+from attocode.tui.bridges.swarm_bridge import SwarmEventMessage
+from attocode.tui.widgets.swarm.control_bar import (
+    RetryTaskRequested,
+    SkipTaskRequested,
+    SwarmCancelRequested,
+    SwarmControlBar,
+    SwarmPauseRequested,
+    SwarmResumeRequested,
+)
 from attocode.tui.widgets.swarm.decisions_pane import DecisionsPane
 from attocode.tui.widgets.swarm.files_pane import FilesPane
 from attocode.tui.widgets.swarm.model_health_pane import ModelHealthPane
@@ -161,6 +170,7 @@ class SwarmDashboardScreen(Screen):
         event_bridge: Any = None,
         blackboard: Any = None,
         ast_service: Any = None,
+        orchestrator: Any = None,
         **kwargs: Any,
     ) -> None:
         super().__init__(**kwargs)
@@ -168,6 +178,7 @@ class SwarmDashboardScreen(Screen):
         self._event_bridge = event_bridge
         self._blackboard = blackboard
         self._ast_service = ast_service
+        self._orchestrator = orchestrator
         self._poll_timer: Timer | None = None
         self._swarm_start_ts: float = 0.0
 
@@ -187,6 +198,7 @@ class SwarmDashboardScreen(Screen):
                 blackboard=self._blackboard,
                 id="tab-astbb",
             )
+        yield SwarmControlBar(id="swarm-control-bar")
         yield SwarmStatusFooter(id="swarm-status-footer")
         yield Footer()
 
@@ -216,36 +228,8 @@ class SwarmDashboardScreen(Screen):
         if not state:
             return
 
-        # Update footer
         self._update_footer(state)
-
-        # Only update the active pane for efficiency
-        tab_id = _TAB_IDS[self.active_tab] if 0 <= self.active_tab < len(_TAB_IDS) else "tab-overview"
-
-        try:
-            if tab_id == "tab-overview":
-                self.query_one("#tab-overview", OverviewPane).update_state(state)
-            elif tab_id == "tab-workers":
-                self.query_one("#tab-workers", WorkersPane).update_state(state)
-            elif tab_id == "tab-tasks":
-                self.query_one("#tab-tasks", TasksPane).update_state(state)
-            elif tab_id == "tab-models":
-                self.query_one("#tab-models", ModelHealthPane).update_state(state)
-            elif tab_id == "tab-decisions":
-                self.query_one("#tab-decisions", DecisionsPane).update_state(state)
-            elif tab_id == "tab-files":
-                self.query_one("#tab-files", FilesPane).update_state(state)
-            elif tab_id == "tab-quality":
-                self.query_one("#tab-quality", QualityPane).update_state(state)
-            elif tab_id == "tab-astbb":
-                output_dir = ""
-                if self._event_bridge and hasattr(self._event_bridge, "_output_dir"):
-                    output_dir = self._event_bridge._output_dir
-                self.query_one("#tab-astbb", ASTBlackboardPane).update_state(
-                    state, output_dir=output_dir
-                )
-        except Exception:
-            pass
+        self._update_active_pane(state)
 
     def _get_state(self) -> dict[str, Any] | None:
         """Get state from event bridge (preferred) or state_fn."""
@@ -307,6 +291,52 @@ class SwarmDashboardScreen(Screen):
 
     # --- Message handlers ---
 
+    def on_swarm_event_message(self, event: SwarmEventMessage) -> None:
+        """Handle live swarm events for immediate pane refresh."""
+        etype = event.event.get("type", "")
+        # Force immediate update on task lifecycle events
+        if etype.startswith(("swarm.task.", "swarm.wave.", "swarm.quality.")):
+            state = self._get_state()
+            if state:
+                self._update_footer(state)
+                self._update_active_pane(state)
+
+        # Push raw event to EventsLog (Phase 3.2 wiring)
+        try:
+            from attocode.tui.widgets.swarm.event_timeline import EventsLog
+            events_log = self.query_one(EventsLog)
+            events_log.add_event(event.event)
+        except Exception:
+            pass
+
+    def _update_active_pane(self, state: dict[str, Any]) -> None:
+        """Update the currently visible pane with fresh state."""
+        tab_id = _TAB_IDS[self.active_tab] if 0 <= self.active_tab < len(_TAB_IDS) else "tab-overview"
+        try:
+            if tab_id == "tab-overview":
+                self.query_one("#tab-overview", OverviewPane).update_state(state)
+            elif tab_id == "tab-workers":
+                self.query_one("#tab-workers", WorkersPane).update_state(state)
+            elif tab_id == "tab-tasks":
+                self.query_one("#tab-tasks", TasksPane).update_state(state)
+            elif tab_id == "tab-models":
+                self.query_one("#tab-models", ModelHealthPane).update_state(state)
+            elif tab_id == "tab-decisions":
+                self.query_one("#tab-decisions", DecisionsPane).update_state(state)
+            elif tab_id == "tab-files":
+                self.query_one("#tab-files", FilesPane).update_state(state)
+            elif tab_id == "tab-quality":
+                self.query_one("#tab-quality", QualityPane).update_state(state)
+            elif tab_id == "tab-astbb":
+                output_dir = ""
+                if self._event_bridge and hasattr(self._event_bridge, "_output_dir"):
+                    output_dir = self._event_bridge._output_dir
+                self.query_one("#tab-astbb", ASTBlackboardPane).update_state(
+                    state, output_dir=output_dir
+                )
+        except Exception:
+            pass
+
     def on_task_card_selected(self, message: TaskCard.Selected) -> None:
         """Handle TaskCard click — switch to Tasks tab and select that task."""
         self._switch_tab(2)  # tab index 2 = Tasks
@@ -334,6 +364,33 @@ class SwarmDashboardScreen(Screen):
                         except Exception:
                             pass
                     break
+
+    # --- Control handlers ---
+
+    async def on_swarm_pause_requested(self, event: SwarmPauseRequested) -> None:
+        if self._orchestrator and hasattr(self._orchestrator, "pause"):
+            await self._orchestrator.pause()
+
+    async def on_swarm_resume_requested(self, event: SwarmResumeRequested) -> None:
+        if self._orchestrator and hasattr(self._orchestrator, "resume"):
+            await self._orchestrator.resume()
+
+    async def on_swarm_cancel_requested(self, event: SwarmCancelRequested) -> None:
+        if self._orchestrator and hasattr(self._orchestrator, "cancel"):
+            await self._orchestrator.cancel()
+            self.notify("Swarm cancelled", severity="warning")
+
+    async def on_skip_task_requested(self, event: SkipTaskRequested) -> None:
+        if self._orchestrator and hasattr(self._orchestrator, "skip_task"):
+            ok = await self._orchestrator.skip_task(event.task_id)
+            if ok:
+                self.notify(f"Skipped task {event.task_id[:12]}", severity="information")
+
+    async def on_retry_task_requested(self, event: RetryTaskRequested) -> None:
+        if self._orchestrator and hasattr(self._orchestrator, "retry_task"):
+            ok = await self._orchestrator.retry_task(event.task_id)
+            if ok:
+                self.notify(f"Retrying task {event.task_id[:12]}", severity="information")
 
     # --- Tab actions ---
 

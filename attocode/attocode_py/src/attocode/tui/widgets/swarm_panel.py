@@ -64,12 +64,12 @@ def phase_info(phase: SwarmPhase) -> tuple[str, str]:
 
 
 class SwarmPanel(Static):
-    """Displays live swarm status: phase, workers, queue, budget."""
+    """Displays live swarm status: phase, workers, queue, budget, quality."""
 
     DEFAULT_CSS = """
     SwarmPanel {
         height: auto;
-        max-height: 12;
+        max-height: 14;
         border: round $primary-darken-2;
         padding: 0 1;
         display: none;
@@ -83,11 +83,22 @@ class SwarmPanel(Static):
     def __init__(self, **kwargs) -> None:
         super().__init__(**kwargs)
         self._status: SwarmStatus | None = None
+        self._quality_stats: dict[str, int] = {}
+        self._start_time: float = 0.0
 
     def update_status(self, status: SwarmStatus | None) -> None:
         """Update the displayed swarm status."""
         self._status = status
         self.set_class(status is not None, "visible")
+        self.refresh()
+
+    def set_start_time(self, ts: float) -> None:
+        """Set the swarm start timestamp for ETA calculations."""
+        self._start_time = ts
+
+    def update_quality_stats(self, stats: dict[str, int]) -> None:
+        """Update quality gate statistics."""
+        self._quality_stats = stats
         self.refresh()
 
     def render(self) -> Text:
@@ -138,7 +149,7 @@ class SwarmPanel(Static):
             if len(workers) > 4:
                 text.append(f"   ... and {len(workers) - 4} more\n", style="dim")
 
-        # Budget
+        # Budget + burn rate
         b = s.budget
         if b.tokens_total > 0:
             tok_frac = b.tokens_used / b.tokens_total
@@ -148,6 +159,31 @@ class SwarmPanel(Static):
             text.append(f" {tok_frac * 100:.0f}%")
             if b.cost_total > 0:
                 text.append(f"  ${b.cost_used:.2f}/${b.cost_total:.2f}")
+            # Burn rate & ETA
+            if self._start_time > 0 and b.tokens_used > 0:
+                elapsed_s = max(1.0, time.time() - self._start_time)
+                burn_rate = b.tokens_used / elapsed_s
+                remaining = b.tokens_total - b.tokens_used
+                if burn_rate > 0:
+                    eta_s = remaining / burn_rate
+                    text.append(f"  ETA: ~{format_elapsed(eta_s * 1000)}", style="dim")
             text.append("\n")
+
+        # Quality stats
+        qs = self._quality_stats
+        if qs:
+            total_dispatches = qs.get("total_dispatches", 0)
+            rejections = qs.get("total_rejections", 0)
+            hollows = qs.get("total_hollows", 0)
+            if total_dispatches > 0 or rejections > 0:
+                text.append("  Quality: ", style="dim")
+                pass_count = total_dispatches - rejections - hollows
+                if pass_count > 0:
+                    text.append(f"Pass: {pass_count}  ", style="green")
+                if rejections > 0:
+                    text.append(f"Reject: {rejections}  ", style="red")
+                if hollows > 0:
+                    text.append(f"Hollow: {hollows}", style="yellow")
+                text.append("\n")
 
         return text

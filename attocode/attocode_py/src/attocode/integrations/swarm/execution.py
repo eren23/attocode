@@ -213,6 +213,10 @@ async def execute_wave(
         and ctx.worker_pool.available_slots > 0
         and not ctx.cancelled
     ):
+        # Pause check: wait until unpaused
+        while getattr(ctx, "paused", False) and not ctx.cancelled:
+            await asyncio.sleep(0.5)
+
         if is_circuit_breaker_active(recovery_state, ctx):
             wait_ms = recovery_state.circuit_breaker_until - time.time()
             if wait_ms > 0:
@@ -243,6 +247,10 @@ async def execute_wave(
         from attocode.integrations.swarm.lifecycle import emit_budget_update
         emit_budget_update(ctx)
         ctx.emit(swarm_event("swarm.status", status=get_status()))
+
+        # Pause check before slot re-fill
+        while getattr(ctx, "paused", False) and not ctx.cancelled:
+            await asyncio.sleep(0.5)
 
         # Fill freed slots with remaining tasks
         while (

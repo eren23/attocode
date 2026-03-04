@@ -15,6 +15,14 @@ from attocode.tui.widgets.swarm.decisions_pane import DecisionsPane
 from attocode.tui.widgets.swarm.files_pane import FilesPane
 from attocode.tui.widgets.swarm.quality_pane import QualityPane
 from attocode.tui.widgets.swarm.ast_blackboard_pane import ASTBlackboardPane
+from attocode.tui.widgets.swarm.control_bar import (
+    RetryTaskRequested,
+    SkipTaskRequested,
+    SwarmCancelRequested,
+    SwarmControlBar,
+    SwarmPauseRequested,
+    SwarmResumeRequested,
+)
 
 __all__ = [
     "AgentGrid",
@@ -39,4 +47,11 @@ __all__ = [
     "FilesPane",
     "QualityPane",
     "ASTBlackboardPane",
+    # Control bar
+    "SwarmControlBar",
+    "SwarmPauseRequested",
+    "SwarmResumeRequested",
+    "SwarmCancelRequested",
+    "SkipTaskRequested",
+    "RetryTaskRequested",
 ]

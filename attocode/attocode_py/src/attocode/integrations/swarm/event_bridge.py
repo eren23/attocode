@@ -84,6 +84,9 @@ class SwarmEventBridge:
         self._total_dispatches: int = 0
         self._total_hollows: int = 0
 
+        # TUI live callback (set via set_tui_callback)
+        self._tui_callback: Callable[[dict[str, Any]], None] | None = None
+
         # Rate-limiting for state writes
         self._pending_write: asyncio.TimerHandle | None = None
         self._min_state_interval: float = (
@@ -155,6 +158,10 @@ class SwarmEventBridge:
     def write_budget_pool_snapshot(self, data: dict[str, Any]) -> None:
         """Write budget-pool.json to the output directory."""
         self._write_json_file("budget-pool.json", data)
+
+    def set_tui_callback(self, cb: Callable[[dict[str, Any]], None] | None) -> None:
+        """Set a callback invoked for every event (for live TUI updates)."""
+        self._tui_callback = cb
 
     def get_live_state(self) -> dict[str, Any]:
         """Return the current accumulated state snapshot.
@@ -235,7 +242,8 @@ class SwarmEventBridge:
         elif event_type == "swarm.quality.result":
             self._on_quality_result(data)
         elif event_type == "swarm.quality.rejected":
-            self._quality_rejections += 1
+            # Note: _on_quality_result already increments _quality_rejections
+            # when passed=False, so we only append to timeline here.
             self._append_timeline(event)
         elif event_type == "swarm.model.failover":
             self._append_timeline(event)
@@ -246,6 +254,18 @@ class SwarmEventBridge:
             self._append_timeline(event)
 
         self._schedule_state_write()
+
+        # Push to TUI if callback is set
+        if self._tui_callback is not None:
+            try:
+                self._tui_callback({
+                    "type": event_type,
+                    "data": data,
+                    "seq": self._seq,
+                    "timestamp": time.time(),
+                })
+            except Exception:
+                logger.debug("TUI callback failed", exc_info=True)
 
     # ------------------------------------------------------------------
     # Type-Specific Handlers
