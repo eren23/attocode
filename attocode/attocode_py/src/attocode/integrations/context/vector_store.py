@@ -12,8 +12,8 @@ import math
 import os
 import sqlite3
 import struct
+import threading
 from dataclasses import dataclass, field
-from pathlib import Path
 from typing import Any
 
 logger = logging.getLogger(__name__)
@@ -79,13 +79,15 @@ class VectorStore:
     db_path: str
     dimension: int
     _conn: sqlite3.Connection | None = field(default=None, repr=False)
+    _lock: threading.Lock = field(default_factory=threading.Lock, repr=False)
 
     def __post_init__(self) -> None:
         # Ensure directory exists
         os.makedirs(os.path.dirname(self.db_path) or ".", exist_ok=True)
-        self._conn = sqlite3.connect(self.db_path)
+        self._conn = sqlite3.connect(self.db_path, check_same_thread=False)
         self._conn.execute("PRAGMA journal_mode=WAL")
         self._create_tables()
+        self._validate_dimension()
 
     def _create_tables(self) -> None:
         assert self._conn is not None
@@ -102,19 +104,63 @@ class VectorStore:
         self._conn.execute(
             "CREATE INDEX IF NOT EXISTS idx_vectors_file ON vectors(file_path)"
         )
+        # Metadata table for tracking index freshness per file
+        self._conn.execute("""
+            CREATE TABLE IF NOT EXISTS file_metadata (
+                file_path TEXT PRIMARY KEY,
+                last_indexed_at REAL NOT NULL,
+                file_mtime REAL NOT NULL,
+                chunk_count INTEGER NOT NULL DEFAULT 0
+            )
+        """)
+        # Store-level metadata (dimension, etc.)
+        self._conn.execute("""
+            CREATE TABLE IF NOT EXISTS store_metadata (
+                key TEXT PRIMARY KEY,
+                value TEXT NOT NULL
+            )
+        """)
         self._conn.commit()
+
+    def _validate_dimension(self) -> None:
+        """Check stored dimension matches current; clear if mismatched."""
+        assert self._conn is not None
+        row = self._conn.execute(
+            "SELECT value FROM store_metadata WHERE key = 'dimension'"
+        ).fetchone()
+        if row:
+            stored_dim = int(row[0])
+            if stored_dim != self.dimension:
+                logger.warning(
+                    "Embedding dimension changed (%d -> %d), clearing vector index",
+                    stored_dim, self.dimension,
+                )
+                self._conn.execute("DELETE FROM vectors")
+                self._conn.execute("DELETE FROM file_metadata")
+                self._conn.execute(
+                    "INSERT OR REPLACE INTO store_metadata (key, value) VALUES ('dimension', ?)",
+                    (str(self.dimension),),
+                )
+                self._conn.commit()
+        else:
+            self._conn.execute(
+                "INSERT OR REPLACE INTO store_metadata (key, value) VALUES ('dimension', ?)",
+                (str(self.dimension),),
+            )
+            self._conn.commit()
 
     def upsert(self, entry: VectorEntry) -> None:
         """Insert or update a vector entry."""
         assert self._conn is not None
         packed = _pack_vector(entry.vector)
-        self._conn.execute(
-            """INSERT OR REPLACE INTO vectors
-               (id, file_path, chunk_type, name, text, vector)
-               VALUES (?, ?, ?, ?, ?, ?)""",
-            (entry.id, entry.file_path, entry.chunk_type, entry.name, entry.text, packed),
-        )
-        self._conn.commit()
+        with self._lock:
+            self._conn.execute(
+                """INSERT OR REPLACE INTO vectors
+                   (id, file_path, chunk_type, name, text, vector)
+                   VALUES (?, ?, ?, ?, ?, ?)""",
+                (entry.id, entry.file_path, entry.chunk_type, entry.name, entry.text, packed),
+            )
+            self._conn.commit()
 
     def upsert_batch(self, entries: list[VectorEntry]) -> None:
         """Batch insert/update vector entries."""
@@ -123,22 +169,24 @@ class VectorStore:
             (e.id, e.file_path, e.chunk_type, e.name, e.text, _pack_vector(e.vector))
             for e in entries
         ]
-        self._conn.executemany(
-            """INSERT OR REPLACE INTO vectors
-               (id, file_path, chunk_type, name, text, vector)
-               VALUES (?, ?, ?, ?, ?, ?)""",
-            rows,
-        )
-        self._conn.commit()
+        with self._lock:
+            self._conn.executemany(
+                """INSERT OR REPLACE INTO vectors
+                   (id, file_path, chunk_type, name, text, vector)
+                   VALUES (?, ?, ?, ?, ?, ?)""",
+                rows,
+            )
+            self._conn.commit()
 
     def delete_by_file(self, file_path: str) -> int:
         """Delete all entries for a file. Returns count deleted."""
         assert self._conn is not None
-        cursor = self._conn.execute(
-            "DELETE FROM vectors WHERE file_path = ?", (file_path,),
-        )
-        self._conn.commit()
-        return cursor.rowcount
+        with self._lock:
+            cursor = self._conn.execute(
+                "DELETE FROM vectors WHERE file_path = ?", (file_path,),
+            )
+            self._conn.commit()
+            return cursor.rowcount
 
     def search(
         self,
@@ -161,21 +209,18 @@ class VectorStore:
             return []
 
         if file_filter:
-            # Fetch all and filter with fnmatch for correct glob semantics
-            # (SQL LIKE can't handle ** properly)
             import fnmatch
-            cursor = self._conn.execute(
-                "SELECT id, file_path, chunk_type, name, text, vector FROM vectors",
-            )
             _file_filter_fn = lambda fp: fnmatch.fnmatch(fp, file_filter)
         else:
             _file_filter_fn = None
-            cursor = self._conn.execute(
+
+        with self._lock:
+            rows = self._conn.execute(
                 "SELECT id, file_path, chunk_type, name, text, vector FROM vectors",
-            )
+            ).fetchall()
 
         results: list[SearchResult] = []
-        for row in cursor:
+        for row in rows:
             if _file_filter_fn and not _file_filter_fn(row[1]):
                 continue
             try:
@@ -200,8 +245,75 @@ class VectorStore:
     def count(self) -> int:
         """Return total number of stored vectors."""
         assert self._conn is not None
-        row = self._conn.execute("SELECT COUNT(*) FROM vectors").fetchone()
+        with self._lock:
+            row = self._conn.execute("SELECT COUNT(*) FROM vectors").fetchone()
         return row[0] if row else 0
+
+    def set_file_metadata(
+        self, file_path: str, mtime: float, chunk_count: int,
+    ) -> None:
+        """Record when a file was last indexed and its mtime."""
+        assert self._conn is not None
+        import time as _time
+        with self._lock:
+            self._conn.execute(
+                """INSERT OR REPLACE INTO file_metadata
+                   (file_path, last_indexed_at, file_mtime, chunk_count)
+                   VALUES (?, ?, ?, ?)""",
+                (file_path, _time.time(), mtime, chunk_count),
+            )
+            self._conn.commit()
+
+    def get_file_metadata(self, file_path: str) -> dict[str, Any] | None:
+        """Get index metadata for a file. Returns None if not indexed."""
+        assert self._conn is not None
+        with self._lock:
+            row = self._conn.execute(
+                "SELECT last_indexed_at, file_mtime, chunk_count "
+                "FROM file_metadata WHERE file_path = ?",
+                (file_path,),
+            ).fetchone()
+        if row:
+            return {"last_indexed_at": row[0], "file_mtime": row[1], "chunk_count": row[2]}
+        return None
+
+    def get_stale_files(self, file_mtimes: dict[str, float]) -> list[str]:
+        """Return files whose mtime is newer than last indexed mtime.
+
+        Args:
+            file_mtimes: Dict of relative_path -> current mtime.
+
+        Returns:
+            List of file paths that need re-indexing.
+        """
+        assert self._conn is not None
+        with self._lock:
+            rows = self._conn.execute(
+                "SELECT file_path, file_mtime FROM file_metadata"
+            ).fetchall()
+        indexed = {row[0]: row[1] for row in rows}
+        stale: list[str] = []
+        for fpath, current_mtime in file_mtimes.items():
+            stored_mtime = indexed.get(fpath)
+            if stored_mtime is None or current_mtime > stored_mtime:
+                stale.append(fpath)
+        return stale
+
+    def get_all_indexed_files(self) -> list[str]:
+        """Return all file paths that have metadata in the store."""
+        assert self._conn is not None
+        with self._lock:
+            rows = self._conn.execute("SELECT file_path FROM file_metadata").fetchall()
+        return [r[0] for r in rows]
+
+    def delete_file_metadata(self, file_path: str) -> None:
+        """Remove metadata for a file."""
+        assert self._conn is not None
+        with self._lock:
+            self._conn.execute(
+                "DELETE FROM file_metadata WHERE file_path = ?", (file_path,),
+            )
+            self._conn.commit()
 
     def close(self) -> None:
         """Close the database connection."""

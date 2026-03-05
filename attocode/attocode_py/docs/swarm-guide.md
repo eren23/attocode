@@ -147,6 +147,14 @@ Each section:
 - **Workers** --- each active worker's name, model, current task, and elapsed time
 - **Budget** --- token and cost usage with progress bar
 
+Dashboard controls:
+
+- **Pause/Resume** dispatch from the swarm control bar (running tasks continue)
+- **Cancel** swarm execution with confirmation from the control bar
+- In Tasks tab:
+  - Press `s` to skip the selected pending/ready task
+  - Press `r` to retry the selected failed task
+
 ## Monitoring Files
 
 During execution, the swarm writes state to `.agent/swarm-state/`:

@@ -229,6 +229,13 @@ A full-screen 8-tab dashboard for monitoring swarm operations:
 | Quality | `7` | Quality gates, hollow detection, wave reviews |
 | AST/BB | `8` | AST explorer and shared blackboard inspector |
 
+Dashboard runtime controls:
+
+- Bottom control bar: **Pause/Resume** dispatch and **Cancel** swarm run
+- Tasks tab shortcuts:
+  - `s` to skip selected pending/ready task
+  - `r` to retry selected failed task
+
 ### Swarm Monitor (`Ctrl+M`)
 
 Fleet-level monitoring of all swarm runs in the workspace. Browse historical swarm sessions and stream live events from trace files.

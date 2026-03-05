@@ -13,6 +13,7 @@ from textual.timer import Timer
 from textual.widgets import Footer, Static
 
 from attocode.tui.bridges.approval_bridge import ApprovalBridge, BudgetBridge
+from attocode.tui.bridges.swarm_bridge import SwarmEventMessage
 from attocode.tui.dialogs.approval import ApprovalDialog, ApprovalResult
 from attocode.tui.dialogs.budget import BudgetDialog
 from attocode.tui.events import (
@@ -130,6 +131,9 @@ class AttocodeApp(App):
         self._typing_timer: Timer | None = None
         self._typing_frame_index = 0
 
+        # Rate-limit failure toasts (I4)
+        self._last_failure_toast_time: float = 0.0
+
     def compose(self) -> ComposeResult:
         with Vertical(id="main-container"):
             yield WelcomeBanner(
@@ -156,6 +160,9 @@ class AttocodeApp(App):
 
     async def on_unmount(self) -> None:
         """Clean up persistent resources on app teardown."""
+        # Detach swarm callback before closing agent
+        if self._agent and hasattr(self._agent, "set_tui_swarm_callback"):
+            self._agent.set_tui_swarm_callback(None)
         if self._agent and hasattr(self._agent, "close"):
             await self._agent.close()
 
@@ -194,6 +201,12 @@ class AttocodeApp(App):
         # Set up bridge handlers
         self.approval_bridge.set_handler(self._show_approval_dialog)
         self.budget_bridge.set_handler(self._show_budget_dialog)
+
+        # Wire swarm event callback to push Textual messages
+        if self._agent and hasattr(self._agent, "set_tui_swarm_callback"):
+            self._agent.set_tui_swarm_callback(
+                lambda evt: self.post_message(SwarmEventMessage(evt))
+            )
 
         # Hint below banner
         log = self.query_one("#message-log", MessageLog)
@@ -567,6 +580,134 @@ class AttocodeApp(App):
         except Exception:
             pass
 
+    # --- Swarm event handler ---
+
+    def on_swarm_event_message(self, event: SwarmEventMessage) -> None:
+        """Route swarm events to message log, toasts, and panel updates."""
+        etype = event.event.get("type", "")
+        data = event.event.get("data", {})
+        log = self.query_one("#message-log", MessageLog)
+
+        # Route key events to message log
+        if etype == "swarm.start":
+            log.add_swarm_phase("Swarm started", data.get("message", ""))
+            # Auto-show swarm panel and hint
+            try:
+                self.query_one("#swarm-panel", SwarmPanel).add_class("visible")
+            except Exception:
+                pass
+            log.add_system_message("Press Ctrl+S for full swarm dashboard")
+
+        elif etype == "swarm.tasks.loaded":
+            tasks = data.get("tasks", [])
+            log.add_swarm_phase(
+                f"Decomposed into {len(tasks)} tasks",
+                f"{data.get('total_waves', '?')} waves",
+            )
+
+        elif etype == "swarm.task.dispatched":
+            log.add_swarm_dispatch(
+                data.get("description", data.get("task_id", "?")),
+                worker=data.get("worker_name", ""),
+                model=data.get("model", ""),
+            )
+
+        elif etype == "swarm.task.completed":
+            files = data.get("files_modified") or []
+            log.add_swarm_complete(
+                data.get("description", data.get("task_id", "?")),
+                quality_score=data.get("quality_score"),
+                files=files,
+            )
+
+        elif etype == "swarm.task.failed":
+            desc = data.get("description", data.get("task_id", "?"))
+            fm = data.get("failure_mode", "")
+            log.add_swarm_failure(desc, error=data.get("error", ""), failure_mode=fm)
+            # Rate-limit per-task failure toasts to avoid spam on rapid failures
+            import time as _time
+            now = _time.time()
+            if now - self._last_failure_toast_time > 3.0:
+                self._last_failure_toast_time = now
+                self.notify(
+                    f"Task failed ({fm}): {desc[:40]}" if fm else f"Task failed: {desc[:40]}",
+                    severity="error",
+                    timeout=8,
+                )
+
+        elif etype == "swarm.wave.complete":
+            wave = data.get("wave", "?")
+            total = data.get("total_waves", "?")
+            completed = data.get("completed", 0)
+            failed = data.get("failed", 0)
+            log.add_swarm_wave(wave, total, completed, failed)
+            self.notify(
+                f"Wave {wave}/{total}: {completed} done, {failed} failed",
+                severity="information",
+            )
+
+        elif etype == "swarm.quality.rejected":
+            desc = data.get("description", data.get("task_id", "?"))
+            score = data.get("score")
+            feedback = data.get("feedback", "")
+            log.add_swarm_quality_reject(desc, score, feedback)
+            self.notify(
+                f"Quality rejected ({score}/5): {feedback[:50]}",
+                severity="warning",
+                timeout=6,
+            )
+
+        elif etype == "swarm.hollow_detected":
+            streak = data.get("streak", data.get("hollow_streak", 0))
+            self.notify(
+                f"Hollow completion (streak: {streak})",
+                severity="warning",
+                timeout=4,
+            )
+
+        elif etype == "swarm.model.failover":
+            from_model = data.get("from_model", "?")
+            to_model = data.get("to_model", "?")
+            self.notify(
+                f"Failover: {from_model} \u2192 {to_model}",
+                severity="warning",
+                timeout=4,
+            )
+
+        elif etype == "swarm.paused":
+            log.add_swarm_phase("Dispatch paused")
+            self.notify("Swarm paused", severity="information")
+
+        elif etype == "swarm.resumed":
+            log.add_swarm_phase("Dispatch resumed")
+            self.notify("Swarm resumed", severity="information")
+
+        elif etype == "swarm.complete":
+            log.add_swarm_phase("Swarm completed", data.get("message", ""))
+            self.notify("Swarm execution complete!", severity="information", timeout=10)
+
+        # Update SwarmPanel quality stats from event bridge state
+        self._update_swarm_panel_from_event(event.event)
+
+    def _update_swarm_panel_from_event(self, evt: dict) -> None:
+        """Push quality stats and start time to SwarmPanel."""
+        try:
+            panel = self.query_one("#swarm-panel", SwarmPanel)
+            etype = evt.get("type", "")
+            if etype == "swarm.start" and panel._start_time == 0:
+                import time as _time
+                panel.set_start_time(evt.get("timestamp", 0) or _time.time())
+            # Pull quality_stats from event bridge's public API
+            if self._agent and hasattr(self._agent, "event_bridge"):
+                bridge = self._agent.event_bridge
+                if bridge and hasattr(bridge, "get_live_state"):
+                    live_state = bridge.get_live_state()
+                    qs = live_state.get("quality_stats", {})
+                    if qs:
+                        panel.update_quality_stats(qs)
+        except Exception:
+            pass
+
     def on_compaction_completed(self, event: CompactionCompleted) -> None:
         """Compaction event — update status bar and internals panel."""
         status = self.query_one("#status-bar", StatusBar)
@@ -770,6 +911,7 @@ class AttocodeApp(App):
         event_bridge = None
         blackboard = None
         ast_service = None
+        orch = None
 
         if self._agent and hasattr(self._agent, "_swarm_orchestrator"):
             orch = self._agent._swarm_orchestrator
@@ -787,6 +929,7 @@ class AttocodeApp(App):
             event_bridge=event_bridge,
             blackboard=blackboard,
             ast_service=ast_service,
+            orchestrator=orch,
         ))
 
     # --- Helpers ---

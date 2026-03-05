@@ -12,6 +12,48 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Fix `attoswarm tui` not picking up new TUI widgets when installed via `uv tool install`
 - Enabling code understanding tools of attocode to other AI coders as a skill system
 
+## [0.1.13] - 2026-03-05
+
+### Added
+
+- **Swarm dashboard control bar** with Pause/Resume and Cancel actions (`SwarmControlBar`)
+- **Task-level swarm controls** in Tasks tab: skip pending/ready task (`s`) and retry failed task (`r`)
+- **Swarm orchestrator runtime controls**: `pause()`, `resume()`, `skip_task()`, and `retry_task()`
+- **Live swarm event callback bridge** for immediate TUI refresh and timeline/event-log updates
+- **Extended swarm panel telemetry**: quality counters and budget burn-rate ETA
+- **Semantic embedding provider selection** via `ATTOCODE_EMBEDDING_MODEL` and explicit model routing
+- **Nomic local embedding provider** (`nomic-ai/nomic-embed-text-v1.5`) and `semantic-nomic` optional dependency extra
+- **Incremental semantic indexing APIs**: `reindex_file()` and `reindex_stale_files()` with stale/deleted file handling
+- **Vector-store file metadata tracking** for indexed mtime/chunk freshness
+- **Queue-based semantic reindex tests** (`test_semantic_search.py`) covering dedup and re-queue behavior
+
+### Changed
+
+- `/spawn` now supports optional model override: `/spawn [--model <model>] <task>`
+- `/spawn` now executes delegated work asynchronously via `await _spawn_command(...)`
+- `SemanticSearchManager` now uses richer chunks (including method-level chunks) and incremental metadata updates
+- `VectorStore` now uses SQLite with `check_same_thread=False` plus lock-guarded DB operations
+- Swarm dashboard pane updates are now event-driven for faster visible feedback during task lifecycle transitions
+
+### Fixed
+
+- `/spawn` failure reporting now surfaces actual `error` details when present instead of returning blank/partial failures
+- Semantic reindex dispatch on file changes no longer creates one thread per change; now uses bounded queued reindexing
+- Help/docs drift for `/spawn` syntax corrected to include `--model`
+- Duplicate quality rejection counting in swarm event bridge corrected
+- Embedding dimension mismatch now auto-invalidates stale vector index content
+
+### Documentation
+
+- Updated slash-command docs for `/spawn [--model <model>] <task>`
+- Updated optional dependency docs with `semantic` and `semantic-nomic` extras
+- Updated swarm dashboard docs with runtime controls (pause/resume/cancel + task skip/retry)
+
+### Tests
+
+- Added unit tests for semantic reindex queue behavior (`tests/unit/integrations/context/test_semantic_search.py`)
+- Verified context integration suite with new tests included
+
 ## [0.1.12] - 2026-03-04
 
 ### Added

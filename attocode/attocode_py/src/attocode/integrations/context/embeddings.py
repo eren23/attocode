@@ -11,7 +11,6 @@ from __future__ import annotations
 import logging
 import os
 from abc import ABC, abstractmethod
-from dataclasses import dataclass
 
 logger = logging.getLogger(__name__)
 
@@ -79,6 +78,34 @@ class OpenAIEmbeddingProvider(EmbeddingProvider):
         return "openai:text-embedding-3-small"
 
 
+class NomicEmbeddingProvider(EmbeddingProvider):
+    """Local embeddings via nomic-embed-text (137M params, better code understanding)."""
+
+    def __init__(self) -> None:
+        from sentence_transformers import SentenceTransformer  # type: ignore[import-untyped]
+        logger.warning(
+            "Loading nomic-embed-text with trust_remote_code=True — "
+            "this executes code from the model repository"
+        )
+        self._model = SentenceTransformer(
+            "nomic-ai/nomic-embed-text-v1.5", trust_remote_code=True,
+        )
+        self._dim = 768
+
+    def embed(self, texts: list[str]) -> list[list[float]]:
+        # nomic-embed-text recommends prefixing with task type
+        prefixed = [f"search_document: {t}" for t in texts]
+        embeddings = self._model.encode(prefixed, convert_to_numpy=True)
+        return [e.tolist() for e in embeddings]
+
+    def dimension(self) -> int:
+        return self._dim
+
+    @property
+    def name(self) -> str:
+        return "local:nomic-embed-text-v1.5"
+
+
 class NullEmbeddingProvider(EmbeddingProvider):
     """Fallback provider that returns empty vectors."""
 
@@ -93,12 +120,51 @@ class NullEmbeddingProvider(EmbeddingProvider):
         return "none"
 
 
-def create_embedding_provider() -> EmbeddingProvider:
+def create_embedding_provider(
+    model: str = "",
+) -> EmbeddingProvider:
     """Create the best available embedding provider.
+
+    Args:
+        model: Preferred model name. Options:
+            - "all-MiniLM-L6-v2" (default, 384-dim, fast)
+            - "nomic-embed-text" (768-dim, better code understanding)
+            - "openai" (API-based, requires OPENAI_API_KEY)
+            - "" (auto-detect best available)
 
     Tries in order: local sentence-transformers, OpenAI API, null fallback.
     """
-    # Try local first (no API cost)
+    model = model or os.environ.get("ATTOCODE_EMBEDDING_MODEL", "")
+
+    # Explicit local default request
+    if model == "all-MiniLM-L6-v2":
+        try:
+            provider = LocalEmbeddingProvider()
+            logger.info("Using embedding provider: %s", provider.name)
+            return provider
+        except Exception:
+            logger.warning("all-MiniLM-L6-v2 requested but failed, trying fallback", exc_info=True)
+
+    # Explicit nomic request
+    if model == "nomic-embed-text":
+        try:
+            provider = NomicEmbeddingProvider()
+            logger.info("Using embedding provider: %s", provider.name)
+            return provider
+        except Exception:
+            logger.warning("nomic-embed-text requested but failed, trying fallback", exc_info=True)
+
+    # Explicit OpenAI request
+    if model == "openai":
+        try:
+            provider = OpenAIEmbeddingProvider()
+            logger.info("Using embedding provider: %s", provider.name)
+            return provider
+        except Exception:
+            logger.warning("OpenAI embeddings requested but failed", exc_info=True)
+            return NullEmbeddingProvider()
+
+    # Auto-detect: try local first (no API cost)
     try:
         provider = LocalEmbeddingProvider()
         logger.info("Using local embedding provider: %s", provider.name)

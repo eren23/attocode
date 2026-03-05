@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import logging
 import os
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
@@ -52,6 +52,8 @@ class FeatureConfig:
     enable_work_log: bool = True
     enable_pending_plan: bool = True
     enable_tool_recommendation: bool = True
+    enable_thread_manager: bool = True
+    enable_semantic_search_reindex: bool = True  # Auto-reindex on file change
     enable_diverse_serialization: bool = False  # Off by default
 
     # Tuning
@@ -546,6 +548,38 @@ async def initialize_features(
         except Exception:
             logger.debug("feature_init_failed", extra={"feature": "semantic_search"}, exc_info=True)
             results["semantic_search"] = False
+
+    # 32. Thread manager
+    if cfg.enable_thread_manager and not getattr(ctx, "thread_manager", None):
+        try:
+            from attocode.integrations.utilities.thread_manager import ThreadManager
+            sid = getattr(ctx, "session_id", "") or ""
+            ctx.thread_manager = ThreadManager(session_id=sid)
+            results["thread_manager"] = True
+        except Exception:
+            logger.warning("feature_init_failed", extra={"feature": "thread_manager"}, exc_info=True)
+            results["thread_manager"] = False
+
+    # 33. Background semantic search reindex (stale files on startup)
+    sem_search = getattr(ctx, "_semantic_search", None)
+    if cfg.enable_semantic_search_reindex and sem_search and getattr(sem_search, "is_available", False):
+        try:
+            import threading
+
+            def _bg_reindex() -> None:
+                try:
+                    count = sem_search.reindex_stale_files()
+                    if count > 0:
+                        logger.info("Background reindex: %d chunks refreshed", count)
+                except Exception:
+                    logger.debug("background_reindex_failed", exc_info=True)
+
+            t = threading.Thread(target=_bg_reindex, daemon=True, name="semantic-reindex")
+            t.start()
+            results["semantic_reindex_bg"] = True
+        except Exception:
+            logger.debug("feature_init_failed", extra={"feature": "semantic_reindex_bg"}, exc_info=True)
+            results["semantic_reindex_bg"] = False
 
     # Wire cross-references between features
     wire_cross_references(ctx, results)

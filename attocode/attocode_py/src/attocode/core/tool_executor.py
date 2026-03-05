@@ -13,8 +13,10 @@ Features:
 from __future__ import annotations
 
 import asyncio
+import os
 import time
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Any
 
 from attocode.types.events import EventType
@@ -205,6 +207,29 @@ def _notify_file_changed(ctx: AgentContext, path: str) -> None:
             ast_svc.notify_file_changed(path)
         except Exception:
             pass
+
+    # Notify semantic search to re-index the changed file.
+    # Prefer the manager's bounded queue to avoid spawning unbounded threads.
+    sem_search = getattr(ctx, "_semantic_search", None)
+    if sem_search:
+        try:
+            if hasattr(sem_search, "queue_reindex"):
+                sem_search.queue_reindex(path)
+            else:
+                sem_search.reindex_file(path)
+        except Exception:
+            pass
+
+    # Write to code_intel notification queue (.attocode/cache/file_changes)
+    try:
+        working_dir = getattr(ctx, "working_dir", None) or os.getcwd()
+        queue_path = Path(working_dir) / ".attocode" / "cache" / "file_changes"
+        if queue_path.parent.exists():
+            rel = os.path.relpath(path, working_dir)
+            with open(queue_path, "a", encoding="utf-8") as fh:
+                fh.write(rel + "\n")
+    except Exception:
+        pass
 
 
 def _cap_result(content: str, max_chars: int = MAX_RESULT_CHARS) -> tuple[str, bool]:

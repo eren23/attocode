@@ -35,6 +35,8 @@ class SwarmEventMessage(Message):
 class SwarmBridge:
     """Bridges orchestrator ``EventBus`` events to Textual ``Message`` objects.
 
+    Legacy: kept for potential attoswarm direct integration.
+
     Usage::
 
         bridge = SwarmBridge(app)

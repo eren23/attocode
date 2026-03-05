@@ -70,6 +70,7 @@ class OrchestratorInternals:
 
     # Mutable orchestrator state
     cancelled: bool = False
+    paused: bool = False
     current_phase: SwarmPhase = SwarmPhase.IDLE
     total_tokens: int = 0
     total_cost: float = 0.0
@@ -127,6 +128,8 @@ class SwarmOrchestrator:
         self._spawn_agent_fn = spawn_agent_fn
         self._blackboard = blackboard
         self._listeners: list[SwarmEventListener] = []
+        self._paused: bool = False
+        self._cancelled: bool = False
 
         # These are created lazily or injected
         self._task_queue: Any = None
@@ -141,6 +144,7 @@ class SwarmOrchestrator:
         self._state_store: Any = None
         self._event_bridge: Any = None
         self._message_bus: Any = None
+        self._active_ctx: OrchestratorInternals | None = None  # Set during execute()
 
     def _initialize_subsystems(self) -> None:
         """Create all subsystems. Called before execute()."""
@@ -263,6 +267,7 @@ class SwarmOrchestrator:
         self._initialize_subsystems()
 
         # Reset mutable state
+        self._paused = False
         self._cancelled = False
         self._current_phase = SwarmPhase.IDLE
         self._total_tokens = 0
@@ -283,6 +288,7 @@ class SwarmOrchestrator:
 
         ctx = self._get_internals()
         ctx.original_prompt = task
+        self._active_ctx = ctx
         recovery_state = SwarmRecoveryState(
             adaptive_stagger_ms=self._config.dispatch_stagger_ms,
         )
@@ -469,6 +475,61 @@ class SwarmOrchestrator:
         self._current_phase = SwarmPhase.FAILED
         if self._worker_pool:
             await self._worker_pool.cancel_all()
+
+    async def pause(self) -> None:
+        """Pause dispatching new tasks. Running tasks continue."""
+        self._paused = True
+        if self._active_ctx:
+            self._active_ctx.paused = True
+        self._emit(swarm_event("swarm.paused", message="Dispatch paused by user"))
+
+    async def resume(self) -> None:
+        """Resume dispatching after a pause."""
+        self._paused = False
+        if self._active_ctx:
+            self._active_ctx.paused = False
+        self._emit(swarm_event("swarm.resumed", message="Dispatch resumed"))
+
+    @property
+    def paused(self) -> bool:
+        """Whether dispatching is paused."""
+        return self._paused
+
+    async def skip_task(self, task_id: str) -> bool:
+        """Skip a pending/ready task and cascade-skip dependents. Returns True if skipped."""
+        if not self._task_queue:
+            return False
+        task = self._task_queue.get_task(task_id)
+        if not task or task.status not in (SwarmTaskStatus.PENDING, SwarmTaskStatus.READY):
+            return False
+        task.status = SwarmTaskStatus.SKIPPED
+        self._emit(swarm_event(
+            "swarm.task.skipped",
+            task_id=task_id,
+            description=task.description,
+            reason="skipped_by_user",
+        ))
+        # Cascade-skip dependents so they don't hang waiting
+        self._task_queue.trigger_cascade_skip(task_id)
+        return True
+
+    async def retry_task(self, task_id: str) -> bool:
+        """Re-queue a failed task for retry. Returns True if re-queued."""
+        if not self._task_queue:
+            return False
+        task = self._task_queue.get_task(task_id)
+        if not task or task.status != SwarmTaskStatus.FAILED:
+            return False
+        task.attempts = max(0, task.attempts - 1)
+        task.status = SwarmTaskStatus.READY
+        task.failure_mode = None
+        self._emit(swarm_event(
+            "swarm.task.retry_queued",
+            task_id=task_id,
+            description=task.description,
+            message="Task re-queued by user",
+        ))
+        return True
 
     def get_budget_pool(self) -> Any:
         """Expose budget pool for parent agent."""

@@ -177,7 +177,7 @@ Delegate sub-tasks to independent agent instances that run with their own budget
 
 ```
 /spawn "Analyze the test coverage in src/auth/"
-/spawn researcher "Find all API endpoint handlers"
+/spawn --model gpt-5-mini "Find all API endpoint handlers"
 ```
 
 ### How Subagents Work

@@ -46,6 +46,14 @@ def _get_ctx(agent: Any) -> Any:
     return getattr(agent, "context", None) if agent else None
 
 
+def _feature_unavailable(name: str, enable_hint: str = "") -> CommandResult:
+    """Return a consistent 'feature not available' message."""
+    msg = f"{name} is not available."
+    if enable_hint:
+        msg += f" Enable with: {enable_hint}"
+    return CommandResult(output=msg)
+
+
 async def _get_or_init_session_store(agent: Any) -> Any:
     """Get session store from context/agent or lazily initialize via agent."""
     ctx = _get_ctx(agent)
@@ -185,7 +193,7 @@ async def handle_command(
         return _agents_command(agent, arg)
 
     if cmd == "/spawn":
-        return _spawn_command(agent, arg)
+        return await _spawn_command(agent, arg)
 
     if cmd == "/find":
         return _find_command(agent, arg)
@@ -316,14 +324,14 @@ def _help_text() -> str:
         "\n"
         "Mode:\n"
         "  /mode [name]      Show or switch mode (build/plan/review/debug)\n"
-        "  /plan             Show the current plan\n"
+        "  /plan [desc]      Enter plan mode (or show current plan)\n"
         "  /show-plan        Show detailed plan with pending diffs\n"
         "  /approve [n|all]  Approve proposed change(s)\n"
         "  /reject [n|all]   Reject proposed change(s)\n"
         "\n"
         "Agent:\n"
         "  /agents [subcmd]  List or manage agents (list/info/new/edit/reload)\n"
-        "  /spawn <task>     Spawn a subagent for a task\n"
+        "  /spawn [--model <model>] <task>\n"
         "  /find <query>     Search agents by keyword\n"
         "  /suggest <task>   Suggest best agent for a task\n"
         "  /auto <task>      Auto-select and confirm agent for a task\n"
@@ -342,6 +350,7 @@ def _help_text() -> str:
         "  /mcp [subcmd]     MCP management (list/tools/connect/disconnect/search/stats)\n"
         "  /skills [subcmd]  Skill management (list/info/new/edit/enable/disable/reload)\n"
         "  /undo [path]      Undo last file change (or specific file)\n"
+        "  /diff             Show recent file changes\n"
         "\n"
         "Context:\n"
         "  /context [sub]    Show context info (breakdown for token details)\n"
@@ -787,11 +796,42 @@ def _plan_command(agent: Any, arg: str) -> CommandResult:
     ctx = _get_ctx(agent)
     mode_mgr = getattr(ctx, "mode_manager", None) if ctx else None
 
-    if mode_mgr:
-        summary = mode_mgr.format_changes_summary()
-        return CommandResult(output=f"Mode: {mode_mgr.mode.value}\n{summary}")
+    if not mode_mgr:
+        return _feature_unavailable("Plan mode", "/config set mode_manager true")
 
-    return CommandResult(output="No plan mode manager available.")
+    if arg:
+        # /plan <description> — enter plan mode and set goal
+        mode_mgr.switch_mode("plan")
+        if ctx and hasattr(ctx, "goal"):
+            ctx.goal = arg
+        return CommandResult(
+            output=f"Entered plan mode. Goal: {arg}\n"
+            "Use /show-plan to see proposed changes, /approve to apply them."
+        )
+
+    # No arg — show current plan state
+    if mode_mgr.mode.value == "plan":
+        summary = mode_mgr.format_changes_summary()
+        return CommandResult(output=f"Mode: plan\n{summary}")
+
+    # Check interactive planner
+    planner = getattr(ctx, "interactive_planner", None) if ctx else None
+    if planner and hasattr(planner, "current_plan") and planner.current_plan:
+        plan = planner.current_plan
+        lines = [f"Interactive plan: {getattr(plan, 'title', 'untitled')}"]
+        steps = getattr(plan, "steps", [])
+        for i, step in enumerate(steps):
+            status = getattr(step, "status", "pending")
+            desc = getattr(step, "description", str(step))
+            lines.append(f"  [{i}] [{status}] {desc}")
+        return CommandResult(output="\n".join(lines))
+
+    # Show current mode + summary
+    summary = mode_mgr.format_changes_summary()
+    return CommandResult(
+        output=f"Mode: {mode_mgr.mode.value}\n{summary}\n"
+        "Tip: /plan <description> enters plan mode with a goal."
+    )
 
 
 def _show_plan_command(agent: Any) -> CommandResult:
@@ -800,7 +840,7 @@ def _show_plan_command(agent: Any) -> CommandResult:
     mode_mgr = getattr(ctx, "mode_manager", None) if ctx else None
 
     if not mode_mgr:
-        return CommandResult(output="No plan mode manager available.")
+        return _feature_unavailable("Plan mode", "/config set mode_manager true")
 
     lines = [f"Mode: {mode_mgr.mode.value}"]
 
@@ -830,7 +870,15 @@ def _approve_command(agent: Any, arg: str) -> CommandResult:
     mode_mgr = getattr(ctx, "mode_manager", None) if ctx else None
 
     if not mode_mgr:
-        return CommandResult(output="Mode system not available.")
+        # Fallback: try pending plan manager
+        pending = getattr(ctx, "_pending_plan", None) if ctx else None
+        if pending and hasattr(pending, "approve"):
+            try:
+                result = pending.approve(arg or "all")
+                return CommandResult(output=result)
+            except Exception as e:
+                return CommandResult(output=f"Approve failed: {e}")
+        return _feature_unavailable("Mode system")
 
     if arg == "all":
         return CommandResult(output=mode_mgr.approve_all_changes())
@@ -845,8 +893,11 @@ def _approve_command(agent: Any, arg: str) -> CommandResult:
     # Approve the first pending change
     pending = mode_mgr.get_pending_changes()
     if pending:
-        idx = mode_mgr.proposed_changes.index(pending[0])
-        return CommandResult(output=mode_mgr.approve_change(idx))
+        try:
+            idx = mode_mgr.proposed_changes.index(pending[0])
+            return CommandResult(output=mode_mgr.approve_change(idx))
+        except (ValueError, IndexError):
+            return CommandResult(output="Could not find pending change to approve.")
     return CommandResult(output="No pending changes to approve.")
 
 
@@ -855,7 +906,14 @@ def _reject_command(agent: Any, arg: str) -> CommandResult:
     mode_mgr = getattr(ctx, "mode_manager", None) if ctx else None
 
     if not mode_mgr:
-        return CommandResult(output="Mode system not available.")
+        pending = getattr(ctx, "_pending_plan", None) if ctx else None
+        if pending and hasattr(pending, "reject"):
+            try:
+                result = pending.reject(arg or "all")
+                return CommandResult(output=result)
+            except Exception as e:
+                return CommandResult(output=f"Reject failed: {e}")
+        return _feature_unavailable("Mode system")
 
     if arg == "all":
         return CommandResult(output=mode_mgr.reject_all_changes())
@@ -869,8 +927,11 @@ def _reject_command(agent: Any, arg: str) -> CommandResult:
 
     pending = mode_mgr.get_pending_changes()
     if pending:
-        idx = mode_mgr.proposed_changes.index(pending[0])
-        return CommandResult(output=mode_mgr.reject_change(idx))
+        try:
+            idx = mode_mgr.proposed_changes.index(pending[0])
+            return CommandResult(output=mode_mgr.reject_change(idx))
+        except (ValueError, IndexError):
+            return CommandResult(output="Could not find pending change to reject.")
     return CommandResult(output="No pending changes to reject.")
 
 
@@ -1009,13 +1070,47 @@ def _agents_reload_command(agent: Any) -> CommandResult:
         return CommandResult(output=f"Error reloading agents: {e}")
 
 
-def _spawn_command(agent: Any, task: str) -> CommandResult:
+async def _spawn_command(agent: Any, task: str) -> CommandResult:
     if not task:
-        return CommandResult(output="Usage: /spawn <task description>")
-    return CommandResult(
-        output="Subagent spawning from commands not yet supported.\n"
-        "Use the spawn_agent tool within your prompt instead."
-    )
+        return CommandResult(output="Usage: /spawn [--model <model>] <task description>")
+
+    # Parse optional --model flag
+    model: str | None = None
+    if task.startswith("--model "):
+        parts = task.split(maxsplit=2)
+        if len(parts) >= 3:
+            model = parts[1]
+            task = parts[2]
+        else:
+            return CommandResult(output="Usage: /spawn --model <model> <task description>")
+
+    if not agent or not hasattr(agent, "spawn_agent"):
+        return _feature_unavailable("Subagent spawning")
+
+    try:
+        import time as _time
+        agent_name = f"command_spawn_{int(_time.time() * 1000)}"
+        result = await agent.spawn_agent(
+            agent_name=agent_name,
+            task=task,
+            model=model,
+        )
+        success = result.get("success", False)
+        response = result.get("response", "")
+        tokens = result.get("tokens_used", 0)
+
+        if success:
+            lines = [
+                f"Subagent completed ({tokens:,} tokens):",
+                response[:2000] if len(response) > 2000 else response,
+            ]
+        else:
+            error = result.get("error", "")
+            detail = error or response or "No error details returned."
+            lines = [f"Subagent failed: {str(detail)[:500]}"]
+        return CommandResult(output="\n".join(lines))
+    except Exception as e:
+        return CommandResult(output=f"Spawn error: {e}")
 
 
 def _find_command(agent: Any, query: str) -> CommandResult:
@@ -1150,7 +1245,7 @@ def _threads_command(agent: Any) -> CommandResult:
     mgr = getattr(ctx, "thread_manager", None) if ctx else None
 
     if not mgr:
-        return CommandResult(output="Thread management not available. Use /fork to create the first thread.")
+        return _feature_unavailable("Thread management", "/fork to create the first thread")
 
     try:
         threads = mgr.list_threads()
@@ -1181,7 +1276,7 @@ def _switch_command(agent: Any, thread_id: str) -> CommandResult:
     mgr = getattr(ctx, "thread_manager", None) if ctx else None
 
     if not mgr:
-        return CommandResult(output="Thread management not available.")
+        return _feature_unavailable("Thread management")
 
     try:
         info = mgr.switch_thread(thread_id)
@@ -1256,13 +1351,28 @@ async def _restore_command(agent: Any, checkpoint_id: str) -> CommandResult:
 
 async def _goals_command(agent: Any, arg: str) -> CommandResult:
     ctx = _get_ctx(agent)
-    store = getattr(ctx, "session_store", None) if ctx else None
-    sid = getattr(ctx, "session_id", None) if ctx else None
+    if not ctx:
+        return CommandResult(output="Goals require an active agent context.")
+    store = getattr(ctx, "session_store", None)
+    sid = getattr(ctx, "session_id", None)
 
-    if not store or not sid:
-        return CommandResult(output="Session persistence not configured (goals require a session store).")
+    # In-memory fallback goals when no session store
+    _mem_goals: list[dict[str, Any]] = getattr(ctx, "_memory_goals", [])
+    use_memory = not store or not sid
+
+    if use_memory and not hasattr(ctx, "_memory_goals"):
+        ctx._memory_goals = []  # type: ignore[attr-defined]
+        _mem_goals = ctx._memory_goals  # type: ignore[attr-defined]
 
     if not arg or arg == "list":
+        if use_memory:
+            active = [g for g in _mem_goals if g.get("status") == "active"]
+            if not active:
+                return CommandResult(output="No active goals. Use /goals add <description> to create one.")
+            lines = ["Active goals (in-memory):"]
+            for g in active:
+                lines.append(f"  [{g['id']}] {g['description']}")
+            return CommandResult(output="\n".join(lines))
         try:
             goals = await store.list_goals(sid, status="active")
             if not goals:
@@ -1282,6 +1392,10 @@ async def _goals_command(agent: Any, arg: str) -> CommandResult:
     if subcmd == "add":
         if not subarg:
             return CommandResult(output="Usage: /goals add <description>")
+        if use_memory:
+            gid = len(_mem_goals) + 1
+            _mem_goals.append({"id": gid, "description": subarg, "status": "active"})
+            return CommandResult(output=f"Goal #{gid} created (in-memory): {subarg}")
         try:
             goal_id = await store.create_goal(sid, subarg)
             return CommandResult(output=f"Goal #{goal_id} created: {subarg}")
@@ -1293,14 +1407,29 @@ async def _goals_command(agent: Any, arg: str) -> CommandResult:
             return CommandResult(output="Usage: /goals done <id>")
         try:
             goal_id = int(subarg)
-            await store.complete_goal(goal_id)
-            return CommandResult(output=f"Goal #{goal_id} marked complete.")
         except ValueError:
             return CommandResult(output="Usage: /goals done <id> (id must be a number)")
+        if use_memory:
+            for g in _mem_goals:
+                if g["id"] == goal_id:
+                    g["status"] = "done"
+                    return CommandResult(output=f"Goal #{goal_id} marked complete.")
+            return CommandResult(output=f"Goal #{goal_id} not found.")
+        try:
+            await store.complete_goal(goal_id)
+            return CommandResult(output=f"Goal #{goal_id} marked complete.")
         except Exception as e:
             return CommandResult(output=f"Error: {e}")
 
     if subcmd == "all":
+        if use_memory:
+            if not _mem_goals:
+                return CommandResult(output="No goals found.")
+            lines = ["All goals (in-memory):"]
+            for g in _mem_goals:
+                status_mark = "+" if g["status"] == "active" else "x"
+                lines.append(f"  [{status_mark}] #{g['id']} {g['description']}")
+            return CommandResult(output="\n".join(lines))
         try:
             goals = await store.list_goals(sid)
             if not goals:
@@ -2013,7 +2142,7 @@ def _undo_command(agent: Any, arg: str) -> CommandResult:
     tracker = getattr(ctx, "file_change_tracker", None) if ctx else None
 
     if not tracker:
-        return CommandResult(output="Undo system not available (no file change tracker).")
+        return _feature_unavailable("Undo system", "/config set file_tracking true")
 
     if not arg:
         result = tracker.undo_last_change()
@@ -2037,7 +2166,7 @@ def _diff_command(agent: Any, arg: str) -> CommandResult:
     tracker = getattr(ctx, "file_change_tracker", None) if ctx else None
 
     if not tracker:
-        return CommandResult(output="File change tracking not available.")
+        return _feature_unavailable("File change tracking", "/config set file_tracking true")
 
     history = tracker.format_history()
     if not history or history == "No changes":

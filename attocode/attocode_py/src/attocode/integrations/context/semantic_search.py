@@ -9,6 +9,8 @@ from __future__ import annotations
 
 import logging
 import os
+import queue
+import threading
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -42,6 +44,10 @@ class SemanticSearchManager:
     _store: Any = field(default=None, repr=False)
     _indexed: bool = field(default=False, repr=False)
     _keyword_fallback: bool = field(default=False, repr=False)
+    _reindex_queue: queue.Queue[str] = field(default_factory=queue.Queue, repr=False)
+    _reindex_pending: set[str] = field(default_factory=set, repr=False)
+    _reindex_lock: threading.Lock = field(default_factory=threading.Lock, repr=False)
+    _reindex_worker_started: bool = field(default=False, repr=False)
 
     def __post_init__(self) -> None:
         from attocode.integrations.context.embeddings import (
@@ -59,6 +65,49 @@ class SemanticSearchManager:
                 db_path=os.path.join(db_dir, "embeddings.db"),
                 dimension=self._provider.dimension(),
             )
+
+    def _start_reindex_worker(self) -> None:
+        """Start the background reindex worker once."""
+        with self._reindex_lock:
+            if self._reindex_worker_started:
+                return
+            self._reindex_worker_started = True
+
+        worker = threading.Thread(
+            target=self._reindex_worker_loop,
+            daemon=True,
+            name="semantic-reindex-worker",
+        )
+        worker.start()
+
+    def _reindex_worker_loop(self) -> None:
+        """Background worker for bounded, queued file reindexing."""
+        while True:
+            rel_path = self._reindex_queue.get()
+            try:
+                self.reindex_file(rel_path)
+            except Exception:
+                logger.debug("queue_reindex_failed: %s", rel_path, exc_info=True)
+            finally:
+                with self._reindex_lock:
+                    self._reindex_pending.discard(rel_path)
+                self._reindex_queue.task_done()
+
+    def queue_reindex(self, file_path: str) -> None:
+        """Queue a file for background reindex with de-duplication."""
+        if self._keyword_fallback or not self._store:
+            return
+        try:
+            rel = os.path.relpath(file_path, self.root_dir)
+        except ValueError:
+            rel = file_path
+
+        self._start_reindex_worker()
+        with self._reindex_lock:
+            if rel in self._reindex_pending:
+                return
+            self._reindex_pending.add(rel)
+        self._reindex_queue.put(rel)
 
     @property
     def is_available(self) -> bool:
@@ -82,7 +131,6 @@ class SemanticSearchManager:
             logger.info("Semantic search: no provider, skipping indexing")
             return 0
 
-        from attocode.integrations.context.codebase_ast import parse_file
         from attocode.integrations.context.codebase_context import (
             CodebaseContextManager,
         )
@@ -93,8 +141,6 @@ class SemanticSearchManager:
         if not ctx._files:
             ctx.discover_files()
 
-        chunks: list[tuple[str, str, str, str]] = []  # (id, file_path, chunk_type, text)
-
         # Supported languages: Python, JS, TS always; others when tree-sitter available
         _ts_langs: set[str] = set()
         try:
@@ -104,67 +150,13 @@ class SemanticSearchManager:
             pass
         _supported = {"python", "javascript", "typescript"} | _ts_langs
 
+        chunks: list[tuple[str, str, str, str]] = []
+
         for f in ctx._files:
             if f.language not in _supported:
                 continue
-
-            # File-level summary
-            try:
-                ast = parse_file(f.path)
-            except Exception:
-                continue
-
-            # Build file summary
-            imports = [imp.module for imp in ast.imports[:10]]
-            symbols = ast.get_symbols()[:10]
-            summary_parts = []
-            if ast.docstring:
-                summary_parts.append(ast.docstring[:200])
-            if imports:
-                summary_parts.append(f"imports: {', '.join(imports)}")
-            if symbols:
-                summary_parts.append(f"defines: {', '.join(symbols)}")
-            if summary_parts:
-                chunks.append((
-                    f"file:{f.relative_path}",
-                    f.relative_path,
-                    "file",
-                    " | ".join(summary_parts),
-                ))
-
-            # Function-level chunks
-            for func in ast.functions:
-                text_parts = [f"function {func.name}"]
-                if func.docstring:
-                    text_parts.append(func.docstring[:150])
-                params = ", ".join(p.name for p in func.parameters[:8])
-                if params:
-                    text_parts.append(f"params: {params}")
-                if func.return_type:
-                    text_parts.append(f"returns: {func.return_type}")
-                chunks.append((
-                    f"func:{f.relative_path}:{func.name}",
-                    f.relative_path,
-                    "function",
-                    " | ".join(text_parts),
-                ))
-
-            # Class-level chunks
-            for cls in ast.classes:
-                text_parts = [f"class {cls.name}"]
-                if cls.bases:
-                    text_parts.append(f"extends: {', '.join(cls.bases)}")
-                if cls.docstring:
-                    text_parts.append(cls.docstring[:150])
-                methods = [m.name for m in cls.methods[:8]]
-                if methods:
-                    text_parts.append(f"methods: {', '.join(methods)}")
-                chunks.append((
-                    f"cls:{f.relative_path}:{cls.name}",
-                    f.relative_path,
-                    "class",
-                    " | ".join(text_parts),
-                ))
+            file_chunks = self._chunk_single_file(f.relative_path, f.path)
+            chunks.extend(file_chunks)
 
         if not chunks:
             return 0
@@ -199,6 +191,20 @@ class SemanticSearchManager:
 
         if entries:
             self._store.upsert_batch(entries)
+
+        # Update metadata for indexed files
+        indexed_files: dict[str, int] = {}
+        for e in entries:
+            indexed_files[e.file_path] = indexed_files.get(e.file_path, 0) + 1
+        for f in ctx._files:
+            if f.relative_path in indexed_files:
+                try:
+                    mtime = os.path.getmtime(f.path)
+                except OSError:
+                    mtime = 0.0
+                self._store.set_file_metadata(
+                    f.relative_path, mtime, indexed_files[f.relative_path],
+                )
 
         self._indexed = True
         logger.info("Semantic search: indexed %d chunks from %d files",
@@ -328,6 +334,169 @@ class SemanticSearchManager:
 
         return results[:top_k]
 
+    def _chunk_single_file(
+        self, rel_path: str, abs_path: str,
+    ) -> list[tuple[str, str, str, str]]:
+        """Extract chunks from a single file.
+
+        Returns list of (id, file_path, chunk_type, text) tuples.
+        """
+        from attocode.integrations.context.codebase_ast import parse_file
+
+        try:
+            ast = parse_file(abs_path)
+        except Exception:
+            return []
+
+        chunks: list[tuple[str, str, str, str]] = []
+
+        # File-level summary
+        imports = [imp.module for imp in ast.imports[:10]]
+        symbols = ast.get_symbols()[:10]
+        summary_parts = []
+        if ast.docstring:
+            summary_parts.append(ast.docstring[:200])
+        if imports:
+            summary_parts.append(f"imports: {', '.join(imports)}")
+        if symbols:
+            summary_parts.append(f"defines: {', '.join(symbols)}")
+        if summary_parts:
+            chunks.append((
+                f"file:{rel_path}",
+                rel_path,
+                "file",
+                " | ".join(summary_parts),
+            ))
+
+        # Function-level chunks
+        for func in ast.functions:
+            text_parts = [f"function {func.name}"]
+            if func.docstring:
+                text_parts.append(func.docstring[:150])
+            params = ", ".join(p.name for p in func.parameters[:8])
+            if params:
+                text_parts.append(f"params: {params}")
+            if func.return_type:
+                text_parts.append(f"returns: {func.return_type}")
+            chunks.append((
+                f"func:{rel_path}:{func.name}",
+                rel_path,
+                "function",
+                " | ".join(text_parts),
+            ))
+
+        # Class-level chunks (including method-level)
+        for cls in ast.classes:
+            text_parts = [f"class {cls.name}"]
+            if cls.bases:
+                text_parts.append(f"extends: {', '.join(cls.bases)}")
+            if cls.docstring:
+                text_parts.append(cls.docstring[:150])
+            methods = [m.name for m in cls.methods[:8]]
+            if methods:
+                text_parts.append(f"methods: {', '.join(methods)}")
+            chunks.append((
+                f"cls:{rel_path}:{cls.name}",
+                rel_path,
+                "class",
+                " | ".join(text_parts),
+            ))
+
+            # Method-level chunks for richer search
+            for method in cls.methods:
+                m_parts = [f"method {cls.name}.{method.name}"]
+                if method.docstring:
+                    m_parts.append(method.docstring[:150])
+                m_params = ", ".join(p.name for p in method.parameters[:8])
+                if m_params:
+                    m_parts.append(f"params: {m_params}")
+                if method.return_type:
+                    m_parts.append(f"returns: {method.return_type}")
+                chunks.append((
+                    f"method:{rel_path}:{cls.name}.{method.name}",
+                    rel_path,
+                    "method",
+                    " | ".join(m_parts),
+                ))
+
+        return chunks
+
+    def reindex_file(self, file_path: str) -> int:
+        """Re-index a single file: delete old vectors and re-embed.
+
+        Args:
+            file_path: Absolute or relative path to the file.
+
+        Returns:
+            Number of chunks indexed (0 if skipped).
+        """
+        if self._keyword_fallback or not self._store:
+            return 0
+
+        from attocode.integrations.context.vector_store import VectorEntry
+
+        try:
+            rel = os.path.relpath(file_path, self.root_dir)
+        except ValueError:
+            rel = file_path
+
+        abs_path = os.path.join(self.root_dir, rel) if not os.path.isabs(file_path) else file_path
+
+        if not os.path.isfile(abs_path):
+            # File was deleted — just remove vectors
+            self._store.delete_by_file(rel)
+            self._store.delete_file_metadata(rel)
+            return 0
+
+        # Re-chunk
+        chunks = self._chunk_single_file(rel, abs_path)
+        if not chunks:
+            self._store.delete_by_file(rel)
+            self._store.delete_file_metadata(rel)
+            return 0
+
+        # Embed FIRST (before deleting old vectors) — if embed fails,
+        # we keep existing vectors rather than losing them
+        texts = [c[3] for c in chunks]
+        try:
+            vectors = self._provider.embed(texts)
+        except Exception:
+            logger.warning(
+                "reindex_file embed failed for %s, keeping old vectors",
+                rel, exc_info=True,
+            )
+            return 0
+
+        # Build entries
+        entries = []
+        for (cid, fpath, ctype, text), vec in zip(chunks, vectors):
+            if not vec:
+                continue
+            entries.append(VectorEntry(
+                id=cid,
+                file_path=fpath,
+                chunk_type=ctype,
+                name=cid.split(":")[-1] if ":" in cid else fpath,
+                text=text,
+                vector=vec,
+            ))
+
+        # Now safe to delete old + upsert new
+        self._store.delete_by_file(rel)
+        if entries:
+            self._store.upsert_batch(entries)
+
+        # Update metadata
+        try:
+            mtime = os.path.getmtime(abs_path)
+        except OSError:
+            mtime = 0.0
+        self._store.set_file_metadata(rel, mtime, len(entries))
+
+        logger.debug("reindex_file: %s -> %d chunks", rel, len(entries))
+        self._indexed = True
+        return len(entries)
+
     def invalidate_file(self, file_path: str) -> None:
         """Remove embeddings for a changed file."""
         if self._store:
@@ -336,6 +505,66 @@ class SemanticSearchManager:
             except ValueError:
                 rel = file_path
             self._store.delete_by_file(rel)
+
+    def reindex_stale_files(self, context_manager: Any = None) -> int:
+        """Re-index only files whose mtime has changed since last indexing.
+
+        Designed to be called on agent startup for incremental freshness.
+
+        Returns:
+            Number of chunks re-indexed.
+        """
+        if self._keyword_fallback or not self._store:
+            return 0
+
+        from attocode.integrations.context.codebase_context import (
+            CodebaseContextManager,
+        )
+
+        ctx = context_manager or CodebaseContextManager(root_dir=self.root_dir)
+        ctx._ensure_fresh()
+        if not ctx._files:
+            ctx.discover_files()
+
+        # Build mtime map for all discovered files
+        file_mtimes: dict[str, float] = {}
+        file_paths: dict[str, str] = {}  # rel -> abs
+        for f in ctx._files:
+            try:
+                file_mtimes[f.relative_path] = os.path.getmtime(f.path)
+                file_paths[f.relative_path] = f.path
+            except OSError:
+                continue
+
+        stale = self._store.get_stale_files(file_mtimes)
+
+        # Clean up vectors for files that have been deleted from disk
+        all_indexed = self._store.get_all_indexed_files()
+        current_files = set(file_mtimes.keys())
+        deleted_count = 0
+        for indexed_path in all_indexed:
+            if indexed_path not in current_files:
+                self._store.delete_by_file(indexed_path)
+                self._store.delete_file_metadata(indexed_path)
+                deleted_count += 1
+                logger.debug("Cleaned up vectors for deleted file: %s", indexed_path)
+
+        if not stale and not deleted_count:
+            logger.debug("reindex_stale_files: all files up to date")
+            return 0
+
+        if deleted_count:
+            logger.info("reindex_stale_files: cleaned up %d deleted files", deleted_count)
+
+        logger.info("reindex_stale_files: %d stale files to re-index", len(stale))
+        total_chunks = 0
+        for rel_path in stale:
+            abs_path = file_paths.get(rel_path)
+            if abs_path:
+                total_chunks += self.reindex_file(abs_path)
+
+        self._indexed = True
+        return total_chunks
 
     def close(self) -> None:
         """Close the vector store."""
