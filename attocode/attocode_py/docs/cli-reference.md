@@ -122,7 +122,7 @@ Type `/help` in the TUI for the full list. The most commonly used commands are o
 | `/skills new <name>` | Create a new skill scaffold |
 | `/agents` | List available agents |
 | `/agents info <name>` | Show detailed agent info |
-| `/spawn <task>` | Spawn a subagent for a task |
+| `/spawn [--model <model>] <task>` | Spawn a subagent for a task |
 
 ### MCP (Model Context Protocol)
 

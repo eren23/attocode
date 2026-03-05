@@ -233,14 +233,14 @@ Attocode ships with 3 built-in agents:
 
 ### Spawning Agents
 
-Use `/spawn` to delegate a task to a specific agent:
+Use `/spawn` to delegate a task to a subagent (optionally overriding model):
 
 ```
-/spawn researcher "Find all authentication-related files"
-/spawn reviewer "Review the changes in src/auth/"
+/spawn "Find all authentication-related files"
+/spawn --model gpt-5-mini "Review the changes in src/auth/"
 ```
 
-Or let the agent spawn subagents autonomously via the `spawn_agent` tool.
+For role-specific delegation, use `/auto <task>` for recommendation or tool-level orchestration via `spawn_agent`.
 
 ## Initialization
 

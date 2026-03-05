@@ -47,6 +47,8 @@ Note: this is a single command. If your terminal wraps lines, do not split the p
 uv sync --extra anthropic     # Anthropic SDK (recommended)
 uv sync --extra openai        # OpenAI SDK
 uv sync --extra tree-sitter   # AST parsing for code analysis
+uv sync --extra semantic      # Semantic search embeddings (sentence-transformers)
+uv sync --extra semantic-nomic # Nomic embeddings (requires trust_remote_code)
 ```
 
 <details>

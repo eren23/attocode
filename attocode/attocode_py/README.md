@@ -68,6 +68,8 @@ Note: the command must be entered as one line. Terminal wrapping can visually sp
 uv sync --extra anthropic     # Anthropic SDK (recommended)
 uv sync --extra openai        # OpenAI SDK
 uv sync --extra tree-sitter   # AST parsing for code analysis
+uv sync --extra semantic      # Semantic search embeddings (sentence-transformers)
+uv sync --extra semantic-nomic # Nomic embeddings (requires trust_remote_code)
 uv sync --extra dev           # Development tools (pytest, mypy, ruff)
 uv sync --all-extras          # All of the above
 ```
@@ -87,6 +89,8 @@ pipx install --force .
 # Provider extras
 pip install -e ".[anthropic]"
 pip install -e ".[openai]"
+pip install -e ".[semantic]"
+pip install -e ".[semantic-nomic]"
 ```
 
 </details>
@@ -280,7 +284,7 @@ Track high-level objectives across prompts:
 | `/skills new <name>` | Create a new skill scaffold |
 | `/agents` | List available agents |
 | `/agents info <name>` | Show detailed agent info |
-| `/spawn <task>` | Spawn a subagent for a task |
+| `/spawn [--model <model>] <task>` | Spawn a subagent for a task |
 
 ### MCP (Model Context Protocol)
 

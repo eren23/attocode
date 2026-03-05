@@ -117,6 +117,8 @@ class AgentContext:
     _skill_manager: Any = None  # dict with loader/executor/dependency_graph/skills
     _state_machine: Any = None  # AgentStateMachine instance
     _work_log: Any = None  # WorkLog instance
+    _semantic_search: Any = None  # SemanticSearchManager instance
+    _security_scanner: Any = None  # SecurityScanner instance
 
     def on_event(self, handler: EventHandler) -> None:
         """Register an event handler."""

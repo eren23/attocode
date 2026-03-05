@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "attocode"
-version = "0.1.12"
+version = "0.1.13"
 description = "Production AI coding agent"
 readme = "README.md"
 requires-python = ">=3.12"
@@ -57,6 +57,7 @@ tree-sitter = [
 ]
 watch = ["watchfiles>=1.0"]
 semantic = ["sentence-transformers>=3.0"]
+semantic-nomic = ["sentence-transformers>=3.0", "einops"]
 code-intel = []  # mcp moved to required deps (entry point always registered)
 docs = [
     "mkdocs>=1.6",
@@ -134,7 +135,7 @@ source = ["src/attocode", "src/attoswarm", "src/attocode_core"]
 omit = ["tests/*"]
 
 [tool.bumpversion]
-current_version = "0.1.12"
+current_version = "0.1.13"
 commit = false
 tag = false
 
