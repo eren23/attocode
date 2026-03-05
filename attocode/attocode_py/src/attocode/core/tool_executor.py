@@ -146,6 +146,100 @@ class ToolExecutionStats:
     truncated: int = 0
 
 
+def _derive_allow_pattern(tc: ToolCall, approval: Any) -> str | None:
+    """Build a persisted allow-pattern for "always allow" grants."""
+    explicit = getattr(approval, "allow_pattern", None)
+    if explicit:
+        return explicit
+
+    if tc.name != "bash":
+        return "*"
+
+    command = " ".join(str((tc.arguments or {}).get("command", "")).split()).strip()
+    if not command:
+        return None
+
+    # Never persist broad grants for destructive shell commands.
+    lower = f" {command.lower()} "
+    destructive_markers = (
+        " rm ",
+        "rm -",
+        " sudo ",
+        " chmod ",
+        " chown ",
+        " mkfs",
+        " dd ",
+        " git reset",
+        " git clean",
+        " git checkout .",
+    )
+    if any(marker in lower for marker in destructive_markers):
+        return None
+
+    return f"{command}*"
+
+
+def _check_markup_mismatch(ctx: AgentContext, tc: ToolCall) -> None:
+    """Emit diagnostic if pseudo-tool streamed text diverges from actual tool args."""
+    if tc.name != "bash":
+        return
+    payload = getattr(ctx, "_last_suspicious_markup", None)
+    if not payload:
+        return
+    expected = str(payload.get("command", "")).strip()
+    actual = str((tc.arguments or {}).get("command", "")).strip()
+    if expected and actual and expected != actual:
+        ctx.emit_simple(
+            EventType.TOOL_CALL_MISMATCH,
+            tool=tc.name,
+            iteration=ctx.iteration,
+            metadata={
+                "expected": expected,
+                "actual": actual,
+                "source": "stream_text_vs_structured_tool_call",
+            },
+        )
+    setattr(ctx, "_last_suspicious_markup", None)
+    setattr(ctx, "_tool_markup_buffer", "")
+
+
+def _is_loop_guard_blocked(ctx: AgentContext, tc: ToolCall) -> bool:
+    """Block repeated identical bash calls once doom-loop is already detected."""
+    if tc.name != "bash":
+        return False
+    economics = getattr(ctx, "economics", None)
+    detector = getattr(economics, "loop_detector", None) if economics is not None else None
+    if detector is None:
+        return False
+    try:
+        detection = detector.peek(tc.name, tc.arguments or {})
+    except Exception:
+        return False
+    if not detection.is_loop:
+        return False
+
+    msg = (
+        f"Loop guard blocked repeated command: '{tc.name}' "
+        f"seen {detection.count} times with identical arguments."
+    )
+    ctx.emit_simple(
+        EventType.LOOP_GUARD_ACTIVATED,
+        tool=tc.name,
+        iteration=ctx.iteration,
+        metadata={"tool": tc.name, "count": detection.count, "message": msg},
+    )
+    return True
+
+
+def _is_subagent_failure_output(output: str) -> bool:
+    text = (output or "").lower()
+    return (
+        "subagent failed" in text
+        or "rate limit" in text
+        or "429" in text
+    )
+
+
 async def _check_permission(ctx: AgentContext, tc: ToolCall) -> str | None:
     """Check tool permission via policy engine. Returns error string if denied, None if allowed."""
     if ctx.policy_engine is None:
@@ -164,6 +258,13 @@ async def _check_permission(ctx: AgentContext, tc: ToolCall) -> str | None:
     # PROMPT — need user approval
     if ctx.approval_callback is not None:
         try:
+            ctx.emit_simple(
+                EventType.TOOL_APPROVAL_REQUESTED,
+                tool=tc.name,
+                args=tc.arguments,
+                iteration=ctx.iteration,
+                metadata={"reason": result.reason, "danger_level": str(result.danger_level)},
+            )
             approval = await ctx.approval_callback(
                 tc.name,
                 tc.arguments,
@@ -171,9 +272,40 @@ async def _check_permission(ctx: AgentContext, tc: ToolCall) -> str | None:
                 result.reason,
             )
             if hasattr(approval, "approved") and approval.approved:
+                ctx.emit_simple(
+                    EventType.TOOL_APPROVAL_GRANTED,
+                    tool=tc.name,
+                    args=tc.arguments,
+                    iteration=ctx.iteration,
+                )
                 if getattr(approval, "always_allow", False) and ctx.policy_engine:
-                    ctx.policy_engine.approve_command(tc.name)
+                    pattern = _derive_allow_pattern(tc, approval)
+                    if pattern:
+                        ctx.policy_engine.approve_command(tc.name, pattern=pattern)
+                        ctx.emit_simple(
+                            EventType.PERMISSION_REMEMBERED,
+                            tool=tc.name,
+                            args=tc.arguments,
+                            iteration=ctx.iteration,
+                            metadata={"pattern": pattern},
+                        )
+                        if getattr(ctx, "session_store", None) and getattr(ctx, "session_id", None):
+                            try:
+                                await ctx.session_store.grant_permission(
+                                    ctx.session_id,
+                                    tc.name,
+                                    pattern,
+                                    "allow",
+                                )
+                            except Exception:
+                                pass
                 return None
+            ctx.emit_simple(
+                EventType.TOOL_APPROVAL_DENIED,
+                tool=tc.name,
+                args=tc.arguments,
+                iteration=ctx.iteration,
+            )
             return f"Tool '{tc.name}' was denied by user"
         except Exception:
             return f"Tool '{tc.name}' approval timed out or failed"
@@ -276,6 +408,42 @@ async def execute_single_tool(
             tc.name, tc.arguments, tool.spec.parameters,
         )
 
+    _check_markup_mismatch(ctx, tc)
+
+    if tc.name == "spawn_agent" and getattr(ctx, "_subagent_fallback_mode", False):
+        error_msg = (
+            "Subagent spawning is temporarily disabled after repeated failures. "
+            "Continue with local investigation tools instead."
+        )
+        ctx.emit_simple(
+            EventType.RESILIENCE_FALLBACK,
+            tool=tc.name,
+            iteration=ctx.iteration,
+            metadata={"reason": "subagent_failures", "message": error_msg},
+        )
+        ctx.emit_simple(
+            EventType.TOOL_ERROR,
+            tool=tc.name,
+            error=error_msg,
+            args=tc.arguments,
+            iteration=ctx.iteration,
+        )
+        return ToolResult(call_id=tc.id, error=error_msg), False
+
+    if _is_loop_guard_blocked(ctx, tc):
+        error_msg = (
+            f"Tool '{tc.name}' blocked by loop guard due to repeated identical calls. "
+            "Provide a different command or summarize findings."
+        )
+        ctx.emit_simple(
+            EventType.TOOL_ERROR,
+            tool=tc.name,
+            error=error_msg,
+            args=tc.arguments,
+            iteration=ctx.iteration,
+        )
+        return ToolResult(call_id=tc.id, error=error_msg), False
+
     # Validate required parameters exist
     if tool and tool.spec.parameters:
         required = tool.spec.parameters.get("required", [])
@@ -368,6 +536,26 @@ async def execute_single_tool(
         # Notify code intel of file changes (AST, codebase context, explorer)
         if _track_path and not result.is_error:
             _notify_file_changed(ctx, _track_path)
+
+        if tc.name == "spawn_agent":
+            failures = int(getattr(ctx, "_subagent_failure_count", 0))
+            if result.is_error or _is_subagent_failure_output(result.result or ""):
+                failures += 1
+            else:
+                failures = 0
+            setattr(ctx, "_subagent_failure_count", failures)
+            if failures >= 2:
+                setattr(ctx, "_subagent_fallback_mode", True)
+                ctx.emit_simple(
+                    EventType.RESILIENCE_FALLBACK,
+                    tool=tc.name,
+                    iteration=ctx.iteration,
+                    metadata={
+                        "reason": "subagent_failures",
+                        "count": failures,
+                        "message": "Repeated subagent failures detected; switched to local fallback mode.",
+                    },
+                )
 
         # Cap result size
         result_content = result.result or ""

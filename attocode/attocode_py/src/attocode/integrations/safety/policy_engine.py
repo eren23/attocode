@@ -6,6 +6,8 @@ if they should be allowed, prompted for approval, or blocked.
 
 from __future__ import annotations
 
+import fnmatch
+import json
 import re
 from dataclasses import dataclass, field
 from enum import StrEnum
@@ -91,7 +93,25 @@ class PolicyEngine:
 
     rules: list[PolicyRule] = field(default_factory=lambda: list(DEFAULT_RULES))
     auto_approve_patterns: list[str] = field(default_factory=list)
-    _approved_commands: set[str] = field(default_factory=set, repr=False)
+    _approved_commands: dict[str, set[str]] = field(default_factory=dict, repr=False)
+
+    @staticmethod
+    def _args_signature(tool_name: str, arguments: dict[str, Any] | None = None) -> str:
+        """Build a stable signature used for command-pattern grants."""
+        arguments = arguments or {}
+        if tool_name == "bash":
+            return str(arguments.get("command", "")).strip()
+        try:
+            return json.dumps(arguments, sort_keys=True, default=str)
+        except (TypeError, ValueError):
+            return str(arguments)
+
+    def _is_granted(self, tool_name: str, arguments: dict[str, Any] | None = None) -> bool:
+        patterns = self._approved_commands.get(tool_name)
+        if not patterns:
+            return False
+        sig = self._args_signature(tool_name, arguments)
+        return any(p == "*" or fnmatch.fnmatch(sig, p) for p in patterns)
 
     def evaluate(self, tool_name: str, arguments: dict[str, Any] | None = None) -> PolicyResult:
         """Evaluate a tool call against policies.
@@ -104,12 +124,26 @@ class PolicyEngine:
             PolicyResult with the decision.
         """
         # Check session-approved commands (from "Always Allow")
-        if tool_name in self._approved_commands:
+        if self._is_granted(tool_name, arguments):
             return PolicyResult(
                 decision=PolicyDecision.ALLOW,
                 danger_level=DangerLevel.SAFE,
                 tool_name=tool_name,
             )
+
+        # Bash command-aware safety checks.
+        if tool_name == "bash":
+            from attocode.integrations.safety.bash_policy import CommandRisk, classify_command
+
+            cmd = str((arguments or {}).get("command", ""))
+            classification = classify_command(cmd)
+            if classification.risk == CommandRisk.BLOCK:
+                return PolicyResult(
+                    decision=PolicyDecision.DENY,
+                    danger_level=DangerLevel.CRITICAL,
+                    reason=classification.reason or "Command blocked by bash policy",
+                    tool_name=tool_name,
+                )
 
         # Check auto-approve patterns first
         for pattern in self.auto_approve_patterns:
@@ -126,6 +160,11 @@ class PolicyEngine:
                 return PolicyResult(
                     decision=rule.decision,
                     danger_level=rule.danger_level,
+                    reason=(
+                        classification.reason
+                        if tool_name == "bash" and "classification" in locals()
+                        else ""
+                    ),
                     tool_name=tool_name,
                 )
 
@@ -137,22 +176,25 @@ class PolicyEngine:
             tool_name=tool_name,
         )
 
-    def approve_command(self, command: str) -> None:
+    def approve_command(self, command: str, pattern: str = "*") -> None:
         """Mark a command as pre-approved."""
-        self._approved_commands.add(command)
+        if command not in self._approved_commands:
+            self._approved_commands[command] = set()
+        self._approved_commands[command].add(pattern or "*")
 
-    def is_approved(self, command: str) -> bool:
+    def is_approved(self, command: str, args: dict[str, Any] | None = None) -> bool:
         """Check if a command was previously approved."""
-        return command in self._approved_commands
+        return self._is_granted(command, args)
 
     @property
     def approved_commands(self) -> set[str]:
         """Return the set of approved commands (for persistence)."""
-        return set(self._approved_commands)
+        return set(self._approved_commands.keys())
 
     def load_grants(self, commands: list[str]) -> None:
         """Bulk-load pre-approved commands (e.g. from DB)."""
-        self._approved_commands.update(commands)
+        for cmd in commands:
+            self.approve_command(cmd, "*")
 
     def approve_all(self) -> None:
         """Set all tools to auto-approve."""

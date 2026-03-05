@@ -554,6 +554,9 @@ class AttocodeApp(App):
         if event.mode == "error":
             self.query_one("#message-log", MessageLog).add_error_message(event.text)
             self.notify(event.text, severity="error", timeout=6)
+        elif event.mode == "warning":
+            self.query_one("#message-log", MessageLog).add_system_message(event.text)
+            self.notify(event.text, severity="warning", timeout=6)
         elif event.mode == "info":
             self.query_one("#message-log", MessageLog).add_system_message(event.text)
         self._sync_status_metrics()
@@ -878,6 +881,15 @@ class AttocodeApp(App):
         """Toggle agent internals panel (Ctrl+I)."""
         panel = self.query_one("#agent-internals", AgentInternalsPanel)
         panel.toggle_class("visible")
+
+    def action_toggle_tasks(self) -> None:
+        """Toggle tasks panel visibility."""
+        panel = self.query_one("#tasks-panel", TasksPanel)
+        panel.toggle_class("visible")
+
+    def action_toggle_debug(self) -> None:
+        """Alias debug toggle to internals panel."""
+        self.action_toggle_internals()
 
     def action_toggle_dashboard(self) -> None:
         """Toggle the dashboard screen (Ctrl+D)."""

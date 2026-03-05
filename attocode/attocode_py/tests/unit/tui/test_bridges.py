@@ -88,9 +88,27 @@ class TestApprovalBridge:
         assert result.approved is True
         assert not resolved  # Handler should NOT have been called
 
+    @pytest.mark.asyncio
+    async def test_always_allow_does_not_generalize_to_different_bash_command(self) -> None:
+        bridge = ApprovalBridge()
+        bridge.set_handler(lambda *_: None)
+
+        task = asyncio.create_task(
+            bridge.request_approval("bash", {"command": "python3 -m pytest tests/unit -q"})
+        )
+        await asyncio.sleep(0.01)
+        bridge.resolve(ApprovalResult(approved=True, always_allow=True))
+        result = await task
+        assert result.allow_pattern is not None
+
+        denied = await bridge.request_approval(
+            "bash", {"command": "rm -f tests/foo.py"}, timeout=0.05
+        )
+        assert denied.approved is False
+
     def test_clear_always_allowed(self) -> None:
         bridge = ApprovalBridge()
-        bridge._always_allowed.add("bash:npm test")
+        bridge._always_allowed["bash"] = {"npm test*"}
         bridge.clear_always_allowed()
         assert len(bridge._always_allowed) == 0
 

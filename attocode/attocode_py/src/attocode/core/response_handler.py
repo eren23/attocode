@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import asyncio
+import html
+import re
 import time
 from typing import Any
 
@@ -19,6 +21,51 @@ if __name__ != "__main__":
 MAX_RETRIES = 3
 RETRY_BASE_DELAY = 1.0
 RETRY_MAX_DELAY = 30.0
+_MAX_MARKUP_BUFFER = 4096
+_TOOL_MARKUP_RE = re.compile(
+    r'<parameter\s+name="command">\s*(.*?)\s*(?:</parameter>|</invoke>)',
+    re.IGNORECASE | re.DOTALL,
+)
+
+
+def _track_suspicious_tool_markup(ctx: AgentContext, content: str) -> None:
+    """Capture pseudo-tool XML-like text emitted as normal stream content.
+
+    Some models occasionally stream markup-like text (e.g. <parameter...>)
+    while also returning structured tool calls. We keep this as diagnostic
+    metadata and surface an event so UI/trace can flag possible drift.
+    """
+    if not content or "<parameter" not in content:
+        return
+
+    buf = getattr(ctx, "_tool_markup_buffer", "")
+    buf = (buf + content)[-_MAX_MARKUP_BUFFER:]
+    setattr(ctx, "_tool_markup_buffer", buf)
+    decoded = html.unescape(buf)
+
+    match = _TOOL_MARKUP_RE.search(decoded)
+    if not match:
+        return
+
+    command = " ".join(match.group(1).split()).strip()
+    if not command:
+        return
+
+    prev = getattr(ctx, "_last_suspicious_markup", None) or {}
+    if prev.get("command") == command:
+        return
+
+    payload = {
+        "command": command,
+        "raw": decoded[-600:],
+        "timestamp": time.time(),
+    }
+    setattr(ctx, "_last_suspicious_markup", payload)
+    ctx.emit_simple(
+        EventType.SUSPICIOUS_TOOL_MARKUP,
+        iteration=ctx.iteration,
+        metadata={"command": command, "raw_excerpt": payload["raw"]},
+    )
 
 
 async def call_llm(
@@ -168,6 +215,8 @@ async def call_llm_streaming(
             def _on_chunk(chunk: Any) -> None:
                 from attocode.types.messages import StreamChunkType
                 if chunk.type in (StreamChunkType.TEXT, StreamChunkType.THINKING):
+                    if chunk.type == StreamChunkType.TEXT:
+                        _track_suspicious_tool_markup(ctx, chunk.content or "")
                     ctx.emit_simple(
                         EventType.LLM_STREAM_CHUNK,
                         metadata={

@@ -10,6 +10,7 @@ import pytest
 from attocode.agent.context import AgentContext
 from attocode.core.tool_executor import (
     build_tool_result_messages,
+    execute_single_tool,
     execute_tool_calls,
 )
 from attocode.providers.mock import MockProvider
@@ -145,6 +146,98 @@ class TestExecuteToolCalls:
         # Both should start before either finishes
         assert order.index("a_start") < order.index("a_end")
         assert order.index("b_start") < order.index("b_end")
+
+    @pytest.mark.asyncio
+    async def test_emits_tool_call_mismatch_for_suspicious_markup(self, ctx: AgentContext) -> None:
+        async def bash_tool(args: dict[str, Any]) -> str:
+            return "ok"
+
+        ctx.registry.register(Tool(
+            spec=ToolSpec(
+                name="bash",
+                description="bash",
+                parameters={
+                    "type": "object",
+                    "properties": {"command": {"type": "string"}},
+                    "required": ["command"],
+                },
+            ),
+            execute=bash_tool,
+        ))
+        ctx.policy_engine = None
+        ctx._last_suspicious_markup = {"command": "rm -f dangerous.txt"}
+        events: list[AgentEvent] = []
+        ctx.on_event(events.append)
+
+        tc = ToolCall(id="tc_1", name="bash", arguments={"command": "python -m pytest"})
+        await execute_single_tool(ctx, tc)
+        types = [e.type for e in events]
+        assert EventType.TOOL_CALL_MISMATCH in types
+
+    @pytest.mark.asyncio
+    async def test_loop_guard_blocks_repeated_bash(self, ctx: AgentContext) -> None:
+        async def bash_tool(args: dict[str, Any]) -> str:
+            return "should not run"
+
+        class DummyLoop:
+            threshold = 3
+
+            def peek(self, tool_name: str, arguments: dict[str, Any]):
+                class _R:
+                    is_loop = True
+                    count = 3
+                return _R()
+
+        class DummyEconomics:
+            loop_detector = DummyLoop()
+
+        ctx.registry.register(Tool(
+            spec=ToolSpec(
+                name="bash",
+                description="bash",
+                parameters={
+                    "type": "object",
+                    "properties": {"command": {"type": "string"}},
+                    "required": ["command"],
+                },
+            ),
+            execute=bash_tool,
+        ))
+        ctx.economics = DummyEconomics()
+        ctx.policy_engine = None
+        events: list[AgentEvent] = []
+        ctx.on_event(events.append)
+
+        tc = ToolCall(id="tc_1", name="bash", arguments={"command": "python -m pytest"})
+        result, _ = await execute_single_tool(ctx, tc)
+
+        assert result.is_error
+        assert "loop guard" in (result.error or "").lower()
+        assert EventType.LOOP_GUARD_ACTIVATED in [e.type for e in events]
+
+    @pytest.mark.asyncio
+    async def test_subagent_failover_suppresses_further_spawns(self, ctx: AgentContext) -> None:
+        async def spawn_agent_tool(args: dict[str, Any]) -> str:
+            return "Subagent failed: LLM error 429 rate limit"
+
+        ctx.registry.register(Tool(
+            spec=ToolSpec(name="spawn_agent", description="spawn", parameters={}),
+            execute=spawn_agent_tool,
+        ))
+        ctx.policy_engine = None
+
+        tc1 = ToolCall(id="tc_1", name="spawn_agent", arguments={})
+        tc2 = ToolCall(id="tc_2", name="spawn_agent", arguments={})
+        tc3 = ToolCall(id="tc_3", name="spawn_agent", arguments={})
+
+        r1, _ = await execute_single_tool(ctx, tc1)
+        r2, _ = await execute_single_tool(ctx, tc2)
+        r3, _ = await execute_single_tool(ctx, tc3)
+
+        assert not r1.is_error
+        assert not r2.is_error
+        assert r3.is_error
+        assert "temporarily disabled" in (r3.error or "")
 
 
 class TestBuildToolResultMessages:

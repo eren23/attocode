@@ -12,6 +12,40 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Fix `attoswarm tui` not picking up new TUI widgets when installed via `uv tool install`
 - Enabling code understanding tools of attocode to other AI coders as a skill system
 
+## [0.1.14] - 2026-03-05
+
+### Added
+
+- **Release guard workflow checks** in GitHub Actions:
+  - Tag `vX.Y.Z` must match `project.version` in `pyproject.toml`
+  - Tag `vX.Y.Z` must match `attocode.__version__`
+  - Release aborts if `attocode==X.Y.Z` is already published on PyPI
+- **New slash command reliability coverage** (`tests/unit/test_commands_reliability.py`) to validate routed commands pre/post run, command palette routing, and mode/thread persistence.
+- **Tool-call diagnostics and resilience events**:
+  - Suspicious streamed pseudo-tool markup detection (`tool.markup.suspicious`)
+  - Streamed-vs-executed command mismatch detection (`tool.call.mismatch`)
+  - Loop-guard activation events (`tool.loop_guard.activated`)
+
+### Changed
+
+- Bumped package version from `0.1.13` to `0.1.14`
+- Slash commands now bootstrap a lightweight command context before first prompt, so command features are available earlier.
+- Added `/tasks` and `/debug` command handlers and aligned help/palette key hints with current TUI bindings (`Ctrl+T`, `Ctrl+I`).
+- Subagent spawning now uses `SubagentSpawner` budget/time controls and returns structured error details.
+- Approval "always allow" behavior now uses scoped argument patterns instead of broad command-name grants.
+- TUI now surfaces warning-status events for tool-markup drift and loop-guard activation.
+
+### Fixed
+
+- `Plan mode` and `file tracking` unavailable messages no longer suggest unsupported `/config set ...` toggles.
+- Policy evaluation now applies bash risk classification for explicit deny on blocked commands.
+- Session permission replay no longer restores legacy wildcard bash grants.
+- Repeated failing `spawn_agent` calls now switch to local fallback mode instead of repeatedly retrying broken subagent flows.
+
+### Tests
+
+- Added targeted coverage for policy pattern grants, bash block rules, approval bridge scoped grants, markup diagnostics, loop-guard blocking, and subagent fallback behavior.
+
 ## [0.1.13] - 2026-03-05
 
 ### Added

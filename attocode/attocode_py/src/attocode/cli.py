@@ -422,6 +422,11 @@ def _run_tui(config: Any) -> None:
     builder = builder.with_approval_callback(approval_bridge.request_approval)
 
     agent = builder.build()
+    try:
+        asyncio.run(agent.ensure_command_context())
+    except Exception:
+        if config.debug:
+            click.echo("Warning: command context bootstrap failed.", err=True)
 
     async def _request_budget_extension(
         current_tokens: int,
@@ -540,6 +545,26 @@ def _run_tui(config: Any) -> None:
         elif event.type == EventType.ERROR:
             error_msg = event.error or "unknown error"
             _post_event(StatusUpdate(f"Error: {error_msg}", mode="error"))
+        elif event.type == EventType.SUSPICIOUS_TOOL_MARKUP:
+            cmd = (event.metadata or {}).get("command", "")
+            _post_event(StatusUpdate(
+                f"Suspicious streamed tool markup detected: {cmd[:80]}",
+                mode="warning",
+            ))
+        elif event.type == EventType.TOOL_CALL_MISMATCH:
+            meta = event.metadata or {}
+            expected = meta.get("expected", "")
+            actual = meta.get("actual", "")
+            _post_event(StatusUpdate(
+                "Tool-call mismatch: streamed text and executed arguments diverged.\n"
+                f"  expected: {expected[:80]}\n  actual:   {actual[:80]}",
+                mode="warning",
+            ))
+        elif event.type == EventType.LOOP_GUARD_ACTIVATED:
+            _post_event(StatusUpdate(
+                (event.metadata or {}).get("message", "Loop guard activated."),
+                mode="warning",
+            ))
 
     agent.on_event(_on_agent_event)
 

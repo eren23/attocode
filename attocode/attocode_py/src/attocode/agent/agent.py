@@ -86,6 +86,7 @@ class ProductionAgent:
         self._recording_config = recording_config
         self._recorder: Any = None  # RecordingSessionManager instance
         self._file_change_tracker: Any = None  # Persists across runs for /diff, /undo
+        self._mode_manager: Any = None  # Persists across runs for /mode, /plan
         self._extension_handler: BudgetExtensionHandler | None = None
         self._run_count: int = 0
         self._total_tokens_all_runs: int = 0
@@ -207,6 +208,69 @@ class ProductionAgent:
             logger.warning("session_store_init_failed", exc_info=True)
             self._session_store = None
             return None
+
+    async def ensure_command_context(self) -> AgentContext:
+        """Ensure a lightweight context exists for slash commands before first run."""
+        if self._ctx is not None:
+            return self._ctx
+
+        ctx = AgentContext(
+            provider=self._provider,
+            registry=self._registry,
+            config=self._config,
+            budget=self._budget,
+            working_dir=self._working_dir,
+            system_prompt=self._system_prompt,
+            policy_engine=self._policy_engine,
+            approval_callback=self._approval_callback,
+            economics=self._economics,
+            compaction_manager=self._compaction_manager,
+            recitation_manager=self._recitation_manager,
+            failure_tracker=self._failure_tracker,
+            learning_store=self._learning_store,
+            auto_checkpoint=self._auto_checkpoint,
+            mcp_server_configs=self._mcp_server_configs or [],
+        )
+
+        # Reuse persistent command-related managers when available.
+        if self._mode_manager is not None:
+            ctx.mode_manager = self._mode_manager
+        if self._file_change_tracker is not None:
+            ctx.file_change_tracker = self._file_change_tracker
+        if self._thread_manager is not None:
+            ctx.thread_manager = self._thread_manager
+
+        # Create command-critical managers if missing.
+        if ctx.mode_manager is None:
+            try:
+                from attocode.integrations.utilities.mode_manager import ModeManager
+                ctx.mode_manager = ModeManager()
+            except Exception:
+                logger.debug("mode_manager_init_failed", exc_info=True)
+        if ctx.file_change_tracker is None:
+            try:
+                from attocode.integrations.utilities.undo import FileChangeTracker
+                ctx.file_change_tracker = FileChangeTracker()
+            except Exception:
+                logger.debug("file_change_tracker_init_failed", exc_info=True)
+        if ctx.thread_manager is None:
+            try:
+                from attocode.integrations.utilities.thread_manager import ThreadManager
+                sid = self._session_id or ""
+                ctx.thread_manager = ThreadManager(session_id=sid)
+            except Exception:
+                logger.debug("thread_manager_init_failed", exc_info=True)
+
+        # Persist manager instances for future runs.
+        if ctx.mode_manager is not None:
+            self._mode_manager = ctx.mode_manager
+        if ctx.file_change_tracker is not None:
+            self._file_change_tracker = ctx.file_change_tracker
+        if ctx.thread_manager is not None:
+            self._thread_manager = ctx.thread_manager
+
+        self._ctx = ctx
+        return ctx
 
     def apply_budget_extension(self, additional_tokens: int) -> int:
         """Extend token budget and sync agent/context/economics references.
@@ -365,6 +429,12 @@ class ProductionAgent:
             ctx.thread_manager = self._thread_manager
         if self._trace_collector:
             ctx.trace_collector = self._trace_collector
+        if self._mode_manager:
+            ctx.mode_manager = self._mode_manager
+        if self._file_change_tracker:
+            ctx.file_change_tracker = self._file_change_tracker
+        if self._thread_manager:
+            ctx.thread_manager = self._thread_manager
 
         # Initialize recording if configured
         if self._recording_config is not None:
@@ -440,7 +510,10 @@ class ProductionAgent:
                 perms = await self._session_store.list_permissions(self._session_id)
                 for p in perms:
                     if p.permission_type == "allow":
-                        self._policy_engine.approve_command(p.tool_name)
+                        # Legacy bash wildcard grants are too broad; skip for safety.
+                        if p.tool_name == "bash" and (p.pattern or "*") == "*":
+                            continue
+                        self._policy_engine.approve_command(p.tool_name, pattern=p.pattern or "*")
             except Exception:
                 logger.debug("permission_grants_load_failed", exc_info=True)
 
@@ -460,6 +533,14 @@ class ProductionAgent:
             await initialize_features(ctx, working_dir=self._working_dir)
         except Exception:
             logger.warning("feature_init_failed", exc_info=True)
+
+        # Persist command-critical managers initialized during this run.
+        if getattr(ctx, "mode_manager", None) is not None:
+            self._mode_manager = ctx.mode_manager
+        if getattr(ctx, "file_change_tracker", None) is not None:
+            self._file_change_tracker = ctx.file_change_tracker
+        if getattr(ctx, "thread_manager", None) is not None:
+            self._thread_manager = ctx.thread_manager
 
         # Load skills
         loaded_skills = None
@@ -1049,36 +1130,49 @@ class ProductionAgent:
     ) -> dict[str, Any]:
         """Spawn a subagent with its own budget to handle a delegated task."""
         try:
-            from attocode.integrations.agents.async_subagent import AsyncSubagentSpawner
+            from attocode.agent.builder import AgentBuilder
+            from attocode.core.subagent_spawner import SubagentSpawner
 
-            # Calculate budget allocation
-            allocated_tokens = int(self._budget.max_tokens * budget_fraction)
-            allocated_iterations = max(
-                5, int(self._budget.max_iterations * budget_fraction)
-            )
-            subagent_budget = ExecutionBudget(
-                max_tokens=allocated_tokens,
-                max_iterations=allocated_iterations,
-                enforcement_mode=self._budget.enforcement_mode,
-            )
+            async def _run_subagent(sub_budget: ExecutionBudget, _subagent_id: str) -> AgentResult:
+                builder = (
+                    AgentBuilder()
+                    .with_provider(provider=self._provider)
+                    .with_model(model or self._config.model or "")
+                    .with_working_dir(self._working_dir)
+                    .with_budget(sub_budget)
+                    .with_compaction(False)
+                    .with_spawn_agent(False)
+                )
+                subagent = builder.build()
+                try:
+                    return await subagent.run(task)
+                finally:
+                    await subagent.close()
 
-            spawner = AsyncSubagentSpawner(
-                provider=self._provider,
-                registry=self._registry,
-                working_dir=self._working_dir,
-                budget=subagent_budget,
-                model=model or self._config.model or "",
-                timeout_seconds=timeout_seconds,
-            )
+            parent_used = 0
+            if self._ctx is not None:
+                parent_used = self._ctx.metrics.total_tokens
 
-            spawn_result = await spawner.spawn(agent_name=agent_name, task=task)
+            spawner = SubagentSpawner(
+                parent_budget=self._budget,
+                parent_tokens_used=parent_used,
+                hard_timeout_seconds=timeout_seconds,
+            )
+            spawn_result = await spawner.spawn(
+                _run_subagent,
+                task_description=task,
+                budget_fraction=budget_fraction,
+                timeout=timeout_seconds,
+            )
 
             result: dict[str, Any] = {
-                "success": spawn_result.get("success", False),
-                "response": spawn_result.get("response", ""),
-                "tokens_used": spawn_result.get("tokens_used", 0),
+                "success": spawn_result.success,
+                "response": spawn_result.response,
+                "tokens_used": spawn_result.tokens_used,
                 "agent_name": agent_name,
             }
+            if spawn_result.error:
+                result["error"] = spawn_result.error
 
             # Track in registry
             self._subagent_registry[agent_name] = {
