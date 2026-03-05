@@ -53,9 +53,14 @@ class TestPolicyEngine:
 
     def test_approve_command(self) -> None:
         pe = PolicyEngine()
-        pe.approve_command("npm test")
-        assert pe.is_approved("npm test")
-        assert not pe.is_approved("npm publish")
+        pe.approve_command("bash", pattern="python3 -m pytest*")
+        assert pe.is_approved("bash", {"command": "python3 -m pytest tests/unit -q"})
+        assert not pe.is_approved("bash", {"command": "rm -f foo.txt"})
+
+    def test_bash_block_patterns_are_denied(self) -> None:
+        pe = PolicyEngine()
+        result = pe.evaluate("bash", {"command": "rm -rf /"})
+        assert result.decision == PolicyDecision.DENY
 
     def test_approve_all(self) -> None:
         pe = PolicyEngine()

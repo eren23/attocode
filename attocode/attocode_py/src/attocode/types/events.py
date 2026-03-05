@@ -51,6 +51,9 @@ class EventType(StrEnum):
     TOOL_APPROVAL_DENIED = "tool.approval.denied"
     TOOL_BLOCKED = "tool.blocked"
     TOOL_COERCED = "tool.coerced"
+    TOOL_CALL_MISMATCH = "tool.call.mismatch"
+    SUSPICIOUS_TOOL_MARKUP = "tool.markup.suspicious"
+    LOOP_GUARD_ACTIVATED = "tool.loop_guard.activated"
 
     # --- LLM events ---
     LLM_START = "llm.start"

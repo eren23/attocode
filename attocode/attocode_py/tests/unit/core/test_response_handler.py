@@ -8,7 +8,7 @@ from unittest.mock import AsyncMock
 import pytest
 
 from attocode.agent.context import AgentContext
-from attocode.core.response_handler import call_llm
+from attocode.core.response_handler import _track_suspicious_tool_markup, call_llm
 from attocode.errors import LLMError, ProviderError
 from attocode.providers.mock import MockProvider
 from attocode.tools.registry import ToolRegistry
@@ -192,3 +192,15 @@ class TestCallLLMRetry:
         types = [e.type for e in events]
         assert EventType.LLM_ERROR in types
         assert EventType.LLM_COMPLETE in types
+
+
+class TestStreamingMarkupDiagnostics:
+    def test_suspicious_tool_markup_event(self, ctx: AgentContext) -> None:
+        events: list[AgentEvent] = []
+        ctx.on_event(events.append)
+        _track_suspicious_tool_markup(
+            ctx,
+            '<parameter name="command">python3 -m pytest tests/unit -q</invoke>',
+        )
+        types = [e.type for e in events]
+        assert EventType.SUSPICIOUS_TOOL_MARKUP in types

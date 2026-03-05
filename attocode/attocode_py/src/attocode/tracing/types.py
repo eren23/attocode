@@ -392,6 +392,9 @@ def _build_event_type_mapping() -> dict[str, TraceEventKind]:
         "tool.approval.denied": TraceEventKind.TOOL_APPROVAL,
         "tool.blocked": TraceEventKind.TOOL_ERROR,
         "tool.coerced": TraceEventKind.TOOL_APPROVAL,
+        "tool.call.mismatch": TraceEventKind.TOOL_ERROR,
+        "tool.markup.suspicious": TraceEventKind.TOOL_APPROVAL,
+        "tool.loop_guard.activated": TraceEventKind.BUDGET_WARNING,
         # Budget
         "budget.check": TraceEventKind.BUDGET_CHECK,
         "budget.warning": TraceEventKind.BUDGET_WARNING,

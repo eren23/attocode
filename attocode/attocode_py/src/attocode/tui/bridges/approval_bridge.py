@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import fnmatch
 from typing import Any
 
 from attocode.tui.dialogs.approval import ApprovalResult
@@ -17,8 +18,58 @@ class ApprovalBridge:
 
     def __init__(self) -> None:
         self._pending: asyncio.Future[ApprovalResult] | None = None
-        self._always_allowed: set[str] = set()
+        self._always_allowed: dict[str, set[str]] = {}
         self._on_request: Any = None
+
+    @staticmethod
+    def _args_signature(tool_name: str, args: dict[str, Any]) -> str:
+        if tool_name == "bash":
+            return str(args.get("command", "")).strip()
+        return _first_arg(args)
+
+    @staticmethod
+    def _derive_allow_pattern(
+        tool_name: str,
+        args: dict[str, Any],
+        danger_level: str,
+    ) -> str | None:
+        """Create a scoped allow-pattern for session grants.
+
+        For bash, never create wildcard grants for destructive commands.
+        """
+        if tool_name != "bash":
+            return "*"
+
+        cmd = " ".join(str(args.get("command", "")).split()).strip()
+        if not cmd:
+            return None
+
+        lower = cmd.lower()
+        destructive_markers = (
+            " rm ",
+            "rm -",
+            " sudo ",
+            " chmod ",
+            " chown ",
+            " mkfs",
+            " dd ",
+            " git reset",
+            " git clean",
+            " git checkout .",
+        )
+        wrapped = f" {lower} "
+        if any(marker in wrapped for marker in destructive_markers):
+            return None
+        if danger_level in ("high", "critical"):
+            return None
+        return f"{cmd}*"
+
+    def _is_always_allowed(self, tool_name: str, args: dict[str, Any]) -> bool:
+        patterns = self._always_allowed.get(tool_name)
+        if not patterns:
+            return False
+        sig = self._args_signature(tool_name, args)
+        return any(p == "*" or fnmatch.fnmatch(sig, p) for p in patterns)
 
     def set_handler(self, handler: Any) -> None:
         """Set the handler called when approval is needed.
@@ -41,7 +92,7 @@ class ApprovalBridge:
         Returns ApprovalResult. Raises asyncio.TimeoutError if timeout exceeded.
         """
         # Check always-allowed tools (bare tool name, any args/danger level)
-        if tool_name in self._always_allowed:
+        if self._is_always_allowed(tool_name, args):
             return ApprovalResult(approved=True, always_allow=True)
 
         # Create future for this request
@@ -61,7 +112,15 @@ class ApprovalBridge:
 
         # Record always-allow
         if result.always_allow:
-            self._always_allowed.add(tool_name)
+            pattern = result.allow_pattern or self._derive_allow_pattern(
+                tool_name, args, danger_level,
+            )
+            if pattern:
+                self._always_allowed.setdefault(tool_name, set()).add(pattern)
+                result.allow_pattern = pattern
+            else:
+                # Allow this call only; do not persist a risky wildcard.
+                result.always_allow = False
 
         return result
 
@@ -76,7 +135,7 @@ class ApprovalBridge:
 
     def clear_always_allowed(self) -> None:
         """Clear all always-allowed patterns."""
-        self._always_allowed.clear()
+        self._always_allowed = {}
 
 
 class BudgetBridge:

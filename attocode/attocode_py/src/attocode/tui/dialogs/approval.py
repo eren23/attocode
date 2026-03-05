@@ -20,10 +20,12 @@ class ApprovalResult:
         approved: bool,
         always_allow: bool = False,
         deny_reason: str | None = None,
+        allow_pattern: str | None = None,
     ) -> None:
         self.approved = approved
         self.always_allow = always_allow
         self.deny_reason = deny_reason
+        self.allow_pattern = allow_pattern
 
 
 class ApprovalDialog(ModalScreen[ApprovalResult]):

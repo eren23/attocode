@@ -116,6 +116,13 @@ async def handle_command(
     cmd = parts[0].lower()
     arg = parts[1] if len(parts) > 1 else ""
 
+    # Bootstrap lightweight context so command features work before first prompt.
+    if agent and not getattr(agent, "context", None) and hasattr(agent, "ensure_command_context"):
+        try:
+            await agent.ensure_command_context()
+        except Exception:
+            pass
+
     # --- Core commands ---
     if cmd in ("/help", "/h", "/?"):
         return CommandResult(output=_help_text())
@@ -249,6 +256,12 @@ async def handle_command(
     if cmd == "/audit":
         return await _audit_command(agent)
 
+    if cmd == "/tasks":
+        return _tasks_command(app)
+
+    if cmd == "/debug":
+        return _debug_command(app)
+
     if cmd == "/undo":
         return _undo_command(agent, arg)
 
@@ -363,6 +376,8 @@ def _help_text() -> str:
         "  /trace [subcmd]   Trace inspection (summary/analyze/issues/export)\n"
         "  /grants           Show remembered permissions\n"
         "  /audit            Show recent tool call audit log\n"
+        "  /tasks            Toggle tasks panel\n"
+        "  /debug            Toggle debug panel\n"
         "\n"
         "Capabilities:\n"
         "  /powers [model]   Show capabilities (or model-specific caps)\n"
@@ -797,7 +812,7 @@ def _plan_command(agent: Any, arg: str) -> CommandResult:
     mode_mgr = getattr(ctx, "mode_manager", None) if ctx else None
 
     if not mode_mgr:
-        return _feature_unavailable("Plan mode", "/config set mode_manager true")
+        return _feature_unavailable("Plan mode")
 
     if arg:
         # /plan <description> — enter plan mode and set goal
@@ -840,7 +855,7 @@ def _show_plan_command(agent: Any) -> CommandResult:
     mode_mgr = getattr(ctx, "mode_manager", None) if ctx else None
 
     if not mode_mgr:
-        return _feature_unavailable("Plan mode", "/config set mode_manager true")
+        return _feature_unavailable("Plan mode")
 
     lines = [f"Mode: {mode_mgr.mode.value}"]
 
@@ -2137,12 +2152,44 @@ async def _audit_command(agent: Any) -> CommandResult:
         return CommandResult(output=f"Error: {e}")
 
 
+def _tasks_command(app: Any) -> CommandResult:
+    """Toggle tasks panel visibility in TUI."""
+    if not app:
+        return CommandResult(output="Tasks panel requires TUI mode.")
+    if hasattr(app, "action_toggle_tasks"):
+        try:
+            app.action_toggle_tasks()
+            return CommandResult(output="Tasks panel toggled.")
+        except Exception as e:
+            return CommandResult(output=f"Failed to toggle tasks panel: {e}")
+    return CommandResult(output="Tasks panel is not supported by this app.")
+
+
+def _debug_command(app: Any) -> CommandResult:
+    """Toggle debug/internals panel visibility in TUI."""
+    if not app:
+        return CommandResult(output="Debug panel requires TUI mode.")
+    if hasattr(app, "action_toggle_debug"):
+        try:
+            app.action_toggle_debug()
+            return CommandResult(output="Debug panel toggled.")
+        except Exception as e:
+            return CommandResult(output=f"Failed to toggle debug panel: {e}")
+    if hasattr(app, "action_toggle_internals"):
+        try:
+            app.action_toggle_internals()
+            return CommandResult(output="Debug panel toggled.")
+        except Exception as e:
+            return CommandResult(output=f"Failed to toggle debug panel: {e}")
+    return CommandResult(output="Debug panel is not supported by this app.")
+
+
 def _undo_command(agent: Any, arg: str) -> CommandResult:
     ctx = _get_ctx(agent)
     tracker = getattr(ctx, "file_change_tracker", None) if ctx else None
 
     if not tracker:
-        return _feature_unavailable("Undo system", "/config set file_tracking true")
+        return _feature_unavailable("Undo system")
 
     if not arg:
         result = tracker.undo_last_change()
@@ -2166,7 +2213,7 @@ def _diff_command(agent: Any, arg: str) -> CommandResult:
     tracker = getattr(ctx, "file_change_tracker", None) if ctx else None
 
     if not tracker:
-        return _feature_unavailable("File change tracking", "/config set file_tracking true")
+        return _feature_unavailable("File change tracking")
 
     history = tracker.format_history()
     if not history or history == "No changes":
@@ -2324,9 +2371,8 @@ def _tui_command() -> CommandResult:
         "  Ctrl+L    Clear screen\n"
         "  Ctrl+P    Command palette\n"
         "  Escape    Cancel current operation\n"
-        "  Alt+T     Toggle tool details\n"
-        "  Alt+O     Toggle thinking display\n"
-        "  Alt+D     Toggle debug panel"
+        "  Ctrl+T    Toggle tool details\n"
+        "  Ctrl+I    Toggle debug panel"
     ))
 
 
