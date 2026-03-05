@@ -188,6 +188,7 @@ def _run_single_turn(config: Any, prompt: str) -> None:
                     warning_threshold=config.compaction_warning_threshold,
                     compaction_threshold=config.compaction_threshold,
                 )
+                .with_openrouter_preferences(config.openrouter_preferences)
             )
 
             if config.session_dir:
@@ -236,7 +237,16 @@ def _run_single_turn(config: Any, prompt: str) -> None:
             sys.exit(1)
 
         try:
-            result = await agent.run(prompt)
+            # Detect image paths in the prompt for single-turn mode
+            images: list[str] | None = None
+            if prompt:
+                from attocode.tools.image_utils import extract_image_paths
+                remaining, detected = extract_image_paths(prompt)
+                if detected:
+                    prompt = remaining
+                    images = detected
+
+            result = await agent.run(prompt, images=images)
             if result.response:
                 click.echo(result.response)
             if not result.success and result.error:
@@ -374,6 +384,7 @@ def _run_tui(config: Any) -> None:
             warning_threshold=config.compaction_warning_threshold,
             compaction_threshold=config.compaction_threshold,
         )
+        .with_openrouter_preferences(config.openrouter_preferences)
     )
 
     if config.session_dir:
@@ -568,7 +579,7 @@ def _run_tui(config: Any) -> None:
 
     agent.on_event(_on_agent_event)
 
-    def on_submit(prompt: str) -> None:
+    def on_submit(prompt: str, images: list[str] | None = None) -> None:
         """Called when user submits a prompt in the TUI."""
         nonlocal agent_task
 
@@ -576,7 +587,7 @@ def _run_tui(config: Any) -> None:
             # NOTE: Do not post AgentStarted here — on_prompt_input_submitted
             # in app.py already handles the UI state transition.
             try:
-                result = await agent.run(prompt)
+                result = await agent.run(prompt, images=images)
                 _post_event(AgentCompleted(
                     success=result.success,
                     response=result.response,

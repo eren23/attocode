@@ -373,11 +373,15 @@ class ProductionAgent:
         if self._ctx and self._ctx.economics:
             self._ctx.economics.resume_duration()
 
-    async def run(self, prompt: str) -> AgentResult:
+    async def run(self, prompt: str, *, images: list[str] | None = None) -> AgentResult:
         """Run the agent with the given prompt.
 
         This is the main entry point for agent execution.
         Builds context, initializes messages, and runs the execution loop.
+
+        Args:
+            prompt: The user's text prompt.
+            images: Optional list of image file paths to include inline.
         """
         if self._status == AgentStatus.RUNNING:
             return AgentResult(
@@ -584,7 +588,7 @@ class ProductionAgent:
         # Build messages — carry over previous conversation if this is a subsequent run
         if self._conversation_messages:
             # Subsequent run: carry over previous conversation + new user message
-            from attocode.agent.message_builder import build_system_prompt
+            from attocode.agent.message_builder import build_system_prompt, build_user_message
             sys_prompt = self._system_prompt or build_system_prompt(
                 working_dir=self._working_dir,
                 skills=loaded_skills,
@@ -596,13 +600,14 @@ class ProductionAgent:
                 carried[0] = Message(role=Role.SYSTEM, content=sys_prompt)
             else:
                 carried.insert(0, Message(role=Role.SYSTEM, content=sys_prompt))
-            # Append new user message
-            carried.append(Message(role=Role.USER, content=prompt))
+            # Append new user message (with images if provided)
+            carried.append(build_user_message(prompt, images=images, working_dir=self._working_dir))
             ctx.add_messages(carried)
         else:
             # First run: build fresh initial messages
             messages = build_initial_messages(
                 prompt,
+                images=images,
                 system_prompt=self._system_prompt,
                 working_dir=self._working_dir,
                 skills=loaded_skills,

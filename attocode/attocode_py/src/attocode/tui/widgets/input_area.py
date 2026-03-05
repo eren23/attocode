@@ -20,9 +20,10 @@ class _PromptTextArea(TextArea):
     class Submitted(Message):
         """User pressed Enter to submit."""
 
-        def __init__(self, value: str) -> None:
+        def __init__(self, value: str, images: list[str] | None = None) -> None:
             super().__init__()
             self.value = value
+            self.images = images or []
 
     def _on_key(self, event: Key) -> None:
         if event.key == "shift+enter":
@@ -35,7 +36,9 @@ class _PromptTextArea(TextArea):
             event.stop()
             value = self.text.strip()
             if value:
-                self.post_message(self.Submitted(value))
+                from attocode.tools.image_utils import extract_image_paths
+                remaining, images = extract_image_paths(value)
+                self.post_message(self.Submitted(remaining or value, images or None))
             return
         super()._on_key(event)
 
@@ -79,9 +82,10 @@ class PromptInput(Widget):
     class Submitted(Message):
         """User submitted a prompt."""
 
-        def __init__(self, value: str) -> None:
+        def __init__(self, value: str, images: list[str] | None = None) -> None:
             super().__init__()
             self.value = value
+            self.images = images or []
 
     def __init__(self, **kwargs) -> None:
         super().__init__(**kwargs)
@@ -107,6 +111,7 @@ class PromptInput(Widget):
         """Handle Enter key from the inner TextArea."""
         event.stop()
         value = event.value
+        images = event.images
         if not value or not self._enabled:
             return
         if not self._history or self._history[-1] != value:
@@ -114,7 +119,7 @@ class PromptInput(Widget):
         self._history_index = -1
         ta = self.query_one("#prompt-input", _PromptTextArea)
         ta.clear()
-        self.post_message(self.Submitted(value))
+        self.post_message(self.Submitted(value, images or None))
 
     def set_enabled(self, enabled: bool) -> None:
         """Enable or disable input."""

@@ -3,13 +3,15 @@
 from attocode.tools.base import Tool, ToolParam, ToolSpec
 from attocode.tools.permission import AllowAllPermissions, PermissionChecker, PermissionResult
 from attocode.tools.registry import ToolRegistry
+from attocode.tools.vision import create_vision_tool
 
 __all__ = [
+    "AllowAllPermissions",
+    "PermissionChecker",
+    "PermissionResult",
     "Tool",
     "ToolParam",
     "ToolSpec",
     "ToolRegistry",
-    "PermissionChecker",
-    "PermissionResult",
-    "AllowAllPermissions",
+    "create_vision_tool",
 ]

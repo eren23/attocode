@@ -2,11 +2,15 @@
 
 from __future__ import annotations
 
+import dataclasses
+import logging
 import os
 from typing import Any
 
 from attocode.errors import ConfigurationError
 from attocode.providers.base import LLMProvider
+
+logger = logging.getLogger(__name__)
 
 
 class ProviderRegistry:
@@ -43,6 +47,7 @@ def create_provider(
     *,
     api_key: str | None = None,
     model: str | None = None,
+    openrouter_preferences: dict[str, Any] | None = None,
     **kwargs: Any,
 ) -> LLMProvider:
     """Create a provider by name, or auto-detect from environment."""
@@ -67,7 +72,15 @@ def create_provider(
         from attocode.providers.anthropic import AnthropicProvider
         return AnthropicProvider(**provider_kwargs)
     if name == "openrouter":
-        from attocode.providers.openrouter import OpenRouterProvider
+        from attocode.providers.openrouter import OpenRouterPreferences, OpenRouterProvider
+        if openrouter_preferences:
+            valid_keys = {f.name for f in dataclasses.fields(OpenRouterPreferences)}
+            unknown = set(openrouter_preferences) - valid_keys
+            if unknown:
+                logger.warning("Ignoring unknown OpenRouter preference keys: %s", unknown)
+            filtered = {k: v for k, v in openrouter_preferences.items() if k in valid_keys}
+            if filtered:
+                provider_kwargs["preferences"] = OpenRouterPreferences(**filtered)
         return OpenRouterProvider(**provider_kwargs)
     if name == "openai":
         from attocode.providers.openai import OpenAIProvider

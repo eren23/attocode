@@ -13,9 +13,14 @@ from attocode.providers.openai import OpenAIProvider
 from attocode.types.messages import (
     ChatOptions,
     ChatResponse,
+    ImageContentBlock,
+    ImageSource,
+    ImageSourceType,
     Message,
+    MessageWithStructuredContent,
     Role,
     StopReason,
+    TextContentBlock,
     TokenUsage,
     ToolCall,
     ToolDefinition,
@@ -306,3 +311,60 @@ class TestParseResponse:
         }
         result = provider._parse_response(data, "gpt-4o")
         assert result.content == ""
+
+
+# ---------------------------------------------------------------------------
+# _format_content (image handling)
+# ---------------------------------------------------------------------------
+
+
+class TestFormatContent:
+    def test_plain_string_passthrough(self, provider: OpenAIProvider) -> None:
+        assert provider._format_content("hello") == "hello"
+
+    def test_text_block(self, provider: OpenAIProvider) -> None:
+        blocks = [TextContentBlock(text="hello")]
+        result = provider._format_content(blocks)
+        assert result == [{"type": "text", "text": "hello"}]
+
+    def test_image_block_base64(self, provider: OpenAIProvider) -> None:
+        source = ImageSource(type=ImageSourceType.BASE64, media_type="image/png", data="iVBORw0KGgo=")
+        blocks = [ImageContentBlock(source=source)]
+        result = provider._format_content(blocks)
+        assert len(result) == 1
+        assert result[0]["type"] == "image_url"
+        assert result[0]["image_url"]["url"] == "data:image/png;base64,iVBORw0KGgo="
+
+    def test_image_block_url(self, provider: OpenAIProvider) -> None:
+        source = ImageSource(type=ImageSourceType.URL, media_type="image/jpeg", data="https://example.com/img.jpg")
+        blocks = [ImageContentBlock(source=source)]
+        result = provider._format_content(blocks)
+        assert len(result) == 1
+        assert result[0]["type"] == "image_url"
+        assert result[0]["image_url"]["url"] == "https://example.com/img.jpg"
+
+    def test_mixed_text_and_image(self, provider: OpenAIProvider) -> None:
+        source = ImageSource(type=ImageSourceType.BASE64, media_type="image/jpeg", data="abc123")
+        blocks = [
+            TextContentBlock(text="What is this?"),
+            ImageContentBlock(source=source),
+        ]
+        result = provider._format_content(blocks)
+        assert len(result) == 2
+        assert result[0] == {"type": "text", "text": "What is this?"}
+        assert result[1]["type"] == "image_url"
+
+    def test_structured_content_in_format_messages(self, provider: OpenAIProvider) -> None:
+        source = ImageSource(type=ImageSourceType.BASE64, media_type="image/png", data="data==")
+        msg = MessageWithStructuredContent(
+            role=Role.USER,
+            content=[TextContentBlock(text="Describe"), ImageContentBlock(source=source)],
+        )
+        result = provider._format_messages([msg])
+        assert len(result) == 1
+        assert result[0]["role"] == "user"
+        content = result[0]["content"]
+        assert isinstance(content, list)
+        assert len(content) == 2
+        assert content[0]["type"] == "text"
+        assert content[1]["type"] == "image_url"

@@ -318,6 +318,7 @@ class AttocodeApp(App):
             return
 
         text = event.value
+        images = event.images
 
         # Hide welcome banner on first interaction
         self._hide_welcome_banner()
@@ -329,7 +330,7 @@ class AttocodeApp(App):
             return
 
         log = self.query_one("#message-log", MessageLog)
-        log.add_user_message(text)
+        log.add_user_message(text, images=images or None)
 
         if self._on_submit:
             self._processing = True
@@ -337,7 +338,7 @@ class AttocodeApp(App):
             self.query_one("#input-area", PromptInput).set_enabled(False)
             self.query_one("#status-bar", StatusBar).start_processing()
             self._start_typing_indicator()
-            self._on_submit(text)
+            self._on_submit(text, images or None)
 
     def _handle_slash_command(self, text: str) -> None:
         """Handle a slash command synchronously."""

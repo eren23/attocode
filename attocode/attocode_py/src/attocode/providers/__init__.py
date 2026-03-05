@@ -2,8 +2,8 @@
 
 from attocode.providers.base import (
     BUILTIN_MODELS,
-    CapableProvider,
     KNOWN_PRICING,
+    CapableProvider,
     LLMProvider,
     ModelInfo,
     ModelPricing,
@@ -21,13 +21,16 @@ from attocode.providers.fallback_chain import (
 from attocode.providers.mock import MockProvider
 from attocode.providers.model_cache import (
     clear_cache as clear_model_cache,
+    get_cached_capabilities,
     init_model_cache,
+    is_vision_capable,
 )
+from attocode.providers.openrouter import OpenRouterPreferences
 from attocode.providers.registry import ProviderRegistry, create_provider
 from attocode.providers.resilient_provider import (
-    ResilientProvider,
     ResilienceConfig,
     ResilienceStats,
+    ResilientProvider,
 )
 
 __all__ = [
@@ -39,6 +42,7 @@ __all__ = [
     "MockProvider",
     "ModelInfo",
     "ModelPricing",
+    "OpenRouterPreferences",
     "ProviderCapability",
     "ProviderFallbackChain",
     "ProviderHealth",
@@ -50,7 +54,9 @@ __all__ = [
     "StreamingProvider",
     "clear_model_cache",
     "create_provider",
+    "get_cached_capabilities",
     "get_model_context_window",
     "get_model_pricing",
     "init_model_cache",
+    "is_vision_capable",
 ]

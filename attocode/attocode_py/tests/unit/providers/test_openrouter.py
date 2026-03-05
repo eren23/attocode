@@ -9,13 +9,18 @@ import httpx
 import pytest
 
 from attocode.errors import ProviderError
-from attocode.providers.openrouter import OpenRouterProvider
+from attocode.providers.openrouter import OpenRouterPreferences, OpenRouterProvider
 from attocode.types.messages import (
     ChatOptions,
     ChatResponse,
+    ImageContentBlock,
+    ImageSource,
+    ImageSourceType,
     Message,
+    MessageWithStructuredContent,
     Role,
     StopReason,
+    TextContentBlock,
     TokenUsage,
     ToolCall,
     ToolDefinition,
@@ -221,3 +226,151 @@ class TestParseResponse:
         assert result.usage.input_tokens == 0
         assert result.usage.output_tokens == 0
         assert result.usage.total_tokens == 0
+
+
+# ---------------------------------------------------------------------------
+# _format_content (image handling)
+# ---------------------------------------------------------------------------
+
+
+class TestFormatContent:
+    def test_plain_string_passthrough(self, provider: OpenRouterProvider) -> None:
+        assert provider._format_content("hello") == "hello"
+
+    def test_text_block(self, provider: OpenRouterProvider) -> None:
+        blocks = [TextContentBlock(text="hello")]
+        result = provider._format_content(blocks)
+        assert result == [{"type": "text", "text": "hello"}]
+
+    def test_image_block_base64(self, provider: OpenRouterProvider) -> None:
+        source = ImageSource(type=ImageSourceType.BASE64, media_type="image/png", data="iVBORw0KGgo=")
+        blocks = [ImageContentBlock(source=source)]
+        result = provider._format_content(blocks)
+        assert len(result) == 1
+        assert result[0]["type"] == "image_url"
+        assert result[0]["image_url"]["url"] == "data:image/png;base64,iVBORw0KGgo="
+
+    def test_image_block_url(self, provider: OpenRouterProvider) -> None:
+        source = ImageSource(type=ImageSourceType.URL, media_type="image/jpeg", data="https://example.com/img.jpg")
+        blocks = [ImageContentBlock(source=source)]
+        result = provider._format_content(blocks)
+        assert len(result) == 1
+        assert result[0]["type"] == "image_url"
+        assert result[0]["image_url"]["url"] == "https://example.com/img.jpg"
+
+    def test_mixed_text_and_image(self, provider: OpenRouterProvider) -> None:
+        source = ImageSource(type=ImageSourceType.BASE64, media_type="image/jpeg", data="abc123")
+        blocks = [
+            TextContentBlock(text="Look at this:"),
+            ImageContentBlock(source=source),
+        ]
+        result = provider._format_content(blocks)
+        assert len(result) == 2
+        assert result[0] == {"type": "text", "text": "Look at this:"}
+        assert result[1]["type"] == "image_url"
+
+    def test_structured_content_in_format_messages(self, provider: OpenRouterProvider) -> None:
+        source = ImageSource(type=ImageSourceType.BASE64, media_type="image/png", data="data==")
+        msg = MessageWithStructuredContent(
+            role=Role.USER,
+            content=[TextContentBlock(text="Describe"), ImageContentBlock(source=source)],
+        )
+        result = provider._format_messages([msg])
+        assert len(result) == 1
+        assert result[0]["role"] == "user"
+        content = result[0]["content"]
+        assert isinstance(content, list)
+        assert len(content) == 2
+        assert content[0]["type"] == "text"
+        assert content[1]["type"] == "image_url"
+
+
+# ---------------------------------------------------------------------------
+# OpenRouterPreferences
+# ---------------------------------------------------------------------------
+
+
+class TestOpenRouterPreferences:
+    def test_default_preferences_empty_dict(self) -> None:
+        prefs = OpenRouterPreferences()
+        assert prefs.to_dict() == {}
+
+    def test_order_serialization(self) -> None:
+        prefs = OpenRouterPreferences(order=["anthropic", "openai"])
+        d = prefs.to_dict()
+        assert d == {"order": ["anthropic", "openai"]}
+
+    def test_only_and_ignore(self) -> None:
+        prefs = OpenRouterPreferences(only=["anthropic"], ignore=["openai"])
+        d = prefs.to_dict()
+        assert d["only"] == ["anthropic"]
+        assert d["ignore"] == ["openai"]
+
+    def test_allow_fallbacks_false(self) -> None:
+        prefs = OpenRouterPreferences(allow_fallbacks=False)
+        d = prefs.to_dict()
+        assert d["allow_fallbacks"] is False
+
+    def test_allow_fallbacks_true_omitted(self) -> None:
+        prefs = OpenRouterPreferences(allow_fallbacks=True)
+        assert "allow_fallbacks" not in prefs.to_dict()
+
+    def test_sort_and_quantizations(self) -> None:
+        prefs = OpenRouterPreferences(sort="price", quantizations=["bf16", "fp16"])
+        d = prefs.to_dict()
+        assert d["sort"] == "price"
+        assert d["quantizations"] == ["bf16", "fp16"]
+
+    def test_max_price(self) -> None:
+        prefs = OpenRouterPreferences(max_price={"prompt": 5.0, "completion": 15.0})
+        d = prefs.to_dict()
+        assert d["max_price"] == {"prompt": 5.0, "completion": 15.0}
+
+    def test_data_collection(self) -> None:
+        prefs = OpenRouterPreferences(data_collection="deny")
+        assert prefs.to_dict()["data_collection"] == "deny"
+
+    def test_require_parameters(self) -> None:
+        prefs = OpenRouterPreferences(require_parameters=True)
+        assert prefs.to_dict()["require_parameters"] is True
+
+    def test_full_preferences(self) -> None:
+        prefs = OpenRouterPreferences(
+            order=["anthropic"],
+            allow_fallbacks=False,
+            sort="throughput",
+            data_collection="deny",
+        )
+        d = prefs.to_dict()
+        assert d == {
+            "order": ["anthropic"],
+            "allow_fallbacks": False,
+            "sort": "throughput",
+            "data_collection": "deny",
+        }
+
+
+# ---------------------------------------------------------------------------
+# Preferences injection into request body
+# ---------------------------------------------------------------------------
+
+
+class TestPreferencesInjection:
+    def test_no_preferences_no_provider_key(self, provider: OpenRouterProvider) -> None:
+        body: dict = {"model": "test", "messages": []}
+        provider._inject_preferences(body)
+        assert "provider" not in body
+
+    def test_preferences_injected(self) -> None:
+        prefs = OpenRouterPreferences(order=["anthropic"], sort="price")
+        p = OpenRouterProvider(api_key="or-test-key", preferences=prefs)
+        body: dict = {"model": "test", "messages": []}
+        p._inject_preferences(body)
+        assert body["provider"] == {"order": ["anthropic"], "sort": "price"}
+
+    def test_empty_preferences_not_injected(self) -> None:
+        prefs = OpenRouterPreferences()  # all defaults
+        p = OpenRouterProvider(api_key="or-test-key", preferences=prefs)
+        body: dict = {"model": "test", "messages": []}
+        p._inject_preferences(body)
+        assert "provider" not in body

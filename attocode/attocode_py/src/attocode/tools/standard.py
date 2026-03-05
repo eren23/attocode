@@ -2,12 +2,15 @@
 
 from __future__ import annotations
 
+import logging
 from typing import Any
 
 from attocode.tools.bash import create_bash_tool
 from attocode.tools.file_ops import create_file_tools
 from attocode.tools.registry import ToolRegistry
 from attocode.tools.search import create_search_tools
+
+logger = logging.getLogger(__name__)
 
 
 def create_standard_registry(
@@ -16,6 +19,7 @@ def create_standard_registry(
     bash_timeout: float = 120.0,
     sandbox: Any = None,
     enable_spawn_agent: bool = False,
+    enable_vision: bool = True,
     provider_name: str | None = None,
     api_key: str | None = None,
     model: str | None = None,
@@ -33,5 +37,12 @@ def create_standard_registry(
         registry.register(create_spawn_agent_tool(
             working_dir, provider_name, api_key, model,
         ))
+
+    if enable_vision:
+        try:
+            from attocode.tools.vision import create_vision_tool
+            registry.register(create_vision_tool(provider_name, api_key, model, working_dir))
+        except Exception as exc:
+            logger.warning("Vision tool unavailable: %s", exc)
 
     return registry

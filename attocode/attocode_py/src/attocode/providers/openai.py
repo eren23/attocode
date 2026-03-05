@@ -10,6 +10,12 @@ from typing import Any
 import httpx
 
 from attocode.errors import ProviderError
+from attocode.providers.openai_compat import (
+    describe_request_error,
+    format_openai_content,
+    format_openai_messages,
+    format_openai_tool,
+)
 from attocode.types.messages import (
     ChatOptions,
     ChatResponse,
@@ -25,21 +31,6 @@ from attocode.types.messages import (
 
 DEFAULT_API_URL = "https://api.openai.com/v1/chat/completions"
 DEFAULT_MODEL = "gpt-4o"
-
-
-def _describe_request_error(e: httpx.RequestError) -> str:
-    """Build a descriptive error message for httpx request errors.
-
-    httpx.ReadTimeout and similar errors often have empty str(e),
-    so we fall back to the exception type name and include the
-    chained cause when available.
-    """
-    msg = str(e)
-    if not msg:
-        msg = type(e).__name__
-    if e.__cause__ and str(e.__cause__):
-        msg = f"{msg} (caused by {type(e.__cause__).__name__}: {e.__cause__})"
-    return msg
 
 
 class OpenAIProvider:
@@ -104,7 +95,7 @@ class OpenAIProvider:
             ) from e
         except httpx.RequestError as e:
             raise ProviderError(
-                f"OpenAI request error: {_describe_request_error(e)}",
+                f"OpenAI request error: {describe_request_error(e)}",
                 provider="openai", retryable=True,
             ) from e
 
@@ -144,7 +135,7 @@ class OpenAIProvider:
             ) from e
         except httpx.RequestError as e:
             raise ProviderError(
-                f"OpenAI request error: {_describe_request_error(e)}",
+                f"OpenAI request error: {describe_request_error(e)}",
                 provider="openai", retryable=True,
             ) from e
         except httpx.StreamError as e:
@@ -153,24 +144,15 @@ class OpenAIProvider:
                 provider="openai", retryable=True,
             ) from e
 
+    def _format_content(self, content: str | list) -> str | list[dict[str, Any]]:
+        """Convert structured content blocks to OpenAI-compatible format."""
+        return format_openai_content(content)
+
     def _format_messages(self, messages: list[Message | MessageWithStructuredContent]) -> list[dict[str, Any]]:
-        result: list[dict[str, Any]] = []
-        for msg in messages:
-            content = msg.content if isinstance(msg.content, str) else str(msg.content)
-            if msg.role == Role.TOOL:
-                result.append({"role": "tool", "content": content, "tool_call_id": msg.tool_call_id or ""})
-            elif msg.role == Role.ASSISTANT and msg.tool_calls:
-                tc_list = [
-                    {"id": tc.id, "type": "function", "function": {"name": tc.name, "arguments": json.dumps(tc.arguments)}}
-                    for tc in msg.tool_calls
-                ]
-                result.append({"role": "assistant", "content": content or None, "tool_calls": tc_list})
-            else:
-                result.append({"role": str(msg.role), "content": content})
-        return result
+        return format_openai_messages(messages, self._format_content)
 
     def _format_tool(self, tool: ToolDefinition) -> dict[str, Any]:
-        return {"type": "function", "function": {"name": tool.name, "description": tool.description, "parameters": tool.parameters}}
+        return format_openai_tool(tool)
 
     def _parse_response(self, data: dict[str, Any], model: str) -> ChatResponse:
         choices = data.get("choices", [])

@@ -7,8 +7,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **Vision support**: `vision_analyze` tool for analyzing images via vision-capable LLMs (accepts URLs, file paths, or base64 data)
+- **OpenRouter provider preferences**: `OpenRouterPreferences` dataclass for controlling upstream provider routing (order, only, ignore, sort, quantizations, max_price)
+- **Model capabilities cache**: `is_vision_capable()` and `get_cached_capabilities()` in `model_cache.py`, populated from OpenRouter `/api/v1/models` architecture data
+
+### Changed
+
+- **DRY extraction**: Shared `providers/openai_compat.py` module for `format_openai_content()`, `format_openai_messages()`, `describe_request_error()` — deduplicated from OpenRouter and OpenAI providers
+- **Vision tool security hardening**: `danger_level` changed from `SAFE` to `MODERATE`; path traversal protection (resolve against working directory); SSRF protection (reject non-HTTPS URLs and private/internal IPs)
+- **Vision provider no longer cached permanently** — provider is created per call, avoiding stale state after model or API key changes
+
+### Fixed
+
+- **Image handling in OpenRouter/OpenAI/Anthropic providers**: `_format_content()` now properly converts `ImageContentBlock` to provider-specific dicts; unknown block types fall back to text representation instead of sending raw dataclass instances; Anthropic URL-source images now use correct `{"type": "url", "url": ...}` format
+- **OpenRouter preferences crash on unknown config keys**: `OpenRouterPreferences` construction now filters unknown keys from user config instead of raising `TypeError`
+- **Vision tool registration silently swallowing exceptions**: Now logs a warning when the vision tool fails to register
+
 ### Planned
 
+- Execution backend abstraction (`BaseEnvironment` ABC with Local/Docker/SSH/Singularity/Modal backends)
 - Fix `attoswarm tui` not picking up new TUI widgets when installed via `uv tool install`
 - Enabling code understanding tools of attocode to other AI coders as a skill system
 

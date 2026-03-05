@@ -5,11 +5,18 @@ from __future__ import annotations
 import json
 import os
 from collections.abc import AsyncIterator
+from dataclasses import dataclass, field
 from typing import Any
 
 import httpx
 
 from attocode.errors import ProviderError
+from attocode.providers.openai_compat import (
+    describe_request_error,
+    format_openai_content,
+    format_openai_messages,
+    format_openai_tool,
+)
 from attocode.types.messages import (
     ChatOptions,
     ChatResponse,
@@ -27,19 +34,63 @@ DEFAULT_API_URL = "https://openrouter.ai/api/v1/chat/completions"
 DEFAULT_MODEL = "anthropic/claude-sonnet-4"
 
 
-def _describe_request_error(e: httpx.RequestError) -> str:
-    """Build a descriptive error message for httpx request errors.
+@dataclass(slots=True)
+class OpenRouterPreferences:
+    """OpenRouter provider routing preferences.
 
-    httpx.ReadTimeout and similar errors often have empty str(e),
-    so we fall back to the exception type name and include the
-    chained cause when available.
+    Controls which upstream providers are used and how they're selected.
+    See https://openrouter.ai/docs/provider-routing
     """
-    msg = str(e)
-    if not msg:
-        msg = type(e).__name__
-    if e.__cause__ and str(e.__cause__):
-        msg = f"{msg} (caused by {type(e.__cause__).__name__}: {e.__cause__})"
-    return msg
+
+    order: list[str] | None = None
+    """Provider slugs to prefer, e.g. ["anthropic", "openai"]."""
+
+    only: list[str] | None = None
+    """Only use these providers."""
+
+    ignore: list[str] | None = None
+    """Exclude these providers."""
+
+    allow_fallbacks: bool = True
+    """Allow fallback to other providers if preferred ones are unavailable."""
+
+    require_parameters: bool = False
+    """Only route to providers that support all request parameters."""
+
+    data_collection: str | None = None
+    """Data collection preference: "deny" or "allow"."""
+
+    quantizations: list[str] | None = None
+    """Allowed quantizations, e.g. ["bf16", "fp16", "int8", "int4"]."""
+
+    sort: str | None = None
+    """Sort providers by: "price", "throughput", or "latency"."""
+
+    max_price: dict[str, float] | None = None
+    """Max price per token type, e.g. {"prompt": 5, "completion": 15}."""
+
+    def to_dict(self) -> dict[str, Any]:
+        """Serialize non-default fields to the OpenRouter provider dict."""
+        result: dict[str, Any] = {}
+        if self.order is not None:
+            result["order"] = self.order
+        if self.only is not None:
+            result["only"] = self.only
+        if self.ignore is not None:
+            result["ignore"] = self.ignore
+        if not self.allow_fallbacks:
+            result["allow_fallbacks"] = False
+        if self.require_parameters:
+            result["require_parameters"] = True
+        if self.data_collection is not None:
+            result["data_collection"] = self.data_collection
+        if self.quantizations is not None:
+            result["quantizations"] = self.quantizations
+        if self.sort is not None:
+            result["sort"] = self.sort
+        if self.max_price is not None:
+            result["max_price"] = self.max_price
+        return result
 
 
 class OpenRouterProvider:
@@ -53,6 +104,7 @@ class OpenRouterProvider:
         timeout: float = 600.0,
         *,
         app_name: str = "attocode",
+        preferences: OpenRouterPreferences | None = None,
     ) -> None:
         self._api_key = api_key or os.environ.get("OPENROUTER_API_KEY", "")
         if not self._api_key:
@@ -61,6 +113,7 @@ class OpenRouterProvider:
         self._api_url = api_url
         self._timeout = timeout
         self._app_name = app_name
+        self._preferences = preferences
         self._client = self._create_client()
 
     def _create_client(self) -> httpx.AsyncClient:
@@ -99,6 +152,7 @@ class OpenRouterProvider:
             body["temperature"] = options.temperature
         if options and options.tools:
             body["tools"] = [self._format_tool(t) for t in options.tools]
+        self._inject_preferences(body)
 
         try:
             response = await client.post(self._api_url, json=body)
@@ -112,7 +166,7 @@ class OpenRouterProvider:
             ) from e
         except httpx.RequestError as e:
             raise ProviderError(
-                f"OpenRouter request error: {_describe_request_error(e)}",
+                f"OpenRouter request error: {describe_request_error(e)}",
                 provider="openrouter", retryable=True,
             ) from e
 
@@ -137,6 +191,7 @@ class OpenRouterProvider:
             body["temperature"] = options.temperature
         if options and options.tools:
             body["tools"] = [self._format_tool(t) for t in options.tools]
+        self._inject_preferences(body)
 
         try:
             async with client.stream("POST", self._api_url, json=body) as response:
@@ -151,7 +206,7 @@ class OpenRouterProvider:
             ) from e
         except httpx.RequestError as e:
             raise ProviderError(
-                f"OpenRouter request error: {_describe_request_error(e)}",
+                f"OpenRouter request error: {describe_request_error(e)}",
                 provider="openrouter", retryable=True,
             ) from e
         except httpx.StreamError as e:
@@ -160,24 +215,22 @@ class OpenRouterProvider:
                 provider="openrouter", retryable=True,
             ) from e
 
+    def _inject_preferences(self, body: dict[str, Any]) -> None:
+        """Add provider routing preferences to the request body if configured."""
+        if self._preferences is not None:
+            pref_dict = self._preferences.to_dict()
+            if pref_dict:
+                body["provider"] = pref_dict
+
+    def _format_content(self, content: str | list) -> str | list[dict[str, Any]]:
+        """Convert structured content blocks to OpenAI-compatible format."""
+        return format_openai_content(content)
+
     def _format_messages(self, messages: list[Message | MessageWithStructuredContent]) -> list[dict[str, Any]]:
-        result: list[dict[str, Any]] = []
-        for msg in messages:
-            content = msg.content if isinstance(msg.content, str) else str(msg.content)
-            if msg.role == Role.TOOL:
-                result.append({"role": "tool", "content": content, "tool_call_id": msg.tool_call_id or ""})
-            elif msg.role == Role.ASSISTANT and msg.tool_calls:
-                tc_list = [
-                    {"id": tc.id, "type": "function", "function": {"name": tc.name, "arguments": json.dumps(tc.arguments)}}
-                    for tc in msg.tool_calls
-                ]
-                result.append({"role": "assistant", "content": content or None, "tool_calls": tc_list})
-            else:
-                result.append({"role": str(msg.role), "content": content})
-        return result
+        return format_openai_messages(messages, self._format_content)
 
     def _format_tool(self, tool: ToolDefinition) -> dict[str, Any]:
-        return {"type": "function", "function": {"name": tool.name, "description": tool.description, "parameters": tool.parameters}}
+        return format_openai_tool(tool)
 
     def _parse_response(self, data: dict[str, Any], model: str) -> ChatResponse:
         choices = data.get("choices", [])

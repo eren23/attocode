@@ -439,6 +439,25 @@ What's needed:
 
 The `CodeAnalyzer._cache` (djb2 content hash) already does per-file invalidation correctly — the problem is one layer up in `CodebaseContextManager` which has no change-awareness at all.
 
+### Execution backend abstraction
+
+Abstract command execution behind a `BaseEnvironment(ABC)` interface so the agent can run commands locally, in Docker, via SSH, or on cloud platforms (Singularity, Modal). Reference design: hermes-agent `tools/environments/`.
+
+Planned backends:
+- **Local** — wraps existing `execute_bash()` from `tools/bash.py`
+- **Docker** — extends `DockerSandbox` with security hardening (`--cap-drop ALL`, `--pids-limit 256`, tmpfs mounts)
+- **SSH** — ControlMaster persistence, remote process kill, `SSHConfig` dataclass
+- **Singularity** — overlay-based persistence, SIF image caching
+- **Modal** — serverless cloud execution, filesystem snapshots
+
+Integration: new `--env local|docker|ssh` CLI flag, `with_environment()` builder method, `environment_type` + `environment_config` config fields. See `.claude/CLAUDE.md` "Future Work: Execution Backend Abstraction" for full type definitions.
+
+### Vision tool enhancements
+
+- Support multi-image analysis (accept list of images in a single call)
+- Auto-detect vision capability at the provider level and route vision messages automatically (without requiring explicit `vision_analyze` tool use)
+- Add image generation support via DALL-E / Stability AI backends
+
 ## Documentation
 
 - [Architecture](docs/ARCHITECTURE.md) --- Module relationships and data flow
