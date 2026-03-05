@@ -1,0 +1,101 @@
+version: 1
+name: code-intel-big3-oss-demo
+created_at: 2026-03-05
+
+execution:
+  mode: local
+  codespaces_roadmap: true
+  results_file: eval/oss_demo/results.jsonl
+  report_file: eval/oss_demo/report.md
+
+repos:
+  - id: vscode
+    name: microsoft/vscode
+    url: https://github.com/microsoft/vscode
+    archetype: ts-monorepo
+    language_focus: [typescript, javascript]
+  - id: django
+    name: django/django
+    url: https://github.com/django/django
+    archetype: python-framework
+    language_focus: [python]
+  - id: pytorch
+    name: pytorch/pytorch
+    url: https://github.com/pytorch/pytorch
+    archetype: ml-runtime
+    language_focus: [python, c++]
+
+agents:
+  - id: codex
+    display_name: Codex CLI
+    lane: decisive
+    cheap_fast: false
+  - id: claude_code
+    display_name: Claude Code
+    lane: decisive
+    cheap_fast: false
+  - id: cursor_composer_1_5
+    display_name: Cursor Composer 1.5
+    lane: cheap-fast
+    cheap_fast: true
+
+tasks:
+  - id: orient_bootstrap
+    title: First-pass orientation
+    category: orientation
+    expected_tools: [bootstrap, project_summary]
+    prompt: |
+      You are evaluating a large OSS repository. Produce a concise architecture
+      map and identify 3 high-value entry points for a new contributor.
+  - id: target_scope
+    title: Scope the likely change area
+    category: localization
+    expected_tools: [explore_codebase, relevant_context, semantic_search]
+    prompt: |
+      Locate files most likely involved in a hypothetical bug fix around
+      dependency resolution and provide rationale with dependency evidence.
+  - id: impact_trace
+    title: Impact and blast-radius analysis
+    category: impact
+    expected_tools: [impact_analysis, dependency_graph, cross_references]
+    prompt: |
+      Assume we need to change one core symbol in the identified target area.
+      Estimate blast radius, critical dependents, and regression risk.
+  - id: risk_style
+    title: Risk and style scan
+    category: quality
+    expected_tools: [hotspots, conventions]
+    prompt: |
+      Identify the top maintainability risks in this repository and the key
+      coding conventions an external contributor must follow.
+  - id: plan_only_patch
+    title: Plan-only implementation proposal
+    category: planning
+    expected_tools: [relevant_context, lsp_references, lsp_diagnostics]
+    prompt: |
+      Draft a patch plan (no code changes) for one small bug fix. Include file
+      list, expected test impact, and acceptance criteria.
+
+scoring:
+  quality_weights:
+    task_completion: 0.35
+    evidence_quality: 0.25
+    technical_correctness: 0.20
+    actionability: 0.10
+    clarity: 0.10
+  efficiency_weights:
+    latency: 0.40
+    cost_proxy: 0.30
+    tool_efficiency: 0.30
+
+ablation:
+  enabled: true
+  baseline_label: without_code_intel
+  treatment_label: with_code_intel
+  sample_repo: django
+
+roadmap:
+  wave2_repos:
+    - kubernetes/kubernetes
+    - vercel/next.js
+    - apache/airflow
