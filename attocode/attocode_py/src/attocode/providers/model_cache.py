@@ -23,8 +23,18 @@ logger = logging.getLogger(__name__)
 
 _pricing_cache: dict[str, ModelPricing] = {}
 _context_cache: dict[str, int] = {}
+_capabilities_cache: dict[str, set[str]] = {}
 _cache_timestamp: float = 0.0
 _CACHE_TTL: float = 3600.0  # 1 hour
+
+# Models known to support vision even without dynamic cache data
+_KNOWN_VISION_MODELS: set[str] = {
+    "gpt-4o", "gpt-4o-mini", "gpt-4-turbo",
+    "claude-sonnet-4-20250514", "claude-opus-4-20250514",
+    "claude-haiku-4-20250414", "claude-haiku-3-5-20241022",
+    "google/gemini-2.0-flash", "google/gemini-2.5-pro-preview",
+    "glm-4.6v", "glm-4.5v",  # ZAI vision models
+}
 
 
 # ---------------------------------------------------------------------------
@@ -40,7 +50,7 @@ async def init_model_cache() -> None:
     works without authentication; ``OPENROUTER_API_KEY`` is sent when
     available (helps with rate limits) but is not required.
     """
-    global _pricing_cache, _context_cache, _cache_timestamp  # noqa: PLW0603
+    global _pricing_cache, _context_cache, _capabilities_cache, _cache_timestamp  # noqa: PLW0603
 
     now = time.monotonic()
     if _pricing_cache and now - _cache_timestamp < _CACHE_TTL:
@@ -69,6 +79,7 @@ async def init_model_cache() -> None:
 
     pricing: dict[str, ModelPricing] = {}
     context: dict[str, int] = {}
+    capabilities: dict[str, set[str]] = {}
 
     for model in models:
         model_id: str = model.get("id", "")
@@ -94,9 +105,21 @@ async def init_model_cache() -> None:
         if ctx_len and isinstance(ctx_len, int):
             context[model_id] = ctx_len
 
+        # Extract capabilities from architecture.input_modalities
+        arch = model.get("architecture") or {}
+        input_mods = arch.get("input_modalities") or []
+        caps: set[str] = set()
+        if "image" in input_mods:
+            caps.add("vision")
+        if "audio" in input_mods:
+            caps.add("audio")
+        if caps:
+            capabilities[model_id] = caps
+
     if pricing:
         _pricing_cache = pricing
         _context_cache = context
+        _capabilities_cache = capabilities
         _cache_timestamp = now
         logger.debug("Loaded %d models from OpenRouter", len(pricing))
         _reconcile_builtin_models()
@@ -157,6 +180,14 @@ def _reconcile_builtin_models() -> None:
                 info.pricing = live_price
                 KNOWN_PRICING[model_id] = live_price
 
+        # Vision capability
+        cap_key = _fuzzy_lookup(model_id, _capabilities_cache)
+        if cap_key is not None and "vision" in _capabilities_cache[cap_key]:
+            from attocode.providers.base import ProviderCapability
+            if ProviderCapability.VISION not in info.capabilities:
+                info.capabilities.add(ProviderCapability.VISION)
+                logger.debug("%s: added VISION capability from OpenRouter", model_id)
+
 
 # ---------------------------------------------------------------------------
 # Sync lookups (used at runtime)
@@ -204,6 +235,27 @@ def get_cached_pricing(model_id: str) -> ModelPricing | None:
     return None
 
 
+def get_cached_capabilities(model_id: str) -> set[str] | None:
+    """Return capabilities from the dynamic cache, or ``None``."""
+    key = _fuzzy_lookup(model_id, _capabilities_cache)
+    if key is not None:
+        return _capabilities_cache[key]
+    return None
+
+
+def is_vision_capable(model_id: str) -> bool:
+    """Check if a model supports vision input.
+
+    Checks the dynamic cache first, then falls back to a known set.
+    """
+    caps = get_cached_capabilities(model_id)
+    if caps is not None:
+        return "vision" in caps
+    # Fall back to known vision models
+    short_id = model_id.rsplit("/", 1)[-1]
+    return model_id in _KNOWN_VISION_MODELS or short_id in _KNOWN_VISION_MODELS
+
+
 def is_cache_initialized() -> bool:
     """Return whether the dynamic cache has been populated."""
     return len(_pricing_cache) > 0
@@ -211,7 +263,8 @@ def is_cache_initialized() -> bool:
 
 def clear_cache() -> None:
     """Reset all caches — for test isolation."""
-    global _pricing_cache, _context_cache, _cache_timestamp  # noqa: PLW0603
+    global _pricing_cache, _context_cache, _capabilities_cache, _cache_timestamp  # noqa: PLW0603
     _pricing_cache = {}
     _context_cache = {}
+    _capabilities_cache = {}
     _cache_timestamp = 0.0

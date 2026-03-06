@@ -17,10 +17,12 @@ from attocode.providers.base import (
 )
 from attocode.providers.model_cache import (
     clear_cache,
+    get_cached_capabilities,
     get_cached_context_length,
     get_cached_pricing,
     init_model_cache,
     is_cache_initialized,
+    is_vision_capable,
 )
 
 
@@ -40,18 +42,33 @@ OPENROUTER_RESPONSE = {
             "name": "Claude Sonnet 4",
             "pricing": {"prompt": "0.000003", "completion": "0.000015"},
             "context_length": 200000,
+            "architecture": {
+                "modality": "text+image->text",
+                "input_modalities": ["text", "image"],
+                "output_modalities": ["text"],
+            },
         },
         {
             "id": "openai/gpt-4o",
             "name": "GPT-4o",
             "pricing": {"prompt": "0.0000025", "completion": "0.00001"},
             "context_length": 128000,
+            "architecture": {
+                "modality": "text+image+audio->text",
+                "input_modalities": ["text", "image", "audio"],
+                "output_modalities": ["text"],
+            },
         },
         {
             "id": "zhipu/glm-5",
             "name": "GLM-5",
             "pricing": {"prompt": "0.0000005", "completion": "0.000001"},
             "context_length": 128000,
+            "architecture": {
+                "modality": "text->text",
+                "input_modalities": ["text"],
+                "output_modalities": ["text"],
+            },
         },
     ],
 }
@@ -300,3 +317,64 @@ class TestReconciliation:
             await init_model_cache()
 
         assert BUILTIN_MODELS["glm-5"].max_context_tokens == original_ctx
+
+
+# ---------------------------------------------------------------------------
+# Capabilities cache
+# ---------------------------------------------------------------------------
+
+
+class TestCapabilitiesCache:
+    @pytest.fixture(autouse=True)
+    async def _populate(self) -> None:
+        mock_client = _make_mock_client(OPENROUTER_RESPONSE)
+        with patch.dict("os.environ", {"OPENROUTER_API_KEY": "sk-test"}):
+            with patch("attocode.providers.model_cache.httpx.AsyncClient", return_value=mock_client):
+                await init_model_cache()
+
+    def test_vision_model_detected(self) -> None:
+        caps = get_cached_capabilities("anthropic/claude-sonnet-4")
+        assert caps is not None
+        assert "vision" in caps
+
+    def test_audio_model_detected(self) -> None:
+        caps = get_cached_capabilities("openai/gpt-4o")
+        assert caps is not None
+        assert "vision" in caps
+        assert "audio" in caps
+
+    def test_text_only_model_no_caps(self) -> None:
+        caps = get_cached_capabilities("zhipu/glm-5")
+        assert caps is None  # no special capabilities
+
+    def test_unknown_model_returns_none(self) -> None:
+        assert get_cached_capabilities("some/unknown-model") is None
+
+
+class TestIsVisionCapable:
+    @pytest.fixture(autouse=True)
+    async def _populate(self) -> None:
+        mock_client = _make_mock_client(OPENROUTER_RESPONSE)
+        with patch.dict("os.environ", {"OPENROUTER_API_KEY": "sk-test"}):
+            with patch("attocode.providers.model_cache.httpx.AsyncClient", return_value=mock_client):
+                await init_model_cache()
+
+    def test_cached_vision_model(self) -> None:
+        assert is_vision_capable("anthropic/claude-sonnet-4") is True
+
+    def test_cached_non_vision_model(self) -> None:
+        assert is_vision_capable("zhipu/glm-5") is False
+
+    def test_known_fallback_gpt4o(self) -> None:
+        """Known vision models should be detected even without cache."""
+        clear_cache()
+        assert is_vision_capable("gpt-4o") is True
+
+    def test_known_fallback_with_prefix(self) -> None:
+        clear_cache()
+        # "openai/gpt-4o" — short_id "gpt-4o" IS in known set
+        assert is_vision_capable("openai/gpt-4o") is True
+
+    def test_unknown_model(self) -> None:
+        clear_cache()
+        assert is_vision_capable("some/text-only-model") is False

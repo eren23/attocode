@@ -310,6 +310,32 @@ class AttocodeApp(App):
         except Exception:
             pass
 
+    # --- Paste / drop handler ---
+
+    def on_paste(self, event: Any) -> None:
+        """Intercept paste events so drag-drop works anywhere in the TUI.
+
+        When the user drops a file (or pastes text) outside the input area,
+        redirect it to the input TextArea. This ensures image drag-drop
+        works regardless of which widget has focus.
+        """
+        from textual.widgets import TextArea
+
+        # If the input TextArea already has focus, let it handle normally
+        if isinstance(self.focused, TextArea):
+            return
+
+        # Redirect the pasted text to the input area
+        text = getattr(event, "text", "")
+        if not text:
+            return
+        event.prevent_default()
+        event.stop()
+        input_area = self.query_one("#input-area", PromptInput)
+        input_area.focus_input()
+        ta = input_area.query_one("#prompt-input", TextArea)
+        ta.insert(text)
+
     # --- Message handlers ---
 
     def on_prompt_input_submitted(self, event: PromptInput.Submitted) -> None:
@@ -318,18 +344,24 @@ class AttocodeApp(App):
             return
 
         text = event.value
+        images = event.images
 
         # Hide welcome banner on first interaction
         self._hide_welcome_banner()
 
-        # Check for slash commands
+        # Check for slash commands (but not file paths that start with /)
         from attocode.commands import is_command
-        if is_command(text):
-            self._handle_slash_command(text)
-            return
+        if is_command(text) and not images:
+            # Guard: file-system paths like /Users/... aren't slash commands
+            first_word = text.strip().split()[0] if text.strip() else ""
+            if not (first_word.startswith("/") and ("/" in first_word[1:])):
+                self._handle_slash_command(text)
+                return
 
+        # Vision capability is checked inside ProductionAgent.run() —
+        # use pop_image_warning() after completion to surface warnings.
         log = self.query_one("#message-log", MessageLog)
-        log.add_user_message(text)
+        log.add_user_message(text, images=images or None)
 
         if self._on_submit:
             self._processing = True
@@ -337,7 +369,7 @@ class AttocodeApp(App):
             self.query_one("#input-area", PromptInput).set_enabled(False)
             self.query_one("#status-bar", StatusBar).start_processing()
             self._start_typing_indicator()
-            self._on_submit(text)
+            self._on_submit(text, images or None)
 
     def _handle_slash_command(self, text: str) -> None:
         """Handle a slash command synchronously."""
@@ -396,6 +428,12 @@ class AttocodeApp(App):
             # Error case even if we streamed
             if not event.success and event.error:
                 log.add_error_message(event.error)
+
+        # Show image warning if the agent stripped images due to provider/model
+        if self._agent:
+            image_warning = self._agent.pop_image_warning()
+            if image_warning:
+                log.add_system_message(image_warning)
 
         self._streamed_response = False
         self.query_one("#input-area", PromptInput).set_enabled(True)

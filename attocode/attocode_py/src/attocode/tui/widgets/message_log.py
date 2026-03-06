@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from datetime import datetime
+from pathlib import Path
 
 from rich.text import Text
 from textual.widgets import RichLog
@@ -27,14 +28,18 @@ class MessageLog(RichLog):
         super().__init__(highlight=True, markup=True, wrap=True, **kwargs)
         self._max_messages = 500
 
-    def add_user_message(self, text: str) -> None:
-        """Add a user message."""
+    def add_user_message(self, text: str, *, images: list[str] | None = None) -> None:
+        """Add a user message, with optional image attachment indicators."""
         ts = datetime.now().strftime("%H:%M:%S")
         styled = Text()
         styled.append(f"[{ts}] ", style="dim")
         styled.append(" You ", style="bold on #45475a")
         styled.append(" ")
         styled.append(text)
+        if images:
+            for img in images:
+                name = Path(img).name
+                styled.append(f"\n  \U0001f4ce {name}", style="dim italic")
         self.write(styled)
 
     def add_assistant_message(self, text: str) -> None:

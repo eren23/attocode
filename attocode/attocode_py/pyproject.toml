@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "attocode"
-version = "0.1.14"
+version = "0.1.15"
 description = "Production AI coding agent"
 readme = "README.md"
 requires-python = ">=3.12"

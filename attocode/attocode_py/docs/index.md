@@ -50,6 +50,7 @@ attocode --swarm "Build a REST API with tests"
 - [Sessions & Persistence](sessions-guide.md) --- Checkpoints, resume, and thread forking
 - [Context Engineering](context-engineering.md) --- How long sessions stay effective
 - [AST & Code Intelligence](ast-and-code-intelligence.md) --- Symbol indexing, cross-references, and impact analysis
+- [OSS Demo Playbook](code-intel-oss-demo-playbook.md) --- Big-3 agent benchmarking on large OSS repos with code-intel tools
 - [Advanced Features](advanced-features.md) --- Plan mode, task decomposition, permissions, danger classification
 - [Provider Resilience](provider-resilience.md) --- Retry, circuit breaker, fallback chain, model cache
 - [Skills & Agents](skills-and-agents.md) --- Custom skills and agent definitions

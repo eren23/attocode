@@ -65,6 +65,7 @@ nav:
       - Sandbox: SANDBOX.md
       - Budget System: BUDGET.md
       - MCP Integration: MCP.md
+      - OSS Demo Playbook: code-intel-oss-demo-playbook.md
       - Swarm Mode: swarm-guide.md
       - Hybrid Swarm: hybrid-swarm-operations.md
       - Skills & Agents: skills-and-agents.md

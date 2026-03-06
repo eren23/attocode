@@ -115,6 +115,11 @@ class LLMProvider(Protocol):
     @property
     def name(self) -> str: ...
 
+    @property
+    def supports_vision(self) -> bool:
+        """Whether this provider accepts image content blocks inline."""
+        return True
+
     async def chat(
         self,
         messages: list[Message | MessageWithStructuredContent],

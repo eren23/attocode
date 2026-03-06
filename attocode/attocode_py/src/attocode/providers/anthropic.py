@@ -205,10 +205,17 @@ class AnthropicProvider:
                         b["cache_control"] = {"type": block.cache_control.type}
                     blocks.append(b)
                 elif isinstance(block, ImageContentBlock):
-                    blocks.append({
-                        "type": "image",
-                        "source": {"type": block.source.type, "media_type": block.source.media_type, "data": block.source.data},
-                    })
+                    from attocode.types.messages import ImageSourceType
+                    if block.source.type == ImageSourceType.URL:
+                        blocks.append({
+                            "type": "image",
+                            "source": {"type": "url", "url": block.source.data},
+                        })
+                    else:
+                        blocks.append({
+                            "type": "image",
+                            "source": {"type": "base64", "media_type": block.source.media_type, "data": block.source.data},
+                        })
             return {"role": str(msg.role), "content": blocks}
         return {"role": str(msg.role), "content": content}
 

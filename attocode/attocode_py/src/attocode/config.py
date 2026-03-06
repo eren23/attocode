@@ -112,6 +112,9 @@ class AttoConfig:
     # System prompt override
     system_prompt: str | None = None
 
+    # OpenRouter preferences
+    openrouter_preferences: dict[str, Any] | None = None
+
     # Rules
     rules: list[str] = field(default_factory=list)
 
@@ -298,6 +301,8 @@ def _apply_dict(config: AttoConfig, data: dict[str, Any]) -> None:
         "compactionThreshold": "compaction_threshold",
         "sandboxMode": "sandbox_mode",
         "systemPrompt": "system_prompt",
+        "openrouter_preferences": "openrouter_preferences",
+        "openrouterPreferences": "openrouter_preferences",
     }
     compaction_block = data.get("compaction")
     if isinstance(compaction_block, dict):

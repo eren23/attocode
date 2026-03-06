@@ -213,10 +213,15 @@ class AzureOpenAIProvider:
 
 def _format_message(msg: Message | MessageWithStructuredContent) -> dict[str, Any]:
     """Format a message for the Azure OpenAI API."""
+    from attocode.providers.openai_compat import format_openai_content
+
     result: dict[str, Any] = {"role": msg.role.value if hasattr(msg.role, "value") else str(msg.role)}
 
     if hasattr(msg, "content") and msg.content:
-        result["content"] = msg.content
+        if isinstance(msg.content, list):
+            result["content"] = format_openai_content(msg.content)
+        else:
+            result["content"] = msg.content
 
     if hasattr(msg, "tool_calls") and msg.tool_calls:
         result["tool_calls"] = [

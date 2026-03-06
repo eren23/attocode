@@ -48,6 +48,7 @@ class AgentBuilder:
         self._compaction_threshold: float = 0.8
         self._session_dir: str | None = None
         self._enable_spawn_agent: bool = True
+        self._enable_vision: bool = True
         self._mcp_server_configs: list[dict[str, Any]] = []
         self._learning_store: Any = None
         self._auto_checkpoint: Any = None
@@ -55,6 +56,7 @@ class AgentBuilder:
         self._failure_tracker: Any = None
         self._trace_collector: Any = None
         self._recording_config: Any = None
+        self._openrouter_preferences: dict[str, Any] | None = None
 
     def with_provider(
         self,
@@ -213,6 +215,11 @@ class AgentBuilder:
         self._enable_spawn_agent = enabled
         return self
 
+    def with_vision(self, enabled: bool = True) -> AgentBuilder:
+        """Enable the vision_analyze tool for image analysis."""
+        self._enable_vision = enabled
+        return self
+
     def with_mcp_servers(self, configs: list[dict[str, Any]]) -> AgentBuilder:
         """Set MCP server configurations.
 
@@ -250,6 +257,11 @@ class AgentBuilder:
             self._recording_config = config
         return self
 
+    def with_openrouter_preferences(self, preferences: dict[str, Any] | None) -> AgentBuilder:
+        """Set OpenRouter provider routing preferences."""
+        self._openrouter_preferences = preferences
+        return self
+
     def with_tricks(
         self,
         recitation: Any = None,
@@ -267,6 +279,7 @@ class AgentBuilder:
         if provider is None:
             provider = create_provider(
                 self._provider_name,
+                openrouter_preferences=self._openrouter_preferences,
                 **self._provider_kwargs,
             )
 
@@ -283,6 +296,7 @@ class AgentBuilder:
                 self._working_dir or None,
                 sandbox=sandbox,
                 enable_spawn_agent=self._enable_spawn_agent,
+                enable_vision=self._enable_vision,
                 provider_name=self._provider_name,
                 api_key=self._provider_kwargs.get("api_key"),
                 model=self._provider_kwargs.get("model"),
