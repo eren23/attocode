@@ -8,10 +8,13 @@ batching, and event filtering.
 from __future__ import annotations
 
 import asyncio
+import logging
 import time
 from dataclasses import dataclass, field
 from enum import StrEnum
 from typing import Any, Callable
+
+logger = logging.getLogger(__name__)
 
 from attocode.tui.events import (
     AgentCompleted,
@@ -27,6 +30,7 @@ from attocode.tui.events import (
     LLMStreamEnd,
     LLMStreamStart,
     PhaseTransition,
+    PlanUpdated,
     StatusUpdate,
     SwarmStatusUpdate,
     ToolCompleted,
@@ -110,6 +114,8 @@ class AgentEventBridge:
             EventType.LLM_STREAM_END.value: self._on_llm_stream_end,
             EventType.INSIGHT_PHASE_CHANGE.value: self._on_phase_transition,
             EventType.INSIGHT_DOOM_LOOP.value: self._on_doom_loop,
+            EventType.PLAN_CREATED.value: self._on_plan_created,
+            EventType.PLAN_UPDATED.value: self._on_plan_updated,
         }
 
     @property
@@ -308,6 +314,18 @@ class AgentEventBridge:
             tool_name=data.get("tool_name", ""),
             count=data.get("count", 0),
         ))
+
+    def _on_plan_created(self, data: dict[str, Any]) -> None:
+        try:
+            self._post(PlanUpdated(plan=data.get("plan")))
+        except Exception:
+            logger.debug("Failed to dispatch plan_created event", exc_info=True)
+
+    def _on_plan_updated(self, data: dict[str, Any]) -> None:
+        try:
+            self._post(PlanUpdated(plan=data.get("plan")))
+        except Exception:
+            logger.debug("Failed to dispatch plan_updated event", exc_info=True)
 
 
 # ─── Message pruning ────────────────────────────────────────────────────────

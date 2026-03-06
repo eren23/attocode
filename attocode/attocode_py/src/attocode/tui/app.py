@@ -32,6 +32,7 @@ from attocode.tui.events import (
     LLMStreamEnd,
     LLMStreamStart,
     PhaseTransition,
+    PlanUpdated,
     StatusUpdate,
     SwarmStatusUpdate,
     ToolCompleted,
@@ -130,6 +131,9 @@ class AttocodeApp(App):
         # Typing indicator state
         self._typing_timer: Timer | None = None
         self._typing_frame_index = 0
+
+        # Active tools for AgentInternalsPanel: tool_id -> tool_name
+        self._active_tools: dict[str, str] = {}
 
         # Rate-limit failure toasts (I4)
         self._last_failure_toast_time: float = 0.0
@@ -436,6 +440,7 @@ class AttocodeApp(App):
                 log.add_system_message(image_warning)
 
         self._streamed_response = False
+        self._active_tools.clear()
         self.query_one("#input-area", PromptInput).set_enabled(True)
         self.query_one("#status-bar", StatusBar).stop_processing()
         self.query_one("#tool-panel", ToolCallsPanel).clear_calls()
@@ -467,6 +472,14 @@ class AttocodeApp(App):
         log = self.query_one("#message-log", MessageLog)
         log.add_tool_message(event.name, "started")
 
+        # Track active tools for internals panel (keyed by tool_id)
+        self._active_tools[event.tool_id] = event.name
+        try:
+            internals = self.query_one("#agent-internals", AgentInternalsPanel)
+            internals.set_active_tools(list(self._active_tools.values()))
+        except Exception:
+            pass
+
     def on_tool_completed(self, event: ToolCompleted) -> None:
         """Tool call completed."""
         panel = self.query_one("#tool-panel", ToolCallsPanel)
@@ -481,6 +494,14 @@ class AttocodeApp(App):
         if event.error:
             log = self.query_one("#message-log", MessageLog)
             log.add_tool_message(event.name, "error")
+
+        # Update active tools for internals panel (keyed by tool_id)
+        self._active_tools.pop(event.tool_id, None)
+        try:
+            internals = self.query_one("#agent-internals", AgentInternalsPanel)
+            internals.set_active_tools(list(self._active_tools.values()))
+        except Exception:
+            pass
 
         # Feed live dashboard accumulator
         self._live_accumulator.record_tool(event.name, error=bool(event.error))
@@ -795,6 +816,14 @@ class AttocodeApp(App):
                 self.query_one("#status-bar", StatusBar).cache_hit_rate = (
                     panel.cache_read / total
                 )
+        except Exception:
+            pass
+
+    def on_plan_updated(self, event: PlanUpdated) -> None:
+        """Plan data updated — show in PlanPanel."""
+        try:
+            plan_panel = self.query_one("#plan-panel", PlanPanel)
+            plan_panel.set_plan(event.plan)
         except Exception:
             pass
 

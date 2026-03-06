@@ -1,6 +1,6 @@
 """MCP server exposing Attocode's code intelligence capabilities.
 
-Provides 24 tools for deep codebase understanding:
+Provides 27 tools for deep codebase understanding:
 - bootstrap: All-in-one orientation (summary + map + conventions + search)
 - relevant_context: Subgraph capsule for file(s) with neighbors and symbols
 - repo_map: Token-budgeted file tree with symbols
@@ -38,7 +38,7 @@ import os
 import re
 import sys
 import threading
-from collections import Counter
+from collections import Counter, deque
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -1004,9 +1004,9 @@ def dependency_graph(start_file: str, depth: int = 2) -> str:
     # Forward BFS
     lines.append("\n  Imports (forward):")
     visited_fwd: set[str] = set()
-    queue_fwd: list[tuple[str, int]] = [(rel, 0)]
+    queue_fwd: deque[tuple[str, int]] = deque([(rel, 0)])
     while queue_fwd:
-        current, d = queue_fwd.pop(0)
+        current, d = queue_fwd.popleft()
         if current in visited_fwd or d > depth:
             continue
         visited_fwd.add(current)
@@ -1024,9 +1024,9 @@ def dependency_graph(start_file: str, depth: int = 2) -> str:
     # Reverse BFS
     lines.append("\n  Imported by (reverse):")
     visited_rev: set[str] = set()
-    queue_rev: list[tuple[str, int]] = [(rel, 0)]
+    queue_rev: deque[tuple[str, int]] = deque([(rel, 0)])
     while queue_rev:
-        current, d = queue_rev.pop(0)
+        current, d = queue_rev.popleft()
         if current in visited_rev or d > depth:
             continue
         visited_rev.add(current)
@@ -1041,6 +1041,261 @@ def dependency_graph(start_file: str, depth: int = 2) -> str:
     if len(visited_rev) <= 1:
         lines.append("    (none)")
 
+    return "\n".join(lines)
+
+
+@mcp.tool()
+def graph_query(
+    file: str,
+    edge_type: str = "IMPORTS",
+    direction: str = "outbound",
+    depth: int = 2,
+) -> str:
+    """BFS traversal over typed dependency edges.
+
+    Walks the import graph from a starting file, following edges of the
+    specified type and direction.
+
+    Args:
+        file: Starting file path (relative to project root or absolute).
+        edge_type: Edge type to follow. One of: IMPORTS, IMPORTED_BY.
+        direction: "outbound" follows imports, "inbound" follows importers.
+        depth: Maximum BFS hops (default 2, max 5).
+    """
+    valid_edge_types = {"IMPORTS", "IMPORTED_BY"}
+    valid_directions = {"outbound", "inbound"}
+    if edge_type not in valid_edge_types:
+        return f"Error: invalid edge_type '{edge_type}'. Must be one of: {', '.join(sorted(valid_edge_types))}"
+    if direction not in valid_directions:
+        return f"Error: invalid direction '{direction}'. Must be one of: {', '.join(sorted(valid_directions))}"
+
+    svc = _get_ast_service()
+    rel = svc._to_rel(file)
+    depth = min(depth, 5)
+
+    use_dependents = edge_type == "IMPORTED_BY" or direction == "inbound"
+
+    visited: set[str] = set()
+    queue: deque[tuple[str, int]] = deque([(rel, 0)])
+    result_by_depth: dict[int, list[str]] = {}
+
+    while queue:
+        current, d = queue.popleft()
+        if current in visited or d > depth:
+            continue
+        visited.add(current)
+        if d > 0:
+            result_by_depth.setdefault(d, []).append(current)
+        neighbors = svc.get_dependents(current) if use_dependents else svc.get_dependencies(current)
+        for n in sorted(neighbors):
+            if n not in visited:
+                queue.append((n, d + 1))
+
+    label = "importers" if use_dependents else "imports"
+    lines = [f"Graph query: {rel} ({label}, depth={depth})"]
+    if not result_by_depth:
+        lines.append("  (no results)")
+    else:
+        for d in sorted(result_by_depth):
+            lines.append(f"\n  Hop {d}:")
+            for f_path in result_by_depth[d]:
+                lines.append(f"    {'>' * d} {f_path}")
+    lines.append(f"\nTotal: {len(visited) - 1} files reachable")
+    return "\n".join(lines)
+
+
+@mcp.tool()
+def find_related(file: str, top_k: int = 10) -> str:
+    """Find structurally related files by import-graph proximity.
+
+    Combines 2-hop import neighbors with co-importer overlap
+    (Jaccard-style) to find the most structurally related files.
+
+    Args:
+        file: File path (relative to project root or absolute).
+        top_k: Number of results to return (default 10).
+    """
+    svc = _get_ast_service()
+    rel = svc._to_rel(file)
+    idx = svc._index
+
+    # Check file exists in index
+    if rel not in idx.file_symbols and rel not in idx.file_dependencies:
+        return f"Error: file '{rel}' not found in the project index."
+
+    # Collect 2-hop neighbors in both directions
+    neighbors: Counter[str] = Counter()
+
+    direct_deps = idx.get_dependencies(rel)
+    direct_importers = idx.get_dependents(rel)
+    all_direct = direct_deps | direct_importers
+
+    for n in all_direct:
+        neighbors[n] += 3  # Direct connection = high weight
+
+    for n in all_direct:
+        for nn in idx.get_dependencies(n):
+            if nn != rel:
+                neighbors[nn] += 1
+        for nn in idx.get_dependents(n):
+            if nn != rel:
+                neighbors[nn] += 1
+
+    # Co-importer overlap (Jaccard-style boost) — scoped to 2-hop neighbors only
+    my_deps = idx.get_dependencies(rel)
+    if my_deps:
+        candidate_files = set(neighbors.keys())
+        for other_file in candidate_files:
+            other_deps_set = idx.file_dependencies.get(other_file, set())
+            if not other_deps_set:
+                continue
+            overlap = len(my_deps & other_deps_set)
+            if overlap > 0:
+                union = len(my_deps | other_deps_set)
+                jaccard = overlap / union if union else 0
+                neighbors[other_file] += round(jaccard * 5)
+
+    top = neighbors.most_common(top_k)
+    lines = [f"Files related to {rel}:"]
+    if not top:
+        lines.append("  (no related files found)")
+    else:
+        for path, score in top:
+            rel_type = "direct" if path in all_direct else "transitive"
+            lines.append(f"  [{score:>3}] {path}  ({rel_type})")
+
+    return "\n".join(lines)
+
+
+@mcp.tool()
+def community_detection(
+    min_community_size: int = 3,
+    max_communities: int = 20,
+) -> str:
+    """Detect file communities via connected components on the import graph.
+
+    Groups files into communities based on the undirected import graph.
+    Reports community sizes and hub files (highest degree within each community).
+
+    Args:
+        min_community_size: Minimum files per community to report (default 3).
+        max_communities: Maximum number of communities to return (default 20).
+    """
+    svc = _get_ast_service()
+    idx = svc._index
+
+    # Build undirected adjacency
+    all_files: set[str] = set()
+    all_files.update(idx.file_dependencies.keys())
+    all_files.update(idx.file_dependents.keys())
+    all_files.update(f for deps in idx.file_dependencies.values() for f in deps)
+
+    adj: dict[str, set[str]] = {f: set() for f in all_files}
+    for src, deps in idx.file_dependencies.items():
+        for tgt in deps:
+            adj.setdefault(src, set()).add(tgt)
+            adj.setdefault(tgt, set()).add(src)
+
+    # Connected components via BFS
+    visited: set[str] = set()
+    communities: list[set[str]] = []
+    for start in all_files:
+        if start in visited:
+            continue
+        component: set[str] = set()
+        bfs_queue: deque[str] = deque([start])
+        while bfs_queue:
+            node = bfs_queue.popleft()
+            if node in visited:
+                continue
+            visited.add(node)
+            component.add(node)
+            for neighbor in adj.get(node, set()):
+                if neighbor not in visited:
+                    bfs_queue.append(neighbor)
+        communities.append(component)
+
+    # Sort by size descending, filter by min size
+    communities.sort(key=len, reverse=True)
+    communities = [c for c in communities if len(c) >= min_community_size][:max_communities]
+
+    lines = [f"Community detection: {len(communities)} communities (min size {min_community_size})"]
+    for i, community in enumerate(communities, 1):
+        lines.append(f"\n  Community {i} ({len(community)} files):")
+        # Find hub file (highest degree)
+        hub = max(community, key=lambda f: len(adj.get(f, set())))
+        hub_degree = len(adj.get(hub, set()))
+        lines.append(f"    Hub: {hub} (degree {hub_degree})")
+        # Show a few sample files
+        sample = sorted(community)[:5]
+        for f in sample:
+            degree = len(adj.get(f, set()))
+            lines.append(f"    - {f} (degree {degree})")
+        if len(community) > 5:
+            lines.append(f"    ... and {len(community) - 5} more")
+
+    return "\n".join(lines)
+
+
+# ---------------------------------------------------------------------------
+# MCP Resources: Project files and symbol lookup
+# ---------------------------------------------------------------------------
+
+
+@mcp.resource("attocode://project/{path}")
+def project_file_resource(path: str) -> str:
+    """File content with line numbers. Path-traversal protected.
+
+    Args:
+        path: Relative file path within the project.
+    """
+    project_dir = _get_project_dir()
+    root = Path(os.path.realpath(project_dir))
+    full = Path(os.path.realpath(os.path.join(project_dir, path)))
+    if not full.is_relative_to(root):
+        return "Error: path traversal not allowed."
+    if not full.is_file():
+        return f"Error: file not found: {path}"
+    try:
+        content = full.read_text(encoding="utf-8", errors="replace")
+        lines = content.split("\n")
+        numbered = [f"{i + 1:>5} | {line}" for i, line in enumerate(lines)]
+        return "\n".join(numbered)
+    except Exception as e:
+        return f"Error reading file: {e}"
+
+
+@mcp.resource("attocode://symbols/{name}")
+def symbol_resource(name: str) -> str:
+    """Symbol definition lookup with source snippets.
+
+    Args:
+        name: Symbol name to look up.
+    """
+    svc = _get_ast_service()
+    defs = svc.find_symbol(name)
+    if not defs:
+        return f"No definitions found for '{name}'."
+
+    project_dir = _get_project_dir()
+    root = Path(os.path.realpath(project_dir))
+
+    lines = [f"Definitions for '{name}':"]
+    for d in defs[:10]:
+        lines.append(f"\n  {d.file_path}:{d.start_line}")
+        lines.append(f"    Qualified: {d.qualified_name}")
+        # Try to read source snippet (path-traversal protected)
+        try:
+            full = Path(os.path.realpath(os.path.join(project_dir, d.file_path)))
+            if not full.is_relative_to(root):
+                continue
+            src_lines = full.read_text(encoding="utf-8", errors="replace").split("\n")
+            start = max(0, d.start_line - 1)
+            end = min(len(src_lines), d.end_line + 1)
+            for i in range(start, end):
+                lines.append(f"    {i + 1:>5} | {src_lines[i]}")
+        except Exception:
+            pass
     return "\n".join(lines)
 
 
@@ -1085,14 +1340,14 @@ def relevant_context(
 
     # BFS in both directions
     visited: dict[str, tuple[int, str]] = {}  # rel -> (distance, relationship)
-    queue: list[tuple[str, int, str]] = []
+    queue: deque[tuple[str, int, str]] = deque()
 
     for rel in center_rels:
         visited[rel] = (0, "center")
         queue.append((rel, 0, "center"))
 
     while queue:
-        current, d, _rel_type = queue.pop(0)
+        current, d, _rel_type = queue.popleft()
         if d >= depth:
             continue
 
@@ -2329,13 +2584,26 @@ def main() -> None:
 
     # No subcommand — start MCP server
     project_dir = "."
+    transport = "stdio"
+    host = "127.0.0.1"
+    port = 8080
     for i, arg in enumerate(args):
         if arg == "--project" and i + 1 < len(args):
             project_dir = args[i + 1]
-            break
-        if arg.startswith("--project="):
+        elif arg.startswith("--project="):
             project_dir = arg.split("=", 1)[1]
-            break
+        elif arg == "--transport" and i + 1 < len(args):
+            transport = args[i + 1]
+        elif arg.startswith("--transport="):
+            transport = arg.split("=", 1)[1]
+        elif arg == "--host" and i + 1 < len(args):
+            host = args[i + 1]
+        elif arg.startswith("--host="):
+            host = arg.split("=", 1)[1]
+        elif arg == "--port" and i + 1 < len(args):
+            port = int(args[i + 1])
+        elif arg.startswith("--port="):
+            port = int(arg.split("=", 1)[1])
 
     project_dir = os.path.abspath(project_dir)
     os.environ["ATTOCODE_PROJECT_DIR"] = project_dir
@@ -2344,9 +2612,12 @@ def main() -> None:
     _start_file_watcher(project_dir)
     _start_queue_poller(project_dir)
 
-    logger.info("Starting attocode-code-intel for %s", project_dir)
+    logger.info("Starting attocode-code-intel for %s (transport=%s)", project_dir, transport)
     try:
-        mcp.run(transport="stdio")
+        if transport == "sse":
+            mcp.run(transport="sse", host=host, port=port)
+        else:
+            mcp.run(transport="stdio")
     finally:
         _stop_file_watcher()
 

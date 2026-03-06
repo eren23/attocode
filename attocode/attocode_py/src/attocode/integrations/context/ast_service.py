@@ -367,6 +367,10 @@ class ASTService:
         return sorted(related)
 
     # ------------------------------------------------------------------
+    def to_rel(self, path: str) -> str:
+        """Normalize *path* to a relative path from root (public API)."""
+        return self._to_rel(path)
+
     # Internals
     # ------------------------------------------------------------------
 

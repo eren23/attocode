@@ -172,6 +172,14 @@ class DoomLoopWarning(Message):
         self.count = count
 
 
+class PlanUpdated(Message):
+    """Plan data updated (from /plan command or plan events)."""
+
+    def __init__(self, plan: dict[str, Any] | None) -> None:
+        super().__init__()
+        self.plan = plan
+
+
 class CacheStats(Message):
     """LLM cache statistics update."""
 

@@ -348,11 +348,12 @@ class ExecutionEconomicsManager:
         # Iteration check
         if self.budget.max_iterations is not None and self.budget.max_iterations > 0:
             if self._llm_calls >= self.budget.max_iterations:
+                token_frac = self._total_tokens / max(1, self.budget.max_tokens) if self.budget.max_tokens > 0 else 0.0
                 if self.enforcement_mode == BudgetEnforcementMode.ADVISORY:
                     return BudgetCheck(
                         can_continue=True,
                         status=BudgetStatus.WARNING,
-                        usage_fraction=1.0,
+                        usage_fraction=token_frac,
                         budget_type="iterations",
                         message=f"Iteration limit reached ({self.budget.max_iterations}) [advisory]",
                         injected_prompt="You have exceeded the iteration limit. Wrap up efficiently.",
@@ -361,7 +362,7 @@ class ExecutionEconomicsManager:
                 return BudgetCheck(
                     can_continue=False,
                     status=BudgetStatus.EXHAUSTED,
-                    usage_fraction=1.0,
+                    usage_fraction=token_frac,
                     budget_type="iterations",
                     message=f"Iteration limit reached ({self.budget.max_iterations})",
                     recovery_suggestions=["Request budget extension", "Complete current task immediately"],

@@ -8,10 +8,13 @@ from __future__ import annotations
 
 import asyncio
 import json
+import logging
 import os
 import re
 from dataclasses import dataclass, field
 from typing import Any
+
+logger = logging.getLogger(__name__)
 
 
 def _expand_env(env: dict[str, str] | None) -> dict[str, str] | None:
@@ -178,9 +181,10 @@ class MCPClient:
             return None
 
         self._request_id += 1
+        req_id = self._request_id
         msg = {
             "jsonrpc": "2.0",
-            "id": self._request_id,
+            "id": req_id,
             "method": method,
             "params": params,
         }
@@ -195,12 +199,39 @@ class MCPClient:
                 self._process.stdout.readline(), timeout=30.0
             )
             if not line:
+                logger.warning(
+                    "MCP server %s returned empty response for %s",
+                    self._server_name, method,
+                )
                 return None
             response = json.loads(line.decode())
+            # Validate JSON-RPC response ID matches request
+            resp_id = response.get("id")
+            if resp_id != req_id:
+                logger.warning(
+                    "MCP server %s response ID mismatch for %s: expected %s, got %s",
+                    self._server_name, method, req_id, resp_id,
+                )
             if "error" in response:
+                err = response["error"]
+                logger.warning(
+                    "MCP server %s RPC error for %s: code=%s message=%s",
+                    self._server_name, method,
+                    err.get("code", "?"), err.get("message", "unknown"),
+                )
                 return None
             return response.get("result")
-        except (asyncio.TimeoutError, json.JSONDecodeError):
+        except asyncio.TimeoutError:
+            logger.warning(
+                "MCP server %s timed out on %s (30s)",
+                self._server_name, method,
+            )
+            return None
+        except json.JSONDecodeError as exc:
+            logger.warning(
+                "MCP server %s returned invalid JSON for %s: %s",
+                self._server_name, method, exc,
+            )
             return None
 
     async def _notify(self, method: str, params: dict[str, Any]) -> None:

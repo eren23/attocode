@@ -7,12 +7,16 @@ to be available immediately at startup.
 
 from __future__ import annotations
 
+import time
 from dataclasses import dataclass, field
 from enum import StrEnum
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from attocode.integrations.mcp.client import MCPCallResult, MCPClient, MCPTool
 from attocode.integrations.mcp.config import MCPServerConfig
+
+if TYPE_CHECKING:
+    from attocode.integrations.mcp.meta_tools import MCPMetaTools
 
 
 class ConnectionState(StrEnum):
@@ -43,8 +47,9 @@ class MCPClientManager:
     tool request via :meth:`ensure_connected`.
     """
 
-    def __init__(self) -> None:
+    def __init__(self, meta_tools: MCPMetaTools | None = None) -> None:
         self._servers: dict[str, ServerEntry] = {}
+        self._meta_tools: MCPMetaTools | None = meta_tools
 
     # ------------------------------------------------------------------
     # Registration
@@ -153,7 +158,9 @@ class MCPClientManager:
             if entry.client is not None and entry.state == ConnectionState.CONNECTED:
                 for tool in entry.client.tools:
                     if tool.name == tool_name:
-                        return await entry.client.call_tool(tool_name, arguments)
+                        return await self._call_and_record(
+                            entry.config.name, entry.client, tool_name, arguments,
+                        )
 
         # Tool not found in connected servers -- try lazy connect
         for entry in self._servers.values():
@@ -162,11 +169,26 @@ class MCPClientManager:
                 if success and entry.client is not None:
                     for tool in entry.client.tools:
                         if tool.name == tool_name:
-                            return await entry.client.call_tool(
-                                tool_name, arguments
+                            return await self._call_and_record(
+                                entry.config.name, entry.client, tool_name, arguments,
                             )
 
         return MCPCallResult(success=False, error=f"Tool not found: {tool_name}")
+
+    async def _call_and_record(
+        self,
+        server_name: str,
+        client: MCPClient,
+        tool_name: str,
+        arguments: dict[str, Any],
+    ) -> MCPCallResult:
+        """Call a tool and record statistics in MCPMetaTools if available."""
+        start = time.monotonic()
+        result = await client.call_tool(tool_name, arguments)
+        elapsed_ms = (time.monotonic() - start) * 1000
+        if self._meta_tools is not None:
+            self._meta_tools.record_call(server_name, tool_name, elapsed_ms, result.success)
+        return result
 
     # ------------------------------------------------------------------
     # Introspection

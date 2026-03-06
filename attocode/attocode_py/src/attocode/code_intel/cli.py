@@ -56,7 +56,7 @@ def _print_help() -> None:
         "Commands:\n"
         "  install <target>    Install MCP server into a coding assistant\n"
         "  uninstall <target>  Remove MCP server from a coding assistant\n"
-        "  serve               Run MCP server directly (stdio)\n"
+        "  serve               Run MCP server directly (stdio or SSE)\n"
         "  status              Check installation status across all targets\n"
         "  notify              Notify server about changed files (for hooks)\n"
         "\n"
@@ -78,6 +78,11 @@ def _print_help() -> None:
         "  --project <path>    Project directory to index (default: .)\n"
         "  --global            Install globally (Claude, Codex, Zed)\n"
         "  --hooks             Also install PostToolUse hooks (Claude Code)\n"
+        "\n"
+        "Serve options:\n"
+        "  --transport <type>  Transport protocol: stdio (default) or sse\n"
+        "  --host <addr>       SSE host address (default: 127.0.0.1)\n"
+        "  --port <num>        SSE port number (default: 8080)\n"
         "\n"
         "Notify options:\n"
         "  --file <path>       File that changed (repeatable)\n"
@@ -155,6 +160,34 @@ def _cmd_uninstall(args: list[str]) -> None:
 def _cmd_serve(args: list[str], *, debug: bool = False) -> None:
     _, project_dir, _, _ = _parse_opts(args)
 
+    # Parse transport flags
+    transport = "stdio"
+    host = "127.0.0.1"
+    port = 8080
+    i = 0
+    while i < len(args):
+        arg = args[i]
+        if arg == "--transport" and i + 1 < len(args):
+            transport = args[i + 1]
+            i += 2
+        elif arg.startswith("--transport="):
+            transport = arg.split("=", 1)[1]
+            i += 1
+        elif arg == "--host" and i + 1 < len(args):
+            host = args[i + 1]
+            i += 2
+        elif arg.startswith("--host="):
+            host = arg.split("=", 1)[1]
+            i += 1
+        elif arg == "--port" and i + 1 < len(args):
+            port = int(args[i + 1])
+            i += 2
+        elif arg.startswith("--port="):
+            port = int(arg.split("=", 1)[1])
+            i += 1
+        else:
+            i += 1
+
     os.environ["ATTOCODE_PROJECT_DIR"] = os.path.abspath(project_dir)
 
     if debug:
@@ -164,8 +197,11 @@ def _cmd_serve(args: list[str], *, debug: bool = False) -> None:
     from attocode.code_intel.server import mcp
 
     abs_dir = os.path.abspath(project_dir)
-    print(f"Starting attocode-code-intel server for {abs_dir}", file=sys.stderr)
-    mcp.run(transport="stdio")
+    print(f"Starting attocode-code-intel server for {abs_dir} (transport={transport})", file=sys.stderr)
+    if transport == "sse":
+        mcp.run(transport="sse", host=host, port=port)
+    else:
+        mcp.run(transport="stdio")
 
 
 def _cmd_status() -> None:

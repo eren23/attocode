@@ -846,7 +846,10 @@ async def run_execution_loop(
                 if preflight.reason == CompletionReason.BUDGET_LIMIT:
                     ctx.emit_simple(
                         EventType.BUDGET_EXHAUSTED,
-                        metadata={"message": preflight.message},
+                        metadata={
+                            "message": preflight.message,
+                            "usage_fraction": ctx.economics.usage_fraction if ctx.economics else 1.0,
+                        },
                     )
                 return LoopResult(
                     success=False,
