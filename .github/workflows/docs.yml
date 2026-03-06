@@ -4,8 +4,8 @@ on:
   push:
     branches: [main]
     paths:
-      - 'attocode/attocode_py/docs/**'
-      - 'attocode/attocode_py/mkdocs.yml'
+      - 'docs/**'
+      - 'mkdocs.yml'
   workflow_dispatch:
 
 permissions:
@@ -26,12 +26,10 @@ jobs:
         with:
           python-version: '3.12'
       - run: uv sync --extra docs
-        working-directory: attocode/attocode_py
       - run: uv run mkdocs build
-        working-directory: attocode/attocode_py
       - uses: actions/upload-pages-artifact@v3
         with:
-          path: attocode/attocode_py/site
+          path: site
 
   deploy:
     needs: build

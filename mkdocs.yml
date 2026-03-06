@@ -1,0 +1,115 @@
+site_name: Attocode
+site_description: Production AI coding agent built in Python
+site_url: https://eren23.github.io/attocode/
+repo_url: https://github.com/eren23/attocode
+repo_name: eren23/attocode
+
+theme:
+  name: material
+  palette:
+    - scheme: slate
+      primary: deep purple
+      accent: amber
+      toggle:
+        icon: material/brightness-4
+        name: Switch to light mode
+    - scheme: default
+      primary: deep purple
+      accent: amber
+      toggle:
+        icon: material/brightness-7
+        name: Switch to dark mode
+  features:
+    - navigation.instant
+    - navigation.sections
+    - navigation.expand
+    - navigation.top
+    - search.highlight
+    - content.code.copy
+  icon:
+    repo: fontawesome/brands/github
+
+markdown_extensions:
+  - admonition
+  - pymdownx.details
+  - pymdownx.superfences:
+      custom_fences:
+        - name: mermaid
+          class: mermaid
+          format: !!python/name:pymdownx.superfences.fence_code_format
+  - pymdownx.highlight:
+      anchor_linenums: true
+  - pymdownx.inlinehilite
+  - pymdownx.tabbed:
+      alternate_style: true
+  - tables
+  - attr_list
+  - md_in_html
+  - toc:
+      permalink: true
+
+nav:
+  - Home: index.md
+  - Getting Started: getting-started.md
+  - CLI Reference: cli-reference.md
+  - Architecture: ARCHITECTURE.md
+  - Features:
+      - TUI Interface: tui-guide.md
+      - Sessions & Persistence: sessions-guide.md
+      - Context Engineering: context-engineering.md
+      - AST & Code Intelligence: ast-and-code-intelligence.md
+      - Advanced Features: advanced-features.md
+  - Guides:
+      - Providers: PROVIDERS.md
+      - Provider Resilience: provider-resilience.md
+      - Sandbox: SANDBOX.md
+      - Budget System: BUDGET.md
+      - MCP Integration: MCP.md
+      - OSS Demo Playbook: code-intel-oss-demo-playbook.md
+      - Swarm Mode: swarm-guide.md
+      - Hybrid Swarm: hybrid-swarm-operations.md
+      - Skills & Agents: skills-and-agents.md
+      - Tracing: tracing-guide.md
+      - Recording & Replay: recording-and-replay.md
+  - Extending: extending.md
+  - Internals: internals.md
+  - Troubleshooting: troubleshooting.md
+  - Development:
+      - Testing: TESTING.md
+      - Contributing: contributing.md
+  - Lessons:
+      - Overview: lessons/index.md
+      - "01 - Core Agent Loop": lessons/01-core-loop.md
+      - "02 - Provider Abstraction": lessons/02-provider-abstraction.md
+      - "03 - Tool System": lessons/03-tool-system.md
+      - "04 - Streaming": lessons/04-streaming.md
+      - "05 - Error Recovery": lessons/05-error-recovery.md
+      - "06 - Testing Agents": lessons/06-testing-agents.md
+      - "07 - MCP Integration": lessons/07-mcp-integration.md
+      - "08 - Cache Hitting": lessons/08-cache-hitting.md
+      - "09 - Complete Agent": lessons/09-complete-agent.md
+      - "10 - Hook System": lessons/10-hook-system.md
+      - "11 - Plugin System": lessons/11-plugin-system.md
+      - "12 - Rules System": lessons/12-rules-system.md
+      - "13 - Client/Server": lessons/13-client-server.md
+      - "14 - Memory Systems": lessons/14-memory-systems.md
+      - "15 - Planning": lessons/15-planning.md
+      - "16 - Reflection": lessons/16-reflection.md
+      - "17 - Multi-Agent": lessons/17-multi-agent.md
+      - "18 - ReAct Pattern": lessons/18-react-pattern.md
+      - "19 - Observability": lessons/19-observability.md
+      - "20 - Sandboxing": lessons/20-sandboxing.md
+      - "21 - Human-in-Loop": lessons/21-human-in-loop.md
+      - "22 - Model Routing": lessons/22-model-routing.md
+      - "23 - Execution Policies": lessons/23-execution-policies.md
+      - "24 - Advanced Patterns": lessons/24-advanced-patterns.md
+      - "25 - Production Agent": lessons/25-production-agent.md
+      - "26 - Tracing & Evaluation": lessons/26-tracing-and-evaluation.md
+  - Roadmap: swarm-roadmap.md
+
+extra_javascript:
+  - https://unpkg.com/mermaid@11/dist/mermaid.min.js
+  - javascripts/mermaid-init.js
+
+plugins:
+  - search
