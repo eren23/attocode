@@ -7,29 +7,51 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Planned
+
+- Execution backend abstraction (`BaseEnvironment` ABC with Local/Docker/SSH/Singularity/Modal backends)
+- Fix `attoswarm tui` not picking up new TUI widgets when installed via `uv tool install`
+- Enabling code understanding tools of attocode to other AI coders as a skill system
+
+## [0.1.15] - 2026-03-06
+
 ### Added
 
 - **Vision support**: `vision_analyze` tool for analyzing images via vision-capable LLMs (accepts URLs, file paths, or base64 data)
+- **Inline image support in TUI**: drag-drop or paste image paths into the prompt; images are extracted, base64-encoded, and sent as `ImageContentBlock` alongside text
+- **Image path extraction** (`tools/image_utils.py`): `extract_image_paths()` handles bare paths, quoted paths, and macOS backslash-escaped drag-drop paths; `load_image_to_source()` with size/path validation
 - **OpenRouter provider preferences**: `OpenRouterPreferences` dataclass for controlling upstream provider routing (order, only, ignore, sort, quantizations, max_price)
 - **Model capabilities cache**: `is_vision_capable()` and `get_cached_capabilities()` in `model_cache.py`, populated from OpenRouter `/api/v1/models` architecture data
+- **ZAI vision-disable safety**: ZAI provider automatically strips image blocks before sending to GLM models (text-only endpoint); agent sets user-facing warning via `pop_image_warning()`
+- **Azure vision support**: `_format_message()` properly converts `ImageContentBlock` to Azure's `image_url` content part format
+- **OSS demo eval harness** (`eval/oss_demo/`): manifest-driven benchmarking for multi-agent code-intel tasks with YAML config, result validation, and Markdown report generation
 
 ### Changed
 
 - **DRY extraction**: Shared `providers/openai_compat.py` module for `format_openai_content()`, `format_openai_messages()`, `describe_request_error()` — deduplicated from OpenRouter and OpenAI providers
 - **Vision tool security hardening**: `danger_level` changed from `SAFE` to `MODERATE`; path traversal protection (resolve against working directory); SSRF protection (reject non-HTTPS URLs and private/internal IPs)
 - **Vision provider no longer cached permanently** — provider is created per call, avoiding stale state after model or API key changes
+- **ZAI `_strip_images` uses deny-list filter** — filters out `ImageContentBlock` instead of allow-listing `TextContentBlock`, so future block types pass through safely
+- **ZAI all-image messages get placeholder** — instead of being silently dropped, all-image messages are replaced with a `[image removed]` placeholder to preserve conversation turn structure
+- **ZAI image stripping DRY** — extracted `_maybe_strip_images()` helper shared by `chat()` and `chat_stream()`, eliminating duplicated check-and-strip logic
+- **TUI vision check removed** — duplicated vision capability check in `app.py` removed; agent is now the single authority for vision checks; TUI surfaces warnings via `pop_image_warning()` after agent completion
 
 ### Fixed
 
 - **Image handling in OpenRouter/OpenAI/Anthropic providers**: `_format_content()` now properly converts `ImageContentBlock` to provider-specific dicts; unknown block types fall back to text representation instead of sending raw dataclass instances; Anthropic URL-source images now use correct `{"type": "url", "url": ...}` format
 - **OpenRouter preferences crash on unknown config keys**: `OpenRouterPreferences` construction now filters unknown keys from user config instead of raising `TypeError`
 - **Vision tool registration silently swallowing exceptions**: Now logs a warning when the vision tool fails to register
+- **TUI accessing private provider/config attributes** — removed `_provider` and `_config` access from TUI; uses public `pop_image_warning()` API instead
+- **`pop_image_warning()` was dead code** — now wired into TUI's `on_agent_completed` handler
+- **Redundant `MessageLog` query** in `on_prompt_input_submitted` — consolidated to single query
 
-### Planned
+### Tests
 
-- Execution backend abstraction (`BaseEnvironment` ABC with Local/Docker/SSH/Singularity/Modal backends)
-- Fix `attoswarm tui` not picking up new TUI widgets when installed via `uv tool install`
-- Enabling code understanding tools of attocode to other AI coders as a skill system
+- 60 vision tests in `test_vision_tool.py`: input detection, URL/path validation, tool spec, tool execution (local file, base64, URL rejection, SSRF), image path extraction (bare, quoted, escaped, multi-image, drag-drop), `load_image_to_source`, `build_initial_messages` with images, ZAI vision-disabled (strip from chat, strip from chat_stream, all-image placeholder, multi-text-block preservation, warning log assertion, agent pop_image_warning lifecycle), Azure format, vision capability cache
+- `test_model_cache.py`: ZAI vision model recognition, text-only exclusion, known model coverage
+- `test_openai.py`: content formatting for text and image blocks
+- `test_openrouter.py`: preferences construction, unknown key filtering, model capabilities caching
+- `test_eval_oss_demo.py`: manifest loading, result validation, report generation
 
 ## [0.1.14] - 2026-03-05
 
