@@ -27,6 +27,7 @@ node_modules/
 .attocode/sessions/
 .attocode/recordings/
 .attocode/cache/
+.attocode/.attocode/
 
 # Legacy TS runtime artifacts
 legacy/.attocode/traces/
