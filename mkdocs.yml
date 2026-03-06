@@ -77,6 +77,35 @@ nav:
   - Development:
       - Testing: TESTING.md
       - Contributing: contributing.md
+  - Lessons:
+      - Overview: lessons/index.md
+      - "01 - Core Agent Loop": lessons/01-core-loop.md
+      - "02 - Provider Abstraction": lessons/02-provider-abstraction.md
+      - "03 - Tool System": lessons/03-tool-system.md
+      - "04 - Streaming": lessons/04-streaming.md
+      - "05 - Error Recovery": lessons/05-error-recovery.md
+      - "06 - Testing Agents": lessons/06-testing-agents.md
+      - "07 - MCP Integration": lessons/07-mcp-integration.md
+      - "08 - Cache Hitting": lessons/08-cache-hitting.md
+      - "09 - Complete Agent": lessons/09-complete-agent.md
+      - "10 - Hook System": lessons/10-hook-system.md
+      - "11 - Plugin System": lessons/11-plugin-system.md
+      - "12 - Rules System": lessons/12-rules-system.md
+      - "13 - Client/Server": lessons/13-client-server.md
+      - "14 - Memory Systems": lessons/14-memory-systems.md
+      - "15 - Planning": lessons/15-planning.md
+      - "16 - Reflection": lessons/16-reflection.md
+      - "17 - Multi-Agent": lessons/17-multi-agent.md
+      - "18 - ReAct Pattern": lessons/18-react-pattern.md
+      - "19 - Observability": lessons/19-observability.md
+      - "20 - Sandboxing": lessons/20-sandboxing.md
+      - "21 - Human-in-Loop": lessons/21-human-in-loop.md
+      - "22 - Model Routing": lessons/22-model-routing.md
+      - "23 - Execution Policies": lessons/23-execution-policies.md
+      - "24 - Advanced Patterns": lessons/24-advanced-patterns.md
+      - "25 - Production Agent": lessons/25-production-agent.md
+      - "26 - Tracing & Evaluation": lessons/26-tracing-and-evaluation.md
+  - Roadmap: swarm-roadmap.md
 
 extra_javascript:
   - https://unpkg.com/mermaid@11/dist/mermaid.min.js

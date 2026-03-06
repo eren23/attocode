@@ -11,7 +11,7 @@
 
 ```bash
 git clone https://github.com/eren23/attocode.git
-cd attocode/attocode_py
+cd attocode
 
 uv sync --all-extras          # creates .venv, installs everything
 ```
@@ -19,7 +19,7 @@ uv sync --all-extras          # creates .venv, installs everything
 ### Global install (recommended for end users)
 
 ```bash
-cd attocode/attocode_py
+cd attocode
 uv tool install --force . --with anthropic --with openai
 ```
 
@@ -30,13 +30,13 @@ This installs three commands globally: `attocode`, `attocodepy`, and `attoswarm`
 Use this when you want `attocode` on PATH to run your local workspace directly:
 
 ```bash
-uv tool install --force --editable --no-cache --from /absolute/path/to/attocode/attocode_py attocode
+uv tool install --force --editable --no-cache --from /absolute/path/to/attocode attocode
 ```
 
 Example:
 
 ```bash
-uv tool install --force --editable --no-cache --from /Users/eren/Documents/AI/first-principles-agent/attocode/attocode_py attocode
+uv tool install --force --editable --no-cache --from /Users/eren/Documents/AI/first-principles-agent/attocode attocode
 ```
 
 Note: this is a single command. If your terminal wraps lines, do not split the path.
@@ -164,13 +164,13 @@ The `attocode` command always operates on **the current working directory** --- 
 For editable local development installs, use:
 
 ```bash
-uv tool install --force --editable --no-cache --from /absolute/path/to/attocode/attocode_py attocode
+uv tool install --force --editable --no-cache --from /absolute/path/to/attocode attocode
 ```
 
 **`uv run` (from the project directory):**
 
 ```bash
-cd /path/to/attocode_py
+cd /path/to/attocode
 uv run attocode "your prompt"
 ```
 
@@ -181,10 +181,10 @@ uv run attocode "your prompt"
 
 ```bash
 # bash / zsh
-alias attocode="/absolute/path/to/attocode_py/.venv/bin/attocode"
+alias attocode="/absolute/path/to/attocode/.venv/bin/attocode"
 
 # fish
-alias attocode /absolute/path/to/attocode_py/.venv/bin/attocode
+alias attocode /absolute/path/to/attocode/.venv/bin/attocode
 ```
 
 </details>

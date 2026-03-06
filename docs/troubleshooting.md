@@ -36,13 +36,13 @@ Or run the setup wizard:
 **Fix (editable local install):**
 
 ```bash
-uv tool install --force --editable --no-cache --from /absolute/path/to/attocode/attocode_py attocode
+uv tool install --force --editable --no-cache --from /absolute/path/to/attocode attocode
 ```
 
 Example:
 
 ```bash
-uv tool install --force --editable --no-cache --from /Users/eren/Documents/AI/first-principles-agent/attocode/attocode_py attocode
+uv tool install --force --editable --no-cache --from /Users/eren/Documents/AI/first-principles-agent/attocode attocode
 ```
 
 Then restart the running TUI process.

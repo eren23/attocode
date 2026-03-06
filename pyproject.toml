@@ -86,7 +86,7 @@ attocode-code-intel = "attocode.code_intel.server:main"
 Homepage = "https://github.com/eren23/attocode"
 Repository = "https://github.com/eren23/attocode"
 "Bug Tracker" = "https://github.com/eren23/attocode/issues"
-Changelog = "https://github.com/eren23/attocode/blob/main/attocode_py/CHANGELOG.md"
+Changelog = "https://github.com/eren23/attocode/blob/main/CHANGELOG.md"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/attocode", "src/attoswarm", "src/attocode_core"]

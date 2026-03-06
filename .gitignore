@@ -1,23 +1,38 @@
+# Python
 dist/
-node_modules
+__pycache__/
+.venv/
+*.egg-info/
+*.db
+*.jsonl
+.mypy_cache/
+.pytest_cache/
+.ruff_cache/
+
+# Node (lessons/)
+node_modules/
+
+# Environment
 .env
+
+# Claude/Agent
 .claude/
 .agent/
 .traces/
 .production-agent-sessions/
 .test-sandbox/
-__pycache__/
-.venv/
-attocode/.attocode/traces/
-attocode/.attocode/sessions/
+
+# Attocode runtime
 .attocode/traces/
 .attocode/sessions/
-attocode/attocode_py/.attocode/traces/
-attocode/attocode_py/.attocode/sessions/
-attocode/attocode_py/.attocode/traces/
-attocode/attocode_py/.attocode/sessions/
-attocode/attocode_py/.attocode/recordings/
-attocode/.attocode/recordings/
+.attocode/recordings/
+.attocode/cache/
+
+# Legacy TS runtime artifacts
+legacy/.attocode/traces/
+legacy/.attocode/sessions/
+legacy/.attocode/recordings/
+
+# Build outputs
+site/
 snapshot_report.html
-attocode/attocode_py/site/
-attocode/attocode_py/.attocode/cache/

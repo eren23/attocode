@@ -4,7 +4,7 @@
 
 ```bash
 git clone https://github.com/eren23/attocode.git
-cd attocode/attocode_py
+cd attocode
 
 uv sync --all-extras          # creates .venv, installs everything
 # or: python -m venv .venv && source .venv/bin/activate && pip install -e ".[dev]"

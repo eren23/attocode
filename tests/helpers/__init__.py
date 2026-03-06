@@ -1,4 +1,4 @@
-"""Shared test helpers for attocode_py test suite."""
+"""Shared test helpers for attocode test suite."""
 
 from __future__ import annotations
 

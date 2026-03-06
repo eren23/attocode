@@ -1,4 +1,8 @@
-# Attocode
+> **Note:** This is the archived TypeScript implementation of Attocode (v0.2.6).
+> The active Python implementation is at the repository root.
+> See the [main README](../README.md) for the current project.
+
+# Attocode (TypeScript - Legacy)
 
 A production-ready AI coding agent for your terminal.
 
