@@ -11,7 +11,11 @@ from textual.message import Message
 from textual.widget import Widget
 from textual.widgets import Collapsible, Input, Static, Tree
 
+from attocode.tui.widgets.command_palette import fuzzy_match
+
 logger = logging.getLogger(__name__)
+
+_FUZZY_THRESHOLD = 0.3
 
 
 class RepoOverviewWidget(Widget):
@@ -202,12 +206,13 @@ class RepoOverviewWidget(Widget):
                         names.append(cls.name)
                         for m in cls.methods:
                             names.append(m.name)
+                    names.extend(file_ast.top_level_vars)
                     ast_symbol_map[rel_path] = names
 
         # --- Entry Points ---
         filtered_entries = [
             ep for ep in self._entry_points
-            if not q or q in ep.lower() or self._symbols_match(ep, q, ast_symbol_map)
+            if not q or self._best_match_score(ep, q, ast_symbol_map) >= _FUZZY_THRESHOLD
         ]
         if filtered_entries:
             entry_branch = tree.root.add("Entry Points", data={"kind": "category"})
@@ -219,8 +224,7 @@ class RepoOverviewWidget(Widget):
         filtered_top = [
             f for f in self._top_files
             if not q
-            or q in f.get("relative_path", "").lower()
-            or self._symbols_match(f.get("relative_path", ""), q, ast_symbol_map)
+            or self._best_match_score(f.get("relative_path", ""), q, ast_symbol_map) >= _FUZZY_THRESHOLD
         ]
         if filtered_top:
             top_branch = tree.root.add("Top Files (by importance)", data={"kind": "category"})
@@ -231,17 +235,19 @@ class RepoOverviewWidget(Widget):
                 label = f"{_short_path(rp)}  [{importance:.2f}] {lang}"
                 node = top_branch.add(label, data={"kind": "file", "path": rp, "view": "deps"})
                 node.add_leaf("Loading symbols...", data={"kind": "placeholder"})
-                # Auto-expand if search matched a symbol name
-                if q and self._symbols_match(rp, q, ast_symbol_map):
-                    node.expand()
+                # Auto-expand if a symbol name fuzzy-matched the query
+                # Skip single-char queries to avoid expanding everything
+                if q and len(q) >= 2:
+                    symbol_names = ast_symbol_map.get(rp, [])
+                    if any(fuzzy_match(q, n) >= _FUZZY_THRESHOLD for n in symbol_names):
+                        node.expand()
 
         # --- Dependency Hubs ---
         top_hubs = self._dep_stats.get("top_hubs", [])
         filtered_hubs = [
             (path, count) for path, count in top_hubs
             if not q
-            or q in path.lower()
-            or self._symbols_match(path, q, ast_symbol_map)
+            or self._best_match_score(path, q, ast_symbol_map) >= _FUZZY_THRESHOLD
         ]
         if filtered_hubs:
             hub_branch = tree.root.add("Dependency Hubs", data={"kind": "category"})
@@ -252,17 +258,21 @@ class RepoOverviewWidget(Widget):
                     data={"kind": "file", "path": path, "view": "impact"},
                 )
                 node.add_leaf("Loading symbols...", data={"kind": "placeholder"})
-                if q and self._symbols_match(path, q, ast_symbol_map):
-                    node.expand()
+                if q and len(q) >= 2:
+                    symbol_names = ast_symbol_map.get(path, [])
+                    if any(fuzzy_match(q, n) >= _FUZZY_THRESHOLD for n in symbol_names):
+                        node.expand()
 
         tree.root.expand()
 
-    def _symbols_match(
-        self, rel_path: str, query: str, symbol_map: dict[str, list[str]]
-    ) -> bool:
-        """Check if any symbol in the file matches the query."""
-        names = symbol_map.get(rel_path, [])
-        return any(query in n.lower() for n in names)
+    def _best_match_score(
+        self, path: str, query: str, symbol_map: dict[str, list[str]]
+    ) -> float:
+        """Return best fuzzy match score across file path and its symbol names."""
+        best = fuzzy_match(query, path)
+        for name in symbol_map.get(path, []):
+            best = max(best, fuzzy_match(query, name))
+        return best
 
     # --- Lazy symbol loading on expand ---
 
@@ -329,7 +339,9 @@ class RepoOverviewWidget(Widget):
                 )
             has_symbols = True
 
-        # Top-level functions as leaves
+        # Top-level functions as leaves (filtering applies for all query lengths,
+        # but auto-expand only kicks in for len(q) >= 2 — this intentional asymmetry
+        # reduces noise for single-char queries while still narrowing the file list)
         for fn in file_ast.functions:
             if fn.is_method:
                 continue
@@ -348,6 +360,22 @@ class RepoOverviewWidget(Widget):
                     "symbol_kind": "function",
                     "start_line": fn.start_line,
                     "end_line": fn.end_line,
+                },
+            )
+            has_symbols = True
+
+        # Top-level constants
+        for var_name in file_ast.top_level_vars:
+            node.add_leaf(
+                f"const {var_name}",
+                data={
+                    "kind": "symbol",
+                    "path": path,
+                    "name": var_name,
+                    "qualified_name": var_name,
+                    "symbol_kind": "variable",
+                    "start_line": 0,
+                    "end_line": 0,
                 },
             )
             has_symbols = True

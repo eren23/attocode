@@ -13,6 +13,34 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Fix `attoswarm tui` not picking up new TUI widgets when installed via `uv tool install`
 - Enabling code understanding tools of attocode to other AI coders as a skill system
 
+## [0.1.16] - 2026-03-06
+
+### Added
+
+- **Graph visualization commands** — `/graph`, `/deps`, `/impact`, `/hotspots` slash commands for interactive codebase graph exploration
+- **Graph screen** (`tui/screens/graph_screen.py`) — dedicated TUI screen for dependency graph, impact analysis, and hotspot heatmap visualization
+- **Repo overview widget** (`tui/widgets/repo_overview.py`) — interactive codebase tree with fuzzy search, lazy symbol loading, language bar chart
+- **Dependency graph widget** (`tui/widgets/dependency_graph.py`) — tree-based dependency visualization
+- **Hotspot heatmap widget** (`tui/widgets/hotspot_heatmap.py`) — visual heatmap of code complexity hotspots
+- **Impact graph widget** (`tui/widgets/impact_graph.py`) — blast radius visualization for file changes
+- **Fuzzy search in repo overview** — search files and symbols with fuzzy matching, auto-expand on symbol match, single-char guard
+- **Constants in symbol search** — `top_level_vars` now indexed in fuzzy search and visible in expanded tree nodes
+- **5 new MCP code-intel tools** — `graph_query`, `find_related`, `community_detection` + enhancements to existing tools
+
+### Changed
+
+- `symbol_count` property now includes `top_level_vars` (consistent with `get_symbols()`)
+- License changed from MIT to custom Attocode License (free for personal use and small teams; larger commercial use requires notification)
+
+### Fixed
+
+- Constants searchable but not visible when expanding tree nodes in repo overview
+- Tautological auto-expand tests replaced with score-based assertions
+
+### Tests
+
+- 21 fuzzy search tests (`tests/unit/tui/test_fuzzy_search.py`)
+
 ## [0.1.15] - 2026-03-06
 
 ### Added

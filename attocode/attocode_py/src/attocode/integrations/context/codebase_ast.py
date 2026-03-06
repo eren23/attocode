@@ -111,12 +111,13 @@ class FileAST:
 
     @property
     def symbol_count(self) -> int:
-        return len(self.functions) + len(self.classes)
+        return len(self.functions) + len(self.classes) + len(self.top_level_vars)
 
     def get_symbols(self) -> list[str]:
-        """Get all top-level symbol names."""
+        """Get all top-level symbol names (functions, classes, and constants)."""
         symbols = [f.name for f in self.functions]
         symbols.extend(c.name for c in self.classes)
+        symbols.extend(self.top_level_vars)
         return symbols
 
 
