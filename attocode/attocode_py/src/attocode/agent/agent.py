@@ -102,6 +102,7 @@ class ProductionAgent:
         self._session_store: Any = None       # Persists across runs for /goals, /audit, /grants, etc.
         self._session_id: str | None = None   # Current session ID
         self._conversation_messages: list[Message] = []  # Persists across TUI runs
+        self._last_image_warning: str | None = None  # Warning when images are dropped
 
     @property
     def status(self) -> AgentStatus:
@@ -383,6 +384,34 @@ class ProductionAgent:
             prompt: The user's text prompt.
             images: Optional list of image file paths to include inline.
         """
+        # Check vision capability — strip images early with user-facing warning
+        if images:
+            provider_name = getattr(self._provider, "name", "unknown")
+            # Level 1: provider doesn't support vision at all
+            # getattr used because providers implement LLMProvider via structural
+            # typing (Protocol), not subclass — attribute may not exist on all impls.
+            if not getattr(self._provider, "supports_vision", True):
+                warning = (
+                    f"Images not sent — the {provider_name} provider does not "
+                    f"support inline images currently."
+                )
+                logger.warning(warning)
+                self._last_image_warning = warning
+                images = None
+            else:
+                # Level 2: specific model doesn't support vision
+                from attocode.providers.model_cache import is_vision_capable
+
+                model = self._config.model if self._config else ""
+                if model and not is_vision_capable(model):
+                    warning = (
+                        f"Images not sent — model {model} does not support "
+                        f"vision input."
+                    )
+                    logger.warning(warning)
+                    self._last_image_warning = warning
+                    images = None
+
         if self._status == AgentStatus.RUNNING:
             return AgentResult(
                 success=False,
@@ -843,6 +872,12 @@ class ProductionAgent:
     def reset_conversation(self) -> None:
         """Reset conversation history for a fresh start (/clear)."""
         self._conversation_messages = []
+
+    def pop_image_warning(self) -> str | None:
+        """Return and clear the last image warning, if any."""
+        warning = self._last_image_warning
+        self._last_image_warning = None
+        return warning
 
     def get_budget_usage(self) -> float:
         """Get the current budget usage as a fraction (0.0 to 1.0).

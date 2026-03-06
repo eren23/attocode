@@ -8,7 +8,7 @@ from __future__ import annotations
 import base64
 import logging
 import os
-import re
+import shlex
 from pathlib import Path
 
 from attocode.tools.vision import _detect_mime, _validate_file_path
@@ -21,53 +21,38 @@ IMAGE_EXTENSIONS = {".png", ".jpg", ".jpeg", ".gif", ".webp", ".bmp", ".tiff", "
 # Max image file size: 20 MB
 MAX_IMAGE_SIZE = 20 * 1024 * 1024
 
-# Regex for quoted paths: "..." or '...'
-_QUOTED_PATH_RE = re.compile(r"""(['"])((?:(?!\1).)+\.[a-zA-Z]{2,5})\1""")
-
-# Regex for unquoted paths: /absolute or ./relative or ~/home, ending with image ext
-_UNQUOTED_PATH_RE = re.compile(
-    r"""(?:^|\s)((?:[/~.]|[A-Za-z]:[\\/])"""  # starts with / ~ . or drive letter
-    r"""[^\s'"]*\.[a-zA-Z]{2,5})"""  # rest of path with extension
-    r"""(?=\s|$)""",
-)
-
 
 def extract_image_paths(text: str) -> tuple[str, list[str]]:
     """Extract image file paths from user text input.
 
-    Handles:
-    - Bare file paths: /path/to/image.png
-    - Quoted paths: "/path/to/image.png" or '/path/to/image.png'
-    - Paths with ~ (home directory)
+    Uses shell-style tokenization (shlex) to correctly handle:
+    - Backslash-escaped spaces from macOS drag-drop:
+        /Users/me/Screenshot\\ 2026-03-05\\ at\\ 18.42.57.png
+    - Quoted paths: "/Users/me/My Photos/img.png"
+    - Simple unquoted paths: /tmp/image.png
     - Multiple images in one prompt
 
     Returns (remaining_text, list_of_image_paths).
     """
+    # Use shell-style tokenization — handles \\ escapes and quotes
+    try:
+        tokens = shlex.split(text)
+    except ValueError:
+        # Unbalanced quotes or other parse error — fall back to simple split
+        tokens = text.split()
+
     image_paths: list[str] = []
-    remaining = text
+    remaining_tokens: list[str] = []
 
-    # First pass: quoted paths
-    for match in _QUOTED_PATH_RE.finditer(text):
-        path_str = match.group(2)
-        if _is_image_extension(path_str):
-            resolved = _resolve_path(path_str)
+    for token in tokens:
+        if _is_image_extension(token):
+            resolved = _resolve_path(token)
             if resolved and os.path.isfile(resolved):
                 image_paths.append(resolved)
-                # Remove the entire quoted match (including quotes) from remaining
-                remaining = remaining.replace(match.group(0), "", 1)
+                continue
+        remaining_tokens.append(token)
 
-    # Second pass: unquoted paths (on the remaining text after quoted removal)
-    for match in _UNQUOTED_PATH_RE.finditer(remaining):
-        path_str = match.group(1)
-        if _is_image_extension(path_str):
-            resolved = _resolve_path(path_str)
-            if resolved and os.path.isfile(resolved):
-                image_paths.append(resolved)
-                remaining = remaining.replace(path_str, "", 1)
-
-    # Clean up extra whitespace
-    remaining = " ".join(remaining.split()).strip()
-
+    remaining = " ".join(remaining_tokens).strip()
     return remaining, image_paths
 
 

@@ -38,7 +38,12 @@ class _PromptTextArea(TextArea):
             if value:
                 from attocode.tools.image_utils import extract_image_paths
                 remaining, images = extract_image_paths(value)
-                self.post_message(self.Submitted(remaining or value, images or None))
+                if images:
+                    # Images found — use remaining text (may be empty)
+                    self.post_message(self.Submitted(remaining, images))
+                else:
+                    # No images — pass original text
+                    self.post_message(self.Submitted(value))
             return
         super()._on_key(event)
 
@@ -112,9 +117,9 @@ class PromptInput(Widget):
         event.stop()
         value = event.value
         images = event.images
-        if not value or not self._enabled:
+        if (not value and not images) or not self._enabled:
             return
-        if not self._history or self._history[-1] != value:
+        if value and (not self._history or self._history[-1] != value):
             self._history.append(value)
         self._history_index = -1
         ta = self.query_one("#prompt-input", _PromptTextArea)

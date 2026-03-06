@@ -90,6 +90,10 @@ def build_user_message(
 
     When images are provided, returns a MessageWithStructuredContent
     containing text + image content blocks. Otherwise returns a plain Message.
+
+    Note: working_dir is NOT enforced for user-provided images. The user
+    explicitly chose to share these files (drag-drop / paste), unlike
+    agent-initiated vision_analyze calls where the restriction applies.
     """
     if not images:
         text = prompt or "Describe this image."
@@ -102,7 +106,8 @@ def build_user_message(
     content_blocks.append(TextContentBlock(text=text))
 
     for img_path in images:
-        source = load_image_to_source(img_path, working_dir or None)
+        # No working_dir restriction — user explicitly shared these files
+        source = load_image_to_source(img_path)
         if source is not None:
             content_blocks.append(ImageContentBlock(source=source))
 
