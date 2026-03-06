@@ -184,7 +184,7 @@ async def handle_command(
         return _mode_command(agent, arg)
 
     if cmd == "/plan":
-        return _plan_command(agent, arg)
+        return _plan_command(agent, arg, app=app)
 
     if cmd == "/show-plan":
         return _show_plan_command(agent)
@@ -245,6 +245,16 @@ async def handle_command(
 
     if cmd == "/repomap":
         return _repomap_command(agent, arg)
+
+    # --- Graph visualization commands ---
+    if cmd == "/deps":
+        return _deps_command(agent, arg, app=app)
+
+    if cmd == "/impact":
+        return _impact_command(agent, arg, app=app)
+
+    if cmd == "/graph":
+        return _graph_command(agent, app=app)
 
     # --- Debug commands ---
     if cmd == "/trace":
@@ -371,6 +381,11 @@ def _help_text() -> str:
         "  /repomap symbols  Tree with function/class annotations\n"
         "  /repomap deps     Dependency graph stats\n"
         "  /repomap analyze  Force re-discovery (clear caches)\n"
+        "\n"
+        "Graph:\n"
+        "  /deps <file>      Show dependency graph for a file\n"
+        "  /impact <file>    Show blast radius / impact analysis\n"
+        "  /graph            Show repo overview (overview/deps/impact/hotspots)\n"
         "\n"
         "Debug:\n"
         "  /trace [subcmd]   Trace inspection (summary/analyze/issues/export)\n"
@@ -807,7 +822,7 @@ def _mode_command(agent: Any, arg: str) -> CommandResult:
     return CommandResult(output=result)
 
 
-def _plan_command(agent: Any, arg: str) -> CommandResult:
+def _plan_command(agent: Any, arg: str, *, app: Any = None) -> CommandResult:
     ctx = _get_ctx(agent)
     mode_mgr = getattr(ctx, "mode_manager", None) if ctx else None
 
@@ -819,6 +834,20 @@ def _plan_command(agent: Any, arg: str) -> CommandResult:
         mode_mgr.switch_mode("plan")
         if ctx and hasattr(ctx, "goal"):
             ctx.goal = arg
+
+        # Emit plan event to TUI so PlanPanel shows data
+        if app and hasattr(app, "post_message"):
+            try:
+                from attocode.tui.events import PlanUpdated
+                from attocode.types.agent import AgentPlan, PlanTask, TaskStatus
+                plan = AgentPlan(
+                    goal=arg,
+                    tasks=[PlanTask(id="plan-0", description=arg, status=TaskStatus.IN_PROGRESS)],
+                )
+                app.post_message(PlanUpdated(plan=plan))
+            except Exception:
+                pass
+
         return CommandResult(
             output=f"Entered plan mode. Goal: {arg}\n"
             "Use /show-plan to see proposed changes, /approve to apply them."
@@ -1945,6 +1974,125 @@ def _repomap_command(agent: Any, arg: str) -> CommandResult:
         return CommandResult(output="\n".join(lines))
     except Exception as e:
         return CommandResult(output=f"Tree generation failed: {e}")
+
+
+# ============================================================
+# Graph visualization command handlers
+# ============================================================
+
+
+def _get_ast_svc(agent: Any) -> Any:
+    """Get or create an ASTService for graph commands."""
+    wd = _get_working_dir(agent)
+    if not wd:
+        return None
+    try:
+        from attocode.integrations.context.ast_service import ASTService
+        svc = ASTService.get_instance(wd)
+        if not svc.initialized:
+            svc.initialize()
+        return svc
+    except Exception:
+        return None
+
+
+def _deps_command(agent: Any, arg: str, *, app: Any = None) -> CommandResult:
+    """Show dependency graph for a file. Opens GraphScreen in TUI mode."""
+    if not arg:
+        return CommandResult(output="Usage: /deps <file_path>")
+
+    wd = _get_working_dir(agent) or "."
+
+    # TUI mode: push GraphScreen
+    if app and hasattr(app, "push_screen"):
+        try:
+            from attocode.tui.screens.graph_screen import GraphScreen
+            app.push_screen(GraphScreen(mode="deps", file=arg.strip(), working_dir=wd))
+            return CommandResult(output="")
+        except Exception as e:
+            return CommandResult(output=f"Failed to open graph screen: {e}")
+
+    # REPL fallback: text output
+    svc = _get_ast_svc(agent)
+    if not svc:
+        return CommandResult(output="AST service not available.")
+
+    rel = svc._to_rel(arg.strip())
+    deps = sorted(svc.get_dependencies(rel))
+    importers = sorted(svc.get_dependents(rel))
+    lines = [f"Dependencies for {rel}:"]
+    lines.append(f"\n  Imports ({len(deps)}):")
+    for d in deps[:20]:
+        lines.append(f"    -> {d}")
+    lines.append(f"\n  Imported by ({len(importers)}):")
+    for i in importers[:20]:
+        lines.append(f"    <- {i}")
+    return CommandResult(output="\n".join(lines))
+
+
+def _impact_command(agent: Any, arg: str, *, app: Any = None) -> CommandResult:
+    """Show impact analysis for a file. Opens GraphScreen in TUI mode."""
+    if not arg:
+        return CommandResult(output="Usage: /impact <file_path>")
+
+    wd = _get_working_dir(agent) or "."
+
+    # TUI mode: push GraphScreen
+    if app and hasattr(app, "push_screen"):
+        try:
+            from attocode.tui.screens.graph_screen import GraphScreen
+            app.push_screen(GraphScreen(mode="impact", file=arg.strip(), working_dir=wd))
+            return CommandResult(output="")
+        except Exception as e:
+            return CommandResult(output=f"Failed to open graph screen: {e}")
+
+    # REPL fallback: text output
+    svc = _get_ast_svc(agent)
+    if not svc:
+        return CommandResult(output="AST service not available.")
+
+    rel = svc._to_rel(arg.strip())
+    affected = svc.get_impact([rel])
+    lines = [f"Impact analysis for {rel}: {len(affected)} files affected"]
+    for f in sorted(affected)[:30]:
+        lines.append(f"    > {f}")
+    if len(affected) > 30:
+        lines.append(f"    ... and {len(affected) - 30} more")
+    return CommandResult(output="\n".join(lines))
+
+
+def _graph_command(agent: Any, *, app: Any = None) -> CommandResult:
+    """Show repo overview. Opens GraphScreen in TUI mode."""
+    wd = _get_working_dir(agent) or "."
+
+    # TUI mode: push GraphScreen
+    if app and hasattr(app, "push_screen"):
+        try:
+            from attocode.tui.screens.graph_screen import GraphScreen
+            app.push_screen(GraphScreen(mode="overview", working_dir=wd))
+            return CommandResult(output="")
+        except Exception as e:
+            return CommandResult(output=f"Failed to open graph screen: {e}")
+
+    # REPL fallback: text output
+    svc = _get_ast_svc(agent)
+    if not svc:
+        return CommandResult(output="AST service not available.")
+
+    idx = svc._index
+    hotspots: list[tuple[str, int]] = []
+    for f in idx.file_symbols:
+        fan_in = len(idx.get_dependents(f))
+        fan_out = len(idx.get_dependencies(f))
+        symbol_count = len(idx.file_symbols.get(f, set()))
+        score = fan_in * 2 + fan_out + symbol_count
+        hotspots.append((f, score))
+
+    hotspots.sort(key=lambda h: h[1], reverse=True)
+    lines = ["Hotspot heatmap (top 15):"]
+    for f, score in hotspots[:15]:
+        lines.append(f"  [{score:>4}] {f}")
+    return CommandResult(output="\n".join(lines))
 
 
 # ============================================================

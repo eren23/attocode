@@ -38,6 +38,10 @@ from attocode.tui.widgets.command_palette import (
 )
 from attocode.tui.widgets.token_sparkline import TokenSparkline
 from attocode.tui.widgets.metrics_table import MetricsScreen
+from attocode.tui.widgets.dependency_graph import DependencyGraphWidget
+from attocode.tui.widgets.impact_graph import ImpactGraphWidget
+from attocode.tui.widgets.hotspot_heatmap import HotspotHeatmap
+from attocode.tui.widgets.repo_overview import RepoOverviewWidget
 
 __all__ = [
     # existing
@@ -95,4 +99,9 @@ __all__ = [
     "TokenSparkline",
     # metrics_table
     "MetricsScreen",
+    # graph widgets
+    "DependencyGraphWidget",
+    "ImpactGraphWidget",
+    "HotspotHeatmap",
+    "RepoOverviewWidget",
 ]

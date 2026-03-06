@@ -1,6 +1,6 @@
 # Code Intelligence MCP Server — Agent Guidelines
 
-> **24 tools** for deep codebase understanding. This guide helps AI agents use them
+> **27 tools** for deep codebase understanding. This guide helps AI agents use them
 > efficiently, minimizing token usage while maximizing insight.
 
 ---
@@ -33,6 +33,9 @@
 |------|---------|-------------|
 | `dependencies` | Direct imports and importers for a file | Quick dependency check |
 | `dependency_graph` | Multi-hop dependency tree (BFS both directions) | Understand module relationships |
+| `graph_query` | BFS traversal with typed edges and direction control | Targeted import/importer walks |
+| `find_related` | Find structurally similar files (Jaccard + 2-hop) | Discover related modules |
+| `community_detection` | Connected-component clustering of the import graph | Understand module boundaries |
 | `impact_analysis` | Transitive blast radius of file changes | **Before modifying files** |
 | `relevant_context` | Subgraph capsule — file + neighbors with symbols | Understand a file in context (replaces N+1 calls) |
 
@@ -245,6 +248,78 @@ When the language server is unavailable or returns "LSP not available":
 8. **`semantic_search` for known exact names.** Use `search_symbols("MyClass")` — it's faster and more precise. Save `semantic_search` for "find code that handles authentication"-style queries.
 
 9. **Ignoring importance scores in `explore_codebase` output.** High-importance files (>0.7) are entry points and hubs. Start there.
+
+---
+
+## Graph Query Tools (New)
+
+### `graph_query` — Directed BFS with edge types
+
+Walk imports or importers from a file with depth control.
+
+```json
+{"file": "src/core/loop.py", "edge_type": "IMPORTS", "direction": "outbound", "depth": 2}
+```
+
+Returns files grouped by hop distance:
+```
+Hop 1:
+  > src/core/tool_executor.py
+  > src/core/response_handler.py
+Hop 2:
+  >> src/providers/base.py
+  >> src/tools/registry.py
+```
+
+Use `direction: "inbound"` or `edge_type: "IMPORTED_BY"` to reverse:
+```json
+{"file": "src/types/events.py", "direction": "inbound", "depth": 1}
+```
+
+### `find_related` — Structural similarity
+
+Find files related by import patterns (not just direct imports).
+
+```json
+{"file": "src/agent/agent.py", "top_k": 5}
+```
+
+Returns ranked list with relationship type:
+```
+Files related to src/agent/agent.py:
+  [  9] src/agent/builder.py  (direct)
+  [  6] src/core/loop.py  (direct)
+  [  3] src/agent/context.py  (direct)
+  [  2] src/providers/base.py  (transitive)
+```
+
+### `community_detection` — Module clustering
+
+Find natural groupings in the codebase.
+
+```json
+{"min_community_size": 5, "max_communities": 10}
+```
+
+Returns communities with hub files:
+```
+Community 1 (45 files):
+  Hub: src/types/events.py (degree 32)
+  - src/agent/agent.py (degree 15)
+  - src/core/loop.py (degree 12)
+  ...
+
+Community 2 (18 files):
+  Hub: src/tui/app.py (degree 14)
+  ...
+```
+
+### Resources
+
+Two MCP resources for direct content access:
+
+- `attocode://project/{path}` — File content with line numbers (path-traversal protected)
+- `attocode://symbols/{name}` — Symbol definitions with source snippets
 
 10. **Modifying files without `impact_analysis` first.** Always check the blast radius before making changes to shared/hub files.
 

@@ -767,10 +767,13 @@ class ProductionAgent:
         """
         from attocode.integrations.mcp.client_manager import MCPClientManager
         from attocode.integrations.mcp.config import MCPServerConfig
+        from attocode.integrations.mcp.meta_tools import MCPMetaTools
         from attocode.tools.base import Tool, ToolSpec
         from attocode.types.messages import DangerLevel
 
-        manager = MCPClientManager()
+        if not hasattr(self, "_mcp_meta_tools") or self._mcp_meta_tools is None:
+            self._mcp_meta_tools = MCPMetaTools()
+        manager = MCPClientManager(meta_tools=self._mcp_meta_tools)
 
         # Convert dicts to MCPServerConfig and register
         configs: list[MCPServerConfig] = []

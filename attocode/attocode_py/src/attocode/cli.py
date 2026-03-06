@@ -532,9 +532,10 @@ def _run_tui(config: Any) -> None:
                 message=meta.get("message", ""),
             ))
         elif event.type == EventType.BUDGET_EXHAUSTED:
+            meta = event.metadata or {}
             _post_event(BudgetWarning(
-                message=event.metadata.get("message", "") if event.metadata else "",
-                usage_fraction=1.0,
+                message=meta.get("message", ""),
+                usage_fraction=meta.get("usage_fraction", 1.0),
             ))
         elif event.type == EventType.BUDGET_EXTENSION_GRANTED:
             meta = event.metadata or {}
