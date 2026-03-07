@@ -51,6 +51,42 @@ attocode --resume abc123
 attocode --non-interactive "List all TODO comments"
 ```
 
+## Code Intelligence Server
+
+The `code-intel serve` subcommand starts the MCP or HTTP server for code intelligence tools.
+
+```bash
+attocode code-intel serve [options]
+```
+
+| Flag | Default | Description |
+|------|---------|-------------|
+| `--transport <type>` | `stdio` | Transport protocol: `stdio`, `sse`, or `http` |
+| `--project <path>` | `.` | Project directory to index |
+| `--host <addr>` | `127.0.0.1` | Server bind address (for `sse` and `http` transports) |
+| `--port <num>` | `8080` | Server port (for `sse` and `http` transports) |
+
+### Transport Modes
+
+| Transport | Protocol | Use Case |
+|-----------|----------|----------|
+| `stdio` | MCP over stdin/stdout | AI coding assistants (Claude Code, Cursor, etc.) |
+| `sse` | MCP over Server-Sent Events | Remote MCP clients |
+| `http` | REST API (FastAPI) | Custom integrations, CI pipelines, multi-project |
+
+```bash
+# Default: MCP over stdio
+attocode code-intel serve --project /path/to/repo
+
+# HTTP REST API
+attocode code-intel serve --transport http --project /path/to/repo
+
+# SSE transport on custom port
+attocode code-intel serve --transport sse --host 0.0.0.0 --port 9090
+```
+
+The HTTP transport serves interactive API docs at `/docs` (Swagger) and `/redoc`. See [Code Intel HTTP API](code-intel-http-api.md) for the full endpoint reference.
+
 ## Keyboard Shortcuts
 
 | Key | Action |

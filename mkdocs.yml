@@ -58,6 +58,7 @@ nav:
       - Sessions & Persistence: sessions-guide.md
       - Context Engineering: context-engineering.md
       - AST & Code Intelligence: ast-and-code-intelligence.md
+      - Code Intel HTTP API: code-intel-http-api.md
       - Advanced Features: advanced-features.md
   - Guides:
       - Providers: PROVIDERS.md

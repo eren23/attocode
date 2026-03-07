@@ -2,6 +2,11 @@
 
 > **27 tools** for deep codebase understanding. This guide helps AI agents use them
 > efficiently, minimizing token usage while maximizing insight.
+>
+> These tools are available via MCP (stdio/SSE) **and** as a REST API over HTTP.
+> The HTTP API supports multi-project management, bearer token auth, and interactive
+> docs at `/docs`. Start the HTTP server with:
+> `attocode code-intel serve --transport http --project /path/to/repo`
 
 ---
 

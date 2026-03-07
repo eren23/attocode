@@ -1,0 +1,28 @@
+version: "3.8"
+
+services:
+  code-intel:
+    build:
+      context: ../..
+      dockerfile: docker/code-intel/Dockerfile
+    ports:
+      - "${ATTOCODE_PORT:-8080}:8080"
+    environment:
+      - ATTOCODE_PROJECT_DIR=/project
+      - ATTOCODE_API_KEY=${ATTOCODE_API_KEY:-}
+      - ATTOCODE_HOST=0.0.0.0
+      - ATTOCODE_PORT=8080
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+    volumes:
+      # Mount a local project to analyze (read-only)
+      - ${PROJECT_DIR:-.}:/project:ro
+      # Writable volume for SQLite cache (graph.db, embeddings.db, memory.db)
+      - code-intel-cache:/project/.attocode/cache
+
+volumes:
+  code-intel-cache:

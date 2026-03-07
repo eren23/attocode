@@ -58,7 +58,11 @@ tree-sitter = [
 watch = ["watchfiles>=1.0"]
 semantic = ["sentence-transformers>=3.0"]
 semantic-nomic = ["sentence-transformers>=3.0", "einops"]
-code-intel = []  # mcp moved to required deps (entry point always registered)
+code-intel = [
+    "fastapi>=0.115",
+    "uvicorn[standard]>=0.34",
+    "python-multipart>=0.0.18",
+]
 docs = [
     "mkdocs>=1.6",
     "mkdocs-material>=9.5",
@@ -113,7 +117,7 @@ testpaths = ["tests"]
 asyncio_mode = "auto"
 markers = [
     "slow: marks tests as slow (deselect with '-m \"not slow\"')",
-    "integration: marks integration tests",
+    "integration: tests that use real services (not mocked)",
     "live_swarm: opt-in live backend swarm smoke tests",
 ]
 
