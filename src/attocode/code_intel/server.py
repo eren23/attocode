@@ -1999,7 +1999,7 @@ async def lsp_hover(file: str, line: int, col: int = 0) -> str:
 
 
 @mcp.tool()
-async def lsp_diagnostics(file: str) -> str:
+def lsp_diagnostics(file: str) -> str:
     """Get errors and warnings from the language server for a file.
 
     Args:
@@ -2614,7 +2614,11 @@ def main() -> None:
 
     logger.info("Starting attocode-code-intel for %s (transport=%s)", project_dir, transport)
     try:
-        if transport == "sse":
+        if transport == "http":
+            from attocode.code_intel.cli import _serve_http
+
+            _serve_http(project_dir, host=host, port=port, debug=False)
+        elif transport == "sse":
             mcp.run(transport="sse", host=host, port=port)
         else:
             mcp.run(transport="stdio")

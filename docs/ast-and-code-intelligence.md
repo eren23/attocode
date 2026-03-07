@@ -306,21 +306,70 @@ All targets support `--project <path>` to specify the project directory (default
 
 ### Available Tools
 
-The MCP server exposes 11 tools:
+The MCP server exposes 27 tools across 6 categories:
+
+#### Orientation
 
 | Tool | Parameters | Description |
 |------|-----------|-------------|
+| `bootstrap` | `task_hint`, `max_tokens` | All-in-one codebase orientation (summary + map + conventions + search) |
+| `project_summary` | `max_tokens` | High-level project overview (languages, structure, entry points) |
 | `repo_map` | `include_symbols`, `max_tokens` | Token-budgeted file tree with top-level symbols |
+| `explore_codebase` | `path`, `max_items`, `importance_threshold` | Hierarchical drill-down navigation |
+| `hotspots` | `top_n` | Risk/complexity analysis with percentile-ranked hotspots |
+| `conventions` | `sample_size`, `path` | Code style and convention detection (naming, typing, patterns) |
+
+#### Symbol Lookup
+
+| Tool | Parameters | Description |
+|------|-----------|-------------|
 | `symbols` | `path` | List all symbols (functions, classes, methods) in a file |
 | `search_symbols` | `name` | Fuzzy symbol search across the entire codebase |
-| `dependencies` | `path` | Show what a file imports from and what imports it |
-| `impact_analysis` | `changed_files` | Transitive impact set via BFS on reverse dependency graph |
 | `cross_references` | `symbol_name` | Find where a symbol is defined and all its usage sites |
 | `file_analysis` | `path` | Detailed single-file analysis: chunks, imports, exports |
+
+#### Dependencies & Graph
+
+| Tool | Parameters | Description |
+|------|-----------|-------------|
+| `dependencies` | `path` | Show what a file imports from and what imports it |
 | `dependency_graph` | `start_file`, `depth` | Dependency graph radiating outward from a file |
-| `project_summary` | --- | High-level project overview (languages, structure, entry points) |
-| `hotspots` | --- | Risk/complexity analysis with percentile-ranked hotspots |
-| `conventions` | --- | Code style and convention detection (naming, typing, patterns) |
+| `graph_query` | `file`, `edge_type`, `direction`, `depth` | BFS traversal with typed edges and direction control |
+| `find_related` | `file`, `top_k` | Find structurally similar files (Jaccard + 2-hop) |
+| `community_detection` | `min_community_size`, `max_communities` | Connected-component clustering of the import graph |
+| `impact_analysis` | `changed_files` | Transitive impact set via BFS on reverse dependency graph |
+| `relevant_context` | `files`, `depth`, `max_tokens`, `include_symbols` | Subgraph capsule --- file + neighbors with symbols |
+
+#### Search & Security
+
+| Tool | Parameters | Description |
+|------|-----------|-------------|
+| `semantic_search` | `query`, `top_k`, `file_filter` | Natural language code search (vector + keyword RRF) |
+| `security_scan` | `mode`, `path` | Secret detection, anti-patterns, dependency issues |
+
+#### LSP
+
+| Tool | Parameters | Description |
+|------|-----------|-------------|
+| `lsp_definition` | `file`, `line`, `col` | Type-resolved go-to-definition |
+| `lsp_references` | `file`, `line`, `col`, `include_declaration` | All references with type awareness |
+| `lsp_hover` | `file`, `line`, `col` | Type signature + documentation |
+| `lsp_diagnostics` | `file` | Errors and warnings from language server |
+
+#### Memory & Recall
+
+| Tool | Parameters | Description |
+|------|-----------|-------------|
+| `recall` | `query`, `scope`, `max_results` | Retrieve relevant project learnings |
+| `record_learning` | `type`, `description`, `details`, `scope`, `confidence` | Record patterns/conventions/gotchas |
+| `learning_feedback` | `learning_id`, `helpful` | Mark learning as helpful/unhelpful |
+| `list_learnings` | `status`, `type`, `scope` | Browse all stored learnings |
+
+#### Index Maintenance
+
+| Tool | Parameters | Description |
+|------|-----------|-------------|
+| `notify_file_changed` | `files` | Trigger index update for changed files |
 
 ### CLI Reference
 
@@ -366,8 +415,33 @@ python -m attocode.code_intel.server --project /path/to/repo
 
 The server uses stdio transport and speaks the MCP protocol. Any MCP client can connect to it.
 
+## HTTP API
+
+The same 27 tools are also available as a REST API over HTTP, supporting multi-project management, bearer token authentication, and interactive Swagger/ReDoc docs.
+
+```bash
+# Start the HTTP server
+attocode code-intel serve --transport http --project /path/to/repo
+
+# Open http://localhost:8080/docs for Swagger UI
+```
+
+For the full endpoint reference, authentication setup, Docker deployment, and client examples, see the dedicated **[Code Intel HTTP API](code-intel-http-api.md)** page.
+
+## Docker Deployment
+
+A Docker setup is provided in `docker/code-intel/` for containerized deployment of the HTTP API:
+
+```bash
+cd docker/code-intel
+PROJECT_DIR=/path/to/repo docker-compose up --build
+```
+
+Your source code is mounted read-only; cache databases persist in a named volume. See **[Code Intel HTTP API --- Docker Deployment](code-intel-http-api.md#docker-deployment)** for details.
+
 ## Related Pages
 
+- [Code Intel HTTP API](code-intel-http-api.md) --- REST endpoints, auth, Docker, client examples
 - [Context Engineering](context-engineering.md) --- How context blocks and code context work together
 - [Architecture](ARCHITECTURE.md) --- Overall system design
 - [Extending Attocode](extending.md) --- Adding custom tools

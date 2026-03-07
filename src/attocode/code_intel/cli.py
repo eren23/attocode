@@ -80,9 +80,9 @@ def _print_help() -> None:
         "  --hooks             Also install PostToolUse hooks (Claude Code)\n"
         "\n"
         "Serve options:\n"
-        "  --transport <type>  Transport protocol: stdio (default) or sse\n"
-        "  --host <addr>       SSE host address (default: 127.0.0.1)\n"
-        "  --port <num>        SSE port number (default: 8080)\n"
+        "  --transport <type>  Transport protocol: stdio (default), sse, or http\n"
+        "  --host <addr>       Server host address (default: 127.0.0.1)\n"
+        "  --port <num>        Server port number (default: 8080)\n"
         "\n"
         "Notify options:\n"
         "  --file <path>       File that changed (repeatable)\n"
@@ -198,10 +198,37 @@ def _cmd_serve(args: list[str], *, debug: bool = False) -> None:
 
     abs_dir = os.path.abspath(project_dir)
     print(f"Starting attocode-code-intel server for {abs_dir} (transport={transport})", file=sys.stderr)
-    if transport == "sse":
+    if transport == "http":
+        _serve_http(abs_dir, host=host, port=port, debug=debug)
+    elif transport == "sse":
         mcp.run(transport="sse", host=host, port=port)
     else:
         mcp.run(transport="stdio")
+
+
+def _serve_http(project_dir: str, *, host: str, port: int, debug: bool) -> None:
+    """Start the FastAPI HTTP server."""
+    try:
+        import uvicorn
+    except ImportError:
+        print(
+            "Error: uvicorn not installed. Install with: pip install 'attocode[code-intel]'",
+            file=sys.stderr,
+        )
+        sys.exit(1)
+
+    from attocode.code_intel.api.app import create_app
+    from attocode.code_intel.config import CodeIntelConfig
+
+    config = CodeIntelConfig(
+        project_dir=project_dir,
+        host=host,
+        port=port,
+        api_key=os.environ.get("ATTOCODE_API_KEY", ""),
+        log_level="debug" if debug else "info",
+    )
+    app = create_app(config)
+    uvicorn.run(app, host=host, port=port, log_level=config.log_level)
 
 
 def _cmd_status() -> None:
