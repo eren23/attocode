@@ -96,6 +96,7 @@ class SwarmOrchestrator:
         self._state_seq = 0
         self._manifest: SwarmManifest | None = None
         self._tasks: dict[str, TaskSpec] = {}
+        self._task_attempts: dict[str, int] = {}
 
     # ------------------------------------------------------------------
     # Public API
@@ -211,7 +212,8 @@ class SwarmOrchestrator:
                 self._persist_state()
 
                 batch_tasks = [self._task_to_dict(tid) for tid in parallel]
-                results = await self._subagent_mgr.execute_batch(batch_tasks)
+                task_timeout = max(t.get("timeout_seconds", 0) for t in batch_tasks) or 600.0
+                results = await self._subagent_mgr.execute_batch(batch_tasks, timeout=task_timeout)
 
                 for result in results:
                     completed += self._handle_result(result)
@@ -224,7 +226,9 @@ class SwarmOrchestrator:
                 self._persist_state()
 
                 task_dict = self._task_to_dict(tid)
-                result = await self._subagent_mgr.execute_single(task_dict)
+                task = self._tasks.get(tid)
+                task_timeout = float(task.timeout_seconds) if task and task.timeout_seconds > 0 else 600.0
+                result = await self._subagent_mgr.execute_single(task_dict, timeout=task_timeout)
                 completed += self._handle_result(result)
                 self._persist_state()
 
@@ -400,12 +404,18 @@ class SwarmOrchestrator:
     def _init_file_ledger(self) -> None:
         try:
             from attoswarm.workspace.file_ledger import FileLedger
+            from attoswarm.workspace.reconciler import ASTReconciler
+
             persist_dir = str(self._internal_dir / "ledger")
             self._file_ledger = FileLedger(
                 root_dir=self._root_dir,
                 ast_service=self._ast_service,
                 persist_dir=persist_dir,
             )
+
+            # Wire AST reconciler into the ledger for conflict resolution
+            self._reconciler = ASTReconciler(ast_service=self._ast_service)
+            self._file_ledger._reconciler = self._reconciler
         except Exception as exc:
             logger.warning("File ledger init failed: %s", exc)
             self._file_ledger = None
@@ -453,6 +463,7 @@ class SwarmOrchestrator:
             "symbol_scope": task.symbol_scope,
             "role_hint": task.role_hint,
             "task_kind": task.task_kind,
+            "timeout_seconds": task.timeout_seconds,
         }
 
     def _handle_result(self, result: TaskResult) -> int:
@@ -469,16 +480,32 @@ class SwarmOrchestrator:
                         message=f"Task {result.task_id} completed",
                         data={"files_modified": result.files_modified})
             return 1
-        else:
-            self._aot_graph.mark_failed(result.task_id)
-            skipped = self._aot_graph.cascade_skip_blocked()
-            self._emit("fail", task_id=result.task_id,
+
+        # Track attempts
+        attempts = self._task_attempts.get(result.task_id, 0) + 1
+        self._task_attempts[result.task_id] = attempts
+        max_retries = getattr(getattr(self._config, 'retries', None), 'max_task_attempts', 2)
+
+        if attempts < max_retries:
+            # Reset for retry
+            node = self._aot_graph.get_node(result.task_id)
+            if node:
+                node.status = "pending"
+            self._emit("retry", task_id=result.task_id,
                         agent_id=f"agent-{result.task_id}",
-                        message=f"Task {result.task_id} failed: {result.error}",
-                        data={"skipped": skipped})
-            if skipped:
-                self._emit("skip", message=f"Cascade-skipped: {skipped}")
+                        message=f"Task {result.task_id} failed (attempt {attempts}/{max_retries}), retrying")
             return 0
+
+        # Max retries exhausted
+        self._aot_graph.mark_failed(result.task_id)
+        skipped = self._aot_graph.cascade_skip_blocked()
+        self._emit("fail", task_id=result.task_id,
+                    agent_id=f"agent-{result.task_id}",
+                    message=f"Task {result.task_id} failed: {result.error}",
+                    data={"skipped": skipped})
+        if skipped:
+            self._emit("skip", message=f"Cascade-skipped: {skipped}")
+        return 0
 
     def _split_by_conflicts(
         self,

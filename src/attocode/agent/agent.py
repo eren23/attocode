@@ -2,21 +2,16 @@
 
 from __future__ import annotations
 
-import asyncio
 import logging
-import os
-import time
-import uuid
 from typing import Any, Callable
 
 from attocode.agent.context import AgentContext, EventHandler
-from attocode.agent.message_builder import build_initial_messages
 from attocode.providers.base import LLMProvider, get_model_context_window
 from attocode.tools.registry import ToolRegistry
 from attocode.types.agent import AgentConfig, AgentMetrics, AgentResult, AgentStatus
 from attocode.types.budget import ExecutionBudget, STANDARD_BUDGET
-from attocode.types.events import AgentEvent, EventType
-from attocode.types.messages import Message, Role, ToolCall
+from attocode.types.events import EventType
+from attocode.types.messages import Message
 
 logger = logging.getLogger(__name__)
 
@@ -421,269 +416,38 @@ class ProductionAgent:
 
         self._status = AgentStatus.RUNNING
 
-        # Build context
-        ctx = AgentContext(
-            provider=self._provider,
-            registry=self._registry,
-            config=self._config,
-            budget=self._budget,
-            working_dir=self._working_dir,
-            system_prompt=self._system_prompt,
-            policy_engine=self._policy_engine,
-            approval_callback=self._approval_callback,
-            economics=self._economics,
-            compaction_manager=self._compaction_manager,
-            recitation_manager=self._recitation_manager,
-            failure_tracker=self._failure_tracker,
-            learning_store=self._learning_store,
-            auto_checkpoint=self._auto_checkpoint,
-            mcp_server_configs=self._mcp_server_configs or [],
-            goal=prompt[:500],  # Store goal for recitation
-        )
-
-        # Wire extension handler into context
-        if self._extension_handler:
-            ctx.extension_handler = self._extension_handler  # type: ignore[attr-defined]
-
-        # Wire additional integrations
-        if self._safety_manager:
-            ctx.safety_manager = self._safety_manager  # type: ignore[attr-defined]
-        if self._task_manager:
-            ctx.task_manager = self._task_manager  # type: ignore[attr-defined]
-        if self._interactive_planner:
-            ctx.interactive_planner = self._interactive_planner  # type: ignore[attr-defined]
-        if self._codebase_context:
-            ctx.codebase_context = self._codebase_context  # type: ignore[attr-defined]
-        if self._multi_agent_manager:
-            ctx.multi_agent_manager = self._multi_agent_manager  # type: ignore[attr-defined]
-        if self._cancellation_manager:
-            ctx.cancellation_manager = self._cancellation_manager  # type: ignore[attr-defined]
-        if self._thread_manager:
-            ctx.thread_manager = self._thread_manager
-        if self._trace_collector:
-            ctx.trace_collector = self._trace_collector
-        if self._mode_manager:
-            ctx.mode_manager = self._mode_manager
-        if self._file_change_tracker:
-            ctx.file_change_tracker = self._file_change_tracker
-        if self._thread_manager:
-            ctx.thread_manager = self._thread_manager
-
-        # Initialize recording if configured
-        if self._recording_config is not None:
-            try:
-                from attocode.integrations.recording.recorder import RecordingSessionManager
-                self._recorder = RecordingSessionManager(self._recording_config)
-                rec_session_id = str(uuid.uuid4())[:8]
-                self._recorder.start(rec_session_id)
-            except Exception:
-                logger.warning("recorder_init_failed", exc_info=True)
-                self._recorder = None  # Non-fatal
-
-        # Register event handlers
-        for handler in self._event_handlers:
-            ctx.on_event(handler)
-
-        # Wire recorder as an event handler so it captures all agent events
-        if self._recorder is not None:
-            ctx.on_event(self._recorder.handle_event)
-
-        self._ctx = ctx
-
-        # Check if swarm mode is enabled
+        # Check if swarm mode is enabled (needs minimal context setup first)
         if getattr(self._config, 'swarm_enabled', False):
+            # Swarm path: the swarm runner only needs _ctx set with event
+            # handlers + integrations. We set up a minimal context here.
+            ctx = AgentContext(
+                provider=self._provider,
+                registry=self._registry,
+                config=self._config,
+                budget=self._budget,
+                working_dir=self._working_dir,
+                system_prompt=self._system_prompt,
+                policy_engine=self._policy_engine,
+                approval_callback=self._approval_callback,
+                economics=self._economics,
+                compaction_manager=self._compaction_manager,
+                recitation_manager=self._recitation_manager,
+                failure_tracker=self._failure_tracker,
+                learning_store=self._learning_store,
+                auto_checkpoint=self._auto_checkpoint,
+                mcp_server_configs=self._mcp_server_configs or [],
+                goal=prompt[:500],
+            )
+            if self._extension_handler:
+                ctx.extension_handler = self._extension_handler  # type: ignore[attr-defined]
+            for handler in self._event_handlers:
+                ctx.on_event(handler)
+            self._ctx = ctx
             return await self._run_with_swarm(prompt)
 
-        # Initialize session persistence (reuse store across runs)
-        await self.ensure_session_store()
-
-        # Handle session resume if requested
-        resume_session_id = getattr(self._config, "resume_session", None)
-        if resume_session_id and self._session_store and self._run_count == 0:
-            try:
-                resume_data = await self._session_store.resume_session(resume_session_id)
-                if resume_data and resume_data.get("messages"):
-                    # Restore messages into context
-                    for msg_dict in resume_data["messages"]:
-                        role = msg_dict.get("role", "user")
-                        content = msg_dict.get("content", "")
-                        ctx.messages.append(Message(role=Role(role), content=content))
-                    self._session_id = resume_session_id
-                    # Emit event for UI
-                    ctx.emit(AgentEvent(
-                        type=EventType.STATUS,
-                        message=f"Resumed session {resume_session_id} "
-                                f"({len(resume_data['messages'])} messages)",
-                    ))
-            except Exception:
-                logger.warning("session_resume_failed", exc_info=True)
-
-        # Create a new session record for this run (skip if resuming)
-        if self._session_store and not self._session_id:
-            try:
-                session_id = str(uuid.uuid4())[:8]
-                await self._session_store.create_session(
-                    session_id,
-                    prompt[:200],
-                    model=self._config.model or "",
-                )
-                self._session_id = session_id
-            except Exception:
-                logger.warning("session_create_failed", exc_info=True)
-
-        # Attach to context (always, even on subsequent runs)
-        if self._session_store:
-            ctx.session_store = self._session_store
-            ctx.session_id = self._session_id
-
-        # Load persisted grants from DB into policy engine
-        if (self._session_store and self._session_id
-                and self._policy_engine and hasattr(self._policy_engine, "approve_command")):
-            try:
-                perms = await self._session_store.list_permissions(self._session_id)
-                for p in perms:
-                    if p.permission_type == "allow":
-                        # Legacy bash wildcard grants are too broad; skip for safety.
-                        if p.tool_name == "bash" and (p.pattern or "*") == "*":
-                            continue
-                        self._policy_engine.approve_command(p.tool_name, pattern=p.pattern or "*")
-            except Exception:
-                logger.debug("permission_grants_load_failed", exc_info=True)
-
-        # Reuse file change tracker across runs so /diff and /undo show cumulative history
-        if self._file_change_tracker is None:
-            try:
-                from attocode.integrations.utilities.undo import FileChangeTracker
-                self._file_change_tracker = FileChangeTracker()
-            except Exception:
-                logger.debug("file_change_tracker_init_failed", exc_info=True)
-        if self._file_change_tracker is not None:
-            ctx.file_change_tracker = self._file_change_tracker
-
-        # Initialize optional features (file tracking, mode manager, etc.)
-        try:
-            from attocode.agent.feature_initializer import initialize_features
-            await initialize_features(ctx, working_dir=self._working_dir)
-        except Exception:
-            logger.warning("feature_init_failed", exc_info=True)
-
-        # Persist command-critical managers initialized during this run.
-        if getattr(ctx, "mode_manager", None) is not None:
-            self._mode_manager = ctx.mode_manager
-        if getattr(ctx, "file_change_tracker", None) is not None:
-            self._file_change_tracker = ctx.file_change_tracker
-        if getattr(ctx, "thread_manager", None) is not None:
-            self._thread_manager = ctx.thread_manager
-
-        # Load skills
-        loaded_skills = None
-        if self._working_dir:
-            try:
-                from attocode.integrations.skills.loader import SkillLoader
-                loader = SkillLoader(self._working_dir)
-                loader.load()
-                all_skills = loader.list_skills()
-                if all_skills:
-                    loaded_skills = all_skills
-            except Exception:
-                logger.debug("skills_load_failed", exc_info=True)
-
-        # Connect MCP servers and register their tools
-        mcp_clients: list[Any] = []
-        if self._mcp_server_configs:
-            mcp_clients = await self._connect_mcp_servers()
-
-        # Inject learnings into context if available
-        learning_context = ""
-        if self._learning_store:
-            try:
-                learning_context = self._learning_store.get_learning_context(
-                    query=prompt[:200],
-                    max_learnings=5,
-                )
-            except Exception:
-                logger.debug("learnings_load_failed", exc_info=True)
-
-        # Register codebase context tools (if manager is available)
-        if self._codebase_context or getattr(ctx, "codebase_context", None):
-            try:
-                from attocode.tools.codebase import create_codebase_tools
-                mgr = self._codebase_context or ctx.codebase_context
-                for tool in create_codebase_tools(mgr):
-                    self._registry.register(tool)
-            except Exception:
-                logger.debug("codebase_tools_register_failed", exc_info=True)
-
-        # Build messages — carry over previous conversation if this is a subsequent run
-        if self._conversation_messages:
-            # Subsequent run: carry over previous conversation + new user message
-            from attocode.agent.message_builder import build_system_prompt, build_user_message
-            sys_prompt = self._system_prompt or build_system_prompt(
-                working_dir=self._working_dir,
-                skills=loaded_skills,
-                extra_context=learning_context or None,
-            )
-            carried = list(self._conversation_messages)
-            # Replace system message (first msg) with fresh prompt (skills/learnings may have changed)
-            if carried and carried[0].role == Role.SYSTEM:
-                carried[0] = Message(role=Role.SYSTEM, content=sys_prompt)
-            else:
-                carried.insert(0, Message(role=Role.SYSTEM, content=sys_prompt))
-            # Append new user message (with images if provided)
-            carried.append(build_user_message(prompt, images=images, working_dir=self._working_dir))
-            ctx.add_messages(carried)
-        else:
-            # First run: build fresh initial messages
-            messages = build_initial_messages(
-                prompt,
-                images=images,
-                system_prompt=self._system_prompt,
-                working_dir=self._working_dir,
-                skills=loaded_skills,
-                learning_context=learning_context,
-            )
-            ctx.add_messages(messages)
-
-        # Pre-seed repo map so the LLM has codebase structure from turn 1.
-        # Only on the first run — subsequent runs already have it in history.
-        _cbc_mgr = self._codebase_context or getattr(ctx, "codebase_context", None)
-        if _cbc_mgr and self._run_count == 0:
-            try:
-                repo_map = _cbc_mgr.get_preseed_map(max_tokens=6000)
-                parts = [
-                    "## Relevant Code (Pre-Analyzed AST Data)",
-                    "This section contains the repository structure with exported "
-                    "symbols, extracted by static analysis.",
-                    "For broad exploration, read this first before calling "
-                    "glob/read_file.",
-                    "Use the `codebase_overview` tool to get a refreshed or "
-                    "filtered view at any time.",
-                    "",
-                    f"Files: {repo_map.total_files} | "
-                    f"Lines: {repo_map.total_lines} | "
-                    f"Languages: {', '.join(sorted(repo_map.languages.keys()))}",
-                    "",
-                    "```",
-                    repo_map.tree,
-                    "```",
-                ]
-                if repo_map.symbols:
-                    parts.append("")
-                    parts.append("## Key Symbols")
-                    for rel_path, syms in list(repo_map.symbols.items())[:10]:
-                        parts.append(f"- `{rel_path}`: {', '.join(syms)}")
-
-                call_id = "preseed-repo-map"
-                ctx.add_messages([
-                    Message(
-                        role=Role.ASSISTANT,
-                        content="",
-                        tool_calls=[ToolCall(id=call_id, name="get_repo_map", arguments={})],
-                    ),
-                    Message(role=Role.TOOL, content="\n".join(parts), tool_call_id=call_id),
-                ])
-            except Exception:
-                logger.debug("preseed_repo_map_failed", exc_info=True)
+        # Build context, wire integrations, load skills, connect MCP, build messages
+        from attocode.agent.run_context_builder import build_run_context
+        ctx, mcp_clients = await build_run_context(self, prompt, images=images)
 
         try:
             # Lazy import to break circular dependency:
@@ -758,99 +522,9 @@ class ProductionAgent:
             # can read agent state between prompts.
 
     async def _connect_mcp_servers(self) -> list[Any]:
-        """Connect to MCP servers and register their tools.
-
-        Uses MCPClientManager for lifecycle management.  Eager servers
-        are connected immediately and their tools registered in the
-        registry.  Lazy servers are deferred — a tool_resolver callback
-        on the registry will connect them on first use.
-        """
-        from attocode.integrations.mcp.client_manager import MCPClientManager
-        from attocode.integrations.mcp.config import MCPServerConfig
-        from attocode.integrations.mcp.meta_tools import MCPMetaTools
-        from attocode.tools.base import Tool, ToolSpec
-        from attocode.types.messages import DangerLevel
-
-        if not hasattr(self, "_mcp_meta_tools") or self._mcp_meta_tools is None:
-            self._mcp_meta_tools = MCPMetaTools()
-        manager = MCPClientManager(meta_tools=self._mcp_meta_tools)
-
-        # Convert dicts to MCPServerConfig and register
-        configs: list[MCPServerConfig] = []
-        for mcp_cfg in self._mcp_server_configs:
-            cfg = MCPServerConfig(
-                name=mcp_cfg.get("name", ""),
-                command=mcp_cfg.get("command", ""),
-                args=mcp_cfg.get("args", []),
-                env=mcp_cfg.get("env", {}),
-                enabled=mcp_cfg.get("enabled", True),
-                lazy_load=mcp_cfg.get("lazy_load", False),
-            )
-            configs.append(cfg)
-
-        manager.register_all(configs)
-        await manager.connect_eager()
-
-        # Store manager so /mcp commands can use it
-        self._mcp_client_manager = manager
-
-        # Helper: build a namespaced tool name
-        def _tool_name(server_name: str, raw_name: str) -> str:
-            return f"mcp__{server_name}__{raw_name}" if server_name else raw_name
-
-        # Helper: wrap an MCP tool as a registry Tool
-        def _make_tool(server_name: str, mcp_tool: Any) -> Tool:
-            def _make_call(mgr: MCPClientManager, name: str):
-                async def _run(args: dict) -> Any:
-                    r = await mgr.call_tool(name, args)
-                    return r.result if r.success else f"Error: {r.error}"
-                return _run
-
-            return Tool(
-                spec=ToolSpec(
-                    name=_tool_name(server_name, mcp_tool.name),
-                    description=mcp_tool.description,
-                    parameters=mcp_tool.input_schema,
-                    danger_level=DangerLevel.MODERATE,
-                ),
-                execute=_make_call(manager, mcp_tool.name),
-                tags=["mcp", server_name],
-            )
-
-        # Register tools from eagerly-connected servers
-        for mcp_tool in manager.get_all_tools():
-            # Find which server owns this tool
-            for sname in manager.server_names:
-                srv_tools = manager.get_tools_for_server(sname)
-                if any(t.name == mcp_tool.name for t in srv_tools):
-                    self._registry.register(_make_tool(sname, mcp_tool))
-                    break
-
-        # Set up lazy resolver for tools on pending (lazy) servers
-        has_lazy = any(c.lazy_load and c.enabled for c in configs)
-        if has_lazy:
-            async def _resolve_tool(tool_name: str) -> Tool | None:
-                """Lazy resolver: connect pending servers to find the requested tool."""
-                # Strip mcp__ prefix to get raw tool name
-                raw_name = tool_name
-                if tool_name.startswith("mcp__"):
-                    parts = tool_name.split("__", 2)
-                    if len(parts) == 3:
-                        raw_name = parts[2]
-
-                # call_tool triggers lazy connect for pending servers
-                await manager.call_tool(raw_name, {})
-
-                # If lazy connect succeeded, find the tool definition
-                for sname in manager.server_names:
-                    for mt in manager.get_tools_for_server(sname):
-                        if mt.name == raw_name:
-                            return _make_tool(sname, mt)
-                return None
-
-            self._registry.set_tool_resolver(_resolve_tool)
-
-        return []  # No longer returning raw clients
+        """Connect to MCP servers and register their tools."""
+        from attocode.agent.mcp_connector import connect_mcp_servers
+        return await connect_mcp_servers(self)
 
     def cancel(self) -> None:
         """Cancel the current agent execution."""
@@ -987,180 +661,13 @@ class ProductionAgent:
 
     async def _run_with_swarm(self, prompt: str) -> AgentResult:
         """Delegate execution to the swarm orchestrator for parallel multi-agent work."""
-        try:
-            from attocode.integrations.swarm.cc_spawner import create_cc_spawn_fn
-            from attocode.integrations.swarm.event_bridge import SwarmEventBridge
-            from attocode.integrations.swarm.model_selector import get_fallback_workers
-            from attocode.integrations.swarm.orchestrator import SwarmOrchestrator
-            from attocode.integrations.swarm.types import (
-                SwarmConfig,
-                SwarmExecutionResult,
-                SwarmWorkerSpec,
-                WorkerCapability,
-            )
-
-            # Build swarm configuration from agent config
-            orchestrator_model = self._config.model or "claude-sonnet-4-20250514"
-
-            # Build worker specs from config or defaults
-            workers = self._build_worker_specs(orchestrator_model)
-
-            swarm_cfg = SwarmConfig(
-                orchestrator_model=orchestrator_model,
-                workers=workers,
-                max_concurrency=getattr(self._config, "swarm_max_concurrency", 2),
-                quality_gates=getattr(self._config, "swarm_quality_gates", True),
-                total_budget=self._budget.max_tokens * 10,  # workers get their own budgets
-                max_cost=10.0,
-                worker_max_iterations=self._budget.max_iterations,
-            )
-
-            # Create spawn function using CC CLI subprocess
-            spawn_fn = create_cc_spawn_fn(
-                working_dir=self._working_dir,
-                default_model=orchestrator_model,
-                max_iterations=swarm_cfg.worker_max_iterations,
-            )
-
-            # Create or reuse orchestrator
-            if self._swarm_orchestrator is None:
-                self._swarm_orchestrator = SwarmOrchestrator(
-                    config=swarm_cfg,
-                    provider=self._provider,
-                    spawn_agent_fn=spawn_fn,
-                )
-
-            # Attach event bridge for TUI consumption — create fresh each run
-            # to avoid duplicate listeners from repeated swarm executions
-            if self._event_bridge is not None:
-                self._event_bridge.close()
-                self._event_bridge = None
-            self._event_bridge = SwarmEventBridge(
-                output_dir=os.path.join(
-                    self._session_dir or ".agent", "swarm-live"
-                ),
-            )
-            self._event_bridge.attach(self._swarm_orchestrator)
-
-            # Wire TUI callback if set
-            if self._tui_swarm_callback:
-                self._event_bridge.set_tui_callback(self._tui_swarm_callback)
-
-            # Start AST server for external CC instances
-            if self._ast_server is None and self._working_dir:
-                try:
-                    from attocode.integrations.context.ast_service import ASTService
-                    from attocode.integrations.context.ast_server import ASTServer
-                    from attocode.tools.ast_query import create_ast_query_tool
-
-                    ast_svc = ASTService.get_instance(self._working_dir)
-                    if not ast_svc.initialized:
-                        ast_svc.initialize()
-
-                    # Start socket server
-                    self._ast_server = ASTServer(ast_svc)
-                    await self._ast_server.start()
-
-                    # Register AST query tool for workers
-                    if not self._registry.has("codebase_ast_query"):
-                        self._registry.register(create_ast_query_tool(ast_svc))
-                except Exception:
-                    logger.debug("ast_server_init_failed", exc_info=True)
-
-            # Execute the swarm
-            swarm_result: SwarmExecutionResult = await self._swarm_orchestrator.execute(
-                prompt
-            )
-
-            # Stop AST server after swarm completes
-            if self._ast_server:
-                try:
-                    await self._ast_server.stop()
-                except Exception:
-                    logger.debug("ast_server_stop_failed", exc_info=True)
-                self._ast_server = None
-
-            # Close event bridge
-            if self._event_bridge:
-                self._event_bridge.close()
-
-            # Convert SwarmExecutionResult to AgentResult
-            stats = swarm_result.stats
-            return AgentResult(
-                success=swarm_result.success,
-                response=swarm_result.summary or "",
-                error=None if swarm_result.success else (
-                    swarm_result.errors[0].get("message", "Swarm failed")
-                    if swarm_result.errors else "Swarm execution failed"
-                ),
-                metrics=AgentMetrics(
-                    total_tokens=stats.total_tokens,
-                    estimated_cost=stats.total_cost,
-                    llm_calls=stats.orchestrator_tokens,
-                    tool_calls=stats.completed_tasks,
-                    duration_ms=float(stats.total_duration_ms),
-                ),
-            )
-
-        except ImportError as ie:
-            return AgentResult(
-                success=False,
-                response="",
-                error=f"Swarm module not available: {ie}",
-            )
-        except Exception as e:
-            logger.error("swarm_execution_failed", exc_info=True)
-            return AgentResult(
-                success=False,
-                response="",
-                error=f"Swarm execution failed: {e}",
-            )
+        from attocode.agent.swarm_runner import run_with_swarm
+        return await run_with_swarm(self, prompt)
 
     def _build_worker_specs(self, orchestrator_model: str) -> list:
         """Build SwarmWorkerSpec list from agent config or defaults."""
-        from attocode.integrations.swarm.types import (
-            SwarmWorkerSpec,
-            WorkerCapability,
-            WorkerRole,
-        )
-
-        # Check if config has explicit worker specs
-        configured_workers = getattr(self._config, "swarm_workers", None)
-        if configured_workers:
-            return configured_workers
-
-        # Check for swarm worker models list (e.g., from CLI)
-        worker_models = getattr(self._config, "swarm_worker_models", None)
-        if worker_models:
-            specs = []
-            for i, model in enumerate(worker_models):
-                specs.append(SwarmWorkerSpec(
-                    name=f"worker-{i}",
-                    model=model,
-                    capabilities=[WorkerCapability.CODE, WorkerCapability.TEST],
-                ))
-            return specs
-
-        # Default: use orchestrator model for 2 builder workers + 1 reviewer
-        return [
-            SwarmWorkerSpec(
-                name="builder-0",
-                model=orchestrator_model,
-                capabilities=[WorkerCapability.CODE, WorkerCapability.TEST],
-            ),
-            SwarmWorkerSpec(
-                name="builder-1",
-                model=orchestrator_model,
-                capabilities=[WorkerCapability.CODE, WorkerCapability.TEST],
-            ),
-            SwarmWorkerSpec(
-                name="reviewer",
-                model=orchestrator_model,
-                capabilities=[WorkerCapability.REVIEW, WorkerCapability.RESEARCH],
-                role=WorkerRole.EXECUTOR,
-                allowed_tools=["Read", "Glob", "Grep"],
-            ),
-        ]
+        from attocode.agent.swarm_runner import build_worker_specs
+        return build_worker_specs(self, orchestrator_model)
 
     async def spawn_agent(
         self,
@@ -1172,250 +679,37 @@ class ProductionAgent:
         timeout_seconds: float = 120.0,
     ) -> dict[str, Any]:
         """Spawn a subagent with its own budget to handle a delegated task."""
-        try:
-            from attocode.agent.builder import AgentBuilder
-            from attocode.core.subagent_spawner import SubagentSpawner
-
-            async def _run_subagent(sub_budget: ExecutionBudget, _subagent_id: str) -> AgentResult:
-                builder = (
-                    AgentBuilder()
-                    .with_provider(provider=self._provider)
-                    .with_model(model or self._config.model or "")
-                    .with_working_dir(self._working_dir)
-                    .with_budget(sub_budget)
-                    .with_compaction(False)
-                    .with_spawn_agent(False)
-                )
-                subagent = builder.build()
-                try:
-                    return await subagent.run(task)
-                finally:
-                    await subagent.close()
-
-            parent_used = 0
-            if self._ctx is not None:
-                parent_used = self._ctx.metrics.total_tokens
-
-            spawner = SubagentSpawner(
-                parent_budget=self._budget,
-                parent_tokens_used=parent_used,
-                hard_timeout_seconds=timeout_seconds,
-            )
-            spawn_result = await spawner.spawn(
-                _run_subagent,
-                task_description=task,
-                budget_fraction=budget_fraction,
-                timeout=timeout_seconds,
-            )
-
-            result: dict[str, Any] = {
-                "success": spawn_result.success,
-                "response": spawn_result.response,
-                "tokens_used": spawn_result.tokens_used,
-                "agent_name": agent_name,
-            }
-            if spawn_result.error:
-                result["error"] = spawn_result.error
-
-            # Track in registry
-            self._subagent_registry[agent_name] = {
-                **result,
-                "task": task,
-                "timestamp": time.time(),
-            }
-
-            return result
-
-        except Exception as e:
-            logger.warning("subagent_spawn_failed", exc_info=True)
-            err = "Subagent module not available" if isinstance(e, ImportError) else str(e)
-            return {"success": False, "response": "", "tokens_used": 0,
-                    "agent_name": agent_name, "error": err}
+        from attocode.agent.subagent_api import spawn_agent
+        return await spawn_agent(
+            self, agent_name, task,
+            model=model, budget_fraction=budget_fraction,
+            timeout_seconds=timeout_seconds,
+        )
 
     async def spawn_agents_parallel(
         self,
         tasks: list[dict[str, Any]],
     ) -> list[dict[str, Any]]:
-        """Spawn multiple subagents concurrently via asyncio.gather.
-
-        Each task dict must have 'agent' and 'task' keys. Optional:
-        'model', 'budget_fraction', 'timeout_seconds'.
-        """
-        if not tasks:
-            return []
-
-        # Calculate per-agent budget fraction so total does not exceed 80%
-        default_fraction = min(0.8 / max(len(tasks), 1), 0.3)
-
-        coros = []
-        for task_spec in tasks:
-            agent_name = task_spec.get("agent", f"agent-{uuid.uuid4().hex[:6]}")
-            task_desc = task_spec.get("task", "")
-            coros.append(
-                self.spawn_agent(
-                    agent_name=agent_name,
-                    task=task_desc,
-                    model=task_spec.get("model"),
-                    budget_fraction=task_spec.get("budget_fraction", default_fraction),
-                    timeout_seconds=task_spec.get("timeout_seconds", 120.0),
-                )
-            )
-
-        results = await asyncio.gather(*coros, return_exceptions=True)
-
-        # Convert exceptions to error dicts
-        final: list[dict[str, Any]] = []
-        for i, result in enumerate(results):
-            if isinstance(result, Exception):
-                agent_name = tasks[i].get("agent", f"agent-{i}")
-                final.append({
-                    "success": False,
-                    "response": "",
-                    "tokens_used": 0,
-                    "agent_name": agent_name,
-                    "error": str(result),
-                })
-            else:
-                final.append(result)  # type: ignore[arg-type]
-        return final
+        """Spawn multiple subagents concurrently via asyncio.gather."""
+        from attocode.agent.subagent_api import spawn_agents_parallel
+        return await spawn_agents_parallel(self, tasks)
 
     async def suggest_agent_for_task(self, task: str) -> dict[str, Any]:
-        """Suggest the best agent for a task using registry or keyword heuristics.
-
-        Returns dict with: suggestions (list), should_delegate (bool),
-        delegate_agent (str | None).
-        """
-        suggestions: list[dict[str, Any]] = []
-        should_delegate = False
-        delegate_agent: str | None = None
-
-        # Try multi-agent manager first
-        if self._multi_agent_manager:
-            try:
-                agents = self._multi_agent_manager.list_agents()
-                for agent_def in agents:
-                    name = getattr(agent_def, "name", str(agent_def))
-                    description = getattr(agent_def, "description", "")
-                    # Simple keyword overlap scoring
-                    task_words = set(task.lower().split())
-                    desc_words = set(description.lower().split())
-                    overlap = len(task_words & desc_words)
-                    score = overlap / max(len(task_words), 1)
-                    suggestions.append({"agent": name, "score": round(score, 3)})
-
-                suggestions.sort(key=lambda s: s["score"], reverse=True)
-
-                if suggestions and suggestions[0]["score"] > 0.15:
-                    should_delegate = True
-                    delegate_agent = suggestions[0]["agent"]
-
-                # Attempt LLM-based classification for better accuracy
-                if self._provider and suggestions:
-                    try:
-                        agent_list_str = ", ".join(
-                            f"{s['agent']} (score={s['score']})" for s in suggestions[:5]
-                        )
-                        classification_prompt = (
-                            f"Given the task: '{task[:300]}'\n"
-                            f"Available agents: {agent_list_str}\n"
-                            f"Which agent is the best fit? Reply with just the agent name, "
-                            f"or 'none' if the task should be handled by the main agent."
-                        )
-                        from attocode.types.messages import Message
-
-                        llm_messages = [Message(role="user", content=classification_prompt)]
-                        llm_response = await self._provider.chat(llm_messages, model=self._config.model)
-                        chosen = (llm_response.content or "").strip().lower()
-
-                        agent_names_lower = {s["agent"].lower(): s["agent"] for s in suggestions}
-                        if chosen in agent_names_lower:
-                            delegate_agent = agent_names_lower[chosen]
-                            should_delegate = True
-                        elif chosen == "none":
-                            should_delegate = False
-                            delegate_agent = None
-                    except Exception:
-                        logger.debug("llm_classification_failed", exc_info=True)
-            except Exception:
-                logger.debug("agent_suggestion_failed", exc_info=True)
-
-        # Fallback: keyword heuristic when no multi-agent manager
-        if not suggestions:
-            keyword_agents: dict[str, list[str]] = {
-                "test-writer": ["test", "spec", "coverage", "assert", "unittest"],
-                "refactorer": ["refactor", "clean", "extract", "rename", "simplify"],
-                "documenter": ["document", "readme", "docstring", "jsdoc", "comment"],
-                "debugger": ["debug", "fix", "error", "bug", "crash", "trace"],
-                "reviewer": ["review", "audit", "check", "lint", "quality"],
-            }
-            task_lower = task.lower()
-            for agent_name, keywords in keyword_agents.items():
-                matches = sum(1 for kw in keywords if kw in task_lower)
-                if matches > 0:
-                    score = matches / len(keywords)
-                    suggestions.append({"agent": agent_name, "score": round(score, 3)})
-
-            suggestions.sort(key=lambda s: s["score"], reverse=True)
-            if suggestions and suggestions[0]["score"] > 0.2:
-                should_delegate = True
-                delegate_agent = suggestions[0]["agent"]
-
-        return {
-            "suggestions": suggestions[:5],
-            "should_delegate": should_delegate,
-            "delegate_agent": delegate_agent,
-        }
+        """Suggest the best agent for a task using registry or keyword heuristics."""
+        from attocode.agent.subagent_api import suggest_agent_for_task
+        return await suggest_agent_for_task(self, task)
 
     # --- Checkpoint management ---
 
     async def create_checkpoint(self, label: str = "") -> dict[str, Any]:
         """Create a checkpoint of the current conversation state for later restore."""
-        checkpoint_id = f"cp-{uuid.uuid4().hex[:8]}"
-        timestamp = time.time()
-        message_count = len(self._ctx.messages) if self._ctx else 0
-
-        # Persist to session store if available
-        if self._ctx and hasattr(self._ctx, "session_store") and self._ctx.session_store:
-            try:
-                session_id = getattr(self._ctx, "session_id", "")
-                await self._ctx.session_store.create_checkpoint(
-                    session_id=session_id,
-                    checkpoint_id=checkpoint_id,
-                    label=label,
-                    messages=self._ctx.messages,
-                )
-            except Exception:
-                logger.debug("checkpoint_persist_failed", exc_info=True)
-
-        return {
-            "checkpoint_id": checkpoint_id,
-            "label": label or f"Checkpoint at iteration {self._ctx.iteration if self._ctx else 0}",
-            "message_count": message_count,
-            "timestamp": timestamp,
-        }
+        from attocode.agent.checkpoint_api import create_checkpoint
+        return await create_checkpoint(self, label)
 
     async def restore_checkpoint(self, checkpoint_id: str) -> bool:
         """Restore conversation state from a previously created checkpoint."""
-        if not self._ctx:
-            return False
-
-        if not hasattr(self._ctx, "session_store") or not self._ctx.session_store:
-            return False
-
-        try:
-            session_id = getattr(self._ctx, "session_id", "")
-            checkpoint_data = await self._ctx.session_store.load_checkpoint(
-                session_id=session_id,
-                checkpoint_id=checkpoint_id,
-            )
-            if checkpoint_data and "messages" in checkpoint_data:
-                self._ctx.messages.clear()
-                self._ctx.messages.extend(checkpoint_data["messages"])
-                return True
-        except Exception:
-            logger.warning("checkpoint_restore_failed", exc_info=True)
-
-        return False
+        from attocode.agent.checkpoint_api import restore_checkpoint
+        return await restore_checkpoint(self, checkpoint_id)
 
     # --- File change tracking and undo ---
 
@@ -1427,32 +721,13 @@ class ProductionAgent:
         content_after: str = "",
     ) -> None:
         """Record a file change for /diff review and /undo capability."""
-        if self._file_change_tracker is not None:
-            try:
-                self._file_change_tracker.track_change(
-                    path=path,
-                    before_content=content_before,
-                    after_content=content_after,
-                    tool_name=action,
-                )
-            except Exception:
-                logger.debug("file_change_track_failed", exc_info=True)
+        from attocode.agent.checkpoint_api import track_file_change
+        track_file_change(self, path, action, content_before, content_after)
 
     def undo_last_change(self) -> dict[str, Any] | None:
         """Undo the most recent file change, restoring previous content."""
-        if self._file_change_tracker is None:
-            return None
-        try:
-            result_msg = self._file_change_tracker.undo_last_change()
-            if not result_msg or result_msg == "No changes to undo.":
-                return None
-            return {
-                "message": result_msg,
-                "success": "restored" in result_msg.lower() or "undone" in result_msg.lower(),
-            }
-        except Exception:
-            logger.debug("undo_failed", exc_info=True)
-            return None
+        from attocode.agent.checkpoint_api import undo_last_change
+        return undo_last_change(self)
 
     # --- Codebase analysis ---
 

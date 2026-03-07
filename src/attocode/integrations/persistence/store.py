@@ -306,12 +306,16 @@ class SessionStore:
         self._db: aiosqlite.Connection | None = None
 
     async def initialize(self) -> None:
-        """Open the database and create tables."""
+        """Open the database and create/migrate tables."""
         self._db_path.parent.mkdir(parents=True, exist_ok=True)
         self._db = await aiosqlite.connect(str(self._db_path))
         self._db.row_factory = aiosqlite.Row
         await self._db.executescript(CREATE_TABLES_SQL)
         await self._db.commit()
+
+        # Check and apply schema migrations
+        from attocode.integrations.persistence.migrations import check_and_migrate
+        await check_and_migrate(self._db)
 
     async def close(self) -> None:
         """Close the database connection."""

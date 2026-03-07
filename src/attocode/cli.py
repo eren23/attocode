@@ -118,6 +118,14 @@ def main(
     # Load configuration
     config = load_config(cli_args=cli_args)
 
+    # Validate configuration early
+    from attocode.config_validator import validate_config
+    try:
+        validate_config(config)
+    except Exception as e:
+        click.echo(f"Configuration error: {e}", err=True)
+        sys.exit(1)
+
     # Join prompt parts (--task flag takes precedence over positional args)
     prompt_text = task or (" ".join(prompt) if prompt else "")
 

@@ -1,0 +1,105 @@
+models:
+  claude-opus-4-20250514:
+    provider: anthropic
+    max_context_tokens: 200000
+    max_output_tokens: 8192
+    pricing:
+      input_per_million: 15.0
+      output_per_million: 75.0
+      cache_read_per_million: 1.5
+      cache_write_per_million: 18.75
+
+  claude-opus-4-6-20260312:
+    provider: anthropic
+    max_context_tokens: 200000
+    max_output_tokens: 32000
+    pricing:
+      input_per_million: 15.0
+      output_per_million: 75.0
+      cache_read_per_million: 1.5
+      cache_write_per_million: 18.75
+
+  claude-sonnet-4-20250514:
+    provider: anthropic
+    max_context_tokens: 200000
+    max_output_tokens: 8192
+    pricing:
+      input_per_million: 3.0
+      output_per_million: 15.0
+      cache_read_per_million: 0.3
+      cache_write_per_million: 3.75
+
+  claude-sonnet-4-6-20260312:
+    provider: anthropic
+    max_context_tokens: 200000
+    max_output_tokens: 16000
+    pricing:
+      input_per_million: 3.0
+      output_per_million: 15.0
+      cache_read_per_million: 0.3
+      cache_write_per_million: 3.75
+
+  claude-haiku-4-5-20251001:
+    provider: anthropic
+    max_context_tokens: 200000
+    max_output_tokens: 8192
+    pricing:
+      input_per_million: 0.80
+      output_per_million: 4.0
+      cache_read_per_million: 0.08
+      cache_write_per_million: 1.0
+
+  claude-haiku-3-5-20241022:
+    provider: anthropic
+    max_context_tokens: 200000
+    max_output_tokens: 8192
+    pricing:
+      input_per_million: 0.80
+      output_per_million: 4.0
+      cache_read_per_million: 0.08
+      cache_write_per_million: 1.0
+
+  gpt-4o:
+    provider: openai
+    max_context_tokens: 128000
+    max_output_tokens: 16384
+    pricing:
+      input_per_million: 2.50
+      output_per_million: 10.0
+
+  gpt-4o-mini:
+    provider: openai
+    max_context_tokens: 128000
+    max_output_tokens: 16384
+    pricing:
+      input_per_million: 0.15
+      output_per_million: 0.60
+
+  o3-mini:
+    provider: openai
+    max_context_tokens: 200000
+    max_output_tokens: 100000
+    pricing:
+      input_per_million: 1.10
+      output_per_million: 4.40
+
+  o3:
+    provider: openai
+    max_context_tokens: 200000
+    max_output_tokens: 100000
+    pricing:
+      input_per_million: 2.0
+      output_per_million: 8.0
+
+  o4-mini:
+    provider: openai
+    max_context_tokens: 200000
+    max_output_tokens: 100000
+    pricing:
+      input_per_million: 1.10
+      output_per_million: 4.40
+
+  glm-5:
+    provider: zai
+    max_context_tokens: 128000
+    max_output_tokens: 4096

@@ -235,22 +235,12 @@ def _make_subprocess_decompose_fn(cfg: SwarmYamlConfig):  # noqa: ANN202
 
     def _parse_tasks(raw: str) -> list[_TaskSpec]:
         """Parse JSON output into TaskSpec list with validation."""
-        text = raw.strip()
-        # Strip <thinking>...</thinking> tags (Claude extended thinking)
-        text = re.sub(r"<thinking>.*?</thinking>", "", text, flags=re.DOTALL)
-        # Strip markdown fences (```json ... ``` or ``` ... ```)
-        text = re.sub(r"```(?:json|JSON)?\s*\n?", "", text)
-        text = text.strip()
-        # Extract first JSON array from the text
-        match = re.search(r"\[.*\]", text, flags=re.DOTALL)
-        if not match:
-            raise ValueError(f"No JSON array found in output ({len(raw)} chars)")
-        text = match.group(0)
+        from attoswarm.coordinator.task_parser import extract_json_array
 
-        data = json.loads(text)
-        if not isinstance(data, list) or len(data) < 2:
+        data = extract_json_array(raw)
+        if len(data) < 2:
             raise ValueError(
-                f"Expected array with >=2 tasks, got {len(data) if isinstance(data, list) else 0} items"
+                f"Expected array with >=2 tasks, got {len(data)} items"
             )
 
         # Validate task_ids are unique

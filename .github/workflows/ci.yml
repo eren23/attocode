@@ -26,5 +26,17 @@ jobs:
       - name: Lint
         run: uv run ruff check src/ tests/
 
+      - name: Type check
+        run: uv run mypy src/attocode src/attoswarm src/attocode_core --ignore-missing-imports
+
       - name: Run tests
-        run: uv run pytest tests/unit/ -q --tb=short
+        run: uv run pytest tests/unit/ -q --tb=short --cov=src/attocode --cov=src/attoswarm --cov=src/attocode_core --cov-report=xml --cov-report=term-missing
+
+      - name: Upload coverage
+        if: matrix.python-version == '3.12'
+        uses: codecov/codecov-action@v4
+        with:
+          files: coverage.xml
+          fail_ci_if_error: false
+        env:
+          CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}

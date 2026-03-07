@@ -12,6 +12,7 @@ Wraps ``codebase_ast.parse_file`` / ``diff_file_ast`` and
 
 from __future__ import annotations
 
+import asyncio
 import logging
 import os
 import re
@@ -136,6 +137,60 @@ class ASTService:
         self._initialized = True
         logger.debug(
             "ASTService initialized: %d files, %d definitions",
+            len(self._ast_cache),
+            sum(len(v) for v in self._index.definitions.values()),
+        )
+
+    async def async_initialize(self, batch_size: int = 50) -> None:
+        """Async version of initialize that parses files in batches.
+
+        Uses ``asyncio.to_thread`` to avoid blocking the event loop
+        on large repositories.  Files are parsed in batches of
+        *batch_size* concurrently.
+        """
+        files = self._context_mgr.discover_files()
+        self._index = CrossRefIndex()
+        self._ast_cache.clear()
+
+        _ts_langs: set[str] = set()
+        try:
+            from attocode.integrations.context.ts_parser import supported_languages
+            _ts_langs = set(supported_languages())
+        except ImportError:
+            pass
+        _supported = {"python", "javascript", "typescript"} | _ts_langs
+
+        parseable = [fi for fi in files if fi.language in _supported]
+
+        def _parse_one(fi_path: str) -> tuple[str, FileAST | None]:
+            try:
+                return fi_path, parse_file(fi_path)
+            except Exception:
+                return fi_path, None
+
+        # Parse in batches to avoid overwhelming the thread pool
+        for i in range(0, len(parseable), batch_size):
+            batch = parseable[i:i + batch_size]
+            tasks = [
+                asyncio.to_thread(_parse_one, fi.path)
+                for fi in batch
+            ]
+            results = await asyncio.gather(*tasks)
+            for fi, (_, ast) in zip(batch, results):
+                if ast is not None:
+                    rel = fi.relative_path
+                    self._ast_cache[rel] = ast
+                    self._index_file(rel, ast)
+
+        dep_graph = self._context_mgr.dependency_graph
+        if dep_graph:
+            for src, targets in dep_graph.forward.items():
+                for tgt in targets:
+                    self._index.add_file_dependency(src, tgt)
+
+        self._initialized = True
+        logger.debug(
+            "ASTService async_initialized: %d files, %d definitions",
             len(self._ast_cache),
             sum(len(v) for v in self._index.definitions.values()),
         )

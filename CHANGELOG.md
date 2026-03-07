@@ -7,6 +7,37 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **Agent module extraction** — `agent.py` split into 5 focused modules: `checkpoint_api.py` (checkpoint/undo), `mcp_connector.py` (MCP server wiring), `run_context_builder.py` (full run-context init), `subagent_api.py` (spawn/delegate), `swarm_runner.py` (swarm entry point)
+- **Code-intel tool modules** — 15 MCP tools from monolithic `server.py` organized into `tools/analysis_tools.py`, `navigation_tools.py`, `search_tools.py`, `lsp_tools.py`, `learning_tools.py`
+- **Code-intel helpers** (`code_intel/helpers.py`) — 15+ pure functions for complexity scoring, convention detection, tech-stack identification, and framework pattern matching
+- **Config validator** (`config_validator.py`) — early fail-fast validation of provider, model, API key format, and working directory before agent init
+- **Database migrations** (`persistence/migrations.py`) — schema versioning with `check_and_migrate()`; v1→v2 adds `usage_logs` table
+- **Async AST initialization** (`ast_service.py`) — `async_initialize(batch_size=50)` parses files concurrently via `asyncio.to_thread()`
+- **Swarm coordinator extraction** — `loop.py` split into `failure_handler.py`, `output_harvester.py`, `review_processor.py`, `task_dispatcher.py`
+- **Task retry logic** (`orchestrator.py`) — per-task attempt tracking, per-task timeouts, AST reconciliation wiring
+- **AST-aware conflict resolution** (`file_ledger.py`) — 3-way merge with base snapshots; reduces false-positive OCC conflicts when parallel agents edit non-overlapping regions
+- **Robust JSON task parser** (`task_parser.py`) — 3-strategy fallback (direct → cleaned → balanced brackets) for LLM task decomposition output
+- **Adapter output parsing** — `aider.py`, `claude.py`, `codex.py` adapters now extract tokens/cost from subprocess stdout; all adapters gain static `build_command()` methods
+- **Updated model registry** (`models.yaml`) — added Claude Opus 4.6, Sonnet 4.6, o3, o4-mini; fixed Haiku 4.5 date; removed deprecated gpt-4-turbo
+
+### Changed
+
+- **Model registry externalized** — hardcoded `BUILTIN_MODELS` dict in `providers/base.py` replaced with `models.yaml`; loader uses `_load_builtin_models()` from YAML
+- **CI pipeline** (`.github/workflows/ci.yml`) — added mypy type checking, pytest coverage reporting, and codecov upload (gated on Python 3.12)
+- **CLI entry point** (`cli.py`) — calls `validate_config()` before agent initialization
+- **SessionStore** (`store.py`) — runs `check_and_migrate()` on init for forward-compatible schema
+- **GLM-5 provider** — fixed `zhipu` → `zai` in model registry to match codebase convention
+
+### Internal
+
+- `agent.py` reduced from ~840L to ~430L (delegates to extracted modules)
+- `code_intel/server.py` reduced by ~2,200L (tools + helpers extracted)
+- `coordinator/loop.py` reduced from ~1,500L to ~970L (4 modules extracted)
+- `attoswarm/cli.py` task parsing extracted to `task_parser.extract_json_array()`
+- No public API changes — all extractions are internal reorganization
+
 ### Planned
 
 - Execution backend abstraction (`BaseEnvironment` ABC with Local/Docker/SSH/Singularity/Modal backends)
