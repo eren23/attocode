@@ -110,6 +110,8 @@ class FileLedger:
         self._claims: dict[str, FileClaim] = {}     # rel_path -> active claim
         self._write_log: list[WriteLogEntry] = []
         self._locks: dict[str, asyncio.Lock] = {}
+        self._reconciler: Any = None                # ASTReconciler, set by orchestrator
+        self._snapshots: dict[str, str] = {}        # rel_path -> base content at snapshot time
 
         # Restore persisted state if available
         if persist_dir:
@@ -132,8 +134,9 @@ class FileLedger:
         content = p.read_text(encoding="utf-8", errors="replace") if p.exists() else ""
         h = self._hash(content)
 
-        # Record known version
+        # Record known version and base content for reconciliation
         self._versions[rel] = h
+        self._snapshots[rel] = content
 
         return FileVersion(
             file_path=rel,
@@ -262,6 +265,66 @@ class FileLedger:
                 "OCC conflict on %s: base=%s current=%s agent=%s",
                 rel, base_hash[:8], current_hash[:8], agent_id,
             )
+
+            # Try AST reconciliation before giving up
+            if self._reconciler is not None:
+                base_snapshot = self._snapshots.get(rel)
+                if base_snapshot is not None:
+                    try:
+                        current_content = Path(abs_path).read_text(
+                            encoding="utf-8", errors="replace",
+                        )
+                        merge_result = self._reconciler.reconcile(
+                            abs_path, base_snapshot, content, current_content,
+                        )
+                        if merge_result.success:
+                            new_hash = self._hash(merge_result.merged_content)
+                            Path(abs_path).write_text(
+                                merge_result.merged_content, encoding="utf-8",
+                            )
+                            self._versions[rel] = new_hash
+                            self._snapshots[rel] = merge_result.merged_content
+
+                            self._write_log.append(WriteLogEntry(
+                                timestamp=time.time(),
+                                file_path=rel,
+                                agent_id=agent_id,
+                                task_id=task_id,
+                                base_hash=base_hash,
+                                new_hash=new_hash,
+                                conflict=True,
+                                reconciled=True,
+                            ))
+                            self._persist()
+
+                            # Notify AST service of reconciled content
+                            if self._ast_service:
+                                try:
+                                    self._ast_service.notify_file_changed(abs_path)
+                                except Exception:
+                                    pass
+
+                            logger.info(
+                                "AST reconciliation succeeded on %s "
+                                "(auto-resolved %d symbols)",
+                                rel, merge_result.auto_resolved,
+                            )
+                            return WriteResult(
+                                success=True,
+                                conflict=True,
+                                reconciled=True,
+                                final_hash=new_hash,
+                            )
+                        else:
+                            logger.info(
+                                "AST reconciliation failed on %s: %d conflicts",
+                                rel, len(merge_result.conflicts),
+                            )
+                    except Exception as exc:
+                        logger.warning(
+                            "AST reconciliation error on %s: %s", rel, exc,
+                        )
+
             self._write_log.append(WriteLogEntry(
                 timestamp=time.time(),
                 file_path=rel,

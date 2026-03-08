@@ -51,6 +51,7 @@ class AgentStatus:
     started_at: float = 0.0
     tokens_used: int = 0
     model: str = ""
+    activity: str = ""      # human-readable current activity label
 
 
 # ---------------------------------------------------------------------------
@@ -227,11 +228,13 @@ class SubagentManager:
         tokens: int = 0,
         model: str = "",
     ) -> None:
+        existing = self._agent_statuses.get(agent_id)
+        started = existing.started_at if existing and existing.started_at else time.time()
         s = AgentStatus(
             agent_id=agent_id,
             task_id=task_id,
             status=status,
-            started_at=time.time(),
+            started_at=started,
             tokens_used=tokens,
             model=model,
         )

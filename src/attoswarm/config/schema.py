@@ -63,7 +63,7 @@ class RetryConfig:
 
 @dataclass(slots=True)
 class OrchestrationConfig:
-    decomposition: str = "llm"  # llm | parallel | heuristic | fast | manual
+    decomposition: str = "llm"  # llm | parallel | heuristic | fast | manual | file
     max_tasks: int = 20
     max_depth: int = 3
     custom_instructions: str = ""  # Prepended to decompose prompt for domain-specific guidance

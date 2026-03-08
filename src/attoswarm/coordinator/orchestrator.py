@@ -13,6 +13,7 @@ Hierarchy:
 
 from __future__ import annotations
 
+import asyncio
 import logging
 import os
 import time
@@ -25,7 +26,7 @@ from attoswarm.coordinator.aot_graph import AoTGraph, AoTNode
 from attoswarm.coordinator.budget import BudgetCounter
 from attoswarm.coordinator.event_bus import EventBus, SwarmEvent
 from attoswarm.coordinator.subagent_manager import SubagentManager, TaskResult
-from attoswarm.protocol.io import write_json_atomic
+from attoswarm.protocol.io import write_json_atomic, write_json_fast
 from attoswarm.protocol.models import (
     SwarmManifest,
     SwarmState,
@@ -96,6 +97,9 @@ class SwarmOrchestrator:
         self._state_seq = 0
         self._manifest: SwarmManifest | None = None
         self._tasks: dict[str, TaskSpec] = {}
+        self._task_attempts: dict[str, int] = {}
+        self._task_attempt_history: dict[str, list[dict[str, Any]]] = {}
+        self._control_cursor: int = 0  # line offset into control.jsonl
 
     # ------------------------------------------------------------------
     # Public API
@@ -163,28 +167,47 @@ class SwarmOrchestrator:
 
         self._emit("info", message=f"DAG: {len(tasks)} tasks, {len(execution_order)} levels")
 
-        # Build manifest
+        # Restore task states on resume
+        if self._resume:
+            self._restore_state()
+
+        # Build and persist manifest
         self._manifest = SwarmManifest(
             run_id=self._run_id,
             goal=self._goal,
             tasks=list(self._tasks.values()),
         )
+        self._persist_manifest()
         self._persist_state()
 
-        # 4. Execute levels
+        # 4. Execute batches (progress-based loop)
+        #
+        # A while loop replaces the old ``for level_idx, batch_ids in
+        # enumerate(execution_order)`` loop which was bounded by the number
+        # of DAG levels.  Retried tasks (reset to "pending") consumed a
+        # level iteration, causing later levels to be silently skipped.
+        #
+        # The while loop keeps executing as long as get_ready_batch()
+        # returns tasks.  A safety bound prevents infinite loops.
         self._phase = "executing"
         completed = 0
-        for level_idx, batch_ids in enumerate(execution_order):
-            self._emit(
-                "info",
-                message=f"Level {level_idx}: {len(batch_ids)} tasks",
-            )
+        batch_num = 0
+        max_retries = getattr(getattr(self._config, 'retries', None), 'max_task_attempts', 2)
+        max_batches = len(tasks) * (max_retries + 1)
 
-            # Get ready tasks
+        # Start background control polling
+        control_poll_task = asyncio.create_task(self._control_poll_loop())
+
+        while batch_num < max_batches:
             ready = self._aot_graph.get_ready_batch()
             if not ready:
-                self._emit("info", message=f"Level {level_idx}: no ready tasks, skipping")
-                continue
+                break  # No more tasks can run
+
+            batch_num += 1
+            self._emit(
+                "info",
+                message=f"Batch {batch_num}: {len(ready)} tasks",
+            )
 
             # Check parallel safety
             conflicts = self._aot_graph.check_parallel_safety(ready, self._ast_service)
@@ -211,7 +234,11 @@ class SwarmOrchestrator:
                 self._persist_state()
 
                 batch_tasks = [self._task_to_dict(tid) for tid in parallel]
-                results = await self._subagent_mgr.execute_batch(batch_tasks)
+                # Persist prompts for each task
+                for td in batch_tasks:
+                    self._persist_prompt(td["task_id"], td)
+                task_timeout = max(t.get("timeout_seconds", 0) for t in batch_tasks) or 600.0
+                results = await self._subagent_mgr.execute_batch(batch_tasks, timeout=task_timeout)
 
                 for result in results:
                     completed += self._handle_result(result)
@@ -224,16 +251,33 @@ class SwarmOrchestrator:
                 self._persist_state()
 
                 task_dict = self._task_to_dict(tid)
-                result = await self._subagent_mgr.execute_single(task_dict)
+                self._persist_prompt(tid, task_dict)
+                task = self._tasks.get(tid)
+                task_timeout = float(task.timeout_seconds) if task and task.timeout_seconds > 0 else 600.0
+                result = await self._subagent_mgr.execute_single(task_dict, timeout=task_timeout)
                 completed += self._handle_result(result)
                 self._persist_state()
 
-            # Post-level: refresh AST index
+            # Post-batch: refresh AST index, check control messages, stall detection
             if self._ast_service:
                 try:
                     self._ast_service.refresh()
                 except Exception:
                     pass
+            self._check_control_messages()
+            self._check_stale_agents()
+
+        # Stop background control polling
+        control_poll_task.cancel()
+        try:
+            await control_poll_task
+        except asyncio.CancelledError:
+            pass
+
+        # Warn if tasks remain pending after the loop
+        remaining = [tid for tid, n in self._aot_graph.nodes.items() if n.status == "pending"]
+        if remaining:
+            self._emit("warning", message=f"{len(remaining)} tasks still pending after execution: {remaining}")
 
         # 5. Finalize
         self._phase = "completed"
@@ -264,8 +308,8 @@ class SwarmOrchestrator:
             },
             "dag_summary": self._aot_graph.summary(),
             "budget": {
-                "tokens_used": self._budget.tokens_used,
-                "cost_usd": self._budget.cost_used,
+                "tokens_used": self._budget.used_tokens,
+                "cost_usd": self._budget.used_cost_usd,
             },
             "elapsed_s": time.time() - self._start_time if self._start_time else 0,
             "active_agents": [
@@ -281,6 +325,31 @@ class SwarmOrchestrator:
     # ------------------------------------------------------------------
     # Internal
     # ------------------------------------------------------------------
+
+    def _persist_manifest(self) -> None:
+        """Write manifest JSON for resume / TUI consumption."""
+        if not self._manifest:
+            return
+        data: dict[str, Any] = {
+            "run_id": self._manifest.run_id,
+            "goal": self._manifest.goal,
+            "tasks": [
+                {
+                    "task_id": t.task_id,
+                    "title": t.title,
+                    "description": t.description,
+                    "deps": t.deps,
+                    "target_files": t.target_files,
+                    "task_kind": t.task_kind,
+                    "role_hint": t.role_hint or "",
+                }
+                for t in self._manifest.tasks
+            ],
+        }
+        try:
+            write_json_atomic(self._layout["manifest"], data)
+        except Exception as exc:
+            logger.warning("Failed to persist manifest: %s", exc)
 
     def _persist_task(self, task_id: str) -> None:
         """Write per-task JSON file for TUI task detail view."""
@@ -301,6 +370,10 @@ class SwarmOrchestrator:
             "files_modified": task.files_modified,
             "result_summary": task.result_summary,
             "symbol_scope": task.symbol_scope,
+            "tokens_used": task.tokens_used,
+            "cost_usd": task.cost_usd,
+            "attempt_count": self._task_attempts.get(task_id, 0),
+            "attempt_history": self._task_attempt_history.get(task_id, []),
         }
         path = self._layout["tasks"] / f"task-{task_id}.json"
         try:
@@ -339,6 +412,9 @@ class SwarmOrchestrator:
                 "assigned_agent": agent_for_task.get(tid, ""),
                 "target_files": task.target_files[:5],
                 "result_summary": task.result_summary[:200] if task.result_summary else "",
+                "tokens_used": task.tokens_used,
+                "cost_usd": task.cost_usd,
+                "attempt_count": self._task_attempts.get(tid, 0),
             })
 
         # Persist per-task JSON files
@@ -357,10 +433,12 @@ class SwarmOrchestrator:
                 "started_at_epoch": a.started_at,
                 "model": a.model or self._config.run.default_model or "",
                 "task_title": task.title if task else "",
+                "activity": a.activity,
             })
 
         state: dict[str, Any] = {
             "run_id": self._run_id,
+            "goal": self._goal,
             "phase": self._phase,
             "updated_at": utc_now_iso(),
             "dag": {"nodes": dag_nodes, "edges": dag_edges},
@@ -374,7 +452,7 @@ class SwarmOrchestrator:
         }
 
         try:
-            write_json_atomic(self._layout["state"], state)
+            write_json_fast(self._layout["state"], state)
         except Exception as exc:
             logger.warning("Failed to persist state: %s", exc)
 
@@ -400,12 +478,18 @@ class SwarmOrchestrator:
     def _init_file_ledger(self) -> None:
         try:
             from attoswarm.workspace.file_ledger import FileLedger
+            from attoswarm.workspace.reconciler import ASTReconciler
+
             persist_dir = str(self._internal_dir / "ledger")
             self._file_ledger = FileLedger(
                 root_dir=self._root_dir,
                 ast_service=self._ast_service,
                 persist_dir=persist_dir,
             )
+
+            # Wire AST reconciler into the ledger for conflict resolution
+            self._reconciler = ASTReconciler(ast_service=self._ast_service)
+            self._file_ledger._reconciler = self._reconciler
         except Exception as exc:
             logger.warning("File ledger init failed: %s", exc)
             self._file_ledger = None
@@ -413,8 +497,23 @@ class SwarmOrchestrator:
     async def _decompose_goal(self) -> list[TaskSpec]:
         """Decompose the goal into tasks.
 
-        Uses the provided ``decompose_fn`` or falls back to a single task.
+        Checks for a tasks file first (tasks.yaml/yml/md in the run dir),
+        then uses the provided ``decompose_fn``, or falls back to a single task.
         """
+        # Check for pre-defined tasks file in run dir
+        for ext in ("yaml", "yml", "md"):
+            tasks_file = self._layout["root"] / f"tasks.{ext}"
+            if tasks_file.exists():
+                try:
+                    from attoswarm.coordinator.task_file_parser import load_tasks_file
+                    tasks = load_tasks_file(tasks_file)
+                    if tasks:
+                        self._emit("info", message=f"Loaded {len(tasks)} tasks from {tasks_file.name}")
+                        return tasks
+                except Exception as exc:
+                    logger.warning("Failed to load tasks file %s: %s", tasks_file, exc)
+                    self._emit("warning", message=f"Tasks file {tasks_file.name} failed: {exc}")
+
         if self._decompose_fn:
             try:
                 result = await self._decompose_fn(
@@ -453,6 +552,7 @@ class SwarmOrchestrator:
             "symbol_scope": task.symbol_scope,
             "role_hint": task.role_hint,
             "task_kind": task.task_kind,
+            "timeout_seconds": task.timeout_seconds,
         }
 
     def _handle_result(self, result: TaskResult) -> int:
@@ -461,24 +561,86 @@ class SwarmOrchestrator:
         if task:
             task.files_modified = result.files_modified
             task.result_summary = result.result_summary
+            task.tokens_used = result.tokens_used
+            task.cost_usd = result.cost_usd
+
+        # Update budget
+        if result.tokens_used or result.cost_usd:
+            self._budget.add_usage(
+                {"total": result.tokens_used} if result.tokens_used else None,
+                result.cost_usd if result.cost_usd else None,
+            )
 
         if result.success:
             self._aot_graph.mark_complete(result.task_id)
             self._emit("complete", task_id=result.task_id,
                         agent_id=f"agent-{result.task_id}",
                         message=f"Task {result.task_id} completed",
-                        data={"files_modified": result.files_modified})
+                        data={"files_modified": result.files_modified,
+                              "tokens_used": result.tokens_used,
+                              "cost_usd": result.cost_usd})
             return 1
-        else:
-            self._aot_graph.mark_failed(result.task_id)
-            skipped = self._aot_graph.cascade_skip_blocked()
-            self._emit("fail", task_id=result.task_id,
+
+        # Track attempts
+        attempts = self._task_attempts.get(result.task_id, 0) + 1
+        self._task_attempts[result.task_id] = attempts
+        max_retries = getattr(getattr(self._config, 'retries', None), 'max_task_attempts', 2)
+
+        # Record attempt history
+        self._task_attempt_history.setdefault(result.task_id, []).append({
+            "attempt": attempts,
+            "error": (result.error or "")[:500],
+            "timestamp": utc_now_iso(),
+            "duration_s": result.duration_s,
+            "tokens_used": result.tokens_used,
+        })
+
+        if attempts < max_retries:
+            # Reset for retry
+            node = self._aot_graph.get_node(result.task_id)
+            if node:
+                node.status = "pending"
+            self._emit("retry", task_id=result.task_id,
                         agent_id=f"agent-{result.task_id}",
-                        message=f"Task {result.task_id} failed: {result.error}",
-                        data={"skipped": skipped})
-            if skipped:
-                self._emit("skip", message=f"Cascade-skipped: {skipped}")
+                        message=f"Task {result.task_id} failed (attempt {attempts}/{max_retries}), retrying")
             return 0
+
+        # Max retries exhausted
+        self._aot_graph.mark_failed(result.task_id)
+        skipped = self._aot_graph.cascade_skip_blocked()
+        self._emit("fail", task_id=result.task_id,
+                    agent_id=f"agent-{result.task_id}",
+                    message=f"Task {result.task_id} failed: {result.error}",
+                    data={"skipped": skipped})
+        if skipped:
+            self._emit("skip", message=f"Cascade-skipped: {skipped}")
+        return 0
+
+    def _restore_state(self) -> None:
+        """Restore task states from persisted state file for resume.
+
+        Tasks that were ``done`` stay done; everything else (failed, skipped,
+        running) is reset to ``pending`` so they are retried.
+        """
+        from attoswarm.protocol.io import read_json
+
+        state = read_json(self._layout["state"], default={})
+        dag = state.get("dag", {})
+        restored = 0
+        for node_data in dag.get("nodes", []):
+            tid = str(node_data.get("task_id", ""))
+            status = str(node_data.get("status", "pending"))
+            node = self._aot_graph.get_node(tid)
+            if not node:
+                continue
+            if status == "done":
+                node.status = "done"
+                restored += 1
+            else:
+                # Reset failed/skipped/running to pending for retry
+                node.status = "pending"
+        if restored:
+            self._emit("info", message=f"Resumed: {restored} tasks already done, rest reset to pending")
 
     def _split_by_conflicts(
         self,
@@ -500,6 +662,86 @@ class SwarmOrchestrator:
         parallel = [tid for tid in batch if tid not in conflicting]
         serialized = [tid for tid in batch if tid in conflicting]
         return parallel, serialized
+
+    async def _control_poll_loop(self) -> None:
+        """Background task that checks control.jsonl every 5s during execution."""
+        while self._phase == "executing":
+            self._check_control_messages()
+            await asyncio.sleep(5.0)
+
+    def _persist_prompt(self, task_id: str, task_dict: dict[str, Any]) -> None:
+        """Write the full agent prompt to disk for TUI inspection."""
+        parts = [f"# Task: {task_dict.get('title', '')}", "", task_dict.get("description", "")]
+        target_files = task_dict.get("target_files", [])
+        if target_files:
+            parts.append(f"\nTarget files: {', '.join(target_files)}")
+        read_files = task_dict.get("read_files", [])
+        if read_files:
+            parts.append(f"\nReference files: {', '.join(read_files)}")
+        prompt_path = self._layout["agents"] / f"agent-{task_id}.prompt.txt"
+        try:
+            prompt_path.write_text("\n".join(parts), encoding="utf-8")
+        except Exception:
+            pass
+
+    def _check_control_messages(self) -> None:
+        """Poll control.jsonl for user-initiated skip/retry/edit commands."""
+        import json as _json
+
+        control_path = self._layout["root"] / "control.jsonl"
+        if not control_path.exists():
+            return
+        try:
+            lines = control_path.read_text(encoding="utf-8").splitlines()
+        except Exception:
+            return
+        new_lines = lines[self._control_cursor:]
+        self._control_cursor = len(lines)
+
+        for line in new_lines:
+            try:
+                msg = _json.loads(line)
+            except Exception:
+                continue
+            action = msg.get("action", "")
+            task_id = msg.get("task_id", "")
+            if not task_id:
+                continue
+
+            if action == "skip":
+                node = self._aot_graph.get_node(task_id)
+                if node and node.status not in ("done", "skipped"):
+                    self._aot_graph.mark_failed(task_id)
+                    skipped = self._aot_graph.cascade_skip_blocked()
+                    self._emit("skip", task_id=task_id,
+                               message=f"Task {task_id} skipped by user",
+                               data={"skipped": skipped})
+            elif action == "retry":
+                node = self._aot_graph.get_node(task_id)
+                if node and node.status in ("failed", "skipped"):
+                    node.status = "pending"
+                    self._task_attempts.pop(task_id, None)
+                    self._emit("retry", task_id=task_id,
+                               message=f"Task {task_id} retry requested by user")
+            elif action == "edit_task":
+                new_desc = msg.get("description", "")
+                task = self._tasks.get(task_id)
+                if task and new_desc:
+                    task.description = new_desc
+                    self._persist_task(task_id)
+                    self._emit("info", task_id=task_id,
+                               message=f"Task {task_id} description updated by user")
+
+    def _check_stale_agents(self) -> None:
+        """Warn about agents that haven't produced output beyond the configured timeout."""
+        timeout = self._config.watchdog.task_silence_timeout_seconds
+        now = time.time()
+        stale = []
+        for a in self._subagent_mgr.get_active_agents():
+            if a.started_at and now - a.started_at > timeout:
+                stale.append(a.agent_id)
+        if stale:
+            self._emit("warning", message=f"Stale agents (>{timeout:.0f}s): {stale}")
 
     def _emit(
         self,

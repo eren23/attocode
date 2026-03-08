@@ -7,7 +7,6 @@ import logging
 import os
 import shlex
 import shutil
-import subprocess
 import time
 import uuid
 from dataclasses import replace
@@ -15,21 +14,20 @@ from pathlib import Path
 from typing import Any
 
 from attocode_core.ast_index.indexer import CodeIndex
-from attoswarm.adapters.base import AgentMessage, AgentProcessSpec
+from attoswarm.adapters.base import AgentProcessSpec
 from attoswarm.adapters.registry import get_adapter
 from attoswarm.config.schema import RoleConfig, SwarmYamlConfig
 from attoswarm.coordinator.budget import BudgetCounter
 from attoswarm.coordinator.merge_queue import MergeQueue
-from attoswarm.coordinator.scheduler import AgentSlot, assign_tasks, compute_ready_tasks
+from attoswarm.coordinator.scheduler import AgentSlot, assign_tasks, compute_ready_tasks  # noqa: F401
 from attoswarm.coordinator.state_writer import write_state
 from attoswarm.coordinator.watchdog import evaluate_watchdog
 from attoswarm.protocol.io import append_jsonl, read_json, write_json_atomic
-from attoswarm.protocol.locks import locked_file
+from attoswarm.protocol.locks import locked_file  # noqa: F401
 from attoswarm.protocol.models import (
     AgentInbox,
     AgentOutbox,
     BudgetSpec,
-    InboxMessage,
     MergePolicy,
     RoleSpec,
     SwarmManifest,
@@ -38,6 +36,28 @@ from attoswarm.protocol.models import (
     utc_now_iso,
 )
 from attoswarm.workspace.worktree import cleanup_worktrees, ensure_workspace_for_agent
+
+from attoswarm.coordinator.failure_handler import (
+    cascade_skip_blocked as _cascade_skip_blocked_impl,
+    enforce_task_duration_limits as _enforce_task_duration_limits_impl,
+    enforce_task_silence_timeouts as _enforce_task_silence_timeouts_impl,
+    handle_task_failed as _handle_task_failed_impl,
+    mark_running_task_failed as _mark_running_task_failed_impl,
+)
+from attoswarm.coordinator.output_harvester import (
+    capture_partial_output as _capture_partial_output_impl,
+    detect_file_changes as _detect_file_changes_impl,
+    handle_completion_claim as _handle_completion_claim_impl,
+    harvest_outputs as _harvest_outputs_impl,
+)
+from attoswarm.coordinator.review_processor import (
+    process_review_queue as _process_review_queue_impl,
+)
+from attoswarm.coordinator.task_dispatcher import (
+    build_task_prompt as _build_task_prompt_impl,
+    dispatch_ready_tasks as _dispatch_ready_tasks_impl,
+    send_task_assignment as _send_task_assignment_impl,
+)
 
 log = logging.getLogger(__name__)
 
@@ -468,289 +488,19 @@ class HybridCoordinator:
             await asyncio.sleep(poll)
 
     async def _harvest_outputs(self) -> None:
-        for agent_id, adapter in self.adapters.items():
-            handle = self.handles[agent_id]
-            events = await adapter.read_output(handle, since_seq=self.outbox_cursors.get(agent_id, 0))
-            if not events:
-                if handle.process.returncode is not None and agent_id in self.running_task_by_agent:
-                    await self._mark_running_task_failed(
-                        agent_id,
-                        self._exit_reason(agent_id, "process_exit_without_terminal_event"),
-                    )
-                continue
-
-            outbox_path = self.layout["agents"] / f"agent-{agent_id}.outbox.json"
-            lock_path = self.layout["locks"] / f"agent-{agent_id}.outbox.lock"
-            with locked_file(lock_path):
-                raw = read_json(outbox_path, AgentOutbox(agent_id=agent_id).to_dict())
-                next_seq = int(raw.get("next_seq", 1))
-                raw_events = raw.get("events", [])
-                for ev in events:
-                    task_id = self.running_task_by_agent.get(agent_id)
-                    line = str(ev.payload.get("line", ""))
-                    self.budget.add_usage(ev.token_usage, ev.cost_usd, text=line)
-                    payload = {
-                        "seq": next_seq,
-                        "event_id": f"{agent_id}-e{next_seq}",
-                        "timestamp": ev.timestamp,
-                        "type": ev.type,
-                        "task_id": task_id,
-                        "payload": ev.payload,
-                        "token_usage": ev.token_usage,
-                        "cost_usd": ev.cost_usd,
-                    }
-                    raw_events.append(payload)
-                    self.outbox_cursors[agent_id] = next_seq
-                    self._append_event(
-                        "agent.event",
-                        {
-                            "agent_id": agent_id,
-                            "task_id": task_id,
-                            "event_type": ev.type,
-                            "payload": ev.payload,
-                        },
-                    )
-
-                    if ev.type == "task_done" and task_id:
-                        await self._handle_completion_claim(agent_id, task_id)
-                    elif ev.type == "task_failed" and task_id:
-                        await self._handle_task_failed(agent_id, task_id, reason="worker_reported_failure")
-                    else:
-                        if task_id:
-                            self.running_task_last_progress[task_id] = time.monotonic()
-                    next_seq += 1
-                raw["events"] = raw_events
-                raw["next_seq"] = next_seq
-                write_json_atomic(outbox_path, raw)
+        await _harvest_outputs_impl(self)
 
     async def _dispatch_ready_tasks(self) -> None:
-        assert self.manifest is not None
-        tasks = [replace(t, status=self.task_state.get(t.task_id, t.status)) for t in self.manifest.tasks]
-        ready = compute_ready_tasks(tasks, self.task_state)
-        free = [
-            AgentSlot(
-                agent_id=aid,
-                role_id=self.role_by_agent[aid].role_id,
-                backend=self.role_by_agent[aid].backend,
-                busy=aid in self.running_task_by_agent,
-            )
-            for aid in self.handles
-        ]
-        assignments = assign_tasks(ready, free, self.manifest.roles)
-        for assignment in assignments:
-            task = self._find_task(assignment.task_id)
-            if task is None:
-                continue
-            if self.task_attempts.get(task.task_id, 0) >= self.config.retries.max_task_attempts:
-                self._transition_task(task.task_id, "failed", "coordinator", "max_task_attempts_exceeded")
-                self._persist_task(task, status="failed", last_error="max_task_attempts_exceeded")
-                continue
-            self.task_attempts[task.task_id] = self.task_attempts.get(task.task_id, 0) + 1
-            self.running_task_by_agent[assignment.agent_id] = task.task_id
-            self.running_task_last_progress[task.task_id] = time.monotonic()
-            self.running_task_started_at[task.task_id] = time.monotonic()
-            self._transition_task(task.task_id, "running", "coordinator", "assigned")
-            self._persist_task(task, status="running", assigned_agent_id=assignment.agent_id)
-            await self._send_task_assignment(assignment.agent_id, task)
+        await _dispatch_ready_tasks_impl(self)
 
     def _build_task_prompt(self, task: TaskSpec) -> str:
-        """Build an actionable prompt for the agent based on task kind.
-
-        The prompt gives the agent coding context and instructions appropriate
-        for its task type.  It intentionally does NOT include protocol markers
-        like ``[TASK_DONE]`` / ``[TASK_FAILED]`` — those are emitted by the
-        heartbeat wrapper based on exit code.
-        """
-        desc = task.description.replace(chr(10), " ").strip()
-        goal_ctx = f"Project goal: {self.goal}\n\n" if self.goal else ""
-
-        acceptance_block = ""
-        if task.acceptance:
-            items = "\n".join(f"  - {a}" for a in task.acceptance)
-            acceptance_block = f"\nAcceptance criteria:\n{items}\n"
-
-        if task.task_kind in ("implement", "test", "integrate"):
-            return (
-                f"{goal_ctx}"
-                f"Task {task.task_id}: {task.title}\n\n"
-                f"{desc}\n"
-                f"{acceptance_block}\n"
-                "You are a coding agent. Read the existing code in this working directory, "
-                "then create or modify the necessary files to complete this task. "
-                "Write clean, working code. Run any available tests to verify correctness."
-            )
-
-        if task.task_kind in ("analysis", "design"):
-            return (
-                f"{goal_ctx}"
-                f"Task {task.task_id}: {task.title}\n\n"
-                f"{desc}\n"
-                f"{acceptance_block}\n"
-                "Analyze the codebase in this working directory and produce a concrete "
-                "written plan or analysis. Include specific file paths, function names, "
-                "and implementation details."
-            )
-
-        if task.task_kind in ("judge", "critic"):
-            return (
-                f"{goal_ctx}"
-                f"Task {task.task_id}: {task.title}\n\n"
-                f"{desc}\n"
-                f"{acceptance_block}\n"
-                "Evaluate the work in this working directory. Check for correctness, "
-                "completeness, and adherence to the acceptance criteria. Report any issues found."
-            )
-
-        # Fallback for merge or unknown kinds
-        return (
-            f"{goal_ctx}"
-            f"Task {task.task_id}: {task.title}\n\n"
-            f"{desc}\n"
-            f"{acceptance_block}\n"
-            "Complete this task using the files in the current working directory."
-        )
+        return _build_task_prompt_impl(self, task)
 
     async def _send_task_assignment(self, agent_id: str, task: TaskSpec) -> None:
-        inbox_path = self.layout["agents"] / f"agent-{agent_id}.inbox.json"
-        lock_path = self.layout["locks"] / f"agent-{agent_id}.inbox.lock"
-        with locked_file(lock_path):
-            raw = read_json(inbox_path, AgentInbox(agent_id=agent_id).to_dict())
-            next_seq = int(raw.get("next_seq", 1))
-            msg = InboxMessage(
-                seq=next_seq,
-                message_id=f"{agent_id}-m{next_seq}",
-                timestamp=utc_now_iso(),
-                kind="task_assign",
-                task_id=task.task_id,
-                payload={
-                    "title": task.title,
-                    "description": task.description,
-                    "acceptance": task.acceptance,
-                    "artifacts": task.artifacts,
-                    "task_kind": task.task_kind,
-                },
-                requires_ack=True,
-            )
-            messages = raw.get("messages", [])
-            messages.append(
-                {
-                    "seq": msg.seq,
-                    "message_id": msg.message_id,
-                    "timestamp": msg.timestamp,
-                    "kind": msg.kind,
-                    "task_id": msg.task_id,
-                    "payload": msg.payload,
-                    "requires_ack": msg.requires_ack,
-                }
-            )
-            raw["messages"] = messages
-            raw["next_seq"] = next_seq + 1
-            write_json_atomic(inbox_path, raw)
-
-        prompt_text = self._build_task_prompt(task)
-        adapter = self.adapters[agent_id]
-        handle = self.handles[agent_id]
-        await adapter.send_message(
-            handle,
-            AgentMessage(
-                message_id=msg.message_id,
-                task_id=task.task_id,
-                kind="task_assign",
-                content=prompt_text,
-            ),
-        )
-        self._append_event(
-            "agent.task.launch",
-            {"agent_id": agent_id, "task_id": task.task_id, "task_kind": task.task_kind},
-        )
-        if self.config.run.debug:
-            self._append_event(
-                "debug.task.prompt_sent",
-                {
-                    "agent_id": agent_id,
-                    "task_id": task.task_id,
-                    "prompt": prompt_text[:2000],
-                },
-            )
+        await _send_task_assignment_impl(self, agent_id, task)
 
     async def _process_review_queue(self) -> None:
-        assert self.manifest is not None
-        authority = self.config.merge.authority_role
-        review_roles = self._review_roles()
-
-        for item in self.merge_queue.items:
-            if item.status == "pending":
-                created: list[str] = []
-                for rid in review_roles:
-                    review_id = f"review-{item.task_id}-{rid}"
-                    if self._find_task(review_id) is not None:
-                        created.append(review_id)
-                        continue
-                    rt = TaskSpec(
-                        task_id=review_id,
-                        title=f"Review {item.task_id}",
-                        description=f"Validate completion claim for {item.task_id}",
-                        deps=[item.task_id],
-                        role_hint=rid,
-                        task_kind="judge" if self._role_type(rid) == "judge" else "critic",
-                        status="pending",
-                    )
-                    self._append_task(rt)
-                    self._transition_task(rt.task_id, "ready", "coordinator", "review_created")
-                    created.append(review_id)
-                item.judge_task_ids = created
-                item.status = "in_review"
-                item.decision = "reviewing"
-
-            if item.status == "in_review":
-                if not item.judge_task_ids:
-                    item.status = "approved"
-                    item.decision = "approved_without_review_roles"
-                else:
-                    statuses = [self.task_state.get(tid, "pending") for tid in item.judge_task_ids]
-                    if any(s in {"pending", "ready", "running", "reviewing"} for s in statuses):
-                        continue
-                    passed = sum(1 for s in statuses if s == "done")
-                    score = passed / max(len(statuses), 1)
-                    item.quality_score = score
-                    if score >= self.config.merge.quality_threshold:
-                        item.status = "approved"
-                        item.decision = "approved"
-                    else:
-                        item.status = "rejected"
-                        item.decision = "rejected"
-                        self._transition_task(item.task_id, "failed", "review", "insufficient_quality")
-
-            if item.status == "approved":
-                if item.merge_task_id is None:
-                    merge_id = f"merge-{item.task_id}"
-                    if self._find_task(merge_id) is None:
-                        t = TaskSpec(
-                            task_id=merge_id,
-                            title=f"Merge {item.task_id}",
-                            description=f"Apply and reconcile outputs for {item.task_id}",
-                            deps=[item.task_id] + item.judge_task_ids,
-                            role_hint=authority,
-                            task_kind="merge",
-                            status="pending",
-                        )
-                        self._append_task(t)
-                        self._transition_task(merge_id, "ready", "coordinator", "merge_created")
-                    item.merge_task_id = merge_id
-                else:
-                    status = self.task_state.get(item.merge_task_id, "pending")
-                    if status == "done":
-                        item.status = "merged"
-                        item.decision = "merged"
-                        self._transition_task(item.task_id, "done", "merger", "merge_completed")
-                        task = self._find_task(item.task_id)
-                        if task is not None:
-                            self._persist_task(task, status="done")
-                    elif status == "failed":
-                        item.merge_attempts += 1
-                        if item.merge_attempts >= self.config.retries.max_task_attempts:
-                            item.status = "rejected"
-                            item.decision = "merge_failed"
+        await _process_review_queue_impl(self)
 
     async def _restart_agent(self, agent_id: str) -> None:
         adapter = self.adapters[agent_id]
@@ -776,229 +526,28 @@ class HybridCoordinator:
         )
 
     def _detect_file_changes(self, agent_id: str, task_id: str) -> None:
-        """Best-effort detection of files changed in an agent's worktree."""
-        handle = self.handles.get(agent_id)
-        if not handle:
-            return
-        cwd = handle.spec.cwd
-        try:
-            result = subprocess.run(
-                ["git", "diff", "--name-only", "HEAD"],
-                cwd=cwd, capture_output=True, text=True, timeout=5,
-            )
-            untracked = subprocess.run(
-                ["git", "ls-files", "--others", "--exclude-standard"],
-                cwd=cwd, capture_output=True, text=True, timeout=5,
-            )
-            changed = [f for f in result.stdout.strip().splitlines() if f]
-            new_files = [f"+ {f}" for f in untracked.stdout.strip().splitlines() if f]
-            all_files = changed + new_files
-            if all_files:
-                self._append_event("task.files_changed", {
-                    "agent_id": agent_id,
-                    "task_id": task_id,
-                    "files": all_files[:50],
-                    "cwd": cwd,
-                })
-        except Exception:
-            pass  # Best-effort
+        _detect_file_changes_impl(self, agent_id, task_id)
 
     async def _handle_completion_claim(self, agent_id: str, task_id: str) -> None:
-        self._detect_file_changes(agent_id, task_id)
-        self.running_task_by_agent.pop(agent_id, None)
-        self.running_task_last_progress.pop(task_id, None)
-        self.running_task_started_at.pop(task_id, None)
-        self._append_event(
-            "agent.task.exit",
-            {"agent_id": agent_id, "task_id": task_id, "result": "task_done"},
-        )
-        self._append_event(
-            "agent.task.classified",
-            {"agent_id": agent_id, "task_id": task_id, "classification": "success"},
-        )
-        task = self._find_task(task_id)
-        if task is None:
-            return
-        if task.task_kind in SKIP_REVIEW_KINDS:
-            self._transition_task(task_id, "done", self._role_type_by_agent(agent_id), "terminal_claim")
-            self._persist_task(task, status="done")
-            return
-        # Worker tasks become reviewing first; higher hierarchy decides final status.
-        self._transition_task(task_id, "reviewing", self._role_type_by_agent(agent_id), "completion_claim")
-        self._persist_task(task, status="reviewing")
-        self.merge_queue.enqueue(task_id, artifacts=task.artifacts)
+        await _handle_completion_claim_impl(self, agent_id, task_id)
 
     async def _handle_task_failed(self, agent_id: str, task_id: str, reason: str) -> None:
-        self.running_task_by_agent.pop(agent_id, None)
-        self.running_task_last_progress.pop(task_id, None)
-        self.running_task_started_at.pop(task_id, None)
-
-        # Capture partial progress from agent outbox before it's lost
-        partial_output = self._capture_partial_output(agent_id)
-
-        self._append_event(
-            "agent.task.exit",
-            {"agent_id": agent_id, "task_id": task_id, "result": "task_failed"},
-        )
-        self._append_event(
-            "agent.task.classified",
-            {
-                "agent_id": agent_id,
-                "task_id": task_id,
-                "classification": "failure",
-                "reason": reason,
-                "partial_output": partial_output[:500] if partial_output else "",
-            },
-        )
-        task = self._find_task(task_id)
-        if task is None:
-            return
-        if self.task_attempts.get(task_id, 0) < self.config.retries.max_task_attempts:
-            # For duration-exceeded failures, increase timeout on retry
-            if "duration_exceeded" in reason and task.timeout_override is None:
-                task.timeout_override = int(
-                    self.config.watchdog.task_max_duration_seconds * 1.5
-                )
-                self._task_timeout_overrides[task_id] = task.timeout_override
-            self._transition_task(task_id, "ready", "coordinator", reason)
-            self._persist_task(task, status="ready", last_error=reason)
-        else:
-            self._transition_task(task_id, "failed", "coordinator", reason)
-            self._persist_task(task, status="failed", last_error=reason)
-            # Only cascade-skip tasks whose ALL deps are failed/skipped
-            self._cascade_skip_blocked()
+        await _handle_task_failed_impl(self, agent_id, task_id, reason)
 
     async def _mark_running_task_failed(self, agent_id: str, reason: str) -> None:
-        task_id = self.running_task_by_agent.get(agent_id)
-        if task_id:
-            await self._handle_task_failed(agent_id, task_id, reason)
+        await _mark_running_task_failed_impl(self, agent_id, reason)
 
     def _capture_partial_output(self, agent_id: str) -> str:
-        """Best-effort capture of partial progress from an agent's outbox."""
-        try:
-            outbox_path = self.layout["agents"] / f"agent-{agent_id}.outbox.json"
-            outbox = read_json(outbox_path, {})
-            events = outbox.get("events", [])
-            if events:
-                last_events = events[-3:]
-                return "; ".join(
-                    str(
-                        e.get("payload", {}).get("line")
-                        or e.get("payload", {}).get("message")
-                        or e.get("payload", {}).get("result")
-                        or e.get("type", "")
-                    )[:100]
-                    for e in last_events
-                    if isinstance(e, dict)
-                )
-        except Exception:
-            pass
-        return ""
+        return _capture_partial_output_impl(self, agent_id)
 
     def _cascade_skip_blocked(self) -> list[str]:
-        """Skip tasks whose ALL dependencies are failed/skipped (no viable path).
-
-        Unlike immediate cascade, this only skips when there is truly no
-        possibility of the task running (all deps terminal and none succeeded).
-        """
-        if self.manifest is None:
-            return []
-        skipped: list[str] = []
-        changed = True
-        while changed:
-            changed = False
-            for task in self.manifest.tasks:
-                status = self.task_state.get(task.task_id, task.status)
-                if status not in ("pending", "ready"):
-                    continue
-                if not task.deps:
-                    continue
-                # Check if ANY dependency can still succeed
-                has_viable = any(
-                    self.task_state.get(d, "pending") in ("pending", "ready", "running", "reviewing")
-                    for d in task.deps
-                )
-                if not has_viable:
-                    # All deps are terminal — check if enough succeeded for partial execution
-                    done_count = sum(1 for d in task.deps if self.task_state.get(d) == "done")
-                    if task.deps and done_count / len(task.deps) >= 0.5:
-                        continue  # 50%+ deps succeeded — let it run with partial context
-                    self._transition_task(task.task_id, "skipped", "coordinator", "all_deps_failed")
-                    self._persist_task(task, status="skipped", last_error="all_deps_failed")
-                    skipped.append(task.task_id)
-                    changed = True
-        if skipped:
-            self._append_event("task.cascade_skip", {
-                "skipped": skipped,
-                "reason": "all_deps_failed",
-            })
-        return skipped
+        return _cascade_skip_blocked_impl(self)
 
     async def _enforce_task_silence_timeouts(self) -> None:
-        timeout = max(5.0, float(self.config.watchdog.task_silence_timeout_seconds))
-        now = time.monotonic()
-        for agent_id, task_id in list(self.running_task_by_agent.items()):
-            last = self.running_task_last_progress.get(task_id, now)
-            elapsed = now - last
-            if self.config.run.debug:
-                self._append_event(
-                    "debug.watchdog.silence_check",
-                    {
-                        "agent_id": agent_id,
-                        "task_id": task_id,
-                        "elapsed_seconds": round(elapsed, 1),
-                        "threshold_seconds": timeout,
-                    },
-                )
-            if elapsed <= timeout:
-                continue
-            await self._handle_task_failed(agent_id, task_id, reason=f"silent_timeout>{timeout}s")
-            self._append_event(
-                "agent.task.classified",
-                {
-                    "agent_id": agent_id,
-                    "task_id": task_id,
-                    "classification": "silent_timeout",
-                    "timeout_seconds": timeout,
-                },
-            )
+        await _enforce_task_silence_timeouts_impl(self)
 
     async def _enforce_task_duration_limits(self) -> None:
-        default_max = max(300.0, float(self.config.watchdog.task_max_duration_seconds))
-        now = time.monotonic()
-        for agent_id, task_id in list(self.running_task_by_agent.items()):
-            started = self.running_task_started_at.get(task_id)
-            if started is None:
-                continue
-            # Respect per-task timeout_override (set on retry for timed-out tasks)
-            override = self._task_timeout_overrides.get(task_id)
-            max_duration = float(override) if override is not None else default_max
-            elapsed = now - started
-            if self.config.run.debug:
-                self._append_event(
-                    "debug.watchdog.duration_check",
-                    {
-                        "agent_id": agent_id,
-                        "task_id": task_id,
-                        "elapsed_seconds": round(elapsed, 1),
-                        "threshold_seconds": max_duration,
-                    },
-                )
-            if elapsed > max_duration:
-                await self._handle_task_failed(
-                    agent_id, task_id,
-                    reason=f"task_duration_exceeded>{max_duration}s",
-                )
-                self._append_event(
-                    "agent.task.classified",
-                    {
-                        "agent_id": agent_id,
-                        "task_id": task_id,
-                        "classification": "duration_exceeded",
-                        "duration_seconds": now - started,
-                        "max_duration_seconds": max_duration,
-                    },
-                )
+        await _enforce_task_duration_limits_impl(self)
 
     def _active_agents(self) -> list[dict]:
         active: list[dict] = []

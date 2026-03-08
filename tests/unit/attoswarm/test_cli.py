@@ -27,11 +27,11 @@ def test_init_interactive_minimal_existing_repo(tmp_path: Path) -> None:
     (tmp_path / ".git").mkdir()
     runner = CliRunner()
     # Input order: setup_target, profile, workers, budget, runtime,
-    #              workspace, quality, advanced?, output_mode
+    #              workspace, quality, advanced?, output_mode, task_decomposition?
     result = runner.invoke(
         main,
         ["init", str(tmp_path)],
-        input="existing-repo\n2cc\n2\n2\n2\nshared\nstandard\nn\nminimal\n",
+        input="existing-repo\n2cc\n2\n2\n2\nshared\nstandard\nn\nminimal\nn\n",
     )
     assert result.exit_code == 0
     assert (tmp_path / ".attocode" / "swarm.hybrid.yaml").exists()
@@ -41,12 +41,13 @@ def test_init_interactive_minimal_existing_repo(tmp_path: Path) -> None:
 def test_init_interactive_demo_scaffold(tmp_path: Path) -> None:
     runner = CliRunner()
     # --mode and --profile are passed as flags; remaining interactive prompts:
-    # setup_target, workers, budget, runtime, workspace, quality, advanced?
+    # setup_target, workers, budget, runtime, workspace, quality, advanced?, task_decomposition?
     result = runner.invoke(
         main,
         ["init", str(tmp_path), "--mode", "demo", "--profile", "cc-codex"],
-        input="demo-project\n2\n2\n2\nshared\nstandard\nn\n",
+        input="demo-project\n2\n2\n2\nshared\nstandard\nn\nn\n",
     )
+    # Note: --mode skips the output_mode prompt, so task_decomposition? is the last prompt
     assert result.exit_code == 0
     assert (tmp_path / ".attocode" / "swarm.hybrid.yaml").exists()
     assert (tmp_path / "tasks" / "goal.md").exists()

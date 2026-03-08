@@ -2,9 +2,12 @@
 
 from __future__ import annotations
 
+import json
+from pathlib import Path
 from typing import Any
 
 from rich.text import Text
+from textual.message import Message
 from textual.reactive import reactive
 from textual.widgets import Static
 
@@ -18,6 +21,26 @@ class DetailInspector(Static):
     - status
     - ... any other metadata
     """
+
+    can_focus = True
+
+    class SkipTaskRequested(Message):
+        """User requested to skip a task via detail inspector."""
+        def __init__(self, task_id: str) -> None:
+            super().__init__()
+            self.task_id = task_id
+
+    class RetryTaskRequested(Message):
+        """User requested to retry a task via detail inspector."""
+        def __init__(self, task_id: str) -> None:
+            super().__init__()
+            self.task_id = task_id
+
+    class EditTaskRequested(Message):
+        """User requested to edit a task description."""
+        def __init__(self, task_id: str) -> None:
+            super().__init__()
+            self.task_id = task_id
 
     DEFAULT_CSS = """
     DetailInspector {
@@ -38,6 +61,27 @@ class DetailInspector(Static):
     def inspect(self, data: dict[str, Any]) -> None:
         """External API to set inspection target."""
         self.inspect_data = data
+        self.focus()
+
+    def on_key(self, event: Any) -> None:
+        """Handle action keys for the currently inspected item."""
+        data = self.inspect_data
+        if not data or data.get("kind") != "task":
+            return
+        task_id = data.get("task_id", "")
+        status = data.get("status", "")
+        if not task_id:
+            return
+
+        if event.key == "r" and status in ("failed", "skipped"):
+            self.post_message(self.RetryTaskRequested(task_id))
+            event.stop()
+        elif event.key == "s" and status in ("pending", "running", "failed", "skipped"):
+            self.post_message(self.SkipTaskRequested(task_id))
+            event.stop()
+        elif event.key == "e" and status == "pending":
+            self.post_message(self.EditTaskRequested(task_id))
+            event.stop()
 
     def _rebuild(self, data: dict[str, Any]) -> None:
         if not data:
@@ -145,9 +189,21 @@ class DetailInspector(Static):
             "done": "green",
             "failed": "red",
             "pending": "dim",
+            "skipped": "yellow dim",
         }.get(status, "")
         text.append("  Status: ")
         text.append(f"{status}\n", style=status_style)
+
+        blocked = data.get("blocked_reason", "")
+        if blocked:
+            text.append("  Blocked: ", style="red bold")
+            text.append(f"{blocked}\n", style="red")
+
+        # Agent activity (what the agent is currently doing)
+        agent_activity = data.get("agent_activity", "")
+        if agent_activity:
+            text.append("  Activity: ", style="cyan bold")
+            text.append(f"{agent_activity}\n", style="cyan italic")
 
         task_kind = data.get("task_kind", "")
         if task_kind:
@@ -167,11 +223,37 @@ class DetailInspector(Static):
         if duration:
             text.append(f"  Duration: {duration}\n")
 
+        # Cost & tokens
+        tokens = data.get("tokens_used", 0)
+        cost = data.get("cost_usd", 0.0)
+        if tokens or cost:
+            text.append("  Tokens: ", style="bold")
+            text.append(f"{tokens:,}", style="yellow")
+            if cost:
+                text.append(f" (${cost:.4f})", style="yellow")
+            text.append("\n")
+
         # Attempts
-        attempts = data.get("attempts", 0)
+        attempts = data.get("attempts", 0) or data.get("attempt_count", 0)
         if attempts:
             style = "yellow" if attempts > 1 else ""
             text.append(f"  Attempts: {attempts}\n", style=style)
+
+        # Attempt history
+        attempt_history = data.get("attempt_history", [])
+        if attempt_history:
+            text.append("\n  Attempt History:\n", style="yellow bold")
+            for ah in attempt_history[-5:]:  # Show last 5
+                attempt_num = ah.get("attempt", "?")
+                error = ah.get("error", "")[:100]
+                dur = ah.get("duration_s", 0)
+                ts = ah.get("timestamp", "")
+                text.append(f"    #{attempt_num}", style="yellow")
+                if dur:
+                    text.append(f" ({dur:.1f}s)", style="dim")
+                if error:
+                    text.append(f" - {error}", style="red dim")
+                text.append("\n")
 
         deps = data.get("deps", [])
         if deps:
@@ -189,8 +271,14 @@ class DetailInspector(Static):
             for f in files_modified[:10]:
                 text.append(f"    \u2022 {f}\n", style="green dim")
 
+        # Prompt preview
+        prompt = data.get("prompt_preview", "")
+        if prompt:
+            text.append("\n  Prompt (preview):\n", style="blue bold")
+            text.append(f"  {prompt[:300]}\n", style="blue dim")
+
         desc = data.get("description", "") or data.get("result_summary", "")
-        if desc:
+        if desc and not prompt:
             text.append(f"\n  Description:\n  {desc[:300]}\n", style="dim italic")
 
         # Stderr if available
@@ -198,3 +286,21 @@ class DetailInspector(Static):
         if stderr:
             text.append("\n  Stderr:\n", style="red dim")
             text.append(f"    {stderr[-500:]}\n", style="red dim")
+
+        # Action hints
+        if status in ("failed", "skipped"):
+            text.append("\n  Actions: ", style="bold")
+            text.append("[r] Retry", style="cyan bold")
+            text.append("  ", style="dim")
+            text.append("[s] Skip", style="yellow bold")
+            text.append("\n")
+        elif status == "pending":
+            text.append("\n  Actions: ", style="bold")
+            text.append("[s] Skip", style="yellow bold")
+            text.append("  ", style="dim")
+            text.append("[e] Edit", style="blue bold")
+            text.append("\n")
+        elif status == "running":
+            text.append("\n  Actions: ", style="bold")
+            text.append("[s] Skip/Cancel", style="yellow bold")
+            text.append("\n")

@@ -29,24 +29,86 @@ class StateStore:
         self.state_path = self.run_dir / "swarm.state.json"
         self.events_path = self.run_dir / "swarm.events.jsonl"
         self._task_cache: dict[str, tuple[float, dict[str, Any]]] = {}
-        self._cache_ttl = 2.0
+        self._cache_ttl = 5.0
+
+        # State-level cache: (mtime, state_seq, data)
+        self._state_cache: tuple[float, int, dict[str, Any]] | None = None
+
+        # Incremental JSONL event reading
+        self._events_last_size: int = 0
+        self._events_cache: list[dict[str, Any]] = []
 
     def read_state(self) -> dict[str, Any]:
-        return read_json(self.state_path, default={})
+        """Read state with mtime + state_seq change detection."""
+        try:
+            mtime = self.state_path.stat().st_mtime
+        except OSError:
+            return {}
+        if self._state_cache is not None:
+            cached_mtime, cached_seq, cached_data = self._state_cache
+            if mtime == cached_mtime:
+                return cached_data
+        data = read_json(self.state_path, default={})
+        seq = data.get("state_seq", 0) if isinstance(data, dict) else 0
+        self._state_cache = (mtime, seq, data)
+        return data
+
+    def has_new_events(self) -> bool:
+        """Check if events file has grown since last read (no I/O beyond stat).
+
+        Caches the stat'd size so that a subsequent ``read_events`` call in the
+        same refresh cycle avoids a redundant stat.
+        """
+        try:
+            size = self.events_path.stat().st_size
+        except OSError:
+            return False
+        self._events_last_stat: int = size
+        return size != self._events_last_size
+
+    _MAX_CACHED_EVENTS = 2000
 
     def read_events(self, limit: int = 200) -> list[dict[str, Any]]:
+        """Incremental JSONL read — only parses new bytes since last call."""
         if not self.events_path.exists():
             return []
-        out: list[dict[str, Any]] = []
-        lines = self.events_path.read_text(encoding="utf-8", errors="replace").splitlines()
-        for line in lines[-max(limit, 1):]:
+        # Re-use size from has_new_events() if available (same refresh cycle)
+        size = getattr(self, "_events_last_stat", None)
+        if size is None:
             try:
-                item = json.loads(line)
-            except json.JSONDecodeError:
-                continue
-            if isinstance(item, dict):
-                out.append(item)
-        return out
+                size = self.events_path.stat().st_size
+            except OSError:
+                return self._events_cache[-limit:]
+        else:
+            self._events_last_stat = None  # consume cached value
+
+        if size == self._events_last_size:
+            return self._events_cache[-limit:]  # No new data
+
+        with self.events_path.open("rb") as f:
+            if self._events_last_size > 0 and size > self._events_last_size:
+                # Read only new bytes
+                f.seek(self._events_last_size)
+            else:
+                # File truncated or first read — reset
+                self._events_cache.clear()
+                self._events_last_size = 0
+            for line in f:
+                try:
+                    item = json.loads(line)
+                except json.JSONDecodeError:
+                    continue
+                if isinstance(item, dict):
+                    self._events_cache.append(item)
+            # Use actual file position (not stat'd size) to avoid losing
+            # partial lines that haven't been terminated with \n yet
+            self._events_last_size = f.tell()
+
+        # Cap in-memory cache to prevent unbounded growth
+        if len(self._events_cache) > self._MAX_CACHED_EVENTS:
+            self._events_cache = self._events_cache[-self._MAX_CACHED_EVENTS:]
+
+        return self._events_cache[-limit:]
 
     def read_agent_box(self, agent_id: str, box: str) -> dict[str, Any]:
         path = self.run_dir / "agents" / f"agent-{agent_id}.{box}.json"
@@ -204,8 +266,10 @@ class StateStore:
                 "assigned_agent": str(assigned_agent),
                 "target_files": node.get("target_files", []),
                 "result_summary": str(node.get("result_summary", "")),
-                "attempts": int(node.get("attempts", 0)) or int(by_task.get(task_id, 0)),
+                "attempts": int(node.get("attempts", 0)) or int(node.get("attempt_count", 0)) or int(by_task.get(task_id, 0)),
                 "depends_on": deps_map.get(task_id, []),
+                "tokens_used": int(node.get("tokens_used", 0)),
+                "cost_usd": float(node.get("cost_usd", 0.0)),
             })
         return out
 
@@ -375,7 +439,7 @@ class StateStore:
         now = time.time()
         cache_key = "_messages_cache"
         cached = getattr(self, cache_key, None)
-        if cached and now - cached[0] < 1.5:
+        if cached and now - cached[0] < 5.0:
             return cached[1]
 
         messages: list[dict[str, Any]] = []
@@ -396,7 +460,8 @@ class StateStore:
                 continue
 
             data = read_json(path, default={})
-            for msg in data.get("messages", []):
+            items_key = "events" if ".outbox.json" in name else "messages"
+            for msg in data.get(items_key, []):
                 if not isinstance(msg, dict):
                     continue
                 payload = msg.get("payload", {})
@@ -409,17 +474,62 @@ class StateStore:
                 messages.append({
                     "direction": direction_label,
                     "agent_id": agent_id,
-                    "kind": msg.get("kind", ""),
+                    "kind": msg.get("kind", "") or msg.get("type", ""),
                     "task_id": str(msg.get("task_id", "") or ""),
                     "timestamp": msg.get("timestamp", ""),
                     "payload_preview": payload_str,
                 })
+
+        # Fallback: if no inbox/outbox files found, synthesize from events
+        if not messages:
+            messages = self._synthesize_messages_from_events()
 
         # Sort by timestamp
         messages.sort(key=lambda m: _to_epoch(m.get("timestamp", "")))
 
         setattr(self, cache_key, (now, messages))
         return messages
+
+    def _synthesize_messages_from_events(self) -> list[dict[str, Any]]:
+        """Convert swarm events into message-like dicts as fallback.
+
+        Used when SwarmOrchestrator (shared workspace mode) is active and
+        does not write inbox/outbox files.
+        """
+        _EVENT_TO_MESSAGE: dict[str, tuple[str, str]] = {
+            "spawn": ("coordinator\u2192agent", "task_assign"),
+            "agent.spawned": ("coordinator\u2192agent", "task_assign"),
+            "agent.task.launch": ("coordinator\u2192agent", "task_assign"),
+            "complete": ("agent\u2192coordinator", "task_done"),
+            "task.completed": ("agent\u2192coordinator", "task_done"),
+            "fail": ("agent\u2192coordinator", "task_failed"),
+            "task.failed": ("agent\u2192coordinator", "task_failed"),
+            "retry": ("coordinator\u2192agent", "retry"),
+        }
+
+        raw_events = self.read_events(limit=500)
+        out: list[dict[str, Any]] = []
+        for ev in raw_events:
+            etype = str(ev.get("type", ev.get("event_type", "")))
+            mapping = _EVENT_TO_MESSAGE.get(etype)
+            if not mapping:
+                continue
+            direction, kind = mapping
+            payload = ev.get("payload", {}) if isinstance(ev.get("payload"), dict) else {}
+            agent_id = str(ev.get("agent_id", "") or payload.get("agent_id", ""))
+            task_id = str(ev.get("task_id", "") or payload.get("task_id", ""))
+            msg_text = str(
+                ev.get("message", "") or payload.get("message", "") or etype
+            )[:200]
+            out.append({
+                "direction": direction,
+                "agent_id": agent_id,
+                "kind": kind,
+                "task_id": task_id,
+                "timestamp": ev.get("timestamp", ""),
+                "payload_preview": msg_text,
+            })
+        return out
 
     def build_task_detail(
         self, task_id: str, state: dict[str, Any] | None = None,
@@ -431,7 +541,7 @@ class StateStore:
         """
         task = self.read_task(task_id)
         if task:
-            return {
+            detail: dict[str, Any] = {
                 "kind": "task",
                 "task_id": task_id,
                 "title": task.get("title", ""),
@@ -442,7 +552,28 @@ class StateStore:
                 "target_files": task.get("target_files", []),
                 "files_modified": task.get("files_modified", []),
                 "result_summary": task.get("result_summary", ""),
+                "tokens_used": int(task.get("tokens_used", 0)),
+                "cost_usd": float(task.get("cost_usd", 0.0)),
+                "attempt_count": int(task.get("attempt_count", 0)),
+                "attempt_history": task.get("attempt_history", []),
             }
+            # Read prompt file if exists
+            prompt_path = self.run_dir / "agents" / f"agent-{task_id}.prompt.txt"
+            if prompt_path.exists():
+                try:
+                    detail["prompt_preview"] = prompt_path.read_text(encoding="utf-8")[:500]
+                except Exception:
+                    pass
+            # Read activity sidecar if exists
+            activity_path = self.run_dir / "agents" / f"agent-{task_id}.activity.txt"
+            if activity_path.exists():
+                try:
+                    detail["agent_activity"] = activity_path.read_text(encoding="utf-8").strip()
+                except Exception:
+                    pass
+            if detail.get("status") == "pending":
+                detail["blocked_reason"] = self._diagnose_pending(task_id, state)
+            return detail
 
         # -- Fallback: reconstruct from state DAG + events ----------------
         if state is None:
@@ -505,7 +636,7 @@ class StateStore:
             if isinstance(e, (list, tuple)) and len(e) >= 2 and str(e[1]) == task_id
         ]
 
-        return {
+        fallback_detail: dict[str, Any] = {
             "kind": "task",
             "task_id": task_id,
             "title": str(node.get("title", "")),
@@ -518,6 +649,71 @@ class StateStore:
             "model": model,
             "duration": duration,
         }
+        if fallback_detail.get("status") == "pending":
+            fallback_detail["blocked_reason"] = self._diagnose_pending(task_id, state)
+        return fallback_detail
+
+    def _diagnose_pending(
+        self, task_id: str, state: dict[str, Any] | None = None,
+    ) -> str:
+        """Explain why a pending task hasn't executed."""
+        if state is None:
+            state = self.read_state()
+        dag = state.get("dag", {})
+        edges = dag.get("edges", [])
+        deps_map = self._parse_edges(edges)
+        deps = deps_map.get(task_id, [])
+
+        nodes = {str(n.get("task_id", "")): n for n in dag.get("nodes", [])}
+
+        if not deps:
+            return "No dependencies -- should be ready (possible orchestrator bug)"
+
+        dep_statuses: list[tuple[str, str]] = []
+        for dep_id in deps:
+            dep_node = nodes.get(dep_id, {})
+            dep_statuses.append((dep_id, str(dep_node.get("status", "unknown"))))
+
+        pending_deps = [d for d, s in dep_statuses if s == "pending"]
+        failed_deps = [d for d, s in dep_statuses if s in ("failed", "skipped")]
+        running_deps = [d for d, s in dep_statuses if s == "running"]
+
+        parts: list[str] = []
+        if pending_deps:
+            parts.append(f"Waiting on pending: {', '.join(pending_deps)}")
+        if running_deps:
+            parts.append(f"Waiting on running: {', '.join(running_deps)}")
+        if failed_deps:
+            parts.append(f"Blocked by failed: {', '.join(failed_deps)}")
+
+        # Check if swarm ended before this task was reached
+        phase = state.get("phase", "")
+        if phase == "completed" and not running_deps:
+            all_deps_done = all(s == "done" for _, s in dep_statuses)
+            if all_deps_done:
+                parts.append(
+                    "All deps done -- swarm ended before task was scheduled (orchestrator bug)"
+                )
+            elif pending_deps:
+                parts.append("Swarm ended while dependencies still pending")
+
+        return "; ".join(parts) if parts else "Unknown"
+
+    def build_per_task_costs(self, state: dict[str, Any]) -> list[dict[str, Any]]:
+        """Return per-task cost breakdown for budget display."""
+        dag = state.get("dag", {})
+        nodes = dag.get("nodes", [])
+        costs: list[dict[str, Any]] = []
+        for node in nodes:
+            cost = float(node.get("cost_usd", 0))
+            if cost > 0:
+                costs.append({
+                    "task_id": str(node.get("task_id", "")),
+                    "cost_usd": cost,
+                    "tokens_used": int(node.get("tokens_used", 0)),
+                })
+        costs.sort(key=lambda c: c["cost_usd"], reverse=True)
+        return costs
 
     def build_agent_detail(
         self, agent_id: str, state: dict[str, Any]

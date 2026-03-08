@@ -60,6 +60,10 @@ class TaskSpec:
     files_modified: list[str] = field(default_factory=list)
     result_summary: str = ""
     timeout_override: int | None = None  # per-task timeout (seconds); overrides watchdog default
+    timeout_seconds: int = 0  # per-task timeout in seconds; 0 means use default
+    # --- Cost tracking (populated after task completion) ---
+    tokens_used: int = 0
+    cost_usd: float = 0.0
 
 
 @dataclass(slots=True)

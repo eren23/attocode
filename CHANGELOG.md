@@ -7,6 +7,59 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.17] - 2026-03-08
+
+### Added
+
+- **Agent module extraction** — `agent.py` split into 5 focused modules: `checkpoint_api.py` (checkpoint/undo), `mcp_connector.py` (MCP server wiring), `run_context_builder.py` (full run-context init), `subagent_api.py` (spawn/delegate), `swarm_runner.py` (swarm entry point)
+- **Code-intel tool modules** — 15 MCP tools from monolithic `server.py` organized into `tools/analysis_tools.py`, `navigation_tools.py`, `search_tools.py`, `lsp_tools.py`, `learning_tools.py`
+- **Code-intel helpers** (`code_intel/helpers.py`) — 15+ pure functions for complexity scoring, convention detection, tech-stack identification, and framework pattern matching
+- **Config validator** (`config_validator.py`) — early fail-fast validation of provider, model, API key format, and working directory before agent init
+- **Database migrations** (`persistence/migrations.py`) — schema versioning with `check_and_migrate()`; v1→v2 adds `usage_logs` table
+- **Async AST initialization** (`ast_service.py`) — `async_initialize(batch_size=50)` parses files concurrently via `asyncio.to_thread()`
+- **Swarm coordinator extraction** — `loop.py` split into `failure_handler.py`, `output_harvester.py`, `review_processor.py`, `task_dispatcher.py`
+- **Task retry logic** (`orchestrator.py`) — per-task attempt tracking, per-task timeouts, AST reconciliation wiring
+- **AST-aware conflict resolution** (`file_ledger.py`) — 3-way merge with base snapshots; reduces false-positive OCC conflicts when parallel agents edit non-overlapping regions
+- **Robust JSON task parser** (`task_parser.py`) — 3-strategy fallback (direct → cleaned → balanced brackets) for LLM task decomposition output
+- **Adapter output parsing** — `aider.py`, `claude.py`, `codex.py` adapters now extract tokens/cost from subprocess stdout; all adapters gain static `build_command()` methods
+- **Updated model registry** (`models.yaml`) — added Claude Opus 4.6, Sonnet 4.6, o3, o4-mini; fixed Haiku 4.5 date; removed deprecated gpt-4-turbo
+- **Task file parser** (`task_file_parser.py`) — loads `tasks.yaml`/`tasks.yml`/`tasks.md` with format auto-detection (YAML structured definitions + Markdown heading extraction); integrated into `orchestrator._decompose_goal()` as highest-priority source
+- **Swarm TUI dashboard overhaul** — `OverviewPane` composite widget replacing raw DataTable tab; `AgentCard`/`TaskCard` card-based display components; `SwarmSummaryBar` with live agent activity snapshot and pending-task hint; richer `DetailInspector` and `EventTimeline` rendering; +45 lines of swarm-specific TCSS
+- **StateStore performance** (`stores.py`) — incremental JSONL reading via `seek()`; state cache with mtime + state_seq change detection; `has_new_events()` stat-only polling (no file I/O); `_synthesize_messages_from_events()` fallback for shared-workspace mode; `_MAX_CACHED_EVENTS = 2000` cap; `build_per_task_costs()`, `build_agent_detail()`, `build_task_detail()` with DAG fallback reconstruction
+- **Orchestrator resume & control** (`orchestrator.py`) — `_restore_state()` for resume from persisted state; `_check_control_messages()` for skip/retry/edit_task via `control.jsonl`; `_check_stale_agents()` watchdog-based silence timeout; `_persist_prompt()`, `_persist_task()`, `_persist_manifest()` for TUI inspection and resume
+- **Protocol additions** (`models.py`, `io.py`) — `timeout_seconds` field on `TaskSpec` (per-task timeout, 0 = default); `write_json_fast()` atomic write without fsync for TUI-consumed state
+- **Coverage threshold** — `[tool.coverage.report]` with `fail_under = 40` added to `pyproject.toml`
+
+### Changed
+
+- **Model registry externalized** — hardcoded `BUILTIN_MODELS` dict in `providers/base.py` replaced with `models.yaml`; loader uses `_load_builtin_models()` from YAML
+- **CI pipeline** (`.github/workflows/ci.yml`) — added mypy type checking, pytest coverage reporting, and codecov upload (gated on Python 3.12)
+- **CLI entry point** (`cli.py`) — calls `validate_config()` before agent initialization
+- **SessionStore** (`store.py`) — runs `check_and_migrate()` on init for forward-compatible schema
+- **GLM-5 provider** — fixed `zhipu` → `zai` in model registry to match codebase convention
+- **Orchestrator execution loop** — progress-based while loop replaces level-bounded for loop (fixes retry starvation when tasks fail at deep dependency levels)
+- **SwarmSummaryBar** — live agent activity labels, pending-task hints, `g`/`t` keybindings for Graph/Timeline navigation
+
+### Fixed
+
+- **`orchestrator.get_state()`** — referenced wrong `BudgetCounter` attribute names (`self._budget.tokens_used` → `used_tokens`, `cost_used` → `used_cost_usd`); was dead-code since TUI reads from persisted state file
+
+### Tests
+
+- **117 new test functions** across 8 files: `test_protocol_io.py` (28 — atomic writes, corrupt JSON recovery, concurrent access), `test_protocol_locks.py` (4 — flock serialization, exception safety), `test_output_harvester.py` (22 — harvest loop, budget accumulation, completion/failure dispatch), `test_orchestrator.py` (28 — `_handle_result`, `_split_by_conflicts`, `_restore_state`, persistence), `test_control_messages.py` (skip/retry/edit_task, cursor tracking, stale agents), `test_task_file_parser.py` (YAML/Markdown parsing, edge cases), `test_ux_features.py` (activity labels, budget keys, agent colors), `test_stores.py` expanded (+35 — read_state caching, incremental JSONL, event synthesis)
+- **Coverage threshold** (`fail_under = 40`) enforced in `pyproject.toml`
+
+### Internal
+
+- `agent.py` reduced from ~840L to ~430L (delegates to extracted modules)
+- `code_intel/server.py` reduced by ~2,200L (tools + helpers extracted)
+- `coordinator/loop.py` reduced from ~1,500L to ~970L (4 modules extracted)
+- `attoswarm/cli.py` task parsing extracted to `task_parser.extract_json_array()`
+- `stores.py` grew ~230 lines (incremental JSONL, caching, detail builders)
+- `orchestrator.py` grew ~250 lines (resume, control messages, persistence, stale-agent watchdog)
+- `task_file_parser.py` — 232 LOC new module
+- No public API changes — all extractions are internal reorganization
+
 ### Planned
 
 - Execution backend abstraction (`BaseEnvironment` ABC with Local/Docker/SSH/Singularity/Modal backends)

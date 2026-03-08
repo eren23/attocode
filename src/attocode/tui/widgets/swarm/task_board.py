@@ -313,11 +313,16 @@ class TasksDataTable(Widget):
         except Exception:
             return
 
-        # Sort: running first, then pending, done, failed
+        # Sort: status bucket primary, task_id secondary. Cross-bucket transitions
+        # (e.g. pending→running) change the order and trigger a full rebuild;
+        # only intra-bucket changes (cell updates) use the differential path.
         sorted_tasks = sorted(
             self._task_rows,
-            key=lambda t: _STATUS_SORT_ORDER.get(
-                _TASK_STATUS_MAP.get(t.get("status", "pending"), "pending"), 99
+            key=lambda t: (
+                _STATUS_SORT_ORDER.get(
+                    _TASK_STATUS_MAP.get(t.get("status", "pending"), "pending"), 99
+                ),
+                t.get("task_id", ""),
             ),
         )
 

@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "attocode"
-version = "0.1.16"
+version = "0.1.17"
 description = "Production AI coding agent"
 readme = "README.md"
 requires-python = ">=3.12"
@@ -138,8 +138,17 @@ select = ["E", "F", "I", "N", "W", "UP", "B", "A", "SIM", "TCH"]
 source = ["src/attocode", "src/attoswarm", "src/attocode_core"]
 omit = ["tests/*"]
 
+[tool.coverage.report]
+fail_under = 40
+show_missing = true
+exclude_lines = [
+    "pragma: no cover",
+    "if TYPE_CHECKING:",
+    "if __name__ ==",
+]
+
 [tool.bumpversion]
-current_version = "0.1.16"
+current_version = "0.1.17"
 commit = false
 tag = false
 

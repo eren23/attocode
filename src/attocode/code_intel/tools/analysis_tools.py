@@ -1,0 +1,486 @@
+"""Analysis tools for the code-intel MCP server.
+
+Tools: file_analysis, impact_analysis, dependency_graph, hotspots,
+cross_references, dependencies, graph_query, find_related, community_detection.
+"""
+
+from __future__ import annotations
+
+import os
+from collections import Counter, deque
+
+from attocode.code_intel.helpers import (
+    _compute_file_metrics,
+    _compute_function_hotspots,
+)
+from attocode.code_intel.server import (
+    _get_ast_service,
+    _get_code_analyzer,
+    _get_context_mgr,
+    _get_project_dir,
+    mcp,
+)
+
+
+@mcp.tool()
+def file_analysis(path: str) -> str:
+    """Get detailed analysis of a single file including code chunks, imports, and exports.
+
+    Extracts structured information about functions, classes, methods,
+    imports, and exports using AST parsing (tree-sitter or regex fallback).
+
+    Args:
+        path: File path (relative to project root or absolute).
+    """
+    analyzer = _get_code_analyzer()
+    project_dir = _get_project_dir()
+
+    # Resolve to absolute path if relative
+    if not os.path.isabs(path):
+        path = os.path.join(project_dir, path)
+
+    result = analyzer.analyze_file(path)
+
+    lines = [f"Analysis of {result.path}:"]
+    lines.append(f"  Language: {result.language}")
+    lines.append(f"  Lines: {result.line_count}")
+
+    if result.imports:
+        lines.append(f"\n  Imports ({len(result.imports)}):")
+        for imp in result.imports:
+            lines.append(f"    {imp}")
+
+    if result.exports:
+        lines.append(f"\n  Exports ({len(result.exports)}):")
+        for exp in result.exports:
+            lines.append(f"    {exp}")
+
+    if result.chunks:
+        lines.append(f"\n  Code chunks ({len(result.chunks)}):")
+        for chunk in result.chunks:
+            sig = f" — {chunk.signature}" if chunk.signature else ""
+            parent = f" (in {chunk.parent})" if chunk.parent else ""
+            lines.append(
+                f"    {chunk.kind} {chunk.name}{parent}{sig}  "
+                f"L{chunk.start_line}-{chunk.end_line}"
+            )
+
+    return "\n".join(lines)
+
+
+@mcp.tool()
+def impact_analysis(changed_files: list[str]) -> str:
+    """Analyze the transitive impact of changing one or more files.
+
+    Uses BFS on the reverse dependency graph to find all files that
+    could be affected by changes to the given files. This is useful
+    for understanding the blast radius of a code change.
+
+    Args:
+        changed_files: List of file paths that were changed.
+    """
+    svc = _get_ast_service()
+    impacted = svc.get_impact(changed_files)
+
+    if not impacted:
+        return f"No other files are impacted by changes to {', '.join(changed_files)}"
+
+    lines = [f"Impact analysis for {', '.join(changed_files)}:"]
+    lines.append(f"\n  {len(impacted)} files affected:")
+    for f in sorted(impacted):
+        lines.append(f"    {f}")
+    return "\n".join(lines)
+
+
+@mcp.tool()
+def dependency_graph(start_file: str, depth: int = 2) -> str:
+    """Get the dependency graph starting from a file.
+
+    Shows the import tree radiating outward from the given file,
+    including both forward dependencies (what it imports) and
+    reverse dependencies (what imports it).
+
+    Args:
+        start_file: File path to start from.
+        depth: How many hops to traverse (default 2).
+    """
+    svc = _get_ast_service()
+    rel = svc._to_rel(start_file)
+
+    lines = [f"Dependency graph for {rel} (depth={depth}):"]
+
+    # Forward BFS
+    lines.append("\n  Imports (forward):")
+    visited_fwd: set[str] = set()
+    queue_fwd: deque[tuple[str, int]] = deque([(rel, 0)])
+    while queue_fwd:
+        current, d = queue_fwd.popleft()
+        if current in visited_fwd or d > depth:
+            continue
+        visited_fwd.add(current)
+        indent = "    " + "  " * d
+        if d > 0:
+            lines.append(f"{indent}{current}")
+        deps = svc.get_dependencies(current)
+        for dep in sorted(deps):
+            if dep not in visited_fwd:
+                queue_fwd.append((dep, d + 1))
+
+    if len(visited_fwd) <= 1:
+        lines.append("    (none)")
+
+    # Reverse BFS
+    lines.append("\n  Imported by (reverse):")
+    visited_rev: set[str] = set()
+    queue_rev: deque[tuple[str, int]] = deque([(rel, 0)])
+    while queue_rev:
+        current, d = queue_rev.popleft()
+        if current in visited_rev or d > depth:
+            continue
+        visited_rev.add(current)
+        indent = "    " + "  " * d
+        if d > 0:
+            lines.append(f"{indent}{current}")
+        dependents = svc.get_dependents(current)
+        for dep in sorted(dependents):
+            if dep not in visited_rev:
+                queue_rev.append((dep, d + 1))
+
+    if len(visited_rev) <= 1:
+        lines.append("    (none)")
+
+    return "\n".join(lines)
+
+
+@mcp.tool()
+def hotspots(top_n: int = 15) -> str:
+    """Identify files with highest complexity, coupling, and risk.
+
+    Ranks files by a composite score combining size, symbol count,
+    fan-in (dependents), fan-out (dependencies), and symbol density.
+    Also categorizes files as god-files, hubs, coupling magnets, or orphans.
+
+    Args:
+        top_n: Number of top hotspots to show (default 15).
+    """
+    ctx = _get_context_mgr()
+    files = ctx._files
+
+    if not files:
+        return "No files discovered in this project."
+
+    svc = _get_ast_service()
+    index = svc._index
+    ast_cache = svc._ast_cache
+
+    all_metrics = _compute_file_metrics(files, index, ast_cache)
+    if not all_metrics:
+        return "No analyzable files found."
+
+    # Sort by composite score
+    all_metrics.sort(key=lambda m: m.composite, reverse=True)
+
+    lines = [f"Top {min(top_n, len(all_metrics))} hotspots by complexity/coupling:\n"]
+    for i, m in enumerate(all_metrics[:top_n], 1):
+        tags = f"  [{', '.join(m.categories)}]" if m.categories else ""
+        lines.append(
+            f"  {i:2d}. {m.path}\n"
+            f"      {m.line_count} lines, {m.symbol_count} symbols, "
+            f"pub={m.public_symbols}, "
+            f"fan-in={m.fan_in}, fan-out={m.fan_out}, "
+            f"density={m.density}%, score={m.composite}{tags}"
+        )
+
+    # Function-level hotspots
+    fn_hotspots = _compute_function_hotspots(ast_cache, top_n=10)
+    if fn_hotspots:
+        lines.append("\nLongest functions:")
+        for i, fm in enumerate(fn_hotspots, 1):
+            pub_mark = "" if fm.is_public else " (private)"
+            ret_mark = "" if fm.has_return_type else " [no return type]"
+            lines.append(
+                f"  {i:2d}. {fm.name} — {fm.line_count} lines, "
+                f"{fm.param_count} params{pub_mark}{ret_mark}\n"
+                f"      {fm.file_path}"
+            )
+
+    # Orphan detection
+    orphans = [
+        m for m in all_metrics
+        if m.fan_in == 0 and m.fan_out == 0 and m.line_count >= 20
+        and not any(fi.is_test for fi in files if fi.relative_path == m.path)
+    ]
+    if orphans:
+        lines.append(f"\nOrphan files (no imports/importers, {len(orphans)} found):")
+        for m in orphans[:10]:
+            lines.append(f"  {m.path} ({m.line_count} lines, {m.symbol_count} symbols)")
+        if len(orphans) > 10:
+            lines.append(f"  ... and {len(orphans) - 10} more")
+
+    return "\n".join(lines)
+
+
+@mcp.tool()
+def cross_references(symbol_name: str) -> str:
+    """Find where a symbol is defined and all places it is referenced.
+
+    Shows both the definition locations and all call sites, imports,
+    and attribute accesses for the given symbol.
+
+    Args:
+        symbol_name: Name of the symbol to look up.
+    """
+    svc = _get_ast_service()
+    definitions = svc.find_symbol(symbol_name)
+    references = svc.get_callers(symbol_name)
+
+    lines = [f"Cross-references for '{symbol_name}':"]
+
+    lines.append(f"\n  Definitions ({len(definitions)}):")
+    if definitions:
+        for loc in definitions:
+            lines.append(
+                f"    {loc.kind} {loc.qualified_name}  "
+                f"in {loc.file_path}:{loc.start_line}"
+            )
+    else:
+        lines.append("    (none found)")
+
+    lines.append(f"\n  References ({len(references)}):")
+    if references:
+        for ref in references[:50]:  # Cap at 50 to avoid huge output
+            lines.append(f"    [{ref.ref_kind}] {ref.file_path}:{ref.line}")
+        if len(references) > 50:
+            lines.append(f"    ... and {len(references) - 50} more")
+    else:
+        lines.append("    (none found)")
+
+    return "\n".join(lines)
+
+
+@mcp.tool()
+def dependencies(path: str) -> str:
+    """Get import/dependency relationships for a file.
+
+    Shows both what the file imports from (dependencies) and what files
+    import it (dependents/importers).
+
+    Args:
+        path: File path (relative to project root or absolute).
+    """
+    svc = _get_ast_service()
+    deps = svc.get_dependencies(path)
+    dependents = svc.get_dependents(path)
+
+    lines = [f"Dependencies for {path}:"]
+
+    lines.append(f"\n  Imports from ({len(deps)} files):")
+    if deps:
+        for d in sorted(deps):
+            lines.append(f"    {d}")
+    else:
+        lines.append("    (none)")
+
+    lines.append(f"\n  Imported by ({len(dependents)} files):")
+    if dependents:
+        for d in sorted(dependents):
+            lines.append(f"    {d}")
+    else:
+        lines.append("    (none)")
+
+    return "\n".join(lines)
+
+
+@mcp.tool()
+def graph_query(
+    file: str,
+    edge_type: str = "IMPORTS",
+    direction: str = "outbound",
+    depth: int = 2,
+) -> str:
+    """BFS traversal over typed dependency edges.
+
+    Walks the import graph from a starting file, following edges of the
+    specified type and direction.
+
+    Args:
+        file: Starting file path (relative to project root or absolute).
+        edge_type: Edge type to follow. One of: IMPORTS, IMPORTED_BY.
+        direction: "outbound" follows imports, "inbound" follows importers.
+        depth: Maximum BFS hops (default 2, max 5).
+    """
+    valid_edge_types = {"IMPORTS", "IMPORTED_BY"}
+    valid_directions = {"outbound", "inbound"}
+    if edge_type not in valid_edge_types:
+        opts = ", ".join(sorted(valid_edge_types))
+        return f"Error: invalid edge_type '{edge_type}'. Must be one of: {opts}"
+    if direction not in valid_directions:
+        opts = ", ".join(sorted(valid_directions))
+        return f"Error: invalid direction '{direction}'. Must be one of: {opts}"
+
+    svc = _get_ast_service()
+    rel = svc._to_rel(file)
+    depth = min(depth, 5)
+
+    use_dependents = edge_type == "IMPORTED_BY" or direction == "inbound"
+
+    visited: set[str] = set()
+    queue: deque[tuple[str, int]] = deque([(rel, 0)])
+    result_by_depth: dict[int, list[str]] = {}
+
+    while queue:
+        current, d = queue.popleft()
+        if current in visited or d > depth:
+            continue
+        visited.add(current)
+        if d > 0:
+            result_by_depth.setdefault(d, []).append(current)
+        neighbors = svc.get_dependents(current) if use_dependents else svc.get_dependencies(current)
+        for n in sorted(neighbors):
+            if n not in visited:
+                queue.append((n, d + 1))
+
+    label = "importers" if use_dependents else "imports"
+    lines = [f"Graph query: {rel} ({label}, depth={depth})"]
+    if not result_by_depth:
+        lines.append("  (no results)")
+    else:
+        for d in sorted(result_by_depth):
+            lines.append(f"\n  Hop {d}:")
+            for f_path in result_by_depth[d]:
+                lines.append(f"    {'>' * d} {f_path}")
+    lines.append(f"\nTotal: {len(visited) - 1} files reachable")
+    return "\n".join(lines)
+
+
+@mcp.tool()
+def find_related(file: str, top_k: int = 10) -> str:
+    """Find structurally related files by import-graph proximity.
+
+    Combines 2-hop import neighbors with co-importer overlap
+    (Jaccard-style) to find the most structurally related files.
+
+    Args:
+        file: File path (relative to project root or absolute).
+        top_k: Number of results to return (default 10).
+    """
+    svc = _get_ast_service()
+    rel = svc._to_rel(file)
+    idx = svc._index
+
+    # Check file exists in index
+    if rel not in idx.file_symbols and rel not in idx.file_dependencies:
+        return f"Error: file '{rel}' not found in the project index."
+
+    # Collect 2-hop neighbors in both directions
+    neighbors: Counter[str] = Counter()
+
+    direct_deps = idx.get_dependencies(rel)
+    direct_importers = idx.get_dependents(rel)
+    all_direct = direct_deps | direct_importers
+
+    for n in all_direct:
+        neighbors[n] += 3  # Direct connection = high weight
+
+    for n in all_direct:
+        for nn in idx.get_dependencies(n):
+            if nn != rel:
+                neighbors[nn] += 1
+        for nn in idx.get_dependents(n):
+            if nn != rel:
+                neighbors[nn] += 1
+
+    # Co-importer overlap (Jaccard-style boost) — scoped to 2-hop neighbors only
+    my_deps = idx.get_dependencies(rel)
+    if my_deps:
+        candidate_files = set(neighbors.keys())
+        for other_file in candidate_files:
+            other_deps_set = idx.file_dependencies.get(other_file, set())
+            if not other_deps_set:
+                continue
+            overlap = len(my_deps & other_deps_set)
+            if overlap > 0:
+                union = len(my_deps | other_deps_set)
+                jaccard = overlap / union if union else 0
+                neighbors[other_file] += round(jaccard * 5)
+
+    top = neighbors.most_common(top_k)
+    lines = [f"Files related to {rel}:"]
+    if not top:
+        lines.append("  (no related files found)")
+    else:
+        for path, score in top:
+            rel_type = "direct" if path in all_direct else "transitive"
+            lines.append(f"  [{score:>3}] {path}  ({rel_type})")
+
+    return "\n".join(lines)
+
+
+@mcp.tool()
+def community_detection(
+    min_community_size: int = 3,
+    max_communities: int = 20,
+) -> str:
+    """Detect file communities via connected components on the import graph.
+
+    Groups files into communities based on the undirected import graph.
+    Reports community sizes and hub files (highest degree within each community).
+
+    Args:
+        min_community_size: Minimum files per community to report (default 3).
+        max_communities: Maximum number of communities to return (default 20).
+    """
+    svc = _get_ast_service()
+    idx = svc._index
+
+    # Build undirected adjacency
+    all_files: set[str] = set()
+    all_files.update(idx.file_dependencies.keys())
+    all_files.update(idx.file_dependents.keys())
+    all_files.update(f for deps in idx.file_dependencies.values() for f in deps)
+
+    adj: dict[str, set[str]] = {f: set() for f in all_files}
+    for src, deps in idx.file_dependencies.items():
+        for tgt in deps:
+            adj.setdefault(src, set()).add(tgt)
+            adj.setdefault(tgt, set()).add(src)
+
+    # Connected components via BFS
+    visited: set[str] = set()
+    communities: list[set[str]] = []
+    for start in all_files:
+        if start in visited:
+            continue
+        component: set[str] = set()
+        bfs_queue: deque[str] = deque([start])
+        while bfs_queue:
+            node = bfs_queue.popleft()
+            if node in visited:
+                continue
+            visited.add(node)
+            component.add(node)
+            for neighbor in adj.get(node, set()):
+                if neighbor not in visited:
+                    bfs_queue.append(neighbor)
+        communities.append(component)
+
+    # Sort by size descending, filter by min size
+    communities.sort(key=len, reverse=True)
+    communities = [c for c in communities if len(c) >= min_community_size][:max_communities]
+
+    lines = [f"Community detection: {len(communities)} communities (min size {min_community_size})"]
+    for i, community in enumerate(communities, 1):
+        lines.append(f"\n  Community {i} ({len(community)} files):")
+        # Find hub file (highest degree)
+        hub = max(community, key=lambda f: len(adj.get(f, set())))
+        hub_degree = len(adj.get(hub, set()))
+        lines.append(f"    Hub: {hub} (degree {hub_degree})")
+        # Show a few sample files
+        sample = sorted(community)[:5]
+        for f in sample:
+            degree = len(adj.get(f, set()))
+            lines.append(f"    - {f} (degree {degree})")
+        if len(community) > 5:
+            lines.append(f"    ... and {len(community) - 5} more")
+
+    return "\n".join(lines)

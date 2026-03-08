@@ -6,10 +6,14 @@ and streaming configuration.
 
 from __future__ import annotations
 
+import logging
 from collections.abc import AsyncIterator
 from dataclasses import dataclass, field
 from enum import StrEnum
-from typing import Protocol, runtime_checkable
+from pathlib import Path
+from typing import Any, Protocol, runtime_checkable
+
+import yaml
 
 from attocode.types.messages import (
     ChatOptions,
@@ -157,83 +161,49 @@ class CapableProvider(LLMProvider, Protocol):
 # Built-in model registry (static fallback when dynamic cache is unavailable)
 # ---------------------------------------------------------------------------
 
-BUILTIN_MODELS: dict[str, ModelInfo] = {
-    "claude-opus-4-20250514": ModelInfo(
-        model_id="claude-opus-4-20250514",
-        provider="anthropic",
-        max_context_tokens=200_000,
-        max_output_tokens=8_192,
-        pricing=ModelPricing(
-            input_per_million=15.0, output_per_million=75.0,
-            cache_read_per_million=1.5, cache_write_per_million=18.75,
-        ),
-    ),
-    "claude-sonnet-4-20250514": ModelInfo(
-        model_id="claude-sonnet-4-20250514",
-        provider="anthropic",
-        max_context_tokens=200_000,
-        max_output_tokens=8_192,
-        pricing=ModelPricing(
-            input_per_million=3.0, output_per_million=15.0,
-            cache_read_per_million=0.3, cache_write_per_million=3.75,
-        ),
-    ),
-    "claude-haiku-4-20250414": ModelInfo(
-        model_id="claude-haiku-4-20250414",
-        provider="anthropic",
-        max_context_tokens=200_000,
-        max_output_tokens=8_192,
-        pricing=ModelPricing(
-            input_per_million=0.80, output_per_million=4.0,
-            cache_read_per_million=0.08, cache_write_per_million=1.0,
-        ),
-    ),
-    "claude-haiku-3-5-20241022": ModelInfo(
-        model_id="claude-haiku-3-5-20241022",
-        provider="anthropic",
-        max_context_tokens=200_000,
-        max_output_tokens=8_192,
-        pricing=ModelPricing(
-            input_per_million=0.80, output_per_million=4.0,
-            cache_read_per_million=0.08, cache_write_per_million=1.0,
-        ),
-    ),
-    "gpt-4o": ModelInfo(
-        model_id="gpt-4o",
-        provider="openai",
-        max_context_tokens=128_000,
-        max_output_tokens=16_384,
-        pricing=ModelPricing(input_per_million=2.50, output_per_million=10.0),
-    ),
-    "gpt-4o-mini": ModelInfo(
-        model_id="gpt-4o-mini",
-        provider="openai",
-        max_context_tokens=128_000,
-        max_output_tokens=16_384,
-        pricing=ModelPricing(input_per_million=0.15, output_per_million=0.60),
-    ),
-    "gpt-4-turbo": ModelInfo(
-        model_id="gpt-4-turbo",
-        provider="openai",
-        max_context_tokens=128_000,
-        max_output_tokens=4_096,
-        pricing=ModelPricing(input_per_million=10.0, output_per_million=30.0),
-    ),
-    "o3-mini": ModelInfo(
-        model_id="o3-mini",
-        provider="openai",
-        max_context_tokens=128_000,
-        max_output_tokens=4_096,
-        pricing=ModelPricing(input_per_million=1.10, output_per_million=4.40),
-    ),
-    "glm-5": ModelInfo(
-        model_id="glm-5",
-        provider="zhipu",
-        max_context_tokens=128_000,
-        max_output_tokens=4_096,
-        pricing=ModelPricing(),
-    ),
-}
+_log = logging.getLogger(__name__)
+
+
+def _load_builtin_models() -> dict[str, ModelInfo]:
+    """Load model definitions from the co-located ``models.yaml`` file.
+
+    Falls back to an empty dict if the file is missing or malformed.
+    """
+    yaml_path = Path(__file__).parent / "models.yaml"
+    try:
+        raw: dict[str, Any] = yaml.safe_load(yaml_path.read_text())  # type: ignore[assignment]
+    except Exception:
+        _log.warning("Failed to load %s – falling back to empty model registry", yaml_path)
+        return {}
+
+    if not isinstance(raw, dict):
+        return {}
+
+    models_section = raw.get("models")
+    if not isinstance(models_section, dict):
+        return {}
+
+    result: dict[str, ModelInfo] = {}
+    for model_id, attrs in models_section.items():
+        if not isinstance(attrs, dict):
+            continue
+        pricing_data = attrs.get("pricing") or {}
+        result[model_id] = ModelInfo(
+            model_id=model_id,
+            provider=attrs.get("provider", ""),
+            max_context_tokens=attrs.get("max_context_tokens", 200_000),
+            max_output_tokens=attrs.get("max_output_tokens", 4_096),
+            pricing=ModelPricing(
+                input_per_million=pricing_data.get("input_per_million", 0.0),
+                output_per_million=pricing_data.get("output_per_million", 0.0),
+                cache_read_per_million=pricing_data.get("cache_read_per_million", 0.0),
+                cache_write_per_million=pricing_data.get("cache_write_per_million", 0.0),
+            ),
+        )
+    return result
+
+
+BUILTIN_MODELS: dict[str, ModelInfo] = _load_builtin_models()
 
 DEFAULT_CONTEXT_WINDOW = 200_000
 
