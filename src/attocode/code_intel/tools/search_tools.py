@@ -73,6 +73,29 @@ def semantic_search(
 
 
 @mcp.tool()
+def semantic_search_status() -> str:
+    """Get the status of the semantic search index.
+
+    Returns: provider name, coverage percentage, files indexed/total,
+    indexing status, and whether vector search is active.
+    """
+    mgr = _get_semantic_search()
+    progress = mgr.get_index_progress()
+    lines = [
+        "Semantic search status:",
+        f"  Provider: {mgr.provider_name}",
+        f"  Available: {mgr.is_available}",
+        f"  Status: {progress.status}",
+        f"  Coverage: {progress.coverage:.0%} ({progress.indexed_files}/{progress.total_files} files)",
+        f"  Failed: {progress.failed_files}",
+        f"  Vector search active: {mgr.is_index_ready()}",
+    ]
+    if progress.elapsed_seconds > 0:
+        lines.append(f"  Elapsed: {progress.elapsed_seconds:.1f}s")
+    return "\n".join(lines)
+
+
+@mcp.tool()
 def security_scan(
     mode: str = "full",
     path: str = "",

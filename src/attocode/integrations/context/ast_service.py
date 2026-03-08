@@ -125,7 +125,12 @@ class ASTService:
                 continue
             rel = fi.relative_path
             self._ast_cache[rel] = ast
-            self._index_file(rel, ast)
+            # Phase 1: index definitions only
+            self._index_definitions(rel, ast)
+
+        # Phase 2: index references (now known_symbols is complete)
+        for rel, ast in self._ast_cache.items():
+            self._index_references(rel, ast)
 
         # Copy dependency graph edges into the cross-ref index
         dep_graph = self._context_mgr.dependency_graph
@@ -168,7 +173,7 @@ class ASTService:
             except Exception:
                 return fi_path, None
 
-        # Parse in batches to avoid overwhelming the thread pool
+        # Phase 1: Parse all files and index definitions
         for i in range(0, len(parseable), batch_size):
             batch = parseable[i:i + batch_size]
             tasks = [
@@ -180,7 +185,11 @@ class ASTService:
                 if ast is not None:
                     rel = fi.relative_path
                     self._ast_cache[rel] = ast
-                    self._index_file(rel, ast)
+                    self._index_definitions(rel, ast)
+
+        # Phase 2: Index references (now known_symbols is complete)
+        for rel, ast in self._ast_cache.items():
+            self._index_references(rel, ast)
 
         dep_graph = self._context_mgr.dependency_graph
         if dep_graph:
@@ -426,6 +435,14 @@ class ASTService:
         """Normalize *path* to a relative path from root (public API)."""
         return self._to_rel(path)
 
+    def get_symbol_names(self, file_path: str) -> list[str]:
+        """Return all symbol names defined in the cached AST for *file_path*."""
+        rel = self._to_rel(file_path)
+        ast = self._ast_cache.get(rel)
+        if ast is None:
+            return []
+        return ast.get_symbols()
+
     # Internals
     # ------------------------------------------------------------------
 
@@ -440,7 +457,17 @@ class ASTService:
         return path
 
     def _index_file(self, rel_path: str, ast: FileAST) -> None:
-        """Index all symbols and references from a parsed FileAST."""
+        """Index all symbols and references from a parsed FileAST.
+
+        Convenience wrapper that calls both phases.  Used by
+        ``notify_file_changed`` for incremental updates where most
+        symbols are already known.
+        """
+        self._index_definitions(rel_path, ast)
+        self._index_references(rel_path, ast)
+
+    def _index_definitions(self, rel_path: str, ast: FileAST) -> None:
+        """Phase 1: Index all *definitions* (functions, classes, methods)."""
         # Top-level functions
         for func in ast.functions:
             loc = SymbolLocation(
@@ -476,6 +503,12 @@ class ASTService:
                 )
                 self._index.add_definition(method_loc)
 
+    def _index_references(self, rel_path: str, ast: FileAST) -> None:
+        """Phase 2: Index import references and call-site references.
+
+        Should be called after all definitions are indexed so that
+        ``known_symbols`` is complete.
+        """
         # Import references
         for imp in ast.imports:
             for name in imp.names:

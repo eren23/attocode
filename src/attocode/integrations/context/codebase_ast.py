@@ -192,11 +192,32 @@ def _parse_python_params(params_str: str) -> tuple[list[str], list[ParamDef]]:
     if not params_str.strip():
         return simple, detailed
 
-    # Split parameters respecting brackets (for nested types like dict[str, int])
+    # Split parameters respecting brackets and string literals
     params_raw: list[str] = []
     depth = 0
     current: list[str] = []
-    for ch in params_str:
+    i = 0
+    while i < len(params_str):
+        ch = params_str[i]
+        if ch in ('"', "'"):
+            # Skip string literals
+            quote = ch
+            current.append(ch)
+            i += 1
+            while i < len(params_str) and params_str[i] != quote:
+                if params_str[i] == "\\":
+                    current.append(params_str[i])
+                    i += 1
+                    if i < len(params_str):
+                        current.append(params_str[i])
+                        i += 1
+                    continue
+                current.append(params_str[i])
+                i += 1
+            if i < len(params_str):
+                current.append(params_str[i])  # closing quote
+            i += 1
+            continue
         if ch in ("(", "[", "{"):
             depth += 1
             current.append(ch)
@@ -208,6 +229,7 @@ def _parse_python_params(params_str: str) -> tuple[list[str], list[ParamDef]]:
             current = []
         else:
             current.append(ch)
+        i += 1
     if current:
         params_raw.append("".join(current).strip())
 
@@ -328,6 +350,132 @@ def _extract_class_properties(
     return props
 
 
+_STRINGS_AND_COMMENTS_RE = re.compile(
+    r'#.*$|"(?:[^"\\]|\\.)*"|\'(?:[^\'\\]|\\.)*\'', re.MULTILINE,
+)
+
+
+def _count_parens(line: str) -> int:
+    """Count unbalanced parentheses, ignoring those inside strings and comments."""
+    stripped = _STRINGS_AND_COMMENTS_RE.sub("", line)
+    return stripped.count("(") - stripped.count(")")
+
+
+def _join_multiline_defs(lines: list[str]) -> list[tuple[int, int, str]]:
+    """Preprocess lines to join multi-line ``def`` and ``class`` signatures.
+
+    Detects lines that start a ``def`` or ``class`` statement but have
+    unbalanced parentheses, then accumulates subsequent lines until
+    parentheses balance and the line ends with ``:``.
+
+    Returns:
+        A list of ``(start_line_index, end_line_index, joined_line)`` tuples.
+        *start_line_index* is the original line where the statement begins.
+        *end_line_index* is the last raw line consumed (equal to start for
+        single-line statements).  Lines that were folded into a preceding
+        signature are omitted (their content is merged into the signature
+        line).
+    """
+    result: list[tuple[int, int, str]] = []
+    i = 0
+    n = len(lines)
+
+    while i < n:
+        line = lines[i]
+        stripped = line.strip()
+
+        # Quick check: does this line start a def or class?
+        is_def = bool(re.match(r"\s*(async\s+)?def\s+\w+", line))
+        is_class = bool(re.match(r"\s*class\s+\w+", stripped))
+
+        if (is_def or is_class) and "(" in line:
+            # Count parentheses balance on this line (ignoring strings/comments)
+            depth = _count_parens(line)
+            if depth > 0:
+                # Multi-line signature — accumulate until balanced
+                # Strip comments from each line before joining so embedded
+                # comments don't confuse downstream parsing.
+                start_idx = i
+                parts = [_STRINGS_AND_COMMENTS_RE.sub(
+                    lambda m: m.group() if m.group()[0] != "#" else "", line,
+                ).rstrip()]
+                i += 1
+                while i < n and depth > 0:
+                    continuation = lines[i]
+                    depth += _count_parens(continuation)
+                    cleaned = _STRINGS_AND_COMMENTS_RE.sub(
+                        lambda m: m.group() if m.group()[0] != "#" else "", continuation,
+                    ).strip()
+                    parts.append(cleaned)
+                    i += 1
+                # i now points to the line AFTER the last continuation line
+                end_idx = i - 1
+                joined = " ".join(parts)
+                result.append((start_idx, end_idx, joined))
+                continue
+
+        # Regular line — pass through
+        result.append((i, i, line))
+        i += 1
+
+    return result
+
+
+def _match_function_def(line: str) -> re.Match[str] | None:
+    """Match a function definition with balanced-paren-aware parameter extraction.
+
+    Handles nested parens in default values like ``def foo(x: int = max(0, 1))``.
+    Returns a match-like object with groups:
+        1: indent, 2: async prefix or None, 3: name,
+        4: type params or "", 5: params string, 6: return type or ""
+    """
+    m = re.match(r"^(\s*)(async\s+)?def\s+(\w+)\s*(?:\[([^\]]*)\])?\s*\(", line)
+    if not m:
+        return None
+    # Find the matching closing paren by counting depth
+    paren_start = m.end() - 1  # index of the opening '('
+    depth = 1
+    i = paren_start + 1
+    while i < len(line) and depth > 0:
+        ch = line[i]
+        if ch == "(":
+            depth += 1
+        elif ch == ")":
+            depth -= 1
+        elif ch in ('"', "'"):
+            # Skip string literals
+            quote = ch
+            i += 1
+            while i < len(line) and line[i] != quote:
+                if line[i] == "\\":
+                    i += 1
+                i += 1
+        i += 1
+    if depth != 0:
+        return None
+    paren_end = i - 1  # index of closing ')'
+    params_str = line[paren_start + 1:paren_end]
+    rest = line[paren_end + 1:]
+    # Match optional return type and colon
+    ret_match = re.match(r"\s*(?:->\s*(.+?))?\s*:\s*$", rest)
+    if not ret_match:
+        return None
+    return_type = ret_match.group(1) or ""
+    # Build a synthetic match via a simple namespace
+    class _FuncMatch:
+        def group(self, n: int) -> str | None:
+            return [
+                line,  # 0: full match
+                m.group(1),  # 1: indent
+                m.group(2),  # 2: async prefix
+                m.group(3),  # 3: name
+                m.group(4) or "",  # 4: type params
+                params_str,  # 5: params
+                return_type,  # 6: return type
+            ][n]
+    return _FuncMatch()
+
+
 def parse_python(content: str, path: str = "") -> FileAST:
     """Parse Python source using regex patterns.
 
@@ -360,11 +508,15 @@ def parse_python(content: str, path: str = "") -> FileAST:
                         line=i + 1,
                     ))
 
+    # Preprocess lines to join multi-line def/class signatures
+    preprocessed = _join_multiline_defs(lines)
+
     # Parse classes and functions
     current_class: ClassDef | None = None
     decorators: list[str] = []
 
-    for i, line in enumerate(lines):
+    for orig_line_idx, sig_end_idx, line in preprocessed:
+        i = orig_line_idx
         stripped = line.strip()
 
         # Decorators
@@ -390,16 +542,18 @@ def parse_python(content: str, path: str = "") -> FileAST:
                     filtered_bases.append(b)
 
             # Find end of class (next non-indented line)
-            end_line = i + 1
-            for j in range(i + 1, len(lines)):
+            # Start scanning from after the last line of the signature
+            body_start = sig_end_idx + 1
+            end_line = body_start
+            for j in range(body_start, len(lines)):
                 if lines[j].strip() and not lines[j].startswith((" ", "\t")):
                     end_line = j
                     break
             else:
                 end_line = len(lines)
 
-            # Extract docstring
-            docstring = _extract_docstring(lines, i + 1)
+            # Extract docstring (body starts after the signature)
+            docstring = _extract_docstring(lines, body_start)
 
             # Detect abstract class
             is_abstract = (
@@ -409,7 +563,7 @@ def parse_python(content: str, path: str = "") -> FileAST:
             )
 
             # Extract properties
-            properties = _extract_class_properties(lines, i + 1, end_line)
+            properties = _extract_class_properties(lines, body_start, end_line)
 
             current_class = ClassDef(
                 name=class_name,
@@ -427,10 +581,8 @@ def parse_python(content: str, path: str = "") -> FileAST:
             continue
 
         # Function definition (with optional PEP 695 type params)
-        func_match = re.match(
-            r"^(\s*)(async\s+)?def\s+(\w+)\s*(?:\[([^\]]*)\])?\s*\(([^)]*)\)(?:\s*->\s*(.+))?\s*:",
-            line,
-        )
+        # Use balanced-paren-aware extraction instead of [^)]*
+        func_match = _match_function_def(line)
         if func_match:
             indent = func_match.group(1)
             is_async = func_match.group(2) is not None
@@ -446,9 +598,11 @@ def parse_python(content: str, path: str = "") -> FileAST:
             params, parameters = _parse_python_params(params_str)
 
             # Find end of function
+            # Start scanning from after the last line of the signature
             func_indent = len(indent)
-            end_line = i + 1
-            for j in range(i + 1, len(lines)):
+            func_body_start = sig_end_idx + 1
+            end_line = func_body_start
+            for j in range(func_body_start, len(lines)):
                 l = lines[j]
                 if l.strip() and not l.startswith((" " * (func_indent + 1))) and not l.startswith("\t" * (func_indent // 4 + 1)):
                     if l.strip() and (len(l) - len(l.lstrip())) <= func_indent:
@@ -457,7 +611,7 @@ def parse_python(content: str, path: str = "") -> FileAST:
             else:
                 end_line = len(lines)
 
-            docstring = _extract_docstring(lines, i + 1)
+            docstring = _extract_docstring(lines, func_body_start)
 
             # Detect decorator-based flags
             is_staticmethod = "staticmethod" in decorators

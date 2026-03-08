@@ -63,7 +63,7 @@ wheels = [
 
 [[package]]
 name = "attocode"
-version = "0.1.17"
+version = "0.1.18"
 source = { editable = "." }
 dependencies = [
     { name = "aiosqlite" },
@@ -89,6 +89,7 @@ anthropic = [
 ]
 code-intel = [
     { name = "fastapi" },
+    { name = "networkx" },
     { name = "python-multipart" },
     { name = "uvicorn", extra = ["standard"] },
 ]
@@ -107,6 +108,9 @@ docs = [
     { name = "mkdocs" },
     { name = "mkdocs-material" },
     { name = "pymdown-extensions" },
+]
+graph = [
+    { name = "networkx" },
 ]
 openai = [
     { name = "openai" },
@@ -146,6 +150,8 @@ requires-dist = [
     { name = "mkdocs", marker = "extra == 'docs'", specifier = ">=1.6" },
     { name = "mkdocs-material", marker = "extra == 'docs'", specifier = ">=9.5" },
     { name = "mypy", marker = "extra == 'dev'", specifier = ">=1.10" },
+    { name = "networkx", marker = "extra == 'code-intel'", specifier = ">=3.0" },
+    { name = "networkx", marker = "extra == 'graph'", specifier = ">=3.0" },
     { name = "openai", marker = "extra == 'openai'", specifier = ">=1.50" },
     { name = "pathspec", specifier = ">=0.12.0" },
     { name = "psutil", specifier = ">=6.0" },
@@ -181,7 +187,7 @@ requires-dist = [
     { name = "uvicorn", extras = ["standard"], marker = "extra == 'code-intel'", specifier = ">=0.34" },
     { name = "watchfiles", marker = "extra == 'watch'", specifier = ">=1.0" },
 ]
-provides-extras = ["anthropic", "openai", "tree-sitter", "watch", "semantic", "semantic-nomic", "code-intel", "docs", "dev"]
+provides-extras = ["anthropic", "openai", "tree-sitter", "watch", "semantic", "semantic-nomic", "graph", "code-intel", "docs", "dev"]
 
 [[package]]
 name = "attrs"

@@ -1081,18 +1081,56 @@ class CodebaseContextManager:
         return max(0.0, min(1.0, score))
 
     def _select_by_relevance(self, query: str, max_files: int) -> list[FileInfo]:
-        """Select files by relevance to a query (simple keyword matching)."""
+        """Select files by relevance to a query (keyword + symbol matching)."""
         query_lower = query.lower()
         keywords = query_lower.split()
+
+        # Try to get symbol names from AST service for content matching
+        symbol_names: dict[str, list[str]] = {}
+        try:
+            from attocode.integrations.context.ast_service import ASTService
+            svc = ASTService.get_instance(self._root_dir)
+            if svc.initialized:
+                for f in self._files:
+                    syms = svc.get_symbol_names(f.relative_path)
+                    if syms:
+                        symbol_names[f.relative_path] = [s.lower() for s in syms]
+        except Exception:
+            pass
+
+        _CONFIG_NAMES = frozenset({
+            "pyproject.toml", "package.json", "tsconfig.json", "setup.cfg",
+            "setup.py", "readme.md", "changelog.md",
+        })
 
         scored: list[tuple[float, FileInfo]] = []
         for f in self._files:
             rel_lower = f.relative_path.lower()
-            match_score = sum(1 for kw in keywords if kw in rel_lower)
-            if match_score > 0:
-                scored.append((f.importance + match_score * 0.3, f))
-            else:
-                scored.append((f.importance, f))
+            basename_lower = os.path.basename(rel_lower)
+
+            # Path keyword matching
+            path_score = sum(1 for kw in keywords if kw in rel_lower)
+
+            # Symbol name matching (content-aware)
+            sym_score = 0
+            file_syms = symbol_names.get(f.relative_path, [])
+            for kw in keywords:
+                for sym in file_syms:
+                    if kw in sym:
+                        sym_score += 1
+                        break
+
+            # Config file penalty
+            config_penalty = 1.0
+            if basename_lower in _CONFIG_NAMES or f.is_config:
+                config_penalty = 0.3
+
+            # Compute final score: reduced importance weight, boosted content match
+            base = f.importance * 0.3  # Reduced from 1.0
+            match_bonus = path_score * 0.3 + sym_score * 0.5
+            score = (base + match_bonus) * config_penalty
+
+            scored.append((score, f))
 
         scored.sort(key=lambda x: x[0], reverse=True)
         return [f for _, f in scored[:max_files]]

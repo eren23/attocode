@@ -530,3 +530,131 @@ class TestCodeAnalyzerInvalidateAndUpdate:
 
         # Should be in cache now
         assert analyzer.cache_stats["entries"] == 1
+
+
+# ============================================================
+# Multi-line Signature Tests
+# ============================================================
+
+
+class TestMultilineSignatures:
+    def test_multiline_function_def(self) -> None:
+        code = (
+            "def foo(\n"
+            "    a: int,\n"
+            "    b: str,\n"
+            ") -> None:\n"
+            "    pass\n"
+        )
+        ast = parse_python(code)
+        assert len(ast.functions) == 1
+        func = ast.functions[0]
+        assert func.name == "foo"
+        assert func.params == ["a", "b"]
+        assert func.parameters[0].type_annotation == "int"
+        assert func.parameters[1].type_annotation == "str"
+        assert func.return_type == "None"
+        assert func.start_line == 1
+
+    def test_multiline_async_def(self) -> None:
+        code = (
+            "async def process(\n"
+            "    ctx: Context,\n"
+            "    *,\n"
+            "    max_retries: int = 3,\n"
+            "    timeout: float = 30.0,\n"
+            ") -> bool:\n"
+            "    return True\n"
+        )
+        ast = parse_python(code)
+        assert len(ast.functions) == 1
+        func = ast.functions[0]
+        assert func.name == "process"
+        assert func.is_async is True
+        assert func.return_type == "bool"
+        assert func.start_line == 1
+        # Check kwonly params
+        assert func.parameters[1].is_kwonly is True
+        assert func.parameters[1].name == "max_retries"
+
+    def test_multiline_with_decorators(self) -> None:
+        code = (
+            "@staticmethod\n"
+            "@cache\n"
+            "def compute(\n"
+            "    data: list[int],\n"
+            "    factor: float = 1.0,\n"
+            ") -> float:\n"
+            "    return sum(data) * factor\n"
+        )
+        ast = parse_python(code)
+        assert len(ast.functions) == 1
+        func = ast.functions[0]
+        assert func.name == "compute"
+        assert "staticmethod" in func.decorators
+        assert "cache" in func.decorators
+        assert func.start_line == 3  # def starts on line 3
+
+    def test_multiline_class_method(self) -> None:
+        code = (
+            "class MyClass:\n"
+            "    def method(\n"
+            "        self,\n"
+            "        x: int,\n"
+            "        y: int,\n"
+            "    ) -> tuple[int, int]:\n"
+            "        return x, y\n"
+        )
+        ast = parse_python(code)
+        assert len(ast.classes) == 1
+        cls = ast.classes[0]
+        assert len(cls.methods) == 1
+        method = cls.methods[0]
+        assert method.name == "method"
+        assert method.params == ["self", "x", "y"]
+
+    def test_single_line_still_works(self) -> None:
+        code = "def simple(a: int, b: str) -> None:\n    pass\n"
+        ast = parse_python(code)
+        assert len(ast.functions) == 1
+        assert ast.functions[0].name == "simple"
+
+    def test_multiline_with_paren_in_comment(self) -> None:
+        """Parentheses in comments should not break paren balancing."""
+        code = (
+            "def foo(\n"
+            "    x: int,  # has a ( in comment\n"
+            "    y: str,\n"
+            ") -> None:\n"
+            "    pass\n"
+        )
+        ast = parse_python(code)
+        assert len(ast.functions) == 1
+        func = ast.functions[0]
+        assert func.name == "foo"
+        assert func.params == ["x", "y"]
+
+    def test_multiline_with_paren_in_string_default(self) -> None:
+        """Parentheses inside string default values should not break paren balancing."""
+        code = (
+            "def bar(\n"
+            '    x: str = "bad ) default",\n'
+            "    y: int = 0,\n"
+            ") -> None:\n"
+            "    pass\n"
+        )
+        ast = parse_python(code)
+        assert len(ast.functions) == 1
+        func = ast.functions[0]
+        assert func.name == "bar"
+        assert func.params == ["x", "y"]
+
+    def test_nested_parens_in_default_value(self) -> None:
+        """Nested function calls in default values should be handled."""
+        code = "def foo(x: int = max(0, 1)) -> None:\n    pass\n"
+        ast = parse_python(code)
+        assert len(ast.functions) == 1
+        func = ast.functions[0]
+        assert func.name == "foo"
+        assert func.params == ["x"]
+        assert func.return_type == "None"

@@ -416,15 +416,35 @@ def find_related(file: str, top_k: int = 10) -> str:
     return "\n".join(lines)
 
 
+def _louvain_communities(
+    all_files: set[str],
+    adj: dict[str, set[str]],
+    weights: dict[tuple[str, str], float],
+) -> tuple[list[set[str]], float]:
+    """Run Louvain community detection using networkx."""
+    from attocode.code_intel.community import louvain_communities
+    return louvain_communities(all_files, adj, weights)
+
+
+def _bfs_connected_components(
+    all_files: set[str],
+    adj: dict[str, set[str]],
+) -> tuple[list[set[str]], float]:
+    """Fallback: connected components via BFS. Modularity = 0."""
+    from attocode.code_intel.community import bfs_connected_components
+    return bfs_connected_components(all_files, adj)
+
+
 @mcp.tool()
 def community_detection(
     min_community_size: int = 3,
     max_communities: int = 20,
 ) -> str:
-    """Detect file communities via connected components on the import graph.
+    """Detect file communities using Louvain algorithm on the import graph.
 
-    Groups files into communities based on the undirected import graph.
-    Reports community sizes and hub files (highest degree within each community).
+    Groups files into communities based on modularity optimization (Louvain),
+    falling back to connected components when networkx is not installed.
+    Reports community sizes, modularity, hub files, and directory themes.
 
     Args:
         min_community_size: Minimum files per community to report (default 3).
@@ -433,53 +453,75 @@ def community_detection(
     svc = _get_ast_service()
     idx = svc._index
 
-    # Build undirected adjacency
+    # Build undirected adjacency with weights
     all_files: set[str] = set()
     all_files.update(idx.file_dependencies.keys())
     all_files.update(idx.file_dependents.keys())
     all_files.update(f for deps in idx.file_dependencies.values() for f in deps)
 
     adj: dict[str, set[str]] = {f: set() for f in all_files}
+    weights: dict[tuple[str, str], float] = {}
     for src, deps in idx.file_dependencies.items():
         for tgt in deps:
             adj.setdefault(src, set()).add(tgt)
             adj.setdefault(tgt, set()).add(src)
+            # Bidirectional imports get weight 2, unidirectional weight 1
+            key = (min(src, tgt), max(src, tgt))
+            is_bidirectional = tgt in idx.file_dependencies and src in idx.file_dependencies.get(tgt, set())
+            weights[key] = 2.0 if is_bidirectional else 1.0
 
-    # Connected components via BFS
-    visited: set[str] = set()
-    communities: list[set[str]] = []
-    for start in all_files:
-        if start in visited:
-            continue
-        component: set[str] = set()
-        bfs_queue: deque[str] = deque([start])
-        while bfs_queue:
-            node = bfs_queue.popleft()
-            if node in visited:
-                continue
-            visited.add(node)
-            component.add(node)
-            for neighbor in adj.get(node, set()):
-                if neighbor not in visited:
-                    bfs_queue.append(neighbor)
-        communities.append(component)
+    # Try Louvain, fall back to BFS connected components
+    try:
+        communities, modularity_score = _louvain_communities(all_files, adj, weights)
+        method = "louvain"
+    except ImportError:
+        communities, modularity_score = _bfs_connected_components(all_files, adj)
+        method = "connected-components"
 
     # Sort by size descending, filter by min size
     communities.sort(key=len, reverse=True)
     communities = [c for c in communities if len(c) >= min_community_size][:max_communities]
 
-    lines = [f"Community detection: {len(communities)} communities (min size {min_community_size})"]
+    lines = [
+        f"Community detection ({method}): {len(communities)} communities "
+        f"(min size {min_community_size}, modularity={modularity_score:.3f})"
+    ]
     for i, community in enumerate(communities, 1):
-        lines.append(f"\n  Community {i} ({len(community)} files):")
-        # Find hub file (highest degree)
-        hub = max(community, key=lambda f: len(adj.get(f, set())))
-        hub_degree = len(adj.get(hub, set()))
-        lines.append(f"    Hub: {hub} (degree {hub_degree})")
-        # Show a few sample files
+        # Find common directory prefix as "theme"
+        dirs = [os.path.dirname(f) for f in community if os.path.dirname(f)]
+        if dirs:
+            theme_counter: Counter[str] = Counter(dirs)
+            common_theme = theme_counter.most_common(1)[0][0]
+        else:
+            common_theme = "(root)"
+
+        # Internal vs external degree
+        internal_edges = 0
+        external_edges = 0
+        for f in community:
+            for neighbor in adj.get(f, set()):
+                if neighbor in community:
+                    internal_edges += 1
+                else:
+                    external_edges += 1
+        internal_edges //= 2  # Each edge counted twice
+
+        lines.append(f"\n  Community {i} ({len(community)} files) — theme: {common_theme}")
+        lines.append(f"    Internal edges: {internal_edges}, External edges: {external_edges}")
+
+        # Hub: highest internal degree (within community)
+        def _internal_degree(f: str) -> int:
+            return sum(1 for n in adj.get(f, set()) if n in community)
+
+        hub = max(community, key=_internal_degree)
+        hub_deg = _internal_degree(hub)
+        lines.append(f"    Hub: {hub} (internal degree {hub_deg})")
+
+        # Show sample files
         sample = sorted(community)[:5]
         for f in sample:
-            degree = len(adj.get(f, set()))
-            lines.append(f"    - {f} (degree {degree})")
+            i_deg = _internal_degree(f)
+            lines.append(f"    - {f} (internal degree {i_deg})")
         if len(community) > 5:
             lines.append(f"    ... and {len(community) - 5} more")
 

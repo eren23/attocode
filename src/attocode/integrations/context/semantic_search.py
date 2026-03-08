@@ -1,20 +1,79 @@
 """Semantic search manager.
 
 Indexes codebase content into embeddings and provides natural language
-search over code. Gracefully degrades to keyword matching when no
+search over code. Gracefully degrades to BM25 keyword matching when no
 embedding provider is available.
 """
 
 from __future__ import annotations
 
 import logging
+import math
 import os
 import queue
+import re
 import threading
 from dataclasses import dataclass, field
 from typing import Any
 
 logger = logging.getLogger(__name__)
+
+# ---------------------------------------------------------------------------
+# BM25 keyword search support types
+# ---------------------------------------------------------------------------
+
+_STOP_WORDS = frozenset({
+    "self", "cls", "the", "is", "in", "of", "and", "or", "to", "a", "an",
+    "for", "not", "on", "with", "as", "at", "by", "from", "it", "be",
+    "this", "that", "if", "else", "def", "class", "import", "return",
+    "none", "true", "false", "pass", "str", "int", "float", "bool", "list",
+    "dict", "set", "tuple", "any", "type", "optional",
+})
+
+_CAMEL_RE = re.compile(r"(?<=[a-z])(?=[A-Z])|(?<=[A-Z])(?=[A-Z][a-z])")
+
+
+def _tokenize(text: str) -> list[str]:
+    """Tokenize text: split camelCase/snake_case, lowercase, remove stop words."""
+    # Split on non-alphanumeric first
+    parts = re.split(r"[^a-zA-Z0-9]+", text)
+    tokens: list[str] = []
+    for part in parts:
+        # Split camelCase
+        sub_parts = _CAMEL_RE.sub("_", part).split("_")
+        for sp in sub_parts:
+            sp_lower = sp.lower()
+            if len(sp_lower) >= 2 and sp_lower not in _STOP_WORDS:
+                tokens.append(sp_lower)
+    return tokens
+
+
+@dataclass(slots=True)
+class _KeywordDoc:
+    """A document in the BM25 keyword index."""
+
+    id: str              # "func:path:name" or "file:path"
+    file_path: str
+    chunk_type: str      # file, function, class, method
+    name: str
+    text: str            # preview text
+    is_config: bool
+    is_test: bool
+    term_freqs: dict[str, int] = field(default_factory=dict)
+    doc_len: int = 0
+
+
+@dataclass(slots=True)
+class IndexProgress:
+    """Progress of background embedding indexing."""
+
+    total_files: int = 0
+    indexed_files: int = 0
+    failed_files: int = 0
+    status: str = "idle"  # idle, running, paused, completed, error
+    coverage: float = 0.0  # indexed / total
+    started_at: float = 0.0
+    elapsed_seconds: float = 0.0
 
 
 @dataclass(slots=True)
@@ -48,6 +107,13 @@ class SemanticSearchManager:
     _reindex_pending: set[str] = field(default_factory=set, repr=False)
     _reindex_lock: threading.Lock = field(default_factory=threading.Lock, repr=False)
     _reindex_worker_started: bool = field(default=False, repr=False)
+    _kw_docs: list[_KeywordDoc] = field(default_factory=list, repr=False)
+    _kw_df: dict[str, int] = field(default_factory=dict, repr=False)
+    _kw_avg_dl: float = field(default=0.0, repr=False)
+    _kw_index_built: bool = field(default=False, repr=False)
+    _bg_indexer: Any = field(default=None, repr=False)
+    _bg_thread: Any = field(default=None, repr=False)
+    _index_progress: IndexProgress = field(default_factory=IndexProgress, repr=False)
 
     def __post_init__(self) -> None:
         from attocode.integrations.context.embeddings import (
@@ -239,11 +305,15 @@ class SemanticSearchManager:
         if self._keyword_fallback:
             return self._keyword_search(query, top_k, file_filter)
 
-        # Auto-index if needed (may be slow on large codebases —
-        # for large projects, call index() explicitly at agent startup)
-        if not self._indexed and self._store and self._store.count() == 0:
-            logger.info("Semantic search: auto-indexing codebase (this may take a moment)...")
-            self.index()
+        # Coverage-based switchover: use keyword fallback while indexing
+        if not self._indexed and self._store:
+            count = self._store.count()
+            if count == 0 and self._bg_indexer is None:
+                # No embeddings and no background indexer — use keyword fallback
+                return self._keyword_search(query, top_k, file_filter)
+            elif not self.is_index_ready() and self._bg_indexer is not None:
+                # Indexer running but coverage < 80% — use keyword fallback
+                return self._keyword_search(query, top_k, file_filter)
 
         # Embed query
         try:
@@ -277,8 +347,15 @@ class SemanticSearchManager:
         # Stage 2: Reciprocal Rank Fusion
         from attocode.integrations.context.ast_chunker import reciprocal_rank_fusion
 
+        # Map chunk_type to vector ID prefix for consistent key space
+        _type_prefix = {"function": "func", "class": "cls", "method": "method", "file": "file"}
+
         vector_ranked = [(r.id, r.score) for r in raw_results]
-        keyword_ranked = [(r.file_path, r.score) for r in keyword_results]
+        # Use composite IDs for keyword results matching vector key space
+        keyword_ranked = [
+            (f"{_type_prefix.get(r.chunk_type, r.chunk_type)}:{r.file_path}:{r.name}", r.score)
+            for r in keyword_results
+        ]
 
         fused = reciprocal_rank_fusion(vector_ranked, keyword_ranked)
 
@@ -293,8 +370,9 @@ class SemanticSearchManager:
                 score=r.score,
             )
         for r in keyword_results:
-            if r.file_path not in result_map:
-                result_map[r.file_path] = r
+            kw_id = f"{_type_prefix.get(r.chunk_type, r.chunk_type)}:{r.file_path}:{r.name}"
+            if kw_id not in result_map:
+                result_map[kw_id] = r
 
         # Return top-k by fused score
         merged: list[SemanticSearchResult] = []
@@ -312,27 +390,277 @@ class SemanticSearchManager:
         top_k: int,
         file_filter: str,
     ) -> list[SemanticSearchResult]:
-        """Fallback keyword-based search using CodebaseContextManager."""
+        """BM25 content-aware keyword search using AST-extracted data."""
+        if not self._kw_index_built:
+            self._build_keyword_index()
+
+        if not self._kw_docs:
+            return []
+
+        import fnmatch
+
+        query_tokens = _tokenize(query)
+        if not query_tokens:
+            return []
+
+        query_lower = query.lower()
+
+        # BM25 parameters
+        k1 = 1.5
+        b = 0.75
+        N = len(self._kw_docs)
+        avg_dl = self._kw_avg_dl or 1.0
+
+        scored: list[tuple[float, _KeywordDoc]] = []
+        for doc in self._kw_docs:
+            if file_filter and not fnmatch.fnmatch(doc.file_path, file_filter):
+                continue
+
+            # BM25 score
+            score = 0.0
+            for term in query_tokens:
+                tf = doc.term_freqs.get(term, 0)
+                if tf == 0:
+                    continue
+                df = self._kw_df.get(term, 0)
+                if df == 0:
+                    continue
+                idf = math.log((N - df + 0.5) / (df + 0.5) + 1.0)
+                dl = doc.doc_len or 1
+                tf_norm = (tf * (k1 + 1)) / (tf + k1 * (1 - b + b * dl / avg_dl))
+                score += idf * tf_norm
+
+            if score <= 0:
+                continue
+
+            # Post-hoc boosts
+            name_lower = doc.name.lower()
+            name_tokens = _tokenize(doc.name)
+
+            # Symbol name match boost
+            for term in query_tokens:
+                if term in name_tokens:
+                    score *= 1.5
+                    break
+
+            # Config/doc file penalty
+            if doc.is_config:
+                score *= 0.3
+
+            # Test file mild penalty
+            if doc.is_test:
+                score *= 0.7
+
+            # Function/method chunk preference over file-level
+            if doc.chunk_type in ("function", "method"):
+                score *= 1.1
+
+            # Exact phrase bonus: multi-word query substring match in text
+            if len(query_tokens) > 1 and query_lower in doc.text.lower():
+                score *= 1.2
+
+            scored.append((score, doc))
+
+        if not scored:
+            return []
+
+        scored.sort(key=lambda x: x[0], reverse=True)
+
+        # Normalize to 0-1
+        max_score = scored[0][0] if scored else 1.0
+        if max_score <= 0:
+            max_score = 1.0
+
+        # Deduplicate: max 2 chunks per file
+        file_counts: dict[str, int] = {}
+        results: list[SemanticSearchResult] = []
+        for raw_score, doc in scored:
+            if file_counts.get(doc.file_path, 0) >= 2:
+                continue
+            file_counts[doc.file_path] = file_counts.get(doc.file_path, 0) + 1
+            results.append(SemanticSearchResult(
+                file_path=doc.file_path,
+                chunk_type=doc.chunk_type,
+                name=doc.name,
+                text=doc.text,
+                score=round(raw_score / max_score, 4),
+            ))
+            if len(results) >= top_k:
+                break
+
+        return results
+
+    def _build_keyword_index(self) -> None:
+        """Build BM25 inverted index from AST-extracted data."""
+        from attocode.integrations.context.codebase_ast import parse_file
         from attocode.integrations.context.codebase_context import CodebaseContextManager
 
         ctx = CodebaseContextManager(root_dir=self.root_dir)
-        files = ctx.select_context(query=query, strategy="relevance", max_files=top_k)
+        ctx._ensure_fresh()
+        if not ctx._files:
+            ctx.discover_files()
 
-        results = []
-        for f in files:
-            if file_filter:
-                import fnmatch
-                if not fnmatch.fnmatch(f.relative_path, file_filter):
-                    continue
-            results.append(SemanticSearchResult(
-                file_path=f.relative_path,
+        _CONFIG_EXTS = frozenset({".toml", ".json", ".yaml", ".yml", ".cfg", ".ini", ".md", ".rst", ".txt"})
+        _CONFIG_NAMES = frozenset({
+            "pyproject.toml", "package.json", "tsconfig.json", "setup.cfg",
+            "setup.py", "readme.md", "readme.rst", "changelog.md", "license",
+        })
+
+        docs: list[_KeywordDoc] = []
+        df: dict[str, int] = {}
+
+        for f in ctx._files:
+            rel = f.relative_path
+            basename = os.path.basename(rel).lower()
+            ext = os.path.splitext(basename)[1]
+            is_config = ext in _CONFIG_EXTS or basename in _CONFIG_NAMES
+            is_test = f.is_test
+
+            try:
+                ast = parse_file(f.path)
+            except Exception:
+                continue
+
+            # File-level doc: path components + import modules + symbol names
+            file_text_parts = list(re.split(r"[/\\]", rel))
+            file_text_parts.extend(imp.module for imp in ast.imports[:20])
+            file_text_parts.extend(ast.get_symbols()[:20])
+            file_text = " ".join(file_text_parts)
+            file_tokens = _tokenize(file_text)
+
+            file_tf: dict[str, int] = {}
+            for t in file_tokens:
+                file_tf[t] = file_tf.get(t, 0) + 1
+
+            docs.append(_KeywordDoc(
+                id=f"file:{rel}",
+                file_path=rel,
                 chunk_type="file",
-                name=os.path.basename(f.relative_path),
-                text=f"[keyword match] {f.language} ({f.line_count}L)",
-                score=round(f.importance, 4),
+                name=os.path.basename(rel),
+                text=file_text[:200],
+                is_config=is_config,
+                is_test=is_test,
+                term_freqs=file_tf,
+                doc_len=len(file_tokens),
             ))
 
-        return results[:top_k]
+            # Function-level docs
+            for func in ast.functions:
+                parts: list[str] = []
+                # Name with 3x weight
+                parts.extend([func.name] * 3)
+                if func.docstring:
+                    parts.append(func.docstring[:300])
+                parts.extend(p.name for p in func.parameters[:10])
+                parts.extend(p.type_annotation for p in func.parameters[:10] if p.type_annotation)
+                if func.return_type:
+                    parts.append(func.return_type)
+                parts.extend(func.decorators[:5])
+                text = " ".join(parts)
+                tokens = _tokenize(text)
+
+                tf: dict[str, int] = {}
+                for t in tokens:
+                    tf[t] = tf.get(t, 0) + 1
+
+                preview_parts = [f"function {func.name}"]
+                if func.docstring:
+                    preview_parts.append(func.docstring[:100])
+                params_str = ", ".join(p.name for p in func.parameters[:6])
+                if params_str:
+                    preview_parts.append(f"({params_str})")
+
+                docs.append(_KeywordDoc(
+                    id=f"func:{rel}:{func.name}",
+                    file_path=rel,
+                    chunk_type="function",
+                    name=func.name,
+                    text=" | ".join(preview_parts),
+                    is_config=False,
+                    is_test=is_test,
+                    term_freqs=tf,
+                    doc_len=len(tokens),
+                ))
+
+            # Class + method-level docs
+            for cls in ast.classes:
+                cls_parts: list[str] = [cls.name] * 3
+                if cls.bases:
+                    cls_parts.extend(cls.bases)
+                if cls.docstring:
+                    cls_parts.append(cls.docstring[:300])
+                cls_parts.extend(m.name for m in cls.methods[:15])
+                cls_text = " ".join(cls_parts)
+                cls_tokens = _tokenize(cls_text)
+
+                cls_tf: dict[str, int] = {}
+                for t in cls_tokens:
+                    cls_tf[t] = cls_tf.get(t, 0) + 1
+
+                cls_preview = f"class {cls.name}"
+                if cls.bases:
+                    cls_preview += f"({', '.join(cls.bases[:3])})"
+                if cls.docstring:
+                    cls_preview += f" | {cls.docstring[:100]}"
+
+                docs.append(_KeywordDoc(
+                    id=f"cls:{rel}:{cls.name}",
+                    file_path=rel,
+                    chunk_type="class",
+                    name=cls.name,
+                    text=cls_preview,
+                    is_config=False,
+                    is_test=is_test,
+                    term_freqs=cls_tf,
+                    doc_len=len(cls_tokens),
+                ))
+
+                for method in cls.methods:
+                    m_parts: list[str] = [method.name] * 3
+                    m_parts.append(cls.name)
+                    if method.docstring:
+                        m_parts.append(method.docstring[:300])
+                    m_parts.extend(p.name for p in method.parameters[:10])
+                    m_parts.extend(p.type_annotation for p in method.parameters[:10] if p.type_annotation)
+                    if method.return_type:
+                        m_parts.append(method.return_type)
+                    m_text = " ".join(m_parts)
+                    m_tokens = _tokenize(m_text)
+
+                    m_tf: dict[str, int] = {}
+                    for t in m_tokens:
+                        m_tf[t] = m_tf.get(t, 0) + 1
+
+                    m_preview = f"method {cls.name}.{method.name}"
+                    if method.docstring:
+                        m_preview += f" | {method.docstring[:100]}"
+
+                    docs.append(_KeywordDoc(
+                        id=f"method:{rel}:{cls.name}.{method.name}",
+                        file_path=rel,
+                        chunk_type="method",
+                        name=f"{cls.name}.{method.name}",
+                        text=m_preview,
+                        is_config=False,
+                        is_test=is_test,
+                        term_freqs=m_tf,
+                        doc_len=len(m_tokens),
+                    ))
+
+        # Build document frequencies
+        for doc in docs:
+            for term in doc.term_freqs:
+                df[term] = df.get(term, 0) + 1
+
+        # Average document length
+        total_len = sum(doc.doc_len for doc in docs)
+        avg_dl = total_len / len(docs) if docs else 1.0
+
+        self._kw_docs = docs
+        self._kw_df = df
+        self._kw_avg_dl = avg_dl
+        self._kw_index_built = True
+        logger.debug("BM25 keyword index built: %d docs, %d terms", len(docs), len(df))
 
     def _chunk_single_file(
         self, rel_path: str, abs_path: str,
@@ -499,6 +827,7 @@ class SemanticSearchManager:
 
     def invalidate_file(self, file_path: str) -> None:
         """Remove embeddings for a changed file."""
+        self._kw_index_built = False  # Force rebuild on next keyword search
         if self._store:
             try:
                 rel = os.path.relpath(file_path, self.root_dir)
@@ -566,8 +895,212 @@ class SemanticSearchManager:
         self._indexed = True
         return total_chunks
 
+    # ------------------------------------------------------------------
+    # Background indexing (P3)
+    # ------------------------------------------------------------------
+
+    def is_index_ready(self) -> bool:
+        """Check if the vector index has sufficient coverage (>=80%)."""
+        if self._keyword_fallback or not self._store:
+            return False
+        progress = self.get_index_progress()
+        return progress.coverage >= 0.8
+
+    def get_index_progress(self) -> IndexProgress:
+        """Get current indexing progress (thread-safe snapshot)."""
+        with self._reindex_lock:
+            if self._bg_indexer is not None:
+                # Return a snapshot to avoid races
+                p = self._index_progress
+                return IndexProgress(
+                    total_files=p.total_files,
+                    indexed_files=p.indexed_files,
+                    failed_files=p.failed_files,
+                    status=p.status,
+                    coverage=p.coverage,
+                    started_at=p.started_at,
+                    elapsed_seconds=p.elapsed_seconds,
+                )
+        # If no background indexer, check store directly
+        if self._store:
+            # Use cached total if available to avoid expensive filesystem scan
+            cached_total = self._index_progress.total_files
+            if cached_total > 0:
+                total = cached_total
+            else:
+                from attocode.integrations.context.codebase_context import CodebaseContextManager
+                ctx = CodebaseContextManager(root_dir=self.root_dir)
+                ctx._ensure_fresh()
+                if not ctx._files:
+                    ctx.discover_files()
+                total = len([f for f in ctx._files if f.language in ("python", "javascript", "typescript")])
+                self._index_progress.total_files = total
+            indexed = len(self._store.get_all_indexed_files()) if total > 0 else 0
+            coverage = indexed / total if total > 0 else 0.0
+            return IndexProgress(
+                total_files=total,
+                indexed_files=indexed,
+                coverage=round(coverage, 3),
+                status="completed" if coverage >= 0.99 else "idle",
+            )
+        return self._index_progress
+
+    def start_background_indexing(self) -> IndexProgress:
+        """Start background progressive embedding indexing."""
+        import time
+
+        if self._keyword_fallback or not self._store:
+            self._index_progress.status = "error"
+            return self._index_progress
+
+        with self._reindex_lock:
+            if self._bg_indexer is not None:
+                return self._index_progress
+
+            self._index_progress = IndexProgress(status="running", started_at=time.time())
+            stop_event = threading.Event()
+
+            def _worker() -> None:
+                try:
+                    self._run_background_indexing(stop_event)
+                except Exception:
+                    logger.error("Background indexer crashed", exc_info=True)
+                    with self._reindex_lock:
+                        self._index_progress.status = "error"
+                finally:
+                    with self._reindex_lock:
+                        self._bg_indexer = None
+                        self._bg_thread = None
+
+            worker = threading.Thread(target=_worker, daemon=True, name="bg-embedding-indexer")
+            self._bg_indexer = stop_event
+            self._bg_thread = worker
+            worker.start()
+        return self._index_progress
+
+    def stop_background_indexing(self) -> None:
+        """Stop background indexing gracefully."""
+        if self._bg_indexer is not None:
+            self._bg_indexer.set()
+
+    def _run_background_indexing(self, stop_event: threading.Event) -> None:
+        """Background indexer loop: process files in batches."""
+        import time
+
+        from attocode.integrations.context.codebase_context import CodebaseContextManager
+        from attocode.integrations.context.vector_store import VectorEntry
+
+        ctx = CodebaseContextManager(root_dir=self.root_dir)
+        ctx._ensure_fresh()
+        if not ctx._files:
+            ctx.discover_files()
+
+        _ts_langs: set[str] = set()
+        try:
+            from attocode.integrations.context.ts_parser import supported_languages
+            _ts_langs = set(supported_languages())
+        except ImportError:
+            pass
+        _supported = {"python", "javascript", "typescript"} | _ts_langs
+
+        indexable = [f for f in ctx._files if f.language in _supported]
+        self._index_progress.total_files = len(indexable)
+
+        # Determine which files need indexing
+        file_mtimes: dict[str, float] = {}
+        for f in indexable:
+            try:
+                file_mtimes[f.relative_path] = os.path.getmtime(f.path)
+            except OSError:
+                pass
+
+        stale = set(self._store.get_stale_files(file_mtimes))
+        # Also include files not yet indexed at all
+        all_indexed = set(self._store.get_all_indexed_files())
+        to_index = [f for f in indexable if f.relative_path in stale or f.relative_path not in all_indexed]
+
+        self._index_progress.indexed_files = len(indexable) - len(to_index)
+        batch_size = 50
+
+        for i in range(0, len(to_index), batch_size):
+            if stop_event.is_set():
+                self._index_progress.status = "paused"
+                return
+
+            batch = to_index[i:i + batch_size]
+            for f in batch:
+                if stop_event.is_set():
+                    self._index_progress.status = "paused"
+                    return
+                try:
+                    chunks = self._chunk_single_file(f.relative_path, f.path)
+                    if not chunks:
+                        self._index_progress.failed_files += 1
+                        continue
+
+                    texts = [c[3] for c in chunks]
+                    vectors = self._provider.embed(texts)
+                    entries = []
+                    for (cid, fpath, ctype, text), vec in zip(chunks, vectors):
+                        if not vec:
+                            continue
+                        entries.append(VectorEntry(
+                            id=cid,
+                            file_path=fpath,
+                            chunk_type=ctype,
+                            name=cid.split(":")[-1] if ":" in cid else fpath,
+                            text=text,
+                            vector=vec,
+                        ))
+
+                    if entries:
+                        self._store.delete_by_file(f.relative_path)
+                        self._store.upsert_batch(entries)
+                        try:
+                            mtime = os.path.getmtime(f.path)
+                        except OSError:
+                            mtime = 0.0
+                        self._store.set_file_metadata(f.relative_path, mtime, len(entries))
+                        with self._reindex_lock:
+                            self._index_progress.indexed_files += 1
+                    else:
+                        with self._reindex_lock:
+                            self._index_progress.failed_files += 1
+                except Exception:
+                    logger.debug("bg_index_failed: %s", f.relative_path, exc_info=True)
+                    with self._reindex_lock:
+                        self._index_progress.failed_files += 1
+
+            # Update coverage
+            with self._reindex_lock:
+                total = self._index_progress.total_files or 1
+                self._index_progress.coverage = round(self._index_progress.indexed_files / total, 3)
+                self._index_progress.elapsed_seconds = round(time.time() - self._index_progress.started_at, 1)
+
+            # Yield CPU between batches
+            time.sleep(0.1)
+
+        with self._reindex_lock:
+            self._index_progress.status = "completed"
+            total = self._index_progress.total_files or 1
+            self._index_progress.coverage = round(self._index_progress.indexed_files / total, 3)
+            self._index_progress.elapsed_seconds = round(time.time() - self._index_progress.started_at, 1)
+        self._indexed = True
+        logger.info(
+            "Background indexing complete: %d/%d files (%.0f%% coverage)",
+            self._index_progress.indexed_files,
+            self._index_progress.total_files,
+            self._index_progress.coverage * 100,
+        )
+
     def close(self) -> None:
-        """Close the vector store."""
+        """Close the vector store and stop background indexer."""
+        self.stop_background_indexing()
+        thread = self._bg_thread
+        if thread is not None:
+            thread.join(timeout=5.0)
+            if thread.is_alive():
+                logger.warning("Background indexer thread did not stop within 5s")
         if self._store:
             self._store.close()
 

@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "attocode"
-version = "0.1.17"
+version = "0.1.18"
 description = "Production AI coding agent"
 readme = "README.md"
 requires-python = ">=3.12"
@@ -58,10 +58,12 @@ tree-sitter = [
 watch = ["watchfiles>=1.0"]
 semantic = ["sentence-transformers>=3.0"]
 semantic-nomic = ["sentence-transformers>=3.0", "einops"]
+graph = ["networkx>=3.0"]
 code-intel = [
     "fastapi>=0.115",
     "uvicorn[standard]>=0.34",
     "python-multipart>=0.0.18",
+    "networkx>=3.0",
 ]
 docs = [
     "mkdocs>=1.6",
@@ -148,7 +150,7 @@ exclude_lines = [
 ]
 
 [tool.bumpversion]
-current_version = "0.1.17"
+current_version = "0.1.18"
 commit = false
 tag = false
 
