@@ -447,6 +447,290 @@ def _resolve_js_import(module: str, source_file: str, file_index: dict[str, str]
     return None
 
 
+def _resolve_rust_import(module: str, source_file: str, file_index: dict[str, str]) -> str | None:
+    """Resolve a Rust use/mod statement to a relative file path.
+
+    Handles:
+    - ``use crate::worker::MainWorker`` → ``src/worker.rs`` or ``src/worker/mod.rs``
+    - ``use super::utils`` → relative to parent module
+    - ``mod worker;`` → ``worker.rs`` or ``worker/mod.rs`` in same dir
+    - Skips stdlib (``std::``) and external crates
+    """
+    if not module:
+        return None
+
+    # Skip stdlib and well-known external crates
+    if module.startswith(("std::", "core::", "alloc::", "extern ")):
+        return None
+
+    source_dir = str(Path(source_file).parent)
+    source_name = Path(source_file).stem
+
+    # Handle `mod foo;` declarations (module is just the mod name)
+    if not module.startswith(("crate::", "self::", "super::")):
+        # Could be a mod declaration or an external crate — try local resolution
+        parts = module.replace("::", "/").split("/")
+        # Simple mod: try sibling file or subdir
+        if len(parts) == 1:
+            mod_name = parts[0]
+            # If source is mod.rs or lib.rs/main.rs, mod is a child
+            if source_name in ("mod", "lib", "main"):
+                candidates = [
+                    f"{source_dir}/{mod_name}.rs",
+                    f"{source_dir}/{mod_name}/mod.rs",
+                ]
+            else:
+                # Sibling module
+                candidates = [
+                    f"{source_dir}/{mod_name}.rs",
+                    f"{source_dir}/{mod_name}/mod.rs",
+                ]
+            for c in candidates:
+                normalized = c.replace(os.sep, "/")
+                if normalized in file_index:
+                    return file_index[normalized]
+        return None
+
+    # Handle crate:: paths
+    if module.startswith("crate::"):
+        remainder = module[len("crate::"):]
+        parts = remainder.replace("::", "/").split("/")
+        # Find crate root (look for src/ dir pattern)
+        crate_src = "src"
+        # Try src/<path>.rs and src/<path>/mod.rs
+        for i in range(len(parts), 0, -1):
+            candidate = crate_src + "/" + "/".join(parts[:i])
+            for suffix in (".rs", "/mod.rs"):
+                key = candidate + suffix
+                normalized = key.replace(os.sep, "/")
+                if normalized in file_index:
+                    return file_index[normalized]
+        return None
+
+    # Handle self:: paths (relative to current module)
+    if module.startswith("self::"):
+        remainder = module[len("self::"):]
+        parts = remainder.replace("::", "/").split("/")
+        # If source is mod.rs, resolve relative to its directory
+        if source_name in ("mod", "lib", "main"):
+            base = source_dir
+        else:
+            base = source_dir
+        for i in range(len(parts), 0, -1):
+            candidate = base + "/" + "/".join(parts[:i])
+            for suffix in (".rs", "/mod.rs"):
+                key = candidate + suffix
+                normalized = key.replace(os.sep, "/")
+                if normalized in file_index:
+                    return file_index[normalized]
+        return None
+
+    # Handle super:: paths (relative to parent module)
+    if module.startswith("super::"):
+        remainder = module[len("super::"):]
+        parts = remainder.replace("::", "/").split("/")
+        parent = str(Path(source_dir).parent)
+        for i in range(len(parts), 0, -1):
+            candidate = parent + "/" + "/".join(parts[:i])
+            for suffix in (".rs", "/mod.rs"):
+                key = candidate + suffix
+                normalized = key.replace(os.sep, "/")
+                if normalized in file_index:
+                    return file_index[normalized]
+        return None
+
+    return None
+
+
+def _resolve_go_import(module: str, source_file: str, file_index: dict[str, str]) -> str | None:
+    """Resolve a Go import path to a relative file path.
+
+    Handles:
+    - ``import "./internal/parser"`` → relative local import
+    - Internal packages sharing module path prefix → local resolution
+    - Skips stdlib (no dots in path) and external packages
+    """
+    if not module:
+        return None
+
+    # Relative imports (rare but valid in Go)
+    if module.startswith("./") or module.startswith("../"):
+        base = Path(source_file).parent
+        resolved = str((base / module).as_posix())
+        # Go packages are directories — look for any .go file in that dir
+        for suffix in (".go", "/main.go", "/"+Path(resolved).name+".go"):
+            key = resolved + suffix
+            if key in file_index:
+                return file_index[key]
+        return None
+
+    # Skip stdlib (no dots in import path = stdlib in Go)
+    if "." not in module:
+        return None
+
+    # Skip external packages — only resolve if the module path maps to local files
+    # Try the last N segments as a directory path
+    parts = module.split("/")
+    for start in range(len(parts)):
+        candidate_dir = "/".join(parts[start:])
+        # Look for any file under this directory in the index
+        for key in file_index:
+            if key.startswith(candidate_dir + "/") and key.endswith(".go"):
+                return file_index[key]
+
+    return None
+
+
+def _resolve_java_import(module: str, source_file: str, file_index: dict[str, str]) -> str | None:
+    """Resolve a Java import to a relative file path.
+
+    Handles:
+    - ``import com.myproject.utils.Helper`` → ``com/myproject/utils/Helper.java``
+    - Skips stdlib (``java.``, ``javax.``) and common third-party packages
+    """
+    if not module:
+        return None
+
+    # Skip stdlib and common external packages
+    if module.startswith(("java.", "javax.", "sun.", "com.sun.",
+                          "org.junit.", "org.apache.", "org.springframework.",
+                          "com.google.", "org.slf4j.", "org.mockito.")):
+        return None
+
+    # Skip wildcard imports for resolution (still tracked for other purposes)
+    if module.endswith(".*"):
+        module = module[:-2]
+
+    # Convert package.Class to path
+    candidate = module.replace(".", "/") + ".java"
+    normalized = candidate.replace(os.sep, "/")
+    if normalized in file_index:
+        return file_index[normalized]
+
+    # Try under common source roots
+    for prefix in ("src/main/java/", "src/", "app/src/main/java/"):
+        key = prefix + normalized
+        if key in file_index:
+            return file_index[key]
+
+    return None
+
+
+def _resolve_ruby_import(module: str, source_file: str, file_index: dict[str, str]) -> str | None:
+    """Resolve a Ruby require/require_relative to a relative file path.
+
+    Handles:
+    - ``require_relative './helper'`` → relative path resolution
+    - ``require 'mylib/utils'`` → try local lib/ resolution
+    - Skips stdlib/gems (no reliable local resolution)
+    """
+    if not module:
+        return None
+
+    # require_relative: module starts with ./ or ../
+    if module.startswith("./") or module.startswith("../"):
+        base = Path(source_file).parent
+        resolved = str((base / module).as_posix())
+        for suffix in ("", ".rb"):
+            key = resolved + suffix
+            if key in file_index:
+                return file_index[key]
+        return None
+
+    # Plain require: try as a local path with .rb extension
+    candidate = module
+    for suffix in (".rb",):
+        key = candidate + suffix
+        normalized = key.replace(os.sep, "/")
+        if normalized in file_index:
+            return file_index[normalized]
+        # Try under lib/
+        lib_key = "lib/" + normalized
+        if lib_key in file_index:
+            return file_index[lib_key]
+
+    return None
+
+
+def _resolve_c_import(module: str, source_file: str, file_index: dict[str, str]) -> str | None:
+    """Resolve a C/C++ #include to a relative file path.
+
+    Handles:
+    - ``#include "myheader.h"`` → search in same dir and include paths
+    - Skips system headers (angle-bracket includes like ``<stdio.h>``)
+
+    Note: The module string from the parser is the include path without
+    quotes/brackets. System includes are identified by convention (no path
+    separators, common system headers).
+    """
+    if not module:
+        return None
+
+    # System headers (angle-bracket includes are typically marked differently,
+    # but as a heuristic: skip common system/stdlib headers)
+    _SYSTEM_PREFIXES = (
+        "stdio", "stdlib", "string", "math", "time", "errno", "signal",
+        "assert", "ctype", "locale", "setjmp", "stdarg", "stddef",
+        "sys/", "linux/", "windows.h", "unistd.h", "fcntl.h",
+        "iostream", "vector", "map", "string", "algorithm", "memory",
+        "functional", "utility", "numeric", "iterator", "cassert",
+        "cstdio", "cstdlib", "cstring", "cmath",
+    )
+    module_lower = module.lower()
+    if any(module_lower.startswith(p) or module_lower == p for p in _SYSTEM_PREFIXES):
+        return None
+
+    # Try exact path in file index
+    normalized = module.replace(os.sep, "/")
+    if normalized in file_index:
+        return file_index[normalized]
+
+    # Try relative to source file directory
+    source_dir = str(Path(source_file).parent)
+    candidate = source_dir + "/" + normalized
+    if candidate in file_index:
+        return file_index[candidate]
+
+    # Try common include directories
+    for prefix in ("include/", "src/", "inc/"):
+        key = prefix + normalized
+        if key in file_index:
+            return file_index[key]
+
+    return None
+
+
+def _compute_dynamic_cap(files: list[FileInfo], configured_max: int) -> int:
+    """Compute a dynamic file cap based on repo composition.
+
+    Rules:
+    - <1,000 source files → no cap (keep all)
+    - 1,000–5,000 source files → cap at source count (keep all source, trim non-source)
+    - 5,000–20,000 → cap at 5,000
+    - 20,000+ → cap at 10,000
+
+    Args:
+        files: All discovered files (before truncation).
+        configured_max: The user-configured max_files (used as a minimum).
+
+    Returns:
+        The effective cap to apply.
+    """
+    source_count = sum(1 for f in files if f.language)
+    total = len(files)
+
+    if source_count < 1_000:
+        cap = total  # Keep everything
+    elif source_count <= 5_000:
+        cap = max(source_count, configured_max)
+    elif source_count <= 20_000:
+        cap = max(5_000, configured_max)
+    else:
+        cap = max(10_000, configured_max)
+
+    return cap
+
+
 def build_dependency_graph(
     files: list[FileInfo],
     root_dir: str,
@@ -470,8 +754,24 @@ def build_dependency_graph(
     # Build index with prefix-stripped alternate keys for src/ layout
     file_index = _build_file_index(files, root_dir)
 
+    # Dispatch table for language-specific import resolvers
+    _resolvers: dict[str, Any] = {
+        "python": _resolve_python_import,
+        "javascript": _resolve_js_import,
+        "typescript": _resolve_js_import,
+        "rust": _resolve_rust_import,
+        "go": _resolve_go_import,
+        "java": _resolve_java_import,
+        "ruby": _resolve_ruby_import,
+        "c": _resolve_c_import,
+        "cpp": _resolve_c_import,
+    }
+
+    # Languages that have parseable imports
+    supported_langs = set(_resolvers.keys())
+
     for f in files:
-        if f.language not in ("python", "javascript", "typescript"):
+        if f.language not in supported_langs:
             continue
 
         try:
@@ -479,12 +779,9 @@ def build_dependency_graph(
         except Exception:
             continue
 
+        resolver = _resolvers[f.language]
         for imp in ast.imports:
-            if f.language == "python":
-                target = _resolve_python_import(imp.module, f.relative_path, file_index)
-            else:
-                target = _resolve_js_import(imp.module, f.relative_path, file_index)
-
+            target = resolver(imp.module, f.relative_path, file_index)
             if target is not None and target != f.relative_path:
                 graph.add_edge(f.relative_path, target)
 
@@ -531,11 +828,17 @@ class CodebaseContextManager:
     def discover_files(self) -> list[FileInfo]:
         """Discover all relevant files in the repository.
 
+        Two-pass approach: collect all files (with safety ceiling), then
+        score importance and truncate to a dynamic cap. This ensures
+        important files deep in the alphabet aren't excluded by
+        filesystem traversal order.
+
         Returns:
             List of FileInfo objects for discovered files.
         """
         root = Path(self.root_dir)
         files: list[FileInfo] = []
+        _SAFETY_CEILING = 50_000  # OOM guard for massive repos
 
         for dirpath, dirnames, filenames in os.walk(root):
             # Filter ignored directories (in-place to prevent os.walk descent)
@@ -573,7 +876,7 @@ class CodebaseContextManager:
                 is_test = any(p in rel_path.lower() for p in TEST_PATTERNS)
                 is_config = any(p in rel_path.lower() for p in CONFIG_PATTERNS)
 
-                # Estimate line count
+                # Estimate line count (only for source files with a recognized lang)
                 line_count = 0
                 if lang and size < 500_000:
                     try:
@@ -592,10 +895,10 @@ class CodebaseContextManager:
                     line_count=line_count,
                 ))
 
-                if len(files) >= self.max_files:
+                if len(files) >= _SAFETY_CEILING:
                     break
 
-            if len(files) >= self.max_files:
+            if len(files) >= _SAFETY_CEILING:
                 break
 
         # Score importance
@@ -614,6 +917,11 @@ class CodebaseContextManager:
 
         # Sort by importance (highest first)
         files.sort(key=lambda f: f.importance, reverse=True)
+
+        # Truncate to dynamic cap AFTER scoring (smart truncation)
+        cap = _compute_dynamic_cap(files, self.max_files)
+        if len(files) > cap:
+            files = files[:cap]
 
         self._files = files
         self._last_refresh_time = time.monotonic()
@@ -719,8 +1027,9 @@ class CodebaseContextManager:
 
         from attocode.integrations.context.codebase_ast import parse_file as _parse_file
 
+        _SYMBOL_LANGS = {"python", "javascript", "typescript", "rust", "go", "java", "ruby", "c", "cpp"}
         for f in self._files:
-            if f.language not in ("python", "javascript", "typescript"):
+            if f.language not in _SYMBOL_LANGS:
                 continue
             try:
                 # Use cached AST when available

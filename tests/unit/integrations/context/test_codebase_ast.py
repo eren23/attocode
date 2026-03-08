@@ -19,8 +19,10 @@ from attocode.integrations.context.codebase_ast import (
     diff_file_ast,
     diff_imports,
     parse_file,
+    parse_go,
     parse_javascript,
     parse_python,
+    parse_rust,
 )
 
 
@@ -658,3 +660,169 @@ class TestMultilineSignatures:
         assert func.name == "foo"
         assert func.params == ["x"]
         assert func.return_type == "None"
+
+
+# ============================================================
+# Rust Parser Tests
+# ============================================================
+
+
+class TestParseRust:
+    def test_functions(self) -> None:
+        code = "pub fn main() {\n    println!(\"hello\");\n}\n\nfn helper() {\n}\n"
+        ast = parse_rust(code)
+        assert len(ast.functions) == 2
+        assert ast.functions[0].name == "main"
+        assert ast.functions[1].name == "helper"
+
+    def test_async_function(self) -> None:
+        code = "pub async fn fetch_data() {\n    todo!()\n}\n"
+        ast = parse_rust(code)
+        assert len(ast.functions) == 1
+        assert ast.functions[0].name == "fetch_data"
+        assert ast.functions[0].is_async
+
+    def test_structs(self) -> None:
+        code = "pub struct Worker {\n    name: String,\n    id: u32,\n}\n"
+        ast = parse_rust(code)
+        assert len(ast.classes) == 1
+        assert ast.classes[0].name == "Worker"
+
+    def test_enums(self) -> None:
+        code = "pub enum Status {\n    Active,\n    Inactive,\n}\n"
+        ast = parse_rust(code)
+        assert len(ast.classes) == 1
+        assert ast.classes[0].name == "Status"
+
+    def test_traits(self) -> None:
+        code = "pub trait Runnable {\n    fn run(&self);\n}\n"
+        ast = parse_rust(code)
+        assert len(ast.classes) == 1
+        assert ast.classes[0].name == "Runnable"
+
+    def test_use_imports(self) -> None:
+        code = (
+            "use std::collections::HashMap;\n"
+            "use crate::worker::MainWorker;\n"
+            "use super::utils;\n"
+        )
+        ast = parse_rust(code)
+        assert len(ast.imports) == 3
+        assert ast.imports[0].module == "std::collections::HashMap"
+        assert ast.imports[1].module == "crate::worker::MainWorker"
+
+    def test_mod_declaration(self) -> None:
+        code = "mod worker;\nmod utils;\n"
+        ast = parse_rust(code)
+        assert len(ast.imports) == 2
+        assert ast.imports[0].module == "worker"
+        assert ast.imports[1].module == "utils"
+
+    def test_constants(self) -> None:
+        code = "pub const MAX_SIZE: usize = 1024;\nstatic COUNTER: u32 = 0;\n"
+        ast = parse_rust(code)
+        assert "MAX_SIZE" in ast.top_level_vars
+        assert "COUNTER" in ast.top_level_vars
+
+    def test_unsafe_trait(self) -> None:
+        code = "unsafe trait Send {\n}\n"
+        ast = parse_rust(code)
+        assert len(ast.classes) == 1
+        assert ast.classes[0].name == "Send"
+
+    def test_parse_file_rust(self) -> None:
+        code = "pub fn main() {\n}\n"
+        ast = parse_file("test.rs", content=code)
+        assert ast.language == "rust"
+        assert len(ast.functions) == 1
+
+    def test_get_symbols(self) -> None:
+        code = (
+            "pub struct Worker {}\n"
+            "pub fn run() {\n}\n"
+            "pub const MAX: u32 = 10;\n"
+        )
+        ast = parse_rust(code)
+        syms = ast.get_symbols()
+        assert "run" in syms
+        assert "Worker" in syms
+        assert "MAX" in syms
+
+
+# ============================================================
+# Go Parser Tests
+# ============================================================
+
+
+class TestParseGo:
+    def test_functions(self) -> None:
+        code = "package main\n\nfunc main() {\n    fmt.Println(\"hello\")\n}\n\nfunc helper() {\n}\n"
+        ast = parse_go(code)
+        assert len(ast.functions) == 2
+        assert ast.functions[0].name == "main"
+        assert ast.functions[1].name == "helper"
+
+    def test_methods(self) -> None:
+        code = "func (s *Server) Start() {\n}\n\nfunc (s *Server) Stop() {\n}\n"
+        ast = parse_go(code)
+        assert len(ast.functions) == 2
+        assert ast.functions[0].name == "Start"
+        assert ast.functions[0].is_method
+        assert ast.functions[1].name == "Stop"
+
+    def test_structs(self) -> None:
+        code = "type Server struct {\n    host string\n    port int\n}\n"
+        ast = parse_go(code)
+        assert len(ast.classes) == 1
+        assert ast.classes[0].name == "Server"
+
+    def test_interfaces(self) -> None:
+        code = "type Handler interface {\n    Handle(r Request) Response\n}\n"
+        ast = parse_go(code)
+        assert len(ast.classes) == 1
+        assert ast.classes[0].name == "Handler"
+
+    def test_single_import(self) -> None:
+        code = 'package main\n\nimport "fmt"\n'
+        ast = parse_go(code)
+        assert len(ast.imports) == 1
+        assert ast.imports[0].module == "fmt"
+
+    def test_import_block(self) -> None:
+        code = 'package main\n\nimport (\n    "fmt"\n    "net/http"\n    "os"\n)\n'
+        ast = parse_go(code)
+        assert len(ast.imports) == 3
+        modules = [imp.module for imp in ast.imports]
+        assert "fmt" in modules
+        assert "net/http" in modules
+        assert "os" in modules
+
+    def test_aliased_import(self) -> None:
+        code = 'import (\n    mux "github.com/gorilla/mux"\n)\n'
+        ast = parse_go(code)
+        assert len(ast.imports) == 1
+        assert ast.imports[0].module == "github.com/gorilla/mux"
+
+    def test_constants(self) -> None:
+        code = "var MaxSize int = 100\nconst DefaultPort int = 8080\n"
+        ast = parse_go(code)
+        assert "MaxSize" in ast.top_level_vars
+        assert "DefaultPort" in ast.top_level_vars
+
+    def test_parse_file_go(self) -> None:
+        code = "package main\n\nfunc main() {\n}\n"
+        ast = parse_file("test.go", content=code)
+        assert ast.language == "go"
+        assert len(ast.functions) == 1
+
+    def test_get_symbols(self) -> None:
+        code = (
+            "type Worker struct {\n}\n\n"
+            "func Run() {\n}\n\n"
+            "var MaxItems int = 10\n"
+        )
+        ast = parse_go(code)
+        syms = ast.get_symbols()
+        assert "Run" in syms
+        assert "Worker" in syms
+        assert "MaxItems" in syms

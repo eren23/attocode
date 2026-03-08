@@ -166,6 +166,12 @@ LANG_EXTENSIONS: dict[str, str] = {
     ".rs": "rust",
     ".java": "java",
     ".rb": "ruby",
+    ".c": "c",
+    ".h": "c",
+    ".cpp": "cpp",
+    ".hpp": "cpp",
+    ".cc": "cpp",
+    ".cxx": "cpp",
 }
 
 
@@ -864,6 +870,249 @@ def parse_javascript(content: str, path: str = "") -> FileAST:
     return ast
 
 
+def parse_rust(content: str, path: str = "") -> FileAST:
+    """Parse Rust source using regex patterns.
+
+    Extracts functions, structs, enums, traits, impl blocks, imports (use/mod).
+    """
+    lines = content.split("\n")
+    ast = FileAST(path=path, language="rust", line_count=len(lines))
+
+    for i, line in enumerate(lines):
+        stripped = line.strip()
+
+        # Imports: use ... ;
+        use_match = re.match(r"^(?:pub\s+)?use\s+(.+);", stripped)
+        if use_match:
+            module = use_match.group(1).strip()
+            # Extract the base path (before :: { ... })
+            base = re.sub(r"\s*::\s*\{[^}]*\}", "", module)
+            base = re.sub(r"\s*::\s*\w+$", "", base)
+            ast.imports.append(ImportDef(module=module, is_from=True, line=i + 1))
+            continue
+
+        # mod declarations: mod foo;
+        mod_match = re.match(r"^(?:pub\s+)?mod\s+(\w+)\s*;", stripped)
+        if mod_match:
+            ast.imports.append(ImportDef(
+                module=mod_match.group(1), is_from=False, line=i + 1,
+            ))
+            continue
+
+        # Functions: (pub)? (async)? fn name(...)
+        fn_match = re.match(
+            r"^(?:pub(?:\([\w:]+\))?\s+)?(?:async\s+)?(?:unsafe\s+)?(?:extern\s+\"[^\"]*\"\s+)?fn\s+(\w+)",
+            stripped,
+        )
+        if fn_match:
+            func_name = fn_match.group(1)
+            # Find end via brace matching
+            end_line = i + 1
+            brace_count = stripped.count("{") - stripped.count("}")
+            if brace_count > 0:
+                for j in range(i + 1, min(i + 500, len(lines))):
+                    brace_count += lines[j].count("{") - lines[j].count("}")
+                    if brace_count <= 0:
+                        end_line = j + 1
+                        break
+            is_async = "async " in stripped.split("fn")[0]
+            ast.functions.append(FunctionDef(
+                name=func_name,
+                start_line=i + 1,
+                end_line=end_line,
+                is_async=is_async,
+            ))
+            continue
+
+        # Structs: (pub)? struct Name
+        struct_match = re.match(r"^(?:pub(?:\([\w:]+\))?\s+)?struct\s+(\w+)", stripped)
+        if struct_match:
+            end_line = i + 1
+            brace_count = stripped.count("{") - stripped.count("}")
+            if brace_count > 0:
+                for j in range(i + 1, min(i + 500, len(lines))):
+                    brace_count += lines[j].count("{") - lines[j].count("}")
+                    if brace_count <= 0:
+                        end_line = j + 1
+                        break
+            ast.classes.append(ClassDef(
+                name=struct_match.group(1),
+                start_line=i + 1,
+                end_line=end_line,
+            ))
+            continue
+
+        # Enums: (pub)? enum Name
+        enum_match = re.match(r"^(?:pub(?:\([\w:]+\))?\s+)?enum\s+(\w+)", stripped)
+        if enum_match:
+            end_line = i + 1
+            brace_count = stripped.count("{") - stripped.count("}")
+            if brace_count > 0:
+                for j in range(i + 1, min(i + 500, len(lines))):
+                    brace_count += lines[j].count("{") - lines[j].count("}")
+                    if brace_count <= 0:
+                        end_line = j + 1
+                        break
+            ast.classes.append(ClassDef(
+                name=enum_match.group(1),
+                start_line=i + 1,
+                end_line=end_line,
+            ))
+            continue
+
+        # Traits: (pub)? trait Name
+        trait_match = re.match(r"^(?:pub(?:\([\w:]+\))?\s+)?(?:unsafe\s+)?trait\s+(\w+)", stripped)
+        if trait_match:
+            end_line = i + 1
+            brace_count = stripped.count("{") - stripped.count("}")
+            if brace_count > 0:
+                for j in range(i + 1, min(i + 500, len(lines))):
+                    brace_count += lines[j].count("{") - lines[j].count("}")
+                    if brace_count <= 0:
+                        end_line = j + 1
+                        break
+            ast.classes.append(ClassDef(
+                name=trait_match.group(1),
+                start_line=i + 1,
+                end_line=end_line,
+            ))
+            continue
+
+        # Top-level constants: (pub)? const NAME: ...
+        const_match = re.match(r"^(?:pub\s+)?(?:const|static)\s+([A-Z_][A-Z_0-9]*)\s*:", stripped)
+        if const_match:
+            ast.top_level_vars.append(const_match.group(1))
+
+    return ast
+
+
+def parse_go(content: str, path: str = "") -> FileAST:
+    """Parse Go source using regex patterns.
+
+    Extracts functions, methods, structs, interfaces, imports.
+    """
+    lines = content.split("\n")
+    ast = FileAST(path=path, language="go", line_count=len(lines))
+
+    i = 0
+    while i < len(lines):
+        stripped = lines[i].strip()
+
+        # Import block: import ( ... )
+        if stripped == "import (" or stripped.startswith("import ("):
+            i += 1
+            while i < len(lines):
+                imp_line = lines[i].strip()
+                if imp_line == ")":
+                    break
+                # Parse "pkg" or alias "pkg"
+                imp_match = re.match(r'^(?:\w+\s+)?"([^"]+)"', imp_line)
+                if imp_match:
+                    ast.imports.append(ImportDef(
+                        module=imp_match.group(1), is_from=False, line=i + 1,
+                    ))
+                i += 1
+            i += 1
+            continue
+
+        # Single import: import "pkg"
+        single_imp = re.match(r'^import\s+(?:\w+\s+)?"([^"]+)"', stripped)
+        if single_imp:
+            ast.imports.append(ImportDef(
+                module=single_imp.group(1), is_from=False, line=i + 1,
+            ))
+            i += 1
+            continue
+
+        # Method: func (receiver) Name(...)
+        method_match = re.match(r"^func\s+\([^)]+\)\s+(\w+)\s*\(", stripped)
+        if method_match:
+            func_name = method_match.group(1)
+            end_line = i + 1
+            brace_count = stripped.count("{") - stripped.count("}")
+            if brace_count > 0:
+                for j in range(i + 1, min(i + 500, len(lines))):
+                    brace_count += lines[j].count("{") - lines[j].count("}")
+                    if brace_count <= 0:
+                        end_line = j + 1
+                        break
+            ast.functions.append(FunctionDef(
+                name=func_name,
+                start_line=i + 1,
+                end_line=end_line,
+                is_method=True,
+            ))
+            i += 1
+            continue
+
+        # Function: func Name(...)
+        fn_match = re.match(r"^func\s+(\w+)\s*\(", stripped)
+        if fn_match:
+            func_name = fn_match.group(1)
+            end_line = i + 1
+            brace_count = stripped.count("{") - stripped.count("}")
+            if brace_count > 0:
+                for j in range(i + 1, min(i + 500, len(lines))):
+                    brace_count += lines[j].count("{") - lines[j].count("}")
+                    if brace_count <= 0:
+                        end_line = j + 1
+                        break
+            ast.functions.append(FunctionDef(
+                name=func_name,
+                start_line=i + 1,
+                end_line=end_line,
+            ))
+            i += 1
+            continue
+
+        # Struct: type Name struct {
+        struct_match = re.match(r"^type\s+(\w+)\s+struct\s*\{", stripped)
+        if struct_match:
+            end_line = i + 1
+            brace_count = stripped.count("{") - stripped.count("}")
+            if brace_count > 0:
+                for j in range(i + 1, min(i + 500, len(lines))):
+                    brace_count += lines[j].count("{") - lines[j].count("}")
+                    if brace_count <= 0:
+                        end_line = j + 1
+                        break
+            ast.classes.append(ClassDef(
+                name=struct_match.group(1),
+                start_line=i + 1,
+                end_line=end_line,
+            ))
+            i += 1
+            continue
+
+        # Interface: type Name interface {
+        iface_match = re.match(r"^type\s+(\w+)\s+interface\s*\{", stripped)
+        if iface_match:
+            end_line = i + 1
+            brace_count = stripped.count("{") - stripped.count("}")
+            if brace_count > 0:
+                for j in range(i + 1, min(i + 500, len(lines))):
+                    brace_count += lines[j].count("{") - lines[j].count("}")
+                    if brace_count <= 0:
+                        end_line = j + 1
+                        break
+            ast.classes.append(ClassDef(
+                name=iface_match.group(1),
+                start_line=i + 1,
+                end_line=end_line,
+            ))
+            i += 1
+            continue
+
+        # Top-level constants
+        const_match = re.match(r"^(?:var|const)\s+([A-Z_][A-Za-z_0-9]*)\s+", stripped)
+        if const_match:
+            ast.top_level_vars.append(const_match.group(1))
+
+        i += 1
+
+    return ast
+
+
 def _ts_result_to_file_ast(result: dict, file_path: str) -> FileAST:
     """Convert tree-sitter parse result dict into a FileAST dataclass."""
     language = result.get("language", "unknown")
@@ -960,11 +1209,15 @@ def parse_file(file_path: str, content: str | None = None) -> FileAST:
     except ImportError:
         pass  # tree-sitter not installed
 
-    # Regex fallback for Python and JavaScript/TypeScript
+    # Regex fallback for Python, JavaScript/TypeScript, Rust, Go
     if lang == "python":
         return parse_python(content, file_path)
     elif lang in ("javascript", "typescript"):
         return parse_javascript(content, file_path)
+    elif lang == "rust":
+        return parse_rust(content, file_path)
+    elif lang == "go":
+        return parse_go(content, file_path)
     else:
         # Minimal parsing for unknown languages
         return FileAST(

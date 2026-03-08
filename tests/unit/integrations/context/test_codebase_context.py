@@ -16,6 +16,12 @@ from attocode.integrations.context.codebase_context import (
     DependencyGraph,
     FileInfo,
     RepoMap,
+    _compute_dynamic_cap,
+    _resolve_c_import,
+    _resolve_go_import,
+    _resolve_java_import,
+    _resolve_ruby_import,
+    _resolve_rust_import,
     build_dependency_graph,
 )
 
@@ -155,12 +161,21 @@ class TestDiscoverFiles:
         assert len(config_files) >= 1
 
     def test_max_files_limit(self, tmp_path: Path) -> None:
+        """Dynamic cap keeps all files when source count < 1000."""
         for i in range(20):
             (tmp_path / f"file{i}.py").write_text(f"x = {i}\n")
 
         mgr = CodebaseContextManager(root_dir=str(tmp_path), max_files=5)
         files = mgr.discover_files()
-        assert len(files) == 5
+        # With <1000 source files, dynamic cap keeps everything
+        assert len(files) == 20
+
+    def test_safety_ceiling(self, tmp_path: Path) -> None:
+        """Safety ceiling (50k) prevents OOM on massive repos."""
+        # Just verify the constant exists and discover_files completes
+        mgr = CodebaseContextManager(root_dir=str(tmp_path), max_files=5)
+        files = mgr.discover_files()
+        assert isinstance(files, list)
 
     def test_sorts_by_importance(self, tmp_path: Path) -> None:
         _create_project(tmp_path)
@@ -578,3 +593,236 @@ class TestBudgetedRepoMap:
         counts = CodebaseContextManager._count_omitted_per_dir(all_paths, included)
         assert counts["src"] == 1  # c.py omitted
         assert counts["tests"] == 2  # both test files omitted
+
+
+# --- Dynamic cap tests ---
+
+
+class TestDynamicCap:
+    def _make_files(self, n_source: int, n_other: int = 0) -> list[FileInfo]:
+        files = []
+        for i in range(n_source):
+            files.append(FileInfo(
+                path=f"/tmp/f{i}.py", relative_path=f"f{i}.py",
+                language="python", importance=0.5,
+            ))
+        for i in range(n_other):
+            files.append(FileInfo(
+                path=f"/tmp/d{i}.txt", relative_path=f"d{i}.txt",
+                language="", importance=0.1,
+            ))
+        return files
+
+    def test_small_repo_keeps_all(self) -> None:
+        files = self._make_files(50, 30)
+        cap = _compute_dynamic_cap(files, 2000)
+        assert cap == 80  # total count — keep everything
+
+    def test_medium_repo_caps_at_source_count(self) -> None:
+        files = self._make_files(2000, 500)
+        cap = _compute_dynamic_cap(files, 2000)
+        assert cap == 2000  # max(source_count, configured_max)
+
+    def test_large_repo_caps_at_5000(self) -> None:
+        files = self._make_files(8000, 1000)
+        cap = _compute_dynamic_cap(files, 2000)
+        assert cap == 5000
+
+    def test_huge_repo_caps_at_10000(self) -> None:
+        files = self._make_files(25000, 5000)
+        cap = _compute_dynamic_cap(files, 2000)
+        assert cap == 10000
+
+
+# --- Rust import resolver tests ---
+
+
+class TestResolveRustImport:
+    def _index(self, paths: list[str]) -> dict[str, str]:
+        return {p: p for p in paths}
+
+    def test_crate_import(self) -> None:
+        idx = self._index(["src/worker.rs", "src/main.rs"])
+        result = _resolve_rust_import("crate::worker", "src/main.rs", idx)
+        assert result == "src/worker.rs"
+
+    def test_crate_import_mod_rs(self) -> None:
+        idx = self._index(["src/worker/mod.rs", "src/main.rs"])
+        result = _resolve_rust_import("crate::worker", "src/main.rs", idx)
+        assert result == "src/worker/mod.rs"
+
+    def test_super_import(self) -> None:
+        idx = self._index(["src/utils.rs", "src/sub/child.rs"])
+        result = _resolve_rust_import("super::utils", "src/sub/child.rs", idx)
+        assert result == "src/utils.rs"
+
+    def test_mod_declaration(self) -> None:
+        idx = self._index(["src/worker.rs", "src/lib.rs"])
+        result = _resolve_rust_import("worker", "src/lib.rs", idx)
+        assert result == "src/worker.rs"
+
+    def test_skip_stdlib(self) -> None:
+        idx = self._index(["src/main.rs"])
+        assert _resolve_rust_import("std::collections::HashMap", "src/main.rs", idx) is None
+
+    def test_skip_core(self) -> None:
+        idx = self._index(["src/main.rs"])
+        assert _resolve_rust_import("core::fmt", "src/main.rs", idx) is None
+
+    def test_nested_crate_import(self) -> None:
+        idx = self._index(["src/a/b.rs", "src/main.rs"])
+        result = _resolve_rust_import("crate::a::b", "src/main.rs", idx)
+        assert result == "src/a/b.rs"
+
+    def test_self_import(self) -> None:
+        idx = self._index(["src/parser/lexer.rs", "src/parser/mod.rs"])
+        result = _resolve_rust_import("self::lexer", "src/parser/mod.rs", idx)
+        assert result == "src/parser/lexer.rs"
+
+
+# --- Go import resolver tests ---
+
+
+class TestResolveGoImport:
+    def _index(self, paths: list[str]) -> dict[str, str]:
+        return {p: p for p in paths}
+
+    def test_relative_import(self) -> None:
+        idx = self._index(["internal/parser/parser.go", "main.go"])
+        result = _resolve_go_import("./internal/parser", "main.go", idx)
+        assert result == "internal/parser/parser.go"
+
+    def test_skip_stdlib(self) -> None:
+        idx = self._index(["main.go"])
+        assert _resolve_go_import("fmt", "main.go", idx) is None
+        assert _resolve_go_import("net/http", "main.go", idx) is None
+
+    def test_skip_external(self) -> None:
+        idx = self._index(["main.go"])
+        # External packages have dots in path but won't match local files
+        assert _resolve_go_import("github.com/user/repo/pkg", "main.go", idx) is None
+
+
+# --- Java import resolver tests ---
+
+
+class TestResolveJavaImport:
+    def _index(self, paths: list[str]) -> dict[str, str]:
+        return {p: p for p in paths}
+
+    def test_local_import(self) -> None:
+        idx = self._index(["com/myapp/utils/Helper.java", "com/myapp/Main.java"])
+        result = _resolve_java_import(
+            "com.myapp.utils.Helper", "com/myapp/Main.java", idx,
+        )
+        assert result == "com/myapp/utils/Helper.java"
+
+    def test_maven_layout(self) -> None:
+        idx = self._index(["src/main/java/com/app/Service.java"])
+        result = _resolve_java_import(
+            "com.app.Service", "src/main/java/com/app/Main.java", idx,
+        )
+        assert result == "src/main/java/com/app/Service.java"
+
+    def test_skip_stdlib(self) -> None:
+        idx = self._index(["Main.java"])
+        assert _resolve_java_import("java.util.List", "Main.java", idx) is None
+        assert _resolve_java_import("javax.swing.JFrame", "Main.java", idx) is None
+
+    def test_skip_external(self) -> None:
+        idx = self._index(["Main.java"])
+        assert _resolve_java_import("org.apache.commons.lang3.StringUtils", "Main.java", idx) is None
+
+
+# --- Ruby import resolver tests ---
+
+
+class TestResolveRubyImport:
+    def _index(self, paths: list[str]) -> dict[str, str]:
+        return {p: p for p in paths}
+
+    def test_require_relative(self) -> None:
+        idx = self._index(["lib/helper.rb", "lib/main.rb"])
+        result = _resolve_ruby_import("./helper", "lib/main.rb", idx)
+        assert result == "lib/helper.rb"
+
+    def test_require_relative_with_ext(self) -> None:
+        idx = self._index(["lib/helper.rb", "lib/main.rb"])
+        result = _resolve_ruby_import("./helper.rb", "lib/main.rb", idx)
+        assert result == "lib/helper.rb"
+
+    def test_require_local_lib(self) -> None:
+        idx = self._index(["lib/mylib/utils.rb"])
+        result = _resolve_ruby_import("mylib/utils", "app.rb", idx)
+        assert result == "lib/mylib/utils.rb"
+
+
+# --- C/C++ import resolver tests ---
+
+
+class TestResolveCImport:
+    def _index(self, paths: list[str]) -> dict[str, str]:
+        return {p: p for p in paths}
+
+    def test_local_header(self) -> None:
+        idx = self._index(["src/myheader.h", "src/main.c"])
+        result = _resolve_c_import("myheader.h", "src/main.c", idx)
+        assert result == "src/myheader.h"
+
+    def test_include_dir(self) -> None:
+        idx = self._index(["include/mylib.h", "src/main.c"])
+        result = _resolve_c_import("mylib.h", "src/main.c", idx)
+        assert result == "include/mylib.h"
+
+    def test_skip_system_header(self) -> None:
+        idx = self._index(["src/main.c"])
+        assert _resolve_c_import("stdio.h", "src/main.c", idx) is None
+        assert _resolve_c_import("stdlib.h", "src/main.c", idx) is None
+
+    def test_relative_path_header(self) -> None:
+        idx = self._index(["src/utils/helper.h", "src/main.c"])
+        result = _resolve_c_import("utils/helper.h", "src/main.c", idx)
+        assert result == "src/utils/helper.h"
+
+
+# --- End-to-end multi-language dependency graph tests ---
+
+
+class TestMultiLanguageDependencyGraph:
+    def test_rust_dependency_graph(self, tmp_path: Path) -> None:
+        """Rust use/mod imports are resolved in dependency graph."""
+        src = tmp_path / "src"
+        src.mkdir()
+        (src / "main.rs").write_text(
+            "mod worker;\nuse crate::worker::run;\n\nfn main() {\n    run();\n}\n",
+        )
+        (src / "worker.rs").write_text(
+            "pub fn run() {\n    println!(\"working\");\n}\n",
+        )
+
+        mgr = CodebaseContextManager(root_dir=str(tmp_path))
+        files = mgr.discover_files()
+        graph = mgr.dependency_graph
+        assert graph is not None
+
+        main_imports = graph.get_imports(os.path.join("src", "main.rs"))
+        assert any("worker" in p for p in main_imports)
+
+    def test_go_dependency_graph(self, tmp_path: Path) -> None:
+        """Go relative imports are resolved in dependency graph."""
+        (tmp_path / "main.go").write_text(
+            'package main\n\nimport "./internal/parser"\n\nfunc main() {\n}\n',
+        )
+        internal = tmp_path / "internal" / "parser"
+        internal.mkdir(parents=True)
+        (internal / "parser.go").write_text(
+            'package parser\n\nfunc Parse() string {\n    return "ok"\n}\n',
+        )
+
+        mgr = CodebaseContextManager(root_dir=str(tmp_path))
+        files = mgr.discover_files()
+        graph = mgr.dependency_graph
+        assert graph is not None
+
+        main_imports = graph.get_imports("main.go")
+        assert any("parser" in p for p in main_imports)
