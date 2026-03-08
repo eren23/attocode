@@ -32,6 +32,17 @@ def write_json_atomic(path: Path, data: Any) -> None:
     os.replace(tmp, path)
 
 
+def write_json_fast(path: Path, data: Any) -> None:
+    """Atomic write without fsync — suitable for TUI-consumed state files."""
+    ensure_parent(path)
+    tmp = path.with_suffix(path.suffix + ".tmp")
+    payload = json.dumps(data, indent=2, sort_keys=False) + "\n"
+    with tmp.open("w", encoding="utf-8") as handle:
+        handle.write(payload)
+        handle.flush()
+    os.replace(tmp, path)
+
+
 def append_jsonl(path: Path, item: Any) -> None:
     ensure_parent(path)
     with path.open("a", encoding="utf-8") as handle:

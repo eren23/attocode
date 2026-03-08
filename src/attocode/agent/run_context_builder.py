@@ -81,8 +81,6 @@ async def build_run_context(
         ctx.mode_manager = agent._mode_manager
     if agent._file_change_tracker:
         ctx.file_change_tracker = agent._file_change_tracker
-    if agent._thread_manager:
-        ctx.thread_manager = agent._thread_manager
 
     # Initialize recording if configured
     if agent._recording_config is not None:

@@ -3,13 +3,14 @@
 from __future__ import annotations
 
 import json
+import os
 import time
 from pathlib import Path
 from typing import Any
 
 import pytest
 
-from attoswarm.tui.stores import StateStore
+from attoswarm.tui.stores import StateStore, _to_epoch
 
 
 @pytest.fixture()
@@ -23,6 +24,411 @@ def tmp_run_dir(tmp_path: Path) -> Path:
 @pytest.fixture()
 def store(tmp_run_dir: Path) -> StateStore:
     return StateStore(str(tmp_run_dir))
+
+
+# ── _to_epoch ─────────────────────────────────────────────────────────
+
+
+class TestToEpoch:
+    def test_int(self) -> None:
+        assert _to_epoch(1000) == 1000.0
+
+    def test_float(self) -> None:
+        assert _to_epoch(1000.5) == 1000.5
+
+    def test_iso_string(self) -> None:
+        result = _to_epoch("2026-01-01T00:00:00Z")
+        assert result > 0
+
+    def test_empty_string(self) -> None:
+        assert _to_epoch("") == 0.0
+
+    def test_none(self) -> None:
+        assert _to_epoch(None) == 0.0
+
+    def test_invalid_string(self) -> None:
+        assert _to_epoch("not a date") == 0.0
+
+
+# ── read_state ────────────────────────────────────────────────────────
+
+
+class TestReadState:
+    def test_no_file(self, store: StateStore) -> None:
+        assert store.read_state() == {}
+
+    def test_reads_valid_state(self, store: StateStore, tmp_run_dir: Path) -> None:
+        state = {"phase": "executing", "state_seq": 5}
+        (tmp_run_dir / "swarm.state.json").write_text(json.dumps(state))
+        assert store.read_state() == state
+
+    def test_caches_by_mtime(self, store: StateStore, tmp_run_dir: Path) -> None:
+        state_path = tmp_run_dir / "swarm.state.json"
+        state_path.write_text(json.dumps({"v": 1}))
+        first = store.read_state()
+
+        # Overwrite WITHOUT changing mtime -> cache hit
+        state_path.write_text(json.dumps({"v": 2}))
+        mtime = os.path.getmtime(str(state_path))
+        os.utime(str(state_path), (mtime - 1, mtime - 1))
+        # Force the same mtime as the cached one
+        store._state_cache = (mtime - 1, first.get("state_seq", 0), first)
+        second = store.read_state()
+        assert second == {"v": 1}  # cached
+
+    def test_invalidates_on_mtime_change(self, store: StateStore, tmp_run_dir: Path) -> None:
+        state_path = tmp_run_dir / "swarm.state.json"
+        state_path.write_text(json.dumps({"v": 1}))
+        store.read_state()
+
+        # Force mtime change
+        time.sleep(0.05)
+        state_path.write_text(json.dumps({"v": 2}))
+        assert store.read_state() == {"v": 2}
+
+
+# ── has_new_events ────────────────────────────────────────────────────
+
+
+class TestHasNewEvents:
+    def test_no_file(self, store: StateStore) -> None:
+        assert store.has_new_events() is False
+
+    def test_empty_file(self, store: StateStore, tmp_run_dir: Path) -> None:
+        (tmp_run_dir / "swarm.events.jsonl").write_text("")
+        # First call: size is 0 and _events_last_size is 0
+        assert store.has_new_events() is False
+
+    def test_new_data(self, store: StateStore, tmp_run_dir: Path) -> None:
+        (tmp_run_dir / "swarm.events.jsonl").write_text('{"a":1}\n')
+        assert store.has_new_events() is True
+
+    def test_no_change_after_read(self, store: StateStore, tmp_run_dir: Path) -> None:
+        path = tmp_run_dir / "swarm.events.jsonl"
+        path.write_text('{"a":1}\n')
+        store.read_events()
+        assert store.has_new_events() is False
+
+
+# ── read_events (incremental JSONL) ──────────────────────────────────
+
+
+class TestReadEvents:
+    def test_no_file(self, store: StateStore) -> None:
+        assert store.read_events() == []
+
+    def test_reads_all_lines(self, store: StateStore, tmp_run_dir: Path) -> None:
+        lines = [json.dumps({"seq": i}) for i in range(5)]
+        (tmp_run_dir / "swarm.events.jsonl").write_text("\n".join(lines) + "\n")
+        result = store.read_events(limit=100)
+        assert len(result) == 5
+        assert result[0]["seq"] == 0
+
+    def test_limit_returns_tail(self, store: StateStore, tmp_run_dir: Path) -> None:
+        lines = [json.dumps({"seq": i}) for i in range(10)]
+        (tmp_run_dir / "swarm.events.jsonl").write_text("\n".join(lines) + "\n")
+        result = store.read_events(limit=3)
+        assert len(result) == 3
+        assert result[0]["seq"] == 7  # tail
+
+    def test_incremental_read(self, store: StateStore, tmp_run_dir: Path) -> None:
+        path = tmp_run_dir / "swarm.events.jsonl"
+        path.write_text(json.dumps({"seq": 0}) + "\n")
+        first = store.read_events(limit=100)
+        assert len(first) == 1
+
+        # Append more
+        with path.open("a") as f:
+            f.write(json.dumps({"seq": 1}) + "\n")
+            f.write(json.dumps({"seq": 2}) + "\n")
+        second = store.read_events(limit=100)
+        assert len(second) == 3
+
+    def test_truncated_file_resets(self, store: StateStore, tmp_run_dir: Path) -> None:
+        path = tmp_run_dir / "swarm.events.jsonl"
+        # Write large initial data
+        lines = [json.dumps({"seq": i}) for i in range(10)]
+        path.write_text("\n".join(lines) + "\n")
+        store.read_events(limit=100)
+
+        # Truncate to smaller content
+        path.write_text(json.dumps({"seq": 99}) + "\n")
+        result = store.read_events(limit=100)
+        assert len(result) == 1
+        assert result[0]["seq"] == 99
+
+    def test_skips_invalid_json_lines(self, store: StateStore, tmp_run_dir: Path) -> None:
+        content = '{"ok":1}\nnot json\n{"ok":2}\n'
+        (tmp_run_dir / "swarm.events.jsonl").write_text(content)
+        result = store.read_events(limit=100)
+        assert len(result) == 2
+
+    def test_caps_in_memory_cache(self, store: StateStore, tmp_run_dir: Path) -> None:
+        store._MAX_CACHED_EVENTS = 10
+        lines = [json.dumps({"seq": i}) for i in range(20)]
+        (tmp_run_dir / "swarm.events.jsonl").write_text("\n".join(lines) + "\n")
+        store.read_events(limit=100)
+        assert len(store._events_cache) == 10  # capped
+
+
+# ── read_agent_box ────────────────────────────────────────────────────
+
+
+class TestReadAgentBox:
+    def test_reads_inbox(self, store: StateStore, tmp_run_dir: Path) -> None:
+        inbox = {"messages": [{"kind": "task_assign"}]}
+        (tmp_run_dir / "agents" / "agent-w1.inbox.json").write_text(json.dumps(inbox))
+        result = store.read_agent_box("w1", "inbox")
+        assert result["messages"][0]["kind"] == "task_assign"
+
+    def test_missing_returns_default(self, store: StateStore) -> None:
+        assert store.read_agent_box("nope", "outbox") == {}
+
+
+# ── build_agent_activity ──────────────────────────────────────────────
+
+
+class TestBuildAgentActivity:
+    def test_known_event_types(self, store: StateStore) -> None:
+        events = [
+            {"type": "spawn", "agent_id": "w1"},
+            {"type": "task.completed", "agent_id": "w2"},
+        ]
+        result = store.build_agent_activity(events)
+        assert result["w1"] == "Starting..."
+        assert result["w2"] == "Completed"
+
+    def test_files_changed(self, store: StateStore) -> None:
+        events = [
+            {
+                "type": "task.files_changed",
+                "payload": {"agent_id": "w1", "files": ["src/a.py", "src/b.py", "src/c.py"]},
+            },
+        ]
+        result = store.build_agent_activity(events)
+        assert "Editing a.py" in result["w1"]
+        assert "+2" in result["w1"]
+
+    def test_fallback_to_message(self, store: StateStore) -> None:
+        events = [
+            {"type": "unknown.type", "agent_id": "w1", "message": "custom msg"},
+        ]
+        result = store.build_agent_activity(events)
+        assert result["w1"] == "custom msg"
+
+    def test_nested_agent_id(self, store: StateStore) -> None:
+        events = [
+            {"type": "spawn", "payload": {"agent_id": "w1"}},
+        ]
+        result = store.build_agent_activity(events)
+        assert result["w1"] == "Starting..."
+
+    def test_empty_events(self, store: StateStore) -> None:
+        assert store.build_agent_activity([]) == {}
+
+
+# ── build_task_detail ─────────────────────────────────────────────────
+
+
+class TestBuildTaskDetail:
+    def test_from_task_file(self, store: StateStore, tmp_run_dir: Path) -> None:
+        task = {
+            "title": "Fix bug",
+            "status": "done",
+            "task_kind": "bugfix",
+            "description": "Fix null pointer",
+            "depends_on": ["t0"],
+            "target_files": ["src/main.py"],
+            "result_summary": "Fixed",
+            "tokens_used": 5000,
+        }
+        (tmp_run_dir / "tasks" / "task-t1.json").write_text(json.dumps(task))
+        result = store.build_task_detail("t1")
+        assert result["title"] == "Fix bug"
+        assert result["status"] == "done"
+        assert result["deps"] == ["t0"]
+        assert result["tokens_used"] == 5000
+
+    def test_fallback_to_dag(self, store: StateStore, tmp_run_dir: Path) -> None:
+        """When per-task file missing, reconstruct from state DAG."""
+        state = {
+            "dag": {
+                "nodes": [{"task_id": "t1", "title": "Research", "status": "pending"}],
+                "edges": [["t0", "t1"]],
+            },
+        }
+        (tmp_run_dir / "swarm.state.json").write_text(json.dumps(state))
+        result = store.build_task_detail("t1")
+        assert result["title"] == "Research"
+        assert result["deps"] == ["t0"]
+
+    def test_missing_task_returns_empty(self, store: StateStore) -> None:
+        assert store.build_task_detail("nonexistent") == {}
+
+    def test_pending_gets_blocked_reason(self, store: StateStore, tmp_run_dir: Path) -> None:
+        task = {"title": "Blocked", "status": "pending", "depends_on": ["dep1"]}
+        (tmp_run_dir / "tasks" / "task-blocked.json").write_text(json.dumps(task))
+        state = {
+            "dag": {
+                "nodes": [
+                    {"task_id": "dep1", "status": "running"},
+                    {"task_id": "blocked", "status": "pending"},
+                ],
+                "edges": [["dep1", "blocked"]],
+            },
+        }
+        (tmp_run_dir / "swarm.state.json").write_text(json.dumps(state))
+        result = store.build_task_detail("blocked", state)
+        assert "running" in result.get("blocked_reason", "").lower()
+
+
+# ── _diagnose_pending ─────────────────────────────────────────────────
+
+
+class TestDiagnosePending:
+    def test_no_deps(self, store: StateStore) -> None:
+        state = {
+            "dag": {"nodes": [{"task_id": "t1", "status": "pending"}], "edges": []},
+        }
+        result = store._diagnose_pending("t1", state)
+        assert "should be ready" in result.lower()
+
+    def test_pending_deps(self, store: StateStore) -> None:
+        state = {
+            "dag": {
+                "nodes": [
+                    {"task_id": "t0", "status": "pending"},
+                    {"task_id": "t1", "status": "pending"},
+                ],
+                "edges": [["t0", "t1"]],
+            },
+        }
+        result = store._diagnose_pending("t1", state)
+        assert "t0" in result
+
+    def test_failed_deps(self, store: StateStore) -> None:
+        state = {
+            "dag": {
+                "nodes": [
+                    {"task_id": "t0", "status": "failed"},
+                    {"task_id": "t1", "status": "pending"},
+                ],
+                "edges": [["t0", "t1"]],
+            },
+        }
+        result = store._diagnose_pending("t1", state)
+        assert "failed" in result.lower()
+
+    def test_swarm_ended_with_pending(self, store: StateStore) -> None:
+        state = {
+            "phase": "completed",
+            "dag": {
+                "nodes": [
+                    {"task_id": "t0", "status": "pending"},
+                    {"task_id": "t1", "status": "pending"},
+                ],
+                "edges": [["t0", "t1"]],
+            },
+        }
+        result = store._diagnose_pending("t1", state)
+        assert "ended" in result.lower()
+
+
+# ── build_per_task_costs ──────────────────────────────────────────────
+
+
+class TestBuildPerTaskCosts:
+    def test_sorted_by_cost_desc(self, store: StateStore) -> None:
+        state = {
+            "dag": {
+                "nodes": [
+                    {"task_id": "t1", "cost_usd": 0.5, "tokens_used": 1000},
+                    {"task_id": "t2", "cost_usd": 1.5, "tokens_used": 3000},
+                    {"task_id": "t3", "cost_usd": 0.1, "tokens_used": 200},
+                ],
+            },
+        }
+        result = store.build_per_task_costs(state)
+        assert len(result) == 3
+        assert result[0]["task_id"] == "t2"
+        assert result[-1]["task_id"] == "t3"
+
+    def test_zero_cost_excluded(self, store: StateStore) -> None:
+        state = {
+            "dag": {"nodes": [{"task_id": "t1", "cost_usd": 0}]},
+        }
+        assert store.build_per_task_costs(state) == []
+
+    def test_empty_dag(self, store: StateStore) -> None:
+        assert store.build_per_task_costs({}) == []
+
+
+# ── read_all_messages ─────────────────────────────────────────────────
+
+
+class TestReadAllMessages:
+    def test_reads_inbox_outbox(self, store: StateStore, tmp_run_dir: Path) -> None:
+        inbox = {
+            "messages": [
+                {"kind": "task_assign", "task_id": "t1", "timestamp": 1000, "payload": {"msg": "go"}},
+            ],
+        }
+        outbox = {
+            "events": [
+                {"type": "task_done", "task_id": "t1", "timestamp": 1001, "payload": {"result": "ok"}},
+            ],
+        }
+        (tmp_run_dir / "agents" / "agent-w1.inbox.json").write_text(json.dumps(inbox))
+        (tmp_run_dir / "agents" / "agent-w1.outbox.json").write_text(json.dumps(outbox))
+
+        result = store.read_all_messages()
+        assert len(result) == 2
+        assert result[0]["direction"] == "coordinator\u2192agent"
+        assert result[1]["direction"] == "agent\u2192coordinator"
+
+    def test_sorted_by_timestamp(self, store: StateStore, tmp_run_dir: Path) -> None:
+        inbox = {
+            "messages": [
+                {"kind": "task_assign", "task_id": "t1", "timestamp": 2000, "payload": {}},
+            ],
+        }
+        outbox = {
+            "events": [
+                {"type": "task_done", "task_id": "t1", "timestamp": 1000, "payload": {}},
+            ],
+        }
+        (tmp_run_dir / "agents" / "agent-w1.inbox.json").write_text(json.dumps(inbox))
+        (tmp_run_dir / "agents" / "agent-w1.outbox.json").write_text(json.dumps(outbox))
+
+        result = store.read_all_messages()
+        assert result[0]["timestamp"] == 1000  # earlier first
+
+    def test_no_agents_dir(self, tmp_path: Path) -> None:
+        s = StateStore(str(tmp_path))
+        assert s.read_all_messages() == []
+
+    def test_caches_result(self, store: StateStore, tmp_run_dir: Path) -> None:
+        inbox = {"messages": [{"kind": "test", "timestamp": 1000, "payload": {}}]}
+        (tmp_run_dir / "agents" / "agent-w1.inbox.json").write_text(json.dumps(inbox))
+
+        first = store.read_all_messages()
+        # Modify file — cache should serve stale
+        (tmp_run_dir / "agents" / "agent-w1.inbox.json").write_text(
+            json.dumps({"messages": [{"kind": "updated", "timestamp": 2000, "payload": {}}]})
+        )
+        second = store.read_all_messages()
+        assert first == second  # cached within TTL
+
+    def test_fallback_to_events(self, store: StateStore, tmp_run_dir: Path) -> None:
+        """When no inbox/outbox files exist, synthesize from events."""
+        events = [
+            json.dumps({"type": "agent.spawned", "agent_id": "w1", "task_id": "t1", "timestamp": 1000}),
+            json.dumps({"type": "task.completed", "agent_id": "w1", "task_id": "t1", "timestamp": 2000}),
+        ]
+        (tmp_run_dir / "swarm.events.jsonl").write_text("\n".join(events) + "\n")
+
+        result = store.read_all_messages()
+        assert len(result) >= 2
 
 
 # ── _parse_edges ──────────────────────────────────────────────────────

@@ -93,8 +93,12 @@ class EventTimeline(Static):
             icon = _EVENT_ICONS.get(etype, "\u2022")
             style = _EVENT_STYLES.get(etype, "dim")
             message = event.get("message", "")
+            agent_id = event.get("agent_id", "")
 
             text.append(f"{time_str} ", style="dim")
+            if agent_id:
+                ac = _agent_color(agent_id)
+                text.append(f"[{agent_id}] ", style=f"{ac} bold")
             text.append(f"[{etype.upper():8s}] ", style=style)
             text.append(f"{icon} ", style=style)
             text.append(f"{message}\n")
@@ -115,7 +119,21 @@ _LOG_COLORS: dict[str, str] = {
     "budget": "magenta",
     "transition": "blue",
     "info": "dim",
+    "warning": "yellow bold",
+    "retry": "yellow",
 }
+
+# Agent color palette — cycle through distinct colors for per-agent coloring
+_AGENT_COLORS: list[str] = ["cyan", "yellow", "magenta", "green", "blue", "red"]
+_agent_color_cache: dict[str, str] = {}
+
+
+def _agent_color(agent_id: str) -> str:
+    """Return a consistent color for a given agent_id."""
+    if agent_id not in _agent_color_cache:
+        idx = len(_agent_color_cache) % len(_AGENT_COLORS)
+        _agent_color_cache[agent_id] = _AGENT_COLORS[idx]
+    return _agent_color_cache[agent_id]
 
 
 class EventsLog(Widget):
@@ -146,6 +164,13 @@ class EventsLog(Widget):
         """Append only new events since last call."""
         if not events:
             return
+        # Reset on truncation (e.g. events file was rewritten)
+        if len(events) < self._seen_count:
+            self._seen_count = 0
+            try:
+                self.query_one("#events-log", RichLog).clear()
+            except Exception:
+                pass
         new_events = events[self._seen_count:]
         if not new_events:
             return
@@ -173,7 +198,8 @@ class EventsLog(Widget):
             line.append(f"{time_str} ", style="dim")
             line.append(f"[{etype.upper():12s}] ", style=color)
             if agent_id:
-                line.append(f"{agent_id} ", style="cyan dim")
+                ac = _agent_color(agent_id)
+                line.append(f"{agent_id} ", style=f"{ac} bold")
             if task_id:
                 line.append(f"{task_id} ", style="green dim")
             line.append(message)

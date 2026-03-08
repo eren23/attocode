@@ -24,6 +24,44 @@ from attoswarm.tui.app import AttoswarmApp
 
 logger = logging.getLogger(__name__)
 
+# ── Activity label parsing for agent stdout ──────────────────────────
+
+_ACTIVITY_PATTERNS: list[tuple[re.Pattern[str], str]] = [
+    (re.compile(r"(?:Read|Reading)\s+(?:tool\s+)?['\"]?(\S+)", re.IGNORECASE), "Reading {0}"),
+    (re.compile(r"(?:Edit|Editing)\s+(?:tool\s+)?['\"]?(\S+)", re.IGNORECASE), "Editing {0}"),
+    (re.compile(r"(?:Write|Writing)\s+(?:tool\s+)?['\"]?(\S+)", re.IGNORECASE), "Writing {0}"),
+    (re.compile(r"(?:Bash|Running)\s+(?:tool\s+)?['\"]?(.+?)(?:['\"]|$)", re.IGNORECASE), "Running {0}"),
+    (re.compile(r"(?:Grep|Searching)\s+(?:for\s+)?['\"]?(\S+)", re.IGNORECASE), "Searching {0}"),
+    (re.compile(r"(?:Glob|Finding)\s+['\"]?(\S+)", re.IGNORECASE), "Finding {0}"),
+]
+
+
+def _parse_activity_label(line: str) -> str:
+    """Extract a human-readable activity label from a stdout line."""
+    line = line.strip()
+    if not line:
+        return ""
+    for pattern, template in _ACTIVITY_PATTERNS:
+        m = pattern.search(line)
+        if m:
+            target = m.group(1)[:60]
+            # Shorten file paths
+            if "/" in target:
+                target = target.rsplit("/", 1)[-1]
+            return template.format(target)
+    return ""
+
+
+def _write_activity(run_dir: str, task_id: str, label: str) -> None:
+    """Write a current-activity sidecar file for TUI consumption."""
+    try:
+        p = Path(run_dir) / "agents" / f"agent-{task_id}.activity.txt"
+        p.parent.mkdir(parents=True, exist_ok=True)
+        p.write_text(label, encoding="utf-8")
+    except Exception:
+        pass
+
+
 # Env vars that interfere with nested agent processes (e.g. running from
 # within Claude Code would set CLAUDECODE=1 causing claude subprocess to
 # refuse with "cannot launch inside another session").
@@ -130,10 +168,39 @@ def _make_subprocess_spawn_fn(cfg: SwarmYamlConfig):  # noqa: ANN202
                 start_new_session=True,
             )
             worker_timeout = max(cfg.run.max_runtime_seconds or 600, 600)
-            stdout_bytes, stderr_bytes = await asyncio.wait_for(
-                proc.communicate(),
-                timeout=worker_timeout,
-            )
+
+            # Stream stdout to capture activity labels
+            async def _read_stdout() -> bytes:
+                assert proc.stdout is not None
+                buf = bytearray()
+                while True:
+                    chunk = await proc.stdout.read(4096)
+                    if not chunk:
+                        break
+                    buf.extend(chunk)
+                    # Parse lines for tool-call activity patterns
+                    text = chunk.decode("utf-8", errors="replace")
+                    for line in text.splitlines():
+                        label = _parse_activity_label(line)
+                        if label:
+                            # Write activity to a sidecar file for TUI
+                            _write_activity(cfg.run.run_dir, task["task_id"], label)
+                return bytes(buf)
+
+            async def _read_stderr() -> bytes:
+                assert proc.stderr is not None
+                return await proc.stderr.read()
+
+            try:
+                stdout_bytes, stderr_bytes = await asyncio.wait_for(
+                    asyncio.gather(_read_stdout(), _read_stderr()),
+                    timeout=worker_timeout,
+                )
+            except asyncio.TimeoutError:
+                proc.kill()
+                raise
+
+            await proc.wait()
             elapsed = _time.monotonic() - t0
             stdout_text = (stdout_bytes or b"").decode("utf-8", errors="replace")
             stderr_text = (stderr_bytes or b"").decode("utf-8", errors="replace")
@@ -431,6 +498,12 @@ def run_command(
     default=None,
     help="Override workspace mode: 'shared' (AoT+OCC) or 'worktree' (legacy)",
 )
+@click.option(
+    "--tasks-file",
+    type=click.Path(exists=True, dir_okay=False, path_type=Path),
+    default=None,
+    help="Pre-defined task decomposition file (YAML or Markdown)",
+)
 def start_command(
     config_path: Path,
     goal: tuple[str, ...],
@@ -441,6 +514,7 @@ def start_command(
     skip_doctor: bool,
     debug_flag: bool,
     workspace_mode: str | None,
+    tasks_file: Path | None,
 ) -> None:
     """Single launcher: run coordinator and monitor with one command."""
     cfg = load_swarm_yaml(config_path)
@@ -453,6 +527,14 @@ def start_command(
     goal_text = " ".join(goal).strip()
     if not goal_text:
         raise click.ClickException("Goal text is required")
+
+    # Copy tasks file into run dir for orchestrator auto-detection
+    if tasks_file:
+        run_path = Path(cfg.run.run_dir)
+        run_path.mkdir(parents=True, exist_ok=True)
+        dest = run_path / f"tasks{tasks_file.suffix}"
+        shutil.copy2(tasks_file, dest)
+        click.echo(f"Tasks file copied to {dest}")
 
     if not skip_doctor:
         rows = _doctor_rows(cfg)
@@ -531,19 +613,53 @@ def tui_command(run_dir: Path) -> None:
 
 @main.command("resume")
 @click.argument("run_dir", type=click.Path(exists=True, file_okay=False, path_type=Path))
-def resume_command(run_dir: Path) -> None:
+@click.option(
+    "--workspace-mode",
+    type=click.Choice(["shared", "worktree"]),
+    default=None,
+    help="Override workspace mode: 'shared' (AoT+OCC) or 'worktree' (legacy)",
+)
+def resume_command(run_dir: Path, workspace_mode: str | None) -> None:
     """Resume execution from an existing run directory."""
-    manifest = run_dir / "swarm.manifest.json"
-    if not manifest.exists():
-        raise click.ClickException(f"Missing manifest: {manifest}")
-    cfg = (
-        load_swarm_yaml(run_dir / "swarm.yaml")
-        if (run_dir / "swarm.yaml").exists()
-        else SwarmYamlConfig()
-    )
+    manifest_path = run_dir / "swarm.manifest.json"
+    state_path = run_dir / "swarm.state.json"
+    if not manifest_path.exists() and not state_path.exists():
+        raise click.ClickException(
+            f"No manifest or state found in {run_dir}. Is this a valid run directory?"
+        )
+
+    # Try config from run dir, then parent, then defaults
+    cfg_path = run_dir / "swarm.yaml"
+    if not cfg_path.exists():
+        # Check parent dirs for the original config
+        for candidate in [
+            run_dir.parent.parent / ".attocode" / "swarm.hybrid.yaml",
+            Path.cwd() / ".attocode" / "swarm.hybrid.yaml",
+        ]:
+            if candidate.exists():
+                cfg_path = candidate
+                break
+    cfg = load_swarm_yaml(cfg_path) if cfg_path.exists() else SwarmYamlConfig()
     cfg.run.run_dir = str(run_dir)
-    goal = read_json(manifest, default={}).get("goal", "Resume swarm run")
-    code = asyncio.run(HybridCoordinator(cfg, str(goal), resume=True).run())
+    if workspace_mode:
+        cfg.workspace.mode = workspace_mode
+
+    # Read goal from manifest or state
+    manifest_data = read_json(manifest_path, default={})
+    goal = manifest_data.get("goal", "")
+    if not goal:
+        state_data = read_json(state_path, default={})
+        goal = state_data.get("goal", "Resume swarm run")
+
+    if cfg.workspace.mode == "shared":
+        from attoswarm.coordinator.orchestrator import SwarmOrchestrator
+        code = asyncio.run(SwarmOrchestrator(
+            cfg, str(goal), resume=True,
+            decompose_fn=_make_subprocess_decompose_fn(cfg),
+            spawn_fn=_make_subprocess_spawn_fn(cfg),
+        ).run())
+    else:
+        code = asyncio.run(HybridCoordinator(cfg, str(goal), resume=True).run())
     raise SystemExit(code)
 
 
@@ -682,7 +798,7 @@ def init_command(target_dir: Path | None, profile: str | None, mode: str | None)
     if click.confirm("\nConfigure advanced settings?", default=False):
         decomposition = click.prompt(
             "Decomposition strategy",
-            type=click.Choice(["llm", "parallel", "heuristic", "fast"]),
+            type=click.Choice(["llm", "parallel", "heuristic", "fast", "file"]),
             default="llm",
         )
         max_tasks = click.prompt("Max tasks", type=int, default=20)
@@ -854,6 +970,10 @@ def init_command(target_dir: Path | None, profile: str | None, mode: str | None)
     path.write_text(yaml_text, encoding="utf-8")
     click.echo(f"\nCreated {path}")
 
+    # --- Optional task decomposition file ---
+    if click.confirm("\nCreate a task decomposition file? (for manual task control)", default=False):
+        _interactive_task_builder(base, cfg=config)
+
     # --- Demo scaffold ---
     if mode == "demo":
         tasks_dir = base / "tasks"
@@ -892,6 +1012,201 @@ def init_command(target_dir: Path | None, profile: str | None, mode: str | None)
     click.echo(f"  attocode swarm start {path} \"Implement a feature with tests\"")
     click.echo(f"  attocode swarm doctor {path}")
     click.echo("  attocode swarm monitor .agent/hybrid-swarm")
+
+
+def _interactive_task_builder(base_dir: Path, cfg: dict[str, Any]) -> None:
+    """Guide the user through creating a task decomposition file."""
+    import yaml as _yaml
+
+    _has_api_key = bool(
+        os.environ.get("ANTHROPIC_API_KEY")
+        or os.environ.get("OPENROUTER_API_KEY")
+        or os.environ.get("OPENAI_API_KEY")
+    )
+
+    click.echo("\nHow would you like to create tasks?")
+    click.echo("  [1] Manual - define tasks one by one")
+    if _has_api_key:
+        click.echo("  [2] AI-assisted - describe your goal and let AI decompose it")
+    choices = ["1", "2"] if _has_api_key else ["1"]
+    method = click.prompt("Select method", type=click.Choice(choices), default="1")
+
+    if method == "2" and _has_api_key:
+        tasks = _ai_assisted_task_builder(base_dir, cfg)
+    else:
+        tasks = _manual_task_builder()
+
+    if not tasks:
+        click.echo("No tasks created.")
+        return
+
+    # Choose output format
+    click.echo("\nSave as:")
+    click.echo("  [1] YAML (tasks/tasks.yaml) - structured, machine-friendly")
+    click.echo("  [2] Markdown (tasks/tasks.md) - human-friendly, easy to edit")
+    fmt = click.prompt("Select format", type=click.Choice(["1", "2"]), default="1")
+
+    tasks_dir = base_dir / "tasks"
+    tasks_dir.mkdir(parents=True, exist_ok=True)
+
+    if fmt == "1":
+        out_path = tasks_dir / "tasks.yaml"
+        yaml_text = _yaml.dump(
+            {"tasks": tasks},
+            default_flow_style=False,
+            sort_keys=False,
+            allow_unicode=True,
+        )
+        out_path.write_text(yaml_text, encoding="utf-8")
+    else:
+        out_path = tasks_dir / "tasks.md"
+        md_lines: list[str] = []
+        for t in tasks:
+            md_lines.append(f"## {t['task_id']}: {t['title']}")
+            md_lines.append(f"Kind: {t.get('task_kind', 'implement')}")
+            if t.get("role_hint"):
+                md_lines.append(f"Role: {t['role_hint']}")
+            if t.get("deps"):
+                md_lines.append(f"Depends on: {', '.join(t['deps'])}")
+            if t.get("target_files"):
+                md_lines.append(f"Target files: {', '.join(t['target_files'])}")
+            md_lines.append("")
+            md_lines.append(t.get("description", ""))
+            md_lines.append("")
+        out_path.write_text("\n".join(md_lines), encoding="utf-8")
+
+    click.echo(f"Created {out_path}")
+    click.echo(f"Use with: attoswarm start <config> --tasks-file {out_path} \"<goal>\"")
+
+
+def _manual_task_builder() -> list[dict[str, Any]]:
+    """Interactively define tasks one by one."""
+    tasks: list[dict[str, Any]] = []
+    task_num = 0
+
+    while True:
+        task_num += 1
+        default_id = f"task-{task_num}"
+        click.echo(f"\n--- Task {task_num} ---")
+        task_id = click.prompt("Task ID", default=default_id)
+        title = click.prompt("Title")
+
+        click.echo("Description (empty line to finish):")
+        desc_lines: list[str] = []
+        while True:
+            line = click.prompt("", default="", prompt_suffix="")
+            if not line:
+                break
+            desc_lines.append(line)
+        description = "\n".join(desc_lines)
+
+        task_kind = click.prompt(
+            "Kind",
+            type=click.Choice(["implement", "test", "integrate", "analysis", "design"]),
+            default="implement",
+        )
+
+        target_files_str = click.prompt("Target files (comma-separated, optional)", default="")
+        target_files = [f.strip() for f in target_files_str.split(",") if f.strip()] if target_files_str else []
+
+        # Show existing task IDs for dep selection
+        existing_ids = [t["task_id"] for t in tasks]
+        deps: list[str] = []
+        if existing_ids:
+            deps_str = click.prompt(
+                f"Dependencies (from: {', '.join(existing_ids)}, comma-separated, optional)",
+                default="",
+            )
+            deps = [d.strip() for d in deps_str.split(",") if d.strip()] if deps_str else []
+
+        tasks.append({
+            "task_id": task_id,
+            "title": title,
+            "description": description,
+            "task_kind": task_kind,
+            "target_files": target_files,
+            "deps": deps,
+        })
+
+        if not click.confirm("Add another task?", default=True):
+            break
+
+    return tasks
+
+
+def _ai_assisted_task_builder(base_dir: Path, cfg: dict[str, Any]) -> list[dict[str, Any]]:
+    """Use LLM to decompose a goal into tasks."""
+    click.echo("\nDescribe your goal (empty line to finish):")
+    goal_lines: list[str] = []
+    while True:
+        line = click.prompt("", default="", prompt_suffix="")
+        if not line:
+            break
+        goal_lines.append(line)
+    goal_text = "\n".join(goal_lines)
+    if not goal_text.strip():
+        click.echo("No goal provided.")
+        return []
+
+    # Try to load config and call backend
+    try:
+        from attoswarm.config.loader import load_swarm_yaml as _load
+        from attoswarm.coordinator.decompose import build_decompose_prompt, classify_goal_complexity
+        from attoswarm.coordinator.task_parser import extract_json_array
+
+        # Determine backend from roles config
+        roles = cfg.get("roles", [])
+        orch_role = next((r for r in roles if r.get("role_type") == "orchestrator"), None)
+        if orch_role:
+            backend = orch_role.get("backend", "claude")
+            model = orch_role.get("model", "")
+        elif roles:
+            backend = roles[0].get("backend", "claude")
+            model = roles[0].get("model", "")
+        else:
+            backend = "claude"
+            model = ""
+
+        complexity = classify_goal_complexity(goal_text)
+        prompt = build_decompose_prompt(goal_text, complexity=complexity)
+        cmd = _build_backend_cmd(backend, model, prompt)
+
+        clean_env = {k: v for k, v in os.environ.items() if k not in _STRIP_ENV_VARS}
+        click.echo("Calling AI to decompose goal...")
+        proc = subprocess.run(
+            cmd,
+            capture_output=True,
+            text=True,
+            timeout=120,
+            cwd=str(base_dir),
+            env=clean_env,
+        )
+
+        if proc.returncode != 0:
+            raise RuntimeError(f"Backend exited with code {proc.returncode}: {proc.stderr[:300]}")
+
+        raw_tasks = extract_json_array(proc.stdout)
+
+        # Display proposed tasks
+        click.echo(f"\nProposed {len(raw_tasks)} tasks:")
+        for i, t in enumerate(raw_tasks, 1):
+            deps_str = f" (deps: {', '.join(t.get('deps', []))})" if t.get("deps") else ""
+            click.echo(f"  {i}. [{t.get('task_kind', 'implement')}] {t.get('task_id', '?')}: {t.get('title', '?')}{deps_str}")
+
+        choice = click.prompt("Accept these tasks?", type=click.Choice(["y", "edit", "n"]), default="y")
+        if choice == "y":
+            return raw_tasks
+        elif choice == "edit":
+            click.echo("Tasks saved as draft. Edit the file and re-run.")
+            return raw_tasks
+        else:
+            click.echo("Falling back to manual builder.")
+            return _manual_task_builder()
+
+    except Exception as exc:
+        click.echo(f"AI decomposition failed: {exc}")
+        click.echo("Falling back to manual builder.")
+        return _manual_task_builder()
 
 
 if __name__ == "__main__":

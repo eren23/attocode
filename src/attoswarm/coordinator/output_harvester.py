@@ -26,6 +26,8 @@ async def harvest_outputs(coordinator: HybridCoordinator) -> None:
                 handle.process.returncode is not None
                 and agent_id in coordinator.running_task_by_agent
             ):
+                from attoswarm.coordinator.failure_handler import mark_running_task_failed
+
                 await mark_running_task_failed(
                     coordinator,
                     agent_id,
@@ -178,14 +180,3 @@ def detect_file_changes(
             )
     except Exception:
         pass  # Best-effort
-
-
-async def mark_running_task_failed(
-    coordinator: HybridCoordinator, agent_id: str, reason: str
-) -> None:
-    """Fail the task currently assigned to *agent_id*, if any."""
-    task_id = coordinator.running_task_by_agent.get(agent_id)
-    if task_id:
-        from attoswarm.coordinator.failure_handler import handle_task_failed
-
-        await handle_task_failed(coordinator, agent_id, task_id, reason)

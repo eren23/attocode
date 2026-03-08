@@ -153,18 +153,20 @@ class AgentGrid(Widget):
         except Exception:
             return
 
-        # Clear existing cards
-        row.remove_children()
-
         if not agents:
+            row.remove_children()
             row.mount(Static(Text("No active agents", style="dim italic")))
             return
 
+        # Build lookup of existing cards by agent_id
+        existing: dict[str, AgentCard] = {
+            c.agent_id: c for c in row.query(AgentCard)
+        }
+        new_ids: set[str] = set()
+
         for agent in agents:
-            # Event bridge uses "worker_name"; fallback to "agent_id"
             agent_id = agent.get("worker_name") or agent.get("agent_id", "?")
-            card = AgentCard(agent_id=agent_id)
-            row.mount(card)
+            new_ids.add(agent_id)
 
             # Compute elapsed string from started_at timestamp
             elapsed_str = agent.get("elapsed", "")
@@ -175,14 +177,36 @@ class AgentGrid(Widget):
                     secs = int(_time.time() - started_at)
                     elapsed_str = f"{secs}s" if secs < 60 else f"{secs // 60}m{secs % 60:02d}s"
 
-            card.update_data(
-                status=agent.get("status", "running" if agent.get("task_id") else "idle"),
-                task_id=agent.get("task_id", ""),
-                model=agent.get("model", ""),
-                tokens=agent.get("tokens_used", 0),
-                elapsed=elapsed_str,
-                task_title=agent.get("task_title", ""),
-            )
+            status = agent.get("status", "running" if agent.get("task_id") else "idle")
+            task_id = agent.get("task_id", "")
+            model = agent.get("model", "")
+            tokens = agent.get("tokens_used", 0)
+            task_title = agent.get("task_title", "")
+
+            if agent_id in existing:
+                # Update in-place (no DOM ops)
+                existing[agent_id].update_data(
+                    status=status, task_id=task_id, model=model,
+                    tokens=tokens, elapsed=elapsed_str, task_title=task_title,
+                )
+            else:
+                # Mount new card
+                # Remove "no agents" placeholder if present (exact type, not isinstance,
+                # because AgentCard is a subclass of Static)
+                for child in list(row.children):
+                    if type(child) is Static:
+                        child.remove()
+                card = AgentCard(agent_id=agent_id)
+                row.mount(card)
+                card.update_data(
+                    status=status, task_id=task_id, model=model,
+                    tokens=tokens, elapsed=elapsed_str, task_title=task_title,
+                )
+
+        # Remove departed agent cards
+        for aid, card in existing.items():
+            if aid not in new_ids:
+                card.remove()
 
 
 _AGENT_STATUS_ICONS = {
