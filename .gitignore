@@ -37,3 +37,7 @@ legacy/.attocode/recordings/
 # Build outputs
 site/
 snapshot_report.html
+.internal
+
+# scripts
+scripts/

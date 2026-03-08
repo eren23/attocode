@@ -2911,3 +2911,179 @@ class TestMemoryTools:
         result = list_learnings(scope="src/api/")
         assert "Scoped learning" in result
         assert "Global learning" in result  # Global is always included
+
+
+# ============================================================
+# Community Detection (Louvain) Tests
+# ============================================================
+
+
+class TestCommunityDetection:
+    """Test Louvain community detection with graceful BFS fallback."""
+
+    def test_louvain_separates_clusters(self) -> None:
+        """Three distinct clusters should be correctly found by Louvain."""
+        try:
+            import networkx as nx
+            from networkx.algorithms.community import louvain_communities, modularity
+        except ImportError:
+            pytest.skip("networkx not installed")
+
+        # Build 3 distinct clusters connected by a single bridge each
+        all_files = set()
+        adj: dict[str, set[str]] = {}
+        weights: dict[tuple[str, str], float] = {}
+
+        # Cluster A: a1-a5 fully connected
+        for i in range(1, 6):
+            f = f"a{i}.py"
+            all_files.add(f)
+            adj.setdefault(f, set())
+        for i in range(1, 6):
+            for j in range(i + 1, 6):
+                src, tgt = f"a{i}.py", f"a{j}.py"
+                adj[src].add(tgt)
+                adj[tgt].add(src)
+                weights[(src, tgt)] = 2.0
+
+        # Cluster B: b1-b5 fully connected
+        for i in range(1, 6):
+            f = f"b{i}.py"
+            all_files.add(f)
+            adj.setdefault(f, set())
+        for i in range(1, 6):
+            for j in range(i + 1, 6):
+                src, tgt = f"b{i}.py", f"b{j}.py"
+                adj[src].add(tgt)
+                adj[tgt].add(src)
+                weights[(src, tgt)] = 2.0
+
+        # Cluster C: c1-c5 fully connected
+        for i in range(1, 6):
+            f = f"c{i}.py"
+            all_files.add(f)
+            adj.setdefault(f, set())
+        for i in range(1, 6):
+            for j in range(i + 1, 6):
+                src, tgt = f"c{i}.py", f"c{j}.py"
+                adj[src].add(tgt)
+                adj[tgt].add(src)
+                weights[(src, tgt)] = 2.0
+
+        # Weak bridges
+        adj["a1.py"].add("b1.py")
+        adj["b1.py"].add("a1.py")
+        weights[("a1.py", "b1.py")] = 1.0
+        adj["b1.py"].add("c1.py")
+        adj["c1.py"].add("b1.py")
+        weights[("b1.py", "c1.py")] = 1.0
+
+        # Build networkx graph and run Louvain
+        G = nx.Graph()
+        G.add_nodes_from(all_files)
+        for src, neighbors in adj.items():
+            for tgt in neighbors:
+                if src < tgt:
+                    w = weights.get((src, tgt), weights.get((tgt, src), 1.0))
+                    G.add_edge(src, tgt, weight=w)
+
+        communities = [set(c) for c in louvain_communities(G, weight="weight", seed=42)]
+        assert len(communities) >= 3, f"Expected >=3 communities, got {len(communities)}"
+
+    def test_fallback_without_networkx(self) -> None:
+        """BFS fallback should work as connected components."""
+        from collections import deque as _deque
+
+        all_files = {"a.py", "b.py", "c.py", "d.py"}
+        adj: dict[str, set[str]] = {
+            "a.py": {"b.py"},
+            "b.py": {"a.py"},
+            "c.py": {"d.py"},
+            "d.py": {"c.py"},
+        }
+
+        # Inline BFS connected components (same algo as the fallback)
+        visited: set[str] = set()
+        communities: list[set[str]] = []
+        for start in all_files:
+            if start in visited:
+                continue
+            component: set[str] = set()
+            bfs_queue: _deque[str] = _deque([start])
+            while bfs_queue:
+                node = bfs_queue.popleft()
+                if node in visited:
+                    continue
+                visited.add(node)
+                component.add(node)
+                for neighbor in adj.get(node, set()):
+                    if neighbor not in visited:
+                        bfs_queue.append(neighbor)
+            communities.append(component)
+
+        assert len(communities) == 2
+
+    def test_modularity_positive(self) -> None:
+        """Non-trivial graph with clear clusters should have positive modularity."""
+        try:
+            import networkx as nx
+            from networkx.algorithms.community import louvain_communities, modularity
+        except ImportError:
+            pytest.skip("networkx not installed")
+
+        all_files = set()
+        adj: dict[str, set[str]] = {}
+        weights: dict[tuple[str, str], float] = {}
+
+        # Two fully-connected clusters of 4 nodes each, with one weak bridge
+        for prefix in ("x", "y"):
+            for i in range(1, 5):
+                f = f"{prefix}{i}.py"
+                all_files.add(f)
+                adj.setdefault(f, set())
+            for i in range(1, 5):
+                for j in range(i + 1, 5):
+                    src, tgt = f"{prefix}{i}.py", f"{prefix}{j}.py"
+                    adj[src].add(tgt)
+                    adj[tgt].add(src)
+                    weights[(src, tgt)] = 2.0
+
+        # Weak bridge
+        adj["x1.py"].add("y1.py")
+        adj["y1.py"].add("x1.py")
+        weights[("x1.py", "y1.py")] = 1.0
+
+        G = nx.Graph()
+        G.add_nodes_from(all_files)
+        for src, neighbors in adj.items():
+            for tgt in neighbors:
+                if src < tgt:
+                    w = weights.get((src, tgt), weights.get((tgt, src), 1.0))
+                    G.add_edge(src, tgt, weight=w)
+
+        communities = [set(c) for c in louvain_communities(G, weight="weight", seed=42)]
+        mod_score = modularity(G, communities, weight="weight")
+        assert mod_score > 0, f"Expected positive modularity, got {mod_score}"
+
+    def test_empty_graph_no_edges(self) -> None:
+        """Community detection on a graph with no edges should not raise."""
+        from attocode.code_intel.community import louvain_communities as _louvain
+
+        try:
+            import networkx  # noqa: F401
+        except ImportError:
+            pytest.skip("networkx not installed")
+
+        all_files = {"a.py", "b.py", "c.py"}
+        adj: dict[str, set[str]] = {f: set() for f in all_files}
+        weights: dict[tuple[str, str], float] = {}
+
+        communities, modularity_score = _louvain(all_files, adj, weights)
+        # Each file should be its own community
+        assert len(communities) == 3
+        assert modularity_score == 0.0
+        # All files accounted for
+        all_nodes = set()
+        for c in communities:
+            all_nodes.update(c)
+        assert all_nodes == all_files

@@ -409,6 +409,8 @@ class CodeIntelService:
         return "\n".join(lines)
 
     def community_detection(self, min_community_size: int = 3, max_communities: int = 20) -> str:
+        from collections import Counter as _Counter
+
         svc = self._get_ast_service()
         idx = svc._index
 
@@ -418,42 +420,53 @@ class CodeIntelService:
         all_files.update(f for deps in idx.file_dependencies.values() for f in deps)
 
         adj: dict[str, set[str]] = {f: set() for f in all_files}
+        weights: dict[tuple[str, str], float] = {}
         for src, deps in idx.file_dependencies.items():
             for tgt in deps:
                 adj.setdefault(src, set()).add(tgt)
                 adj.setdefault(tgt, set()).add(src)
+                key = (min(src, tgt), max(src, tgt))
+                is_bidi = tgt in idx.file_dependencies and src in idx.file_dependencies.get(tgt, set())
+                weights[key] = 2.0 if is_bidi else 1.0
 
-        visited: set[str] = set()
-        communities: list[set[str]] = []
-        for start in all_files:
-            if start in visited:
-                continue
-            component: set[str] = set()
-            bfs_queue: deque[str] = deque([start])
-            while bfs_queue:
-                node = bfs_queue.popleft()
-                if node in visited:
-                    continue
-                visited.add(node)
-                component.add(node)
-                for neighbor in adj.get(node, set()):
-                    if neighbor not in visited:
-                        bfs_queue.append(neighbor)
-            communities.append(component)
+        # Try Louvain, fall back to BFS connected components
+        try:
+            from attocode.code_intel.community import louvain_communities as _louvain
+            communities, modularity_score = _louvain(all_files, adj, weights)
+            method = "louvain"
+        except ImportError:
+            from attocode.code_intel.community import bfs_connected_components
+            communities, modularity_score = bfs_connected_components(all_files, adj)
+            method = "connected-components"
 
         communities.sort(key=len, reverse=True)
         communities = [c for c in communities if len(c) >= min_community_size][:max_communities]
 
-        lines = [f"Community detection: {len(communities)} communities (min size {min_community_size})"]
+        lines = [
+            f"Community detection ({method}): {len(communities)} communities "
+            f"(min size {min_community_size}, modularity={modularity_score:.3f})"
+        ]
         for i, community in enumerate(communities, 1):
-            lines.append(f"\n  Community {i} ({len(community)} files):")
-            hub = max(community, key=lambda f: len(adj.get(f, set())))
-            hub_degree = len(adj.get(hub, set()))
-            lines.append(f"    Hub: {hub} (degree {hub_degree})")
+            dirs = [os.path.dirname(f) for f in community if os.path.dirname(f)]
+            theme = _Counter(dirs).most_common(1)[0][0] if dirs else "(root)"
+
+            internal_edges = sum(
+                1 for f in community for n in adj.get(f, set()) if n in community
+            ) // 2
+            external_edges = sum(
+                1 for f in community for n in adj.get(f, set()) if n not in community
+            )
+
+            def _int_deg(f: str) -> int:
+                return sum(1 for n in adj.get(f, set()) if n in community)
+
+            hub = max(community, key=_int_deg)
+            lines.append(f"\n  Community {i} ({len(community)} files) — theme: {theme}")
+            lines.append(f"    Internal edges: {internal_edges}, External edges: {external_edges}")
+            lines.append(f"    Hub: {hub} (internal degree {_int_deg(hub)})")
             sample = sorted(community)[:5]
             for f in sample:
-                degree = len(adj.get(f, set()))
-                lines.append(f"    - {f} (degree {degree})")
+                lines.append(f"    - {f} (internal degree {_int_deg(f)})")
             if len(community) > 5:
                 lines.append(f"    ... and {len(community) - 5} more")
         return "\n".join(lines)
@@ -553,8 +566,8 @@ class CodeIntelService:
         return header_text + "\n".join(sections)
 
     def project_summary(self, max_tokens: int = 4000) -> str:
-        # Import the synthesis helpers from server module
-        from attocode.code_intel.server import (
+        # Import the synthesis helpers from helpers module
+        from attocode.code_intel.helpers import (
             _classify_layers,
             _detect_build_system,
             _detect_project_name,
@@ -647,7 +660,7 @@ class CodeIntelService:
         return "\n\n".join(output_parts)
 
     def bootstrap(self, task_hint: str = "", max_tokens: int = 8000) -> str:
-        from attocode.code_intel.server import _analyze_conventions, _format_conventions
+        from attocode.code_intel.helpers import _analyze_conventions, _format_conventions
 
         ctx = self._get_context_mgr()
         files = ctx._files
@@ -746,7 +759,7 @@ class CodeIntelService:
         return "\n\n".join(sections)
 
     def hotspots(self, top_n: int = 15) -> str:
-        from attocode.code_intel.server import _compute_file_metrics, _compute_function_hotspots
+        from attocode.code_intel.helpers import _compute_file_metrics, _compute_function_hotspots
 
         ctx = self._get_context_mgr()
         files = ctx._files
@@ -799,7 +812,7 @@ class CodeIntelService:
         return "\n".join(lines)
 
     def conventions(self, sample_size: int = 50, path: str = "") -> str:
-        from attocode.code_intel.server import _analyze_conventions, _format_conventions
+        from attocode.code_intel.helpers import _analyze_conventions, _format_conventions
 
         svc = self._get_ast_service()
         ast_cache = svc._ast_cache
@@ -985,6 +998,38 @@ class CodeIntelService:
         mgr = self._get_semantic_search()
         results = mgr.search(query, top_k=top_k, file_filter=file_filter)
         return mgr.format_results(results)
+
+    def start_indexing(self) -> dict:
+        """Start background embedding indexing."""
+        mgr = self._get_semantic_search()
+        progress = mgr.start_background_indexing()
+        return {
+            "provider": mgr.provider_name,
+            "available": mgr.is_available,
+            "status": progress.status,
+            "total_files": progress.total_files,
+            "indexed_files": progress.indexed_files,
+            "failed_files": progress.failed_files,
+            "coverage": progress.coverage,
+            "elapsed_seconds": progress.elapsed_seconds,
+            "vector_search_active": mgr.is_index_ready(),
+        }
+
+    def indexing_status(self) -> dict:
+        """Get current indexing status."""
+        mgr = self._get_semantic_search()
+        progress = mgr.get_index_progress()
+        return {
+            "provider": mgr.provider_name,
+            "available": mgr.is_available,
+            "status": progress.status,
+            "total_files": progress.total_files,
+            "indexed_files": progress.indexed_files,
+            "failed_files": progress.failed_files,
+            "coverage": progress.coverage,
+            "elapsed_seconds": progress.elapsed_seconds,
+            "vector_search_active": mgr.is_index_ready(),
+        }
 
     def recall(self, query: str, scope: str = "", max_results: int = 10) -> str:
         store = self._get_memory_store()

@@ -7,6 +7,53 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.18] - 2026-03-08
+
+### Added
+
+- **Multi-language AST parsers** — regex-based parsers for Rust (structs, enums, traits, impl blocks, `use`/`mod`), Go (`func`, `type`, `import`), Java (classes, interfaces, `import`), Ruby (`class`, `module`, `def`, `require`), and C/C++ (`#include`, functions, structs, enums)
+- **Multi-language dependency graph resolvers** — `_resolve_rust_import()` (handles `crate::`, `self::`, `super::`, `mod` declarations), `_resolve_go_import()`, `_resolve_java_import()` (package→path conversion), `_resolve_ruby_import()`, `_resolve_c_import()` (`#include` header resolution)
+- **Dynamic file cap** (`_compute_dynamic_cap()`) — replaces fixed 2,000-file cap with repo-aware scaling: <1K source files → no cap, 1K–5K → cap at source count, 5K–20K → cap at 5,000, 20K+ → cap at 10,000
+- **Importance-scored file selection** — files scored by type (source > config > docs > tests) and proximity to project root before truncation, replacing naive filesystem-order cutoff
+- **Embedding index HTTP API** — `POST /index` and `GET /index/status` endpoints with `IndexStatusResponse` Pydantic model (9 fields: provider, available, status, total/indexed/failed files, coverage, elapsed, vector_search_active)
+- **`semantic_search_status` MCP tool** — reports provider, coverage, indexing status, and vector search readiness
+- **Community detection shared module** (`code_intel/community.py`) — `louvain_communities()` and `bfs_connected_components()` extracted from duplicate implementations
+- **`ASTService.get_symbol_names()`** — public API for symbol name lookup (replaces direct `_ast_cache` access)
+- **`networkx` optional dependency** — `graph` extra and included in `code-intel` extra
+- **CLI `--timeout` flag** for `code-intel index --background` (default 30 min, prevents indefinite hang)
+
+### Changed
+
+- **`LANG_EXTENSIONS`** — added `.c`, `.h`, `.cpp`, `.hpp`, `.cc`, `.cxx` mappings
+- **`_collect_files()`** — now applies importance scoring and dynamic cap instead of hard 2,000-file limit
+- **Two-stage search RRF fusion** — keyword results now use composite IDs (`func:path:name`) matching vector key space; fixes silent dropping of keyword-only results during merge
+- **`start_indexing()` API response** — returns all 9 `IndexStatusResponse` fields (was only 4)
+- **`get_index_progress()`** — caches `total_files` to avoid expensive `CodebaseContextManager` re-creation on every polling call; returns thread-safe snapshot copies
+
+### Fixed
+
+- **FastAPI `class FastAPI` not found** — `fastapi/` directory was excluded by old fixed cap that favored `docs_src/` and `tests/` by filesystem order; dynamic cap + importance scoring now keeps source files
+- **FastAPI dependency graph empty** — `applications.py` and `routing.py` had no dependency edges because only Python imports were resolved within the capped file set
+- **FastAPI `routing.py` symbols empty** — file was excluded by old cap; now included via importance scoring
+- **Deno `worker.rs` symbols empty** — no Rust parser existed; new `parse_rust()` extracts structs, enums, traits, impl blocks, functions
+- **Deno Rust files not dependency-graphed** — `_resolve_rust_import()` now resolves `use`/`mod` statements to file paths
+- **RRF key space mismatch** — vector results keyed by `func:path:name`, keyword results keyed by `file_path` — keyword-only hits were silently dropped from merged output
+- **Multi-line def paren counting** — `_join_multiline_defs()` now strips comments and preserves string literals before counting parentheses; prevents incorrect join on `def foo(x):  # has ( in comment`
+- **Nested parens in function signatures** — `parse_python()` replaced `[^)]*` regex with balanced-paren-aware `_match_function_def()` helper; correctly parses `def foo(x: int = max(0, 1))`
+- **`_parse_python_params` string handling** — parameter splitter now skips string literals, preventing `)` inside default values (e.g. `"bad ) default"`) from breaking param extraction
+- **Background indexer race condition** — `start_background_indexing()` now holds `_reindex_lock` during check-and-set of `_bg_indexer`; prevents duplicate indexer threads
+- **`close()` thread safety** — joins background indexer thread (5s timeout) before closing vector store; prevents data corruption from mid-write store closure
+- **`_index_progress` thread safety** — all progress field mutations in background thread protected by `_reindex_lock`; `get_index_progress()` returns snapshot copies
+- **Inflated coverage metric** — `indexed_files` only incremented when embedding entries are non-empty (was counting files even when `embed()` returned empty vectors)
+- **Empty graph `NetworkXError`** — `louvain_communities()` returns singleton communities with modularity 0.0 when graph has no edges
+- **Dead `seen` set** — removed redundant deduplication in `_build_keyword_index()` DF calculation (iterating `dict.keys()` is already unique)
+- **`_select_by_relevance` encapsulation** — replaced direct `svc._ast_cache` access with public `ASTService.get_symbol_names()` method
+
+### Tests
+
+- **7 new test functions** — RRF merge path integration tests (2), paren-in-comment/string/nested-default edge cases (3), empty-graph community detection (1), `_bg_thread` field coverage (1)
+- **5,208 total tests pass**, 0 regressions
+
 ## [0.1.17] - 2026-03-08
 
 ### Added

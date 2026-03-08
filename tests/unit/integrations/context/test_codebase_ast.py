@@ -19,8 +19,10 @@ from attocode.integrations.context.codebase_ast import (
     diff_file_ast,
     diff_imports,
     parse_file,
+    parse_go,
     parse_javascript,
     parse_python,
+    parse_rust,
 )
 
 
@@ -530,3 +532,297 @@ class TestCodeAnalyzerInvalidateAndUpdate:
 
         # Should be in cache now
         assert analyzer.cache_stats["entries"] == 1
+
+
+# ============================================================
+# Multi-line Signature Tests
+# ============================================================
+
+
+class TestMultilineSignatures:
+    def test_multiline_function_def(self) -> None:
+        code = (
+            "def foo(\n"
+            "    a: int,\n"
+            "    b: str,\n"
+            ") -> None:\n"
+            "    pass\n"
+        )
+        ast = parse_python(code)
+        assert len(ast.functions) == 1
+        func = ast.functions[0]
+        assert func.name == "foo"
+        assert func.params == ["a", "b"]
+        assert func.parameters[0].type_annotation == "int"
+        assert func.parameters[1].type_annotation == "str"
+        assert func.return_type == "None"
+        assert func.start_line == 1
+
+    def test_multiline_async_def(self) -> None:
+        code = (
+            "async def process(\n"
+            "    ctx: Context,\n"
+            "    *,\n"
+            "    max_retries: int = 3,\n"
+            "    timeout: float = 30.0,\n"
+            ") -> bool:\n"
+            "    return True\n"
+        )
+        ast = parse_python(code)
+        assert len(ast.functions) == 1
+        func = ast.functions[0]
+        assert func.name == "process"
+        assert func.is_async is True
+        assert func.return_type == "bool"
+        assert func.start_line == 1
+        # Check kwonly params
+        assert func.parameters[1].is_kwonly is True
+        assert func.parameters[1].name == "max_retries"
+
+    def test_multiline_with_decorators(self) -> None:
+        code = (
+            "@staticmethod\n"
+            "@cache\n"
+            "def compute(\n"
+            "    data: list[int],\n"
+            "    factor: float = 1.0,\n"
+            ") -> float:\n"
+            "    return sum(data) * factor\n"
+        )
+        ast = parse_python(code)
+        assert len(ast.functions) == 1
+        func = ast.functions[0]
+        assert func.name == "compute"
+        assert "staticmethod" in func.decorators
+        assert "cache" in func.decorators
+        assert func.start_line == 3  # def starts on line 3
+
+    def test_multiline_class_method(self) -> None:
+        code = (
+            "class MyClass:\n"
+            "    def method(\n"
+            "        self,\n"
+            "        x: int,\n"
+            "        y: int,\n"
+            "    ) -> tuple[int, int]:\n"
+            "        return x, y\n"
+        )
+        ast = parse_python(code)
+        assert len(ast.classes) == 1
+        cls = ast.classes[0]
+        assert len(cls.methods) == 1
+        method = cls.methods[0]
+        assert method.name == "method"
+        assert method.params == ["self", "x", "y"]
+
+    def test_single_line_still_works(self) -> None:
+        code = "def simple(a: int, b: str) -> None:\n    pass\n"
+        ast = parse_python(code)
+        assert len(ast.functions) == 1
+        assert ast.functions[0].name == "simple"
+
+    def test_multiline_with_paren_in_comment(self) -> None:
+        """Parentheses in comments should not break paren balancing."""
+        code = (
+            "def foo(\n"
+            "    x: int,  # has a ( in comment\n"
+            "    y: str,\n"
+            ") -> None:\n"
+            "    pass\n"
+        )
+        ast = parse_python(code)
+        assert len(ast.functions) == 1
+        func = ast.functions[0]
+        assert func.name == "foo"
+        assert func.params == ["x", "y"]
+
+    def test_multiline_with_paren_in_string_default(self) -> None:
+        """Parentheses inside string default values should not break paren balancing."""
+        code = (
+            "def bar(\n"
+            '    x: str = "bad ) default",\n'
+            "    y: int = 0,\n"
+            ") -> None:\n"
+            "    pass\n"
+        )
+        ast = parse_python(code)
+        assert len(ast.functions) == 1
+        func = ast.functions[0]
+        assert func.name == "bar"
+        assert func.params == ["x", "y"]
+
+    def test_nested_parens_in_default_value(self) -> None:
+        """Nested function calls in default values should be handled."""
+        code = "def foo(x: int = max(0, 1)) -> None:\n    pass\n"
+        ast = parse_python(code)
+        assert len(ast.functions) == 1
+        func = ast.functions[0]
+        assert func.name == "foo"
+        assert func.params == ["x"]
+        assert func.return_type == "None"
+
+
+# ============================================================
+# Rust Parser Tests
+# ============================================================
+
+
+class TestParseRust:
+    def test_functions(self) -> None:
+        code = "pub fn main() {\n    println!(\"hello\");\n}\n\nfn helper() {\n}\n"
+        ast = parse_rust(code)
+        assert len(ast.functions) == 2
+        assert ast.functions[0].name == "main"
+        assert ast.functions[1].name == "helper"
+
+    def test_async_function(self) -> None:
+        code = "pub async fn fetch_data() {\n    todo!()\n}\n"
+        ast = parse_rust(code)
+        assert len(ast.functions) == 1
+        assert ast.functions[0].name == "fetch_data"
+        assert ast.functions[0].is_async
+
+    def test_structs(self) -> None:
+        code = "pub struct Worker {\n    name: String,\n    id: u32,\n}\n"
+        ast = parse_rust(code)
+        assert len(ast.classes) == 1
+        assert ast.classes[0].name == "Worker"
+
+    def test_enums(self) -> None:
+        code = "pub enum Status {\n    Active,\n    Inactive,\n}\n"
+        ast = parse_rust(code)
+        assert len(ast.classes) == 1
+        assert ast.classes[0].name == "Status"
+
+    def test_traits(self) -> None:
+        code = "pub trait Runnable {\n    fn run(&self);\n}\n"
+        ast = parse_rust(code)
+        assert len(ast.classes) == 1
+        assert ast.classes[0].name == "Runnable"
+
+    def test_use_imports(self) -> None:
+        code = (
+            "use std::collections::HashMap;\n"
+            "use crate::worker::MainWorker;\n"
+            "use super::utils;\n"
+        )
+        ast = parse_rust(code)
+        assert len(ast.imports) == 3
+        assert ast.imports[0].module == "std::collections::HashMap"
+        assert ast.imports[1].module == "crate::worker::MainWorker"
+
+    def test_mod_declaration(self) -> None:
+        code = "mod worker;\nmod utils;\n"
+        ast = parse_rust(code)
+        assert len(ast.imports) == 2
+        assert ast.imports[0].module == "worker"
+        assert ast.imports[1].module == "utils"
+
+    def test_constants(self) -> None:
+        code = "pub const MAX_SIZE: usize = 1024;\nstatic COUNTER: u32 = 0;\n"
+        ast = parse_rust(code)
+        assert "MAX_SIZE" in ast.top_level_vars
+        assert "COUNTER" in ast.top_level_vars
+
+    def test_unsafe_trait(self) -> None:
+        code = "unsafe trait Send {\n}\n"
+        ast = parse_rust(code)
+        assert len(ast.classes) == 1
+        assert ast.classes[0].name == "Send"
+
+    def test_parse_file_rust(self) -> None:
+        code = "pub fn main() {\n}\n"
+        ast = parse_file("test.rs", content=code)
+        assert ast.language == "rust"
+        assert len(ast.functions) == 1
+
+    def test_get_symbols(self) -> None:
+        code = (
+            "pub struct Worker {}\n"
+            "pub fn run() {\n}\n"
+            "pub const MAX: u32 = 10;\n"
+        )
+        ast = parse_rust(code)
+        syms = ast.get_symbols()
+        assert "run" in syms
+        assert "Worker" in syms
+        assert "MAX" in syms
+
+
+# ============================================================
+# Go Parser Tests
+# ============================================================
+
+
+class TestParseGo:
+    def test_functions(self) -> None:
+        code = "package main\n\nfunc main() {\n    fmt.Println(\"hello\")\n}\n\nfunc helper() {\n}\n"
+        ast = parse_go(code)
+        assert len(ast.functions) == 2
+        assert ast.functions[0].name == "main"
+        assert ast.functions[1].name == "helper"
+
+    def test_methods(self) -> None:
+        code = "func (s *Server) Start() {\n}\n\nfunc (s *Server) Stop() {\n}\n"
+        ast = parse_go(code)
+        assert len(ast.functions) == 2
+        assert ast.functions[0].name == "Start"
+        assert ast.functions[0].is_method
+        assert ast.functions[1].name == "Stop"
+
+    def test_structs(self) -> None:
+        code = "type Server struct {\n    host string\n    port int\n}\n"
+        ast = parse_go(code)
+        assert len(ast.classes) == 1
+        assert ast.classes[0].name == "Server"
+
+    def test_interfaces(self) -> None:
+        code = "type Handler interface {\n    Handle(r Request) Response\n}\n"
+        ast = parse_go(code)
+        assert len(ast.classes) == 1
+        assert ast.classes[0].name == "Handler"
+
+    def test_single_import(self) -> None:
+        code = 'package main\n\nimport "fmt"\n'
+        ast = parse_go(code)
+        assert len(ast.imports) == 1
+        assert ast.imports[0].module == "fmt"
+
+    def test_import_block(self) -> None:
+        code = 'package main\n\nimport (\n    "fmt"\n    "net/http"\n    "os"\n)\n'
+        ast = parse_go(code)
+        assert len(ast.imports) == 3
+        modules = [imp.module for imp in ast.imports]
+        assert "fmt" in modules
+        assert "net/http" in modules
+        assert "os" in modules
+
+    def test_aliased_import(self) -> None:
+        code = 'import (\n    mux "github.com/gorilla/mux"\n)\n'
+        ast = parse_go(code)
+        assert len(ast.imports) == 1
+        assert ast.imports[0].module == "github.com/gorilla/mux"
+
+    def test_constants(self) -> None:
+        code = "var MaxSize int = 100\nconst DefaultPort int = 8080\n"
+        ast = parse_go(code)
+        assert "MaxSize" in ast.top_level_vars
+        assert "DefaultPort" in ast.top_level_vars
+
+    def test_parse_file_go(self) -> None:
+        code = "package main\n\nfunc main() {\n}\n"
+        ast = parse_file("test.go", content=code)
+        assert ast.language == "go"
+        assert len(ast.functions) == 1
+
+    def test_get_symbols(self) -> None:
+        code = (
+            "type Worker struct {\n}\n\n"
+            "func Run() {\n}\n\n"
+            "var MaxItems int = 10\n"
+        )
+        ast = parse_go(code)
+        syms = ast.get_symbols()
+        assert "Run" in syms
+        assert "Worker" in syms
+        assert "MaxItems" in syms

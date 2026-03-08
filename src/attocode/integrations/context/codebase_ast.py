@@ -166,6 +166,12 @@ LANG_EXTENSIONS: dict[str, str] = {
     ".rs": "rust",
     ".java": "java",
     ".rb": "ruby",
+    ".c": "c",
+    ".h": "c",
+    ".cpp": "cpp",
+    ".hpp": "cpp",
+    ".cc": "cpp",
+    ".cxx": "cpp",
 }
 
 
@@ -192,11 +198,32 @@ def _parse_python_params(params_str: str) -> tuple[list[str], list[ParamDef]]:
     if not params_str.strip():
         return simple, detailed
 
-    # Split parameters respecting brackets (for nested types like dict[str, int])
+    # Split parameters respecting brackets and string literals
     params_raw: list[str] = []
     depth = 0
     current: list[str] = []
-    for ch in params_str:
+    i = 0
+    while i < len(params_str):
+        ch = params_str[i]
+        if ch in ('"', "'"):
+            # Skip string literals
+            quote = ch
+            current.append(ch)
+            i += 1
+            while i < len(params_str) and params_str[i] != quote:
+                if params_str[i] == "\\":
+                    current.append(params_str[i])
+                    i += 1
+                    if i < len(params_str):
+                        current.append(params_str[i])
+                        i += 1
+                    continue
+                current.append(params_str[i])
+                i += 1
+            if i < len(params_str):
+                current.append(params_str[i])  # closing quote
+            i += 1
+            continue
         if ch in ("(", "[", "{"):
             depth += 1
             current.append(ch)
@@ -208,6 +235,7 @@ def _parse_python_params(params_str: str) -> tuple[list[str], list[ParamDef]]:
             current = []
         else:
             current.append(ch)
+        i += 1
     if current:
         params_raw.append("".join(current).strip())
 
@@ -328,6 +356,132 @@ def _extract_class_properties(
     return props
 
 
+_STRINGS_AND_COMMENTS_RE = re.compile(
+    r'#.*$|"(?:[^"\\]|\\.)*"|\'(?:[^\'\\]|\\.)*\'', re.MULTILINE,
+)
+
+
+def _count_parens(line: str) -> int:
+    """Count unbalanced parentheses, ignoring those inside strings and comments."""
+    stripped = _STRINGS_AND_COMMENTS_RE.sub("", line)
+    return stripped.count("(") - stripped.count(")")
+
+
+def _join_multiline_defs(lines: list[str]) -> list[tuple[int, int, str]]:
+    """Preprocess lines to join multi-line ``def`` and ``class`` signatures.
+
+    Detects lines that start a ``def`` or ``class`` statement but have
+    unbalanced parentheses, then accumulates subsequent lines until
+    parentheses balance and the line ends with ``:``.
+
+    Returns:
+        A list of ``(start_line_index, end_line_index, joined_line)`` tuples.
+        *start_line_index* is the original line where the statement begins.
+        *end_line_index* is the last raw line consumed (equal to start for
+        single-line statements).  Lines that were folded into a preceding
+        signature are omitted (their content is merged into the signature
+        line).
+    """
+    result: list[tuple[int, int, str]] = []
+    i = 0
+    n = len(lines)
+
+    while i < n:
+        line = lines[i]
+        stripped = line.strip()
+
+        # Quick check: does this line start a def or class?
+        is_def = bool(re.match(r"\s*(async\s+)?def\s+\w+", line))
+        is_class = bool(re.match(r"\s*class\s+\w+", stripped))
+
+        if (is_def or is_class) and "(" in line:
+            # Count parentheses balance on this line (ignoring strings/comments)
+            depth = _count_parens(line)
+            if depth > 0:
+                # Multi-line signature — accumulate until balanced
+                # Strip comments from each line before joining so embedded
+                # comments don't confuse downstream parsing.
+                start_idx = i
+                parts = [_STRINGS_AND_COMMENTS_RE.sub(
+                    lambda m: m.group() if m.group()[0] != "#" else "", line,
+                ).rstrip()]
+                i += 1
+                while i < n and depth > 0:
+                    continuation = lines[i]
+                    depth += _count_parens(continuation)
+                    cleaned = _STRINGS_AND_COMMENTS_RE.sub(
+                        lambda m: m.group() if m.group()[0] != "#" else "", continuation,
+                    ).strip()
+                    parts.append(cleaned)
+                    i += 1
+                # i now points to the line AFTER the last continuation line
+                end_idx = i - 1
+                joined = " ".join(parts)
+                result.append((start_idx, end_idx, joined))
+                continue
+
+        # Regular line — pass through
+        result.append((i, i, line))
+        i += 1
+
+    return result
+
+
+def _match_function_def(line: str) -> re.Match[str] | None:
+    """Match a function definition with balanced-paren-aware parameter extraction.
+
+    Handles nested parens in default values like ``def foo(x: int = max(0, 1))``.
+    Returns a match-like object with groups:
+        1: indent, 2: async prefix or None, 3: name,
+        4: type params or "", 5: params string, 6: return type or ""
+    """
+    m = re.match(r"^(\s*)(async\s+)?def\s+(\w+)\s*(?:\[([^\]]*)\])?\s*\(", line)
+    if not m:
+        return None
+    # Find the matching closing paren by counting depth
+    paren_start = m.end() - 1  # index of the opening '('
+    depth = 1
+    i = paren_start + 1
+    while i < len(line) and depth > 0:
+        ch = line[i]
+        if ch == "(":
+            depth += 1
+        elif ch == ")":
+            depth -= 1
+        elif ch in ('"', "'"):
+            # Skip string literals
+            quote = ch
+            i += 1
+            while i < len(line) and line[i] != quote:
+                if line[i] == "\\":
+                    i += 1
+                i += 1
+        i += 1
+    if depth != 0:
+        return None
+    paren_end = i - 1  # index of closing ')'
+    params_str = line[paren_start + 1:paren_end]
+    rest = line[paren_end + 1:]
+    # Match optional return type and colon
+    ret_match = re.match(r"\s*(?:->\s*(.+?))?\s*:\s*$", rest)
+    if not ret_match:
+        return None
+    return_type = ret_match.group(1) or ""
+    # Build a synthetic match via a simple namespace
+    class _FuncMatch:
+        def group(self, n: int) -> str | None:
+            return [
+                line,  # 0: full match
+                m.group(1),  # 1: indent
+                m.group(2),  # 2: async prefix
+                m.group(3),  # 3: name
+                m.group(4) or "",  # 4: type params
+                params_str,  # 5: params
+                return_type,  # 6: return type
+            ][n]
+    return _FuncMatch()
+
+
 def parse_python(content: str, path: str = "") -> FileAST:
     """Parse Python source using regex patterns.
 
@@ -360,11 +514,15 @@ def parse_python(content: str, path: str = "") -> FileAST:
                         line=i + 1,
                     ))
 
+    # Preprocess lines to join multi-line def/class signatures
+    preprocessed = _join_multiline_defs(lines)
+
     # Parse classes and functions
     current_class: ClassDef | None = None
     decorators: list[str] = []
 
-    for i, line in enumerate(lines):
+    for orig_line_idx, sig_end_idx, line in preprocessed:
+        i = orig_line_idx
         stripped = line.strip()
 
         # Decorators
@@ -390,16 +548,18 @@ def parse_python(content: str, path: str = "") -> FileAST:
                     filtered_bases.append(b)
 
             # Find end of class (next non-indented line)
-            end_line = i + 1
-            for j in range(i + 1, len(lines)):
+            # Start scanning from after the last line of the signature
+            body_start = sig_end_idx + 1
+            end_line = body_start
+            for j in range(body_start, len(lines)):
                 if lines[j].strip() and not lines[j].startswith((" ", "\t")):
                     end_line = j
                     break
             else:
                 end_line = len(lines)
 
-            # Extract docstring
-            docstring = _extract_docstring(lines, i + 1)
+            # Extract docstring (body starts after the signature)
+            docstring = _extract_docstring(lines, body_start)
 
             # Detect abstract class
             is_abstract = (
@@ -409,7 +569,7 @@ def parse_python(content: str, path: str = "") -> FileAST:
             )
 
             # Extract properties
-            properties = _extract_class_properties(lines, i + 1, end_line)
+            properties = _extract_class_properties(lines, body_start, end_line)
 
             current_class = ClassDef(
                 name=class_name,
@@ -427,10 +587,8 @@ def parse_python(content: str, path: str = "") -> FileAST:
             continue
 
         # Function definition (with optional PEP 695 type params)
-        func_match = re.match(
-            r"^(\s*)(async\s+)?def\s+(\w+)\s*(?:\[([^\]]*)\])?\s*\(([^)]*)\)(?:\s*->\s*(.+))?\s*:",
-            line,
-        )
+        # Use balanced-paren-aware extraction instead of [^)]*
+        func_match = _match_function_def(line)
         if func_match:
             indent = func_match.group(1)
             is_async = func_match.group(2) is not None
@@ -446,9 +604,11 @@ def parse_python(content: str, path: str = "") -> FileAST:
             params, parameters = _parse_python_params(params_str)
 
             # Find end of function
+            # Start scanning from after the last line of the signature
             func_indent = len(indent)
-            end_line = i + 1
-            for j in range(i + 1, len(lines)):
+            func_body_start = sig_end_idx + 1
+            end_line = func_body_start
+            for j in range(func_body_start, len(lines)):
                 l = lines[j]
                 if l.strip() and not l.startswith((" " * (func_indent + 1))) and not l.startswith("\t" * (func_indent // 4 + 1)):
                     if l.strip() and (len(l) - len(l.lstrip())) <= func_indent:
@@ -457,7 +617,7 @@ def parse_python(content: str, path: str = "") -> FileAST:
             else:
                 end_line = len(lines)
 
-            docstring = _extract_docstring(lines, i + 1)
+            docstring = _extract_docstring(lines, func_body_start)
 
             # Detect decorator-based flags
             is_staticmethod = "staticmethod" in decorators
@@ -710,6 +870,249 @@ def parse_javascript(content: str, path: str = "") -> FileAST:
     return ast
 
 
+def parse_rust(content: str, path: str = "") -> FileAST:
+    """Parse Rust source using regex patterns.
+
+    Extracts functions, structs, enums, traits, impl blocks, imports (use/mod).
+    """
+    lines = content.split("\n")
+    ast = FileAST(path=path, language="rust", line_count=len(lines))
+
+    for i, line in enumerate(lines):
+        stripped = line.strip()
+
+        # Imports: use ... ;
+        use_match = re.match(r"^(?:pub\s+)?use\s+(.+);", stripped)
+        if use_match:
+            module = use_match.group(1).strip()
+            # Extract the base path (before :: { ... })
+            base = re.sub(r"\s*::\s*\{[^}]*\}", "", module)
+            base = re.sub(r"\s*::\s*\w+$", "", base)
+            ast.imports.append(ImportDef(module=module, is_from=True, line=i + 1))
+            continue
+
+        # mod declarations: mod foo;
+        mod_match = re.match(r"^(?:pub\s+)?mod\s+(\w+)\s*;", stripped)
+        if mod_match:
+            ast.imports.append(ImportDef(
+                module=mod_match.group(1), is_from=False, line=i + 1,
+            ))
+            continue
+
+        # Functions: (pub)? (async)? fn name(...)
+        fn_match = re.match(
+            r"^(?:pub(?:\([\w:]+\))?\s+)?(?:async\s+)?(?:unsafe\s+)?(?:extern\s+\"[^\"]*\"\s+)?fn\s+(\w+)",
+            stripped,
+        )
+        if fn_match:
+            func_name = fn_match.group(1)
+            # Find end via brace matching
+            end_line = i + 1
+            brace_count = stripped.count("{") - stripped.count("}")
+            if brace_count > 0:
+                for j in range(i + 1, min(i + 500, len(lines))):
+                    brace_count += lines[j].count("{") - lines[j].count("}")
+                    if brace_count <= 0:
+                        end_line = j + 1
+                        break
+            is_async = "async " in stripped.split("fn")[0]
+            ast.functions.append(FunctionDef(
+                name=func_name,
+                start_line=i + 1,
+                end_line=end_line,
+                is_async=is_async,
+            ))
+            continue
+
+        # Structs: (pub)? struct Name
+        struct_match = re.match(r"^(?:pub(?:\([\w:]+\))?\s+)?struct\s+(\w+)", stripped)
+        if struct_match:
+            end_line = i + 1
+            brace_count = stripped.count("{") - stripped.count("}")
+            if brace_count > 0:
+                for j in range(i + 1, min(i + 500, len(lines))):
+                    brace_count += lines[j].count("{") - lines[j].count("}")
+                    if brace_count <= 0:
+                        end_line = j + 1
+                        break
+            ast.classes.append(ClassDef(
+                name=struct_match.group(1),
+                start_line=i + 1,
+                end_line=end_line,
+            ))
+            continue
+
+        # Enums: (pub)? enum Name
+        enum_match = re.match(r"^(?:pub(?:\([\w:]+\))?\s+)?enum\s+(\w+)", stripped)
+        if enum_match:
+            end_line = i + 1
+            brace_count = stripped.count("{") - stripped.count("}")
+            if brace_count > 0:
+                for j in range(i + 1, min(i + 500, len(lines))):
+                    brace_count += lines[j].count("{") - lines[j].count("}")
+                    if brace_count <= 0:
+                        end_line = j + 1
+                        break
+            ast.classes.append(ClassDef(
+                name=enum_match.group(1),
+                start_line=i + 1,
+                end_line=end_line,
+            ))
+            continue
+
+        # Traits: (pub)? trait Name
+        trait_match = re.match(r"^(?:pub(?:\([\w:]+\))?\s+)?(?:unsafe\s+)?trait\s+(\w+)", stripped)
+        if trait_match:
+            end_line = i + 1
+            brace_count = stripped.count("{") - stripped.count("}")
+            if brace_count > 0:
+                for j in range(i + 1, min(i + 500, len(lines))):
+                    brace_count += lines[j].count("{") - lines[j].count("}")
+                    if brace_count <= 0:
+                        end_line = j + 1
+                        break
+            ast.classes.append(ClassDef(
+                name=trait_match.group(1),
+                start_line=i + 1,
+                end_line=end_line,
+            ))
+            continue
+
+        # Top-level constants: (pub)? const NAME: ...
+        const_match = re.match(r"^(?:pub\s+)?(?:const|static)\s+([A-Z_][A-Z_0-9]*)\s*:", stripped)
+        if const_match:
+            ast.top_level_vars.append(const_match.group(1))
+
+    return ast
+
+
+def parse_go(content: str, path: str = "") -> FileAST:
+    """Parse Go source using regex patterns.
+
+    Extracts functions, methods, structs, interfaces, imports.
+    """
+    lines = content.split("\n")
+    ast = FileAST(path=path, language="go", line_count=len(lines))
+
+    i = 0
+    while i < len(lines):
+        stripped = lines[i].strip()
+
+        # Import block: import ( ... )
+        if stripped == "import (" or stripped.startswith("import ("):
+            i += 1
+            while i < len(lines):
+                imp_line = lines[i].strip()
+                if imp_line == ")":
+                    break
+                # Parse "pkg" or alias "pkg"
+                imp_match = re.match(r'^(?:\w+\s+)?"([^"]+)"', imp_line)
+                if imp_match:
+                    ast.imports.append(ImportDef(
+                        module=imp_match.group(1), is_from=False, line=i + 1,
+                    ))
+                i += 1
+            i += 1
+            continue
+
+        # Single import: import "pkg"
+        single_imp = re.match(r'^import\s+(?:\w+\s+)?"([^"]+)"', stripped)
+        if single_imp:
+            ast.imports.append(ImportDef(
+                module=single_imp.group(1), is_from=False, line=i + 1,
+            ))
+            i += 1
+            continue
+
+        # Method: func (receiver) Name(...)
+        method_match = re.match(r"^func\s+\([^)]+\)\s+(\w+)\s*\(", stripped)
+        if method_match:
+            func_name = method_match.group(1)
+            end_line = i + 1
+            brace_count = stripped.count("{") - stripped.count("}")
+            if brace_count > 0:
+                for j in range(i + 1, min(i + 500, len(lines))):
+                    brace_count += lines[j].count("{") - lines[j].count("}")
+                    if brace_count <= 0:
+                        end_line = j + 1
+                        break
+            ast.functions.append(FunctionDef(
+                name=func_name,
+                start_line=i + 1,
+                end_line=end_line,
+                is_method=True,
+            ))
+            i += 1
+            continue
+
+        # Function: func Name(...)
+        fn_match = re.match(r"^func\s+(\w+)\s*\(", stripped)
+        if fn_match:
+            func_name = fn_match.group(1)
+            end_line = i + 1
+            brace_count = stripped.count("{") - stripped.count("}")
+            if brace_count > 0:
+                for j in range(i + 1, min(i + 500, len(lines))):
+                    brace_count += lines[j].count("{") - lines[j].count("}")
+                    if brace_count <= 0:
+                        end_line = j + 1
+                        break
+            ast.functions.append(FunctionDef(
+                name=func_name,
+                start_line=i + 1,
+                end_line=end_line,
+            ))
+            i += 1
+            continue
+
+        # Struct: type Name struct {
+        struct_match = re.match(r"^type\s+(\w+)\s+struct\s*\{", stripped)
+        if struct_match:
+            end_line = i + 1
+            brace_count = stripped.count("{") - stripped.count("}")
+            if brace_count > 0:
+                for j in range(i + 1, min(i + 500, len(lines))):
+                    brace_count += lines[j].count("{") - lines[j].count("}")
+                    if brace_count <= 0:
+                        end_line = j + 1
+                        break
+            ast.classes.append(ClassDef(
+                name=struct_match.group(1),
+                start_line=i + 1,
+                end_line=end_line,
+            ))
+            i += 1
+            continue
+
+        # Interface: type Name interface {
+        iface_match = re.match(r"^type\s+(\w+)\s+interface\s*\{", stripped)
+        if iface_match:
+            end_line = i + 1
+            brace_count = stripped.count("{") - stripped.count("}")
+            if brace_count > 0:
+                for j in range(i + 1, min(i + 500, len(lines))):
+                    brace_count += lines[j].count("{") - lines[j].count("}")
+                    if brace_count <= 0:
+                        end_line = j + 1
+                        break
+            ast.classes.append(ClassDef(
+                name=iface_match.group(1),
+                start_line=i + 1,
+                end_line=end_line,
+            ))
+            i += 1
+            continue
+
+        # Top-level constants
+        const_match = re.match(r"^(?:var|const)\s+([A-Z_][A-Za-z_0-9]*)\s+", stripped)
+        if const_match:
+            ast.top_level_vars.append(const_match.group(1))
+
+        i += 1
+
+    return ast
+
+
 def _ts_result_to_file_ast(result: dict, file_path: str) -> FileAST:
     """Convert tree-sitter parse result dict into a FileAST dataclass."""
     language = result.get("language", "unknown")
@@ -806,11 +1209,15 @@ def parse_file(file_path: str, content: str | None = None) -> FileAST:
     except ImportError:
         pass  # tree-sitter not installed
 
-    # Regex fallback for Python and JavaScript/TypeScript
+    # Regex fallback for Python, JavaScript/TypeScript, Rust, Go
     if lang == "python":
         return parse_python(content, file_path)
     elif lang in ("javascript", "typescript"):
         return parse_javascript(content, file_path)
+    elif lang == "rust":
+        return parse_rust(content, file_path)
+    elif lang == "go":
+        return parse_go(content, file_path)
     else:
         # Minimal parsing for unknown languages
         return FileAST(

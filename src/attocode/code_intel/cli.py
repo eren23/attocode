@@ -43,6 +43,8 @@ def dispatch_code_intel(parts: tuple[str, ...] | list[str], *, debug: bool = Fal
         _cmd_status()
     elif cmd == "notify":
         _cmd_notify(args[1:])
+    elif cmd == "index":
+        _cmd_index(args[1:])
     else:
         print(f"Unknown code-intel command: {cmd}", file=sys.stderr)
         _print_help()
@@ -57,6 +59,7 @@ def _print_help() -> None:
         "  install <target>    Install MCP server into a coding assistant\n"
         "  uninstall <target>  Remove MCP server from a coding assistant\n"
         "  serve               Run MCP server directly (stdio or SSE)\n"
+        "  index               Build or check embedding index for semantic search\n"
         "  status              Check installation status across all targets\n"
         "  notify              Notify server about changed files (for hooks)\n"
         "\n"
@@ -440,3 +443,97 @@ def _cmd_notify(args: list[str]) -> None:
                 fh.write(rp + "\n")
 
     print(f"Queued {len(rel_paths)} file(s) for index update.")
+
+
+def _cmd_index(args: list[str]) -> None:
+    """Build or check the semantic search embedding index.
+
+    Modes:
+      --status       Print current index status and exit
+      --foreground   Blocking full index (default if no --background)
+      --background   Start daemon, poll progress, print status
+    """
+    import time
+
+    _, project_dir, _, _ = _parse_opts(args)
+    project_dir = os.path.abspath(project_dir)
+
+    mode = "foreground"
+    for arg in args:
+        if arg == "--status":
+            mode = "status"
+        elif arg == "--background":
+            mode = "background"
+        elif arg == "--foreground":
+            mode = "foreground"
+
+    os.environ.setdefault("ATTOCODE_PROJECT_DIR", project_dir)
+
+    from attocode.integrations.context.semantic_search import SemanticSearchManager
+
+    mgr = SemanticSearchManager(root_dir=project_dir)
+
+    if mode == "status":
+        progress = mgr.get_index_progress()
+        print(f"Provider: {mgr.provider_name}")
+        print(f"Status: {progress.status}")
+        print(f"Coverage: {progress.coverage:.0%} ({progress.indexed_files}/{progress.total_files} files)")
+        if progress.elapsed_seconds > 0:
+            print(f"Elapsed: {progress.elapsed_seconds:.1f}s")
+        print(f"Vector search active: {mgr.is_index_ready()}")
+        mgr.close()
+        return
+
+    if not mgr.is_available:
+        print(
+            "No embedding provider available. Install sentence-transformers:\n"
+            "  pip install 'attocode[semantic]'",
+            file=sys.stderr,
+        )
+        mgr.close()
+        sys.exit(1)
+
+    if mode == "foreground":
+        print(f"Indexing {project_dir} (foreground)...", file=sys.stderr)
+        count = mgr.index()
+        print(f"Indexed {count} chunks.", file=sys.stderr)
+        mgr.close()
+        return
+
+    # Parse --timeout flag (default: 30 minutes)
+    timeout_seconds = 1800
+    for i, arg in enumerate(args):
+        if arg == "--timeout" and i + 1 < len(args):
+            timeout_seconds = int(args[i + 1])
+        elif arg.startswith("--timeout="):
+            timeout_seconds = int(arg.split("=", 1)[1])
+
+    # Background mode
+    print(f"Starting background indexing for {project_dir}...", file=sys.stderr)
+    progress = mgr.start_background_indexing()
+    deadline = time.time() + timeout_seconds
+
+    try:
+        while progress.status == "running":
+            if time.time() > deadline:
+                print(
+                    f"\nTimeout: indexing did not complete within {timeout_seconds}s. "
+                    "Use --timeout to increase.",
+                    file=sys.stderr,
+                )
+                mgr.stop_background_indexing()
+                break
+            progress = mgr.get_index_progress()
+            print(
+                f"\r  {progress.indexed_files}/{progress.total_files} files "
+                f"({progress.coverage:.0%}) — {progress.elapsed_seconds:.0f}s",
+                end="", file=sys.stderr, flush=True,
+            )
+            time.sleep(1.0)
+    except KeyboardInterrupt:
+        print("\nStopping...", file=sys.stderr)
+        mgr.stop_background_indexing()
+
+    progress = mgr.get_index_progress()
+    print(f"\nDone: {progress.status} ({progress.indexed_files}/{progress.total_files} files)", file=sys.stderr)
+    mgr.close()
