@@ -487,17 +487,8 @@ def _regex_analyze_generic(content: str, path: str, language: str) -> list[CodeC
 
 def _detect_language(ext: str) -> str:
     """Detect language from file extension."""
-    mapping = {
-        ".py": "python", ".pyi": "python",
-        ".ts": "typescript", ".tsx": "typescript",
-        ".js": "javascript", ".jsx": "javascript",
-        ".rs": "rust", ".go": "go",
-        ".java": "java", ".kt": "kotlin",
-        ".c": "c", ".h": "c",
-        ".cpp": "cpp", ".cc": "cpp",
-        ".rb": "ruby", ".php": "php",
-    }
-    return mapping.get(ext, "")
+    from attocode.integrations.context.codebase_ast import LANG_EXTENSIONS
+    return LANG_EXTENSIONS.get(ext, "")
 
 
 def _extract_imports(content: str, language: str) -> list[str]:

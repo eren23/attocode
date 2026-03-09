@@ -108,6 +108,7 @@ class FileAST:
     imports: list[ImportDef] = field(default_factory=list)
     top_level_vars: list[str] = field(default_factory=list)
     line_count: int = 0
+    parsing_tier: str = ""  # "tree_sitter", "regex", "generic_ts", "ctags", "minimal"
 
     @property
     def symbol_count(self) -> int:
@@ -157,11 +158,17 @@ class FileChangeResult:
 
 # Language detection
 LANG_EXTENSIONS: dict[str, str] = {
+    # Tier 1: Original 9 languages
     ".py": "python",
+    ".pyi": "python",
     ".js": "javascript",
     ".jsx": "javascript",
+    ".mjs": "javascript",
+    ".cjs": "javascript",
     ".ts": "typescript",
     ".tsx": "typescript",
+    ".mts": "typescript",
+    ".cts": "typescript",
     ".go": "go",
     ".rs": "rust",
     ".java": "java",
@@ -172,6 +179,38 @@ LANG_EXTENSIONS: dict[str, str] = {
     ".hpp": "cpp",
     ".cc": "cpp",
     ".cxx": "cpp",
+    ".hxx": "cpp",
+    ".hh": "cpp",
+    # Phase 1: 11 new programming languages
+    ".cs": "csharp",
+    ".php": "php",
+    ".swift": "swift",
+    ".kt": "kotlin",
+    ".kts": "kotlin",
+    ".scala": "scala",
+    ".sc": "scala",
+    ".lua": "lua",
+    ".ex": "elixir",
+    ".exs": "elixir",
+    ".hs": "haskell",
+    ".lhs": "haskell",
+    ".sh": "bash",
+    ".bash": "bash",
+    ".zsh": "bash",
+    ".tf": "hcl",
+    ".hcl": "hcl",
+    ".tfvars": "hcl",
+    ".zig": "zig",
+    # Phase 2: Data/config languages
+    ".yaml": "yaml",
+    ".yml": "yaml",
+    ".toml": "toml",
+    ".json": "json",
+    ".jsonc": "json",
+    ".html": "html",
+    ".htm": "html",
+    ".css": "css",
+    ".scss": "css",
 }
 
 
@@ -1187,9 +1226,14 @@ def _ts_result_to_file_ast(result: dict, file_path: str) -> FileAST:
 def parse_file(file_path: str, content: str | None = None) -> FileAST:
     """Parse a source file and return its AST.
 
-    Tries tree-sitter first (supports 8+ languages), then falls back to
-    regex-based parsers for Python/JS/TS. Returns a minimal FileAST for
-    unsupported languages.
+    Uses a tiered fallback strategy:
+      1. Tree-sitter with per-language config (25 languages)
+      2. Generic tree-sitter heuristics (30+ additional languages)
+      3. Regex-based parsers for Python/JS/TS/Rust/Go
+      4. Universal-ctags subprocess (150+ languages)
+      5. Minimal FileAST for truly unknown languages
+
+    Returns a FileAST for any input file.
     """
     if content is None:
         try:
@@ -1199,32 +1243,65 @@ def parse_file(file_path: str, content: str | None = None) -> FileAST:
 
     lang = detect_language(file_path)
 
-    # Try tree-sitter first (works for all 8+ supported languages)
+    # Tier 1: Tree-sitter with per-language config (25 languages)
     try:
         from attocode.integrations.context.ts_parser import ts_parse_file
 
         ts_result = ts_parse_file(file_path, content=content, language=lang)
         if ts_result is not None:
-            return _ts_result_to_file_ast(ts_result, file_path)
+            result = _ts_result_to_file_ast(ts_result, file_path)
+            result.parsing_tier = "tree_sitter"
+            return result
     except ImportError:
         pass  # tree-sitter not installed
 
-    # Regex fallback for Python, JavaScript/TypeScript, Rust, Go
+    # Tier 2: Regex fallback for Python, JavaScript/TypeScript, Rust, Go
+    regex_result: FileAST | None = None
     if lang == "python":
-        return parse_python(content, file_path)
+        regex_result = parse_python(content, file_path)
     elif lang in ("javascript", "typescript"):
-        return parse_javascript(content, file_path)
+        regex_result = parse_javascript(content, file_path)
     elif lang == "rust":
-        return parse_rust(content, file_path)
+        regex_result = parse_rust(content, file_path)
     elif lang == "go":
-        return parse_go(content, file_path)
-    else:
-        # Minimal parsing for unknown languages
-        return FileAST(
-            path=file_path,
-            language=lang,
-            line_count=content.count("\n") + 1,
-        )
+        regex_result = parse_go(content, file_path)
+    if regex_result is not None:
+        regex_result.parsing_tier = "regex"
+        return regex_result
+
+    # Tier 3: Generic tree-sitter heuristics (30+ additional languages)
+    try:
+        from attocode.integrations.context.ts_parser import ts_parse_file_generic
+
+        generic_result = ts_parse_file_generic(file_path, content=content, language=lang)
+        if generic_result is not None:
+            result = _ts_result_to_file_ast(generic_result, file_path)
+            result.parsing_tier = "generic_ts"
+            return result
+    except ImportError:
+        pass
+
+    # Tier 4: Universal-ctags fallback (150+ languages)
+    try:
+        from attocode.integrations.context.ts_parser import ctags_parse_file
+
+        ctags_result = ctags_parse_file(file_path, content=content)
+        if ctags_result is not None:
+            if lang:
+                ctags_result["language"] = lang
+            result = _ts_result_to_file_ast(ctags_result, file_path)
+            result.parsing_tier = "ctags"
+            return result
+    except Exception:
+        pass  # ctags not installed or other error
+
+    # Tier 5: Minimal parsing for unknown languages
+    return FileAST(
+        path=file_path,
+        language=lang if lang != "unknown" else lang,
+        line_count=content.count("\n") + 1,
+        parsing_tier="minimal",
+    )
 
 
 def diff_file_ast(old: FileAST, new: FileAST) -> list[SymbolChange]:

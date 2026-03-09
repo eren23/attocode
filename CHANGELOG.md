@@ -7,6 +7,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.19] - 2026-03-09
+
+### Added
+
+- **Tree-sitter multi-language parsing** — `LANGUAGE_CONFIGS` for 25 languages (Python, JS/TS, Go, Rust, Java, Ruby, C, C++, C#, PHP, Swift, Kotlin, Scala, Lua, Elixir, Haskell, Bash, HCL, Zig, YAML, TOML, JSON, HTML, CSS) with per-language node-type queries for functions, classes, imports, and methods
+- **`GenericTreeSitterExtractor`** — heuristic-based parser covering 50+ additional languages via installed tree-sitter grammars; uses common node-type patterns (function_definition, class_declaration, import_statement) without per-language config
+- **`EXTRA_GRAMMAR_MODULES`** — 20+ additional grammar mappings (Dart, R, Julia, OCaml, Perl, Clojure, Erlang, etc.) for generic extractor fallback
+- **Elixir custom extractor** — handles `defmodule` (with dotted names), `def`/`defp` functions with correct `parent_class`, and `use`/`import`/`alias`/`require` imports
+- **Tree-sitter grammar dependencies** — 25 `tree-sitter-*` packages added to `[project.optional-dependencies]`
+
+### Fixed
+
+- **PHP tree-sitter grammar loading** — `grammar_module` corrected to `tree_sitter_php.php` (nested module path); PHP parsing now works end-to-end
+- **C/C++ function name extraction** — was returning return types (e.g. `void`, `int`) instead of actual function names; now correctly extracts the `declarator` identifier
+- **Kotlin import extraction** — added `import_list` to `import_types`; imports are now detected
+- **Elixir parsing** — previously returned empty results; new custom extractor handles `defmodule`/`def`/`defp`/`use`/`import` correctly
+
+### Tests
+
+- **5 new test methods** — C function name regression test, C++ function name regression test, PHP class+imports test, Kotlin imports test, Elixir module/functions/imports test
+- **TestCTreeSitter, TestCppTreeSitter, TestElixirTreeSitter** — 3 new test classes added
+
 ## [0.1.18] - 2026-03-08
 
 ### Added

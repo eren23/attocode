@@ -41,3 +41,4 @@ snapshot_report.html
 
 # scripts
 scripts/
+.DS_Store
