@@ -39,6 +39,8 @@ dependencies = [
     "psutil>=6.0",
     "mcp>=1.0",
     "tomli_w>=1.0",
+    "matplotlib>=3.10.8",
+    "numpy>=2.4.2",
 ]
 
 [project.optional-dependencies]
@@ -46,6 +48,7 @@ anthropic = ["anthropic>=0.40"]
 openai = ["openai>=1.50"]
 tree-sitter = [
     "tree-sitter>=0.23",
+    # Tier 1: Original 9 languages
     "tree-sitter-python",
     "tree-sitter-javascript",
     "tree-sitter-go",
@@ -54,6 +57,25 @@ tree-sitter = [
     "tree-sitter-ruby",
     "tree-sitter-c",
     "tree-sitter-cpp",
+    # Phase 1: 11 new programming languages
+    "tree-sitter-c-sharp",
+    "tree-sitter-php",
+    "tree-sitter-swift",
+    "tree-sitter-kotlin",
+    "tree-sitter-scala",
+    "tree-sitter-lua",
+    "tree-sitter-elixir",
+    # tree-sitter-haskell: not available as standalone PyPI package;
+    # install tree-sitter-language-pack for Haskell support
+    "tree-sitter-bash",
+    "tree-sitter-hcl",
+    "tree-sitter-zig",
+    # Phase 2: Data/config languages
+    "tree-sitter-yaml",
+    "tree-sitter-toml",
+    "tree-sitter-json",
+    "tree-sitter-html",
+    "tree-sitter-css",
 ]
 watch = ["watchfiles>=1.0"]
 semantic = ["sentence-transformers>=3.0"]
