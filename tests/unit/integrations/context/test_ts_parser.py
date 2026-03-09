@@ -299,6 +299,41 @@ class TestCSharpTreeSitter:
         assert len(result["imports"]) >= 1
 
 
+@pytest.mark.skipif(not _has_grammar("c"), reason="tree-sitter-c not installed")
+class TestCTreeSitter:
+    def test_function_names_not_return_types(self) -> None:
+        code = (
+            "void myFunction(int x) {}\n"
+            "int anotherFunc(char *s) { return 0; }\n"
+            "static long getTimestamp(void) { return 0; }\n"
+        )
+        result = ts_parse_file("test.c", content=code, language="c")
+        assert result is not None
+        names = [f["name"] for f in result["functions"]]
+        assert "myFunction" in names
+        assert "anotherFunc" in names
+        assert "getTimestamp" in names
+        # Must NOT extract return types as names
+        for bad in ("void", "int", "static", "long"):
+            assert bad not in names
+
+
+@pytest.mark.skipif(not _has_grammar("cpp"), reason="tree-sitter-cpp not installed")
+class TestCppTreeSitter:
+    def test_function_names_not_return_types(self) -> None:
+        code = (
+            "void topLevel(int x) {}\n"
+            "int* pointerFunc() { return nullptr; }\n"
+        )
+        result = ts_parse_file("test.cpp", content=code, language="cpp")
+        assert result is not None
+        names = [f["name"] for f in result["functions"]]
+        assert "topLevel" in names
+        assert "pointerFunc" in names
+        for bad in ("void", "int"):
+            assert bad not in names
+
+
 @pytest.mark.skipif(not _has_grammar("php"), reason="tree-sitter-php not installed")
 class TestPHPTreeSitter:
     def test_function(self) -> None:
@@ -307,6 +342,21 @@ class TestPHPTreeSitter:
         assert result is not None
         assert len(result["functions"]) >= 1
         assert result["functions"][0]["name"] == "hello"
+
+    def test_class_and_imports(self) -> None:
+        code = (
+            "<?php\n"
+            "namespace App\\Models;\n"
+            "use App\\Base\\Model;\n"
+            "class User {\n"
+            "    public function getName() { return $this->name; }\n"
+            "}\n"
+        )
+        result = ts_parse_file("test.php", content=code, language="php")
+        assert result is not None
+        assert len(result["classes"]) >= 1
+        assert any(c["name"] == "User" for c in result["classes"])
+        assert len(result["imports"]) >= 1
 
 
 @pytest.mark.skipif(not _has_grammar("swift"), reason="tree-sitter-swift not installed")
@@ -333,6 +383,16 @@ class TestKotlinTreeSitter:
         assert result is not None
         assert len(result["functions"]) >= 1
 
+    def test_imports(self) -> None:
+        code = (
+            "import kotlin.collections.mutableListOf\n"
+            "import java.util.Date\n"
+            "fun main() {}\n"
+        )
+        result = ts_parse_file("test.kt", content=code, language="kotlin")
+        assert result is not None
+        assert len(result["imports"]) >= 2
+
 
 @pytest.mark.skipif(not _has_grammar("bash"), reason="tree-sitter-bash not installed")
 class TestBashTreeSitter:
@@ -342,6 +402,34 @@ class TestBashTreeSitter:
         assert result is not None
         assert len(result["functions"]) >= 1
         assert result["functions"][0]["name"] == "hello"
+
+
+@pytest.mark.skipif(not _has_grammar("elixir"), reason="tree-sitter-elixir not installed")
+class TestElixirTreeSitter:
+    def test_module_with_functions_and_imports(self) -> None:
+        code = (
+            "defmodule MyApp.Repo do\n"
+            "  use Ecto.Repo\n"
+            "  import Ecto.Query\n"
+            "  def get_user(id) do\n"
+            "    id\n"
+            "  end\n"
+            "  defp internal(x) do\n"
+            "    x\n"
+            "  end\n"
+            "end\n"
+        )
+        result = ts_parse_file("test.ex", content=code, language="elixir")
+        assert result is not None
+        # Module found
+        assert any(c["name"] == "MyApp.Repo" for c in result["classes"])
+        # Functions found with correct parent_class
+        fn_names = [f["name"] for f in result["functions"]]
+        assert "get_user" in fn_names
+        assert "internal" in fn_names
+        assert all(f["parent_class"] == "MyApp.Repo" for f in result["functions"])
+        # Imports found
+        assert len(result["imports"]) >= 2
 
 
 @pytest.mark.skipif(not _has_grammar("lua"), reason="tree-sitter-lua not installed")

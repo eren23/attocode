@@ -39,6 +39,7 @@ class _LangConfig:
     import_types: tuple[str, ...]  # node types that represent imports
     method_types: tuple[str, ...] = ()  # method declarations inside classes
     name_field: str = "name"  # tree-sitter field for the identifier
+    language_func: str = "language"  # function name to call on grammar module
 
 
 LANGUAGE_CONFIGS: dict[str, _LangConfig] = {
@@ -125,6 +126,7 @@ LANGUAGE_CONFIGS: dict[str, _LangConfig] = {
         ),
         import_types=("namespace_use_declaration",),
         method_types=("method_declaration",),
+        language_func="language_php",
     ),
     "swift": _LangConfig(
         grammar_module="tree_sitter_swift",
@@ -142,7 +144,7 @@ LANGUAGE_CONFIGS: dict[str, _LangConfig] = {
             "class_declaration", "object_declaration", "interface_declaration",
             "enum_class_body",
         ),
-        import_types=("import_header",),
+        import_types=("import_header", "import"),
     ),
     "scala": _LangConfig(
         grammar_module="tree_sitter_scala",
@@ -169,7 +171,7 @@ LANGUAGE_CONFIGS: dict[str, _LangConfig] = {
     "haskell": _LangConfig(
         grammar_module="tree_sitter_haskell",
         function_types=("function", "bind"),
-        class_types=("data_type", "newtype", "type_synomym", "class", "instance"),
+        class_types=("data_type", "newtype", "type_synonym", "class", "instance"),
         import_types=("import",),
     ),
     "bash": _LangConfig(
@@ -266,7 +268,8 @@ def _get_parser(language: str):
         import tree_sitter as ts
 
         grammar_mod = importlib.import_module(config.grammar_module)
-        lang = ts.Language(grammar_mod.language())
+        lang_fn = getattr(grammar_mod, config.language_func, None) or grammar_mod.language
+        lang = ts.Language(lang_fn())
         parser = ts.Parser(lang)
         _PARSERS[language] = parser
         return parser
@@ -306,6 +309,20 @@ def _find_name(node, source_bytes: bytes) -> str:
     name_node = node.child_by_field_name("name")
     if name_node:
         return _node_text(name_node, source_bytes)
+
+    # C/C++: name is inside declarator → function_declarator → identifier
+    declarator = node.child_by_field_name("declarator")
+    if declarator:
+        if declarator.type == "function_declarator":
+            for child in declarator.children:
+                if child.type == "identifier":
+                    return _node_text(child, source_bytes)
+        # pointer_declarator or other wrappers around function_declarator
+        for sub in declarator.children:
+            if sub.type == "function_declarator":
+                for child in sub.children:
+                    if child.type == "identifier":
+                        return _node_text(child, source_bytes)
 
     # Fallback: look for identifier child
     for child in node.children:
@@ -537,16 +554,30 @@ def _process_elixir_call(
     node, source_bytes: bytes,
     functions: list[dict], classes: list[dict], imports: list[dict],
     parent_class: str,
-) -> None:
-    """Handle Elixir call nodes that represent def/defmodule/import macros."""
-    # Get the target (macro name)
+) -> str:
+    """Handle Elixir call nodes that represent def/defmodule/import macros.
+
+    Returns the module name if a defmodule was found (for use as parent_class
+    when recursing into the do_block), empty string otherwise.
+    """
+    # Get the macro name (first identifier child — Elixir AST has no "target" field)
     target = node.child_by_field_name("target")
     if not target:
-        return
+        for child in node.children:
+            if child.type == "identifier":
+                target = child
+                break
+    if not target:
+        return ""
     macro_name = _node_text(target, source_bytes).strip()
 
-    # Get the arguments
+    # Get the arguments (first "arguments" child — may not be a named field)
     args = node.child_by_field_name("arguments")
+    if not args:
+        for child in node.children:
+            if child.type == "arguments":
+                args = child
+                break
 
     if macro_name in _ELIXIR_FN_MACROS:
         # def/defp: first arg is the function head (a call node with the fn name)
@@ -554,7 +585,13 @@ def _process_elixir_call(
             head = args.children[0]
             name = ""
             if head.type == "call":
+                # Inner call also uses identifier children, not "target" field
                 head_target = head.child_by_field_name("target")
+                if not head_target:
+                    for child in head.children:
+                        if child.type == "identifier":
+                            head_target = child
+                            break
                 if head_target:
                     name = _node_text(head_target, source_bytes).strip()
             elif head.type == "identifier":
@@ -571,6 +608,7 @@ def _process_elixir_call(
                     "visibility": "public" if macro_name in ("def", "defmacro") else "private",
                     "parent_class": parent_class,
                 })
+        return ""
 
     elif macro_name in _ELIXIR_MOD_MACROS:
         # defmodule: first arg is the module name (an alias like MyApp.Repo)
@@ -586,6 +624,8 @@ def _process_elixir_call(
                     "start_line": node.start_point[0] + 1,
                     "end_line": node.end_point[0] + 1,
                 })
+                return name
+        return ""
 
     elif macro_name in _ELIXIR_IMPORT_MACROS:
         # import/use/require/alias: first arg is the module reference
@@ -598,6 +638,8 @@ def _process_elixir_call(
                     "is_from": macro_name == "alias",
                     "start_line": node.start_point[0] + 1,
                 })
+
+    return ""
 
 
 # ---------------------------------------------------------------------------
@@ -774,9 +816,15 @@ def ts_parse_file(file_path: str, content: str | None = None, language: str = ""
 
         # Elixir: macro calls (def, defmodule, import, etc.)
         if language == "elixir" and ntype == "call":
-            _process_elixir_call(
+            mod_name = _process_elixir_call(
                 node, source_bytes, functions, classes, imports, parent_class,
             )
+            # Recurse into do_block for nested defs inside defmodule
+            inner_parent = mod_name or parent_class
+            for child in node.children:
+                if child.type == "do_block":
+                    for sub in child.children:
+                        _process_node(sub, parent_class=inner_parent)
             return
 
         # Recurse into children
@@ -988,7 +1036,7 @@ _GENERIC_CLASS_TYPES = frozenset({
     "type_declaration", "type_definition", "type_alias",
     "module_definition", "module_declaration", "namespace_definition",
     "object_declaration", "record_declaration",
-    "data_type", "newtype", "type_synomym",  # Haskell (note: grammar typo)
+    "data_type", "newtype", "type_synonym",  # Haskell
     "union_declaration",  # Zig
 })
 
@@ -1026,7 +1074,18 @@ class GenericTreeSitterExtractor:
             import tree_sitter as ts
 
             mod = importlib.import_module(grammar_module)
-            lang = ts.Language(mod.language())
+            # Try standard language(), fall back to language_<name>() for
+            # grammars like tree_sitter_php that export language_php()
+            lang_fn = getattr(mod, "language", None)
+            if lang_fn is None:
+                # Search for language_* functions
+                for attr in dir(mod):
+                    if attr.startswith("language_") and callable(getattr(mod, attr)):
+                        lang_fn = getattr(mod, attr)
+                        break
+            if lang_fn is None:
+                raise AttributeError(f"No language function found in {grammar_module}")
+            lang = ts.Language(lang_fn())
             self._grammar_cache[grammar_module] = lang
             return lang
         except (ImportError, AttributeError, Exception) as e:
