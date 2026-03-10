@@ -2,15 +2,16 @@
 
 from __future__ import annotations
 
-from pathlib import Path
+from typing import TYPE_CHECKING
 
-from textual.app import ComposeResult
-from textual.containers import Container, Horizontal
+from textual.containers import Container
 from textual.widgets import Static
 
 from attocode.tracing.analysis import SessionAnalyzer, SessionSummaryView
 from attocode.tracing.collector import load_trace_session
-from attocode.tui.widgets.dashboard.viz import ASCIITable, PercentBar
+
+if TYPE_CHECKING:
+    from textual.app import ComposeResult
 
 
 class ComparePane(Container):

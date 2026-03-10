@@ -3,8 +3,10 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from typing import TYPE_CHECKING
 
-from attocode_core.ast_index.indexer import CodeIndex
+if TYPE_CHECKING:
+    from attocode_core.ast_index.indexer import CodeIndex
 
 
 @dataclass(slots=True)
@@ -12,7 +14,7 @@ class DependencyGraph:
     edges: dict[str, set[str]] = field(default_factory=dict)
 
     @classmethod
-    def from_index(cls, idx: CodeIndex) -> "DependencyGraph":
+    def from_index(cls, idx: CodeIndex) -> DependencyGraph:
         graph = cls()
         for f in idx.files:
             graph.edges.setdefault(f.file_path, set())

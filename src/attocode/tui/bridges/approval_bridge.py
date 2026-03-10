@@ -105,7 +105,7 @@ class ApprovalBridge:
 
         try:
             result = await asyncio.wait_for(self._pending, timeout=timeout)
-        except asyncio.TimeoutError:
+        except TimeoutError:
             result = ApprovalResult(approved=False)
         finally:
             self._pending = None
@@ -166,7 +166,7 @@ class BudgetBridge:
 
         try:
             result = await asyncio.wait_for(self._pending, timeout=timeout)
-        except asyncio.TimeoutError:
+        except TimeoutError:
             result = False
         finally:
             self._pending = None

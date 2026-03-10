@@ -19,9 +19,8 @@ import os
 import time
 import uuid
 from pathlib import Path
-from typing import Any, Callable
+from typing import TYPE_CHECKING, Any
 
-from attoswarm.config.schema import SwarmYamlConfig
 from attoswarm.coordinator.aot_graph import AoTGraph, AoTNode
 from attoswarm.coordinator.budget import BudgetCounter
 from attoswarm.coordinator.event_bus import EventBus, SwarmEvent
@@ -29,11 +28,15 @@ from attoswarm.coordinator.subagent_manager import SubagentManager, TaskResult
 from attoswarm.protocol.io import write_json_atomic, write_json_fast
 from attoswarm.protocol.models import (
     SwarmManifest,
-    SwarmState,
     TaskSpec,
     default_run_layout,
     utc_now_iso,
 )
+
+if TYPE_CHECKING:
+    from collections.abc import Callable
+
+    from attoswarm.config.schema import SwarmYamlConfig
 
 logger = logging.getLogger(__name__)
 

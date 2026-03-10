@@ -157,6 +157,7 @@ line-length = 100
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "N", "W", "UP", "B", "A", "SIM", "TCH"]
+ignore = ["E501", "SIM105"]
 
 [tool.coverage.run]
 source = ["src/attocode", "src/attoswarm", "src/attocode_core"]

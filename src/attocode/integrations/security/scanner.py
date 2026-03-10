@@ -11,7 +11,6 @@ import os
 import time
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any
 
 from attocode.integrations.security.patterns import (
     ANTI_PATTERNS,
@@ -281,7 +280,7 @@ class SecurityScanner:
         lines: list[str] = []
 
         # Header
-        lines.append(f"Security Scan Report")
+        lines.append("Security Scan Report")
         lines.append(f"Score: {report.compliance_score}/100 | "
                       f"Files: {report.files_scanned} | "
                       f"Time: {report.scan_time_ms:.0f}ms")

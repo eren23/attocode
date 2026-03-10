@@ -2,13 +2,15 @@
 
 from __future__ import annotations
 
-from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from pydantic import BaseModel
 
 from attocode.types.messages import DangerLevel, ToolDefinition
+
+if TYPE_CHECKING:
+    from collections.abc import Awaitable, Callable
 
 
 class ToolParam(BaseModel):

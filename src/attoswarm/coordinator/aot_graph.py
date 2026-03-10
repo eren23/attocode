@@ -182,7 +182,7 @@ class AoTGraph:
     def check_parallel_safety(
         self,
         batch: list[str],
-        ast_service: "ASTService | None" = None,
+        ast_service: ASTService | None = None,
     ) -> list[dict[str, Any]]:
         """Check whether tasks in *batch* can safely run in parallel.
 

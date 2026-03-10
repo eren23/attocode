@@ -8,15 +8,15 @@ from __future__ import annotations
 
 import difflib
 from dataclasses import dataclass, field
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from rich.text import Text
-from textual.app import ComposeResult
-from textual.containers import Horizontal, Vertical, VerticalScroll
+from textual.containers import Vertical, VerticalScroll
 from textual.reactive import reactive
-from textual.widget import Widget
 from textual.widgets import Static
 
+if TYPE_CHECKING:
+    from textual.app import ComposeResult
 
 # ─── Data types ──────────────────────────────────────────────────────────────
 
@@ -227,7 +227,7 @@ class DiffView(VerticalScroll):
         *,
         show_line_numbers: bool = True,
         name: str | None = None,
-        id: str | None = None,
+        id: str | None = None,  # noqa: A002
     ) -> None:
         super().__init__(name=name, id=id)
         self._show_line_numbers = show_line_numbers
@@ -297,7 +297,7 @@ class CollapsibleDiffView(Vertical):
         file_diff: FileDiff,
         *,
         name: str | None = None,
-        id: str | None = None,
+        id: str | None = None,  # noqa: A002
     ) -> None:
         super().__init__(name=name, id=id)
         self._file_diff = file_diff

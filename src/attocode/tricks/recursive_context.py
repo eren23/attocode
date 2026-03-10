@@ -17,7 +17,7 @@ from __future__ import annotations
 import re
 from collections import deque
 from dataclasses import dataclass, field
-from typing import Any, Protocol
+from typing import Protocol
 
 from attocode.integrations.utilities.token_estimate import estimate_tokens as _estimate_tokens
 
@@ -265,7 +265,7 @@ class RecursiveContextRetriever:
         Priority files are loaded first and given more token budget.
         Remaining budget is used for recursive exploration.
         """
-        priority = set(priority_files or [])
+        _priority = set(priority_files or [])
         visited: set[str] = set()
         nodes: list[ContextNode] = []
         total_tokens = 0

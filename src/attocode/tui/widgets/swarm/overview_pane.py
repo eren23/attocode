@@ -2,9 +2,8 @@
 
 from __future__ import annotations
 
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
-from textual.app import ComposeResult
 from textual.containers import Horizontal, Vertical
 from textual.widget import Widget
 
@@ -12,6 +11,9 @@ from attocode.tui.widgets.swarm.agent_grid import AgentGrid
 from attocode.tui.widgets.swarm.dag_view import DependencyTree
 from attocode.tui.widgets.swarm.event_timeline import EventTimeline
 from attocode.tui.widgets.swarm.task_board import TaskBoard
+
+if TYPE_CHECKING:
+    from textual.app import ComposeResult
 
 
 class OverviewPane(Widget):

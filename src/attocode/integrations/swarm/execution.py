@@ -20,9 +20,6 @@ from attocode.integrations.swarm.types import (
     BUILTIN_TASK_TYPE_CONFIGS,
     SpawnResult,
     SwarmError,
-    SwarmEvent,
-    SwarmPhase,
-    SwarmStatus,
     SwarmTask,
     SwarmTaskResult,
     SwarmTaskStatus,
@@ -49,12 +46,10 @@ async def execute_waves(
 ) -> None:
     """Main wave loop. Iterates through all waves dispatching and processing tasks."""
     from attocode.integrations.swarm.lifecycle import (
-        emit_budget_update,
         save_checkpoint,
     )
     from attocode.integrations.swarm.recovery import (
         assess_and_adapt,
-        is_circuit_breaker_active,
         rescue_cascade_skipped,
     )
 
@@ -390,10 +385,7 @@ async def handle_task_completion(
 
     Routes to success, failure, or hollow handling paths.
     """
-    from attocode.integrations.swarm.lifecycle import get_effective_retries
     from attocode.integrations.swarm.recovery import (
-        decrease_stagger,
-        record_rate_limit,
         try_resilience_recovery,
     )
 
@@ -402,9 +394,8 @@ async def handle_task_completion(
         return
 
     # Guard: already terminal
-    if task.status in (SwarmTaskStatus.SKIPPED, SwarmTaskStatus.FAILED):
-        if not task.pending_cascade_skip:
-            return
+    if task.status in (SwarmTaskStatus.SKIPPED, SwarmTaskStatus.FAILED) and not task.pending_cascade_skip:
+        return
 
     duration_ms = int((time.time() - started_at) * 1000)
 
@@ -495,19 +486,18 @@ async def _handle_successful_completion(
     output = spawn_result.output or ""
 
     # Future intent guard
-    if ctx.config.completion_guard.reject_future_intent_outputs:
-        if has_future_intent_language(output):
-            task_result.success = False
-            task_result.quality_feedback = "Output describes future work rather than completed work"
-            max_retries = ctx.config.worker_retries
-            ctx.task_queue.mark_failed_without_cascade(task_id, max_retries)
-            ctx.emit(swarm_event(
-                "swarm.quality.rejected",
-                task_id=task_id,
-                score=1,
-                feedback="Future intent language detected",
-            ))
-            return
+    if ctx.config.completion_guard.reject_future_intent_outputs and has_future_intent_language(output):
+        task_result.success = False
+        task_result.quality_feedback = "Output describes future work rather than completed work"
+        max_retries = ctx.config.worker_retries
+        ctx.task_queue.mark_failed_without_cascade(task_id, max_retries)
+        ctx.emit(swarm_event(
+            "swarm.quality.rejected",
+            task_id=task_id,
+            score=1,
+            feedback="Future intent language detected",
+        ))
+        return
 
     # Concrete artifact guard for action tasks
     if ctx.config.completion_guard.require_concrete_artifacts_for_action_tasks:
@@ -589,8 +579,8 @@ async def _handle_successful_completion(
     # Verification gate — run automated checks (tests, types, lint)
     if ctx.config.quality_gates:
         try:
-            from attocode.integrations.tasks.verification_gate import VerificationGate
             from attocode.integrations.tasks.task_splitter import SubTask
+            from attocode.integrations.tasks.verification_gate import VerificationGate
 
             working_dir = getattr(ctx, "working_dir", None) or "."
             gate = VerificationGate(
@@ -945,7 +935,7 @@ async def _run_wave_review(ctx: OrchestratorInternals, wave_index: int) -> None:
 
     if critic_config is None:
         # No critic configured — emit a basic summary event
-        stats = ctx.task_queue.get_stats()
+        _stats = ctx.task_queue.get_stats()
         ctx.emit(swarm_event(
             "swarm.wave.review",
             wave=wave_index + 1,
@@ -1071,7 +1061,7 @@ async def _run_scout_for_task(
     )
 
     # Use scout's model (falls back to orchestrator model)
-    scout_model = scout_config.model or ctx.config.orchestrator_model
+    _scout_model = scout_config.model or ctx.config.orchestrator_model
 
     try:
         scout_result = await asyncio.wait_for(
@@ -1105,6 +1095,6 @@ async def _run_scout_for_task(
             logger.info("Scout gathered %d chars of context for task %s",
                         len(scout_result.output), task.id)
 
-    except (asyncio.TimeoutError, Exception) as exc:
+    except (TimeoutError, Exception) as exc:
         # Scout is best-effort — don't block dispatch on failure
         logger.debug("Scout for task %s failed: %s", task.id, exc)

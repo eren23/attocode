@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import json
 import os
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
@@ -18,12 +18,10 @@ import httpx
 
 from attocode.errors import ProviderError
 from attocode.types.messages import (
-    CacheControl,
     ChatOptions,
     ChatResponse,
     Message,
     MessageWithStructuredContent,
-    Role,
     StopReason,
     StreamChunk,
     TokenUsage,

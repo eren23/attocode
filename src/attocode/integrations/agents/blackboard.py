@@ -15,9 +15,9 @@ from __future__ import annotations
 import asyncio
 import fnmatch
 import time
+from collections.abc import Callable
 from dataclasses import dataclass, field
-from typing import Any, Callable
-
+from typing import Any
 
 # =============================================================================
 # Data Types
@@ -547,15 +547,13 @@ class SharedBlackboard:
             key = f"{self._FILE_REGISTRY_PREFIX}{file_path}"
             existing = self._store.get(key)
 
-            if existing is not None and not existing.is_expired:
-                # Another worker already modified this file
-                if existing.owner != worker_id:
-                    conflicts.append(file_path)
-                    # Update metadata to track conflict
-                    existing.metadata.setdefault("conflicting_workers", [])
-                    if worker_id not in existing.metadata["conflicting_workers"]:
-                        existing.metadata["conflicting_workers"].append(worker_id)
-                    continue
+            if existing is not None and not existing.is_expired and existing.owner != worker_id:
+                conflicts.append(file_path)
+                # Update metadata to track conflict
+                existing.metadata.setdefault("conflicting_workers", [])
+                if worker_id not in existing.metadata["conflicting_workers"]:
+                    existing.metadata["conflicting_workers"].append(worker_id)
+                continue
 
             # Register this worker as the modifier
             self.publish(

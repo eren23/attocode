@@ -7,12 +7,10 @@ Requires Docker to be installed and accessible.
 from __future__ import annotations
 
 import asyncio
-import json
 import os
 import shutil
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any
 
 from attocode.errors import ConfigurationError
 
@@ -92,7 +90,7 @@ class DockerSandbox:
             "docker", "run", "--rm",
             f"--memory={self.options.max_memory_mb}m",
             "--cpus=1",
-            f"-w=/workspace",
+            "-w=/workspace",
         ]
 
         # Mount working directory
@@ -129,7 +127,7 @@ class DockerSandbox:
             stdout, stderr = await asyncio.wait_for(
                 proc.communicate(), timeout=self.options.timeout
             )
-        except asyncio.TimeoutError:
+        except TimeoutError:
             proc.kill()
             await proc.communicate()
             # Also kill the container

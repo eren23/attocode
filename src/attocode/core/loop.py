@@ -20,19 +20,19 @@ from __future__ import annotations
 
 import asyncio
 import time
-from dataclasses import dataclass, field
-from typing import Any
+from dataclasses import dataclass
+from typing import TYPE_CHECKING, Any
 
+from attocode.core.completion import analyze_completion
+from attocode.core.response_handler import call_llm, call_llm_streaming
+from attocode.core.tool_executor import build_tool_result_messages, execute_tool_calls
 from attocode.errors import BudgetExhaustedError, CancellationError
 from attocode.types.agent import AgentCompletionStatus, AgentResult, CompletionReason
 from attocode.types.events import EventType
 from attocode.types.messages import Message, Role, ToolResult
 
-from attocode.agent.context import AgentContext
-from attocode.core.completion import CompletionAnalysis, analyze_completion
-from attocode.core.response_handler import call_llm, call_llm_streaming
-from attocode.core.tool_executor import build_tool_result_messages, execute_tool_calls
-
+if TYPE_CHECKING:
+    from attocode.agent.context import AgentContext
 
 # Context overflow guard constants
 MAX_SINGLE_TOOL_RESULT_TOKENS = 50_000
@@ -603,7 +603,7 @@ def invalidate_ast_on_edit(ctx: AgentContext, tool_name: str, tool_args: dict) -
     for incremental re-parsing.  Also invalidates the CodeAnalyzer cache entry
     so the next analyze_file() call re-reads from disk.
     """
-    FILE_EDIT_TOOLS = {"write_file", "edit_file", "create_file", "patch_file", "replace_in_file"}
+    FILE_EDIT_TOOLS = {"write_file", "edit_file", "create_file", "patch_file", "replace_in_file"}  # noqa: N806
 
     if tool_name not in FILE_EDIT_TOOLS:
         return
@@ -637,7 +637,7 @@ async def collect_lsp_diagnostics(
     to inject into context. Returns None if no diagnostics or LSP
     is not available.
     """
-    FILE_EDIT_TOOLS = {"write_file", "edit_file", "create_file", "patch_file", "replace_in_file"}
+    FILE_EDIT_TOOLS = {"write_file", "edit_file", "create_file", "patch_file", "replace_in_file"}  # noqa: N806
 
     if tool_name not in FILE_EDIT_TOOLS:
         return None
@@ -906,7 +906,7 @@ async def run_execution_loop(
                 )
 
             # 3. Auto-compaction check
-            compaction_result = await handle_auto_compaction(ctx)
+            _compaction_result = await handle_auto_compaction(ctx)
 
             # 4. Call LLM (streaming when provider supports it)
             try:
@@ -1063,7 +1063,7 @@ async def run_execution_loop(
 
                 # Record in economics (loop detection + phase tracking)
                 if ctx.economics is not None:
-                    for tc, tr in zip(response.tool_calls, tool_results):
+                    for tc, _tr in zip(response.tool_calls, tool_results, strict=False):
                         try:
                             loop_detection, phase_nudge = ctx.economics.record_tool_call(
                                 tc.name,
@@ -1092,7 +1092,7 @@ async def run_execution_loop(
                 # Record failures in failure tracker + self-improvement diagnosis
                 if ctx.failure_tracker is not None:
                     from attocode.tricks.failure_evidence import FailureInput
-                    for tc, tr in zip(response.tool_calls, tool_results):
+                    for tc, tr in zip(response.tool_calls, tool_results, strict=False):
                         if tr.is_error and tr.error:
                             try:
                                 ctx.failure_tracker.record_failure(FailureInput(
@@ -1107,7 +1107,7 @@ async def run_execution_loop(
                 # Self-improvement: diagnose tool failures, record successes
                 self_improvement = getattr(ctx, "_self_improvement", None)
                 if self_improvement is not None:
-                    for tc, tr in zip(response.tool_calls, tool_results):
+                    for tc, tr in zip(response.tool_calls, tool_results, strict=False):
                         try:
                             if tr.is_error and tr.error:
                                 enhanced = self_improvement.enhance_error_message(
@@ -1157,7 +1157,7 @@ async def run_execution_loop(
                 # Collect LSP diagnostics after file edits
                 lsp_diagnostics_parts: list[str] = []
                 if getattr(ctx, "_lsp_manager", None) is not None:
-                    for tc, tr in zip(response.tool_calls, tool_results):
+                    for tc, tr in zip(response.tool_calls, tool_results, strict=False):
                         if not tr.is_error:
                             try:
                                 diag_msg = await collect_lsp_diagnostics(
@@ -1187,7 +1187,7 @@ async def run_execution_loop(
                 work_log = getattr(ctx, "_work_log", None)
                 if work_log is not None:
                     try:
-                        for tc, tr in zip(response.tool_calls, tool_results):
+                        for tc, tr in zip(response.tool_calls, tool_results, strict=False):
                             work_log.record_tool_call(
                                 tc.name,
                                 success=not tr.is_error,
@@ -1199,7 +1199,7 @@ async def run_execution_loop(
                 # Record in dead letter queue if tool errors
                 dlq = getattr(ctx, "_dead_letter_queue", None)
                 if dlq is not None:
-                    for tc, tr in zip(response.tool_calls, tool_results):
+                    for tc, tr in zip(response.tool_calls, tool_results, strict=False):
                         if tr.is_error:
                             try:
                                 dlq.add(tc.name, tr.error or "Unknown error", tc.arguments)
@@ -1224,7 +1224,7 @@ async def run_execution_loop(
                             if pt is not None:
                                 phase = getattr(pt, "current_phase", "unknown")
 
-                        for tc, tr in zip(response.tool_calls, tool_results):
+                        for tc, tr in zip(response.tool_calls, tool_results, strict=False):
                             recommender.record_usage(
                                 tool_name=tc.name,
                                 task_type=phase,

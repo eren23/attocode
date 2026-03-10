@@ -14,9 +14,12 @@ import time
 from collections import deque
 from dataclasses import dataclass, field
 from enum import StrEnum
-from typing import Any, Callable, TypeVar
+from typing import TYPE_CHECKING, Any, TypeVar
 
 from attocode.errors import ProviderError
+
+if TYPE_CHECKING:
+    from collections.abc import Callable
 
 T = TypeVar("T")
 
@@ -92,11 +95,8 @@ class CircuitBreaker:
         self._failure_count += 1
         self._last_failure_time = time.monotonic()
 
-        if self.state == CircuitState.HALF_OPEN:
+        if self.state == CircuitState.HALF_OPEN or self.state == CircuitState.CLOSED and self._failure_count >= self.config.failure_threshold:
             self.state = CircuitState.OPEN
-        elif self.state == CircuitState.CLOSED:
-            if self._failure_count >= self.config.failure_threshold:
-                self.state = CircuitState.OPEN
 
     def reset(self) -> None:
         """Reset the circuit breaker to closed state."""
@@ -191,10 +191,7 @@ class RateLimiter:
         recent_tokens = sum(
             tokens for t, tokens in self._token_usage if t > cutoff
         )
-        if recent_tokens >= self.config.max_tokens_per_minute:
-            return False
-
-        return True
+        return recent_tokens < self.config.max_tokens_per_minute
 
     def record_request(self, tokens: int = 0) -> None:
         """Record a request and its token usage."""
@@ -261,8 +258,8 @@ async def resilient_fetch(
 
             return result
 
-        except asyncio.TimeoutError:
-            last_error = asyncio.TimeoutError(f"Timeout after {timeout}s")
+        except TimeoutError:
+            last_error = TimeoutError(f"Timeout after {timeout}s")
             if circuit_breaker:
                 circuit_breaker.record_failure()
         except Exception as e:
@@ -352,7 +349,7 @@ class FallbackChain:
                 errors.append(f"{name}: {e}")
 
         raise ProviderError(
-            f"All providers failed:\n" + "\n".join(f"  - {e}" for e in errors)
+            "All providers failed:\n" + "\n".join(f"  - {e}" for e in errors)
         )
 
 

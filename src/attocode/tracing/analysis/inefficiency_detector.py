@@ -9,11 +9,11 @@ and actionable suggestions.
 from __future__ import annotations
 
 import json
-from collections import Counter, defaultdict
+from collections import Counter
 from typing import Any
 
 from attocode.tracing.analysis.views import DetectedIssue
-from attocode.tracing.types import TraceEvent, TraceEventKind, TraceSession
+from attocode.tracing.types import TraceEventKind, TraceSession
 
 
 class InefficiencyDetector:
@@ -56,9 +56,8 @@ class InefficiencyDetector:
         for event in self._session.events:
             if event.iteration is not None:
                 max_iteration = max(max_iteration, event.iteration)
-            if event.kind in (TraceEventKind.TOOL_END, TraceEventKind.TOOL_ERROR):
-                if event.iteration is not None:
-                    iterations_with_tools.add(event.iteration)
+            if event.kind in (TraceEventKind.TOOL_END, TraceEventKind.TOOL_ERROR) and event.iteration is not None:
+                iterations_with_tools.add(event.iteration)
 
         # Scan for consecutive runs without tools.
         run_start: int | None = None
@@ -230,7 +229,7 @@ class InefficiencyDetector:
             return issues
 
         threshold = avg_tokens * 2.0
-        for event, tokens in zip(llm_responses, token_counts):
+        for event, tokens in zip(llm_responses, token_counts, strict=False):
             if tokens > threshold:
                 issues.append(
                     DetectedIssue(
@@ -482,9 +481,8 @@ class InefficiencyDetector:
         # Count tool calls per iteration.
         tools_per_iteration: Counter[int] = Counter()
         for event in self._session.events:
-            if event.kind in (TraceEventKind.TOOL_END, TraceEventKind.TOOL_ERROR):
-                if event.iteration is not None:
-                    tools_per_iteration[event.iteration] += 1
+            if event.kind in (TraceEventKind.TOOL_END, TraceEventKind.TOOL_ERROR) and event.iteration is not None:
+                tools_per_iteration[event.iteration] += 1
 
         # Check for mode changes.
         mode_change_iterations: set[int] = set()

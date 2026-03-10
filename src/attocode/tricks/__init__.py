@@ -9,16 +9,7 @@ Techniques for optimizing LLM context usage:
 - JSON extraction utilities
 """
 
-from attocode.tricks.kv_cache import CacheAwareContext, CacheStats, CacheableContentBlock
-from attocode.tricks.recitation import RecitationManager, RecitationState
-from attocode.tricks.reversible_compaction import ReversibleCompactor, Reference
-from attocode.tricks.failure_evidence import FailureTracker, Failure
-from attocode.tricks.serialization_diversity import DiverseSerializer
-from attocode.tricks.recursive_context import (
-    ContextNode,
-    RecursiveContextResult,
-    RecursiveContextRetriever,
-)
+from attocode.tricks.failure_evidence import Failure, FailureTracker
 from attocode.tricks.json_utils import (
     extract_json,
     extract_json_array,
@@ -27,6 +18,15 @@ from attocode.tricks.json_utils import (
     safe_parse,
     truncate_json,
 )
+from attocode.tricks.kv_cache import CacheableContentBlock, CacheAwareContext, CacheStats
+from attocode.tricks.recitation import RecitationManager, RecitationState
+from attocode.tricks.recursive_context import (
+    ContextNode,
+    RecursiveContextResult,
+    RecursiveContextRetriever,
+)
+from attocode.tricks.reversible_compaction import Reference, ReversibleCompactor
+from attocode.tricks.serialization_diversity import DiverseSerializer
 
 __all__ = [
     "CacheAwareContext",

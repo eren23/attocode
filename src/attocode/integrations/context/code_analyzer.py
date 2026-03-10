@@ -58,7 +58,7 @@ class FileAnalysis:
 # Tree-sitter availability flag
 _TREE_SITTER_AVAILABLE = False
 try:
-    import tree_sitter  # type: ignore[import-untyped]
+    import tree_sitter  # type: ignore[import-untyped]  # noqa: F401
     _TREE_SITTER_AVAILABLE = True
 except ImportError:
     pass

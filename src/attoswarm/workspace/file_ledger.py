@@ -21,7 +21,7 @@ import json
 import logging
 import os
 import time
-from dataclasses import asdict, dataclass, field
+from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
@@ -98,7 +98,7 @@ class FileLedger:
     def __init__(
         self,
         root_dir: str,
-        ast_service: "ASTService | None" = None,
+        ast_service: ASTService | None = None,
         persist_dir: str | None = None,
     ) -> None:
         self._root_dir = os.path.abspath(root_dir)
@@ -163,9 +163,8 @@ class FileLedger:
 
         async with lock:
             existing = self._claims.get(rel)
-            if existing and existing.agent_id != agent_id:
-                if existing.claim_type == "exclusive":
-                    return False
+            if existing and existing.agent_id != agent_id and existing.claim_type == "exclusive":
+                return False
 
             current_hash = self._versions.get(rel, "")
             self._claims[rel] = FileClaim(

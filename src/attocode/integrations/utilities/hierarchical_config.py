@@ -14,7 +14,6 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
-
 # Default configuration values
 DEFAULTS: dict[str, Any] = {
     "model": "claude-sonnet-4-20250514",

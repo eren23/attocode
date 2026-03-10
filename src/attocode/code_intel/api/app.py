@@ -3,13 +3,17 @@
 from __future__ import annotations
 
 import logging
+from typing import TYPE_CHECKING
 
 from attocode.code_intel.config import CodeIntelConfig
+
+if TYPE_CHECKING:
+    from fastapi import FastAPI
 
 logger = logging.getLogger(__name__)
 
 
-def create_app(config: CodeIntelConfig | None = None) -> "FastAPI":
+def create_app(config: CodeIntelConfig | None = None) -> FastAPI:
     """Create and configure the FastAPI application.
 
     Args:
@@ -20,7 +24,15 @@ def create_app(config: CodeIntelConfig | None = None) -> "FastAPI":
 
     from attocode.code_intel.api import deps
     from attocode.code_intel.api.middleware import RequestLoggingMiddleware
-    from attocode.code_intel.api.routes import analysis, graph, health, learning, lsp, projects, search
+    from attocode.code_intel.api.routes import (
+        analysis,
+        graph,
+        health,
+        learning,
+        lsp,
+        projects,
+        search,
+    )
 
     if config is None:
         config = CodeIntelConfig.from_env()

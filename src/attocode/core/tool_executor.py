@@ -17,14 +17,16 @@ import os
 import time
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from attocode.types.events import EventType
 from attocode.types.messages import Message, Role, ToolCall, ToolResult
 
+if TYPE_CHECKING:
+    from attocode.agent.context import AgentContext
 
 if __name__ != "__main__":
-    from attocode.agent.context import AgentContext
+    pass
 
 
 # Defaults
@@ -199,8 +201,8 @@ def _check_markup_mismatch(ctx: AgentContext, tc: ToolCall) -> None:
                 "source": "stream_text_vs_structured_tool_call",
             },
         )
-    setattr(ctx, "_last_suspicious_markup", None)
-    setattr(ctx, "_tool_markup_buffer", "")
+    ctx._last_suspicious_markup = None
+    ctx._tool_markup_buffer = ""
 
 
 def _is_loop_guard_blocked(ctx: AgentContext, tc: ToolCall) -> bool:
@@ -505,7 +507,7 @@ async def execute_single_tool(
             _track_path = (tc.arguments or {}).get("path")
             if _track_path:
                 try:
-                    from pathlib import Path as _P
+                    from pathlib import Path as _P  # noqa: N814
                     _p = _P(_track_path)
                     if not _p.is_absolute() and ctx.working_dir:
                         _p = _P(ctx.working_dir) / _p
@@ -525,7 +527,7 @@ async def execute_single_tool(
         # Record file change for undo/diff tracking
         if _track_path and not result.is_error and ctx.file_change_tracker:
             try:
-                from pathlib import Path as _P
+                from pathlib import Path as _P  # noqa: N814
                 _after = _P(_track_path).read_text(encoding="utf-8") if _P(_track_path).exists() else None
                 ctx.file_change_tracker.track_change(
                     _track_path, _before_content, _after, tc.name,
@@ -543,9 +545,9 @@ async def execute_single_tool(
                 failures += 1
             else:
                 failures = 0
-            setattr(ctx, "_subagent_failure_count", failures)
+            ctx._subagent_failure_count = failures
             if failures >= 2:
-                setattr(ctx, "_subagent_fallback_mode", True)
+                ctx._subagent_fallback_mode = True
                 ctx.emit_simple(
                     EventType.RESILIENCE_FALLBACK,
                     tool=tc.name,
@@ -587,7 +589,7 @@ async def execute_single_tool(
             error=result.error,
         ), was_truncated
 
-    except asyncio.TimeoutError:
+    except TimeoutError:
         duration = time.monotonic() - start
         error_msg = f"Tool '{tc.name}' timed out after {effective_timeout}s"
         ctx.emit_simple(
@@ -713,7 +715,7 @@ def build_tool_result_messages(
     Returns a list of Message objects with role=TOOL, one per result.
     """
     messages: list[Message] = []
-    for tc, result in zip(tool_calls, results):
+    for tc, result in zip(tool_calls, results, strict=False):
         content = result.error if result.is_error else (result.result or "")
         messages.append(Message(
             role=Role.TOOL,

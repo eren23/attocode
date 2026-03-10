@@ -259,10 +259,7 @@ def notify_file_changed(files: list[str]) -> str:
     for f in files:
         try:
             p = Path(f)
-            if p.is_absolute():
-                rel = os.path.relpath(str(p), project_dir)
-            else:
-                rel = str(p)
+            rel = os.path.relpath(str(p), project_dir) if p.is_absolute() else str(p)
             # Guard against path traversal
             rel = os.path.normpath(rel)
             if rel.startswith(".."):

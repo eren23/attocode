@@ -6,16 +6,13 @@ DiagnosticsPanel for system health overview.
 
 from __future__ import annotations
 
-import time
-from typing import Any
+from typing import TYPE_CHECKING
 
-from rich.text import Text
-from textual.app import ComposeResult
 from textual.containers import VerticalScroll
-from textual.reactive import reactive
-from textual.widget import Widget
 from textual.widgets import Static
 
+if TYPE_CHECKING:
+    from textual.app import ComposeResult
 
 # ─── DebugPanel ──────────────────────────────────────────────────────────────
 
@@ -163,7 +160,7 @@ class DiagnosticsPanel(VerticalScroll):
     ) -> None:
         """Update provider health status."""
         section = self.query_one("#diag-health", Static)
-        status_cls = (
+        _status_cls = (
             "diag-ok" if provider_status == "ok"
             else "diag-warn" if provider_status == "degraded"
             else "diag-error"

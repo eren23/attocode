@@ -2,16 +2,18 @@
 
 from __future__ import annotations
 
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from attocode.agent.agent import ProductionAgent
-from attocode.agent.context import EventHandler
-from attocode.providers.base import LLMProvider
 from attocode.providers.registry import create_provider
-from attocode.tools.registry import ToolRegistry
 from attocode.tools.standard import create_standard_registry
 from attocode.types.agent import AgentConfig
-from attocode.types.budget import ExecutionBudget, STANDARD_BUDGET
+from attocode.types.budget import STANDARD_BUDGET, ExecutionBudget
+
+if TYPE_CHECKING:
+    from attocode.agent.context import EventHandler
+    from attocode.providers.base import LLMProvider
+    from attocode.tools.registry import ToolRegistry
 
 
 class AgentBuilder:

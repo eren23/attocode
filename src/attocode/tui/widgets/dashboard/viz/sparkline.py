@@ -7,10 +7,9 @@ Usage::
 
 from __future__ import annotations
 
+from rich.text import Text
 from textual.reactive import reactive
 from textual.widget import Widget
-
-from rich.text import Text
 
 # Eight Unicode block-element characters ordered by ascending height.
 _BLOCKS = " \u2581\u2582\u2583\u2584\u2585\u2586\u2587\u2588"
@@ -39,7 +38,7 @@ class SparkLine(Widget):
         max_width: int = 40,
         *,
         name: str | None = None,
-        id: str | None = None,
+        id: str | None = None,  # noqa: A002
         classes: str | None = None,
     ) -> None:
         super().__init__(name=name, id=id, classes=classes)

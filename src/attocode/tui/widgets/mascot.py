@@ -78,7 +78,7 @@ def render_startup_banner(
     gap = "  "
 
     # Side-by-side: ghost (colored) + figlet (bold)
-    for g_line, f_line in zip(ghost_lines, figlet_lines):
+    for g_line, f_line in zip(ghost_lines, figlet_lines, strict=False):
         text.append(g_line, style=accent_color)
         text.append(gap)
         text.append(f_line, style="bold")

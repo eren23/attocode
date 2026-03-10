@@ -14,7 +14,6 @@ from textual.widgets import Static
 from attocode.integrations.swarm.types import (
     SwarmPhase,
     SwarmStatus,
-    SwarmWorkerStatus,
 )
 
 

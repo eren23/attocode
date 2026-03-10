@@ -2,11 +2,15 @@
 
 from __future__ import annotations
 
-from textual.app import ComposeResult
+from typing import TYPE_CHECKING
+
 from textual.containers import Horizontal
 from textual.message import Message
 from textual.widget import Widget
 from textual.widgets import Button
+
+if TYPE_CHECKING:
+    from textual.app import ComposeResult
 
 
 class SwarmPauseRequested(Message):

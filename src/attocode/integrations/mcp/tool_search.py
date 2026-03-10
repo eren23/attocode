@@ -8,11 +8,13 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
-from attocode.integrations.mcp.client import MCPTool
 from attocode.tools.base import Tool, ToolSpec
 from attocode.types.messages import DangerLevel
+
+if TYPE_CHECKING:
+    from attocode.integrations.mcp.client import MCPTool
 
 
 @dataclass(slots=True)

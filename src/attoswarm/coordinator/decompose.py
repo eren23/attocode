@@ -10,8 +10,6 @@ import logging
 import re
 from typing import Any
 
-from attoswarm.protocol.models import TaskSpec
-
 logger = logging.getLogger(__name__)
 
 # Complexity tier → (min_tasks, max_tasks)
@@ -205,7 +203,7 @@ def validate_decomposition(tasks: list[dict[str, Any]], complexity: str) -> list
         desc = task.get("description", "")
         title = task.get("title", "")
         # Count distinct feature mentions (separated by commas/and)
-        combined = f"{title} {desc}"
+        _combined = f"{title} {desc}"
         # Simple heuristic: count "and" or comma-separated clauses in title
         and_count = title.count(" and ") + title.count(",")
         if and_count >= 2:

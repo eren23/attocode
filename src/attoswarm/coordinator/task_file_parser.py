@@ -13,10 +13,12 @@ Usage::
 from __future__ import annotations
 
 import re
-from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from attoswarm.protocol.models import TaskSpec
+
+if TYPE_CHECKING:
+    from pathlib import Path
 
 _KNOWN_KINDS = frozenset({
     "implement", "test", "integrate", "analysis",
@@ -45,7 +47,7 @@ def load_tasks_file(path: Path) -> list[TaskSpec]:
 
     errors = validate_tasks(raw)
     if errors:
-        raise ValueError(f"Task file validation failed:\n" + "\n".join(f"  - {e}" for e in errors))
+        raise ValueError("Task file validation failed:\n" + "\n".join(f"  - {e}" for e in errors))
 
     return [
         TaskSpec(

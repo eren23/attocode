@@ -3,17 +3,20 @@
 from __future__ import annotations
 
 from collections import Counter
-from typing import Any, Callable
+from typing import TYPE_CHECKING, Any
 
 from rich.text import Text
-from textual.app import ComposeResult
 from textual.binding import Binding
 from textual.screen import Screen
-from textual.timer import Timer
 from textual.widgets import Footer, Header, Static
 
 from attocode.tui.widgets.swarm.event_timeline import EventTimeline
 
+if TYPE_CHECKING:
+    from collections.abc import Callable
+
+    from textual.app import ComposeResult
+    from textual.timer import Timer
 
 _FILTER_TYPES = [
     "", "spawn", "complete", "fail", "write", "conflict",

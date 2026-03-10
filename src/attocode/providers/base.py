@@ -7,21 +7,23 @@ and streaming configuration.
 from __future__ import annotations
 
 import logging
-from collections.abc import AsyncIterator
 from dataclasses import dataclass, field
 from enum import StrEnum
 from pathlib import Path
-from typing import Any, Protocol, runtime_checkable
+from typing import TYPE_CHECKING, Any, Protocol, runtime_checkable
 
 import yaml
 
-from attocode.types.messages import (
-    ChatOptions,
-    ChatResponse,
-    Message,
-    MessageWithStructuredContent,
-    StreamChunk,
-)
+if TYPE_CHECKING:
+    from collections.abc import AsyncIterator
+
+    from attocode.types.messages import (
+        ChatOptions,
+        ChatResponse,
+        Message,
+        MessageWithStructuredContent,
+        StreamChunk,
+    )
 
 
 class ProviderCapability(StrEnum):

@@ -8,9 +8,10 @@ from __future__ import annotations
 
 from collections import defaultdict, deque
 from dataclasses import dataclass, field
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
-from attocode.integrations.skills.loader import SkillDefinition
+if TYPE_CHECKING:
+    from attocode.integrations.skills.loader import SkillDefinition
 
 
 class SkillDependencyError(Exception):
@@ -148,12 +149,11 @@ class SkillDependencyGraph:
         warnings: list[str] = []
         for dep_name, required_version in info.compatible_versions.items():
             dep_info = self._deps.get(dep_name)
-            if dep_info and dep_info.version and required_version:
-                if dep_info.version != required_version:
-                    warnings.append(
-                        f"{skill_name} requires {dep_name} v{required_version} "
-                        f"but found v{dep_info.version}"
-                    )
+            if dep_info and dep_info.version and required_version and dep_info.version != required_version:
+                warnings.append(
+                    f"{skill_name} requires {dep_name} v{required_version} "
+                    f"but found v{dep_info.version}"
+                )
         return warnings
 
     def to_dict(self) -> dict[str, Any]:

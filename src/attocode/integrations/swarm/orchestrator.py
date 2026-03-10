@@ -6,18 +6,13 @@ workers, manages quality gates, recovery, and produces a final result.
 
 from __future__ import annotations
 
-import asyncio
 import logging
-import time
 from dataclasses import dataclass, field
 from typing import Any
 
 from attocode.integrations.swarm.types import (
-    BUILTIN_TASK_TYPE_CONFIGS,
     ArtifactInventory,
-    ModelHealthRecord,
     OrchestratorDecision,
-    SmartDecompositionResult,
     SpawnResult,
     SwarmCheckpoint,
     SwarmConfig,
@@ -25,7 +20,6 @@ from attocode.integrations.swarm.types import (
     SwarmEvent,
     SwarmEventListener,
     SwarmExecutionResult,
-    SwarmExecutionStats,
     SwarmPhase,
     SwarmPlan,
     SwarmStatus,
@@ -169,8 +163,9 @@ class SwarmOrchestrator:
 
         # Initialize message bus for inter-worker communication
         try:
-            from attocode.integrations.swarm.message_bus import SwarmMessageBus
             import os
+
+            from attocode.integrations.swarm.message_bus import SwarmMessageBus
             bus_path = os.path.join(self._config.state_dir, "message_bus.db")
             os.makedirs(os.path.dirname(bus_path), exist_ok=True)
             self._message_bus = SwarmMessageBus(bus_path)
@@ -386,7 +381,7 @@ class SwarmOrchestrator:
 
             # Phase 9: Synthesis
             ctx.current_phase = SwarmPhase.SYNTHESIZING
-            synthesis = await synthesize_outputs(ctx)
+            _synthesis = await synthesize_outputs(ctx)
 
             # Save final state
             await self._save_state(ctx, "final")

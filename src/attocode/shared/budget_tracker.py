@@ -10,9 +10,10 @@ from __future__ import annotations
 import hashlib
 import json
 from dataclasses import dataclass, field
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
-from attocode.shared.shared_economics_state import SharedEconomicsState
+if TYPE_CHECKING:
+    from attocode.shared.shared_economics_state import SharedEconomicsState
 
 
 @dataclass(slots=True)

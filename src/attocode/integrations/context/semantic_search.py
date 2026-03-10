@@ -243,7 +243,7 @@ class SemanticSearchManager:
 
         # Store
         entries = []
-        for (cid, fpath, ctype, text), vec in zip(chunks, all_vectors):
+        for (cid, fpath, ctype, text), vec in zip(chunks, all_vectors, strict=False):
             if not vec:
                 continue
             entries.append(VectorEntry(
@@ -408,7 +408,7 @@ class SemanticSearchManager:
         # BM25 parameters
         k1 = 1.5
         b = 0.75
-        N = len(self._kw_docs)
+        N = len(self._kw_docs)  # noqa: N806
         avg_dl = self._kw_avg_dl or 1.0
 
         scored: list[tuple[float, _KeywordDoc]] = []
@@ -434,7 +434,7 @@ class SemanticSearchManager:
                 continue
 
             # Post-hoc boosts
-            name_lower = doc.name.lower()
+            _name_lower = doc.name.lower()
             name_tokens = _tokenize(doc.name)
 
             # Symbol name match boost
@@ -500,8 +500,8 @@ class SemanticSearchManager:
         if not ctx._files:
             ctx.discover_files()
 
-        _CONFIG_EXTS = frozenset({".toml", ".json", ".yaml", ".yml", ".cfg", ".ini", ".md", ".rst", ".txt"})
-        _CONFIG_NAMES = frozenset({
+        _CONFIG_EXTS = frozenset({".toml", ".json", ".yaml", ".yml", ".cfg", ".ini", ".md", ".rst", ".txt"})  # noqa: N806
+        _CONFIG_NAMES = frozenset({  # noqa: N806
             "pyproject.toml", "package.json", "tsconfig.json", "setup.cfg",
             "setup.py", "readme.md", "readme.rst", "changelog.md", "license",
         })
@@ -797,7 +797,7 @@ class SemanticSearchManager:
 
         # Build entries
         entries = []
-        for (cid, fpath, ctype, text), vec in zip(chunks, vectors):
+        for (cid, fpath, ctype, text), vec in zip(chunks, vectors, strict=False):
             if not vec:
                 continue
             entries.append(VectorEntry(
@@ -1041,7 +1041,7 @@ class SemanticSearchManager:
                     texts = [c[3] for c in chunks]
                     vectors = self._provider.embed(texts)
                     entries = []
-                    for (cid, fpath, ctype, text), vec in zip(chunks, vectors):
+                    for (cid, fpath, ctype, text), vec in zip(chunks, vectors, strict=False):
                         if not vec:
                             continue
                         entries.append(VectorEntry(

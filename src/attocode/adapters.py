@@ -206,7 +206,7 @@ def create_tui_approval_bridge(callback: Any, timeout: float = 60.0) -> Approval
                 return await asyncio.wait_for(
                     callback(tool_name, args, danger_level), timeout=timeout,
                 )
-            except asyncio.TimeoutError:
+            except TimeoutError:
                 logger.warning("Approval timed out after %.1fs for %s", timeout, tool_name)
                 return False
             except Exception:
@@ -227,7 +227,7 @@ def create_tui_budget_bridge(callback: Any, timeout: float = 60.0) -> BudgetExte
                 return await asyncio.wait_for(
                     callback(current_tokens, max_tokens, requested, reason), timeout=timeout,
                 )
-            except asyncio.TimeoutError:
+            except TimeoutError:
                 logger.warning("Budget extension timed out after %.1fs", timeout)
                 return False
             except Exception:
@@ -248,7 +248,7 @@ def create_tui_learning_bridge(callback: Any, timeout: float = 60.0) -> Learning
                     logger.warning("Invalid validation result %r, defaulting to skip", result)
                     return "skip"
                 return result
-            except asyncio.TimeoutError:
+            except TimeoutError:
                 logger.warning("Learning validation timed out after %.1fs", timeout)
                 return "skip"
             except Exception:

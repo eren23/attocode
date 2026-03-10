@@ -3,7 +3,8 @@
 from __future__ import annotations
 
 import asyncio
-from typing import Any, Awaitable, Callable
+from collections.abc import Awaitable, Callable
+from typing import Any
 
 from attocode.errors import ToolNotFoundError, ToolTimeoutError
 from attocode.tools.base import Tool
@@ -84,8 +85,8 @@ class ToolRegistry:
                 timeout=effective_timeout,
             )
             return ToolResult(call_id="", result=result)
-        except asyncio.TimeoutError:
-            raise ToolTimeoutError(tool_name, effective_timeout)
+        except TimeoutError as err:
+            raise ToolTimeoutError(tool_name, effective_timeout) from err
         except Exception as e:
             return ToolResult(call_id="", error=f"{type(e).__name__}: {e}")
 

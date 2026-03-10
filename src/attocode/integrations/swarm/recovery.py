@@ -13,21 +13,22 @@ import json
 import logging
 import time
 from dataclasses import dataclass, field
-from typing import Any, Callable, Coroutine
+from typing import TYPE_CHECKING, Any
 
 from attocode.integrations.swarm.helpers import is_hollow_completion
 from attocode.integrations.swarm.types import (
     BUILTIN_TASK_TYPE_CONFIGS,
-    OrchestratorDecision,
     SpawnResult,
     SubtaskType,
     SwarmConfig,
-    SwarmEvent,
     SwarmTask,
     SwarmTaskResult,
     SwarmTaskStatus,
     swarm_event,
 )
+
+if TYPE_CHECKING:
+    from collections.abc import Callable, Coroutine
 
 logger = logging.getLogger(__name__)
 
@@ -252,10 +253,7 @@ def _should_accept_degraded(
     had_tool_calls = spawn_result.tool_calls > 0
     narrative_only = is_hollow_completion(spawn_result, task.type.value if isinstance(task.type, SubtaskType) else str(task.type), config)
 
-    if not is_action and had_tool_calls and not narrative_only:
-        return True
-
-    return False
+    return not is_action and had_tool_calls and not narrative_only
 
 
 # =============================================================================
@@ -288,10 +286,7 @@ def should_auto_split(ctx: Any, task: SwarmTask) -> bool:
         return False
     if not task.is_foundation:
         return False
-    if not _budget_has_capacity(ctx):
-        return False
-
-    return True
+    return _budget_has_capacity(ctx)
 
 
 async def judge_split(ctx: Any, task: SwarmTask) -> dict[str, Any]:
@@ -386,12 +381,11 @@ def rescue_cascade_skipped(ctx: Any, *, lenient: bool = False) -> list[SwarmTask
             # Strict: rescue if majority completed
             should_rescue = dep_total > 0 and dep_completed / dep_total >= 0.5
 
-        if should_rescue:
-            if ctx.task_queue.rescue_task(task_id):
-                task.rescue_context = (
-                    f"Rescued: {dep_completed}/{dep_total} deps completed"
-                )
-                rescued.append(task)
+        if should_rescue and ctx.task_queue.rescue_task(task_id):
+            task.rescue_context = (
+                f"Rescued: {dep_completed}/{dep_total} deps completed"
+            )
+            rescued.append(task)
 
     if rescued:
         logger.info(

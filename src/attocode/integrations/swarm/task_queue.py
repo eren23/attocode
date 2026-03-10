@@ -5,9 +5,8 @@ from __future__ import annotations
 import logging
 import os
 import time
-from collections.abc import Callable
-from dataclasses import asdict, dataclass, field
-from typing import Any
+from dataclasses import asdict
+from typing import TYPE_CHECKING, Any
 
 from attocode.integrations.swarm.types import (
     FAILURE_MODE_THRESHOLDS,
@@ -27,6 +26,9 @@ from attocode.integrations.swarm.types import (
     TaskCheckpointState,
     TaskFailureMode,
 )
+
+if TYPE_CHECKING:
+    from collections.abc import Callable
 
 logger = logging.getLogger(__name__)
 
@@ -144,7 +146,7 @@ class SwarmTaskQueue:
 
         # Build task objects from subtasks ------------------------------------
         parallel_groups: list[list[str]] = dep_graph.parallel_groups
-        subtask_map: dict[str, SmartSubtask] = {s.id: s for s in result.subtasks}
+        _subtask_map: dict[str, SmartSubtask] = {s.id: s for s in result.subtasks}
 
         # Assign waves via parallel_groups ------------------------------------
         id_to_wave: dict[str, int] = {}
@@ -404,10 +406,7 @@ class SwarmTaskQueue:
 
     def is_complete(self) -> bool:
         """Check whether all tasks are in a terminal state."""
-        for task in self.tasks.values():
-            if task.status not in _TERMINAL_STATUSES:
-                return False
-        return True
+        return all(task.status in _TERMINAL_STATUSES for task in self.tasks.values())
 
     # ------------------------------------------------------------------
     # Accessors

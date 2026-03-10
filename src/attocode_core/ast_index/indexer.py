@@ -5,7 +5,10 @@ from __future__ import annotations
 import ast
 import json
 from dataclasses import asdict, dataclass, field
-from pathlib import Path
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from pathlib import Path
 
 
 @dataclass(slots=True)
@@ -30,7 +33,7 @@ class CodeIndex:
     files: list[FileIndex] = field(default_factory=list)
 
     @classmethod
-    def build(cls, root: Path) -> "CodeIndex":
+    def build(cls, root: Path) -> CodeIndex:
         files: list[FileIndex] = []
         for path in root.rglob("*.py"):
             if ".git" in path.parts or ".venv" in path.parts:

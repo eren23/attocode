@@ -3,15 +3,18 @@
 from __future__ import annotations
 
 import logging
-from typing import Any, Callable
+from collections.abc import Callable
+from typing import TYPE_CHECKING, Any
 
 from attocode.agent.context import AgentContext, EventHandler
 from attocode.providers.base import LLMProvider, get_model_context_window
-from attocode.tools.registry import ToolRegistry
 from attocode.types.agent import AgentConfig, AgentMetrics, AgentResult, AgentStatus
-from attocode.types.budget import ExecutionBudget, STANDARD_BUDGET
+from attocode.types.budget import STANDARD_BUDGET, ExecutionBudget
 from attocode.types.events import EventType
-from attocode.types.messages import Message
+
+if TYPE_CHECKING:
+    from attocode.tools.registry import ToolRegistry
+    from attocode.types.messages import Message
 
 logger = logging.getLogger(__name__)
 
@@ -194,6 +197,7 @@ class ProductionAgent:
             return None
         try:
             from pathlib import Path
+
             from attocode.integrations.persistence.store import SessionStore
 
             db_path = Path(self._session_dir) / "sessions.db"

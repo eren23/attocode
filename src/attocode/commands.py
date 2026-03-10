@@ -1364,11 +1364,10 @@ def _rollback_command(agent: Any, arg: str) -> CommandResult:
         ctx.messages.pop()
         removed += 1
 
-    if removed == 0:
+    if removed == 0 and ctx.messages:
         # If last message is user, remove it
-        if ctx.messages:
-            ctx.messages.pop()
-            removed = 1
+        ctx.messages.pop()
+        removed = 1
 
     return CommandResult(output=f"Rolled back {removed} message(s). {len(ctx.messages)} remaining.")
 
@@ -1833,7 +1832,7 @@ def _context_command(agent: Any, arg: str) -> CommandResult:
         f"  Budget: {ctx.budget.max_tokens:,} tokens",
         f"  Usage: {agent.get_budget_usage():.0%}" if agent else "",
     ]
-    return CommandResult(output="\n".join(l for l in lines if l))
+    return CommandResult(output="\n".join(line for line in lines if line))
 
 
 def _context_breakdown(ctx: Any) -> CommandResult:
@@ -1968,7 +1967,7 @@ def _repomap_command(agent: Any, arg: str) -> CommandResult:
         lines = [f"Repository: {ctx_mgr.root_dir} ({file_count} files)"]
         if langs:
             top = sorted(langs.items(), key=lambda x: x[1], reverse=True)[:5]
-            lines.append("Languages: " + ", ".join(f"{l} ({c})" for l, c in top))
+            lines.append("Languages: " + ", ".join(f"{line} ({c})" for line, c in top))
         lines.append("")
         lines.append(tree)
         return CommandResult(output="\n".join(lines))
@@ -2154,7 +2153,7 @@ def _trace_command(agent: Any, arg: str) -> CommandResult:
 
         # Efficiency ratios
         if ctx.iteration > 0:
-            lines.append(f"\n  Efficiency:")
+            lines.append("\n  Efficiency:")
             lines.append(f"    Tokens/iteration: {m.total_tokens / ctx.iteration:,.0f}")
             lines.append(f"    LLM calls/iteration: {m.llm_calls / ctx.iteration:.1f}")
             if m.tool_calls > 0:
@@ -2258,7 +2257,7 @@ async def _grants_command(agent: Any) -> CommandResult:
             if perms:
                 lines.append("\nPersisted permissions:" if lines else "Persisted permissions:")
                 for p in perms:
-                    expires = f" (expires)" if p.expires_at else ""
+                    expires = " (expires)" if p.expires_at else ""
                     lines.append(f"  {p.tool_name} [{p.permission_type}] pattern={p.pattern}{expires}")
         except Exception:
             pass
@@ -2887,7 +2886,7 @@ def _swarm_config_show(agent: Any) -> CommandResult:
     if config:
         model = getattr(config, "model", None) or "default"
         lines.append(f"  Runtime model: {model}")
-        lines.append(f"  Defaults: 2 builders + 1 reviewer (all use runtime model)")
+        lines.append("  Defaults: 2 builders + 1 reviewer (all use runtime model)")
 
     return CommandResult(output="\n".join(lines))
 

@@ -12,7 +12,6 @@ from textual.reactive import reactive
 from textual.widget import Widget
 from textual.widgets import DataTable, Static
 
-
 _COLUMN_TITLES = {
     "pending": "PENDING",
     "running": "RUNNING",

@@ -18,7 +18,6 @@ from attocode.types.messages import (
     ToolCall,
 )
 
-
 # =============================================================================
 # Types
 # =============================================================================
@@ -284,7 +283,7 @@ async def adapt_anthropic_stream(
     current_tool_id: str | None = None
     current_tool_name: str | None = None
     tool_args_json: str = ""
-    in_thinking_block: bool = False
+    _in_thinking_block: bool = False
 
     async for line in lines:
         if not line.startswith("data: "):
@@ -301,9 +300,9 @@ async def adapt_anthropic_stream(
                     current_tool_id = block.get("id", "")
                     current_tool_name = block.get("name", "")
                     tool_args_json = ""
-                    in_thinking_block = False
+                    _in_thinking_block = False
                 elif block.get("type") == "thinking":
-                    in_thinking_block = True
+                    _in_thinking_block = True
 
             elif event_type == "content_block_delta":
                 delta = parsed.get("delta", {})
@@ -319,7 +318,7 @@ async def adapt_anthropic_stream(
                     tool_args_json += delta.get("partial_json", "")
 
             elif event_type == "content_block_stop":
-                in_thinking_block = False
+                _in_thinking_block = False
                 if current_tool_id and current_tool_name:
                     try:
                         args = json.loads(tool_args_json) if tool_args_json else {}

@@ -10,7 +10,7 @@ import threading
 from dataclasses import dataclass, field
 from typing import Any
 
-from attocode.tricks.failure_evidence import Failure, FailureTracker
+from attocode.tricks.failure_evidence import FailureTracker
 from attocode.tricks.reversible_compaction import Reference
 
 

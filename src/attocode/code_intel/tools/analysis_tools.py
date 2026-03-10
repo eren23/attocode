@@ -510,8 +510,8 @@ def community_detection(
         lines.append(f"    Internal edges: {internal_edges}, External edges: {external_edges}")
 
         # Hub: highest internal degree (within community)
-        def _internal_degree(f: str) -> int:
-            return sum(1 for n in adj.get(f, set()) if n in community)
+        def _internal_degree(f: str, _community: set[str] = community) -> int:
+            return sum(1 for n in adj.get(f, set()) if n in _community)
 
         hub = max(community, key=_internal_degree)
         hub_deg = _internal_degree(hub)

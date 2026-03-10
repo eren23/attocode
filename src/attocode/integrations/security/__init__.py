@@ -1,9 +1,8 @@
 """Security compliance scanning integrations."""
 
-from attocode.integrations.security.scanner import (
-    SecurityFinding,
-    SecurityReport,
-    SecurityScanner,
+from attocode.integrations.security.dependency_audit import (
+    DependencyAuditor,
+    DependencyFinding,
 )
 from attocode.integrations.security.patterns import (
     ANTI_PATTERNS,
@@ -12,9 +11,10 @@ from attocode.integrations.security.patterns import (
     SecurityPattern,
     Severity,
 )
-from attocode.integrations.security.dependency_audit import (
-    DependencyAuditor,
-    DependencyFinding,
+from attocode.integrations.security.scanner import (
+    SecurityFinding,
+    SecurityReport,
+    SecurityScanner,
 )
 
 __all__ = [

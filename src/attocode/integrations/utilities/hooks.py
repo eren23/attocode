@@ -133,7 +133,7 @@ class HookManager:
                 error=stderr.decode(errors="replace").strip(),
                 exit_code=proc.returncode or 0,
             )
-        except asyncio.TimeoutError:
+        except TimeoutError:
             return HookResult(
                 event=hook.event,
                 command=hook.command,

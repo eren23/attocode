@@ -8,9 +8,12 @@ from __future__ import annotations
 
 import asyncio
 import time
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from enum import StrEnum
-from typing import Any, Callable, Awaitable
+from typing import TYPE_CHECKING, Any
+
+if TYPE_CHECKING:
+    from collections.abc import Awaitable, Callable
 
 
 class SubagentStatus(StrEnum):
@@ -122,7 +125,7 @@ class AsyncSubagentManager:
                 )
                 handle.result = result
                 handle.status = SubagentStatus.COMPLETED
-            except asyncio.TimeoutError:
+            except TimeoutError:
                 handle.status = SubagentStatus.TIMED_OUT
                 handle.error = f"Timed out after {timeout}s"
             except asyncio.CancelledError:
@@ -151,7 +154,7 @@ class AsyncSubagentManager:
                 self._results_queue.get(),
                 timeout=timeout or self.config.collect_timeout,
             )
-        except asyncio.TimeoutError:
+        except TimeoutError:
             return None
 
     async def cancel(self, subagent_id: str) -> bool:

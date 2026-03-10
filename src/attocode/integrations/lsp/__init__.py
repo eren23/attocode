@@ -3,6 +3,7 @@
 from attocode.integrations.lsp.client import (
     BUILTIN_SERVERS,
     COMPLETION_KIND_MAP,
+    LanguageServerConfig,
     LSPCompletion,
     LSPConfig,
     LSPDiagnostic,
@@ -10,7 +11,6 @@ from attocode.integrations.lsp.client import (
     LSPManager,
     LSPPosition,
     LSPRange,
-    LanguageServerConfig,
 )
 
 __all__ = [

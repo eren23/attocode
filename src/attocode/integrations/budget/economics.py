@@ -14,11 +14,10 @@ from typing import Any
 from attocode.integrations.budget.loop_detector import LoopDetection, LoopDetector
 from attocode.integrations.budget.phase_tracker import PhaseTracker
 from attocode.types.budget import (
-    BudgetCheckResult,
+    STANDARD_BUDGET,
     BudgetEnforcementMode,
     BudgetStatus,
     ExecutionBudget,
-    STANDARD_BUDGET,
 )
 
 
@@ -116,10 +115,10 @@ class ProgressState:
 
     def record_tool(self, tool_name: str, success: bool = True) -> None:
         """Record a tool call's contribution to progress."""
-        READ_TOOLS = {"read_file", "glob", "grep", "search_files"}
-        EDIT_TOOLS = {"write_file", "edit_file", "create_file", "patch_file"}
-        BASH_TOOLS = {"bash", "run_command"}
-        TEST_TOOLS = {"run_tests", "pytest"}
+        READ_TOOLS = {"read_file", "glob", "grep", "search_files"}  # noqa: N806
+        EDIT_TOOLS = {"write_file", "edit_file", "create_file", "patch_file"}  # noqa: N806
+        BASH_TOOLS = {"bash", "run_command"}  # noqa: N806
+        TEST_TOOLS = {"run_tests", "pytest"}  # noqa: N806
 
         if tool_name in READ_TOOLS:
             self.files_read += 1
@@ -346,40 +345,38 @@ class ExecutionEconomicsManager:
             )
 
         # Iteration check
-        if self.budget.max_iterations is not None and self.budget.max_iterations > 0:
-            if self._llm_calls >= self.budget.max_iterations:
-                token_frac = self._total_tokens / max(1, self.budget.max_tokens) if self.budget.max_tokens > 0 else 0.0
-                if self.enforcement_mode == BudgetEnforcementMode.ADVISORY:
-                    return BudgetCheck(
-                        can_continue=True,
-                        status=BudgetStatus.WARNING,
-                        usage_fraction=token_frac,
-                        budget_type="iterations",
-                        message=f"Iteration limit reached ({self.budget.max_iterations}) [advisory]",
-                        injected_prompt="You have exceeded the iteration limit. Wrap up efficiently.",
-                        allows_task_continuation=True,
-                    )
+        if self.budget.max_iterations is not None and self.budget.max_iterations > 0 and self._llm_calls >= self.budget.max_iterations:
+            token_frac = self._total_tokens / max(1, self.budget.max_tokens) if self.budget.max_tokens > 0 else 0.0
+            if self.enforcement_mode == BudgetEnforcementMode.ADVISORY:
                 return BudgetCheck(
-                    can_continue=False,
-                    status=BudgetStatus.EXHAUSTED,
+                    can_continue=True,
+                    status=BudgetStatus.WARNING,
                     usage_fraction=token_frac,
                     budget_type="iterations",
-                    message=f"Iteration limit reached ({self.budget.max_iterations})",
-                    recovery_suggestions=["Request budget extension", "Complete current task immediately"],
+                    message=f"Iteration limit reached ({self.budget.max_iterations}) [advisory]",
+                    injected_prompt="You have exceeded the iteration limit. Wrap up efficiently.",
+                    allows_task_continuation=True,
                 )
+            return BudgetCheck(
+                can_continue=False,
+                status=BudgetStatus.EXHAUSTED,
+                usage_fraction=token_frac,
+                budget_type="iterations",
+                message=f"Iteration limit reached ({self.budget.max_iterations})",
+                recovery_suggestions=["Request budget extension", "Complete current task immediately"],
+            )
 
         # Duration check
         if self.budget.max_duration_seconds and self.budget.max_duration_seconds > 0:
             elapsed = self.elapsed_seconds
-            if elapsed >= self.budget.max_duration_seconds:
-                if self.enforcement_mode == BudgetEnforcementMode.STRICT:
-                    return BudgetCheck(
-                        can_continue=False,
-                        status=BudgetStatus.EXHAUSTED,
-                        usage_fraction=1.0,
-                        budget_type="duration",
-                        message=f"Duration limit reached ({elapsed:.0f}s/{self.budget.max_duration_seconds}s)",
-                    )
+            if elapsed >= self.budget.max_duration_seconds and self.enforcement_mode == BudgetEnforcementMode.STRICT:
+                return BudgetCheck(
+                    can_continue=False,
+                    status=BudgetStatus.EXHAUSTED,
+                    usage_fraction=1.0,
+                    budget_type="duration",
+                    message=f"Duration limit reached ({elapsed:.0f}s/{self.budget.max_duration_seconds}s)",
+                )
 
         # Token check
         if self.budget.max_tokens > 0:
@@ -593,7 +590,7 @@ class ExecutionEconomicsManager:
         }
 
     @property
-    def progress(self) -> "ProgressState":
+    def progress(self) -> ProgressState:
         """Get progress tracking state."""
         return self._progress
 
@@ -616,15 +613,12 @@ class ExecutionEconomicsManager:
             return True
 
         # Above 90%, only allow if advisory mode
-        if self.enforcement_mode in (
+        return self.enforcement_mode in (
             BudgetEnforcementMode.SOFT,
             BudgetEnforcementMode.ADVISORY,
-        ):
-            return True
+        )
 
-        return False
-
-    def get_graduated_enforcement(self) -> "EnforcementLevel":
+    def get_graduated_enforcement(self) -> EnforcementLevel:
         """Get the current enforcement level based on usage progression.
 
         Enforcement graduates from none -> warn -> restricted -> hard
@@ -674,7 +668,7 @@ class ExecutionEconomicsManager:
             "cooldown_ok": cooldown_ok,
         }
 
-    def get_phase_budget(self, phase: str) -> "PhaseBudgetConfig":
+    def get_phase_budget(self, phase: str) -> PhaseBudgetConfig:
         """Get budget allocation for a specific execution phase."""
         tuning = self._tuning if hasattr(self, "_tuning") else EconomicsTuning()
 

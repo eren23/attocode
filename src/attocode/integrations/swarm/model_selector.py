@@ -5,7 +5,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import time
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Any
 
 from attocode.integrations.swarm.types import (
@@ -207,14 +207,13 @@ async def auto_detect_worker_models(
         headers["Authorization"] = f"Bearer {options.api_key}"
 
     try:
-        async with aiohttp.ClientSession() as session:
-            async with session.get(url, headers=headers, timeout=aiohttp.ClientTimeout(total=30)) as resp:
-                if resp.status != 200:
-                    logger.warning(
-                        "OpenRouter API returned %d; using fallback workers", resp.status
-                    )
-                    return get_fallback_workers(options.orchestrator_model)
-                data = await resp.json()
+        async with aiohttp.ClientSession() as session, session.get(url, headers=headers, timeout=aiohttp.ClientTimeout(total=30)) as resp:
+            if resp.status != 200:
+                logger.warning(
+                    "OpenRouter API returned %d; using fallback workers", resp.status
+                )
+                return get_fallback_workers(options.orchestrator_model)
+            data = await resp.json()
     except Exception:
         logger.warning("Failed to query OpenRouter API; using fallback workers", exc_info=True)
         return get_fallback_workers(options.orchestrator_model)
@@ -747,7 +746,7 @@ async def probe_model(
             latency_ms=latency_ms,
         )
 
-    except asyncio.TimeoutError:
+    except TimeoutError:
         latency_ms = (time.monotonic() - start) * 1000
         return ProbeResult(
             model=model,

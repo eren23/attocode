@@ -129,7 +129,7 @@ class SubagentOutputStore:
             return ""
 
         parts = [f"## Subagent Outputs ({len(recent)} results)\n"]
-        for i, output in enumerate(recent, 1):
+        for _i, output in enumerate(recent, 1):
             status = "SUCCESS" if output.success else "FAILED"
             parts.append(
                 f"### [{status}] {output.agent_type} ({output.subagent_id})\n"

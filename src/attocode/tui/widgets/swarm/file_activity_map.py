@@ -59,7 +59,7 @@ class FileActivityMap(Static):
             for name, actions in files:
                 # Determine aggregate status
                 writes = [a for a in actions if a.get("action") == "write"]
-                reads = [a for a in actions if a.get("action") == "read"]
+                _reads = [a for a in actions if a.get("action") == "read"]
                 agents = sorted({a.get("agent_id", "?") for a in actions})
 
                 if writes:

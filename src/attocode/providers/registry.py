@@ -5,10 +5,12 @@ from __future__ import annotations
 import dataclasses
 import logging
 import os
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from attocode.errors import ConfigurationError
-from attocode.providers.base import LLMProvider
+
+if TYPE_CHECKING:
+    from attocode.providers.base import LLMProvider
 
 logger = logging.getLogger(__name__)
 

@@ -18,13 +18,11 @@ from attocode.integrations.swarm.types import (
     SpawnAgentFn,
     SpawnResult,
     SwarmConfig,
-    SwarmEvent,
     SwarmTask,
     SwarmWorkerSpec,
     SwarmWorkerStatus,
     TaskTypeConfig,
     WorkerCapability,
-    swarm_event,
 )
 
 logger = logging.getLogger(__name__)
@@ -90,8 +88,9 @@ class SwarmWorkerPool:
         self._worktree_manager: Any | None = None
         if config.enable_worktree_isolation:
             try:
-                from attocode.integrations.swarm.worktree_manager import WorktreeManager
                 import os
+
+                from attocode.integrations.swarm.worktree_manager import WorktreeManager
                 repo_root = os.getcwd()
                 mgr = WorktreeManager(repo_root)
                 if mgr.is_git_repo():
@@ -164,11 +163,7 @@ class SwarmWorkerPool:
 
         # Fallback chains
         if not candidates:
-            if required == WorkerCapability.TEST:
-                candidates = self._workers_with_capability(WorkerCapability.CODE)
-            elif required == WorkerCapability.WRITE:
-                candidates = self._workers_with_capability(WorkerCapability.CODE)
-            elif required == WorkerCapability.DOCUMENT:
+            if required == WorkerCapability.TEST or required == WorkerCapability.WRITE or required == WorkerCapability.DOCUMENT:
                 candidates = self._workers_with_capability(WorkerCapability.CODE)
             elif required == WorkerCapability.REVIEW:
                 candidates = self._workers_with_capability(WorkerCapability.RESEARCH)
@@ -383,7 +378,7 @@ class SwarmWorkerPool:
                 self._spawn_agent_fn(**spawn_kwargs),
                 timeout=timeout_s,
             )
-        except asyncio.TimeoutError:
+        except TimeoutError:
             logger.warning("Worker for task %s timed out after %.0fs", task.id, timeout_s)
             result = SpawnResult(
                 success=False,

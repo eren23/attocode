@@ -58,10 +58,7 @@ class MessagesLog(Widget):
 
             # Format timestamp
             epoch = self._to_epoch(ts_raw)
-            if epoch:
-                time_str = time.strftime("%H:%M:%S", time.localtime(epoch))
-            else:
-                time_str = "??:??:??"
+            time_str = time.strftime("%H:%M:%S", time.localtime(epoch)) if epoch else "??:??:??"
 
             line = Text()
             line.append(f"{time_str} ", style="dim")

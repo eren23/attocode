@@ -12,15 +12,13 @@ Key features:
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 
 from attocode.integrations.budget.budget_pool import (
     BudgetAllocation,
     BudgetPoolConfig,
-    BudgetPoolStats,
     SharedBudgetPool,
 )
-
 
 # =============================================================================
 # Types

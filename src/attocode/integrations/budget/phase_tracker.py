@@ -117,9 +117,8 @@ class PhaseTracker:
         if tool_name == "bash" and self.files_edited > 0:
             # Bash after edits = probably running tests
             return AgentPhase.VERIFYING
-        if tool_name in _EXPLORATION_TOOLS:
-            if self.files_edited == 0:
-                return AgentPhase.EXPLORATION
+        if tool_name in _EXPLORATION_TOOLS and self.files_edited == 0:
+            return AgentPhase.EXPLORATION
         return self.current_phase
 
     def _check_nudges(self) -> str | None:

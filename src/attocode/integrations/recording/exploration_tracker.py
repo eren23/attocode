@@ -207,10 +207,7 @@ class ExplorationGraph:
 
     def to_ascii_dag(self, agent_id: str | None = None) -> str:
         """Render a simple ASCII representation of the exploration path."""
-        if agent_id:
-            path = self.get_agent_path(agent_id)
-        else:
-            path = list(self.nodes.values())
+        path = self.get_agent_path(agent_id) if agent_id else list(self.nodes.values())
 
         if not path:
             return "(no exploration recorded)"
@@ -227,7 +224,7 @@ class ExplorationGraph:
 
             lines.append(f"{prefix}{arrow}{node.file_path} ({node.action}){outcome_badge}")
             if i < len(path) - 1:
-                lines.append(f"    │")
+                lines.append("    │")
 
         return "\n".join(lines)
 

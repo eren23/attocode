@@ -11,16 +11,58 @@ import time
 import uuid
 from dataclasses import replace
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from attocode_core.ast_index.indexer import CodeIndex
 from attoswarm.adapters.base import AgentProcessSpec
 from attoswarm.adapters.registry import get_adapter
-from attoswarm.config.schema import RoleConfig, SwarmYamlConfig
 from attoswarm.coordinator.budget import BudgetCounter
+from attoswarm.coordinator.failure_handler import (
+    cascade_skip_blocked as _cascade_skip_blocked_impl,
+)
+from attoswarm.coordinator.failure_handler import (
+    enforce_task_duration_limits as _enforce_task_duration_limits_impl,
+)
+from attoswarm.coordinator.failure_handler import (
+    enforce_task_silence_timeouts as _enforce_task_silence_timeouts_impl,
+)
+from attoswarm.coordinator.failure_handler import (
+    handle_task_failed as _handle_task_failed_impl,
+)
+from attoswarm.coordinator.failure_handler import (
+    mark_running_task_failed as _mark_running_task_failed_impl,
+)
 from attoswarm.coordinator.merge_queue import MergeQueue
-from attoswarm.coordinator.scheduler import AgentSlot, assign_tasks, compute_ready_tasks  # noqa: F401
+from attoswarm.coordinator.output_harvester import (
+    capture_partial_output as _capture_partial_output_impl,
+)
+from attoswarm.coordinator.output_harvester import (
+    detect_file_changes as _detect_file_changes_impl,
+)
+from attoswarm.coordinator.output_harvester import (
+    handle_completion_claim as _handle_completion_claim_impl,
+)
+from attoswarm.coordinator.output_harvester import (
+    harvest_outputs as _harvest_outputs_impl,
+)
+from attoswarm.coordinator.review_processor import (
+    process_review_queue as _process_review_queue_impl,
+)
+from attoswarm.coordinator.scheduler import (  # noqa: F401
+    AgentSlot,
+    assign_tasks,
+    compute_ready_tasks,
+)
 from attoswarm.coordinator.state_writer import write_state
+from attoswarm.coordinator.task_dispatcher import (
+    build_task_prompt as _build_task_prompt_impl,
+)
+from attoswarm.coordinator.task_dispatcher import (
+    dispatch_ready_tasks as _dispatch_ready_tasks_impl,
+)
+from attoswarm.coordinator.task_dispatcher import (
+    send_task_assignment as _send_task_assignment_impl,
+)
 from attoswarm.coordinator.watchdog import evaluate_watchdog
 from attoswarm.protocol.io import append_jsonl, read_json, write_json_atomic
 from attoswarm.protocol.locks import locked_file  # noqa: F401
@@ -37,27 +79,8 @@ from attoswarm.protocol.models import (
 )
 from attoswarm.workspace.worktree import cleanup_worktrees, ensure_workspace_for_agent
 
-from attoswarm.coordinator.failure_handler import (
-    cascade_skip_blocked as _cascade_skip_blocked_impl,
-    enforce_task_duration_limits as _enforce_task_duration_limits_impl,
-    enforce_task_silence_timeouts as _enforce_task_silence_timeouts_impl,
-    handle_task_failed as _handle_task_failed_impl,
-    mark_running_task_failed as _mark_running_task_failed_impl,
-)
-from attoswarm.coordinator.output_harvester import (
-    capture_partial_output as _capture_partial_output_impl,
-    detect_file_changes as _detect_file_changes_impl,
-    handle_completion_claim as _handle_completion_claim_impl,
-    harvest_outputs as _harvest_outputs_impl,
-)
-from attoswarm.coordinator.review_processor import (
-    process_review_queue as _process_review_queue_impl,
-)
-from attoswarm.coordinator.task_dispatcher import (
-    build_task_prompt as _build_task_prompt_impl,
-    dispatch_ready_tasks as _dispatch_ready_tasks_impl,
-    send_task_assignment as _send_task_assignment_impl,
-)
+if TYPE_CHECKING:
+    from attoswarm.config.schema import RoleConfig, SwarmYamlConfig
 
 log = logging.getLogger(__name__)
 

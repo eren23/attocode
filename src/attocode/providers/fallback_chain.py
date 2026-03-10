@@ -7,18 +7,19 @@ detection.
 
 from __future__ import annotations
 
-import asyncio
 import time
 from dataclasses import dataclass, field
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from attocode.errors import ConfigurationError, ProviderError
-from attocode.types.messages import (
-    ChatOptions,
-    ChatResponse,
-    Message,
-    MessageWithStructuredContent,
-)
+
+if TYPE_CHECKING:
+    from attocode.types.messages import (
+        ChatOptions,
+        ChatResponse,
+        Message,
+        MessageWithStructuredContent,
+    )
 
 
 @dataclass(slots=True)

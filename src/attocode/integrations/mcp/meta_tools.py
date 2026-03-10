@@ -7,9 +7,10 @@ connections, available tools, and resource usage statistics.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
-from attocode.integrations.mcp.client import MCPTool
+if TYPE_CHECKING:
+    from attocode.integrations.mcp.client import MCPTool
 
 
 @dataclass(slots=True)

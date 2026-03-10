@@ -10,9 +10,10 @@ import logging
 import os
 import subprocess
 from dataclasses import dataclass, field
-from typing import Any, Protocol
+from typing import TYPE_CHECKING, Any, Protocol
 
-from attocode.integrations.tasks.task_splitter import SubTask
+if TYPE_CHECKING:
+    from attocode.integrations.tasks.task_splitter import SubTask
 
 logger = logging.getLogger(__name__)
 

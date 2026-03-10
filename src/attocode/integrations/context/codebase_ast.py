@@ -10,8 +10,7 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Literal
-
+from typing import Literal
 
 # ---------------------------------------------------------------------------
 # Parameter and property detail types
@@ -648,11 +647,10 @@ def parse_python(content: str, path: str = "") -> FileAST:
             func_body_start = sig_end_idx + 1
             end_line = func_body_start
             for j in range(func_body_start, len(lines)):
-                l = lines[j]
-                if l.strip() and not l.startswith((" " * (func_indent + 1))) and not l.startswith("\t" * (func_indent // 4 + 1)):
-                    if l.strip() and (len(l) - len(l.lstrip())) <= func_indent:
-                        end_line = j
-                        break
+                line = lines[j]
+                if line.strip() and not line.startswith(" " * (func_indent + 1)) and not line.startswith("\t" * (func_indent // 4 + 1)) and (len(line) - len(line.lstrip())) <= func_indent:
+                    end_line = j
+                    break
             else:
                 end_line = len(lines)
 

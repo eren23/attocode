@@ -17,12 +17,10 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING
 
 from attocode.integrations.context.codebase_ast import (
-    ClassDef,
     FileAST,
-    FunctionDef,
     SymbolChange,
     diff_file_ast,
     parse_file,
@@ -68,7 +66,7 @@ class MergeResult:
 class ASTReconciler:
     """AST-aware 3-way merge for shared-workspace OCC conflicts."""
 
-    def __init__(self, ast_service: "ASTService | None" = None) -> None:
+    def __init__(self, ast_service: ASTService | None = None) -> None:
         self._ast_service = ast_service
 
     def reconcile(

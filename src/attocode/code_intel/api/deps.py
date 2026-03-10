@@ -60,8 +60,8 @@ def get_service_or_404(project_id: str) -> CodeIntelService:
     """Return the service for a project or raise HTTP 404."""
     try:
         return get_service(project_id)
-    except ValueError:
-        raise HTTPException(status_code=404, detail=f"Project '{project_id}' not found")
+    except ValueError as err:
+        raise HTTPException(status_code=404, detail=f"Project '{project_id}' not found") from err
 
 
 def register_project(project_id: str, path: str, name: str = "") -> CodeIntelService:

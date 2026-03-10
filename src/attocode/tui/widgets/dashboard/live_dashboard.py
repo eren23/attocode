@@ -2,11 +2,15 @@
 
 from __future__ import annotations
 
-from textual.app import ComposeResult
+from typing import TYPE_CHECKING
+
 from textual.containers import Container
 from textual.widgets import Static
 
-from attocode.tui.widgets.dashboard.viz import SparkLine, BarChart, PercentBar
+from attocode.tui.widgets.dashboard.viz import BarChart, PercentBar, SparkLine
+
+if TYPE_CHECKING:
+    from textual.app import ComposeResult
 
 
 class LiveTraceAccumulator:

@@ -14,10 +14,8 @@ import os
 import sys
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any
 
 from attocode.errors import ConfigurationError
-
 
 # Landlock constants
 LANDLOCK_CREATE_RULESET_VERSION = 1
@@ -168,7 +166,7 @@ class LandlockSandbox:
             stdout, stderr = await asyncio.wait_for(
                 proc.communicate(), timeout=self.options.timeout
             )
-        except asyncio.TimeoutError:
+        except TimeoutError:
             proc.kill()
             await proc.communicate()
             return f"Command timed out after {self.options.timeout}s", -1

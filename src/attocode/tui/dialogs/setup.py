@@ -3,10 +3,9 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from rich.text import Text
-from textual.app import ComposeResult
 from textual.binding import Binding
 from textual.containers import Vertical
 from textual.screen import ModalScreen
@@ -17,6 +16,9 @@ from attocode.config import (
     PROVIDER_MODEL_OPTIONS,
     save_global_config,
 )
+
+if TYPE_CHECKING:
+    from textual.app import ComposeResult
 
 
 @dataclass(slots=True)
@@ -234,9 +236,7 @@ class SetupWizard(ModalScreen[SetupResult]):
         if self._step == 2:
             return False
         # Step 3 custom model input: disable all number bindings
-        if self._custom_model_mode:
-            return False
-        return True
+        return not self._custom_model_mode
 
     # --- Input handlers ---
 

@@ -6,9 +6,8 @@ import json
 import logging
 import os
 import re
-from collections.abc import Callable
 from dataclasses import dataclass, field
-from typing import Any, Protocol
+from typing import TYPE_CHECKING, Any, Protocol
 
 from attocode.integrations.swarm.types import (
     BUILTIN_TASK_TYPE_CONFIGS,
@@ -16,6 +15,9 @@ from attocode.integrations.swarm.types import (
     SwarmTask,
     SwarmTaskResult,
 )
+
+if TYPE_CHECKING:
+    from collections.abc import Callable
 
 logger = logging.getLogger(__name__)
 
@@ -259,17 +261,16 @@ def run_pre_flight_checks(
     # V7: Task type requires tool calls but got zero
     task_type_str = task.type.value if hasattr(task.type, "value") else str(task.type)
     type_config = BUILTIN_TASK_TYPE_CONFIGS.get(task_type_str)
-    if type_config and type_config.requires_tool_calls:
-        if result.tool_calls is not None and result.tool_calls == 0:
-            return QualityGateResult(
-                score=0,
-                feedback=(
-                    f"Task type '{task_type_str}' requires tool calls but "
-                    f"none were made. This indicates no real work was performed."
-                ),
-                passed=False,
-                pre_flight_reject=True,
-            )
+    if type_config and type_config.requires_tool_calls and result.tool_calls is not None and result.tool_calls == 0:
+        return QualityGateResult(
+            score=0,
+            feedback=(
+                f"Task type '{task_type_str}' requires tool calls but "
+                f"none were made. This indicates no real work was performed."
+            ),
+            passed=False,
+            pre_flight_reject=True,
+        )
 
     # V10: No files modified + no tool calls + description implies file creation
     if (
@@ -402,7 +403,7 @@ def run_concrete_checks(
         # JSON validation
         if fpath.endswith(".json"):
             try:
-                with open(fpath, "r", encoding="utf-8") as f:
+                with open(fpath, encoding="utf-8") as f:
                     json.load(f)
             except (json.JSONDecodeError, OSError) as exc:
                 issues.append(f"JSON parse error in {fpath}: {exc}")
@@ -412,7 +413,7 @@ def run_concrete_checks(
         code_extensions = (".ts", ".tsx", ".js", ".jsx", ".py")
         if any(fpath.endswith(ext) for ext in code_extensions):
             try:
-                with open(fpath, "r", encoding="utf-8", errors="replace") as f:
+                with open(fpath, encoding="utf-8", errors="replace") as f:
                     content = f.read()
                 open_braces = content.count("{")
                 close_braces = content.count("}")

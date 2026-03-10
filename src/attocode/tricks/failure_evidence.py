@@ -9,9 +9,10 @@ from __future__ import annotations
 import re
 import time
 import uuid
-from dataclasses import dataclass, field
+from collections.abc import Callable
+from dataclasses import dataclass
 from enum import StrEnum
-from typing import Any, Callable
+from typing import Any
 
 
 class FailureCategory(StrEnum):
@@ -110,7 +111,7 @@ class FailureTracker:
         self._failures: list[Failure] = []
         self._listeners: list[FailureEventListener] = []
 
-    def record_failure(self, input: FailureInput) -> Failure:
+    def record_failure(self, input: FailureInput) -> Failure:  # noqa: A002
         """Record a new failure."""
         # Extract error string and stack trace
         if isinstance(input.error, Exception):

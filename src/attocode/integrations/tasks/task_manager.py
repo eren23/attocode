@@ -135,9 +135,8 @@ class TaskManager:
         """Get tasks that are ready to execute (dependencies met)."""
         ready = []
         for node in self._tasks.values():
-            if node.task.status in (TaskStatus.PENDING, TaskStatus.BLOCKED):
-                if self._dependencies_met(node.task.id):
-                    ready.append(node.task)
+            if node.task.status in (TaskStatus.PENDING, TaskStatus.BLOCKED) and self._dependencies_met(node.task.id):
+                ready.append(node.task)
         return ready
 
     def get_all_tasks(self) -> list[PlanTask]:
@@ -241,6 +240,5 @@ class TaskManager:
     def _update_blocked_tasks(self) -> None:
         """Update blocked tasks that may now be ready."""
         for node in self._tasks.values():
-            if node.task.status == TaskStatus.BLOCKED:
-                if self._dependencies_met(node.task.id):
-                    node.task.status = TaskStatus.PENDING
+            if node.task.status == TaskStatus.BLOCKED and self._dependencies_met(node.task.id):
+                node.task.status = TaskStatus.PENDING

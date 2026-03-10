@@ -43,11 +43,11 @@ class SwarmBridge:
         bridge.connect(orchestrator.event_bus)
     """
 
-    def __init__(self, app: "App") -> None:
+    def __init__(self, app: App) -> None:
         self._app = app
         self._event_bus: EventBus | None = None
 
-    def connect(self, event_bus: "EventBus") -> None:
+    def connect(self, event_bus: EventBus) -> None:
         """Subscribe to the event bus."""
         self._event_bus = event_bus
         event_bus.subscribe(self._on_event)
@@ -58,7 +58,7 @@ class SwarmBridge:
             self._event_bus.unsubscribe(self._on_event)
             self._event_bus = None
 
-    def _on_event(self, event: "SwarmEvent") -> None:
+    def _on_event(self, event: SwarmEvent) -> None:
         """Convert EventBus events to Textual messages."""
         try:
             self._app.post_message(SwarmEventMessage({

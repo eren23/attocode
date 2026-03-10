@@ -12,10 +12,9 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any
 
-from attocode.integrations.skills.loader import SkillDefinition, SkillLoader
-
 if TYPE_CHECKING:
     from attocode.integrations.skills.dependency_graph import SkillDependencyGraph
+    from attocode.integrations.skills.loader import SkillDefinition, SkillLoader
 
 
 @dataclass

@@ -4,8 +4,10 @@ from __future__ import annotations
 
 from dataclasses import asdict, dataclass, field
 from datetime import UTC, datetime
-from pathlib import Path
-from typing import Any, Literal
+from typing import TYPE_CHECKING, Any, Literal
+
+if TYPE_CHECKING:
+    from pathlib import Path
 
 SchemaVersion = Literal["1.0"]
 TaskStatus = Literal["pending", "ready", "running", "done", "failed", "blocked", "skipped"]

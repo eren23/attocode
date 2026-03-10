@@ -99,7 +99,7 @@ def gather_environment_facts(cwd: str | Path | None = None) -> EnvironmentFacts:
     facts.git_available = git_path is not None
 
     if facts.git_available:
-        work_dir = str(cwd) if cwd else None
+        _work_dir = str(cwd) if cwd else None
         facts.git_branch = _run_cmd(
             ["git", "rev-parse", "--abbrev-ref", "HEAD"],
         )

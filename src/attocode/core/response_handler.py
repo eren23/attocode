@@ -6,15 +6,17 @@ import asyncio
 import html
 import re
 import time
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from attocode.errors import LLMError, ProviderError
 from attocode.types.events import EventType
-from attocode.types.messages import ChatOptions, ChatResponse, ToolDefinition
+from attocode.types.messages import ChatOptions, ChatResponse
 
+if TYPE_CHECKING:
+    from attocode.agent.context import AgentContext
 
 if __name__ != "__main__":
-    from attocode.agent.context import AgentContext
+    pass
 
 
 # Default retry config
@@ -40,7 +42,7 @@ def _track_suspicious_tool_markup(ctx: AgentContext, content: str) -> None:
 
     buf = getattr(ctx, "_tool_markup_buffer", "")
     buf = (buf + content)[-_MAX_MARKUP_BUFFER:]
-    setattr(ctx, "_tool_markup_buffer", buf)
+    ctx._tool_markup_buffer = buf
     decoded = html.unescape(buf)
 
     match = _TOOL_MARKUP_RE.search(decoded)
@@ -60,7 +62,7 @@ def _track_suspicious_tool_markup(ctx: AgentContext, content: str) -> None:
         "raw": decoded[-600:],
         "timestamp": time.time(),
     }
-    setattr(ctx, "_last_suspicious_markup", payload)
+    ctx._last_suspicious_markup = payload
     ctx.emit_simple(
         EventType.SUSPICIOUS_TOOL_MARKUP,
         iteration=ctx.iteration,
@@ -181,8 +183,8 @@ async def call_llm_streaming(
     emits LLM_STREAM_START / LLM_STREAM_CHUNK / LLM_STREAM_END events.
     Otherwise falls back to the regular ``call_llm()``.
     """
-    from attocode.providers.base import StreamingProvider
     from attocode.integrations.streaming.handler import StreamHandler
+    from attocode.providers.base import StreamingProvider
 
     if not isinstance(ctx.provider, StreamingProvider):
         return await call_llm(ctx, max_retries=max_retries, retry_base_delay=retry_base_delay)

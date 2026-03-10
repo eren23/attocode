@@ -2,13 +2,15 @@
 
 from __future__ import annotations
 
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
-from textual.app import ComposeResult
-from textual.containers import Container, Vertical
+from textual.containers import Container
 from textual.widgets import Static
 
-from attocode.tui.widgets.dashboard.viz import ASCIITable, PercentBar, SeverityBadge
+from attocode.tui.widgets.dashboard.viz import ASCIITable, PercentBar
+
+if TYPE_CHECKING:
+    from textual.app import ComposeResult
 
 
 class SwarmActivityPane(Container):

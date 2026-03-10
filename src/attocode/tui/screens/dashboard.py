@@ -7,9 +7,8 @@ system for clean separation from the chat interface.
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
-from textual.app import ComposeResult
 from textual.binding import Binding
 from textual.containers import Vertical
 from textual.screen import Screen
@@ -23,6 +22,9 @@ from attocode.tui.widgets.dashboard.live_dashboard import (
 from attocode.tui.widgets.dashboard.session_browser import SessionBrowserPane
 from attocode.tui.widgets.dashboard.session_detail import SessionDetailPane
 from attocode.tui.widgets.dashboard.swarm_activity_pane import SwarmActivityPane
+
+if TYPE_CHECKING:
+    from textual.app import ComposeResult
 
 # Tab definitions: (number key, label, pane widget id)
 _TABS = [

@@ -8,7 +8,6 @@ from pathlib import Path
 from typing import Any
 
 from attocode.tools.base import Tool, ToolSpec
-from attocode.types.messages import DangerLevel
 
 
 async def grep_search(args: dict[str, Any], working_dir: str | None = None) -> str:

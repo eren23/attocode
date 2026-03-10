@@ -13,18 +13,15 @@ import yaml
 
 logger = logging.getLogger(__name__)
 
-from attocode.integrations.swarm.types import (
+from attocode.integrations.swarm.types import (  # noqa: E402
     AutoSplitConfig,
     CompletionGuardConfig,
-    DEFAULT_SWARM_CONFIG,
     HierarchyConfig,
     HierarchyRoleConfig,
     SwarmConfig,
     SwarmWorkerSpec,
-    TaskTypeConfig,
     WorkerCapability,
 )
-
 
 # =============================================================================
 # YAML Parsing

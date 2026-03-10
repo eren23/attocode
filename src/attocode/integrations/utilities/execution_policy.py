@@ -8,7 +8,7 @@ Conditional policies based on argument patterns.
 from __future__ import annotations
 
 import re
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from enum import StrEnum
 from typing import Any
 
@@ -46,10 +46,7 @@ class PolicyCondition:
             return self._match_value(intent.value)
         if self.field == "argument":
             # Check if any argument value matches
-            for arg_val in arguments.values():
-                if self._match_value(str(arg_val)):
-                    return True
-            return False
+            return any(self._match_value(str(arg_val)) for arg_val in arguments.values())
         if self.field == "argument_pattern":
             # Regex match against all argument values
             for arg_val in arguments.values():

@@ -141,7 +141,7 @@ class ToolRecommendationEngine:
             words = context.lower().split()
             for word in words:
                 if word in self._keyword_tool_map:
-                    for tool, count in self._keyword_tool_map[word].most_common(3):
+                    for tool, _count in self._keyword_tool_map[word].most_common(3):
                         if keyword_scores[tool] < 0.3:
                             keyword_scores[tool] += 0.1
                             if f"Matches keyword '{word}'" not in reasons[tool]:

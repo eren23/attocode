@@ -70,7 +70,7 @@ def classify_complexity(
     Returns:
         ComplexityAssessment with level and metadata.
     """
-    prompt_lower = prompt.lower()
+    _prompt_lower = prompt.lower()
     word_count = len(prompt.split())
 
     # Very short prompts are usually trivial

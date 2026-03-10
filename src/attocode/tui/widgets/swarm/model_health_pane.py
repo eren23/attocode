@@ -2,13 +2,15 @@
 
 from __future__ import annotations
 
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from rich.text import Text
-from textual.app import ComposeResult
 from textual.containers import Horizontal, Vertical
 from textual.widget import Widget
-from textual.widgets import DataTable, Static
+from textual.widgets import DataTable
+
+if TYPE_CHECKING:
+    from textual.app import ComposeResult
 
 
 class ModelHealthDetail(Widget):

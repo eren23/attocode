@@ -84,7 +84,9 @@ class CodeIntelService:
         if self._context_mgr is None:
             with self._init_lock:
                 if self._context_mgr is None:
-                    from attocode.integrations.context.codebase_context import CodebaseContextManager
+                    from attocode.integrations.context.codebase_context import (
+                        CodebaseContextManager,
+                    )
 
                     mgr = CodebaseContextManager(root_dir=self._project_dir)
                     mgr.discover_files()
@@ -120,7 +122,9 @@ class CodeIntelService:
             ast_svc = self._get_ast_service()
             with self._init_lock:
                 if self._explorer is None:
-                    from attocode.integrations.context.hierarchical_explorer import HierarchicalExplorer
+                    from attocode.integrations.context.hierarchical_explorer import (
+                        HierarchicalExplorer,
+                    )
 
                     self._explorer = HierarchicalExplorer(ctx, ast_service=ast_svc)
         return self._explorer
@@ -457,8 +461,8 @@ class CodeIntelService:
                 1 for f in community for n in adj.get(f, set()) if n not in community
             )
 
-            def _int_deg(f: str) -> int:
-                return sum(1 for n in adj.get(f, set()) if n in community)
+            def _int_deg(f: str, _community: set[str] = community) -> int:
+                return sum(1 for n in adj.get(f, set()) if n in _community)
 
             hub = max(community, key=_int_deg)
             lines.append(f"\n  Community {i} ({len(community)} files) — theme: {theme}")
@@ -1051,7 +1055,7 @@ class CodeIntelService:
 
     def record_learning(
         self,
-        type: str,
+        type: str,  # noqa: A002
         description: str,
         details: str = "",
         scope: str = "",
@@ -1073,7 +1077,7 @@ class CodeIntelService:
         action = "boosted" if helpful else "reduced"
         return f"Feedback recorded — confidence {action} for learning #{learning_id}."
 
-    def list_learnings(self, status: str = "active", type: str = "", scope: str = "") -> str:
+    def list_learnings(self, status: str = "active", type: str = "", scope: str = "") -> str:  # noqa: A002
         store = self._get_memory_store()
         results = store.list_all(status=status, type=type or None)
         if scope:
@@ -1100,10 +1104,7 @@ class CodeIntelService:
         for f in files:
             try:
                 p = Path(f)
-                if p.is_absolute():
-                    rel = os.path.relpath(str(p), self._project_dir)
-                else:
-                    rel = str(p)
+                rel = os.path.relpath(str(p), self._project_dir) if p.is_absolute() else str(p)
                 rel = os.path.normpath(rel)
                 if rel.startswith(".."):
                     continue

@@ -10,7 +10,6 @@ from textual.reactive import reactive
 from textual.widget import Widget
 from textual.widgets import RichLog, Static
 
-
 _EVENT_STYLES = {
     "spawn": "cyan",
     "claim": "yellow",
@@ -84,10 +83,7 @@ class EventTimeline(Static):
         text = Text()
         for event in filtered[-30:]:  # Show last 30
             ts = event.get("timestamp", 0)
-            if ts:
-                time_str = time.strftime("%H:%M:%S", time.localtime(ts))
-            else:
-                time_str = "??:??:??"
+            time_str = time.strftime("%H:%M:%S", time.localtime(ts)) if ts else "??:??:??"
 
             etype = event.get("type", "info")
             icon = _EVENT_ICONS.get(etype, "\u2022")
@@ -183,10 +179,7 @@ class EventsLog(Widget):
 
         for event in new_events:
             ts = event.get("timestamp", 0)
-            if ts:
-                time_str = time.strftime("%H:%M:%S", time.localtime(ts))
-            else:
-                time_str = "??:??:??"
+            time_str = time.strftime("%H:%M:%S", time.localtime(ts)) if ts else "??:??:??"
 
             etype = event.get("type", "info")
             color = _LOG_COLORS.get(etype, "dim")

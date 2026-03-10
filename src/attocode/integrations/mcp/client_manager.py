@@ -8,14 +8,14 @@ to be available immediately at startup.
 from __future__ import annotations
 
 import time
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from enum import StrEnum
 from typing import TYPE_CHECKING, Any
 
 from attocode.integrations.mcp.client import MCPCallResult, MCPClient, MCPTool
-from attocode.integrations.mcp.config import MCPServerConfig
 
 if TYPE_CHECKING:
+    from attocode.integrations.mcp.config import MCPServerConfig
     from attocode.integrations.mcp.meta_tools import MCPMetaTools
 
 

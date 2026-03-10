@@ -6,9 +6,10 @@ for the agent execution lifecycle.
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from enum import StrEnum
-from typing import Any, Callable
+from typing import Any
 
 
 class AgentLifecycleState(StrEnum):

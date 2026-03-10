@@ -60,7 +60,7 @@ class ImpactGraphWidget(Widget):
             text.append("  No downstream impact detected.\n", style="green")
             return text
 
-        _HOP_STYLES = {
+        _HOP_STYLES = {  # noqa: N806
             1: "bold red",
             2: "yellow",
         }

@@ -6,11 +6,10 @@ preserving essential information.
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Any
 
 from attocode.types.messages import Message, Role
-
 
 # Length thresholds
 COMPACT_PREVIEW_LENGTH = 200
