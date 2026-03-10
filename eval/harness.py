@@ -367,14 +367,26 @@ class ResultsDB:
     def get_run_results(self, run_id: str) -> list[dict[str, Any]]:
         assert self._conn is not None
         cursor = self._conn.execute(
-            """SELECT instance_id, status, tokens_used, cost_usd,
-                      wall_time_seconds, tests_passed, error, model
+            """SELECT instance_id, status, patch_generated, tokens_used, cost_usd,
+                      wall_time_seconds, tests_passed, error, model, metadata_json
                FROM instance_results WHERE run_id = ?
                ORDER BY instance_id""",
             (run_id,),
         )
         columns = [d[0] for d in cursor.description]
-        return [dict(zip(columns, row)) for row in cursor.fetchall()]
+        results: list[dict[str, Any]] = []
+        for row in cursor.fetchall():
+            item = dict(zip(columns, row))
+            raw_meta = item.pop("metadata_json", "")
+            if raw_meta:
+                try:
+                    item["metadata"] = json.loads(raw_meta)
+                except json.JSONDecodeError:
+                    item["metadata"] = {}
+            else:
+                item["metadata"] = {}
+            results.append(item)
+        return results
 
     def close(self) -> None:
         if self._conn:
@@ -452,6 +464,16 @@ class EvalHarness:
                 tool_calls=agent_result.get("tool_calls", 0),
                 model=agent_result.get("model", self.model),
                 tests_passed=tests_passed,
+                metadata={
+                    "repo": instance.repo,
+                    "base_commit": instance.base_commit,
+                    "problem_statement": instance.problem_statement,
+                    "test_patch": instance.test_patch,
+                    "patch_gold": instance.patch_gold,
+                    "hints": instance.hints,
+                    "instance_metadata": instance.metadata,
+                    "working_dir": instance_dir,
+                },
             )
 
         except asyncio.TimeoutError:
@@ -461,6 +483,16 @@ class EvalHarness:
                 wall_time_seconds=time.monotonic() - start_time,
                 error="Agent timed out",
                 model=self.model,
+                metadata={
+                    "repo": instance.repo,
+                    "base_commit": instance.base_commit,
+                    "problem_statement": instance.problem_statement,
+                    "test_patch": instance.test_patch,
+                    "patch_gold": instance.patch_gold,
+                    "hints": instance.hints,
+                    "instance_metadata": instance.metadata,
+                    "working_dir": instance_dir,
+                },
             )
         except Exception as exc:
             return RunResult(
@@ -469,6 +501,16 @@ class EvalHarness:
                 wall_time_seconds=time.monotonic() - start_time,
                 error=str(exc),
                 model=self.model,
+                metadata={
+                    "repo": instance.repo,
+                    "base_commit": instance.base_commit,
+                    "problem_statement": instance.problem_statement,
+                    "test_patch": instance.test_patch,
+                    "patch_gold": instance.patch_gold,
+                    "hints": instance.hints,
+                    "instance_metadata": instance.metadata,
+                    "working_dir": instance_dir,
+                },
             )
 
     async def run_suite(
