@@ -55,37 +55,40 @@ def extract_efficiency(run_dir: str) -> EfficiencyMetrics:
 
     Expected structure:
         run_dir/
-            state.json          — final orchestrator state
-            events.jsonl        — event log
-            manifest.json       — task manifest
-            tasks/              — per-task results
+            swarm.state.json    — final orchestrator state
+            swarm.events.jsonl  — event log
     """
     metrics = EfficiencyMetrics()
 
-    state = _load_json(os.path.join(run_dir, "state.json"))
+    state = _load_json(os.path.join(run_dir, "swarm.state.json"))
     if not state:
         return metrics
 
     metrics.run_id = state.get("run_id", "")
 
-    # Task counts
-    tasks = state.get("tasks", {})
-    if isinstance(tasks, dict):
-        task_list = list(tasks.values())
-    elif isinstance(tasks, list):
-        task_list = tasks
+    # Task counts: prefer dag_summary counters, fall back to dag.nodes.
+    dag_summary = state.get("dag_summary", {})
+    if isinstance(dag_summary, dict) and any(k in dag_summary for k in ("pending", "running", "done", "failed")):
+        pending = int(dag_summary.get("pending", 0) or 0)
+        running = int(dag_summary.get("running", 0) or 0)
+        done = int(dag_summary.get("done", 0) or 0)
+        failed = int(dag_summary.get("failed", 0) or 0)
+        metrics.total_tasks = pending + running + done + failed
+        metrics.completed_tasks = done
+        metrics.failed_tasks = failed
     else:
-        task_list = []
-
-    metrics.total_tasks = len(task_list)
-    metrics.completed_tasks = sum(
-        1 for t in task_list
-        if t.get("status") in ("done", "completed")
-    )
-    metrics.failed_tasks = sum(
-        1 for t in task_list
-        if t.get("status") in ("failed", "error", "skipped")
-    )
+        dag = state.get("dag", {})
+        nodes = dag.get("nodes", []) if isinstance(dag, dict) else []
+        task_list = nodes if isinstance(nodes, list) else []
+        metrics.total_tasks = len(task_list)
+        metrics.completed_tasks = sum(
+            1 for t in task_list
+            if isinstance(t, dict) and t.get("status") in ("done", "completed")
+        )
+        metrics.failed_tasks = sum(
+            1 for t in task_list
+            if isinstance(t, dict) and t.get("status") in ("failed", "error", "skipped")
+        )
 
     # Task completion rate
     if metrics.total_tasks > 0:
@@ -103,10 +106,10 @@ def extract_efficiency(run_dir: str) -> EfficiencyMetrics:
 
     # Max concurrency from DAG summary
     dag = state.get("dag_summary", {})
-    metrics.max_concurrency = dag.get("max_parallelism", 1) or 1
+    metrics.max_concurrency = int(dag.get("max_parallelism", 1) or 1) if isinstance(dag, dict) else 1
 
     # Process events for parallelism and retry metrics
-    events = _load_events(os.path.join(run_dir, "events.jsonl"))
+    events = _load_events(os.path.join(run_dir, "swarm.events.jsonl"))
     if events:
         _process_events(metrics, events)
 
@@ -187,16 +190,17 @@ def _process_events(metrics: EfficiencyMetrics, events: list[dict]) -> None:
     retry_successes = 0
 
     for evt in events:
-        evt_type = evt.get("type", "")
-        ts = evt.get("timestamp", 0)
+        evt_type = evt.get("type") or evt.get("event_type") or ""
+        ts = _to_seconds(evt.get("timestamp", 0))
+        payload = evt.get("payload", {}) if isinstance(evt.get("payload"), dict) else {}
 
         if evt_type == "agent.started":
-            agent_id = evt.get("agent_id", "")
+            agent_id = evt.get("agent_id") or payload.get("agent_id", "")
             if agent_id:
                 agent_starts[agent_id] = ts
 
         elif evt_type == "agent.completed":
-            agent_id = evt.get("agent_id", "")
+            agent_id = evt.get("agent_id") or payload.get("agent_id", "")
             if agent_id in agent_starts:
                 total_agent_time += ts - agent_starts.pop(agent_id)
 
@@ -226,3 +230,10 @@ def _compute_critical_path(metrics: EfficiencyMetrics, state: dict) -> None:
     critical_path_len = dag.get("critical_path_length", 0)
     if metrics.total_tasks > 0 and critical_path_len > 0:
         metrics.critical_path_ratio = critical_path_len / metrics.total_tasks
+
+
+def _to_seconds(value: Any) -> float:
+    """Best-effort conversion of event timestamps to seconds."""
+    if isinstance(value, (int, float)):
+        return float(value)
+    return 0.0

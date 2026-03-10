@@ -249,7 +249,7 @@ def _build_landlock_helper(
         f"writable = {w_paths}\n"
         f"cmd = {cmd}\n"
         "apply_landlock(readable, writable)\n"
-        "result = subprocess.run(cmd, shell=True, capture_output=True, text=True)\n"
+        "result = subprocess.run(['/bin/sh', '-lc', cmd], capture_output=True, text=True)\n"
         "sys.stdout.write(result.stdout)\n"
         "sys.stderr.write(result.stderr)\n"
         "sys.exit(result.returncode)\n"

@@ -26,7 +26,7 @@ from eval.metrics import compute_metrics, format_report
 from eval.swebench.adapter import AttoswarmSWEBenchFactory
 from eval.swebench.config import SWEBenchEvalConfig
 from eval.swebench.dataset import load_from_jsonl, load_from_huggingface
-from eval.swebench.efficiency import extract_efficiency, format_efficiency_report
+from eval.swebench.efficiency import extract_efficiency, extract_efficiency_batch, format_efficiency_report
 from eval.swebench.grader import grade_local, grade_official
 from eval.swebench.report import (
     generate_leaderboard,
@@ -75,6 +75,7 @@ def build_parser() -> argparse.ArgumentParser:
     # --- efficiency ---
     eff_parser = subparsers.add_parser("efficiency", help="Analyze swarm efficiency")
     eff_parser.add_argument("--run-id", required=True)
+    eff_parser.add_argument("--db", default="eval_swebench.db")
     eff_parser.add_argument("--run-dir", help="Override run directory path")
 
     # --- leaderboard ---
@@ -247,25 +248,54 @@ def cmd_compare(args: argparse.Namespace) -> None:
 
 def cmd_efficiency(args: argparse.Namespace) -> None:
     """Analyze swarm efficiency for a run."""
-    run_dir = args.run_dir
-    if not run_dir:
-        # Try to find run directory from default locations
-        candidates = [
-            os.path.join(".agent", args.run_id),
-            os.path.join("/tmp", f"attocode-eval-{args.run_id}"),
-        ]
-        for c in candidates:
-            if os.path.isdir(c):
-                run_dir = c
-                break
+    run_dirs: list[str] = []
+    if args.run_dir:
+        if os.path.isdir(args.run_dir):
+            run_dirs = [args.run_dir]
+    else:
+        # Try to resolve run dirs from persisted eval metadata.
+        db = ResultsDB(args.db)
+        db.connect()
+        rows = db.get_run_results(args.run_id)
+        db.close()
+        for row in rows:
+            meta = row.get("metadata", {})
+            if not isinstance(meta, dict):
+                continue
+            working_dir = str(meta.get("working_dir", ""))
+            if not working_dir:
+                continue
+            candidate = os.path.join(working_dir, ".swarm-run")
+            if os.path.isdir(candidate):
+                run_dirs.append(candidate)
 
-    if not run_dir or not os.path.isdir(run_dir):
+        # Fallback to historical defaults.
+        if not run_dirs:
+            candidates = [
+                os.path.join(".agent", args.run_id),
+                os.path.join("/tmp", f"attocode-eval-{args.run_id}"),
+            ]
+            for c in candidates:
+                if os.path.isdir(c):
+                    run_dirs.append(c)
+
+    # Deduplicate while preserving order.
+    deduped: list[str] = []
+    for d in run_dirs:
+        if d not in deduped:
+            deduped.append(d)
+
+    if not deduped:
         print(f"Run directory not found for: {args.run_id}")
         print("Use --run-dir to specify the path")
         sys.exit(1)
 
-    metrics = extract_efficiency(run_dir)
-    print(format_efficiency_report([metrics]))
+    if len(deduped) == 1:
+        metrics = extract_efficiency(deduped[0])
+        print(format_efficiency_report([metrics]))
+        return
+
+    print(format_efficiency_report(extract_efficiency_batch(deduped)))
 
 
 def cmd_leaderboard(args: argparse.Namespace) -> None:

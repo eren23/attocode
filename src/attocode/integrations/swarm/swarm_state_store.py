@@ -214,7 +214,15 @@ class SwarmStateStore:
                 return 0
 
             ids = [r[0] for r in rows]
-            placeholders = ",".join("?" * len(ids))
-            conn.execute(f"DELETE FROM swarm_checkpoints WHERE session_id IN ({placeholders})", ids)
-            cursor = conn.execute(f"DELETE FROM swarm_sessions WHERE session_id IN ({placeholders})", ids)
-            return cursor.rowcount
+            deleted = 0
+            for session_id in ids:
+                conn.execute(
+                    "DELETE FROM swarm_checkpoints WHERE session_id = ?",
+                    (session_id,),
+                )
+                cursor = conn.execute(
+                    "DELETE FROM swarm_sessions WHERE session_id = ?",
+                    (session_id,),
+                )
+                deleted += max(cursor.rowcount, 0)
+            return deleted

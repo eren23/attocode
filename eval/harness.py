@@ -433,6 +433,11 @@ class EvalHarness:
             # Setup
             instance_dir = setup_instance(instance, self.work_dir)
 
+            # Optional per-instance hook for factories that need full BenchInstance context.
+            bind_instance = getattr(self.agent_factory, "set_instance", None)
+            if callable(bind_instance):
+                bind_instance(instance)
+
             # Run agent
             agent_result = await self.agent_factory.create_and_run(
                 working_dir=instance_dir,

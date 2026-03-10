@@ -9,7 +9,7 @@ Provides sensible defaults for SWE-bench evaluation runs:
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Any
 
 
@@ -79,11 +79,12 @@ def build_swarm_yaml_dict(
             "max_depth": cfg.max_depth,
             "custom_instructions": cfg.custom_instructions,
         },
-        "retry": {
+        "retries": {
             "max_task_attempts": cfg.max_task_attempts,
         },
         "workspace": {
             "mode": cfg.workspace_mode,
+            "max_concurrent_writers": cfg.max_concurrent_agents,
         },
     }
 

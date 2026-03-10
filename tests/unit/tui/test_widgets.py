@@ -4,10 +4,10 @@ from __future__ import annotations
 
 import pytest
 
-from attocode.tui.widgets.tool_calls import ToolCallInfo, ToolCallsPanel, _truncate
-from attocode.tui.widgets.agents_panel import ActiveAgentInfo, AgentsPanel
-from attocode.tui.widgets.status_bar import StatusBar
 from attocode.types.agent import AgentPlan, PlanTask, TaskStatus
+from attocode.tui.widgets.agents_panel import ActiveAgentInfo
+from attocode.tui.widgets.status_bar import StatusBar
+from attocode.tui.widgets.tool_calls import ToolCallInfo, _truncate
 
 
 class TestToolCallInfo:

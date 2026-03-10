@@ -87,6 +87,7 @@ class AttoswarmSWEBenchFactory:
         try:
             result = await self._run_swarm(
                 working_dir=working_dir,
+                run_dir=run_dir,
                 goal=goal,
                 config_path=config_path,
                 timeout=min(timeout, cfg.max_runtime_seconds),
@@ -125,6 +126,7 @@ class AttoswarmSWEBenchFactory:
     async def _run_swarm(
         self,
         working_dir: str,
+        run_dir: str,
         goal: str,
         config_path: str,
         timeout: float,
@@ -137,9 +139,15 @@ class AttoswarmSWEBenchFactory:
             "--non-interactive",
         ]
 
-        # Strip known secret env vars to prevent leakage into untrusted repos
-        _SECRET_PREFIXES = ("CLAUDECODE", "ANTHROPIC_API_KEY", "OPENAI_API_KEY", "AWS_", "GITHUB_TOKEN")
-        env = {k: v for k, v in os.environ.items() if not any(k.startswith(p) for p in _SECRET_PREFIXES)}
+        # Keep model credentials so attoswarm can authenticate, while still
+        # stripping unrelated high-risk automation tokens from child env.
+        _STRIP_PREFIXES = ("CLAUDECODE", "AWS_")
+        _STRIP_EXACT = {"GITHUB_TOKEN", "GH_TOKEN"}
+        env = {
+            k: v
+            for k, v in os.environ.items()
+            if k not in _STRIP_EXACT and not any(k.startswith(p) for p in _STRIP_PREFIXES)
+        }
 
         proc = None
         try:
@@ -158,8 +166,8 @@ class AttoswarmSWEBenchFactory:
 
             output = stdout.decode("utf-8", errors="replace")
 
-            # Try to load state.json from run directory
-            state_path = os.path.join(working_dir, ".swarm-run", "state.json")
+            # Try to load the persisted swarm state from configured run_dir.
+            state_path = os.path.join(run_dir, "swarm.state.json")
             state: dict[str, Any] = {}
             if os.path.exists(state_path):
                 with open(state_path) as f:

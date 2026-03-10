@@ -6,13 +6,11 @@ against published SWE-bench leaderboard results.
 
 from __future__ import annotations
 
-import json
-import os
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Any
 
-from eval.harness import ResultsDB, RunResult, InstanceStatus
-from eval.metrics import compute_metrics, compare_runs, format_comparison, EvalMetrics
+from eval.harness import RunResult, InstanceStatus
+from eval.metrics import compute_metrics, compare_runs, format_comparison
 from eval.swebench.efficiency import EfficiencyMetrics
 
 
@@ -159,7 +157,8 @@ def generate_per_repo_breakdown(
         repo_results = by_repo[repo]
         total = len(repo_results)
         passed = sum(1 for r in repo_results if r.status == InstanceStatus.PASSED)
-        failed = sum(1 for r in repo_results if r.status == InstanceStatus.FAILED)
+        # Treat any non-passed terminal state as failed for compact reporting.
+        failed = total - passed
         rate = passed / total if total > 0 else 0
         lines.append(f"| {repo} | {total} | {passed} | {failed} | {rate:.1%} |")
 

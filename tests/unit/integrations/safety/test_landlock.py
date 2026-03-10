@@ -192,6 +192,8 @@ class TestBuildLandlockHelper:
     def test_subprocess_run_at_end(self) -> None:
         script = _build_landlock_helper([], ["/tmp"], "echo done")
         assert "subprocess.run" in script
+        assert "shell=True" not in script
+        assert "['/bin/sh', '-lc', cmd]" in script
         assert "sys.exit(result.returncode)" in script
 
 
