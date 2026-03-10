@@ -7,15 +7,15 @@ and suggested fixes in a structured format.
 from __future__ import annotations
 
 import time
-from dataclasses import dataclass, field
-from typing import Any
+from dataclasses import dataclass
+from typing import TYPE_CHECKING
 
-from rich.text import Text
-from textual.app import ComposeResult
 from textual.containers import VerticalScroll
 from textual.reactive import reactive
-from textual.widget import Widget
 from textual.widgets import Static
+
+if TYPE_CHECKING:
+    from textual.app import ComposeResult
 
 
 @dataclass(slots=True)

@@ -50,7 +50,7 @@ class MergeQueue:
         return [asdict(item) for item in self.items]
 
     @classmethod
-    def from_list(cls, raw: list[dict]) -> "MergeQueue":
+    def from_list(cls, raw: list[dict]) -> MergeQueue:
         items: list[MergeItem] = []
         for item in raw:
             if not isinstance(item, dict) or "task_id" not in item:

@@ -8,8 +8,9 @@ from __future__ import annotations
 
 import asyncio
 import time
+from collections.abc import Callable
 from dataclasses import dataclass, field
-from typing import Any, Callable
+from typing import Any
 
 
 @dataclass
@@ -115,7 +116,7 @@ class HealthChecker:
             else:
                 healthy = result
             healthy = bool(healthy)
-        except asyncio.TimeoutError:
+        except TimeoutError:
             healthy = False
             error = f"Timed out after {config.timeout}s"
             result_obj = HealthCheckResult(

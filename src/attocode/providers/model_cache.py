@@ -13,7 +13,12 @@ import time
 
 import httpx
 
-from attocode.providers.base import BUILTIN_MODELS, KNOWN_PRICING, MODEL_CONTEXT_WINDOWS, ModelPricing
+from attocode.providers.base import (
+    BUILTIN_MODELS,
+    KNOWN_PRICING,
+    MODEL_CONTEXT_WINDOWS,
+    ModelPricing,
+)
 
 logger = logging.getLogger(__name__)
 

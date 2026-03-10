@@ -16,9 +16,7 @@ the combined consumption never exceeds the pool total.
 from __future__ import annotations
 
 import asyncio
-from dataclasses import dataclass, field
-from typing import Any
-
+from dataclasses import dataclass
 
 # =============================================================================
 # Types

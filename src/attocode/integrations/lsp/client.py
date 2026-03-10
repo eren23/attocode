@@ -19,7 +19,6 @@ from typing import Any
 
 from attocode.errors import ConfigurationError, ToolError
 
-
 # =============================================================================
 # Types
 # =============================================================================
@@ -411,7 +410,7 @@ class _LSPClient:
 
         try:
             return await asyncio.wait_for(future, timeout=self._timeout)
-        except asyncio.TimeoutError:
+        except TimeoutError:
             self._pending.pop(req_id, None)
             raise ToolError(f"Request {method} timed out", tool_name="lsp") from None
 

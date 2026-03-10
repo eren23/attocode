@@ -17,7 +17,7 @@ The main entry point is ``ts_parse_file()`` which returns a ``FileAST``
 from __future__ import annotations
 
 import logging
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from pathlib import Path
 
 logger = logging.getLogger(__name__)
@@ -265,6 +265,7 @@ def _get_parser(language: str):
 
     try:
         import importlib
+
         import tree_sitter as ts
 
         grammar_mod = importlib.import_module(config.grammar_module)
@@ -903,16 +904,15 @@ def _extract_data_symbols(
                         top_level_vars.append(key)
     elif language == "json":
         # Extract top-level object keys
-        if root.children:
-            obj = root.children[0] if root.children else None
-            if obj and obj.type == "object":
-                for child in obj.children:
-                    if child.type == "pair":
-                        key_node = child.child_by_field_name("key")
-                        if key_node:
-                            key = _node_text(key_node, source_bytes).strip('"')
-                            if key:
-                                top_level_vars.append(key)
+        obj = root.children[0] if root.children else None
+        if obj and obj.type == "object":
+            for child in obj.children:
+                if child.type == "pair":
+                    key_node = child.child_by_field_name("key")
+                    if key_node:
+                        key = _node_text(key_node, source_bytes).strip('"')
+                        if key:
+                            top_level_vars.append(key)
 
 
 def _extract_html_symbols(
@@ -976,18 +976,17 @@ def _extract_html_id(
                 if attr.type == "attribute":
                     name_node = attr.child_by_field_name("name")
                     val_node = attr.child_by_field_name("value")
-                    if name_node and val_node:
-                        if _node_text(name_node, source_bytes) == "id":
-                            id_val = _node_text(val_node, source_bytes).strip('"\'')
-                            if id_val:
-                                classes.append({
-                                    "name": f"{tag}#{id_val}",
-                                    "bases": [],
-                                    "methods": [],
-                                    "decorators": [],
-                                    "start_line": node.start_point[0] + 1,
-                                    "end_line": node.end_point[0] + 1,
-                                })
+                    if name_node and val_node and _node_text(name_node, source_bytes) == "id":
+                        id_val = _node_text(val_node, source_bytes).strip('"\'')
+                        if id_val:
+                            classes.append({
+                                "name": f"{tag}#{id_val}",
+                                "bases": [],
+                                "methods": [],
+                                "decorators": [],
+                                "start_line": node.start_point[0] + 1,
+                                "end_line": node.end_point[0] + 1,
+                            })
 
 
 def _extract_css_symbols(root, source_bytes: bytes, classes: list[dict]) -> None:
@@ -1071,6 +1070,7 @@ class GenericTreeSitterExtractor:
 
         try:
             import importlib
+
             import tree_sitter as ts
 
             mod = importlib.import_module(grammar_module)
@@ -1325,27 +1325,23 @@ def ctags_parse_file(file_path: str, content: str | None = None) -> dict | None:
     Provides symbol extraction for 150+ languages when ctags is installed.
     Returns None if ctags is not available or produces no output.
     """
-    import subprocess
     import json as json_mod
+    import subprocess
 
     # Write content to a temp file if provided (ctags needs a file on disk)
-    temp_file = None
     target_path = file_path
     if content is not None:
         import tempfile
         suffix = Path(file_path).suffix
         try:
-            temp_file = tempfile.NamedTemporaryFile(
+            with tempfile.NamedTemporaryFile(
                 mode="w", suffix=suffix, delete=False, encoding="utf-8",
-            )
-            temp_file.write(content)
-            temp_file.flush()
-            target_path = temp_file.name
+            ) as temp_file:
+                temp_file.write(content)
+                temp_file.flush()
+                target_path = temp_file.name
         except OSError:
             return None
-        finally:
-            if temp_file:
-                temp_file.close()
 
     try:
         result = subprocess.run(

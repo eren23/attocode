@@ -247,14 +247,15 @@ def _run_single_turn(config: Any, prompt: str) -> None:
         try:
             # Detect image paths in the prompt for single-turn mode
             images: list[str] | None = None
-            if prompt:
+            effective_prompt = prompt
+            if effective_prompt:
                 from attocode.tools.image_utils import extract_image_paths
-                remaining, detected = extract_image_paths(prompt)
+                remaining, detected = extract_image_paths(effective_prompt)
                 if detected:
-                    prompt = remaining
+                    effective_prompt = remaining
                     images = detected
 
-            result = await agent.run(prompt, images=images)
+            result = await agent.run(effective_prompt, images=images)
             if result.response:
                 click.echo(result.response)
             if not result.success and result.error:
@@ -334,7 +335,6 @@ def _run_tui(config: Any) -> None:
     from attocode.tui.app import AttocodeApp
     from attocode.tui.events import (
         AgentCompleted,
-        AgentStarted,
         BudgetWarning,
         IterationUpdate,
         LLMCompleted,
@@ -650,12 +650,11 @@ def _run_swarm(config: Any, prompt: str) -> None:
 
     async def _run() -> None:
         from attocode.integrations.swarm import (
-            SwarmOrchestrator,
             create_swarm_orchestrator,
             load_swarm_yaml_config,
             yaml_to_swarm_config,
         )
-        from attocode.integrations.swarm.types import DEFAULT_SWARM_CONFIG, SwarmConfig
+        from attocode.integrations.swarm.types import SwarmConfig
         from attocode.providers.model_cache import init_model_cache
         from attocode.providers.registry import create_provider
 
@@ -706,7 +705,7 @@ def _run_swarm(config: Any, prompt: str) -> None:
                 task_desc = getattr(event, "description", "")
                 click.echo(f"  Task completed: {task_desc}", err=True)
             elif event_type == "wave.completed":
-                click.echo(f"  Wave completed", err=True)
+                click.echo("  Wave completed", err=True)
             elif event_type == "swarm.error":
                 error = getattr(event, "error", "")
                 click.echo(f"  Swarm error: {error}", err=True)

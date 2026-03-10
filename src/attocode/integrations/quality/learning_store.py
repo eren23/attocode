@@ -10,9 +10,10 @@ import json
 import sqlite3
 import time
 import uuid
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from enum import StrEnum
-from typing import Any, Callable
+from typing import Any
 
 
 class LearningStatus(StrEnum):
@@ -315,23 +316,23 @@ class LearningStore:
         learnings: dict[str, Learning] = {}
 
         if query:
-            for l in self.retrieve_relevant(query, max_learnings):
-                learnings[l.id] = l
+            for learning in self.retrieve_relevant(query, max_learnings):
+                learnings[learning.id] = learning
 
         if categories:
             for cat in categories:
-                for l in self.retrieve_by_category(cat, 5):
-                    learnings[l.id] = l
+                for learning in self.retrieve_by_category(cat, 5):
+                    learnings[learning.id] = learning
 
         if actions:
             for act in actions:
-                for l in self.retrieve_by_action(act, 5):
-                    learnings[l.id] = l
+                for learning in self.retrieve_by_action(act, 5):
+                    learnings[learning.id] = learning
 
         if not learnings:
             return ""
 
-        items = sorted(learnings.values(), key=lambda l: l.confidence, reverse=True)
+        items = sorted(learnings.values(), key=lambda learning: learning.confidence, reverse=True)
         return format_learnings_context(items[:max_learnings])
 
     def archive_learning(self, learning_id: str) -> bool:
@@ -532,10 +533,10 @@ def format_learnings_context(learnings: list[Learning]) -> str:
     }
 
     lines = ["[Previous Learnings]"]
-    for l in learnings:
-        icon = icons.get(l.type, "")
-        conf = f"({l.confidence:.0%})"
-        lines.append(f"- {icon} {conf} {l.description}")
-        if l.details:
-            lines.append(f"  {l.details}")
+    for learning in learnings:
+        icon = icons.get(learning.type, "")
+        conf = f"({learning.confidence:.0%})"
+        lines.append(f"- {icon} {conf} {learning.description}")
+        if learning.details:
+            lines.append(f"  {learning.details}")
     return "\n".join(lines)

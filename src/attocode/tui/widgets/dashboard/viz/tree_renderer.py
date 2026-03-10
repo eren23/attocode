@@ -18,12 +18,14 @@ Usage::
 
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
+from rich.text import Text
 from textual.reactive import reactive
 from textual.widget import Widget
 
-from rich.text import Text
-
-from attocode.tracing.analysis.views import TreeNode
+if TYPE_CHECKING:
+    from attocode.tracing.analysis.views import TreeNode
 
 # Box-drawing segments.
 _TEE = "\u251c\u2500\u2500 "  # ├──
@@ -55,7 +57,7 @@ class TreeRenderer(Widget):
         root: TreeNode | None = None,
         *,
         name: str | None = None,
-        id: str | None = None,
+        id: str | None = None,  # noqa: A002
         classes: str | None = None,
     ) -> None:
         super().__init__(name=name, id=id, classes=classes)

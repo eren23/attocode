@@ -2,10 +2,8 @@
 
 from __future__ import annotations
 
-import json
 import os
-from collections.abc import AsyncIterator
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import httpx
 
@@ -13,7 +11,6 @@ from attocode.errors import ProviderError
 from attocode.types.messages import (
     ChatOptions,
     ChatResponse,
-    ContentBlock,
     ImageContentBlock,
     Message,
     MessageWithStructuredContent,
@@ -25,6 +22,9 @@ from attocode.types.messages import (
     ToolCall,
     ToolDefinition,
 )
+
+if TYPE_CHECKING:
+    from collections.abc import AsyncIterator
 
 DEFAULT_API_URL = "https://api.anthropic.com/v1/messages"
 DEFAULT_MODEL = "claude-sonnet-4-20250514"

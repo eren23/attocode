@@ -3,9 +3,12 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Iterable
+from typing import TYPE_CHECKING
 
-from attoswarm.protocol.models import RoleSpec, TaskSpec
+if TYPE_CHECKING:
+    from collections.abc import Iterable
+
+    from attoswarm.protocol.models import RoleSpec, TaskSpec
 
 
 @dataclass(slots=True)

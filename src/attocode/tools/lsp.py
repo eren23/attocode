@@ -6,7 +6,6 @@ hover info, and diagnostics as on-demand agent tools.
 
 from __future__ import annotations
 
-import os
 from typing import Any
 
 from attocode.tools.base import Tool, ToolSpec

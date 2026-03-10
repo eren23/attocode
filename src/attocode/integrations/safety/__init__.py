@@ -6,17 +6,16 @@ from attocode.integrations.safety.bash_policy import (
     classify_command,
     extract_command_name,
 )
+from attocode.integrations.safety.edit_validator import (
+    EditValidator,
+    ValidationResult,
+)
 from attocode.integrations.safety.policy_engine import (
     DangerLevel,
     PolicyDecision,
     PolicyEngine,
     PolicyResult,
     PolicyRule,
-)
-
-from attocode.integrations.safety.edit_validator import (
-    EditValidator,
-    ValidationResult,
 )
 
 __all__ = [

@@ -5,22 +5,23 @@ from __future__ import annotations
 import logging
 from collections import deque
 from dataclasses import dataclass
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 logger = logging.getLogger(__name__)
 
-from rich.text import Text
-from textual.app import ComposeResult
-from textual.binding import Binding
-from textual.containers import Vertical
-from textual.screen import Screen
-from textual.widgets import Footer, Static
+from rich.text import Text  # noqa: E402
+from textual.binding import Binding  # noqa: E402
+from textual.containers import Vertical  # noqa: E402
+from textual.screen import Screen  # noqa: E402
+from textual.widgets import Footer, Static  # noqa: E402
 
-from attocode.tui.widgets.dependency_graph import DependencyGraphWidget
-from attocode.tui.widgets.hotspot_heatmap import HotspotHeatmap
-from attocode.tui.widgets.impact_graph import ImpactGraphWidget
-from attocode.tui.widgets.repo_overview import RepoOverviewWidget
+from attocode.tui.widgets.dependency_graph import DependencyGraphWidget  # noqa: E402
+from attocode.tui.widgets.hotspot_heatmap import HotspotHeatmap  # noqa: E402
+from attocode.tui.widgets.impact_graph import ImpactGraphWidget  # noqa: E402
+from attocode.tui.widgets.repo_overview import RepoOverviewWidget  # noqa: E402
 
+if TYPE_CHECKING:
+    from textual.app import ComposeResult
 
 _VIEWS = ("overview", "deps", "impact", "hotspots")
 _VIEW_LABELS = {

@@ -11,10 +11,12 @@ import logging
 import os
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
-from attocode.agent.context import AgentContext
-from attocode.types.budget import BudgetEnforcementMode, ExecutionBudget
+from attocode.types.budget import BudgetEnforcementMode
+
+if TYPE_CHECKING:
+    from attocode.agent.context import AgentContext
 
 logger = logging.getLogger(__name__)
 
@@ -229,8 +231,9 @@ async def initialize_features(
     # 12. Safety manager (policy engine + execution policy)
     if cfg.enable_safety and not getattr(ctx, "safety_manager", None):
         try:
-            from attocode.integrations.safety.policy_engine import PolicyEngine
             from attocode.integrations.safety.execution_policy import ExecutionPolicy
+
+            from attocode.integrations.safety.policy_engine import PolicyEngine
 
             policy_engine = PolicyEngine()
             exec_policy = ExecutionPolicy()
@@ -326,9 +329,9 @@ async def initialize_features(
     # 15c. Register hierarchical explorer tool (requires codebase context)
     if cbc and hasattr(ctx, "registry") and ctx.registry is not None:
         try:
+            from attocode.integrations.context.ast_service import ASTService
             from attocode.integrations.context.hierarchical_explorer import HierarchicalExplorer
             from attocode.tools.explore import create_explore_tool
-            from attocode.integrations.context.ast_service import ASTService
 
             ast_svc = None
             try:
@@ -456,10 +459,10 @@ async def initialize_features(
     # 27. Skill manager (full lifecycle)
     if cfg.enable_skill_manager and working_dir and not getattr(ctx, '_skill_manager', None):
         try:
-            from attocode.integrations.skills.loader import SkillLoader
-            from attocode.integrations.skills.executor import SkillExecutor
-            from attocode.integrations.skills.state import SkillStateStore
             from attocode.integrations.skills.dependency_graph import SkillDependencyGraph
+            from attocode.integrations.skills.executor import SkillExecutor
+            from attocode.integrations.skills.loader import SkillLoader
+            from attocode.integrations.skills.state import SkillStateStore
 
             loader = SkillLoader(working_dir)
             # Search additional directories
@@ -607,20 +610,18 @@ def wire_cross_references(ctx: AgentContext, results: dict[str, bool]) -> None:
     initialized. This function sets up those connections.
     """
     # Wire economics into compaction manager for post-compaction baseline updates
-    if results.get("economics") and results.get("compaction"):
-        if ctx.economics and ctx.compaction_manager:
-            try:
-                ctx.compaction_manager.economics = ctx.economics
-            except Exception:
-                logger.warning("cross_ref_failed", extra={"ref": "economics->compaction"}, exc_info=True)
+    if results.get("economics") and results.get("compaction") and ctx.economics and ctx.compaction_manager:
+        try:
+            ctx.compaction_manager.economics = ctx.economics
+        except Exception:
+            logger.warning("cross_ref_failed", extra={"ref": "economics->compaction"}, exc_info=True)
 
     # Wire failure tracker into learning store for failure-based learnings
-    if results.get("failure_tracking") and results.get("learning"):
-        if ctx.failure_tracker and ctx.learning_store:
-            try:
-                ctx.learning_store.failure_tracker = ctx.failure_tracker
-            except Exception:
-                logger.warning("cross_ref_failed", extra={"ref": "failure->learning"}, exc_info=True)
+    if results.get("failure_tracking") and results.get("learning") and ctx.failure_tracker and ctx.learning_store:
+        try:
+            ctx.learning_store.failure_tracker = ctx.failure_tracker
+        except Exception:
+            logger.warning("cross_ref_failed", extra={"ref": "failure->learning"}, exc_info=True)
 
     # Wire work log into economics for progress tracking
     if results.get("work_log") and results.get("economics"):

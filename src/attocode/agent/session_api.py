@@ -6,14 +6,13 @@ lower-level SessionStore with convenience methods.
 
 from __future__ import annotations
 
-import json
-import time
-from dataclasses import asdict, dataclass
+from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
-from attocode.types.agent import AgentMetrics
-from attocode.types.messages import Message, Role
+if TYPE_CHECKING:
+    from attocode.types.agent import AgentMetrics
+    from attocode.types.messages import Message
 
 
 @dataclass(slots=True)

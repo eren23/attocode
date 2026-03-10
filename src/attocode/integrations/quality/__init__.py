@@ -1,5 +1,22 @@
 """Quality: learning, self-improvement, checkpoints, health checks."""
 
+from attocode.integrations.quality.auto_checkpoint import (
+    AutoCheckpointManager,
+    Checkpoint,
+    CheckpointConfig,
+)
+from attocode.integrations.quality.dead_letter_queue import (
+    DeadLetter,
+    DeadLetterQueue,
+)
+from attocode.integrations.quality.health_check import (
+    HealthCheckConfig,
+    HealthChecker,
+    HealthCheckerConfig,
+    HealthCheckResult,
+    HealthReport,
+    format_health_report,
+)
 from attocode.integrations.quality.learning_store import (
     Learning,
     LearningProposal,
@@ -14,23 +31,6 @@ from attocode.integrations.quality.self_improvement import (
     SelfImprovementProtocol,
     SuccessPattern,
     ToolCallDiagnosis,
-)
-from attocode.integrations.quality.auto_checkpoint import (
-    AutoCheckpointManager,
-    Checkpoint,
-    CheckpointConfig,
-)
-from attocode.integrations.quality.health_check import (
-    HealthCheckConfig,
-    HealthCheckResult,
-    HealthChecker,
-    HealthCheckerConfig,
-    HealthReport,
-    format_health_report,
-)
-from attocode.integrations.quality.dead_letter_queue import (
-    DeadLetter,
-    DeadLetterQueue,
 )
 from attocode.integrations.quality.tool_recommendation import (
     ToolRecommendation,

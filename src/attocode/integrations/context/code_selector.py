@@ -7,13 +7,15 @@ importance, relevance, breadth, depth.
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from enum import StrEnum
-from typing import Any
+from typing import TYPE_CHECKING
 
-from attocode.integrations.context.code_analyzer import CodeChunk, FileAnalysis
-from attocode.integrations.context.codebase_context import FileInfo
 from attocode.integrations.utilities.token_estimate import estimate_tokens
+
+if TYPE_CHECKING:
+    from attocode.integrations.context.code_analyzer import CodeChunk, FileAnalysis
+    from attocode.integrations.context.codebase_context import FileInfo
 
 
 class SelectionStrategy(StrEnum):
@@ -220,9 +222,9 @@ class CodeSelector:
             by_file.setdefault(chunk.file_path, []).append(chunk)
 
         scored: list[tuple[CodeChunk, float]] = []
-        num_files = len(by_file)
+        _num_files = len(by_file)
 
-        for file_path, file_chunks in by_file.items():
+        for _file_path, file_chunks in by_file.items():
             # Sort file's chunks by importance
             file_chunks.sort(key=lambda c: -c.importance)
             for i, chunk in enumerate(file_chunks):

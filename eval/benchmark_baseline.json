@@ -1,0 +1,25 @@
+{
+  "timestamp": "2026-03-10T00:00:00",
+  "git_sha": "d5ae529",
+  "branch": "main",
+  "repos": {
+    "attocode": {
+      "bootstrap_time_ms": 32000,
+      "symbol_count": 70,
+      "quality_score": 4.2,
+      "total_time_ms": 45000
+    },
+    "gh-cli": {
+      "bootstrap_time_ms": 8500,
+      "symbol_count": 45,
+      "quality_score": 3.8,
+      "total_time_ms": 15000
+    },
+    "redis": {
+      "bootstrap_time_ms": 12000,
+      "symbol_count": 38,
+      "quality_score": 3.5,
+      "total_time_ms": 20000
+    }
+  }
+}

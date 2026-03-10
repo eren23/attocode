@@ -2,18 +2,19 @@
 
 from __future__ import annotations
 
-import asyncio
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING
 
-from textual.app import ComposeResult
 from textual.containers import Container, Vertical
 from textual.message import Message
 from textual.widgets import Input, Static
 
 from attocode.tracing.analysis import SessionAnalyzer
 from attocode.tracing.collector import load_trace_session
+
+if TYPE_CHECKING:
+    from textual.app import ComposeResult
 
 
 @dataclass(slots=True)

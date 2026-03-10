@@ -17,7 +17,6 @@ from typing import Any
 
 from attocode.errors import ToolError
 
-
 # =============================================================================
 # Types
 # =============================================================================
@@ -154,7 +153,7 @@ class PTYShellManager:
                 self._read_until_marker(output_parts),
                 timeout=self._timeout,
             )
-        except asyncio.TimeoutError:
+        except TimeoutError:
             timed_out = True
             output = "".join(output_parts)
             self._emit("command.timeout", {"command": command})
@@ -264,7 +263,7 @@ class PTYShellManager:
 
             try:
                 await asyncio.wait_for(self._process.wait(), timeout=1.0)
-            except asyncio.TimeoutError:
+            except TimeoutError:
                 self._process.kill()
                 await self._process.wait()
 

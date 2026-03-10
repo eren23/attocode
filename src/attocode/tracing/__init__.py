@@ -24,17 +24,11 @@ Submodules
 
 from __future__ import annotations
 
-# --- types ----------------------------------------------------------------
-from attocode.tracing.types import (
-    TraceEvent,
-    TraceEventCategory,
-    TraceEventKind,
-    TraceSession,
-    TraceSummary,
-    create_trace_event,
-    event_type_to_trace_kind,
-    get_trace_event_category,
-    TRACE_EVENT_CATEGORIES,
+# --- cache boundary -------------------------------------------------------
+from attocode.tracing.cache_boundary import (
+    CacheBoundaryTracker,
+    CacheHitRecord,
+    CacheStats,
 )
 
 # --- collector ------------------------------------------------------------
@@ -44,11 +38,17 @@ from attocode.tracing.collector import (
     load_trace_session,
 )
 
-# --- cache boundary -------------------------------------------------------
-from attocode.tracing.cache_boundary import (
-    CacheBoundaryTracker,
-    CacheHitRecord,
-    CacheStats,
+# --- types ----------------------------------------------------------------
+from attocode.tracing.types import (
+    TRACE_EVENT_CATEGORIES,
+    TraceEvent,
+    TraceEventCategory,
+    TraceEventKind,
+    TraceSession,
+    TraceSummary,
+    create_trace_event,
+    event_type_to_trace_kind,
+    get_trace_event_category,
 )
 
 __all__ = [

@@ -10,7 +10,6 @@ from textual.reactive import reactive
 from textual.widget import Widget
 from textual.widgets import Static, Tree
 
-
 _STATUS_SYMBOLS = {
     "pending": "\u25cb",    # ○
     "running": "\u21bb",    # ↻

@@ -60,7 +60,6 @@ async def _execute_codebase_overview(manager: Any, args: dict[str, Any]) -> str:
     - symbols (default): File tree + exported symbol names per file (~2-5K tokens)
     - full: Symbol details with params, return types, visibility (up to 10K tokens)
     """
-    from attocode.integrations.utilities.token_estimate import estimate_tokens
 
     mode: str = args.get("mode", "symbols")
     directory: str = args.get("directory", "")
@@ -314,7 +313,7 @@ def _filter_symbols(
     include_classes = not symbol_type or symbol_type == "class"
     include_variables = not symbol_type or symbol_type == "variable"
     # interface/type/enum apply to TS-like ASTs; we treat them as classes
-    include_interface = not symbol_type or symbol_type in ("interface", "type", "enum")
+    _include_interface = not symbol_type or symbol_type in ("interface", "type", "enum")
 
     if include_functions:
         for func in ast.functions:

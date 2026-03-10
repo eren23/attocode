@@ -15,7 +15,12 @@ from attocode.code_intel.api.deps import (
     list_projects,
     register_project,
 )
-from attocode.code_intel.api.models import ProjectInfo, ProjectListResponse, ProjectRegister, TextResult
+from attocode.code_intel.api.models import (
+    ProjectInfo,
+    ProjectListResponse,
+    ProjectRegister,
+    TextResult,
+)
 
 router = APIRouter(prefix="/api/v1/projects", tags=["projects"], dependencies=[Depends(verify_api_key)])
 

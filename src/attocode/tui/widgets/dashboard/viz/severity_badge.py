@@ -8,10 +8,9 @@ Usage::
 
 from __future__ import annotations
 
+from rich.text import Text
 from textual.reactive import reactive
 from textual.widget import Widget
-
-from rich.text import Text
 
 _SEVERITY_STYLES: dict[str, str] = {
     "critical": "white on red bold",
@@ -43,7 +42,7 @@ class SeverityBadge(Widget):
         severity: str = "low",
         *,
         name: str | None = None,
-        id: str | None = None,
+        id: str | None = None,  # noqa: A002
         classes: str | None = None,
     ) -> None:
         super().__init__(name=name, id=id, classes=classes)

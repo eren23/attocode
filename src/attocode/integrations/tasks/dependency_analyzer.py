@@ -8,9 +8,10 @@ from __future__ import annotations
 
 from collections import defaultdict, deque
 from dataclasses import dataclass, field
+from typing import TYPE_CHECKING
 
-from attocode.integrations.tasks.task_splitter import SubTask
-
+if TYPE_CHECKING:
+    from attocode.integrations.tasks.task_splitter import SubTask
 
 # ---------------------------------------------------------------------------
 # Data classes
@@ -130,7 +131,7 @@ class DependencyAnalyzer:
           - GREY  (1): on current path
           - BLACK (2): fully explored
         """
-        WHITE, GREY, BLACK = 0, 1, 2
+        WHITE, GREY, BLACK = 0, 1, 2  # noqa: N806
 
         children: dict[str, list[str]] = defaultdict(list)
         for src, tgt in graph.edges:
@@ -181,7 +182,7 @@ class DependencyAnalyzer:
             return []
 
         # Complexity weights
-        _WEIGHT = {"simple": 1, "medium": 2, "complex": 3}
+        _WEIGHT = {"simple": 1, "medium": 2, "complex": 3}  # noqa: N806
 
         children: dict[str, list[str]] = defaultdict(list)
         for src, tgt in graph.edges:

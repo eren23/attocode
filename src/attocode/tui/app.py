@@ -4,56 +4,58 @@ from __future__ import annotations
 
 import asyncio
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from textual.app import App, ComposeResult
 from textual.binding import Binding
 from textual.containers import Vertical
-from textual.timer import Timer
 from textual.widgets import Footer, Static
 
 from attocode.tui.bridges.approval_bridge import ApprovalBridge, BudgetBridge
 from attocode.tui.bridges.swarm_bridge import SwarmEventMessage
 from attocode.tui.dialogs.approval import ApprovalDialog, ApprovalResult
 from attocode.tui.dialogs.budget import BudgetDialog
-from attocode.tui.events import (
-    AgentCompleted,
-    AgentStarted,
-    ApprovalRequired,
-    BudgetWarning,
-    CacheStats,
-    CompactionCompleted,
-    DoomLoopWarning,
-    IterationUpdate,
-    LLMCompleted,
-    LLMRetry,
-    LLMStarted,
-    LLMStreamChunk,
-    LLMStreamEnd,
-    LLMStreamStart,
-    PhaseTransition,
-    PlanUpdated,
-    StatusUpdate,
-    SwarmStatusUpdate,
-    ToolCompleted,
-    ToolStarted,
-)
 from attocode.tui.screens.dashboard import DashboardScreen
 from attocode.tui.screens.swarm_monitor import SwarmMonitorScreen
-from attocode.tui.widgets.dashboard.live_dashboard import LiveTraceAccumulator
+from attocode.tui.widgets.agent_internals_panel import AgentInternalsPanel
 from attocode.tui.widgets.agents_panel import AgentsPanel
+from attocode.tui.widgets.dashboard.live_dashboard import LiveTraceAccumulator
 from attocode.tui.widgets.input_area import PromptInput
 from attocode.tui.widgets.message_log import MessageLog
 from attocode.tui.widgets.plan_panel import PlanPanel
 from attocode.tui.widgets.status_bar import StatusBar
 from attocode.tui.widgets.streaming_buffer import StreamingBuffer
-from attocode.tui.widgets.token_sparkline import TokenSparkline
-from attocode.tui.widgets.welcome_banner import WelcomeBanner
 from attocode.tui.widgets.swarm_panel import SwarmPanel
 from attocode.tui.widgets.tasks_panel import TasksPanel
 from attocode.tui.widgets.thinking_panel import ThinkingPanel
-from attocode.tui.widgets.agent_internals_panel import AgentInternalsPanel
+from attocode.tui.widgets.token_sparkline import TokenSparkline
 from attocode.tui.widgets.tool_calls import ToolCallInfo, ToolCallsPanel
+from attocode.tui.widgets.welcome_banner import WelcomeBanner
+
+if TYPE_CHECKING:
+    from textual.timer import Timer
+
+    from attocode.tui.events import (
+        AgentCompleted,
+        AgentStarted,
+        BudgetWarning,
+        CacheStats,
+        CompactionCompleted,
+        DoomLoopWarning,
+        IterationUpdate,
+        LLMCompleted,
+        LLMRetry,
+        LLMStarted,
+        LLMStreamChunk,
+        LLMStreamEnd,
+        LLMStreamStart,
+        PhaseTransition,
+        PlanUpdated,
+        StatusUpdate,
+        SwarmStatusUpdate,
+        ToolCompleted,
+        ToolStarted,
+    )
 
 # Path to TCSS files
 _STYLES_DIR = Path(__file__).parent / "styles"
@@ -377,7 +379,6 @@ class AttocodeApp(App):
 
     def _handle_slash_command(self, text: str) -> None:
         """Handle a slash command synchronously."""
-        import asyncio
         from attocode.commands import handle_command
 
         log = self.query_one("#message-log", MessageLog)

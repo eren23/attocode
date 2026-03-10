@@ -7,9 +7,9 @@ import json
 import logging
 import os
 import re
+import shutil
 import subprocess
 import sys
-import shutil
 from pathlib import Path
 from typing import Any
 
@@ -20,7 +20,6 @@ from attoswarm.config.schema import RoleConfig, SwarmYamlConfig
 from attoswarm.coordinator.loop import HybridCoordinator
 from attoswarm.protocol.io import read_json
 from attoswarm.tui.app import AttoswarmApp
-
 
 logger = logging.getLogger(__name__)
 
@@ -196,7 +195,7 @@ def _make_subprocess_spawn_fn(cfg: SwarmYamlConfig):  # noqa: ANN202
                     asyncio.gather(_read_stdout(), _read_stderr()),
                     timeout=worker_timeout,
                 )
-            except asyncio.TimeoutError:
+            except TimeoutError:
                 proc.kill()
                 raise
 
@@ -220,7 +219,7 @@ def _make_subprocess_spawn_fn(cfg: SwarmYamlConfig):  # noqa: ANN202
                     error=stderr_text[:2000] or f"{cmd[0]} exited with code {proc.returncode}",
                     duration_s=elapsed,
                 )
-        except asyncio.TimeoutError:
+        except TimeoutError:
             return _TaskResult(
                 task_id=task["task_id"],
                 success=False,
@@ -1150,7 +1149,6 @@ def _ai_assisted_task_builder(base_dir: Path, cfg: dict[str, Any]) -> list[dict[
 
     # Try to load config and call backend
     try:
-        from attoswarm.config.loader import load_swarm_yaml as _load
         from attoswarm.coordinator.decompose import build_decompose_prompt, classify_goal_complexity
         from attoswarm.coordinator.task_parser import extract_json_array
 

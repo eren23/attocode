@@ -13,7 +13,7 @@ import uuid
 from dataclasses import dataclass, field
 from typing import Any
 
-from attocode.types.budget import ExecutionBudget, BudgetEnforcementMode, SUBAGENT_BUDGET
+from attocode.types.budget import BudgetEnforcementMode, ExecutionBudget
 from attocode.types.events import EventType
 
 
@@ -279,7 +279,7 @@ class SubagentSpawner:
                 duration_ms=duration_ms,
             )
 
-        except asyncio.TimeoutError:
+        except TimeoutError:
             duration_ms = (time.monotonic() - start_time) * 1000
             if self._emit:
                 self._emit(EventType.SUBAGENT_TIMEOUT_HARD_KILL, agent_id=agent_id)
@@ -305,7 +305,7 @@ class SubagentSpawner:
 
     async def cancel_all(self) -> None:
         """Cancel all active subagents."""
-        for agent_id, task in list(self._active_agents.items()):
+        for _agent_id, task in list(self._active_agents.items()):
             if not task.done():
                 task.cancel()
         self._active_agents.clear()

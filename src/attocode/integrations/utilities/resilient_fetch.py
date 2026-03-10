@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import asyncio
 import time
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Any
 
 
@@ -71,9 +71,7 @@ class CircuitBreakerState:
         if not self.is_open:
             return True
         # Half-open: allow after timeout period
-        if time.time() - self.last_failure_time > self.timeout:
-            return True
-        return False
+        return time.time() - self.last_failure_time > self.timeout
 
 
 class ResilientFetch:

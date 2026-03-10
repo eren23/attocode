@@ -9,8 +9,6 @@ from __future__ import annotations
 import asyncio
 import shlex
 from dataclasses import dataclass, field
-from typing import Any
-
 
 DEFAULT_ALLOWED_COMMANDS = frozenset({
     "ls", "cat", "head", "tail", "wc", "echo", "printf",
@@ -151,7 +149,7 @@ class BasicSandbox:
                 proc.communicate(),
                 timeout=self.options.timeout,
             )
-        except asyncio.TimeoutError:
+        except TimeoutError:
             proc.kill()
             await proc.communicate()
             return f"Command timed out after {self.options.timeout}s", -1

@@ -11,7 +11,6 @@ import os
 import time
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any
 
 from attocode.integrations.security.patterns import (
     ANTI_PATTERNS,
@@ -33,6 +32,10 @@ _SCANNABLE_EXTENSIONS = {
 
 # Dot-files that should still be scanned (e.g. .env contains secrets)
 _SCANNABLE_DOTFILES = {".env", ".envrc", ".env.local", ".env.production", ".env.staging"}
+_EXTRA_IGNORED_DIRS = {"site"}
+_PATTERN_DEFINITION_FILES = {
+    os.path.normpath("src/attocode/integrations/security/patterns.py"),
+}
 
 
 @dataclass(slots=True)
@@ -169,10 +172,15 @@ class SecurityScanner:
         )
 
         for dirpath, dirnames, filenames in os.walk(scan_root):
+            rel_dir = os.path.relpath(dirpath, self.root_dir)
+            rel_parts = set(Path(rel_dir).parts) if rel_dir not in (".", "") else set()
             # Filter ignored directories
             dirnames[:] = [
                 d for d in dirnames
-                if d not in DEFAULT_IGNORES and not d.startswith(".")
+                if d not in DEFAULT_IGNORES
+                and d not in _EXTRA_IGNORED_DIRS
+                and d not in rel_parts
+                and not d.startswith(".")
             ]
 
             for filename in filenames:
@@ -190,6 +198,10 @@ class SecurityScanner:
                 try:
                     rel_path = os.path.relpath(full_path, self.root_dir)
                 except ValueError:
+                    continue
+                rel_path_norm = os.path.normpath(rel_path)
+
+                if rel_path_norm in _PATTERN_DEFINITION_FILES:
                     continue
 
                 try:
@@ -268,7 +280,7 @@ class SecurityScanner:
         lines: list[str] = []
 
         # Header
-        lines.append(f"Security Scan Report")
+        lines.append("Security Scan Report")
         lines.append(f"Score: {report.compliance_score}/100 | "
                       f"Files: {report.files_scanned} | "
                       f"Time: {report.scan_time_ms:.0f}ms")

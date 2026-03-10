@@ -10,7 +10,6 @@ from __future__ import annotations
 import time
 from dataclasses import dataclass, field
 from enum import StrEnum
-from typing import Any
 
 
 class RoutingStrategy(StrEnum):
@@ -55,9 +54,7 @@ class ProviderStats:
     @property
     def is_available(self) -> bool:
         if self.circuit_state == CircuitState.OPEN:
-            if time.time() > self.circuit_open_until:
-                return True  # Allow half-open probe
-            return False
+            return time.time() > self.circuit_open_until  # Allow half-open probe
         return True
 
 

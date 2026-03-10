@@ -10,10 +10,9 @@ Usage::
 
 from __future__ import annotations
 
+from rich.text import Text
 from textual.reactive import reactive
 from textual.widget import Widget
-
-from rich.text import Text
 
 
 class ASCIITable(Widget):
@@ -42,7 +41,7 @@ class ASCIITable(Widget):
         rows: list[tuple[str, ...]] | None = None,
         *,
         name: str | None = None,
-        id: str | None = None,
+        id: str | None = None,  # noqa: A002
         classes: str | None = None,
     ) -> None:
         super().__init__(name=name, id=id, classes=classes)

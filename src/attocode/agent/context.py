@@ -5,15 +5,16 @@ from __future__ import annotations
 import asyncio
 from collections.abc import Callable
 from dataclasses import dataclass, field
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
-from attocode.providers.base import LLMProvider
-from attocode.tools.registry import ToolRegistry
 from attocode.types.agent import AgentConfig, AgentMetrics
-from attocode.types.budget import ExecutionBudget, STANDARD_BUDGET
+from attocode.types.budget import STANDARD_BUDGET, ExecutionBudget
 from attocode.types.events import AgentEvent, EventType
-from attocode.types.messages import Message, MessageWithStructuredContent
 
+if TYPE_CHECKING:
+    from attocode.providers.base import LLMProvider
+    from attocode.tools.registry import ToolRegistry
+    from attocode.types.messages import Message, MessageWithStructuredContent
 
 EventHandler = Callable[[AgentEvent], Any]
 ApprovalCallback = Callable[..., Any]  # async (tool_name, args, danger, context) -> ApprovalResult
@@ -154,18 +155,14 @@ class AgentContext:
         Returns True if we should continue, False if we should stop.
         """
         max_iter = self.budget.max_iterations or self.config.max_iterations
-        if max_iter and self.iteration >= max_iter:
-            return False
-        return True
+        return not (max_iter and self.iteration >= max_iter)
 
     def check_token_budget(self) -> bool:
         """Check if we've exceeded the token budget.
 
         Returns True if we should continue, False if we should stop.
         """
-        if self.budget.max_tokens and self.metrics.total_tokens >= self.budget.max_tokens:
-            return False
-        return True
+        return not (self.budget.max_tokens and self.metrics.total_tokens >= self.budget.max_tokens)
 
     def add_message(self, message: Message | MessageWithStructuredContent) -> None:
         """Add a message to the conversation history."""

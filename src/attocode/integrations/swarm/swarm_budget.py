@@ -7,7 +7,7 @@ spending, and provides global budget oversight for the swarm.
 from __future__ import annotations
 
 import time
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Any
 
 from attocode.types.budget import ExecutionBudget

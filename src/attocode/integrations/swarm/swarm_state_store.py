@@ -9,16 +9,11 @@ from __future__ import annotations
 import json
 import sqlite3
 import time
-from dataclasses import dataclass, field
-from pathlib import Path
-from typing import Any
+from dataclasses import dataclass
+from typing import TYPE_CHECKING, Any
 
-from attocode.integrations.swarm.types import (
-    SwarmCheckpoint,
-    SwarmPhase,
-    SwarmTask,
-    SwarmTaskStatus,
-)
+if TYPE_CHECKING:
+    from pathlib import Path
 
 
 @dataclass(slots=True)
@@ -214,7 +209,15 @@ class SwarmStateStore:
                 return 0
 
             ids = [r[0] for r in rows]
-            placeholders = ",".join("?" * len(ids))
-            conn.execute(f"DELETE FROM swarm_checkpoints WHERE session_id IN ({placeholders})", ids)
-            cursor = conn.execute(f"DELETE FROM swarm_sessions WHERE session_id IN ({placeholders})", ids)
-            return cursor.rowcount
+            deleted = 0
+            for session_id in ids:
+                conn.execute(
+                    "DELETE FROM swarm_checkpoints WHERE session_id = ?",
+                    (session_id,),
+                )
+                cursor = conn.execute(
+                    "DELETE FROM swarm_sessions WHERE session_id = ?",
+                    (session_id,),
+                )
+                deleted += max(cursor.rowcount, 0)
+            return deleted

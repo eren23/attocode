@@ -20,17 +20,13 @@ from pathlib import Path
 from typing import Any
 
 from attocode.integrations.context.codebase_ast import (
-    ClassDef,
     FileAST,
-    FunctionDef,
-    ImportDef,
     diff_file_ast,
     diff_imports,
     parse_file,
 )
 from attocode.integrations.context.codebase_context import (
     CodebaseContextManager,
-    DependencyGraph,
 )
 from attocode.integrations.context.cross_references import (
     CrossRefIndex,
@@ -41,7 +37,7 @@ from attocode.integrations.context.cross_references import (
 logger = logging.getLogger(__name__)
 
 # Singleton registry: root_dir -> ASTService
-_instances: dict[str, "ASTService"] = {}
+_instances: dict[str, ASTService] = {}
 
 
 class ASTService:
@@ -68,7 +64,7 @@ class ASTService:
         self._initialized = False
 
     @classmethod
-    def get_instance(cls, root_dir: str) -> "ASTService":
+    def get_instance(cls, root_dir: str) -> ASTService:
         """Return (or create) the singleton for *root_dir*."""
         key = os.path.abspath(root_dir)
         if key not in _instances:
@@ -181,7 +177,7 @@ class ASTService:
                 for fi in batch
             ]
             results = await asyncio.gather(*tasks)
-            for fi, (_, ast) in zip(batch, results):
+            for fi, (_, ast) in zip(batch, results, strict=False):
                 if ast is not None:
                     rel = fi.relative_path
                     self._ast_cache[rel] = ast
@@ -246,10 +242,10 @@ class ASTService:
         # Compute diffs
         if old_ast is not None:
             symbol_changes = diff_file_ast(old_ast, new_ast)
-            dep_changes = diff_imports(old_ast, new_ast)
+            _dep_changes = diff_imports(old_ast, new_ast)
         else:
             symbol_changes = []
-            dep_changes = None
+            _dep_changes = None
 
         # Update index: remove old entries, re-index
         self._index.remove_file(rel)

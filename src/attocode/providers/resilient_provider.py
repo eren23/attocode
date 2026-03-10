@@ -8,16 +8,18 @@ from __future__ import annotations
 
 import asyncio
 import time
-from dataclasses import dataclass, field
-from typing import Any
+from dataclasses import dataclass
+from typing import TYPE_CHECKING, Any
 
 from attocode.errors import ProviderError
-from attocode.types.messages import (
-    ChatOptions,
-    ChatResponse,
-    Message,
-    MessageWithStructuredContent,
-)
+
+if TYPE_CHECKING:
+    from attocode.types.messages import (
+        ChatOptions,
+        ChatResponse,
+        Message,
+        MessageWithStructuredContent,
+    )
 
 
 @dataclass(slots=True)
@@ -154,7 +156,7 @@ class ResilientProvider:
                 self._stats.successful_calls += 1
                 return response
 
-            except asyncio.TimeoutError:
+            except TimeoutError:
                 self._stats.timed_out_calls += 1
                 self._cb.record_failure()
                 last_error = ProviderError(

@@ -1,5 +1,10 @@
 """Persistence integrations."""
 
+from attocode.integrations.persistence.history import (
+    HistoryEntry,
+    HistoryManager,
+    HistorySearchResult,
+)
 from attocode.integrations.persistence.store import (
     CheckpointRecord,
     CompactionRecord,
@@ -12,12 +17,6 @@ from attocode.integrations.persistence.store import (
     SessionStore,
     ToolCallRecord,
     UsageLogRecord,
-)
-
-from attocode.integrations.persistence.history import (
-    HistoryEntry,
-    HistoryManager,
-    HistorySearchResult,
 )
 
 __all__ = [

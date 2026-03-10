@@ -18,9 +18,6 @@ from dataclasses import dataclass, field
 from enum import StrEnum
 from typing import Any
 
-from attocode.types.agent import AgentResult
-
-
 # =============================================================================
 # Enums
 # =============================================================================

@@ -10,11 +10,9 @@ import json
 import logging
 import os
 import re
-import time
 from typing import TYPE_CHECKING, Any
 
 from attocode.integrations.swarm.types import (
-    BUILTIN_TASK_TYPE_CONFIGS,
     AcceptanceCriterion,
     ArtifactFile,
     ArtifactInventory,
@@ -22,22 +20,14 @@ from attocode.integrations.swarm.types import (
     FixupTask,
     IntegrationTestPlan,
     IntegrationTestStep,
-    OrchestratorDecision,
     SmartDecompositionResult,
     SmartSubtask,
-    SwarmCheckpoint,
-    SwarmError,
     SwarmExecutionResult,
     SwarmExecutionStats,
-    SwarmPhase,
     SwarmPlan,
-    SwarmStatus,
     SwarmTask,
-    SwarmTaskResult,
     SwarmTaskStatus,
     SynthesisResult,
-    VerificationResult,
-    VerificationStepResult,
     swarm_event,
 )
 
@@ -286,7 +276,7 @@ async def plan_execution(
     decomposition: SmartDecompositionResult,
 ) -> None:
     """LLM call to create execution plan with acceptance criteria."""
-    model = (
+    _model = (
         (ctx.config.hierarchy.manager.model if ctx.config.hierarchy.manager.model else None)
         or ctx.config.planner_model
         or ctx.config.orchestrator_model
@@ -438,8 +428,8 @@ def build_stats(ctx: OrchestratorInternals) -> SwarmExecutionStats:
 def build_summary(ctx: OrchestratorInternals, stats: SwarmExecutionStats) -> str:
     """Build human-readable summary of execution."""
     lines = [
-        f"Swarm Execution Summary",
-        f"=" * 40,
+        "Swarm Execution Summary",
+        "=" * 40,
         f"Tasks: {stats.completed_tasks}/{stats.total_tasks} completed",
         f"Failed: {stats.failed_tasks}, Skipped: {stats.skipped_tasks}",
         f"Waves: {stats.waves_completed}",
@@ -551,7 +541,7 @@ def save_checkpoint(ctx: OrchestratorInternals, label: str) -> None:
         return
 
     try:
-        checkpoint_state = ctx.task_queue.get_checkpoint_state()
+        _checkpoint_state = ctx.task_queue.get_checkpoint_state()
         ctx.emit(swarm_event(
             "swarm.state.checkpoint",
             session_id=ctx.config.resume_session_id or "",

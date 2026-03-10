@@ -1,5 +1,8 @@
 """Context engineering integrations."""
 
+from attocode.integrations.context.ast_client import ASTClient
+from attocode.integrations.context.ast_server import ASTServer
+from attocode.integrations.context.ast_service import ASTService
 from attocode.integrations.context.auto_compaction import (
     AutoCompactionManager,
     CompactionCheckResult,
@@ -7,17 +10,33 @@ from attocode.integrations.context.auto_compaction import (
     CompactionStatus,
     CompactionStrategy,
 )
+from attocode.integrations.context.code_analyzer import (
+    CodeAnalyzer,
+    CodeChunk,
+    FileAnalysis,
+)
+from attocode.integrations.context.code_selector import (
+    CodeSelector,
+    SelectionConfig,
+    SelectionResult,
+    SelectionStrategy,
+)
+from attocode.integrations.context.codebase_ast import (
+    ClassDef,
+    FileAST,
+    FunctionDef,
+    ImportDef,
+    detect_language,
+    parse_file,
+    parse_javascript,
+    parse_python,
+)
 from attocode.integrations.context.codebase_context import (
     CodebaseContextManager,
     DependencyGraph,
     FileInfo,
     RepoMap,
     build_dependency_graph,
-)
-from attocode.integrations.context.code_analyzer import (
-    CodeAnalyzer,
-    CodeChunk,
-    FileAnalysis,
 )
 from attocode.integrations.context.compaction import (
     CompactionResult,
@@ -33,38 +52,20 @@ from attocode.integrations.context.context_engineering import (
     FailureRecord,
     InjectionBudget,
 )
-from attocode.integrations.context.code_selector import (
-    CodeSelector,
-    SelectionConfig,
-    SelectionResult,
-    SelectionStrategy,
+from attocode.integrations.context.cross_references import (
+    CrossRefIndex,
+    SymbolLocation,
+    SymbolRef,
+)
+from attocode.integrations.context.embeddings import (
+    EmbeddingProvider,
+    NullEmbeddingProvider,
+    create_embedding_provider,
 )
 from attocode.integrations.context.file_cache import (
     CacheEntry,
     FileCache,
     FileCacheStats,
-)
-from attocode.integrations.context.codebase_ast import (
-    ClassDef,
-    FileAST,
-    FunctionDef,
-    ImportDef,
-    detect_language,
-    parse_file,
-    parse_javascript,
-    parse_python,
-)
-from attocode.integrations.context.semantic_cache import (
-    SemanticCacheConfig,
-    SemanticCacheManager,
-)
-from attocode.integrations.context.ast_service import ASTService
-from attocode.integrations.context.ast_server import ASTServer
-from attocode.integrations.context.ast_client import ASTClient
-from attocode.integrations.context.cross_references import (
-    CrossRefIndex,
-    SymbolLocation,
-    SymbolRef,
 )
 from attocode.integrations.context.hierarchical_explorer import (
     DirectoryNode,
@@ -72,21 +73,22 @@ from attocode.integrations.context.hierarchical_explorer import (
     FileNode,
     HierarchicalExplorer,
 )
+from attocode.integrations.context.memory_store import MemoryStore
+from attocode.integrations.context.semantic_cache import (
+    SemanticCacheConfig,
+    SemanticCacheManager,
+)
 from attocode.integrations.context.semantic_search import (
     SemanticSearchManager,
     SemanticSearchResult,
 )
 from attocode.integrations.context.vector_store import (
     SearchResult as VectorSearchResult,
+)
+from attocode.integrations.context.vector_store import (
     VectorEntry,
     VectorStore,
 )
-from attocode.integrations.context.embeddings import (
-    EmbeddingProvider,
-    NullEmbeddingProvider,
-    create_embedding_provider,
-)
-from attocode.integrations.context.memory_store import MemoryStore
 
 __all__ = [
     # auto_compaction

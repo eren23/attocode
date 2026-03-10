@@ -7,7 +7,7 @@ patterns, and persists recurring failures as learnings.
 from __future__ import annotations
 
 import re
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Any
 
 

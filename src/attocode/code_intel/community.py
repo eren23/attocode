@@ -22,7 +22,7 @@ def louvain_communities(
     from networkx.algorithms.community import louvain_communities as _louvain
     from networkx.algorithms.community import modularity
 
-    G = nx.Graph()
+    G = nx.Graph()  # noqa: N806
     G.add_nodes_from(all_files)
     for src, neighbors in adj.items():
         for tgt in neighbors:

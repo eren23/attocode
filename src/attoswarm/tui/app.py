@@ -12,10 +12,9 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from rich.text import Text
-from textual import events
 from textual.app import App, ComposeResult
 from textual.binding import Binding
 from textual.containers import Horizontal, Vertical
@@ -28,17 +27,20 @@ from textual.widgets import (
     TabPane,
 )
 
-from attoswarm.protocol.io import read_json, write_json_atomic
-from attoswarm.protocol.models import utc_now_iso
-from attoswarm.tui.stores import StateStore
-
 from attocode.tui.widgets.swarm.agent_grid import AgentCard, AgentsDataTable
-from attocode.tui.widgets.swarm.dag_view import DependencyTree
 from attocode.tui.widgets.swarm.detail_inspector import DetailInspector
 from attocode.tui.widgets.swarm.event_timeline import EventsLog
 from attocode.tui.widgets.swarm.messages_log import MessagesLog
 from attocode.tui.widgets.swarm.overview_pane import OverviewPane
 from attocode.tui.widgets.swarm.task_board import TaskCard, TasksDataTable
+from attoswarm.protocol.io import read_json, write_json_atomic
+from attoswarm.protocol.models import utc_now_iso
+from attoswarm.tui.stores import StateStore
+
+if TYPE_CHECKING:
+    from textual import events
+
+    from attocode.tui.widgets.swarm.dag_view import DependencyTree
 
 _CSS_PATH = Path(__file__).resolve().parent / "styles" / "swarm.tcss"
 
@@ -160,20 +162,18 @@ class AttoswarmApp(App[None]):
                     yield OverviewPane(id="overview-pane")
 
                 # Tab 2: Tasks
-                with TabPane("Tasks", id="tab-tasks"):
-                    with Horizontal(id="tasks-container"):
-                        with Vertical(id="tasks-table-container"):
-                            yield TasksDataTable(id="tasks-dt")
-                        with Vertical(id="task-detail-container"):
-                            yield DetailInspector(id="task-detail")
+                with TabPane("Tasks", id="tab-tasks"), Horizontal(id="tasks-container"):
+                    with Vertical(id="tasks-table-container"):
+                        yield TasksDataTable(id="tasks-dt")
+                    with Vertical(id="task-detail-container"):
+                        yield DetailInspector(id="task-detail")
 
                 # Tab 3: Agents
-                with TabPane("Agents", id="tab-agents"):
-                    with Horizontal(id="agents-container"):
-                        with Vertical(id="agents-table-container"):
-                            yield AgentsDataTable(id="agents-dt")
-                        with Vertical(id="agent-detail-container"):
-                            yield DetailInspector(id="agent-detail")
+                with TabPane("Agents", id="tab-agents"), Horizontal(id="agents-container"):
+                    with Vertical(id="agents-table-container"):
+                        yield AgentsDataTable(id="agents-dt")
+                    with Vertical(id="agent-detail-container"):
+                        yield DetailInspector(id="agent-detail")
 
                 # Tab 4: Events
                 with TabPane("Events", id="tab-events"):
@@ -500,7 +500,7 @@ class AttoswarmApp(App[None]):
             with open(control_path, "a", encoding="utf-8") as f:
                 f.write(json.dumps(msg) + "\n")
         except Exception:
-            self.notify(f"Failed to write control message", severity="error")
+            self.notify("Failed to write control message", severity="error")
 
     # ── Tab switching actions ─────────────────────────────────────────
 

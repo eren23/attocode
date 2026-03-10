@@ -10,18 +10,19 @@ Navigate between agents with left/right arrows.
 from __future__ import annotations
 
 import time
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from rich.text import Text
-from textual.app import ComposeResult
 from textual.binding import Binding
 from textual.containers import Horizontal, Vertical
 from textual.screen import Screen
-from textual.timer import Timer
 from textual.widgets import Footer, Header, Static
 
 from attocode.tui.widgets.swarm.event_timeline import EventTimeline
-from attocode.tui.widgets.swarm.workers_pane import WorkerDetailCard
+
+if TYPE_CHECKING:
+    from textual.app import ComposeResult
+    from textual.timer import Timer
 
 
 class FocusScreen(Screen):

@@ -7,16 +7,15 @@ batching, and event filtering.
 
 from __future__ import annotations
 
-import asyncio
 import logging
 import time
 from dataclasses import dataclass, field
 from enum import StrEnum
-from typing import Any, Callable
+from typing import TYPE_CHECKING, Any
 
 logger = logging.getLogger(__name__)
 
-from attocode.tui.events import (
+from attocode.tui.events import (  # noqa: E402
     AgentCompleted,
     AgentStarted,
     BudgetWarning,
@@ -36,7 +35,11 @@ from attocode.tui.events import (
     ToolCompleted,
     ToolStarted,
 )
-from attocode.types.events import EventType
+from attocode.types.events import EventType  # noqa: E402
+
+if TYPE_CHECKING:
+    import asyncio
+    from collections.abc import Callable
 
 
 class EventFilterLevel(StrEnum):
@@ -373,10 +376,7 @@ def prune_messages(
 
     # Keep only the most recent non-system messages
     keep = config.keep_recent_count
-    if len(non_system) > keep:
-        pruned_non_system = non_system[-keep:]
-    else:
-        pruned_non_system = non_system
+    pruned_non_system = non_system[-keep:] if len(non_system) > keep else non_system
 
     # Combine: system messages + recent non-system
     return system + pruned_non_system

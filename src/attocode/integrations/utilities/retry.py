@@ -3,8 +3,7 @@
 from __future__ import annotations
 
 import asyncio
-from collections.abc import Awaitable, Callable
-from typing import Any, TypeVar
+from typing import TYPE_CHECKING, Any, TypeVar
 
 from tenacity import (
     RetryCallState,
@@ -13,6 +12,9 @@ from tenacity import (
     stop_after_attempt,
     wait_exponential,
 )
+
+if TYPE_CHECKING:
+    from collections.abc import Awaitable, Callable
 
 T = TypeVar("T")
 
@@ -25,9 +27,7 @@ def is_retryable(exc: BaseException) -> bool:
     if isinstance(exc, ProviderError):
         return exc.retryable
     # Network errors are retryable
-    if isinstance(exc, (ConnectionError, TimeoutError, asyncio.TimeoutError)):
-        return True
-    return False
+    return isinstance(exc, (ConnectionError, TimeoutError, asyncio.TimeoutError))
 
 
 def with_retry(
@@ -59,7 +59,7 @@ def with_retry(
     return retry(**kwargs)
 
 
-async def retry_async(
+async def retry_async(  # noqa: UP047
     fn: Callable[..., Awaitable[T]],
     *args: Any,
     max_attempts: int = 3,

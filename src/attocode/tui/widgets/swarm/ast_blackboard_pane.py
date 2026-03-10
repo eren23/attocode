@@ -4,13 +4,15 @@ from __future__ import annotations
 
 import json
 import os
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from rich.text import Text
-from textual.app import ComposeResult
 from textual.containers import Horizontal, Vertical
 from textual.widget import Widget
-from textual.widgets import Static, Tree
+from textual.widgets import Tree
+
+if TYPE_CHECKING:
+    from textual.app import ComposeResult
 
 
 class ASTExplorerMini(Widget):
@@ -105,7 +107,7 @@ class ASTExplorerMini(Widget):
         path = os.path.join(output_dir, "codemap.json")
         if os.path.isfile(path):
             try:
-                with open(path, "r") as f:
+                with open(path) as f:
                     self._codemap = json.load(f)
                 self._refresh_tree()
             except Exception:
@@ -191,7 +193,7 @@ class BlackboardInspector(Widget):
         path = os.path.join(output_dir, "blackboard.json")
         if os.path.isfile(path):
             try:
-                with open(path, "r") as f:
+                with open(path) as f:
                     self._snapshot = json.load(f)
                 self.refresh()
             except Exception:

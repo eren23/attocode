@@ -8,10 +8,11 @@ from __future__ import annotations
 
 import time
 import uuid
-from dataclasses import dataclass, field
-from typing import Any
+from dataclasses import dataclass
+from typing import TYPE_CHECKING, Any
 
-from attocode.types.messages import Message
+if TYPE_CHECKING:
+    from attocode.types.messages import Message
 
 
 @dataclass(slots=True)

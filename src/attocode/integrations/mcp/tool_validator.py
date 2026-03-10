@@ -111,7 +111,4 @@ class MCPToolValidator:
         if isinstance(result, (list, dict, set)) and len(result) == 0:
             return False
 
-        if isinstance(result, dict) and result.get("error"):
-            return False
-
-        return True
+        return not (isinstance(result, dict) and result.get("error"))

@@ -10,12 +10,6 @@ from attocode.integrations.mcp.client_manager import (
     ServerEntry,
 )
 from attocode.integrations.mcp.config import MCPServerConfig, load_mcp_configs
-from attocode.integrations.mcp.tool_search import (
-    MCPToolMatch,
-    MCPToolSearchIndex,
-    create_mcp_tool_search_tool,
-)
-from attocode.integrations.mcp.tool_validator import MCPToolValidator
 from attocode.integrations.mcp.custom_tools import (
     MCPCustomToolConfig,
     MCPCustomTools,
@@ -25,6 +19,12 @@ from attocode.integrations.mcp.meta_tools import (
     MCPMetaTools,
     MCPServerStats,
 )
+from attocode.integrations.mcp.tool_search import (
+    MCPToolMatch,
+    MCPToolSearchIndex,
+    create_mcp_tool_search_tool,
+)
+from attocode.integrations.mcp.tool_validator import MCPToolValidator
 
 __all__ = [
     # client

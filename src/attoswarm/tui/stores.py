@@ -365,7 +365,7 @@ class StateStore:
             # Convert ISO timestamp to epoch if needed
             if isinstance(ts_raw, str) and ts_raw:
                 try:
-                    from datetime import datetime, timezone
+                    from datetime import datetime
                     dt = datetime.fromisoformat(ts_raw.replace("Z", "+00:00"))
                     ts = dt.timestamp()
                 except Exception:
@@ -496,7 +496,7 @@ class StateStore:
         Used when SwarmOrchestrator (shared workspace mode) is active and
         does not write inbox/outbox files.
         """
-        _EVENT_TO_MESSAGE: dict[str, tuple[str, str]] = {
+        _EVENT_TO_MESSAGE: dict[str, tuple[str, str]] = {  # noqa: N806
             "spawn": ("coordinator\u2192agent", "task_assign"),
             "agent.spawned": ("coordinator\u2192agent", "task_assign"),
             "agent.task.launch": ("coordinator\u2192agent", "task_assign"),

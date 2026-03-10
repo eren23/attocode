@@ -1,5 +1,11 @@
 """Agent management: registry, blackboard, delegation, synthesis."""
 
+from attocode.integrations.agents.async_subagent import (
+    AsyncSubagentConfig,
+    AsyncSubagentManager,
+    SubagentHandle,
+    SubagentStatus,
+)
 from attocode.integrations.agents.blackboard import (
     BlackboardEntry,
     BlackboardMetrics,
@@ -7,13 +13,13 @@ from attocode.integrations.agents.blackboard import (
     SharedBlackboard,
     Subscriber,
 )
-from attocode.integrations.agents.registry import AgentDefinition, AgentRegistry, BUILTIN_AGENTS
 from attocode.integrations.agents.delegation import (
     DelegationProtocol,
     DelegationRequest,
     DelegationResult,
     DelegationStatus,
 )
+from attocode.integrations.agents.registry import BUILTIN_AGENTS, AgentDefinition, AgentRegistry
 from attocode.integrations.agents.result_synthesizer import (
     AgentOutput,
     ConflictSeverity,
@@ -29,12 +35,6 @@ from attocode.integrations.agents.result_synthesizer import (
     SynthesisStats,
     build_synthesis_prompt,
     create_result_synthesizer,
-)
-from attocode.integrations.agents.async_subagent import (
-    AsyncSubagentConfig,
-    AsyncSubagentManager,
-    SubagentHandle,
-    SubagentStatus,
 )
 from attocode.integrations.agents.subagent_output_store import (
     SubagentOutput,

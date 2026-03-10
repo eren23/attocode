@@ -7,8 +7,9 @@ by keeping static content at the start and dynamic content at the end.
 from __future__ import annotations
 
 import json
+from collections.abc import Callable
 from dataclasses import dataclass, field
-from typing import Any, Callable
+from typing import Any
 
 from attocode.integrations.utilities.token_estimate import estimate_tokens
 

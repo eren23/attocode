@@ -2,10 +2,8 @@
 
 from __future__ import annotations
 
-from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
-from textual.app import ComposeResult
 from textual.containers import Container, Vertical
 from textual.message import Message
 from textual.widgets import ContentSwitcher, Static
@@ -13,26 +11,22 @@ from textual.widgets import ContentSwitcher, Static
 from attocode.tracing.analysis import (
     InefficiencyDetector,
     SessionAnalyzer,
-    TokenAnalyzer,
 )
 from attocode.tracing.analysis.views import (
-    DetectedIssue,
-    SessionSummaryView,
-    TimelineEntry,
-    TokenFlowPoint,
     TreeNode,
 )
 from attocode.tracing.collector import load_trace_session
-from attocode.tracing.types import TraceSession
 from attocode.tui.widgets.dashboard.viz import (
     ASCIITable,
-    BarChart,
     PercentBar,
-    SeverityBadge,
     SparkLine,
     TreeRenderer,
 )
 
+if TYPE_CHECKING:
+    from textual.app import ComposeResult
+
+    from attocode.tracing.types import TraceSession
 
 _SUB_TABS = [
     ("a", "Summary"),

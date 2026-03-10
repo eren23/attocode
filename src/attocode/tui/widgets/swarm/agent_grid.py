@@ -12,7 +12,6 @@ from textual.reactive import reactive
 from textual.widget import Widget
 from textual.widgets import DataTable, Static
 
-
 _STATUS_ICONS = {
     "idle": "\u2501",      # ━
     "claiming": "\u21bb",   # ↻

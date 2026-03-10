@@ -13,9 +13,11 @@ import asyncio
 import logging
 import time
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, Any, Callable
+from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
+    from collections.abc import Callable
+
     from attocode.integrations.context.ast_service import ASTService
     from attoswarm.workspace.file_ledger import FileLedger
 
@@ -77,8 +79,8 @@ class SubagentManager:
     def __init__(
         self,
         max_concurrency: int,
-        file_ledger: "FileLedger | None" = None,
-        ast_service: "ASTService | None" = None,
+        file_ledger: FileLedger | None = None,
+        ast_service: ASTService | None = None,
         spawn_fn: Callable[..., Any] | None = None,
     ) -> None:
         self._max_concurrency = max_concurrency
@@ -197,7 +199,7 @@ class SubagentManager:
                         success=True,
                         result_summary="(no spawn_fn configured — stub)",
                     )
-            except asyncio.TimeoutError:
+            except TimeoutError:
                 result = TaskResult(
                     task_id=task_id,
                     success=False,

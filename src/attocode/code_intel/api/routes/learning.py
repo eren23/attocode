@@ -52,7 +52,7 @@ async def learning_feedback(project_id: str, learning_id: int, req: LearningFeed
 async def list_learnings(
     project_id: str,
     status: str = "active",
-    type: str = "",
+    type: str = "",  # noqa: A002
     scope: str = "",
 ) -> TextResult:
     """List all learnings."""

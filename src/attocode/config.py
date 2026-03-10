@@ -11,7 +11,6 @@ from typing import Any
 import yaml
 from dotenv import load_dotenv
 
-
 # Load .env files
 load_dotenv()
 
@@ -309,9 +308,9 @@ def _apply_dict(config: AttoConfig, data: dict[str, Any]) -> None:
         warning = compaction_block.get("warning_threshold", compaction_block.get("warningThreshold"))
         threshold = compaction_block.get("compaction_threshold", compaction_block.get("compactionThreshold"))
         if warning is not None:
-            setattr(config, "compaction_warning_threshold", float(warning))
+            config.compaction_warning_threshold = float(warning)
         if threshold is not None:
-            setattr(config, "compaction_threshold", float(threshold))
+            config.compaction_threshold = float(threshold)
 
     for key, attr in field_map.items():
         if key in data and data[key] is not None:

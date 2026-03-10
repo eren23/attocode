@@ -14,20 +14,15 @@ Tabs:
 from __future__ import annotations
 
 import time
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from rich.text import Text
-from textual import events
-from textual.app import ComposeResult
 from textual.binding import Binding
-from textual.containers import Horizontal, Vertical
 from textual.reactive import reactive
 from textual.screen import Screen
-from textual.timer import Timer
 from textual.widgets import ContentSwitcher, Footer, Header, Static
 
 from attocode.tui.widgets.swarm.ast_blackboard_pane import ASTBlackboardPane
-from attocode.tui.bridges.swarm_bridge import SwarmEventMessage
 from attocode.tui.widgets.swarm.control_bar import (
     RetryTaskRequested,
     SkipTaskRequested,
@@ -41,11 +36,16 @@ from attocode.tui.widgets.swarm.files_pane import FilesPane
 from attocode.tui.widgets.swarm.model_health_pane import ModelHealthPane
 from attocode.tui.widgets.swarm.overview_pane import OverviewPane
 from attocode.tui.widgets.swarm.quality_pane import QualityPane
-from attocode.tui.widgets.swarm.agent_grid import AgentCard
-from attocode.tui.widgets.swarm.task_board import TaskCard
 from attocode.tui.widgets.swarm.tasks_pane import TasksPane
 from attocode.tui.widgets.swarm.workers_pane import WorkersPane
 
+if TYPE_CHECKING:
+    from textual.app import ComposeResult
+    from textual.timer import Timer
+
+    from attocode.tui.bridges.swarm_bridge import SwarmEventMessage
+    from attocode.tui.widgets.swarm.agent_grid import AgentCard
+    from attocode.tui.widgets.swarm.task_board import TaskCard
 
 _TAB_LABELS = [
     "1:Overview",

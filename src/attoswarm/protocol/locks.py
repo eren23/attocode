@@ -4,8 +4,11 @@ from __future__ import annotations
 
 import contextlib
 import fcntl
-from pathlib import Path
-from typing import Iterator
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from collections.abc import Iterator
+    from pathlib import Path
 
 
 @contextlib.contextmanager

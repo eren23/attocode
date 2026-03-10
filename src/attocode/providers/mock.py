@@ -2,9 +2,8 @@
 
 from __future__ import annotations
 
-from collections.abc import AsyncIterator, Awaitable, Callable
 from dataclasses import dataclass, field
-from typing import Any
+from typing import TYPE_CHECKING
 
 from attocode.types.messages import (
     ChatOptions,
@@ -17,6 +16,9 @@ from attocode.types.messages import (
     TokenUsage,
     ToolCall,
 )
+
+if TYPE_CHECKING:
+    from collections.abc import AsyncIterator, Awaitable, Callable
 
 
 @dataclass

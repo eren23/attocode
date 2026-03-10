@@ -21,6 +21,8 @@ from attocode.providers.fallback_chain import (
 from attocode.providers.mock import MockProvider
 from attocode.providers.model_cache import (
     clear_cache as clear_model_cache,
+)
+from attocode.providers.model_cache import (
     get_cached_capabilities,
     init_model_cache,
     is_vision_capable,

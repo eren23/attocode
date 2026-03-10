@@ -2,18 +2,18 @@
 
 from __future__ import annotations
 
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from rich.text import Text
-from textual.app import ComposeResult
 from textual.binding import Binding
 from textual.containers import Horizontal, Vertical
-from textual.reactive import reactive
 from textual.widget import Widget
-from textual.widgets import DataTable, Static
+from textual.widgets import DataTable
 
 from attocode.tui.widgets.swarm.control_bar import RetryTaskRequested, SkipTaskRequested
 
+if TYPE_CHECKING:
+    from textual.app import ComposeResult
 
 _STATUS_COLORS = {
     "pending": "dim",

@@ -10,7 +10,6 @@ import json
 import logging
 import re
 import time
-from dataclasses import dataclass, field
 from typing import Any, Protocol
 
 from attocode.errors import AgentError
@@ -368,7 +367,6 @@ class InteractivePlanner:
             if s.status in (TaskStatus.COMPLETED, TaskStatus.SKIPPED)
         }
         for step in plan.steps:
-            if step.status == TaskStatus.PENDING:
-                if all(dep in completed_ids for dep in step.dependencies):
-                    return step
+            if step.status == TaskStatus.PENDING and all(dep in completed_ids for dep in step.dependencies):
+                return step
         return None

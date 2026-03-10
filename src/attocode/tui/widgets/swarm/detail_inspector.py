@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-import json
-from pathlib import Path
 from typing import Any
 
 from rich.text import Text
@@ -247,7 +245,7 @@ class DetailInspector(Static):
                 attempt_num = ah.get("attempt", "?")
                 error = ah.get("error", "")[:100]
                 dur = ah.get("duration_s", 0)
-                ts = ah.get("timestamp", "")
+                _ts = ah.get("timestamp", "")
                 text.append(f"    #{attempt_num}", style="yellow")
                 if dur:
                     text.append(f" ({dur:.1f}s)", style="dim")

@@ -6,10 +6,9 @@ stream to prevent the agent from losing track of objectives.
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass, field
-from typing import Any, Callable
-
-from attocode.integrations.utilities.token_estimate import estimate_tokens
+from typing import Any
 
 
 @dataclass

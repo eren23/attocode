@@ -115,7 +115,7 @@ class MCPClient:
                     self._process.stdin.close()
                 self._process.terminate()
                 await asyncio.wait_for(self._process.wait(), timeout=5.0)
-            except (asyncio.TimeoutError, ProcessLookupError):
+            except (TimeoutError, ProcessLookupError):
                 self._process.kill()
             finally:
                 self._process = None
@@ -221,7 +221,7 @@ class MCPClient:
                 )
                 return None
             return response.get("result")
-        except asyncio.TimeoutError:
+        except TimeoutError:
             logger.warning(
                 "MCP server %s timed out on %s (30s)",
                 self._server_name, method,

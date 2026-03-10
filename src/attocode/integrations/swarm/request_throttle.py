@@ -8,10 +8,11 @@ from __future__ import annotations
 
 import asyncio
 import time
-from dataclasses import dataclass, field
-from typing import Any
+from dataclasses import dataclass
+from typing import TYPE_CHECKING, Any
 
-from attocode.providers.base import LLMProvider
+if TYPE_CHECKING:
+    from attocode.providers.base import LLMProvider
 
 
 @dataclass(slots=True)
@@ -178,9 +179,7 @@ class ThrottledProvider:
             return result
         except Exception as e:
             error_str = str(e).lower()
-            if "429" in error_str or "rate" in error_str:
-                self._throttle.backoff()
-            elif "402" in error_str:
+            if "429" in error_str or "rate" in error_str or "402" in error_str:
                 self._throttle.backoff()
             raise
         finally:

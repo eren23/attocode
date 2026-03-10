@@ -7,7 +7,6 @@ budget management, and priority-based context assembly.
 
 from __future__ import annotations
 
-import re
 from dataclasses import dataclass, field
 from enum import StrEnum
 from typing import Any

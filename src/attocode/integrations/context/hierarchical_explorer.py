@@ -11,7 +11,6 @@ from __future__ import annotations
 import os
 from collections import OrderedDict
 from dataclasses import dataclass, field
-from pathlib import Path
 from typing import Any
 
 
@@ -125,14 +124,11 @@ class HierarchicalExplorer:
         # Group into direct children (dirs and files at this level)
         dir_stats: dict[str, _DirAccum] = {}
         direct_files: list[Any] = []
-        depth = path.count("/") + 1 if path else 0
+        _depth = path.count("/") + 1 if path else 0
 
         for f in relevant:
             rel = f.relative_path
-            if path:
-                child = rel[len(path) + 1:]
-            else:
-                child = rel
+            child = rel[len(path) + 1:] if path else rel
 
             parts = child.split("/")
             if len(parts) == 1:
@@ -155,7 +151,7 @@ class HierarchicalExplorer:
 
         # Build directory nodes
         directories: list[DirectoryNode] = []
-        for sp, acc in sorted(dir_stats.items()):
+        for _sp, acc in sorted(dir_stats.items()):
             directories.append(DirectoryNode(
                 name=acc.name,
                 path=acc.path,
@@ -284,7 +280,7 @@ class HierarchicalExplorer:
             lang_str = ""
             if d.languages:
                 top_langs = sorted(d.languages.items(), key=lambda x: -x[1])[:3]
-                lang_str = f"  [{', '.join(l for l, _ in top_langs)}]"
+                lang_str = f"  [{', '.join(line for line, _ in top_langs)}]"
             lines.append(
                 f"  [dir] {d.name}/  "
                 f"{d.file_count} files  {d.total_lines:,} lines{lang_str}"

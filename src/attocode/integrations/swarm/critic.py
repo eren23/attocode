@@ -11,14 +11,12 @@ Only runs if the ``critic`` role is configured in the swarm roles.
 from __future__ import annotations
 
 import logging
-import time
 from typing import TYPE_CHECKING, Any
 
 from attocode.integrations.swarm.types import (
     FixupTask,
     SubtaskType,
     SwarmTask,
-    SwarmTaskResult,
     SwarmTaskStatus,
     WaveReviewResult,
     swarm_event,

@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from typing import Annotated
+
 from fastapi import APIRouter, Depends, Query
 
 from attocode.code_intel.api.auth import verify_api_key
@@ -69,7 +71,7 @@ async def dependencies(project_id: str, path: str = Query(...)) -> TextResult:
 
 
 @router.get("/impact", response_model=TextResult)
-async def impact_analysis(project_id: str, files: list[str] = Query(..., description="Changed file paths")) -> TextResult:
+async def impact_analysis(project_id: str, files: Annotated[list[str], Query(description="Changed file paths")]) -> TextResult:
     """Transitive impact analysis."""
     svc = get_service_or_404(project_id)
     return TextResult(result=svc.impact_analysis(files))

@@ -14,7 +14,6 @@ from __future__ import annotations
 
 import asyncio
 import os
-import signal
 from typing import Any
 
 from attocode.tools.base import Tool, ToolSpec
@@ -88,7 +87,7 @@ async def _kill_process(proc: asyncio.subprocess.Process) -> None:
 
     try:
         await asyncio.wait_for(proc.wait(), timeout=SIGTERM_GRACE_SECONDS)
-    except asyncio.TimeoutError:
+    except TimeoutError:
         # Process didn't exit gracefully, force kill
         try:
             proc.kill()  # SIGKILL
@@ -145,7 +144,7 @@ async def execute_bash(
         )
         try:
             stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=cmd_timeout)
-        except asyncio.TimeoutError:
+        except TimeoutError:
             await _kill_process(proc)
             return f"Error: Command timed out after {cmd_timeout:.0f}s"
 

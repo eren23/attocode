@@ -20,7 +20,6 @@ from attocode.integrations.recording.exploration_tracker import (
     tool_to_action,
 )
 from attocode.integrations.recording.graph_types import (
-    EdgeKind,
     NodeKind,
     SessionGraph,
 )
@@ -221,9 +220,8 @@ class RecordingSessionManager:
 
         # Debounce
         now = time.time()
-        if (now - self._last_capture_time) * 1000 < self._config.debounce_ms:
-            if event_type not in _ALWAYS_CAPTURE:
-                return
+        if (now - self._last_capture_time) * 1000 < self._config.debounce_ms and event_type not in _ALWAYS_CAPTURE:
+            return
 
         self._last_capture_time = now
         self._frame_counter += 1
@@ -252,7 +250,7 @@ class RecordingSessionManager:
         if self._session_dir:
             self._write_frame_sidecar(frame)
 
-    def export(self, format: str = "html") -> Path:
+    def export(self, format: str = "html") -> Path:  # noqa: A002
         """Export the recording to the specified format.
 
         Args:
@@ -448,15 +446,16 @@ class RecordingSessionManager:
             return True
 
         gran = self._config.capture_granularity
-        if gran == "event":
-            return event_type in _CAPTURE_EVENTS
-        elif gran == "tool_call":
-            return event_type in (
+        _granularity_events: dict[str, frozenset[str]] = {
+            "event": frozenset(_CAPTURE_EVENTS),
+            "tool_call": frozenset({
                 "tool.start", "tool.complete", "tool.error",
                 "iteration", "subagent.spawn", "subagent.complete",
-            )
-        elif gran == "iteration":
-            return event_type in ("iteration", "subagent.spawn", "subagent.complete")
+            }),
+            "iteration": frozenset({"iteration", "subagent.spawn", "subagent.complete"}),
+        }
+        if gran in _granularity_events:
+            return event_type in _granularity_events[gran]
         return False
 
     def _capture_screenshot(self, event_type: str) -> str | None:

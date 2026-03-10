@@ -403,10 +403,7 @@ def _resolve_python_import(module: str, source_file: str, file_index: dict[str, 
         for _ in range(dots - 1):
             base = base.parent
         parts = [p for p in module.lstrip(".").split(".") if p]
-        if parts:
-            candidate = str(base / "/".join(parts))
-        else:
-            candidate = str(base / "__init__")
+        candidate = str(base / "/".join(parts)) if parts else str(base / "__init__")
     else:
         candidate = "/".join(parts)
 
@@ -512,10 +509,7 @@ def _resolve_rust_import(module: str, source_file: str, file_index: dict[str, st
         remainder = module[len("self::"):]
         parts = remainder.replace("::", "/").split("/")
         # If source is mod.rs, resolve relative to its directory
-        if source_name in ("mod", "lib", "main"):
-            base = source_dir
-        else:
-            base = source_dir
+        base = source_dir
         for i in range(len(parts), 0, -1):
             candidate = base + "/" + "/".join(parts[:i])
             for suffix in (".rs", "/mod.rs"):
@@ -668,7 +662,7 @@ def _resolve_c_import(module: str, source_file: str, file_index: dict[str, str])
 
     # System headers (angle-bracket includes are typically marked differently,
     # but as a heuristic: skip common system/stdlib headers)
-    _SYSTEM_PREFIXES = (
+    _SYSTEM_PREFIXES = (  # noqa: N806
         "stdio", "stdlib", "string", "math", "time", "errno", "signal",
         "assert", "ctype", "locale", "setjmp", "stdarg", "stddef",
         "sys/", "linux/", "windows.h", "unistd.h", "fcntl.h",
@@ -838,7 +832,7 @@ class CodebaseContextManager:
         """
         root = Path(self.root_dir)
         files: list[FileInfo] = []
-        _SAFETY_CEILING = 50_000  # OOM guard for massive repos
+        _SAFETY_CEILING = 50_000  # noqa: N806  # OOM guard for massive repos
 
         for dirpath, dirnames, filenames in os.walk(root):
             # Filter ignored directories (in-place to prevent os.walk descent)
@@ -880,7 +874,7 @@ class CodebaseContextManager:
                 line_count = 0
                 if lang and size < 500_000:
                     try:
-                        with open(full_path, "r", encoding="utf-8", errors="ignore") as f:
+                        with open(full_path, encoding="utf-8", errors="ignore") as f:
                             line_count = sum(1 for _ in f)
                     except OSError:
                         pass
@@ -1027,7 +1021,7 @@ class CodebaseContextManager:
 
         from attocode.integrations.context.codebase_ast import parse_file as _parse_file
 
-        _SYMBOL_LANGS = {"python", "javascript", "typescript", "rust", "go", "java", "ruby", "c", "cpp"}
+        _SYMBOL_LANGS = {"python", "javascript", "typescript", "rust", "go", "java", "ruby", "c", "cpp"}  # noqa: N806
         for f in self._files:
             if f.language not in _SYMBOL_LANGS:
                 continue
@@ -1106,7 +1100,7 @@ class CodebaseContextManager:
         parts = ["## Repository Context\n"]
         parts.append(f"Files: {len(self._files)} | ")
         parts.append(f"Languages: {', '.join(sorted(self.get_repo_map().languages.keys()))}\n")
-        parts.append(f"\n### Key Files\n")
+        parts.append("\n### Key Files\n")
 
         token_count = estimate_tokens("\n".join(parts))
 
@@ -1353,7 +1347,7 @@ class CodebaseContextManager:
         score = 0.5  # Base
 
         name = Path(file.relative_path).name.lower()
-        rel = file.relative_path.lower()
+        _rel = file.relative_path.lower()
 
         # Entry points
         if name in ("main.py", "main.ts", "app.py", "app.ts", "cli.py", "cli.ts"):
@@ -1407,7 +1401,7 @@ class CodebaseContextManager:
         except Exception:
             pass
 
-        _CONFIG_NAMES = frozenset({
+        _CONFIG_NAMES = frozenset({  # noqa: N806
             "pyproject.toml", "package.json", "tsconfig.json", "setup.cfg",
             "setup.py", "readme.md", "changelog.md",
         })

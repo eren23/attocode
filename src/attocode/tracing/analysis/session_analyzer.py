@@ -6,8 +6,6 @@ token flow data from a :class:`~attocode.tracing.types.TraceSession`.
 
 from __future__ import annotations
 
-from typing import Any
-
 from attocode.tracing.analysis.token_analyzer import TokenAnalyzer
 from attocode.tracing.analysis.views import (
     SessionSummaryView,

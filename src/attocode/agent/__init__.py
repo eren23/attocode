@@ -5,8 +5,8 @@ from attocode.agent.builder import AgentBuilder
 from attocode.agent.context import AgentContext
 from attocode.agent.feature_initializer import (
     FeatureConfig,
-    initialize_features,
     get_feature_summary,
+    initialize_features,
 )
 from attocode.agent.message_builder import build_initial_messages, build_system_prompt
 from attocode.agent.session_api import SessionAPI, SessionSnapshot, SessionSummary

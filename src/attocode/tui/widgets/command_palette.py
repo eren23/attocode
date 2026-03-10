@@ -6,17 +6,18 @@ agent commands, settings, and actions.
 
 from __future__ import annotations
 
-import re
-from dataclasses import dataclass, field
-from typing import Any, Callable
+from dataclasses import dataclass
+from typing import TYPE_CHECKING, Any
 
-from textual.app import ComposeResult
 from textual.binding import Binding
 from textual.containers import Vertical
-from textual.reactive import reactive
 from textual.screen import ModalScreen
-from textual.widget import Widget
-from textual.widgets import Input, ListView, ListItem, Static
+from textual.widgets import Input, ListItem, ListView, Static
+
+if TYPE_CHECKING:
+    from collections.abc import Callable
+
+    from textual.app import ComposeResult
 
 
 @dataclass(slots=True)
@@ -283,7 +284,7 @@ class CommandPaletteScreen(ModalScreen[str | None]):
 
         if query:
             matches = self._registry.search(query)
-            for cmd, score in matches:
+            for cmd, _score in matches:
                 self._results.append(cmd)
         else:
             self._results = [

@@ -11,7 +11,6 @@ import json
 import logging
 import os
 import re
-import time
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
@@ -143,7 +142,7 @@ class DependencyAuditor:
                         version_spec=version,
                         severity=Severity.HIGH,
                         message=f"Unpinned dependency: {pkg}@{version}",
-                        recommendation=f"Pin to a specific version range",
+                        recommendation="Pin to a specific version range",
                         source_file=str(path),
                     ))
                 elif version.startswith(">=") and "<" not in version:
@@ -152,7 +151,7 @@ class DependencyAuditor:
                         version_spec=version,
                         severity=Severity.LOW,
                         message=f"Open-ended version range: {pkg}@{version}",
-                        recommendation=f"Consider adding upper bound (e.g. >=1.0,<2.0)",
+                        recommendation="Consider adding upper bound (e.g. >=1.0,<2.0)",
                         source_file=str(path),
                     ))
 
@@ -185,7 +184,7 @@ class DependencyAuditor:
                 version_spec=version,
                 severity=Severity.LOW,
                 message=f"Open-ended version: {pkg}{version}",
-                recommendation=f"Consider adding upper bound for reproducibility",
+                recommendation="Consider adding upper bound for reproducibility",
                 source_file=source_file,
             )
 

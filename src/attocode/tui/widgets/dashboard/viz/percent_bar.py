@@ -8,10 +8,9 @@ Usage::
 
 from __future__ import annotations
 
+from rich.text import Text
 from textual.reactive import reactive
 from textual.widget import Widget
-
-from rich.text import Text
 
 _BAR_WIDTH = 20
 
@@ -43,7 +42,7 @@ class PercentBar(Widget):
         bar_width: int = _BAR_WIDTH,
         *,
         name: str | None = None,
-        id: str | None = None,
+        id: str | None = None,  # noqa: A002
         classes: str | None = None,
     ) -> None:
         super().__init__(name=name, id=id, classes=classes)

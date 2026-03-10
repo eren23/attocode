@@ -14,7 +14,7 @@ import logging
 import os
 import time
 from dataclasses import asdict
-from typing import IO, Any, Callable
+from typing import IO, TYPE_CHECKING, Any
 
 from attocode.integrations.swarm.types import (
     ArtifactInventory,
@@ -22,13 +22,15 @@ from attocode.integrations.swarm.types import (
     OrchestratorDecision,
     SwarmEvent,
     SwarmPhase,
-    SwarmQueueStats,
     SwarmStatus,
     SwarmTask,
     SwarmTaskStatus,
     SwarmWorkerStatus,
     VerificationResult,
 )
+
+if TYPE_CHECKING:
+    from collections.abc import Callable
 
 logger = logging.getLogger(__name__)
 
@@ -245,9 +247,7 @@ class SwarmEventBridge:
             # Note: _on_quality_result already increments _quality_rejections
             # when passed=False, so we only append to timeline here.
             self._append_timeline(event)
-        elif event_type == "swarm.model.failover":
-            self._append_timeline(event)
-        elif event_type == "swarm.task.attempt":
+        elif event_type == "swarm.model.failover" or event_type == "swarm.task.attempt":
             self._append_timeline(event)
         else:
             # Generic timeline entry for all other events
@@ -429,9 +429,8 @@ class SwarmEventBridge:
                 )
 
         verification = data.get("verification")
-        if verification is not None:
-            if isinstance(verification, VerificationResult):
-                self._verification = verification
+        if verification is not None and isinstance(verification, VerificationResult):
+            self._verification = verification
 
         # Cancel any pending debounced writes and do a final immediate write
         if self._pending_write is not None:

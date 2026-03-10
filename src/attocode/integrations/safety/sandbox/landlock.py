@@ -14,10 +14,8 @@ import os
 import sys
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any
 
 from attocode.errors import ConfigurationError
-
 
 # Landlock constants
 LANDLOCK_CREATE_RULESET_VERSION = 1
@@ -168,7 +166,7 @@ class LandlockSandbox:
             stdout, stderr = await asyncio.wait_for(
                 proc.communicate(), timeout=self.options.timeout
             )
-        except asyncio.TimeoutError:
+        except TimeoutError:
             proc.kill()
             await proc.communicate()
             return f"Command timed out after {self.options.timeout}s", -1
@@ -249,7 +247,7 @@ def _build_landlock_helper(
         f"writable = {w_paths}\n"
         f"cmd = {cmd}\n"
         "apply_landlock(readable, writable)\n"
-        "result = subprocess.run(cmd, shell=True, capture_output=True, text=True)\n"
+        "result = subprocess.run(['/bin/sh', '-lc', cmd], capture_output=True, text=True)\n"
         "sys.stdout.write(result.stdout)\n"
         "sys.stderr.write(result.stderr)\n"
         "sys.exit(result.returncode)\n"

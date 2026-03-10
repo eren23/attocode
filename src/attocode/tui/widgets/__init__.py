@@ -1,33 +1,6 @@
 """TUI widgets."""
 
 from attocode.tui.widgets.agents_panel import ActiveAgentInfo, AgentsPanel
-from attocode.tui.widgets.input_area import PromptInput
-from attocode.tui.widgets.mascot import GhostExpression, render_ghost, render_startup_banner
-from attocode.tui.widgets.message_log import MessageLog
-from attocode.tui.widgets.plan_panel import PlanPanel
-from attocode.tui.widgets.status_bar import StatusBar
-from attocode.tui.widgets.streaming_buffer import StreamingBuffer
-from attocode.tui.widgets.welcome_banner import WelcomeBanner
-from attocode.tui.widgets.swarm_panel import SwarmPanel
-from attocode.tui.widgets.tasks_panel import TasksPanel
-from attocode.tui.widgets.thinking_panel import ThinkingPanel
-from attocode.tui.widgets.tool_calls import ToolCallInfo, ToolCallsPanel
-from attocode.tui.widgets.diff_view import (
-    CollapsibleDiffView,
-    DiffHunk,
-    DiffLine,
-    DiffView,
-    FileDiff,
-    FileChangeSummary,
-    compute_diff,
-    render_diff_line,
-)
-from attocode.tui.widgets.debug_panel import DebugPanel
-from attocode.tui.widgets.transparency_panel import TransparencyPanel
-from attocode.tui.widgets.error_detail_panel import ErrorDetail, ErrorDetailPanel
-from attocode.tui.widgets.file_change_summary import FileChangeSummary as FileChangeSummaryWidget
-from attocode.tui.widgets.diagnostics_panel import DiagnosticItem, DiagnosticsPanel
-from attocode.tui.widgets.side_by_side_diff import SideBySideDiff, SideBySideLine
 from attocode.tui.widgets.collapsible_diff import CollapsibleDiffView as CollapsibleDiffWidget
 from attocode.tui.widgets.command_palette import (
     CommandEntry,
@@ -36,12 +9,39 @@ from attocode.tui.widgets.command_palette import (
     fuzzy_match,
     register_default_commands,
 )
-from attocode.tui.widgets.token_sparkline import TokenSparkline
-from attocode.tui.widgets.metrics_table import MetricsScreen
+from attocode.tui.widgets.debug_panel import DebugPanel
 from attocode.tui.widgets.dependency_graph import DependencyGraphWidget
-from attocode.tui.widgets.impact_graph import ImpactGraphWidget
+from attocode.tui.widgets.diagnostics_panel import DiagnosticItem, DiagnosticsPanel
+from attocode.tui.widgets.diff_view import (
+    CollapsibleDiffView,
+    DiffHunk,
+    DiffLine,
+    DiffView,
+    FileChangeSummary,
+    FileDiff,
+    compute_diff,
+    render_diff_line,
+)
+from attocode.tui.widgets.error_detail_panel import ErrorDetail, ErrorDetailPanel
+from attocode.tui.widgets.file_change_summary import FileChangeSummary as FileChangeSummaryWidget
 from attocode.tui.widgets.hotspot_heatmap import HotspotHeatmap
+from attocode.tui.widgets.impact_graph import ImpactGraphWidget
+from attocode.tui.widgets.input_area import PromptInput
+from attocode.tui.widgets.mascot import GhostExpression, render_ghost, render_startup_banner
+from attocode.tui.widgets.message_log import MessageLog
+from attocode.tui.widgets.metrics_table import MetricsScreen
+from attocode.tui.widgets.plan_panel import PlanPanel
 from attocode.tui.widgets.repo_overview import RepoOverviewWidget
+from attocode.tui.widgets.side_by_side_diff import SideBySideDiff, SideBySideLine
+from attocode.tui.widgets.status_bar import StatusBar
+from attocode.tui.widgets.streaming_buffer import StreamingBuffer
+from attocode.tui.widgets.swarm_panel import SwarmPanel
+from attocode.tui.widgets.tasks_panel import TasksPanel
+from attocode.tui.widgets.thinking_panel import ThinkingPanel
+from attocode.tui.widgets.token_sparkline import TokenSparkline
+from attocode.tui.widgets.tool_calls import ToolCallInfo, ToolCallsPanel
+from attocode.tui.widgets.transparency_panel import TransparencyPanel
+from attocode.tui.widgets.welcome_banner import WelcomeBanner
 
 __all__ = [
     # existing
