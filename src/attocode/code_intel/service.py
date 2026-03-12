@@ -170,6 +170,546 @@ class CodeIntelService:
         )
         return "\n".join(lines)
 
+    # ------------------------------------------------------------------
+    # Structured data methods (v2 API — return dicts, not formatted text)
+    # ------------------------------------------------------------------
+
+    def symbols_data(self, path: str) -> list[dict]:
+        """Return raw symbol locations for a file."""
+        svc = self._get_ast_service()
+        locs = svc.get_file_symbols(path)
+        return [
+            {
+                "kind": loc.kind, "name": loc.name,
+                "qualified_name": loc.qualified_name,
+                "file_path": loc.file_path,
+                "start_line": loc.start_line, "end_line": loc.end_line,
+            }
+            for loc in sorted(locs, key=lambda s: s.start_line)
+        ]
+
+    def search_symbols_data(self, name: str) -> list[dict]:
+        """Return raw symbol search results."""
+        svc = self._get_ast_service()
+        locs = svc.find_symbol(name)
+        return [
+            {
+                "kind": loc.kind, "name": loc.name,
+                "qualified_name": loc.qualified_name,
+                "file_path": loc.file_path,
+                "start_line": loc.start_line, "end_line": loc.end_line,
+            }
+            for loc in locs
+        ]
+
+    def dependencies_data(self, path: str) -> dict:
+        """Return structured dependency data."""
+        svc = self._get_ast_service()
+        deps = svc.get_dependencies(path)
+        dependents = svc.get_dependents(path)
+        return {
+            "path": path,
+            "imports": sorted(deps),
+            "imported_by": sorted(dependents),
+        }
+
+    def impact_analysis_data(self, changed_files: list[str]) -> dict:
+        """Return structured impact analysis."""
+        svc = self._get_ast_service()
+        impacted = svc.get_impact(changed_files)
+        return {
+            "changed_files": changed_files,
+            "impacted_files": sorted(impacted),
+            "total_impacted": len(impacted),
+        }
+
+    def cross_references_data(self, symbol_name: str) -> dict:
+        """Return structured cross-reference data."""
+        svc = self._get_ast_service()
+        definitions = svc.find_symbol(symbol_name)
+        references = svc.get_callers(symbol_name)
+        return {
+            "symbol": symbol_name,
+            "definitions": [
+                {
+                    "kind": loc.kind, "name": loc.name,
+                    "qualified_name": loc.qualified_name,
+                    "file_path": loc.file_path,
+                    "start_line": loc.start_line, "end_line": loc.end_line,
+                }
+                for loc in definitions
+            ],
+            "references": [
+                {"ref_kind": ref.ref_kind, "file_path": ref.file_path, "line": ref.line}
+                for ref in references
+            ],
+            "total_references": len(references),
+        }
+
+    def file_analysis_data(self, path: str) -> dict:
+        """Return structured file analysis."""
+        analyzer = self._get_code_analyzer()
+        if not os.path.isabs(path):
+            path = os.path.join(self._project_dir, path)
+        result = analyzer.analyze_file(path)
+        return {
+            "path": result.path,
+            "language": result.language,
+            "line_count": result.line_count,
+            "imports": list(result.imports),
+            "exports": list(result.exports),
+            "chunks": [
+                {
+                    "kind": chunk.kind, "name": chunk.name,
+                    "parent": chunk.parent, "signature": chunk.signature,
+                    "start_line": chunk.start_line, "end_line": chunk.end_line,
+                }
+                for chunk in result.chunks
+            ],
+        }
+
+    def hotspots_data(self, top_n: int = 15) -> dict:
+        """Return structured hotspot data."""
+        from attocode.code_intel.helpers import _compute_file_metrics, _compute_function_hotspots
+
+        ctx = self._get_context_mgr()
+        files = ctx._files
+        if not files:
+            return {"file_hotspots": [], "function_hotspots": [], "orphan_files": []}
+
+        svc = self._get_ast_service()
+        index = svc._index
+        ast_cache = svc._ast_cache
+
+        all_metrics = _compute_file_metrics(files, index, ast_cache)
+        all_metrics.sort(key=lambda m: m.composite, reverse=True)
+
+        def _fm_dict(m):
+            return {
+                "path": m.path, "line_count": m.line_count,
+                "symbol_count": m.symbol_count, "public_symbols": m.public_symbols,
+                "fan_in": m.fan_in, "fan_out": m.fan_out,
+                "density": m.density, "composite": m.composite,
+                "categories": m.categories,
+            }
+
+        fn_hotspots = _compute_function_hotspots(ast_cache, top_n=10)
+        orphans = [
+            m for m in all_metrics
+            if m.fan_in == 0 and m.fan_out == 0 and m.line_count >= 20
+            and not any(fi.is_test for fi in files if fi.relative_path == m.path)
+        ]
+
+        return {
+            "file_hotspots": [_fm_dict(m) for m in all_metrics[:top_n]],
+            "function_hotspots": [
+                {
+                    "file_path": fm.file_path, "name": fm.name,
+                    "line_count": fm.line_count, "param_count": fm.param_count,
+                    "is_public": fm.is_public, "has_return_type": fm.has_return_type,
+                }
+                for fm in fn_hotspots
+            ],
+            "orphan_files": [_fm_dict(m) for m in orphans[:10]],
+        }
+
+    def conventions_data(self, sample_size: int = 50, path: str = "") -> dict:
+        """Return structured convention stats."""
+        from attocode.code_intel.helpers import _analyze_conventions
+
+        svc = self._get_ast_service()
+        ast_cache = svc._ast_cache
+        if not ast_cache:
+            return {"sample_size": 0, "path": path, "stats": {}, "dir_stats": {}}
+
+        ctx = self._get_context_mgr()
+        files = ctx._files
+        path_prefix = path.rstrip("/") + "/" if path else ""
+
+        if path_prefix:
+            candidates = sorted(
+                [fi for fi in files if fi.relative_path in ast_cache
+                 and fi.relative_path.startswith(path_prefix)],
+                key=lambda fi: fi.importance, reverse=True,
+            )
+            sample_rels = [fi.relative_path for fi in candidates[:sample_size]]
+        else:
+            candidates = sorted(
+                [fi for fi in files if fi.relative_path in ast_cache],
+                key=lambda fi: fi.importance, reverse=True,
+            )
+            sample_rels = [fi.relative_path for fi in candidates[:sample_size]]
+
+        if not sample_rels:
+            return {"sample_size": 0, "path": path, "stats": {}, "dir_stats": {}}
+
+        stats = _analyze_conventions(ast_cache, sample_rels)
+        # Convert Counter objects to plain dicts for serialization
+        stats["decorator_counts"] = dict(stats["decorator_counts"])
+        stats["base_classes"] = dict(stats["base_classes"])
+        stats.pop("files_per_dir", None)
+        # Convert tuple pairs to dicts for Pydantic v2
+        stats["exception_classes"] = [
+            {"name": name, "bases": bases}
+            for name, bases in stats.get("exception_classes", [])
+        ]
+
+        dir_stats: dict[str, dict] = {}
+        if not path_prefix:
+            dir_groups: dict[str, list[str]] = {}
+            for rel in sample_rels:
+                parts = rel.split("/")
+                dirname = parts[0] if len(parts) > 1 else "(root)"
+                dir_groups.setdefault(dirname, []).append(rel)
+            for dirname, dir_rels in dir_groups.items():
+                if len(dir_rels) >= 3:
+                    ds = _analyze_conventions(ast_cache, dir_rels)
+                    ds["decorator_counts"] = dict(ds["decorator_counts"])
+                    ds["base_classes"] = dict(ds["base_classes"])
+                    ds.pop("files_per_dir", None)
+                    ds["exception_classes"] = [
+                        {"name": name, "bases": bases}
+                        for name, bases in ds.get("exception_classes", [])
+                    ]
+                    dir_stats[dirname] = ds
+
+        return {
+            "sample_size": len(sample_rels),
+            "path": path,
+            "stats": stats,
+            "dir_stats": dir_stats,
+        }
+
+    def dependency_graph_data(self, start_file: str, depth: int = 2) -> dict:
+        """Return structured dependency graph."""
+        svc = self._get_ast_service()
+        rel = svc._to_rel(start_file)
+
+        def _bfs(get_neighbors):
+            visited: set[str] = set()
+            queue: deque[tuple[str, int]] = deque([(rel, 0)])
+            nodes = []
+            while queue:
+                current, d = queue.popleft()
+                if current in visited or d > depth:
+                    continue
+                visited.add(current)
+                if d > 0:
+                    nodes.append({"path": current, "depth": d})
+                for n in sorted(get_neighbors(current)):
+                    if n not in visited:
+                        queue.append((n, d + 1))
+            return nodes
+
+        return {
+            "start_file": rel,
+            "depth": depth,
+            "forward": _bfs(svc.get_dependencies),
+            "reverse": _bfs(svc.get_dependents),
+        }
+
+    def graph_query_data(
+        self, file: str, edge_type: str = "IMPORTS",
+        direction: str = "outbound", depth: int = 2,
+    ) -> dict:
+        """Return structured graph query result."""
+        svc = self._get_ast_service()
+        rel = svc._to_rel(file)
+        depth = min(depth, 5)
+        use_dependents = edge_type == "IMPORTED_BY" or direction == "inbound"
+
+        visited: set[str] = set()
+        queue: deque[tuple[str, int]] = deque([(rel, 0)])
+        hops_by_depth: dict[int, list[str]] = {}
+        while queue:
+            current, d = queue.popleft()
+            if current in visited or d > depth:
+                continue
+            visited.add(current)
+            if d > 0:
+                hops_by_depth.setdefault(d, []).append(current)
+            neighbors = svc.get_dependents(current) if use_dependents else svc.get_dependencies(current)
+            for n in sorted(neighbors):
+                if n not in visited:
+                    queue.append((n, d + 1))
+
+        return {
+            "root": rel,
+            "direction": "inbound" if use_dependents else "outbound",
+            "depth": depth,
+            "hops": [{"depth": d, "files": fs} for d, fs in sorted(hops_by_depth.items())],
+            "total_reachable": len(visited) - 1,
+        }
+
+    def find_related_data(self, file: str, top_k: int = 10) -> dict:
+        """Return structured related-files result."""
+        svc = self._get_ast_service()
+        rel = svc._to_rel(file)
+        idx = svc._index
+
+        neighbors: Counter[str] = Counter()
+        direct_deps = idx.get_dependencies(rel)
+        direct_importers = idx.get_dependents(rel)
+        all_direct = direct_deps | direct_importers
+
+        for n in all_direct:
+            neighbors[n] += 3
+        for n in all_direct:
+            for nn in idx.get_dependencies(n):
+                if nn != rel:
+                    neighbors[nn] += 1
+            for nn in idx.get_dependents(n):
+                if nn != rel:
+                    neighbors[nn] += 1
+
+        my_deps = idx.get_dependencies(rel)
+        if my_deps:
+            for other_file in set(neighbors.keys()):
+                other_deps_set = idx.file_dependencies.get(other_file, set())
+                if other_deps_set:
+                    overlap = len(my_deps & other_deps_set)
+                    if overlap > 0:
+                        union = len(my_deps | other_deps_set)
+                        neighbors[other_file] += round((overlap / union if union else 0) * 5)
+
+        top = neighbors.most_common(top_k)
+        return {
+            "file": rel,
+            "related": [
+                {
+                    "path": path,
+                    "score": score,
+                    "relation_type": "direct" if path in all_direct else "transitive",
+                }
+                for path, score in top
+            ],
+        }
+
+    def community_detection_data(
+        self, min_community_size: int = 3, max_communities: int = 20,
+    ) -> dict:
+        """Return structured community detection result."""
+        svc = self._get_ast_service()
+        idx = svc._index
+
+        all_files: set[str] = set()
+        all_files.update(idx.file_dependencies.keys())
+        all_files.update(idx.file_dependents.keys())
+        all_files.update(f for deps in idx.file_dependencies.values() for f in deps)
+
+        adj: dict[str, set[str]] = {f: set() for f in all_files}
+        weights: dict[tuple[str, str], float] = {}
+        for src, deps in idx.file_dependencies.items():
+            for tgt in deps:
+                adj.setdefault(src, set()).add(tgt)
+                adj.setdefault(tgt, set()).add(src)
+                key = (min(src, tgt), max(src, tgt))
+                is_bidi = tgt in idx.file_dependencies and src in idx.file_dependencies.get(tgt, set())
+                weights[key] = 2.0 if is_bidi else 1.0
+
+        try:
+            from attocode.code_intel.community import louvain_communities as _louvain
+            communities, modularity_score = _louvain(all_files, adj, weights)
+            method = "louvain"
+        except ImportError:
+            from attocode.code_intel.community import bfs_connected_components
+            communities, modularity_score = bfs_connected_components(all_files, adj)
+            method = "connected-components"
+
+        communities.sort(key=len, reverse=True)
+        communities = [c for c in communities if len(c) >= min_community_size][:max_communities]
+
+        result_communities = []
+        for i, community in enumerate(communities, 1):
+            from collections import Counter as _Counter
+            dirs = [os.path.dirname(f) for f in community if os.path.dirname(f)]
+            theme = _Counter(dirs).most_common(1)[0][0] if dirs else "(root)"
+            internal_edges = sum(
+                1 for f in community for n in adj.get(f, set()) if n in community
+            ) // 2
+            external_edges = sum(
+                1 for f in community for n in adj.get(f, set()) if n not in community
+            )
+
+            def _int_deg(f: str, _community: set[str] = community) -> int:
+                return sum(1 for n in adj.get(f, set()) if n in _community)
+
+            hub = max(community, key=_int_deg)
+            result_communities.append({
+                "id": i,
+                "files": sorted(community),
+                "size": len(community),
+                "theme": theme,
+                "internal_edges": internal_edges,
+                "external_edges": external_edges,
+                "hub": hub,
+                "hub_internal_degree": _int_deg(hub),
+            })
+
+        return {
+            "method": method,
+            "modularity": round(modularity_score, 3),
+            "communities": result_communities,
+        }
+
+    def semantic_search_data(self, query: str, top_k: int = 10, file_filter: str = "") -> dict:
+        """Return structured semantic search results."""
+        mgr = self._get_semantic_search()
+        results = mgr.search(query, top_k=top_k, file_filter=file_filter)
+        return {
+            "query": query,
+            "results": [
+                {
+                    "file_path": r.file_path,
+                    "score": r.score,
+                    "snippet": r.text,
+                    "line": None,
+                }
+                for r in results
+            ],
+            "total": len(results),
+        }
+
+    def security_scan_data(self, mode: str = "full", path: str = "") -> dict:
+        """Return structured security scan results."""
+        scanner = self._get_security_scanner()
+        report = scanner.scan(mode=mode, path=path)
+        findings = [
+            {
+                "severity": str(finding.severity),
+                "category": str(finding.category),
+                "file_path": finding.file_path,
+                "line": finding.line,
+                "message": finding.message,
+                "suggestion": finding.recommendation,
+            }
+            for finding in report.findings
+        ]
+        return {
+            "mode": mode,
+            "path": path,
+            "findings": findings,
+            "total_findings": len(findings),
+            "summary": report.summary,
+        }
+
+    async def lsp_definition_data(self, file: str, line: int, col: int = 0) -> dict:
+        """Return structured LSP definition result."""
+        lsp = self._get_lsp_manager()
+        if not os.path.isabs(file):
+            file = os.path.join(self._project_dir, file)
+        try:
+            loc = await lsp.get_definition(file, line, col)
+        except Exception as e:
+            return {"location": None, "error": f"LSP not available: {e}"}
+        if loc is None:
+            return {"location": None, "error": None}
+        uri = loc.uri
+        if uri.startswith("file://"):
+            uri = uri[7:]
+        try:
+            uri = os.path.relpath(uri, self._project_dir)
+        except ValueError:
+            pass
+        return {
+            "location": {
+                "file": uri,
+                "line": loc.range.start.line + 1,
+                "col": loc.range.start.character + 1,
+            },
+            "error": None,
+        }
+
+    async def lsp_references_data(
+        self, file: str, line: int, col: int = 0, include_declaration: bool = True,
+    ) -> dict:
+        """Return structured LSP references."""
+        lsp = self._get_lsp_manager()
+        if not os.path.isabs(file):
+            file = os.path.join(self._project_dir, file)
+        try:
+            locs = await lsp.get_references(file, line, col, include_declaration=include_declaration)
+        except Exception as e:
+            return {"locations": [], "total": 0, "error": f"LSP not available: {e}"}
+        locations = []
+        for loc in locs:
+            uri = loc.uri
+            if uri.startswith("file://"):
+                uri = uri[7:]
+            try:
+                uri = os.path.relpath(uri, self._project_dir)
+            except ValueError:
+                pass
+            locations.append({
+                "file": uri,
+                "line": loc.range.start.line + 1,
+                "col": loc.range.start.character + 1,
+            })
+        return {"locations": locations, "total": len(locs), "error": None}
+
+    async def lsp_hover_data(self, file: str, line: int, col: int = 0) -> dict:
+        """Return structured LSP hover info."""
+        lsp = self._get_lsp_manager()
+        if not os.path.isabs(file):
+            file = os.path.join(self._project_dir, file)
+        try:
+            info = await lsp.get_hover(file, line, col)
+        except Exception as e:
+            return {"content": None, "file": file, "line": line, "col": col,
+                    "error": f"LSP not available: {e}"}
+        return {"content": info, "file": file, "line": line, "col": col, "error": None}
+
+    def lsp_diagnostics_data(self, file: str) -> dict:
+        """Return structured LSP diagnostics."""
+        lsp = self._get_lsp_manager()
+        if not os.path.isabs(file):
+            file = os.path.join(self._project_dir, file)
+        try:
+            diags = lsp.get_diagnostics(file)
+        except Exception as e:
+            return {"file": file, "diagnostics": [], "total": 0,
+                    "error": f"LSP not available: {e}"}
+        return {
+            "file": file,
+            "diagnostics": [
+                {
+                    "severity": d.severity,
+                    "source": d.source,
+                    "code": str(d.code) if d.code else None,
+                    "line": d.range.start.line + 1,
+                    "col": d.range.start.character + 1,
+                    "message": d.message,
+                }
+                for d in diags
+            ],
+            "total": len(diags),
+            "error": None,
+        }
+
+    def repo_stats_data(self) -> dict:
+        """Return aggregate repository statistics."""
+        ctx = self._get_context_mgr()
+        files = ctx._files
+        svc = self._get_ast_service()
+        idx = svc._index
+
+        total_lines = sum(fi.line_count for fi in files)
+        languages: Counter[str] = Counter()
+        for fi in files:
+            if fi.language:
+                languages[fi.language] += 1
+
+        symbol_count = sum(len(syms) for syms in idx.file_symbols.values())
+        dep_count = sum(len(deps) for deps in idx.file_dependencies.values())
+
+        return {
+            "file_count": len(files),
+            "total_lines": total_lines,
+            "symbol_count": symbol_count,
+            "dependency_count": dep_count,
+            "languages": dict(languages),
+        }
+
     def symbols(self, path: str) -> str:
         svc = self._get_ast_service()
         locs = svc.get_file_symbols(path)
@@ -275,46 +815,24 @@ class CodeIntelService:
         return "\n".join(lines)
 
     def dependency_graph(self, start_file: str, depth: int = 2) -> str:
-        svc = self._get_ast_service()
-        rel = svc._to_rel(start_file)
+        data = self.dependency_graph_data(start_file, depth)
+        rel = data["start_file"]
         lines = [f"Dependency graph for {rel} (depth={depth}):"]
 
-        # Forward BFS
         lines.append("\n  Imports (forward):")
-        visited_fwd: set[str] = set()
-        queue_fwd: deque[tuple[str, int]] = deque([(rel, 0)])
-        while queue_fwd:
-            current, d = queue_fwd.popleft()
-            if current in visited_fwd or d > depth:
-                continue
-            visited_fwd.add(current)
-            indent = "    " + "  " * d
-            if d > 0:
-                lines.append(f"{indent}{current}")
-            deps = svc.get_dependencies(current)
-            for dep in sorted(deps):
-                if dep not in visited_fwd:
-                    queue_fwd.append((dep, d + 1))
-        if len(visited_fwd) <= 1:
+        if data["forward"]:
+            for node in data["forward"]:
+                indent = "    " + "  " * node["depth"]
+                lines.append(f"{indent}{node['path']}")
+        else:
             lines.append("    (none)")
 
-        # Reverse BFS
         lines.append("\n  Imported by (reverse):")
-        visited_rev: set[str] = set()
-        queue_rev: deque[tuple[str, int]] = deque([(rel, 0)])
-        while queue_rev:
-            current, d = queue_rev.popleft()
-            if current in visited_rev or d > depth:
-                continue
-            visited_rev.add(current)
-            indent = "    " + "  " * d
-            if d > 0:
-                lines.append(f"{indent}{current}")
-            dependents = svc.get_dependents(current)
-            for dep in sorted(dependents):
-                if dep not in visited_rev:
-                    queue_rev.append((dep, d + 1))
-        if len(visited_rev) <= 1:
+        if data["reverse"]:
+            for node in data["reverse"]:
+                indent = "    " + "  " * node["depth"]
+                lines.append(f"{indent}{node['path']}")
+        else:
             lines.append("    (none)")
 
         return "\n".join(lines)
@@ -333,37 +851,18 @@ class CodeIntelService:
         if direction not in valid_directions:
             return f"Error: invalid direction '{direction}'. Must be one of: {', '.join(sorted(valid_directions))}"
 
-        svc = self._get_ast_service()
-        rel = svc._to_rel(file)
-        depth = min(depth, 5)
-        use_dependents = edge_type == "IMPORTED_BY" or direction == "inbound"
-
-        visited: set[str] = set()
-        queue: deque[tuple[str, int]] = deque([(rel, 0)])
-        result_by_depth: dict[int, list[str]] = {}
-
-        while queue:
-            current, d = queue.popleft()
-            if current in visited or d > depth:
-                continue
-            visited.add(current)
-            if d > 0:
-                result_by_depth.setdefault(d, []).append(current)
-            neighbors = svc.get_dependents(current) if use_dependents else svc.get_dependencies(current)
-            for n in sorted(neighbors):
-                if n not in visited:
-                    queue.append((n, d + 1))
-
-        label = "importers" if use_dependents else "imports"
-        lines = [f"Graph query: {rel} ({label}, depth={depth})"]
-        if not result_by_depth:
+        data = self.graph_query_data(file, edge_type, direction, depth)
+        label = "importers" if data["direction"] == "inbound" else "imports"
+        lines = [f"Graph query: {data['root']} ({label}, depth={data['depth']})"]
+        if not data["hops"]:
             lines.append("  (no results)")
         else:
-            for d in sorted(result_by_depth):
+            for hop in data["hops"]:
+                d = hop["depth"]
                 lines.append(f"\n  Hop {d}:")
-                for f_path in result_by_depth[d]:
+                for f_path in hop["files"]:
                     lines.append(f"    {'>' * d} {f_path}")
-        lines.append(f"\nTotal: {len(visited) - 1} files reachable")
+        lines.append(f"\nTotal: {data['total_reachable']} files reachable")
         return "\n".join(lines)
 
     def find_related(self, file: str, top_k: int = 10) -> str:
@@ -374,105 +873,30 @@ class CodeIntelService:
         if rel not in idx.file_symbols and rel not in idx.file_dependencies:
             return f"Error: file '{rel}' not found in the project index."
 
-        neighbors: Counter[str] = Counter()
-        direct_deps = idx.get_dependencies(rel)
-        direct_importers = idx.get_dependents(rel)
-        all_direct = direct_deps | direct_importers
-
-        for n in all_direct:
-            neighbors[n] += 3
-        for n in all_direct:
-            for nn in idx.get_dependencies(n):
-                if nn != rel:
-                    neighbors[nn] += 1
-            for nn in idx.get_dependents(n):
-                if nn != rel:
-                    neighbors[nn] += 1
-
-        my_deps = idx.get_dependencies(rel)
-        if my_deps:
-            candidate_files = set(neighbors.keys())
-            for other_file in candidate_files:
-                other_deps_set = idx.file_dependencies.get(other_file, set())
-                if not other_deps_set:
-                    continue
-                overlap = len(my_deps & other_deps_set)
-                if overlap > 0:
-                    union = len(my_deps | other_deps_set)
-                    jaccard = overlap / union if union else 0
-                    neighbors[other_file] += round(jaccard * 5)
-
-        top = neighbors.most_common(top_k)
-        lines = [f"Files related to {rel}:"]
-        if not top:
+        data = self.find_related_data(file, top_k)
+        lines = [f"Files related to {data['file']}:"]
+        if not data["related"]:
             lines.append("  (no related files found)")
         else:
-            for path, score in top:
-                rel_type = "direct" if path in all_direct else "transitive"
-                lines.append(f"  [{score:>3}] {path}  ({rel_type})")
+            for item in data["related"]:
+                lines.append(f"  [{item['score']:>3}] {item['path']}  ({item['relation_type']})")
         return "\n".join(lines)
 
     def community_detection(self, min_community_size: int = 3, max_communities: int = 20) -> str:
-        from collections import Counter as _Counter
-
-        svc = self._get_ast_service()
-        idx = svc._index
-
-        all_files: set[str] = set()
-        all_files.update(idx.file_dependencies.keys())
-        all_files.update(idx.file_dependents.keys())
-        all_files.update(f for deps in idx.file_dependencies.values() for f in deps)
-
-        adj: dict[str, set[str]] = {f: set() for f in all_files}
-        weights: dict[tuple[str, str], float] = {}
-        for src, deps in idx.file_dependencies.items():
-            for tgt in deps:
-                adj.setdefault(src, set()).add(tgt)
-                adj.setdefault(tgt, set()).add(src)
-                key = (min(src, tgt), max(src, tgt))
-                is_bidi = tgt in idx.file_dependencies and src in idx.file_dependencies.get(tgt, set())
-                weights[key] = 2.0 if is_bidi else 1.0
-
-        # Try Louvain, fall back to BFS connected components
-        try:
-            from attocode.code_intel.community import louvain_communities as _louvain
-            communities, modularity_score = _louvain(all_files, adj, weights)
-            method = "louvain"
-        except ImportError:
-            from attocode.code_intel.community import bfs_connected_components
-            communities, modularity_score = bfs_connected_components(all_files, adj)
-            method = "connected-components"
-
-        communities.sort(key=len, reverse=True)
-        communities = [c for c in communities if len(c) >= min_community_size][:max_communities]
-
+        data = self.community_detection_data(min_community_size, max_communities)
         lines = [
-            f"Community detection ({method}): {len(communities)} communities "
-            f"(min size {min_community_size}, modularity={modularity_score:.3f})"
+            f"Community detection ({data['method']}): {len(data['communities'])} communities "
+            f"(min size {min_community_size}, modularity={data['modularity']:.3f})"
         ]
-        for i, community in enumerate(communities, 1):
-            dirs = [os.path.dirname(f) for f in community if os.path.dirname(f)]
-            theme = _Counter(dirs).most_common(1)[0][0] if dirs else "(root)"
-
-            internal_edges = sum(
-                1 for f in community for n in adj.get(f, set()) if n in community
-            ) // 2
-            external_edges = sum(
-                1 for f in community for n in adj.get(f, set()) if n not in community
-            )
-
-            def _int_deg(f: str, _community: set[str] = community) -> int:
-                return sum(1 for n in adj.get(f, set()) if n in _community)
-
-            hub = max(community, key=_int_deg)
-            lines.append(f"\n  Community {i} ({len(community)} files) — theme: {theme}")
-            lines.append(f"    Internal edges: {internal_edges}, External edges: {external_edges}")
-            lines.append(f"    Hub: {hub} (internal degree {_int_deg(hub)})")
-            sample = sorted(community)[:5]
+        for comm in data["communities"]:
+            lines.append(f"\n  Community {comm['id']} ({comm['size']} files) — theme: {comm['theme']}")
+            lines.append(f"    Internal edges: {comm['internal_edges']}, External edges: {comm['external_edges']}")
+            lines.append(f"    Hub: {comm['hub']} (internal degree {comm['hub_internal_degree']})")
+            sample = comm["files"][:5]
             for f in sample:
-                lines.append(f"    - {f} (internal degree {_int_deg(f)})")
-            if len(community) > 5:
-                lines.append(f"    ... and {len(community) - 5} more")
+                lines.append(f"    - {f}")
+            if comm["size"] > 5:
+                lines.append(f"    ... and {comm['size'] - 5} more")
         return "\n".join(lines)
 
     def relevant_context(

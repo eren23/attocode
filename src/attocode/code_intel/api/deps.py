@@ -3,11 +3,21 @@
 from __future__ import annotations
 
 import logging
+import uuid
+from typing import TYPE_CHECKING, Annotated, AsyncGenerator
 
-from fastapi import HTTPException
+from fastapi import HTTPException, Query
 
 from attocode.code_intel.config import CodeIntelConfig
 from attocode.code_intel.service import CodeIntelService
+
+if TYPE_CHECKING:
+    from sqlalchemy.ext.asyncio import AsyncSession
+
+    from attocode.code_intel.api.auth.context import AuthContext
+
+# N2: Shared BranchParam type alias — used by all route modules
+BranchParam = Annotated[str, Query(alias="branch", description="Branch name (empty = default/working dir)")]
 
 logger = logging.getLogger(__name__)
 
@@ -79,3 +89,142 @@ def list_projects() -> dict[str, CodeIntelService]:
 def get_default_project_id() -> str:
     """Return the default project ID."""
     return _default_project_id
+
+
+# --- Branch context ---
+
+
+class BranchContext:
+    """Resolved branch context for service mode queries.
+
+    Contains the branch ID and resolved manifest (path → content_sha).
+    Passed to service methods so all queries are branch-aware.
+    """
+
+    def __init__(
+        self,
+        branch_id: uuid.UUID,
+        branch_name: str,
+        manifest: dict[str, str],
+        version: int = 0,
+    ) -> None:
+        self.branch_id = branch_id
+        self.branch_name = branch_name
+        self.manifest = manifest
+        self.version = version
+        self._sha_to_path: dict[str, str] | None = None
+
+    @property
+    def content_shas(self) -> set[str]:
+        return set(self.manifest.values())
+
+    @property
+    def sha_to_path(self) -> dict[str, str]:
+        if self._sha_to_path is None:
+            self._sha_to_path = {sha: path for path, sha in self.manifest.items()}
+        return self._sha_to_path
+
+
+async def get_branch_context(
+    repo_id: uuid.UUID,
+    branch_name: str,
+    session: AsyncSession,
+) -> BranchContext:
+    """Resolve branch context for a query. Returns BranchContext with manifest.
+
+    If branch_name is empty, uses the repository's default branch.
+    """
+    from sqlalchemy import select
+
+    from attocode.code_intel.db.models import Branch, Repository
+    from attocode.code_intel.storage.branch_overlay import BranchOverlay
+
+    if not branch_name:
+        result = await session.execute(
+            select(Repository.default_branch).where(Repository.id == repo_id)
+        )
+        branch_name = result.scalar_one_or_none() or "main"
+
+    result = await session.execute(
+        select(Branch).where(
+            Branch.repo_id == repo_id,
+            Branch.name == branch_name,
+        )
+    )
+    branch = result.scalar_one_or_none()
+    if branch is None:
+        raise HTTPException(status_code=404, detail=f"Branch '{branch_name}' not found")
+
+    overlay = BranchOverlay(session)
+    manifest = await overlay.resolve_manifest(branch.id)
+    version = await overlay.get_version(branch.id)
+
+    return BranchContext(
+        branch_id=branch.id,
+        branch_name=branch_name,
+        manifest=manifest,
+        version=version,
+    )
+
+
+# --- Git manager ---
+
+
+def get_git_manager():
+    """Return a GitRepoManager configured from the active config."""
+    from attocode.code_intel.git.manager import GitRepoManager
+
+    config = get_config()
+    return GitRepoManager(config.git_clone_dir, config.git_ssh_key_path)
+
+
+# --- Service mode dependencies ---
+
+
+async def get_db_session() -> AsyncGenerator[AsyncSession, None]:
+    """Yield an async DB session. Raises 503 if not in service mode."""
+    config = get_config()
+    if not config.is_service_mode:
+        raise HTTPException(status_code=503, detail="Service mode not enabled (DATABASE_URL not set)")
+    from attocode.code_intel.db.engine import get_session
+
+    async for session in get_session():
+        yield session
+
+
+async def get_org_scoped_session(
+    auth: AuthContext,
+    session: AsyncSession,
+) -> AsyncSession:
+    """Set RLS context for org isolation, then return the session.
+
+    M12 fix: Use parameterized SET to prevent SQL injection.
+    """
+    if auth.org_id:
+        from sqlalchemy import text
+        await session.execute(
+            text("SET LOCAL app.current_org_id = :org_id").bindparams(org_id=str(auth.org_id))
+        )
+    return session
+
+
+async def get_repo_service(
+    org_id: uuid.UUID,
+    repo_id: uuid.UUID,
+    session: AsyncSession,
+) -> CodeIntelService:
+    """Look up a Repository from DB and return a CodeIntelService for its local_path."""
+    from sqlalchemy import select
+
+    from attocode.code_intel.db.models import Repository
+
+    result = await session.execute(
+        select(Repository).where(Repository.id == repo_id, Repository.org_id == org_id)
+    )
+    repo = result.scalar_one_or_none()
+    if repo is None:
+        raise HTTPException(status_code=404, detail="Repository not found")
+    path = repo.clone_path or repo.local_path
+    if not path:
+        raise HTTPException(status_code=422, detail="Repository has no local path or clone")
+    return CodeIntelService.get_instance(path, _config)

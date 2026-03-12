@@ -5,7 +5,7 @@ from __future__ import annotations
 from fastapi import APIRouter, Depends, Query
 
 from attocode.code_intel.api.auth import verify_api_key
-from attocode.code_intel.api.deps import get_service_or_404
+from attocode.code_intel.api.deps import BranchParam, get_service_or_404
 from attocode.code_intel.api.models import (
     LearningFeedbackRequest,
     RecordLearningRequest,
@@ -33,6 +33,7 @@ async def record_learning(project_id: str, req: RecordLearningRequest) -> TextRe
 async def recall(
     project_id: str,
     query: str = Query(...),
+    branch: BranchParam = "",
     scope: str = "",
     max_results: int = 10,
 ) -> TextResult:
@@ -51,6 +52,7 @@ async def learning_feedback(project_id: str, learning_id: int, req: LearningFeed
 @router.get("/projects/{project_id}/learnings", response_model=TextResult)
 async def list_learnings(
     project_id: str,
+    branch: BranchParam = "",
     status: str = "active",
     type: str = "",  # noqa: A002
     scope: str = "",

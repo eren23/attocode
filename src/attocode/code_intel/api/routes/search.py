@@ -6,7 +6,7 @@ from fastapi import APIRouter, Depends
 from pydantic import BaseModel
 
 from attocode.code_intel.api.auth import verify_api_key
-from attocode.code_intel.api.deps import get_service_or_404
+from attocode.code_intel.api.deps import BranchParam, get_service_or_404
 from attocode.code_intel.api.models import SemanticSearchRequest, TextResult
 
 router = APIRouter(
@@ -29,7 +29,11 @@ class IndexStatusResponse(BaseModel):
 
 
 @router.post("/search", response_model=TextResult)
-async def semantic_search(project_id: str, req: SemanticSearchRequest) -> TextResult:
+async def semantic_search(
+    project_id: str,
+    req: SemanticSearchRequest,
+    branch: BranchParam = "",
+) -> TextResult:
     """Semantic search (vector + keyword RRF)."""
     svc = get_service_or_404(project_id)
     return TextResult(result=svc.semantic_search(
@@ -38,7 +42,10 @@ async def semantic_search(project_id: str, req: SemanticSearchRequest) -> TextRe
 
 
 @router.post("/index", response_model=IndexStatusResponse)
-async def start_indexing(project_id: str) -> IndexStatusResponse:
+async def start_indexing(
+    project_id: str,
+    branch: BranchParam = "",
+) -> IndexStatusResponse:
     """Start background embedding indexing."""
     svc = get_service_or_404(project_id)
     result = svc.start_indexing()
@@ -46,7 +53,10 @@ async def start_indexing(project_id: str) -> IndexStatusResponse:
 
 
 @router.get("/index/status", response_model=IndexStatusResponse)
-async def index_status(project_id: str) -> IndexStatusResponse:
+async def index_status(
+    project_id: str,
+    branch: BranchParam = "",
+) -> IndexStatusResponse:
     """Get current embedding index status."""
     svc = get_service_or_404(project_id)
     result = svc.indexing_status()

@@ -2,16 +2,20 @@ FROM python:3.12-slim
 
 WORKDIR /app
 
-# Install git for repo cloning (Phase 2)
-RUN apt-get update && apt-get install -y --no-install-recommends git curl && \
+# Install git, libgit2, and curl
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    git curl libgit2-dev && \
     rm -rf /var/lib/apt/lists/*
 
 # Copy project files
 COPY pyproject.toml .
 COPY src/ src/
 
-# Install with code-intel extras
-RUN pip install --no-cache-dir ".[code-intel]"
+# Install with service extras (includes code-intel + all service deps)
+RUN pip install --no-cache-dir ".[service]"
+
+# Create repo clone directory
+RUN mkdir -p /var/lib/code-intel/repos
 
 # Default port
 EXPOSE 8080

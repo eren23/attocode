@@ -5,7 +5,7 @@ from __future__ import annotations
 from fastapi import APIRouter, Depends
 
 from attocode.code_intel.api.auth import verify_api_key
-from attocode.code_intel.api.deps import get_service_or_404
+from attocode.code_intel.api.deps import BranchParam, get_service_or_404
 from attocode.code_intel.api.models import (
     FindRelatedRequest,
     GraphQueryRequest,
@@ -21,7 +21,11 @@ router = APIRouter(
 
 
 @router.post("/query", response_model=TextResult)
-async def graph_query(project_id: str, req: GraphQueryRequest) -> TextResult:
+async def graph_query(
+    project_id: str,
+    req: GraphQueryRequest,
+    branch: BranchParam = "",
+) -> TextResult:
     """BFS traversal over dependency edges."""
     svc = get_service_or_404(project_id)
     return TextResult(result=svc.graph_query(
@@ -30,7 +34,11 @@ async def graph_query(project_id: str, req: GraphQueryRequest) -> TextResult:
 
 
 @router.post("/related", response_model=TextResult)
-async def find_related(project_id: str, req: FindRelatedRequest) -> TextResult:
+async def find_related(
+    project_id: str,
+    req: FindRelatedRequest,
+    branch: BranchParam = "",
+) -> TextResult:
     """Find structurally related files."""
     svc = get_service_or_404(project_id)
     return TextResult(result=svc.find_related(file=req.file, top_k=req.top_k))
@@ -39,6 +47,7 @@ async def find_related(project_id: str, req: FindRelatedRequest) -> TextResult:
 @router.get("/communities", response_model=TextResult)
 async def community_detection(
     project_id: str,
+    branch: BranchParam = "",
     min_community_size: int = 3,
     max_communities: int = 20,
 ) -> TextResult:
@@ -50,7 +59,11 @@ async def community_detection(
 
 
 @router.post("/context", response_model=TextResult)
-async def relevant_context(project_id: str, req: RelevantContextRequest) -> TextResult:
+async def relevant_context(
+    project_id: str,
+    req: RelevantContextRequest,
+    branch: BranchParam = "",
+) -> TextResult:
     """Get subgraph capsule for files with neighbors."""
     svc = get_service_or_404(project_id)
     return TextResult(result=svc.relevant_context(
