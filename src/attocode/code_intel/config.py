@@ -28,16 +28,30 @@ class CodeIntelConfig:
     git_clone_max_gb: float = 50.0
     git_ssh_key_path: str = ""
 
+    # Embedding settings
+    embedding_model: str = ""  # auto-detect or explicit: all-MiniLM-L6-v2 | nomic-embed-text | openai
+    embedding_dimension: int = 0  # 0 = auto from model
+
     # Auth settings
     jwt_expiry_minutes: int = 60
     refresh_expiry_days: int = 30
     github_client_id: str = ""
     github_client_secret: str = ""
+    google_client_id: str = ""
+    google_client_secret: str = ""
+    base_url: str = ""  # e.g. "https://code.example.com" — for OAuth redirect_uri
 
     @property
     def is_service_mode(self) -> bool:
         """True when DATABASE_URL is set — enables multi-user service features."""
         return bool(self.database_url)
+
+    @property
+    def effective_base_url(self) -> str:
+        """Base URL for OAuth redirect URIs. Falls back to http://host:port."""
+        if self.base_url:
+            return self.base_url.rstrip("/")
+        return f"http://{self.host}:{self.port}"
 
     @classmethod
     def from_env(cls) -> CodeIntelConfig:
@@ -55,8 +69,13 @@ class CodeIntelConfig:
             git_clone_dir=os.environ.get("GIT_CLONE_DIR", "/var/lib/code-intel/repos"),
             git_clone_max_gb=float(os.environ.get("GIT_CLONE_MAX_GB", "50")),
             git_ssh_key_path=os.environ.get("GIT_SSH_KEY_PATH", ""),
+            embedding_model=os.environ.get("ATTOCODE_EMBEDDING_MODEL", ""),
+            embedding_dimension=int(os.environ.get("ATTOCODE_EMBEDDING_DIMENSION", "0")),
             jwt_expiry_minutes=int(os.environ.get("JWT_EXPIRY_MINUTES", "60")),
             refresh_expiry_days=int(os.environ.get("REFRESH_EXPIRY_DAYS", "30")),
             github_client_id=os.environ.get("GITHUB_CLIENT_ID", ""),
             github_client_secret=os.environ.get("GITHUB_CLIENT_SECRET", ""),
+            google_client_id=os.environ.get("GOOGLE_CLIENT_ID", ""),
+            google_client_secret=os.environ.get("GOOGLE_CLIENT_SECRET", ""),
+            base_url=os.environ.get("ATTOCODE_BASE_URL", ""),
         )

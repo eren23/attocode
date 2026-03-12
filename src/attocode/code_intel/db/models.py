@@ -12,6 +12,12 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 from attocode.code_intel.db.base import Base, TimestampMixin, generate_uuid
 
 
+try:
+    from pgvector.sqlalchemy import Vector as _PgVector
+except ImportError:
+    _PgVector = None
+
+
 class Organization(TimestampMixin, Base):
     __tablename__ = "organizations"
 
@@ -35,6 +41,7 @@ class User(Base):
     avatar_url: Mapped[str | None] = mapped_column(Text, nullable=True)
     password_hash: Mapped[str | None] = mapped_column(Text, nullable=True)
     github_id: Mapped[int | None] = mapped_column(BigInteger, unique=True, nullable=True)
+    google_id: Mapped[str | None] = mapped_column(Text, unique=True, nullable=True)
     auth_provider: Mapped[str] = mapped_column(Text, nullable=False, server_default="email")
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
 
@@ -188,7 +195,11 @@ class Embedding(Base):
     embedding_model: Mapped[str] = mapped_column(Text, nullable=False, server_default="default")
     chunk_text: Mapped[str] = mapped_column(Text, nullable=False, server_default="")
     chunk_type: Mapped[str] = mapped_column(Text, nullable=False, server_default="file")
-    # vector column added when pgvector extension is available
+    # Vector column — added at runtime by ensure_vector_column().
+    # Dimension depends on the configured embedding model (384/768/1536).
+    # Column is nullable: rows without vectors are pre-pgvector or pending re-embedding.
+    if _PgVector is not None:
+        vector = mapped_column(_PgVector(), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
 
     # C6 fix: DB-level guarantee of one embedding per (content_sha, model, chunk_type)

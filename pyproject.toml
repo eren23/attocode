@@ -102,6 +102,7 @@ service = [
     "pygit2>=1.14",
     "redis[hiredis]>=5.0",
     "arq>=0.26",
+    "pgvector>=0.3",
 ]
 docs = [
     "mkdocs>=1.6",

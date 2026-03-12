@@ -3,12 +3,15 @@
 from __future__ import annotations
 
 import secrets
+import time
 import uuid
+from urllib.parse import urlencode
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, EmailStr
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
+from starlette.responses import RedirectResponse
 
 from attocode.code_intel.api.auth import resolve_auth
 from attocode.code_intel.api.auth.context import AuthContext
@@ -18,6 +21,28 @@ from attocode.code_intel.api.deps import get_config, get_db_session
 from attocode.code_intel.db.models import OrgMembership, User
 
 router = APIRouter(prefix="/api/v1/auth", tags=["auth"])
+
+
+# --- OAuth state store (single-instance, 10 min TTL) ---
+
+_oauth_states: dict[str, float] = {}
+
+
+def _store_state(state: str) -> None:
+    """Store an OAuth state token with the current timestamp."""
+    now = time.time()
+    expired = [k for k, v in _oauth_states.items() if now - v > 600]
+    for k in expired:
+        del _oauth_states[k]
+    _oauth_states[state] = now
+
+
+def _validate_state(state: str) -> bool:
+    """Validate and consume an OAuth state token (single-use)."""
+    ts = _oauth_states.pop(state, None)
+    if ts is None:
+        return False
+    return time.time() - ts < 600
 
 
 # --- Request/Response models ---
@@ -135,21 +160,25 @@ async def github_authorize() -> dict:
         raise HTTPException(status_code=501, detail="GitHub OAuth not configured")
 
     state = secrets.token_urlsafe(32)
+    _store_state(state)
     url = await get_github_auth_url(
         client_id=config.github_client_id,
-        redirect_uri=f"http://{config.host}:{config.port}/api/v1/auth/github/callback",
+        redirect_uri=f"{config.effective_base_url}/api/v1/auth/github/callback",
         state=state,
     )
     return {"authorize_url": url, "state": state}
 
 
-@router.get("/github/callback", response_model=TokenResponse)
+@router.get("/github/callback")
 async def github_callback(
     code: str = Query(...),
     state: str = Query(""),
     session: AsyncSession = Depends(get_db_session),
-) -> TokenResponse:
-    """Handle GitHub OAuth callback — create/link user, return JWT."""
+) -> RedirectResponse:
+    """Handle GitHub OAuth callback — create/link user, redirect with JWT."""
+    if not _validate_state(state):
+        raise HTTPException(status_code=400, detail="Invalid or expired OAuth state")
+
     from attocode.code_intel.api.auth.oauth import exchange_github_code
 
     config = get_config()
@@ -177,7 +206,7 @@ async def github_callback(
         if user:
             # Link GitHub to existing account
             user.github_id = gh_user["github_id"]
-            user.avatar_url = gh_user["avatar_url"]
+            user.avatar_url = user.avatar_url or gh_user["avatar_url"]
         else:
             # Create new user
             user = User(
@@ -192,10 +221,93 @@ async def github_callback(
     await session.commit()
     await session.refresh(user)
 
-    return TokenResponse(
-        access_token=create_access_token(user.id, expires_minutes=config.jwt_expiry_minutes),
-        refresh_token=create_refresh_token(user.id, expires_days=config.refresh_expiry_days),
+    access_token = create_access_token(user.id, expires_minutes=config.jwt_expiry_minutes)
+    refresh_token = create_refresh_token(user.id, expires_days=config.refresh_expiry_days)
+    fragment = urlencode({"access_token": access_token, "refresh_token": refresh_token})
+    return RedirectResponse(url=f"/auth/callback#{fragment}", status_code=302)
+
+
+@router.get("/google")
+async def google_authorize() -> dict:
+    """Redirect URL for Google OAuth authorization."""
+    from attocode.code_intel.api.auth.oauth import get_google_auth_url
+
+    config = get_config()
+    if not config.google_client_id:
+        raise HTTPException(status_code=501, detail="Google OAuth not configured")
+
+    state = secrets.token_urlsafe(32)
+    _store_state(state)
+    url = await get_google_auth_url(
+        client_id=config.google_client_id,
+        redirect_uri=f"{config.effective_base_url}/api/v1/auth/google/callback",
+        state=state,
     )
+    return {"authorize_url": url, "state": state}
+
+
+@router.get("/google/callback")
+async def google_callback(
+    code: str = Query(...),
+    state: str = Query(""),
+    session: AsyncSession = Depends(get_db_session),
+) -> RedirectResponse:
+    """Handle Google OAuth callback — create/link user, redirect with JWT."""
+    if not _validate_state(state):
+        raise HTTPException(status_code=400, detail="Invalid or expired OAuth state")
+
+    from attocode.code_intel.api.auth.oauth import exchange_google_code
+
+    config = get_config()
+    if not config.google_client_id or not config.google_client_secret:
+        raise HTTPException(status_code=501, detail="Google OAuth not configured")
+
+    g_user = await exchange_google_code(
+        code=code,
+        client_id=config.google_client_id,
+        client_secret=config.google_client_secret,
+        redirect_uri=f"{config.effective_base_url}/api/v1/auth/google/callback",
+    )
+
+    # Lookup by google_id -> email -> create new
+    result = await session.execute(select(User).where(User.google_id == g_user["google_id"]))
+    user = result.scalar_one_or_none()
+
+    if user is None:
+        result = await session.execute(select(User).where(User.email == g_user["email"]))
+        user = result.scalar_one_or_none()
+        if user:
+            user.google_id = g_user["google_id"]
+            user.avatar_url = user.avatar_url or g_user["avatar_url"]
+        else:
+            user = User(
+                email=g_user["email"],
+                name=g_user["name"],
+                google_id=g_user["google_id"],
+                avatar_url=g_user["avatar_url"],
+                auth_provider="google",
+            )
+            session.add(user)
+
+    await session.commit()
+    await session.refresh(user)
+
+    access_token = create_access_token(user.id, expires_minutes=config.jwt_expiry_minutes)
+    refresh_token = create_refresh_token(user.id, expires_days=config.refresh_expiry_days)
+    fragment = urlencode({"access_token": access_token, "refresh_token": refresh_token})
+    return RedirectResponse(url=f"/auth/callback#{fragment}", status_code=302)
+
+
+@router.get("/providers")
+async def list_providers() -> dict:
+    """List available auth providers. No auth required — called from login page."""
+    config = get_config()
+    providers = ["email"]
+    if config.github_client_id:
+        providers.append("github")
+    if config.google_client_id:
+        providers.append("google")
+    return {"providers": providers, "registration_enabled": True}
 
 
 class UpdateProfileRequest(BaseModel):

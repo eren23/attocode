@@ -154,6 +154,23 @@ def create_app(config: CodeIntelConfig | None = None) -> FastAPI:
         app.include_router(activity.router)
         app.include_router(preferences.router)
 
+    # SPA fallback — serve frontend static files (registered LAST so it
+    # doesn't shadow /api/*, /docs, /redoc, /openapi.json).
+    import os
+
+    static_dir = os.environ.get("ATTOCODE_STATIC_DIR", "/app/static")
+    if os.path.isdir(static_dir):
+        from starlette.responses import FileResponse
+
+        @app.get("/{full_path:path}", include_in_schema=False)
+        async def spa_fallback(full_path: str) -> FileResponse:
+            file_path = os.path.join(static_dir, full_path)
+            if os.path.isfile(file_path):
+                return FileResponse(file_path)
+            return FileResponse(os.path.join(static_dir, "index.html"))
+
+        logger.info("SPA fallback enabled from %s", static_dir)
+
     logger.info(
         "FastAPI app created for %s (service_mode=%s)",
         config.project_dir or "(no project)",

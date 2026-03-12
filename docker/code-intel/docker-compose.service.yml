@@ -18,6 +18,10 @@ services:
       - GIT_CLONE_MAX_GB=${GIT_CLONE_MAX_GB:-50}
       - GITHUB_CLIENT_ID=${GITHUB_CLIENT_ID:-}
       - GITHUB_CLIENT_SECRET=${GITHUB_CLIENT_SECRET:-}
+      - GOOGLE_CLIENT_ID=${GOOGLE_CLIENT_ID:-}
+      - GOOGLE_CLIENT_SECRET=${GOOGLE_CLIENT_SECRET:-}
+      - ATTOCODE_BASE_URL=${ATTOCODE_BASE_URL:-}
+      - ATTOCODE_EMBEDDING_MODEL=${ATTOCODE_EMBEDDING_MODEL:-}
     restart: unless-stopped
     depends_on:
       postgres:
@@ -43,6 +47,7 @@ services:
       - SECRET_KEY=${SECRET_KEY:-change-me-in-production}
       - GIT_CLONE_DIR=/var/lib/code-intel/repos
       - GIT_CLONE_MAX_GB=${GIT_CLONE_MAX_GB:-50}
+      - ATTOCODE_EMBEDDING_MODEL=${ATTOCODE_EMBEDDING_MODEL:-}
     restart: unless-stopped
     depends_on:
       postgres:

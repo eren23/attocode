@@ -1,3 +1,12 @@
+# Stage 1: Build frontend
+FROM node:22-alpine AS frontend
+WORKDIR /frontend
+COPY frontend/package.json frontend/package-lock.json* ./
+RUN npm ci --ignore-scripts
+COPY frontend/ .
+RUN npm run build
+
+# Stage 2: Python application
 FROM python:3.12-slim
 
 WORKDIR /app
@@ -14,6 +23,9 @@ COPY src/ src/
 # Install with service extras (includes code-intel + all service deps)
 RUN pip install --no-cache-dir ".[service]"
 
+# Copy frontend build output
+COPY --from=frontend /frontend/dist /app/static
+
 # Create repo clone directory
 RUN mkdir -p /var/lib/code-intel/repos
 
@@ -23,5 +35,6 @@ EXPOSE 8080
 # Run HTTP server
 ENV ATTOCODE_HOST=0.0.0.0
 ENV ATTOCODE_PORT=8080
+ENV ATTOCODE_STATIC_DIR=/app/static
 
 CMD ["attocode-code-intel", "serve", "--transport", "http", "--host", "0.0.0.0", "--port", "8080"]

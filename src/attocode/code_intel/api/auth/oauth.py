@@ -1,4 +1,4 @@
-"""GitHub OAuth 2.0 authorization code flow."""
+"""OAuth 2.0 authorization code flows (GitHub + Google)."""
 
 from __future__ import annotations
 
@@ -13,6 +13,10 @@ logger = logging.getLogger(__name__)
 GITHUB_AUTHORIZE_URL = "https://github.com/login/oauth/authorize"
 GITHUB_TOKEN_URL = "https://github.com/login/oauth/access_token"
 GITHUB_USER_URL = "https://api.github.com/user"
+
+GOOGLE_AUTHORIZE_URL = "https://accounts.google.com/o/oauth2/v2/auth"
+GOOGLE_TOKEN_URL = "https://oauth2.googleapis.com/token"
+GOOGLE_USERINFO_URL = "https://openidconnect.googleapis.com/v1/userinfo"
 
 
 async def get_github_auth_url(client_id: str, redirect_uri: str, state: str) -> str:
@@ -79,4 +83,64 @@ async def exchange_github_code(
             "email": email,
             "name": user_data.get("name") or user_data.get("login", ""),
             "avatar_url": user_data.get("avatar_url", ""),
+        }
+
+
+async def get_google_auth_url(client_id: str, redirect_uri: str, state: str) -> str:
+    """Build the Google OAuth authorization URL."""
+    import urllib.parse
+
+    params = {
+        "client_id": client_id,
+        "redirect_uri": redirect_uri,
+        "scope": "openid email profile",
+        "state": state,
+        "response_type": "code",
+        "access_type": "offline",
+        "prompt": "consent",
+    }
+    return f"{GOOGLE_AUTHORIZE_URL}?{urllib.parse.urlencode(params)}"
+
+
+async def exchange_google_code(
+    code: str,
+    client_id: str,
+    client_secret: str,
+    redirect_uri: str,
+) -> dict:
+    """Exchange authorization code for access token and fetch user info.
+
+    Returns dict with keys: google_id, email, name, avatar_url.
+    """
+    import httpx
+
+    async with httpx.AsyncClient() as client:
+        # Exchange code for token (Google requires form-encoded, not JSON)
+        token_resp = await client.post(
+            GOOGLE_TOKEN_URL,
+            data={
+                "code": code,
+                "client_id": client_id,
+                "client_secret": client_secret,
+                "redirect_uri": redirect_uri,
+                "grant_type": "authorization_code",
+            },
+        )
+        token_resp.raise_for_status()
+        token_data = token_resp.json()
+        access_token = token_data["access_token"]
+
+        # Fetch user profile
+        user_resp = await client.get(
+            GOOGLE_USERINFO_URL,
+            headers={"Authorization": f"Bearer {access_token}"},
+        )
+        user_resp.raise_for_status()
+        user_data = user_resp.json()
+
+        return {
+            "google_id": user_data["sub"],
+            "email": user_data["email"],
+            "name": user_data.get("name", ""),
+            "avatar_url": user_data.get("picture", ""),
         }

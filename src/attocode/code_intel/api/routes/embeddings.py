@@ -160,6 +160,63 @@ async def get_file_embedding_status(
     )
 
 
+class GenerateEmbeddingsRequest(BaseModel):
+    branch: str = "main"
+
+
+class GenerateEmbeddingsResponse(BaseModel):
+    job_id: str
+    status: str
+    message: str
+
+
+@router.post("/embeddings/generate", response_model=GenerateEmbeddingsResponse)
+async def trigger_generate_embeddings(
+    repo_id: uuid.UUID,
+    req: GenerateEmbeddingsRequest = GenerateEmbeddingsRequest(),
+    auth: AuthContext = Depends(resolve_auth),
+    session: AsyncSession = Depends(get_db_session),
+) -> GenerateEmbeddingsResponse:
+    """Trigger embedding generation for a branch.
+
+    Enqueues an ARQ background job to generate embeddings for all files
+    in the specified branch that don't already have them.
+    """
+    repo = await _get_repo(repo_id, session)
+
+    # Enqueue the ARQ job
+    try:
+        import redis.asyncio as aioredis
+        from arq import create_pool
+        from arq.connections import RedisSettings
+
+        from attocode.code_intel.api.deps import get_config
+
+        config = get_config()
+        if not config.redis_url:
+            raise HTTPException(status_code=503, detail="Redis not configured — cannot enqueue jobs")
+
+        redis_settings = RedisSettings.from_dsn(config.redis_url)
+        pool = await create_pool(redis_settings)
+        job = await pool.enqueue_job(
+            "generate_embeddings",
+            str(repo_id),
+            req.branch,
+        )
+        await pool.close()
+
+        return GenerateEmbeddingsResponse(
+            job_id=job.job_id if job else "unknown",
+            status="queued",
+            message=f"Embedding generation queued for branch '{req.branch}'",
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.exception("Failed to enqueue embedding generation job")
+        raise HTTPException(status_code=500, detail=f"Failed to enqueue job: {e}")
+
+
 @router.get("/indexing/status", response_model=IndexingStatusResponse)
 async def get_indexing_status(
     repo_id: uuid.UUID,

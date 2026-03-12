@@ -2,11 +2,60 @@
 
 from __future__ import annotations
 
+import logging
 import uuid
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from sqlalchemy.ext.asyncio import AsyncSession
+
+logger = logging.getLogger(__name__)
+
+
+async def ensure_vector_column(session: AsyncSession, dimension: int) -> None:
+    """Ensure the embeddings table has a vector column of the right dimension.
+
+    Called once at startup by generate_embeddings job. Handles:
+    - Column doesn't exist yet -> CREATE
+    - Column exists with wrong dimension -> DROP index, ALTER, recreate index
+    - Column exists with right dimension -> no-op
+    """
+    from sqlalchemy import text
+
+    result = await session.execute(text(
+        "SELECT atttypmod FROM pg_attribute "
+        "WHERE attrelid = 'embeddings'::regclass AND attname = 'vector'"
+    ))
+    row = result.first()
+
+    if row is None:
+        # Column doesn't exist — add it
+        await session.execute(text(
+            f"ALTER TABLE embeddings ADD COLUMN vector vector({dimension})"
+        ))
+        await session.execute(text(
+            "CREATE INDEX IF NOT EXISTS idx_embeddings_vector_hnsw "
+            "ON embeddings USING hnsw (vector vector_cosine_ops) "
+            "WITH (m = 16, ef_construction = 64)"
+        ))
+        logger.info("Created vector column with dimension %d and HNSW index", dimension)
+    elif row[0] != dimension + 4:  # pgvector stores dim+4 in atttypmod
+        # Dimension mismatch — re-dimension
+        await session.execute(text("DROP INDEX IF EXISTS idx_embeddings_vector_hnsw"))
+        await session.execute(text("UPDATE embeddings SET vector = NULL"))
+        await session.execute(text(
+            f"ALTER TABLE embeddings ALTER COLUMN vector TYPE vector({dimension})"
+        ))
+        await session.execute(text(
+            "CREATE INDEX IF NOT EXISTS idx_embeddings_vector_hnsw "
+            "ON embeddings USING hnsw (vector vector_cosine_ops) "
+            "WITH (m = 16, ef_construction = 64)"
+        ))
+        logger.info("Re-dimensioned vector column to %d (old vectors cleared)", dimension)
+    else:
+        logger.debug("Vector column already has correct dimension %d", dimension)
+
+    await session.commit()
 
 
 class EmbeddingStore:
@@ -29,7 +78,7 @@ class EmbeddingStore:
     ) -> int:
         """Store embeddings for a content hash.
 
-        Each embedding dict: {chunk_text, chunk_type, embedding_model}
+        Each embedding dict: {chunk_text, chunk_type, embedding_model, vector?}
         Idempotent — if content_sha+model already has embeddings, replaces them.
 
         Returns count of embeddings stored.
@@ -53,12 +102,16 @@ class EmbeddingStore:
 
         # Insert new
         for emb_data in embeddings:
-            emb = Embedding(
-                content_sha=content_sha,
-                embedding_model=emb_data.get("embedding_model", "default"),
-                chunk_text=emb_data.get("chunk_text", ""),
-                chunk_type=emb_data.get("chunk_type", "file"),
-            )
+            kwargs = {
+                "content_sha": content_sha,
+                "embedding_model": emb_data.get("embedding_model", "default"),
+                "chunk_text": emb_data.get("chunk_text", ""),
+                "chunk_type": emb_data.get("chunk_type", "file"),
+            }
+            # Include vector if provided and pgvector is available
+            if "vector" in emb_data and emb_data["vector"] is not None:
+                kwargs["vector"] = emb_data["vector"]
+            emb = Embedding(**kwargs)
             self._session.add(emb)
 
         await self._session.flush()
@@ -98,18 +151,23 @@ class EmbeddingStore:
     async def similarity_search(
         self,
         branch_id: uuid.UUID,
-        query_text: str,
+        query_vector: list[float],
         top_k: int = 10,
         model: str = "default",
     ) -> list[dict]:
-        """Find most similar content within a branch context.
+        """Find most similar content within a branch context using pgvector cosine distance.
 
-        When pgvector is available, uses cosine similarity on vector column.
-        Currently returns text-based results scoped to branch manifest.
+        Args:
+            branch_id: Branch to scope results to.
+            query_vector: Embedded query vector.
+            top_k: Number of results to return.
+            model: Embedding model name to filter by.
+
+        Returns:
+            List of dicts with file, content_sha, chunk_text, chunk_type, model, score.
         """
-        from sqlalchemy import select
+        from sqlalchemy import text
 
-        from attocode.code_intel.db.models import Embedding
         from attocode.code_intel.storage.branch_overlay import BranchOverlay
 
         overlay = BranchOverlay(self._session)
@@ -121,26 +179,34 @@ class EmbeddingStore:
 
         sha_to_path = {sha: path for path, sha in manifest.items()}
 
-        # When pgvector is available, use:
-        # SELECT *, vector <=> :query_vector AS distance FROM embeddings
-        # WHERE content_sha = ANY(:shas) AND embedding_model = :model
-        # ORDER BY distance LIMIT :top_k
+        # pgvector cosine distance query — score = 1 - distance (higher = more similar)
         result = await self._session.execute(
-            select(Embedding)
-            .where(
-                Embedding.content_sha.in_(content_shas),
-                Embedding.embedding_model == model,
-            )
-            .limit(top_k)
+            text("""
+                SELECT content_sha, chunk_text, chunk_type, embedding_model,
+                       1 - (vector <=> :qv::vector) AS score
+                FROM embeddings
+                WHERE content_sha = ANY(:shas)
+                  AND embedding_model = :model
+                  AND vector IS NOT NULL
+                ORDER BY vector <=> :qv::vector
+                LIMIT :top_k
+            """),
+            {
+                "qv": str(query_vector),
+                "shas": list(content_shas),
+                "model": model,
+                "top_k": top_k,
+            },
         )
 
         results = []
-        for emb in result.scalars():
+        for row in result:
             results.append({
-                "file": sha_to_path.get(emb.content_sha, "unknown"),
-                "content_sha": emb.content_sha,
-                "chunk_text": emb.chunk_text,
-                "chunk_type": emb.chunk_type,
-                "model": emb.embedding_model,
+                "file": sha_to_path.get(row.content_sha, "unknown"),
+                "content_sha": row.content_sha,
+                "chunk_text": row.chunk_text,
+                "chunk_type": row.chunk_type,
+                "model": row.embedding_model,
+                "score": float(row.score),
             })
         return results

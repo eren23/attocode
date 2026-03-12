@@ -61,6 +61,9 @@ nav:
       - Code Intel HTTP API: code-intel-http-api.md
       - Advanced Features: advanced-features.md
   - Guides:
+      - Local Development: guides/local-development.md
+      - Repos & Branches: guides/repos-and-branches.md
+      - Semantic Search: guides/semantic-search.md
       - Providers: PROVIDERS.md
       - Provider Resilience: provider-resilience.md
       - Sandbox: SANDBOX.md
