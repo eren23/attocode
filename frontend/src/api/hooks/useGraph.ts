@@ -1,0 +1,44 @@
+import { useMutation, useQuery } from "@tanstack/react-query";
+import { apiFetch } from "@/api/client";
+import type { DependencyGraphResponse } from "@/api/generated/schema";
+
+export function useDependencyGraph(repoId: string) {
+  return useMutation({
+    mutationFn: (opts: { file?: string; depth?: number; direction?: string }) =>
+      apiFetch<DependencyGraphResponse>(
+        `/api/v2/projects/${repoId}/dependency-graph`,
+        {
+          method: "POST",
+          body: JSON.stringify(opts),
+        },
+      ),
+  });
+}
+
+export function useGraphQuery(repoId: string) {
+  return useMutation({
+    mutationFn: (query: string) =>
+      apiFetch<DependencyGraphResponse>(
+        `/api/v2/projects/${repoId}/graph/query`,
+        {
+          method: "POST",
+          body: JSON.stringify({ query }),
+        },
+      ),
+  });
+}
+
+export function useRelatedFiles(repoId: string, file: string) {
+  return useQuery({
+    queryKey: ["graph", "related", repoId, file],
+    queryFn: () =>
+      apiFetch<{ files: { path: string; score: number }[] }>(
+        `/api/v2/projects/${repoId}/graph/related`,
+        {
+          method: "POST",
+          body: JSON.stringify({ file }),
+        },
+      ),
+    enabled: !!repoId && !!file,
+  });
+}
