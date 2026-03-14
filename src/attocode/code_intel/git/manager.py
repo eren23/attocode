@@ -34,10 +34,17 @@ class GitRepoManager:
     def __init__(self, clone_dir: str, ssh_key_path: str = "") -> None:
         self._clone_dir = Path(clone_dir)
         self._cred_store = CredentialStore(ssh_key_path)
+        self._path_overrides: dict[str, Path] = {}
         self._clone_dir.mkdir(parents=True, exist_ok=True)
+
+    def register_path(self, repo_id: str, path: str | Path) -> None:
+        """Register a path override for a repo (e.g. local directory imports)."""
+        self._path_overrides[repo_id] = Path(path)
 
     def _repo_path(self, repo_id: str) -> Path:
         """Return the filesystem path for a repo's bare clone."""
+        if repo_id in self._path_overrides:
+            return self._path_overrides[repo_id]
         return self._clone_dir / f"{repo_id}.git"
 
     def clone(
@@ -112,10 +119,6 @@ class GitRepoManager:
         for ref_name in repo.references:
             if not ref_name.startswith("refs/heads/") and not ref_name.startswith("refs/remotes/origin/"):
                 continue
-            ref = repo.references[ref_name]
-            commit = repo.get(ref.target)
-            if commit is None:
-                continue
 
             name = ref_name
             if name.startswith("refs/heads/"):
@@ -125,9 +128,15 @@ class GitRepoManager:
                 if name == "HEAD":
                     continue
 
+            ref = repo.references[ref_name]
+            try:
+                commit = ref.peel(pygit2.Commit)
+            except Exception:
+                continue
+
             branches.append(BranchInfo(
                 name=name,
-                commit=str(ref.target),
+                commit=str(commit.id),
                 is_default=(name == default_branch),
             ))
 
@@ -439,7 +448,16 @@ class GitRepoManager:
         return total
 
     def delete(self, repo_id: str) -> None:
-        """Delete a repo's bare clone from disk."""
+        """Delete a repo's bare clone from disk.
+
+        Skips deletion for repos with path overrides (local directory imports)
+        to avoid nuking the user's project directory.
+        """
+        if repo_id in self._path_overrides:
+            logger.info("Skipping delete for local repo %s (path override)", repo_id)
+            self._path_overrides.pop(repo_id, None)
+            return
+
         import shutil
 
         path = self._repo_path(repo_id)

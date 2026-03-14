@@ -66,12 +66,50 @@ def get_service(project_id: str = "") -> CodeIntelService:
     return _services[pid]
 
 
-def get_service_or_404(project_id: str) -> CodeIntelService:
-    """Return the service for a project or raise HTTP 404."""
-    try:
-        return get_service(project_id)
-    except ValueError as err:
-        raise HTTPException(status_code=404, detail=f"Project '{project_id}' not found") from err
+async def get_service_or_404(project_id: str) -> CodeIntelService:
+    """Return the service for a project or raise HTTP 404.
+
+    Supports both CLI-mode string IDs ("default") and service-mode UUIDs.
+    For UUIDs in service mode, looks up the repo path from the DB.
+    """
+    # Fast path: already registered
+    if project_id in _services:
+        return _services[project_id]
+    pid = project_id or _default_project_id
+    if pid in _services:
+        return _services[pid]
+
+    # Service mode: try UUID lookup from DB
+    config = get_config()
+    if config.is_service_mode:
+        try:
+            uuid.UUID(project_id)
+        except ValueError:
+            pass
+        else:
+            from attocode.code_intel.db.engine import get_engine
+
+            engine = get_engine()
+            if engine is not None:
+                from sqlalchemy import text
+
+                async with engine.connect() as conn:
+                    result = await conn.execute(
+                        text("SELECT clone_path, local_path FROM repositories WHERE id = :rid"),
+                        {"rid": project_id},
+                    )
+                    row = result.first()
+
+                if row is not None:
+                    path = row[0] or row[1]
+                    if not path:
+                        raise HTTPException(
+                            status_code=422,
+                            detail=f"Repository '{project_id}' has no indexed content yet",
+                        )
+                    return register_project(project_id, path)
+
+    raise HTTPException(status_code=404, detail=f"Project '{project_id}' not found")
 
 
 def register_project(project_id: str, path: str, name: str = "") -> CodeIntelService:
@@ -89,6 +127,59 @@ def list_projects() -> dict[str, CodeIntelService]:
 def get_default_project_id() -> str:
     """Return the default project ID."""
     return _default_project_id
+
+
+# --- Provider factories ---
+
+
+async def get_analysis_provider(project_id: str):
+    """Return the appropriate analysis provider based on mode."""
+    config = get_config()
+    if config.is_service_mode:
+        from attocode.code_intel.api.providers.db_provider import DbAnalysisProvider
+
+        return DbAnalysisProvider(project_id)
+
+    from attocode.code_intel.api.providers.local_provider import LocalAnalysisProvider
+
+    svc = await get_service_or_404(project_id)
+    return LocalAnalysisProvider(svc)
+
+
+async def get_search_provider(project_id: str):
+    """Return the appropriate search provider based on mode."""
+    config = get_config()
+    if config.is_service_mode:
+        from attocode.code_intel.api.providers.db_provider import DbSearchProvider
+
+        return DbSearchProvider(project_id)
+
+    from attocode.code_intel.api.providers.local_provider import LocalSearchProvider
+
+    svc = await get_service_or_404(project_id)
+    return LocalSearchProvider(svc)
+
+
+async def get_graph_provider(project_id: str):
+    """Return the appropriate graph provider based on mode."""
+    config = get_config()
+    if config.is_service_mode:
+        from attocode.code_intel.api.providers.db_provider import DbGraphProvider
+
+        return DbGraphProvider(project_id)
+
+    from attocode.code_intel.api.providers.local_provider import LocalGraphProvider
+
+    svc = await get_service_or_404(project_id)
+    return LocalGraphProvider(svc)
+
+
+async def get_lsp_provider(project_id: str):
+    """Return the LSP provider. Currently only local mode is supported."""
+    from attocode.code_intel.api.providers.local_provider import LocalLSPProvider
+
+    svc = await get_service_or_404(project_id)
+    return LocalLSPProvider(svc)
 
 
 # --- Branch context ---

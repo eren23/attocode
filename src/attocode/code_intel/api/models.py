@@ -50,8 +50,9 @@ class ProjectListResponse(BaseModel):
 
 
 class DependencyGraphRequest(BaseModel):
-    start_file: str
-    depth: int = Field(2, ge=1, le=5)
+    start_file: str = ""
+    depth: int = Field(3, ge=1, le=10)
+    directory: str = ""
 
 
 class GraphQueryRequest(BaseModel):
@@ -202,6 +203,7 @@ class SymbolItem(BaseModel):
     kind: str = ""
     name: str = ""
     qualified_name: str = ""
+    signature: str = ""
     file_path: str = ""
     start_line: int = 0
     end_line: int = 0
@@ -224,21 +226,32 @@ class DependencyResponse(BaseModel):
 
 
 class DependencyGraphNode(BaseModel):
-    path: str
-    depth: int
+    id: str
+    label: str
+    type: str = "file"
+
+
+class DependencyGraphEdge(BaseModel):
+    source: str
+    target: str
+    type: str = "import"
 
 
 class DependencyGraphResponse(BaseModel):
-    start_file: str
+    nodes: list[DependencyGraphNode]
+    edges: list[DependencyGraphEdge]
+
+
+class ImpactLayer(BaseModel):
     depth: int
-    forward: list[DependencyGraphNode]
-    reverse: list[DependencyGraphNode]
+    files: list[str]
 
 
 class ImpactAnalysisResponse(BaseModel):
     changed_files: list[str]
     impacted_files: list[str]
     total_impacted: int
+    layers: list[ImpactLayer] = []
 
 
 class ReferenceItem(BaseModel):
@@ -346,12 +359,21 @@ class CommunityItem(BaseModel):
     external_edges: int = 0
     hub: str = ""
     hub_internal_degree: int = 0
+    top_dirs: list[str] = []
+
+
+class CommunityBridge(BaseModel):
+    source_id: int
+    target_id: int
+    edge_count: int
+    sample_files: list[str] = []
 
 
 class CommunityResponse(BaseModel):
     method: str
     modularity: float
     communities: list[CommunityItem]
+    bridges: list[CommunityBridge] = []
 
 
 class GraphQueryHop(BaseModel):
@@ -455,3 +477,40 @@ class RepoStatsResponse(BaseModel):
     symbol_count: int = 0
     dependency_count: int = 0
     languages: dict[str, int] = {}
+
+
+# ------------------------------------------------------------------
+# Learning v2 (structured)
+# ------------------------------------------------------------------
+
+
+class LearningItem(BaseModel):
+    id: int
+    type: str
+    description: str
+    details: str = ""
+    scope: str = ""
+    confidence: float = 0.7
+    status: str = "active"
+    helpful_count: int = 0
+    unhelpful_count: int = 0
+
+
+class LearningListResponse(BaseModel):
+    learnings: list[LearningItem]
+    total: int
+
+
+class LearningRecallItem(BaseModel):
+    id: int
+    type: str
+    description: str
+    scope: str = ""
+    confidence: float = 0.7
+    relevance_score: float = 0.0
+
+
+class LearningRecallResponse(BaseModel):
+    query: str
+    results: list[LearningRecallItem]
+    total: int

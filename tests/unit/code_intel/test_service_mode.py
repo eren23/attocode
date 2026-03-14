@@ -15,7 +15,7 @@ from attocode.code_intel.config import CodeIntelConfig
 # Skip tests requiring service deps if not installed
 try:
     import jose  # noqa: F401
-    import passlib  # noqa: F401
+    import bcrypt  # noqa: F401
     HAS_SERVICE_DEPS = True
 except ImportError:
     HAS_SERVICE_DEPS = False
@@ -27,7 +27,7 @@ except ImportError:
     HAS_SQLALCHEMY = False
 
 requires_service_deps = pytest.mark.skipif(
-    not HAS_SERVICE_DEPS, reason="Service dependencies (python-jose, passlib) not installed"
+    not HAS_SERVICE_DEPS, reason="Service dependencies (python-jose, bcrypt) not installed"
 )
 requires_sqlalchemy = pytest.mark.skipif(
     not HAS_SQLALCHEMY, reason="SQLAlchemy not installed"

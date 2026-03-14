@@ -19,6 +19,17 @@ class DependencyStore:
     def __init__(self, session: AsyncSession) -> None:
         self._session = session
 
+    async def has_dependencies(self, source_sha: str) -> bool:
+        """Check if dependencies already exist for a source SHA."""
+        from sqlalchemy import func, select
+
+        from attocode.code_intel.db.models import Dependency
+
+        result = await self._session.execute(
+            select(func.count()).where(Dependency.source_sha == source_sha)
+        )
+        return (result.scalar() or 0) > 0
+
     async def upsert_dependencies(
         self,
         source_sha: str,

@@ -18,6 +18,12 @@ export const ROUTES = {
     `/orgs/${orgId}/repos/${repoId}/graph`,
   EMBEDDINGS: (orgId: string, repoId: string) =>
     `/orgs/${orgId}/repos/${repoId}/embeddings`,
+  SECURITY: (orgId: string, repoId: string) =>
+    `/orgs/${orgId}/repos/${repoId}/security`,
+  LEARNINGS: (orgId: string, repoId: string) =>
+    `/orgs/${orgId}/repos/${repoId}/learnings`,
+  BRANCH_COMPARE: (orgId: string, repoId: string) =>
+    `/orgs/${orgId}/repos/${repoId}/compare`,
   ACTIVITY: (orgId: string) => `/orgs/${orgId}/activity`,
   SETTINGS: (orgId: string) => `/orgs/${orgId}/settings`,
   OAUTH_CALLBACK: "/auth/callback",

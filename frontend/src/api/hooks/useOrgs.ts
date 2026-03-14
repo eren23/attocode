@@ -64,6 +64,7 @@ export function useCreateRepo() {
       orgId: string;
       name: string;
       clone_url?: string;
+      local_path?: string;
       default_branch?: string;
       language?: string;
     }) =>

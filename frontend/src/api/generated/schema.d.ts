@@ -151,7 +151,24 @@ export interface BlameEntry {
   date: string;
   line_start: number;
   line_end: number;
-  content: string;
+}
+
+export interface RelatedFile {
+  path: string;
+  score: number;
+  relation_type: string;
+}
+
+export interface LearningEntry {
+  id: number;
+  type: string;
+  description: string;
+  details: string;
+  scope: string;
+  confidence: number;
+  status: string;
+  helpful_count: number;
+  unhelpful_count: number;
 }
 
 export interface SearchResult {
@@ -178,6 +195,34 @@ export interface SymbolInfo {
   signature?: string;
 }
 
+export interface FileHotspot {
+  path: string;
+  line_count: number;
+  symbol_count: number;
+  public_symbols: number;
+  fan_in: number;
+  fan_out: number;
+  density: number;
+  composite: number;
+  categories: string[];
+}
+
+export interface FunctionHotspot {
+  file_path: string;
+  name: string;
+  line_count: number;
+  param_count: number;
+  is_public: boolean;
+  has_return_type: boolean;
+}
+
+export interface HotspotsData {
+  file_hotspots: FileHotspot[];
+  function_hotspots: FunctionHotspot[];
+  orphan_files: FileHotspot[];
+}
+
+/** @deprecated Use FileHotspot instead */
 export interface HotspotEntry {
   file: string;
   score: number;
@@ -186,6 +231,42 @@ export interface HotspotEntry {
   lines: number;
 }
 
+export interface ConventionStats {
+  total_functions: number;
+  snake_names: number;
+  camel_names: number;
+  typed_return: number;
+  typed_params: number;
+  total_params: number;
+  has_docstring_fn: number;
+  has_docstring_cls: number;
+  total_classes: number;
+  async_count: number;
+  from_imports: number;
+  plain_imports: number;
+  relative_imports: number;
+  total_imports: number;
+  decorator_counts: Record<string, number>;
+  dataclass_count: number;
+  abstract_count: number;
+  base_classes: Record<string, number>;
+  exception_classes: { name: string; file: string }[];
+  private_functions: number;
+  staticmethod_count: number;
+  classmethod_count: number;
+  property_count: number;
+  all_exports_count: number;
+  file_sizes: number[];
+}
+
+export interface ConventionsData {
+  sample_size: number;
+  path: string;
+  stats: ConventionStats;
+  dir_stats: Record<string, ConventionStats>;
+}
+
+/** @deprecated Use ConventionsData instead */
 export interface ConventionEntry {
   category: string;
   pattern: string;
@@ -199,25 +280,60 @@ export interface ImpactNode {
   impact_score: number;
 }
 
-export interface ImpactResult {
-  source: string;
-  affected: ImpactNode[];
+export interface ImpactLayer {
   depth: number;
+  files: string[];
+}
+
+export interface ImpactResult {
+  changed_files: string[];
+  impacted_files: string[];
+  total_impacted: number;
+  layers?: ImpactLayer[];
 }
 
 export interface CommunityInfo {
   id: number;
   files: string[];
-  label?: string;
-  cohesion: number;
+  size: number;
+  theme: string;
+  internal_edges: number;
+  external_edges: number;
+  hub: string;
+  hub_internal_degree: number;
+  top_dirs: string[];
+}
+
+export interface CommunityBridge {
+  source_id: number;
+  target_id: number;
+  edge_count: number;
+  sample_files: string[];
+}
+
+export interface CommunityResult {
+  method: string;
+  modularity: number;
+  communities: CommunityInfo[];
+  bridges: CommunityBridge[];
 }
 
 export interface SecurityFinding {
   file: string;
-  line: number;
+  line: number | null;
   rule: string;
   severity: "info" | "warning" | "error" | "critical";
   message: string;
+  category?: string;
+  suggestion?: string;
+}
+
+export interface SecurityScanResult {
+  mode: string;
+  path: string;
+  findings: SecurityFinding[];
+  total_findings: number;
+  summary: Record<string, number>;
 }
 
 export interface DependencyGraphNode {
@@ -242,10 +358,13 @@ export interface EmbeddingStatus {
   embedded_files: number;
   coverage: number;
   last_updated: string | null;
+  provider_available?: boolean;
+  provider_hint?: string;
 }
 
 export interface EmbeddingFileEntry {
   file: string;
+  content_sha: string;
   embedded: boolean;
   chunk_count: number;
   last_embedded_at: string | null;
@@ -306,4 +425,36 @@ export interface JobInfo {
   created_at: string;
   completed_at: string | null;
   error: string | null;
+}
+
+export interface LearningItemV2 {
+  id: number;
+  type: string;
+  description: string;
+  details: string;
+  scope: string;
+  confidence: number;
+  status: string;
+  helpful_count: number;
+  unhelpful_count: number;
+}
+
+export interface LearningListResponse {
+  learnings: LearningItemV2[];
+  total: number;
+}
+
+export interface LearningRecallItem {
+  id: number;
+  type: string;
+  description: string;
+  scope: string;
+  confidence: number;
+  relevance_score: number;
+}
+
+export interface LearningRecallResponse {
+  query: string;
+  results: LearningRecallItem[];
+  total: number;
 }

@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Link } from "react-router";
-import { useOrgs, useCreateOrg, useOrgRepos, useCreateRepo } from "@/api/hooks/useOrgs";
+import { useOrgs, useCreateOrg, useOrgRepos, useCreateRepo, useDeleteRepo } from "@/api/hooks/useOrgs";
 import { useMe } from "@/api/hooks/useAuth";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -10,11 +10,16 @@ import { LoadingSpinner } from "@/components/shared/LoadingSpinner";
 import { EmptyState } from "@/components/shared/EmptyState";
 import { ROUTES } from "@/lib/routes";
 import { formatRelativeTime } from "@/lib/format";
+import { useRepoStats } from "@/api/hooks/useFiles";
 import {
   Plus,
   FolderGit2,
   Building2,
   GitBranch,
+  Trash2,
+  FileCode2,
+  Braces,
+  Database,
 } from "lucide-react";
 
 export function DashboardPage() {
@@ -111,7 +116,10 @@ function OrgCard({
   const [showNewRepo, setShowNewRepo] = useState(false);
   const [newRepoName, setNewRepoName] = useState("");
   const [newRepoUrl, setNewRepoUrl] = useState("");
+  const [newRepoLocalPath, setNewRepoLocalPath] = useState("");
+  const [newRepoBranch, setNewRepoBranch] = useState("main");
   const createRepo = useCreateRepo();
+  const deleteRepo = useDeleteRepo();
 
   const handleCreateRepo = () => {
     if (!newRepoName.trim()) return;
@@ -120,11 +128,15 @@ function OrgCard({
         orgId,
         name: newRepoName,
         clone_url: newRepoUrl || undefined,
+        local_path: newRepoLocalPath || undefined,
+        default_branch: newRepoBranch || "main",
       },
       {
         onSuccess: () => {
           setNewRepoName("");
           setNewRepoUrl("");
+          setNewRepoLocalPath("");
+          setNewRepoBranch("main");
           setShowNewRepo(false);
         },
       },
@@ -166,6 +178,18 @@ function OrgCard({
               onChange={(e) => setNewRepoUrl(e.target.value)}
               className="flex-1"
             />
+            <Input
+              placeholder="Local path (optional)"
+              value={newRepoLocalPath}
+              onChange={(e) => setNewRepoLocalPath(e.target.value)}
+              className="flex-1"
+            />
+            <Input
+              placeholder="Branch"
+              value={newRepoBranch}
+              onChange={(e) => setNewRepoBranch(e.target.value)}
+              className="w-28"
+            />
             <Button
               size="sm"
               onClick={handleCreateRepo}
@@ -190,37 +214,95 @@ function OrgCard({
         ) : (
           <div className="divide-y divide-border">
             {repos.repositories.map((repo) => (
-              <Link
-                key={repo.id}
-                to={ROUTES.REPO(orgId, repo.id)}
-                className="flex items-center justify-between py-3 hover:bg-accent/30 -mx-6 px-6 transition-colors"
-              >
-                <div className="flex items-center gap-3">
-                  <FolderGit2 className="h-4 w-4 text-muted-foreground" />
-                  <span className="font-medium text-sm">{repo.name}</span>
-                  {repo.language && (
-                    <Badge variant="outline">{repo.language}</Badge>
-                  )}
-                </div>
-                <div className="flex items-center gap-4 text-xs text-muted-foreground">
-                  <span className="flex items-center gap-1">
-                    <GitBranch className="h-3 w-3" />
-                    {repo.default_branch}
-                  </span>
-                  <Badge
-                    variant={
-                      repo.index_status === "indexed" ? "success" : "warning"
-                    }
-                  >
-                    {repo.index_status}
-                  </Badge>
-                  <span>{formatRelativeTime(repo.created_at)}</span>
-                </div>
-              </Link>
+              <RepoRow key={repo.id} orgId={orgId} repo={repo} onDelete={() => {
+                if (window.confirm(`Delete repo '${repo.name}'? This cannot be undone.`)) {
+                  deleteRepo.mutate({ orgId, repoId: repo.id });
+                }
+              }} />
             ))}
           </div>
         )}
       </CardContent>
     </Card>
+  );
+}
+
+function RepoRow({
+  orgId,
+  repo,
+  onDelete,
+}: {
+  orgId: string;
+  repo: { id: string; name: string; language: string | null; default_branch: string; index_status: string; created_at: string };
+  onDelete: () => void;
+}) {
+  const stats = useRepoStats(orgId, repo.id);
+
+  return (
+    <Link
+      to={ROUTES.REPO(orgId, repo.id)}
+      className="flex items-center justify-between py-3 hover:bg-accent/30 -mx-6 px-6 transition-colors"
+    >
+      <div className="flex items-center gap-3">
+        <FolderGit2 className="h-4 w-4 text-muted-foreground" />
+        <div>
+          <span className="font-medium text-sm">{repo.name}</span>
+          {stats.data && (
+            <div className="flex items-center gap-3 mt-0.5">
+              <span className="flex items-center gap-1 text-[10px] text-muted-foreground">
+                <FileCode2 className="h-2.5 w-2.5" />
+                {stats.data.total_files} files
+              </span>
+              <span className="flex items-center gap-1 text-[10px] text-muted-foreground">
+                <Braces className="h-2.5 w-2.5" />
+                {stats.data.total_symbols} symbols
+              </span>
+              {stats.data.embedded_files > 0 && (
+                <span className="flex items-center gap-1 text-[10px] text-muted-foreground">
+                  <Database className="h-2.5 w-2.5" />
+                  {stats.data.embedded_files} embedded
+                </span>
+              )}
+              {stats.data.languages && Object.keys(stats.data.languages).length > 0 && (
+                <span className="text-[10px] text-muted-foreground">
+                  {Object.entries(stats.data.languages)
+                    .sort(([, a], [, b]) => b - a)
+                    .slice(0, 3)
+                    .map(([lang]) => lang)
+                    .join(", ")}
+                </span>
+              )}
+            </div>
+          )}
+        </div>
+        {repo.language && (
+          <Badge variant="outline">{repo.language}</Badge>
+        )}
+      </div>
+      <div className="flex items-center gap-4 text-xs text-muted-foreground">
+        <span className="flex items-center gap-1">
+          <GitBranch className="h-3 w-3" />
+          {repo.default_branch}
+        </span>
+        <Badge
+          variant={
+            repo.index_status === "indexed" ? "success" : "warning"
+          }
+        >
+          {repo.index_status}
+        </Badge>
+        <span>{formatRelativeTime(repo.created_at)}</span>
+        <button
+          onClick={(e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            onDelete();
+          }}
+          className="p-1 rounded hover:bg-destructive/10 hover:text-destructive transition-colors"
+        >
+          <Trash2 className="h-3.5 w-3.5" />
+        </button>
+      </div>
+    </Link>
   );
 }

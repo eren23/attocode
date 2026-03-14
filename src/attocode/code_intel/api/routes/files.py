@@ -8,8 +8,6 @@ import os
 
 from fastapi import APIRouter, Depends, HTTPException
 
-logger = logging.getLogger(__name__)
-
 from attocode.code_intel.api.auth import verify_api_key
 from attocode.code_intel.api.deps import BranchParam, get_service_or_404
 from attocode.code_intel.api.models import (
@@ -17,6 +15,9 @@ from attocode.code_intel.api.models import (
     FileTreeResponse,
     TreeEntry,
 )
+from attocode.code_intel.api.utils import LANG_MAP, MAX_FILE_SIZE, detect_language
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(
     prefix="/api/v1/projects/{project_id}",
@@ -24,36 +25,10 @@ router = APIRouter(
     dependencies=[Depends(verify_api_key)],
 )
 
-# Language detection by extension
-_LANG_MAP: dict[str, str] = {
-    ".py": "python", ".js": "javascript", ".ts": "typescript",
-    ".tsx": "typescriptreact", ".jsx": "javascriptreact",
-    ".rs": "rust", ".go": "go", ".java": "java", ".rb": "ruby",
-    ".c": "c", ".cpp": "cpp", ".h": "c", ".hpp": "cpp",
-    ".cs": "csharp", ".swift": "swift", ".kt": "kotlin",
-    ".sh": "shell", ".bash": "shell", ".zsh": "shell",
-    ".json": "json", ".yaml": "yaml", ".yml": "yaml",
-    ".toml": "toml", ".xml": "xml", ".html": "html", ".css": "css",
-    ".sql": "sql", ".md": "markdown", ".txt": "plaintext",
-    ".dockerfile": "dockerfile",
-}
-
-# Max file size for content retrieval (5 MB)
-_MAX_FILE_SIZE = 5 * 1024 * 1024
-
-
-def _detect_language(path: str) -> str:
-    """Detect language from file extension."""
-    _, ext = os.path.splitext(path)
-    ext = ext.lower()
-    if ext in _LANG_MAP:
-        return _LANG_MAP[ext]
-    basename = os.path.basename(path).lower()
-    if basename == "dockerfile":
-        return "dockerfile"
-    if basename == "makefile":
-        return "makefile"
-    return ""
+# Backward-compatible aliases
+_LANG_MAP = LANG_MAP
+_MAX_FILE_SIZE = MAX_FILE_SIZE
+_detect_language = detect_language
 
 
 def _resolve_path(project_dir: str, rel_path: str) -> str:
@@ -72,7 +47,7 @@ async def get_file_content(
     branch: BranchParam = "",
 ) -> FileContentResponse:
     """Read file content with metadata."""
-    svc = get_service_or_404(project_id)
+    svc = await get_service_or_404(project_id)
     abs_path = _resolve_path(svc.project_dir, path)
 
     if not os.path.isfile(abs_path):
@@ -118,7 +93,7 @@ async def get_file_tree(
     branch: BranchParam = "",
 ) -> FileTreeResponse:
     """List directory entries."""
-    svc = get_service_or_404(project_id)
+    svc = await get_service_or_404(project_id)
     abs_path = _resolve_path(svc.project_dir, path) if path else svc.project_dir
 
     if not os.path.isdir(abs_path):

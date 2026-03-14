@@ -223,13 +223,12 @@ def _serve_http(project_dir: str, *, host: str, port: int, debug: bool) -> None:
     from attocode.code_intel.api.app import create_app
     from attocode.code_intel.config import CodeIntelConfig
 
-    config = CodeIntelConfig(
-        project_dir=project_dir,
-        host=host,
-        port=port,
-        api_key=os.environ.get("ATTOCODE_API_KEY", ""),
-        log_level="debug" if debug else "info",
-    )
+    config = CodeIntelConfig.from_env()
+    config.project_dir = project_dir
+    config.host = host
+    config.port = port
+    if debug:
+        config.log_level = "debug"
     app = create_app(config)
     uvicorn.run(app, host=host, port=port, log_level=config.log_level)
 

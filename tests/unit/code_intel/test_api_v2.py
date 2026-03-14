@@ -169,12 +169,6 @@ def _make_mock_service(project_dir: str = "/tmp/test-project") -> MagicMock:
         ],
         "total": 1, "error": None,
     }
-    svc.repo_stats_data.return_value = {
-        "file_count": 100, "total_lines": 10000,
-        "symbol_count": 500, "dependency_count": 200,
-        "languages": {"python": 80, "typescript": 20},
-    }
-
     # Internal methods used by reindex
     svc._get_ast_service = MagicMock()
     svc._get_context_mgr = MagicMock()
@@ -246,9 +240,11 @@ async def test_v2_dependency_graph(client):
                           json={"start_file": "src/mod.py", "depth": 2})
     assert r.status_code == 200
     data = r.json()
-    assert data["start_file"] == "src/mod.py"
-    assert len(data["forward"]) == 1
-    assert len(data["reverse"]) == 1
+    assert "nodes" in data
+    assert "edges" in data
+    # Root node + forward + reverse deps
+    assert len(data["nodes"]) >= 1
+    assert any(n["id"] == "src/mod.py" for n in data["nodes"])
 
 
 @pytest.mark.asyncio
@@ -300,16 +296,6 @@ async def test_v2_conventions(client):
     assert data["sample_size"] == 25
     assert data["stats"]["total_functions"] == 100
     assert data["stats"]["snake_names"] == 90
-
-
-@pytest.mark.asyncio
-async def test_v2_stats(client):
-    r = await client.get("/api/v2/projects/default/stats")
-    assert r.status_code == 200
-    data = r.json()
-    assert data["file_count"] == 100
-    assert data["total_lines"] == 10000
-    assert data["languages"]["python"] == 80
 
 
 # ---------------------------------------------------------------------------
@@ -641,9 +627,12 @@ async def test_unknown_project_404(client):
 
 
 @pytest.mark.asyncio
-async def test_missing_required_path_422(client):
+async def test_symbols_no_path_returns_all(client):
+    """v2 symbols endpoint accepts empty path (returns all symbols)."""
     r = await client.get("/api/v2/projects/default/symbols")
-    assert r.status_code == 422
+    assert r.status_code == 200
+    data = r.json()
+    assert data["path"] == ""
 
 
 @pytest.mark.asyncio

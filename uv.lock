@@ -163,9 +163,9 @@ code-intel = [
     { name = "uvicorn", extra = ["standard"] },
 ]
 dev = [
+    { name = "bcrypt" },
     { name = "bump-my-version" },
     { name = "mypy" },
-    { name = "passlib", extra = ["bcrypt"] },
     { name = "pytest" },
     { name = "pytest-asyncio" },
     { name = "pytest-cov" },
@@ -198,10 +198,11 @@ service = [
     { name = "alembic" },
     { name = "arq" },
     { name = "asyncpg" },
+    { name = "bcrypt" },
     { name = "fastapi" },
     { name = "httpx-oauth" },
     { name = "networkx" },
-    { name = "passlib", extra = ["bcrypt"] },
+    { name = "pgvector" },
     { name = "pydantic-settings" },
     { name = "pygit2" },
     { name = "python-jose", extra = ["cryptography"] },
@@ -247,6 +248,8 @@ requires-dist = [
     { name = "anthropic", marker = "extra == 'anthropic'", specifier = ">=0.40" },
     { name = "arq", marker = "extra == 'service'", specifier = ">=0.26" },
     { name = "asyncpg", marker = "extra == 'service'", specifier = ">=0.30" },
+    { name = "bcrypt", marker = "extra == 'dev'", specifier = ">=4.0" },
+    { name = "bcrypt", marker = "extra == 'service'", specifier = ">=4.0" },
     { name = "bump-my-version", marker = "extra == 'dev'", specifier = ">=0.28" },
     { name = "click", specifier = ">=8.1.0" },
     { name = "einops", marker = "extra == 'semantic-nomic'" },
@@ -264,9 +267,8 @@ requires-dist = [
     { name = "networkx", marker = "extra == 'service'", specifier = ">=3.0" },
     { name = "numpy", specifier = ">=2.4.2" },
     { name = "openai", marker = "extra == 'openai'", specifier = ">=1.50" },
-    { name = "passlib", extras = ["bcrypt"], marker = "extra == 'dev'", specifier = ">=1.7" },
-    { name = "passlib", extras = ["bcrypt"], marker = "extra == 'service'", specifier = ">=1.7" },
     { name = "pathspec", specifier = ">=0.12.0" },
+    { name = "pgvector", marker = "extra == 'service'", specifier = ">=0.3" },
     { name = "psutil", specifier = ">=6.0" },
     { name = "pydantic", specifier = ">=2.0.0" },
     { name = "pydantic-settings", marker = "extra == 'service'", specifier = ">=2.0" },
@@ -2050,26 +2052,24 @@ wheels = [
 ]
 
 [[package]]
-name = "passlib"
-version = "1.7.4"
-source = { registry = "https://pypi.org/simple" }
-sdist = { url = "https://files.pythonhosted.org/packages/b6/06/9da9ee59a67fae7761aab3ccc84fa4f3f33f125b370f1ccdb915bf967c11/passlib-1.7.4.tar.gz", hash = "sha256:defd50f72b65c5402ab2c573830a6978e5f202ad0d984793c8dde2c4152ebe04", size = 689844, upload-time = "2020-10-08T19:00:52.121Z" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/3b/a4/ab6b7589382ca3df236e03faa71deac88cae040af60c071a78d254a62172/passlib-1.7.4-py2.py3-none-any.whl", hash = "sha256:aa6bca462b8d8bda89c70b382f0c298a20b5560af6cbfa2dce410c0a2fb669f1", size = 525554, upload-time = "2020-10-08T19:00:49.856Z" },
-]
-
-[package.optional-dependencies]
-bcrypt = [
-    { name = "bcrypt" },
-]
-
-[[package]]
 name = "pathspec"
 version = "1.0.4"
 source = { registry = "https://pypi.org/simple" }
 sdist = { url = "https://files.pythonhosted.org/packages/fa/36/e27608899f9b8d4dff0617b2d9ab17ca5608956ca44461ac14ac48b44015/pathspec-1.0.4.tar.gz", hash = "sha256:0210e2ae8a21a9137c0d470578cb0e595af87edaa6ebf12ff176f14a02e0e645", size = 131200, upload-time = "2026-01-27T03:59:46.938Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/ef/3c/2c197d226f9ea224a9ab8d197933f9da0ae0aac5b6e0f884e2b8d9c8e9f7/pathspec-1.0.4-py3-none-any.whl", hash = "sha256:fb6ae2fd4e7c921a165808a552060e722767cfa526f99ca5156ed2ce45a5c723", size = 55206, upload-time = "2026-01-27T03:59:45.137Z" },
+]
+
+[[package]]
+name = "pgvector"
+version = "0.4.2"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "numpy" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/25/6c/6d8b4b03b958c02fa8687ec6063c49d952a189f8c91ebbe51e877dfab8f7/pgvector-0.4.2.tar.gz", hash = "sha256:322cac0c1dc5d41c9ecf782bd9991b7966685dee3a00bc873631391ed949513a", size = 31354, upload-time = "2025-12-05T01:07:17.87Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/5a/26/6cee8a1ce8c43625ec561aff19df07f9776b7525d9002c86bceb3e0ac970/pgvector-0.4.2-py3-none-any.whl", hash = "sha256:549d45f7a18593783d5eec609ea1684a724ba8405c4cb182a0b2b08aeff04e08", size = 27441, upload-time = "2025-12-05T01:07:16.536Z" },
 ]
 
 [[package]]

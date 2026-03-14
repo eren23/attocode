@@ -129,9 +129,9 @@ class IncrementalPipeline:
 
                 # Queue embedding generation (dedup: skip if already embedded)
                 if not await self._embedding_store.has_embeddings(sha):
-                    # In service mode, this would enqueue an ARQ job.
-                    # For now, we just note it needs embedding.
-                    pass
+                    if repo_id:
+                        from attocode.code_intel.workers.job_utils import enqueue_embedding_job
+                        await enqueue_embedding_job(repo_id, ref or "main")
 
                 stats["processed"] += 1
 

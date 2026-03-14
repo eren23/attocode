@@ -40,6 +40,7 @@ class CodeIntelConfig:
     google_client_id: str = ""
     google_client_secret: str = ""
     base_url: str = ""  # e.g. "https://code.example.com" — for OAuth redirect_uri
+    registration_key: str = ""  # When set, required in register request to prevent open signup
 
     @property
     def is_service_mode(self) -> bool:
@@ -78,4 +79,5 @@ class CodeIntelConfig:
             google_client_id=os.environ.get("GOOGLE_CLIENT_ID", ""),
             google_client_secret=os.environ.get("GOOGLE_CLIENT_SECRET", ""),
             base_url=os.environ.get("ATTOCODE_BASE_URL", ""),
+            registration_key=os.environ.get("REGISTRATION_KEY", ""),
         )

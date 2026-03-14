@@ -96,7 +96,7 @@ service = [
     "asyncpg>=0.30",
     "alembic>=1.14",
     "pydantic-settings>=2.0",
-    "passlib[bcrypt]>=1.7",
+    "bcrypt>=4.0",
     "python-jose[cryptography]>=3.3",
     "httpx-oauth>=0.15",
     "pygit2>=1.14",
@@ -120,7 +120,7 @@ dev = [
     "respx>=0.22",
     "bump-my-version>=0.28",
     "sqlalchemy[asyncio]>=2.0",
-    "passlib[bcrypt]>=1.7",
+    "bcrypt>=4.0",
     "python-jose[cryptography]>=3.3",
 ]
 

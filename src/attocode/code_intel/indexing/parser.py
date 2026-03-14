@@ -60,7 +60,7 @@ def parse_content(content_sha: str, content: bytes, filename: str) -> dict:
     """
     language = detect_language(filename)
     symbols = extract_symbols(content, filename)
-    imports = _extract_imports(content, filename, language)
+    imports = extract_imports(content, filename, language)
 
     return {
         "content_sha": content_sha,
@@ -70,7 +70,7 @@ def parse_content(content_sha: str, content: bytes, filename: str) -> dict:
     }
 
 
-def _extract_imports(content: bytes, path: str, language: str | None) -> list[str]:
+def extract_imports(content: bytes, path: str, language: str | None) -> list[str]:
     """Extract import statements from file content. Returns list of module names."""
     import re
 
@@ -98,6 +98,9 @@ def _extract_imports(content: bytes, path: str, language: str | None) -> list[st
         # require('module')
         for m in re.finditer(r"""require\s*\(\s*['"]([\w@/.\\-]+)['"]""", text):
             imports.append(m.group(1))
+        # Re-exports: export { X } from 'module'; export * from 'module'
+        for m in re.finditer(r"""export\s+(?:\*|(?:\{[^}]*\}|\w+)\s+)from\s+['"]([\w@/.\\-]+)['"]""", text):
+            imports.append(m.group(1))
     elif language == "go":
         # M3 fix: restrict to Go import block context, not all quoted strings
         import_block = re.search(r'import\s*\((.*?)\)', text, re.DOTALL)
@@ -115,6 +118,78 @@ def _extract_imports(content: bytes, path: str, language: str | None) -> list[st
             imports.append(m.group(1))
 
     return imports
+
+
+def extract_references(content: bytes, path: str) -> list[dict]:
+    """Extract symbol references (call sites, imports) from file content.
+
+    Returns list of dicts: {symbol_name, ref_kind, line}.
+    """
+    import re
+
+    language = detect_language(path)
+    if not language or language not in ("python", "javascript", "typescript"):
+        return []
+
+    try:
+        text = content.decode("utf-8", errors="replace")
+    except Exception:
+        return []
+
+    refs: list[dict] = []
+    seen: set[tuple[str, int]] = set()  # dedupe (name, line)
+
+    for i, line_text in enumerate(text.split("\n"), 1):
+        stripped = line_text.strip()
+        # Skip comment lines
+        if stripped.startswith("#") or stripped.startswith("//"):
+            continue
+        # Skip definition lines (def/class/function/interface/type)
+        if re.match(r"^\s*(?:async\s+)?(?:def|class|function|interface|type)\s", line_text):
+            continue
+        # Skip import lines — those are tracked as dependencies
+        if re.match(r"^\s*(?:from\s|import\s|export\s.*from)", line_text):
+            continue
+
+        # Function/method calls: name(
+        for m in re.finditer(r"\b(\w+)\s*\(", stripped):
+            name = m.group(1)
+            # Skip language keywords and builtins
+            if name in _SKIP_NAMES:
+                continue
+            key = (name, i)
+            if key not in seen:
+                seen.add(key)
+                refs.append({"symbol_name": name, "ref_kind": "call", "line": i})
+
+        # Method calls: obj.method(
+        for m in re.finditer(r"\b\w+\.(\w+)\s*\(", stripped):
+            name = m.group(1)
+            if name in _SKIP_NAMES:
+                continue
+            key = (name, i)
+            if key not in seen:
+                seen.add(key)
+                refs.append({"symbol_name": name, "ref_kind": "call", "line": i})
+
+    return refs
+
+
+_SKIP_NAMES = frozenset({
+    # Python keywords/builtins
+    "if", "else", "elif", "for", "while", "try", "except", "finally",
+    "with", "as", "return", "yield", "raise", "pass", "break", "continue",
+    "print", "len", "range", "list", "dict", "set", "tuple", "str", "int",
+    "float", "bool", "type", "super", "isinstance", "issubclass", "hasattr",
+    "getattr", "setattr", "delattr", "property", "staticmethod", "classmethod",
+    "enumerate", "zip", "map", "filter", "sorted", "reversed", "min", "max",
+    "sum", "abs", "any", "all", "next", "iter", "open", "round", "repr",
+    # JS/TS keywords/builtins
+    "require", "import", "export", "new", "typeof", "void", "delete",
+    "Array", "Object", "String", "Number", "Boolean", "Promise", "Date",
+    "Math", "JSON", "console", "setTimeout", "setInterval", "clearTimeout",
+    "clearInterval", "parseInt", "parseFloat", "Error", "RegExp", "Map", "Set",
+})
 
 
 def extract_symbols(content: bytes, path: str) -> list[dict]:
@@ -180,13 +255,28 @@ def _walk_tree(node, symbols: list[dict], language: str) -> None:
     if node_type in kind_map:
         name_node = node.child_by_field_name("name")
         if name_node:
+            is_async = node.parent and node.parent.type in (
+                "async_function_definition", "decorated_definition",
+            ) or node_type.startswith("async_")
+            # Build signature from parameters node if available
+            sig = None
+            params_node = node.child_by_field_name("parameters")
+            if params_node:
+                sig = params_node.text.decode("utf-8", errors="replace")
+                ret_node = node.child_by_field_name("return_type")
+                if ret_node:
+                    sig += f" -> {ret_node.text.decode('utf-8', errors='replace')}"
+            exported = False
+            if node.parent and node.parent.type == "export_statement":
+                exported = True
             symbols.append({
                 "name": name_node.text.decode("utf-8"),
                 "kind": kind_map[node_type],
                 "line_start": node.start_point[0] + 1,
                 "line_end": node.end_point[0] + 1,
-                "signature": None,
-                "exported": False,
+                "signature": sig,
+                "exported": exported,
+                "metadata": {"async": True} if is_async else {},
             })
 
     for child in node.children:
@@ -221,16 +311,31 @@ def _extract_with_regex(text: str, language: str) -> list[dict]:
     lang_patterns = patterns.get(language, patterns.get("javascript", []))
 
     for i, line in enumerate(lines, 1):
+        stripped = line.strip()
         for pattern, kind in lang_patterns:
-            match = re.match(pattern, line.strip())
+            match = re.match(pattern, stripped)
             if match:
+                is_async = "async" in stripped.split("def ")[0] if "def " in stripped else "async" in stripped.split("function")[0] if "function" in stripped else False
+                # Extract signature from the line
+                sig = None
+                paren_start = stripped.find("(")
+                if paren_start != -1:
+                    # Find matching close paren (simple single-line)
+                    paren_end = stripped.rfind(")")
+                    if paren_end > paren_start:
+                        sig = stripped[paren_start:paren_end + 1]
+                        # Check for return type annotation
+                        rest = stripped[paren_end + 1:].strip()
+                        if rest.startswith("->"):
+                            sig += f" {rest.split(':')[0].strip()}"
                 symbols.append({
                     "name": match.group(1),
                     "kind": kind,
                     "line_start": i,
                     "line_end": i,
-                    "signature": None,
+                    "signature": sig,
                     "exported": "export" in line,
+                    "metadata": {"async": True} if is_async else {},
                 })
                 break
 

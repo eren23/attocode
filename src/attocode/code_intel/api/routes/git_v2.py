@@ -14,7 +14,7 @@ from attocode.code_intel.api.auth import resolve_auth
 from attocode.code_intel.api.auth.context import AuthContext
 from attocode.code_intel.api.deps import get_db_session, get_git_manager
 
-router = APIRouter(prefix="/api/v2/repos/{repo_id}", tags=["git-v2"])
+router = APIRouter(prefix="/api/v2/projects/{project_id}", tags=["git-v2"])
 logger = logging.getLogger(__name__)
 
 
@@ -86,10 +86,10 @@ class DiffResponse(BaseModel):
 # --- Helpers ---
 
 
-async def _get_repo(repo_id: uuid.UUID, session: AsyncSession):
+async def _get_repo(project_id: uuid.UUID, session: AsyncSession):
     from attocode.code_intel.db.models import Repository
 
-    result = await session.execute(select(Repository).where(Repository.id == repo_id))
+    result = await session.execute(select(Repository).where(Repository.id == project_id))
     repo = result.scalar_one_or_none()
     if repo is None:
         raise HTTPException(status_code=404, detail="Repository not found")
@@ -101,7 +101,7 @@ async def _get_repo(repo_id: uuid.UUID, session: AsyncSession):
 
 @router.get("/commits", response_model=CommitListResponse)
 async def get_commit_log(
-    repo_id: uuid.UUID,
+    project_id: uuid.UUID,
     ref: str = Query("", description="Git ref. Defaults to default branch."),
     path: str = Query("", description="Filter commits to those touching this path."),
     limit: int = Query(50, ge=1, le=100),
@@ -110,13 +110,13 @@ async def get_commit_log(
     session: AsyncSession = Depends(get_db_session),
 ) -> CommitListResponse:
     """Get paginated commit log."""
-    repo = await _get_repo(repo_id, session)
+    repo = await _get_repo(project_id, session)
     git = get_git_manager()
     resolved_ref = ref if ref else repo.default_branch
 
     try:
         commits = git.get_commit_log(
-            str(repo_id), resolved_ref,
+            str(project_id), resolved_ref,
             path=path or None, limit=limit, offset=offset,
         )
     except (FileNotFoundError, ValueError) as e:
@@ -145,17 +145,17 @@ async def get_commit_log(
 
 @router.get("/commits/{sha}", response_model=CommitDetailResponse)
 async def get_commit_detail(
-    repo_id: uuid.UUID,
+    project_id: uuid.UUID,
     sha: str,
     auth: AuthContext = Depends(resolve_auth),
     session: AsyncSession = Depends(get_db_session),
 ) -> CommitDetailResponse:
     """Get full commit detail with file diffs."""
-    await _get_repo(repo_id, session)
+    await _get_repo(project_id, session)
     git = get_git_manager()
 
     try:
-        commit_info, patches = git.get_commit_detail(str(repo_id), sha)
+        commit_info, patches = git.get_commit_detail(str(project_id), sha)
     except (FileNotFoundError, ValueError) as e:
         raise HTTPException(status_code=404, detail=str(e))
 
@@ -202,7 +202,7 @@ async def get_commit_detail(
 
 @router.get("/diff", response_model=DiffResponse)
 async def get_diff(
-    repo_id: uuid.UUID,
+    project_id: uuid.UUID,
     from_ref: str = Query(..., alias="from", description="Base ref"),
     to_ref: str = Query(..., alias="to", description="Target ref"),
     path: str = Query("", description="Filter to specific path"),
@@ -210,11 +210,11 @@ async def get_diff(
     session: AsyncSession = Depends(get_db_session),
 ) -> DiffResponse:
     """Diff between two refs with patch content."""
-    await _get_repo(repo_id, session)
+    await _get_repo(project_id, session)
     git = get_git_manager()
 
     try:
-        patches = git.get_patch(str(repo_id), from_ref, to_ref, path=path or None)
+        patches = git.get_patch(str(project_id), from_ref, to_ref, path=path or None)
     except (FileNotFoundError, ValueError) as e:
         raise HTTPException(status_code=404, detail=str(e))
 
@@ -255,14 +255,14 @@ async def get_diff(
 
 @router.get("/blame/{path:path}", response_model=list[BlameHunkResponse])
 async def get_blame(
-    repo_id: uuid.UUID,
+    project_id: uuid.UUID,
     path: str,
     ref: str = Query("", description="Git ref. Defaults to default branch."),
     auth: AuthContext = Depends(resolve_auth),
     session: AsyncSession = Depends(get_db_session),
 ) -> list[BlameHunkResponse]:
     """Get line-level blame for a file."""
-    repo = await _get_repo(repo_id, session)
+    repo = await _get_repo(project_id, session)
     git = get_git_manager()
     resolved_ref = ref if ref else repo.default_branch
 
@@ -270,7 +270,7 @@ async def get_blame(
         raise HTTPException(status_code=400, detail="Path traversal not allowed")
 
     try:
-        hunks = git.get_blame(str(repo_id), resolved_ref, path)
+        hunks = git.get_blame(str(project_id), resolved_ref, path)
     except (FileNotFoundError, ValueError, KeyError) as e:
         raise HTTPException(status_code=404, detail=f"Cannot blame: {e}")
 

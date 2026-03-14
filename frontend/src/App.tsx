@@ -17,6 +17,9 @@ import { SearchPage } from "@/pages/SearchPage";
 import { AnalysisPage } from "@/pages/AnalysisPage";
 import { GraphPage } from "@/pages/GraphPage";
 import { EmbeddingsPage } from "@/pages/EmbeddingsPage";
+import { SecurityPage } from "@/pages/SecurityPage";
+import { LearningsPage } from "@/pages/LearningsPage";
+import { BranchComparePage } from "@/pages/BranchComparePage";
 import { SettingsPage } from "@/pages/SettingsPage";
 import { ActivityPage } from "@/pages/ActivityPage";
 import { NotFoundPage } from "@/pages/NotFoundPage";
@@ -65,6 +68,9 @@ export default function App() {
                 <Route path="analysis" element={<AnalysisPage />} />
                 <Route path="graph" element={<GraphPage />} />
                 <Route path="embeddings" element={<EmbeddingsPage />} />
+                <Route path="security" element={<SecurityPage />} />
+                <Route path="learnings" element={<LearningsPage />} />
+                <Route path="compare" element={<BranchComparePage />} />
               </Route>
 
               {/* Org routes */}

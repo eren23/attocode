@@ -4,12 +4,16 @@ import type { DependencyGraphResponse } from "@/api/generated/schema";
 
 export function useDependencyGraph(repoId: string) {
   return useMutation({
-    mutationFn: (opts: { file?: string; depth?: number; direction?: string }) =>
+    mutationFn: (opts: { file?: string; depth?: number; directory?: string }) =>
       apiFetch<DependencyGraphResponse>(
         `/api/v2/projects/${repoId}/dependency-graph`,
         {
           method: "POST",
-          body: JSON.stringify(opts),
+          body: JSON.stringify({
+            start_file: opts.file || "",
+            depth: opts.depth || 3,
+            directory: opts.directory || "",
+          }),
         },
       ),
   });
@@ -22,7 +26,7 @@ export function useGraphQuery(repoId: string) {
         `/api/v2/projects/${repoId}/graph/query`,
         {
           method: "POST",
-          body: JSON.stringify({ query }),
+          body: JSON.stringify({ file: query }),
         },
       ),
   });
@@ -32,7 +36,7 @@ export function useRelatedFiles(repoId: string, file: string) {
   return useQuery({
     queryKey: ["graph", "related", repoId, file],
     queryFn: () =>
-      apiFetch<{ files: { path: string; score: number }[] }>(
+      apiFetch<{ file: string; related: { path: string; score: number; relation_type: string }[] }>(
         `/api/v2/projects/${repoId}/graph/related`,
         {
           method: "POST",

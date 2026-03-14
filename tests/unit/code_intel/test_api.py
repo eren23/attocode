@@ -659,9 +659,10 @@ async def test_lsp_diagnostics_missing_file_422(client):
 
 
 @pytest.mark.asyncio
-async def test_dependency_graph_empty_body_422(client):
+async def test_dependency_graph_empty_body_ok(client):
+    """Empty body is valid — start_file defaults to '' and depth to 3."""
     r = await client.post("/api/v1/projects/default/dependency-graph", json={})
-    assert r.status_code == 422
+    assert r.status_code == 200
 
 
 @pytest.mark.asyncio

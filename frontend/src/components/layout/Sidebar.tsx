@@ -10,6 +10,9 @@ import {
   Activity,
   Settings,
   Home,
+  Shield,
+  BookOpen,
+  GitCompare,
 } from "lucide-react";
 import { cn } from "@/lib/cn";
 import { ROUTES } from "@/lib/routes";
@@ -34,9 +37,24 @@ function getRepoNav(orgId: string, repoId: string) {
     },
     { label: "Graph", icon: Network, href: ROUTES.GRAPH(orgId, repoId) },
     {
+      label: "Security",
+      icon: Shield,
+      href: ROUTES.SECURITY(orgId, repoId),
+    },
+    {
       label: "Embeddings",
       icon: Database,
       href: ROUTES.EMBEDDINGS(orgId, repoId),
+    },
+    {
+      label: "Knowledge Base",
+      icon: BookOpen,
+      href: ROUTES.LEARNINGS(orgId, repoId),
+    },
+    {
+      label: "Compare",
+      icon: GitCompare,
+      href: ROUTES.BRANCH_COMPARE(orgId, repoId),
     },
   ];
 }

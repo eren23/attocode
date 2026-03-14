@@ -52,6 +52,7 @@ class RegisterRequest(BaseModel):
     email: str
     password: str
     name: str = ""
+    registration_key: str = ""
 
 
 class LoginRequest(BaseModel):
@@ -87,6 +88,10 @@ async def register(
     session: AsyncSession = Depends(get_db_session),
 ) -> TokenResponse:
     """Register a new user with email + password."""
+    config = get_config()
+    if config.registration_key and req.registration_key != config.registration_key:
+        raise HTTPException(status_code=403, detail="Invalid registration key")
+
     # Check if email already exists
     existing = await session.execute(select(User).where(User.email == req.email))
     if existing.scalar_one_or_none():
@@ -307,7 +312,11 @@ async def list_providers() -> dict:
         providers.append("github")
     if config.google_client_id:
         providers.append("google")
-    return {"providers": providers, "registration_enabled": True}
+    return {
+        "providers": providers,
+        "registration_enabled": True,
+        "registration_key_required": bool(config.registration_key),
+    }
 
 
 class UpdateProfileRequest(BaseModel):

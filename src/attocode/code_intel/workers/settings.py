@@ -5,6 +5,7 @@ from __future__ import annotations
 import os
 
 from arq.connections import RedisSettings
+from arq.cron import cron
 
 from attocode.code_intel.workers.jobs import (
     cleanup_stale_branches,
@@ -40,9 +41,9 @@ class WorkerSettings:
 
     cron_jobs = [
         # Every 6 hours: clean up stale branch overlays
-        # cron(cleanup_stale_branches, hour={0, 6, 12, 18}, minute=0),
+        cron(cleanup_stale_branches, hour={0, 6, 12, 18}, minute=0),
         # Every 24 hours: GC unreferenced content
-        # cron(gc_unreferenced_content, hour=3, minute=0),
+        cron(gc_unreferenced_content, hour=3, minute=0),
     ]
 
     redis_settings = get_redis_settings()

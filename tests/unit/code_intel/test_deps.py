@@ -51,11 +51,12 @@ def test_list_projects(tmp_path):
     assert "b" in projects
 
 
-def test_get_service_or_404():
+@pytest.mark.asyncio
+async def test_get_service_or_404():
     from fastapi import HTTPException
 
     with pytest.raises(HTTPException) as exc_info:
-        deps.get_service_or_404("unknown")
+        await deps.get_service_or_404("unknown")
     assert exc_info.value.status_code == 404
 
 

@@ -126,13 +126,45 @@ class EmbeddingStore:
 
         from attocode.code_intel.db.models import Embedding
 
-        result = await self._session.execute(
-            select(Embedding.content_sha).where(
-                Embedding.content_sha.in_(content_shas),
-                Embedding.embedding_model == model,
-            ).distinct()
+        stmt = select(Embedding.content_sha).where(
+            Embedding.content_sha.in_(content_shas),
+            Embedding.embedding_model == model,
         )
+        if hasattr(Embedding, 'vector'):
+            stmt = stmt.where(Embedding.vector.isnot(None))
+        result = await self._session.execute(stmt.distinct())
         return {row[0] for row in result}
+
+    async def batch_embedding_stats(
+        self, content_shas: set[str], model: str = "default",
+    ) -> dict[str, dict]:
+        """Get chunk count + last embedded time for content SHAs with embeddings."""
+        if not content_shas:
+            return {}
+
+        from sqlalchemy import func, select
+
+        from attocode.code_intel.db.models import Embedding
+
+        stmt = select(
+            Embedding.content_sha,
+            func.count().label("chunk_count"),
+            func.max(Embedding.created_at).label("last_embedded"),
+        ).where(
+            Embedding.content_sha.in_(content_shas),
+            Embedding.embedding_model == model,
+        )
+        if hasattr(Embedding, 'vector'):
+            stmt = stmt.where(Embedding.vector.isnot(None))
+        stmt = stmt.group_by(Embedding.content_sha)
+        result = await self._session.execute(stmt)
+        return {
+            row.content_sha: {
+                "chunk_count": row.chunk_count,
+                "last_embedded": row.last_embedded,
+            }
+            for row in result
+        }
 
     async def has_embeddings(self, content_sha: str, model: str = "default") -> bool:
         """Check if embeddings exist for a content_sha+model. Used for dedup gating."""
@@ -140,13 +172,95 @@ class EmbeddingStore:
 
         from attocode.code_intel.db.models import Embedding
 
-        result = await self._session.execute(
-            select(Embedding.id).where(
-                Embedding.content_sha == content_sha,
-                Embedding.embedding_model == model,
-            ).limit(1)
+        stmt = select(Embedding.id).where(
+            Embedding.content_sha == content_sha,
+            Embedding.embedding_model == model,
         )
+        if hasattr(Embedding, 'vector'):
+            stmt = stmt.where(Embedding.vector.isnot(None))
+        result = await self._session.execute(stmt.limit(1))
         return result.scalar_one_or_none() is not None
+
+    async def find_similar_by_sha(
+        self,
+        branch_id: uuid.UUID,
+        content_sha: str,
+        top_k: int = 10,
+        model: str = "default",
+    ) -> list[dict]:
+        """Find files similar to the given content_sha within a branch.
+
+        Retrieves the embedding vector(s) for the source content_sha, averages
+        them if multiple chunks exist, then runs a cosine similarity search
+        excluding the source itself.
+        """
+        from sqlalchemy import text
+
+        from attocode.code_intel.storage.branch_overlay import BranchOverlay
+
+        # 1. Get vectors for the source content_sha
+        result = await self._session.execute(
+            text("""
+                SELECT vector::text FROM embeddings
+                WHERE content_sha = :sha AND embedding_model = :model AND vector IS NOT NULL
+            """),
+            {"sha": content_sha, "model": model},
+        )
+        rows = result.fetchall()
+        if not rows:
+            return []
+
+        # 2. Parse and average vectors
+        def parse_vector(vec_str: str) -> list[float]:
+            return [float(x) for x in vec_str.strip("[]").split(",")]
+
+        vectors = [parse_vector(row[0]) for row in rows]
+        dim = len(vectors[0])
+        if len(vectors) == 1:
+            avg_vector = vectors[0]
+        else:
+            avg_vector = [sum(v[i] for v in vectors) / len(vectors) for i in range(dim)]
+
+        # 3. Resolve branch manifest
+        overlay = BranchOverlay(self._session)
+        manifest = await overlay.resolve_manifest(branch_id)
+        content_shas = set(manifest.values())
+        content_shas.discard(content_sha)  # exclude source
+
+        if not content_shas:
+            return []
+
+        sha_to_path = {sha: path for path, sha in manifest.items()}
+
+        # 4. Run cosine similarity search
+        result = await self._session.execute(
+            text("""
+                SELECT content_sha, chunk_text, chunk_type, embedding_model,
+                       1 - (vector <=> CAST(:qv AS vector)) AS score
+                FROM embeddings
+                WHERE content_sha = ANY(:shas)
+                  AND embedding_model = :model
+                  AND vector IS NOT NULL
+                ORDER BY vector <=> CAST(:qv AS vector)
+                LIMIT :top_k
+            """),
+            {
+                "qv": "[" + ",".join(str(v) for v in avg_vector) + "]",
+                "shas": list(content_shas),
+                "model": model,
+                "top_k": top_k,
+            },
+        )
+
+        results = []
+        for row in result:
+            results.append({
+                "file": sha_to_path.get(row.content_sha, "unknown"),
+                "content_sha": row.content_sha,
+                "chunk_text": row.chunk_text,
+                "score": float(row.score),
+            })
+        return results
 
     async def similarity_search(
         self,
@@ -154,6 +268,7 @@ class EmbeddingStore:
         query_vector: list[float],
         top_k: int = 10,
         model: str = "default",
+        file_filter: str = "",
     ) -> list[dict]:
         """Find most similar content within a branch context using pgvector cosine distance.
 
@@ -172,6 +287,11 @@ class EmbeddingStore:
 
         overlay = BranchOverlay(self._session)
         manifest = await overlay.resolve_manifest(branch_id)
+
+        if file_filter:
+            import fnmatch
+            manifest = {p: s for p, s in manifest.items() if fnmatch.fnmatch(p, file_filter)}
+
         content_shas = set(manifest.values())
 
         if not content_shas:
@@ -183,16 +303,16 @@ class EmbeddingStore:
         result = await self._session.execute(
             text("""
                 SELECT content_sha, chunk_text, chunk_type, embedding_model,
-                       1 - (vector <=> :qv::vector) AS score
+                       1 - (vector <=> CAST(:qv AS vector)) AS score
                 FROM embeddings
                 WHERE content_sha = ANY(:shas)
                   AND embedding_model = :model
                   AND vector IS NOT NULL
-                ORDER BY vector <=> :qv::vector
+                ORDER BY vector <=> CAST(:qv AS vector)
                 LIMIT :top_k
             """),
             {
-                "qv": str(query_vector),
+                "qv": "[" + ",".join(str(v) for v in query_vector) + "]",
                 "shas": list(content_shas),
                 "model": model,
                 "top_k": top_k,

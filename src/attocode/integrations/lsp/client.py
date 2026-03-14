@@ -548,6 +548,10 @@ class LSPManager:
         self._listeners: set[LSPEventListener] = set()
         self._diagnostics_cache: dict[str, list[LSPDiagnostic]] = {}
 
+    def has_clients(self) -> bool:
+        """Return True if any LSP clients are running."""
+        return bool(self._clients)
+
     async def auto_start(self, workspace_root: str | None = None) -> list[str]:
         """Auto-detect and start LSP servers for detected languages."""
         if not self._enabled or not self._auto_detect:

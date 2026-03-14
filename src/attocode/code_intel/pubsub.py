@@ -10,13 +10,16 @@ logger = logging.getLogger(__name__)
 
 
 async def publish_event(repo_id: str, event_type: str, payload: dict) -> None:
-    """Publish an event to the repo's channel."""
-    from attocode.code_intel.redis import get_redis
+    """Publish an event to the repo's channel. Fire-and-forget — never raises."""
+    try:
+        from attocode.code_intel.redis import get_redis
 
-    redis = await get_redis()
-    channel = f"repo:{repo_id}:events"
-    message = json.dumps({"type": event_type, "payload": payload})
-    await redis.publish(channel, message)
+        redis = await get_redis()
+        channel = f"repo:{repo_id}:events"
+        message = json.dumps({"type": event_type, "payload": payload})
+        await redis.publish(channel, message)
+    except Exception:
+        logger.warning("Failed to publish event %s for repo %s", event_type, repo_id, exc_info=True)
 
 
 async def subscribe(repo_id: str) -> AsyncGenerator[dict, None]:

@@ -112,7 +112,10 @@ class CodeIntelService:
                         enabled=True,
                         root_uri=f"file://{self._project_dir}",
                     )
-                    self._lsp_manager = LSPManager(config=config)
+                    mgr = LSPManager(config=config)
+                    # auto_start is async, will be called on first LSP request
+                    self._lsp_manager = mgr
+                    self._lsp_auto_started = False
         return self._lsp_manager
 
     def _get_explorer(self):
@@ -214,13 +217,31 @@ class CodeIntelService:
         }
 
     def impact_analysis_data(self, changed_files: list[str]) -> dict:
-        """Return structured impact analysis."""
+        """Return structured impact analysis with BFS depth layers."""
         svc = self._get_ast_service()
-        impacted = svc.get_impact(changed_files)
+        # BFS with depth tracking
+        visited: set[str] = set(changed_files)
+        frontier = set(changed_files)
+        layers: list[dict] = []
+        current_depth = 0
+        while frontier:
+            current_depth += 1
+            next_frontier: set[str] = set()
+            for f in frontier:
+                for dep in svc.get_dependents(f):
+                    if dep not in visited:
+                        visited.add(dep)
+                        next_frontier.add(dep)
+            if next_frontier:
+                layers.append({"depth": current_depth, "files": sorted(next_frontier)})
+            frontier = next_frontier
+
+        impacted = sorted(visited - set(changed_files))
         return {
             "changed_files": changed_files,
-            "impacted_files": sorted(impacted),
+            "impacted_files": impacted,
             "total_impacted": len(impacted),
+            "layers": layers,
         }
 
     def cross_references_data(self, symbol_name: str) -> dict:
@@ -593,17 +614,34 @@ class CodeIntelService:
             "summary": report.summary,
         }
 
+    async def _ensure_lsp_started(self) -> None:
+        """Start LSP servers on first async call."""
+        if not getattr(self, "_lsp_auto_started", True):
+            self._lsp_auto_started = True
+            lsp = self._get_lsp_manager()
+            try:
+                await lsp.auto_start()
+            except Exception:
+                import logging
+                logging.getLogger(__name__).warning(
+                    "LSP auto_start failed for %s — language servers may not be installed",
+                    self._project_dir,
+                )
+
     async def lsp_definition_data(self, file: str, line: int, col: int = 0) -> dict:
         """Return structured LSP definition result."""
+        await self._ensure_lsp_started()
         lsp = self._get_lsp_manager()
+        if not lsp.has_clients():
+            return {"location": None, "error": "No language server running. Install pyright or typescript-language-server."}
         if not os.path.isabs(file):
             file = os.path.join(self._project_dir, file)
         try:
             loc = await lsp.get_definition(file, line, col)
         except Exception as e:
-            return {"location": None, "error": f"LSP not available: {e}"}
+            return {"location": None, "error": f"LSP error: {e}"}
         if loc is None:
-            return {"location": None, "error": None}
+            return {"location": None, "error": "No definition found at this location"}
         uri = loc.uri
         if uri.startswith("file://"):
             uri = uri[7:]
@@ -624,13 +662,16 @@ class CodeIntelService:
         self, file: str, line: int, col: int = 0, include_declaration: bool = True,
     ) -> dict:
         """Return structured LSP references."""
+        await self._ensure_lsp_started()
         lsp = self._get_lsp_manager()
+        if not lsp.has_clients():
+            return {"locations": [], "total": 0, "error": "No language server running. Install pyright or typescript-language-server."}
         if not os.path.isabs(file):
             file = os.path.join(self._project_dir, file)
         try:
             locs = await lsp.get_references(file, line, col, include_declaration=include_declaration)
         except Exception as e:
-            return {"locations": [], "total": 0, "error": f"LSP not available: {e}"}
+            return {"locations": [], "total": 0, "error": f"LSP error: {e}"}
         locations = []
         for loc in locs:
             uri = loc.uri
@@ -649,26 +690,33 @@ class CodeIntelService:
 
     async def lsp_hover_data(self, file: str, line: int, col: int = 0) -> dict:
         """Return structured LSP hover info."""
+        await self._ensure_lsp_started()
         lsp = self._get_lsp_manager()
+        if not lsp.has_clients():
+            return {"content": None, "file": file, "line": line, "col": col,
+                    "error": "No language server running. Install pyright or typescript-language-server."}
         if not os.path.isabs(file):
             file = os.path.join(self._project_dir, file)
         try:
             info = await lsp.get_hover(file, line, col)
         except Exception as e:
             return {"content": None, "file": file, "line": line, "col": col,
-                    "error": f"LSP not available: {e}"}
+                    "error": f"LSP error: {e}"}
         return {"content": info, "file": file, "line": line, "col": col, "error": None}
 
     def lsp_diagnostics_data(self, file: str) -> dict:
         """Return structured LSP diagnostics."""
         lsp = self._get_lsp_manager()
+        if not lsp.has_clients():
+            return {"file": file, "diagnostics": [], "total": 0,
+                    "error": "No language server running. Install pyright or typescript-language-server."}
         if not os.path.isabs(file):
             file = os.path.join(self._project_dir, file)
         try:
             diags = lsp.get_diagnostics(file)
         except Exception as e:
             return {"file": file, "diagnostics": [], "total": 0,
-                    "error": f"LSP not available: {e}"}
+                    "error": f"LSP error: {e}"}
         return {
             "file": file,
             "diagnostics": [

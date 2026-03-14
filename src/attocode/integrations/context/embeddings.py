@@ -120,6 +120,9 @@ class NullEmbeddingProvider(EmbeddingProvider):
         return "none"
 
 
+_provider_cache: dict[str, EmbeddingProvider] = {}
+
+
 def create_embedding_provider(
     model: str = "",
 ) -> EmbeddingProvider:
@@ -136,38 +139,55 @@ def create_embedding_provider(
     """
     model = model or os.environ.get("ATTOCODE_EMBEDDING_MODEL", "")
 
+    if model in _provider_cache:
+        return _provider_cache[model]
+
     # Explicit local default request
     if model == "all-MiniLM-L6-v2":
         try:
             provider = LocalEmbeddingProvider()
             logger.info("Using embedding provider: %s", provider.name)
+            _provider_cache[model] = provider
             return provider
-        except Exception:
-            logger.warning("all-MiniLM-L6-v2 requested but failed, trying fallback", exc_info=True)
+        except ImportError:
+            raise ImportError(
+                f"Embedding model '{model}' requires sentence-transformers. "
+                "Install with: pip install attocode[semantic]"
+            )
 
     # Explicit nomic request
     if model == "nomic-embed-text":
         try:
             provider = NomicEmbeddingProvider()
             logger.info("Using embedding provider: %s", provider.name)
+            _provider_cache[model] = provider
             return provider
-        except Exception:
-            logger.warning("nomic-embed-text requested but failed, trying fallback", exc_info=True)
+        except ImportError:
+            raise ImportError(
+                f"Embedding model '{model}' requires sentence-transformers and einops. "
+                "Install with: pip install attocode[semantic-nomic]"
+            )
 
     # Explicit OpenAI request
     if model == "openai":
         try:
             provider = OpenAIEmbeddingProvider()
             logger.info("Using embedding provider: %s", provider.name)
+            _provider_cache[model] = provider
             return provider
-        except Exception:
-            logger.warning("OpenAI embeddings requested but failed", exc_info=True)
-            return NullEmbeddingProvider()
+        except ImportError:
+            raise ImportError(
+                "OpenAI embeddings require the openai package. "
+                "Install with: pip install attocode[openai]"
+            )
+        except Exception as e:
+            raise RuntimeError(f"OpenAI embedding provider failed: {e}") from e
 
     # Auto-detect: try local first (no API cost)
     try:
         provider = LocalEmbeddingProvider()
         logger.info("Using local embedding provider: %s", provider.name)
+        _provider_cache[model] = provider
         return provider
     except ImportError:
         logger.debug("sentence-transformers not installed, trying OpenAI")
@@ -179,12 +199,13 @@ def create_embedding_provider(
         try:
             provider = OpenAIEmbeddingProvider()
             logger.info("Using OpenAI embedding provider: %s", provider.name)
+            _provider_cache[model] = provider
             return provider
         except ImportError:
             logger.debug("openai package not installed")
         except Exception:
             logger.debug("OpenAI embedding provider failed", exc_info=True)
 
-    # Graceful degradation
+    # Graceful degradation — don't cache so retry picks up newly installed packages
     logger.info("No embedding provider available; semantic search will use keyword fallback")
     return NullEmbeddingProvider()

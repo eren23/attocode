@@ -25,13 +25,11 @@ async def index_repository(ctx: dict, repo_id: str, branch_name: str = "main") -
         try:
             from sqlalchemy import select
 
-            # Get repository
-            result = await session.execute(
-                select(Repository).where(Repository.id == uuid.UUID(repo_id))
-            )
-            repo = result.scalar_one_or_none()
-            if repo is None:
-                return {"error": f"Repository {repo_id} not found"}
+            from attocode.code_intel.workers.job_utils import get_repo_or_error
+
+            repo, err = await get_repo_or_error(repo_id, session)
+            if err:
+                return err
 
             # Create/update job record
             job = IndexingJob(
@@ -62,13 +60,45 @@ async def index_repository(ctx: dict, repo_id: str, branch_name: str = "main") -
             async def on_progress(data: dict) -> None:
                 await publish_event(repo_id, "index.progress", data)
 
-            # Perform indexing
+            # Clone if needed, then index
             from attocode.code_intel.api.deps import get_config
             from attocode.code_intel.git.manager import GitRepoManager
             from attocode.code_intel.indexing.full_indexer import FullIndexer
 
             config = get_config()
             git_mgr = GitRepoManager(config.git_clone_dir, config.git_ssh_key_path)
+
+            # Clone the repo if it has a clone_url and hasn't been cloned yet
+            if repo.clone_url and not repo.clone_path:
+                import asyncio
+
+                loop = asyncio.get_running_loop()
+                clone_path = await loop.run_in_executor(
+                    None, git_mgr.clone, repo.clone_url, repo_id,
+                )
+                repo.clone_path = clone_path
+                await session.flush()
+                logger.info("Cloned %s to %s", repo.clone_url, clone_path)
+
+                # Detect default branch from cloned repo
+                branches = git_mgr.list_branches(repo_id)
+                default = next((b for b in branches if b.is_default), None)
+                if default and default.name != repo.default_branch:
+                    repo.default_branch = default.name
+                    if branch_name == "main" and default.name != "main":
+                        branch_name = default.name
+                        branch.name = default.name
+                        branch.is_default = True
+                    await session.flush()
+
+            # Determine the working path for indexing
+            work_path = repo.clone_path or repo.local_path
+            if not work_path:
+                return {"error": "No clone_path or local_path for repo"}
+
+            # Register path override so git operations use the correct directory
+            git_mgr.register_path(repo_id, work_path)
+
             indexer = FullIndexer(session, git_mgr, progress_callback=lambda d: None)
 
             stats = await indexer.index(repo_id, branch.id, ref=branch_name)
@@ -83,10 +113,24 @@ async def index_repository(ctx: dict, repo_id: str, branch_name: str = "main") -
 
             await session.commit()
             await publish_event(repo_id, "index.completed", stats)
+
+            # Auto-trigger embedding generation after successful index
+            from attocode.code_intel.workers.job_utils import enqueue_embedding_job
+            await enqueue_embedding_job(repo_id, branch_name)
+
             return stats
 
         except Exception as e:
             logger.exception("Error indexing repo %s", repo_id)
+            try:
+                repo.index_status = "failed"
+                job.status = "failed"
+                job.completed_at = datetime.now(timezone.utc)
+                job.error = str(e)
+                job.result = {"error": str(e)}
+                await session.commit()
+            except Exception:
+                logger.warning("Failed to persist error state for repo %s", repo_id)
             await publish_event(repo_id, "index.failed", {"error": str(e)})
             return {"error": str(e)}
 
@@ -113,21 +157,15 @@ async def index_branch_delta(
 
     async for session in get_session():
         try:
-            from sqlalchemy import select
+            from attocode.code_intel.workers.job_utils import get_branch_or_error, get_repo_or_error
 
-            result = await session.execute(
-                select(Repository).where(Repository.id == uuid.UUID(repo_id))
-            )
-            repo = result.scalar_one_or_none()
-            if repo is None:
-                return {"error": f"Repository {repo_id} not found"}
+            repo, err = await get_repo_or_error(repo_id, session)
+            if err:
+                return err
 
-            branch_result = await session.execute(
-                select(Branch).where(Branch.repo_id == repo.id, Branch.name == branch_name)
-            )
-            branch = branch_result.scalar_one_or_none()
-            if branch is None:
-                return {"error": f"Branch {branch_name} not found"}
+            branch, err = await get_branch_or_error(repo.id, branch_name, session)
+            if err:
+                return err
 
             job = IndexingJob(
                 repo_id=repo.id,
@@ -161,6 +199,14 @@ async def index_branch_delta(
 
         except Exception as e:
             logger.exception("Error delta-indexing repo %s", repo_id)
+            try:
+                job.status = "failed"
+                job.completed_at = datetime.now(timezone.utc)
+                job.error = str(e)
+                job.result = {"error": str(e)}
+                await session.commit()
+            except Exception:
+                logger.warning("Failed to persist error state for delta-index repo %s", repo_id)
             await publish_event(repo_id, "index.failed", {"error": str(e)})
             return {"error": str(e)}
 
@@ -189,27 +235,26 @@ async def generate_embeddings(ctx: dict, repo_id: str, branch_name: str = "main"
         try:
             from sqlalchemy import select
 
-            # 1. Get repo + branch
-            result = await session.execute(
-                select(Repository).where(Repository.id == uuid.UUID(repo_id))
-            )
-            repo = result.scalar_one_or_none()
-            if repo is None:
-                return {"error": f"Repository {repo_id} not found"}
+            from attocode.code_intel.workers.job_utils import get_branch_or_error, get_repo_or_error
 
-            branch_result = await session.execute(
-                select(Branch).where(Branch.repo_id == repo.id, Branch.name == branch_name)
-            )
-            branch = branch_result.scalar_one_or_none()
-            if branch is None:
-                return {"error": f"Branch {branch_name} not found"}
+            # 1. Get repo + branch
+            repo, err = await get_repo_or_error(repo_id, session)
+            if err:
+                return err
+
+            branch, err = await get_branch_or_error(repo.id, branch_name, session)
+            if err:
+                return err
 
             # 2. Create embedding provider
             from attocode.code_intel.api.deps import get_config
             from attocode.integrations.context.embeddings import create_embedding_provider
 
             config = get_config()
-            provider = create_embedding_provider(config.embedding_model)
+            try:
+                provider = create_embedding_provider(config.embedding_model)
+            except (ImportError, RuntimeError) as exc:
+                return {"error": str(exc)}
             if provider.name == "none":
                 return {"error": "No embedding provider available", "hint": "Install sentence-transformers or set OPENAI_API_KEY"}
 
@@ -258,6 +303,7 @@ async def generate_embeddings(ctx: dict, repo_id: str, branch_name: str = "main"
                         continue
                     try:
                         text_content = fc.content.decode("utf-8", errors="replace")
+                        text_content = text_content.replace('\x00', '')
                     except Exception:
                         continue
                     # Truncate very large files to avoid OOM in embedding model
@@ -269,9 +315,11 @@ async def generate_embeddings(ctx: dict, repo_id: str, branch_name: str = "main"
                 if not texts:
                     continue
 
-                # Embed the batch
+                # Embed the batch (CPU-bound, run in executor to avoid blocking event loop)
                 try:
-                    vectors = provider.embed(texts)
+                    import asyncio
+                    loop = asyncio.get_running_loop()
+                    vectors = await loop.run_in_executor(None, provider.embed, texts)
                 except Exception:
                     logger.exception("Embedding failed for batch starting at index %d", i)
                     continue
@@ -285,8 +333,6 @@ async def generate_embeddings(ctx: dict, repo_id: str, branch_name: str = "main"
                         "vector": vector,
                     }])
                     embedded_count += 1
-
-                await session.flush()
 
                 # Publish progress
                 await publish_event(repo_id, "embeddings.progress", {
@@ -319,11 +365,50 @@ async def generate_embeddings(ctx: dict, repo_id: str, branch_name: str = "main"
 async def cleanup_stale_branches(ctx: dict) -> dict:
     """Cron job: remove branch overlays for branches that no longer exist in git.
 
-    Runs every 6 hours.
+    Runs every 6 hours. Compares DB branches against actual git branches
+    and removes overlays for branches that no longer exist.
     """
+    from sqlalchemy import select
+
+    from attocode.code_intel.api.deps import get_config
+    from attocode.code_intel.db.engine import get_session
+    from attocode.code_intel.db.models import Branch, Repository
+    from attocode.code_intel.git.manager import GitRepoManager
+
     logger.info("Running stale branch cleanup")
-    # Placeholder — will compare DB branches with git branches
-    return {"cleaned": 0}
+    cleaned = 0
+
+    async for session in get_session():
+        config = get_config()
+        git_mgr = GitRepoManager(config.git_clone_dir, config.git_ssh_key_path)
+
+        result = await session.execute(select(Repository))
+        repos = result.scalars().all()
+
+        for repo in repos:
+            try:
+                git_branches = {b.name for b in git_mgr.list_branches(str(repo.id))}
+            except (FileNotFoundError, ValueError):
+                continue
+
+            branch_result = await session.execute(
+                select(Branch).where(Branch.repo_id == repo.id)
+            )
+            db_branches = branch_result.scalars().all()
+
+            for db_branch in db_branches:
+                if db_branch.name not in git_branches and not db_branch.is_default:
+                    logger.info(
+                        "Removing stale branch %s from repo %s",
+                        db_branch.name, repo.id,
+                    )
+                    await session.delete(db_branch)
+                    cleaned += 1
+
+        await session.commit()
+
+    logger.info("Stale branch cleanup complete: removed %d branches", cleaned)
+    return {"cleaned": cleaned}
 
 
 async def gc_unreferenced_content(ctx: dict) -> dict:

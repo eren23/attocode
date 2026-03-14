@@ -144,7 +144,7 @@ class ContentStore:
         result = await self._session.execute(
             text("""
             DELETE FROM file_contents
-            WHERE created_at < NOW() - INTERVAL ':age minutes'
+            WHERE created_at < NOW() - make_interval(mins => :age)
               AND sha256 NOT IN (
                 SELECT DISTINCT content_sha FROM branch_files WHERE content_sha IS NOT NULL
                 UNION

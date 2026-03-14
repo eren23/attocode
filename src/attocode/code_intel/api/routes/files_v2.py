@@ -13,47 +13,15 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from attocode.code_intel.api.auth import resolve_auth
 from attocode.code_intel.api.auth.context import AuthContext
 from attocode.code_intel.api.deps import get_db_session, get_git_manager
+from attocode.code_intel.api.utils import MAX_FILE_SIZE, detect_language, is_binary
 
-router = APIRouter(prefix="/api/v2/repos/{repo_id}", tags=["files-v2"])
+router = APIRouter(prefix="/api/v2/projects/{project_id}", tags=["files-v2"])
 logger = logging.getLogger(__name__)
 
-# Max file size for content retrieval (5 MB)
-_MAX_FILE_SIZE = 5 * 1024 * 1024
-
-# Language detection by extension (shared with files.py)
-_LANG_MAP: dict[str, str] = {
-    ".py": "python", ".js": "javascript", ".ts": "typescript",
-    ".tsx": "typescriptreact", ".jsx": "javascriptreact",
-    ".rs": "rust", ".go": "go", ".java": "java", ".rb": "ruby",
-    ".c": "c", ".cpp": "cpp", ".h": "c", ".hpp": "cpp",
-    ".cs": "csharp", ".swift": "swift", ".kt": "kotlin",
-    ".sh": "shell", ".bash": "shell", ".zsh": "shell",
-    ".json": "json", ".yaml": "yaml", ".yml": "yaml",
-    ".toml": "toml", ".xml": "xml", ".html": "html", ".css": "css",
-    ".sql": "sql", ".md": "markdown", ".txt": "plaintext",
-    ".dockerfile": "dockerfile",
-}
-
-
-def _detect_language(path: str) -> str:
-    """Detect language from file extension."""
-    import os
-
-    _, ext = os.path.splitext(path)
-    ext = ext.lower()
-    if ext in _LANG_MAP:
-        return _LANG_MAP[ext]
-    basename = os.path.basename(path).lower()
-    if basename == "dockerfile":
-        return "dockerfile"
-    if basename == "makefile":
-        return "makefile"
-    return ""
-
-
-def _is_binary(data: bytes) -> bool:
-    """Heuristic binary detection: check for null bytes in first 8KB."""
-    return b"\x00" in data[:8192]
+# Backward-compatible aliases
+_MAX_FILE_SIZE = MAX_FILE_SIZE
+_detect_language = detect_language
+_is_binary = is_binary
 
 
 # --- Response models ---
@@ -62,9 +30,10 @@ def _is_binary(data: bytes) -> bool:
 class TreeEntryV2(BaseModel):
     name: str
     path: str
-    type: str  # blob|tree
+    type: str  # file|directory
     size: int = 0
     language: str = ""
+    children: list[TreeEntryV2] | None = None
 
 
 class TreeResponse(BaseModel):
@@ -93,10 +62,10 @@ class RepoStatsResponse(BaseModel):
 # --- Helpers ---
 
 
-async def _get_repo(repo_id: uuid.UUID, session: AsyncSession):
+async def _get_repo(project_id: uuid.UUID, session: AsyncSession):
     from attocode.code_intel.db.models import Repository
 
-    result = await session.execute(select(Repository).where(Repository.id == repo_id))
+    result = await session.execute(select(Repository).where(Repository.id == project_id))
     repo = result.scalar_one_or_none()
     if repo is None:
         raise HTTPException(status_code=404, detail="Repository not found")
@@ -111,20 +80,59 @@ async def _resolve_ref(repo, ref: str) -> str:
 # --- Endpoints ---
 
 
+def _build_tree_recursive(
+    git, project_id: str, ref: str, path: str = "", max_depth: int = 10,
+) -> list[TreeEntryV2]:
+    """Build a nested tree by recursively walking git entries."""
+    if max_depth <= 0:
+        return []
+    try:
+        entries = git.get_tree(project_id, ref, path) if path else git.get_tree(project_id, ref)
+    except (FileNotFoundError, ValueError, KeyError):
+        return []
+
+    result = []
+    for e in entries:
+        node_type = "directory" if e.type == "tree" else "file"
+        children = None
+        if e.type == "tree":
+            children = _build_tree_recursive(git, project_id, ref, e.path, max_depth - 1)
+        result.append(TreeEntryV2(
+            name=e.name,
+            path=e.path,
+            type=node_type,
+            size=e.size,
+            language=_detect_language(e.name) if e.type == "blob" else "",
+            children=children,
+        ))
+    # Sort: directories first, then files, alphabetically
+    result.sort(key=lambda x: (0 if x.type == "directory" else 1, x.name.lower()))
+    return result
+
+
 @router.get("/tree", response_model=TreeResponse)
 async def get_root_tree(
-    repo_id: uuid.UUID,
+    project_id: uuid.UUID,
     ref: str = Query("", description="Git ref (branch, tag, commit). Defaults to default branch."),
+    recursive: bool = Query(True, description="Return nested tree with children"),
     auth: AuthContext = Depends(resolve_auth),
     session: AsyncSession = Depends(get_db_session),
 ) -> TreeResponse:
-    """List root tree at a ref."""
-    repo = await _get_repo(repo_id, session)
+    """List root tree at a ref. With recursive=true, returns full nested tree."""
+    repo = await _get_repo(project_id, session)
     git = get_git_manager()
     resolved_ref = await _resolve_ref(repo, ref)
 
+    if recursive:
+        import asyncio
+        loop = asyncio.get_running_loop()
+        entries = await loop.run_in_executor(
+            None, _build_tree_recursive, git, str(project_id), resolved_ref, "", 10,
+        )
+        return TreeResponse(path="", ref=resolved_ref, entries=entries)
+
     try:
-        entries = git.get_tree(str(repo_id), resolved_ref)
+        entries = git.get_tree(str(project_id), resolved_ref)
     except (FileNotFoundError, ValueError) as e:
         raise HTTPException(status_code=404, detail=str(e))
 
@@ -135,7 +143,7 @@ async def get_root_tree(
             TreeEntryV2(
                 name=e.name,
                 path=e.path,
-                type=e.type,
+                type="directory" if e.type == "tree" else "file",
                 size=e.size,
                 language=_detect_language(e.name) if e.type == "blob" else "",
             )
@@ -146,14 +154,14 @@ async def get_root_tree(
 
 @router.get("/tree/{path:path}", response_model=TreeResponse)
 async def get_subtree(
-    repo_id: uuid.UUID,
+    project_id: uuid.UUID,
     path: str,
     ref: str = Query("", description="Git ref. Defaults to default branch."),
     auth: AuthContext = Depends(resolve_auth),
     session: AsyncSession = Depends(get_db_session),
 ) -> TreeResponse:
     """List subtree at a path and ref."""
-    repo = await _get_repo(repo_id, session)
+    repo = await _get_repo(project_id, session)
     git = get_git_manager()
     resolved_ref = await _resolve_ref(repo, ref)
 
@@ -162,7 +170,7 @@ async def get_subtree(
         raise HTTPException(status_code=400, detail="Path traversal not allowed")
 
     try:
-        entries = git.get_tree(str(repo_id), resolved_ref, path)
+        entries = git.get_tree(str(project_id), resolved_ref, path)
     except (FileNotFoundError, ValueError, KeyError) as e:
         raise HTTPException(status_code=404, detail=f"Path not found: {path}")
 
@@ -173,7 +181,7 @@ async def get_subtree(
             TreeEntryV2(
                 name=e.name,
                 path=e.path,
-                type=e.type,
+                type="directory" if e.type == "tree" else "file",
                 size=e.size,
                 language=_detect_language(e.name) if e.type == "blob" else "",
             )
@@ -184,14 +192,14 @@ async def get_subtree(
 
 @router.get("/files/{path:path}", response_model=FileContentV2Response)
 async def get_file_content(
-    repo_id: uuid.UUID,
+    project_id: uuid.UUID,
     path: str,
     ref: str = Query("", description="Git ref. Defaults to default branch."),
     auth: AuthContext = Depends(resolve_auth),
     session: AsyncSession = Depends(get_db_session),
 ) -> FileContentV2Response:
     """Read file content at a specific ref."""
-    repo = await _get_repo(repo_id, session)
+    repo = await _get_repo(project_id, session)
     git = get_git_manager()
     resolved_ref = await _resolve_ref(repo, ref)
 
@@ -200,7 +208,7 @@ async def get_file_content(
         raise HTTPException(status_code=400, detail="Path traversal not allowed")
 
     try:
-        data = git.read_file(str(repo_id), resolved_ref, path)
+        data = git.read_file(str(project_id), resolved_ref, path)
     except (FileNotFoundError, KeyError) as e:
         raise HTTPException(status_code=404, detail=f"File not found: {path}")
 
@@ -228,7 +236,7 @@ async def get_file_content(
 
 @router.get("/stats", response_model=RepoStatsResponse)
 async def get_repo_stats(
-    repo_id: uuid.UUID,
+    project_id: uuid.UUID,
     ref: str = Query("", description="Git ref. Defaults to default branch."),
     auth: AuthContext = Depends(resolve_auth),
     session: AsyncSession = Depends(get_db_session),
@@ -237,11 +245,11 @@ async def get_repo_stats(
     from attocode.code_intel.api.deps import get_branch_context
     from attocode.code_intel.db.models import Embedding, Symbol
 
-    repo = await _get_repo(repo_id, session)
+    repo = await _get_repo(project_id, session)
     resolved_ref = ref if ref else repo.default_branch
 
     try:
-        branch_ctx = await get_branch_context(repo_id, resolved_ref, session)
+        branch_ctx = await get_branch_context(project_id, resolved_ref, session)
     except HTTPException:
         return RepoStatsResponse()
 

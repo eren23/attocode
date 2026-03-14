@@ -46,16 +46,21 @@ async function getLanguageExtension(
   }
 }
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import type { ReactCodeMirrorRef } from "@uiw/react-codemirror";
+import { EditorView } from "@codemirror/view";
+import { EditorSelection } from "@codemirror/state";
 
 interface FileViewerProps {
   content: string;
   path: string;
   className?: string;
+  highlightLine?: number | null;
 }
 
-export function FileViewer({ content, path, className }: FileViewerProps) {
+export function FileViewer({ content, path, className, highlightLine }: FileViewerProps) {
   const [extensions, setExtensions] = useState<Extension[]>([]);
+  const editorRef = useRef<ReactCodeMirrorRef>(null);
   const lang = getLanguageFromPath(path);
 
   useEffect(() => {
@@ -64,8 +69,32 @@ export function FileViewer({ content, path, className }: FileViewerProps) {
     });
   }, [lang]);
 
+  useEffect(() => {
+    if (!highlightLine || highlightLine < 1) return;
+
+    const tryScroll = () => {
+      const view = editorRef.current?.view;
+      if (!view) {
+        // View not ready yet — try next frame
+        rafId = requestAnimationFrame(tryScroll);
+        return;
+      }
+      const lineCount = view.state.doc.lines;
+      if (highlightLine > lineCount) return;
+      const line = view.state.doc.line(highlightLine);
+      view.dispatch({
+        selection: EditorSelection.cursor(line.from),
+        effects: EditorView.scrollIntoView(line.from, { y: "center" }),
+      });
+    };
+
+    let rafId = requestAnimationFrame(tryScroll);
+    return () => cancelAnimationFrame(rafId);
+  }, [highlightLine, content]);
+
   return (
     <CodeMirror
+      ref={editorRef}
       value={content}
       theme={oneDark}
       extensions={extensions}

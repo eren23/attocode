@@ -16,6 +16,24 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
+async def _run_migrations(database_url: str) -> None:
+    """Run Alembic migrations programmatically."""
+    import asyncio
+    from pathlib import Path
+
+    from alembic import command
+    from alembic.config import Config
+
+    migrations_dir = Path(__file__).resolve().parent.parent / "migrations"
+    alembic_cfg = Config(str(migrations_dir / "alembic.ini"))
+    alembic_cfg.set_main_option("script_location", str(migrations_dir))
+    alembic_cfg.set_main_option("sqlalchemy.url", database_url)
+
+    # Alembic is sync — run in thread to avoid blocking the event loop
+    loop = asyncio.get_running_loop()
+    await loop.run_in_executor(None, command.upgrade, alembic_cfg, "head")
+
+
 @asynccontextmanager
 async def _lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     """Startup/shutdown lifecycle — initialize DB engine in service mode."""
@@ -25,6 +43,13 @@ async def _lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
 
         init_engine(config.database_url)
         logger.info("Service mode: database engine initialized")
+
+        # Auto-run migrations on startup
+        try:
+            await _run_migrations(config.database_url)
+            logger.info("Service mode: migrations applied")
+        except Exception:
+            logger.exception("Failed to run migrations on startup")
     yield
 
     # Shutdown debouncer
@@ -52,18 +77,14 @@ def create_app(config: CodeIntelConfig | None = None) -> FastAPI:
     from attocode.code_intel.api.middleware import RequestLoggingMiddleware
     from attocode.code_intel.api.routes import (
         analysis,
-        analysis_v2,
         files,
         graph,
-        graph_v2,
         health,
         learning,
         lsp,
-        lsp_v2,
         notify,
         projects,
         search,
-        search_v2,
     )
 
     if config is None:
@@ -104,21 +125,20 @@ def create_app(config: CodeIntelConfig | None = None) -> FastAPI:
 
         app.add_middleware(RateLimitMiddleware, requests_per_minute=60)
 
-    # Legacy routes (local mode + backward compat)
+    # Core routes — each module has router_v1 (text) + router_v2 (JSON)
     app.include_router(health.router)
     app.include_router(projects.router)
-    app.include_router(analysis.router)
-    app.include_router(search.router)
-    app.include_router(graph.router)
+    app.include_router(analysis.router_v1)
+    app.include_router(analysis.router_v2)
+    app.include_router(search.router_v1)
+    app.include_router(search.router_v2)
+    app.include_router(graph.router_v1)
+    app.include_router(graph.router_v2)
+    app.include_router(lsp.router_v1)
+    app.include_router(lsp.router_v2)
     app.include_router(learning.router)
-    app.include_router(lsp.router)
+    app.include_router(learning.router_v2)
     app.include_router(notify.router)
-
-    # v2 structured routes (return JSON, not text)
-    app.include_router(analysis_v2.router)
-    app.include_router(graph_v2.router)
-    app.include_router(search_v2.router)
-    app.include_router(lsp_v2.router)
     app.include_router(files.router)
 
     # Service mode routes

@@ -95,7 +95,7 @@ async def get_projects(
 @router.get("/{project_id}", response_model=ProjectInfo)
 async def get_project(project_id: str) -> ProjectInfo:
     """Get project details."""
-    svc = get_service_or_404(project_id)
+    svc = await get_service_or_404(project_id)
     return ProjectInfo(
         id=project_id,
         name=os.path.basename(svc.project_dir),
@@ -107,7 +107,7 @@ async def get_project(project_id: str) -> ProjectInfo:
 @router.post("/{project_id}/reindex", response_model=TextResult)
 async def reindex_project(project_id: str) -> TextResult:
     """Trigger a full reindex of the project."""
-    svc = get_service_or_404(project_id)
+    svc = await get_service_or_404(project_id)
     async with _reindex_lock:
         svc._ast_service = None
         svc._context_mgr = None

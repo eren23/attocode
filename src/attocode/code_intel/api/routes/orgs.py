@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 import re
 import uuid
 from datetime import datetime, timezone
@@ -15,6 +16,8 @@ from attocode.code_intel.api.auth import resolve_auth
 from attocode.code_intel.api.auth.context import AuthContext
 from attocode.code_intel.api.deps import get_db_session, get_repo_service
 from attocode.code_intel.db.models import Organization, OrgMembership, Repository, User
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/v1/orgs", tags=["organizations"])
 
@@ -78,6 +81,7 @@ class UpdateMemberRequest(BaseModel):
 class CreateRepoRequest(BaseModel):
     name: str
     clone_url: str | None = None
+    local_path: str | None = None
     default_branch: str = "main"
     language: str | None = None
 
@@ -468,12 +472,29 @@ async def create_repo(
         org_id=org_id,
         name=req.name,
         clone_url=req.clone_url,
+        local_path=req.local_path,
         default_branch=req.default_branch,
         language=req.language,
     )
     session.add(repo)
     await session.commit()
     await session.refresh(repo)
+
+    # Enqueue indexing job if clone_url or local_path is provided
+    if repo.clone_url or repo.local_path:
+        try:
+            from arq import create_pool
+
+            from attocode.code_intel.workers.settings import get_redis_settings
+
+            pool = await create_pool(get_redis_settings())
+            await pool.enqueue_job("index_repository", str(repo.id))
+            await pool.aclose()
+            repo.index_status = "indexing"
+            await session.commit()
+            await session.refresh(repo)
+        except Exception:
+            logger.warning("Failed to enqueue indexing job for repo %s", repo.id, exc_info=True)
 
     return RepoResponse(
         id=str(repo.id),
@@ -595,8 +616,19 @@ async def reindex_repo(
     if repo is None:
         raise HTTPException(status_code=404, detail="Repository not found")
 
+    try:
+        from arq import create_pool
+
+        from attocode.code_intel.workers.settings import get_redis_settings
+
+        pool = await create_pool(get_redis_settings())
+        await pool.enqueue_job("index_repository", str(repo_id))
+        await pool.aclose()
+    except Exception:
+        logger.warning("Failed to enqueue reindex job for repo %s", repo_id, exc_info=True)
+        raise HTTPException(status_code=503, detail="Failed to enqueue reindex job")
+
     repo.index_status = "indexing"
     await session.commit()
 
-    # In Step 6, this will enqueue an ARQ job instead
     return {"detail": "Reindex triggered", "repo_id": str(repo_id)}
