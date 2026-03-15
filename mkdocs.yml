@@ -52,7 +52,9 @@ nav:
   - Home: index.md
   - Getting Started: getting-started.md
   - CLI Reference: cli-reference.md
-  - Architecture: ARCHITECTURE.md
+  - Architecture:
+      - Overview: ARCHITECTURE.md
+      - "v0.2 Service Mode": architecture-v2.md
   - Features:
       - TUI Interface: tui-guide.md
       - Sessions & Persistence: sessions-guide.md
@@ -61,6 +63,9 @@ nav:
       - Code Intel HTTP API: code-intel-http-api.md
       - Advanced Features: advanced-features.md
   - Guides:
+      - Local Development: guides/local-development.md
+      - Repos & Branches: guides/repos-and-branches.md
+      - Semantic Search: guides/semantic-search.md
       - Providers: PROVIDERS.md
       - Provider Resilience: provider-resilience.md
       - Sandbox: SANDBOX.md
@@ -106,7 +111,9 @@ nav:
       - "24 - Advanced Patterns": lessons/24-advanced-patterns.md
       - "25 - Production Agent": lessons/25-production-agent.md
       - "26 - Tracing & Evaluation": lessons/26-tracing-and-evaluation.md
-  - Roadmap: swarm-roadmap.md
+  - Roadmap:
+      - Swarm: swarm-roadmap.md
+      - "Code Intel": roadmap.md
 
 extra_javascript:
   - https://unpkg.com/mermaid@11/dist/mermaid.min.js

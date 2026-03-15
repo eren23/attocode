@@ -659,9 +659,10 @@ async def test_lsp_diagnostics_missing_file_422(client):
 
 
 @pytest.mark.asyncio
-async def test_dependency_graph_empty_body_422(client):
+async def test_dependency_graph_empty_body_ok(client):
+    """Empty body is valid — start_file defaults to '' and depth to 3."""
     r = await client.post("/api/v1/projects/default/dependency-graph", json={})
-    assert r.status_code == 422
+    assert r.status_code == 200
 
 
 @pytest.mark.asyncio
@@ -727,6 +728,95 @@ async def test_cors_response_has_allow_origin():
     async with httpx.AsyncClient(transport=transport, base_url="http://test") as c:
         r = await c.get("/health", headers={"Origin": "http://example.com"})
     assert r.headers.get("access-control-allow-origin") == "http://example.com"
+    deps.reset()
+    CodeIntelService._reset_instances()
+
+
+@pytest.mark.asyncio
+async def test_auth_jwt_on_analysis_endpoint():
+    """JWT tokens should work on endpoints that previously used verify_api_key."""
+    try:
+        from attocode.code_intel.api.auth.jwt import create_access_token
+        import jose  # noqa: F401
+    except ImportError:
+        pytest.skip("python-jose not installed")
+
+    deps.reset()
+    CodeIntelService._reset_instances()
+
+    user_id = __import__("uuid").uuid4()
+    org_id = __import__("uuid").uuid4()
+
+    config = CodeIntelConfig(
+        project_dir="/tmp/test-project",
+        database_url="postgresql+asyncpg://localhost/test",
+        secret_key="test-secret",
+    )
+    # Patch out DB lifecycle (no real DB in unit tests)
+    with patch("attocode.code_intel.api.app._lifespan") as mock_lifespan:
+        from contextlib import asynccontextmanager
+
+        @asynccontextmanager
+        async def _noop_lifespan(app):
+            yield
+
+        mock_lifespan.side_effect = _noop_lifespan
+        app = create_app(config)
+
+    deps._services["default"] = _make_mock_service()
+
+    token = create_access_token(user_id, org_id, scopes=["read:symbols"])
+    headers = {"Authorization": f"Bearer {token}"}
+
+    transport = httpx.ASGITransport(app=app)
+    async with httpx.AsyncClient(transport=transport, base_url="http://test") as c:
+        # These endpoints previously used verify_api_key
+        r = await c.get("/api/v1/projects/default/map", headers=headers)
+        assert r.status_code == 200
+
+        r = await c.get("/api/v1/projects/default/symbols", params={"path": "foo.py"}, headers=headers)
+        assert r.status_code == 200
+
+        r = await c.get("/api/v1/projects", headers=headers)
+        assert r.status_code == 200
+
+    deps.reset()
+    CodeIntelService._reset_instances()
+
+
+@pytest.mark.asyncio
+async def test_auth_jwt_rejected_without_header_service_mode():
+    """Service mode with no auth header should return 401 on guarded endpoints."""
+    try:
+        import jose  # noqa: F401
+    except ImportError:
+        pytest.skip("python-jose not installed")
+
+    deps.reset()
+    CodeIntelService._reset_instances()
+
+    config = CodeIntelConfig(
+        project_dir="/tmp/test-project",
+        database_url="postgresql+asyncpg://localhost/test",
+        secret_key="test-secret",
+    )
+    with patch("attocode.code_intel.api.app._lifespan") as mock_lifespan:
+        from contextlib import asynccontextmanager
+
+        @asynccontextmanager
+        async def _noop_lifespan(app):
+            yield
+
+        mock_lifespan.side_effect = _noop_lifespan
+        app = create_app(config)
+
+    deps._services["default"] = _make_mock_service()
+
+    transport = httpx.ASGITransport(app=app)
+    async with httpx.AsyncClient(transport=transport, base_url="http://test") as c:
+        r = await c.get("/api/v1/projects/default/map")
+        assert r.status_code == 401
+
     deps.reset()
     CodeIntelService._reset_instances()
 

@@ -28,11 +28,14 @@ node_modules/
 .attocode/recordings/
 .attocode/cache/
 .attocode/.attocode/
+.attocode/dev-state.json
+.attocode/config.toml
 
 # Legacy TS runtime artifacts
 legacy/.attocode/traces/
 legacy/.attocode/sessions/
 legacy/.attocode/recordings/
+
 
 # Build outputs
 site/
@@ -42,3 +45,6 @@ snapshot_report.html
 # scripts
 scripts/
 .DS_Store
+
+#playwright
+.playwright-mcp

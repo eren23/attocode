@@ -8,13 +8,15 @@ import uuid
 
 from fastapi import APIRouter, Depends, HTTPException
 
-from attocode.code_intel.api.auth import verify_api_key
+from attocode.code_intel.api.auth import verify_auth
 from attocode.code_intel.api.deps import (
     get_config,
     get_service_or_404,
     list_projects,
     register_project,
 )
+from fastapi import Query as QueryParam
+
 from attocode.code_intel.api.models import (
     ProjectInfo,
     ProjectListResponse,
@@ -22,7 +24,7 @@ from attocode.code_intel.api.models import (
     TextResult,
 )
 
-router = APIRouter(prefix="/api/v1/projects", tags=["projects"], dependencies=[Depends(verify_api_key)])
+router = APIRouter(prefix="/api/v1/projects", tags=["projects"], dependencies=[Depends(verify_auth)])
 
 # Serializes reindex operations so concurrent requests don't corrupt state
 _reindex_lock = asyncio.Lock()
@@ -68,24 +70,32 @@ async def create_project(req: ProjectRegister) -> ProjectInfo:
 
 
 @router.get("", response_model=ProjectListResponse)
-async def get_projects() -> ProjectListResponse:
+async def get_projects(
+    limit: int = QueryParam(20, ge=1, le=100),
+    offset: int = QueryParam(0, ge=0),
+) -> ProjectListResponse:
     """List all registered projects."""
     projects = list_projects()
-    items = []
+    all_items = []
     for pid, svc in projects.items():
-        items.append(ProjectInfo(
+        all_items.append(ProjectInfo(
             id=pid,
             name=os.path.basename(svc.project_dir),
             path=svc.project_dir,
             status="ready",
         ))
-    return ProjectListResponse(projects=items)
+    total = len(all_items)
+    page = all_items[offset:offset + limit]
+    return ProjectListResponse(
+        projects=page, total=total, limit=limit, offset=offset,
+        has_more=(offset + limit < total),
+    )
 
 
 @router.get("/{project_id}", response_model=ProjectInfo)
 async def get_project(project_id: str) -> ProjectInfo:
     """Get project details."""
-    svc = get_service_or_404(project_id)
+    svc = await get_service_or_404(project_id)
     return ProjectInfo(
         id=project_id,
         name=os.path.basename(svc.project_dir),
@@ -97,7 +107,7 @@ async def get_project(project_id: str) -> ProjectInfo:
 @router.post("/{project_id}/reindex", response_model=TextResult)
 async def reindex_project(project_id: str) -> TextResult:
     """Trigger a full reindex of the project."""
-    svc = get_service_or_404(project_id)
+    svc = await get_service_or_404(project_id)
     async with _reindex_lock:
         svc._ast_service = None
         svc._context_mgr = None

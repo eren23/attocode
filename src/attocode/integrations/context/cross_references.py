@@ -110,8 +110,16 @@ class CrossRefIndex:
         return results
 
     def get_references(self, symbol_name: str) -> list[SymbolRef]:
-        """Look up all call sites / references for a symbol."""
-        return self.references.get(symbol_name, [])
+        """Look up all call sites / references for a symbol (exact or suffix match)."""
+        # Exact match first
+        if symbol_name in self.references:
+            return self.references[symbol_name]
+        # Suffix match (e.g. "clear" matches refs keyed as "MCPMetaTools.clear")
+        results: list[SymbolRef] = []
+        for ref_name, refs in self.references.items():
+            if ref_name == symbol_name or ref_name.endswith(f".{symbol_name}"):
+                results.extend(refs)
+        return results
 
     def get_dependents(self, file_path: str) -> set[str]:
         """Files that import from *file_path*."""

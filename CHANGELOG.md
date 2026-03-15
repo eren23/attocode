@@ -7,6 +7,54 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-03-15
+
+### Added
+
+- **Service-mode backend** — Multi-user FastAPI application with JWT, OAuth (GitHub, Google), API keys, and password auth; PostgreSQL + pgvector for embeddings; Redis for pub/sub and cache; dual-mode architecture (local SQLite vs remote HTTP)
+- **24 API route modules** — Auth, orgs, projects, repos, branches, files, files_v2, git_v2, search, graph, embeddings, learning, activity, webhooks, websocket, notify, jobs, preferences, presence, api_keys, health, lsp
+- **Provider abstraction** — `DbProvider` (Postgres-backed), `LocalProvider` (SQLite + filesystem), `RemoteProvider` (HTTP bridge to service mode)
+- **Background workers** — ARQ worker with indexing pipeline, debouncer for git events, incremental AST + embedding indexer
+- **Git integration** — Git manager, credentials handling, storage layer; branch overlay, diff engine, blame hunks
+- **Frontend SPA** — React 19 + TypeScript + Vite dashboard with Shadcn UI; login, register, OAuth callback
+- **Frontend pages** — Dashboard, Activity, Analysis (conventions, hotspots, symbols), Embeddings, File Browser, Graph (dependency visualization), Learnings, Search, Security, Settings, Branch Compare, Commit History/Detail, Repo Detail
+- **Frontend components** — Activity feed, analysis panels, auth guards, file tree/viewer, embedding search/status, git commit list/diff viewer, dependency graph with controls
+- **Webhook secret encryption** — `crypto.py` for encrypted webhook secrets at rest; migration 009
+- **Database migrations** — 010 (commits table), 011 (commit changed files), 012 (branch merged_at), 013 (revoked tokens), 014 (blame hunks)
+- **Security scanner DB** — `security_scanner_db.py` for storing scan results
+- **Documentation** — `docs/architecture-v2.md`, `docs/roadmap.md`, guides for local development, repos-and-branches, semantic-search
+- **Docker** — `docker-compose.dev.yml`, `docker-compose.service.yml` for local and service-mode deployment
+- **CLI remote mode** — `--remote` / `ATTocode_REMOTE_URL` for connecting to service-mode backend
+
+### Changed
+
+- **`pyproject.toml`** — version bump to 0.2.0; dependency updates
+- **Code-intel API** — refactored for provider abstraction; routes use `DbProvider` in service mode
+- **Frontend API client** — generated schema, React Query hooks for all endpoints
+
+### Tests
+
+- **New unit tests** — `test_advisory_lock`, `test_branch_versioning`, `test_cli_remote`, `test_config_remote`, `test_db_security_scan`, `test_diff_engine`, `test_notify_enhanced`, `test_org_isolation`, `test_pubsub_streams`, `test_remote_provider`, `test_webhook_encryption`; expanded `test_service_mode`, `test_api`
+
+### Fixed
+
+- **Security scan "Branch 'main' not found"** — removed hardcoded `branch or "main"` fallback in `db_provider.py` (5 call sites) and `notify.py` (1 call site); `get_branch_context()` now properly looks up the repository's default branch from the DB when branch is empty
+- **Force graph glitching on community toggle** — `communityColorMap` was called inline in `GraphPage.tsx` creating a new object every render, triggering full SVG teardown; now memoized with `useMemo`
+- **Graph node animation stall** — fade-in animation used `r=0` with uncapped stagger delay (346 nodes × 15ms = 5s); replaced with opacity fade, delay capped to 800ms total
+- **Graph 0 edges** — `Dependency` table empty when indexer dependency pass hasn't run; added `_compute_import_edges()` fallback in `DbGraphProvider` that extracts import edges on-the-fly from stored `FileContent`
+- **Search page blank on error** — added `isError` state rendering with message and link to Embeddings page for indexing; added "Semantic search powered by embeddings" hint to `SearchBar`
+
+### Improved
+
+- **Impact analysis UX** — added explanatory text ("Direct = files that import changed files"), mini flow diagram (`Changed → Direct → 2nd Order`), taller stacked bar (`h-8`) with inline file-count labels, clearer layer names ("Directly imports changed files" instead of "Direct (depth 1)")
+- **Embeddings search results** — merged `EmbeddingSearchPreview` and "Find Similar" button list into unified display; `SimilarFilesPanel` now appears above results; `onFindSimilar` prop added to `EmbeddingSearchPreview`
+- **Sidebar navigation** — split flat repo nav into "Code" (Files, Commits, Search) and "Insights" (Analysis, Graph, Security, Embeddings, Knowledge Base, Compare) sub-groups with `SectionDivider` labels
+- **Graph aesthetics** — curved bezier edges (quadratic `<path>` replacing `<line>`), softer glow filter (`opacity 0.2`, `stdDeviation 4`), brighter label text (`#e4e4e7`, `11px`), refined community color palette for dark backgrounds
+- **Graph controls** — "Select File or Directory" button (was plain "Browse"), wider dropdown (`w-96`) with search filter input, auto-triggers graph generation on file selection
+- **Graph-to-files** — new "View Side-by-Side" panel (`GraphFilePanel`, 450px) alongside graph; "Open in Files" renamed to "Open in Full Page"; `NodeInfoCard` updated with `Columns2` icon
+- **Graph simulation stability** — position cache across re-renders (`positionCacheRef`), tuned `velocityDecay(0.4)`, `alphaDecay(0.028)`, `alphaMin(0.001)`, warm restart with `alpha(0.3)` when restoring cached positions, stale cache cleanup
+- **CSS refinements** — deeper card hover shadows, primary glow ring, `focus-visible` outline glow, 150ms transitions on interactive elements
+
 ## [0.1.19] - 2026-03-09
 
 ### Added

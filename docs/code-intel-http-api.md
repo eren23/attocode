@@ -77,6 +77,28 @@ All configuration is via environment variables:
 | `ATTOCODE_API_KEY` | `""` | API key for bearer auth (empty = open mode) |
 | `ATTOCODE_CORS_ORIGINS` | `*` | Comma-separated allowed CORS origins |
 | `ATTOCODE_LOG_LEVEL` | `info` | Log level (`debug`, `info`, `warning`, `error`) |
+| `ATTOCODE_RATE_LIMIT_RPM` | `300` | Base rate limit (RPM). Notify gets 10x, auth gets 0.1x |
+| `WORKER_MAX_JOBS` | `10` | Max concurrent worker jobs |
+
+---
+
+## Rate Limiting
+
+Rate limits are tiered by endpoint category. The base rate is controlled by `ATTOCODE_RATE_LIMIT_RPM` (default: 300 RPM):
+
+| Category | Multiplier | Effective Default |
+|----------|-----------|-------------------|
+| Standard endpoints | 1x | 300 RPM |
+| Notify endpoints (`/notify/*`) | 10x | 3,000 RPM |
+| Auth endpoints (`/auth/*`) | 0.1x | 30 RPM |
+
+Rate limit headers (`X-RateLimit-Limit`, `X-RateLimit-Remaining`, `X-RateLimit-Reset`) are included in every response. When exceeded, the server returns `429 Too Many Requests`.
+
+---
+
+## Org Isolation
+
+In service mode, all repositories are scoped to the authenticated user's organization. API requests only return data belonging to the user's org — there is no cross-org data leakage. Org membership is established during the `connect` or registration flow.
 
 ---
 
@@ -151,6 +173,57 @@ curl -X POST http://localhost:8080/api/v1/projects/a1b2c3d4/bootstrap \
 curl "http://localhost:8080/api/v1/projects/a1b2c3d4/impact?files=src/auth.py&files=src/config.py"
 ```
 
+### Notify (File Changes)
+
+| Method | Path | Description |
+|--------|------|-------------|
+| `POST` | `/api/v1/notify/file-changed` | Notify about changed files (202 async) |
+| `POST` | `/api/v1/notify/flush` | Force-flush pending debounced notifications |
+| `POST` | `/api/v1/notify/bulk-sync` | Bulk sync up to 500 files (bypasses debouncer) |
+| `POST` | `/api/v1/notify/blame` | Push blame data for DB-backed blame |
+| `POST` | `/api/v1/notify/commits` | Push commit metadata |
+
+#### Idempotency
+
+The notify endpoint supports an optional `idempotency_key` field to prevent duplicate processing:
+
+```bash
+curl -X POST http://localhost:8080/api/v1/notify/file-changed \
+  -H "Content-Type: application/json" \
+  -d '{"paths": ["src/app.py"], "idempotency_key": "hook-abc123"}'
+```
+
+- Keys are cached for 5 minutes (TTL). Duplicate requests within the window return `{"accepted": 0, "message": "Duplicate ..."}`.
+- Empty or omitted `idempotency_key` skips deduplication.
+
+#### Optimistic Concurrency (If-Match)
+
+The `if_match` field enables optimistic concurrency control against the branch version counter:
+
+```bash
+curl -X POST http://localhost:8080/api/v1/notify/file-changed \
+  -H "Content-Type: application/json" \
+  -d '{"paths": ["src/app.py"], "branch": "main", "if_match": 42}'
+```
+
+If the branch version doesn't match, the write is rejected with a version mismatch error.
+
+#### WebSocket Replay
+
+WebSocket clients can pass `last_event_id` as a query parameter to replay missed events on reconnect:
+
+```
+ws://localhost:8080/ws/repos/{repo_id}/events?token=...&last_event_id=1234567890-0
+```
+
+- `last_event_id=$` (default) — receive only new events
+- `last_event_id=0` — replay all available events from the stream
+- `last_event_id=<specific-id>` — resume from a specific stream position
+
+Each event includes a `_stream_id` field that clients should track for reconnection.
+
+---
+
 ### Search
 
 | Method | Path | Parameters | Description |
@@ -224,6 +297,43 @@ curl -X POST http://localhost:8080/api/v1/projects/a1b2c3d4/lsp/definition \
 
 # Get diagnostics
 curl "http://localhost:8080/api/v1/projects/a1b2c3d4/lsp/diagnostics?file=src/auth.py"
+```
+
+### Service Mode Endpoints
+
+These endpoints provide DB-backed capabilities for remote repos (no local git clone required). Available only in service mode (Postgres + Redis).
+
+| Method | Path | Description |
+|--------|------|-------------|
+| `GET` | `/api/v2/projects/{id}/diff?from=X&to=Y` | Branch diff with line-level hunks (DB-backed) |
+| `GET` | `/api/v2/projects/{id}/blame/{path}` | Blame data (DB-backed for remote repos) |
+| `POST` | `/api/v2/projects/{id}/security-scan` | Security scan (DB-backed for remote repos) |
+| `POST` | `/api/v1/repos/{repo_id}/branches/merge` | Merge branch overlay |
+| `GET` | `/api/v2/projects/{id}/commits` | Commit log (DB-backed) |
+| `GET` | `/api/v2/projects/{id}/commits/{sha}` | Commit detail with changed files |
+
+```bash
+# Branch diff with line-level hunks
+curl "http://localhost:8080/api/v2/projects/$PROJECT_ID/diff?from=main&to=feature/auth" \
+  -H "Authorization: Bearer $TOKEN"
+
+# Blame for a file
+curl "http://localhost:8080/api/v2/projects/$PROJECT_ID/blame/src/app.py" \
+  -H "Authorization: Bearer $TOKEN"
+
+# Merge a branch
+curl -X POST "http://localhost:8080/api/v1/repos/$REPO_ID/branches/merge" \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"source_branch": "feature/auth", "target_branch": "main", "delete_source": true}'
+
+# Commit log
+curl "http://localhost:8080/api/v2/projects/$PROJECT_ID/commits" \
+  -H "Authorization: Bearer $TOKEN"
+
+# Commit detail with changed files
+curl "http://localhost:8080/api/v2/projects/$PROJECT_ID/commits/abc123def" \
+  -H "Authorization: Bearer $TOKEN"
 ```
 
 ---

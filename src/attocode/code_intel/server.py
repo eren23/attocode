@@ -29,6 +29,13 @@ Provides 27 tools for deep codebase understanding:
 Usage::
 
     attocode-code-intel --project /path/to/repo
+
+Remote mode (proxy through a remote code-intel HTTP server)::
+
+    attocode-code-intel --project . --remote https://code.example.com --remote-token <jwt> --remote-repo <uuid>
+
+Remote connection can also be auto-loaded from ``.attocode/config.toml``
+(created by ``attocode code-intel connect``).
 """
 
 from __future__ import annotations
@@ -78,6 +85,7 @@ _context_mgr = None
 _code_analyzer = None
 _semantic_search = None  # Backward compat: tests may set this directly
 _memory_store = None  # Backward compat: tests may set this directly
+_remote_client: "RemoteClient | None" = None  # Set when --remote is used
 
 
 def _get_project_dir() -> str:
@@ -521,7 +529,7 @@ symbols = _navigation_tools.symbols  # noqa: E402
 
 # Subcommands that should be dispatched to the CLI handler instead of
 # starting the MCP server.
-_CLI_SUBCOMMANDS = {"install", "uninstall", "serve", "status", "notify", "help", "--help", "-h"}
+_CLI_SUBCOMMANDS = {"install", "uninstall", "serve", "status", "notify", "connect", "test-connection", "watch", "help", "--help", "-h"}
 
 
 def main() -> None:
@@ -545,6 +553,9 @@ def main() -> None:
     transport = "stdio"
     host = "127.0.0.1"
     port = 8080
+    remote_url = ""
+    remote_token = ""
+    remote_repo_id = ""
     for i, arg in enumerate(args):
         if arg == "--project" and i + 1 < len(args):
             project_dir = args[i + 1]
@@ -562,9 +573,36 @@ def main() -> None:
             port = int(args[i + 1])
         elif arg.startswith("--port="):
             port = int(arg.split("=", 1)[1])
+        elif arg == "--remote" and i + 1 < len(args):
+            remote_url = args[i + 1]
+        elif arg.startswith("--remote="):
+            remote_url = arg.split("=", 1)[1]
+        elif arg == "--remote-token" and i + 1 < len(args):
+            remote_token = args[i + 1]
+        elif arg.startswith("--remote-token="):
+            remote_token = arg.split("=", 1)[1]
+        elif arg == "--remote-repo" and i + 1 < len(args):
+            remote_repo_id = args[i + 1]
+        elif arg.startswith("--remote-repo="):
+            remote_repo_id = arg.split("=", 1)[1]
 
     project_dir = os.path.abspath(project_dir)
     os.environ["ATTOCODE_PROJECT_DIR"] = project_dir
+
+    # Load remote config from .attocode/config.toml if not explicitly provided
+    global _remote_client
+    if not remote_url:
+        from attocode.code_intel.config import load_remote_config
+        rc = load_remote_config(project_dir)
+        if rc.is_configured:
+            remote_url = rc.server
+            remote_token = rc.token
+            remote_repo_id = rc.repo_id
+
+    if remote_url:
+        from attocode.code_intel.api.providers.remote_provider import RemoteClient
+        _remote_client = RemoteClient(remote_url, remote_token, remote_repo_id)
+        logger.info("Remote mode: proxying through %s (repo: %s)", remote_url, remote_repo_id)
 
     # Start file watcher and notification queue poller in background
     _start_file_watcher(project_dir)
