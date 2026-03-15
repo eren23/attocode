@@ -13,6 +13,7 @@ from attocode.code_intel.workers.jobs import (
     generate_embeddings,
     index_branch_delta,
     index_repository,
+    prune_expired_revocations,
 )
 
 
@@ -44,10 +45,13 @@ class WorkerSettings:
         cron(cleanup_stale_branches, hour={0, 6, 12, 18}, minute=0),
         # Every 24 hours: GC unreferenced content
         cron(gc_unreferenced_content, hour=3, minute=0),
+        # Every 24 hours: prune expired token revocations
+        cron(prune_expired_revocations, hour=4, minute=0),
     ]
 
     redis_settings = get_redis_settings()
 
-    max_jobs = 10
+    # Configurable via environment
+    max_jobs = int(os.environ.get("WORKER_MAX_JOBS", "10"))
     job_timeout = 1800  # 30 minutes default
     health_check_interval = 30

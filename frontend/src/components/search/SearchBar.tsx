@@ -24,8 +24,11 @@ export function SearchBar({ value, onChange, onSubmit, fileFilter, onFileFilterC
           value={value}
           onChange={(e) => onChange(e.target.value)}
           placeholder="Search code, symbols, or concepts..."
-          className="pl-9"
+          className="pl-9 h-11 rounded-xl"
         />
+        <p className="absolute right-3 top-1/2 -translate-y-1/2 text-[10px] text-muted-foreground/60">
+          Semantic search powered by embeddings
+        </p>
       </div>
       {onFileFilterChange && (
         <div className="relative flex-1">

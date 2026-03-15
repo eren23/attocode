@@ -165,45 +165,45 @@ function OrgCard({
       </CardHeader>
       <CardContent>
         {showNewRepo && (
-          <div className="mb-4 flex items-center gap-2 rounded-md border border-border p-3">
-            <Input
-              placeholder="Repository name"
-              value={newRepoName}
-              onChange={(e) => setNewRepoName(e.target.value)}
-              className="flex-1"
-            />
-            <Input
-              placeholder="Clone URL (optional)"
-              value={newRepoUrl}
-              onChange={(e) => setNewRepoUrl(e.target.value)}
-              className="flex-1"
-            />
-            <Input
-              placeholder="Local path (optional)"
-              value={newRepoLocalPath}
-              onChange={(e) => setNewRepoLocalPath(e.target.value)}
-              className="flex-1"
-            />
-            <Input
-              placeholder="Branch"
-              value={newRepoBranch}
-              onChange={(e) => setNewRepoBranch(e.target.value)}
-              className="w-28"
-            />
-            <Button
-              size="sm"
-              onClick={handleCreateRepo}
-              disabled={createRepo.isPending}
-            >
-              Add
-            </Button>
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => setShowNewRepo(false)}
-            >
-              Cancel
-            </Button>
+          <div className="mb-4 rounded-md border border-border p-3 space-y-3">
+            <div className="grid grid-cols-2 gap-2">
+              <Input
+                placeholder="Repository name"
+                value={newRepoName}
+                onChange={(e) => setNewRepoName(e.target.value)}
+              />
+              <Input
+                placeholder="Clone URL (optional)"
+                value={newRepoUrl}
+                onChange={(e) => setNewRepoUrl(e.target.value)}
+              />
+              <Input
+                placeholder="Local path (optional)"
+                value={newRepoLocalPath}
+                onChange={(e) => setNewRepoLocalPath(e.target.value)}
+              />
+              <Input
+                placeholder="Branch"
+                value={newRepoBranch}
+                onChange={(e) => setNewRepoBranch(e.target.value)}
+              />
+            </div>
+            <div className="flex gap-2">
+              <Button
+                size="sm"
+                onClick={handleCreateRepo}
+                disabled={createRepo.isPending}
+              >
+                Add
+              </Button>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setShowNewRepo(false)}
+              >
+                Cancel
+              </Button>
+            </div>
           </div>
         )}
 
@@ -241,7 +241,7 @@ function RepoRow({
   return (
     <Link
       to={ROUTES.REPO(orgId, repo.id)}
-      className="flex items-center justify-between py-3 hover:bg-accent/30 -mx-6 px-6 transition-colors"
+      className="group flex items-center justify-between py-3 hover:bg-primary/[0.04] -mx-6 px-6 transition-colors"
     >
       <div className="flex items-center gap-3">
         <FolderGit2 className="h-4 w-4 text-muted-foreground" />
@@ -249,22 +249,22 @@ function RepoRow({
           <span className="font-medium text-sm">{repo.name}</span>
           {stats.data && (
             <div className="flex items-center gap-3 mt-0.5">
-              <span className="flex items-center gap-1 text-[10px] text-muted-foreground">
-                <FileCode2 className="h-2.5 w-2.5" />
+              <span className="flex items-center gap-1 text-xs text-muted-foreground">
+                <FileCode2 className="h-3 w-3" />
                 {stats.data.total_files} files
               </span>
-              <span className="flex items-center gap-1 text-[10px] text-muted-foreground">
-                <Braces className="h-2.5 w-2.5" />
+              <span className="flex items-center gap-1 text-xs text-muted-foreground">
+                <Braces className="h-3 w-3" />
                 {stats.data.total_symbols} symbols
               </span>
               {stats.data.embedded_files > 0 && (
-                <span className="flex items-center gap-1 text-[10px] text-muted-foreground">
-                  <Database className="h-2.5 w-2.5" />
+                <span className="flex items-center gap-1 text-xs text-muted-foreground">
+                  <Database className="h-3 w-3" />
                   {stats.data.embedded_files} embedded
                 </span>
               )}
               {stats.data.languages && Object.keys(stats.data.languages).length > 0 && (
-                <span className="text-[10px] text-muted-foreground">
+                <span className="text-xs text-muted-foreground">
                   {Object.entries(stats.data.languages)
                     .sort(([, a], [, b]) => b - a)
                     .slice(0, 3)
@@ -298,7 +298,7 @@ function RepoRow({
             e.stopPropagation();
             onDelete();
           }}
-          className="p-1 rounded hover:bg-destructive/10 hover:text-destructive transition-colors"
+          className="p-1 rounded hover:bg-destructive/10 hover:text-destructive transition-colors opacity-0 group-hover:opacity-100"
         >
           <Trash2 className="h-3.5 w-3.5" />
         </button>

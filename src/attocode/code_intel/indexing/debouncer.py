@@ -15,8 +15,8 @@ from typing import Awaitable, Callable
 logger = logging.getLogger(__name__)
 
 # Type alias for the batch handler
-BatchHandler = Callable[[str, str, list[str]], Awaitable[None]]
-# handler(project_id, branch, paths)
+# handler(project_id, branch, paths, files)
+BatchHandler = Callable[[str, str, list[str], dict[str, str] | None], Awaitable[None]]
 
 
 _MAX_PENDING_PER_KEY = 10_000  # M9: cap pending paths to prevent unbounded memory
@@ -44,10 +44,12 @@ class FileChangeDebouncer:
         self._max_pending = max_pending_per_key
         # Pending paths per (project_id, branch)
         self._pending: dict[tuple[str, str], set[str]] = defaultdict(set)
+        # Pending file contents per (project_id, branch) — path → base64 content
+        self._pending_files: dict[tuple[str, str], dict[str, str]] = defaultdict(dict)
         # Active timers per (project_id, branch)
         self._timers: dict[tuple[str, str], asyncio.Task] = {}
 
-    async def notify(self, project_id: str, branch: str, paths: list[str]) -> None:
+    async def notify(self, project_id: str, branch: str, paths: list[str], *, files: dict[str, str] | None = None) -> None:
         """Add paths to the pending batch for (project_id, branch).
 
         Resets the debounce timer. Handler fires after `delay_seconds` of quiet.
@@ -56,6 +58,10 @@ class FileChangeDebouncer:
         key = (project_id, branch)
         pending = self._pending[key]
         pending.update(paths)
+
+        # Accumulate file contents (latest wins per path)
+        if files:
+            self._pending_files[key].update(files)
 
         # M9: cap pending paths to prevent unbounded memory
         if len(pending) > self._max_pending:
@@ -85,6 +91,7 @@ class FileChangeDebouncer:
         # M1 fix: copy batch, then clear pending — prevents lost updates
         # if new paths arrive between pop and handler execution
         batch = self._pending.pop(key, set())
+        files = self._pending_files.pop(key, None) or None
         paths = list(batch)
         self._timers.pop(key, None)
 
@@ -97,7 +104,7 @@ class FileChangeDebouncer:
             project_id, branch, len(paths),
         )
         try:
-            await self._handler(project_id, branch, paths)
+            await self._handler(project_id, branch, paths, files)
         except Exception:
             logger.exception(
                 "Error in debounce handler for %s/%s",
@@ -111,8 +118,9 @@ class FileChangeDebouncer:
             self._timers[key].cancel()
             self._timers.pop(key, None)
         paths = list(self._pending.pop(key, set()))
+        files = self._pending_files.pop(key, None) or None
         if paths:
-            await self._handler(project_id, branch, paths)
+            await self._handler(project_id, branch, paths, files)
 
     async def shutdown(self) -> None:
         """Cancel all pending timers. Call on app shutdown."""
@@ -120,6 +128,7 @@ class FileChangeDebouncer:
             task.cancel()
         self._timers.clear()
         self._pending.clear()
+        self._pending_files.clear()
 
     @property
     def pending_count(self) -> int:

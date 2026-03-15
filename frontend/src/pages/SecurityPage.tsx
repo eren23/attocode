@@ -154,7 +154,7 @@ export function SecurityPage() {
                   "flex-1 rounded-l-md px-4 py-2.5 text-sm transition-colors",
                   mode === "quick"
                     ? "bg-primary text-primary-foreground"
-                    : "text-muted-foreground hover:text-foreground hover:bg-accent/50",
+                    : "text-muted-foreground hover:text-foreground hover:bg-white/[0.04]",
                 )}
               >
                 <div className="font-medium">Quick</div>
@@ -168,7 +168,7 @@ export function SecurityPage() {
                   "flex-1 rounded-r-md border-l border-border px-4 py-2.5 text-sm transition-colors",
                   mode === "full"
                     ? "bg-primary text-primary-foreground"
-                    : "text-muted-foreground hover:text-foreground hover:bg-accent/50",
+                    : "text-muted-foreground hover:text-foreground hover:bg-white/[0.04]",
                 )}
               >
                 <div className="font-medium">Full</div>
@@ -190,7 +190,7 @@ export function SecurityPage() {
                 value={path}
                 onChange={(e) => setPath(e.target.value)}
                 placeholder="e.g. src/ or src/main.py"
-                className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-violet-500"
+                className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/40"
               />
             </div>
           )}
@@ -226,11 +226,11 @@ export function SecurityPage() {
       {scan.isPending && (
         <div className="w-full overflow-hidden rounded-full bg-muted h-2">
           <div
-            className="h-full rounded-full bg-violet-500 animate-pulse"
+            className="h-full rounded-full bg-primary animate-pulse"
             style={{
               width: "100%",
               animation: "pulse 1.5s ease-in-out infinite, indeterminate 2s ease-in-out infinite",
-              background: "linear-gradient(90deg, transparent, #8b5cf6 50%, transparent)",
+              background: "linear-gradient(90deg, transparent, #2563eb 50%, transparent)",
               backgroundSize: "200% 100%",
             }}
           />
@@ -379,7 +379,7 @@ function FindingRow({
         </div>
         <button
           onClick={() => onFileClick(finding.file, finding.line)}
-          className="flex shrink-0 items-center gap-1.5 rounded-md px-2 py-1 text-xs font-mono text-muted-foreground hover:text-foreground hover:bg-accent/50 transition-colors"
+          className="flex shrink-0 items-center gap-1.5 rounded-md px-2 py-1 text-xs font-mono text-muted-foreground hover:text-foreground hover:bg-white/[0.04] transition-colors"
           title="Open file"
         >
           <FileCode2 className="h-3.5 w-3.5" />

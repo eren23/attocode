@@ -38,18 +38,18 @@ export function GraphTooltip({
 
   return (
     <div
-      className="pointer-events-none absolute z-50 rounded-lg border border-zinc-700 bg-zinc-900/95 px-3 py-2.5 shadow-lg backdrop-blur-sm"
+      className="pointer-events-none absolute z-50 rounded-lg border border-border bg-card/95 px-3 py-2.5 shadow-lg backdrop-blur-sm"
       style={{ left: position.x + 12, top: position.y - 12 }}
     >
-      <p className="font-mono text-xs text-zinc-200">{node.label}</p>
+      <p className="font-mono text-xs text-foreground">{node.label}</p>
       <div className="mt-1.5 flex items-center gap-2">
         <span
           className="inline-block h-2 w-2 rounded-full"
           style={{ backgroundColor: color }}
         />
-        <span className="text-[10px] text-zinc-400">{node.type}</span>
+        <span className="text-[10px] text-muted-foreground">{node.type}</span>
       </div>
-      <p className="mt-1 text-[10px] text-zinc-500">
+      <p className="mt-1 text-[10px] text-muted-foreground">
         {connectionCount} connections ({incomingCount} in, {outgoingCount} out)
       </p>
     </div>

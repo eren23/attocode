@@ -16,7 +16,7 @@ export function IndexingStatusBar({ status }: { status: IndexingStatus }) {
         {status.status}
       </Badge>
       <div className="flex-1">
-        <div className="h-2 rounded-full bg-zinc-800">
+        <div className="h-2 rounded-full bg-muted">
           <div
             className="h-2 rounded-full bg-primary transition-all"
             style={{ width: `${status.progress}%` }}

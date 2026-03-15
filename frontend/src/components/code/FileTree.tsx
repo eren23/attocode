@@ -7,6 +7,7 @@ import type { FileTreeNode } from "@/api/generated/schema";
 interface FileTreeProps {
   nodes: FileTreeNode[];
   onSelect: (path: string) => void;
+  onSelectDirectory?: (path: string) => void;
   selectedPath?: string;
   depth?: number;
 }
@@ -14,6 +15,7 @@ interface FileTreeProps {
 export function FileTree({
   nodes,
   onSelect,
+  onSelectDirectory,
   selectedPath,
   depth = 0,
 }: FileTreeProps) {
@@ -24,6 +26,7 @@ export function FileTree({
           key={node.path}
           node={node}
           onSelect={onSelect}
+          onSelectDirectory={onSelectDirectory}
           selectedPath={selectedPath}
           depth={depth}
         />
@@ -35,11 +38,13 @@ export function FileTree({
 function TreeNode({
   node,
   onSelect,
+  onSelectDirectory,
   selectedPath,
   depth,
 }: {
   node: FileTreeNode;
   onSelect: (path: string) => void;
+  onSelectDirectory?: (path: string) => void;
   selectedPath?: string;
   depth: number;
 }) {
@@ -54,13 +59,14 @@ function TreeNode({
         onClick={() => {
           if (isDir) {
             setExpanded(!expanded);
+            onSelectDirectory?.(node.path);
           } else {
             onSelect(node.path);
           }
         }}
         className={cn(
-          "flex w-full items-center gap-1 rounded px-2 py-1 text-left hover:bg-accent/50 transition-colors",
-          isSelected && "bg-accent text-accent-foreground",
+          "flex w-full items-center gap-1 rounded px-2 py-1 text-left hover:bg-white/[0.04] transition-colors",
+          isSelected && "bg-primary/[0.08] text-foreground",
         )}
         style={{ paddingLeft: `${depth * 16 + 8}px` }}
       >
@@ -96,6 +102,7 @@ function TreeNode({
         <FileTree
           nodes={node.children}
           onSelect={onSelect}
+          onSelectDirectory={onSelectDirectory}
           selectedPath={selectedPath}
           depth={depth + 1}
         />

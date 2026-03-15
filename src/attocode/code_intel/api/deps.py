@@ -175,7 +175,13 @@ async def get_graph_provider(project_id: str):
 
 
 async def get_lsp_provider(project_id: str):
-    """Return the LSP provider. Currently only local mode is supported."""
+    """Return the LSP provider. Uses DbLSPProvider in service mode for remote repos."""
+    config = get_config()
+    if config.is_service_mode:
+        from attocode.code_intel.api.providers.db_provider import DbLSPProvider
+
+        return DbLSPProvider(project_id)
+
     from attocode.code_intel.api.providers.local_provider import LocalLSPProvider
 
     svc = await get_service_or_404(project_id)

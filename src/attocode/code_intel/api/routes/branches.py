@@ -164,6 +164,72 @@ async def compare_branches(
     )
 
 
+class BranchMergeRequest(BaseModel):
+    source_branch: str
+    target_branch: str
+    delete_source: bool = True
+
+
+class BranchMergeResponse(BaseModel):
+    source: str
+    target: str
+    added: int = 0
+    modified: int = 0
+    deleted: int = 0
+    total: int = 0
+
+
+@router.post("/merge", response_model=BranchMergeResponse)
+async def merge_branches(
+    repo_id: uuid.UUID,
+    req: BranchMergeRequest,
+    auth: AuthContext = Depends(resolve_auth),
+    session: AsyncSession = Depends(get_db_session),
+) -> BranchMergeResponse:
+    """Merge source branch overlay into target branch."""
+    await _get_repo(repo_id, session)
+
+    source_result = await session.execute(
+        select(Branch).where(Branch.repo_id == repo_id, Branch.name == req.source_branch)
+    )
+    source = source_result.scalar_one_or_none()
+    if source is None:
+        raise HTTPException(status_code=404, detail=f"Branch '{req.source_branch}' not found")
+
+    target_result = await session.execute(
+        select(Branch).where(Branch.repo_id == repo_id, Branch.name == req.target_branch)
+    )
+    target = target_result.scalar_one_or_none()
+    if target is None:
+        raise HTTPException(status_code=404, detail=f"Branch '{req.target_branch}' not found")
+
+    if source.is_default:
+        raise HTTPException(status_code=400, detail="Cannot merge the default branch as source")
+
+    from attocode.code_intel.storage.branch_overlay import BranchOverlay
+
+    overlay = BranchOverlay(session)
+    stats = await overlay.merge_branch(
+        source.id, target.id, delete_source=req.delete_source,
+    )
+
+    from attocode.code_intel.audit import log_event
+
+    repo = await _get_repo(repo_id, session)
+    await log_event(
+        session, repo.org_id, "branch.merged", repo_id=repo_id,
+        detail={"source": req.source_branch, "target": req.target_branch, "stats": stats},
+    )
+
+    await session.commit()
+
+    return BranchMergeResponse(
+        source=req.source_branch,
+        target=req.target_branch,
+        **stats,
+    )
+
+
 @router.delete("/{branch_name}")
 async def delete_branch(
     repo_id: uuid.UUID,

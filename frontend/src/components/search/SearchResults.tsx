@@ -71,7 +71,7 @@ export function SearchResults({ results, query = "" }: SearchResultsProps) {
         <button
           key={i}
           onClick={() => handleClick(result)}
-          className="flex w-full flex-col gap-1 px-4 py-3 text-left hover:bg-accent/30 transition-colors"
+          className="flex w-full flex-col gap-1 px-4 py-3 text-left hover:bg-primary/[0.04] transition-colors"
         >
           <div className="flex items-center gap-2 text-sm">
             <span

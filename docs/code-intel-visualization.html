@@ -1,0 +1,153 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Attocode Code Intel Visualization</title>
+  <script type="module">
+    import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.esm.min.mjs';
+    mermaid.initialize({ startOnLoad: true, theme: 'dark' });
+  </script>
+  <style>
+    body { font-family: system-ui, sans-serif; background: #1e1e1e; color: #e0e0e0; padding: 2rem; }
+    h1 { color: #7dd3fc; }
+    h2 { color: #a5f3fc; margin-top: 2rem; border-bottom: 1px solid #334155; padding-bottom: 0.5rem; }
+    .mermaid { background: #262626; padding: 1rem; border-radius: 8px; margin: 1rem 0; }
+    .note { font-size: 0.875rem; color: #94a3b8; margin-top: 0.5rem; }
+  </style>
+</head>
+<body>
+  <h1>Attocode Code Intel Visualization</h1>
+  <p class="note">Diagrams from symbols + import analysis. Dependency graph returned empty for this project.</p>
+
+  <h2>1. TypeScript Entry — Module Dependencies</h2>
+  <div class="mermaid">
+flowchart TB
+    subgraph Entry["main.ts"]
+        main
+    end
+    subgraph Providers["providers"]
+        getProvider["provider.js"]
+        resilientProvider["resilient-provider.js"]
+        adapters["adapters"]
+    end
+    subgraph Core["core"]
+        createProductionAgent["agent/index.js"]
+        adaptersModule["adapters.js"]
+        standardTools["tools/standard.js"]
+    end
+    subgraph CLI["cli"]
+        parseArgs["cli.js"]
+        loadConfig["config"]
+    end
+    subgraph Modes["modes"]
+        startTUI["startTUIMode"]
+        startREPL["startProductionREPL"]
+    end
+    subgraph Integrations["integrations"]
+        eventDisplay["event-display"]
+        healthCheck["health-check"]
+        swarm["swarm"]
+    end
+    main --> getProvider
+    main --> resilientProvider
+    main --> createProductionAgent
+    main --> adaptersModule
+    main --> standardTools
+    main --> parseArgs
+    main --> loadConfig
+    main --> startTUI
+    main --> startREPL
+    main --> eventDisplay
+    main --> healthCheck
+    main --> swarm
+  </div>
+
+  <h2>2. ProductionAgent — Key Methods</h2>
+  <div class="mermaid">
+classDiagram
+    class ProductionAgent {
+        +run()
+        +buildMessages()
+        +buildContext()
+        +runSwarm()
+        +runWithReAct()
+        +runWithTeam()
+        +createAndExecutePlan()
+        +cancel()
+        +reset()
+        +cleanup()
+        +addTool()
+        +getTools()
+        +getMode()
+        +getSkills()
+        +createCheckpoint()
+        +restoreCheckpoint()
+        +approvePlan()
+        +getLSPManager()
+        +suggestAgentForTask()
+    }
+  </div>
+
+  <h2>3. Python Execution Loop — Components</h2>
+  <div class="mermaid">
+flowchart TB
+    subgraph DataClasses["Data classes"]
+        CompactionResult
+        LoopResult
+        BudgetPreflightResult
+        WrapupState
+    end
+    subgraph PreFlight["Pre-flight"]
+        check_iteration_budget
+    end
+    subgraph ContextMgmt["Context management"]
+        handle_auto_compaction
+        inject_recitation
+        accumulate_failure_evidence
+    end
+    subgraph MainLoop["run_execution_loop"]
+        direction TB
+        step1["1. Recitation"]
+        step2["2. Budget check"]
+        step3["3. Call LLM"]
+        step4["4. Execute tools"]
+        step5["5. Return result"]
+    end
+    MainLoop --> PreFlight
+    MainLoop --> ContextMgmt
+  </div>
+
+  <h2>4. ReAct Loop — Sequence</h2>
+  <div class="mermaid">
+sequenceDiagram
+    participant EL as Execution Loop
+    participant Checks as Pre-flight
+    participant Inject as Context Injection
+    participant LLM as LLM Call
+    participant Tools as Tools
+    EL->>Checks: Cancel, budget
+    Checks->>Inject: Proceed
+    Inject->>LLM: callLLM
+    LLM-->>EL: Response
+    alt Has tool_calls
+        EL->>Tools: Execute
+        Tools-->>EL: Results
+    else Text only
+        EL->>EL: Complete
+    end
+  </div>
+
+  <h2>5. Python Package Structure</h2>
+  <div class="mermaid">
+graph TB
+    cli[cli.py] --> config[config]
+    cli --> loop[core/loop.py]
+    codeintel[code_intel] --> server[server.py]
+    codeintel --> installer[installer.py]
+    tui[tui/widgets/swarm] --> task_board
+    tui --> dag_view
+    tui --> agent_grid
+  </div>
+</body>
+</html>

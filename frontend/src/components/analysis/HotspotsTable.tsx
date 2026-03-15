@@ -133,7 +133,7 @@ export function FileHotspotsTable({ hotspots }: FileHotspotsTableProps) {
               </TableCell>
               <TableCell>
                 <div className="flex items-center gap-2">
-                  <div className="h-2 w-16 rounded-full bg-zinc-800">
+                  <div className="h-2 w-16 rounded-full bg-muted">
                     <div
                       className="h-2 rounded-full bg-amber-500"
                       style={{ width: `${Math.min(h.composite * 100, 100)}%` }}

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from fastapi import APIRouter, Depends, Query
 
-from attocode.code_intel.api.auth import verify_api_key
+from attocode.code_intel.api.auth import verify_auth
 from attocode.code_intel.api.deps import BranchParam, get_service_or_404
 from attocode.code_intel.api.models import (
     LearningFeedbackRequest,
@@ -19,13 +19,13 @@ from attocode.code_intel.api.models import (
 router = APIRouter(
     prefix="/api/v1",
     tags=["learning"],
-    dependencies=[Depends(verify_api_key)],
+    dependencies=[Depends(verify_auth)],
 )
 
 router_v2 = APIRouter(
     prefix="/api/v2",
     tags=["learning-v2"],
-    dependencies=[Depends(verify_api_key)],
+    dependencies=[Depends(verify_auth)],
 )
 
 

@@ -8,6 +8,7 @@ export class RepoWebSocket {
   private reconnectDelay = 1000;
   private heartbeatInterval: ReturnType<typeof setInterval> | null = null;
   private closed = false;
+  private lastStreamId = "$";
 
   constructor(
     private repoId: string,
@@ -20,7 +21,7 @@ export class RepoWebSocket {
     const token = getAccessToken();
     const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
     const host = this.baseUrl || window.location.host;
-    const url = `${protocol}//${host}/ws/repos/${this.repoId}/events?token=${token}`;
+    const url = `${protocol}//${host}/ws/repos/${this.repoId}/events?token=${token}&last_event_id=${this.lastStreamId}`;
 
     this.ws = new WebSocket(url);
 
@@ -34,7 +35,12 @@ export class RepoWebSocket {
         const msg = JSON.parse(evt.data as string) as {
           type: string;
           data: unknown;
+          _stream_id?: string;
         };
+        // Track stream position for replay on reconnect
+        if (msg._stream_id) {
+          this.lastStreamId = msg._stream_id;
+        }
         const handlers = this.handlers.get(msg.type);
         if (handlers) {
           handlers.forEach((h) => h(msg.data));

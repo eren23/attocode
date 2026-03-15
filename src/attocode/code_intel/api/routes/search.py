@@ -7,7 +7,7 @@ import logging
 from fastapi import APIRouter, Depends
 from pydantic import BaseModel
 
-from attocode.code_intel.api.auth import verify_api_key
+from attocode.code_intel.api.auth import verify_auth
 from attocode.code_intel.api.deps import (
     BranchParam,
     get_search_provider,
@@ -28,7 +28,7 @@ logger = logging.getLogger(__name__)
 router_v1 = APIRouter(
     prefix="/api/v1/projects/{project_id}",
     tags=["search"],
-    dependencies=[Depends(verify_api_key)],
+    dependencies=[Depends(verify_auth)],
 )
 
 # --- v2 router: structured JSON ---
@@ -36,7 +36,7 @@ router_v1 = APIRouter(
 router_v2 = APIRouter(
     prefix="/api/v2/projects/{project_id}",
     tags=["search-v2"],
-    dependencies=[Depends(verify_api_key)],
+    dependencies=[Depends(verify_auth)],
 )
 
 
@@ -120,6 +120,14 @@ async def semantic_search_v2(
         raise HTTPException(
             status_code=503,
             detail=f"Search is not available: {exc}",
+        ) from exc
+    except HTTPException:
+        raise
+    except Exception as exc:
+        logger.exception("Search failed for project %s", project_id)
+        raise HTTPException(
+            status_code=500,
+            detail=f"Search failed: {exc}",
         ) from exc
 
 

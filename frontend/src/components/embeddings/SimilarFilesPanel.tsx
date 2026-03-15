@@ -52,7 +52,7 @@ export function SimilarFilesPanel({ sourceFile, results, onClose }: SimilarFiles
               <button
                 key={i}
                 onClick={() => navigate(`../files?path=${encodeURIComponent(r.file_path)}`)}
-                className="flex w-full items-center gap-2 rounded px-2 py-1.5 text-left text-sm hover:bg-accent/30 transition-colors"
+                className="flex w-full items-center gap-2 rounded px-2 py-1.5 text-left text-sm hover:bg-primary/[0.04] transition-colors"
               >
                 <span
                   className="inline-block h-2.5 w-2.5 rounded-full shrink-0"
@@ -62,7 +62,7 @@ export function SimilarFilesPanel({ sourceFile, results, onClose }: SimilarFiles
                 <div className="flex items-center gap-1.5 shrink-0">
                   <div className="h-1.5 w-16 rounded-full bg-muted overflow-hidden">
                     <div
-                      className="h-full rounded-full bg-violet-500"
+                      className="h-full rounded-full bg-primary"
                       style={{ width: `${pct}%` }}
                     />
                   </div>

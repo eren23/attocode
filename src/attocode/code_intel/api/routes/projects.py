@@ -8,7 +8,7 @@ import uuid
 
 from fastapi import APIRouter, Depends, HTTPException
 
-from attocode.code_intel.api.auth import verify_api_key
+from attocode.code_intel.api.auth import verify_auth
 from attocode.code_intel.api.deps import (
     get_config,
     get_service_or_404,
@@ -24,7 +24,7 @@ from attocode.code_intel.api.models import (
     TextResult,
 )
 
-router = APIRouter(prefix="/api/v1/projects", tags=["projects"], dependencies=[Depends(verify_api_key)])
+router = APIRouter(prefix="/api/v1/projects", tags=["projects"], dependencies=[Depends(verify_auth)])
 
 # Serializes reindex operations so concurrent requests don't corrupt state
 _reindex_lock = asyncio.Lock()

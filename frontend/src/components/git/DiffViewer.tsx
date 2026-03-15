@@ -24,14 +24,14 @@ export function DiffViewer({ orgId, repoId, fromSha, toSha }: DiffViewerProps) {
           key={file.path}
           className="rounded-lg border border-border overflow-hidden"
         >
-          <div className="flex items-center justify-between bg-zinc-900 px-4 py-2 text-sm">
+          <div className="flex items-center justify-between bg-card px-4 py-2 text-sm">
             <span className="font-mono">{file.path}</span>
             <span className="text-xs text-muted-foreground">{file.status}</span>
           </div>
           <div className="overflow-x-auto">
             {file.hunks.map((hunk, hi) => (
               <div key={hi}>
-                <div className="bg-zinc-800/50 px-4 py-1 text-xs text-muted-foreground font-mono">
+                <div className="bg-muted/30 px-4 py-1 text-xs text-muted-foreground font-mono">
                   {hunk.header}
                 </div>
                 {hunk.lines.map((line, li) => (

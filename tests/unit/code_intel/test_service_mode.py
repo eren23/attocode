@@ -537,7 +537,7 @@ class TestDebouncer:
 
         received = []
 
-        async def handler(project_id, branch, paths):
+        async def handler(project_id, branch, paths, files=None):
             received.append((project_id, branch, sorted(paths)))
 
         debouncer = FileChangeDebouncer(handler=handler, delay_seconds=0.1)
@@ -557,7 +557,7 @@ class TestDebouncer:
 
         received = []
 
-        async def handler(project_id, branch, paths):
+        async def handler(project_id, branch, paths, files=None):
             received.append((project_id, branch))
 
         debouncer = FileChangeDebouncer(handler=handler, delay_seconds=0.1)
@@ -577,7 +577,7 @@ class TestDebouncer:
 
         received = []
 
-        async def handler(project_id, branch, paths):
+        async def handler(project_id, branch, paths, files=None):
             received.append(paths)
 
         debouncer = FileChangeDebouncer(handler=handler, delay_seconds=0.1)
@@ -596,7 +596,7 @@ class TestDebouncer:
 
         received = []
 
-        async def handler(project_id, branch, paths):
+        async def handler(project_id, branch, paths, files=None):
             received.append(paths)
 
         debouncer = FileChangeDebouncer(handler=handler, delay_seconds=10.0)
@@ -613,7 +613,7 @@ class TestDebouncer:
 
         received = []
 
-        async def handler(project_id, branch, paths):
+        async def handler(project_id, branch, paths, files=None):
             received.append(paths)
 
         debouncer = FileChangeDebouncer(handler=handler, delay_seconds=10.0)
@@ -815,7 +815,7 @@ class TestDebouncerMaxPending:
 
         received = []
 
-        async def handler(project_id, branch, paths):
+        async def handler(project_id, branch, paths, files=None):
             received.append(paths)
 
         debouncer = FileChangeDebouncer(

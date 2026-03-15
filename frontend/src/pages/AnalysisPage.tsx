@@ -21,6 +21,7 @@ import { EmptyState } from "@/components/shared/EmptyState";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { TabGroup } from "@/components/ui/tabs";
 import { cn } from "@/lib/cn";
 import {
   FileCode2,
@@ -51,22 +52,7 @@ export function AnalysisPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex gap-1 border-b border-border">
-        {TABS.map((t) => (
-          <button
-            key={t}
-            onClick={() => setTab(t)}
-            className={cn(
-              "border-b-2 px-4 py-2 text-sm transition-colors",
-              t === tab
-                ? "border-primary text-foreground"
-                : "border-transparent text-muted-foreground hover:text-foreground",
-            )}
-          >
-            {t}
-          </button>
-        ))}
-      </div>
+      <TabGroup items={TABS} value={tab} onChange={setTab} />
 
       {tab === "Symbols" &&
         (symbols.isLoading ? (
@@ -171,7 +157,7 @@ function ConventionsTab({ repoId, conventions }: { repoId: string; conventions: 
           value={dirPath}
           onChange={(e) => setDirPath(e.target.value)}
           placeholder="All (or e.g. src/api)"
-          className="h-8 w-64 rounded-md border border-input bg-background px-3 text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-violet-500"
+          className="h-8 w-64 rounded-md border border-input bg-background px-3 text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/40"
         />
       </div>
       <ConventionsPanelNew data={activeData.data} />
@@ -250,12 +236,17 @@ function ImpactTab({ orgId, repoId }: { orgId: string; repoId: string }) {
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-3">
+          <p className="text-xs text-muted-foreground leading-relaxed">
+            Traces the dependency graph to find files affected by your changes.
+            <strong className="text-foreground/80"> Direct</strong> = files that import changed files.
+            Higher orders = transitive dependencies (files that import those files, and so on).
+          </p>
           {selectedFiles.length > 0 && (
             <div className="flex flex-wrap gap-1.5">
               {selectedFiles.map((f) => (
                 <Badge key={f} variant="secondary" className="gap-1 pl-2 pr-1 font-mono text-xs">
                   {f}
-                  <button onClick={() => removeFile(f)} className="ml-0.5 rounded-sm hover:bg-accent/80 p-0.5">
+                  <button onClick={() => removeFile(f)} className="ml-0.5 rounded-sm hover:bg-white/[0.08] p-0.5">
                     <X className="h-3 w-3" />
                   </button>
                 </Badge>
@@ -273,7 +264,7 @@ function ImpactTab({ orgId, repoId }: { orgId: string; repoId: string }) {
                 value={textInput}
                 onChange={(e) => setTextInput(e.target.value)}
                 placeholder="e.g. src/main.py, src/utils.py"
-                className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-violet-500"
+                className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/40"
                 onKeyDown={(e) => {
                   if (e.key === "Enter") {
                     e.preventDefault();
@@ -345,20 +336,45 @@ function ImpactTab({ orgId, repoId }: { orgId: string; repoId: string }) {
             )}
           </div>
 
+          {/* Impact flow visualization */}
+          {impact.data.layers && impact.data.layers.length > 0 && (
+            <div className="flex items-center gap-1.5 text-xs text-muted-foreground overflow-x-auto pb-1">
+              <span className="rounded bg-primary/20 px-2 py-0.5 text-primary font-medium whitespace-nowrap">
+                Changed ({impact.data.changed_files.length})
+              </span>
+              {impact.data.layers.map((layer, i) => (
+                <span key={layer.depth} className="flex items-center gap-1.5">
+                  <span className="text-muted-foreground/50">&rarr;</span>
+                  <span className={cn(
+                    "rounded px-2 py-0.5 font-medium whitespace-nowrap",
+                    i === 0 ? "bg-red-500/20 text-red-400" : i === 1 ? "bg-orange-500/20 text-orange-400" : "bg-amber-500/20 text-amber-400",
+                  )}>
+                    {layer.depth === 1 ? "Direct" : `${layer.depth}${layer.depth === 2 ? "nd" : layer.depth === 3 ? "rd" : "th"}`} ({layer.files.length})
+                  </span>
+                </span>
+              ))}
+            </div>
+          )}
+
           {/* Stacked bar visualization */}
           {impact.data.layers && impact.data.layers.length > 0 && impact.data.total_impacted > 0 && (
-            <div className="flex h-3 w-full rounded-full overflow-hidden">
-              {impact.data.layers.map((layer, i) => (
-                <div
-                  key={layer.depth}
-                  className={cn(
-                    "h-full",
-                    i === 0 ? "bg-red-500" : i === 1 ? "bg-orange-500" : i === 2 ? "bg-amber-500" : "bg-yellow-500",
-                  )}
-                  style={{ width: `${(layer.files.length / impact.data!.total_impacted) * 100}%` }}
-                  title={`Depth ${layer.depth}: ${layer.files.length} files`}
-                />
-              ))}
+            <div className="flex h-8 w-full rounded-lg overflow-hidden">
+              {impact.data.layers.map((layer, i) => {
+                const pct = (layer.files.length / impact.data!.total_impacted) * 100;
+                return (
+                  <div
+                    key={layer.depth}
+                    className={cn(
+                      "h-full flex items-center justify-center text-[10px] font-medium text-white/90 transition-all",
+                      i === 0 ? "bg-red-500" : i === 1 ? "bg-orange-500" : i === 2 ? "bg-amber-500" : "bg-yellow-500",
+                    )}
+                    style={{ width: `${pct}%` }}
+                    title={`Depth ${layer.depth}: ${layer.files.length} files`}
+                  >
+                    {pct > 12 && `${layer.files.length}`}
+                  </div>
+                );
+              })}
             </div>
           )}
 
@@ -388,7 +404,7 @@ function ImpactTab({ orgId, repoId }: { orgId: string; repoId: string }) {
                     <li key={file}>
                       <button
                         onClick={() => handleFileClick(file)}
-                        className="flex items-center gap-2 rounded-md px-2 py-1.5 text-sm font-mono text-muted-foreground hover:text-foreground hover:bg-accent/50 transition-colors w-full text-left"
+                        className="flex items-center gap-2 rounded-md px-2 py-1.5 text-sm font-mono text-muted-foreground hover:text-foreground hover:bg-white/[0.04] transition-colors w-full text-left"
                       >
                         <FileCode2 className="h-3.5 w-3.5 shrink-0" />
                         {file}
@@ -441,8 +457,7 @@ function ImpactLayerCard({
       <CardHeader className="cursor-pointer pb-2" onClick={() => setExpanded(!expanded)}>
         <CardTitle className="flex items-center gap-2 text-sm">
           {expanded ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
-          {depth === 1 ? "Direct" : `${depth === 2 ? "2nd-order" : `${depth}th-order`}`}
-          <span className="text-muted-foreground font-normal">(depth {depth})</span>
+          {depth === 1 ? "Directly imports changed files" : depth === 2 ? "2nd-order dependencies" : `${depth}th-order dependencies`}
           <Badge variant="secondary" className="text-[10px] ml-auto">{files.length} files</Badge>
         </CardTitle>
       </CardHeader>
@@ -453,7 +468,7 @@ function ImpactLayerCard({
               <li key={file}>
                 <button
                   onClick={(e) => { e.stopPropagation(); onFileClick(file); }}
-                  className="flex items-center gap-2 rounded-md px-2 py-1.5 text-sm font-mono text-muted-foreground hover:text-foreground hover:bg-accent/50 transition-colors w-full text-left"
+                  className="flex items-center gap-2 rounded-md px-2 py-1.5 text-sm font-mono text-muted-foreground hover:text-foreground hover:bg-white/[0.04] transition-colors w-full text-left"
                 >
                   <FileCode2 className="h-3.5 w-3.5 shrink-0" />
                   {file}
@@ -636,7 +651,7 @@ function CommunityCard({
               <li key={file}>
                 <button
                   onClick={(e) => { e.stopPropagation(); onFileClick(file); }}
-                  className="flex items-center gap-2 rounded-md px-2 py-1.5 text-sm font-mono text-muted-foreground hover:text-foreground hover:bg-accent/50 transition-colors w-full text-left"
+                  className="flex items-center gap-2 rounded-md px-2 py-1.5 text-sm font-mono text-muted-foreground hover:text-foreground hover:bg-white/[0.04] transition-colors w-full text-left"
                 >
                   <FileCode2 className="h-3.5 w-3.5 shrink-0" />
                   {file}

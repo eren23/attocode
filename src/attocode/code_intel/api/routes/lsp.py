@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from fastapi import APIRouter, Depends, Query
 
-from attocode.code_intel.api.auth import verify_api_key
+from attocode.code_intel.api.auth import verify_auth
 from attocode.code_intel.api.deps import (
     BranchParam,
     get_lsp_provider,
@@ -25,7 +25,7 @@ from attocode.code_intel.api.models import (
 router_v1 = APIRouter(
     prefix="/api/v1/projects/{project_id}/lsp",
     tags=["lsp"],
-    dependencies=[Depends(verify_api_key)],
+    dependencies=[Depends(verify_auth)],
 )
 
 # --- v2 router: structured JSON ---
@@ -33,7 +33,7 @@ router_v1 = APIRouter(
 router_v2 = APIRouter(
     prefix="/api/v2/projects/{project_id}/lsp",
     tags=["lsp-v2"],
-    dependencies=[Depends(verify_api_key)],
+    dependencies=[Depends(verify_auth)],
 )
 
 

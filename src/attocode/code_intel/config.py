@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import os
 from dataclasses import dataclass, field
+from pathlib import Path
 
 
 @dataclass(slots=True)
@@ -31,6 +32,11 @@ class CodeIntelConfig:
     # Embedding settings
     embedding_model: str = ""  # auto-detect or explicit: all-MiniLM-L6-v2 | nomic-embed-text | openai
     embedding_dimension: int = 0  # 0 = auto from model
+
+    # Remote connection (CLI → server bridge)
+    remote_url: str = ""  # e.g. "https://code.example.com"
+    remote_token: str = ""  # JWT or API key for remote server
+    remote_repo_id: str = ""  # UUID of the repo on the remote server
 
     # Auth settings
     jwt_expiry_minutes: int = 60
@@ -80,4 +86,89 @@ class CodeIntelConfig:
             google_client_secret=os.environ.get("GOOGLE_CLIENT_SECRET", ""),
             base_url=os.environ.get("ATTOCODE_BASE_URL", ""),
             registration_key=os.environ.get("REGISTRATION_KEY", ""),
+            remote_url=os.environ.get("ATTOCODE_REMOTE_URL", ""),
+            remote_token=os.environ.get("ATTOCODE_REMOTE_TOKEN", ""),
+            remote_repo_id=os.environ.get("ATTOCODE_REMOTE_REPO_ID", ""),
         )
+
+
+@dataclass(slots=True)
+class RemoteConfig:
+    """Remote server connection configuration, persisted to .attocode/config.toml."""
+
+    server: str = ""
+    token: str = ""
+    repo_id: str = ""
+    branch_auto_detect: bool = True
+
+    @property
+    def is_configured(self) -> bool:
+        return bool(self.server and self.token)
+
+
+def load_remote_config(project_dir: str) -> RemoteConfig:
+    """Load remote config from .attocode/config.toml, falling back to env vars."""
+    config_path = Path(project_dir) / ".attocode" / "config.toml"
+
+    rc = RemoteConfig()
+
+    if config_path.exists():
+        try:
+            import tomllib
+            data = tomllib.loads(config_path.read_text(encoding="utf-8"))
+            remote = data.get("remote", {})
+            rc.server = remote.get("server", "")
+            rc.token = remote.get("token", "")
+            rc.repo_id = remote.get("repo_id", "")
+            rc.branch_auto_detect = remote.get("branch_auto_detect", True)
+        except Exception:
+            pass
+
+    # Env vars override file config
+    if os.environ.get("ATTOCODE_REMOTE_URL"):
+        rc.server = os.environ["ATTOCODE_REMOTE_URL"]
+    if os.environ.get("ATTOCODE_REMOTE_TOKEN"):
+        rc.token = os.environ["ATTOCODE_REMOTE_TOKEN"]
+    if os.environ.get("ATTOCODE_REMOTE_REPO_ID"):
+        rc.repo_id = os.environ["ATTOCODE_REMOTE_REPO_ID"]
+
+    return rc
+
+
+def save_remote_config(project_dir: str, rc: RemoteConfig) -> Path:
+    """Save remote config to .attocode/config.toml. Returns the config path."""
+    config_path = Path(project_dir) / ".attocode" / "config.toml"
+    config_path.parent.mkdir(parents=True, exist_ok=True)
+
+    # Preserve existing config sections
+    existing: dict = {}
+    if config_path.exists():
+        try:
+            import tomllib
+            existing = tomllib.loads(config_path.read_text(encoding="utf-8"))
+        except Exception:
+            pass
+
+    existing["remote"] = {
+        "server": rc.server,
+        "token": rc.token,
+        "repo_id": rc.repo_id,
+        "branch_auto_detect": rc.branch_auto_detect,
+    }
+
+    # Write TOML manually (tomllib is read-only, avoid tomli_w dependency)
+    lines: list[str] = []
+    for section, values in existing.items():
+        if isinstance(values, dict):
+            lines.append(f"[{section}]")
+            for k, v in values.items():
+                if isinstance(v, bool):
+                    lines.append(f"{k} = {'true' if v else 'false'}")
+                elif isinstance(v, str):
+                    lines.append(f'{k} = "{v}"')
+                else:
+                    lines.append(f"{k} = {v}")
+            lines.append("")
+
+    config_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+    return config_path

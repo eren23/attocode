@@ -3,10 +3,11 @@ import { useParams } from "react-router";
 import { useOrg, useOrgMembers } from "@/api/hooks/useOrgs";
 import { MemberList } from "@/components/settings/MemberList";
 import { ApiKeyManager } from "@/components/settings/ApiKeyManager";
+import { RepoManager } from "@/components/settings/RepoManager";
 import { LoadingSpinner } from "@/components/shared/LoadingSpinner";
-import { cn } from "@/lib/cn";
+import { TabGroup } from "@/components/ui/tabs";
 
-const TABS = ["Members", "API Keys"] as const;
+const TABS = ["Members", "API Keys", "Repositories"] as const;
 
 export function SettingsPage() {
   const { orgId } = useParams();
@@ -25,22 +26,7 @@ export function SettingsPage() {
         </p>
       </div>
 
-      <div className="flex gap-1 border-b border-border">
-        {TABS.map((t) => (
-          <button
-            key={t}
-            onClick={() => setTab(t)}
-            className={cn(
-              "border-b-2 px-4 py-2 text-sm transition-colors",
-              t === tab
-                ? "border-primary text-foreground"
-                : "border-transparent text-muted-foreground hover:text-foreground",
-            )}
-          >
-            {t}
-          </button>
-        ))}
-      </div>
+      <TabGroup items={TABS} value={tab} onChange={setTab} />
 
       {tab === "Members" && (
         <MemberList
@@ -51,6 +37,8 @@ export function SettingsPage() {
       )}
 
       {tab === "API Keys" && <ApiKeyManager orgId={orgId!} />}
+
+      {tab === "Repositories" && <RepoManager orgId={orgId!} />}
     </div>
   );
 }

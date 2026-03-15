@@ -153,7 +153,7 @@ export function BranchComparePage() {
                   <button
                     key={file.path}
                     onClick={() => handleFileClick(file.path)}
-                    className="flex w-full items-center gap-3 px-4 py-3 text-left hover:bg-accent/30 transition-colors"
+                    className="flex w-full items-center gap-3 px-4 py-3 text-left hover:bg-primary/[0.04] transition-colors"
                   >
                     {statusIcon(file.status)}
                     <span className="flex-1 truncate text-sm font-mono">

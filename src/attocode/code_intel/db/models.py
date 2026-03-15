@@ -139,6 +139,7 @@ class Branch(Base):
     is_default: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default="false")
     # Monotonic version counter — incremented on every overlay write for consistency checks
     version: Mapped[int] = mapped_column(Integer, nullable=False, server_default="0")
+    merged_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
     repository: Mapped[Repository] = relationship(back_populates="branches")
     parent_branch: Mapped[Branch | None] = relationship(remote_side=[id])
@@ -234,6 +235,27 @@ class Dependency(Base):
     metadata_: Mapped[dict] = mapped_column("metadata", JSONB, nullable=False, server_default="{}")
 
 
+class Commit(Base):
+    """DB-backed commit history for remote repos without bare clones."""
+    __tablename__ = "commits"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=generate_uuid)
+    repo_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("repositories.id", ondelete="CASCADE"), nullable=False)
+    oid: Mapped[str] = mapped_column(Text, nullable=False)
+    message: Mapped[str] = mapped_column(Text, nullable=False)
+    author_name: Mapped[str] = mapped_column(Text, nullable=False)
+    author_email: Mapped[str] = mapped_column(Text, nullable=False)
+    timestamp: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    parent_oids: Mapped[list[str]] = mapped_column(ARRAY(String), nullable=False, server_default="{}")
+    branch_name: Mapped[str] = mapped_column(Text, nullable=False, server_default="main")
+    changed_files: Mapped[list | None] = mapped_column(JSONB, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+
+    __table_args__ = (
+        __import__("sqlalchemy").UniqueConstraint("repo_id", "oid", name="uq_commits_repo_oid"),
+    )
+
+
 class IndexingJob(Base):
     __tablename__ = "indexing_jobs"
 
@@ -280,8 +302,35 @@ class WebhookConfig(Base):
     repo_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("repositories.id"), nullable=False)
     provider: Mapped[str] = mapped_column(Text, nullable=False)
     secret_hash: Mapped[str] = mapped_column(Text, nullable=False)
+    secret_encrypted: Mapped[str | None] = mapped_column(Text, nullable=True)  # Fernet-encrypted webhook secret
     events: Mapped[list[str]] = mapped_column(ARRAY(String), nullable=False, server_default="{push}")
     active: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default="true")
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
 
     repository: Mapped[Repository] = relationship(back_populates="webhook_configs")
+
+
+class RevokedToken(Base):
+    """JWT token blocklist for revocation."""
+    __tablename__ = "revoked_tokens"
+
+    jti: Mapped[str] = mapped_column(Text, primary_key=True)
+    revoked_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+
+
+class BlameHunk(Base):
+    """DB-backed blame data for remote repos."""
+    __tablename__ = "blame_hunks"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=generate_uuid)
+    repo_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("repositories.id", ondelete="CASCADE"), nullable=False)
+    path: Mapped[str] = mapped_column(Text, nullable=False)
+    branch_name: Mapped[str] = mapped_column(Text, nullable=False, server_default="main")
+    commit_oid: Mapped[str] = mapped_column(Text, nullable=False)
+    author_name: Mapped[str] = mapped_column(Text, nullable=False)
+    author_email: Mapped[str] = mapped_column(Text, nullable=False)
+    timestamp: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    start_line: Mapped[int] = mapped_column(Integer, nullable=False)
+    end_line: Mapped[int] = mapped_column(Integer, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)

@@ -4,28 +4,51 @@
   --color-background: var(--color-zinc-950);
   --color-foreground: var(--color-zinc-50);
   --color-muted: var(--color-zinc-800);
-  --color-muted-foreground: var(--color-zinc-400);
+  --color-muted-foreground: #b4b4bc;
   --color-border: var(--color-zinc-800);
   --color-input: var(--color-zinc-800);
-  --color-ring: var(--color-violet-500);
-  --color-primary: var(--color-violet-500);
+  --color-ring: #3b82f6;
+  --color-primary: #2563eb;
   --color-primary-foreground: var(--color-white);
   --color-secondary: var(--color-zinc-800);
   --color-secondary-foreground: var(--color-zinc-100);
-  --color-accent: var(--color-zinc-800);
-  --color-accent-foreground: var(--color-zinc-100);
+  --color-accent: #131832;
+  --color-accent-foreground: #e0e7ff;
   --color-destructive: var(--color-red-600);
   --color-destructive-foreground: var(--color-white);
-  --color-card: var(--color-zinc-900);
+  --color-card: #16161d;
   --color-card-foreground: var(--color-zinc-100);
-  --color-popover: var(--color-zinc-900);
+  --color-popover: #1c1c27;
   --color-popover-foreground: var(--color-zinc-100);
   --color-success: var(--color-emerald-500);
   --color-warning: var(--color-amber-500);
+
+  /* Surface layers */
+  --color-surface-1: #0f1015;
+  --color-surface-2: #16161d;
+  --color-surface-3: #1c1c27;
+
   --radius-sm: 0.25rem;
   --radius-md: 0.375rem;
   --radius-lg: 0.5rem;
 }
+
+/* Card elevation shadows */
+.shadow-card { box-shadow: 0 1px 3px rgba(0,0,0,0.3), 0 0 0 1px rgba(255,255,255,0.03); }
+.shadow-card-hover { box-shadow: 0 4px 16px rgba(0,0,0,0.45), 0 0 0 1px rgba(255,255,255,0.06); }
+.shadow-primary-glow { box-shadow: 0 0 0 1px rgba(37,99,235,0.15), 0 0 24px -5px rgba(37,99,235,0.2); }
+
+/* Animations */
+@keyframes fade-in-up { from { opacity:0; transform:translateY(8px); } to { opacity:1; transform:translateY(0); } }
+@keyframes shimmer { 0% { background-position:-200% 0; } 100% { background-position:200% 0; } }
+.animate-fade-in-up { animation: fade-in-up 0.3s ease-out; }
+.animate-shimmer { background:linear-gradient(90deg,transparent,rgba(255,255,255,0.04),transparent); background-size:200% 100%; animation:shimmer 2s infinite; }
+
+/* Interactive element transitions */
+button, a, [role="button"] { transition: background-color 0.15s ease, color 0.15s ease, box-shadow 0.15s ease, opacity 0.15s ease; }
+
+/* Focus ring glow */
+:focus-visible { outline: none; box-shadow: 0 0 0 2px var(--color-background), 0 0 0 4px rgba(37,99,235,0.5); }
 
 body {
   font-family:
@@ -45,11 +68,11 @@ body {
   background: transparent;
 }
 ::-webkit-scrollbar-thumb {
-  background: var(--color-zinc-700);
+  background: #2a2a3a;
   border-radius: 4px;
 }
 ::-webkit-scrollbar-thumb:hover {
-  background: var(--color-zinc-600);
+  background: #3a3a4a;
 }
 
 @keyframes fade-in {

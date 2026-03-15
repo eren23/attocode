@@ -126,7 +126,7 @@ export function FileBrowserPage() {
               <div className="flex flex-1 overflow-hidden">
                 {/* Blame gutter */}
                 {showBlame && (
-                  <div className="w-48 shrink-0 overflow-y-auto border-r border-border bg-zinc-900/50 font-mono text-[11px]">
+                  <div className="w-48 shrink-0 overflow-y-auto border-r border-border bg-[--color-surface-1]/80 font-mono text-[11px]">
                     {blame.isLoading ? (
                       <div className="flex items-center justify-center p-4">
                         <LoadingSpinner />
@@ -137,17 +137,17 @@ export function FileBrowserPage() {
                         return (
                           <div
                             key={`${group.sha}-${group.lineStart}`}
-                            className="border-b border-zinc-800 px-2 py-0.5 text-muted-foreground hover:bg-zinc-800/50"
+                            className="border-b border-border/30 px-2 py-0.5 text-muted-foreground hover:bg-white/[0.04]"
                             style={{ height: `${lineCount * 1.5}rem` }}
                             title={`${group.sha}\n${group.author}\n${group.date}`}
                           >
                             <div className="flex items-start gap-1.5">
-                              <span className="font-semibold text-blue-400">
+                              <span className="font-semibold text-primary">
                                 {shortSha(group.sha)}
                               </span>
                               <span className="truncate">{group.author}</span>
                             </div>
-                            <div className="text-[10px] text-zinc-500">
+                            <div className="text-[10px] text-muted-foreground/70">
                               {formatRelativeTime(group.date)}
                             </div>
                           </div>
@@ -164,7 +164,7 @@ export function FileBrowserPage() {
 
                 {/* Related files panel */}
                 {showRelated && (
-                  <div className="w-64 shrink-0 overflow-y-auto border-l border-border bg-zinc-900/50">
+                  <div className="w-72 shrink-0 overflow-y-auto border-l border-border bg-[--color-surface-1]/80">
                     <div className="flex items-center gap-2 border-b border-border px-3 py-2">
                       <GitBranch className="h-3.5 w-3.5 text-muted-foreground" />
                       <span className="text-xs font-medium">Related Files</span>
@@ -174,17 +174,17 @@ export function FileBrowserPage() {
                         <LoadingSpinner />
                       </div>
                     ) : related.data?.related?.length ? (
-                      <ul className="divide-y divide-zinc-800">
+                      <ul className="divide-y divide-border/30">
                         {related.data.related.map((f) => (
                           <li key={f.path}>
                             <button
-                              className="flex w-full items-center justify-between px-3 py-2 text-left text-xs hover:bg-zinc-800/50"
+                              className="flex w-full items-center justify-between px-3 py-2 text-left text-xs hover:bg-white/[0.04]"
                               onClick={() => {
                                 setSelectedPath(f.path);
                                 setShowRelated(false);
                               }}
                             >
-                              <span className="truncate text-zinc-300">{f.path}</span>
+                              <span className="truncate text-foreground/80">{f.path}</span>
                               <Badge variant="outline" className="ml-2 shrink-0 text-[10px]">
                                 {(f.score * 100).toFixed(0)}%
                               </Badge>

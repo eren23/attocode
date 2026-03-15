@@ -130,7 +130,7 @@ wheels = [
 
 [[package]]
 name = "attocode"
-version = "0.1.19"
+version = "0.2.0"
 source = { editable = "." }
 dependencies = [
     { name = "aiosqlite" },
@@ -199,6 +199,7 @@ service = [
     { name = "arq" },
     { name = "asyncpg" },
     { name = "bcrypt" },
+    { name = "cryptography" },
     { name = "fastapi" },
     { name = "httpx-oauth" },
     { name = "networkx" },
@@ -252,6 +253,7 @@ requires-dist = [
     { name = "bcrypt", marker = "extra == 'service'", specifier = ">=4.0" },
     { name = "bump-my-version", marker = "extra == 'dev'", specifier = ">=0.28" },
     { name = "click", specifier = ">=8.1.0" },
+    { name = "cryptography", marker = "extra == 'service'", specifier = ">=41.0" },
     { name = "einops", marker = "extra == 'semantic-nomic'" },
     { name = "fastapi", marker = "extra == 'code-intel'", specifier = ">=0.115" },
     { name = "fastapi", marker = "extra == 'service'", specifier = ">=0.115" },

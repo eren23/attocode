@@ -1,0 +1,6 @@
+[remote]
+server = "http://127.0.0.1:8080"
+token = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiI0NTY4Njg1Yy0zYTNiLTQ5MGYtOTU4Ny05ODE0ZDU5ZDMyYzUiLCJ0eXBlIjoiYWNjZXNzIiwic2NvcGVzIjpbXSwicGxhbiI6ImZyZWUiLCJpYXQiOjE3NzM1MDczNTQsImV4cCI6MTc3MzU5Mzc1NH0.EQFqdi1ugFlhlUj2NaJHbt8evaxnIigateZUa5i0qDo"
+repo_id = "c04fceff-96dd-4473-803b-fe74696b41d5"
+branch_auto_detect = true
+

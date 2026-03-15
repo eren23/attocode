@@ -6,7 +6,7 @@ from typing import Annotated
 
 from fastapi import APIRouter, Depends, Query
 
-from attocode.code_intel.api.auth import verify_api_key
+from attocode.code_intel.api.auth import verify_auth
 from attocode.code_intel.api.deps import (
     BranchParam,
     get_analysis_provider,
@@ -35,7 +35,7 @@ from attocode.code_intel.api.models import (
 router_v1 = APIRouter(
     prefix="/api/v1/projects/{project_id}",
     tags=["analysis"],
-    dependencies=[Depends(verify_api_key)],
+    dependencies=[Depends(verify_auth)],
 )
 
 # --- v2 router: structured JSON responses ---
@@ -43,7 +43,7 @@ router_v1 = APIRouter(
 router_v2 = APIRouter(
     prefix="/api/v2/projects/{project_id}",
     tags=["analysis-v2"],
-    dependencies=[Depends(verify_api_key)],
+    dependencies=[Depends(verify_auth)],
 )
 
 

@@ -7,6 +7,7 @@ import type {
   RepoResponse,
   MemberListResponse,
   MemberResponse,
+  CredentialStatusResponse,
 } from "@/api/generated/schema";
 
 export function useOrgs() {
@@ -136,5 +137,88 @@ export function useRemoveMember() {
       ),
     onSuccess: (_, vars) =>
       qc.invalidateQueries({ queryKey: ["orgs", vars.orgId, "members"] }),
+  });
+}
+
+// --- Repo Credentials ---
+
+export function useRepoCredentialStatus(orgId: string, repoId: string) {
+  return useQuery({
+    queryKey: ["orgs", orgId, "repos", repoId, "credentials"],
+    queryFn: () =>
+      apiFetch<CredentialStatusResponse>(
+        `/api/v1/orgs/${orgId}/repos/${repoId}/credentials`,
+      ),
+    enabled: !!orgId && !!repoId,
+  });
+}
+
+export function useSetRepoCredential() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({
+      orgId,
+      repoId,
+      cred_type,
+      value,
+    }: {
+      orgId: string;
+      repoId: string;
+      cred_type: string;
+      value: string;
+    }) =>
+      apiFetch<{ detail: string; cred_type: string }>(
+        `/api/v1/orgs/${orgId}/repos/${repoId}/credentials`,
+        {
+          method: "POST",
+          body: JSON.stringify({ cred_type, value }),
+        },
+      ),
+    onSuccess: (_, vars) =>
+      qc.invalidateQueries({
+        queryKey: ["orgs", vars.orgId, "repos", vars.repoId, "credentials"],
+      }),
+  });
+}
+
+export function useDeleteRepoCredential() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({
+      orgId,
+      repoId,
+    }: {
+      orgId: string;
+      repoId: string;
+    }) =>
+      apiFetch<{ detail: string }>(
+        `/api/v1/orgs/${orgId}/repos/${repoId}/credentials`,
+        { method: "DELETE" },
+      ),
+    onSuccess: (_, vars) =>
+      qc.invalidateQueries({
+        queryKey: ["orgs", vars.orgId, "repos", vars.repoId, "credentials"],
+      }),
+  });
+}
+
+export function useReindexRepo() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({
+      orgId,
+      repoId,
+    }: {
+      orgId: string;
+      repoId: string;
+    }) =>
+      apiFetch<{ detail: string; repo_id: string }>(
+        `/api/v1/orgs/${orgId}/repos/${repoId}/reindex`,
+        { method: "POST" },
+      ),
+    onSuccess: (_, vars) =>
+      qc.invalidateQueries({
+        queryKey: ["orgs", vars.orgId, "repos"],
+      }),
   });
 }

@@ -458,3 +458,32 @@ export interface LearningRecallResponse {
   results: LearningRecallItem[];
   total: number;
 }
+
+export interface StreamEventMessage {
+  type: string;
+  data: unknown;
+  _stream_id?: string;
+}
+
+export interface FileChangedRequest {
+  paths: string[];
+  project?: string;
+  branch?: string;
+  idempotency_key?: string;
+  if_match?: number | null;
+}
+
+export interface WebhookConfigResponse {
+  id: string;
+  repo_id: string;
+  provider: string;
+  events: string[];
+  active: boolean;
+  secret_encrypted?: string;
+}
+
+export interface CredentialStatusResponse {
+  configured: boolean;
+  cred_type?: string;
+  created_at?: string;
+}

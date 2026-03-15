@@ -41,7 +41,7 @@ export function TableRow({
   return (
     <tr
       className={cn(
-        "border-b border-border transition-colors hover:bg-muted/50",
+        "border-b border-border/40 transition-colors hover:bg-primary/[0.03]",
         className,
       )}
       {...props}
@@ -56,7 +56,7 @@ export function TableHead({
   return (
     <th
       className={cn(
-        "h-10 px-3 text-left align-middle font-medium text-muted-foreground [&:has([role=checkbox])]:pr-0",
+        "h-10 px-3 text-left align-middle text-[11px] font-medium uppercase tracking-wider text-muted-foreground [&:has([role=checkbox])]:pr-0",
         className,
       )}
       {...props}

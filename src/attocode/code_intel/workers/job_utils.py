@@ -89,3 +89,23 @@ async def get_branch_or_error(
     if branch is None:
         return None, {"error": f"Branch {branch_name} not found"}
     return branch, None
+
+
+async def resolve_repo_credential(repo_id, session: AsyncSession):
+    """Fetch and decrypt RepoCredential for a repo.
+
+    Returns a Credential instance or None if no credential is configured.
+    """
+    from sqlalchemy import select
+
+    from attocode.code_intel.crypto import decrypt_credential
+    from attocode.code_intel.db.models import RepoCredential
+    from attocode.code_intel.git.credentials import Credential
+
+    result = await session.execute(
+        select(RepoCredential).where(RepoCredential.repo_id == repo_id).limit(1)
+    )
+    repo_cred = result.scalar_one_or_none()
+    if repo_cred is None:
+        return None
+    return Credential(cred_type=repo_cred.cred_type, value=decrypt_credential(repo_cred.encrypted_value))

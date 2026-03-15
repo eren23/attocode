@@ -28,6 +28,16 @@ export function SearchPage() {
 
       {search.isFetching && <LoadingSpinner />}
 
+      {search.isError && (
+        <div className="rounded-lg border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-200">
+          <strong>Search failed:</strong>{" "}
+          {search.error?.message || "Unable to perform search. Make sure embeddings are indexed."}
+          <p className="mt-1 text-xs text-red-300/70">
+            Visit the <span className="underline">Embeddings</span> page to check indexing status.
+          </p>
+        </div>
+      )}
+
       {search.data && search.data.results.length > 0 && (
         <div className="space-y-2">
           <p className="text-sm text-muted-foreground">

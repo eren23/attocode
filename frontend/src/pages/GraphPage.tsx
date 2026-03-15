@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import { useParams, useNavigate } from "react-router";
 import { useDependencyGraph } from "@/api/hooks/useGraph";
 import { useCommunities } from "@/api/hooks/useAnalysis";
@@ -12,16 +12,17 @@ import { Button } from "@/components/ui/button";
 import type { DependencyGraphNode } from "@/api/generated/schema";
 import { Network, ArrowRight, ArrowDown, Layers } from "lucide-react";
 import { useDebouncedValue } from "@/hooks/useDebouncedValue";
+import { GraphFilePanel } from "@/components/graph/GraphFilePanel";
 
 // Community color palette for node overlay
 const COMMUNITY_COLORS = [
-  "#8b5cf6", "#06b6d4", "#f59e0b", "#ef4444", "#10b981",
-  "#ec4899", "#3b82f6", "#f97316", "#14b8a6", "#a855f7",
-  "#6366f1", "#84cc16", "#e11d48", "#0ea5e9", "#d946ef",
+  "#4f8ff7", "#22d3ee", "#fbbf24", "#f87171", "#34d399",
+  "#f472b6", "#818cf8", "#fb923c", "#2dd4bf", "#c084fc",
+  "#6366f1", "#a3e635", "#fb7185", "#38bdf8", "#e879f9",
 ];
 
 export function GraphPage() {
-  const { repoId } = useParams();
+  const { orgId, repoId } = useParams();
   const navigate = useNavigate();
   const graph = useDependencyGraph(repoId!);
   const communities = useCommunities(repoId!);
@@ -35,9 +36,10 @@ export function GraphPage() {
 
   const [selectedNode, setSelectedNode] = useState<DependencyGraphNode | null>(null);
   const [selectedNodePos, setSelectedNodePos] = useState({ x: 0, y: 0 });
+  const [filePanelPath, setFilePanelPath] = useState<string | null>(null);
 
-  // Build community color map for nodes
-  const communityColorMap = useCallback(() => {
+  // Build community color map for nodes (memoized to avoid triggering graph re-render)
+  const colorMap = useMemo(() => {
     if (!showCommunities || !communities.data?.communities) return undefined;
     const map: Record<string, string> = {};
     for (const [i, c] of communities.data.communities.entries()) {
@@ -76,6 +78,10 @@ export function GraphPage() {
     },
     [navigate],
   );
+
+  const handleViewSideBySide = useCallback((path: string) => {
+    setFilePanelPath(path);
+  }, []);
 
   const handleSelectNode = useCallback(
     (nodeId: string) => {
@@ -116,6 +122,8 @@ export function GraphPage() {
             onSearchChange={setGraphSearch}
             nodeCount={nodeCount}
             edgeCount={edgeCount}
+            orgId={orgId!}
+            repoId={repoId!}
           />
         </div>
         <div className="flex gap-2">
@@ -149,36 +157,47 @@ export function GraphPage() {
       {graph.isPending && <LoadingSpinner />}
 
       {graph.data && graph.data.nodes.length > 0 ? (
-        <div
-          className="relative h-[calc(100vh-20rem)] rounded-lg border border-border overflow-hidden"
-          style={{
-            background:
-              "radial-gradient(ellipse at center, #1a1a2e 0%, #0f0f17 70%)",
-          }}
-          onClick={(e) => {
-            // Close card when clicking background (not bubbled from card/node)
-            if (e.target === e.currentTarget) setSelectedNode(null);
-          }}
-        >
-          <DependencyGraph
-            nodes={graph.data.nodes}
-            edges={graph.data.edges}
-            layoutMode={layoutMode}
-            direction={direction}
-            onNodeSelect={handleNodeSelect}
-            selectedNodeId={selectedNode?.id}
-            searchQuery={debouncedGraphSearch || undefined}
-            communityColorMap={communityColorMap()}
-          />
-          <NodeInfoCard
-            node={selectedNode}
-            position={selectedNodePos}
-            edges={graph.data.edges}
-            onClose={() => setSelectedNode(null)}
-            onNavigateToFile={handleNavigateToFile}
-            onSelectNode={handleSelectNode}
-            onFocusDirectory={handleFocusDirectory}
-          />
+        <div className="flex gap-0 h-[calc(100vh-20rem)]">
+          <div
+            className="relative flex-1 rounded-lg border border-border overflow-hidden"
+            style={{
+              background:
+                "radial-gradient(ellipse at center, #0c1222 0%, #0f0f17 70%)",
+            }}
+            onClick={(e) => {
+              if (e.target === e.currentTarget) setSelectedNode(null);
+            }}
+          >
+            <DependencyGraph
+              nodes={graph.data.nodes}
+              edges={graph.data.edges}
+              layoutMode={layoutMode}
+              direction={direction}
+              onNodeSelect={handleNodeSelect}
+              selectedNodeId={selectedNode?.id}
+              searchQuery={debouncedGraphSearch || undefined}
+              communityColorMap={colorMap}
+            />
+            <NodeInfoCard
+              node={selectedNode}
+              position={selectedNodePos}
+              edges={graph.data.edges}
+              onClose={() => setSelectedNode(null)}
+              onNavigateToFile={handleNavigateToFile}
+              onViewSideBySide={handleViewSideBySide}
+              onSelectNode={handleSelectNode}
+              onFocusDirectory={handleFocusDirectory}
+            />
+          </div>
+          {filePanelPath && (
+            <GraphFilePanel
+              orgId={orgId!}
+              repoId={repoId!}
+              filePath={filePanelPath}
+              onClose={() => setFilePanelPath(null)}
+              onNavigateToFile={handleNavigateToFile}
+            />
+          )}
         </div>
       ) : (
         !graph.isPending && (

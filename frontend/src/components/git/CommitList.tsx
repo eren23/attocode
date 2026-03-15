@@ -14,7 +14,7 @@ export function CommitList({ commits, onSelect }: CommitListProps) {
         <button
           key={commit.sha}
           onClick={() => onSelect(commit.sha)}
-          className="flex w-full items-start gap-3 px-4 py-3 text-left hover:bg-accent/30 transition-colors"
+          className="flex w-full items-start gap-3 px-4 py-3 text-left hover:bg-primary/[0.04] transition-colors"
         >
           <GitCommitHorizontal className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
           <div className="flex-1 min-w-0">

@@ -90,6 +90,7 @@ class RepoResponse(BaseModel):
     id: str
     name: str
     clone_url: str | None = None
+    local_path: str | None = None
     default_branch: str
     language: str | None = None
     index_status: str
@@ -480,8 +481,9 @@ async def create_repo(
     await session.commit()
     await session.refresh(repo)
 
-    # Enqueue indexing job if clone_url or local_path is provided
-    if repo.clone_url or repo.local_path:
+    # Only enqueue full index if we have a clone_url (server can clone it).
+    # local_path-only repos use incremental updates via notify/watch.
+    if repo.clone_url:
         try:
             from arq import create_pool
 
@@ -500,6 +502,7 @@ async def create_repo(
         id=str(repo.id),
         name=repo.name,
         clone_url=repo.clone_url,
+        local_path=repo.local_path,
         default_branch=repo.default_branch,
         language=repo.language,
         index_status=repo.index_status,
@@ -536,6 +539,7 @@ async def list_repos(
             id=str(repo.id),
             name=repo.name,
             clone_url=repo.clone_url,
+            local_path=repo.local_path,
             default_branch=repo.default_branch,
             language=repo.language,
             index_status=repo.index_status,
@@ -569,6 +573,7 @@ async def get_repo(
         id=str(repo.id),
         name=repo.name,
         clone_url=repo.clone_url,
+        local_path=repo.local_path,
         default_branch=repo.default_branch,
         language=repo.language,
         index_status=repo.index_status,
@@ -632,3 +637,120 @@ async def reindex_repo(
     await session.commit()
 
     return {"detail": "Reindex triggered", "repo_id": str(repo_id)}
+
+
+# --- Repo Credential Management ---
+
+_VALID_CRED_TYPES = {"pat", "deploy_token", "ssh_key"}
+
+
+class SetCredentialRequest(BaseModel):
+    cred_type: str  # pat|deploy_token|ssh_key
+    value: str
+
+
+@router.post("/{org_id}/repos/{repo_id}/credentials")
+async def set_repo_credential(
+    org_id: uuid.UUID,
+    repo_id: uuid.UUID,
+    body: SetCredentialRequest,
+    auth: AuthContext = Depends(resolve_auth),
+    session: AsyncSession = Depends(get_db_session),
+) -> dict:
+    """Set or replace credential for a private repository (admin+)."""
+    await _require_membership(org_id, auth, session, min_role="admin")
+
+    if body.cred_type not in _VALID_CRED_TYPES:
+        raise HTTPException(
+            status_code=422,
+            detail=f"Invalid cred_type. Must be one of: {', '.join(sorted(_VALID_CRED_TYPES))}",
+        )
+
+    result = await session.execute(
+        select(Repository).where(Repository.id == repo_id, Repository.org_id == org_id)
+    )
+    repo = result.scalar_one_or_none()
+    if repo is None:
+        raise HTTPException(status_code=404, detail="Repository not found")
+
+    from attocode.code_intel.crypto import encrypt_credential
+    from attocode.code_intel.db.models import RepoCredential
+
+    # Remove any existing credential for this repo
+    existing = await session.execute(
+        select(RepoCredential).where(RepoCredential.repo_id == repo_id)
+    )
+    for old_cred in existing.scalars().all():
+        await session.delete(old_cred)
+
+    cred = RepoCredential(
+        repo_id=repo_id,
+        cred_type=body.cred_type,
+        encrypted_value=encrypt_credential(body.value),
+    )
+    session.add(cred)
+    await session.commit()
+
+    return {"detail": "Credential set", "cred_type": body.cred_type}
+
+
+@router.get("/{org_id}/repos/{repo_id}/credentials")
+async def get_repo_credential_status(
+    org_id: uuid.UUID,
+    repo_id: uuid.UUID,
+    auth: AuthContext = Depends(resolve_auth),
+    session: AsyncSession = Depends(get_db_session),
+) -> dict:
+    """Check whether a credential is configured for a repo (admin+). Never returns the value."""
+    await _require_membership(org_id, auth, session, min_role="admin")
+
+    result = await session.execute(
+        select(Repository).where(Repository.id == repo_id, Repository.org_id == org_id)
+    )
+    if result.scalar_one_or_none() is None:
+        raise HTTPException(status_code=404, detail="Repository not found")
+
+    from attocode.code_intel.db.models import RepoCredential
+
+    result = await session.execute(
+        select(RepoCredential).where(RepoCredential.repo_id == repo_id).limit(1)
+    )
+    cred = result.scalar_one_or_none()
+    if cred is None:
+        return {"configured": False}
+
+    return {
+        "configured": True,
+        "cred_type": cred.cred_type,
+        "created_at": cred.created_at.isoformat(),
+    }
+
+
+@router.delete("/{org_id}/repos/{repo_id}/credentials")
+async def delete_repo_credential(
+    org_id: uuid.UUID,
+    repo_id: uuid.UUID,
+    auth: AuthContext = Depends(resolve_auth),
+    session: AsyncSession = Depends(get_db_session),
+) -> dict:
+    """Remove credential for a repository (admin+)."""
+    await _require_membership(org_id, auth, session, min_role="admin")
+
+    result = await session.execute(
+        select(Repository).where(Repository.id == repo_id, Repository.org_id == org_id)
+    )
+    if result.scalar_one_or_none() is None:
+        raise HTTPException(status_code=404, detail="Repository not found")
+
+    from attocode.code_intel.db.models import RepoCredential
+
+    existing = await session.execute(
+        select(RepoCredential).where(RepoCredential.repo_id == repo_id)
+    )
+    deleted = 0
+    for cred in existing.scalars().all():
+        await session.delete(cred)
+        deleted += 1
+
+    await session.commit()
+    return {"detail": "Credential removed" if deleted else "No credential configured"}

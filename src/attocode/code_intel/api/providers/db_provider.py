@@ -262,12 +262,16 @@ class DbAnalysisProvider:
         async for session in get_session():
             repo_id = uuid.UUID(self._project_id)
             dep_store = DependencyStore(session)
-            raw = await dep_store.get_graph_for_branch(
-                (await get_branch_context(repo_id, branch, session)).branch_id
-            )
+            branch_ctx = await get_branch_context(repo_id, branch, session)
+            raw = await dep_store.get_graph_for_branch(branch_ctx.branch_id)
 
             raw_nodes = raw.get("nodes", [])
             raw_edges = raw.get("edges", [])
+
+            # Fallback: compute edges on-the-fly from import extraction
+            # when the Dependency table is empty but we have files
+            if not raw_edges and raw_nodes:
+                raw_edges = await self._compute_import_edges(session, branch_ctx)
 
             if start_file:
                 adj: dict[str, list[str]] = {}
@@ -275,8 +279,18 @@ class DbAnalysisProvider:
                     adj.setdefault(e["source"], []).append(e["target"])
                     adj.setdefault(e["target"], []).append(e["source"])
 
+                # Resolve start_file: exact match or directory prefix
+                if start_file in adj:
+                    seeds = {start_file}
+                else:
+                    prefix = start_file.rstrip("/") + "/"
+                    seeds = {n["path"] for n in raw_nodes if n["path"].startswith(prefix)}
+
+                if not seeds:
+                    return DependencyGraphResponse(nodes=[], edges=[])
+
                 reachable: set[str] = set()
-                bfs_frontier = {start_file}
+                bfs_frontier = seeds
                 for _ in range(depth):
                     next_frontier: set[str] = set()
                     for f in bfs_frontier:
@@ -313,6 +327,64 @@ class DbAnalysisProvider:
             return DependencyGraphResponse(nodes=nodes, edges=edges)
 
         return DependencyGraphResponse(nodes=[], edges=[])
+
+    async def _compute_import_edges(self, session: "AsyncSession", branch_ctx: "BranchContext") -> list[dict]:
+        """Fallback: compute edges on-the-fly from import extraction when Dependency table is empty."""
+        import logging
+
+        from sqlalchemy import select
+
+        from attocode.code_intel.db.models import FileContent
+        from attocode.code_intel.indexing.full_indexer import _resolve_import_path
+        from attocode.code_intel.indexing.parser import detect_language, extract_imports
+
+        logger = logging.getLogger(__name__)
+        manifest = branch_ctx.manifest  # path -> sha
+        known_paths = set(manifest.keys())
+        sha_to_path = {sha: path for path, sha in manifest.items()}
+        content_shas = list(set(manifest.values()))
+
+        if not content_shas:
+            return []
+
+        # Batch-fetch file content (limit to avoid memory issues)
+        MAX_FILES = 500
+        if len(content_shas) > MAX_FILES:
+            # Only process files matching start_file prefix if too many
+            content_shas = content_shas[:MAX_FILES]
+
+        result = await session.execute(
+            select(FileContent.sha256, FileContent.content).where(
+                FileContent.sha256.in_(content_shas)
+            )
+        )
+        rows = result.all()
+
+        edges: list[dict] = []
+        for sha, content in rows:
+            source_path = sha_to_path.get(sha)
+            if not source_path or content is None:
+                continue
+            language = detect_language(source_path)
+            if not language:
+                continue
+            try:
+                raw_content = content if isinstance(content, bytes) else content.encode("utf-8")
+                imports = extract_imports(raw_content, source_path, language)
+                for imp in imports:
+                    target = _resolve_import_path(imp, source_path, known_paths, language)
+                    if target and target != source_path:
+                        edges.append({
+                            "source": source_path,
+                            "target": target,
+                            "type": "import",
+                            "weight": 1.0,
+                        })
+            except Exception as e:
+                logger.debug("Import extraction failed for %s: %s", source_path, e)
+
+        logger.info("Computed %d import edges on-the-fly for %d files", len(edges), len(rows))
+        return edges
 
     async def hotspots(self, branch: str, top_n: int) -> HotspotsResponse:
         from sqlalchemy import func as sa_func
@@ -523,7 +595,7 @@ class DbSearchProvider:
 
         async for session in get_session():
             branch_ctx = await get_branch_context(
-                _uuid.UUID(self._project_id), branch or "main", session,
+                _uuid.UUID(self._project_id), branch, session,
             )
 
             store = EmbeddingStore(session)
@@ -569,7 +641,7 @@ class DbSearchProvider:
                         continue
                     for word in query_words:
                         sym_result = await session.execute(
-                            sa_select(Symbol.start_line)
+                            sa_select(Symbol.line_start)
                             .where(Symbol.content_sha == sha)
                             .where(Symbol.name.ilike(f"%{word}%"))
                             .limit(1)
@@ -591,30 +663,37 @@ class DbSearchProvider:
     async def security_scan(
         self, mode: str, path: str, branch: str,
     ) -> SecurityScanResponse:
-        """Falls back to CodeIntelService; returns empty findings if unavailable."""
-        from fastapi import HTTPException
+        """DB-backed security scan — runs regex patterns on stored content."""
+        import uuid as _uuid
 
-        from attocode.code_intel.api.deps import get_service_or_404
+        from attocode.code_intel.api.deps import get_branch_context
+        from attocode.code_intel.db.engine import get_session
+        from attocode.code_intel.storage.security_scanner_db import db_security_scan
 
-        try:
-            svc = await get_service_or_404(self._project_id)
-            data = svc.security_scan_data(mode=mode, path=path)
-            return SecurityScanResponse(
-                mode=data["mode"],
-                path=data["path"],
-                findings=[SecurityFinding(**f) for f in data["findings"]],
-                total_findings=data["total_findings"],
-                summary=data.get("summary", {}),
-            )
-        except HTTPException:
-            logger.warning("Security scan unavailable for project %s (no local clone)", self._project_id)
-            return SecurityScanResponse(
+        async for session in get_session():
+            repo_id = _uuid.UUID(self._project_id)
+            branch_ctx = await get_branch_context(repo_id, branch, session)
+
+            result = await db_security_scan(
+                session,
+                branch_ctx.branch_id,
+                branch_ctx.manifest,
                 mode=mode,
-                path=path,
-                findings=[],
-                total_findings=0,
-                summary={"error": "No local clone available for security scanning"},
+                path_filter=path,
             )
+
+            return SecurityScanResponse(
+                mode=result["mode"],
+                path=result["path"],
+                findings=[SecurityFinding(**f) for f in result["findings"]],
+                total_findings=result["total_findings"],
+                summary=result.get("summary", {}),
+            )
+
+        return SecurityScanResponse(
+            mode=mode, path=path, findings=[], total_findings=0,
+            summary={"error": "No database session available"},
+        )
 
 
 class DbGraphProvider:
@@ -777,3 +856,160 @@ class DbGraphProvider:
             )
 
         return CommunityResponse(method="none", modularity=0.0, communities=[])
+
+
+class DbLSPProvider:
+    """DB-backed LSP provider for remote repos without a language server.
+
+    Provides best-effort definition/references/hover using the symbol and
+    symbol_reference tables. Diagnostics returns empty (requires real LS).
+    """
+
+    __slots__ = ("_project_id",)
+
+    def __init__(self, project_id: str) -> None:
+        self._project_id = project_id
+
+    async def definition(self, file: str, line: int, col: int, branch: str) -> dict:
+        """Find definition of symbol at position."""
+        from sqlalchemy import select
+
+        from attocode.code_intel.api.deps import get_branch_context
+        from attocode.code_intel.db.engine import get_session
+        from attocode.code_intel.db.models import Symbol
+
+        async for session in get_session():
+            repo_id = uuid.UUID(self._project_id)
+            branch_ctx = await get_branch_context(repo_id, branch, session)
+            sha = branch_ctx.manifest.get(file)
+            if not sha:
+                return {"definitions": []}
+
+            # Find symbol at the given line
+            result = await session.execute(
+                select(Symbol).where(
+                    Symbol.content_sha == sha,
+                    Symbol.line_start <= line,
+                    Symbol.line_end >= line,
+                )
+            )
+            source_sym = result.scalars().first()
+            if source_sym is None:
+                return {"definitions": []}
+
+            # Search for a definition with the same name across the branch
+            all_shas = branch_ctx.content_shas
+            def_result = await session.execute(
+                select(Symbol).where(
+                    Symbol.content_sha.in_(all_shas),
+                    Symbol.name == source_sym.name,
+                    Symbol.kind.in_(("class", "function", "method", "variable")),
+                ).limit(10)
+            )
+            definitions = []
+            sha_to_path = branch_ctx.sha_to_path
+            for s in def_result.scalars():
+                definitions.append({
+                    "file": sha_to_path.get(s.content_sha, ""),
+                    "line": s.line_start or 0,
+                    "name": s.name,
+                    "kind": s.kind,
+                    "signature": s.signature or "",
+                })
+            return {"definitions": definitions}
+
+        return {"definitions": []}
+
+    async def references(self, file: str, line: int, col: int, branch: str) -> dict:
+        """Find references to symbol at position."""
+        from sqlalchemy import select
+
+        from attocode.code_intel.api.deps import get_branch_context
+        from attocode.code_intel.db.engine import get_session
+        from attocode.code_intel.db.models import Symbol, SymbolReference
+
+        async for session in get_session():
+            repo_id = uuid.UUID(self._project_id)
+            branch_ctx = await get_branch_context(repo_id, branch, session)
+            sha = branch_ctx.manifest.get(file)
+            if not sha:
+                return {"references": []}
+
+            # Find symbol at position
+            result = await session.execute(
+                select(Symbol).where(
+                    Symbol.content_sha == sha,
+                    Symbol.line_start <= line,
+                    Symbol.line_end >= line,
+                )
+            )
+            source_sym = result.scalars().first()
+            if source_sym is None:
+                return {"references": []}
+
+            # Query references table
+            all_shas = branch_ctx.content_shas
+            ref_result = await session.execute(
+                select(SymbolReference).where(
+                    SymbolReference.content_sha.in_(all_shas),
+                    SymbolReference.symbol_name == source_sym.name,
+                ).limit(500)
+            )
+            sha_to_path = branch_ctx.sha_to_path
+            references = [
+                {
+                    "file": sha_to_path.get(r.content_sha, ""),
+                    "line": r.line,
+                    "ref_kind": r.ref_kind,
+                }
+                for r in ref_result.scalars()
+            ]
+            return {"references": references}
+
+        return {"references": []}
+
+    async def hover(self, file: str, line: int, col: int, branch: str) -> dict:
+        """Get hover info for symbol at position."""
+        from sqlalchemy import select
+
+        from attocode.code_intel.api.deps import get_branch_context
+        from attocode.code_intel.db.engine import get_session
+        from attocode.code_intel.db.models import Symbol
+
+        async for session in get_session():
+            repo_id = uuid.UUID(self._project_id)
+            branch_ctx = await get_branch_context(repo_id, branch, session)
+            sha = branch_ctx.manifest.get(file)
+            if not sha:
+                return {"hover": None}
+
+            result = await session.execute(
+                select(Symbol).where(
+                    Symbol.content_sha == sha,
+                    Symbol.line_start <= line,
+                    Symbol.line_end >= line,
+                )
+            )
+            sym = result.scalars().first()
+            if sym is None:
+                return {"hover": None}
+
+            return {
+                "hover": {
+                    "name": sym.name,
+                    "kind": sym.kind,
+                    "signature": sym.signature or "",
+                    "exported": sym.exported,
+                    "line_start": sym.line_start,
+                    "line_end": sym.line_end,
+                }
+            }
+
+        return {"hover": None}
+
+    async def diagnostics(self, file: str, branch: str) -> dict:
+        """Return empty diagnostics — requires a real language server."""
+        return {
+            "diagnostics": [],
+            "message": "Diagnostics require a running language server (not available for remote repos)",
+        }

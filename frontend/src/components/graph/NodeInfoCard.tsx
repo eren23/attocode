@@ -2,7 +2,7 @@ import type {
   DependencyGraphNode,
   DependencyGraphEdge,
 } from "@/api/generated/schema";
-import { X, ExternalLink, FolderOpen } from "lucide-react";
+import { X, ExternalLink, FolderOpen, Columns2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
 const EXT_COLORS: Record<string, string> = {
@@ -30,6 +30,7 @@ interface NodeInfoCardProps {
   edges: DependencyGraphEdge[];
   onClose: () => void;
   onNavigateToFile: (path: string) => void;
+  onViewSideBySide?: (path: string) => void;
   onSelectNode: (nodeId: string) => void;
   onFocusDirectory?: (dir: string) => void;
 }
@@ -40,6 +41,7 @@ export function NodeInfoCard({
   edges,
   onClose,
   onNavigateToFile,
+  onViewSideBySide,
   onSelectNode,
   onFocusDirectory,
 }: NodeInfoCardProps) {
@@ -61,28 +63,28 @@ export function NodeInfoCard({
 
   return (
     <div
-      className="absolute z-50 w-80 max-h-96 overflow-y-auto rounded-lg border border-zinc-700 bg-zinc-900/95 shadow-xl backdrop-blur-sm"
+      className="absolute z-50 w-80 max-h-96 overflow-y-auto rounded-lg border border-border bg-card/95 shadow-xl backdrop-blur-sm"
       style={style}
     >
       {/* Header */}
-      <div className="sticky top-0 flex items-start justify-between gap-2 border-b border-zinc-700/50 bg-zinc-900/95 px-3 py-2.5">
+      <div className="sticky top-0 flex items-start justify-between gap-2 border-b border-border/50 bg-card/95 px-3 py-2.5">
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2">
             <span
               className="inline-block h-2.5 w-2.5 shrink-0 rounded-full"
               style={{ backgroundColor: color }}
             />
-            <span className="truncate font-mono text-xs text-zinc-200">
+            <span className="truncate font-mono text-xs text-foreground">
               {node.label}
             </span>
           </div>
-          <p className="mt-1 text-[10px] text-zinc-500">
+          <p className="mt-1 text-[10px] text-muted-foreground">
             {incoming.length} incoming, {outgoing.length} outgoing
           </p>
         </div>
         <button
           onClick={onClose}
-          className="shrink-0 rounded p-0.5 text-zinc-500 hover:bg-zinc-800 hover:text-zinc-300"
+          className="shrink-0 rounded p-0.5 text-muted-foreground hover:bg-white/[0.04] hover:text-foreground"
         >
           <X className="h-3.5 w-3.5" />
         </button>
@@ -92,7 +94,7 @@ export function NodeInfoCard({
       <div className="space-y-2 px-3 py-2">
         {incoming.length > 0 && (
           <div>
-            <p className="text-[10px] font-medium uppercase tracking-wider text-zinc-500">
+            <p className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
               Incoming ({incoming.length})
             </p>
             <div className="mt-1 space-y-0.5">
@@ -100,7 +102,7 @@ export function NodeInfoCard({
                 <button
                   key={i}
                   onClick={() => onSelectNode(e.source)}
-                  className="block w-full truncate rounded px-1.5 py-0.5 text-left font-mono text-[11px] text-zinc-400 hover:bg-zinc-800 hover:text-zinc-200"
+                  className="block w-full truncate rounded px-1.5 py-0.5 text-left font-mono text-[11px] text-muted-foreground hover:bg-white/[0.04] hover:text-foreground"
                 >
                   {e.source}
                 </button>
@@ -111,7 +113,7 @@ export function NodeInfoCard({
 
         {outgoing.length > 0 && (
           <div>
-            <p className="text-[10px] font-medium uppercase tracking-wider text-zinc-500">
+            <p className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
               Outgoing ({outgoing.length})
             </p>
             <div className="mt-1 space-y-0.5">
@@ -119,7 +121,7 @@ export function NodeInfoCard({
                 <button
                   key={i}
                   onClick={() => onSelectNode(e.target)}
-                  className="block w-full truncate rounded px-1.5 py-0.5 text-left font-mono text-[11px] text-zinc-400 hover:bg-zinc-800 hover:text-zinc-200"
+                  className="block w-full truncate rounded px-1.5 py-0.5 text-left font-mono text-[11px] text-muted-foreground hover:bg-white/[0.04] hover:text-foreground"
                 >
                   {e.target}
                 </button>
@@ -130,7 +132,18 @@ export function NodeInfoCard({
       </div>
 
       {/* Actions */}
-      <div className="border-t border-zinc-700/50 px-3 py-2 space-y-1.5">
+      <div className="border-t border-border/50 px-3 py-2 space-y-1.5">
+        {onViewSideBySide && (
+          <Button
+            variant="outline"
+            size="sm"
+            className="w-full gap-1.5 text-xs"
+            onClick={() => onViewSideBySide(node.label)}
+          >
+            <Columns2 className="h-3 w-3" />
+            View Side-by-Side
+          </Button>
+        )}
         <Button
           variant="outline"
           size="sm"
@@ -138,7 +151,7 @@ export function NodeInfoCard({
           onClick={() => onNavigateToFile(node.label)}
         >
           <ExternalLink className="h-3 w-3" />
-          Open in Files
+          Open in Full Page
         </Button>
         {directory && onFocusDirectory && (
           <Button

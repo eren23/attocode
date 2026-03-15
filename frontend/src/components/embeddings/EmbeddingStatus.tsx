@@ -13,7 +13,7 @@ export function EmbeddingCoverageInline({ status }: { status: EmbeddingStatus })
         <circle cx="16" cy="16" r="12" fill="none" stroke="#27272a" strokeWidth="4" />
         <circle
           cx="16" cy="16" r="12"
-          fill="none" stroke="#8b5cf6" strokeWidth="4"
+          fill="none" stroke="#2563eb" strokeWidth="4"
           strokeDasharray={`${status.coverage * 75.4} 75.4`}
           strokeLinecap="round"
           transform="rotate(-90 16 16)"
@@ -59,7 +59,7 @@ export function EmbeddingStatusCard({ status }: { status: EmbeddingStatus }) {
               cy="40"
               r="32"
               fill="none"
-              stroke="#8b5cf6"
+              stroke="#2563eb"
               strokeWidth="8"
               strokeDasharray={`${status.coverage * 201} 201`}
               strokeLinecap="round"

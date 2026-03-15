@@ -18,10 +18,13 @@ async def repo_events(
     websocket: WebSocket,
     repo_id: uuid.UUID,
     token: str = Query(""),
+    last_event_id: str = Query("$", alias="last_event_id"),
 ) -> None:
     """Stream real-time events for a repository with bidirectional presence support.
 
     Authenticate via query parameter `token` (JWT).
+    Pass `last_event_id` to replay missed events (e.g. after reconnect).
+    Use "$" for new events only, or "0" to replay all available events.
 
     Outgoing events: index.started, index.progress, index.completed, index.failed,
                      presence.joined, presence.left, presence.file_changed.
@@ -60,7 +63,7 @@ async def repo_events(
         """Read events from Redis pubsub and forward to WebSocket."""
         from attocode.code_intel.pubsub import subscribe
 
-        async for event in subscribe(repo_id_str):
+        async for event in subscribe(repo_id_str, last_event_id=last_event_id):
             await websocket.send_json(event)
 
     async def _ws_reader() -> None:

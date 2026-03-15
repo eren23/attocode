@@ -227,13 +227,13 @@ Hooks are shell commands triggered by lifecycle events. Configure them in `.atto
   "hooks": [
     {
       "event": "tool.before",
-      "command": "python scripts/pre_tool_check.py",
+      "command": "python my_hooks/pre_tool_check.py",
       "timeout": 30,
       "enabled": true
     },
     {
       "event": "run.after",
-      "command": "bash scripts/cleanup.sh",
+      "command": "bash my_hooks/cleanup.sh",
       "timeout": 60,
       "enabled": true
     }
@@ -351,6 +351,8 @@ To add a new integration module:
 2. Export from the subdirectory's `__init__.py` barrel
 3. The root `integrations/__init__.py` re-exports automatically
 4. Wire into the agent via `feature_initializer.py`
+
+> **Service-mode note**: In service mode, additional DB-backed capabilities are available: diff engine, security scanning, LSP (definition/references/hover), and blame — all working for remote repos without local git clones. These use the same provider pattern (see `DbAnalysisProvider`, `DbLSPProvider` in `api/providers/db_provider.py`).
 
 ### Integration Domains
 

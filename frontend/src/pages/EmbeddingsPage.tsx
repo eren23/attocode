@@ -115,7 +115,7 @@ export function EmbeddingsPage() {
             >
               {t}
               {tab === t && (
-                <span className="absolute bottom-0 left-0 right-0 h-0.5 bg-violet-500" />
+                <span className="absolute bottom-0 left-0 right-0 h-0.5 bg-primary" />
               )}
             </button>
           ))}
@@ -195,7 +195,7 @@ export function EmbeddingsPage() {
               value={query}
               onChange={(e) => setQuery(e.target.value)}
               placeholder={`Search ${totalFiles.toLocaleString()} files semantically...`}
-              className="h-12 w-full rounded-lg border border-input bg-background pl-11 pr-4 text-sm transition-all focus:outline-none focus:ring-2 focus:ring-violet-500 focus:border-transparent placeholder:text-muted-foreground"
+              className="h-12 w-full rounded-xl border border-input bg-background pl-11 pr-4 text-sm transition-all focus:outline-none focus:ring-2 focus:ring-primary/40 focus:border-transparent placeholder:text-muted-foreground"
             />
             {debouncedQuery && search.data && (
               <span className="absolute right-3 top-1/2 -translate-y-1/2 rounded-md bg-muted px-2 py-0.5 text-xs text-muted-foreground">
@@ -204,40 +204,7 @@ export function EmbeddingsPage() {
             )}
           </div>
 
-          {/* Semantic search results */}
-          {search.data && search.data.results.length > 0 && (
-            <div className="space-y-3">
-              <EmbeddingSearchPreview
-                results={search.data.results}
-                query={search.data.query}
-                total={search.data.total}
-                repoId={repoId!}
-              />
-              {/* Find Similar buttons for each result */}
-              <div className="space-y-1">
-                {search.data.results.map((result) => (
-                  <div
-                    key={result.file}
-                    className="flex items-center justify-between rounded-md px-3 py-1.5 text-xs hover:bg-accent/50"
-                  >
-                    <span className="font-mono text-muted-foreground truncate">
-                      {result.file}
-                    </span>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      className="text-xs h-7 shrink-0"
-                      onClick={() => handleFindSimilarFromSearch(result.file)}
-                    >
-                      Find Similar
-                    </Button>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {/* Similar files panel (search tab) */}
+          {/* Similar files panel (appears above results when active) */}
           {findSimilar.isPending && similarTarget && <LoadingSpinner />}
           {findSimilar.data && similarTarget && (
             <SimilarFilesPanel
@@ -248,6 +215,23 @@ export function EmbeddingsPage() {
                 findSimilar.reset();
               }}
             />
+          )}
+
+          {/* Unified search results with inline Find Similar */}
+          {search.data && search.data.results.length > 0 && (
+            <EmbeddingSearchPreview
+              results={search.data.results}
+              query={search.data.query}
+              total={search.data.total}
+              repoId={repoId!}
+              onFindSimilar={handleFindSimilarFromSearch}
+            />
+          )}
+
+          {debouncedQuery && search.data && search.data.results.length === 0 && (
+            <div className="text-center py-8 text-sm text-muted-foreground">
+              No results found for &ldquo;{debouncedQuery}&rdquo;
+            </div>
           )}
         </>
       )}

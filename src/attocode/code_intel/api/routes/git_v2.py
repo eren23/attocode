@@ -86,14 +86,47 @@ class DiffResponse(BaseModel):
 # --- Helpers ---
 
 
-async def _get_repo(project_id: uuid.UUID, session: AsyncSession):
+async def _get_repo(project_id: uuid.UUID, session: AsyncSession, auth: AuthContext | None = None):
     from attocode.code_intel.db.models import Repository
 
     result = await session.execute(select(Repository).where(Repository.id == project_id))
     repo = result.scalar_one_or_none()
     if repo is None:
         raise HTTPException(status_code=404, detail="Repository not found")
+    # Org isolation
+    if auth and auth.org_id and repo.org_id != auth.org_id:
+        raise HTTPException(status_code=404, detail="Repository not found")
     return repo
+
+
+def _patch_entry_from_db_diff(patch) -> PatchEntryResponse:
+    """Convert a diff_engine.PatchEntry to PatchEntryResponse."""
+    return PatchEntryResponse(
+        path=patch.path,
+        status=patch.status,
+        old_path=patch.old_path,
+        additions=patch.additions,
+        deletions=patch.deletions,
+        hunks=[
+            DiffHunkResponse(
+                old_start=h.old_start,
+                old_lines=h.old_lines,
+                new_start=h.new_start,
+                new_lines=h.new_lines,
+                header=h.header,
+                lines=[
+                    DiffLineResponse(
+                        origin=ln.origin,
+                        content=ln.content,
+                        old_lineno=ln.old_lineno,
+                        new_lineno=ln.new_lineno,
+                    )
+                    for ln in h.lines
+                ],
+            )
+            for h in patch.hunks
+        ],
+    )
 
 
 # --- Endpoints ---
@@ -110,10 +143,43 @@ async def get_commit_log(
     session: AsyncSession = Depends(get_db_session),
 ) -> CommitListResponse:
     """Get paginated commit log."""
-    repo = await _get_repo(project_id, session)
-    git = get_git_manager()
+    repo = await _get_repo(project_id, session, auth)
     resolved_ref = ref if ref else repo.default_branch
 
+    # DB fallback for repos without a bare clone (remote-connected repos)
+    if not repo.clone_path:
+        from attocode.code_intel.db.models import Commit
+
+        query = (
+            select(Commit)
+            .where(Commit.repo_id == project_id, Commit.branch_name == resolved_ref)
+            .order_by(Commit.timestamp.desc())
+            .limit(limit)
+            .offset(offset)
+        )
+        result = await session.execute(query)
+        rows = result.scalars().all()
+
+        items = [
+            CommitInfoResponse(
+                oid=c.oid,
+                message=c.message,
+                author_name=c.author_name,
+                author_email=c.author_email,
+                timestamp=c.timestamp,
+                parent_oids=c.parent_oids,
+            )
+            for c in rows
+        ]
+        return CommitListResponse(
+            commits=items,
+            total=len(items) + offset,
+            limit=limit,
+            offset=offset,
+            has_more=len(items) == limit,
+        )
+
+    git = get_git_manager()
     try:
         commits = git.get_commit_log(
             str(project_id), resolved_ref,
@@ -151,9 +217,38 @@ async def get_commit_detail(
     session: AsyncSession = Depends(get_db_session),
 ) -> CommitDetailResponse:
     """Get full commit detail with file diffs."""
-    await _get_repo(project_id, session)
-    git = get_git_manager()
+    repo = await _get_repo(project_id, session, auth)
 
+    if not repo.clone_path:
+        # DB fallback: return commit metadata with changed_files if available
+        from attocode.code_intel.db.models import Commit
+
+        result = await session.execute(
+            select(Commit).where(Commit.repo_id == project_id, Commit.oid == sha)
+        )
+        c = result.scalar_one_or_none()
+        if c is None:
+            raise HTTPException(status_code=404, detail=f"Commit {sha} not found")
+
+        files: list[PatchEntryResponse] = []
+        if c.changed_files:
+            files = [
+                PatchEntryResponse(
+                    path=cf.get("path", ""),
+                    status=cf.get("status", "M"),
+                )
+                for cf in c.changed_files
+            ]
+
+        return CommitDetailResponse(
+            commit=CommitInfoResponse(
+                oid=c.oid, message=c.message, author_name=c.author_name,
+                author_email=c.author_email, timestamp=c.timestamp, parent_oids=c.parent_oids,
+            ),
+            files=files,
+        )
+
+    git = get_git_manager()
     try:
         commit_info, patches = git.get_commit_detail(str(project_id), sha)
     except (FileNotFoundError, ValueError) as e:
@@ -210,7 +305,37 @@ async def get_diff(
     session: AsyncSession = Depends(get_db_session),
 ) -> DiffResponse:
     """Diff between two refs with patch content."""
-    await _get_repo(project_id, session)
+    repo = await _get_repo(project_id, session, auth)
+
+    if not repo.clone_path:
+        # DB-backed diff: resolve from_ref/to_ref as branch names
+        from attocode.code_intel.db.models import Branch
+        from attocode.code_intel.storage.diff_engine import compute_branch_diff
+
+        branch_a_result = await session.execute(
+            select(Branch).where(Branch.repo_id == project_id, Branch.name == from_ref)
+        )
+        branch_a = branch_a_result.scalar_one_or_none()
+        if branch_a is None:
+            raise HTTPException(status_code=404, detail=f"Branch '{from_ref}' not found")
+
+        branch_b_result = await session.execute(
+            select(Branch).where(Branch.repo_id == project_id, Branch.name == to_ref)
+        )
+        branch_b = branch_b_result.scalar_one_or_none()
+        if branch_b is None:
+            raise HTTPException(status_code=404, detail=f"Branch '{to_ref}' not found")
+
+        patches = await compute_branch_diff(
+            session, branch_a.id, branch_b.id, path_filter=path,
+        )
+
+        return DiffResponse(
+            from_ref=from_ref,
+            to_ref=to_ref,
+            files=[_patch_entry_from_db_diff(p) for p in patches],
+        )
+
     git = get_git_manager()
 
     try:
@@ -262,12 +387,45 @@ async def get_blame(
     session: AsyncSession = Depends(get_db_session),
 ) -> list[BlameHunkResponse]:
     """Get line-level blame for a file."""
-    repo = await _get_repo(project_id, session)
-    git = get_git_manager()
-    resolved_ref = ref if ref else repo.default_branch
+    repo = await _get_repo(project_id, session, auth)
 
     if ".." in path.split("/"):
         raise HTTPException(status_code=400, detail="Path traversal not allowed")
+
+    if not repo.clone_path:
+        # DB fallback: query blame_hunks table
+        from attocode.code_intel.db.models import BlameHunk
+
+        resolved_ref = ref if ref else repo.default_branch
+        result = await session.execute(
+            select(BlameHunk)
+            .where(
+                BlameHunk.repo_id == project_id,
+                BlameHunk.path == path,
+                BlameHunk.branch_name == resolved_ref,
+            )
+            .order_by(BlameHunk.start_line)
+        )
+        hunks = result.scalars().all()
+        if not hunks:
+            raise HTTPException(
+                status_code=404,
+                detail=f"No blame data for {path}. Push blame data via notify/blame.",
+            )
+        return [
+            BlameHunkResponse(
+                commit_oid=h.commit_oid,
+                author_name=h.author_name,
+                author_email=h.author_email,
+                timestamp=h.timestamp,
+                start_line=h.start_line,
+                end_line=h.end_line,
+            )
+            for h in hunks
+        ]
+
+    git = get_git_manager()
+    resolved_ref = ref if ref else repo.default_branch
 
     try:
         hunks = git.get_blame(str(project_id), resolved_ref, path)

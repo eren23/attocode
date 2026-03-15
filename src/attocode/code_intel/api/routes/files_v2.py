@@ -1,4 +1,9 @@
-"""Service-mode file/tree browsing via bare git repos (v2)."""
+"""Service-mode file/tree browsing via bare git repos (v2).
+
+Supports two backends:
+1. Bare git clone on disk (repos with clone_path) — uses GitManager
+2. DB-backed manifest (remote-connected repos without clone_path) — uses BranchOverlay + ContentStore
+"""
 
 from __future__ import annotations
 
@@ -12,7 +17,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from attocode.code_intel.api.auth import resolve_auth
 from attocode.code_intel.api.auth.context import AuthContext
-from attocode.code_intel.api.deps import get_db_session, get_git_manager
+from attocode.code_intel.api.deps import get_branch_context, get_db_session, get_git_manager
 from attocode.code_intel.api.utils import MAX_FILE_SIZE, detect_language, is_binary
 
 router = APIRouter(prefix="/api/v2/projects/{project_id}", tags=["files-v2"])
@@ -62,12 +67,15 @@ class RepoStatsResponse(BaseModel):
 # --- Helpers ---
 
 
-async def _get_repo(project_id: uuid.UUID, session: AsyncSession):
+async def _get_repo(project_id: uuid.UUID, session: AsyncSession, auth: AuthContext | None = None):
     from attocode.code_intel.db.models import Repository
 
     result = await session.execute(select(Repository).where(Repository.id == project_id))
     repo = result.scalar_one_or_none()
     if repo is None:
+        raise HTTPException(status_code=404, detail="Repository not found")
+    # Org isolation
+    if auth and auth.org_id and repo.org_id != auth.org_id:
         raise HTTPException(status_code=404, detail="Repository not found")
     return repo
 
@@ -75,6 +83,84 @@ async def _get_repo(project_id: uuid.UUID, session: AsyncSession):
 async def _resolve_ref(repo, ref: str) -> str:
     """Resolve ref to use — defaults to repo's default_branch."""
     return ref if ref else repo.default_branch
+
+
+async def _build_tree_from_manifest(
+    session: AsyncSession,
+    repo_id: uuid.UUID,
+    ref: str,
+    path: str = "",
+) -> list[TreeEntryV2]:
+    """Build nested tree from BranchFile manifest (for repos without bare git clones).
+
+    Resolves the manifest once, then builds the tree in-memory.
+    """
+    from attocode.code_intel.db.models import FileContent
+
+    branch_ctx = await get_branch_context(repo_id, ref, session)
+    manifest = branch_ctx.manifest  # dict[str, str] path → sha
+
+    # Fetch file sizes in bulk
+    shas = list(set(manifest.values()))
+    sizes: dict[str, int] = {}
+    if shas:
+        result = await session.execute(
+            select(FileContent.sha256, FileContent.size_bytes)
+            .where(FileContent.sha256.in_(shas))
+        )
+        sizes = {row[0]: row[1] for row in result}
+
+    return _assemble_tree(manifest, sizes, path)
+
+
+def _assemble_tree(
+    manifest: dict[str, str],
+    sizes: dict[str, int],
+    path: str = "",
+) -> list[TreeEntryV2]:
+    """Build a nested TreeEntryV2 list from a flat manifest (pure in-memory, no DB calls)."""
+    prefix = (path.rstrip("/") + "/") if path else ""
+
+    dirs: dict[str, list[str]] = {}
+    files: list[tuple[str, str, int]] = []
+
+    for file_path, sha in manifest.items():
+        if prefix and not file_path.startswith(prefix):
+            continue
+        relative = file_path[len(prefix):]
+        parts = relative.split("/")
+        if len(parts) == 1:
+            files.append((parts[0], file_path, sizes.get(sha, 0)))
+        else:
+            dir_name = parts[0]
+            if dir_name not in dirs:
+                dirs[dir_name] = []
+            dirs[dir_name].append(file_path)
+
+    entries: list[TreeEntryV2] = []
+
+    for dir_name in sorted(dirs.keys(), key=str.lower):
+        dir_path = f"{prefix}{dir_name}" if prefix else dir_name
+        children = _assemble_tree(manifest, sizes, dir_path)
+        entries.append(TreeEntryV2(
+            name=dir_name,
+            path=dir_path,
+            type="directory",
+            size=0,
+            language="",
+            children=children,
+        ))
+
+    for name, full_path, size in sorted(files, key=lambda x: x[0].lower()):
+        entries.append(TreeEntryV2(
+            name=name,
+            path=full_path,
+            type="file",
+            size=size,
+            language=_detect_language(name),
+        ))
+
+    return entries
 
 
 # --- Endpoints ---
@@ -119,9 +205,15 @@ async def get_root_tree(
     session: AsyncSession = Depends(get_db_session),
 ) -> TreeResponse:
     """List root tree at a ref. With recursive=true, returns full nested tree."""
-    repo = await _get_repo(project_id, session)
-    git = get_git_manager()
+    repo = await _get_repo(project_id, session, auth)
     resolved_ref = await _resolve_ref(repo, ref)
+
+    # DB-backed fallback for repos without a bare git clone (remote-connected)
+    if not repo.clone_path:
+        entries = await _build_tree_from_manifest(session, project_id, resolved_ref)
+        return TreeResponse(path="", ref=resolved_ref, entries=entries)
+
+    git = get_git_manager()
 
     if recursive:
         import asyncio
@@ -161,13 +253,19 @@ async def get_subtree(
     session: AsyncSession = Depends(get_db_session),
 ) -> TreeResponse:
     """List subtree at a path and ref."""
-    repo = await _get_repo(project_id, session)
-    git = get_git_manager()
+    repo = await _get_repo(project_id, session, auth)
     resolved_ref = await _resolve_ref(repo, ref)
 
     # Validate path
     if ".." in path.split("/"):
         raise HTTPException(status_code=400, detail="Path traversal not allowed")
+
+    # DB-backed fallback for repos without a bare git clone
+    if not repo.clone_path:
+        entries = await _build_tree_from_manifest(session, project_id, resolved_ref, path)
+        return TreeResponse(path=path, ref=resolved_ref, entries=entries)
+
+    git = get_git_manager()
 
     try:
         entries = git.get_tree(str(project_id), resolved_ref, path)
@@ -199,18 +297,31 @@ async def get_file_content(
     session: AsyncSession = Depends(get_db_session),
 ) -> FileContentV2Response:
     """Read file content at a specific ref."""
-    repo = await _get_repo(project_id, session)
-    git = get_git_manager()
+    repo = await _get_repo(project_id, session, auth)
     resolved_ref = await _resolve_ref(repo, ref)
 
     # Validate path
     if ".." in path.split("/"):
         raise HTTPException(status_code=400, detail="Path traversal not allowed")
 
-    try:
-        data = git.read_file(str(project_id), resolved_ref, path)
-    except (FileNotFoundError, KeyError) as e:
-        raise HTTPException(status_code=404, detail=f"File not found: {path}")
+    # DB-backed fallback: read from ContentStore via manifest SHA
+    if not repo.clone_path:
+        from attocode.code_intel.storage.content_store import ContentStore
+
+        branch_ctx = await get_branch_context(project_id, resolved_ref, session)
+        sha = branch_ctx.manifest.get(path)
+        if sha is None:
+            raise HTTPException(status_code=404, detail=f"File not found: {path}")
+        content_store = ContentStore(session)
+        data = await content_store.get(sha)
+        if data is None:
+            raise HTTPException(status_code=404, detail=f"Content not found for {path}")
+    else:
+        git = get_git_manager()
+        try:
+            data = git.read_file(str(project_id), resolved_ref, path)
+        except (FileNotFoundError, KeyError) as e:
+            raise HTTPException(status_code=404, detail=f"File not found: {path}")
 
     if len(data) > _MAX_FILE_SIZE:
         raise HTTPException(
@@ -242,10 +353,9 @@ async def get_repo_stats(
     session: AsyncSession = Depends(get_db_session),
 ) -> RepoStatsResponse:
     """Get repository file/symbol/language/embedding stats."""
-    from attocode.code_intel.api.deps import get_branch_context
     from attocode.code_intel.db.models import Embedding, Symbol
 
-    repo = await _get_repo(project_id, session)
+    repo = await _get_repo(project_id, session, auth)
     resolved_ref = ref if ref else repo.default_branch
 
     try:

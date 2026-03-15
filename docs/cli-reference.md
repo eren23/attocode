@@ -87,6 +87,103 @@ attocode code-intel serve --transport sse --host 0.0.0.0 --port 9090
 
 The HTTP transport serves interactive API docs at `/docs` (Swagger) and `/redoc`. See [Code Intel HTTP API](code-intel-http-api.md) for the full endpoint reference.
 
+### `setup` — Bootstrap local dev environment
+
+```bash
+attocode code-intel setup [options]
+```
+
+| Flag | Description |
+|------|-------------|
+| `--reset` | Wipe Docker volumes and dev state, then re-bootstrap |
+| `--skip-deps` | Skip `uv sync` (use if deps already installed) |
+| `--project <path>` | Project directory (default: `.`) |
+
+Developer convenience — bootstraps local infrastructure for contributing to attocode. Runs in two phases: infrastructure (Docker, deps, migrations) then API registration (dev user, org, repo). If the API server isn't running, Phase 1 completes and prints instructions. Re-run after starting the API to complete Phase 2.
+
+To connect to an existing server, use `attocode code-intel connect` instead.
+
+## Remote Connection Commands
+
+The `code-intel` subcommand supports connecting a local project to a remote code-intel server for real-time indexing.
+
+### `connect` — Connect to a server
+
+```bash
+# Interactive (prompts for email/password, org/repo selection)
+attocode code-intel connect --server <url>
+
+# Non-interactive with token (CI, scripts)
+attocode code-intel connect --server <url> --token <token> [--repo <id>]
+
+# Non-interactive with credentials
+attocode code-intel connect --server <url> --email <email> --password <pass>
+```
+
+| Flag | Required | Description |
+|------|----------|-------------|
+| `--server <url>` | Yes | Server URL (e.g. `https://code.example.com`) |
+| `--token <token>` | No | JWT or API key — skips interactive login |
+| `--email <email>` | No | Email for register/login (skip prompt) |
+| `--password <pass>` | No | Password for register/login (skip prompt) |
+| `--org <slug-or-id>` | No | Organization slug or ID (skip selection) |
+| `--repo <id>` | No | Repository UUID on the remote server |
+| `--name <repo-name>` | No | Override auto-detected repository name |
+| `--project <path>` | No | Project directory (default: `.`) |
+| `--ci` | No | CI/CD mode: non-interactive, exits non-zero on error |
+| `--skip-sync` | No | Skip initial file sync (CI may only register) |
+| `--state-file <path>` | No | Alternative state file location for ephemeral CI runners |
+| `--force` | No | Clear cached state and re-run |
+
+The primary onboarding flow for service mode. When run without `--token`:
+
+1. Health-checks the server
+2. Registers a new account or logs in (interactive or via `--email`/`--password`)
+3. Auto-detects or prompts for organization (creates one if none exist)
+4. Adds the current project as a repo (or matches an existing one by `local_path`)
+5. Writes `.attocode/config.toml` and `.attocode/dev-state.json`
+6. Verifies authentication and repo access
+
+When run with `--token`, behaves as before — writes config and verifies.
+
+Saves connection config to `.attocode/config.toml` so that subsequent `notify` and `watch` commands POST to the remote server.
+
+### CI/CD Examples
+
+```bash
+# CI pipeline: register + skip sync
+attocode code-intel connect --server $SERVER --token $TOKEN --repo $REPO_ID --ci --skip-sync
+
+# CI with ephemeral state
+attocode code-intel connect --server $SERVER --token $TOKEN --ci --state-file /tmp/ci-state.json
+
+# Force re-register (clear cached state)
+attocode code-intel connect --server $SERVER --token $TOKEN --repo $REPO_ID --force
+```
+
+### `test-connection` — Verify remote connectivity
+
+```bash
+attocode code-intel test-connection [--project <path>]
+```
+
+Runs a series of checks: server reachable, auth valid, repo exists, notify endpoint works, WebSocket connection, and index stats. Reports pass/fail for each.
+
+### `watch` — Watch filesystem and notify remote
+
+```bash
+attocode code-intel watch [--project <path>] [--debounce <ms>]
+```
+
+| Flag | Default | Description |
+|------|---------|-------------|
+| `--project <path>` | `.` | Project directory to watch |
+| `--debounce <ms>` | `500` | Debounce interval in milliseconds |
+
+Uses `watchfiles` (Rust-based) to detect file changes and batch-POSTs them to the remote server's notify endpoint. Watches common code file extensions (`.py`, `.js`, `.ts`, `.go`, `.rs`, `.java`, etc.). Press `Ctrl+C` to stop.
+
+---
+
 ## Keyboard Shortcuts
 
 | Key | Action |

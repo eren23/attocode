@@ -186,7 +186,21 @@ Multiple users pushing to different branches work without contention:
 
 **Example**: User A pushes to `main`, User B pushes to `feature/auth` — both index in parallel, both write to `file_contents` (potentially the same SHAs), each updates their own branch overlay.
 
+## Advisory Locks (Concurrent Indexing Protection)
+
+When multiple file change notifications arrive for the same branch simultaneously, the incremental pipeline acquires a PostgreSQL advisory lock to prevent concurrent indexing of the same branch:
+
+```sql
+SELECT pg_advisory_xact_lock(:key)
+```
+
+The lock key is derived from the first 8 bytes of the branch UUID, ensuring deterministic, branch-scoped locking. The lock is transaction-scoped (`pg_advisory_xact_lock`) — it releases automatically when the transaction commits or rolls back.
+
+On non-PostgreSQL backends (e.g. SQLite in tests), the lock acquisition silently fails and indexing proceeds without locking.
+
 ## Branch Comparison
+
+> **DB-Backed Diff**: For remote repos (no local clone), the diff endpoint now returns line-level hunks with added/removed content, not just file-level changes. This uses the diff engine backed by `file_contents` in Postgres.
 
 Compare what changed between two branches:
 
@@ -209,6 +223,61 @@ Response:
 ```
 
 This resolves both branch manifests and diffs them — no git operations needed.
+
+## Branch Merging
+
+Merge one branch overlay into another:
+
+```bash
+curl -X POST http://localhost:8080/api/v1/repos/{repo_id}/branches/merge \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"source_branch": "feature/auth", "target_branch": "main", "delete_source": true}'
+```
+
+The merge operation:
+
+- Applies all overlay entries from the source branch onto the target branch
+- Optionally deletes the source branch (`"delete_source": true`)
+- Auto-triggered by the GitHub PR merge webhook — when a PR is merged, the system detects it and merges the corresponding overlay
+
+## Stale Branch Cleanup
+
+Merged and inactive branches are cleaned up automatically:
+
+- **Merged branches**: Cleaned 7 days after merge
+- **Inactive branches**: Cleaned if no overlay changes and no commits for 30 days
+- **Schedule**: Cleanup cron runs every 6 hours
+
+No manual intervention required. The cleanup only removes branch overlays — content in `file_contents` is preserved (other branches may reference the same SHAs).
+
+## Blame Data
+
+The CLI pushes blame data during initial sync (`connect --force` or first connect). Blame is parsed from `git blame --porcelain` output and stored in the database.
+
+```bash
+# Retrieve blame for a file (DB-backed for remote repos)
+curl "http://localhost:8080/api/v2/projects/{project_id}/blame/src/app.py" \
+  -H "Authorization: Bearer $TOKEN"
+```
+
+Response contains an array of blame hunks with commit OID, author, timestamp, and line ranges.
+
+## Commit History
+
+The `_push_commit_history` flow now includes `--name-status`, so each commit carries a `changed_files` array:
+
+```bash
+# List commits
+curl "http://localhost:8080/api/v2/projects/{project_id}/commits" \
+  -H "Authorization: Bearer $TOKEN"
+
+# Commit detail with changed files
+curl "http://localhost:8080/api/v2/projects/{project_id}/commits/{sha}" \
+  -H "Authorization: Bearer $TOKEN"
+```
+
+The commit detail response includes a `changed_files` array with `path`, `status` (added/modified/deleted), and `old_path` (for renames).
 
 ## Content Deduplication Savings
 

@@ -8,9 +8,10 @@ interface EmbeddingSearchPreviewProps {
   query: string;
   total: number;
   repoId: string;
+  onFindSimilar?: (filePath: string) => void;
 }
 
-export function EmbeddingSearchPreview({ results, query, total }: EmbeddingSearchPreviewProps) {
+export function EmbeddingSearchPreview({ results, query, total, onFindSimilar }: EmbeddingSearchPreviewProps) {
   const navigate = useNavigate();
 
   if (!results.length) return null;
@@ -22,21 +23,33 @@ export function EmbeddingSearchPreview({ results, query, total }: EmbeddingSearc
       </CardHeader>
       <CardContent className="space-y-1">
         {results.slice(0, 5).map((r, i) => (
-          <button
+          <div
             key={i}
-            onClick={() => navigate(`../files?path=${encodeURIComponent(r.file)}`)}
-            className="flex w-full items-center gap-2 rounded px-2 py-1.5 text-left text-sm hover:bg-accent/30 transition-colors"
+            className="flex w-full items-center gap-2 rounded px-2 py-1.5 text-sm hover:bg-primary/[0.04] transition-colors"
           >
-            <span className="font-mono text-xs text-primary truncate flex-1">{r.file}</span>
-            <span className="shrink-0 rounded bg-violet-500/20 px-1.5 py-0.5 text-xs font-medium text-violet-300">
+            <button
+              onClick={() => navigate(`../files?path=${encodeURIComponent(r.file)}`)}
+              className="font-mono text-xs text-primary truncate flex-1 text-left"
+            >
+              {r.file}
+            </button>
+            <span className="shrink-0 rounded bg-primary/20 px-1.5 py-0.5 text-xs font-medium text-primary">
               {(r.score * 100).toFixed(0)}%
             </span>
-          </button>
+            {onFindSimilar && (
+              <button
+                onClick={() => onFindSimilar(r.file)}
+                className="shrink-0 rounded px-2 py-0.5 text-xs text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+              >
+                Find Similar
+              </button>
+            )}
+          </div>
         ))}
         {total > 5 && (
           <button
             onClick={() => navigate(`../search?q=${encodeURIComponent(query)}`)}
-            className="flex items-center gap-1 pt-1 text-xs text-violet-400 hover:text-violet-300 transition-colors"
+            className="flex items-center gap-1 pt-1 text-xs text-primary hover:text-primary/80 transition-colors"
           >
             View all {total} results in Search <ArrowRight className="h-3 w-3" />
           </button>

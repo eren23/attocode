@@ -123,7 +123,7 @@ def create_app(config: CodeIntelConfig | None = None) -> FastAPI:
     if config.is_service_mode:
         from attocode.code_intel.api.middleware import RateLimitMiddleware
 
-        app.add_middleware(RateLimitMiddleware, requests_per_minute=60)
+        app.add_middleware(RateLimitMiddleware, requests_per_minute=300)
 
     # Core routes — each module has router_v1 (text) + router_v2 (JSON)
     app.include_router(health.router)
@@ -155,12 +155,14 @@ def create_app(config: CodeIntelConfig | None = None) -> FastAPI:
             orgs,
             preferences,
             presence,
+            repos,
             webhooks,
             websocket,
         )
 
         app.include_router(auth.router)
         app.include_router(orgs.router)
+        app.include_router(repos.router)
         app.include_router(api_keys.router)
         app.include_router(branches.router)
         app.include_router(webhooks.router)

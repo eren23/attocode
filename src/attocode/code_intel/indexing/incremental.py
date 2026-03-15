@@ -17,7 +17,7 @@ import uuid
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from attocode.code_intel.indexing.parser import detect_language, extract_symbols
+from attocode.code_intel.indexing.parser import detect_language, extract_imports, extract_symbols
 
 if TYPE_CHECKING:
     from sqlalchemy.ext.asyncio import AsyncSession
@@ -48,10 +48,23 @@ class IncrementalPipeline:
         from attocode.code_intel.storage.symbol_store import SymbolStore
 
         self._session = session
+        from attocode.code_intel.storage.dependency_store import DependencyStore
+
         self._content_store = ContentStore(session)
         self._symbol_store = SymbolStore(session)
         self._embedding_store = EmbeddingStore(session)
         self._overlay = BranchOverlay(session)
+        self._dep_store = DependencyStore(session)
+
+    @staticmethod
+    async def acquire_branch_lock(session: AsyncSession, branch_id: uuid.UUID) -> None:
+        """Acquire a PostgreSQL advisory lock for a branch to prevent concurrent indexing."""
+        from sqlalchemy import text
+
+        lock_key = int.from_bytes(branch_id.bytes[:8], "big") & 0x7FFFFFFFFFFFFFFF
+        await session.execute(
+            text("SELECT pg_advisory_xact_lock(:key)").bindparams(key=lock_key)
+        )
 
     async def process_file_changes(
         self,
@@ -61,11 +74,14 @@ class IncrementalPipeline:
         git_reader: object | None = None,
         repo_id: str | None = None,
         ref: str | None = None,
+        file_contents: dict[str, bytes] | None = None,
     ) -> dict:
         """Process a batch of file changes for a branch.
 
-        Either base_dir (local mode — reads from disk) or
-        git_reader+repo_id+ref (service mode — reads from git) must be provided.
+        Content sources (checked in order):
+        1. file_contents — inline content sent by the client (remote mode)
+        2. base_dir — read from local filesystem
+        3. git_reader+repo_id+ref — read from git
 
         Returns stats: {processed, skipped_unchanged, skipped_missing,
                         skipped_too_large, symbols_updated, errors}
@@ -80,6 +96,12 @@ class IncrementalPipeline:
             "errors": 0,
         }
 
+        # Acquire advisory lock to prevent concurrent indexing on same branch
+        try:
+            await self.acquire_branch_lock(self._session, branch_id)
+        except Exception:
+            pass  # Non-Postgres backends (e.g. tests) — skip locking
+
         # Get current manifest for comparison
         manifest = await self._overlay.resolve_manifest(branch_id)
 
@@ -88,7 +110,7 @@ class IncrementalPipeline:
 
         for path in paths:
             try:
-                content = await self._read_file(path, base_dir, git_reader, repo_id, ref)
+                content = await self._read_file(path, base_dir, git_reader, repo_id, ref, file_contents=file_contents)
 
                 if content is None:
                     # File was deleted
@@ -127,6 +149,29 @@ class IncrementalPipeline:
                     )
                     stats["symbols_updated"] += count or len(symbols)
 
+                # Extract imports and resolve to dependencies
+                imports = extract_imports(content, path, language)
+                if imports and not await self._dep_store.has_dependencies(sha):
+                    from attocode.code_intel.indexing.full_indexer import _resolve_import_path
+
+                    known_paths = set(manifest.keys()) | {u[0] for u in overlay_updates}
+                    path_to_sha = dict(manifest)
+                    for u_path, u_sha, _ in overlay_updates:
+                        path_to_sha[u_path] = u_sha
+
+                    deps = []
+                    for imp in imports:
+                        target = _resolve_import_path(imp, path, known_paths, language)
+                        if target and target in path_to_sha:
+                            deps.append({
+                                "target_sha": path_to_sha[target],
+                                "dep_type": "import",
+                                "weight": 1.0,
+                            })
+                    if deps:
+                        await self._dep_store.upsert_dependencies(sha, deps)
+                        stats["dependencies_extracted"] = stats.get("dependencies_extracted", 0) + len(deps)
+
                 # Queue embedding generation (dedup: skip if already embedded)
                 if not await self._embedding_store.has_embeddings(sha):
                     if repo_id:
@@ -152,14 +197,24 @@ class IncrementalPipeline:
         git_reader: object | None,
         repo_id: str | None,
         ref: str | None,
+        file_contents: dict[str, bytes] | None = None,
     ) -> bytes | None:
-        """Read file content from disk or git.
+        """Read file content from inline content, disk, or git.
 
-        Returns None if file doesn't exist (deleted).
+        Content sources (checked in order):
+        1. file_contents — inline content sent by the client
+        2. base_dir — local filesystem
+        3. git_reader — git object reader
+
+        Returns None if file doesn't exist (deleted) or no content source available.
         C1 fix: Validates resolved path is within base_dir to prevent path traversal.
         """
+        # Priority 1: inline content (sent by client for remote servers)
+        if file_contents is not None and path in file_contents:
+            return file_contents[path]
+
+        # Priority 2: local filesystem
         if base_dir:
-            # Local mode — read from filesystem
             base = Path(base_dir).resolve()
             full_path = (base / path).resolve()
             # C1: prevent path traversal (e.g. ../../etc/passwd)
@@ -173,11 +228,13 @@ class IncrementalPipeline:
                 return full_path.read_bytes()
             except (OSError, PermissionError):
                 return None
-        elif git_reader and repo_id and ref:
-            # Service mode — read from git
+
+        # Priority 3: git reader
+        if git_reader and repo_id and ref:
             try:
                 return git_reader.read_file(repo_id, ref, path)  # type: ignore[union-attr]
             except Exception:
                 return None
-        else:
-            raise ValueError("Either base_dir or git_reader+repo_id+ref must be provided")
+
+        # No content source — file is missing or deleted
+        return None

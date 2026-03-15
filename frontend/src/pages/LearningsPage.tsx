@@ -12,7 +12,7 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { LoadingSpinner } from "@/components/shared/LoadingSpinner";
 import { EmptyState } from "@/components/shared/EmptyState";
-import { cn } from "@/lib/cn";
+import { TabGroup } from "@/components/ui/tabs";
 import { BookOpen, Plus, Search, ThumbsUp, ThumbsDown } from "lucide-react";
 
 const LEARNING_TYPES = ["pattern", "convention", "gotcha", "context", "decision"] as const;
@@ -107,7 +107,7 @@ export function LearningsPage() {
                 <select
                   value={type}
                   onChange={(e) => setType(e.target.value as LearningType)}
-                  className="flex h-9 w-full rounded-md border border-border bg-transparent px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                  className="flex h-9 w-full rounded-md border border-border bg-transparent px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring/50"
                 >
                   {LEARNING_TYPES.map((t) => (
                     <option key={t} value={t}>{t.charAt(0).toUpperCase() + t.slice(1)}</option>
@@ -138,7 +138,7 @@ export function LearningsPage() {
                 value={description}
                 onChange={(e) => setDescription(e.target.value)}
                 rows={3}
-                className="flex w-full rounded-md border border-border bg-transparent px-3 py-2 text-sm shadow-sm transition-colors placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring resize-none"
+                className="flex w-full rounded-md border border-border bg-transparent px-3 py-2 text-sm shadow-sm transition-colors placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring/50 resize-none"
               />
             </div>
             <div className="flex gap-2 justify-end">
@@ -152,22 +152,7 @@ export function LearningsPage() {
       )}
 
       {/* Type filter tabs */}
-      <div className="flex gap-1 border-b border-border">
-        {TYPE_FILTER_TABS.map((t) => (
-          <button
-            key={t}
-            onClick={() => setTypeFilter(t)}
-            className={cn(
-              "border-b-2 px-4 py-2 text-sm transition-colors",
-              t === typeFilter
-                ? "border-primary text-foreground"
-                : "border-transparent text-muted-foreground hover:text-foreground",
-            )}
-          >
-            {t}
-          </button>
-        ))}
-      </div>
+      <TabGroup items={TYPE_FILTER_TABS} value={typeFilter as typeof TYPE_FILTER_TABS[number]} onChange={setTypeFilter} />
 
       {/* Scope filter */}
       <div className="flex gap-3 items-center">
@@ -254,7 +239,7 @@ export function LearningsPage() {
                   <p className="text-sm">{learning.description}</p>
                   <div className="mt-2 flex items-center gap-2">
                     <span className="text-xs text-muted-foreground">Confidence:</span>
-                    <div className="h-1.5 w-24 rounded-full bg-border overflow-hidden">
+                    <div className="h-2 w-24 rounded-full bg-border overflow-hidden">
                       <div
                         className="h-full rounded-full bg-primary transition-all"
                         style={{ width: `${learning.confidence * 100}%` }}

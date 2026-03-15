@@ -72,9 +72,12 @@ async def index_repository(ctx: dict, repo_id: str, branch_name: str = "main") -
             if repo.clone_url and not repo.clone_path:
                 import asyncio
 
+                from attocode.code_intel.workers.job_utils import resolve_repo_credential
+
+                credential = await resolve_repo_credential(repo.id, session)
                 loop = asyncio.get_running_loop()
                 clone_path = await loop.run_in_executor(
-                    None, git_mgr.clone, repo.clone_url, repo_id,
+                    None, git_mgr.clone, repo.clone_url, repo_id, credential,
                 )
                 repo.clone_path = clone_path
                 await session.flush()
@@ -96,8 +99,26 @@ async def index_repository(ctx: dict, repo_id: str, branch_name: str = "main") -
             if not work_path:
                 return {"error": "No clone_path or local_path for repo"}
 
+            # Guard: if the path doesn't exist on this machine, skip
+            # (local_path is a client-side path that the server can't access)
+            import os
+
+            if not os.path.exists(work_path):
+                logger.warning(
+                    "Skipping full index for repo %s: path %s not accessible (remote client path?)",
+                    repo_id, work_path,
+                )
+                repo.index_status = "pending_client"
+                await session.commit()
+                return {"skipped": True, "reason": f"Path {work_path} not accessible from server"}
+
             # Register path override so git operations use the correct directory
             git_mgr.register_path(repo_id, work_path)
+
+            # Advisory lock: prevent concurrent indexing of the same branch
+            from attocode.code_intel.indexing.incremental import IncrementalPipeline
+
+            await IncrementalPipeline.acquire_branch_lock(session, branch.id)
 
             indexer = FullIndexer(session, git_mgr, progress_callback=lambda d: None)
 
@@ -183,6 +204,22 @@ async def index_branch_delta(
 
             config = get_config()
             git_mgr = GitRepoManager(config.git_clone_dir, config.git_ssh_key_path)
+
+            # Fetch latest commits for bare clones
+            if repo.clone_url and repo.clone_path:
+                import asyncio
+
+                from attocode.code_intel.workers.job_utils import resolve_repo_credential
+
+                credential = await resolve_repo_credential(repo.id, session)
+                loop = asyncio.get_running_loop()
+                await loop.run_in_executor(None, git_mgr.fetch, str(repo.id), credential)
+
+            # Advisory lock: prevent concurrent indexing of the same branch
+            from attocode.code_intel.indexing.incremental import IncrementalPipeline
+
+            await IncrementalPipeline.acquire_branch_lock(session, branch.id)
+
             indexer = DeltaIndexer(session, git_mgr)
 
             stats = await indexer.index(repo_id, branch.id, from_ref, to_ref)
@@ -363,16 +400,20 @@ async def generate_embeddings(ctx: dict, repo_id: str, branch_name: str = "main"
 
 
 async def cleanup_stale_branches(ctx: dict) -> dict:
-    """Cron job: remove branch overlays for branches that no longer exist in git.
+    """Cron job: remove branch overlays for branches that no longer exist.
 
-    Runs every 6 hours. Compares DB branches against actual git branches
-    and removes overlays for branches that no longer exist.
+    Runs every 6 hours. For local repos: compares DB branches against git.
+    For remote repos: cleans up merged branches (merged_at > 7 days ago)
+    and inactive branches (no overlay changes and no commits in 30 days).
     """
+    from datetime import timedelta
+
+    from sqlalchemy import func as sa_func
     from sqlalchemy import select
 
     from attocode.code_intel.api.deps import get_config
     from attocode.code_intel.db.engine import get_session
-    from attocode.code_intel.db.models import Branch, Repository
+    from attocode.code_intel.db.models import Branch, BranchFile, Commit, Repository
     from attocode.code_intel.git.manager import GitRepoManager
 
     logger.info("Running stale branch cleanup")
@@ -381,34 +422,113 @@ async def cleanup_stale_branches(ctx: dict) -> dict:
     async for session in get_session():
         config = get_config()
         git_mgr = GitRepoManager(config.git_clone_dir, config.git_ssh_key_path)
+        now = datetime.now(timezone.utc)
 
         result = await session.execute(select(Repository))
         repos = result.scalars().all()
 
         for repo in repos:
-            try:
-                git_branches = {b.name for b in git_mgr.list_branches(str(repo.id))}
-            except (FileNotFoundError, ValueError):
-                continue
+            if repo.clone_path:
+                # Local/cloned repos: compare against git branches
+                try:
+                    git_branches = {b.name for b in git_mgr.list_branches(str(repo.id))}
+                except (FileNotFoundError, ValueError):
+                    continue
 
-            branch_result = await session.execute(
-                select(Branch).where(Branch.repo_id == repo.id)
-            )
-            db_branches = branch_result.scalars().all()
+                branch_result = await session.execute(
+                    select(Branch).where(Branch.repo_id == repo.id)
+                )
+                for db_branch in branch_result.scalars():
+                    if db_branch.name not in git_branches and not db_branch.is_default:
+                        logger.info(
+                            "Removing stale branch %s from repo %s",
+                            db_branch.name, repo.id,
+                        )
+                        await session.delete(db_branch)
+                        cleaned += 1
+            else:
+                # Remote repos: clean up merged + inactive branches
+                branch_result = await session.execute(
+                    select(Branch).where(Branch.repo_id == repo.id)
+                )
+                for db_branch in branch_result.scalars():
+                    if db_branch.is_default:
+                        continue
 
-            for db_branch in db_branches:
-                if db_branch.name not in git_branches and not db_branch.is_default:
-                    logger.info(
-                        "Removing stale branch %s from repo %s",
-                        db_branch.name, repo.id,
-                    )
-                    await session.delete(db_branch)
-                    cleaned += 1
+                    # Clean up merged branches older than 7 days
+                    if db_branch.merged_at and (now - db_branch.merged_at) > timedelta(days=7):
+                        logger.info(
+                            "Removing merged branch %s from repo %s (merged %s)",
+                            db_branch.name, repo.id, db_branch.merged_at,
+                        )
+                        await session.delete(db_branch)
+                        cleaned += 1
+                        continue
+
+                    # Clean up inactive branches: no overlay changes AND no commits in 30 days
+                    if not db_branch.merged_at:
+                        overlay_count_result = await session.execute(
+                            select(sa_func.count()).select_from(
+                                select(BranchFile.path)
+                                .where(BranchFile.branch_id == db_branch.id)
+                                .subquery()
+                            )
+                        )
+                        overlay_count = overlay_count_result.scalar() or 0
+
+                        if overlay_count == 0:
+                            cutoff = now - timedelta(days=30)
+                            recent_commit_result = await session.execute(
+                                select(sa_func.count()).select_from(
+                                    select(Commit.id)
+                                    .where(
+                                        Commit.repo_id == repo.id,
+                                        Commit.branch_name == db_branch.name,
+                                        Commit.created_at > cutoff,
+                                    )
+                                    .subquery()
+                                )
+                            )
+                            recent_commits = recent_commit_result.scalar() or 0
+                            if recent_commits == 0:
+                                logger.info(
+                                    "Removing inactive branch %s from repo %s",
+                                    db_branch.name, repo.id,
+                                )
+                                await session.delete(db_branch)
+                                cleaned += 1
 
         await session.commit()
 
     logger.info("Stale branch cleanup complete: removed %d branches", cleaned)
     return {"cleaned": cleaned}
+
+
+async def prune_expired_revocations(ctx: dict) -> dict:
+    """Cron job: prune expired token revocations.
+
+    Runs every 24 hours. Removes entries whose expires_at has passed
+    (tokens that are already expired don't need blocklist entries).
+    """
+    from sqlalchemy import delete
+
+    from attocode.code_intel.db.engine import get_session
+    from attocode.code_intel.db.models import RevokedToken
+
+    logger.info("Running token revocation cleanup")
+
+    async for session in get_session():
+        result = await session.execute(
+            delete(RevokedToken).where(
+                RevokedToken.expires_at < datetime.now(timezone.utc)
+            )
+        )
+        pruned = result.rowcount
+        await session.commit()
+        logger.info("Pruned %d expired token revocations", pruned)
+        return {"pruned": pruned}
+
+    return {"pruned": 0}
 
 
 async def gc_unreferenced_content(ctx: dict) -> dict:
@@ -422,7 +542,7 @@ async def gc_unreferenced_content(ctx: dict) -> dict:
     logger.info("Running content GC")
     async for session in get_session():
         store = ContentStore(session)
-        count = await store.gc_unreferenced()
+        count = await store.gc_unreferenced(min_age_minutes=60)
         await session.commit()
         return {"removed": count}
     return {"removed": 0}

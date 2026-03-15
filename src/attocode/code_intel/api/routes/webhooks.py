@@ -20,6 +20,23 @@ router = APIRouter(prefix="/api/v1/webhooks", tags=["webhooks"])
 logger = logging.getLogger(__name__)
 
 
+def _get_fernet():
+    """Get Fernet instance using SECRET_KEY from config."""
+    from attocode.code_intel.crypto import _get_fernet as _shared_get_fernet
+
+    return _shared_get_fernet()
+
+
+def _encrypt_secret(secret: str) -> str:
+    """Encrypt a webhook secret for storage."""
+    return _get_fernet().encrypt(secret.encode()).decode()
+
+
+def _decrypt_secret(encrypted: str) -> str:
+    """Decrypt a stored webhook secret."""
+    return _get_fernet().decrypt(encrypted.encode()).decode()
+
+
 class WebhookConfigRequest(BaseModel):
     repo_id: str
     provider: str  # github|gitlab|bitbucket
@@ -49,10 +66,12 @@ async def create_webhook_config(
         raise HTTPException(status_code=404, detail="Repository not found")
 
     secret_hash = hashlib.sha256(req.secret.encode()).hexdigest()
+    secret_encrypted = _encrypt_secret(req.secret)
     config = WebhookConfig(
         repo_id=repo.id,
         provider=req.provider,
         secret_hash=secret_hash,
+        secret_encrypted=secret_encrypted,
         events=req.events,
     )
     session.add(config)
@@ -113,12 +132,14 @@ async def github_webhook(
     if webhook is None:
         raise HTTPException(status_code=404, detail="No matching webhook config found")
 
-    # Verify signature
+    # Verify signature using decrypted secret
     if x_hub_signature_256:
-        # Reconstruct the secret from stored hash — we need the original secret
-        # For now, we verify using HMAC-SHA256 with the stored hash as the key
-        # In production, store the actual secret encrypted, not hashed
-        _verify_github_signature(body, x_hub_signature_256, webhook.secret_hash)
+        if webhook.secret_encrypted:
+            secret = _decrypt_secret(webhook.secret_encrypted)
+            _verify_github_signature(body, x_hub_signature_256, secret)
+        else:
+            # Legacy fallback: no encrypted secret stored yet (pre-migration data)
+            logger.warning("Webhook %s has no encrypted secret; signature verification skipped", webhook.id)
 
     # Log webhook received
     from attocode.code_intel.audit import log_event
@@ -160,6 +181,56 @@ async def github_webhook(
         except Exception as e:
             logger.warning("Failed to enqueue job: %s", e)
             return {"status": "received", "branch": branch, "note": "Job queuing unavailable"}
+
+    elif event == "pull_request":
+        action = payload.get("action", "")
+        pr = payload.get("pull_request", {})
+        merged = pr.get("merged", False)
+
+        if action == "closed" and merged:
+            # Auto-trigger merge + delete source branch in DB
+            base_branch = pr.get("base", {}).get("ref", "")
+            head_branch = pr.get("head", {}).get("ref", "")
+
+            if base_branch and head_branch:
+                logger.info("GitHub PR merged: %s → %s", head_branch, base_branch)
+                try:
+                    from attocode.code_intel.db.models import Branch
+                    from attocode.code_intel.storage.branch_overlay import BranchOverlay
+
+                    repo_result3 = await session.execute(
+                        select(Repository).where(Repository.id == webhook.repo_id)
+                    )
+                    merge_repo = repo_result3.scalar_one_or_none()
+                    if merge_repo:
+                        src_result = await session.execute(
+                            select(Branch).where(
+                                Branch.repo_id == merge_repo.id, Branch.name == head_branch
+                            )
+                        )
+                        tgt_result = await session.execute(
+                            select(Branch).where(
+                                Branch.repo_id == merge_repo.id, Branch.name == base_branch
+                            )
+                        )
+                        src_branch = src_result.scalar_one_or_none()
+                        tgt_branch = tgt_result.scalar_one_or_none()
+
+                        if src_branch and tgt_branch:
+                            overlay = BranchOverlay(session)
+                            await overlay.merge_branch(
+                                src_branch.id, tgt_branch.id, delete_source=True,
+                            )
+                            await session.commit()
+                            return {
+                                "status": "merged",
+                                "source": head_branch,
+                                "target": base_branch,
+                            }
+                except Exception as e:
+                    logger.warning("Auto-merge failed for PR: %s", e)
+
+        return {"status": "received", "event": "pull_request", "action": action}
 
     return {"status": "ignored", "event": event}
 
@@ -228,13 +299,11 @@ async def bitbucket_webhook(
     return {"status": "ignored", "event": event}
 
 
-def _verify_github_signature(body: bytes, signature_header: str, secret_hash: str) -> None:
-    """Verify GitHub HMAC-SHA256 signature."""
+def _verify_github_signature(body: bytes, signature_header: str, secret: str) -> None:
+    """Verify GitHub webhook HMAC-SHA256 signature."""
     if not signature_header.startswith("sha256="):
         raise HTTPException(status_code=401, detail="Invalid signature format")
 
-    # Note: In production, the actual secret should be stored (encrypted),
-    # not just its hash. For now, we skip strict verification when we only
-    # have the hash. This is a known limitation that should be addressed
-    # by storing encrypted secrets.
-    logger.debug("Webhook signature present (verification uses stored hash)")
+    expected = hmac.new(secret.encode(), body, hashlib.sha256).hexdigest()
+    if not hmac.compare_digest(f"sha256={expected}", signature_header):
+        raise HTTPException(status_code=401, detail="Invalid signature")

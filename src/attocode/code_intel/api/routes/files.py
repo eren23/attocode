@@ -8,7 +8,7 @@ import os
 
 from fastapi import APIRouter, Depends, HTTPException
 
-from attocode.code_intel.api.auth import verify_api_key
+from attocode.code_intel.api.auth import verify_auth
 from attocode.code_intel.api.deps import BranchParam, get_service_or_404
 from attocode.code_intel.api.models import (
     FileContentResponse,
@@ -22,7 +22,7 @@ logger = logging.getLogger(__name__)
 router = APIRouter(
     prefix="/api/v1/projects/{project_id}",
     tags=["files"],
-    dependencies=[Depends(verify_api_key)],
+    dependencies=[Depends(verify_auth)],
 )
 
 # Backward-compatible aliases

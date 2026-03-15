@@ -109,7 +109,8 @@ export function DependencyGraph({
   const svgRef = useRef<SVGSVGElement>(null);
   const minimapRef = useRef<SVGSVGElement>(null);
   const nodeSelRef = useRef<d3.Selection<SVGGElement, SimNode, SVGGElement, unknown> | null>(null);
-  const linkSelRef = useRef<d3.Selection<SVGLineElement, SimLink, SVGGElement, unknown> | null>(null);
+  const linkSelRef = useRef<d3.Selection<SVGPathElement, SimLink, SVGGElement, unknown> | null>(null);
+  const positionCacheRef = useRef<Map<string, { x: number; y: number }>>(new Map());
   const [tooltip, setTooltip] = useState<TooltipState | null>(null);
 
   // Main render effect
@@ -119,6 +120,7 @@ export function DependencyGraph({
     const svgEl = svgRef.current;
     const svg = d3.select(svgEl);
     svg.selectAll("*").remove();
+    const positionCache = positionCacheRef.current;
 
     const width = svgEl.clientWidth;
     const height = svgEl.clientHeight;
@@ -152,6 +154,22 @@ export function DependencyGraph({
 
     const nodeIdSet = new Set(simNodes.map((n) => n.id));
 
+    // Restore cached positions for nodes that still exist
+    const hasCachedPositions = simNodes.some((n) => positionCache.has(n.id));
+    if (hasCachedPositions) {
+      // Clean up stale cache entries
+      for (const key of positionCache.keys()) {
+        if (!nodeIdSet.has(key)) positionCache.delete(key);
+      }
+      for (const n of simNodes) {
+        const cached = positionCache.get(n.id);
+        if (cached) {
+          n.x = cached.x;
+          n.y = cached.y;
+        }
+      }
+    }
+
     // Build SimLinks (filter out edges referencing missing nodes)
     const simLinks: SimLink[] = edges
       .filter((e) => nodeIdSet.has(e.source) && nodeIdSet.has(e.target))
@@ -176,12 +194,12 @@ export function DependencyGraph({
 
       filter
         .append("feGaussianBlur")
-        .attr("stdDeviation", "3")
+        .attr("stdDeviation", "4")
         .attr("result", "blur");
       filter
         .append("feFlood")
         .attr("flood-color", color)
-        .attr("flood-opacity", "0.3")
+        .attr("flood-opacity", "0.2")
         .attr("result", "color");
       filter
         .append("feComposite")
@@ -240,16 +258,17 @@ export function DependencyGraph({
     // Container group (zoom target)
     const container = svg.append("g");
 
-    // --- Edges ---
+    // --- Edges (curved paths) ---
     const linkGroup = container.append("g").attr("class", "links");
     const linkElements = linkGroup
-      .selectAll<SVGLineElement, SimLink>("line")
+      .selectAll<SVGPathElement, SimLink>("path")
       .data(simLinks)
       .enter()
-      .append("line")
+      .append("path")
       .attr("stroke", "#52525b")
       .attr("stroke-opacity", 0.4)
       .attr("stroke-width", 1.5)
+      .attr("fill", "none")
       .attr("marker-end", "url(#arrowhead)");
 
     linkSelRef.current = linkElements;
@@ -265,25 +284,48 @@ export function DependencyGraph({
 
     nodeSelRef.current = nodeElements;
 
-    // Circle
+    // Circle -- short fade-in on first render, instant on subsequent
+    const isFirstRender = !hasCachedPositions;
+    const nodeCount = simNodes.length;
+    // Cap total stagger to 800ms regardless of node count
+    const staggerMs = nodeCount > 1 ? Math.min(15, 800 / nodeCount) : 0;
+
     nodeElements
       .append("circle")
       .attr("r", (d) => d.id === selectedNodeId ? d.radius * 1.2 : d.radius)
       .attr("fill", (d) => d.id === selectedNodeId ? `${d.color}44` : `${d.color}22`)
       .attr("stroke", (d) => d.color)
       .attr("stroke-width", (d) => d.id === selectedNodeId ? 3 : 1.5)
-      .attr("filter", (d) => `url(#glow-${d.color.replace("#", "")})`);
+      .attr("filter", (d) => `url(#glow-${d.color.replace("#", "")})`)
+      .style("opacity", isFirstRender ? 0 : 1);
+
+    if (isFirstRender) {
+      nodeElements.select("circle")
+        .transition()
+        .duration(300)
+        .delay((_d, i) => i * staggerMs)
+        .style("opacity", 1);
+    }
 
     // Label below circle
     nodeElements
       .append("text")
       .text((d) => getFileName(d.label))
       .attr("text-anchor", "middle")
-      .attr("dy", (d) => d.radius + 12)
-      .attr("fill", "#d4d4d8")
-      .attr("font-size", "10px")
+      .attr("dy", (d) => d.radius + 14)
+      .attr("fill", "#e4e4e7")
+      .attr("font-size", "11px")
       .attr("font-family", "monospace")
-      .attr("pointer-events", "none");
+      .attr("pointer-events", "none")
+      .style("opacity", isFirstRender ? 0 : 1);
+
+    if (isFirstRender) {
+      nodeElements.select("text")
+        .transition()
+        .duration(300)
+        .delay((_d, i) => i * staggerMs)
+        .style("opacity", 1);
+    }
 
     // --- Hover ---
     nodeElements
@@ -461,27 +503,24 @@ export function DependencyGraph({
         .attr("fill", "rgba(124, 140, 248, 0.08)");
     };
 
-    // --- Tick helper (shorten edges to node boundary) ---
+    // --- Tick helper (curved edges with quadratic bezier) ---
     const tickPositions = () => {
-      linkElements
-        .attr("x1", (d) => (d.source as SimNode).x!)
-        .attr("y1", (d) => (d.source as SimNode).y!)
-        .attr("x2", (d) => {
-          const src = d.source as SimNode;
-          const tgt = d.target as SimNode;
-          const dx = tgt.x! - src.x!;
-          const dy = tgt.y! - src.y!;
-          const dist = Math.sqrt(dx * dx + dy * dy);
-          return dist === 0 ? tgt.x! : tgt.x! - (dx / dist) * tgt.radius;
-        })
-        .attr("y2", (d) => {
-          const src = d.source as SimNode;
-          const tgt = d.target as SimNode;
-          const dx = tgt.x! - src.x!;
-          const dy = tgt.y! - src.y!;
-          const dist = Math.sqrt(dx * dx + dy * dy);
-          return dist === 0 ? tgt.y! : tgt.y! - (dy / dist) * tgt.radius;
-        });
+      linkElements.attr("d", (d) => {
+        const src = d.source as SimNode;
+        const tgt = d.target as SimNode;
+        const dx = tgt.x! - src.x!;
+        const dy = tgt.y! - src.y!;
+        const dist = Math.sqrt(dx * dx + dy * dy);
+        if (dist === 0) return `M ${src.x},${src.y} L ${tgt.x},${tgt.y}`;
+        // Shorten to node boundary
+        const endX = tgt.x! - (dx / dist) * tgt.radius;
+        const endY = tgt.y! - (dy / dist) * tgt.radius;
+        // Slight curve offset perpendicular to the line
+        const curvature = 0.15;
+        const mx = (src.x! + endX) / 2 - dy * curvature;
+        const my = (src.y! + endY) / 2 + dx * curvature;
+        return `M ${src.x},${src.y} Q ${mx},${my} ${endX},${endY}`;
+      });
 
       nodeElements.attr("transform", (d) => `translate(${d.x},${d.y})`);
     };
@@ -517,8 +556,14 @@ export function DependencyGraph({
         )
         .force("x", d3.forceX(width / 2).strength(0.02))
         .force("y", d3.forceY(height / 2).strength(0.02))
-        .alphaDecay(0.02)
-        .velocityDecay(0.3);
+        .alphaDecay(0.028)
+        .alphaMin(0.001)
+        .velocityDecay(0.4);
+
+      // Start with lower alpha if restoring from cache
+      if (hasCachedPositions) {
+        simulation.alpha(0.3);
+      }
 
       simulation.on("tick", tickPositions);
 
@@ -617,6 +662,12 @@ export function DependencyGraph({
     }
 
     return () => {
+      // Save positions to cache before cleanup
+      for (const n of simNodes) {
+        if (n.x != null && n.y != null) {
+          positionCache.set(n.id, { x: n.x, y: n.y });
+        }
+      }
       simulation?.stop();
     };
   }, [nodes, edges, layoutMode, direction, onNodeClick, onNodeSelect, communityColorMap]);

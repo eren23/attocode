@@ -60,6 +60,18 @@ class BranchOverlay:
         )
         return result.scalar_one_or_none() or 0
 
+    async def check_version(self, branch_id: uuid.UUID, expected: int) -> None:
+        """Verify branch version matches expected. Raises ValueError on mismatch.
+
+        Used for If-Match optimistic concurrency control.
+        """
+        current = await self.get_version(branch_id)
+        if current != expected:
+            raise ValueError(
+                f"Branch version mismatch: expected {expected}, current {current}. "
+                "Another update occurred — retry with the latest version."
+            )
+
     async def set_file(
         self,
         branch_id: uuid.UUID,
@@ -98,6 +110,7 @@ class BranchOverlay:
         self,
         branch_id: uuid.UUID,
         files: list[tuple[str, str, str]],
+        expected_version: int | None = None,
     ) -> None:
         """Set multiple files in one operation. Each tuple: (path, content_sha, status).
 
@@ -109,6 +122,9 @@ class BranchOverlay:
 
         if not files:
             return
+
+        if expected_version is not None:
+            await self.check_version(branch_id, expected_version)
 
         # Load existing entries for these paths in one query
         paths = [f[0] for f in files]
@@ -254,6 +270,69 @@ class BranchOverlay:
                 diff[path] = "modified"
 
         return diff
+
+    async def merge_branch(
+        self,
+        source_id: uuid.UUID,
+        target_id: uuid.UUID,
+        *,
+        delete_source: bool = False,
+    ) -> dict:
+        """Merge source branch overlay into target branch.
+
+        Resolves both manifests, computes the diff, and applies source changes
+        to the target overlay. Optionally deletes the source branch after merge.
+
+        Returns merge statistics.
+        """
+        from datetime import datetime, timezone
+
+        from sqlalchemy import select
+
+        from attocode.code_intel.db.models import Branch
+
+        diff = await self.diff_branches(target_id, source_id)
+
+        # Apply source changes to target overlay
+        files_to_set: list[tuple[str, str, str]] = []
+        source_manifest = await self.resolve_manifest(source_id)
+        deleted = 0
+
+        for path, change_type in diff.items():
+            if change_type == "added":
+                sha = source_manifest.get(path)
+                if sha:
+                    files_to_set.append((path, sha, "added"))
+            elif change_type == "modified":
+                sha = source_manifest.get(path)
+                if sha:
+                    files_to_set.append((path, sha, "modified"))
+            elif change_type == "deleted":
+                await self.delete_file(target_id, path)
+                deleted += 1
+
+        if files_to_set:
+            await self.set_files_batch(target_id, files_to_set)
+
+        stats = {
+            "added": sum(1 for _, _, s in files_to_set if s == "added"),
+            "modified": sum(1 for _, _, s in files_to_set if s == "modified"),
+            "deleted": deleted,
+            "total": len(diff),
+        }
+
+        if delete_source:
+            # Mark source as merged and delete
+            result = await self._session.execute(
+                select(Branch).where(Branch.id == source_id)
+            )
+            source_branch = result.scalar_one_or_none()
+            if source_branch:
+                source_branch.merged_at = datetime.now(timezone.utc)
+                await self._session.delete(source_branch)
+                await self._session.flush()
+
+        return stats
 
     async def get_overlay_stats(self, branch_id: uuid.UUID) -> dict:
         """Get statistics about a branch's overlay (files added/modified/deleted)."""

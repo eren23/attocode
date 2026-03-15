@@ -23,7 +23,7 @@ export function ActivityEventCard({ event }: { event: ActivityEvent }) {
 
   return (
     <div className="flex items-start gap-3 rounded-md border border-border bg-card px-4 py-3">
-      <div className="mt-0.5 rounded-md bg-accent p-1.5">
+      <div className="mt-0.5 rounded-md bg-primary/10 p-1.5">
         <Icon className="h-4 w-4 text-muted-foreground" />
       </div>
       <div className="flex-1 min-w-0">

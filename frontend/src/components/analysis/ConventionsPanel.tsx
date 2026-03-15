@@ -22,7 +22,7 @@ function ProgressBar({ value, max, color = "bg-primary" }: { value: number; max:
   const p = max > 0 ? Math.min((value / max) * 100, 100) : 0;
   return (
     <div className="flex items-center gap-2">
-      <div className="h-2 flex-1 rounded-full bg-zinc-800">
+      <div className="h-2 flex-1 rounded-full bg-muted">
         <div className={`h-2 rounded-full ${color}`} style={{ width: `${p}%` }} />
       </div>
       <span className="text-xs text-muted-foreground tabular-nums w-10 text-right">{pct(value, max)}%</span>
