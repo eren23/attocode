@@ -206,6 +206,9 @@ class StateStore:
                 elapsed = f"{secs // 60}m{secs % 60:02d}s"
             else:
                 elapsed = ""
+            # Trace summary enrichment
+            trace = self.build_agent_trace_summary(task_id) if task_id else {}
+
             out.append({
                 "agent_id": agent_id,
                 "status": str(row.get("status", "idle")),
@@ -223,6 +226,11 @@ class StateStore:
                 "restart_count": int(row.get("restart_count", 0)),
                 "stderr_tail": str(row.get("stderr_tail", "")),
                 "command": str(row.get("command", "")),
+                "tool_calls": trace.get("tool_calls", []),
+                "error_count": trace.get("error_count", 0),
+                "last_error": trace.get("last_error", ""),
+                "files_written": trace.get("files_written", []),
+                "total_cost": trace.get("total_cost", 0.0),
             })
         return out
 
@@ -256,6 +264,14 @@ class StateStore:
                 role_hint = role_hint or detail.get("role_hint", "")
                 assigned_agent = assigned_agent or detail.get("assigned_agent", "")
 
+            # is_foundation: prefer serialized value, fall back to edge count
+            is_foundation = node.get("is_foundation")
+            if is_foundation is None:
+                dependents = [e for e in edges
+                              if (isinstance(e, (list, tuple)) and len(e) >= 2 and str(e[0]) == task_id)
+                              or (isinstance(e, dict) and str(e.get("source", e.get("from", ""))) == task_id)]
+                is_foundation = len(dependents) >= 3
+
             out.append({
                 "task_id": task_id,
                 "title": str(node.get("title", "")),
@@ -270,6 +286,8 @@ class StateStore:
                 "depends_on": deps_map.get(task_id, []),
                 "tokens_used": int(node.get("tokens_used", 0)),
                 "cost_usd": float(node.get("cost_usd", 0.0)),
+                "is_foundation": bool(is_foundation),
+                "quality_score": node.get("quality_score"),
             })
         return out
 
@@ -287,6 +305,20 @@ class StateStore:
         for nid in node_ids:
             self._compute_level(nid, deps_map, levels)
 
+        # Build reverse dependency map (source -> [targets that depend on it])
+        depended_by_map: dict[str, list[str]] = {}
+        for edge in edges:
+            if isinstance(edge, (list, tuple)) and len(edge) >= 2:
+                src = str(edge[0])
+                tgt = str(edge[1])
+            elif isinstance(edge, dict):
+                src = str(edge.get("source", edge.get("from", "")))
+                tgt = str(edge.get("target", edge.get("to", "")))
+            else:
+                continue
+            if src:
+                depended_by_map.setdefault(src, []).append(tgt)
+
         out: list[dict[str, Any]] = []
         for node in nodes:
             tid = str(node.get("task_id", ""))
@@ -294,6 +326,7 @@ class StateStore:
                 "task_id": tid,
                 "status": str(node.get("status", "pending")),
                 "depends_on": deps_map.get(tid, []),
+                "depended_by": node.get("depended_by", depended_by_map.get(tid, [])),
                 "level": levels.get(tid, 0),
             })
         return out
@@ -464,17 +497,14 @@ class StateStore:
             for msg in data.get(items_key, []):
                 if not isinstance(msg, dict):
                     continue
+                kind = msg.get("kind", "") or msg.get("type", "")
                 payload = msg.get("payload", {})
-                payload_str = ""
-                if isinstance(payload, dict):
-                    payload_str = str(payload)[:200]
-                elif isinstance(payload, str):
-                    payload_str = payload[:200]
+                payload_str = self._extract_payload_preview(kind, payload)
 
                 messages.append({
                     "direction": direction_label,
                     "agent_id": agent_id,
-                    "kind": msg.get("kind", "") or msg.get("type", ""),
+                    "kind": kind,
                     "task_id": str(msg.get("task_id", "") or ""),
                     "timestamp": msg.get("timestamp", ""),
                     "payload_preview": payload_str,
@@ -516,20 +546,71 @@ class StateStore:
                 continue
             direction, kind = mapping
             payload = ev.get("payload", {}) if isinstance(ev.get("payload"), dict) else {}
+            data = ev.get("data", {}) if isinstance(ev.get("data"), dict) else {}
             agent_id = str(ev.get("agent_id", "") or payload.get("agent_id", ""))
             task_id = str(ev.get("task_id", "") or payload.get("task_id", ""))
-            msg_text = str(
-                ev.get("message", "") or payload.get("message", "") or etype
-            )[:200]
-            out.append({
+
+            # Build structured payload from event data
+            synth_payload: dict[str, Any] = {**payload, **data}
+            synth_payload.setdefault("message", ev.get("message", ""))
+            msg_text = self._extract_payload_preview(kind, synth_payload)
+
+            entry: dict[str, Any] = {
                 "direction": direction,
                 "agent_id": agent_id,
                 "kind": kind,
                 "task_id": task_id,
                 "timestamp": ev.get("timestamp", ""),
                 "payload_preview": msg_text,
-            })
+            }
+            # Attach extra fields for rendering badges
+            tokens = data.get("tokens_used", 0) or payload.get("tokens_used", 0)
+            cost = data.get("cost_usd", 0) or payload.get("cost_usd", 0)
+            if tokens:
+                entry["tokens_used"] = int(tokens)
+            if cost:
+                entry["cost_usd"] = float(cost)
+            out.append(entry)
         return out
+
+    @staticmethod
+    def _extract_payload_preview(kind: str, payload: Any) -> str:
+        """Extract a human-readable preview from a message payload."""
+        if not isinstance(payload, dict):
+            return str(payload)[:200] if payload else ""
+
+        if kind in ("task_assign",):
+            title = payload.get("title", "") or payload.get("description", "")
+            return str(title)[:100] if title else str(payload)[:200]
+
+        if kind in ("task_done", "task_completed"):
+            result = payload.get("result_summary", "") or payload.get("message", "")
+            n_files = len(payload.get("files_modified", []))
+            parts: list[str] = []
+            if result:
+                parts.append(f"Result: {str(result)[:80]}")
+            if n_files:
+                parts.append(f"{n_files} files")
+            return " | ".join(parts) if parts else str(payload)[:200]
+
+        if kind in ("task_failed",):
+            err = payload.get("error", "") or payload.get("message", "")
+            cause = payload.get("failure", {}).get("cause", "") if isinstance(payload.get("failure"), dict) else ""
+            if err:
+                prefix = f"[{cause}] " if cause else ""
+                return f"Error: {prefix}{str(err)[:100]}"
+            return str(payload)[:200]
+
+        if kind == "retry":
+            attempt = payload.get("attempt", "?")
+            reason = payload.get("reason", "") or payload.get("message", "")
+            return f"Attempt {attempt}: {str(reason)[:80]}" if reason else f"Attempt {attempt}"
+
+        # Fallback
+        msg = payload.get("message", "")
+        if msg:
+            return str(msg)[:200]
+        return str(payload)[:200]
 
     def build_task_detail(
         self, task_id: str, state: dict[str, Any] | None = None,
@@ -780,6 +861,12 @@ class StateStore:
             secs = int(complete_ts - spawn_ts)
             elapsed = f"{secs // 60}m{secs % 60:02d}s" if secs >= 60 else f"{secs}s"
 
+        # Trace summary + task-level enrichment
+        trace_summary = self.build_agent_trace_summary(task_id) if task_id else {}
+        task_data = self._read_task_cached(task_id) if task_id else {}
+        cost_usd = trace_summary.get("total_cost", 0.0) or float(task_data.get("cost_usd", 0.0))
+        result_summary = task_data.get("result_summary", "")
+
         return {
             "kind": "agent",
             "agent_id": agent_id,
@@ -798,4 +885,252 @@ class StateStore:
             "exit_code": row.get("exit_code"),
             "restart_count": int(row.get("restart_count", 0)),
             "stderr_tail": str(row.get("stderr_tail", "")),
+            "trace_summary": trace_summary,
+            "cost_usd": cost_usd,
+            "result_summary": result_summary,
         }
+
+    # ── Activity sidecar helpers ─────────────────────────────────
+
+    def read_activity_sidecars(self) -> dict[str, str]:
+        """Scan agents/*.activity.txt and return {task_id: label} with 1s TTL cache."""
+        now = time.time()
+        cached = getattr(self, "_sidecar_cache", None)
+        if cached and now - cached[0] < 3.0:
+            return cached[1]
+
+        agents_dir = self.run_dir / "agents"
+        result: dict[str, str] = {}
+        if agents_dir.exists():
+            for p in agents_dir.iterdir():
+                if p.name.endswith(".activity.txt"):
+                    # agent-{task_id}.activity.txt
+                    task_id = p.name.replace("agent-", "").replace(".activity.txt", "")
+                    try:
+                        label = p.read_text(encoding="utf-8").strip()
+                        if label:
+                            result[task_id] = label
+                    except Exception:
+                        pass
+
+        self._sidecar_cache = (now, result)
+        return result
+
+    # ── Trace summary helpers ──────────────────────────────────────
+
+    def build_agent_trace_summary(self, task_id: str) -> dict[str, Any]:
+        """Summarise last 50 lines of agent-{task_id}.trace.jsonl.
+
+        Returns tool_calls, tool_counts, files_written, error_count,
+        last_error, llm_call_count, total_cost.  Cached with 3s TTL.
+        """
+        now = time.time()
+        cache_key = f"_trace_summary_{task_id}"
+        cached = getattr(self, cache_key, None)
+        if cached and now - cached[0] < 3.0:
+            return cached[1]
+
+        empty: dict[str, Any] = {
+            "tool_calls": [],
+            "tool_counts": {},
+            "files_written": [],
+            "error_count": 0,
+            "last_error": "",
+            "llm_call_count": 0,
+            "total_cost": 0.0,
+        }
+
+        trace_path = self.run_dir / "agents" / f"agent-{task_id}.trace.jsonl"
+        if not trace_path.exists():
+            setattr(self, cache_key, (now, empty))
+            return empty
+
+        # Read last ~8KB to get roughly 50 entries without reading whole file
+        try:
+            size = trace_path.stat().st_size
+            read_from = max(0, size - 8192)
+            lines: list[dict[str, Any]] = []
+            with trace_path.open("rb") as f:
+                if read_from > 0:
+                    f.seek(read_from)
+                    f.readline()  # discard partial line
+                for raw in f:
+                    try:
+                        entry = json.loads(raw)
+                        if isinstance(entry, dict):
+                            lines.append(entry)
+                    except json.JSONDecodeError:
+                        continue
+            lines = lines[-50:]
+        except Exception:
+            setattr(self, cache_key, (now, empty))
+            return empty
+
+        tool_counts: dict[str, int] = {}
+        files_written: list[str] = []
+        error_count = 0
+        last_error = ""
+        llm_call_count = 0
+        total_cost = 0.0
+
+        for entry in lines:
+            etype = entry.get("type", entry.get("event_type", ""))
+
+            # Tool calls
+            tool = entry.get("tool", "") or entry.get("tool_name", "")
+            if tool:
+                tool_counts[tool] = tool_counts.get(tool, 0) + 1
+
+            # File writes
+            if etype in ("file_write", "file.written", "task.files_changed"):
+                fp = entry.get("file", "") or entry.get("path", "")
+                if fp:
+                    basename = str(fp).rsplit("/", 1)[-1]
+                    if basename and basename not in files_written:
+                        files_written.append(basename)
+                for fp2 in entry.get("files", []):
+                    basename2 = str(fp2).rsplit("/", 1)[-1]
+                    if basename2 and basename2 not in files_written:
+                        files_written.append(basename2)
+
+            # Errors
+            if etype in ("error", "tool_error", "agent_error"):
+                error_count += 1
+                msg = str(entry.get("message", entry.get("error", "")))[:80]
+                if msg:
+                    last_error = msg
+
+            # LLM calls
+            if etype in ("llm_call", "llm.response", "llm_response"):
+                llm_call_count += 1
+                total_cost += float(entry.get("cost_usd", entry.get("cost", 0)) or 0)
+
+        # Build deduplicated recent-first tool list
+        seen_tools: list[str] = []
+        for entry in reversed(lines):
+            tool = entry.get("tool", "") or entry.get("tool_name", "")
+            if tool and tool not in seen_tools:
+                seen_tools.append(tool)
+
+        result: dict[str, Any] = {
+            "tool_calls": seen_tools,
+            "tool_counts": tool_counts,
+            "files_written": files_written,
+            "error_count": error_count,
+            "last_error": last_error,
+            "llm_call_count": llm_call_count,
+            "total_cost": total_cost,
+        }
+        setattr(self, cache_key, (now, result))
+        return result
+
+    # ── Transparency helpers (Workstream 2) ───────────────────────
+
+    def read_agent_trace(self, task_id: str) -> list[dict[str, Any]]:
+        """Read agent trace JSONL file incrementally.
+
+        Returns new entries since last call for this task_id.
+        """
+        trace_path = self.run_dir / "agents" / f"agent-{task_id}.trace.jsonl"
+        if not trace_path.exists():
+            return []
+
+        cache_key = f"_trace_offset_{task_id}"
+        last_offset = getattr(self, cache_key, 0)
+
+        entries: list[dict[str, Any]] = []
+        try:
+            size = trace_path.stat().st_size
+            if size <= last_offset:
+                return []
+
+            with trace_path.open("rb") as f:
+                f.seek(last_offset)
+                for line in f:
+                    try:
+                        entry = json.loads(line)
+                        if isinstance(entry, dict):
+                            entries.append(entry)
+                    except json.JSONDecodeError:
+                        continue
+                setattr(self, cache_key, f.tell())
+        except Exception:
+            pass
+
+        return entries
+
+    _SUGGESTION_MAP: dict[str, str] = {
+        "timeout": "Increase task timeout or split into smaller subtasks.",
+        "budget": "Increase budget limit or reduce task scope.",
+        "crash": "Check worker logs for stack trace.",
+        "dep_failure": "Fix upstream dependency first.",
+        "coordination": "Reduce file overlap between parallel tasks.",
+        "agent_error": "Review task prompt for clarity.",
+        "quality": "Relax quality threshold or add more context to task.",
+        "token_limit": "Split task into smaller subtasks to reduce token usage.",
+    }
+
+    def build_failure_chain(
+        self,
+        state: dict[str, Any],
+        events: list[dict[str, Any]] | None = None,
+    ) -> list[dict[str, Any]]:
+        """Build failure chain data from events for FailureChainWidget."""
+        if events is None:
+            events = self.read_events(limit=500)
+        failures: list[dict[str, Any]] = []
+
+        for ev in events:
+            etype = str(ev.get("type", ev.get("event_type", "")))
+            if etype not in ("fail", "task.failed"):
+                continue
+
+            data = ev.get("data", {}) if isinstance(ev.get("data"), dict) else {}
+            failure_data = data.get("failure", {})
+
+            task_id = str(ev.get("task_id", "") or data.get("task_id", ""))
+            cause = failure_data.get("cause", "agent_error")
+            suggestion = failure_data.get("suggestion", "")
+            if not suggestion:
+                suggestion = self._SUGGESTION_MAP.get(cause, "")
+            failures.append({
+                "task_id": task_id,
+                "cause": cause,
+                "confidence": failure_data.get("confidence", 0.0),
+                "evidence": failure_data.get("evidence", str(ev.get("message", ""))[:200]),
+                "chain": failure_data.get("chain", [task_id]),
+                "suggestion": suggestion,
+            })
+
+        return failures
+
+    def build_decision_list(self, state: dict[str, Any]) -> list[dict[str, Any]]:
+        """Extract decisions from state for DecisionsPane."""
+        return state.get("decisions", [])
+
+    def build_conflict_list(
+        self,
+        state: dict[str, Any],
+        events: list[dict[str, Any]] | None = None,
+    ) -> list[dict[str, Any]]:
+        """Build conflict list from events for ConflictPanel."""
+        if events is None:
+            events = self.read_events(limit=500)
+        conflicts: list[dict[str, Any]] = []
+
+        for ev in events:
+            etype = str(ev.get("type", ev.get("event_type", "")))
+            if etype not in ("conflict", "conflict.detected"):
+                continue
+            data = ev.get("data", {}) if isinstance(ev.get("data"), dict) else {}
+            conflicts.append({
+                "file_path": data.get("file_path", ""),
+                "task_a": data.get("task_a", ""),
+                "task_b": data.get("task_b", ""),
+                "symbol_name": data.get("symbol_name", ""),
+                "resolution": data.get("resolution", ""),
+                "strategy": data.get("strategy", ""),
+                "blast_radius_files": data.get("blast_radius_files", []),
+            })
+
+        return conflicts

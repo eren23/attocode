@@ -52,6 +52,10 @@ class EventTimeline(Static):
     events: reactive[list[dict[str, Any]]] = reactive(list)
     filter_type: reactive[str] = reactive("")  # "" = show all
 
+    def __init__(self, **kwargs: Any) -> None:
+        super().__init__(**kwargs)
+        self._prev_event_count: int = 0
+
     def watch_events(self, events: list[dict[str, Any]]) -> None:
         self._rebuild(events)
 
@@ -74,7 +78,15 @@ class EventTimeline(Static):
     def _rebuild(self, events: list[dict[str, Any]]) -> None:
         if not events:
             self.update(Text("(no events yet)", style="dim"))
+            self._prev_event_count = 0
             return
+
+        # Skip rebuild if event count hasn't changed (append-only feed from
+        # last-30 slice — same count means same events). Always rebuild when
+        # a filter is active since the filter_type may have changed.
+        if len(events) == self._prev_event_count and not self.filter_type:
+            return
+        self._prev_event_count = len(events)
 
         filtered = events
         if self.filter_type:
@@ -155,6 +167,23 @@ class EventsLog(Widget):
 
     def compose(self):
         yield RichLog(id="events-log", auto_scroll=True, markup=True)
+
+    def update_events_filtered(self, events: list[dict[str, Any]]) -> None:
+        """Replace all events with a filtered set (resets delta tracking)."""
+        self._seen_count = 0
+        try:
+            self.query_one("#events-log", RichLog).clear()
+        except Exception:
+            pass
+        if not events:
+            try:
+                self.query_one("#events-log", RichLog).write(
+                    Text("No matching events", style="dim italic")
+                )
+            except Exception:
+                pass
+            return
+        self.update_events(events)
 
     def update_events(self, events: list[dict[str, Any]]) -> None:
         """Append only new events since last call."""

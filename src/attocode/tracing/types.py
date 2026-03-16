@@ -110,6 +110,12 @@ class TraceEventKind(StrEnum):
     # --- Checkpoint ---
     CHECKPOINT = "checkpoint"
 
+    # --- Swarm transparency ---
+    SWARM_DECISION = "swarm_decision"
+    SWARM_CONFLICT = "swarm_conflict"
+    SWARM_BUDGET_PROJECTION = "swarm_budget_projection"
+    SWARM_FAILURE_ATTRIBUTION = "swarm_failure_attribution"
+
     # --- Extensibility ---
     CUSTOM = "custom"
 
@@ -484,6 +490,16 @@ def _build_event_type_mapping() -> dict[str, TraceEventKind]:
         "insight.saturation": TraceEventKind.BUDGET_WARNING,
         "insight.nudge": TraceEventKind.BUDGET_CHECK,
         "insight.phase_change": TraceEventKind.MODE_CHANGE,
+        # Swarm transparency
+        "swarm.decision": TraceEventKind.SWARM_DECISION,
+        "swarm.conflict": TraceEventKind.SWARM_CONFLICT,
+        "swarm.budget_projection": TraceEventKind.SWARM_BUDGET_PROJECTION,
+        "swarm.failure_attribution": TraceEventKind.SWARM_FAILURE_ATTRIBUTION,
+        # Research mode
+        "research.baseline": TraceEventKind.CUSTOM,
+        "research.experiment_start": TraceEventKind.CUSTOM,
+        "research.experiment_accepted": TraceEventKind.CUSTOM,
+        "research.experiment_rejected": TraceEventKind.CUSTOM,
     }
     return mapping
 

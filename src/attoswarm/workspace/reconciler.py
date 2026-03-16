@@ -17,7 +17,7 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from attocode.integrations.context.codebase_ast import (
     FileAST,
@@ -68,6 +68,8 @@ class ASTReconciler:
 
     def __init__(self, ast_service: ASTService | None = None) -> None:
         self._ast_service = ast_service
+        self._conflict_advisor: Any = None  # ConflictAdvisor, set by orchestrator
+        self._learning_bridge: Any = None   # SwarmLearningBridge, set by orchestrator
 
     def reconcile(
         self,
@@ -214,6 +216,43 @@ class ASTReconciler:
                     continue
 
                 # Real conflict: both modified the same symbol differently
+                # Try conflict advisor before giving up
+                if self._conflict_advisor:
+                    try:
+                        advice = self._conflict_advisor.advise_conflict(
+                            sym_name, file_path, "", "",
+                        )
+                        if advice.preferred_version in ("a", "b"):
+                            # Auto-resolve using advisor's recommendation
+                            if advice.preferred_version == "a":
+                                src_range = a_symbols.get(sym_name)
+                                src_lines = a_lines
+                            else:
+                                src_range = b_symbols.get(sym_name)
+                                src_lines = b_lines
+                            base_range = base_symbols.get(sym_name)
+                            if src_range and base_range:
+                                replacements.append((
+                                    base_range[0], base_range[1],
+                                    src_lines[src_range[0]:src_range[1]],
+                                ))
+                                auto_resolved += 1
+                                logger.info(
+                                    "Advisor resolved %s: prefer version %s (%s)",
+                                    sym_name, advice.preferred_version, advice.reason,
+                                )
+                                # Record conflict resolution as a learning
+                                if self._learning_bridge:
+                                    try:
+                                        self._learning_bridge.record_conflict_resolution(
+                                            advice, f"prefer_{advice.preferred_version}",
+                                        )
+                                    except Exception:
+                                        pass
+                                continue
+                    except Exception as exc:
+                        logger.debug("Conflict advisor failed for %s: %s", sym_name, exc)
+
                 conflicts.append(MergeConflict(
                     symbol_name=sym_name,
                     symbol_kind=change_a.symbol_kind,

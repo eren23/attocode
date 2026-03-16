@@ -65,7 +65,7 @@ class TaskCard(Static):
         self._attempts = attempts
         self._is_foundation = is_foundation
 
-    def on_mount(self) -> None:
+    def render(self) -> Text:
         text = Text()
         if self._is_foundation:
             text.append("\u2605 ", style="yellow")
@@ -79,7 +79,29 @@ class TaskCard(Static):
             text.append(f" r{self._attempts}", style="yellow dim")
         text.append("\n")
         text.append(self.title[:80], style="dim italic")
-        self.update(text)
+        return text
+
+    def update_data(
+        self,
+        title: str = "",
+        quality_score: int | None = None,
+        attempts: int = 0,
+        is_foundation: bool = False,
+    ) -> None:
+        """Update card content in-place without mount/unmount."""
+        changed = (
+            self.title != title
+            or self._quality_score != quality_score
+            or self._attempts != attempts
+            or self._is_foundation != is_foundation
+        )
+        if not changed:
+            return
+        self.title = title
+        self._quality_score = quality_score
+        self._attempts = attempts
+        self._is_foundation = is_foundation
+        self.refresh()
 
     def on_click(self) -> None:
         self.post_message(self.Selected(self.task_id))
@@ -108,6 +130,8 @@ class KanbanColumn(Vertical):
     def __init__(self, column_key: str, **kwargs: Any) -> None:
         super().__init__(**kwargs)
         self.column_key = column_key
+        self._prev_task_ids: list[str] = []
+        self._card_map: dict[str, TaskCard] = {}
 
     def compose(self):
         title = _COLUMN_TITLES.get(self.column_key, self.column_key.upper())
@@ -118,20 +142,56 @@ class KanbanColumn(Vertical):
         yield Static(header_text, classes="column-header")
 
     def set_tasks(self, tasks: list[dict[str, Any]]) -> None:
-        # Remove old task cards
-        for child in list(self.children):
-            if isinstance(child, TaskCard):
-                child.remove()
+        new_ids = [t.get("task_id", "?") for t in tasks]
+        new_map = {t.get("task_id", "?"): t for t in tasks}
+
+        if new_ids == self._prev_task_ids:
+            # Same cards — update content in-place (no mount/unmount)
+            for tid, task in new_map.items():
+                card = self._card_map.get(tid)
+                if card is not None:
+                    card.update_data(
+                        title=task.get("title", ""),
+                        quality_score=task.get("quality_score"),
+                        attempts=task.get("attempts", 0),
+                        is_foundation=task.get("is_foundation", False),
+                    )
+            return
+
+        # Differential: remove departed, add new
+        old_set = set(self._prev_task_ids)
+        new_set = set(new_ids)
+
+        for tid in old_set - new_set:
+            card = self._card_map.pop(tid, None)
+            if card is not None:
+                card.remove()
 
         for task in tasks:
-            card = TaskCard(
-                task_id=task.get("task_id", "?"),
-                title=task.get("title", ""),
-                quality_score=task.get("quality_score"),
-                attempts=task.get("attempts", 0),
-                is_foundation=task.get("is_foundation", False),
-            )
-            self.mount(card)
+            tid = task.get("task_id", "?")
+            if tid in old_set:
+                # Already mounted — update in-place
+                card = self._card_map.get(tid)
+                if card is not None:
+                    card.update_data(
+                        title=task.get("title", ""),
+                        quality_score=task.get("quality_score"),
+                        attempts=task.get("attempts", 0),
+                        is_foundation=task.get("is_foundation", False),
+                    )
+            else:
+                # New card
+                card = TaskCard(
+                    task_id=tid,
+                    title=task.get("title", ""),
+                    quality_score=task.get("quality_score"),
+                    attempts=task.get("attempts", 0),
+                    is_foundation=task.get("is_foundation", False),
+                )
+                self._card_map[tid] = card
+                self.mount(card)
+
+        self._prev_task_ids = new_ids
 
 
 class TaskBoard(Widget):
@@ -278,6 +338,9 @@ class TasksDataTable(Widget):
         bucket = _TASK_STATUS_MAP.get(raw_status, "pending")
         task_id = task.get("task_id", task.get("id", "?"))
         title = task.get("title", task.get("description", ""))[:50]
+        result = task.get("result_summary", "")
+        if result and bucket in ("done", "failed"):
+            title = f"{title} \u2014 {result[:30]}"
         kind = task.get("task_kind", "")
         agent = task.get("assigned_agent", "")
         attempts = task.get("attempts", 0)
@@ -312,17 +375,12 @@ class TasksDataTable(Widget):
         except Exception:
             return
 
-        # Sort: status bucket primary, task_id secondary. Cross-bucket transitions
-        # (e.g. pending→running) change the order and trigger a full rebuild;
-        # only intra-bucket changes (cell updates) use the differential path.
+        # Sort by task_id only — stable order across status transitions.
+        # Status is shown in the Status column; sorting by it causes full
+        # table rebuilds on every pending→running transition.
         sorted_tasks = sorted(
             self._task_rows,
-            key=lambda t: (
-                _STATUS_SORT_ORDER.get(
-                    _TASK_STATUS_MAP.get(t.get("status", "pending"), "pending"), 99
-                ),
-                t.get("task_id", ""),
-            ),
+            key=lambda t: t.get("task_id", ""),
         )
 
         new_map: dict[str, dict[str, str]] = {}
@@ -446,9 +504,12 @@ class TasksDataTable(Widget):
                 row_idx = new_order.index(self._selected_key)
                 self._restoring_cursor = True
                 table.move_cursor(row=row_idx)
-                self._restoring_cursor = False
+                self.call_later(self._clear_restoring_cursor)
             except (ValueError, Exception):
                 self._restoring_cursor = False
+
+    def _clear_restoring_cursor(self) -> None:
+        self._restoring_cursor = False
 
     def on_data_table_row_highlighted(self, event: DataTable.RowHighlighted) -> None:
         if self._restoring_cursor:

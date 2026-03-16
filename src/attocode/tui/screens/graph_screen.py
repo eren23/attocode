@@ -104,7 +104,7 @@ class GraphScreen(Screen):
         yield Footer()
 
     def on_mount(self) -> None:
-        self._update_breadcrumb()
+        self._show_current_view()
         self.run_worker(self._load_data, thread=True)
 
     def _header_text(self) -> str:
@@ -145,10 +145,7 @@ class GraphScreen(Screen):
             widget_id = f"#graph-{view}"
             try:
                 w = self.query_one(widget_id)
-                if view == self._mode:
-                    w.add_class("visible")
-                else:
-                    w.remove_class("visible")
+                w.display = (view == self._mode)
             except Exception as e:
                 logger.debug("GraphScreen: view toggle failed for %s: %s", widget_id, e)
         self._update_header()
@@ -413,6 +410,7 @@ class GraphScreen(Screen):
         self._navigate_to(
             new_mode,
             self._file if new_mode in ("deps", "impact") else "",
+            push_history=False,
         )
 
     def action_prev_view(self) -> None:
@@ -421,6 +419,7 @@ class GraphScreen(Screen):
         self._navigate_to(
             new_mode,
             self._file if new_mode in ("deps", "impact") else "",
+            push_history=False,
         )
 
 

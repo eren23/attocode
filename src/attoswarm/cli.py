@@ -23,6 +23,20 @@ from attoswarm.tui.app import AttoswarmApp
 
 logger = logging.getLogger(__name__)
 
+
+def _make_trace_collector(cfg: SwarmYamlConfig) -> Any:
+    """Create a TraceCollector for the run if tracing is enabled. Returns None on failure."""
+    try:
+        from attocode.tracing.collector import TraceCollector
+
+        trace_dir = Path(cfg.run.run_dir) / "traces"
+        collector = TraceCollector(output_dir=str(trace_dir), buffer_size=1)
+        collector.start_session(goal="swarm")
+        return collector
+    except Exception as exc:
+        logger.debug("Trace collector init failed: %s", exc)
+        return None
+
 # ── Activity label parsing for agent stdout ──────────────────────────
 
 _ACTIVITY_PATTERNS: list[tuple[re.Pattern[str], str]] = [
@@ -111,7 +125,50 @@ def _build_backend_cmd(backend: str, model: str, prompt: str) -> list[str]:
     raise ValueError(f"Unsupported backend: {backend!r}")
 
 
-def _make_subprocess_spawn_fn(cfg: SwarmYamlConfig):  # noqa: ANN202
+def _build_backend_cmd_stdin(backend: str, model: str, prompt: str) -> tuple[list[str], str]:
+    """Build subprocess command + stdin text, piping prompt via stdin.
+
+    Returns ``(cmd, stdin_text)`` where *stdin_text* is the prompt to write
+    to the process's stdin.  This avoids OS argument-length limits for large
+    prompts.
+
+    Backends that accept stdin for the prompt (claude, codex) get the prompt
+    piped.  Others (aider, attocode) still receive the prompt as a CLI arg.
+    """
+    if backend == "claude":
+        cmd = ["claude", "-p", "--dangerously-skip-permissions"]
+        if model:
+            cmd.extend(["--model", model])
+        # claude -p reads from stdin when no positional prompt is given
+        return cmd, prompt
+    if backend == "codex":
+        cmd = [
+            "codex", "exec", "--json", "--skip-git-repo-check",
+            "--sandbox", "workspace-write",
+        ]
+        if model:
+            cmd.extend(["--model", model])
+        cmd.append(prompt)
+        return cmd, ""
+    if backend == "aider":
+        cmd = ["aider"]
+        if model:
+            cmd.extend(["--model", model])
+        cmd.extend(["--message", prompt])
+        return cmd, ""
+    if backend == "attocode":
+        cmd = ["attocode"]
+        if model:
+            cmd.extend(["--model", model])
+        cmd.extend(["--non-interactive", prompt])
+        return cmd, ""
+    raise ValueError(f"Unsupported backend: {backend!r}")
+
+
+def _make_subprocess_spawn_fn(
+    cfg: SwarmYamlConfig,
+    process_registry: Any = None,
+):  # noqa: ANN202
     """Build a spawn function that delegates to backend CLIs as subprocesses.
 
     Selects the correct backend (claude, codex, aider, attocode) based on the
@@ -119,6 +176,9 @@ def _make_subprocess_spawn_fn(cfg: SwarmYamlConfig):  # noqa: ANN202
     backend (or ``"claude"`` if no roles are defined).
 
     Strips CLAUDECODE env vars to prevent nested-session errors.
+
+    If *process_registry* (a SubagentManager) is provided, spawned processes
+    are registered/unregistered for graceful shutdown.
     """
     from attoswarm.coordinator.subagent_manager import TaskResult as _TaskResult
 
@@ -166,6 +226,8 @@ def _make_subprocess_spawn_fn(cfg: SwarmYamlConfig):  # noqa: ANN202
                 env=clean_env,
                 start_new_session=True,
             )
+            if process_registry is not None:
+                process_registry.register_process(proc)
             worker_timeout = max(cfg.run.max_runtime_seconds or 600, 600)
 
             # Stream stdout to capture activity labels
@@ -200,6 +262,8 @@ def _make_subprocess_spawn_fn(cfg: SwarmYamlConfig):  # noqa: ANN202
                 raise
 
             await proc.wait()
+            if process_registry is not None:
+                process_registry.unregister_process(proc)
             elapsed = _time.monotonic() - t0
             stdout_text = (stdout_bytes or b"").decode("utf-8", errors="replace")
             stderr_text = (stderr_bytes or b"").decode("utf-8", errors="replace")
@@ -265,6 +329,12 @@ def _make_subprocess_decompose_fn(cfg: SwarmYamlConfig):  # noqa: ANN202
         backend = "claude"
         model = ""
 
+    logger.info(
+        "Decomposer using backend=%s model=%s",
+        backend,
+        model or "(default)",
+    )
+
     max_tasks = cfg.orchestration.max_tasks or 20
 
     # Build role descriptions for the prompt
@@ -277,7 +347,7 @@ def _make_subprocess_decompose_fn(cfg: SwarmYamlConfig):  # noqa: ANN202
 
     custom_instructions = (cfg.orchestration.custom_instructions or "").strip()
 
-    def _build_decompose_prompt(goal: str, complexity: str = "") -> str:
+    def _build_decompose_prompt(goal: str, complexity: str = "", codebase_context: str = "") -> str:
         from attoswarm.coordinator.decompose import build_decompose_prompt, classify_goal_complexity
         if not complexity:
             complexity = classify_goal_complexity(goal)
@@ -287,6 +357,7 @@ def _make_subprocess_decompose_fn(cfg: SwarmYamlConfig):  # noqa: ANN202
             max_tasks=max_tasks,
             role_descriptions=role_descriptions,
             custom_instructions=custom_instructions,
+            codebase_context=codebase_context,
         )
 
     def _build_retry_prompt(goal: str, complexity: str = "") -> str:
@@ -336,20 +407,28 @@ def _make_subprocess_decompose_fn(cfg: SwarmYamlConfig):  # noqa: ANN202
 
     async def _run_decompose(prompt: str) -> list[_TaskSpec]:
         """Run a single decomposition attempt via subprocess."""
-        cmd = _build_backend_cmd(backend, model, prompt)
+        cmd, stdin_text = _build_backend_cmd_stdin(backend, model, prompt)
         proc = await asyncio.create_subprocess_exec(
             *cmd,
+            stdin=asyncio.subprocess.PIPE if stdin_text else None,
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
             cwd=cfg.run.working_dir or ".",
             env=clean_env,
             start_new_session=True,
         )
-        decompose_timeout = min(cfg.run.max_runtime_seconds or 120, 120)
-        stdout_bytes, stderr_bytes = await asyncio.wait_for(
-            proc.communicate(),
-            timeout=decompose_timeout,
-        )
+        decompose_timeout = min(cfg.run.max_runtime_seconds or 300, 300)
+        try:
+            stdout_bytes, stderr_bytes = await asyncio.wait_for(
+                proc.communicate(input=stdin_text.encode() if stdin_text else None),
+                timeout=decompose_timeout,
+            )
+        except (asyncio.TimeoutError, TimeoutError):
+            proc.kill()
+            await proc.wait()
+            raise RuntimeError(
+                f"Decomposition subprocess timed out after {decompose_timeout}s"
+            )
         stdout_text = (stdout_bytes or b"").decode("utf-8", errors="replace")
 
         if proc.returncode != 0:
@@ -362,6 +441,7 @@ def _make_subprocess_decompose_fn(cfg: SwarmYamlConfig):  # noqa: ANN202
 
     async def decompose_fn(
         goal: str, *, ast_service: Any = None, config: Any = None,
+        codebase_context: str = "",
     ) -> list[_TaskSpec]:
         """Decompose a goal into TaskSpecs via subprocess LLM call."""
         from attoswarm.coordinator.decompose import classify_goal_complexity, validate_decomposition
@@ -371,7 +451,7 @@ def _make_subprocess_decompose_fn(cfg: SwarmYamlConfig):  # noqa: ANN202
 
         # First attempt with complexity-aware prompt
         try:
-            tasks = await _run_decompose(_build_decompose_prompt(goal, complexity))
+            tasks = await _run_decompose(_build_decompose_prompt(goal, complexity, codebase_context))
             warnings = validate_decomposition(
                 [{"task_id": t.task_id, "title": t.title, "description": t.description} for t in tasks],
                 complexity,
@@ -432,6 +512,60 @@ def _print_doctor(rows: list[dict[str, Any]]) -> bool:
     return all_ok
 
 
+def _print_run_summary(orch: Any) -> None:
+    """Print a post-run summary to the terminal."""
+    summary = orch.aot_graph.summary()
+    done = summary.get("done", 0)
+    total = sum(summary.values()) if isinstance(summary, dict) else 0
+    failed = summary.get("failed", 0)
+    cost = orch.budget.used_cost_usd
+
+    elapsed_s = 0.0
+    if hasattr(orch, '_start_time') and orch._start_time:
+        import time as _t
+        elapsed_s = _t.time() - orch._start_time
+    mins = int(elapsed_s) // 60
+    secs = int(elapsed_s) % 60
+    elapsed_str = f"{mins}m{secs:02d}s" if mins else f"{secs}s"
+
+    click.echo(f"\n{'=' * 50}")
+    click.echo(f"  Tasks: {done}/{total} completed" + (f" ({failed} failed)" if failed else ""))
+    click.echo(f"  Cost:  ${cost:.2f}")
+    click.echo(f"  Time:  {elapsed_str}")
+
+    # Change manifest summary
+    if hasattr(orch, '_change_manifest') and orch._change_manifest:
+        ms = orch._change_manifest.get_summary()
+        if ms.get("total_changes"):
+            click.echo(f"  Files: {len(ms.get('files_modified', []))} modified ({ms['total_changes']} changes)")
+    click.echo(f"{'=' * 50}")
+
+
+def _prompt_git_finalization(orch: Any) -> None:
+    """Prompt user for git finalization if git safety was used."""
+    if not hasattr(orch, '_git_safety') or not orch._git_safety:
+        return
+    gs = orch._git_safety
+    if not gs.state.is_git_repo:
+        return
+
+    click.echo(f"\nSwarm branch: {gs.state.swarm_branch}")
+    if gs.state.stash_ref:
+        click.echo(f"Pre-run stash: {gs.state.stash_ref}")
+
+    try:
+        choice = click.prompt(
+            "Git finalization",
+            type=click.Choice(["merge", "keep", "discard"]),
+            default="keep",
+        )
+        import asyncio as _asyncio
+        _asyncio.run(gs.finalize(choice))
+        click.echo(f"Git finalized: {choice}")
+    except (click.Abort, EOFError):
+        click.echo("Skipped git finalization (branch preserved)")
+
+
 @main.command("run")
 @click.argument("config_path", type=click.Path(exists=True, dir_okay=False, path_type=Path))
 @click.argument("goal", nargs=-1)
@@ -445,6 +579,8 @@ def _print_doctor(rows: list[dict[str, Any]]) -> bool:
     default=None,
     help="Override workspace mode: 'shared' (AoT+OCC) or 'worktree' (legacy)",
 )
+@click.option("--trace", "trace_flag", is_flag=True, help="Enable trace collection for post-hoc analysis")
+@click.option("--no-git-safety", is_flag=True, help="Disable git stash/branch safety net")
 def run_command(
     config_path: Path,
     goal: tuple[str, ...],
@@ -453,6 +589,8 @@ def run_command(
     observe: bool,
     debug_flag: bool,
     workspace_mode: str | None,
+    trace_flag: bool,
+    no_git_safety: bool,
 ) -> None:
     """Run swarm with YAML config and goal."""
     cfg = load_swarm_yaml(config_path)
@@ -462,18 +600,30 @@ def run_command(
         cfg.run.debug = True
     if workspace_mode:
         cfg.workspace.mode = workspace_mode
+    if no_git_safety:
+        cfg.workspace.git_safety = False
     goal_text = " ".join(goal).strip()
     if not goal_text:
         raise click.ClickException("Goal text is required")
 
+    collector = _make_trace_collector(cfg) if trace_flag else None
+
     # Route to appropriate coordinator
     if cfg.workspace.mode == "shared":
         from attoswarm.coordinator.orchestrator import SwarmOrchestrator
-        code = asyncio.run(SwarmOrchestrator(
+        orch = SwarmOrchestrator(
             cfg, goal_text, resume=resume_flag,
             decompose_fn=_make_subprocess_decompose_fn(cfg),
-            spawn_fn=_make_subprocess_spawn_fn(cfg),
-        ).run())
+            spawn_fn=_make_subprocess_spawn_fn(cfg, process_registry=None),
+            trace_collector=collector,
+        )
+        # Wire process registry: spawn_fn uses orchestrator's subagent manager
+        orch._subagent_mgr._spawn_fn = _make_subprocess_spawn_fn(
+            cfg, process_registry=orch._subagent_mgr,
+        )
+        code = asyncio.run(orch.run())
+        _print_run_summary(orch)
+        _prompt_git_finalization(orch)
     else:
         code = asyncio.run(HybridCoordinator(cfg, goal_text, resume=resume_flag).run())
 
@@ -503,6 +653,8 @@ def run_command(
     default=None,
     help="Pre-defined task decomposition file (YAML or Markdown)",
 )
+@click.option("--trace", "trace_flag", is_flag=True, help="Enable trace collection for post-hoc analysis")
+@click.option("--no-git-safety", is_flag=True, help="Disable git stash/branch safety net")
 def start_command(
     config_path: Path,
     goal: tuple[str, ...],
@@ -514,6 +666,8 @@ def start_command(
     debug_flag: bool,
     workspace_mode: str | None,
     tasks_file: Path | None,
+    trace_flag: bool,
+    no_git_safety: bool,
 ) -> None:
     """Single launcher: run coordinator and monitor with one command."""
     cfg = load_swarm_yaml(config_path)
@@ -523,6 +677,8 @@ def start_command(
         cfg.run.debug = True
     if workspace_mode:
         cfg.workspace.mode = workspace_mode
+    if no_git_safety:
+        cfg.workspace.git_safety = False
     goal_text = " ".join(goal).strip()
     if not goal_text:
         raise click.ClickException("Goal text is required")
@@ -555,6 +711,8 @@ def start_command(
             cmd.append("--resume")
         if debug_flag:
             cmd.append("--debug")
+        if trace_flag:
+            cmd.append("--trace")
         log_path = Path(cfg.run.run_dir) / "coordinator.log"
         log_path.parent.mkdir(parents=True, exist_ok=True)
         log_fh = open(log_path, "a", encoding="utf-8")  # noqa: SIM115
@@ -563,14 +721,23 @@ def start_command(
         click.echo(f"Reattach: attoswarm tui {cfg.run.run_dir}")
         raise SystemExit(0)
 
+    collector = _make_trace_collector(cfg) if trace_flag else None
+
     if not monitor:
         if cfg.workspace.mode == "shared":
             from attoswarm.coordinator.orchestrator import SwarmOrchestrator
-            code = asyncio.run(SwarmOrchestrator(
+            orch = SwarmOrchestrator(
                 cfg, goal_text, resume=resume_flag,
                 decompose_fn=_make_subprocess_decompose_fn(cfg),
-                spawn_fn=_make_subprocess_spawn_fn(cfg),
-            ).run())
+                spawn_fn=_make_subprocess_spawn_fn(cfg, process_registry=None),
+                trace_collector=collector,
+            )
+            orch._subagent_mgr._spawn_fn = _make_subprocess_spawn_fn(
+                cfg, process_registry=orch._subagent_mgr,
+            )
+            code = asyncio.run(orch.run())
+            _print_run_summary(orch)
+            _prompt_git_finalization(orch)
         else:
             code = asyncio.run(HybridCoordinator(cfg, goal_text, resume=resume_flag).run())
         raise SystemExit(code)
@@ -589,17 +756,24 @@ def start_command(
         cmd.append("--resume")
     if debug_flag:
         cmd.append("--debug")
+    if trace_flag:
+        cmd.append("--trace")
     log_path = Path(cfg.run.run_dir) / "coordinator.log"
     log_path.parent.mkdir(parents=True, exist_ok=True)
     log_fh = open(log_path, "a", encoding="utf-8")  # noqa: SIM115
     proc = subprocess.Popen(cmd, stdout=log_fh, stderr=log_fh)
-    AttoswarmApp(cfg.run.run_dir).run()
-    if proc.poll() is None:
-        click.echo(
-            f"Monitor exited; coordinator still running in background (pid={proc.pid}).\n"
-            f"Reattach: attoswarm tui {cfg.run.run_dir}"
-        )
-        raise SystemExit(0)
+    try:
+        AttoswarmApp(cfg.run.run_dir).run()
+    finally:
+        if proc.poll() is None:
+            try:
+                proc.terminate()
+                proc.wait(timeout=8)
+            except subprocess.TimeoutExpired:
+                proc.kill()
+                proc.wait(timeout=3)
+            except Exception:
+                pass
     raise SystemExit(proc.returncode or 0)
 
 
@@ -618,7 +792,8 @@ def tui_command(run_dir: Path) -> None:
     default=None,
     help="Override workspace mode: 'shared' (AoT+OCC) or 'worktree' (legacy)",
 )
-def resume_command(run_dir: Path, workspace_mode: str | None) -> None:
+@click.option("--trace", "trace_flag", is_flag=True, help="Enable trace collection for post-hoc analysis")
+def resume_command(run_dir: Path, workspace_mode: str | None, trace_flag: bool) -> None:
     """Resume execution from an existing run directory."""
     manifest_path = run_dir / "swarm.manifest.json"
     state_path = run_dir / "swarm.state.json"
@@ -650,12 +825,15 @@ def resume_command(run_dir: Path, workspace_mode: str | None) -> None:
         state_data = read_json(state_path, default={})
         goal = state_data.get("goal", "Resume swarm run")
 
+    collector = _make_trace_collector(cfg) if trace_flag else None
+
     if cfg.workspace.mode == "shared":
         from attoswarm.coordinator.orchestrator import SwarmOrchestrator
         code = asyncio.run(SwarmOrchestrator(
             cfg, str(goal), resume=True,
             decompose_fn=_make_subprocess_decompose_fn(cfg),
             spawn_fn=_make_subprocess_spawn_fn(cfg),
+            trace_collector=collector,
         ).run())
     else:
         code = asyncio.run(HybridCoordinator(cfg, str(goal), resume=True).run())
@@ -688,6 +866,220 @@ def inspect_command(run_dir: Path, tail: int, agent: str | None, task_id: str | 
         if task_id and payload.get("task_id") != task_id:
             continue
         click.echo(line)
+
+
+@main.command("research")
+@click.argument("goal", type=str)
+@click.option("--eval-command", "-e", type=str, required=True, help="Shell command that outputs numeric metric")
+@click.option("--target-files", "-t", type=str, multiple=True, help="Files the agent should modify")
+@click.option("--max-experiments", type=int, default=100, help="Maximum number of experiments")
+@click.option("--experiment-timeout", type=float, default=300.0, help="Timeout per experiment (seconds)")
+@click.option("--metric-direction", type=click.Choice(["maximize", "minimize"]), default="maximize")
+@click.option("--metric-name", type=str, default="score", help="Name of the metric being optimized")
+@click.option("--max-cost", type=float, default=50.0, help="Total cost budget (USD)")
+@click.option("--resume", type=str, default="", help="Resume a previous research run by ID")
+@click.option("--config", "config_path", type=click.Path(exists=True, dir_okay=False, path_type=Path), default=None)
+@click.option("--db", type=click.Path(path_type=Path), default=None, help="Path to experiment database")
+@click.option("--working-dir", "-w", type=click.Path(exists=True, path_type=Path), default=None)
+def research_command(
+    goal: str,
+    eval_command: str,
+    target_files: tuple[str, ...],
+    max_experiments: int,
+    experiment_timeout: float,
+    metric_direction: str,
+    metric_name: str,
+    max_cost: float,
+    resume: str,
+    config_path: Path | None,
+    db: Path | None,
+    working_dir: Path | None,
+) -> None:
+    """Run iterative research experiments with numeric evaluation.
+
+    The agent will repeatedly modify code, evaluate using --eval-command,
+    and accept/reject changes based on whether the metric improves.
+
+    Example:
+        attoswarm research "improve test pass rate" -e "pytest --tb=no -q | tail -1"
+    """
+    from attoswarm.research.config import ResearchConfig as _ResearchConfig
+    from attoswarm.research.research_orchestrator import ResearchOrchestrator
+
+    wd = str(working_dir) if working_dir else "."
+    run_dir = str(db.parent) if db else ".agent/research"
+
+    research_cfg = _ResearchConfig(
+        metric_name=metric_name,
+        metric_direction=metric_direction,
+        experiment_timeout_seconds=experiment_timeout,
+        total_max_experiments=max_experiments,
+        total_max_cost_usd=max_cost,
+        eval_command=eval_command,
+        target_files=list(target_files),
+        working_dir=wd,
+        run_dir=run_dir,
+    )
+
+    # Load swarm config for spawn_fn if available
+    spawn_fn = None
+    if config_path:
+        cfg = load_swarm_yaml(config_path)
+        spawn_fn = _make_subprocess_spawn_fn(cfg)
+
+    orchestrator = ResearchOrchestrator(
+        config=research_cfg,
+        goal=goal,
+        spawn_fn=spawn_fn,
+    )
+
+    click.echo(f"Starting research: {goal[:80]}")
+    click.echo(f"Eval: {eval_command}")
+    click.echo(f"Direction: {metric_direction} | Max experiments: {max_experiments} | Budget: ${max_cost}")
+
+    state = asyncio.run(orchestrator.run(resume_run_id=resume))
+
+    # Print scoreboard
+    scoreboard = orchestrator.get_scoreboard()
+    click.echo("\n" + "=" * 60)
+    click.echo(scoreboard.render_summary())
+    click.echo("\n" + scoreboard.render_table())
+    click.echo("\n" + scoreboard.render_trend())
+
+    raise SystemExit(0 if state.status == "completed" else 1)
+
+
+def _detect_first_available_backend() -> str:
+    """Auto-detect the first available backend CLI."""
+    for name in ("claude", "codex", "aider", "attocode"):
+        if shutil.which(name):
+            return name
+    return "claude"  # fallback
+
+
+@main.command("quick")
+@click.argument("goal", nargs=-1, required=True)
+@click.option("--budget", type=float, default=10.0, help="Cost cap in USD (default $10)")
+@click.option("--workers", type=int, default=2, help="Number of parallel workers (default 2)")
+@click.option("--backend", type=str, default=None, help="Backend CLI (auto-detect if omitted)")
+@click.option("--no-git-safety", is_flag=True, help="Disable git stash/branch safety")
+@click.option("--trace", "trace_flag", is_flag=True, help="Enable trace collection")
+def quick_command(
+    goal: tuple[str, ...],
+    budget: float,
+    workers: int,
+    backend: str | None,
+    no_git_safety: bool,
+    trace_flag: bool,
+) -> None:
+    """Run swarm without a config file — sensible defaults.
+
+    Examples:
+        attoswarm quick "implement feature X"
+        attoswarm quick --budget 5 --workers 3 "fix all tests"
+    """
+    from attoswarm.config.schema import (
+        BudgetConfig,
+        OrchestrationConfig,
+        RunConfig,
+        WorkspaceConfig,
+    )
+
+    goal_text = " ".join(goal).strip()
+    if not goal_text:
+        raise click.ClickException("Goal text is required")
+
+    if backend is None:
+        backend = _detect_first_available_backend()
+        click.echo(f"Auto-detected backend: {backend}")
+
+    if not shutil.which(backend):
+        raise click.ClickException(f"Backend '{backend}' not found in PATH")
+
+    workers = max(1, min(workers, 8))
+
+    # Build synthetic config
+    orch_role = RoleConfig(
+        role_id="orchestrator",
+        role_type="orchestrator",
+        backend=backend,
+        model="",
+        count=1,
+        task_kinds=["analysis", "design"],
+    )
+    worker_role = RoleConfig(
+        role_id="worker",
+        role_type="worker",
+        backend=backend,
+        model="",
+        count=workers,
+        write_access=True,
+        workspace_mode="shared_ro",
+        task_kinds=["implement", "test", "integrate"],
+    )
+
+    cfg = SwarmYamlConfig(
+        version=1,
+        run=RunConfig(
+            name="quick-run",
+            working_dir=".",
+            run_dir=".agent/hybrid-swarm",
+            max_runtime_seconds=600,
+        ),
+        roles=[orch_role, worker_role],
+        budget=BudgetConfig(
+            max_tokens=5_000_000,
+            max_cost_usd=budget,
+        ),
+        orchestration=OrchestrationConfig(
+            decomposition="llm",
+            max_tasks=20,
+            max_depth=3,
+        ),
+        workspace=WorkspaceConfig(
+            mode="shared",
+            max_concurrent_writers=workers,
+            git_safety=not no_git_safety,
+        ),
+    )
+
+    click.echo(f"Quick start: {workers} workers, ${budget:.0f} budget, backend={backend}")
+    click.echo(f"Goal: {goal_text[:100]}")
+
+    collector = _make_trace_collector(cfg) if trace_flag else None
+
+    from attoswarm.coordinator.orchestrator import SwarmOrchestrator
+    orch = SwarmOrchestrator(
+        cfg, goal_text,
+        decompose_fn=_make_subprocess_decompose_fn(cfg),
+        spawn_fn=_make_subprocess_spawn_fn(cfg, process_registry=None),
+        trace_collector=collector,
+    )
+    orch._subagent_mgr._spawn_fn = _make_subprocess_spawn_fn(
+        cfg, process_registry=orch._subagent_mgr,
+    )
+
+    code = asyncio.run(orch.run())
+
+    # Print summary
+    summary = orch.aot_graph.summary()
+    click.echo(f"\nDone: {summary.get('done', 0)}/{summary.get('total', 0)} tasks, ${orch.budget.used_cost_usd:.2f}")
+
+    # Git safety finalization
+    if orch._git_safety and orch._git_safety.state.is_git_repo:
+        click.echo(f"\nSwarm branch: {orch._git_safety.state.swarm_branch}")
+        if no_git_safety:
+            pass
+        else:
+            choice = click.prompt(
+                "Git finalization",
+                type=click.Choice(["merge", "keep", "discard"]),
+                default="keep",
+            )
+            asyncio.run(orch._git_safety.finalize(choice))
+            click.echo(f"Git finalized: {choice}")
+
+    raise SystemExit(0 if code else 1)
 
 
 @main.command("doctor")

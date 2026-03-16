@@ -582,6 +582,35 @@ class TraceCollector:
         return self.record(TraceEventKind.ITERATION_END, **payload)
 
     # ------------------------------------------------------------------
+    # Swarm transparency events
+    # ------------------------------------------------------------------
+
+    def record_swarm_decision(self, decision: str, phase: str = "", reasoning: str = "") -> TraceEvent:
+        """Record a swarm orchestration decision."""
+        return self.record(
+            TraceEventKind.SWARM_DECISION,
+            decision=decision, phase=phase, reasoning=reasoning,
+        )
+
+    def record_swarm_conflict(self, file_path: str, symbol: str = "", resolution: str = "") -> TraceEvent:
+        """Record a file conflict in swarm execution."""
+        return self.record(
+            TraceEventKind.SWARM_CONFLICT,
+            file_path=file_path, symbol=symbol, resolution=resolution,
+        )
+
+    def record_swarm_budget_projection(self, projection: dict[str, Any]) -> TraceEvent:
+        """Record a budget projection event."""
+        return self.record(TraceEventKind.SWARM_BUDGET_PROJECTION, **projection)
+
+    def record_swarm_failure(self, task_id: str, cause: str, evidence: str = "") -> TraceEvent:
+        """Record a failure attribution event."""
+        return self.record(
+            TraceEventKind.SWARM_FAILURE_ATTRIBUTION,
+            task_id=task_id, cause=cause, evidence=evidence,
+        )
+
+    # ------------------------------------------------------------------
     # Summary
     # ------------------------------------------------------------------
 

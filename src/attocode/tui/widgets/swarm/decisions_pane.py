@@ -13,6 +13,23 @@ if TYPE_CHECKING:
     from textual.app import ComposeResult
 
 
+def _fmt_ts(ts: Any) -> str:
+    """Format a timestamp (epoch number or ISO string) as HH:MM:SS."""
+    if not ts:
+        return "??:??:??"
+    if isinstance(ts, (int, float)):
+        return time.strftime("%H:%M:%S", time.localtime(ts))
+    if isinstance(ts, str):
+        try:
+            from datetime import datetime
+
+            dt = datetime.fromisoformat(ts.replace("Z", "+00:00"))
+            return dt.strftime("%H:%M:%S")
+        except Exception:
+            return ts[:8]
+    return "??:??:??"
+
+
 class DecisionLog(Widget):
     """Scrollable chronological decision log."""
 
@@ -55,7 +72,7 @@ class DecisionLog(Widget):
 
         for d in decisions[-50:]:
             ts = d.get("timestamp", 0)
-            t = time.strftime("%H:%M:%S", time.localtime(ts)) if ts else "??:??:??"
+            t = _fmt_ts(ts)
             phase = d.get("phase", "")
             color = phase_colors.get(phase, "dim")
 
@@ -124,7 +141,7 @@ class ErrorSummary(Widget):
         text.append(f"\nRecent Errors ({min(len(self._errors), 10)}):\n", style="bold")
         for e in self._errors[-10:]:
             ts = e.get("timestamp", 0)
-            t = time.strftime("%H:%M:%S", time.localtime(ts)) if ts else "??:??:??"
+            t = _fmt_ts(ts)
             text.append(f"  [{t}] ", style="dim")
             msg = e.get("message", e.get("error", "unknown"))
             text.append(f"{str(msg)[:80]}\n", style="red")
@@ -136,8 +153,70 @@ class ErrorSummary(Widget):
         self.refresh()
 
 
+class TransitionLog(Widget):
+    """Scrollable log of task state transitions."""
+
+    DEFAULT_CSS = """
+    TransitionLog {
+        height: 1fr;
+        border: solid $primary;
+        padding: 0 1;
+        overflow-y: auto;
+    }
+    """
+
+    _STATE_STYLES: dict[str, str] = {
+        "running": "cyan",
+        "done": "green",
+        "failed": "red",
+        "pending": "dim",
+        "skipped": "yellow",
+        "claiming": "yellow",
+    }
+
+    def __init__(self, **kwargs: Any) -> None:
+        super().__init__(**kwargs)
+        self._transitions: list[dict[str, Any]] = []
+
+    def render(self) -> Text:
+        text = Text()
+        text.append("Transition Log", style="bold underline")
+        text.append("\n\n")
+
+        if not self._transitions:
+            text.append("No task transitions recorded yet", style="dim italic")
+            return text
+
+        for t in self._transitions[-50:]:
+            ts = t.get("timestamp", 0)
+            t_str = _fmt_ts(ts)
+            task_id = t.get("task_id", "?")
+            from_state = t.get("from_state", t.get("from", "?"))
+            to_state = t.get("to_state", t.get("to", "?"))
+            reason = t.get("reason", "")
+            agent = t.get("assigned_agent", t.get("agent_id", ""))
+
+            text.append(f"[{t_str}] ", style="dim")
+            text.append(f"{task_id}: ", style="bold")
+            text.append(f"{from_state}", style="dim")
+            text.append(" \u2192 ", style="dim")
+            to_style = self._STATE_STYLES.get(str(to_state), "")
+            text.append(f"{to_state}", style=to_style)
+            if agent:
+                text.append(f" (agent: {agent})", style="dim italic")
+            if reason:
+                text.append(f" — {reason}", style="dim italic")
+            text.append("\n")
+
+        return text
+
+    def update_transitions(self, transitions: list[dict[str, Any]]) -> None:
+        self._transitions = transitions
+        self.refresh()
+
+
 class DecisionsPane(Widget):
-    """Top: DecisionLog, Bottom: ErrorSummary."""
+    """Top: DecisionLog, Middle: TransitionLog, Bottom: ErrorSummary."""
 
     DEFAULT_CSS = """
     DecisionsPane {
@@ -145,6 +224,9 @@ class DecisionsPane(Widget):
     }
     DecisionsPane #decisions-log-container {
         height: 2fr;
+    }
+    DecisionsPane #decisions-transition-container {
+        height: 1fr;
     }
     DecisionsPane #decisions-error-container {
         height: 1fr;
@@ -155,14 +237,22 @@ class DecisionsPane(Widget):
         with Vertical():
             with Vertical(id="decisions-log-container"):
                 yield DecisionLog(id="dec-log")
+            with Vertical(id="decisions-transition-container"):
+                yield TransitionLog(id="dec-transitions")
             with Vertical(id="decisions-error-container"):
                 yield ErrorSummary(id="dec-errors")
 
     def update_state(self, state: dict[str, Any]) -> None:
-        """Push decisions and errors to child widgets."""
+        """Push decisions, transitions, and errors to child widgets."""
         try:
             self.query_one("#dec-log", DecisionLog).update_decisions(
                 state.get("decisions", [])
+            )
+        except Exception:
+            pass
+        try:
+            self.query_one("#dec-transitions", TransitionLog).update_transitions(
+                state.get("transitions", [])
             )
         except Exception:
             pass

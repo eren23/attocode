@@ -127,6 +127,9 @@ class DependencyTree(Widget):
         super().__init__(**kwargs)
         self._dag_nodes: list[dict[str, Any]] = []
         self._agent_map: dict[str, dict[str, str]] = {}
+        self._prev_structure_hash: str = ""
+        self._node_map: dict[str, Any] = {}  # task_id -> TreeNode
+        self._prev_statuses: dict[str, str] = {}  # task_id -> status
 
     def compose(self):
         tree: Tree[str] = Tree("Tasks", id="dep-tree")
@@ -158,15 +161,40 @@ class DependencyTree(Widget):
                     }
         self._rebuild(edges)
 
+    @staticmethod
+    def _make_label(
+        task_id: str,
+        status: str,
+        title: str,
+        agent_info: dict[str, str] | None = None,
+    ) -> Text:
+        icon = _STATUS_SYMBOLS.get(status, "?")
+        color = _STATUS_COLORS.get(status, "")
+        label = Text()
+        label.append(f"{icon} ", style=color)
+        label.append(task_id, style="bold")
+        label.append(f" \u2014 {title[:40]}", style="dim")
+        label.append(f" [{status}]", style=color)
+        if agent_info:
+            aid = agent_info.get("agent_id", "")
+            act = agent_info.get("activity", "")
+            if aid:
+                label.append(f" @{aid}", style="cyan")
+            if act:
+                label.append(f" ({act})", style="italic dim")
+        return label
+
     def _rebuild(self, edges: list[Any] | None = None) -> None:
         try:
             tree = self.query_one("#dep-tree", Tree)
         except Exception:
             return
 
-        tree.clear()
-
         if not self._dag_nodes:
+            tree.clear()
+            self._prev_structure_hash = ""
+            self._node_map.clear()
+            self._prev_statuses.clear()
             return
 
         # Build dependency map: task_id -> [dep task_ids]
@@ -192,6 +220,33 @@ class DependencyTree(Widget):
                 if tgt:
                     deps_map.setdefault(tgt, []).append(src)
 
+        # Compute structure hash from task IDs + edges
+        node_map = {str(n.get("task_id", "")): n for n in self._dag_nodes}
+        sorted_ids = sorted(node_map.keys())
+        edge_strs = sorted(
+            f"{tid}:{','.join(sorted(ds))}" for tid, ds in deps_map.items() if ds
+        )
+        structure_hash = f"{','.join(sorted_ids)}|{'|'.join(edge_strs)}"
+
+        if structure_hash == self._prev_structure_hash and self._node_map:
+            # Structure unchanged — only update labels for changed statuses
+            for tid, node in node_map.items():
+                status = node.get("status", "pending")
+                if status != self._prev_statuses.get(tid):
+                    tree_node = self._node_map.get(tid)
+                    if tree_node is not None:
+                        title = node.get("title", "")
+                        tree_node.set_label(
+                            self._make_label(tid, status, title, self._agent_map.get(tid))
+                        )
+                    self._prev_statuses[tid] = status
+            return
+
+        # Full rebuild (structure changed or first time)
+        tree.clear()
+        self._node_map.clear()
+        self._prev_statuses.clear()
+
         # Build reverse map: parent -> [children who depend on parent]
         children_map: dict[str, list[str]] = {}
         for tid, deps in deps_map.items():
@@ -199,10 +254,7 @@ class DependencyTree(Widget):
                 children_map.setdefault(dep, []).append(tid)
 
         # Roots = nodes with no deps
-        node_map = {str(n.get("task_id", "")): n for n in self._dag_nodes}
         roots = [tid for tid in node_map if not deps_map.get(tid)]
-
-        # If no roots (circular), use all nodes
         if not roots:
             roots = list(node_map.keys())
 
@@ -215,37 +267,25 @@ class DependencyTree(Widget):
 
             node = node_map.get(task_id, {})
             status = node.get("status", "pending")
-            title = node.get("title", "")[:40]
+            title = node.get("title", "")
 
-            icon = _STATUS_SYMBOLS.get(status, "?")
-            color = _STATUS_COLORS.get(status, "")
-
-            label = Text()
-            label.append(f"{icon} ", style=color)
-            label.append(task_id, style="bold")
-            label.append(f" \u2014 {title}", style="dim")
-            label.append(f" [{status}]", style=color)
-
-            # Agent annotation
-            agent_info = self._agent_map.get(task_id)
-            if agent_info:
-                aid = agent_info.get("agent_id", "")
-                act = agent_info.get("activity", "")
-                if aid:
-                    label.append(f" @{aid}", style="cyan")
-                if act:
-                    label.append(f" ({act})", style="italic dim")
+            label = self._make_label(task_id, status, title, self._agent_map.get(task_id))
+            self._prev_statuses[task_id] = status
 
             kids = children_map.get(task_id, [])
             if kids:
                 branch = parent_branch.add(label, data=task_id, expand=True)
+                self._node_map[task_id] = branch
                 for child_id in kids:
                     _add_node(branch, child_id, depth + 1)
             else:
-                parent_branch.add_leaf(label, data=task_id)
+                leaf = parent_branch.add_leaf(label, data=task_id)
+                self._node_map[task_id] = leaf
 
         for root_id in roots:
             _add_node(tree.root, root_id)
+
+        self._prev_structure_hash = structure_hash
 
     def on_tree_node_selected(self, event: Tree.NodeSelected) -> None:
         if event.node.data:

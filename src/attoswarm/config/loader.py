@@ -9,8 +9,10 @@ import yaml
 
 from attoswarm.config.schema import (
     BudgetConfig,
+    CodeIntelConfig,
     MergeConfig,
     OrchestrationConfig,
+    ResearchConfig,
     RetryConfig,
     RoleConfig,
     RunConfig,
@@ -37,6 +39,8 @@ def load_swarm_yaml(path: str | Path) -> SwarmYamlConfig:
     )
     ui_raw = raw.get("ui", {}) if isinstance(raw.get("ui"), dict) else {}
     workspace_raw = raw.get("workspace", {}) if isinstance(raw.get("workspace"), dict) else {}
+    code_intel_raw = raw.get("code_intel", {}) if isinstance(raw.get("code_intel"), dict) else {}
+    research_raw = raw.get("research", {}) if isinstance(raw.get("research"), dict) else {}
 
     run = RunConfig(**_pick(run_raw, RunConfig))
     budget = BudgetConfig(**_pick(budget_raw, BudgetConfig))
@@ -46,6 +50,8 @@ def load_swarm_yaml(path: str | Path) -> SwarmYamlConfig:
     orchestration = OrchestrationConfig(**_pick(orchestration_raw, OrchestrationConfig))
     ui = UIConfig(**_pick(ui_raw, UIConfig))
     workspace = WorkspaceConfig(**_pick(workspace_raw, WorkspaceConfig))
+    code_intel = CodeIntelConfig(**_pick(code_intel_raw, CodeIntelConfig))
+    research = ResearchConfig(**_pick(research_raw, ResearchConfig))
 
     roles: list[RoleConfig] = []
     raw_roles = raw.get("roles", [])
@@ -66,6 +72,8 @@ def load_swarm_yaml(path: str | Path) -> SwarmYamlConfig:
         orchestration=orchestration,
         ui=ui,
         workspace=workspace,
+        code_intel=code_intel,
+        research=research,
     )
 
 

@@ -59,7 +59,6 @@ class DetailInspector(Static):
     def inspect(self, data: dict[str, Any]) -> None:
         """External API to set inspection target."""
         self.inspect_data = data
-        self.focus()
 
     def on_key(self, event: Any) -> None:
         """Handle action keys for the currently inspected item."""
@@ -137,8 +136,37 @@ class DetailInspector(Static):
         if execution_mode:
             text.append(f"  Execution: {execution_mode}\n")
 
-        text.append(f"  Tokens: {data.get('tokens_used', 0):,}\n")
+        tokens = data.get("tokens_used", 0)
+        cost_usd = data.get("cost_usd", 0.0)
+        text.append(f"  Tokens: {tokens:,}")
+        if cost_usd:
+            text.append(f"  |  Cost: ${cost_usd:.4f}", style="yellow")
+        text.append("\n")
         text.append(f"  Elapsed: {data.get('elapsed', '?')}\n")
+
+        # Tools used (from trace summary)
+        trace = data.get("trace_summary", {})
+        tool_counts = trace.get("tool_counts", {})
+        if tool_counts:
+            parts = [f"{t} ({c}x)" for t, c in sorted(tool_counts.items(), key=lambda x: -x[1])]
+            text.append("  Tools Used: ", style="bold")
+            text.append(", ".join(parts[:6]), style="dim")
+            text.append("\n")
+
+        # Errors from trace
+        error_count = trace.get("error_count", 0)
+        last_error = trace.get("last_error", "")
+        if error_count:
+            text.append(f"  Errors: {error_count}", style="red bold")
+            if last_error:
+                text.append(f"  |  Last: {last_error}", style="red")
+            text.append("\n")
+
+        # Result summary
+        result_summary = data.get("result_summary", "")
+        if result_summary:
+            text.append("  Result Summary: ", style="bold")
+            text.append(f"{result_summary[:200]}\n", style="dim italic")
 
         # Restart info
         restart_count = data.get("restart_count", 0)

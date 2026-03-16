@@ -80,6 +80,42 @@ class WorkspaceConfig:
     mode: str = "shared"  # "shared" (default, AoT+OCC) | "worktree" (legacy subprocess per worktree)
     reconciliation_strategy: str = "ast_merge"  # "ast_merge" | "last_write_wins"
     max_concurrent_writers: int = 4
+    git_safety: bool = True
+    claim_ttl_seconds: float = 120.0
+    change_manifest: bool = True
+
+
+@dataclass(slots=True)
+class CodeIntelConfig:
+    enabled: bool = True
+    bootstrap_on_start: bool = True
+    impact_enrichment: bool = True
+    cross_ref_conflicts: bool = True
+    learning_enabled: bool = True
+    bootstrap_max_tokens: int = 4000
+    max_read_files_per_task: int = 10
+    impact_depth: int = 1
+
+
+@dataclass(slots=True)
+class ResearchConfig:
+    metric_name: str = "score"
+    metric_direction: str = "maximize"  # maximize|minimize
+    experiment_timeout_seconds: float = 300.0
+    experiment_max_tokens: int = 500_000
+    experiment_max_cost_usd: float = 2.0
+    total_max_experiments: int = 100
+    total_max_cost_usd: float = 50.0
+    total_max_wall_seconds: float = 28800.0  # 8 hours
+    min_improvement_threshold: float = 0.0
+    eval_command: str = ""
+    eval_repeat: int = 1
+    target_files: list[str] = field(default_factory=list)
+    use_git_stash: bool = True
+    model: str = ""
+    backend: str = "claude"
+    working_dir: str = "."
+    run_dir: str = ".agent/research"
 
 
 @dataclass(slots=True)
@@ -94,3 +130,5 @@ class SwarmYamlConfig:
     orchestration: OrchestrationConfig = field(default_factory=OrchestrationConfig)
     ui: UIConfig = field(default_factory=UIConfig)
     workspace: WorkspaceConfig = field(default_factory=WorkspaceConfig)
+    code_intel: CodeIntelConfig = field(default_factory=CodeIntelConfig)
+    research: ResearchConfig = field(default_factory=ResearchConfig)
