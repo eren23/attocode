@@ -65,12 +65,15 @@ class SwarmOrchestrator:
         decompose_fn: Callable[..., Any] | None = None,
         spawn_fn: Callable[..., Any] | None = None,
         trace_collector: Any = None,
+        approval_mode: str = "auto",
     ) -> None:
         self._config = config
         self._goal = goal
         self._resume = resume
         self._decompose_fn = decompose_fn
         self._trace_collector = trace_collector
+        self._approval_mode = approval_mode  # "auto" | "preview" | "dry_run"
+        self._approved = False
 
         # Unique run ID
         self._run_id = str(uuid.uuid4())[:8]
@@ -171,7 +174,12 @@ class SwarmOrchestrator:
         """
         self._start_time = time.time()
         self._setup_directories()
+
+        if not self._resume:
+            self._archive_previous_run()
+
         self._phase = "initializing"
+        self._persist_state()  # Early write — lets TUI detect subprocess start
 
         # Install signal handlers for graceful shutdown
         loop = asyncio.get_running_loop()
@@ -202,18 +210,8 @@ class SwarmOrchestrator:
         self._subagent_mgr._ast_service = self._ast_service
         self._subagent_mgr._trace_dir = str(self._layout["agents"])
 
-        # 2b. Initialize git safety net
+        # 2b. Git safety config — deferred to after approval gate
         ws_cfg = getattr(self._config, 'workspace', None)
-        if ws_cfg and ws_cfg.git_safety:
-            try:
-                from attoswarm.workspace.git_safety import GitSafetyNet
-                self._git_safety = GitSafetyNet(self._root_dir, self._run_id, str(self._run_dir))
-                git_state = await self._git_safety.setup()
-                if git_state.is_git_repo:
-                    self._emit("info", message=f"Git safety: branch={git_state.swarm_branch}, stash={'yes' if git_state.stash_ref else 'no'}")
-            except Exception as exc:
-                logger.warning("Git safety init failed: %s", exc)
-                self._git_safety = None
 
         # 2c. Initialize change manifest
         if ws_cfg and ws_cfg.change_manifest:
@@ -229,6 +227,7 @@ class SwarmOrchestrator:
         # 3. Decompose goal into tasks
         self._phase = "decomposing"
         self._emit("info", message=f"Decomposing goal: {self._goal[:100]}")
+        self._persist_state()  # Update phase to "decomposing" for TUI
         tasks = await self._decompose_goal(codebase_context=bootstrap_ctx)
         if not tasks:
             self._emit("fail", message="Decomposition produced no tasks")
@@ -266,6 +265,56 @@ class SwarmOrchestrator:
         self._persist_manifest()
         self._persist_state()
 
+        # ── Approval gate ──
+        # Skip approval on resume if execution had already started
+        if self._resume:
+            from attoswarm.protocol.io import read_json as _read_json
+            prev_state = _read_json(self._layout["state"], default={})
+            prev_phase = prev_state.get("phase", "")
+            if prev_phase in ("executing", "completed", "shutdown"):
+                self._approved = True
+
+        if self._approval_mode == "dry_run":
+            self._phase = "preview"
+            self._emit("info", message=f"Dry run: {len(tasks)} tasks decomposed")
+            self._persist_state()
+            return 0
+
+        if self._approval_mode == "preview":
+            self._phase = "awaiting_approval"
+            self._emit("info", message=f"Awaiting approval for {len(tasks)} tasks")
+            self._persist_state()
+
+            approval_timeout = 1800  # 30 min max wait
+            approval_start = time.time()
+            while not self._shutdown_requested and not self._approved:
+                self._check_control_messages()
+                await asyncio.sleep(1.0)
+                if time.time() - approval_start > approval_timeout:
+                    self._emit("warning", message="Approval timeout — shutting down")
+                    self._request_shutdown()
+                    break
+
+            if self._shutdown_requested and not self._approved:
+                self._phase = "rejected"
+                self._emit("info", message="Execution rejected")
+                self._persist_state()
+                return 0
+            self._emit("info", message="Execution approved — starting")
+
+        # 3c. Initialize git safety net — deferred to after approval gate
+        # so no branch is created for dry_run or rejected previews.
+        if ws_cfg and ws_cfg.git_safety:
+            try:
+                from attoswarm.workspace.git_safety import GitSafetyNet
+                self._git_safety = GitSafetyNet(self._root_dir, self._run_id, str(self._run_dir))
+                git_state = await self._git_safety.setup()
+                if git_state.is_git_repo:
+                    self._emit("info", message=f"Git safety: branch={git_state.swarm_branch}, stash={'yes' if git_state.stash_ref else 'no'}")
+            except Exception as exc:
+                logger.warning("Git safety init failed: %s", exc)
+                self._git_safety = None
+
         # 4. Execute batches (progress-based loop)
         #
         # A while loop replaces the old ``for level_idx, batch_ids in
@@ -284,100 +333,102 @@ class SwarmOrchestrator:
         # Start background control polling
         control_poll_task = asyncio.create_task(self._control_poll_loop())
 
-        while batch_num < max_batches:
-            if self._shutdown_requested:
-                self._emit("info", message="Shutdown requested — stopping dispatch")
-                break
+        try:
+            while batch_num < max_batches:
+                if self._shutdown_requested:
+                    self._emit("info", message="Shutdown requested — stopping dispatch")
+                    break
 
-            # Check pause
-            await self._check_pause()
+                # Check pause
+                await self._check_pause()
 
-            ready = self._aot_graph.get_ready_batch()
-            if not ready:
-                break  # No more tasks can run
+                ready = self._aot_graph.get_ready_batch()
+                if not ready:
+                    break  # No more tasks can run
 
-            batch_num += 1
-            self._emit(
-                "info",
-                message=f"Batch {batch_num}: {len(ready)} tasks",
-            )
+                batch_num += 1
+                self._emit(
+                    "info",
+                    message=f"Batch {batch_num}: {len(ready)} tasks",
+                )
 
-            # Check parallel safety
-            conflicts = self._aot_graph.check_parallel_safety(ready, self._ast_service)
-            parallel, serialized = self._split_by_conflicts(ready, conflicts)
-            if serialized:
-                self._record_decision("executing", "parallel_safety_split",
-                                      f"Serialized {len(serialized)} tasks due to AST conflicts",
-                                      f"Parallel: {parallel}, Serialized: {serialized}")
+                # Check parallel safety
+                conflicts = self._aot_graph.check_parallel_safety(ready, self._ast_service)
+                parallel, serialized = self._split_by_conflicts(ready, conflicts)
+                if serialized:
+                    self._record_decision("executing", "parallel_safety_split",
+                                          f"Serialized {len(serialized)} tasks due to AST conflicts",
+                                          f"Parallel: {parallel}, Serialized: {serialized}")
 
-            # Snapshot files for parallel tasks
-            for tid in parallel:
-                task = self._tasks.get(tid)
-                if task and self._file_ledger:
-                    for f in task.target_files:
-                        abs_path = os.path.join(self._root_dir, f)
-                        if Path(abs_path).exists():
-                            try:
-                                ver = await self._file_ledger.snapshot_file(f, f"agent-{tid}")
-                                task.file_version_snapshot[f] = ver.version_hash
-                            except Exception:
-                                pass
-
-            # Execute parallel batch
-            if parallel:
+                # Snapshot files for parallel tasks
                 for tid in parallel:
+                    task = self._tasks.get(tid)
+                    if task and self._file_ledger:
+                        for f in task.target_files:
+                            abs_path = os.path.join(self._root_dir, f)
+                            if Path(abs_path).exists():
+                                try:
+                                    ver = await self._file_ledger.snapshot_file(f, f"agent-{tid}")
+                                    task.file_version_snapshot[f] = ver.version_hash
+                                except Exception:
+                                    pass
+
+                # Execute parallel batch
+                if parallel:
+                    for tid in parallel:
+                        self._aot_graph.mark_running(tid)
+                        self._emit("spawn", task_id=tid, agent_id=f"agent-{tid}", message=f"Spawning worker for {tid}")
+                    self._persist_state()
+
+                    batch_tasks = [self._task_to_dict(tid) for tid in parallel]
+                    # Persist prompts for each task
+                    for td in batch_tasks:
+                        self._persist_prompt(td["task_id"], td)
+                    task_timeout = max(t.get("timeout_seconds", 0) for t in batch_tasks) or 600.0
+                    results = await self._subagent_mgr.execute_batch(batch_tasks, timeout=task_timeout)
+
+                    for result in results:
+                        completed += self._handle_result(result)
+                    self._persist_state()
+
+                # Execute serialized tasks one by one
+                for tid in serialized:
                     self._aot_graph.mark_running(tid)
-                    self._emit("spawn", task_id=tid, agent_id=f"agent-{tid}", message=f"Spawning worker for {tid}")
-                self._persist_state()
+                    self._emit("spawn", task_id=tid, agent_id=f"agent-{tid}", message=f"Spawning worker for {tid} (serialized)")
+                    self._persist_state()
 
-                batch_tasks = [self._task_to_dict(tid) for tid in parallel]
-                # Persist prompts for each task
-                for td in batch_tasks:
-                    self._persist_prompt(td["task_id"], td)
-                task_timeout = max(t.get("timeout_seconds", 0) for t in batch_tasks) or 600.0
-                results = await self._subagent_mgr.execute_batch(batch_tasks, timeout=task_timeout)
-
-                for result in results:
+                    task_dict = self._task_to_dict(tid)
+                    self._persist_prompt(tid, task_dict)
+                    task = self._tasks.get(tid)
+                    task_timeout = float(task.timeout_seconds) if task and task.timeout_seconds > 0 else 600.0
+                    result = await self._subagent_mgr.execute_single(task_dict, timeout=task_timeout)
                     completed += self._handle_result(result)
-                self._persist_state()
+                    self._persist_state()
 
-            # Execute serialized tasks one by one
-            for tid in serialized:
-                self._aot_graph.mark_running(tid)
-                self._emit("spawn", task_id=tid, agent_id=f"agent-{tid}", message=f"Spawning worker for {tid} (serialized)")
-                self._persist_state()
+                # Post-batch: refresh AST index, check control messages, stall detection
+                if self._ast_service:
+                    try:
+                        self._ast_service.refresh()
+                    except Exception:
+                        pass
+                self._check_control_messages()
+                self._check_stale_agents()
 
-                task_dict = self._task_to_dict(tid)
-                self._persist_prompt(tid, task_dict)
-                task = self._tasks.get(tid)
-                task_timeout = float(task.timeout_seconds) if task and task.timeout_seconds > 0 else 600.0
-                result = await self._subagent_mgr.execute_single(task_dict, timeout=task_timeout)
-                completed += self._handle_result(result)
-                self._persist_state()
+            # Warn if tasks remain pending after the loop
+            remaining = [tid for tid, n in self._aot_graph.nodes.items() if n.status == "pending"]
+            if remaining:
+                self._emit("warning", message=f"{len(remaining)} tasks still pending after execution: {remaining}")
 
-            # Post-batch: refresh AST index, check control messages, stall detection
-            if self._ast_service:
-                try:
-                    self._ast_service.refresh()
-                except Exception:
-                    pass
-            self._check_control_messages()
-            self._check_stale_agents()
+        finally:
+            # 5. Finalize — guaranteed to run on normal exit, shutdown, or SIGTERM
 
-        # Stop background control polling
-        control_poll_task.cancel()
-        try:
-            await control_poll_task
-        except asyncio.CancelledError:
-            pass
+            # Stop background control polling
+            control_poll_task.cancel()
+            try:
+                await control_poll_task
+            except asyncio.CancelledError:
+                pass
 
-        # Warn if tasks remain pending after the loop
-        remaining = [tid for tid, n in self._aot_graph.nodes.items() if n.status == "pending"]
-        if remaining:
-            self._emit("warning", message=f"{len(remaining)} tasks still pending after execution: {remaining}")
-
-        # 5. Finalize — always runs, even on shutdown/error
-        try:
             self._phase = "completed" if not self._shutdown_requested else "shutdown"
             elapsed = time.time() - self._start_time
             summary = self._aot_graph.summary()
@@ -394,17 +445,21 @@ class SwarmOrchestrator:
                 except Exception:
                     pass
 
-            # Git safety: commit on swarm branch, default to "keep" mode
+            # Git safety: commit or discard
             if self._git_safety:
                 try:
-                    await self._git_safety.create_swarm_commit(
-                        f"attoswarm: {completed}/{len(tasks)} tasks completed"
-                    )
+                    if completed > 0:
+                        await self._git_safety.create_swarm_commit(
+                            f"attoswarm: {completed}/{len(tasks)} tasks completed"
+                        )
+                    else:
+                        await self._git_safety.finalize("discard")
+                        self._emit("info", message="Git safety: no tasks completed, restored original branch")
                 except Exception as exc:
-                    logger.warning("Git safety commit failed: %s", exc)
+                    logger.warning("Git safety finalize failed: %s", exc)
 
             self._persist_state()
-        finally:
+
             # Kill all remaining subprocesses
             await self._subagent_mgr.shutdown_all()
 
@@ -492,6 +547,7 @@ class SwarmOrchestrator:
             "cost_usd": task.cost_usd,
             "attempt_count": self._task_attempts.get(task_id, 0),
             "attempt_history": self._task_attempt_history.get(task_id, []),
+            "has_diff": (self._layout["tasks"] / f"task-{task_id}.diff").exists(),
         }
         path = self._layout["tasks"] / f"task-{task_id}.json"
         try:
@@ -578,6 +634,11 @@ class SwarmOrchestrator:
             "decisions": self._decisions[-50:],
             "errors": self._errors[-50:],
             "task_transition_log": self._transition_log[-100:],
+            "git_branch": (
+                self._git_safety.state.swarm_branch
+                if self._git_safety and hasattr(self._git_safety, "state")
+                else ""
+            ),
         }
 
         try:
@@ -593,6 +654,12 @@ class SwarmOrchestrator:
                 path.mkdir(parents=True, exist_ok=True)
         # Internal dir for ledger persistence etc.
         self._internal_dir.mkdir(parents=True, exist_ok=True)
+
+    def _archive_previous_run(self) -> None:
+        """Move previous run artifacts to history/{run_id}/ and start clean."""
+        from attoswarm.coordinator.archive import archive_previous_run
+
+        archive_previous_run(self._layout)
 
     def _init_ast_service(self) -> None:
         try:
@@ -726,6 +793,24 @@ class SwarmOrchestrator:
                 pass
         return d
 
+    def _capture_task_diff(self, task_id: str, files_modified: list[str]) -> None:
+        """Capture git diff for files modified by a task (best-effort)."""
+        if not files_modified:
+            return
+        try:
+            import subprocess
+
+            result = subprocess.run(
+                ["git", "diff", "HEAD", "--"] + files_modified[:20],
+                capture_output=True, text=True, timeout=10,
+                cwd=self._root_dir,
+            )
+            if result.stdout.strip():
+                diff_path = self._layout["tasks"] / f"task-{task_id}.diff"
+                diff_path.write_text(result.stdout, encoding="utf-8")
+        except Exception:
+            pass
+
     def _handle_result(self, result: TaskResult) -> int:
         """Process a task result.  Returns 1 if successful, 0 otherwise."""
         task = self._tasks.get(result.task_id)
@@ -763,6 +848,8 @@ class SwarmOrchestrator:
                         data={"files_modified": result.files_modified,
                               "tokens_used": result.tokens_used,
                               "cost_usd": result.cost_usd})
+            # Capture git diff for modified files
+            self._capture_task_diff(result.task_id, result.files_modified)
             # Record learning from successful task
             if self._learning_bridge:
                 try:
@@ -916,7 +1003,7 @@ class SwarmOrchestrator:
 
     async def _control_poll_loop(self) -> None:
         """Background task that checks control.jsonl every 5s during execution."""
-        while self._phase == "executing" and not self._shutdown_requested:
+        while self._phase in ("executing", "paused", "awaiting_approval") and not self._shutdown_requested:
             self._check_control_messages()
             await asyncio.sleep(5.0)
 
@@ -973,6 +1060,19 @@ class SwarmOrchestrator:
                 self._emit("info", message="Orchestrator resumed by user")
                 self._persist_state()
                 continue
+            if action == "approve":
+                self._approved = True
+                self._phase = "executing"
+                self._emit("info", message="Execution approved by user")
+                self._persist_state()
+                continue
+            if action == "reject":
+                self._request_shutdown()
+                self._emit("info", message="Execution rejected by user")
+                continue
+            if action == "add_task":
+                self._handle_add_task(msg)
+                continue
 
             if not task_id:
                 continue
@@ -1000,6 +1100,79 @@ class SwarmOrchestrator:
                     self._persist_task(task_id)
                     self._emit("info", task_id=task_id,
                                message=f"Task {task_id} description updated by user")
+
+    def _handle_add_task(self, msg: dict[str, Any]) -> None:
+        """Handle add_task control message — inject a new task into the DAG."""
+        new_id = msg.get("task_id", f"user-{uuid.uuid4().hex[:6]}")
+        title = msg.get("title", "").strip()
+        description = msg.get("description", "").strip()
+        deps = msg.get("deps", [])
+        target_files = msg.get("target_files", [])
+        task_kind = msg.get("task_kind", "implement")
+
+        if not title:
+            self._emit("warning", message="add_task rejected: title is required")
+            return
+
+        # Validate deps exist
+        bad_deps = [d for d in deps if d not in self._tasks]
+        if bad_deps:
+            self._emit("warning", message=f"add_task rejected: unknown deps {bad_deps}")
+            return
+
+        # Check for ID collision
+        if new_id in self._tasks:
+            new_id = f"user-{uuid.uuid4().hex[:6]}"
+
+        new_task = TaskSpec(
+            task_id=new_id,
+            title=title,
+            description=description or title,
+            deps=deps,
+            target_files=target_files,
+            task_kind=task_kind,
+        )
+        # Best-effort code-intel enrichment for dynamic tasks
+        if self._code_intel:
+            try:
+                enriched = self._enrich_tasks_with_impact([new_task])
+                if enriched:
+                    new_task = enriched[0]
+            except Exception:
+                pass
+
+        self._tasks[new_id] = new_task
+        new_node = AoTNode(
+            task_id=new_id,
+            depends_on=list(deps),
+            target_files=list(target_files),
+        )
+        self._aot_graph.add_task(new_node)
+
+        # Recompute levels (safe — BFS from scratch)
+        try:
+            self._aot_graph.compute_levels()
+        except ValueError as exc:
+            # Cycle detected — rollback
+            self._aot_graph.remove_task(new_id)
+            del self._tasks[new_id]
+            self._emit("warning", message=f"add_task rejected: {exc}")
+            return
+
+        self._persist_state()
+        if self._manifest:
+            self._manifest.tasks = list(self._tasks.values())
+        self._persist_manifest()
+        self._emit("info", task_id=new_id,
+                    message=f"User added task: {title}")
+        self._transition_log.append({
+            "timestamp": utc_now_iso(),
+            "task_id": new_id,
+            "from_state": "(new)",
+            "to_state": "pending",
+            "reason": "added by user",
+            "assigned_agent": "",
+        })
 
     # ------------------------------------------------------------------
     # Code-intel integration (Workstream 1)

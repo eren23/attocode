@@ -77,6 +77,17 @@ def load_swarm_yaml(path: str | Path) -> SwarmYamlConfig:
     )
 
 
+def save_swarm_yaml(cfg: SwarmYamlConfig, path: str | Path) -> None:
+    """Serialize a SwarmYamlConfig to YAML on disk."""
+    from dataclasses import asdict
+
+    data = asdict(cfg)
+    p = Path(path)
+    p.parent.mkdir(parents=True, exist_ok=True)
+    with p.open("w", encoding="utf-8") as f:
+        yaml.safe_dump(data, f, default_flow_style=False, sort_keys=False)
+
+
 def _pick(raw: dict[str, Any], model_type: type[Any]) -> dict[str, Any]:
     allowed = set(model_type.__dataclass_fields__.keys())
     return {k: v for k, v in raw.items() if k in allowed}

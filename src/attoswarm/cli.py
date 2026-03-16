@@ -15,7 +15,7 @@ from typing import Any
 
 import click
 
-from attoswarm.config.loader import load_swarm_yaml
+from attoswarm.config.loader import load_swarm_yaml, save_swarm_yaml
 from attoswarm.config.schema import RoleConfig, SwarmYamlConfig
 from attoswarm.coordinator.loop import HybridCoordinator
 from attoswarm.protocol.io import read_json
@@ -581,6 +581,7 @@ def _prompt_git_finalization(orch: Any) -> None:
 )
 @click.option("--trace", "trace_flag", is_flag=True, help="Enable trace collection for post-hoc analysis")
 @click.option("--no-git-safety", is_flag=True, help="Disable git stash/branch safety net")
+@click.option("--approval-mode", type=click.Choice(["auto", "preview", "dry_run"]), default="auto", help="Approval mode for task execution")
 def run_command(
     config_path: Path,
     goal: tuple[str, ...],
@@ -591,6 +592,7 @@ def run_command(
     workspace_mode: str | None,
     trace_flag: bool,
     no_git_safety: bool,
+    approval_mode: str,
 ) -> None:
     """Run swarm with YAML config and goal."""
     cfg = load_swarm_yaml(config_path)
@@ -616,6 +618,7 @@ def run_command(
             decompose_fn=_make_subprocess_decompose_fn(cfg),
             spawn_fn=_make_subprocess_spawn_fn(cfg, process_registry=None),
             trace_collector=collector,
+            approval_mode=approval_mode,
         )
         # Wire process registry: spawn_fn uses orchestrator's subagent manager
         orch._subagent_mgr._spawn_fn = _make_subprocess_spawn_fn(
@@ -655,6 +658,8 @@ def run_command(
 )
 @click.option("--trace", "trace_flag", is_flag=True, help="Enable trace collection for post-hoc analysis")
 @click.option("--no-git-safety", is_flag=True, help="Disable git stash/branch safety net")
+@click.option("--preview", is_flag=True, help="Review task plan before execution starts")
+@click.option("--dry-run", is_flag=True, help="Decompose only — show tasks without executing")
 def start_command(
     config_path: Path,
     goal: tuple[str, ...],
@@ -668,6 +673,8 @@ def start_command(
     tasks_file: Path | None,
     trace_flag: bool,
     no_git_safety: bool,
+    preview: bool,
+    dry_run: bool,
 ) -> None:
     """Single launcher: run coordinator and monitor with one command."""
     cfg = load_swarm_yaml(config_path)
@@ -696,7 +703,10 @@ def start_command(
         if not _print_doctor(rows):
             raise click.ClickException("Doctor check failed. Fix missing backends or use --skip-doctor")
 
-    if detach:
+    # Determine approval mode
+    approval_mode = "dry_run" if dry_run else ("preview" if preview else "auto")
+
+    def _build_start_cmd() -> list[str]:
         cmd = [
             sys.executable,
             "-m",
@@ -713,6 +723,14 @@ def start_command(
             cmd.append("--debug")
         if trace_flag:
             cmd.append("--trace")
+        if no_git_safety:
+            cmd.append("--no-git-safety")
+        if approval_mode != "auto":
+            cmd.extend(["--approval-mode", approval_mode])
+        return cmd
+
+    if detach:
+        cmd = _build_start_cmd()
         log_path = Path(cfg.run.run_dir) / "coordinator.log"
         log_path.parent.mkdir(parents=True, exist_ok=True)
         log_fh = open(log_path, "a", encoding="utf-8")  # noqa: SIM115
@@ -723,6 +741,11 @@ def start_command(
 
     collector = _make_trace_collector(cfg) if trace_flag else None
 
+    # --preview without TUI has no way to approve — fall back to dry_run
+    if approval_mode == "preview" and not monitor:
+        click.echo("Note: --preview without --monitor defaults to --dry-run (no TUI to approve)")
+        approval_mode = "dry_run"
+
     if not monitor:
         if cfg.workspace.mode == "shared":
             from attoswarm.coordinator.orchestrator import SwarmOrchestrator
@@ -731,6 +754,7 @@ def start_command(
                 decompose_fn=_make_subprocess_decompose_fn(cfg),
                 spawn_fn=_make_subprocess_spawn_fn(cfg, process_registry=None),
                 trace_collector=collector,
+                approval_mode=approval_mode,
             )
             orch._subagent_mgr._spawn_fn = _make_subprocess_spawn_fn(
                 cfg, process_registry=orch._subagent_mgr,
@@ -742,28 +766,13 @@ def start_command(
             code = asyncio.run(HybridCoordinator(cfg, goal_text, resume=resume_flag).run())
         raise SystemExit(code)
 
-    cmd = [
-        sys.executable,
-        "-m",
-        "attoswarm",
-        "run",
-        str(config_path),
-        goal_text,
-    ]
-    if run_dir:
-        cmd.extend(["--run-dir", run_dir])
-    if resume_flag:
-        cmd.append("--resume")
-    if debug_flag:
-        cmd.append("--debug")
-    if trace_flag:
-        cmd.append("--trace")
+    cmd = _build_start_cmd()
     log_path = Path(cfg.run.run_dir) / "coordinator.log"
     log_path.parent.mkdir(parents=True, exist_ok=True)
     log_fh = open(log_path, "a", encoding="utf-8")  # noqa: SIM115
     proc = subprocess.Popen(cmd, stdout=log_fh, stderr=log_fh)
     try:
-        AttoswarmApp(cfg.run.run_dir).run()
+        AttoswarmApp(cfg.run.run_dir, coordinator_pid=proc.pid).run()
     finally:
         if proc.poll() is None:
             try:
@@ -964,6 +973,11 @@ def _detect_first_available_backend() -> str:
 @click.option("--backend", type=str, default=None, help="Backend CLI (auto-detect if omitted)")
 @click.option("--no-git-safety", is_flag=True, help="Disable git stash/branch safety")
 @click.option("--trace", "trace_flag", is_flag=True, help="Enable trace collection")
+@click.option("--monitor/--no-monitor", default=True, help="Open TUI dashboard (default: yes)")
+@click.option("--detach", is_flag=True, help="Start in background and print reattach command")
+@click.option("--preview", is_flag=True, help="Review task plan before execution starts")
+@click.option("--dry-run", is_flag=True, help="Decompose only — show tasks without executing")
+@click.option("--resume", "resume_flag", is_flag=True, help="Resume previous run (preserve artifacts)")
 def quick_command(
     goal: tuple[str, ...],
     budget: float,
@@ -971,12 +985,19 @@ def quick_command(
     backend: str | None,
     no_git_safety: bool,
     trace_flag: bool,
+    monitor: bool,
+    detach: bool,
+    preview: bool,
+    dry_run: bool,
+    resume_flag: bool,
 ) -> None:
     """Run swarm without a config file — sensible defaults.
 
     Examples:
         attoswarm quick "implement feature X"
         attoswarm quick --budget 5 --workers 3 "fix all tests"
+        attoswarm quick --preview "add user auth"
+        attoswarm quick --dry-run --no-monitor "refactor module X"
     """
     from attoswarm.config.schema import (
         BudgetConfig,
@@ -1046,20 +1067,86 @@ def quick_command(
     click.echo(f"Quick start: {workers} workers, ${budget:.0f} budget, backend={backend}")
     click.echo(f"Goal: {goal_text[:100]}")
 
+    # Save config for resume support
+    run_path = Path(cfg.run.run_dir)
+    run_path.mkdir(parents=True, exist_ok=True)
+    config_path = run_path / "swarm.yaml"
+    save_swarm_yaml(cfg, config_path)
+
+    # Determine approval mode
+    approval_mode = "dry_run" if dry_run else ("preview" if preview else "auto")
+
+    if monitor and not dry_run:
+        # Subprocess + TUI pattern (same as start_command)
+        cmd = [sys.executable, "-m", "attoswarm", "run", str(config_path), goal_text]
+        if trace_flag:
+            cmd.append("--trace")
+        if no_git_safety:
+            cmd.append("--no-git-safety")
+        if approval_mode != "auto":
+            cmd.extend(["--approval-mode", approval_mode])
+        if resume_flag:
+            cmd.append("--resume")
+        log_path = run_path / "coordinator.log"
+        log_fh = open(log_path, "a", encoding="utf-8")  # noqa: SIM115
+
+        if detach:
+            proc = subprocess.Popen(cmd, stdout=log_fh, stderr=log_fh)
+            click.echo(f"Coordinator started in background (pid={proc.pid})")
+            click.echo(f"Reattach: attoswarm tui {cfg.run.run_dir}")
+            raise SystemExit(0)
+
+        proc = subprocess.Popen(cmd, stdout=log_fh, stderr=log_fh)
+        try:
+            AttoswarmApp(cfg.run.run_dir, coordinator_pid=proc.pid).run()
+        finally:
+            if proc.poll() is None:
+                try:
+                    proc.terminate()
+                    proc.wait(timeout=8)
+                except subprocess.TimeoutExpired:
+                    proc.kill()
+                    proc.wait(timeout=3)
+                except Exception:
+                    pass
+        raise SystemExit(proc.returncode or 0)
+
+    # Inline execution (--no-monitor or --dry-run)
+    # --preview without TUI has no way to approve — fall back to dry_run
+    if approval_mode == "preview" and not monitor:
+        click.echo("Note: --preview without --monitor defaults to --dry-run (no TUI to approve)")
+        approval_mode = "dry_run"
+
     collector = _make_trace_collector(cfg) if trace_flag else None
 
     from attoswarm.coordinator.orchestrator import SwarmOrchestrator
     orch = SwarmOrchestrator(
         cfg, goal_text,
+        resume=resume_flag,
         decompose_fn=_make_subprocess_decompose_fn(cfg),
         spawn_fn=_make_subprocess_spawn_fn(cfg, process_registry=None),
         trace_collector=collector,
+        approval_mode=approval_mode,
     )
     orch._subagent_mgr._spawn_fn = _make_subprocess_spawn_fn(
         cfg, process_registry=orch._subagent_mgr,
     )
 
     code = asyncio.run(orch.run())
+
+    # Dry-run: print decomposed task list and exit
+    if dry_run:
+        state = read_json(Path(cfg.run.run_dir) / "swarm.state.json", default={})
+        tasks = state.get("dag", {}).get("nodes", [])
+        click.echo(f"\nDecomposed into {len(tasks)} tasks:")
+        for t in tasks:
+            deps = ", ".join(t.get("deps", []) or [])
+            click.echo(
+                f"  [{t.get('task_kind', '')}] {t.get('task_id', '')}: {t.get('title', '')}"
+                + (f" (deps: {deps})" if deps else "")
+            )
+        click.echo(f"\nReview with: attoswarm tui {cfg.run.run_dir}")
+        raise SystemExit(0)
 
     # Print summary
     summary = orch.aot_graph.summary()

@@ -181,6 +181,40 @@ docs = [
     { name = "mkdocs-material" },
     { name = "pymdown-extensions" },
 ]
+full = [
+    { name = "anthropic" },
+    { name = "fastapi" },
+    { name = "networkx" },
+    { name = "openai" },
+    { name = "python-multipart" },
+    { name = "sentence-transformers" },
+    { name = "tree-sitter" },
+    { name = "tree-sitter-bash" },
+    { name = "tree-sitter-c" },
+    { name = "tree-sitter-c-sharp" },
+    { name = "tree-sitter-cpp" },
+    { name = "tree-sitter-css" },
+    { name = "tree-sitter-elixir" },
+    { name = "tree-sitter-go" },
+    { name = "tree-sitter-hcl" },
+    { name = "tree-sitter-html" },
+    { name = "tree-sitter-java" },
+    { name = "tree-sitter-javascript" },
+    { name = "tree-sitter-json" },
+    { name = "tree-sitter-kotlin" },
+    { name = "tree-sitter-lua" },
+    { name = "tree-sitter-php" },
+    { name = "tree-sitter-python" },
+    { name = "tree-sitter-ruby" },
+    { name = "tree-sitter-rust" },
+    { name = "tree-sitter-scala" },
+    { name = "tree-sitter-swift" },
+    { name = "tree-sitter-toml" },
+    { name = "tree-sitter-yaml" },
+    { name = "tree-sitter-zig" },
+    { name = "uvicorn", extra = ["standard"] },
+    { name = "watchfiles" },
+]
 graph = [
     { name = "networkx" },
 ]
@@ -249,6 +283,7 @@ requires-dist = [
     { name = "anthropic", marker = "extra == 'anthropic'", specifier = ">=0.40" },
     { name = "arq", marker = "extra == 'service'", specifier = ">=0.26" },
     { name = "asyncpg", marker = "extra == 'service'", specifier = ">=0.30" },
+    { name = "attocode", extras = ["anthropic", "openai", "tree-sitter", "watch", "semantic", "graph", "code-intel"], marker = "extra == 'full'" },
     { name = "bcrypt", marker = "extra == 'dev'", specifier = ">=4.0" },
     { name = "bcrypt", marker = "extra == 'service'", specifier = ">=4.0" },
     { name = "bump-my-version", marker = "extra == 'dev'", specifier = ">=0.28" },
@@ -328,7 +363,7 @@ requires-dist = [
     { name = "uvicorn", extras = ["standard"], marker = "extra == 'service'", specifier = ">=0.34" },
     { name = "watchfiles", marker = "extra == 'watch'", specifier = ">=1.0" },
 ]
-provides-extras = ["anthropic", "openai", "tree-sitter", "watch", "semantic", "semantic-nomic", "graph", "code-intel", "service", "docs", "dev"]
+provides-extras = ["anthropic", "openai", "tree-sitter", "watch", "semantic", "semantic-nomic", "graph", "code-intel", "service", "full", "docs", "dev"]
 
 [[package]]
 name = "attrs"

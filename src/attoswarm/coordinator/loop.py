@@ -148,11 +148,11 @@ class HybridCoordinator:
         try:
             self._ensure_layout()
 
-            # Clear stale events on fresh (non-resume) runs
+            # Archive previous run artifacts on fresh (non-resume) runs
             if not self.resume:
-                events_path = self.layout["events"]
-                if events_path.exists():
-                    events_path.write_text("")
+                from attoswarm.coordinator.archive import archive_previous_run
+
+                archive_previous_run(self.layout)
 
             if self.resume and self.layout["manifest"].exists():
                 self._load_existing_run()

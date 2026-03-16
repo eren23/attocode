@@ -78,7 +78,9 @@ Run directory layout:
 .agent/hybrid-swarm/<run>/
   swarm.manifest.json
   swarm.state.json
+  git_safety.json
   index.snapshot.json
+  control.jsonl
   agents/
     agent-<id>.inbox.json
     agent-<id>.outbox.json
@@ -92,6 +94,9 @@ Run directory layout:
 High-value files:
 
 - `swarm.state.json`: phase, active agents, DAG, budget, merge queue, cursors, attempts.
+- `swarm.manifest.json`: task definitions for resume support (updated when tasks are added dynamically).
+- `git_safety.json`: git branch/stash state for TUI completion screen merge/keep actions.
+- `control.jsonl`: append-only control messages from TUI (approve, reject, skip, retry, add_task, edit_task).
 - `agents/agent-*.outbox.json`: normalized events from worker subprocesses.
 - `tasks/task-*.json`: per-task status, attempts, last error, assignment history.
 
@@ -221,9 +226,50 @@ From the dashboard:
 - `p`: pause/resume
 - `r`: manual refresh
 - `i`: inject control message into first active agent inbox
+- `n`: add a new task dynamically
+- `a`: approve task plan (when in `--preview` mode)
+- `x`: reject task plan (when in `--preview` mode)
 - `q`: quit dashboard
 
+On completion, a summary screen appears with options:
+
+- `[m]` Merge: merge the swarm branch into the original branch
+- `[k]` Keep: keep the swarm branch for manual review
+- `[q]` Quit: exit without git changes
+
 For deeper debugging, inspect inbox/outbox files in parallel while TUI is running.
+
+### Approval Mode (`--preview`)
+
+Use `--preview` to review the decomposed task plan before execution starts:
+
+```bash
+attoswarm start .attocode/swarm.hybrid.yaml --preview "Implement feature X"
+attoswarm quick --preview "Refactor module Y"
+```
+
+The TUI shows the task plan and waits for approval (`a`) or rejection (`x`). On resume, a previously-approved run skips the approval gate automatically.
+
+Note: `--preview` requires `--monitor` (the TUI). Using `--preview --no-monitor` automatically falls back to `--dry-run` since there is no TUI to approve.
+
+### Dynamic Task Addition
+
+Press `n` in the TUI to add a new task during execution. Added tasks:
+
+- Are validated for dependency correctness (no cycles)
+- Get code-intel enrichment (if enabled)
+- Are persisted to the manifest (survive resume)
+
+### Git Safety
+
+By default, swarm runs create a dedicated branch (`attoswarm/<run-id>`) and stash uncommitted changes. Disable with `--no-git-safety`:
+
+```bash
+attoswarm quick --no-git-safety "test task"
+attoswarm start config.yaml --no-git-safety "test task"
+```
+
+Git safety state is persisted to `git_safety.json` in the run directory for the TUI completion screen.
 
 ## 7. Common Failure Modes
 

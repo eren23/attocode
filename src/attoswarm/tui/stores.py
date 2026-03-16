@@ -38,6 +38,9 @@ class StateStore:
         self._events_last_size: int = 0
         self._events_cache: list[dict[str, Any]] = []
 
+        # Cross-run staleness detection
+        self._last_run_id: str | None = None
+
     def read_state(self) -> dict[str, Any]:
         """Read state with mtime + state_seq change detection."""
         try:
@@ -50,6 +53,21 @@ class StateStore:
                 return cached_data
         data = read_json(self.state_path, default={})
         seq = data.get("state_seq", 0) if isinstance(data, dict) else 0
+
+        # Cross-run staleness: if run_id changed, invalidate all caches
+        if isinstance(data, dict):
+            run_id = data.get("run_id", "")
+            if run_id and run_id != self._last_run_id:
+                # New run detected (or first run after _last_run_id was None)
+                if self._last_run_id is not None:
+                    # Only clear caches if we had a PREVIOUS run cached
+                    self._events_cache.clear()
+                    self._events_last_size = 0
+                    self._task_cache.clear()
+                self._last_run_id = run_id
+            elif run_id:
+                self._last_run_id = run_id
+
         self._state_cache = (mtime, seq, data)
         return data
 
@@ -93,16 +111,21 @@ class StateStore:
                 # File truncated or first read — reset
                 self._events_cache.clear()
                 self._events_last_size = 0
+            last_good_pos = f.tell()
             for line in f:
                 try:
                     item = json.loads(line)
                 except json.JSONDecodeError:
+                    if not line.endswith(b"\n"):
+                        # Unterminated line at EOF — partial write in progress
+                        break
+                    # Terminated but corrupt — skip past it
+                    last_good_pos = f.tell()
                     continue
                 if isinstance(item, dict):
                     self._events_cache.append(item)
-            # Use actual file position (not stat'd size) to avoid losing
-            # partial lines that haven't been terminated with \n yet
-            self._events_last_size = f.tell()
+                last_good_pos = f.tell()
+            self._events_last_size = last_good_pos
 
         # Cap in-memory cache to prevent unbounded growth
         if len(self._events_cache) > self._MAX_CACHED_EVENTS:
@@ -250,6 +273,20 @@ class StateStore:
         attempts = state.get("attempts", {})
         by_task = attempts.get("by_task", {}) if isinstance(attempts, dict) else {}
 
+        # Build forward map (source -> [targets]) once for O(1) is_foundation lookup
+        fwd_map: dict[str, list[str]] = {}
+        for edge in edges:
+            if isinstance(edge, (list, tuple)) and len(edge) >= 2:
+                src = str(edge[0])
+                tgt = str(edge[1])
+            elif isinstance(edge, dict):
+                src = str(edge.get("source", edge.get("from", "")))
+                tgt = str(edge.get("target", edge.get("to", "")))
+            else:
+                continue
+            if src:
+                fwd_map.setdefault(src, []).append(tgt)
+
         out: list[dict[str, Any]] = []
         for node in nodes:
             task_id = str(node.get("task_id", ""))
@@ -267,10 +304,7 @@ class StateStore:
             # is_foundation: prefer serialized value, fall back to edge count
             is_foundation = node.get("is_foundation")
             if is_foundation is None:
-                dependents = [e for e in edges
-                              if (isinstance(e, (list, tuple)) and len(e) >= 2 and str(e[0]) == task_id)
-                              or (isinstance(e, dict) and str(e.get("source", e.get("from", ""))) == task_id)]
-                is_foundation = len(dependents) >= 3
+                is_foundation = len(fwd_map.get(task_id, [])) >= 3
 
             out.append({
                 "task_id": task_id,
@@ -643,6 +677,13 @@ class StateStore:
             if prompt_path.exists():
                 try:
                     detail["prompt_preview"] = prompt_path.read_text(encoding="utf-8")[:500]
+                except Exception:
+                    pass
+            # Read diff file if exists
+            diff_path = self.run_dir / "tasks" / f"task-{task_id}.diff"
+            if diff_path.exists():
+                try:
+                    detail["diff_content"] = diff_path.read_text(encoding="utf-8")[:5000]
                 except Exception:
                     pass
             # Read activity sidecar if exists
@@ -1134,3 +1175,25 @@ class StateStore:
             })
 
         return conflicts
+
+    def list_history(self) -> list[dict[str, Any]]:
+        """List archived runs from history/ dir."""
+        history_dir = self.run_dir / "history"
+        if not history_dir.is_dir():
+            return []
+        runs: list[dict[str, Any]] = []
+        for entry in sorted(history_dir.iterdir(), reverse=True):
+            if not entry.is_dir():
+                continue
+            state_path = entry / "swarm.state.json"
+            state = read_json(state_path, default={}) if state_path.exists() else {}
+            manifest_path = entry / "swarm.manifest.json"
+            manifest = read_json(manifest_path, default={}) if manifest_path.exists() else {}
+            runs.append({
+                "run_id": entry.name,
+                "goal": manifest.get("goal", state.get("goal", "")),
+                "phase": state.get("phase", "unknown"),
+                "task_count": len(manifest.get("tasks", [])),
+                "path": str(entry),
+            })
+        return runs

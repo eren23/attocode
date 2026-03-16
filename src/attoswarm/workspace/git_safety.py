@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from dataclasses import dataclass
+from dataclasses import asdict, dataclass
 from pathlib import Path
 
 logger = logging.getLogger(__name__)
@@ -44,6 +44,7 @@ class GitSafetyNet:
         """Check if git repo, stash uncommitted changes, create swarm branch."""
         if not Path(self._wd, ".git").exists():
             self._state.is_git_repo = False
+            self._persist_state()
             return self._state
 
         self._state.is_git_repo = True
@@ -52,6 +53,7 @@ class GitSafetyNet:
         rc, branch = await self._git("rev-parse", "--abbrev-ref", "HEAD")
         if rc != 0:
             logger.warning("Could not determine current branch")
+            self._persist_state()
             return self._state
         self._state.original_branch = branch.strip()
 
@@ -78,6 +80,7 @@ class GitSafetyNet:
         else:
             logger.warning("Failed to create swarm branch %s", swarm_branch)
 
+        self._persist_state()
         return self._state
 
     async def create_swarm_commit(self, message: str = "") -> bool:
@@ -138,6 +141,8 @@ class GitSafetyNet:
             if rc == 0 and self._state.stash_ref in stash_list:
                 await self._git("stash", "pop")
 
+        self._persist_state()
+
     async def revert_all(self) -> None:
         """Revert all changes in the working directory."""
         if not self._state.is_git_repo:
@@ -162,6 +167,15 @@ class GitSafetyNet:
             if len(parts) == 2:
                 result.append({"action": parts[0], "file": parts[1]})
         return result
+
+    def _persist_state(self) -> None:
+        """Write git safety state to JSON for TUI consumption."""
+        from attoswarm.protocol.io import write_json_atomic
+        state_path = Path(self._run_dir) / "git_safety.json"
+        try:
+            write_json_atomic(state_path, asdict(self._state))
+        except Exception as exc:
+            logger.warning("Failed to persist git_safety.json: %s", exc)
 
     async def _git(self, *args: str) -> tuple[int, str]:
         """Run a git command and return (returncode, stdout).

@@ -23,7 +23,7 @@ class CompletionScreen(ModalScreen[str]):
         width: 70%;
         max-width: 90;
         height: auto;
-        max-height: 20;
+        max-height: 22;
         border: round $success;
         background: $surface;
         padding: 1 2;
@@ -48,6 +48,8 @@ class CompletionScreen(ModalScreen[str]):
 
     BINDINGS = [
         Binding("escape", "dismiss_review", "Review", show=True),
+        Binding("m", "dismiss_merge", "Merge to main", show=True),
+        Binding("k", "dismiss_keep", "Keep branch", show=True),
         Binding("q", "dismiss_quit", "Quit", show=True),
     ]
 
@@ -59,6 +61,8 @@ class CompletionScreen(ModalScreen[str]):
         cost: float = 0.0,
         elapsed: str = "",
         files_modified: int = 0,
+        git_branch: str = "",
+        phase: str = "completed",
         **kwargs: Any,
     ) -> None:
         super().__init__(**kwargs)
@@ -68,12 +72,15 @@ class CompletionScreen(ModalScreen[str]):
         self._cost = cost
         self._elapsed = elapsed
         self._files_modified = files_modified
+        self._git_branch = git_branch
+        self._phase = phase
 
     def compose(self) -> ComposeResult:
+        title = "Swarm Interrupted" if self._phase == "shutdown" else "Swarm Complete"
         with Vertical(id="completion-modal"):
-            yield Static("Swarm Complete", id="completion-title")
+            yield Static(title, id="completion-title")
             yield Static(self._build_body(), id="completion-body")
-            yield Static("[ESC] Review  [q] Quit", id="completion-hint")
+            yield Static(self._build_hint(), id="completion-hint")
 
     def _build_body(self) -> Text:
         text = Text()
@@ -86,10 +93,29 @@ class CompletionScreen(ModalScreen[str]):
             text.append(f"  Time:  {self._elapsed}\n", style="dim")
         if self._files_modified:
             text.append(f"  Files: {self._files_modified} modified\n", style="cyan")
+        if self._git_branch:
+            text.append(f"  Branch: {self._git_branch}\n", style="blue")
         return text
+
+    def _build_hint(self) -> str:
+        parts = []
+        if self._git_branch:
+            parts.append("[m] Merge  [k] Keep branch")
+        parts.append("[ESC] Review  [q] Quit")
+        return "  ".join(parts)
 
     def action_dismiss_review(self) -> None:
         self.dismiss("review")
 
     def action_dismiss_quit(self) -> None:
         self.dismiss("quit")
+
+    def action_dismiss_merge(self) -> None:
+        if not self._git_branch:
+            return
+        self.dismiss("merge")
+
+    def action_dismiss_keep(self) -> None:
+        if not self._git_branch:
+            return
+        self.dismiss("keep")

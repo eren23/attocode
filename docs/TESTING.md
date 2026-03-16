@@ -69,6 +69,30 @@ class TestMyFeature:
         assert result is not None
 ```
 
+## Attoswarm Audit Tests
+
+The post-implementation audit (Phase 1-3) added targeted tests for bug fixes:
+
+| Test File | Tests | Covers |
+|-----------|-------|--------|
+| `test_git_safety.py` | 13 | `GitSafetyNet`: setup, finalize, persist, stash, non-git no-ops |
+| `test_control_messages.py::TestHandleAddTask` | 3 | C2: manifest sync after dynamic add_task |
+| `test_control_messages.py::TestApprovalGateResumeSkip` | 3 | H1: skip approval gate on resume |
+| `test_cli.py::test_build_start_cmd_*` | 1 | C3: `--no-git-safety` forwarded to subprocess |
+| `test_cli.py::test_*_preview_no_monitor_*` | 2 | L2: `--preview --no-monitor` falls back to dry_run |
+
+Run just the audit tests:
+
+```bash
+pytest tests/unit/attoswarm/test_git_safety.py \
+       tests/unit/attoswarm/test_control_messages.py::TestHandleAddTask \
+       tests/unit/attoswarm/test_control_messages.py::TestApprovalGateResumeSkip \
+       tests/unit/attoswarm/test_cli.py::test_build_start_cmd_forwards_no_git_safety \
+       tests/unit/attoswarm/test_cli.py::test_quick_preview_no_monitor_falls_back_to_dry_run \
+       tests/unit/attoswarm/test_cli.py::test_start_preview_no_monitor_falls_back_to_dry_run \
+       -v
+```
+
 ## Known Pre-existing Failures
 
 | Test | Reason |
