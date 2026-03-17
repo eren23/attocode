@@ -7,6 +7,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.1] - 2026-03-17
+
+### Added
+
+- **Research framework** (`src/attoswarm/research/`) — hypothesis-driven experiment orchestrator with evaluator, accept policy, experiment DB, scoreboard, and config; 8 new modules
+- **EvalHarness + SwarmTraceBridge** — `eval/research_adapter.py` for benchmark integration; `src/attocode/integrations/swarm/trace_bridge.py` for swarm-to-tracing bridge
+- **TUI task management screens** — `AddTaskScreen`, `EditTaskScreen`, `CompletionScreen` for inline task CRUD and swarm completion review
+- **TUI widgets** — `AgentTraceStream` (live agent trace), `BudgetProjectionWidget` (budget forecast), `ConflictPanel` (file conflict display), `FailureChainWidget` (failure chain viz)
+- **Orchestrator enhancements** — approval workflow, learning bridge, failure analyzer, subagent manager, archive module; ~843 lines of new orchestrator logic
+- **Workspace safety** — `git_safety.py` (branch protection, dirty-state checks), `change_manifest.py` (change tracking), `conflict_advisor.py` (conflict resolution hints)
+- **CLI expansion** — 557+ lines of new CLI commands in `attoswarm/cli.py`
+- **Swarm config schema** — new fields in `config/schema.py` and `config/loader.py`
+
+### Improved
+
+- **TUI performance** — `build_task_list()` O(N×M) `is_foundation` edge scan replaced with O(1) forward-map lookup (`stores.py`)
+- **Graph screen** — `action_show_graph()` now passes `working_dir` from state/cwd so hotspots, deps, and impact data load correctly (`app.py`)
+- **TUI widgets** — enhanced `AgentGrid`, `DAGView`, `DecisionsPane`, `DetailInspector`, `EventTimeline`, `MessagesLog`, `OverviewPane`, `TaskBoard` with richer data display
+- **Tracing** — inefficiency detector expanded; collector and types extended for swarm trace events
+
+### Tests
+
+- **New test files** — `test_cli.py`, `test_control_messages.py` (697 lines), `test_git_safety.py` (236 lines)
+
 ## [0.2.0] - 2026-03-15
 
 ### Added

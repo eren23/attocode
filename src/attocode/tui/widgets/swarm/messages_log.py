@@ -48,6 +48,14 @@ class MessagesLog(Widget):
         except Exception:
             return
 
+        _KIND_STYLES: dict[str, str] = {
+            "task_assign": "cyan",
+            "task_done": "green",
+            "task_completed": "green",
+            "task_failed": "red",
+            "retry": "yellow",
+        }
+
         for msg in new_messages:
             direction = msg.get("direction", "")
             agent_id = msg.get("agent_id", "?")
@@ -70,11 +78,24 @@ class MessagesLog(Widget):
                 # agent -> coordinator
                 line.append(f"\u2190 {agent_id}", style="yellow bold")
 
-            line.append(f" [{kind}]", style="dim")
+            # Kind badge with color
+            kind_style = _KIND_STYLES.get(kind, "dim")
+            line.append(f" [{kind}]", style=kind_style)
             if task_id:
                 line.append(f" task:{task_id}", style="green dim")
             if payload:
                 line.append(f" {payload[:120]}", style="dim italic")
+
+            # Token/cost badge
+            tokens_used = msg.get("tokens_used", 0)
+            cost_usd = msg.get("cost_usd", 0)
+            if tokens_used or cost_usd:
+                badge_parts: list[str] = []
+                if tokens_used:
+                    badge_parts.append(f"{tokens_used // 1000}k tok" if tokens_used >= 1000 else f"{tokens_used} tok")
+                if cost_usd:
+                    badge_parts.append(f"${cost_usd:.2f}")
+                line.append(f" ({', '.join(badge_parts)})", style="yellow dim")
 
             log.write(line)
 

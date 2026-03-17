@@ -79,7 +79,20 @@ AgentsDataTable > DataTable {
     height: 1fr;
 }
 
+/* ── Agent Trace Stream ──────────────────────────────────────────── */
+#agent-detail-container DetailInspector {
+    max-height: 10;
+}
+#agent-detail-container AgentTraceStream {
+    height: 1fr;
+    border: solid $surface-lighten-1;
+}
+
 /* ── Events Tab ───────────────────────────────────────────────────── */
+#event-filter {
+    height: 3;
+    margin: 0 0 1 0;
+}
 EventsLog {
     height: 1fr;
 }

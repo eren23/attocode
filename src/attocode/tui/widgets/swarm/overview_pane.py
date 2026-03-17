@@ -6,6 +6,7 @@ from typing import TYPE_CHECKING, Any
 
 from textual.containers import Horizontal, Vertical
 from textual.widget import Widget
+from textual.widgets import Static
 
 from attocode.tui.widgets.swarm.agent_grid import AgentGrid
 from attocode.tui.widgets.swarm.dag_view import DependencyTree
@@ -40,6 +41,11 @@ class OverviewPane(Widget):
         height: auto;
         max-height: 12;
     }
+    OverviewPane #overview-history {
+        height: auto;
+        max-height: 6;
+        padding: 0 1;
+    }
     """
 
     def compose(self) -> ComposeResult:
@@ -52,6 +58,7 @@ class OverviewPane(Widget):
                 yield DependencyTree(id="ov-dag-tree")
         with Vertical(id="overview-events"):
             yield EventTimeline(id="ov-timeline")
+        yield Static("", id="overview-history")
 
     def update_state(self, state: dict[str, Any]) -> None:
         """Push state to child widgets."""
@@ -86,3 +93,22 @@ class OverviewPane(Widget):
             )
         except Exception:
             pass
+        # History: past archived runs
+        history = state.get("history", [])
+        if history:
+            lines = ["[bold]Past Runs[/bold]"]
+            for run in history[:10]:
+                goal = run.get("goal", "")[:60]
+                phase = run.get("phase", "?")
+                count = run.get("task_count", 0)
+                rid = run.get("run_id", "?")
+                lines.append(f"  {rid}  {phase}  {count} tasks  {goal}")
+            try:
+                self.query_one("#overview-history", Static).update("\n".join(lines))
+            except Exception:
+                pass
+        else:
+            try:
+                self.query_one("#overview-history", Static).update("")
+            except Exception:
+                pass

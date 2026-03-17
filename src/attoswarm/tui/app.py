@@ -21,6 +21,7 @@ from textual.containers import Horizontal, Vertical
 from textual.widgets import (
     Footer,
     Header,
+    Input,
     ProgressBar,
     Static,
     TabbedContent,
@@ -28,8 +29,13 @@ from textual.widgets import (
 )
 
 from attocode.tui.widgets.swarm.agent_grid import AgentCard, AgentsDataTable
+from attocode.tui.widgets.swarm.agent_trace_stream import AgentTraceStream
+from attocode.tui.widgets.swarm.budget_projection_widget import BudgetProjectionWidget
+from attocode.tui.widgets.swarm.conflict_panel import ConflictPanel
+from attocode.tui.widgets.swarm.decisions_pane import DecisionsPane
 from attocode.tui.widgets.swarm.detail_inspector import DetailInspector
 from attocode.tui.widgets.swarm.event_timeline import EventsLog
+from attocode.tui.widgets.swarm.failure_chain_widget import FailureChainWidget
 from attocode.tui.widgets.swarm.messages_log import MessagesLog
 from attocode.tui.widgets.swarm.overview_pane import OverviewPane
 from attocode.tui.widgets.swarm.task_board import TaskCard, TasksDataTable
@@ -39,6 +45,7 @@ from attoswarm.tui.stores import StateStore
 
 if TYPE_CHECKING:
     from textual import events
+    from textual.widgets import Input, TextArea
 
     from attocode.tui.widgets.swarm.dag_view import DependencyTree
 
@@ -64,10 +71,15 @@ class SwarmSummaryBar(Static):
         text = Text()
         # Phase
         phase_style = {
+            "initializing": "cyan italic",
+            "decomposing": "cyan bold",
+            "awaiting_approval": "yellow bold",
             "executing": "green bold",
             "completed": "green",
             "failed": "red bold",
             "paused": "yellow",
+            "rejected": "red dim",
+            "shutdown": "red",
         }.get(phase, "bold")
         text.append(f" {phase.upper()} ", style=phase_style)
         text.append(" \u2502 ", style="dim")
@@ -129,22 +141,42 @@ class AttoswarmApp(App[None]):
         Binding("3", "tab_agents", "Agents", show=False),
         Binding("4", "tab_events", "Events", show=False),
         Binding("5", "tab_messages", "Messages", show=False),
+        Binding("6", "tab_decisions", "Decisions", show=False),
         Binding("p", "pause_resume", "Pause/Resume"),
         Binding("i", "inject_message", "Inject Message"),
         Binding("r", "refresh_now", "Refresh"),
         Binding("f", "focus_agent", "Focus Agent"),
         Binding("g", "show_graph", "Graph"),
         Binding("t", "show_timeline", "Timeline"),
+        Binding("a", "approve_plan", "Approve", show=False),
+        Binding("x", "reject_plan", "Reject", show=False),
+        Binding("n", "add_task", "New Task"),
+        Binding("ctrl+c", "quit", "Quit", show=False),
         Binding("q", "quit", "Quit"),
     ]
 
-    def __init__(self, run_dir: str) -> None:
+    def __init__(self, run_dir: str, coordinator_pid: int | None = None) -> None:
         super().__init__()
         self._store = StateStore(run_dir)
         self._last_events: list[dict[str, Any]] = []
         self._tab_switching = False
+        self._refreshing = False
         self._last_state: dict[str, Any] | None = None
         self._last_seq: int = -1
+        self._trace_timer: Any = None
+        self._focused_agent_task: str | None = None
+        self._completion_shown: bool = False
+        self._approval_shown: bool = False
+        self._last_summary_key: tuple[str, int, int, int, int, int, int] | None = None
+        self._last_refreshed_tab: str = ""
+        self._coordinator_pid: int | None = coordinator_pid
+        # Track whether coordinator has written fresh state.
+        # When launched with a coordinator_pid, the first state read may be
+        # stale from a previous run.  We record the initial state_seq on
+        # first read; until the seq changes (coordinator wrote fresh state),
+        # we suppress completion/approval triggers.
+        self._initial_state_seq: int | None = None
+        self._coordinator_started: bool = coordinator_pid is None  # standalone TUI is always "started"
 
     def compose(self) -> ComposeResult:
         yield Header(show_clock=True)
@@ -174,19 +206,29 @@ class AttoswarmApp(App[None]):
                         yield AgentsDataTable(id="agents-dt")
                     with Vertical(id="agent-detail-container"):
                         yield DetailInspector(id="agent-detail")
+                        yield AgentTraceStream(id="agent-trace")
 
                 # Tab 4: Events
                 with TabPane("Events", id="tab-events"):
+                    yield Input(placeholder="Filter events...", id="event-filter")
                     yield EventsLog(id="events-full")
 
                 # Tab 5: Messages
                 with TabPane("Messages", id="tab-messages"):
                     yield MessagesLog(id="messages-log-widget")
 
+                # Tab 6: Decisions & Analysis
+                with TabPane("Decisions", id="tab-decisions"):
+                    with Vertical(id="decisions-outer"):
+                        yield DecisionsPane(id="decisions-pane")
+                        yield BudgetProjectionWidget(id="budget-projection")
+                        yield FailureChainWidget(id="failure-chain")
+                        yield ConflictPanel(id="conflict-panel")
+
         yield Footer()
 
     def on_mount(self) -> None:
-        self.set_interval(1.0, self._refresh)
+        self.set_interval(2.0, self._refresh)
         self._refresh()
         self._apply_responsive_classes()
 
@@ -196,9 +238,14 @@ class AttoswarmApp(App[None]):
         """Suppress refresh during tab transitions to prevent focus stealing."""
         self._tab_switching = True
         self.set_timer(0.3, self._end_tab_switch)
+        # Stop trace polling when leaving agents tab
+        if event.tab and str(event.tab.id) != "tab-agents" and self._trace_timer is not None:
+            self._trace_timer.stop()
+            self._trace_timer = None
 
     def _end_tab_switch(self) -> None:
         self._tab_switching = False
+        self._refresh()
 
     def on_resize(self, event: events.Resize) -> None:
         self._apply_responsive_classes()
@@ -209,53 +256,120 @@ class AttoswarmApp(App[None]):
         self.set_class(w < 80, "very-narrow")
 
     def _refresh(self) -> None:
-        if self._tab_switching:
+        if self._tab_switching or self._refreshing:
             return
+        self._refreshing = True
+        self.run_worker(self._refresh_io, thread=True, exclusive=True)
 
-        state = self._store.read_state()
-        if not state:
-            state = {}
+    def _refresh_io(self) -> None:
+        """Worker thread: all file I/O and data transforms."""
+        try:
+            state = self._store.read_state()
+            if not state:
+                state = {}
 
-        # Skip-if-unchanged: compare state_seq and events file size
-        seq = state.get("state_seq", 0)
-        has_new_events = self._store.has_new_events()
-        if seq == self._last_seq and not has_new_events:
-            return  # Nothing changed — skip all widget updates
+            seq = state.get("state_seq", 0)
+            has_new_events = self._store.has_new_events()
+
+            # Use cached tab value (query_one is NOT thread-safe)
+            active_tab = self._last_refreshed_tab or "tab-overview"
+
+            tab_changed = active_tab != self._last_refreshed_tab
+            if seq == self._last_seq and not has_new_events and not tab_changed:
+                self._refreshing = False
+                return
+
+            # Read events (I/O)
+            raw_events: list[dict[str, Any]] = []
+            try:
+                raw_events = self._store.read_events(limit=500)
+            except Exception:
+                pass
+            event_list = self._store.build_event_list(raw_events)
+
+            # Build tab-specific data (I/O + transforms)
+            tab_data: dict[str, Any] = {}
+            if active_tab == "tab-overview":
+                activity = self._store.build_agent_activity(raw_events)
+                agents = self._store.build_agent_list(state, activity=activity)
+                tasks = self._store.build_task_list(state)
+                tab_data = {"activity": activity, "agents": agents, "tasks": tasks}
+            elif active_tab == "tab-tasks":
+                tab_data = {"tasks": self._store.build_task_list(state)}
+            elif active_tab == "tab-agents":
+                activity = self._store.build_agent_activity(raw_events)
+                sidecars = self._store.read_activity_sidecars()
+                tab_data = {"activity": activity, "sidecars": sidecars}
+            elif active_tab == "tab-decisions":
+                tab_data = {"raw_events": raw_events}
+
+            # Post to main thread for widget updates
+            self.call_from_thread(
+                self._apply_refresh, seq, active_tab, state, event_list, raw_events, tab_data,
+            )
+        except Exception:
+            self._refreshing = False
+
+    def _apply_refresh(
+        self,
+        seq: int,
+        active_tab: str,
+        state: dict[str, Any],
+        event_list: list[dict[str, Any]],
+        raw_events: list[dict[str, Any]],
+        tab_data: dict[str, Any],
+    ) -> None:
+        """Main thread: widget updates only."""
         self._last_seq = seq
         self._last_state = state
+        self._last_events = event_list
 
-        # ── Events (read FIRST so activity data is available) ────────
-        raw_events: list[dict[str, Any]] = []
+        # Determine actual current tab (may have changed since worker started)
         try:
-            raw_events = self._store.read_events(limit=500)
-            self._last_events = self._store.build_event_list(raw_events)
+            actual_tab = self.query_one("#swarm-tabs", TabbedContent).active
         except Exception:
-            pass
+            actual_tab = active_tab
+        self._last_refreshed_tab = actual_tab
 
-        # ── Summary bar + budget (always update) ─────────────────────
+        # Check if coordinator has written fresh state — block ALL widget
+        # updates (tabs, summary, completion) until it does.
+        if not self._coordinator_started:
+            seq_val = state.get("state_seq", 0)
+            if self._initial_state_seq is None:
+                self._initial_state_seq = seq_val
+            elif seq_val != self._initial_state_seq:
+                self._coordinator_started = True
+
+            if not self._coordinator_started and self._coordinator_pid is not None:
+                try:
+                    self.query_one("#summary-bar", SwarmSummaryBar).update_summary(
+                        phase="initializing",
+                        running=0, done=0, total=0, failed=0,
+                        cost=0.0, elapsed="", active_agents=0, pending=0,
+                    )
+                except Exception:
+                    pass
+                self._refreshing = False
+                return
+
         self._refresh_summary(state)
 
-        # ── Active tab only ──────────────────────────────────────────
-        try:
-            active_tab = self.query_one("#swarm-tabs", TabbedContent).active
-        except Exception:
-            active_tab = "tab-overview"
+        # Only apply tab data if tab hasn't changed since worker started
+        if actual_tab == active_tab:
+            if actual_tab == "tab-overview":
+                self._refresh_overview(state, tab_data["agents"], tab_data["tasks"], raw_events)
+            elif actual_tab == "tab-tasks":
+                self._refresh_tasks_with_data(tab_data["tasks"])
+            elif actual_tab == "tab-agents":
+                self._refresh_agents_with_data(state, tab_data["activity"], tab_data.get("sidecars", {}))
+            elif actual_tab == "tab-events":
+                self._refresh_events()
+            elif actual_tab == "tab-messages":
+                self._refresh_messages()
+            elif actual_tab == "tab-decisions":
+                self._refresh_decisions(state, tab_data.get("raw_events"))
 
-        if active_tab == "tab-overview":
-            # Build activity + task/agent lists once, pass through
-            activity = self._store.build_agent_activity(raw_events)
-            agents = self._store.build_agent_list(state, activity=activity)
-            tasks = self._store.build_task_list(state)
-            self._refresh_overview(state, agents, tasks, raw_events)
-        elif active_tab == "tab-tasks":
-            self._refresh_tasks(state)
-        elif active_tab == "tab-agents":
-            activity = self._store.build_agent_activity(raw_events)
-            self._refresh_agents(state, activity)
-        elif active_tab == "tab-events":
-            self._refresh_events()
-        elif active_tab == "tab-messages":
-            self._refresh_messages()
+        self._refreshing = False
 
     def _refresh_summary(self, state: dict[str, Any]) -> None:
         dag_summary = state.get("dag_summary", {})
@@ -278,6 +392,15 @@ class AttoswarmApp(App[None]):
             if a.get("status") in ("running", "claiming")
         ]
         active_agents = len(active_agents_list)
+
+        # Fingerprint check — skip widget updates if nothing changed
+        cost_cents = int(float(budget.get("cost_used_usd", 0.0)) * 100)
+        elapsed_mins = int(elapsed_s) // 60 if isinstance(elapsed_s, (int, float)) else 0
+        phase = state.get("phase", "unknown")
+        summary_key = (phase, running, done, total_tasks, failed, cost_cents, elapsed_mins)
+        if summary_key == self._last_summary_key:
+            return
+        self._last_summary_key = summary_key
 
         # Build live activity list for summary bar
         agent_activities: list[dict[str, str]] = []
@@ -304,6 +427,57 @@ class AttoswarmApp(App[None]):
             )
         except Exception:
             pass
+
+        # Subprocess death detection
+        if self._coordinator_pid is not None:
+            import os as _os
+            try:
+                _os.kill(self._coordinator_pid, 0)
+            except ProcessLookupError:
+                if not self._completion_shown:
+                    if phase not in ("completed", "shutdown"):
+                        self.notify(
+                            "Coordinator process exited unexpectedly — check coordinator.log",
+                            severity="error",
+                        )
+
+        # Approval banner
+        if phase == "awaiting_approval" and not self._approval_shown:
+            self._approval_shown = True
+            self.notify(
+                "Task plan ready for review — press [a] to approve, [x] to reject",
+                severity="information",
+                timeout=0,
+            )
+
+        # Completion screen
+        phase = state.get("phase", "unknown")
+        if phase in ("completed", "shutdown") and not self._completion_shown:
+            self._completion_shown = True
+            try:
+                from attocode.tui.screens.completion_screen import CompletionScreen
+
+                # Read git branch from state or git_safety.json
+                git_branch = state.get("git_branch", "")
+                if not git_branch:
+                    gs_path = Path(self._store.run_dir) / "git_safety.json"
+                    gs = read_json(gs_path, default={})
+                    git_branch = gs.get("swarm_branch", "")
+
+                self.push_screen(
+                    CompletionScreen(
+                        done=done,
+                        failed=failed,
+                        total=total_tasks,
+                        cost=float(budget.get("cost_used_usd", 0.0)),
+                        elapsed=elapsed_str,
+                        git_branch=git_branch,
+                        phase=phase,
+                    ),
+                    callback=self._on_completion_dismiss,
+                )
+            except Exception:
+                pass
 
         # Budget breakdown bar — show per-task cost breakdown
         try:
@@ -346,6 +520,10 @@ class AttoswarmApp(App[None]):
 
     def _refresh_tasks(self, state: dict[str, Any]) -> None:
         tasks = self._store.build_task_list(state)
+        self._refresh_tasks_with_data(tasks)
+
+    def _refresh_tasks_with_data(self, tasks: list[dict[str, Any]]) -> None:
+        """Update tasks tab with pre-built task data (no I/O)."""
         try:
             self.query_one("#tasks-dt", TasksDataTable).update_tasks(tasks)
         except Exception:
@@ -354,6 +532,19 @@ class AttoswarmApp(App[None]):
     def _refresh_agents(
         self, state: dict[str, Any], activity: dict[str, str]
     ) -> None:
+        sidecars = self._store.read_activity_sidecars()
+        self._refresh_agents_with_data(state, activity, sidecars)
+
+    def _refresh_agents_with_data(
+        self, state: dict[str, Any], activity: dict[str, str], sidecars: dict[str, str],
+    ) -> None:
+        """Update agents tab with pre-built data (no I/O)."""
+        if sidecars:
+            for agent in state.get("active_agents", []):
+                task_id = str(agent.get("task_id", ""))
+                agent_id = str(agent.get("agent_id", ""))
+                if task_id in sidecars and agent_id:
+                    activity[agent_id] = sidecars[task_id]
         agents = self._store.build_agent_list(state, activity=activity)
         try:
             self.query_one("#agents-dt", AgentsDataTable).update_agents(agents)
@@ -370,6 +561,80 @@ class AttoswarmApp(App[None]):
         try:
             messages = self._store.read_all_messages()
             self.query_one("#messages-log-widget", MessagesLog).update_messages(messages)
+        except Exception:
+            pass
+
+    def _refresh_decisions(
+        self, state: dict[str, Any], raw_events: list[dict[str, Any]] | None = None,
+    ) -> None:
+        """Refresh the Decisions tab with decisions, budget, failures, conflicts."""
+        if raw_events is None:
+            raw_events = self._store.read_events(limit=500)
+
+        # Decisions
+        try:
+            decisions = self._store.build_decision_list(state)
+            self.query_one("#decisions-pane", DecisionsPane).update_state({
+                "decisions": decisions,
+                "errors": state.get("errors", []),
+                "transitions": state.get("task_transition_log", []),
+            })
+        except Exception:
+            pass
+
+        # Budget projection from events (reuse already-read events)
+        try:
+            projection: dict[str, Any] = {}
+            for ev in reversed(raw_events[-100:]):
+                data = ev.get("data", {}) if isinstance(ev.get("data"), dict) else {}
+                if "projection" in data:
+                    projection = data["projection"]
+                    break
+
+            # Fallback: compute from state budget when no event projection found
+            if not projection:
+                budget = state.get("budget", {})
+                dag_summary = state.get("dag_summary", {})
+                cost_used = float(budget.get("cost_used_usd", 0))
+                cost_max = float(budget.get("cost_max_usd", 0))
+                done = dag_summary.get("done", 0) if isinstance(dag_summary, dict) else 0
+                total = sum(dag_summary.values()) if isinstance(dag_summary, dict) else 0
+                if cost_max > 0:
+                    fraction = cost_used / cost_max
+                    avg = cost_used / max(done, 1)
+                    remaining = max(total - done, 0)
+                    projected = cost_used + avg * remaining
+                    level = (
+                        "ok" if fraction < 0.6
+                        else "caution" if fraction < 0.8
+                        else "warning" if fraction < 0.9
+                        else "critical"
+                    )
+                    projection = {
+                        "usage_fraction": fraction,
+                        "warning_level": level,
+                        "avg_cost_per_task": avg,
+                        "projected_total_cost": projected,
+                        "estimated_completable": int((cost_max - cost_used) / max(avg, 0.001)) if avg > 0 else 0,
+                        "will_exceed": projected > cost_max,
+                        "message": f"${cost_used:.2f} / ${cost_max:.2f}",
+                    }
+
+            self.query_one("#budget-projection", BudgetProjectionWidget).update_projection(projection)
+        except Exception:
+            pass
+
+        # Failure chain (pass events to avoid re-read)
+        try:
+            failures = self._store.build_failure_chain(state, events=raw_events)
+            self.query_one("#failure-chain", FailureChainWidget).update_failures(failures)
+        except Exception:
+            pass
+
+        # Conflicts (pass events to avoid re-read)
+        try:
+            conflicts = self._store.build_conflict_list(state, events=raw_events)
+            self.query_one("#conflict-panel", ConflictPanel).update_conflicts(conflicts)
         except Exception:
             pass
 
@@ -399,11 +664,15 @@ class AttoswarmApp(App[None]):
         # Timeline: last 30 events
         timeline = self._last_events[-30:]
 
+        # Past runs from history/
+        history = self._store.list_history()
+
         return {
             "status": {"active_workers": agents},
             "tasks": tasks_dict,
             "edges": edges,
             "timeline": timeline,
+            "history": history,
         }
 
     # ── Selection handlers ───────────────────────────────────────────
@@ -429,6 +698,19 @@ class AttoswarmApp(App[None]):
                 self.query_one("#agent-detail", DetailInspector).inspect(detail)
             except Exception:
                 pass
+            # Wire trace stream to selected agent's task
+            task_id = detail.get("task_id", "")
+            if task_id:
+                self._focused_agent_task = task_id
+                trace_path = Path(self._store.run_dir) / "agents" / f"agent-{task_id}.trace.jsonl"
+                try:
+                    widget = self.query_one("#agent-trace", AgentTraceStream)
+                    widget.set_trace_path(trace_path)
+                except Exception:
+                    pass
+                # Start polling timer if not already running
+                if self._trace_timer is None:
+                    self._trace_timer = self.set_interval(0.5, self._poll_trace)
 
     def on_task_card_selected(self, event: TaskCard.Selected) -> None:
         """When a task card is clicked in OverviewPane, show detail + switch tab."""
@@ -465,6 +747,28 @@ class AttoswarmApp(App[None]):
                 pass
             self._switch_tab("tab-tasks")
 
+    # ── Event filter handler ────────────────────────────────────────────
+
+    def on_input_changed(self, event: Input.Changed) -> None:
+        if event.input.id == "event-filter":
+            query = event.value.strip().lower()
+            if not query:
+                # Show all events
+                self._refresh_events()
+            else:
+                # Filter events by substring match on agent_id, task_id, type, message
+                filtered = [
+                    e for e in self._last_events
+                    if query in str(e.get("agent_id", "")).lower()
+                    or query in str(e.get("task_id", "")).lower()
+                    or query in str(e.get("type", "")).lower()
+                    or query in str(e.get("message", "")).lower()
+                ]
+                try:
+                    self.query_one("#events-full", EventsLog).update_events_filtered(filtered)
+                except Exception:
+                    pass
+
     # ── Skip/Retry/Edit control message handlers ──────────────────────
 
     def on_detail_inspector_skip_task_requested(
@@ -482,7 +786,27 @@ class AttoswarmApp(App[None]):
     def on_detail_inspector_edit_task_requested(
         self, event: DetailInspector.EditTaskRequested
     ) -> None:
-        self.notify(f"Edit not yet implemented for {event.task_id}", severity="warning")
+        # Get current description from state
+        state = self._last_state or self._store.read_state()
+        dag_nodes = state.get("dag", {}).get("nodes", [])
+        task_data = next((n for n in dag_nodes if n.get("task_id") == event.task_id), {})
+        desc = task_data.get("description", "")
+        # If description is truncated (200 chars in state), read full from per-task JSON
+        if len(desc) >= 199:
+            detail = self._store.read_task(event.task_id)
+            desc = detail.get("description", desc) if detail else desc
+
+        from attocode.tui.screens.edit_task_screen import EditTaskScreen
+        self.push_screen(
+            EditTaskScreen(task_id=event.task_id, description=desc),
+            callback=self._on_edit_task_dismiss,
+        )
+
+    def _on_edit_task_dismiss(self, result: tuple[str, str] | None) -> None:
+        if result is not None:
+            task_id, new_desc = result
+            self._write_control_message(task_id, "edit_task", {"description": new_desc})
+            self.notify(f"Task {task_id} description updated")
 
     def _write_control_message(
         self, task_id: str, action: str, extra: dict[str, Any] | None = None
@@ -499,8 +823,16 @@ class AttoswarmApp(App[None]):
         try:
             with open(control_path, "a", encoding="utf-8") as f:
                 f.write(json.dumps(msg) + "\n")
+                f.flush()
         except Exception:
             self.notify("Failed to write control message", severity="error")
+
+    # ── Input focus guard ──────────────────────────────────────────────
+
+    def _input_has_focus(self) -> bool:
+        """Return True if a text input widget has focus (suppress hotkeys)."""
+        from textual.widgets import Input, TextArea
+        return isinstance(self.focused, (Input, TextArea))
 
     # ── Tab switching actions ─────────────────────────────────────────
 
@@ -512,35 +844,54 @@ class AttoswarmApp(App[None]):
             pass
 
     def action_tab_overview(self) -> None:
-        self._switch_tab("tab-overview")
+        if not self._input_has_focus():
+            self._switch_tab("tab-overview")
 
     def action_tab_tasks(self) -> None:
-        self._switch_tab("tab-tasks")
+        if not self._input_has_focus():
+            self._switch_tab("tab-tasks")
 
     def action_tab_agents(self) -> None:
-        self._switch_tab("tab-agents")
+        if not self._input_has_focus():
+            self._switch_tab("tab-agents")
 
     def action_tab_events(self) -> None:
-        self._switch_tab("tab-events")
+        if not self._input_has_focus():
+            self._switch_tab("tab-events")
 
     def action_tab_messages(self) -> None:
-        self._switch_tab("tab-messages")
+        if not self._input_has_focus():
+            self._switch_tab("tab-messages")
+
+    def action_tab_decisions(self) -> None:
+        if not self._input_has_focus():
+            self._switch_tab("tab-decisions")
 
     # ── Other actions ─────────────────────────────────────────────────
 
     def action_refresh_now(self) -> None:
+        if self._input_has_focus():
+            return
         self._refresh()
 
     def action_pause_resume(self) -> None:
+        if self._input_has_focus():
+            return
         state_path = Path(self._store.state_path)
         state = read_json(state_path, default={})
         phase = state.get("phase", "executing")
-        state["phase"] = "paused" if phase != "paused" else "executing"
+        new_phase = "paused" if phase != "paused" else "executing"
+        # Write control message for orchestrator instead of direct state mutation
+        self._write_control_message("", new_phase)
+        # Also update state for immediate TUI feedback
+        state["phase"] = new_phase
         state["updated_at"] = utc_now_iso()
         write_json_atomic(state_path, state)
 
     def action_inject_message(self) -> None:
         """Inject a control message to a selected agent."""
+        if self._input_has_focus():
+            return
         state = self._last_state if self._last_state is not None else self._store.read_state()
         agent_rows = [
             a for a in state.get("active_agents", [])
@@ -589,24 +940,115 @@ class AttoswarmApp(App[None]):
 
     def action_focus_agent(self) -> None:
         """Push FocusScreen for single-agent stream view."""
+        if self._input_has_focus():
+            return
         from attocode.tui.screens.focus_screen import FocusScreen
 
         self.push_screen(FocusScreen(state_fn=self._state_fn_adapter))
 
     def action_show_graph(self) -> None:
         """Push GraphScreen for full-screen interactive DAG."""
+        if self._input_has_focus():
+            return
         from attocode.tui.screens.graph_screen import GraphScreen
 
-        self.push_screen(GraphScreen())
+        # Derive working_dir from state or cwd
+        working_dir = ""
+        if self._last_state:
+            agents = self._last_state.get("active_agents", [])
+            if agents:
+                working_dir = agents[0].get("cwd", "")
+        if not working_dir:
+            import os
+            working_dir = os.getcwd()
+
+        self.push_screen(GraphScreen(working_dir=working_dir))
 
     def action_show_timeline(self) -> None:
         """Push TimelineScreen for full-screen event timeline."""
+        if self._input_has_focus():
+            return
         from attocode.tui.screens.timeline_screen import TimelineScreen
 
         self.push_screen(TimelineScreen(
             state_fn=self._state_fn_adapter,
             events=self._last_events,
         ))
+
+    def _on_completion_dismiss(self, result: str | None) -> None:
+        """Handle completion screen dismiss."""
+        if result == "quit":
+            self.action_quit()
+        elif result in ("merge", "keep"):
+            self._git_finalize(result)
+
+    def _git_finalize(self, mode: str) -> None:
+        """Run git finalization from TUI."""
+        import subprocess as _sp
+        gs_path = Path(self._store.run_dir) / "git_safety.json"
+        gs = read_json(gs_path, default={})
+        swarm_branch = gs.get("swarm_branch", "")
+        original_branch = gs.get("original_branch", "")
+        stash_ref = gs.get("stash_ref", "")
+        if not swarm_branch:
+            self.notify("No git safety state found", severity="warning")
+            return
+        try:
+            if mode == "merge":
+                _sp.run(["git", "checkout", original_branch], check=True, capture_output=True)
+                _sp.run(
+                    ["git", "merge", swarm_branch, "--no-ff", "-m", f"Merge swarm branch {swarm_branch}"],
+                    check=True, capture_output=True,
+                )
+                self.notify(f"Merged {swarm_branch} into {original_branch}", severity="information")
+            elif mode == "keep":
+                _sp.run(["git", "checkout", original_branch], check=True, capture_output=True)
+                self.notify(f"Kept branch {swarm_branch}", severity="information")
+            if stash_ref:
+                _sp.run(["git", "stash", "pop"], capture_output=True)
+        except _sp.CalledProcessError as exc:
+            self.notify(f"Git finalization failed: {exc.stderr.decode()[:200]}", severity="error")
+
+    def action_approve_plan(self) -> None:
+        if self._input_has_focus():
+            return
+        state = self._last_state or self._store.read_state()
+        if state.get("phase") != "awaiting_approval":
+            return
+        self._write_control_message("", "approve")
+        self.notify("Plan approved — execution starting", severity="information")
+
+    def action_reject_plan(self) -> None:
+        if self._input_has_focus():
+            return
+        state = self._last_state or self._store.read_state()
+        if state.get("phase") != "awaiting_approval":
+            return
+        self._write_control_message("", "reject")
+        self.notify("Plan rejected — shutting down", severity="warning")
+
+    def action_add_task(self) -> None:
+        if self._input_has_focus():
+            return
+        from attocode.tui.screens.add_task_screen import AddTaskScreen
+        self.push_screen(AddTaskScreen(), callback=self._on_add_task_dismiss)
+
+    def _on_add_task_dismiss(self, result: dict[str, Any] | None) -> None:
+        if result is not None:
+            self._write_control_message("", "add_task", result)
+            self.notify(f"Task added: {result.get('title', '')}")
+
+    def _poll_trace(self) -> None:
+        """Poll the agent trace stream for new entries."""
+        try:
+            self.query_one("#agent-trace", AgentTraceStream).poll_new_entries()
+        except Exception:
+            pass
+
+    def action_quit(self) -> None:
+        """Override quit to signal shutdown to orchestrator before exiting."""
+        self._write_control_message("", "shutdown")
+        self.exit()
 
     # ── Helpers ──────────────────────────────────────────────────────
 

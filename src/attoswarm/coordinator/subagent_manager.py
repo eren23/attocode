@@ -11,6 +11,8 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import os
+import signal
 import time
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any
@@ -93,6 +95,14 @@ class SubagentManager:
         self._agent_statuses: dict[str, AgentStatus] = {}
         self._status_callbacks: list[Callable[[AgentStatus], Any]] = []
 
+        # Process tracking for graceful shutdown
+        self._active_processes: set[asyncio.subprocess.Process] = set()
+        self._shutdown_requested: bool = False
+
+        # Trace callback for per-agent trace streaming
+        self._trace_callback: Callable[[dict[str, Any]], None] | None = None
+        self._trace_dir: str | None = None
+
     # ------------------------------------------------------------------
     # Public API
     # ------------------------------------------------------------------
@@ -153,6 +163,51 @@ class SubagentManager:
     def max_concurrency(self) -> int:
         return self._max_concurrency
 
+    @property
+    def shutdown_requested(self) -> bool:
+        return self._shutdown_requested
+
+    def register_process(self, proc: asyncio.subprocess.Process) -> None:
+        """Track an active subprocess for shutdown management."""
+        self._active_processes.add(proc)
+
+    def unregister_process(self, proc: asyncio.subprocess.Process) -> None:
+        """Remove a completed subprocess from tracking."""
+        self._active_processes.discard(proc)
+
+    async def shutdown_all(self, timeout: float = 5.0) -> None:
+        """Gracefully terminate all active subprocesses (SIGTERM -> wait -> SIGKILL)."""
+        self._shutdown_requested = True
+        if not self._active_processes:
+            return
+
+        procs = list(self._active_processes)
+        logger.info("Shutting down %d active processes...", len(procs))
+
+        # Phase 1: SIGTERM via process group (safe because start_new_session=True)
+        for proc in procs:
+            try:
+                if proc.returncode is None:
+                    pgid = os.getpgid(proc.pid)
+                    os.killpg(pgid, signal.SIGTERM)
+            except (ProcessLookupError, OSError):
+                pass
+
+        # Phase 2: Wait up to timeout for graceful exit
+        wait_time = min(timeout, 3.0)
+        await asyncio.sleep(wait_time)
+
+        # Phase 3: SIGKILL survivors
+        for proc in procs:
+            try:
+                if proc.returncode is None:
+                    pgid = os.getpgid(proc.pid)
+                    os.killpg(pgid, signal.SIGKILL)
+            except (ProcessLookupError, OSError):
+                pass
+
+        self._active_processes.clear()
+
     # ------------------------------------------------------------------
     # Internal
     # ------------------------------------------------------------------
@@ -184,6 +239,19 @@ class SubagentManager:
                             error=f"Could not claim file: {f}",
                         )
 
+            # 1b. Start claim heartbeat (renew every 60s)
+            heartbeat_task: asyncio.Task[None] | None = None
+            if self._file_ledger and target_files:
+                async def _heartbeat() -> None:
+                    while True:
+                        await asyncio.sleep(60.0)
+                        for f in target_files:
+                            try:
+                                await self._file_ledger.renew_claim(f, agent_id)
+                            except Exception:
+                                pass
+                heartbeat_task = asyncio.create_task(_heartbeat())
+
             # 2. Spawn worker
             self._emit_status(agent_id, task_id, "running", model=task_model)
             try:
@@ -212,6 +280,14 @@ class SubagentManager:
                     error=str(exc),
                 )
 
+            # 2b. Cancel heartbeat
+            if heartbeat_task is not None:
+                heartbeat_task.cancel()
+                try:
+                    await heartbeat_task
+                except asyncio.CancelledError:
+                    pass
+
             # 3. Release claims
             if self._file_ledger:
                 await self._file_ledger.release_all_claims(agent_id)
@@ -219,6 +295,15 @@ class SubagentManager:
             result.duration_s = time.time() - start
             status = "done" if result.success else "error"
             self._emit_status(agent_id, task_id, status, tokens=result.tokens_used, model=task_model)
+
+            # Write trace entry
+            self._write_trace_entry(agent_id, task_id, "cost_delta" if result.success else "error", {
+                "cost_usd": result.cost_usd,
+                "tokens_used": result.tokens_used,
+                "duration_s": result.duration_s,
+                "files_modified": result.files_modified,
+                "error": result.error or "",
+            })
 
             return result
 
@@ -246,3 +331,46 @@ class SubagentManager:
                 cb(s)
             except Exception as exc:
                 logger.debug("Status callback error: %s", exc)
+
+    def _write_trace_entry(
+        self,
+        agent_id: str,
+        task_id: str,
+        entry_type: str,
+        data: dict[str, Any],
+    ) -> None:
+        """Write a trace entry to the agent's trace JSONL file."""
+        if not self._trace_dir:
+            return
+        import json as _json
+        from pathlib import Path as _Path
+
+        # Update in-memory activity label
+        status = self._agent_statuses.get(agent_id)
+        if status:
+            if entry_type == "tool_call":
+                status.activity = data.get("tool", data.get("name", "tool_call"))
+            elif entry_type == "llm_request":
+                status.activity = "thinking"
+            elif entry_type == "llm_response":
+                status.activity = "processing response"
+            elif entry_type == "file_write":
+                status.activity = f"writing {data.get('file', '')}"
+            elif entry_type == "error":
+                status.activity = "error"
+            else:
+                status.activity = entry_type
+
+        try:
+            trace_path = _Path(self._trace_dir) / f"agent-{task_id}.trace.jsonl"
+            entry = {
+                "timestamp": time.time(),
+                "agent_id": agent_id,
+                "task_id": task_id,
+                "entry_type": entry_type,
+                "data": data,
+            }
+            with trace_path.open("a", encoding="utf-8") as f:
+                f.write(_json.dumps(entry) + "\n")
+        except Exception:
+            pass

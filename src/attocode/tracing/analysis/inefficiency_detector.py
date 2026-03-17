@@ -27,7 +27,7 @@ class InefficiencyDetector:
         self._session = session
 
     def detect_all(self) -> list[DetectedIssue]:
-        """Run all 11 detectors and return the aggregated issue list."""
+        """Run all detectors and return the aggregated issue list."""
         issues: list[DetectedIssue] = []
         issues.extend(self._detect_excessive_iterations())
         issues.extend(self._detect_repeated_tool_calls())
@@ -40,6 +40,9 @@ class InefficiencyDetector:
         issues.extend(self._detect_context_overflow())
         issues.extend(self._detect_budget_warnings_without_action())
         issues.extend(self._detect_subagent_timeouts())
+        # Swarm transparency detectors
+        issues.extend(self._detect_cascade_failures())
+        issues.extend(self._detect_excessive_conflicts())
         return issues
 
     # ------------------------------------------------------------------
@@ -553,6 +556,88 @@ class InefficiencyDetector:
                             "Consider increasing the subagent timeout, "
                             "reducing the delegated task scope, or using a "
                             "faster model for subagent work."
+                        ),
+                    )
+                )
+
+        return issues
+
+
+    # ------------------------------------------------------------------
+    # 12. Cascade failures > 30% of tasks
+    # ------------------------------------------------------------------
+
+    def _detect_cascade_failures(self) -> list[DetectedIssue]:
+        """Detect when cascade failures affect >30% of swarm tasks."""
+        issues: list[DetectedIssue] = []
+
+        total_tasks = 0
+        failed_tasks = 0
+        skipped_tasks = 0
+
+        for event in self._session.events:
+            if event.kind == TraceEventKind.SWARM_TASK_START:
+                total_tasks += 1
+            elif event.kind == TraceEventKind.SWARM_TASK_FAILED:
+                failed_tasks += 1
+                skipped = event.data.get("skipped", [])
+                if isinstance(skipped, list):
+                    skipped_tasks += len(skipped)
+
+        if total_tasks > 0:
+            cascade_pct = (failed_tasks + skipped_tasks) / total_tasks
+            if cascade_pct > 0.30:
+                issues.append(
+                    DetectedIssue(
+                        severity="high",
+                        category="swarm_cascade_failures",
+                        title=f"Cascade failures affecting {cascade_pct:.0%} of tasks",
+                        description=(
+                            f"{failed_tasks} tasks failed and {skipped_tasks} were cascade-skipped "
+                            f"out of {total_tasks} total tasks. This suggests a structural problem "
+                            f"in task dependencies or a critical foundation task failure."
+                        ),
+                        suggestion=(
+                            "Review task dependencies. Consider making foundation tasks "
+                            "more robust with retries, or split large dependency chains."
+                        ),
+                    )
+                )
+
+        return issues
+
+    # ------------------------------------------------------------------
+    # 13. Excessive conflicts per batch
+    # ------------------------------------------------------------------
+
+    def _detect_excessive_conflicts(self) -> list[DetectedIssue]:
+        """Detect excessive file conflicts in swarm execution."""
+        issues: list[DetectedIssue] = []
+
+        conflict_count = 0
+        wave_count = 0
+
+        for event in self._session.events:
+            if event.kind == TraceEventKind.SWARM_CONFLICT:
+                conflict_count += 1
+            elif event.kind == TraceEventKind.SWARM_WAVE_START:
+                wave_count += 1
+
+        if wave_count > 0 and conflict_count > 0:
+            per_wave = conflict_count / wave_count
+            if per_wave > 2.0:
+                issues.append(
+                    DetectedIssue(
+                        severity="medium",
+                        category="swarm_excessive_conflicts",
+                        title=f"High conflict rate: {per_wave:.1f} conflicts/batch",
+                        description=(
+                            f"{conflict_count} file conflicts across {wave_count} batches. "
+                            f"Frequent conflicts slow execution and risk merge errors."
+                        ),
+                        suggestion=(
+                            "Improve task file scoping to reduce overlap, or "
+                            "increase serialization for tasks with shared files."
                         ),
                     )
                 )

@@ -26,6 +26,8 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
+    from collections.abc import Callable
+
     from attocode.integrations.context.ast_service import ASTService
 
 logger = logging.getLogger(__name__)
@@ -57,6 +59,7 @@ class FileClaim:
     base_version_hash: str
     claim_type: str = "exclusive"   # "exclusive" | "section"
     timestamp: float = 0.0
+    last_renewed: float = 0.0
 
 
 @dataclass(slots=True)
@@ -100,10 +103,12 @@ class FileLedger:
         root_dir: str,
         ast_service: ASTService | None = None,
         persist_dir: str | None = None,
+        ttl_seconds: float = 120.0,
     ) -> None:
         self._root_dir = os.path.abspath(root_dir)
         self._ast_service = ast_service
         self._persist_dir = persist_dir
+        self._ttl_seconds = ttl_seconds
 
         # State
         self._versions: dict[str, str] = {}        # rel_path -> current hash
@@ -111,7 +116,9 @@ class FileLedger:
         self._write_log: list[WriteLogEntry] = []
         self._locks: dict[str, asyncio.Lock] = {}
         self._reconciler: Any = None                # ASTReconciler, set by orchestrator
+        self._event_callback: Callable[..., Any] | None = None  # conflict event emitter, set by orchestrator
         self._snapshots: dict[str, str] = {}        # rel_path -> base content at snapshot time
+        self._change_manifest: Any = None           # ChangeManifest, set by orchestrator
 
         # Restore persisted state if available
         if persist_dir:
@@ -158,6 +165,7 @@ class FileLedger:
         Returns ``True`` if the claim was granted, ``False`` if another
         agent already holds an exclusive claim.
         """
+        self._expire_stale_claims()
         rel = self._to_rel(path)
         lock = self._get_lock(rel)
 
@@ -167,16 +175,49 @@ class FileLedger:
                 return False
 
             current_hash = self._versions.get(rel, "")
+            now = time.time()
             self._claims[rel] = FileClaim(
                 file_path=rel,
                 agent_id=agent_id,
                 task_id=task_id,
                 base_version_hash=current_hash,
                 claim_type=claim_type,
-                timestamp=time.time(),
+                timestamp=now,
+                last_renewed=now,
             )
             self._persist()
             return True
+
+    async def renew_claim(self, path: str, agent_id: str) -> bool:
+        """Renew a claim's TTL. Returns True if renewed."""
+        rel = self._to_rel(path)
+        lock = self._get_lock(rel)
+        async with lock:
+            claim = self._claims.get(rel)
+            if claim and claim.agent_id == agent_id:
+                claim.last_renewed = time.time()
+                return True
+        return False
+
+    def _expire_stale_claims(self) -> None:
+        """Remove claims that haven't been renewed within TTL (lazy expiration)."""
+        if self._ttl_seconds <= 0:
+            return
+        now = time.time()
+        expired = [
+            rel for rel, claim in self._claims.items()
+            if now - max(claim.timestamp, claim.last_renewed) > self._ttl_seconds
+        ]
+        for rel in expired:
+            claim = self._claims.pop(rel, None)
+            if claim:
+                logger.info(
+                    "Expired stale claim on %s (agent=%s, age=%.0fs)",
+                    rel, claim.agent_id,
+                    now - max(claim.timestamp, claim.last_renewed),
+                )
+        if expired:
+            self._persist()
 
     async def release_claim(self, path: str, agent_id: str) -> None:
         """Release an advisory lock."""
@@ -217,6 +258,7 @@ class FileLedger:
         If *base_hash* matches the current version, the write succeeds.
         Otherwise it's a CONFLICT.
         """
+        self._expire_stale_claims()
         rel = self._to_rel(path)
         abs_path = self._to_abs(rel)
         lock = self._get_lock(rel)
@@ -257,6 +299,16 @@ class FileLedger:
                     except Exception:
                         pass
 
+                # Record in change manifest
+                if self._change_manifest:
+                    try:
+                        action = "create" if not base_hash else "modify"
+                        self._change_manifest.record_change(
+                            rel, action, agent_id, task_id, base_hash, new_hash,
+                        )
+                    except Exception:
+                        pass
+
                 return WriteResult(success=True, final_hash=new_hash)
 
             # Conflict path
@@ -264,6 +316,31 @@ class FileLedger:
                 "OCC conflict on %s: base=%s current=%s agent=%s",
                 rel, base_hash[:8], current_hash[:8], agent_id,
             )
+
+            # Emit conflict event with both participants
+            if self._event_callback:
+                try:
+                    # Find the previous writer (task_b) from write log
+                    prev_task = ""
+                    prev_agent = ""
+                    for entry in reversed(self._write_log):
+                        if entry.file_path == rel:
+                            prev_task = entry.task_id
+                            prev_agent = entry.agent_id
+                            break
+                    self._event_callback(
+                        file_path=rel,
+                        agent_id=agent_id,
+                        task_id=task_id,
+                        base_hash=base_hash,
+                        current_hash=current_hash,
+                        task_a=task_id,
+                        task_b=prev_task,
+                        agent_a=agent_id,
+                        agent_b=prev_agent,
+                    )
+                except Exception:
+                    pass
 
             # Try AST reconciliation before giving up
             if self._reconciler is not None:

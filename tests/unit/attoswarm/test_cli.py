@@ -64,3 +64,115 @@ def test_doctor_fails_when_binary_missing(tmp_path: Path, monkeypatch) -> None: 
     assert result.exit_code == 1
     assert "[FAIL]" in result.output
 
+
+# ── C3: --no-git-safety forwarding in start_command ──────────────────
+
+
+def test_build_start_cmd_forwards_no_git_safety(tmp_path: Path, monkeypatch) -> None:
+    """C3: _build_start_cmd() must include --no-git-safety when flag is set.
+
+    Uses --detach mode so start_command exits immediately after Popen
+    (avoids launching the TUI).
+    """
+    cfg = tmp_path / "swarm.yaml"
+    _write_config(cfg)
+    monkeypatch.setattr("shutil.which", lambda _: "/usr/bin/claude")
+
+    captured_cmds: list[list[str]] = []
+
+    class FakePopen:
+        pid = 12345
+        returncode = 0
+
+        def __init__(self, cmd, **kwargs):
+            captured_cmds.append(list(cmd))
+
+        def poll(self):
+            return 0
+
+        def wait(self, **kwargs):
+            pass
+
+    monkeypatch.setattr("subprocess.Popen", FakePopen)
+
+    # Create the run dir so the log file can be opened
+    run_dir = tmp_path / ".agent" / "hybrid-swarm"
+    run_dir.mkdir(parents=True, exist_ok=True)
+
+    runner = CliRunner()
+    result = runner.invoke(
+        main,
+        ["start", str(cfg), "--no-git-safety", "--detach", "--skip-doctor", "test goal"],
+    )
+    # --detach uses Popen then exits immediately (no TUI)
+    assert len(captured_cmds) >= 1
+    cmd = captured_cmds[0]
+    assert "--no-git-safety" in cmd
+
+
+# ── L2: --preview --no-monitor falls back to dry_run ─────────────────
+
+
+def test_quick_preview_no_monitor_falls_back_to_dry_run(tmp_path: Path, monkeypatch) -> None:
+    """L2: quick --preview --no-monitor should fall back to dry_run."""
+    monkeypatch.setattr("shutil.which", lambda _: "/usr/bin/claude")
+    monkeypatch.chdir(tmp_path)
+
+    from unittest.mock import MagicMock
+
+    class FakeOrch:
+        _subagent_mgr = MagicMock()
+
+        def __init__(self, cfg, goal, **kwargs):
+            self.captured_approval = kwargs.get("approval_mode", "auto")
+            self._subagent_mgr._spawn_fn = None
+
+        async def run(self):
+            return 0
+
+    # quick_command does a local import inside the function body, so we
+    # patch the module that it imports from
+    monkeypatch.setattr(
+        "attoswarm.coordinator.orchestrator.SwarmOrchestrator",
+        FakeOrch,
+    )
+
+    runner = CliRunner()
+    result = runner.invoke(
+        main,
+        ["quick", "--preview", "--no-monitor", "test goal"],
+    )
+    # The output should mention the fallback
+    assert "dry-run" in result.output.lower() or "dry_run" in result.output.lower()
+
+
+def test_start_preview_no_monitor_falls_back_to_dry_run(tmp_path: Path, monkeypatch) -> None:
+    """L2: start --preview --no-monitor should fall back to dry_run."""
+    cfg = tmp_path / "swarm.yaml"
+    _write_config(cfg)
+    monkeypatch.setattr("shutil.which", lambda _: "/usr/bin/claude")
+
+    from unittest.mock import MagicMock
+
+    class FakeOrch:
+        _subagent_mgr = MagicMock()
+
+        def __init__(self, cfg, goal, **kwargs):
+            self.captured_approval = kwargs.get("approval_mode", "auto")
+            self._subagent_mgr._spawn_fn = None
+
+        async def run(self):
+            return 0
+
+    monkeypatch.setattr(
+        "attoswarm.coordinator.orchestrator.SwarmOrchestrator",
+        FakeOrch,
+    )
+
+    runner = CliRunner()
+    result = runner.invoke(
+        main,
+        ["start", str(cfg), "--preview", "--no-monitor", "--skip-doctor", "test goal"],
+    )
+    assert "dry-run" in result.output.lower() or "dry_run" in result.output.lower()
+

@@ -104,6 +104,7 @@ def build_decompose_prompt(
     max_tasks: int,
     role_descriptions: str = "",
     custom_instructions: str = "",
+    codebase_context: str = "",
 ) -> str:
     """Build a complexity-aware decomposition prompt."""
     min_tasks, target_max = _TASK_RANGE.get(complexity, (3, 5))
@@ -113,6 +114,8 @@ def build_decompose_prompt(
     prefix = ""
     if custom_instructions:
         prefix = f"## Custom Instructions\n{custom_instructions}\n\n"
+    if codebase_context:
+        prefix += f"## Codebase Context\n{codebase_context}\n\n"
 
     granularity_guidance = ""
     if complexity in ("complex", "deep_research"):

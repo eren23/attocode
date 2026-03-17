@@ -93,9 +93,9 @@ class AgentCard(Static):
         elif status == "error":
             self.add_class("error")
 
-        self._render_content()
+        self.refresh()
 
-    def _render_content(self) -> None:
+    def render(self) -> Text:
         icon = _STATUS_ICONS.get(self._status, "?")
         style = _STATUS_STYLES.get(self._status, "")
 
@@ -114,7 +114,7 @@ class AgentCard(Static):
         if self._elapsed:
             text.append(f" \u00b7 {self._elapsed}", style="dim")
 
-        self.update(text)
+        return text
 
     def on_click(self) -> None:
         self.post_message(self.Selected(self.agent_id))
@@ -132,12 +132,19 @@ class AgentGrid(Widget):
     AgentGrid > Horizontal {
         height: auto;
     }
+    AgentCard.running.pulse {
+        border: round $accent-lighten-2;
+        background: $surface-lighten-1;
+    }
     """
 
     agents: reactive[list[dict[str, Any]]] = reactive(list, layout=True)
 
     def compose(self):
         yield Horizontal(id="agent-grid-row")
+
+    def on_mount(self) -> None:
+        self._pulse_on = False
 
     def watch_agents(self, agents: list[dict[str, Any]]) -> None:
         self._rebuild(agents)
@@ -207,6 +214,17 @@ class AgentGrid(Widget):
             if aid not in new_ids:
                 card.remove()
 
+        # Toggle pulse animation (merged from former independent timer)
+        self._pulse_on = not self._pulse_on
+        for card in row.query(AgentCard):
+            if card.has_class("running"):
+                if self._pulse_on:
+                    card.add_class("pulse")
+                else:
+                    card.remove_class("pulse")
+            else:
+                card.remove_class("pulse")
+
 
 _AGENT_STATUS_ICONS = {
     "running": "\u21bb",   # ↻
@@ -248,7 +266,7 @@ class AgentsDataTable(Widget):
 
     def compose(self):
         table = DataTable(id="agents-table", cursor_type="row")
-        table.add_columns("Status", "Agent", "Task", "Activity", "Model", "Elapsed", "Tokens")
+        table.add_columns("Status", "Agent", "Task", "Doing", "Tools", "Errs", "Model", "Elapsed", "Tokens")
         yield table
 
     def update_agents(self, agents: list[dict[str, Any]]) -> None:
@@ -272,11 +290,22 @@ class AgentsDataTable(Widget):
             tokens_str = str(tokens)
         else:
             tokens_str = ""
+
+        # Tool calls (2 most recent)
+        tool_calls = agent.get("tool_calls", [])
+        tools_str = ", ".join(tool_calls[:2]) if tool_calls else ""
+
+        # Error count
+        error_count = agent.get("error_count", 0)
+        errs_str = str(error_count) if error_count else ""
+
         return {
             "agent_id": agent_id,
             "status": status,
             "task_id": task_id,
             "activity": activity,
+            "tools": tools_str,
+            "errs": errs_str,
             "model": model,
             "elapsed": elapsed,
             "tokens": tokens_str,
@@ -312,21 +341,33 @@ class AgentsDataTable(Widget):
         # Detect if order changed (requires full rebuild)
         order_changed = new_order != self._prev_order
 
+        _FIELDS = [
+            "status", "agent_id", "task_id", "activity", "tools", "errs",
+            "model", "elapsed", "tokens",
+        ]
+
+        def _row_values(rd: dict[str, str]) -> tuple[Any, ...]:
+            errs_val: Any = rd["errs"]
+            if errs_val:
+                errs_val = Text(errs_val, style="red bold")
+            return (
+                self._status_text(rd["status"]),
+                rd["agent_id"],
+                rd["task_id"],
+                rd["activity"],
+                rd["tools"],
+                errs_val,
+                rd["model"],
+                rd["elapsed"],
+                rd["tokens"],
+            )
+
         if order_changed or not self._prev_agent_map:
             # First build — full populate
             table.clear()
             for aid in new_order:
                 rd = new_map[aid]
-                table.add_row(
-                    self._status_text(rd["status"]),
-                    rd["agent_id"],
-                    rd["task_id"],
-                    rd["activity"],
-                    rd["model"],
-                    rd["elapsed"],
-                    rd["tokens"],
-                    key=aid,
-                )
+                table.add_row(*_row_values(rd), key=aid)
         else:
             # Differential update
             for removed_key in old_keys - new_keys:
@@ -335,37 +376,21 @@ class AgentsDataTable(Widget):
 
             for added_key in new_keys - old_keys:
                 rd = new_map[added_key]
-                table.add_row(
-                    self._status_text(rd["status"]),
-                    rd["agent_id"],
-                    rd["task_id"],
-                    rd["activity"],
-                    rd["model"],
-                    rd["elapsed"],
-                    rd["tokens"],
-                    key=added_key,
-                )
+                table.add_row(*_row_values(rd), key=added_key)
 
             col_keys = list(table.columns.keys())
             for aid in old_keys & new_keys:
                 old_rd = self._prev_agent_map[aid]
                 new_rd = new_map[aid]
-                field_to_col = [
-                    ("status", 0),
-                    ("agent_id", 1),
-                    ("task_id", 2),
-                    ("activity", 3),
-                    ("model", 4),
-                    ("elapsed", 5),
-                    ("tokens", 6),
-                ]
-                for field, col_idx in field_to_col:
+                for col_idx, field in enumerate(_FIELDS):
                     if old_rd.get(field) != new_rd.get(field):
                         try:
                             if col_idx < len(col_keys):
                                 value: Any = new_rd[field]
                                 if field == "status":
                                     value = self._status_text(new_rd["status"])
+                                elif field == "errs" and value:
+                                    value = Text(value, style="red bold")
                                 table.update_cell(aid, col_keys[col_idx], value)
                         except Exception:
                             pass
@@ -379,9 +404,12 @@ class AgentsDataTable(Widget):
                 row_idx = new_order.index(self._selected_key)
                 self._restoring_cursor = True
                 table.move_cursor(row=row_idx)
-                self._restoring_cursor = False
+                self.call_later(self._clear_restoring_cursor)
             except (ValueError, Exception):
                 self._restoring_cursor = False
+
+    def _clear_restoring_cursor(self) -> None:
+        self._restoring_cursor = False
 
     def on_data_table_row_highlighted(self, event: DataTable.RowHighlighted) -> None:
         if self._restoring_cursor:

@@ -191,6 +191,57 @@ class SwarmState:
         return asdict(self)
 
 
+# ---------------------------------------------------------------------------
+# Transparency & Interpretability models (Workstream 2)
+# ---------------------------------------------------------------------------
+
+
+@dataclass(slots=True)
+class AgentTraceEntry:
+    """A single entry in a per-agent trace stream."""
+
+    timestamp: float
+    agent_id: str
+    task_id: str
+    entry_type: str  # tool_call|llm_request|llm_response|cost_delta|reasoning|file_write|error
+    data: dict[str, Any] = field(default_factory=dict)
+
+
+@dataclass(slots=True)
+class ConflictRecord:
+    """Record of a file conflict detected during execution."""
+
+    timestamp: float
+    file_path: str
+    task_a: str
+    task_b: str
+    symbol_name: str = ""
+    resolution: str = ""  # auto_merged|advisor_resolved|judge_needed|failed
+    strategy: str = ""
+    blast_radius_files: list[str] = field(default_factory=list)
+
+
+@dataclass(slots=True)
+class DecisionRecord:
+    """A recorded decision made by the orchestrator."""
+
+    timestamp: str
+    phase: str
+    decision_type: str
+    decision: str
+    reasoning: str = ""
+
+
+@dataclass(slots=True)
+class FileChangeSummary:
+    """Summary of changes made to a file by a task."""
+
+    file_path: str
+    action: str  # created|modified|deleted
+    lines_added: int = 0
+    lines_removed: int = 0
+
+
 def default_run_layout(run_dir: Path) -> dict[str, Path]:
     return {
         "root": run_dir,
