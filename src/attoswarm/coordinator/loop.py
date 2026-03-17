@@ -185,8 +185,8 @@ class HybridCoordinator:
             self._error("coordinator_crash", f"{type(exc).__name__}: {exc}")
             try:
                 await self._shutdown_agents()
-            except Exception:
-                pass
+            except Exception as exc:
+                log.warning("Shutdown failed during crash: %s", exc)
             raise
 
     def _ensure_layout(self) -> None:
@@ -197,7 +197,8 @@ class HybridCoordinator:
 
     def _preflight_check(self) -> bool:
         """Check that required backend binaries are available. Returns False if none are available."""
-        assert self.manifest is not None
+        if self.manifest is None:
+            raise RuntimeError("Manifest not initialized — cannot proceed")
         backends_ok = 0
         for role in self.manifest.roles:
             cfg = self.role_cfg_by_role_id.get(role.role_id)
@@ -347,13 +348,17 @@ class HybridCoordinator:
             else {}
         )
         self.state_seq = int(state_raw.get("state_seq", 0))
+        saved_overrides = state_raw.get("timeout_overrides")
+        if isinstance(saved_overrides, dict):
+            self._task_timeout_overrides.update({str(k): int(v) for k, v in saved_overrides.items()})
         self.transition_log = [
             x for x in state_raw.get("task_transition_log", []) if isinstance(x, dict)
         ]
         self.errors = [x for x in state_raw.get("errors", []) if isinstance(x, dict)]
 
     async def _spawn_agents(self) -> None:
-        assert self.manifest is not None
+        if self.manifest is None:
+            raise RuntimeError("Manifest not initialized — cannot proceed")
         for role in self.manifest.roles:
             for i in range(role.count):
                 agent_id = f"{role.role_id}-{i+1}"
@@ -441,7 +446,8 @@ class HybridCoordinator:
                     })
 
     async def _run_loop(self) -> None:
-        assert self.manifest is not None
+        if self.manifest is None:
+            raise RuntimeError("Manifest not initialized — cannot proceed")
         phase = "executing"
         poll = max(self.config.run.poll_interval_ms / 1000.0, 0.05)
         max_runtime = max(self.config.run.max_runtime_seconds, 10)
@@ -452,6 +458,18 @@ class HybridCoordinator:
             await self._enforce_task_silence_timeouts()
             await self._enforce_task_duration_limits()
             await self._process_review_queue()
+
+            expired_ids = self.merge_queue.expire_stale_items()
+            for tid in expired_ids:
+                task = next((t for t in self.manifest.tasks if t.task_id == tid), None)
+                if task:
+                    self._transition_task(tid, "failed", "coordinator", "merge_item_expired")
+                    self._persist_task(task, status="failed", last_error="merge_item_expired")
+                else:
+                    log.warning("Merge queue item %s expired but task not in manifest", tid)
+            if expired_ids:
+                self._cascade_skip_blocked()
+
             await self._dispatch_ready_tasks()
 
             done = all(
@@ -505,6 +523,7 @@ class HybridCoordinator:
                 },
                 agent_messages_index={"agents_dir": self.layout["agents"].name},
                 elapsed_s=time.monotonic() - started_at,
+                timeout_overrides=self._task_timeout_overrides or None,
             )
             if phase in {"completed", "failed"}:
                 break
@@ -615,7 +634,8 @@ class HybridCoordinator:
         return {"status": "healthy", "snapshot": snapshot.name, "file_count": file_count}
 
     def _append_task(self, task: TaskSpec) -> None:
-        assert self.manifest is not None
+        if self.manifest is None:
+            raise RuntimeError("Manifest not initialized — cannot proceed")
         self.manifest.tasks.append(task)
         self.task_state[task.task_id] = task.status
         self.task_attempts.setdefault(task.task_id, 0)
@@ -989,18 +1009,21 @@ class HybridCoordinator:
         self._append_event("error", item)
 
     def _find_task(self, task_id: str) -> TaskSpec | None:
-        assert self.manifest is not None
+        if self.manifest is None:
+            raise RuntimeError("Manifest not initialized — cannot proceed")
         return next((t for t in self.manifest.tasks if t.task_id == task_id), None)
 
     def _review_roles(self) -> list[str]:
-        assert self.manifest is not None
+        if self.manifest is None:
+            raise RuntimeError("Manifest not initialized — cannot proceed")
         ids = [r.role_id for r in self.manifest.roles if r.role_type in {"judge", "critic"}]
         if not ids and self.config.merge.judge_roles:
             ids.extend(self.config.merge.judge_roles)
         return ids
 
     def _role_type(self, role_id: str) -> str:
-        assert self.manifest is not None
+        if self.manifest is None:
+            raise RuntimeError("Manifest not initialized — cannot proceed")
         for role in self.manifest.roles:
             if role.role_id == role_id:
                 return role.role_type

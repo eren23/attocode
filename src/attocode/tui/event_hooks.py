@@ -38,7 +38,6 @@ from attocode.tui.events import (  # noqa: E402
 from attocode.types.events import EventType  # noqa: E402
 
 if TYPE_CHECKING:
-    import asyncio
     from collections.abc import Callable
 
 
@@ -61,16 +60,6 @@ class EventStats:
     last_event_time: float = 0.0
 
 
-@dataclass(slots=True)
-class DebouncedEvent:
-    """An event waiting to be dispatched after a debounce period."""
-
-    event_type: str
-    data: dict[str, Any]
-    timestamp: float
-    dispatch_at: float
-
-
 class AgentEventBridge:
     """Bridges agent events to TUI message dispatch.
 
@@ -80,7 +69,6 @@ class AgentEventBridge:
     Args:
         post_message: Callable to post a Textual Message (typically app.post_message).
         filter_level: How much detail to show.
-        debounce_ms: Debounce interval for high-frequency events.
     """
 
     def __init__(
@@ -88,14 +76,10 @@ class AgentEventBridge:
         post_message: Callable[..., Any],
         *,
         filter_level: EventFilterLevel = EventFilterLevel.NORMAL,
-        debounce_ms: float = 100.0,
     ) -> None:
         self._post = post_message
         self._filter_level = filter_level
-        self._debounce_ms = debounce_ms
         self._stats = EventStats()
-        self._debounce_queue: dict[str, DebouncedEvent] = {}
-        self._debounce_task: asyncio.Task[None] | None = None
         self._running = False
         self._handlers: dict[str, Callable[..., Any]] = {
             EventType.START.value: self._on_agent_started,
@@ -140,8 +124,6 @@ class AgentEventBridge:
     def stop(self) -> None:
         """Stop the event bridge."""
         self._running = False
-        if self._debounce_task and not self._debounce_task.done():
-            self._debounce_task.cancel()
 
     def handle_event(self, event_type: str, data: dict[str, Any] | None = None) -> None:
         """Handle an incoming agent event.

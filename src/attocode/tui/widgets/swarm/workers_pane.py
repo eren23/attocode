@@ -59,6 +59,20 @@ class WorkerDetailCard(Widget):
             if desc:
                 text.append(f"  {desc[:50]}\n", style="dim")
 
+        # Activity + tool stats
+        current_tool = w.get("current_tool", "")
+        tool_count = w.get("tool_call_count", 0)
+        llm_turns = w.get("llm_turns", 0)
+        parts: list[str] = []
+        if current_tool:
+            parts.append(f"Activity: {current_tool}")
+        if tool_count:
+            parts.append(f"Tools: {tool_count} calls")
+        if llm_turns:
+            parts.append(f"Turns: {llm_turns}")
+        if parts:
+            text.append(f"  {' | '.join(parts)}\n", style="dim")
+
         # Duration
         started = w.get("started_at", 0)
         if started:

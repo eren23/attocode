@@ -4,9 +4,12 @@ from __future__ import annotations
 
 import asyncio
 import fnmatch
+import logging
 from typing import Any
 
 from attocode.tui.dialogs.approval import ApprovalResult
+
+logger = logging.getLogger(__name__)
 
 
 class ApprovalBridge:
@@ -14,12 +17,16 @@ class ApprovalBridge:
 
     Uses asyncio.Future for clean async communication between
     the agent execution loop and the Textual app.
+
+    Concurrent requests are serialized via an asyncio.Lock to prevent
+    the _pending future from being overwritten.
     """
 
     def __init__(self) -> None:
         self._pending: asyncio.Future[ApprovalResult] | None = None
         self._always_allowed: dict[str, set[str]] = {}
         self._on_request: Any = None
+        self._lock = asyncio.Lock()
 
     @staticmethod
     def _args_signature(tool_name: str, args: dict[str, Any]) -> str:
@@ -89,28 +96,34 @@ class ApprovalBridge:
     ) -> ApprovalResult:
         """Request approval for a tool call.
 
-        Returns ApprovalResult. Raises asyncio.TimeoutError if timeout exceeded.
+        Returns ApprovalResult. Concurrent requests are serialized
+        via an internal lock so that each request gets its own future.
         """
         # Check always-allowed tools (bare tool name, any args/danger level)
         if self._is_always_allowed(tool_name, args):
             return ApprovalResult(approved=True, always_allow=True)
 
-        # Create future for this request
-        loop = asyncio.get_running_loop()
-        self._pending = loop.create_future()
+        async with self._lock:
+            # Create future for this request
+            loop = asyncio.get_running_loop()
+            self._pending = loop.create_future()
 
-        # Notify handler to show dialog
-        if self._on_request:
-            self._on_request(tool_name, args, danger_level, context)
+            # Notify handler to show dialog
+            if self._on_request:
+                self._on_request(tool_name, args, danger_level, context)
 
-        try:
-            result = await asyncio.wait_for(self._pending, timeout=timeout)
-        except TimeoutError:
-            result = ApprovalResult(approved=False)
-        finally:
-            self._pending = None
+            try:
+                result = await asyncio.wait_for(self._pending, timeout=timeout)
+            except (TimeoutError, asyncio.TimeoutError):
+                logger.warning(
+                    "Approval request timed out for tool %s (timeout=%ss)",
+                    tool_name, timeout,
+                )
+                result = ApprovalResult(approved=False)
+            finally:
+                self._pending = None
 
-        # Record always-allow
+        # Record always-allow (outside lock)
         if result.always_allow:
             pattern = result.allow_pattern or self._derive_allow_pattern(
                 tool_name, args, danger_level,
@@ -128,6 +141,11 @@ class ApprovalBridge:
         """Resolve a pending approval request."""
         if self._pending and not self._pending.done():
             self._pending.set_result(result)
+        else:
+            logger.debug(
+                "resolve() called but no pending request (approved=%s)",
+                result.approved,
+            )
 
     def has_pending(self) -> bool:
         """Check if there's a pending approval request."""
@@ -139,11 +157,15 @@ class ApprovalBridge:
 
 
 class BudgetBridge:
-    """Bridges between agent budget extension requests and TUI dialogs."""
+    """Bridges between agent budget extension requests and TUI dialogs.
+
+    Concurrent requests are serialized via an asyncio.Lock.
+    """
 
     def __init__(self) -> None:
         self._pending: asyncio.Future[bool] | None = None
         self._on_request: Any = None
+        self._lock = asyncio.Lock()
 
     def set_handler(self, handler: Any) -> None:
         """Set the handler called when budget extension is needed."""
@@ -158,18 +180,22 @@ class BudgetBridge:
         timeout: float = 60.0,
     ) -> bool:
         """Request a budget extension. Returns True if approved."""
-        loop = asyncio.get_running_loop()
-        self._pending = loop.create_future()
+        async with self._lock:
+            loop = asyncio.get_running_loop()
+            self._pending = loop.create_future()
 
-        if self._on_request:
-            self._on_request(current_tokens, used_pct, requested_tokens, reason)
+            if self._on_request:
+                self._on_request(current_tokens, used_pct, requested_tokens, reason)
 
-        try:
-            result = await asyncio.wait_for(self._pending, timeout=timeout)
-        except TimeoutError:
-            result = False
-        finally:
-            self._pending = None
+            try:
+                result = await asyncio.wait_for(self._pending, timeout=timeout)
+            except (TimeoutError, asyncio.TimeoutError):
+                logger.warning(
+                    "Budget extension request timed out (timeout=%ss)", timeout,
+                )
+                result = False
+            finally:
+                self._pending = None
 
         return result
 
@@ -177,6 +203,11 @@ class BudgetBridge:
         """Resolve a pending budget request."""
         if self._pending and not self._pending.done():
             self._pending.set_result(approved)
+        else:
+            logger.debug(
+                "BudgetBridge.resolve() called but no pending request (approved=%s)",
+                approved,
+            )
 
     def has_pending(self) -> bool:
         """Check if there's a pending budget request."""

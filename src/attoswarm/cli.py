@@ -168,6 +168,7 @@ def _build_backend_cmd_stdin(backend: str, model: str, prompt: str) -> tuple[lis
 def _make_subprocess_spawn_fn(
     cfg: SwarmYamlConfig,
     process_registry: Any = None,
+    event_callback: Any = None,
 ):  # noqa: ANN202
     """Build a spawn function that delegates to backend CLIs as subprocesses.
 
@@ -179,7 +180,11 @@ def _make_subprocess_spawn_fn(
 
     If *process_registry* (a SubagentManager) is provided, spawned processes
     are registered/unregistered for graceful shutdown.
+
+    If *event_callback* is provided, it is called with each parsed
+    ``AgentActivityEvent`` from Claude stream-json output.
     """
+    from attoswarm.adapters.stream_parser import AgentActivityEvent, parse_stream_json_line
     from attoswarm.coordinator.subagent_manager import TaskResult as _TaskResult
 
     # Pre-build role_hint -> RoleConfig lookup
@@ -215,6 +220,12 @@ def _make_subprocess_spawn_fn(
         prompt = "\n".join(prompt_parts)
 
         cmd = _build_backend_cmd(backend, model, prompt)
+        is_claude = backend == "claude"
+        if is_claude:
+            # Inject stream-json only for worker spawns (not decompose);
+            # --verbose is required by claude CLI when combining -p with stream-json
+            cmd = cmd[:-1] + ["--verbose", "--output-format", "stream-json"] + cmd[-1:]
+        task_id = task["task_id"]
 
         t0 = _time.monotonic()
         try:
@@ -230,26 +241,69 @@ def _make_subprocess_spawn_fn(
                 process_registry.register_process(proc)
             worker_timeout = max(cfg.run.max_runtime_seconds or 600, 600)
 
-            # Stream stdout to capture activity labels
+            # Accumulated structured events for result enrichment
+            activity_events: list[AgentActivityEvent] = []
+            final_tokens = 0
+            final_cost = 0.0
+
+            # Stream stdout — use stream-json parser for claude, regex for others
             async def _read_stdout() -> bytes:
-                assert proc.stdout is not None
+                nonlocal final_tokens, final_cost
+                if proc.stdout is None:
+                    raise RuntimeError("Process stdout not available (subprocess created without PIPE)")
                 buf = bytearray()
+                remainder = ""
                 while True:
                     chunk = await proc.stdout.read(4096)
                     if not chunk:
+                        # Process any remaining partial line
+                        if remainder.strip():
+                            _process_line(remainder, task_id, is_claude, activity_events)
                         break
                     buf.extend(chunk)
-                    # Parse lines for tool-call activity patterns
-                    text = chunk.decode("utf-8", errors="replace")
-                    for line in text.splitlines():
-                        label = _parse_activity_label(line)
-                        if label:
-                            # Write activity to a sidecar file for TUI
-                            _write_activity(cfg.run.run_dir, task["task_id"], label)
+                    text = remainder + chunk.decode("utf-8", errors="replace")
+                    lines = text.split("\n")
+                    # Last element may be incomplete — save as remainder
+                    remainder = lines[-1]
+                    for line in lines[:-1]:
+                        _process_line(line, task_id, is_claude, activity_events)
+                # Extract final tokens/cost from result events
+                for evt in activity_events:
+                    if evt.event_kind == "result":
+                        final_tokens = max(final_tokens, evt.tokens_used)
+                        final_cost = max(final_cost, evt.cost_usd)
                 return bytes(buf)
 
+            def _process_line(
+                line: str,
+                tid: str,
+                use_stream_json: bool,
+                events: list[AgentActivityEvent],
+            ) -> None:
+                if use_stream_json:
+                    evt = parse_stream_json_line(line, tid)
+                    if evt:
+                        events.append(evt)
+                        # Backward-compat: write activity sidecar
+                        if evt.event_kind == "tool_call" and evt.tool_name:
+                            _write_activity(cfg.run.run_dir, tid, f"{evt.tool_name} {evt.tool_input_summary[:40]}")
+                        elif evt.event_kind == "text" and evt.text_preview:
+                            _write_activity(cfg.run.run_dir, tid, evt.text_preview[:60])
+                        # Invoke event_callback for real-time observability
+                        if event_callback is not None:
+                            try:
+                                event_callback(evt)
+                            except Exception:
+                                pass
+                else:
+                    # Legacy regex path for non-Claude backends
+                    label = _parse_activity_label(line)
+                    if label:
+                        _write_activity(cfg.run.run_dir, tid, label)
+
             async def _read_stderr() -> bytes:
-                assert proc.stderr is not None
+                if proc.stderr is None:
+                    raise RuntimeError("Process stderr not available (subprocess created without PIPE)")
                 return await proc.stderr.read()
 
             try:
@@ -270,36 +324,40 @@ def _make_subprocess_spawn_fn(
 
             if proc.returncode == 0:
                 return _TaskResult(
-                    task_id=task["task_id"],
+                    task_id=task_id,
                     success=True,
                     result_summary=stdout_text[:4000],
+                    tokens_used=final_tokens,
+                    cost_usd=final_cost,
                     duration_s=elapsed,
                 )
             else:
                 return _TaskResult(
-                    task_id=task["task_id"],
+                    task_id=task_id,
                     success=False,
                     result_summary=stdout_text[:2000],
                     error=stderr_text[:2000] or f"{cmd[0]} exited with code {proc.returncode}",
+                    tokens_used=final_tokens,
+                    cost_usd=final_cost,
                     duration_s=elapsed,
                 )
         except TimeoutError:
             return _TaskResult(
-                task_id=task["task_id"],
+                task_id=task_id,
                 success=False,
                 error=f"Subprocess timed out after {cfg.run.max_runtime_seconds}s",
                 duration_s=_time.monotonic() - t0,
             )
         except FileNotFoundError:
             return _TaskResult(
-                task_id=task["task_id"],
+                task_id=task_id,
                 success=False,
                 error=f"'{cmd[0]}' CLI not found. Install it or add it to PATH.",
                 duration_s=_time.monotonic() - t0,
             )
         except Exception as exc:
             return _TaskResult(
-                task_id=task["task_id"],
+                task_id=task_id,
                 success=False,
                 error=f"Subprocess spawn failed: {exc}",
                 duration_s=_time.monotonic() - t0,
@@ -620,9 +678,10 @@ def run_command(
             trace_collector=collector,
             approval_mode=approval_mode,
         )
-        # Wire process registry: spawn_fn uses orchestrator's subagent manager
+        # Wire process registry + event_callback: spawn_fn uses orchestrator's subagent manager
         orch._subagent_mgr._spawn_fn = _make_subprocess_spawn_fn(
             cfg, process_registry=orch._subagent_mgr,
+            event_callback=orch._on_agent_activity,
         )
         code = asyncio.run(orch.run())
         _print_run_summary(orch)
@@ -758,6 +817,7 @@ def start_command(
             )
             orch._subagent_mgr._spawn_fn = _make_subprocess_spawn_fn(
                 cfg, process_registry=orch._subagent_mgr,
+                event_callback=orch._on_agent_activity,
             )
             code = asyncio.run(orch.run())
             _print_run_summary(orch)
@@ -1130,6 +1190,7 @@ def quick_command(
     )
     orch._subagent_mgr._spawn_fn = _make_subprocess_spawn_fn(
         cfg, process_registry=orch._subagent_mgr,
+        event_callback=orch._on_agent_activity,
     )
 
     code = asyncio.run(orch.run())

@@ -139,6 +139,55 @@ class SwarmOrchestrator:
         self._control_cursor: int = 0  # line offset into control.jsonl
 
     # ------------------------------------------------------------------
+    # Agent activity event callback (wired as event_callback in cli.py)
+    # ------------------------------------------------------------------
+
+    def _on_agent_activity(self, event: Any) -> None:
+        """Handle a structured ``AgentActivityEvent`` from stream-json parsing.
+
+        Updates AgentStatus in the SubagentManager and emits EventBus events.
+        """
+        task_id = getattr(event, "task_id", "")
+        agent_id = f"agent-{task_id}"
+        status = self._subagent_mgr._agent_statuses.get(agent_id)
+        if not status:
+            return
+
+        kind = getattr(event, "event_kind", "")
+        now = getattr(event, "timestamp", 0.0) or __import__("time").time()
+        status.last_activity_ts = now
+
+        if kind == "tool_call":
+            status.tool_call_count += 1
+            status.current_tool = getattr(event, "tool_name", "")
+            status.activity = f"{status.current_tool} {getattr(event, 'tool_input_summary', '')[:40]}"
+            # Track files touched from tool input
+            tool_input = getattr(event, "tool_input_summary", "")
+            if status.current_tool in ("Edit", "Write", "Read") and tool_input:
+                # Extract likely file path (first token)
+                candidate = tool_input.split(",")[0].split('"')[1] if '"' in tool_input else tool_input.split()[0] if tool_input.split() else ""
+                if candidate and "/" in candidate and len(status.files_touched) < 50:
+                    if candidate not in status.files_touched:
+                        status.files_touched.append(candidate)
+            self._emit("agent.tool_call", task_id=task_id, agent_id=agent_id,
+                        message=f"{status.current_tool}",
+                        data={"tool": status.current_tool, "input_summary": getattr(event, "tool_input_summary", "")[:100]})
+        elif kind == "text":
+            status.llm_turns += 1
+            status.activity = getattr(event, "text_preview", "")[:60]
+        elif kind == "result":
+            status.tokens_used = getattr(event, "tokens_used", 0)
+        elif kind == "error":
+            status.activity = f"error: {getattr(event, 'text_preview', '')[:40]}"
+
+        # Write trace entry for tool calls
+        if kind == "tool_call":
+            self._subagent_mgr._write_trace_entry(agent_id, task_id, "tool_call", {
+                "tool": getattr(event, "tool_name", ""),
+                "input_summary": getattr(event, "tool_input_summary", "")[:200],
+            })
+
+    # ------------------------------------------------------------------
     # Public API
     # ------------------------------------------------------------------
 
@@ -370,8 +419,10 @@ class SwarmOrchestrator:
                                 try:
                                     ver = await self._file_ledger.snapshot_file(f, f"agent-{tid}")
                                     task.file_version_snapshot[f] = ver.version_hash
-                                except Exception:
-                                    pass
+                                except Exception as exc:
+                                    logger.warning("File snapshot failed for %s (task %s): %s", f, tid, exc)
+                                    self._emit("warning", task_id=tid,
+                                               message=f"File snapshot failed for {f}: {exc}")
 
                 # Execute parallel batch
                 if parallel:
@@ -388,7 +439,7 @@ class SwarmOrchestrator:
                     results = await self._subagent_mgr.execute_batch(batch_tasks, timeout=task_timeout)
 
                     for result in results:
-                        completed += self._handle_result(result)
+                        completed += await self._handle_result(result)
                     self._persist_state()
 
                 # Execute serialized tasks one by one
@@ -402,15 +453,15 @@ class SwarmOrchestrator:
                     task = self._tasks.get(tid)
                     task_timeout = float(task.timeout_seconds) if task and task.timeout_seconds > 0 else 600.0
                     result = await self._subagent_mgr.execute_single(task_dict, timeout=task_timeout)
-                    completed += self._handle_result(result)
+                    completed += await self._handle_result(result)
                     self._persist_state()
 
                 # Post-batch: refresh AST index, check control messages, stall detection
                 if self._ast_service:
                     try:
                         self._ast_service.refresh()
-                    except Exception:
-                        pass
+                    except Exception as exc:
+                        logger.debug("AST index refresh failed: %s", exc)
                 self._check_control_messages()
                 self._check_stale_agents()
 
@@ -442,8 +493,8 @@ class SwarmOrchestrator:
             if self._change_manifest:
                 try:
                     self._change_manifest.persist()
-                except Exception:
-                    pass
+                except Exception as exc:
+                    logger.warning("Change manifest persist failed: %s", exc)
 
             # Git safety: commit or discard
             if self._git_safety:
@@ -552,8 +603,8 @@ class SwarmOrchestrator:
         path = self._layout["tasks"] / f"task-{task_id}.json"
         try:
             write_json_atomic(path, data)
-        except Exception:
-            pass
+        except Exception as exc:
+            logger.debug("Failed to persist task %s: %s", task_id, exc)
 
     def _persist_state(self) -> None:
         """Write state snapshot to disk for TUI consumption."""
@@ -616,6 +667,10 @@ class SwarmOrchestrator:
                 "cwd": self._root_dir,
                 "exit_code": getattr(a, 'exit_code', None),
                 "restart_count": getattr(a, 'restart_count', 0),
+                "tool_call_count": a.tool_call_count,
+                "current_tool": a.current_tool,
+                "files_touched": a.files_touched[:10],
+                "llm_turns": a.llm_turns,
             })
 
         state: dict[str, Any] = {
@@ -789,8 +844,8 @@ class SwarmOrchestrator:
                 learning_ctx = self._learning_bridge.recall_for_task(task)
                 if learning_ctx:
                     d["learning_context"] = learning_ctx
-            except Exception:
-                pass
+            except Exception as exc:
+                logger.debug("Learning recall for task %s failed: %s", task.task_id, exc)
         return d
 
     def _capture_task_diff(self, task_id: str, files_modified: list[str]) -> None:
@@ -808,10 +863,10 @@ class SwarmOrchestrator:
             if result.stdout.strip():
                 diff_path = self._layout["tasks"] / f"task-{task_id}.diff"
                 diff_path.write_text(result.stdout, encoding="utf-8")
-        except Exception:
-            pass
+        except Exception as exc:
+            logger.debug("Failed to capture diff for task %s: %s", task_id, exc)
 
-    def _handle_result(self, result: TaskResult) -> int:
+    async def _handle_result(self, result: TaskResult) -> int:
         """Process a task result.  Returns 1 if successful, 0 otherwise."""
         task = self._tasks.get(result.task_id)
         if task:
@@ -830,6 +885,38 @@ class SwarmOrchestrator:
         # Track per-task cost for budget projection
         if result.cost_usd > 0:
             self._per_task_costs.append(result.cost_usd)
+
+        # ── Test verification gate ────────────────────────────────────
+        if result.success:
+            tv_cfg = getattr(self._config, 'test_verification', None)
+            if (
+                tv_cfg and tv_cfg.enabled
+                and task and task.task_kind in tv_cfg.applicable_task_kinds
+                and result.files_modified
+            ):
+                verification = await self._run_test_verification(result)
+                if not verification.passed:
+                    result.success = False
+                    result.error = (
+                        f"Tests failed: {verification.tests_failed}/{verification.tests_total} "
+                        f"(pass rate {verification.pass_rate:.0%} < threshold {tv_cfg.pass_rate_threshold:.0%})"
+                    )
+                    if verification.error:
+                        result.error += f" — {verification.error}"
+                    self._emit("test_verify_fail", task_id=result.task_id,
+                                agent_id=f"agent-{result.task_id}",
+                                message=f"Test verification failed for {result.task_id}",
+                                data={"pass_rate": verification.pass_rate,
+                                      "tests_passed": verification.tests_passed,
+                                      "tests_failed": verification.tests_failed,
+                                      "duration_s": verification.duration_s})
+                else:
+                    self._emit("test_verify_pass", task_id=result.task_id,
+                                agent_id=f"agent-{result.task_id}",
+                                message=f"Test verification passed for {result.task_id}",
+                                data={"pass_rate": verification.pass_rate,
+                                      "tests_total": verification.tests_total,
+                                      "duration_s": verification.duration_s})
 
         if result.success:
             old_status = self._aot_graph.get_node(result.task_id).status if self._aot_graph.get_node(result.task_id) else "running"
@@ -854,8 +941,8 @@ class SwarmOrchestrator:
             if self._learning_bridge:
                 try:
                     self._learning_bridge.record_task_outcome(task, result)
-                except Exception:
-                    pass
+                except Exception as exc:
+                    logger.debug("Learning record failed for %s: %s", result.task_id, exc)
             # Budget projection after each result
             self._run_budget_projection()
             return 1
@@ -942,11 +1029,49 @@ class SwarmOrchestrator:
         if self._learning_bridge:
             try:
                 self._learning_bridge.record_task_outcome(task, result)
-            except Exception:
-                pass
+            except Exception as exc:
+                logger.debug("Learning record failed for %s: %s", result.task_id, exc)
         # Budget projection after each result
         self._run_budget_projection()
         return 0
+
+    async def _run_test_verification(self, result: TaskResult) -> Any:
+        """Run the test verification gate for a completed task."""
+        from attoswarm.coordinator.test_verifier import (
+            TestVerificationResult,
+            detect_test_command,
+            run_test_verification,
+        )
+
+        tv_cfg = self._config.test_verification
+        test_cmd = tv_cfg.test_command or detect_test_command(self._root_dir)
+        if not test_cmd:
+            self._emit("info", task_id=result.task_id,
+                        message="No test command found, skipping verification")
+            return TestVerificationResult(
+                passed=True, pass_rate=1.0,
+                tests_passed=0, tests_failed=0, tests_total=0,
+                raw_output="",
+            )
+
+        self._emit("test_verify_start", task_id=result.task_id,
+                    message=f"Running: {test_cmd[:80]}")
+
+        verification = await run_test_verification(
+            working_dir=self._root_dir,
+            test_command=test_cmd,
+            timeout=tv_cfg.test_timeout_seconds,
+            files_modified=result.files_modified,
+            scope=tv_cfg.scope_to_changed_files,
+        )
+
+        # No tests collected → pass
+        if verification.tests_total == 0:
+            verification.passed = True
+        else:
+            verification.passed = verification.pass_rate >= tv_cfg.pass_rate_threshold
+
+        return verification
 
     def _restore_state(self) -> None:
         """Restore task states from persisted state file for resume.
@@ -1019,8 +1144,8 @@ class SwarmOrchestrator:
         prompt_path = self._layout["agents"] / f"agent-{task_id}.prompt.txt"
         try:
             prompt_path.write_text("\n".join(parts), encoding="utf-8")
-        except Exception:
-            pass
+        except Exception as exc:
+            logger.debug("Failed to persist prompt for task %s: %s", task_id, exc)
 
     def _check_control_messages(self) -> None:
         """Poll control.jsonl for user-initiated skip/retry/edit commands."""
@@ -1138,8 +1263,8 @@ class SwarmOrchestrator:
                 enriched = self._enrich_tasks_with_impact([new_task])
                 if enriched:
                     new_task = enriched[0]
-            except Exception:
-                pass
+            except Exception as exc:
+                logger.debug("Code-intel enrichment failed for dynamic task: %s", exc)
 
         self._tasks[new_id] = new_task
         new_node = AoTNode(
@@ -1223,8 +1348,8 @@ class SwarmOrchestrator:
                 learnings = self._learning_bridge.recall_for_goal(self._goal)
                 if learnings:
                     parts.append(learnings)
-            except Exception:
-                pass
+            except Exception as exc:
+                logger.debug("Learning recall for goal failed: %s", exc)
 
         ctx = "\n\n".join(parts)
         if ctx:
@@ -1262,8 +1387,8 @@ class SwarmOrchestrator:
                                 if fp and fp not in existing_reads and len(task.read_files) < max_read:
                                     task.read_files.append(fp)
                                     existing_reads.add(fp)
-                    except Exception:
-                        pass
+                    except Exception as exc:
+                        logger.debug("Impact analysis failed for %s: %s", tf, exc)
 
                     # Related files
                     try:
@@ -1274,8 +1399,8 @@ class SwarmOrchestrator:
                                 if fp and fp not in existing_reads and len(task.read_files) < max_read:
                                     task.read_files.append(fp)
                                     existing_reads.add(fp)
-                    except Exception:
-                        pass
+                    except Exception as exc:
+                        logger.debug("Find related failed for %s: %s", tf, exc)
 
                     # Symbols for scope
                     try:
@@ -1285,8 +1410,8 @@ class SwarmOrchestrator:
                                 name = s if isinstance(s, str) else s.get("name", "")
                                 if name and name not in task.symbol_scope:
                                     task.symbol_scope.append(name)
-                    except Exception:
-                        pass
+                    except Exception as exc:
+                        logger.debug("Symbols lookup failed for %s: %s", tf, exc)
 
                     # Implicit deps from imports
                     try:
@@ -1298,8 +1423,8 @@ class SwarmOrchestrator:
                                     dep_tid = file_to_task[fp]
                                     if dep_tid != task.task_id and dep_tid not in task.deps:
                                         task.deps.append(dep_tid)
-                    except Exception:
-                        pass
+                    except Exception as exc:
+                        logger.debug("Dependencies lookup failed for %s: %s", tf, exc)
 
                 enriched += 1
             except Exception as exc:
@@ -1317,8 +1442,8 @@ class SwarmOrchestrator:
         try:
             from attoswarm.coordinator.budget import BudgetProjector
             self._budget_projector = BudgetProjector()
-        except Exception:
-            pass
+        except Exception as exc:
+            logger.debug("Budget projector init failed: %s", exc)
 
     def _init_trace_bridge(self) -> None:
         """Wire EventBus → TraceCollector bridge if a collector is available."""

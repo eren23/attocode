@@ -37,6 +37,9 @@ legacy/.attocode/traces/
 legacy/.attocode/sessions/
 legacy/.attocode/recordings/
 
+# attocode snapshots
+tests/unit/tui/__snapshots__/
+
 
 # Build outputs
 site/

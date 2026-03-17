@@ -29,6 +29,7 @@ def write_state(
     event_timeline: dict,
     agent_messages_index: dict,
     elapsed_s: float = 0.0,
+    timeout_overrides: dict[str, int] | None = None,
 ) -> None:
     counts = Counter(t.status for t in tasks)
 
@@ -98,4 +99,7 @@ def write_state(
         dag_summary=dag_summary,
         elapsed_s=elapsed_s,
     )
-    write_json_atomic(Path(state_path), payload.to_dict())
+    state_dict = payload.to_dict()
+    if timeout_overrides:
+        state_dict["timeout_overrides"] = timeout_overrides
+    write_json_atomic(Path(state_path), state_dict)

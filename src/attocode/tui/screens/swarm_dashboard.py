@@ -164,6 +164,9 @@ class SwarmDashboardScreen(Screen):
 
     active_tab: reactive[int] = reactive(0)
 
+    # Number of consecutive _get_state() failures before showing offline warning
+    _OFFLINE_THRESHOLD: int = 5
+
     def __init__(
         self,
         state_fn: Any = None,
@@ -181,6 +184,8 @@ class SwarmDashboardScreen(Screen):
         self._orchestrator = orchestrator
         self._poll_timer: Timer | None = None
         self._swarm_start_ts: float = 0.0
+        self._consecutive_state_failures: int = 0
+        self._offline_notified: bool = False
 
     def compose(self) -> ComposeResult:
         yield Header()
@@ -226,7 +231,32 @@ class SwarmDashboardScreen(Screen):
         """Poll orchestrator state and update the active pane."""
         state = self._get_state()
         if not state:
+            self._consecutive_state_failures += 1
+            if (
+                self._consecutive_state_failures >= self._OFFLINE_THRESHOLD
+                and not self._offline_notified
+            ):
+                self._offline_notified = True
+                self.notify(
+                    "Coordinator offline — no state available",
+                    severity="error",
+                    timeout=10,
+                )
+                # Update footer to show offline status
+                try:
+                    self.query_one("#swarm-status-footer", SwarmStatusFooter).update_status(
+                        phase="OFFLINE",
+                    )
+                except Exception:
+                    pass
             return
+
+        # Reset failure counter on success
+        if self._consecutive_state_failures > 0:
+            self._consecutive_state_failures = 0
+            if self._offline_notified:
+                self._offline_notified = False
+                self.notify("Coordinator reconnected", severity="information", timeout=5)
 
         self._update_footer(state)
         self._update_active_pane(state)

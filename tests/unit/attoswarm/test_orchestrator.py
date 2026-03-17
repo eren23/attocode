@@ -64,7 +64,8 @@ def _add_task(
 
 
 class TestHandleResult:
-    def test_success_marks_complete(self, orch: SwarmOrchestrator) -> None:
+    @pytest.mark.asyncio
+    async def test_success_marks_complete(self, orch: SwarmOrchestrator) -> None:
         _add_task(orch, "t1", status="running")
         result = TaskResult(
             task_id="t1",
@@ -74,13 +75,14 @@ class TestHandleResult:
             tokens_used=1000,
             cost_usd=0.05,
         )
-        completed = orch._handle_result(result)
+        completed = await orch._handle_result(result)
         assert completed == 1
         node = orch._aot_graph.get_node("t1")
         assert node is not None
         assert node.status == "done"
 
-    def test_success_updates_task_fields(self, orch: SwarmOrchestrator) -> None:
+    @pytest.mark.asyncio
+    async def test_success_updates_task_fields(self, orch: SwarmOrchestrator) -> None:
         _add_task(orch, "t1", status="running")
         result = TaskResult(
             task_id="t1",
@@ -90,35 +92,38 @@ class TestHandleResult:
             tokens_used=500,
             cost_usd=0.01,
         )
-        orch._handle_result(result)
+        await orch._handle_result(result)
         task = orch._tasks["t1"]
         assert task.files_modified == ["a.py"]
         assert task.result_summary == "Done"
         assert task.tokens_used == 500
         assert task.cost_usd == 0.01
 
-    def test_failure_retries_within_limit(self, orch: SwarmOrchestrator) -> None:
+    @pytest.mark.asyncio
+    async def test_failure_retries_within_limit(self, orch: SwarmOrchestrator) -> None:
         _add_task(orch, "t1", status="running")
         result = TaskResult(task_id="t1", success=False, error="timeout")
-        completed = orch._handle_result(result)
+        completed = await orch._handle_result(result)
         assert completed == 0
         node = orch._aot_graph.get_node("t1")
         assert node is not None
         assert node.status == "pending"  # reset for retry
         assert orch._task_attempts["t1"] == 1
 
-    def test_failure_exhausts_retries(self, orch: SwarmOrchestrator) -> None:
+    @pytest.mark.asyncio
+    async def test_failure_exhausts_retries(self, orch: SwarmOrchestrator) -> None:
         _add_task(orch, "t1", status="running")
         # Exhaust retries (default max_task_attempts=2)
         orch._task_attempts["t1"] = 1
         result = TaskResult(task_id="t1", success=False, error="still broken")
-        completed = orch._handle_result(result)
+        completed = await orch._handle_result(result)
         assert completed == 0
         node = orch._aot_graph.get_node("t1")
         assert node is not None
         assert node.status == "failed"
 
-    def test_failure_records_attempt_history(self, orch: SwarmOrchestrator) -> None:
+    @pytest.mark.asyncio
+    async def test_failure_records_attempt_history(self, orch: SwarmOrchestrator) -> None:
         _add_task(orch, "t1", status="running")
         result = TaskResult(
             task_id="t1",
@@ -127,13 +132,14 @@ class TestHandleResult:
             duration_s=5.0,
             tokens_used=200,
         )
-        orch._handle_result(result)
+        await orch._handle_result(result)
         history = orch._task_attempt_history.get("t1", [])
         assert len(history) == 1
         assert history[0]["attempt"] == 1
         assert history[0]["error"] == "boom"
 
-    def test_failure_cascade_skips_dependents(self, orch: SwarmOrchestrator) -> None:
+    @pytest.mark.asyncio
+    async def test_failure_cascade_skips_dependents(self, orch: SwarmOrchestrator) -> None:
         _add_task(orch, "t1", status="running")
         _add_task(orch, "t2", deps=["t1"])
         orch._aot_graph.compute_levels()
@@ -141,16 +147,17 @@ class TestHandleResult:
         # Exhaust retries for t1
         orch._task_attempts["t1"] = 1
         result = TaskResult(task_id="t1", success=False, error="fatal")
-        orch._handle_result(result)
+        await orch._handle_result(result)
 
         node_t2 = orch._aot_graph.get_node("t2")
         assert node_t2 is not None
         assert node_t2.status == "skipped"
 
-    def test_success_accumulates_budget(self, orch: SwarmOrchestrator) -> None:
+    @pytest.mark.asyncio
+    async def test_success_accumulates_budget(self, orch: SwarmOrchestrator) -> None:
         _add_task(orch, "t1", status="running")
         result = TaskResult(task_id="t1", success=True, tokens_used=3000, cost_usd=0.1)
-        orch._handle_result(result)
+        await orch._handle_result(result)
         assert orch._budget.used_tokens == 3000
         assert orch._budget.used_cost_usd == pytest.approx(0.1)
 

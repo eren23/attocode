@@ -119,6 +119,17 @@ class ResearchConfig:
 
 
 @dataclass(slots=True)
+class TestVerificationConfig:
+    enabled: bool = False
+    test_command: str = ""               # e.g. "python -m pytest --tb=short -q"; auto-detected if empty
+    test_timeout_seconds: float = 120.0
+    pass_rate_threshold: float = 1.0     # 0.0-1.0
+    applicable_task_kinds: list[str] = field(default_factory=lambda: ["implement", "integrate"])
+    scope_to_changed_files: bool = True
+    max_verification_retries: int = 1
+
+
+@dataclass(slots=True)
 class SwarmYamlConfig:
     version: int = 1
     run: RunConfig = field(default_factory=RunConfig)
@@ -132,3 +143,4 @@ class SwarmYamlConfig:
     workspace: WorkspaceConfig = field(default_factory=WorkspaceConfig)
     code_intel: CodeIntelConfig = field(default_factory=CodeIntelConfig)
     research: ResearchConfig = field(default_factory=ResearchConfig)
+    test_verification: TestVerificationConfig = field(default_factory=TestVerificationConfig)

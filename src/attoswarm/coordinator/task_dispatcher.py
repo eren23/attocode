@@ -23,7 +23,8 @@ if TYPE_CHECKING:
 
 async def dispatch_ready_tasks(coordinator: HybridCoordinator) -> None:
     """Find ready tasks, assign them to free agents, and send assignments."""
-    assert coordinator.manifest is not None
+    if coordinator.manifest is None:
+        raise RuntimeError("Manifest not initialized — cannot dispatch tasks")
     tasks = [
         replace(t, status=coordinator.task_state.get(t.task_id, t.status))
         for t in coordinator.manifest.tasks

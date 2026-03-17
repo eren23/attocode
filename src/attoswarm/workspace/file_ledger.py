@@ -257,11 +257,22 @@ class FileLedger:
 
         If *base_hash* matches the current version, the write succeeds.
         Otherwise it's a CONFLICT.
+
+        AST notifications and change manifest recording are deferred
+        until after the per-file lock is released to prevent holding
+        locks during potentially slow external calls.
         """
         self._expire_stale_claims()
         rel = self._to_rel(path)
         abs_path = self._to_abs(rel)
         lock = self._get_lock(rel)
+
+        # Deferred actions to run after lock release
+        notify_ast = False
+        record_manifest_action = ""
+        record_manifest_new_hash = ""
+        emit_conflict_kwargs: dict[str, Any] | None = None
+        result: WriteResult | None = None
 
         async with lock:
             # Read current version from disk
@@ -292,35 +303,21 @@ class FileLedger:
                 ))
                 self._persist()
 
-                # Notify AST service
-                if self._ast_service:
-                    try:
-                        self._ast_service.notify_file_changed(abs_path)
-                    except Exception:
-                        pass
+                # Defer AST notify + manifest record to after lock release
+                notify_ast = True
+                record_manifest_action = "create" if not base_hash else "modify"
+                record_manifest_new_hash = new_hash
+                result = WriteResult(success=True, final_hash=new_hash)
 
-                # Record in change manifest
-                if self._change_manifest:
-                    try:
-                        action = "create" if not base_hash else "modify"
-                        self._change_manifest.record_change(
-                            rel, action, agent_id, task_id, base_hash, new_hash,
-                        )
-                    except Exception:
-                        pass
+            if result is None:
+                # Conflict path
+                logger.warning(
+                    "OCC conflict on %s: base=%s current=%s agent=%s",
+                    rel, base_hash[:8], current_hash[:8], agent_id,
+                )
 
-                return WriteResult(success=True, final_hash=new_hash)
-
-            # Conflict path
-            logger.warning(
-                "OCC conflict on %s: base=%s current=%s agent=%s",
-                rel, base_hash[:8], current_hash[:8], agent_id,
-            )
-
-            # Emit conflict event with both participants
-            if self._event_callback:
-                try:
-                    # Find the previous writer (task_b) from write log
+                # Prepare conflict event data (emit after lock)
+                if self._event_callback:
                     prev_task = ""
                     prev_agent = ""
                     for entry in reversed(self._write_log):
@@ -328,96 +325,116 @@ class FileLedger:
                             prev_task = entry.task_id
                             prev_agent = entry.agent_id
                             break
-                    self._event_callback(
-                        file_path=rel,
-                        agent_id=agent_id,
-                        task_id=task_id,
-                        base_hash=base_hash,
-                        current_hash=current_hash,
-                        task_a=task_id,
-                        task_b=prev_task,
-                        agent_a=agent_id,
-                        agent_b=prev_agent,
-                    )
-                except Exception:
-                    pass
+                    emit_conflict_kwargs = {
+                        "file_path": rel,
+                        "agent_id": agent_id,
+                        "task_id": task_id,
+                        "base_hash": base_hash,
+                        "current_hash": current_hash,
+                        "task_a": task_id,
+                        "task_b": prev_task,
+                        "agent_a": agent_id,
+                        "agent_b": prev_agent,
+                    }
 
-            # Try AST reconciliation before giving up
-            if self._reconciler is not None:
-                base_snapshot = self._snapshots.get(rel)
-                if base_snapshot is not None:
-                    try:
-                        current_content = Path(abs_path).read_text(
-                            encoding="utf-8", errors="replace",
-                        )
-                        merge_result = self._reconciler.reconcile(
-                            abs_path, base_snapshot, content, current_content,
-                        )
-                        if merge_result.success:
-                            new_hash = self._hash(merge_result.merged_content)
-                            Path(abs_path).write_text(
-                                merge_result.merged_content, encoding="utf-8",
+                # Try AST reconciliation before giving up
+                if self._reconciler is not None:
+                    base_snapshot = self._snapshots.get(rel)
+                    if base_snapshot is not None:
+                        try:
+                            current_content = Path(abs_path).read_text(
+                                encoding="utf-8", errors="replace",
                             )
-                            self._versions[rel] = new_hash
-                            self._snapshots[rel] = merge_result.merged_content
-
-                            self._write_log.append(WriteLogEntry(
-                                timestamp=time.time(),
-                                file_path=rel,
-                                agent_id=agent_id,
-                                task_id=task_id,
-                                base_hash=base_hash,
-                                new_hash=new_hash,
-                                conflict=True,
-                                reconciled=True,
-                            ))
-                            self._persist()
-
-                            # Notify AST service of reconciled content
-                            if self._ast_service:
-                                try:
-                                    self._ast_service.notify_file_changed(abs_path)
-                                except Exception:
-                                    pass
-
-                            logger.info(
-                                "AST reconciliation succeeded on %s "
-                                "(auto-resolved %d symbols)",
-                                rel, merge_result.auto_resolved,
+                            merge_result = self._reconciler.reconcile(
+                                abs_path, base_snapshot, content, current_content,
                             )
-                            return WriteResult(
-                                success=True,
-                                conflict=True,
-                                reconciled=True,
-                                final_hash=new_hash,
-                            )
-                        else:
-                            logger.info(
-                                "AST reconciliation failed on %s: %d conflicts",
-                                rel, len(merge_result.conflicts),
-                            )
-                    except Exception as exc:
-                        logger.warning(
-                            "AST reconciliation error on %s: %s", rel, exc,
-                        )
+                            if merge_result.success:
+                                new_hash = self._hash(merge_result.merged_content)
+                                Path(abs_path).write_text(
+                                    merge_result.merged_content, encoding="utf-8",
+                                )
+                                self._versions[rel] = new_hash
+                                self._snapshots[rel] = merge_result.merged_content
 
-            self._write_log.append(WriteLogEntry(
-                timestamp=time.time(),
-                file_path=rel,
-                agent_id=agent_id,
-                task_id=task_id,
-                base_hash=base_hash,
-                new_hash=self._hash(content),
-                conflict=True,
-            ))
-            self._persist()
+                                self._write_log.append(WriteLogEntry(
+                                    timestamp=time.time(),
+                                    file_path=rel,
+                                    agent_id=agent_id,
+                                    task_id=task_id,
+                                    base_hash=base_hash,
+                                    new_hash=new_hash,
+                                    conflict=True,
+                                    reconciled=True,
+                                ))
+                                self._persist()
 
-            return WriteResult(
-                success=False,
-                conflict=True,
-                final_hash=current_hash,
-                error=f"OCC conflict: expected {base_hash[:8]}, got {current_hash[:8]}",
-            )
+                                notify_ast = True
+                                logger.info(
+                                    "AST reconciliation succeeded on %s "
+                                    "(auto-resolved %d symbols)",
+                                    rel, merge_result.auto_resolved,
+                                )
+                                result = WriteResult(
+                                    success=True,
+                                    conflict=True,
+                                    reconciled=True,
+                                    final_hash=new_hash,
+                                )
+                            else:
+                                logger.info(
+                                    "AST reconciliation failed on %s: %d conflicts",
+                                    rel, len(merge_result.conflicts),
+                                )
+                        except Exception as exc:
+                            logger.warning(
+                                "AST reconciliation error on %s: %s", rel, exc,
+                            )
+
+            if result is None:
+                self._write_log.append(WriteLogEntry(
+                    timestamp=time.time(),
+                    file_path=rel,
+                    agent_id=agent_id,
+                    task_id=task_id,
+                    base_hash=base_hash,
+                    new_hash=self._hash(content),
+                    conflict=True,
+                ))
+                self._persist()
+                result = WriteResult(
+                    success=False,
+                    conflict=True,
+                    final_hash=current_hash,
+                    error=f"OCC conflict: expected {base_hash[:8]}, got {current_hash[:8]}",
+                )
+
+        # --- Post-lock deferred actions (no lock held) ---
+
+        # Emit conflict event
+        if emit_conflict_kwargs and self._event_callback:
+            try:
+                self._event_callback(**emit_conflict_kwargs)
+            except Exception as exc:
+                logger.debug("Conflict event callback failed: %s", exc)
+
+        # Notify AST service (potentially slow — safe to do outside lock)
+        if notify_ast and self._ast_service:
+            try:
+                self._ast_service.notify_file_changed(abs_path)
+            except Exception as exc:
+                logger.debug("AST notify_file_changed failed for %s: %s", rel, exc)
+
+        # Record in change manifest (outside lock)
+        if record_manifest_action and self._change_manifest:
+            try:
+                self._change_manifest.record_change(
+                    rel, record_manifest_action, agent_id, task_id,
+                    base_hash, record_manifest_new_hash,
+                )
+            except Exception as exc:
+                logger.debug("Change manifest record failed for %s: %s", rel, exc)
+
+        return result
 
     async def get_active_claims(self) -> dict[str, FileClaim]:
         """Return a copy of all active claims."""
@@ -498,8 +515,8 @@ class FileLedger:
         if versions_path.exists():
             try:
                 self._versions = json.loads(versions_path.read_text(encoding="utf-8"))
-            except Exception:
-                pass
+            except Exception as exc:
+                logger.warning("Failed to restore ledger versions: %s", exc)
 
         # Claims
         claims_path = d / "claims.json"
@@ -508,5 +525,5 @@ class FileLedger:
                 data = json.loads(claims_path.read_text(encoding="utf-8"))
                 for k, v in data.items():
                     self._claims[k] = FileClaim(**v)
-            except Exception:
-                pass
+            except Exception as exc:
+                logger.warning("Failed to restore ledger claims: %s", exc)
