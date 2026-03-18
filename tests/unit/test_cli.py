@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import os
 from pathlib import Path
 from typing import Any
 
@@ -179,6 +180,24 @@ class TestCLI:
         assert result.exit_code == 0
         assert called["parts"] == ("doctor", ".attocode/swarm.hybrid.yaml")
         assert called["debug"] is False
+
+    def test_invoke_attoswarm_marks_launcher_env(self, monkeypatch) -> None:  # type: ignore[no-untyped-def]
+        captured: dict[str, str | list[str]] = {}
+
+        def _fake_attoswarm(*, args: list[str], standalone_mode: bool) -> None:
+            captured["args"] = list(args)
+            captured["started_via"] = os.environ.get("ATTO_SWARM_STARTED_VIA", "")
+            captured["command_family"] = os.environ.get("ATTO_SWARM_COMMAND_FAMILY", "")
+
+        monkeypatch.setattr("attoswarm.cli.main", _fake_attoswarm)
+
+        from attocode.cli import _invoke_attoswarm
+
+        _invoke_attoswarm(["doctor", "cfg.yaml"])
+
+        assert captured["args"] == ["doctor", "cfg.yaml"]
+        assert captured["started_via"] == "attocode"
+        assert captured["command_family"] == "attocode swarm"
 
     def test_single_turn_exits_1_on_failure(self, monkeypatch) -> None:  # type: ignore[no-untyped-def]
         """When agent.run() returns success=False, the process should exit 1."""

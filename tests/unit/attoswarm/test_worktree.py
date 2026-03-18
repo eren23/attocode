@@ -9,6 +9,7 @@ from unittest.mock import MagicMock, call, patch
 from attoswarm.workspace.worktree import (
     _delete_branch,
     _prune_worktrees,
+    _agent_branch_name,
     cleanup_worktrees,
     ensure_workspace_for_agent,
 )
@@ -201,6 +202,48 @@ def test_ensure_workspace_falls_back_when_no_git(mock_run: MagicMock, tmp_path: 
 
 
 @patch("attoswarm.workspace.worktree.subprocess.run")
+def test_ensure_workspace_namespaces_branch_by_run_id(mock_run: MagicMock, tmp_path: Path) -> None:
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    (repo / ".git").mkdir()
+    wt_root = tmp_path / "worktrees"
+
+    ensure_workspace_for_agent(
+        repo_root=repo,
+        worktrees_root=wt_root,
+        agent_id="worker-1",
+        workspace_mode="worktree",
+        write_access=True,
+        run_id="run-123",
+    )
+
+    assert mock_run.call_args_list[1][0][0] == [
+        "git", "worktree", "add", str(wt_root / "worker-1"), "-b", "attoswarm/run-123/worker-1",
+    ]
+
+
+@patch("attoswarm.workspace.worktree.subprocess.run")
+def test_ensure_workspace_uses_base_ref_when_provided(mock_run: MagicMock, tmp_path: Path) -> None:
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    (repo / ".git").mkdir()
+    wt_root = tmp_path / "worktrees"
+
+    ensure_workspace_for_agent(
+        repo_root=repo,
+        worktrees_root=wt_root,
+        agent_id="worker-1",
+        workspace_mode="worktree",
+        write_access=True,
+        base_ref="attoswarm/parent",
+    )
+
+    assert mock_run.call_args_list[1][0][0] == [
+        "git", "worktree", "add", str(wt_root / "worker-1"), "-b", "attoswarm/worker-1", "attoswarm/parent",
+    ]
+
+
+@patch("attoswarm.workspace.worktree.subprocess.run")
 def test_cleanup_worktrees_removes_all(mock_run: MagicMock, tmp_path: Path) -> None:
     repo = tmp_path / "repo"
     repo.mkdir()
@@ -219,6 +262,25 @@ def test_cleanup_worktrees_removes_all(mock_run: MagicMock, tmp_path: Path) -> N
 
 
 @patch("attoswarm.workspace.worktree.subprocess.run")
+def test_cleanup_worktrees_uses_run_scoped_branch_names(mock_run: MagicMock, tmp_path: Path) -> None:
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    wt_root = tmp_path / "worktrees"
+    (wt_root / "worker-1").mkdir(parents=True)
+
+    cleanup_worktrees(repo, wt_root, run_id="run-123")
+
+    assert mock_run.call_args_list[1][0][0] == [
+        "git", "branch", "-D", "attoswarm/run-123/worker-1",
+    ]
+
+
+@patch("attoswarm.workspace.worktree.subprocess.run")
 def test_cleanup_worktrees_noop_when_no_dir(mock_run: MagicMock, tmp_path: Path) -> None:
     cleanup_worktrees(tmp_path / "repo", tmp_path / "nonexistent")
     mock_run.assert_not_called()
+
+
+def test_agent_branch_name_includes_run_id() -> None:
+    assert _agent_branch_name("run-123", "worker-1") == "attoswarm/run-123/worker-1"
+    assert _agent_branch_name("", "worker-1") == "attoswarm/worker-1"

@@ -40,12 +40,20 @@ def _delete_branch(repo_root: Path, branch_name: str) -> None:
         pass  # Branch may not exist — that's fine.
 
 
+def _agent_branch_name(run_id: str, agent_id: str) -> str:
+    if run_id:
+        return f"attoswarm/{run_id}/{agent_id}"
+    return f"attoswarm/{agent_id}"
+
+
 def ensure_workspace_for_agent(
     repo_root: Path,
     worktrees_root: Path,
     agent_id: str,
     workspace_mode: str,
     write_access: bool,
+    run_id: str = "",
+    base_ref: str | None = None,
 ) -> Path:
     if workspace_mode != "worktree" or not write_access:
         return repo_root
@@ -62,14 +70,18 @@ def ensure_workspace_for_agent(
         return path
 
     path.parent.mkdir(parents=True, exist_ok=True)
-    branch_name = f"attoswarm/{agent_id}"
+    branch_name = _agent_branch_name(run_id, agent_id)
 
     # Prune stale worktree bookkeeping before attempting creation.
     _prune_worktrees(repo_root)
 
+    create_cmd = ["git", "worktree", "add", str(path), "-b", branch_name]
+    if base_ref:
+        create_cmd.append(base_ref)
+
     try:
         subprocess.run(
-            ["git", "worktree", "add", str(path), "-b", branch_name],
+            create_cmd,
             cwd=repo_root,
             check=True,
             capture_output=True,
@@ -80,7 +92,7 @@ def ensure_workspace_for_agent(
         _delete_branch(repo_root, branch_name)
         try:
             subprocess.run(
-                ["git", "worktree", "add", str(path), "-b", branch_name],
+                create_cmd,
                 cwd=repo_root,
                 check=True,
                 capture_output=True,
@@ -94,7 +106,7 @@ def ensure_workspace_for_agent(
     return path
 
 
-def cleanup_worktrees(repo_root: Path, worktrees_root: Path) -> None:
+def cleanup_worktrees(repo_root: Path, worktrees_root: Path, run_id: str = "") -> None:
     """Remove all agent worktrees and their branches, then prune."""
     if not worktrees_root.exists():
         return
@@ -102,7 +114,7 @@ def cleanup_worktrees(repo_root: Path, worktrees_root: Path) -> None:
     for child in sorted(worktrees_root.iterdir()):
         if not child.is_dir():
             continue
-        branch_name = f"attoswarm/{child.name}"
+        branch_name = _agent_branch_name(run_id, child.name)
         try:
             subprocess.run(
                 ["git", "worktree", "remove", "--force", str(child)],

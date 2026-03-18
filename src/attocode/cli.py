@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import sys
+import os
 from typing import Any
 
 import click
@@ -635,15 +636,13 @@ def _run_tui(config: Any) -> None:
 def _run_swarm(config: Any, prompt: str) -> None:
     """Run in swarm multi-agent mode."""
     if getattr(config, "swarm_hybrid", False):
-        from attoswarm.cli import main as attoswarm_main
-
         args: list[str] = ["start"]
         if config.swarm_config:
             args.append(config.swarm_config)
         else:
             args.append(".attocode/swarm.hybrid.yaml")
         args.append(prompt)
-        attoswarm_main(args=args, standalone_mode=False)
+        _invoke_attoswarm(args)
         return
 
     import asyncio
@@ -743,16 +742,35 @@ def _run_swarm(config: Any, prompt: str) -> None:
 
 def _dispatch_swarm_command(parts: tuple[str, ...], *, debug: bool = False) -> None:
     """Support `attocode swarm ...` as a convenience wrapper around attoswarm."""
-    from attoswarm.cli import main as attoswarm_main
-
     args = list(parts)
     if not args:
         args = ["--help"]
     elif args[0] == "monitor":
         args[0] = "tui"
-    if debug and args and args[0] in ("start", "run"):
+    if debug and args and args[0] in ("start", "run", "continue"):
         args.insert(1, "--debug")
-    attoswarm_main(args=args, standalone_mode=False)
+    _invoke_attoswarm(args)
+
+
+def _invoke_attoswarm(args: list[str]) -> None:
+    """Invoke attoswarm while marking attocode as the launcher surface."""
+    from attoswarm.cli import main as attoswarm_main
+
+    prev_started = os.environ.get("ATTO_SWARM_STARTED_VIA")
+    prev_family = os.environ.get("ATTO_SWARM_COMMAND_FAMILY")
+    os.environ["ATTO_SWARM_STARTED_VIA"] = "attocode"
+    os.environ["ATTO_SWARM_COMMAND_FAMILY"] = "attocode swarm"
+    try:
+        attoswarm_main(args=args, standalone_mode=False)
+    finally:
+        if prev_started is None:
+            os.environ.pop("ATTO_SWARM_STARTED_VIA", None)
+        else:
+            os.environ["ATTO_SWARM_STARTED_VIA"] = prev_started
+        if prev_family is None:
+            os.environ.pop("ATTO_SWARM_COMMAND_FAMILY", None)
+        else:
+            os.environ["ATTO_SWARM_COMMAND_FAMILY"] = prev_family
 
 
 def _entry_point() -> None:

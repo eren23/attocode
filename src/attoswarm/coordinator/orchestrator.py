@@ -19,6 +19,7 @@ import os
 import signal
 import time
 import uuid
+from dataclasses import asdict
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
@@ -26,8 +27,10 @@ from attoswarm.coordinator.aot_graph import AoTGraph, AoTNode
 from attoswarm.coordinator.budget import BudgetCounter
 from attoswarm.coordinator.event_bus import EventBus, SwarmEvent
 from attoswarm.coordinator.subagent_manager import SubagentManager, TaskResult
-from attoswarm.protocol.io import write_json_atomic, write_json_fast
+from attoswarm.protocol.io import read_json, write_json_atomic, write_json_fast
 from attoswarm.protocol.models import (
+    LauncherInfo,
+    LineageSpec,
     SwarmManifest,
     TaskSpec,
     default_run_layout,
@@ -66,6 +69,8 @@ class SwarmOrchestrator:
         spawn_fn: Callable[..., Any] | None = None,
         trace_collector: Any = None,
         approval_mode: str = "auto",
+        lineage: LineageSpec | None = None,
+        launcher: LauncherInfo | None = None,
     ) -> None:
         self._config = config
         self._goal = goal
@@ -76,10 +81,18 @@ class SwarmOrchestrator:
         self._approved = False
 
         # Unique run ID
-        self._run_id = str(uuid.uuid4())[:8]
         wd = config.run.working_dir or "."
         self._root_dir = os.path.abspath(wd)
         self._run_dir = Path(config.run.run_dir)
+        resume_meta = self._load_resume_metadata() if resume else {}
+        self._run_id = str(
+            resume_meta.get("run_id")
+            or (lineage.run_id if lineage else "")
+            or str(uuid.uuid4())[:8]
+        )
+        self._lineage = lineage or LineageSpec.from_dict(resume_meta.get("lineage", {}))
+        self._launcher = launcher or LauncherInfo.from_dict(resume_meta.get("launcher", {}))
+        self._lineage.refresh(self._run_id, self._resume)
         self._internal_dir = self._run_dir / f"run-{self._run_id}"
         self._layout = default_run_layout(self._run_dir)
 
@@ -137,6 +150,13 @@ class SwarmOrchestrator:
         self._task_attempts: dict[str, int] = {}
         self._task_attempt_history: dict[str, list[dict[str, Any]]] = {}
         self._control_cursor: int = 0  # line offset into control.jsonl
+
+    def _load_resume_metadata(self) -> dict[str, Any]:
+        manifest = read_json(self._run_dir / "swarm.manifest.json", default={})
+        if isinstance(manifest, dict) and manifest.get("run_id"):
+            return manifest
+        state = read_json(self._run_dir / "swarm.state.json", default={})
+        return state if isinstance(state, dict) else {}
 
     # ------------------------------------------------------------------
     # Agent activity event callback (wired as event_callback in cli.py)
@@ -310,6 +330,8 @@ class SwarmOrchestrator:
             run_id=self._run_id,
             goal=self._goal,
             tasks=list(self._tasks.values()),
+            lineage=self._lineage,
+            launcher=self._launcher,
         )
         self._persist_manifest()
         self._persist_state()
@@ -357,7 +379,11 @@ class SwarmOrchestrator:
             try:
                 from attoswarm.workspace.git_safety import GitSafetyNet
                 self._git_safety = GitSafetyNet(self._root_dir, self._run_id, str(self._run_dir))
-                git_state = await self._git_safety.setup()
+                if self._resume and (self._run_dir / "git_safety.json").exists():
+                    self._git_safety.load_state()
+                    git_state = await self._git_safety.reattach()
+                else:
+                    git_state = await self._git_safety.setup(base_ref=self._lineage.base_ref or None)
                 if git_state.is_git_repo:
                     self._emit("info", message=f"Git safety: branch={git_state.swarm_branch}, stash={'yes' if git_state.stash_ref else 'no'}")
             except Exception as exc:
@@ -522,6 +548,8 @@ class SwarmOrchestrator:
             "run_id": self._run_id,
             "phase": self._phase,
             "goal": self._goal,
+            "lineage": asdict(self._lineage),
+            "launcher": asdict(self._launcher),
             "tasks": {
                 tid: {
                     "title": t.title,
@@ -557,6 +585,8 @@ class SwarmOrchestrator:
         data: dict[str, Any] = {
             "run_id": self._manifest.run_id,
             "goal": self._manifest.goal,
+            "lineage": asdict(self._lineage),
+            "launcher": asdict(self._launcher),
             "tasks": [
                 {
                     "task_id": t.task_id,
@@ -677,6 +707,8 @@ class SwarmOrchestrator:
             "run_id": self._run_id,
             "goal": self._goal,
             "phase": self._phase,
+            "lineage": asdict(self._lineage),
+            "launcher": asdict(self._launcher),
             "updated_at": utc_now_iso(),
             "dag": {"nodes": dag_nodes, "edges": dag_edges},
             "active_agents": active_agents,
@@ -1330,6 +1362,8 @@ class SwarmOrchestrator:
         """Bootstrap codebase orientation before decomposition."""
         ci_cfg = getattr(self._config, 'code_intel', None)
         if not self._code_intel or (ci_cfg and not ci_cfg.bootstrap_on_start):
+            if self._lineage.parent_summary:
+                return json.dumps({"parent_summary": self._lineage.parent_summary}, indent=2)
             return ""
         parts: list[str] = []
         try:
@@ -1350,6 +1384,12 @@ class SwarmOrchestrator:
                     parts.append(learnings)
             except Exception as exc:
                 logger.debug("Learning recall for goal failed: %s", exc)
+
+        if self._lineage.parent_summary:
+            parts.append(
+                "Parent swarm summary:\n"
+                + json.dumps(self._lineage.parent_summary, indent=2)
+            )
 
         ctx = "\n\n".join(parts)
         if ctx:

@@ -144,6 +144,36 @@ class TestSetup:
         data = json.loads((run_dir / "git_safety.json").read_text())
         assert data["stash_ref"] == "attoswarm-r1-pre-run"
 
+    @pytest.mark.asyncio
+    async def test_setup_records_base_ref(self, tmp_path: Path) -> None:
+        wd = tmp_path / "project"
+        wd.mkdir()
+        _make_git_repo(wd)
+        run_dir = tmp_path / "run"
+        run_dir.mkdir()
+        net = GitSafetyNet(str(wd), "r1", str(run_dir))
+        state = await net.setup(base_ref="HEAD")
+
+        assert state.base_ref == "HEAD"
+        data = json.loads((run_dir / "git_safety.json").read_text())
+        assert data["base_ref"] == "HEAD"
+
+    @pytest.mark.asyncio
+    async def test_reattach_restores_saved_branch(self, tmp_path: Path) -> None:
+        wd = tmp_path / "project"
+        wd.mkdir()
+        _make_git_repo(wd)
+        run_dir = tmp_path / "run"
+        run_dir.mkdir()
+
+        net = GitSafetyNet(str(wd), "r1", str(run_dir))
+        await net.setup()
+
+        resumed = GitSafetyNet(str(wd), "r1", str(run_dir))
+        resumed.load_state()
+        state = await resumed.reattach()
+        assert state.swarm_branch == "attoswarm/r1"
+
 
 # ── finalize ──────────────────────────────────────────────────────────
 
@@ -178,6 +208,23 @@ class TestFinalize:
         await net.setup()
         # Should not raise
         await net.finalize("merge")
+
+    @pytest.mark.asyncio
+    async def test_finalize_keep_records_result_ref(self, tmp_path: Path) -> None:
+        wd = tmp_path / "project"
+        wd.mkdir()
+        _make_git_repo(wd)
+        run_dir = tmp_path / "run"
+        run_dir.mkdir()
+        net = GitSafetyNet(str(wd), "r1", str(run_dir))
+        await net.setup()
+
+        (wd / "new_file.txt").write_text("content")
+        await net.finalize("keep")
+
+        data = json.loads((run_dir / "git_safety.json").read_text())
+        assert data["finalization_mode"] == "keep"
+        assert data["result_ref"] == "attoswarm/r1"
 
 
 # ── create_swarm_commit ───────────────────────────────────────────────

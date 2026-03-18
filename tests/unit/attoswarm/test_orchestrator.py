@@ -19,7 +19,7 @@ from attoswarm.coordinator.aot_graph import AoTGraph, AoTNode
 from attoswarm.coordinator.orchestrator import SwarmOrchestrator
 from attoswarm.coordinator.subagent_manager import TaskResult
 from attoswarm.protocol.io import read_json
-from attoswarm.protocol.models import TaskSpec
+from attoswarm.protocol.models import LauncherInfo, LineageSpec, TaskSpec
 
 
 @pytest.fixture()
@@ -258,6 +258,15 @@ class TestPersistState:
         state = read_json(orch._layout["state"], default={})
         assert ["t1", "t2"] in state["dag"]["edges"]
 
+    def test_includes_lineage_and_launcher(self, orch: SwarmOrchestrator) -> None:
+        orch._lineage = LineageSpec(parent_run_id="parent-1", continuation_mode="child")
+        orch._launcher = LauncherInfo(started_via="attocode", command_family="attocode swarm")
+        orch._persist_state()
+
+        state = read_json(orch._layout["state"], default={})
+        assert state["lineage"]["parent_run_id"] == "parent-1"
+        assert state["launcher"]["started_via"] == "attocode"
+
     def test_enriched_dag_nodes(self, orch: SwarmOrchestrator) -> None:
         _add_task(orch, "t1", target_files=["src/a.py"])
         orch._tasks["t1"].result_summary = "Done"
@@ -328,6 +337,25 @@ class TestPersistManifest:
         orch._manifest = None
         orch._persist_manifest()  # should not raise
 
+    def test_includes_lineage_and_launcher(self, orch: SwarmOrchestrator) -> None:
+        from attoswarm.protocol.models import SwarmManifest
+
+        orch._lineage = LineageSpec(parent_run_id="parent-1", continuation_mode="child")
+        orch._launcher = LauncherInfo(started_via="attocode", command_family="attocode swarm")
+        _add_task(orch, "t1")
+        orch._manifest = SwarmManifest(
+            run_id=orch._run_id,
+            goal="test goal",
+            tasks=list(orch._tasks.values()),
+            lineage=orch._lineage,
+            launcher=orch._launcher,
+        )
+        orch._persist_manifest()
+
+        data = read_json(orch._layout["manifest"], default={})
+        assert data["lineage"]["parent_run_id"] == "parent-1"
+        assert data["launcher"]["started_via"] == "attocode"
+
 
 # ── get_state ─────────────────────────────────────────────────────────
 
@@ -355,6 +383,22 @@ class TestGetState:
         state = orch.get_state()
         assert "dag_summary" in state
         assert state["dag_summary"]["done"] == 1
+
+
+class TestResumeIdentity:
+    def test_resume_uses_existing_run_id(self, tmp_path: Path) -> None:
+        run_dir = tmp_path / "run"
+        run_dir.mkdir()
+        (run_dir / "swarm.manifest.json").write_text(
+            json.dumps({"run_id": "existing-123", "goal": "resume me"}),
+            encoding="utf-8",
+        )
+
+        cfg = SwarmYamlConfig()
+        cfg.run.run_dir = str(run_dir)
+        orch = SwarmOrchestrator(cfg, "resume me", resume=True)
+
+        assert orch.run_id == "existing-123"
 
 
 # ── _decompose_goal ──────────────────────────────────────────────────

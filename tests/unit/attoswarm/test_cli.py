@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from pathlib import Path
 
 from click.testing import CliRunner
@@ -19,6 +20,38 @@ roles:
     backend: claude
     model: claude-sonnet-4-20250514
 """,
+        encoding="utf-8",
+    )
+
+
+def _write_parent_run(path: Path, run_id: str = "parent-123") -> None:
+    path.mkdir(parents=True, exist_ok=True)
+    (path / "swarm.manifest.json").write_text(
+        json.dumps({
+            "run_id": run_id,
+            "goal": "parent goal",
+            "lineage": {"run_id": run_id, "root_run_id": run_id, "continuation_mode": "fresh"},
+            "tasks": [{"task_id": "t1"}],
+        }),
+        encoding="utf-8",
+    )
+    (path / "swarm.state.json").write_text(
+        json.dumps({
+            "run_id": run_id,
+            "goal": "parent goal",
+            "phase": "completed",
+            "dag_summary": {"done": 1, "failed": 0},
+            "dag": {"nodes": [{"task_id": "t1", "status": "done"}]},
+        }),
+        encoding="utf-8",
+    )
+    (path / "git_safety.json").write_text(
+        json.dumps({
+            "swarm_branch": f"attoswarm/{run_id}",
+            "result_ref": f"attoswarm/{run_id}",
+            "result_commit": "abc123",
+            "finalization_mode": "keep",
+        }),
         encoding="utf-8",
     )
 
@@ -176,3 +209,84 @@ def test_start_preview_no_monitor_falls_back_to_dry_run(tmp_path: Path, monkeypa
     )
     assert "dry-run" in result.output.lower() or "dry_run" in result.output.lower()
 
+
+def test_start_continue_from_builds_child_lineage(tmp_path: Path, monkeypatch) -> None:
+    cfg = tmp_path / "swarm.yaml"
+    _write_config(cfg)
+    parent_run = tmp_path / ".agent" / "hybrid-swarm" / "parent"
+    _write_parent_run(parent_run)
+    monkeypatch.setattr("shutil.which", lambda _: "/usr/bin/claude")
+
+    from unittest.mock import MagicMock
+
+    captured: dict[str, object] = {}
+
+    class FakeOrch:
+        _subagent_mgr = MagicMock()
+
+        def __init__(self, cfg, goal, **kwargs):
+            captured["run_dir"] = cfg.run.run_dir
+            captured["lineage"] = kwargs.get("lineage")
+            captured["launcher"] = kwargs.get("launcher")
+            self._subagent_mgr._spawn_fn = None
+            self.aot_graph = MagicMock(summary=lambda: {"done": 0, "failed": 0, "total": 0})
+            self.budget = MagicMock(used_cost_usd=0.0)
+            self._change_manifest = None
+            self._git_safety = None
+            self._on_agent_activity = MagicMock()
+
+        async def run(self):
+            return 0
+
+    monkeypatch.setattr("attoswarm.coordinator.orchestrator.SwarmOrchestrator", FakeOrch)
+
+    runner = CliRunner()
+    result = runner.invoke(
+        main,
+        ["start", str(cfg), "--continue-from", str(parent_run), "--no-monitor", "--skip-doctor", "child goal"],
+    )
+
+    assert result.exit_code == 0
+    lineage = captured["lineage"]
+    assert getattr(lineage, "parent_run_id") == "parent-123"
+    assert getattr(lineage, "continuation_mode") == "child"
+    assert getattr(lineage, "base_ref") == "attoswarm/parent-123"
+    assert Path(str(captured["run_dir"])) != parent_run
+
+
+def test_continue_command_invokes_child_run(tmp_path: Path, monkeypatch) -> None:
+    cfg = tmp_path / "swarm.yaml"
+    _write_config(cfg)
+    parent_run = tmp_path / ".agent" / "hybrid-swarm" / "parent"
+    _write_parent_run(parent_run)
+    monkeypatch.setattr("shutil.which", lambda _: "/usr/bin/claude")
+
+    from unittest.mock import MagicMock
+
+    captured: dict[str, object] = {}
+
+    class FakeOrch:
+        _subagent_mgr = MagicMock()
+
+        def __init__(self, cfg, goal, **kwargs):
+            captured["lineage"] = kwargs.get("lineage")
+            self._subagent_mgr._spawn_fn = None
+            self.aot_graph = MagicMock(summary=lambda: {"done": 0, "failed": 0, "total": 0})
+            self.budget = MagicMock(used_cost_usd=0.0)
+            self._change_manifest = None
+            self._git_safety = None
+            self._on_agent_activity = MagicMock()
+
+        async def run(self):
+            return 0
+
+    monkeypatch.setattr("attoswarm.coordinator.orchestrator.SwarmOrchestrator", FakeOrch)
+
+    runner = CliRunner()
+    result = runner.invoke(
+        main,
+        ["continue", str(parent_run), "--config", str(cfg), "--no-monitor", "--skip-doctor", "child goal"],
+    )
+
+    assert result.exit_code == 0
+    assert getattr(captured["lineage"], "parent_run_id") == "parent-123"

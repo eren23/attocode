@@ -948,7 +948,11 @@ class TestStoresDiffAndHistory:
             json.dumps({"run_id": "run-bbb", "phase": "shutdown"}),
         )
         (run2 / "swarm.manifest.json").write_text(
-            json.dumps({"goal": "second goal", "tasks": [{"task_id": "t1"}, {"task_id": "t2"}]}),
+            json.dumps({
+                "goal": "second goal",
+                "lineage": {"continuation_mode": "child", "parent_run_id": "run-aaa"},
+                "tasks": [{"task_id": "t1"}, {"task_id": "t2"}],
+            }),
         )
 
         store = StateStore(str(tmp_path))
@@ -960,6 +964,8 @@ class TestStoresDiffAndHistory:
         assert runs[0]["goal"] == "second goal"
         assert runs[0]["phase"] == "shutdown"
         assert runs[0]["task_count"] == 2
+        assert runs[0]["continuation_mode"] == "child"
+        assert runs[0]["parent_run_id"] == "run-aaa"
         assert runs[1]["run_id"] == "run-aaa"
         assert runs[1]["goal"] == "first goal"
         assert runs[1]["task_count"] == 1

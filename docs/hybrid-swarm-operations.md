@@ -36,7 +36,7 @@ Preflight backend checks:
 attocode swarm doctor .attocode/swarm.hybrid.yaml
 ```
 
-Run with `attoswarm` directly:
+Run with `attoswarm` directly (engine CLI; canonical user entrypoint is `attocode swarm`):
 
 ```bash
 attoswarm run .attocode/swarm.hybrid.yaml "Implement a tiny feature and tests"
@@ -60,6 +60,12 @@ Resume from existing run-dir:
 attoswarm run .attocode/swarm.hybrid.yaml --run-dir .agent/hybrid-swarm/demo-1 --resume "task"
 # or
 attoswarm resume .agent/hybrid-swarm/demo-1
+```
+
+Start a new child swarm from a previous swarm:
+
+```bash
+attocode swarm continue .agent/hybrid-swarm/demo-1 "Build on the previous swarm output"
 ```
 
 Open dashboard:
@@ -292,7 +298,7 @@ For deeper debugging, inspect inbox/outbox files in parallel while TUI is runnin
 Use `--preview` to review the decomposed task plan before execution starts:
 
 ```bash
-attoswarm start .attocode/swarm.hybrid.yaml --preview "Implement feature X"
+attocode swarm start .attocode/swarm.hybrid.yaml --preview "Implement feature X"
 attoswarm quick --preview "Refactor module Y"
 ```
 
@@ -314,7 +320,7 @@ By default, swarm runs create a dedicated branch (`attoswarm/<run-id>`) and stas
 
 ```bash
 attoswarm quick --no-git-safety "test task"
-attoswarm start config.yaml --no-git-safety "test task"
+attocode swarm start config.yaml --no-git-safety "test task"
 ```
 
 Git safety state is persisted to `git_safety.json` in the run directory for the TUI completion screen.

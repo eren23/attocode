@@ -91,6 +91,60 @@ class CodeIndexSpec:
 
 
 @dataclass(slots=True)
+class LauncherInfo:
+    started_via: str = "attoswarm"
+    command_family: str = "attoswarm"
+
+    @classmethod
+    def from_dict(cls, raw: Any) -> LauncherInfo:
+        if not isinstance(raw, dict):
+            return cls()
+        return cls(
+            started_via=str(raw.get("started_via", "attoswarm")),
+            command_family=str(raw.get("command_family", "attoswarm")),
+        )
+
+
+@dataclass(slots=True)
+class LineageSpec:
+    run_id: str = ""
+    parent_run_id: str = ""
+    parent_run_dir: str = ""
+    root_run_id: str = ""
+    continuation_mode: str = "fresh"  # fresh | resume | child
+    base_ref: str = ""
+    base_commit: str = ""
+    parent_summary: dict[str, Any] = field(default_factory=dict)
+
+    def refresh(self, run_id: str, is_resume: bool) -> None:
+        self.run_id = run_id
+        if self.parent_run_id:
+            self.continuation_mode = "child"
+        elif is_resume:
+            self.continuation_mode = "resume"
+        else:
+            self.continuation_mode = "fresh"
+        if not self.root_run_id:
+            self.root_run_id = self.parent_run_id or run_id
+
+    @classmethod
+    def from_dict(cls, raw: Any) -> LineageSpec:
+        if not isinstance(raw, dict):
+            return cls()
+        parent_summary = raw.get("parent_summary", {})
+        return cls(
+            run_id=str(raw.get("run_id", "")),
+            parent_run_id=str(raw.get("parent_run_id", "")),
+            parent_run_dir=str(raw.get("parent_run_dir", "")),
+            root_run_id=str(raw.get("root_run_id", "")),
+            continuation_mode=str(raw.get("continuation_mode", "fresh") or "fresh"),
+            base_ref=str(raw.get("base_ref", "")),
+            base_commit=str(raw.get("base_commit", "")),
+            parent_summary=parent_summary if isinstance(parent_summary, dict) else {},
+        )
+
+
+@dataclass(slots=True)
 class SwarmManifest:
     schema_version: SchemaVersion = "1.0"
     run_id: str = ""
@@ -101,6 +155,8 @@ class SwarmManifest:
     budget: BudgetSpec = field(default_factory=BudgetSpec)
     merge_policy: MergePolicy = field(default_factory=MergePolicy)
     code_index: CodeIndexSpec = field(default_factory=CodeIndexSpec)
+    lineage: LineageSpec = field(default_factory=LineageSpec)
+    launcher: LauncherInfo = field(default_factory=LauncherInfo)
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)
@@ -167,6 +223,7 @@ class AgentState:
 class SwarmState:
     schema_version: SchemaVersion = "1.0"
     run_id: str = ""
+    goal: str = ""
     phase: str = "init"
     updated_at: str = field(default_factory=utc_now_iso)
     tasks: dict[str, int] = field(default_factory=dict)
@@ -186,6 +243,8 @@ class SwarmState:
     agent_messages_index: dict[str, Any] = field(default_factory=dict)
     dag_summary: dict[str, int] = field(default_factory=dict)
     elapsed_s: float = 0.0
+    lineage: LineageSpec = field(default_factory=LineageSpec)
+    launcher: LauncherInfo = field(default_factory=LauncherInfo)
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)

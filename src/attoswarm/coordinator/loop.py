@@ -70,6 +70,8 @@ from attoswarm.protocol.models import (
     AgentInbox,
     AgentOutbox,
     BudgetSpec,
+    LauncherInfo,
+    LineageSpec,
     MergePolicy,
     RoleSpec,
     SwarmManifest,
@@ -109,12 +111,22 @@ TRANSITIONS: dict[str, set[str]] = {
 
 
 class HybridCoordinator:
-    def __init__(self, config: SwarmYamlConfig, goal: str, *, resume: bool = False) -> None:
+    def __init__(
+        self,
+        config: SwarmYamlConfig,
+        goal: str,
+        *,
+        resume: bool = False,
+        lineage: LineageSpec | None = None,
+        launcher: LauncherInfo | None = None,
+    ) -> None:
         self.config = config
         self.goal = goal
         self.resume = resume
         self.run_id = f"run_{uuid.uuid4().hex[:12]}"
         self.layout = default_run_layout(Path(config.run.run_dir))
+        self._lineage = lineage or LineageSpec()
+        self._launcher = launcher or LauncherInfo()
 
         self.manifest: SwarmManifest | None = None
         self.task_state: dict[str, str] = {}
@@ -143,6 +155,8 @@ class HybridCoordinator:
 
         self.errors: list[dict[str, Any]] = []
         self.transition_log: list[dict[str, Any]] = []
+
+        self._lineage.refresh(self.run_id, self.resume)
 
     async def run(self) -> int:
         try:
@@ -255,7 +269,11 @@ class HybridCoordinator:
             tasks=tasks,
             budget=budget,
             merge_policy=merge,
+            lineage=self._lineage,
+            launcher=self._launcher,
         )
+        self._lineage.refresh(self.run_id, self.resume)
+        self.manifest.lineage = self._lineage
         for task in tasks:
             self.task_state[task.task_id] = task.status
             self.task_attempts[task.task_id] = 0
@@ -315,6 +333,12 @@ class HybridCoordinator:
             self.task_attempts[task.task_id] = int(task_raw.get("attempts", 0))
 
         self.run_id = str(raw.get("run_id", self.run_id))
+        manifest_lineage = LineageSpec.from_dict(raw.get("lineage", {}))
+        manifest_launcher = LauncherInfo.from_dict(raw.get("launcher", {}))
+        if manifest_lineage.run_id or manifest_lineage.parent_run_id:
+            self._lineage = manifest_lineage
+        self._launcher = manifest_launcher
+        self._lineage.refresh(self.run_id, self.resume)
         budget = BudgetSpec(
             max_tokens=int(raw.get("budget", {}).get("max_tokens", self.config.budget.max_tokens)),
             max_cost_usd=float(raw.get("budget", {}).get("max_cost_usd", self.config.budget.max_cost_usd)),
@@ -341,6 +365,8 @@ class HybridCoordinator:
             tasks=tasks,
             budget=budget,
             merge_policy=merge,
+            lineage=self._lineage,
+            launcher=self._launcher,
         )
 
         state_raw = read_json(self.layout["state"], default={})
@@ -377,6 +403,8 @@ class HybridCoordinator:
                         agent_id=agent_id,
                         workspace_mode=role.workspace_mode,
                         write_access=role.write_access,
+                        run_id=self.run_id,
+                        base_ref=self._lineage.base_ref or None,
                     )
                     spec = AgentProcessSpec(
                         agent_id=agent_id,
@@ -506,6 +534,7 @@ class HybridCoordinator:
             write_state(
                 state_path=str(self.layout["state"]),
                 run_id=self.run_id,
+                goal=self.goal,
                 phase=phase,
                 tasks=tasks,
                 active_agents=self._active_agents(),
@@ -531,6 +560,8 @@ class HybridCoordinator:
                 agent_messages_index={"agents_dir": self.layout["agents"].name},
                 elapsed_s=time.monotonic() - started_at,
                 timeout_overrides=self._task_timeout_overrides or None,
+                lineage=self._lineage,
+                launcher=self._launcher,
             )
             if phase in {"completed", "failed"}:
                 break
@@ -572,6 +603,7 @@ class HybridCoordinator:
         cleanup_worktrees(
             repo_root=Path(self.config.run.working_dir),
             worktrees_root=self.layout["worktrees"],
+            run_id=self.run_id,
         )
 
     def _detect_file_changes(self, agent_id: str, task_id: str) -> None:

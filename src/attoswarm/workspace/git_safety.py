@@ -25,6 +25,11 @@ class GitSafetyState:
     swarm_branch: str = ""
     stash_ref: str = ""
     pre_run_head: str = ""
+    base_ref: str = ""
+    base_commit: str = ""
+    result_ref: str = ""
+    result_commit: str = ""
+    finalization_mode: str = ""
 
 
 class GitSafetyNet:
@@ -40,7 +45,28 @@ class GitSafetyNet:
     def state(self) -> GitSafetyState:
         return self._state
 
-    async def setup(self) -> GitSafetyState:
+    def load_state(self) -> GitSafetyState:
+        """Load persisted git safety state if present."""
+        from attoswarm.protocol.io import read_json
+
+        state_path = Path(self._run_dir) / "git_safety.json"
+        raw = read_json(state_path, default={})
+        if isinstance(raw, dict):
+            self._state = GitSafetyState(
+                is_git_repo=bool(raw.get("is_git_repo", False)),
+                original_branch=str(raw.get("original_branch", "")),
+                swarm_branch=str(raw.get("swarm_branch", "")),
+                stash_ref=str(raw.get("stash_ref", "")),
+                pre_run_head=str(raw.get("pre_run_head", "")),
+                base_ref=str(raw.get("base_ref", "")),
+                base_commit=str(raw.get("base_commit", "")),
+                result_ref=str(raw.get("result_ref", "")),
+                result_commit=str(raw.get("result_commit", "")),
+                finalization_mode=str(raw.get("finalization_mode", "")),
+            )
+        return self._state
+
+    async def setup(self, base_ref: str | None = None) -> GitSafetyState:
         """Check if git repo, stash uncommitted changes, create swarm branch."""
         if not Path(self._wd, ".git").exists():
             self._state.is_git_repo = False
@@ -61,6 +87,12 @@ class GitSafetyNet:
         rc, head = await self._git("rev-parse", "HEAD")
         if rc == 0:
             self._state.pre_run_head = head.strip()
+        self._state.base_ref = base_ref or self._state.original_branch
+        rc, base_head = await self._git("rev-parse", self._state.base_ref)
+        if rc == 0:
+            self._state.base_commit = base_head.strip()
+        elif head:
+            self._state.base_commit = head.strip()
 
         # Stash uncommitted changes (if any)
         rc, status = await self._git("status", "--porcelain")
@@ -73,13 +105,29 @@ class GitSafetyNet:
 
         # Create swarm branch
         swarm_branch = f"attoswarm/{self._run_id}"
-        rc, _ = await self._git("checkout", "-b", swarm_branch)
+        create_args = ("checkout", "-b", swarm_branch, base_ref) if base_ref else ("checkout", "-b", swarm_branch)
+        rc, _ = await self._git(*create_args)
         if rc == 0:
             self._state.swarm_branch = swarm_branch
             logger.info("Created swarm branch: %s", swarm_branch)
         else:
             logger.warning("Failed to create swarm branch %s", swarm_branch)
 
+        self._persist_state()
+        return self._state
+
+    async def reattach(self) -> GitSafetyState:
+        """Reattach to a previously-created swarm branch on resume."""
+        if not Path(self._wd, ".git").exists():
+            self._state.is_git_repo = False
+            self._persist_state()
+            return self._state
+
+        self._state.is_git_repo = True
+        if self._state.swarm_branch:
+            rc, _ = await self._git("checkout", self._state.swarm_branch)
+            if rc != 0:
+                logger.warning("Failed to reattach swarm branch %s", self._state.swarm_branch)
         self._persist_state()
         return self._state
 
@@ -99,7 +147,12 @@ class GitSafetyNet:
             return False  # Nothing staged
 
         rc, _ = await self._git("commit", "-m", msg)
-        return rc == 0
+        if rc == 0:
+            self._state.result_ref = self._state.swarm_branch
+            self._state.result_commit = await self._current_head()
+            self._persist_state()
+            return True
+        return False
 
     async def finalize(self, mode: str = "keep") -> None:
         """Finalize the swarm run: merge, keep, or discard the swarm branch.
@@ -117,23 +170,32 @@ class GitSafetyNet:
             if self._state.swarm_branch:
                 await self._git("branch", "-D", self._state.swarm_branch)
             await self.revert_all()
+            self._state.result_ref = ""
+            self._state.result_commit = ""
         elif mode == "merge":
             await self.create_swarm_commit()
             await self._git("checkout", self._state.original_branch)
             if self._state.swarm_branch:
                 rc, out = await self._git("merge", self._state.swarm_branch)
                 if rc == 0:
+                    self._state.result_ref = self._state.original_branch
+                    self._state.result_commit = await self._current_head()
                     logger.info("Merged swarm branch into %s", self._state.original_branch)
                 else:
                     logger.warning("Merge failed: %s", out[:200])
         else:  # "keep"
             await self.create_swarm_commit()
+            swarm_head = await self._resolve_ref(self._state.swarm_branch)
             await self._git("checkout", self._state.original_branch)
+            self._state.result_ref = self._state.swarm_branch
+            if not self._state.result_commit:
+                self._state.result_commit = swarm_head
             logger.info(
                 "Swarm branch preserved: %s (review with: git log %s)",
                 self._state.swarm_branch,
                 self._state.swarm_branch,
             )
+        self._state.finalization_mode = mode
 
         # Pop stash if we stashed
         if self._state.stash_ref:
@@ -193,3 +255,13 @@ class GitSafetyNet:
         out = (stdout or b"").decode("utf-8", errors="replace")
         assert proc.returncode is not None
         return proc.returncode, out
+
+    async def _current_head(self) -> str:
+        rc, head = await self._git("rev-parse", "HEAD")
+        return head.strip() if rc == 0 else ""
+
+    async def _resolve_ref(self, ref: str) -> str:
+        if not ref:
+            return ""
+        rc, head = await self._git("rev-parse", ref)
+        return head.strip() if rc == 0 else ""
