@@ -104,6 +104,11 @@ _register("gpt-4o-mini", _OPENAI_BASE, max_output_tokens=16_384, max_input_token
 _register("gpt-4-turbo", _OPENAI_BASE, max_output_tokens=4096, max_input_tokens=128_000)
 _register("o1", _OPENAI_BASE | {Capability.EXTENDED_THINKING}, max_output_tokens=100_000, max_input_tokens=200_000)
 _register("o3-mini", _OPENAI_BASE | {Capability.EXTENDED_THINKING}, max_output_tokens=100_000, max_input_tokens=200_000)
+_register("gpt-5.4", _OPENAI_BASE | {Capability.EXTENDED_THINKING, Capability.PROMPT_CACHING}, max_output_tokens=32_000, max_input_tokens=1_000_000)
+_register("gpt-5.4-mini", _OPENAI_BASE | {Capability.PROMPT_CACHING}, max_output_tokens=32_000, max_input_tokens=1_000_000)
+_register("gpt-5.4-nano", {Capability.TOOL_USE, Capability.STREAMING, Capability.STRUCTURED_OUTPUT}, max_output_tokens=16_384, max_input_tokens=128_000)
+_register("gpt-5.3-codex", {Capability.TOOL_USE, Capability.STREAMING, Capability.STRUCTURED_OUTPUT, Capability.EXTENDED_THINKING}, max_output_tokens=100_000, max_input_tokens=200_000)
+_register("gpt-5.2-codex", {Capability.TOOL_USE, Capability.STREAMING, Capability.STRUCTURED_OUTPUT, Capability.EXTENDED_THINKING}, max_output_tokens=100_000, max_input_tokens=200_000)
 
 # Google models
 _register("gemini-2.0-flash", _OPENAI_BASE, max_output_tokens=8192, max_input_tokens=1_000_000)

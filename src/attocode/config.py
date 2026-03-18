@@ -26,7 +26,7 @@ USER_DIR_NAME = ".attocode"
 PROVIDER_MODEL_DEFAULTS: dict[str, str] = {
     "anthropic": "claude-sonnet-4-20250514",
     "openrouter": "anthropic/claude-sonnet-4",
-    "openai": "gpt-4o",
+    "openai": "gpt-5.4-mini",
     "zai": "glm-5",
 }
 
@@ -49,8 +49,10 @@ PROVIDER_MODEL_OPTIONS: dict[str, list[str]] = {
         "openai/gpt-4o",
     ],
     "openai": [
+        "gpt-5.4-mini",
+        "gpt-5.4",
+        "gpt-5.3-codex",
         "gpt-4o",
-        "gpt-4-turbo",
         "o3-mini",
     ],
     "zai": [

@@ -31,6 +31,7 @@ node_modules/
 .attocode/dev-state.json
 .attocode/config.toml
 .attocode/vectors
+attocode/attocode_py/.attocode/cache
 
 # Legacy TS runtime artifacts
 legacy/.attocode/traces/

@@ -184,7 +184,7 @@ roles:
   - role_id: merger
     role_type: merger
     backend: codex
-    model: o3
+    model: gpt-5.3-codex
     count: 1
     write_access: true
     workspace_mode: worktree
@@ -199,6 +199,54 @@ merge:
   judge_roles: []
   quality_threshold: 0.5
 ```
+
+> **Tip:** Replace `backend: codex` with `backend: codex-mcp` to use the
+> MCP server mode for multi-turn worker support (requires Codex v0.115+).
+
+### C. Claude + Codex MCP (multi-turn)
+
+```yaml
+version: 1
+run:
+  working_dir: .
+  run_dir: .agent/hybrid-swarm/cc-codex-mcp
+  poll_interval_ms: 250
+  max_runtime_seconds: 300
+
+roles:
+  - role_id: impl
+    role_type: worker
+    backend: claude
+    model: claude-sonnet-4-20250514
+    count: 1
+    write_access: true
+    workspace_mode: worktree
+    task_kinds: [implement]
+
+  - role_id: merger
+    role_type: merger
+    backend: codex-mcp
+    model: gpt-5.3-codex
+    count: 1
+    write_access: true
+    workspace_mode: worktree
+    task_kinds: [merge]
+
+budget:
+  max_tokens: 500000
+  max_cost_usd: 10
+
+merge:
+  authority_role: merger
+  judge_roles: []
+  quality_threshold: 0.5
+```
+
+The `codex-mcp` backend spawns a `codex mcp-server` process and uses
+JSON-RPC over stdio.  The first task message creates a new Codex thread;
+subsequent messages reuse the thread ID for multi-turn conversation.
+This is useful for merger and reviewer roles that need iterative
+dialogue with the model.
 
 ## 5. Test Matrix You Can Run Today
 

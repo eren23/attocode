@@ -206,7 +206,8 @@ class HybridCoordinator:
                 binary = cfg.command[0] if cfg.command[0] != "sh" else None
             else:
                 # Default commands wrap in sh -c; check the actual backend binary
-                binary = role.backend if role.backend in {"claude", "codex", "aider", "attocode"} else None
+                backend_binary = {"codex-mcp": "codex"}.get(role.backend, role.backend)
+                binary = backend_binary if backend_binary in {"claude", "codex", "aider", "attocode"} else None
             if binary and not shutil.which(binary):
                 self._append_event("preflight.warning", {
                     "role_id": role.role_id,
@@ -264,6 +265,12 @@ class HybridCoordinator:
 
     def _load_existing_run(self) -> None:
         raw = read_json(self.layout["manifest"], default={})
+        saved_version = raw.get("schema_version", "1.0")
+        if saved_version != "1.0":
+            log.warning(
+                "manifest schema_version %s differs from expected 1.0 — resume may be unreliable",
+                saved_version,
+            )
         roles: list[RoleSpec] = []
         for role in raw.get("roles", []):
             if not isinstance(role, dict):
@@ -689,8 +696,16 @@ class HybridCoordinator:
         return {"review_task_ids": review_ids, "statuses": statuses}
 
     def _build_index_snapshot(self) -> None:
-        index = CodeIndex.build(Path(self.config.run.working_dir))
-        index.save(self.layout["root"] / "index.snapshot.json")
+        try:
+            index = CodeIndex.build(Path(self.config.run.working_dir))
+            index.save(self.layout["root"] / "index.snapshot.json")
+        except Exception as exc:
+            log.warning("index snapshot build failed — continuing without it", exc_info=True)
+            self._append_event("index.snapshot_failed", {
+                "reason": "build_error",
+                "error": str(exc),
+                "error_type": type(exc).__name__,
+            })
 
     def _decompose_initial_tasks(self, roles: list[RoleSpec]) -> list[TaskSpec]:
         mode = self.config.orchestration.decomposition
@@ -702,7 +717,7 @@ class HybridCoordinator:
                     description=self.goal,
                     role_hint=roles[0].role_id if roles else None,
                     task_kind="implement",
-                    status="pending",
+                    status="ready",
                 )
             ]
 
@@ -746,7 +761,6 @@ class HybridCoordinator:
                     status="pending",
                 )
             )
-            self.task_state[tasks[0].task_id] = "ready"
             return tasks[: max(1, self.config.orchestration.max_tasks)]
 
         if mode == "parallel":
@@ -760,6 +774,12 @@ class HybridCoordinator:
             )
             return self._decompose_parallel(roles)
 
+        # Unknown mode string → default pipeline
+        if mode not in ("heuristic", "file"):
+            self._append_event(
+                "decomposition.fallback",
+                {"reason": "unknown_mode", "mode": mode, "using": "default_pipeline"},
+            )
         max_tasks = max(1, self.config.orchestration.max_tasks)
         role_worker = next((r.role_id for r in roles if r.role_type == "worker"), roles[0].role_id if roles else None)
         role_judge = next((r.role_id for r in roles if r.role_type == "judge"), None)
@@ -845,7 +865,6 @@ class HybridCoordinator:
         # first task ready for immediate dispatch
         if tasks:
             tasks[0].status = "ready"
-            self.task_state[tasks[0].task_id] = "ready"
         return tasks
 
     def _decompose_parallel(self, roles: list[RoleSpec]) -> list[TaskSpec]:
@@ -876,7 +895,6 @@ class HybridCoordinator:
                     status="ready",
                 ),
             ]
-            self.task_state["t0"] = "ready"
             return tasks[:max_tasks]
 
         # Build focus areas based on worker count.
@@ -906,7 +924,6 @@ class HybridCoordinator:
                 status="ready",
             )
             impl_tasks.append(task)
-            self.task_state[task.task_id] = "ready"
 
         integrate_idx = len(impl_tasks)
         integrate_task = TaskSpec(
@@ -1114,6 +1131,8 @@ class HybridCoordinator:
         if backend == "attocode":
             agent_cmd = f"attocode {model_flag}--non-interactive \"$line\""
             return ["sh", "-c", self._build_heartbeat_script(agent_cmd, debug=debug)]
+        if backend == "codex-mcp":
+            return ["codex", "mcp-server"]
         raise ValueError(f"Unsupported backend: {backend}")
 
     def _role_command(self, role: RoleSpec) -> list[str]:

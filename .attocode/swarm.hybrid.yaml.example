@@ -18,8 +18,8 @@ roles:
 
   - role_id: implementer
     role_type: worker
-    backend: codex
-    model: o3
+    backend: codex  # Use 'codex-mcp' for multi-turn orchestration
+    model: gpt-5.3-codex
     count: 2
     write_access: true
     workspace_mode: worktree
@@ -45,8 +45,8 @@ roles:
 
   - role_id: merger
     role_type: merger
-    backend: codex
-    model: o3
+    backend: codex  # Use 'codex-mcp' for multi-turn orchestration
+    model: gpt-5.3-codex
     count: 1
     write_access: true
     workspace_mode: worktree

@@ -31,7 +31,7 @@ if TYPE_CHECKING:
     from collections.abc import AsyncIterator
 
 DEFAULT_API_URL = "https://api.openai.com/v1/chat/completions"
-DEFAULT_MODEL = "gpt-4o"
+DEFAULT_MODEL = "gpt-5.4-mini"
 
 
 class OpenAIProvider:

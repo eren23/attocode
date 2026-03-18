@@ -125,6 +125,41 @@ def _build_backend_cmd(backend: str, model: str, prompt: str) -> list[str]:
     raise ValueError(f"Unsupported backend: {backend!r}")
 
 
+def _unwrap_codex_jsonl(raw: str) -> str:
+    """Extract LLM message from codex exec --json JSONL output.
+
+    Codex ``exec --json`` emits JSONL events.  The actual LLM response
+    lives in ``item.completed`` events where ``item.type == "agent_message"``.
+    We return the last such message text (multi-turn conversations produce
+    multiple ``item.completed`` events).
+    """
+    messages: list[str] = []
+    for line in raw.splitlines():
+        line = line.strip()
+        if not line:
+            continue
+        try:
+            obj = json.loads(line)
+        except (ValueError, json.JSONDecodeError):
+            continue
+        if not isinstance(obj, dict):
+            continue
+        # Current format: item.completed with agent_message
+        if obj.get("type") == "item.completed":
+            item = obj.get("item", {})
+            if isinstance(item, dict) and item.get("type") == "agent_message":
+                text = item.get("text", "")
+                if text:
+                    messages.append(text)
+        # Legacy format
+        elif obj.get("status") == "completed":
+            msg = obj.get("message", "")
+            if msg:
+                messages.append(msg)
+
+    return messages[-1] if messages else raw
+
+
 def _build_backend_cmd_stdin(backend: str, model: str, prompt: str) -> tuple[list[str], str]:
     """Build subprocess command + stdin text, piping prompt via stdin.
 
@@ -405,11 +440,14 @@ def _make_subprocess_decompose_fn(cfg: SwarmYamlConfig):  # noqa: ANN202
 
     custom_instructions = (cfg.orchestration.custom_instructions or "").strip()
 
+    # No codex preamble needed — codex decomposes fine when output is
+    # correctly unwrapped from JSONL events.
+
     def _build_decompose_prompt(goal: str, complexity: str = "", codebase_context: str = "") -> str:
         from attoswarm.coordinator.decompose import build_decompose_prompt, classify_goal_complexity
         if not complexity:
             complexity = classify_goal_complexity(goal)
-        return build_decompose_prompt(
+        prompt = build_decompose_prompt(
             goal,
             complexity=complexity,
             max_tasks=max_tasks,
@@ -417,16 +455,18 @@ def _make_subprocess_decompose_fn(cfg: SwarmYamlConfig):  # noqa: ANN202
             custom_instructions=custom_instructions,
             codebase_context=codebase_context,
         )
+        return prompt
 
     def _build_retry_prompt(goal: str, complexity: str = "") -> str:
         from attoswarm.coordinator.decompose import build_retry_prompt, classify_goal_complexity
         if not complexity:
             complexity = classify_goal_complexity(goal)
-        return build_retry_prompt(
+        prompt = build_retry_prompt(
             goal,
             complexity=complexity,
             custom_instructions=custom_instructions,
         )
+        return prompt
 
     def _parse_tasks(raw: str) -> list[_TaskSpec]:
         """Parse JSON output into TaskSpec list with validation."""
@@ -434,9 +474,7 @@ def _make_subprocess_decompose_fn(cfg: SwarmYamlConfig):  # noqa: ANN202
 
         data = extract_json_array(raw)
         if len(data) < 2:
-            raise ValueError(
-                f"Expected array with >=2 tasks, got {len(data)} items"
-            )
+            raise ValueError("Expected array with >=2 tasks, got %d items" % len(data))
 
         # Validate task_ids are unique
         ids = [t["task_id"] for t in data]
@@ -462,6 +500,8 @@ def _make_subprocess_decompose_fn(cfg: SwarmYamlConfig):  # noqa: ANN202
             )
             for t in data
         ]
+
+    # _unwrap_codex_jsonl is at module level (no closure deps)
 
     async def _run_decompose(prompt: str) -> list[_TaskSpec]:
         """Run a single decomposition attempt via subprocess."""
@@ -494,6 +534,10 @@ def _make_subprocess_decompose_fn(cfg: SwarmYamlConfig):  # noqa: ANN202
             raise RuntimeError(
                 f"Decomposition subprocess exited {proc.returncode}: {stderr_text[:500]}"
             )
+
+        # Codex --json wraps the LLM response in JSONL events; unwrap it
+        if backend == "codex":
+            stdout_text = _unwrap_codex_jsonl(stdout_text)
 
         return _parse_tasks(stdout_text)
 
@@ -1242,7 +1286,7 @@ def doctor_command(config_path: Path) -> None:
 
 @main.command("init")
 @click.argument("target_dir", type=click.Path(path_type=Path), required=False)
-@click.option("--profile", type=click.Choice(["2cc", "cc-codex", "cc-aider", "full-team", "custom"]), default=None)
+@click.option("--profile", type=click.Choice(["2cc", "cc-codex", "cc-aider", "2codex", "codex-cc", "full-team", "custom"]), default=None)
 @click.option("--mode", type=click.Choice(["minimal", "demo"]), default=None)
 def init_command(target_dir: Path | None, profile: str | None, mode: str | None) -> None:
     """Interactive starter generator for hybrid swarm."""
@@ -1267,11 +1311,13 @@ def init_command(target_dir: Path | None, profile: str | None, mode: str | None)
         click.echo("  [1] 2cc        - Two Claude Code agents (orchestrator + workers)")
         click.echo("  [2] cc-codex   - Claude orchestrator + Codex workers (fast + cheap)")
         click.echo("  [3] cc-aider   - Claude orchestrator + Aider workers")
-        click.echo("  [4] full-team  - Orchestrator + workers + judge + merger (quality-focused)")
-        click.echo("  [5] custom     - Configure each role manually")
+        click.echo("  [4] 2codex     - Pure Codex (orchestrator + workers, no Anthropic key needed)")
+        click.echo("  [5] codex-cc   - Codex orchestrator + Claude workers")
+        click.echo("  [6] full-team  - Orchestrator + workers + judge + merger (quality-focused)")
+        click.echo("  [7] custom     - Configure each role manually")
         profile = click.prompt(
             "Select backend profile",
-            type=click.Choice(["2cc", "cc-codex", "cc-aider", "full-team", "custom"]),
+            type=click.Choice(["2cc", "cc-codex", "cc-aider", "2codex", "codex-cc", "full-team", "custom"]),
             default="2cc",
         )
 
@@ -1377,10 +1423,12 @@ def init_command(target_dir: Path | None, profile: str | None, mode: str | None)
             "task_kinds": task_kinds,
         }
 
+    # Orchestrator backend: codex for codex-led profiles, claude otherwise
+    orch_backend = "codex" if profile in ("2codex", "codex-cc") else "claude"
     orch_role: dict[str, Any] = {
         "role_id": "orchestrator",
         "role_type": "orchestrator",
-        "backend": "claude",
+        "backend": orch_backend,
         "model": "",
         "count": 1,
         "task_kinds": ["analysis", "design"],
@@ -1394,14 +1442,28 @@ def init_command(target_dir: Path | None, profile: str | None, mode: str | None)
         # Split workers: half claude, half codex
         if worker_count <= 1:
             # Single worker: use primary backend only
-            roles = [orch_role, _worker_role("impl-codex", "codex", "o3", 1, impl_kinds)]
+            roles = [orch_role, _worker_role("impl-codex", "codex", "", 1, impl_kinds)]
         else:
             codex_count = worker_count // 2
             claude_count = worker_count - codex_count
             roles = [
                 orch_role,
                 _worker_role("impl-claude", "claude", "", claude_count, impl_kinds),
-                _worker_role("impl-codex", "codex", "o3", codex_count, impl_kinds),
+                _worker_role("impl-codex", "codex", "", codex_count, impl_kinds),
+            ]
+    elif profile == "2codex":
+        roles = [orch_role, _worker_role("impl", "codex", "", worker_count, impl_kinds)]
+    elif profile == "codex-cc":
+        # Codex orchestrator + Claude workers
+        if worker_count <= 1:
+            roles = [orch_role, _worker_role("impl-claude", "claude", "", 1, impl_kinds)]
+        else:
+            claude_count = worker_count // 2
+            codex_count = worker_count - claude_count
+            roles = [
+                orch_role,
+                _worker_role("impl-claude", "claude", "", claude_count, impl_kinds),
+                _worker_role("impl-codex", "codex", "", codex_count, impl_kinds),
             ]
     elif profile == "cc-aider":
         if worker_count <= 1:

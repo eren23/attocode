@@ -8,6 +8,7 @@ from attoswarm.adapters.aider import AiderAdapter
 from attoswarm.adapters.attocode import AttocodeAdapter
 from attoswarm.adapters.claude import ClaudeAdapter
 from attoswarm.adapters.codex import CodexAdapter
+from attoswarm.adapters.codex_mcp import CodexMcpAdapter
 
 if TYPE_CHECKING:
     from attoswarm.adapters.base import AgentAdapter
@@ -19,6 +20,8 @@ def get_adapter(backend: str) -> AgentAdapter:
         return ClaudeAdapter()
     if b == "codex":
         return CodexAdapter()
+    if b == "codex-mcp":
+        return CodexMcpAdapter()
     if b == "aider":
         return AiderAdapter()
     if b == "attocode":

@@ -99,6 +99,46 @@ models:
       input_per_million: 1.10
       output_per_million: 4.40
 
+  gpt-5.4:
+    provider: openai
+    max_context_tokens: 1000000
+    max_output_tokens: 32000
+    pricing:
+      input_per_million: 2.0
+      output_per_million: 8.0
+
+  gpt-5.4-mini:
+    provider: openai
+    max_context_tokens: 1000000
+    max_output_tokens: 32000
+    pricing:
+      input_per_million: 0.40
+      output_per_million: 1.60
+
+  gpt-5.4-nano:
+    provider: openai
+    max_context_tokens: 128000
+    max_output_tokens: 16384
+    pricing:
+      input_per_million: 0.10
+      output_per_million: 0.40
+
+  gpt-5.3-codex:
+    provider: openai
+    max_context_tokens: 200000
+    max_output_tokens: 100000
+    pricing:
+      input_per_million: 1.25
+      output_per_million: 10.0
+
+  gpt-5.2-codex:
+    provider: openai
+    max_context_tokens: 200000
+    max_output_tokens: 100000
+    pricing:
+      input_per_million: 1.25
+      output_per_million: 10.0
+
   glm-5:
     provider: zai
     max_context_tokens: 128000
