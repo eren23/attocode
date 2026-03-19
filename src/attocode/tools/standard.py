@@ -23,6 +23,8 @@ def create_standard_registry(
     provider_name: str | None = None,
     api_key: str | None = None,
     model: str | None = None,
+    project_root: str | None = None,
+    rules: list[str] | None = None,
 ) -> ToolRegistry:
     """Create a standard tool registry with all built-in tools."""
     registry = ToolRegistry()
@@ -35,7 +37,12 @@ def create_standard_registry(
     if enable_spawn_agent:
         from attocode.tools.agent import create_spawn_agent_tool
         registry.register(create_spawn_agent_tool(
-            working_dir, provider_name, api_key, model,
+            working_dir,
+            provider_name,
+            api_key,
+            model,
+            project_root=project_root,
+            rules=rules,
         ))
 
     if enable_vision:

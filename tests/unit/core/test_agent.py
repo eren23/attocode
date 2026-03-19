@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from types import SimpleNamespace
 from typing import Any
 
 import pytest
@@ -9,6 +10,7 @@ import pytest
 from attocode.agent.agent import ProductionAgent
 from attocode.agent.builder import AgentBuilder
 from attocode.agent.message_builder import DEFAULT_SYSTEM_PROMPT, build_initial_messages, build_system_prompt
+from attocode.integrations.persistence.store import SessionStore
 from attocode.providers.mock import MockProvider
 from attocode.tools.base import Tool, ToolSpec
 from attocode.tools.registry import ToolRegistry
@@ -61,6 +63,10 @@ class TestBuildInitialMessages:
     def test_custom_system_prompt(self) -> None:
         msgs = build_initial_messages("Hi", system_prompt="Custom system")
         assert msgs[0].content == "Custom system"
+
+    def test_includes_rules(self) -> None:
+        msgs = build_initial_messages("Hi", rules=["Python only"])
+        assert "Python only" in str(msgs[0].content)
 
 
 # --- ProductionAgent Tests ---
@@ -242,6 +248,146 @@ class TestProductionAgent:
         assert any("Python expert" in str(m.content) for m in sent_msgs)
 
     @pytest.mark.asyncio
+    async def test_rules_from_agent_config_are_injected(self) -> None:
+        provider = MockProvider()
+        provider.add_response(
+            content="Done",
+            usage=TokenUsage(input_tokens=10, output_tokens=5, total_tokens=15),
+        )
+        agent = ProductionAgent(
+            provider=provider,
+            registry=ToolRegistry(),
+            config=AgentConfig(model="mock-model", rules=["Focus only on Python TUI"]),
+        )
+
+        await agent.run("test")
+        sent_msgs = provider.call_history[0][0]
+        assert "Focus only on Python TUI" in str(sent_msgs[0].content)
+
+    def test_reset_conversation_clears_resume_and_session_state(self) -> None:
+        agent = ProductionAgent(provider=MockProvider(), registry=ToolRegistry())
+        agent._conversation_messages = [object()]
+        agent._session_id = "abc123"
+        agent.config.resume_session = "resume-me"
+        agent._thread_manager = object()
+
+        agent.reset_conversation()
+
+        assert agent._conversation_messages == []
+        assert agent._session_id is None
+        assert agent.config.resume_session is None
+        assert agent.config.resume_session_explicit is False
+        assert agent._thread_manager is None
+
+    @pytest.mark.asyncio
+    async def test_resume_session_is_consumed_once(self, tmp_path) -> None:  # type: ignore[no-untyped-def]
+        session_dir = tmp_path / "sessions"
+        session_dir.mkdir()
+        store = SessionStore(session_dir / "sessions.db")
+        await store.initialize()
+        await store.create_session(
+            "resume1",
+            "Old task",
+            model="mock-model",
+            metadata={
+                "working_dir": str(tmp_path),
+                "session_dir": str(session_dir),
+                "project_root": str(tmp_path),
+            },
+        )
+        await store.save_checkpoint(
+            "resume1",
+            [
+                {"role": "user", "content": "previous user"},
+                {"role": "assistant", "content": "previous reply"},
+            ],
+            {},
+        )
+        await store.close()
+
+        provider = MockProvider()
+        provider.add_response(
+            content="First reply",
+            usage=TokenUsage(input_tokens=10, output_tokens=5, total_tokens=15),
+        )
+        provider.add_response(
+            content="Second reply",
+            usage=TokenUsage(input_tokens=10, output_tokens=5, total_tokens=15),
+        )
+        agent = ProductionAgent(
+            provider=provider,
+            registry=ToolRegistry(),
+            config=AgentConfig(model="mock-model", resume_session="resume1"),
+            session_dir=str(session_dir),
+            working_dir=str(tmp_path),
+        )
+
+        await agent.run("continue")
+        assert agent.config.resume_session is None
+
+        await agent.run("next")
+
+        first_messages = provider.call_history[0][0]
+        second_messages = provider.call_history[1][0]
+        first_text = "\n".join(str(m.content) for m in first_messages)
+        second_text = "\n".join(str(m.content) for m in second_messages)
+        assert first_text.count("previous user") == 1
+        assert second_text.count("previous user") == 1
+
+    @pytest.mark.asyncio
+    async def test_missing_resume_emits_rejected_event(self, tmp_path) -> None:  # type: ignore[no-untyped-def]
+        session_dir = tmp_path / "sessions"
+        session_dir.mkdir()
+
+        provider = MockProvider()
+        provider.add_response(
+            content="fresh reply",
+            usage=TokenUsage(input_tokens=10, output_tokens=5, total_tokens=15),
+        )
+        agent = ProductionAgent(
+            provider=provider,
+            registry=ToolRegistry(),
+            config=AgentConfig(model="mock-model", resume_session="missing"),
+            session_dir=str(session_dir),
+            working_dir=str(tmp_path),
+            project_root=str(tmp_path),
+        )
+        events: list[AgentEvent] = []
+        agent.on_event(events.append)
+
+        result = await agent.run("continue")
+
+        assert result.success
+        assert EventType.SESSION_RESUME_REJECTED in [event.type for event in events]
+
+    @pytest.mark.asyncio
+    async def test_resume_without_store_emits_rejected_event(self, tmp_path) -> None:  # type: ignore[no-untyped-def]
+        provider = MockProvider()
+        provider.add_response(
+            content="fresh reply",
+            usage=TokenUsage(input_tokens=10, output_tokens=5, total_tokens=15),
+        )
+        agent = ProductionAgent(
+            provider=provider,
+            registry=ToolRegistry(),
+            config=AgentConfig(model="mock-model", resume_session="staged-id"),
+            session_dir=None,
+            working_dir=str(tmp_path),
+            project_root=str(tmp_path),
+        )
+        events: list[AgentEvent] = []
+        agent.on_event(events.append)
+
+        result = await agent.run("continue")
+
+        assert result.success
+        rejected = [e for e in events if e.type == EventType.SESSION_RESUME_REJECTED]
+        assert rejected
+        assert "session persistence" in (rejected[0].metadata or {}).get("message", "").lower()
+        assert agent.config.resume_session is None
+        assert agent.config.resume_session_explicit is False
+
+    @pytest.mark.asyncio
     async def test_apply_budget_extension_syncs_context_and_economics(self) -> None:
         class _Econ:
             def __init__(self) -> None:
@@ -368,6 +514,95 @@ class TestAgentBuilder:
             .build()
         )
         assert agent is not None
+
+    def test_with_rules(self) -> None:
+        mock = MockProvider()
+        agent = (
+            AgentBuilder()
+            .with_provider(provider=mock)
+            .with_rules(["Python only"])
+            .build()
+        )
+        assert agent.config.rules == ["Python only"]
+
+    def test_with_project_root(self) -> None:
+        mock = MockProvider()
+        agent = (
+            AgentBuilder()
+            .with_provider(provider=mock)
+            .with_project_root("/tmp/project")
+            .build()
+        )
+        assert agent.project_root == "/tmp/project"
+
+    @pytest.mark.asyncio
+    async def test_subagent_spawn_inherits_rules_and_project_root(self, monkeypatch) -> None:  # type: ignore[no-untyped-def]
+        captured: dict[str, Any] = {}
+
+        class _FakeBuilder:
+            def with_provider(self, provider=None, **kwargs):  # type: ignore[no-untyped-def]
+                return self
+
+            def with_model(self, model: str):  # type: ignore[no-untyped-def]
+                captured["model"] = model
+                return self
+
+            def with_working_dir(self, path: str):  # type: ignore[no-untyped-def]
+                captured["working_dir"] = path
+                return self
+
+            def with_project_root(self, path: str):  # type: ignore[no-untyped-def]
+                captured["project_root"] = path
+                return self
+
+            def with_rules(self, rules: list[str]):  # type: ignore[no-untyped-def]
+                captured["rules"] = list(rules)
+                return self
+
+            def with_budget(self, budget):  # type: ignore[no-untyped-def]
+                return self
+
+            def with_compaction(self, enabled: bool):  # type: ignore[no-untyped-def]
+                return self
+
+            def with_spawn_agent(self, enabled: bool):  # type: ignore[no-untyped-def]
+                return self
+
+            def build(self):  # type: ignore[no-untyped-def]
+                class _Subagent:
+                    async def run(self, task: str):  # type: ignore[no-untyped-def]
+                        return SimpleNamespace(success=True, response="ok")
+
+                    async def close(self) -> None:
+                        return None
+
+                return _Subagent()
+
+        class _FakeSpawner:
+            def __init__(self, **kwargs):  # type: ignore[no-untyped-def]
+                pass
+
+            async def spawn(self, run_subagent, **kwargs):  # type: ignore[no-untyped-def]
+                await run_subagent(SimpleNamespace(), "sub-1")
+                return SimpleNamespace(success=True, response="ok", tokens_used=0, error=None)
+
+        monkeypatch.setattr("attocode.agent.builder.AgentBuilder", _FakeBuilder)
+        monkeypatch.setattr("attocode.core.subagent_spawner.SubagentSpawner", _FakeSpawner)
+
+        provider = MockProvider()
+        agent = ProductionAgent(
+            provider=provider,
+            registry=ToolRegistry(),
+            config=AgentConfig(model="mock-model", rules=["Python only"]),
+            working_dir="/tmp/project/work",
+            project_root="/tmp/project",
+        )
+
+        result = await agent.spawn_agent("worker-1", "investigate")
+
+        assert result["success"] is True
+        assert captured["project_root"] == "/tmp/project"
+        assert captured["rules"] == ["Python only"]
 
     @pytest.mark.asyncio
     async def test_built_agent_runs(self) -> None:

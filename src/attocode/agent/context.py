@@ -50,6 +50,7 @@ class AgentContext:
 
     # Working directory
     working_dir: str = ""
+    project_root: str = ""
 
     # Policy engine (optional - if None, all tools are auto-approved)
     policy_engine: Any = None  # PolicyEngine instance

@@ -721,6 +721,26 @@ class TestStoreRunIdCacheInvalidation:
         assert store._task_cache == {}
         assert store._last_run_id == "bbb"
 
+    def test_run_id_truthy_transition_clears_message_and_trace_caches(self, tmp_path: Path) -> None:
+        from attoswarm.tui.stores import StateStore
+
+        store = StateStore(str(tmp_path))
+        store._last_run_id = "aaa"
+        store._messages_cache = (time.time(), [{"kind": "stale"}])
+        store._sidecar_cache = (time.time(), {"t1": "stale"})
+        store._trace_summary_t1 = (time.time(), {"tool_calls": ["old"]})
+        store._trace_offset_t1 = 123
+
+        store.state_path.write_text(
+            json.dumps({"run_id": "bbb", "state_seq": 1}), encoding="utf-8",
+        )
+        store.read_state()
+
+        assert not hasattr(store, "_messages_cache")
+        assert not hasattr(store, "_sidecar_cache")
+        assert not hasattr(store, "_trace_summary_t1")
+        assert not hasattr(store, "_trace_offset_t1")
+
 
 # ── StateStore event partial line handling ─────────────────────────
 

@@ -38,6 +38,12 @@ class MessagesLog(Widget):
         """Append only new messages since last call."""
         if not messages:
             return
+        if len(messages) < self._seen_count:
+            self._seen_count = 0
+            try:
+                self.query_one("#messages-log", RichLog).clear()
+            except Exception:
+                pass
         new_messages = messages[self._seen_count:]
         if not new_messages:
             return

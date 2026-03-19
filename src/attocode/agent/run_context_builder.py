@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import logging
 import uuid
+from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
@@ -18,10 +19,46 @@ if TYPE_CHECKING:
 
 from attocode.agent.context import AgentContext
 from attocode.agent.message_builder import build_initial_messages
+from attocode.config import infer_project_root_from_session_dir
 from attocode.types.events import AgentEvent, EventType
 from attocode.types.messages import Message, Role, ToolCall
 
 logger = logging.getLogger(__name__)
+
+
+def _effective_rules(agent: ProductionAgent, ctx: AgentContext) -> list[str]:
+    """Resolve prompt rules from config, falling back to loaded context rules."""
+    config_rules = list(getattr(agent._config, "rules", []) or [])
+    if config_rules:
+        return [rule for rule in config_rules if isinstance(rule, str) and rule.strip()]
+
+    loaded_rules = getattr(ctx, "_loaded_rules", [])
+    if isinstance(loaded_rules, list):
+        return [rule for rule in loaded_rules if isinstance(rule, str) and rule.strip()]
+    if isinstance(loaded_rules, str) and loaded_rules.strip():
+        return [loaded_rules.strip()]
+    return []
+
+
+def _session_metadata(agent: ProductionAgent) -> dict[str, str]:
+    """Build session metadata used for future isolation checks."""
+    working_dir = getattr(agent, "_working_dir", "") or ""
+    session_dir = getattr(agent, "_session_dir", None) or ""
+    project_root = getattr(agent, "_project_root", "") or ""
+
+    if not project_root and session_dir:
+        inferred = infer_project_root_from_session_dir(session_dir)
+        if inferred:
+            project_root = inferred
+
+    if not project_root and working_dir:
+        project_root = str(Path(working_dir).resolve())
+
+    return {
+        "working_dir": working_dir,
+        "session_dir": session_dir,
+        "project_root": project_root,
+    }
 
 
 async def build_run_context(
@@ -43,6 +80,7 @@ async def build_run_context(
         config=agent._config,
         budget=agent._budget,
         working_dir=agent._working_dir,
+        project_root=agent._project_root,
         system_prompt=agent._system_prompt,
         policy_engine=agent._policy_engine,
         approval_callback=agent._approval_callback,
@@ -108,22 +146,59 @@ async def build_run_context(
 
     # Handle session resume if requested
     resume_session_id = getattr(agent._config, "resume_session", None)
-    if resume_session_id and agent._session_store and agent._run_count == 0:
-        try:
-            resume_data = await agent._session_store.resume_session(resume_session_id)
-            if resume_data and resume_data.get("messages"):
-                for msg_dict in resume_data["messages"]:
-                    role = msg_dict.get("role", "user")
-                    content = msg_dict.get("content", "")
-                    ctx.messages.append(Message(role=Role(role), content=content))
-                agent._session_id = resume_session_id
-                ctx.emit(AgentEvent(
-                    type=EventType.STATUS,
-                    message=f"Resumed session {resume_session_id} "
-                            f"({len(resume_data['messages'])} messages)",
-                ))
-        except Exception:
-            logger.warning("session_resume_failed", exc_info=True)
+    if resume_session_id and agent._run_count == 0:
+        if not agent._session_store:
+            ctx.emit(AgentEvent(
+                type=EventType.SESSION_RESUME_REJECTED,
+                session_id=resume_session_id,
+                metadata={
+                    "message": (
+                        f"Ignored staged resume '{resume_session_id}' because "
+                        "session persistence is not available (no session directory or store failed to initialize)."
+                    ),
+                    "mode": "warning",
+                },
+            ))
+            agent._config.resume_session = None
+            agent._config.resume_session_explicit = False
+        else:
+            try:
+                resume_data = await agent._session_store.resume_session(resume_session_id)
+                if resume_data and resume_data.get("messages"):
+                    for msg_dict in resume_data["messages"]:
+                        role = msg_dict.get("role", "user")
+                        content = msg_dict.get("content", "")
+                        ctx.messages.append(Message(role=Role(role), content=content))
+                    agent._session_id = resume_session_id
+                    agent._conversation_messages = []
+                    ctx.emit(AgentEvent(
+                        type=EventType.SESSION_RESUMED,
+                        session_id=resume_session_id,
+                        metadata={
+                            "message": (
+                                f"Resumed session {resume_session_id} "
+                                f"({len(resume_data['messages'])} messages)"
+                            ),
+                            "mode": "info",
+                        },
+                    ))
+                else:
+                    ctx.emit(AgentEvent(
+                        type=EventType.SESSION_RESUME_REJECTED,
+                        session_id=resume_session_id,
+                        metadata={
+                            "message": (
+                                f"Ignored staged resume '{resume_session_id}' because "
+                                "it was not found in the current project session store."
+                            ),
+                            "mode": "warning",
+                        },
+                    ))
+            except Exception:
+                logger.warning("session_resume_failed", exc_info=True)
+            finally:
+                agent._config.resume_session = None
+                agent._config.resume_session_explicit = False
 
     # Create a new session record for this run (skip if resuming)
     if agent._session_store and not agent._session_id:
@@ -133,6 +208,7 @@ async def build_run_context(
                 session_id,
                 prompt[:200],
                 model=agent._config.model or "",
+                metadata=_session_metadata(agent),
             )
             agent._session_id = session_id
         except Exception:
@@ -169,7 +245,12 @@ async def build_run_context(
     # --- Feature initialization -----------------------------------------
     try:
         from attocode.agent.feature_initializer import initialize_features
-        await initialize_features(ctx, working_dir=agent._working_dir)
+        await initialize_features(
+            ctx,
+            project_root=agent._project_root,
+            working_dir=agent._working_dir,
+            session_dir=agent._session_dir,
+        )
     except Exception:
         logger.warning("feature_init_failed", exc_info=True)
 
@@ -183,10 +264,11 @@ async def build_run_context(
 
     # --- Skills ---------------------------------------------------------
     loaded_skills = None
-    if agent._working_dir:
+    project_root = agent._project_root or agent._working_dir
+    if project_root:
         try:
             from attocode.integrations.skills.loader import SkillLoader
-            loader = SkillLoader(agent._working_dir)
+            loader = SkillLoader(project_root)
             loader.load()
             all_skills = loader.list_skills()
             if all_skills:
@@ -221,9 +303,11 @@ async def build_run_context(
             logger.debug("codebase_tools_register_failed", exc_info=True)
 
     # --- Build messages -------------------------------------------------
-    if agent._conversation_messages:
+    rules = _effective_rules(agent, ctx)
+    if agent._conversation_messages and not ctx.messages:
         from attocode.agent.message_builder import build_system_prompt, build_user_message
         sys_prompt = agent._system_prompt or build_system_prompt(
+            rules=rules,
             working_dir=agent._working_dir,
             skills=loaded_skills,
             extra_context=learning_context or None,
@@ -240,6 +324,7 @@ async def build_run_context(
             prompt,
             images=images,
             system_prompt=agent._system_prompt,
+            rules=rules,
             working_dir=agent._working_dir,
             skills=loaded_skills,
             learning_context=learning_context,

@@ -103,6 +103,7 @@ class AttocodeApp(App):
         git_branch: str = "",
         agent: Any = None,
         approval_bridge: ApprovalBridge | None = None,
+        startup_messages: list[str] | None = None,
         **kwargs,
     ) -> None:
         super().__init__(**kwargs)
@@ -111,6 +112,7 @@ class AttocodeApp(App):
         self._processing = False
         self._exit_pressed = False
         self._agent = agent
+        self._startup_messages = list(startup_messages or [])
 
         # Bridges — use externally provided or create internal
         self.approval_bridge = approval_bridge or ApprovalBridge()
@@ -229,6 +231,8 @@ class AttocodeApp(App):
         # Hint below banner
         log = self.query_one("#message-log", MessageLog)
         log.add_system_message("Type a prompt to start, or /help for commands.")
+        for text in self._startup_messages:
+            log.add_system_message(text)
 
         # Focus input
         self.query_one("#input-area", PromptInput).focus_input()

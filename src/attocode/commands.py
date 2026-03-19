@@ -19,10 +19,13 @@ Provides ~55 slash commands organized into groups:
 
 from __future__ import annotations
 
+import logging
 import os
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass(slots=True)
@@ -78,22 +81,28 @@ def _get_working_dir(agent: Any) -> str:
     return wd or getattr(agent, "_working_dir", "") or ""
 
 
+def _get_project_root(agent: Any) -> str:
+    ctx = _get_ctx(agent)
+    project_root = getattr(ctx, "project_root", None) if ctx else None
+    return project_root or getattr(agent, "_project_root", "") or _get_working_dir(agent)
+
+
 def _get_skill_loader(agent: Any) -> Any:
-    """Create and load a SkillLoader for the agent's working directory."""
+    """Create and load a SkillLoader for the agent's resolved project root."""
     from attocode.integrations.skills.loader import SkillLoader
-    wd = _get_working_dir(agent)
-    if not wd:
+    project_root = _get_project_root(agent)
+    if not project_root:
         return None
-    loader = SkillLoader(wd)
+    loader = SkillLoader(project_root)
     loader.load()
     return loader
 
 
 def _get_agent_registry(agent: Any) -> Any:
-    """Create and load an AgentRegistry for the agent's working directory."""
+    """Create and load an AgentRegistry for the agent's resolved project root."""
     from attocode.integrations.agents.registry import AgentRegistry
-    wd = _get_working_dir(agent)
-    registry = AgentRegistry(wd or None)
+    project_root = _get_project_root(agent)
+    registry = AgentRegistry(project_root or None)
     registry.load()
     return registry
 
@@ -629,6 +638,9 @@ async def _load_command(agent: Any, session_id: str) -> CommandResult:
         if not ctx:
             if agent and hasattr(agent, "config"):
                 agent.config.resume_session = session_id
+                agent.config.resume_session_explicit = True
+            if agent and hasattr(agent, "_conversation_messages"):
+                agent._conversation_messages = []
             return CommandResult(
                 output=f"Session {session_id} staged for resume: {session.task}\n"
                 f"  Messages: {len(checkpoint.messages)}\n"
@@ -686,6 +698,9 @@ async def _resume_command(agent: Any, session_id: str) -> CommandResult:
                 return CommandResult(output=f"Session '{session_id}' not found.")
             if agent and hasattr(agent, "config"):
                 agent.config.resume_session = session_id
+                agent.config.resume_session_explicit = True
+            if agent and hasattr(agent, "_conversation_messages"):
+                agent._conversation_messages = []
             return CommandResult(
                 output=f"Session {session_id} staged for resume: {session.task}\n"
                 "Send your next prompt to continue this session."
@@ -714,6 +729,15 @@ async def _resume_command(agent: Any, session_id: str) -> CommandResult:
 
         # Update session tracking
         ctx.session_id = session_id
+        if agent is not None:
+            try:
+                agent._session_id = session_id
+                agent._conversation_messages = list(ctx.messages)
+                if hasattr(agent, "config"):
+                    agent.config.resume_session = None
+                    agent.config.resume_session_explicit = False
+            except Exception:
+                logger.debug("resume_agent_state_sync_failed", exc_info=True)
         session_info = resume_data.get("session", {})
         task = session_info.get("task", "unknown")
 
@@ -765,7 +789,11 @@ def _reset_command(agent: Any) -> CommandResult:
         return CommandResult(output="No active context.")
 
     msg_count = len(ctx.messages)
-    ctx.messages.clear()
+    if agent and hasattr(agent, "reset_conversation"):
+        agent.reset_conversation()
+    else:
+        ctx.messages.clear()
+        ctx.session_id = None
     ctx.iteration = 0
     from attocode.types.agent import AgentMetrics
     ctx.metrics = AgentMetrics()

@@ -79,6 +79,7 @@ async def initialize_features(
     ctx: AgentContext,
     *,
     config: FeatureConfig | None = None,
+    project_root: str = "",
     working_dir: str = "",
     session_dir: str | None = None,
 ) -> dict[str, bool]:
@@ -171,11 +172,13 @@ async def initialize_features(
             results["auto_checkpoint"] = False
 
     # 7. Rules
-    if cfg.enable_rules and working_dir:
+    resource_root = project_root or working_dir
+
+    if cfg.enable_rules and resource_root:
         try:
             from attocode.integrations.utilities.rules import RulesManager
-            rules_mgr = RulesManager(working_dir)
-            rules = rules_mgr.load_rules()
+            rules_mgr = RulesManager(resource_root)
+            rules = rules_mgr.rules
             if rules:
                 # Rules are added to system prompt via message_builder
                 ctx._loaded_rules = rules
@@ -457,14 +460,14 @@ async def initialize_features(
             results["context_engineering"] = False
 
     # 27. Skill manager (full lifecycle)
-    if cfg.enable_skill_manager and working_dir and not getattr(ctx, '_skill_manager', None):
+    if cfg.enable_skill_manager and resource_root and not getattr(ctx, '_skill_manager', None):
         try:
             from attocode.integrations.skills.dependency_graph import SkillDependencyGraph
             from attocode.integrations.skills.executor import SkillExecutor
             from attocode.integrations.skills.loader import SkillLoader
             from attocode.integrations.skills.state import SkillStateStore
 
-            loader = SkillLoader(working_dir)
+            loader = SkillLoader(resource_root)
             # Search additional directories
             search_dirs = [working_dir]
             if cfg.skill_search_dirs:

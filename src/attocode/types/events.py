@@ -85,6 +85,7 @@ class EventType(StrEnum):
     SESSION_LOADED = "session.loaded"
     SESSION_SAVED = "session.saved"
     SESSION_RESUMED = "session.resumed"
+    SESSION_RESUME_REJECTED = "session.resume.rejected"
     SESSION_FORKED = "session.forked"
     SESSION_CHECKPOINT = "session.checkpoint"
 
