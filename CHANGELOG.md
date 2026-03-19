@@ -7,6 +7,41 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.2] - 2026-03-19
+
+### Added
+
+- **Swarm run summaries** — `run_summary.py` now derives modified-file counts from change manifests, task metadata, or git worktree state while filtering out runtime bookkeeping
+- **Attoswarm release-state coverage** — new tests for exact child lineage anchoring, safe finalization, planning-failure handling, and current snapshot fixtures/baselines
+- **Child swarm lineage** — `continue` now persists explicit lineage metadata including parent run, base ref, base commit, and result commit for follow-up swarms
+- **Codex MCP adapter path** — `codex-mcp` backend support, stream parsing, and adapter tests were added for multi-turn Codex worker flows
+- **Swarm-side test verification** — `test_verifier.py` adds explicit verification plumbing for post-task validation in hybrid swarm runs
+- **TUI stop confirmation** — explicit stop confirmation screen separates dashboard detach from coordinator shutdown
+
+### Changed
+
+- **Hybrid swarm lifecycle** — `continue` now anchors child runs to the exact saved parent commit, `resume` restores persisted shared-workspace manifests without replaying stale control messages, and the dashboard's normal quit path detaches instead of stopping the coordinator
+- **Swarm terminal states** — shared planning failures now stop explicitly as `planning_failed` instead of degrading into a fake single repo-wide task, and CLI/TUI summaries distinguish stopped, planning-failed, and completed runs
+- **Git finalization** — TUI and CLI finalization both route through the git safety net and exclude `.agent` runtime artifacts from branch finalization and changed-file summaries
+- **Attocode TUI responsiveness** — high-frequency stream/tool updates are coalesced, repeated successful tool starts are removed from the main log, and concurrent same-name tool calls keep separate rows
+- **Approval and swarm bridges** — TUI event handling was simplified around the approval bridge and swarm bridge so dashboard state updates are less fragmented
+- **Model registry and Codex defaults** — built-in model metadata, OpenAI capability flags, Codex backend integration, and benchmark baselines were updated together for the new swarm backend surface
+- **Swarm docs** — start vs continue vs resume, detach/reattach behavior, troubleshooting guidance, and the default hybrid example config have been aligned with the current CLI behavior
+
+### Fixed
+
+- **`continue --monitor` run identity** — the monitor now follows the same child `run_dir` as the coordinator instead of opening an empty sibling run
+- **Swarm stop semantics** — leaving the dashboard no longer shuts the run down unless the explicit stop flow is used
+- **Attoswarm snapshot suite drift** — snapshot fixtures and stable-app layout were refreshed to match the current dashboard structure and state schema
+- **Default hybrid example preflight** — `.attocode/swarm.hybrid.yaml.example` now passes `attoswarm doctor` on a default install without requiring `aider`
+- **Shared-workspace resume control replay** — stale control messages no longer immediately re-trigger old shutdown behavior on resume
+- **Swarm merge safety** — branch finalization and changed-file summaries no longer treat `.agent` runtime files as product changes
+
+### Tests
+
+- **Hybrid swarm coverage expanded** — added or extended tests for child swarms, worktree anchoring, Codex parsing, Codex MCP integration, control-message resume behavior, run summaries, and attoswarm TUI snapshots
+- **TUI regression coverage expanded** — added coverage for buffered tool/stream rendering, distinct concurrent tool rows, attoswarm fixture contracts, and current dashboard snapshots
+
 ## [0.2.1] - 2026-03-17
 
 ### Added

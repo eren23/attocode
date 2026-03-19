@@ -6,12 +6,13 @@ from collections import Counter
 from pathlib import Path
 
 from attoswarm.protocol.io import write_json_atomic
-from attoswarm.protocol.models import SwarmState, TaskSpec, utc_now_iso
+from attoswarm.protocol.models import LauncherInfo, LineageSpec, SwarmState, TaskSpec, utc_now_iso
 
 
 def write_state(
     state_path: str,
     run_id: str,
+    goal: str,
     phase: str,
     tasks: list[TaskSpec],
     active_agents: list[dict],
@@ -29,6 +30,9 @@ def write_state(
     event_timeline: dict,
     agent_messages_index: dict,
     elapsed_s: float = 0.0,
+    timeout_overrides: dict[str, int] | None = None,
+    lineage: LineageSpec | None = None,
+    launcher: LauncherInfo | None = None,
 ) -> None:
     counts = Counter(t.status for t in tasks)
 
@@ -68,6 +72,7 @@ def write_state(
 
     payload = SwarmState(
         run_id=run_id,
+        goal=goal,
         phase=phase,
         updated_at=utc_now_iso(),
         tasks={
@@ -97,5 +102,10 @@ def write_state(
         agent_messages_index=agent_messages_index,
         dag_summary=dag_summary,
         elapsed_s=elapsed_s,
+        lineage=lineage or LineageSpec(run_id=run_id),
+        launcher=launcher or LauncherInfo(),
     )
-    write_json_atomic(Path(state_path), payload.to_dict())
+    state_dict = payload.to_dict()
+    if timeout_overrides:
+        state_dict["timeout_overrides"] = timeout_overrides
+    write_json_atomic(Path(state_path), state_dict)

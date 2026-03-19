@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import time
 from typing import TYPE_CHECKING
 
@@ -65,6 +66,7 @@ class StatusBar(Static):
     swarm_done: reactive[int] = reactive(0)
     swarm_total: reactive[int] = reactive(0)
     swarm_cost: reactive[float] = reactive(0.0)
+    live_updates_coalesced: reactive[bool] = reactive(False)
 
     def __init__(self, **kwargs) -> None:
         super().__init__(**kwargs)
@@ -72,6 +74,7 @@ class StatusBar(Static):
         self._processing = False
         self._spinner_index = 0
         self._spinner_timer: Timer | None = None
+        self._refresh_pending = False
 
     def render(self) -> Text:
         text = Text()
@@ -165,6 +168,9 @@ class StatusBar(Static):
             }.get(self.phase, "dim")
             parts.append(Text(self.phase, style=phase_style))
 
+        if self.live_updates_coalesced:
+            parts.append(Text("batched", style="yellow"))
+
         # Swarm indicator
         if self.swarm_active:
             swarm_text = Text()
@@ -235,7 +241,7 @@ class StatusBar(Static):
         self._start_time = time.monotonic()
         self.mode = "thinking"
         if self._spinner_timer is None:
-            self._spinner_timer = self.set_interval(0.08, self._spin)
+            self._spinner_timer = self.set_interval(0.2, self._spin)
 
     def stop_processing(self) -> None:
         """Mark the end of processing."""
@@ -248,74 +254,96 @@ class StatusBar(Static):
     def _spin(self) -> None:
         """Advance spinner frame."""
         self._spinner_index = (self._spinner_index + 1) % len(_SPINNER_FRAMES)
+        self._schedule_refresh()
+
+    def _schedule_refresh(self) -> None:
+        """Coalesce frequent reactive updates into a single repaint."""
+        if self._refresh_pending:
+            return
+        try:
+            asyncio.get_running_loop()
+        except RuntimeError:
+            self.refresh()
+            return
+        if not self.is_attached:
+            self.refresh()
+            return
+        self._refresh_pending = True
+        self.call_after_refresh(self._flush_refresh)
+
+    def _flush_refresh(self) -> None:
+        self._refresh_pending = False
         self.refresh()
 
     # Watchers
     def watch_mode(self) -> None:
-        self.refresh()
+        self._schedule_refresh()
 
     def watch_iteration(self) -> None:
-        self.refresh()
+        self._schedule_refresh()
 
     def watch_context_pct(self) -> None:
-        self.refresh()
+        self._schedule_refresh()
 
     def watch_budget_pct(self) -> None:
-        self.refresh()
+        self._schedule_refresh()
 
     def watch_cost(self) -> None:
-        self.refresh()
+        self._schedule_refresh()
 
     def watch_total_tokens(self) -> None:
-        self.refresh()
+        self._schedule_refresh()
 
     def watch_max_tokens(self) -> None:
-        self.refresh()
+        self._schedule_refresh()
 
     def watch_files_changed(self) -> None:
-        self.refresh()
+        self._schedule_refresh()
 
     def watch_lines_added(self) -> None:
-        self.refresh()
+        self._schedule_refresh()
 
     def watch_lines_removed(self) -> None:
-        self.refresh()
+        self._schedule_refresh()
 
     def watch_project_name(self) -> None:
-        self.refresh()
+        self._schedule_refresh()
 
     def watch_context_tokens(self) -> None:
-        self.refresh()
+        self._schedule_refresh()
 
     def watch_context_window(self) -> None:
-        self.refresh()
+        self._schedule_refresh()
 
     def watch_cache_hit_rate(self) -> None:
-        self.refresh()
+        self._schedule_refresh()
 
     def watch_compaction_count(self) -> None:
-        self.refresh()
+        self._schedule_refresh()
 
     def watch_phase(self) -> None:
-        self.refresh()
+        self._schedule_refresh()
 
     def watch_swarm_active(self) -> None:
-        self.refresh()
+        self._schedule_refresh()
 
     def watch_swarm_wave(self) -> None:
-        self.refresh()
+        self._schedule_refresh()
 
     def watch_swarm_active_workers(self) -> None:
-        self.refresh()
+        self._schedule_refresh()
 
     def watch_swarm_done(self) -> None:
-        self.refresh()
+        self._schedule_refresh()
 
     def watch_swarm_total(self) -> None:
-        self.refresh()
+        self._schedule_refresh()
 
     def watch_swarm_cost(self) -> None:
-        self.refresh()
+        self._schedule_refresh()
+
+    def watch_live_updates_coalesced(self) -> None:
+        self._schedule_refresh()
 
 
 def _render_progress_bar(fraction: float, width: int = 20) -> str:

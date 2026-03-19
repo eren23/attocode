@@ -31,11 +31,16 @@ node_modules/
 .attocode/dev-state.json
 .attocode/config.toml
 .attocode/vectors
+attocode/attocode_py/.attocode/cache
+tests/unit/tui/__snapshots__/
 
 # Legacy TS runtime artifacts
 legacy/.attocode/traces/
 legacy/.attocode/sessions/
 legacy/.attocode/recordings/
+
+# attocode snapshots
+tests/unit/tui/__snapshots__/
 
 
 # Build outputs

@@ -12,7 +12,8 @@ if TYPE_CHECKING:
 
 async def process_review_queue(coordinator: HybridCoordinator) -> None:
     """Walk the merge queue and create/resolve review and merge tasks."""
-    assert coordinator.manifest is not None
+    if coordinator.manifest is None:
+        raise RuntimeError("Manifest not initialized — cannot process review queue")
     authority = coordinator.config.merge.authority_role
     review_roles = coordinator._review_roles()
 

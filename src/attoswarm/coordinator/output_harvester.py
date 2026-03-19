@@ -66,6 +66,11 @@ async def harvest_outputs(coordinator: HybridCoordinator) -> None:
                         "payload": ev.payload,
                     },
                 )
+                # Wire thread_id for codex-mcp multi-turn
+                if ev.payload.get("thread_id"):
+                    _adapter = coordinator.adapters.get(agent_id)
+                    if hasattr(_adapter, "store_thread_id"):
+                        _adapter.store_thread_id(agent_id, ev.payload["thread_id"])
 
                 if ev.type == "task_done" and task_id:
                     await handle_completion_claim(coordinator, agent_id, task_id)

@@ -282,7 +282,7 @@ def test_parallel_decomposition_two_workers() -> None:
     for t in impl_tasks:
         assert t.status == "ready"
         assert t.deps == []
-        assert coord.task_state[t.task_id] == "ready"
+    # task_state is populated by _bootstrap_manifest, not _decompose_initial_tasks
 
     # Integrate depends on all impl tasks
     assert set(integrate_tasks[0].deps) == {t.task_id for t in impl_tasks}

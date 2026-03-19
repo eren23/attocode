@@ -282,7 +282,9 @@ class AgentsDataTable(Widget):
         model = agent.get("model", agent.get("backend", ""))
         task_id = agent.get("task_id", "")
         elapsed = agent.get("elapsed", "")
-        activity = agent.get("activity", "")
+        # Prefer structured current_tool over regex-parsed activity
+        current_tool = agent.get("current_tool", "")
+        activity = f"{current_tool} ..." if current_tool else agent.get("activity", "")
         tokens = agent.get("tokens_used", 0)
         if tokens and tokens >= 1000:
             tokens_str = f"{tokens // 1000}k"

@@ -123,6 +123,31 @@ class TestCheckControlMessages:
         assert node1 is not None and node1.status == "failed"
         assert node2 is not None and node2.status == "failed"
 
+    def test_resume_ignores_historical_control_messages(self, tmp_path: Path) -> None:
+        cfg = SwarmYamlConfig()
+        cfg.run.run_dir = str(tmp_path / "run")
+        orch = SwarmOrchestrator(cfg, "resume goal", resume=True)
+        orch._setup_directories()
+        _add_task(orch, "task-1", "running")
+
+        control_path = orch._layout["root"] / "control.jsonl"
+        control_path.write_text(
+            json.dumps({"action": "shutdown", "task_id": ""}) + "\n",
+            encoding="utf-8",
+        )
+
+        orch._prime_control_cursor()
+        orch._check_control_messages()
+        assert orch._shutdown_requested is False
+
+        with open(control_path, "a", encoding="utf-8") as fh:
+            fh.write(json.dumps({"action": "skip", "task_id": "task-1"}) + "\n")
+        orch._check_control_messages()
+
+        node = orch._aot_graph.get_node("task-1")
+        assert node is not None
+        assert node.status == "failed"
+
 
 # ── _persist_prompt ───────────────────────────────────────────────────
 
@@ -948,7 +973,11 @@ class TestStoresDiffAndHistory:
             json.dumps({"run_id": "run-bbb", "phase": "shutdown"}),
         )
         (run2 / "swarm.manifest.json").write_text(
-            json.dumps({"goal": "second goal", "tasks": [{"task_id": "t1"}, {"task_id": "t2"}]}),
+            json.dumps({
+                "goal": "second goal",
+                "lineage": {"continuation_mode": "child", "parent_run_id": "run-aaa"},
+                "tasks": [{"task_id": "t1"}, {"task_id": "t2"}],
+            }),
         )
 
         store = StateStore(str(tmp_path))
@@ -960,6 +989,8 @@ class TestStoresDiffAndHistory:
         assert runs[0]["goal"] == "second goal"
         assert runs[0]["phase"] == "shutdown"
         assert runs[0]["task_count"] == 2
+        assert runs[0]["continuation_mode"] == "child"
+        assert runs[0]["parent_run_id"] == "run-aaa"
         assert runs[1]["run_id"] == "run-aaa"
         assert runs[1]["goal"] == "first goal"
         assert runs[1]["task_count"] == 1

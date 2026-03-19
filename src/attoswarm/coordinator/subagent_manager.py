@@ -56,6 +56,11 @@ class AgentStatus:
     tokens_used: int = 0
     model: str = ""
     activity: str = ""      # human-readable current activity label
+    tool_call_count: int = 0
+    current_tool: str = ""        # e.g. "Edit", "Bash", "Read"
+    files_touched: list[str] = field(default_factory=list)
+    llm_turns: int = 0
+    last_activity_ts: float = 0.0
 
 
 # ---------------------------------------------------------------------------
@@ -248,8 +253,8 @@ class SubagentManager:
                         for f in target_files:
                             try:
                                 await self._file_ledger.renew_claim(f, agent_id)
-                            except Exception:
-                                pass
+                            except Exception as exc:
+                                logger.debug("Claim heartbeat renewal failed for %s (agent %s): %s", f, agent_id, exc)
                 heartbeat_task = asyncio.create_task(_heartbeat())
 
             # 2. Spawn worker
@@ -372,5 +377,5 @@ class SubagentManager:
             }
             with trace_path.open("a", encoding="utf-8") as f:
                 f.write(_json.dumps(entry) + "\n")
-        except Exception:
-            pass
+        except Exception as exc:
+            logger.debug("Trace write failed for agent %s: %s", agent_id, exc)

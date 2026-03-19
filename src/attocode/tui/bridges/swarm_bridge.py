@@ -6,6 +6,7 @@ that TUI widgets can handle.
 
 from __future__ import annotations
 
+import logging
 from typing import TYPE_CHECKING, Any
 
 from textual.message import Message
@@ -14,6 +15,8 @@ if TYPE_CHECKING:
     from textual.app import App
 
     from attoswarm.coordinator.event_bus import EventBus, SwarmEvent
+
+logger = logging.getLogger(__name__)
 
 
 class SwarmDashboardUpdate(Message):
@@ -46,6 +49,7 @@ class SwarmBridge:
     def __init__(self, app: App) -> None:
         self._app = app
         self._event_bus: EventBus | None = None
+        self._post_failures: int = 0
 
     def connect(self, event_bus: EventBus) -> None:
         """Subscribe to the event bus."""
@@ -69,5 +73,16 @@ class SwarmBridge:
                 "message": event.message,
                 "data": event.data,
             }))
-        except Exception:
-            pass  # App may not be running
+            self._post_failures = 0
+        except Exception as exc:
+            self._post_failures += 1
+            # Log first few failures, then throttle to avoid log spam
+            if self._post_failures <= 3:
+                logger.warning(
+                    "SwarmBridge: failed to post event %s to TUI: %s",
+                    event.event_type, exc,
+                )
+            elif self._post_failures == 4:
+                logger.warning(
+                    "SwarmBridge: suppressing further post_message errors (app may have stopped)"
+                )

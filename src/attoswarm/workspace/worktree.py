@@ -40,12 +40,21 @@ def _delete_branch(repo_root: Path, branch_name: str) -> None:
         pass  # Branch may not exist — that's fine.
 
 
+def _agent_branch_name(run_id: str, agent_id: str) -> str:
+    if run_id:
+        return f"attoswarm/{run_id}/{agent_id}"
+    return f"attoswarm/{agent_id}"
+
+
 def ensure_workspace_for_agent(
     repo_root: Path,
     worktrees_root: Path,
     agent_id: str,
     workspace_mode: str,
     write_access: bool,
+    run_id: str = "",
+    base_ref: str | None = None,
+    base_commit: str | None = None,
 ) -> Path:
     if workspace_mode != "worktree" or not write_access:
         return repo_root
@@ -62,39 +71,58 @@ def ensure_workspace_for_agent(
         return path
 
     path.parent.mkdir(parents=True, exist_ok=True)
-    branch_name = f"attoswarm/{agent_id}"
+    branch_name = _agent_branch_name(run_id, agent_id)
 
     # Prune stale worktree bookkeeping before attempting creation.
     _prune_worktrees(repo_root)
 
-    try:
-        subprocess.run(
-            ["git", "worktree", "add", str(path), "-b", branch_name],
-            cwd=repo_root,
-            check=True,
-            capture_output=True,
-            text=True,
-        )
-    except subprocess.CalledProcessError:
-        # Branch may exist from a previous run — delete it and retry once.
-        _delete_branch(repo_root, branch_name)
+    def _build_create_cmd(anchor: str | None) -> list[str]:
+        cmd = ["git", "worktree", "add", str(path), "-b", branch_name]
+        if anchor:
+            cmd.append(anchor)
+        return cmd
+
+    anchors: list[str | None] = []
+    if base_commit:
+        anchors.append(base_commit)
+    if base_ref and base_ref != base_commit:
+        anchors.append(base_ref)
+    if not anchors:
+        anchors.append(None)
+
+    for idx, anchor in enumerate(anchors):
+        create_cmd = _build_create_cmd(anchor)
         try:
             subprocess.run(
-                ["git", "worktree", "add", str(path), "-b", branch_name],
+                create_cmd,
                 cwd=repo_root,
                 check=True,
                 capture_output=True,
                 text=True,
             )
+            return path
+        except subprocess.CalledProcessError:
+            # Branch may exist from a previous run — delete it and retry once.
+            _delete_branch(repo_root, branch_name)
+            try:
+                subprocess.run(
+                    create_cmd,
+                    cwd=repo_root,
+                    check=True,
+                    capture_output=True,
+                    text=True,
+                )
+                return path
+            except Exception:
+                if idx == len(anchors) - 1:
+                    return repo_root
         except Exception:
-            # Fallback to shared workspace if worktree creation still fails.
-            return repo_root
-    except Exception:
-        return repo_root
+            if idx == len(anchors) - 1:
+                return repo_root
     return path
 
 
-def cleanup_worktrees(repo_root: Path, worktrees_root: Path) -> None:
+def cleanup_worktrees(repo_root: Path, worktrees_root: Path, run_id: str = "") -> None:
     """Remove all agent worktrees and their branches, then prune."""
     if not worktrees_root.exists():
         return
@@ -102,7 +130,7 @@ def cleanup_worktrees(repo_root: Path, worktrees_root: Path) -> None:
     for child in sorted(worktrees_root.iterdir()):
         if not child.is_dir():
             continue
-        branch_name = f"attoswarm/{child.name}"
+        branch_name = _agent_branch_name(run_id, child.name)
         try:
             subprocess.run(
                 ["git", "worktree", "remove", "--force", str(child)],

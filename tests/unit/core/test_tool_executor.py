@@ -98,6 +98,12 @@ class TestExecuteToolCalls:
         assert EventType.TOOL_START in types
         assert EventType.TOOL_COMPLETE in types
 
+        tool_start = next(e for e in events if e.type == EventType.TOOL_START)
+        tool_complete = next(e for e in events if e.type == EventType.TOOL_COMPLETE)
+        assert tool_start.metadata == {"tool_id": "tc_1"}
+        assert tool_complete.metadata is not None
+        assert tool_complete.metadata["tool_id"] == "tc_1"
+
     @pytest.mark.asyncio
     async def test_error_events_emitted(self, ctx: AgentContext) -> None:
         events: list[AgentEvent] = []

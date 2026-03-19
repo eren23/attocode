@@ -1,25 +1,25 @@
 {
-  "timestamp": "2026-03-16T10:22:59",
-  "git_sha": "900250e",
-  "branch": "feat/update-61",
+  "timestamp": "2026-03-17T21:24:07",
+  "git_sha": "252edfe",
+  "branch": "feat/update-62",
   "repos": {
     "attocode": {
-      "bootstrap_time_ms": 13556.53754202649,
+      "bootstrap_time_ms": 13022.512832991197,
       "symbol_count": 2306,
       "quality_score": 4.8,
-      "total_time_ms": 13629.196583060548
+      "total_time_ms": 13073.448292983812
     },
     "gh-cli": {
-      "bootstrap_time_ms": 6102.968791034073,
+      "bootstrap_time_ms": 5416.960583999753,
       "symbol_count": 142,
       "quality_score": 3.2,
-      "total_time_ms": 6119.482583133504
+      "total_time_ms": 5432.259875989985
     },
     "redis": {
-      "bootstrap_time_ms": 7050.459832884371,
+      "bootstrap_time_ms": 7500.254500002484,
       "symbol_count": 389,
       "quality_score": 4.2,
-      "total_time_ms": 7091.075166827068
+      "total_time_ms": 7537.595956004225
     }
   }
 }

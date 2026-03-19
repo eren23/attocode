@@ -107,7 +107,7 @@ def _do_archive_moves(layout: dict[str, Any], history_dir: Path) -> None:
         shutil.move(str(git_safety), str(history_dir / "git_safety.json"))
 
     # Additional root-level files that were previously lost
-    for extra in ("changes.json", "coordinator.log", "swarm.yaml"):
+    for extra in ("changes.json", "coordinator.log", "swarm.yaml", "index.snapshot.json"):
         src = root / extra
         if src.exists() and src.stat().st_size > 0:
             shutil.move(str(src), str(history_dir / extra))

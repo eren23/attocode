@@ -218,11 +218,70 @@ Check the iteration count and phase:
 /status
 ```
 
+## Swarm Run Says Complete But Work Is Still Missing
+
+**Symptom:** A swarm shows `completed` or the dashboard looks finished, but the
+actual product work is clearly not done.
+
+**Common causes:**
+
+- The run was resumed from an older swarm with a different persisted goal than
+  the work you now care about.
+- You needed a new child swarm (`continue`) or new standalone swarm (`start`),
+  but used `resume` instead.
+- The run phase reflects the orchestrator's exit state, not a human judgment
+  that the overall product goal is satisfied.
+
+**What to check:**
+
+```bash
+jq '.goal, .phase, .dag_summary' .agent/hybrid-swarm/<run>/swarm.state.json
+jq '.goal' .agent/hybrid-swarm/<run>/swarm.manifest.json
+```
+
+If the persisted goal is the wrong one, do not resume that run. Start a new
+swarm or create a child swarm from the previous run:
+
+```bash
+attocode swarm start .attocode/swarm.hybrid.yaml "$(cat tasks/goal.md)"
+# or
+attocode swarm continue .agent/hybrid-swarm/<run> --config .attocode/swarm.hybrid.yaml "$(cat tasks/goal-phase2.md)"
+```
+
+If the phase is `completed` but `swarm.state.json` still has pending tasks,
+treat that as a status/reporting issue and inspect the DAG nodes directly
+before trusting the completion label.
+
 If the agent has done 10+ iterations of exploration without edits, it may need a nudge:
 
 ```
 "You've explored enough. Start implementing the changes now."
 ```
+
+## Swarm Stops In `planning_failed`
+
+**Symptom:** A shared-workspace swarm exits with `planning_failed`, the
+completion screen says "Planning Failed", or `attoswarm inspect` shows a
+planning failure before any real task execution starts.
+
+**What's happening:** The swarm could not produce a runnable decomposition for
+the goal. This is different from a worker task failing after execution began.
+
+**What to check:**
+
+```bash
+jq '.phase, .goal, .dag_summary' .agent/hybrid-swarm/<run>/swarm.state.json
+attoswarm inspect .agent/hybrid-swarm/<run>
+```
+
+**Fixes:**
+
+1. Tighten the goal so decomposition has clearer boundaries and deliverables.
+2. If this is follow-up work on a previous swarm, start a child run with `continue` instead of reusing `resume`.
+3. If the existing run was intentionally stopped and still has pending tasks, use `attoswarm resume <run-dir>`; otherwise start a fresh swarm.
+
+If a run ended in `planning_failed`, do not expect `resume` to turn that into
+real execution unless the underlying planning input changes.
 
 ### Agent producing empty or malformed responses
 

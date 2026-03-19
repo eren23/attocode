@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import replace
+from unittest.mock import patch
 
 import pytest
 
@@ -109,6 +110,60 @@ def test_attocode_command_has_heartbeat_and_stdin_isolation() -> None:
     assert "[HEARTBEAT]" in script
     assert "< /dev/null" in script
     assert "attocode" in script
+
+
+# ---------------------------------------------------------------------------
+# _default_command — codex-mcp returns direct command (no heartbeat wrapper)
+# ---------------------------------------------------------------------------
+
+
+def test_codex_mcp_returns_direct_command() -> None:
+    coord = _make_coordinator()
+    cmd = coord._default_command("codex-mcp", "gpt-5.3-codex")
+    assert cmd == ["codex", "mcp-server"]
+    # Must NOT be wrapped in sh -c heartbeat script
+    assert cmd[0] != "sh"
+
+
+def test_codex_mcp_ignores_model_flag() -> None:
+    coord = _make_coordinator()
+    cmd = coord._default_command("codex-mcp", "some-model")
+    assert cmd == ["codex", "mcp-server"]
+    # Model flag has no effect — MCP server gets model via tool call params
+    cmd_empty = coord._default_command("codex-mcp", "")
+    assert cmd_empty == cmd
+
+
+def test_preflight_maps_codex_mcp_to_codex_binary() -> None:
+    from attoswarm.protocol.models import RoleSpec, SwarmManifest, BudgetSpec, MergePolicy
+
+    coord = _make_coordinator()
+    # Set up manifest directly to avoid _bootstrap_manifest's code index build
+    coord.manifest = SwarmManifest(
+        run_id="test",
+        goal="test",
+        roles=[
+            RoleSpec(
+                role_id="mcp-dev",
+                role_type="worker",
+                backend="codex-mcp",
+                model="gpt-5.3-codex",
+                count=1,
+                write_access=True,
+            ),
+        ],
+        tasks=[],
+        budget=BudgetSpec(),
+        merge_policy=MergePolicy(),
+    )
+
+    # Case (a): codex binary found on PATH → preflight passes
+    with patch("shutil.which", return_value="/usr/local/bin/codex"):
+        assert coord._preflight_check() is True
+
+    # Case (b): codex binary not on PATH → preflight emits error, returns False
+    with patch("shutil.which", return_value=None):
+        assert coord._preflight_check() is False
 
 
 # ---------------------------------------------------------------------------
@@ -233,7 +288,7 @@ def test_fast_mode_first_task_is_ready() -> None:
     ]
     tasks = coord._decompose_initial_tasks(roles)
     assert tasks[0].status == "ready"
-    assert coord.task_state.get("t0") == "ready"
+    # task_state is populated by _bootstrap_manifest, not _decompose_initial_tasks
 
 
 def test_fast_mode_respects_max_tasks() -> None:

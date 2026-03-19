@@ -79,7 +79,7 @@ async def test_live_claude_codex_smoke(tmp_path: Path) -> None:
         tmp_path,
         roles=[
             {"role_id": "impl", "role_type": "worker", "backend": "claude", "model": "claude-sonnet-4-20250514", "count": 1, "task_kinds": ["implement"]},
-            {"role_id": "merger", "role_type": "merger", "backend": "codex", "model": "o3", "count": 1, "task_kinds": ["merge"]},
+            {"role_id": "merger", "role_type": "merger", "backend": "codex", "model": "gpt-5.3-codex", "count": 1, "task_kinds": ["merge"]},
         ],
     )
 

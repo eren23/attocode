@@ -10,6 +10,8 @@ import re
 import shutil
 import subprocess
 import sys
+import time
+import uuid
 from pathlib import Path
 from typing import Any
 
@@ -19,6 +21,8 @@ from attoswarm.config.loader import load_swarm_yaml, save_swarm_yaml
 from attoswarm.config.schema import RoleConfig, SwarmYamlConfig
 from attoswarm.coordinator.loop import HybridCoordinator
 from attoswarm.protocol.io import read_json
+from attoswarm.protocol.models import LauncherInfo, LineageSpec
+from attoswarm.run_summary import collect_modified_files
 from attoswarm.tui.app import AttoswarmApp
 
 logger = logging.getLogger(__name__)
@@ -86,7 +90,7 @@ _STRIP_ENV_VARS = {
 
 @click.group()
 def main() -> None:
-    """Attoswarm hybrid swarm orchestrator."""
+    """Attoswarm engine CLI. Canonical user entrypoint: `attocode swarm ...`."""
 
 
 def _build_backend_cmd(backend: str, model: str, prompt: str) -> list[str]:
@@ -123,6 +127,41 @@ def _build_backend_cmd(backend: str, model: str, prompt: str) -> list[str]:
         cmd.extend(["--non-interactive", prompt])
         return cmd
     raise ValueError(f"Unsupported backend: {backend!r}")
+
+
+def _unwrap_codex_jsonl(raw: str) -> str:
+    """Extract LLM message from codex exec --json JSONL output.
+
+    Codex ``exec --json`` emits JSONL events.  The actual LLM response
+    lives in ``item.completed`` events where ``item.type == "agent_message"``.
+    We return the last such message text (multi-turn conversations produce
+    multiple ``item.completed`` events).
+    """
+    messages: list[str] = []
+    for line in raw.splitlines():
+        line = line.strip()
+        if not line:
+            continue
+        try:
+            obj = json.loads(line)
+        except (ValueError, json.JSONDecodeError):
+            continue
+        if not isinstance(obj, dict):
+            continue
+        # Current format: item.completed with agent_message
+        if obj.get("type") == "item.completed":
+            item = obj.get("item", {})
+            if isinstance(item, dict) and item.get("type") == "agent_message":
+                text = item.get("text", "")
+                if text:
+                    messages.append(text)
+        # Legacy format
+        elif obj.get("status") == "completed":
+            msg = obj.get("message", "")
+            if msg:
+                messages.append(msg)
+
+    return messages[-1] if messages else raw
 
 
 def _build_backend_cmd_stdin(backend: str, model: str, prompt: str) -> tuple[list[str], str]:
@@ -168,6 +207,7 @@ def _build_backend_cmd_stdin(backend: str, model: str, prompt: str) -> tuple[lis
 def _make_subprocess_spawn_fn(
     cfg: SwarmYamlConfig,
     process_registry: Any = None,
+    event_callback: Any = None,
 ):  # noqa: ANN202
     """Build a spawn function that delegates to backend CLIs as subprocesses.
 
@@ -179,7 +219,11 @@ def _make_subprocess_spawn_fn(
 
     If *process_registry* (a SubagentManager) is provided, spawned processes
     are registered/unregistered for graceful shutdown.
+
+    If *event_callback* is provided, it is called with each parsed
+    ``AgentActivityEvent`` from Claude stream-json output.
     """
+    from attoswarm.adapters.stream_parser import AgentActivityEvent, parse_stream_json_line
     from attoswarm.coordinator.subagent_manager import TaskResult as _TaskResult
 
     # Pre-build role_hint -> RoleConfig lookup
@@ -215,6 +259,12 @@ def _make_subprocess_spawn_fn(
         prompt = "\n".join(prompt_parts)
 
         cmd = _build_backend_cmd(backend, model, prompt)
+        is_claude = backend == "claude"
+        if is_claude:
+            # Inject stream-json only for worker spawns (not decompose);
+            # --verbose is required by claude CLI when combining -p with stream-json
+            cmd = cmd[:-1] + ["--verbose", "--output-format", "stream-json"] + cmd[-1:]
+        task_id = task["task_id"]
 
         t0 = _time.monotonic()
         try:
@@ -230,26 +280,69 @@ def _make_subprocess_spawn_fn(
                 process_registry.register_process(proc)
             worker_timeout = max(cfg.run.max_runtime_seconds or 600, 600)
 
-            # Stream stdout to capture activity labels
+            # Accumulated structured events for result enrichment
+            activity_events: list[AgentActivityEvent] = []
+            final_tokens = 0
+            final_cost = 0.0
+
+            # Stream stdout — use stream-json parser for claude, regex for others
             async def _read_stdout() -> bytes:
-                assert proc.stdout is not None
+                nonlocal final_tokens, final_cost
+                if proc.stdout is None:
+                    raise RuntimeError("Process stdout not available (subprocess created without PIPE)")
                 buf = bytearray()
+                remainder = ""
                 while True:
                     chunk = await proc.stdout.read(4096)
                     if not chunk:
+                        # Process any remaining partial line
+                        if remainder.strip():
+                            _process_line(remainder, task_id, is_claude, activity_events)
                         break
                     buf.extend(chunk)
-                    # Parse lines for tool-call activity patterns
-                    text = chunk.decode("utf-8", errors="replace")
-                    for line in text.splitlines():
-                        label = _parse_activity_label(line)
-                        if label:
-                            # Write activity to a sidecar file for TUI
-                            _write_activity(cfg.run.run_dir, task["task_id"], label)
+                    text = remainder + chunk.decode("utf-8", errors="replace")
+                    lines = text.split("\n")
+                    # Last element may be incomplete — save as remainder
+                    remainder = lines[-1]
+                    for line in lines[:-1]:
+                        _process_line(line, task_id, is_claude, activity_events)
+                # Extract final tokens/cost from result events
+                for evt in activity_events:
+                    if evt.event_kind == "result":
+                        final_tokens = max(final_tokens, evt.tokens_used)
+                        final_cost = max(final_cost, evt.cost_usd)
                 return bytes(buf)
 
+            def _process_line(
+                line: str,
+                tid: str,
+                use_stream_json: bool,
+                events: list[AgentActivityEvent],
+            ) -> None:
+                if use_stream_json:
+                    evt = parse_stream_json_line(line, tid)
+                    if evt:
+                        events.append(evt)
+                        # Backward-compat: write activity sidecar
+                        if evt.event_kind == "tool_call" and evt.tool_name:
+                            _write_activity(cfg.run.run_dir, tid, f"{evt.tool_name} {evt.tool_input_summary[:40]}")
+                        elif evt.event_kind == "text" and evt.text_preview:
+                            _write_activity(cfg.run.run_dir, tid, evt.text_preview[:60])
+                        # Invoke event_callback for real-time observability
+                        if event_callback is not None:
+                            try:
+                                event_callback(evt)
+                            except Exception:
+                                pass
+                else:
+                    # Legacy regex path for non-Claude backends
+                    label = _parse_activity_label(line)
+                    if label:
+                        _write_activity(cfg.run.run_dir, tid, label)
+
             async def _read_stderr() -> bytes:
-                assert proc.stderr is not None
+                if proc.stderr is None:
+                    raise RuntimeError("Process stderr not available (subprocess created without PIPE)")
                 return await proc.stderr.read()
 
             try:
@@ -270,36 +363,40 @@ def _make_subprocess_spawn_fn(
 
             if proc.returncode == 0:
                 return _TaskResult(
-                    task_id=task["task_id"],
+                    task_id=task_id,
                     success=True,
                     result_summary=stdout_text[:4000],
+                    tokens_used=final_tokens,
+                    cost_usd=final_cost,
                     duration_s=elapsed,
                 )
             else:
                 return _TaskResult(
-                    task_id=task["task_id"],
+                    task_id=task_id,
                     success=False,
                     result_summary=stdout_text[:2000],
                     error=stderr_text[:2000] or f"{cmd[0]} exited with code {proc.returncode}",
+                    tokens_used=final_tokens,
+                    cost_usd=final_cost,
                     duration_s=elapsed,
                 )
         except TimeoutError:
             return _TaskResult(
-                task_id=task["task_id"],
+                task_id=task_id,
                 success=False,
                 error=f"Subprocess timed out after {cfg.run.max_runtime_seconds}s",
                 duration_s=_time.monotonic() - t0,
             )
         except FileNotFoundError:
             return _TaskResult(
-                task_id=task["task_id"],
+                task_id=task_id,
                 success=False,
                 error=f"'{cmd[0]}' CLI not found. Install it or add it to PATH.",
                 duration_s=_time.monotonic() - t0,
             )
         except Exception as exc:
             return _TaskResult(
-                task_id=task["task_id"],
+                task_id=task_id,
                 success=False,
                 error=f"Subprocess spawn failed: {exc}",
                 duration_s=_time.monotonic() - t0,
@@ -347,11 +444,14 @@ def _make_subprocess_decompose_fn(cfg: SwarmYamlConfig):  # noqa: ANN202
 
     custom_instructions = (cfg.orchestration.custom_instructions or "").strip()
 
+    # No codex preamble needed — codex decomposes fine when output is
+    # correctly unwrapped from JSONL events.
+
     def _build_decompose_prompt(goal: str, complexity: str = "", codebase_context: str = "") -> str:
         from attoswarm.coordinator.decompose import build_decompose_prompt, classify_goal_complexity
         if not complexity:
             complexity = classify_goal_complexity(goal)
-        return build_decompose_prompt(
+        prompt = build_decompose_prompt(
             goal,
             complexity=complexity,
             max_tasks=max_tasks,
@@ -359,16 +459,22 @@ def _make_subprocess_decompose_fn(cfg: SwarmYamlConfig):  # noqa: ANN202
             custom_instructions=custom_instructions,
             codebase_context=codebase_context,
         )
+        return prompt
 
     def _build_retry_prompt(goal: str, complexity: str = "") -> str:
         from attoswarm.coordinator.decompose import build_retry_prompt, classify_goal_complexity
         if not complexity:
             complexity = classify_goal_complexity(goal)
-        return build_retry_prompt(
+        prompt = build_retry_prompt(
             goal,
             complexity=complexity,
             custom_instructions=custom_instructions,
         )
+        return prompt
+
+    def _decompose_timeout_seconds() -> float:
+        configured = float(cfg.run.max_runtime_seconds or 0)
+        return configured if configured > 0 else 300.0
 
     def _parse_tasks(raw: str) -> list[_TaskSpec]:
         """Parse JSON output into TaskSpec list with validation."""
@@ -376,9 +482,7 @@ def _make_subprocess_decompose_fn(cfg: SwarmYamlConfig):  # noqa: ANN202
 
         data = extract_json_array(raw)
         if len(data) < 2:
-            raise ValueError(
-                f"Expected array with >=2 tasks, got {len(data)} items"
-            )
+            raise ValueError("Expected array with >=2 tasks, got %d items" % len(data))
 
         # Validate task_ids are unique
         ids = [t["task_id"] for t in data]
@@ -405,6 +509,8 @@ def _make_subprocess_decompose_fn(cfg: SwarmYamlConfig):  # noqa: ANN202
             for t in data
         ]
 
+    # _unwrap_codex_jsonl is at module level (no closure deps)
+
     async def _run_decompose(prompt: str) -> list[_TaskSpec]:
         """Run a single decomposition attempt via subprocess."""
         cmd, stdin_text = _build_backend_cmd_stdin(backend, model, prompt)
@@ -417,7 +523,7 @@ def _make_subprocess_decompose_fn(cfg: SwarmYamlConfig):  # noqa: ANN202
             env=clean_env,
             start_new_session=True,
         )
-        decompose_timeout = min(cfg.run.max_runtime_seconds or 300, 300)
+        decompose_timeout = _decompose_timeout_seconds()
         try:
             stdout_bytes, stderr_bytes = await asyncio.wait_for(
                 proc.communicate(input=stdin_text.encode() if stdin_text else None),
@@ -436,6 +542,10 @@ def _make_subprocess_decompose_fn(cfg: SwarmYamlConfig):  # noqa: ANN202
             raise RuntimeError(
                 f"Decomposition subprocess exited {proc.returncode}: {stderr_text[:500]}"
             )
+
+        # Codex --json wraps the LLM response in JSONL events; unwrap it
+        if backend == "codex":
+            stdout_text = _unwrap_codex_jsonl(stdout_text)
 
         return _parse_tasks(stdout_text)
 
@@ -518,7 +628,9 @@ def _print_run_summary(orch: Any) -> None:
     done = summary.get("done", 0)
     total = sum(summary.values()) if isinstance(summary, dict) else 0
     failed = summary.get("failed", 0)
+    pending = summary.get("pending", 0) if isinstance(summary, dict) else 0
     cost = orch.budget.used_cost_usd
+    phase = getattr(orch, "phase", getattr(orch, "_phase", ""))
 
     elapsed_s = 0.0
     if hasattr(orch, '_start_time') and orch._start_time:
@@ -529,16 +641,69 @@ def _print_run_summary(orch: Any) -> None:
     elapsed_str = f"{mins}m{secs:02d}s" if mins else f"{secs}s"
 
     click.echo(f"\n{'=' * 50}")
-    click.echo(f"  Tasks: {done}/{total} completed" + (f" ({failed} failed)" if failed else ""))
+    if phase == "shutdown":
+        status_label = "Stopped"
+    elif phase == "planning_failed":
+        status_label = "Planning failed"
+    else:
+        status_label = "Tasks"
+    status_line = f"  {status_label}: {done}/{total} completed"
+    if failed:
+        status_line += f" ({failed} failed)"
+    click.echo(status_line)
     click.echo(f"  Cost:  ${cost:.2f}")
     click.echo(f"  Time:  {elapsed_str}")
+    if phase == "shutdown" and pending > 0:
+        run_dir = str(getattr(orch, "_run_dir", ""))
+        click.echo(f"  Pending: {pending}")
+        if run_dir:
+            click.echo(f"  Resume: attoswarm resume {run_dir}")
 
     # Change manifest summary
+    files_modified: list[str] = []
+    printed_change_summary = False
     if hasattr(orch, '_change_manifest') and orch._change_manifest:
         ms = orch._change_manifest.get_summary()
+        files_modified = [str(fp) for fp in ms.get("files_modified", []) if isinstance(fp, str)]
         if ms.get("total_changes"):
-            click.echo(f"  Files: {len(ms.get('files_modified', []))} modified ({ms['total_changes']} changes)")
+            click.echo(f"  Files: {len(files_modified)} modified ({ms['total_changes']} changes)")
+            printed_change_summary = True
+    run_dir = str(getattr(orch, "_run_dir", ""))
+    if not printed_change_summary and run_dir:
+        files_modified = collect_modified_files(run_dir, getattr(orch, "get_state", lambda: {})())
+    if not printed_change_summary and files_modified:
+        click.echo(f"  Files: {len(files_modified)} modified")
     click.echo(f"{'=' * 50}")
+
+
+def _run_monitor_app(run_dir: str, proc: Any) -> int:
+    """Run the dashboard against a coordinator subprocess."""
+    app = AttoswarmApp(run_dir, coordinator_pid=getattr(proc, "pid", None))
+    app.run()
+
+    exit_intent = getattr(app, "exit_intent", "detach")
+    if proc.poll() is None:
+        if exit_intent == "stop":
+            click.echo("Waiting for coordinator shutdown...")
+            try:
+                proc.wait(timeout=8)
+            except subprocess.TimeoutExpired:
+                try:
+                    proc.terminate()
+                    proc.wait(timeout=3)
+                except subprocess.TimeoutExpired:
+                    proc.kill()
+                    proc.wait(timeout=3)
+                except Exception:
+                    pass
+            except Exception:
+                pass
+        else:
+            click.echo(f"Dashboard detached; coordinator still running (pid={proc.pid})")
+            click.echo(f"Reattach: attocode swarm tui {run_dir}")
+            return 0
+
+    return proc.returncode or 0
 
 
 def _prompt_git_finalization(orch: Any) -> None:
@@ -566,11 +731,135 @@ def _prompt_git_finalization(orch: Any) -> None:
         click.echo("Skipped git finalization (branch preserved)")
 
 
+def _launcher_info_from_env() -> LauncherInfo:
+    return LauncherInfo(
+        started_via=os.environ.get("ATTO_SWARM_STARTED_VIA", "attoswarm"),
+        command_family=os.environ.get("ATTO_SWARM_COMMAND_FAMILY", "attoswarm"),
+    )
+
+
+def _read_run_metadata(run_dir: Path) -> tuple[dict[str, Any], dict[str, Any]]:
+    manifest = read_json(run_dir / "swarm.manifest.json", default={})
+    state = read_json(run_dir / "swarm.state.json", default={})
+    return (
+        manifest if isinstance(manifest, dict) else {},
+        state if isinstance(state, dict) else {},
+    )
+
+
+def _summarize_parent_run(parent_run_dir: Path) -> dict[str, Any]:
+    manifest, state = _read_run_metadata(parent_run_dir)
+    dag_summary = state.get("dag_summary", {})
+    if not isinstance(dag_summary, dict):
+        dag_summary = {}
+
+    unresolved: list[str] = []
+    dag_nodes = state.get("dag", {}).get("nodes", []) if isinstance(state.get("dag"), dict) else []
+    if isinstance(dag_nodes, list):
+        for node in dag_nodes:
+            if not isinstance(node, dict):
+                continue
+            if str(node.get("status", "")) not in {"done", "completed"}:
+                task_id = str(node.get("task_id", ""))
+                if task_id:
+                    unresolved.append(task_id)
+
+    changed_files: list[str] = []
+    raw_changes = read_json(parent_run_dir / "changes.json", default=[])
+    if isinstance(raw_changes, list):
+        seen: set[str] = set()
+        for item in raw_changes:
+            if not isinstance(item, dict):
+                continue
+            file_path = str(item.get("file_path", ""))
+            if file_path and file_path not in seen:
+                seen.add(file_path)
+                changed_files.append(file_path)
+
+    return {
+        "goal": manifest.get("goal", state.get("goal", "")),
+        "phase": state.get("phase", ""),
+        "completed_tasks": int(dag_summary.get("done", 0)),
+        "failed_tasks": int(dag_summary.get("failed", 0)),
+        "changed_files": changed_files[:20],
+        "unresolved_tasks": unresolved[:20],
+    }
+
+
+def _build_continuation_lineage(parent_run_dir: Path) -> LineageSpec:
+    manifest, state = _read_run_metadata(parent_run_dir)
+    parent_run_id = str(manifest.get("run_id", state.get("run_id", parent_run_dir.name)))
+    parent_lineage = LineageSpec.from_dict(manifest.get("lineage", {}) or state.get("lineage", {}))
+    git_safety = read_json(parent_run_dir / "git_safety.json", default={})
+    if not isinstance(git_safety, dict):
+        git_safety = {}
+
+    if str(git_safety.get("finalization_mode", "")) == "discard":
+        raise click.ClickException(f"Cannot continue from {parent_run_dir}: parent swarm was discarded")
+
+    base_ref = str(
+        git_safety.get("result_ref")
+        or git_safety.get("swarm_branch")
+        or ""
+    )
+    base_commit = str(
+        git_safety.get("result_commit")
+        or git_safety.get("base_commit")
+        or git_safety.get("pre_run_head")
+        or ""
+    )
+    if not (base_ref or base_commit):
+        raise click.ClickException(
+            f"Cannot continue from {parent_run_dir}: no preserved swarm branch or result commit found"
+        )
+
+    return LineageSpec(
+        parent_run_id=parent_run_id,
+        parent_run_dir=str(parent_run_dir),
+        root_run_id=parent_lineage.root_run_id or parent_run_id,
+        continuation_mode="child",
+        base_ref=base_ref,
+        base_commit=base_commit,
+        parent_summary=_summarize_parent_run(parent_run_dir),
+    )
+
+
+def _default_child_run_dir(parent_run_dir: Path) -> str:
+    manifest, state = _read_run_metadata(parent_run_dir)
+    parent_run_id = str(manifest.get("run_id", state.get("run_id", parent_run_dir.name)))
+    stamp = time.strftime("%Y%m%d-%H%M%S")
+    short_id = uuid.uuid4().hex[:4]
+    return str(parent_run_dir.parent / f"{parent_run_id}-child-{stamp}-{short_id}")
+
+
+def _apply_continuation(
+    cfg: SwarmYamlConfig,
+    continue_from: Path,
+    run_dir: str | None,
+    resume_flag: bool,
+) -> LineageSpec:
+    """Validate --continue-from and return lineage + mutate cfg.run.run_dir."""
+    if resume_flag:
+        raise click.ClickException("--resume cannot be combined with --continue-from")
+    continue_root = continue_from.resolve()
+    lineage = _build_continuation_lineage(continue_root)
+    cfg.run.run_dir = run_dir or _default_child_run_dir(continue_root)
+    if Path(cfg.run.run_dir).resolve() == continue_root:
+        raise click.ClickException("Child runs must use a different run directory than the parent run")
+    return lineage
+
+
 @main.command("run")
 @click.argument("config_path", type=click.Path(exists=True, dir_okay=False, path_type=Path))
 @click.argument("goal", nargs=-1)
 @click.option("--run-dir", default=None, help="Override run directory from config")
 @click.option("--resume", "resume_flag", is_flag=True, help="Resume existing run directory state")
+@click.option(
+    "--continue-from",
+    type=click.Path(exists=True, file_okay=False, path_type=Path),
+    default=None,
+    help="Start a new child swarm from a previous swarm run directory",
+)
 @click.option("--observe", is_flag=True, help="Open TUI after run exits")
 @click.option("--debug", "debug_flag", is_flag=True, help="Enable debug markers in shell wrapper and coordinator events")
 @click.option(
@@ -587,6 +876,7 @@ def run_command(
     goal: tuple[str, ...],
     run_dir: str | None,
     resume_flag: bool,
+    continue_from: Path | None,
     observe: bool,
     debug_flag: bool,
     workspace_mode: str | None,
@@ -596,7 +886,9 @@ def run_command(
 ) -> None:
     """Run swarm with YAML config and goal."""
     cfg = load_swarm_yaml(config_path)
-    if run_dir:
+    launcher = _launcher_info_from_env()
+    lineage = _apply_continuation(cfg, continue_from, run_dir, resume_flag) if continue_from else LineageSpec()
+    if not continue_from and run_dir:
         cfg.run.run_dir = run_dir
     if debug_flag:
         cfg.run.debug = True
@@ -619,16 +911,21 @@ def run_command(
             spawn_fn=_make_subprocess_spawn_fn(cfg, process_registry=None),
             trace_collector=collector,
             approval_mode=approval_mode,
+            lineage=lineage,
+            launcher=launcher,
         )
-        # Wire process registry: spawn_fn uses orchestrator's subagent manager
+        # Wire process registry + event_callback: spawn_fn uses orchestrator's subagent manager
         orch._subagent_mgr._spawn_fn = _make_subprocess_spawn_fn(
             cfg, process_registry=orch._subagent_mgr,
+            event_callback=orch._on_agent_activity,
         )
         code = asyncio.run(orch.run())
         _print_run_summary(orch)
         _prompt_git_finalization(orch)
     else:
-        code = asyncio.run(HybridCoordinator(cfg, goal_text, resume=resume_flag).run())
+        code = asyncio.run(HybridCoordinator(
+            cfg, goal_text, resume=resume_flag, lineage=lineage, launcher=launcher,
+        ).run())
 
     if observe:
         AttoswarmApp(cfg.run.run_dir).run()
@@ -640,6 +937,12 @@ def run_command(
 @click.argument("goal", nargs=-1)
 @click.option("--run-dir", default=None, help="Override run directory from config")
 @click.option("--resume", "resume_flag", is_flag=True, help="Resume existing run directory state")
+@click.option(
+    "--continue-from",
+    type=click.Path(exists=True, file_okay=False, path_type=Path),
+    default=None,
+    help="Start a new child swarm from a previous swarm run directory",
+)
 @click.option("--monitor/--no-monitor", default=True, help="Open monitor while coordinator runs")
 @click.option("--detach", is_flag=True, help="Start coordinator and return immediately")
 @click.option("--skip-doctor", is_flag=True, help="Skip backend preflight checks")
@@ -665,6 +968,7 @@ def start_command(
     goal: tuple[str, ...],
     run_dir: str | None,
     resume_flag: bool,
+    continue_from: Path | None,
     monitor: bool,
     detach: bool,
     skip_doctor: bool,
@@ -676,9 +980,11 @@ def start_command(
     preview: bool,
     dry_run: bool,
 ) -> None:
-    """Single launcher: run coordinator and monitor with one command."""
+    """Canonical user entrypoint: initialize, run, or continue a swarm."""
     cfg = load_swarm_yaml(config_path)
-    if run_dir:
+    launcher = _launcher_info_from_env()
+    lineage = _apply_continuation(cfg, continue_from, run_dir, resume_flag) if continue_from else LineageSpec()
+    if not continue_from and run_dir:
         cfg.run.run_dir = run_dir
     if debug_flag:
         cfg.run.debug = True
@@ -705,6 +1011,7 @@ def start_command(
 
     # Determine approval mode
     approval_mode = "dry_run" if dry_run else ("preview" if preview else "auto")
+    effective_run_dir = cfg.run.run_dir
 
     def _build_start_cmd() -> list[str]:
         cmd = [
@@ -715,10 +1022,12 @@ def start_command(
             str(config_path),
             goal_text,
         ]
-        if run_dir:
-            cmd.extend(["--run-dir", run_dir])
+        if effective_run_dir:
+            cmd.extend(["--run-dir", effective_run_dir])
         if resume_flag:
             cmd.append("--resume")
+        if continue_from:
+            cmd.extend(["--continue-from", str(continue_from)])
         if debug_flag:
             cmd.append("--debug")
         if trace_flag:
@@ -731,12 +1040,12 @@ def start_command(
 
     if detach:
         cmd = _build_start_cmd()
-        log_path = Path(cfg.run.run_dir) / "coordinator.log"
+        log_path = Path(effective_run_dir) / "coordinator.log"
         log_path.parent.mkdir(parents=True, exist_ok=True)
         log_fh = open(log_path, "a", encoding="utf-8")  # noqa: SIM115
         proc = subprocess.Popen(cmd, stdout=log_fh, stderr=log_fh)
         click.echo(f"Coordinator started in background (pid={proc.pid})")
-        click.echo(f"Reattach: attoswarm tui {cfg.run.run_dir}")
+        click.echo(f"Reattach: attocode swarm tui {effective_run_dir}")
         raise SystemExit(0)
 
     collector = _make_trace_collector(cfg) if trace_flag else None
@@ -755,35 +1064,92 @@ def start_command(
                 spawn_fn=_make_subprocess_spawn_fn(cfg, process_registry=None),
                 trace_collector=collector,
                 approval_mode=approval_mode,
+                lineage=lineage,
+                launcher=launcher,
             )
             orch._subagent_mgr._spawn_fn = _make_subprocess_spawn_fn(
                 cfg, process_registry=orch._subagent_mgr,
+                event_callback=orch._on_agent_activity,
             )
             code = asyncio.run(orch.run())
             _print_run_summary(orch)
             _prompt_git_finalization(orch)
         else:
-            code = asyncio.run(HybridCoordinator(cfg, goal_text, resume=resume_flag).run())
+            code = asyncio.run(HybridCoordinator(
+                cfg, goal_text, resume=resume_flag, lineage=lineage, launcher=launcher,
+            ).run())
         raise SystemExit(code)
 
     cmd = _build_start_cmd()
-    log_path = Path(cfg.run.run_dir) / "coordinator.log"
+    log_path = Path(effective_run_dir) / "coordinator.log"
     log_path.parent.mkdir(parents=True, exist_ok=True)
     log_fh = open(log_path, "a", encoding="utf-8")  # noqa: SIM115
     proc = subprocess.Popen(cmd, stdout=log_fh, stderr=log_fh)
-    try:
-        AttoswarmApp(cfg.run.run_dir, coordinator_pid=proc.pid).run()
-    finally:
-        if proc.poll() is None:
-            try:
-                proc.terminate()
-                proc.wait(timeout=8)
-            except subprocess.TimeoutExpired:
-                proc.kill()
-                proc.wait(timeout=3)
-            except Exception:
-                pass
-    raise SystemExit(proc.returncode or 0)
+    raise SystemExit(_run_monitor_app(effective_run_dir, proc))
+
+
+@main.command("continue")
+@click.argument("parent_run_dir", type=click.Path(exists=True, file_okay=False, path_type=Path))
+@click.argument("goal", nargs=-1)
+@click.option(
+    "--config",
+    "config_path",
+    type=click.Path(exists=True, dir_okay=False, path_type=Path),
+    default=Path(".attocode/swarm.hybrid.yaml"),
+    show_default=True,
+    help="Swarm config path",
+)
+@click.option("--run-dir", default=None, help="Override child run directory")
+@click.option("--monitor/--no-monitor", default=True, help="Open monitor while coordinator runs")
+@click.option("--detach", is_flag=True, help="Start coordinator and return immediately")
+@click.option("--skip-doctor", is_flag=True, help="Skip backend preflight checks")
+@click.option("--debug", "debug_flag", is_flag=True, help="Enable debug markers in shell wrapper and coordinator events")
+@click.option(
+    "--workspace-mode",
+    type=click.Choice(["shared", "worktree"]),
+    default=None,
+    help="Override workspace mode: 'shared' (AoT+OCC) or 'worktree' (legacy)",
+)
+@click.option("--trace", "trace_flag", is_flag=True, help="Enable trace collection for post-hoc analysis")
+@click.option("--no-git-safety", is_flag=True, help="Disable git stash/branch safety net")
+@click.option("--preview", is_flag=True, help="Review task plan before execution starts")
+@click.option("--dry-run", is_flag=True, help="Decompose only — show tasks without executing")
+@click.pass_context
+def continue_command(
+    ctx: click.Context,
+    parent_run_dir: Path,
+    goal: tuple[str, ...],
+    config_path: Path,
+    run_dir: str | None,
+    monitor: bool,
+    detach: bool,
+    skip_doctor: bool,
+    debug_flag: bool,
+    workspace_mode: str | None,
+    trace_flag: bool,
+    no_git_safety: bool,
+    preview: bool,
+    dry_run: bool,
+) -> None:
+    """Start a new child swarm on top of a previous swarm's output."""
+    ctx.invoke(
+        start_command,
+        config_path=config_path,
+        goal=goal,
+        run_dir=run_dir,
+        resume_flag=False,
+        continue_from=parent_run_dir,
+        monitor=monitor,
+        detach=detach,
+        skip_doctor=skip_doctor,
+        debug_flag=debug_flag,
+        workspace_mode=workspace_mode,
+        tasks_file=None,
+        trace_flag=trace_flag,
+        no_git_safety=no_git_safety,
+        preview=preview,
+        dry_run=dry_run,
+    )
 
 
 @main.command("tui")
@@ -835,6 +1201,7 @@ def resume_command(run_dir: Path, workspace_mode: str | None, trace_flag: bool) 
         goal = state_data.get("goal", "Resume swarm run")
 
     collector = _make_trace_collector(cfg) if trace_flag else None
+    launcher = _launcher_info_from_env()
 
     if cfg.workspace.mode == "shared":
         from attoswarm.coordinator.orchestrator import SwarmOrchestrator
@@ -843,9 +1210,10 @@ def resume_command(run_dir: Path, workspace_mode: str | None, trace_flag: bool) 
             decompose_fn=_make_subprocess_decompose_fn(cfg),
             spawn_fn=_make_subprocess_spawn_fn(cfg),
             trace_collector=collector,
+            launcher=launcher,
         ).run())
     else:
-        code = asyncio.run(HybridCoordinator(cfg, str(goal), resume=True).run())
+        code = asyncio.run(HybridCoordinator(cfg, str(goal), resume=True, launcher=launcher).run())
     raise SystemExit(code)
 
 
@@ -1093,23 +1461,11 @@ def quick_command(
         if detach:
             proc = subprocess.Popen(cmd, stdout=log_fh, stderr=log_fh)
             click.echo(f"Coordinator started in background (pid={proc.pid})")
-            click.echo(f"Reattach: attoswarm tui {cfg.run.run_dir}")
+            click.echo(f"Reattach: attocode swarm tui {cfg.run.run_dir}")
             raise SystemExit(0)
 
         proc = subprocess.Popen(cmd, stdout=log_fh, stderr=log_fh)
-        try:
-            AttoswarmApp(cfg.run.run_dir, coordinator_pid=proc.pid).run()
-        finally:
-            if proc.poll() is None:
-                try:
-                    proc.terminate()
-                    proc.wait(timeout=8)
-                except subprocess.TimeoutExpired:
-                    proc.kill()
-                    proc.wait(timeout=3)
-                except Exception:
-                    pass
-        raise SystemExit(proc.returncode or 0)
+        raise SystemExit(_run_monitor_app(cfg.run.run_dir, proc))
 
     # Inline execution (--no-monitor or --dry-run)
     # --preview without TUI has no way to approve — fall back to dry_run
@@ -1118,6 +1474,7 @@ def quick_command(
         approval_mode = "dry_run"
 
     collector = _make_trace_collector(cfg) if trace_flag else None
+    launcher = _launcher_info_from_env()
 
     from attoswarm.coordinator.orchestrator import SwarmOrchestrator
     orch = SwarmOrchestrator(
@@ -1127,9 +1484,11 @@ def quick_command(
         spawn_fn=_make_subprocess_spawn_fn(cfg, process_registry=None),
         trace_collector=collector,
         approval_mode=approval_mode,
+        launcher=launcher,
     )
     orch._subagent_mgr._spawn_fn = _make_subprocess_spawn_fn(
         cfg, process_registry=orch._subagent_mgr,
+        event_callback=orch._on_agent_activity,
     )
 
     code = asyncio.run(orch.run())
@@ -1145,7 +1504,7 @@ def quick_command(
                 f"  [{t.get('task_kind', '')}] {t.get('task_id', '')}: {t.get('title', '')}"
                 + (f" (deps: {deps})" if deps else "")
             )
-        click.echo(f"\nReview with: attoswarm tui {cfg.run.run_dir}")
+        click.echo(f"\nReview with: attocode swarm tui {cfg.run.run_dir}")
         raise SystemExit(0)
 
     # Print summary
@@ -1181,7 +1540,7 @@ def doctor_command(config_path: Path) -> None:
 
 @main.command("init")
 @click.argument("target_dir", type=click.Path(path_type=Path), required=False)
-@click.option("--profile", type=click.Choice(["2cc", "cc-codex", "cc-aider", "full-team", "custom"]), default=None)
+@click.option("--profile", type=click.Choice(["2cc", "cc-codex", "cc-aider", "2codex", "codex-cc", "full-team", "custom"]), default=None)
 @click.option("--mode", type=click.Choice(["minimal", "demo"]), default=None)
 def init_command(target_dir: Path | None, profile: str | None, mode: str | None) -> None:
     """Interactive starter generator for hybrid swarm."""
@@ -1206,11 +1565,13 @@ def init_command(target_dir: Path | None, profile: str | None, mode: str | None)
         click.echo("  [1] 2cc        - Two Claude Code agents (orchestrator + workers)")
         click.echo("  [2] cc-codex   - Claude orchestrator + Codex workers (fast + cheap)")
         click.echo("  [3] cc-aider   - Claude orchestrator + Aider workers")
-        click.echo("  [4] full-team  - Orchestrator + workers + judge + merger (quality-focused)")
-        click.echo("  [5] custom     - Configure each role manually")
+        click.echo("  [4] 2codex     - Pure Codex (orchestrator + workers, no Anthropic key needed)")
+        click.echo("  [5] codex-cc   - Codex orchestrator + Claude workers")
+        click.echo("  [6] full-team  - Orchestrator + workers + judge + merger (quality-focused)")
+        click.echo("  [7] custom     - Configure each role manually")
         profile = click.prompt(
             "Select backend profile",
-            type=click.Choice(["2cc", "cc-codex", "cc-aider", "full-team", "custom"]),
+            type=click.Choice(["2cc", "cc-codex", "cc-aider", "2codex", "codex-cc", "full-team", "custom"]),
             default="2cc",
         )
 
@@ -1316,10 +1677,12 @@ def init_command(target_dir: Path | None, profile: str | None, mode: str | None)
             "task_kinds": task_kinds,
         }
 
+    # Orchestrator backend: codex for codex-led profiles, claude otherwise
+    orch_backend = "codex" if profile in ("2codex", "codex-cc") else "claude"
     orch_role: dict[str, Any] = {
         "role_id": "orchestrator",
         "role_type": "orchestrator",
-        "backend": "claude",
+        "backend": orch_backend,
         "model": "",
         "count": 1,
         "task_kinds": ["analysis", "design"],
@@ -1333,14 +1696,28 @@ def init_command(target_dir: Path | None, profile: str | None, mode: str | None)
         # Split workers: half claude, half codex
         if worker_count <= 1:
             # Single worker: use primary backend only
-            roles = [orch_role, _worker_role("impl-codex", "codex", "o3", 1, impl_kinds)]
+            roles = [orch_role, _worker_role("impl-codex", "codex", "", 1, impl_kinds)]
         else:
             codex_count = worker_count // 2
             claude_count = worker_count - codex_count
             roles = [
                 orch_role,
                 _worker_role("impl-claude", "claude", "", claude_count, impl_kinds),
-                _worker_role("impl-codex", "codex", "o3", codex_count, impl_kinds),
+                _worker_role("impl-codex", "codex", "", codex_count, impl_kinds),
+            ]
+    elif profile == "2codex":
+        roles = [orch_role, _worker_role("impl", "codex", "", worker_count, impl_kinds)]
+    elif profile == "codex-cc":
+        # Codex orchestrator + Claude workers
+        if worker_count <= 1:
+            roles = [orch_role, _worker_role("impl-claude", "claude", "", 1, impl_kinds)]
+        else:
+            claude_count = worker_count // 2
+            codex_count = worker_count - claude_count
+            roles = [
+                orch_role,
+                _worker_role("impl-claude", "claude", "", claude_count, impl_kinds),
+                _worker_role("impl-codex", "codex", "", codex_count, impl_kinds),
             ]
     elif profile == "cc-aider":
         if worker_count <= 1:
@@ -1554,7 +1931,7 @@ def _interactive_task_builder(base_dir: Path, cfg: dict[str, Any]) -> None:
         out_path.write_text("\n".join(md_lines), encoding="utf-8")
 
     click.echo(f"Created {out_path}")
-    click.echo(f"Use with: attoswarm start <config> --tasks-file {out_path} \"<goal>\"")
+    click.echo(f"Use with: attocode swarm start <config> --tasks-file {out_path} \"<goal>\"")
 
 
 def _manual_task_builder() -> list[dict[str, Any]]:

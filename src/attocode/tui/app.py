@@ -137,6 +137,15 @@ class AttocodeApp(App):
         # Active tools for AgentInternalsPanel: tool_id -> tool_name
         self._active_tools: dict[str, str] = {}
 
+        # Coalesce high-frequency stream updates to keep the TUI responsive.
+        self._pending_stream_text: list[str] = []
+        self._pending_thinking_text: list[str] = []
+        self._stream_flush_timer: Timer | None = None
+        self._stream_chunks_since_window_start = 0
+        self._stream_window_started_at = 0.0
+        self._stream_chunks_seen_total = 0
+        self._coalescing_live_updates = False
+
         # Rate-limit failure toasts (I4)
         self._last_failure_toast_time: float = 0.0
 
@@ -166,6 +175,9 @@ class AttocodeApp(App):
 
     async def on_unmount(self) -> None:
         """Clean up persistent resources on app teardown."""
+        if self._stream_flush_timer is not None:
+            self._stream_flush_timer.stop()
+            self._stream_flush_timer = None
         # Detach swarm callback before closing agent
         if self._agent and hasattr(self._agent, "set_tui_swarm_callback"):
             self._agent.set_tui_swarm_callback(None)
@@ -442,6 +454,7 @@ class AttocodeApp(App):
 
         self._streamed_response = False
         self._active_tools.clear()
+        self._reset_stream_coalescing()
         self.query_one("#input-area", PromptInput).set_enabled(True)
         self.query_one("#status-bar", StatusBar).stop_processing()
         self.query_one("#tool-panel", ToolCallsPanel).clear_calls()
@@ -470,8 +483,6 @@ class AttocodeApp(App):
             )
         )
         self.query_one("#status-bar", StatusBar).mode = f"calling {event.name}"
-        log = self.query_one("#message-log", MessageLog)
-        log.add_tool_message(event.name, "started")
 
         # Track active tools for internals panel (keyed by tool_id)
         self._active_tools[event.tool_id] = event.name
@@ -544,21 +555,26 @@ class AttocodeApp(App):
     def on_llm_stream_start(self, event: LLMStreamStart) -> None:
         """LLM streaming started — show streaming buffer."""
         self._stop_typing_indicator()
+        self._reset_stream_coalescing()
         self.query_one("#streaming-buffer", StreamingBuffer).start()
         self.query_one("#thinking-panel", ThinkingPanel).start_thinking()
         self.query_one("#status-bar", StatusBar).mode = "streaming"
 
     def on_llm_stream_chunk(self, event: LLMStreamChunk) -> None:
         """A chunk of streaming content arrived."""
+        self._record_stream_activity()
         if event.chunk_type == "thinking":
-            self.query_one("#thinking-panel", ThinkingPanel).append_thinking(event.content)
+            self._pending_thinking_text.append(event.content)
         else:
-            self.query_one("#streaming-buffer", StreamingBuffer).append_chunk(
-                event.content, event.chunk_type
-            )
+            self._pending_stream_text.append(event.content)
+        self._maybe_enable_stream_coalescing()
+
+        if self._stream_flush_timer is None:
+            self._stream_flush_timer = self.set_timer(0.05, self._flush_stream_chunks)
 
     def on_llm_stream_end(self, event: LLMStreamEnd) -> None:
         """LLM streaming ended — finalize to message log."""
+        self._flush_stream_chunks()
         buffer = self.query_one("#streaming-buffer", StreamingBuffer)
         thinking_panel = self.query_one("#thinking-panel", ThinkingPanel)
 
@@ -571,6 +587,7 @@ class AttocodeApp(App):
 
         buffer.stop()
         thinking_panel.stop_thinking()
+        self._reset_stream_coalescing()
 
         # Feed live dashboard accumulator
         self._live_accumulator.record_llm(event.tokens, event.cost)
@@ -751,6 +768,63 @@ class AttocodeApp(App):
 
         # Update SwarmPanel quality stats from event bridge state
         self._update_swarm_panel_from_event(event.event)
+
+    def _flush_stream_chunks(self) -> None:
+        """Flush buffered stream chunks into the visible widgets."""
+        self._stream_flush_timer = None
+        if self._pending_thinking_text:
+            self.query_one("#thinking-panel", ThinkingPanel).append_thinking(
+                "".join(self._pending_thinking_text)
+            )
+            self._pending_thinking_text.clear()
+        if self._pending_stream_text:
+            self.query_one("#streaming-buffer", StreamingBuffer).append_chunk(
+                "".join(self._pending_stream_text),
+                "text",
+            )
+            self._pending_stream_text.clear()
+
+    def _record_stream_activity(self) -> None:
+        """Track stream event rates and mark the UI as batched under load."""
+        now = asyncio.get_running_loop().time()
+        if self._stream_window_started_at == 0.0 or now - self._stream_window_started_at > 0.5:
+            self._stream_window_started_at = now
+            self._stream_chunks_since_window_start = 0
+        self._stream_chunks_since_window_start += 1
+        self._stream_chunks_seen_total += 1
+
+    def _maybe_enable_stream_coalescing(self) -> None:
+        """Enable the batched-live indicator once chunk volume gets high enough."""
+        pending_chunks = len(self._pending_stream_text) + len(self._pending_thinking_text)
+        if self._coalescing_live_updates:
+            return
+        if (
+            self._stream_chunks_seen_total < 12
+            and self._stream_chunks_since_window_start < 12
+            and pending_chunks < 8
+        ):
+            return
+        self._coalescing_live_updates = True
+        self.query_one("#status-bar", StatusBar).live_updates_coalesced = True
+        self.query_one("#message-log", MessageLog).add_system_message(
+            "High event rate detected; batching live updates to keep the TUI responsive."
+        )
+
+    def _reset_stream_coalescing(self) -> None:
+        """Clear batching state after a response finishes."""
+        if self._stream_flush_timer is not None:
+            self._stream_flush_timer.stop()
+            self._stream_flush_timer = None
+        self._pending_stream_text.clear()
+        self._pending_thinking_text.clear()
+        self._stream_chunks_since_window_start = 0
+        self._stream_window_started_at = 0.0
+        self._stream_chunks_seen_total = 0
+        self._coalescing_live_updates = False
+        try:
+            self.query_one("#status-bar", StatusBar).live_updates_coalesced = False
+        except Exception:
+            pass
 
     def _update_swarm_panel_from_event(self, evt: dict) -> None:
         """Push quality stats and start time to SwarmPanel."""

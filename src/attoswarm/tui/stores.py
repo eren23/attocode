@@ -1189,11 +1189,16 @@ class StateStore:
             state = read_json(state_path, default={}) if state_path.exists() else {}
             manifest_path = entry / "swarm.manifest.json"
             manifest = read_json(manifest_path, default={}) if manifest_path.exists() else {}
+            lineage = manifest.get("lineage", state.get("lineage", {}))
+            if not isinstance(lineage, dict):
+                lineage = {}
             runs.append({
                 "run_id": entry.name,
                 "goal": manifest.get("goal", state.get("goal", "")),
                 "phase": state.get("phase", "unknown"),
                 "task_count": len(manifest.get("tasks", [])),
+                "continuation_mode": lineage.get("continuation_mode", ""),
+                "parent_run_id": lineage.get("parent_run_id", ""),
                 "path": str(entry),
             })
         return runs
