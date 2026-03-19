@@ -39,7 +39,6 @@ def _make_stable_app(run_dir: Path) -> "AttoswarmApp":
     vary between runs.
     """
     from textual.app import ComposeResult
-    from textual.widgets import Header
 
     from attoswarm.tui.app import AttoswarmApp, SwarmSummaryBar
 
@@ -47,42 +46,51 @@ def _make_stable_app(run_dir: Path) -> "AttoswarmApp":
         def compose(self) -> ComposeResult:
             # Override compose to match AttoswarmApp layout but with clock disabled
             from textual.containers import Horizontal, Vertical
-            from textual.widgets import Footer, Header, ProgressBar, TabbedContent, TabPane
+            from textual.widgets import Footer, Header, Input, ProgressBar, Static, TabbedContent, TabPane
 
+            from attocode.tui.widgets.swarm.agent_trace_stream import AgentTraceStream
             from attocode.tui.widgets.swarm.agent_grid import AgentsDataTable
+            from attocode.tui.widgets.swarm.budget_projection_widget import BudgetProjectionWidget
+            from attocode.tui.widgets.swarm.conflict_panel import ConflictPanel
+            from attocode.tui.widgets.swarm.decisions_pane import DecisionsPane
             from attocode.tui.widgets.swarm.dag_view import DependencyTree
             from attocode.tui.widgets.swarm.detail_inspector import DetailInspector
             from attocode.tui.widgets.swarm.event_timeline import EventsLog
+            from attocode.tui.widgets.swarm.failure_chain_widget import FailureChainWidget
             from attocode.tui.widgets.swarm.messages_log import MessagesLog
+            from attocode.tui.widgets.swarm.overview_pane import OverviewPane
             from attocode.tui.widgets.swarm.task_board import TasksDataTable
 
             yield Header(show_clock=False)
             with Vertical(id="swarm-outer"):
                 yield SwarmSummaryBar(id="summary-bar")
                 yield ProgressBar(id="budget-progress", total=100, show_eta=False, show_percentage=True)
+                yield Static("", id="budget-breakdown")
                 with TabbedContent(id="swarm-tabs"):
                     with TabPane("Overview", id="tab-overview"):
-                        with Horizontal(id="overview-container"):
-                            with Vertical(id="overview-left"):
-                                yield DependencyTree(id="dep-tree-widget")
-                            with Vertical(id="overview-right"):
-                                yield EventsLog(id="overview-events")
-                    with TabPane("Tasks", id="tab-tasks"):
-                        with Horizontal(id="tasks-container"):
-                            with Vertical(id="tasks-table-container"):
-                                yield TasksDataTable(id="tasks-dt")
-                            with Vertical(id="task-detail-container"):
-                                yield DetailInspector(id="task-detail")
-                    with TabPane("Agents", id="tab-agents"):
-                        with Horizontal(id="agents-container"):
-                            with Vertical(id="agents-table-container"):
-                                yield AgentsDataTable(id="agents-dt")
-                            with Vertical(id="agent-detail-container"):
-                                yield DetailInspector(id="agent-detail")
+                        yield OverviewPane(id="overview-pane")
+                    with TabPane("Tasks", id="tab-tasks"), Horizontal(id="tasks-container"):
+                        with Vertical(id="tasks-table-container"):
+                            yield TasksDataTable(id="tasks-dt")
+                        with Vertical(id="task-detail-container"):
+                            yield DetailInspector(id="task-detail")
+                    with TabPane("Agents", id="tab-agents"), Horizontal(id="agents-container"):
+                        with Vertical(id="agents-table-container"):
+                            yield AgentsDataTable(id="agents-dt")
+                        with Vertical(id="agent-detail-container"):
+                            yield DetailInspector(id="agent-detail")
+                            yield AgentTraceStream(id="agent-trace")
                     with TabPane("Events", id="tab-events"):
+                        yield Input(placeholder="Filter events...", id="event-filter")
                         yield EventsLog(id="events-full")
                     with TabPane("Messages", id="tab-messages"):
                         yield MessagesLog(id="messages-log-widget")
+                    with TabPane("Decisions", id="tab-decisions"):
+                        with Vertical(id="decisions-outer"):
+                            yield DecisionsPane(id="decisions-pane")
+                            yield BudgetProjectionWidget(id="budget-projection")
+                            yield FailureChainWidget(id="failure-chain")
+                            yield ConflictPanel(id="conflict-panel")
             yield Footer()
 
         def on_mount(self) -> None:
@@ -91,6 +99,7 @@ def _make_stable_app(run_dir: Path) -> "AttoswarmApp":
             # Textual 8.0 Tree/DataTable widget data can cause
             # AttributeError during _prune/walk_children on shutdown.
             try:
+                self._apply_responsive_classes()
                 self._refresh()
             except Exception:
                 pass
@@ -107,7 +116,7 @@ def _make_stable_app(run_dir: Path) -> "AttoswarmApp":
 def test_snapshot_empty_init(snap_compare: "Callable", tmp_path: Path) -> None:
     """Empty/init state — no agents, no tasks, blank dashboard."""
     spec = SyntheticRunSpec(
-        phase="init",
+        phase="initializing",
         agents=[],
         tasks=[],
         events=[],

@@ -41,6 +41,7 @@ from attocode.tui.widgets.swarm.overview_pane import OverviewPane
 from attocode.tui.widgets.swarm.task_board import TaskCard, TasksDataTable
 from attoswarm.protocol.io import read_json, write_json_atomic
 from attoswarm.protocol.models import utc_now_iso
+from attoswarm.run_summary import collect_modified_files
 from attoswarm.tui.stores import StateStore
 
 if TYPE_CHECKING:
@@ -67,6 +68,7 @@ class SwarmSummaryBar(Static):
         active_agents: int = 0,
         pending: int = 0,
         agent_activities: list[dict[str, str]] | None = None,
+        resume_command: str = "",
     ) -> None:
         text = Text()
         # Phase
@@ -77,6 +79,7 @@ class SwarmSummaryBar(Static):
             "executing": "green bold",
             "completed": "green",
             "failed": "red bold",
+            "planning_failed": "red bold",
             "paused": "yellow",
             "rejected": "red dim",
             "shutdown": "red",
@@ -122,10 +125,11 @@ class SwarmSummaryBar(Static):
             if remaining > 0:
                 text.append(f" +{remaining} more", style="dim")
         # Abandoned tasks hint
-        if phase == "completed" and pending > 0:
+        if phase in ("completed", "shutdown") and pending > 0:
             text.append("\u2502 ", style="dim")
-            text.append(f"{pending} abandoned ", style="yellow bold")
-            text.append("(resume with: attoswarm resume <run_dir>)", style="yellow dim")
+            text.append(f"{pending} pending ", style="yellow bold")
+            if resume_command:
+                text.append(f"(resume: {resume_command})", style="yellow dim")
 
         self.update(text)
 
@@ -143,6 +147,7 @@ class AttoswarmApp(App[None]):
         Binding("5", "tab_messages", "Messages", show=False),
         Binding("6", "tab_decisions", "Decisions", show=False),
         Binding("p", "pause_resume", "Pause/Resume"),
+        Binding("s", "stop_swarm", "Stop"),
         Binding("i", "inject_message", "Inject Message"),
         Binding("r", "refresh_now", "Refresh"),
         Binding("f", "focus_agent", "Focus Agent"),
@@ -151,8 +156,8 @@ class AttoswarmApp(App[None]):
         Binding("a", "approve_plan", "Approve", show=False),
         Binding("x", "reject_plan", "Reject", show=False),
         Binding("n", "add_task", "New Task"),
-        Binding("ctrl+c", "quit", "Quit", show=False),
-        Binding("q", "quit", "Quit"),
+        Binding("ctrl+c", "quit", "Detach", show=False),
+        Binding("q", "quit", "Detach"),
     ]
 
     def __init__(self, run_dir: str, coordinator_pid: int | None = None) -> None:
@@ -167,9 +172,10 @@ class AttoswarmApp(App[None]):
         self._focused_agent_task: str | None = None
         self._completion_shown: bool = False
         self._approval_shown: bool = False
-        self._last_summary_key: tuple[str, int, int, int, int, int, int] | None = None
+        self._last_summary_key: tuple[str, int, int, int, int, int, int, int] | None = None
         self._last_refreshed_tab: str = ""
         self._coordinator_pid: int | None = coordinator_pid
+        self._exit_intent = "detach"
         # Track whether coordinator has written fresh state.
         # When launched with a coordinator_pid, the first state read may be
         # stale from a previous run.  We record the initial state_seq on
@@ -177,6 +183,9 @@ class AttoswarmApp(App[None]):
         # we suppress completion/approval triggers.
         self._initial_state_seq: int | None = None
         self._coordinator_started: bool = coordinator_pid is None  # standalone TUI is always "started"
+
+    def _completion_files_modified(self, state: dict[str, Any]) -> int:
+        return len(collect_modified_files(self._store.run_dir, state))
 
     def compose(self) -> ComposeResult:
         yield Header(show_clock=True)
@@ -392,12 +401,13 @@ class AttoswarmApp(App[None]):
             if a.get("status") in ("running", "claiming")
         ]
         active_agents = len(active_agents_list)
+        pending = dag_summary.get("pending", 0) if isinstance(dag_summary, dict) else 0
 
         # Fingerprint check — skip widget updates if nothing changed
         cost_cents = int(float(budget.get("cost_used_usd", 0.0)) * 100)
         elapsed_mins = int(elapsed_s) // 60 if isinstance(elapsed_s, (int, float)) else 0
         phase = state.get("phase", "unknown")
-        summary_key = (phase, running, done, total_tasks, failed, cost_cents, elapsed_mins)
+        summary_key = (phase, running, done, total_tasks, failed, pending, cost_cents, elapsed_mins)
         if summary_key == self._last_summary_key:
             return
         self._last_summary_key = summary_key
@@ -409,8 +419,7 @@ class AttoswarmApp(App[None]):
             task_id = a.get("task_id", "")
             if task_id:
                 agent_activities.append({"task_id": task_id, "activity": activity})
-
-        pending = dag_summary.get("pending", 0) if isinstance(dag_summary, dict) else 0
+        resume_command = self._resume_command() if phase in ("completed", "shutdown") and pending > 0 else ""
 
         try:
             self.query_one("#summary-bar", SwarmSummaryBar).update_summary(
@@ -424,6 +433,7 @@ class AttoswarmApp(App[None]):
                 active_agents=active_agents,
                 pending=pending,
                 agent_activities=agent_activities,
+                resume_command=resume_command,
             )
         except Exception:
             pass
@@ -435,7 +445,7 @@ class AttoswarmApp(App[None]):
                 _os.kill(self._coordinator_pid, 0)
             except ProcessLookupError:
                 if not self._completion_shown:
-                    if phase not in ("completed", "shutdown"):
+                    if phase not in ("completed", "shutdown", "planning_failed"):
                         self.notify(
                             "Coordinator process exited unexpectedly — check coordinator.log",
                             severity="error",
@@ -452,7 +462,7 @@ class AttoswarmApp(App[None]):
 
         # Completion screen
         phase = state.get("phase", "unknown")
-        if phase in ("completed", "shutdown") and not self._completion_shown:
+        if phase in ("completed", "shutdown", "planning_failed") and not self._completion_shown:
             self._completion_shown = True
             try:
                 from attocode.tui.screens.completion_screen import CompletionScreen
@@ -471,8 +481,11 @@ class AttoswarmApp(App[None]):
                         total=total_tasks,
                         cost=float(budget.get("cost_used_usd", 0.0)),
                         elapsed=elapsed_str,
+                        files_modified=self._completion_files_modified(state),
                         git_branch=git_branch,
                         phase=phase,
+                        pending=pending,
+                        resume_command=resume_command,
                     ),
                     callback=self._on_completion_dismiss,
                 )
@@ -888,6 +901,17 @@ class AttoswarmApp(App[None]):
         state["updated_at"] = utc_now_iso()
         write_json_atomic(state_path, state)
 
+    def action_stop_swarm(self) -> None:
+        if self._input_has_focus():
+            return
+        state = self._last_state if self._last_state is not None else self._store.read_state()
+        if state.get("phase") in ("completed", "shutdown", "failed", "planning_failed", "rejected"):
+            self.notify("Run is no longer active", severity="warning")
+            return
+        from attocode.tui.screens.confirm_stop_screen import ConfirmStopScreen
+
+        self.push_screen(ConfirmStopScreen(), callback=self._on_stop_swarm_dismiss)
+
     def action_inject_message(self) -> None:
         """Inject a control message to a selected agent."""
         if self._input_has_focus():
@@ -982,32 +1006,49 @@ class AttoswarmApp(App[None]):
         elif result in ("merge", "keep"):
             self._git_finalize(result)
 
+    def _on_stop_swarm_dismiss(self, confirmed: bool | None) -> None:
+        if not confirmed:
+            return
+        self._exit_intent = "stop"
+        self._write_control_message("", "shutdown")
+        self.notify("Stop requested — waiting for coordinator shutdown", severity="warning")
+        self.exit()
+
     def _git_finalize(self, mode: str) -> None:
         """Run git finalization from TUI."""
-        import subprocess as _sp
+        import asyncio as _asyncio
+        import os as _os
+
+        from attoswarm.workspace.git_safety import GitSafetyNet
+
+        run_dir = Path(self._store.run_dir)
         gs_path = Path(self._store.run_dir) / "git_safety.json"
         gs = read_json(gs_path, default={})
+        state = read_json(run_dir / "swarm.state.json", default={})
         swarm_branch = gs.get("swarm_branch", "")
-        original_branch = gs.get("original_branch", "")
-        stash_ref = gs.get("stash_ref", "")
         if not swarm_branch:
             self.notify("No git safety state found", severity="warning")
             return
+
+        working_dir = str(state.get("working_dir", "")) if isinstance(state, dict) else ""
+        if not working_dir:
+            working_dir = str(run_dir.resolve().parent.parent)
+        elif not _os.path.isabs(working_dir):
+            working_dir = str((run_dir.resolve().parent.parent / working_dir).resolve())
+
         try:
+            git_safety = GitSafetyNet(working_dir, str(gs.get("run_id", "")), str(run_dir))
+            git_safety.load_state()
+            _asyncio.run(git_safety.finalize(mode))
             if mode == "merge":
-                _sp.run(["git", "checkout", original_branch], check=True, capture_output=True)
-                _sp.run(
-                    ["git", "merge", swarm_branch, "--no-ff", "-m", f"Merge swarm branch {swarm_branch}"],
-                    check=True, capture_output=True,
+                self.notify(
+                    f"Merged {git_safety.state.swarm_branch} into {git_safety.state.original_branch}",
+                    severity="information",
                 )
-                self.notify(f"Merged {swarm_branch} into {original_branch}", severity="information")
-            elif mode == "keep":
-                _sp.run(["git", "checkout", original_branch], check=True, capture_output=True)
-                self.notify(f"Kept branch {swarm_branch}", severity="information")
-            if stash_ref:
-                _sp.run(["git", "stash", "pop"], capture_output=True)
-        except _sp.CalledProcessError as exc:
-            self.notify(f"Git finalization failed: {exc.stderr.decode()[:200]}", severity="error")
+            else:
+                self.notify(f"Kept branch {git_safety.state.swarm_branch}", severity="information")
+        except Exception as exc:
+            self.notify(f"Git finalization failed: {str(exc)[:200]}", severity="error")
 
     def action_approve_plan(self) -> None:
         if self._input_has_focus():
@@ -1046,14 +1087,21 @@ class AttoswarmApp(App[None]):
             pass
 
     def action_quit(self) -> None:
-        """Override quit to signal shutdown to orchestrator before exiting."""
-        self._write_control_message("", "shutdown")
+        """Exit the dashboard without stopping the coordinator."""
+        self._exit_intent = "detach"
         self.exit()
 
     # ── Helpers ──────────────────────────────────────────────────────
+
+    @property
+    def exit_intent(self) -> str:
+        return self._exit_intent
 
     def _state_fn_adapter(self) -> dict[str, Any]:
         """Adapter that wraps StateStore for FocusScreen/TimelineScreen."""
         state = dict(self._last_state) if self._last_state is not None else self._store.read_state()
         state["events"] = self._last_events
         return state
+
+    def _resume_command(self) -> str:
+        return f"attoswarm resume {self._store.run_dir}"

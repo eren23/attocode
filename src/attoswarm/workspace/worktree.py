@@ -54,6 +54,7 @@ def ensure_workspace_for_agent(
     write_access: bool,
     run_id: str = "",
     base_ref: str | None = None,
+    base_commit: str | None = None,
 ) -> Path:
     if workspace_mode != "worktree" or not write_access:
         return repo_root
@@ -75,21 +76,22 @@ def ensure_workspace_for_agent(
     # Prune stale worktree bookkeeping before attempting creation.
     _prune_worktrees(repo_root)
 
-    create_cmd = ["git", "worktree", "add", str(path), "-b", branch_name]
-    if base_ref:
-        create_cmd.append(base_ref)
+    def _build_create_cmd(anchor: str | None) -> list[str]:
+        cmd = ["git", "worktree", "add", str(path), "-b", branch_name]
+        if anchor:
+            cmd.append(anchor)
+        return cmd
 
-    try:
-        subprocess.run(
-            create_cmd,
-            cwd=repo_root,
-            check=True,
-            capture_output=True,
-            text=True,
-        )
-    except subprocess.CalledProcessError:
-        # Branch may exist from a previous run — delete it and retry once.
-        _delete_branch(repo_root, branch_name)
+    anchors: list[str | None] = []
+    if base_commit:
+        anchors.append(base_commit)
+    if base_ref and base_ref != base_commit:
+        anchors.append(base_ref)
+    if not anchors:
+        anchors.append(None)
+
+    for idx, anchor in enumerate(anchors):
+        create_cmd = _build_create_cmd(anchor)
         try:
             subprocess.run(
                 create_cmd,
@@ -98,11 +100,25 @@ def ensure_workspace_for_agent(
                 capture_output=True,
                 text=True,
             )
+            return path
+        except subprocess.CalledProcessError:
+            # Branch may exist from a previous run — delete it and retry once.
+            _delete_branch(repo_root, branch_name)
+            try:
+                subprocess.run(
+                    create_cmd,
+                    cwd=repo_root,
+                    check=True,
+                    capture_output=True,
+                    text=True,
+                )
+                return path
+            except Exception:
+                if idx == len(anchors) - 1:
+                    return repo_root
         except Exception:
-            # Fallback to shared workspace if worktree creation still fails.
-            return repo_root
-    except Exception:
-        return repo_root
+            if idx == len(anchors) - 1:
+                return repo_root
     return path
 
 

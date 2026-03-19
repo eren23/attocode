@@ -14,12 +14,13 @@ Hierarchy:
 from __future__ import annotations
 
 import asyncio
+import json
 import logging
 import os
 import signal
 import time
 import uuid
-from dataclasses import asdict
+from dataclasses import asdict, fields
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
@@ -43,6 +44,10 @@ if TYPE_CHECKING:
     from attoswarm.config.schema import SwarmYamlConfig
 
 logger = logging.getLogger(__name__)
+
+
+class PlanningFailure(RuntimeError):
+    """Raised when shared-workspace planning cannot produce runnable tasks."""
 
 
 class SwarmOrchestrator:
@@ -158,6 +163,96 @@ class SwarmOrchestrator:
         state = read_json(self._run_dir / "swarm.state.json", default={})
         return state if isinstance(state, dict) else {}
 
+    def _load_existing_manifest(self) -> bool:
+        """Restore tasks and persisted counters from ``swarm.manifest.json``."""
+        raw = read_json(self._layout["manifest"], default={})
+        if not isinstance(raw, dict):
+            return False
+
+        raw_tasks = raw.get("tasks", [])
+        if not isinstance(raw_tasks, list) or not raw_tasks:
+            return False
+
+        self._tasks = {}
+        self._aot_graph = AoTGraph()
+        self._task_attempts = {}
+        self._task_attempt_history = {}
+
+        restored_tasks: list[TaskSpec] = []
+        for item in raw_tasks:
+            if not isinstance(item, dict):
+                continue
+            task = self._task_from_manifest_row(item)
+            if not task.task_id:
+                continue
+            restored_tasks.append(task)
+            self._tasks[task.task_id] = task
+            self._aot_graph.add_task(AoTNode(
+                task_id=task.task_id,
+                depends_on=list(task.deps),
+                target_files=list(task.target_files),
+                symbol_scope=list(task.symbol_scope),
+            ))
+            task_state = read_json(self._layout["tasks"] / f"task-{task.task_id}.json", default={})
+            self._task_attempts[task.task_id] = int(task_state.get("attempt_count", 0))
+            history = task_state.get("attempt_history", [])
+            self._task_attempt_history[task.task_id] = [h for h in history if isinstance(h, dict)]
+
+        if not restored_tasks:
+            return False
+
+        self._aot_graph.compute_levels()
+        self._goal = str(raw.get("goal", self._goal))
+        state_raw = read_json(self._layout["state"], default={})
+        budget_raw = state_raw.get("budget", {}) if isinstance(state_raw.get("budget"), dict) else {}
+        self._budget.used_tokens = int(budget_raw.get("tokens_used", 0))
+        self._budget.used_cost_usd = float(budget_raw.get("cost_used_usd", 0.0))
+        self._state_seq = int(state_raw.get("state_seq", 0))
+        self._decisions = [x for x in state_raw.get("decisions", []) if isinstance(x, dict)]
+        self._errors = [x for x in state_raw.get("errors", []) if isinstance(x, dict)]
+        self._transition_log = [x for x in state_raw.get("task_transition_log", []) if isinstance(x, dict)]
+        self._manifest = SwarmManifest(
+            run_id=self._run_id,
+            goal=self._goal,
+            tasks=restored_tasks,
+            lineage=self._lineage,
+            launcher=self._launcher,
+        )
+        return True
+
+    def _task_from_manifest_row(self, raw: dict[str, Any]) -> TaskSpec:
+        """Build a ``TaskSpec`` from persisted manifest data."""
+        allowed = {f.name for f in fields(TaskSpec)}
+        payload = {k: v for k, v in raw.items() if k in allowed}
+        if "deps" in payload and not isinstance(payload["deps"], list):
+            payload["deps"] = []
+        for key in (
+            "acceptance",
+            "artifacts",
+            "target_files",
+            "read_files",
+            "symbol_scope",
+            "files_modified",
+        ):
+            if key in payload and not isinstance(payload[key], list):
+                payload[key] = []
+        if "file_version_snapshot" in payload and not isinstance(payload["file_version_snapshot"], dict):
+            payload["file_version_snapshot"] = {}
+        if "status" in payload:
+            payload["status"] = str(payload["status"] or "pending")
+        return TaskSpec(**payload)
+
+    def _prime_control_cursor(self) -> None:
+        """Ignore historical control messages so resume only sees new input."""
+        control_path = self._layout["root"] / "control.jsonl"
+        if not control_path.exists():
+            self._control_cursor = 0
+            return
+        try:
+            self._control_cursor = len(control_path.read_text(encoding="utf-8").splitlines())
+        except Exception:
+            self._control_cursor = 0
+
     # ------------------------------------------------------------------
     # Agent activity event callback (wired as event_callback in cli.py)
     # ------------------------------------------------------------------
@@ -243,9 +338,15 @@ class SwarmOrchestrator:
         """
         self._start_time = time.time()
         self._setup_directories()
+        resumed_existing_plan = False
 
         if not self._resume:
             self._archive_previous_run()
+        else:
+            self._prime_control_cursor()
+            resumed_existing_plan = self._load_existing_manifest()
+            if resumed_existing_plan:
+                self._restore_state()
 
         self._phase = "initializing"
         self._persist_state()  # Early write — lets TUI detect subprocess start
@@ -263,7 +364,10 @@ class SwarmOrchestrator:
         self._init_ast_service()
 
         # 1b. Initialize code-intel service
-        self._init_code_intel()
+        if resumed_existing_plan:
+            self._emit("info", message="Resume: using persisted task graph; skipping code-intel bootstrap")
+        else:
+            self._init_code_intel()
 
         # 1c. Initialize budget projector
         self._init_budget_projector()
@@ -290,51 +394,85 @@ class SwarmOrchestrator:
             except Exception as exc:
                 logger.warning("Change manifest init failed: %s", exc)
 
-        # 2d. Bootstrap codebase context before decomposition
-        bootstrap_ctx = self._bootstrap_context()
+        if resumed_existing_plan:
+            tasks = list(self._tasks.values())
+            execution_order = self._aot_graph.get_execution_order()
+            summary = self._aot_graph.summary()
+            self._emit(
+                "info",
+                message=(
+                    f"Resumed existing plan: {summary.get('done', 0)} done, "
+                    f"{summary.get('pending', 0)} pending"
+                ),
+            )
+            self._persist_manifest()
+            self._persist_state()
+        else:
+            # 2d. Bootstrap codebase context before decomposition
+            bootstrap_ctx = self._bootstrap_context()
 
-        # 3. Decompose goal into tasks
-        self._phase = "decomposing"
-        self._emit("info", message=f"Decomposing goal: {self._goal[:100]}")
-        self._persist_state()  # Update phase to "decomposing" for TUI
-        tasks = await self._decompose_goal(codebase_context=bootstrap_ctx)
-        if not tasks:
-            self._emit("fail", message="Decomposition produced no tasks")
-            return 0
-        self._record_decision("decomposing", "decomposition_complete",
-                              f"Produced {len(tasks)} tasks", f"Goal complexity drove task count")
+            # 3. Decompose goal into tasks
+            self._phase = "decomposing"
+            self._emit("info", message=f"Decomposing goal: {self._goal[:100]}")
+            self._persist_state()  # Update phase to "decomposing" for TUI
+            try:
+                tasks = await self._decompose_goal(codebase_context=bootstrap_ctx)
+            except PlanningFailure as exc:
+                self._phase = "planning_failed"
+                self._errors.append({
+                    "timestamp": utc_now_iso(),
+                    "message": str(exc),
+                    "phase": self._phase,
+                    "task_id": "",
+                })
+                self._emit("fail", message=f"Planning failed: {exc}")
+                self._persist_state()
+                return 1
+            if not tasks:
+                self._phase = "planning_failed"
+                self._errors.append({
+                    "timestamp": utc_now_iso(),
+                    "message": "Decomposition produced no tasks",
+                    "phase": self._phase,
+                    "task_id": "",
+                })
+                self._emit("fail", message="Planning failed: decomposition produced no tasks")
+                self._persist_state()
+                return 1
+            self._record_decision("decomposing", "decomposition_complete",
+                                  f"Produced {len(tasks)} tasks", f"Goal complexity drove task count")
 
-        # 3b. Enrich tasks with code-intel impact analysis
-        tasks = self._enrich_tasks_with_impact(tasks)
+            # 3b. Enrich tasks with code-intel impact analysis
+            tasks = self._enrich_tasks_with_impact(tasks)
 
-        # Build AoT DAG
-        for task in tasks:
-            self._tasks[task.task_id] = task
-            self._aot_graph.add_task(AoTNode(
-                task_id=task.task_id,
-                depends_on=list(task.deps),
-                target_files=list(task.target_files),
-                symbol_scope=list(task.symbol_scope),
-            ))
-        self._aot_graph.compute_levels()
-        execution_order = self._aot_graph.get_execution_order()
+            # Build AoT DAG
+            for task in tasks:
+                self._tasks[task.task_id] = task
+                self._aot_graph.add_task(AoTNode(
+                    task_id=task.task_id,
+                    depends_on=list(task.deps),
+                    target_files=list(task.target_files),
+                    symbol_scope=list(task.symbol_scope),
+                ))
+            self._aot_graph.compute_levels()
+            execution_order = self._aot_graph.get_execution_order()
 
-        self._emit("info", message=f"DAG: {len(tasks)} tasks, {len(execution_order)} levels")
+            self._emit("info", message=f"DAG: {len(tasks)} tasks, {len(execution_order)} levels")
 
-        # Restore task states on resume
-        if self._resume:
-            self._restore_state()
+            # Restore task states on resume
+            if self._resume:
+                self._restore_state()
 
-        # Build and persist manifest
-        self._manifest = SwarmManifest(
-            run_id=self._run_id,
-            goal=self._goal,
-            tasks=list(self._tasks.values()),
-            lineage=self._lineage,
-            launcher=self._launcher,
-        )
-        self._persist_manifest()
-        self._persist_state()
+            # Build and persist manifest
+            self._manifest = SwarmManifest(
+                run_id=self._run_id,
+                goal=self._goal,
+                tasks=list(self._tasks.values()),
+                lineage=self._lineage,
+                launcher=self._launcher,
+            )
+            self._persist_manifest()
+            self._persist_state()
 
         # ── Approval gate ──
         # Skip approval on resume if execution had already started
@@ -383,7 +521,10 @@ class SwarmOrchestrator:
                     self._git_safety.load_state()
                     git_state = await self._git_safety.reattach()
                 else:
-                    git_state = await self._git_safety.setup(base_ref=self._lineage.base_ref or None)
+                    git_state = await self._git_safety.setup(
+                        base_ref=self._lineage.base_ref or None,
+                        base_commit=self._lineage.base_commit or None,
+                    )
                 if git_state.is_git_repo:
                     self._emit("info", message=f"Git safety: branch={git_state.swarm_branch}, stash={'yes' if git_state.stash_ref else 'no'}")
             except Exception as exc:
@@ -461,7 +602,7 @@ class SwarmOrchestrator:
                     # Persist prompts for each task
                     for td in batch_tasks:
                         self._persist_prompt(td["task_id"], td)
-                    task_timeout = max(t.get("timeout_seconds", 0) for t in batch_tasks) or 600.0
+                    task_timeout = max(self._resolve_task_timeout_from_dict(td) for td in batch_tasks)
                     results = await self._subagent_mgr.execute_batch(batch_tasks, timeout=task_timeout)
 
                     for result in results:
@@ -477,7 +618,7 @@ class SwarmOrchestrator:
                     task_dict = self._task_to_dict(tid)
                     self._persist_prompt(tid, task_dict)
                     task = self._tasks.get(tid)
-                    task_timeout = float(task.timeout_seconds) if task and task.timeout_seconds > 0 else 600.0
+                    task_timeout = self._resolve_task_timeout(task)
                     result = await self._subagent_mgr.execute_single(task_dict, timeout=task_timeout)
                     completed += await self._handle_result(result)
                     self._persist_state()
@@ -506,12 +647,13 @@ class SwarmOrchestrator:
             except asyncio.CancelledError:
                 pass
 
-            self._phase = "completed" if not self._shutdown_requested else "shutdown"
+            if self._phase != "planning_failed":
+                self._phase = "completed" if not self._shutdown_requested else "shutdown"
             elapsed = time.time() - self._start_time
             summary = self._aot_graph.summary()
             self._emit(
                 "complete",
-                message=f"Swarm {'shutdown' if self._shutdown_requested else 'complete'}: {completed}/{len(tasks)} tasks in {elapsed:.1f}s",
+                message=f"Swarm {self._phase.replace('_', ' ')}: {completed}/{len(tasks)} tasks in {elapsed:.1f}s",
                 data=summary,
             )
 
@@ -587,19 +729,13 @@ class SwarmOrchestrator:
             "goal": self._manifest.goal,
             "lineage": asdict(self._lineage),
             "launcher": asdict(self._launcher),
-            "tasks": [
-                {
-                    "task_id": t.task_id,
-                    "title": t.title,
-                    "description": t.description,
-                    "deps": t.deps,
-                    "target_files": t.target_files,
-                    "task_kind": t.task_kind,
-                    "role_hint": t.role_hint or "",
-                }
-                for t in self._manifest.tasks
-            ],
+            "tasks": [],
         }
+        for task in self._manifest.tasks:
+            row = asdict(task)
+            node = self._aot_graph.get_node(task.task_id)
+            row["status"] = node.status if node else task.status
+            data["tasks"].append(row)
         try:
             write_json_atomic(self._layout["manifest"], data)
         except Exception as exc:
@@ -707,6 +843,7 @@ class SwarmOrchestrator:
             "run_id": self._run_id,
             "goal": self._goal,
             "phase": self._phase,
+            "working_dir": self._root_dir,
             "lineage": asdict(self._lineage),
             "launcher": asdict(self._launcher),
             "updated_at": utc_now_iso(),
@@ -813,7 +950,7 @@ class SwarmOrchestrator:
         """Decompose the goal into tasks.
 
         Checks for a tasks file first (tasks.yaml/yml/md in the run dir),
-        then uses the provided ``decompose_fn``, or falls back to a single task.
+        then uses the provided ``decompose_fn``.
         """
         # Check for pre-defined tasks file in run dir
         for ext in ("yaml", "yml", "md"):
@@ -841,19 +978,26 @@ class SwarmOrchestrator:
                     return result
             except Exception as exc:
                 logger.warning("Decomposition failed: %s", exc)
-                self._emit(
-                    "warning",
-                    message=f"LLM decomposition failed ({exc}), falling back to single task",
-                )
+                raise PlanningFailure(f"LLM decomposition failed ({exc})") from exc
 
-        # Fallback: single task
-        self._emit("info", message="Using single-task fallback (no LLM decomposer available)")
-        return [TaskSpec(
-            task_id="task-1",
-            title=self._goal[:100],
-            description=self._goal,
-            target_files=[],
-        )]
+        raise PlanningFailure("No LLM decomposer available for shared-workspace planning")
+
+    def _default_task_timeout(self) -> float:
+        watchdog = getattr(self._config, "watchdog", None)
+        configured = float(getattr(watchdog, "task_max_duration_seconds", 0.0) or 0.0)
+        return configured if configured > 0 else 600.0
+
+    def _resolve_task_timeout(self, task: TaskSpec | None) -> float:
+        explicit = float(task.timeout_seconds) if task and task.timeout_seconds > 0 else 0.0
+        return explicit or self._default_task_timeout()
+
+    def _resolve_task_timeout_from_dict(self, task: dict[str, Any]) -> float:
+        raw = task.get("timeout_seconds", 0)
+        try:
+            explicit = float(raw or 0)
+        except (TypeError, ValueError):
+            explicit = 0.0
+        return explicit if explicit > 0 else self._default_task_timeout()
 
     def _task_to_dict(self, task_id: str) -> dict[str, Any]:
         """Convert a TaskSpec to a dict for SubagentManager."""

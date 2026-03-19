@@ -83,8 +83,35 @@ attocode --swarm "Build a REST API for a todo app with tests"
 **Hybrid swarm mode** --- process-boundary orchestration via `attoswarm`:
 
 ```bash
-attocode --swarm .attocode/swarm.yaml --hybrid "Build a REST API for a todo app with tests"
+attocode swarm start .attocode/swarm.hybrid.yaml "Build a REST API for a todo app with tests"
 ```
+
+## Swarm Command Chooser
+
+Use these commands based on the scenario:
+
+```bash
+# New standalone swarm
+attocode swarm start .attocode/swarm.hybrid.yaml "$(cat tasks/goal.md)"
+
+# Follow-up / phase-2 swarm based on a previous swarm result
+attocode swarm continue .agent/hybrid-swarm/demo-1 --config .attocode/swarm.hybrid.yaml "$(cat tasks/goal-phase2.md)"
+
+# Resume the exact same run
+attoswarm resume .agent/hybrid-swarm/demo-1
+
+# Reattach the dashboard
+attocode swarm monitor .agent/hybrid-swarm/demo-1
+```
+
+Important distinction:
+
+- `start` = new standalone run
+- `continue` = new child run from previous swarm output
+- `resume` = same run dir, same persisted goal
+
+Use `--tasks-file` only with structured decomposition files such as
+`tasks.yaml` or `tasks.md`, not with high-level goal docs like `goal.md`.
 
 ## CLI Reference
 
@@ -175,6 +202,7 @@ Full documentation is available at **[eren23.github.io/attocode](https://eren23.
 - [Budget](docs/BUDGET.md) --- Token economics and doom-loop detection
 - [MCP](docs/MCP.md) --- Model Context Protocol integration
 - [Swarm Guide](docs/swarm-guide.md) --- Multi-agent orchestration
+- [Hybrid Swarm](docs/hybrid-swarm-operations.md) --- Start vs continue vs resume, monitor/detach flows, and runbook
 - [Contributing](CONTRIBUTING.md) --- How to contribute
 
 ## License

@@ -14,9 +14,6 @@ from textual.widgets import Collapsible, Static
 
 if TYPE_CHECKING:
     from textual.app import ComposeResult
-    from textual.timer import Timer
-
-_SPINNER_FRAMES = ("\u280b", "\u2819", "\u2839", "\u2838", "\u283c", "\u2834", "\u2826", "\u2827", "\u2807", "\u280f")
 
 
 @dataclass
@@ -61,8 +58,6 @@ class ToolCallsPanel(Widget):
         self._tool_id_to_widget_id: dict[str, str] = {}  # tool_id -> latest widget_id
         self._call_counter: int = 0
         self._max_display = max_display
-        self._spinner_index = 0
-        self._spinner_timer: Timer | None = None
         # Summary stats
         self._total_completed: int = 0
         self._total_errors: int = 0
@@ -105,7 +100,6 @@ class ToolCallsPanel(Widget):
         scroll = self.query_one("#tool-scroll", VerticalScroll)
         scroll.mount(collapsible)
         scroll.scroll_end(animate=False)
-        self._ensure_spinner()
         self.add_class("has-tools")
         self._update_header()
 
@@ -152,7 +146,6 @@ class ToolCallsPanel(Widget):
         except Exception:
             pass
 
-        self._ensure_spinner()
         self._update_header()
 
     def clear_calls(self) -> None:
@@ -171,7 +164,6 @@ class ToolCallsPanel(Widget):
                 collapsible.remove()
         except Exception:
             pass
-        self._ensure_spinner()
         self.remove_class("has-tools")
         self._update_header()
 
@@ -188,13 +180,12 @@ class ToolCallsPanel(Widget):
     def _make_title(self, call: ToolCallInfo) -> str:
         """Build the collapsible title string."""
         if call.status == "running":
-            frame = _SPINNER_FRAMES[self._spinner_index]
             args_brief = ", ".join(
                 f"{k}={_truncate(str(v), 30)}"
                 for k, v in list(call.args.items())[:2]
             )
             suffix = f" ({args_brief})" if args_brief else ""
-            return f"{frame} {call.name}{suffix}"
+            return f"\u2026 {call.name}{suffix}"
         elif call.status == "completed":
             elapsed = time.monotonic() - call.start_time
             return f"\u2713 {call.name} ({elapsed:.1f}s)"
@@ -284,27 +275,6 @@ class ToolCallsPanel(Widget):
             except Exception:
                 pass
         self._update_header()
-
-    def _ensure_spinner(self) -> None:
-        """Start or stop spinner based on running tools."""
-        has_running = any(c.status == "running" for c in self._calls.values())
-        if has_running and self._spinner_timer is None:
-            self._spinner_timer = self.set_interval(0.08, self._spin)
-        elif not has_running and self._spinner_timer is not None:
-            self._spinner_timer.stop()
-            self._spinner_timer = None
-
-    def _spin(self) -> None:
-        """Advance spinner frame and update running call titles."""
-        self._spinner_index = (self._spinner_index + 1) % len(_SPINNER_FRAMES)
-        for widget_id, call in self._calls.items():
-            if call.status == "running":
-                try:
-                    collapsible = self.query_one(f"#{widget_id}", Collapsible)
-                    collapsible.title = self._make_title(call)
-                except Exception:
-                    pass
-
 
 def _truncate(s: str, max_len: int) -> str:
     """Truncate string with ellipsis."""

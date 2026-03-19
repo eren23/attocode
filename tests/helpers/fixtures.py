@@ -32,18 +32,29 @@ class SyntheticAgent:
     stderr_tail: str = ""
 
     def to_dict(self) -> dict[str, Any]:
+        status = self.status
+        if status == "busy":
+            status = "running"
+        elif status == "exited" and self.exit_code not in (None, 0):
+            status = "error"
+
         d: dict[str, Any] = {
             "agent_id": self.agent_id or f"agent-{uuid.uuid4().hex[:8]}",
             "role_id": self.role_id,
             "role_type": self.role_type,
             "backend": self.backend,
-            "status": self.status,
+            "status": status,
             "task_id": self.task_id,
             "exit_code": self.exit_code,
             "cwd": self.cwd,
             "command": self.command,
             "restart_count": self.restart_count,
             "stderr_tail": self.stderr_tail,
+            "model": "claude-sonnet-4-20250514",
+            "started_at_epoch": 1_708_776_000.0,
+            "tokens_used": 0,
+            "activity": "",
+            "task_title": "",
         }
         return d
 
@@ -161,26 +172,47 @@ def create_synthetic_run(
         for dep in t.deps:
             dag_edges.append({"from": dep, "to": t.task_id})
 
+    counts = {"pending": 0, "running": 0, "done": 0, "failed": 0, "skipped": 0}
+    for task in spec.tasks:
+        status = str(task.status)
+        if status in counts:
+            counts[status] += 1
+        else:
+            counts["pending"] += 1
+
+    active_agents = [a.to_dict() for a in spec.agents]
+    title_by_task = {t.task_id: t.title for t in spec.tasks}
+    for agent in active_agents:
+        task_id = str(agent.get("task_id") or "")
+        if task_id:
+            agent["task_title"] = title_by_task.get(task_id, "")
+
     state = {
         "schema_version": "1.0",
         "run_id": run_id,
         "phase": spec.phase,
+        "working_dir": str(base_dir.resolve()),
         "updated_at": _ts(60),
-        "tasks": {},
-        "active_agents": [a.to_dict() for a in spec.agents],
+        "tasks": {t.task_id: {"title": t.title, "status": t.status} for t in spec.tasks},
+        "active_agents": active_agents,
         "dag": {"nodes": dag_nodes, "edges": dag_edges},
+        "dag_summary": counts,
         "budget": {
             "tokens_used": spec.budget_tokens_used,
             "tokens_max": spec.budget_tokens_max,
             "cost_used_usd": spec.budget_cost_used,
             "cost_max_usd": spec.budget_cost_max,
         },
+        "elapsed_s": 60,
         "merge_queue": {"pending": 0, "in_review": 0, "merged": 0},
         "errors": spec.errors,
+        "decisions": [],
+        "task_transition_log": [],
         "state_seq": 1,
         "attempts": {"by_task": {t.task_id: t.attempts for t in spec.tasks}},
         "event_timeline": {},
         "agent_messages_index": {},
+        "git_branch": "",
     }
     write_json_atomic(layout["state"], state)
 

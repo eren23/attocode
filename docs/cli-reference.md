@@ -51,6 +51,67 @@ attocode --resume abc123
 attocode --non-interactive "List all TODO comments"
 ```
 
+## Swarm CLI (`attocode swarm` / `attoswarm`)
+
+For hybrid swarm operations, prefer `attocode swarm ...` as the user-facing
+entrypoint. `attoswarm` is the underlying engine CLI.
+
+### Core Commands
+
+| Command | Purpose |
+|---------|---------|
+| `attocode swarm start <config> "<goal>"` | Start a new standalone swarm |
+| `attocode swarm continue <run-dir> --config <config> "<goal>"` | Start a new child swarm from previous swarm output |
+| `attoswarm resume <run-dir>` | Resume the exact same run directory |
+| `attocode swarm monitor <run-dir>` | Open the dashboard for an existing run |
+| `attocode swarm inspect <run-dir>` | Inspect recent state/events without opening TUI |
+| `attoswarm quick "<goal>"` | Run a no-config swarm with defaults |
+
+### Scenario Examples
+
+```bash
+# New standalone swarm from inline goal text
+attocode swarm start .attocode/swarm.hybrid.yaml "Implement a tiny feature and tests"
+
+# New standalone swarm from a high-level goal file
+attocode swarm start .attocode/swarm.hybrid.yaml "$(cat tasks/goal.md)"
+
+# New child swarm (phase 2 / follow-up)
+attocode swarm continue .agent/hybrid-swarm/demo-1 --config .attocode/swarm.hybrid.yaml "$(cat tasks/goal-phase2.md)"
+
+# Resume the same run
+attoswarm resume .agent/hybrid-swarm/demo-1
+
+# Reattach dashboard only
+attocode swarm monitor .agent/hybrid-swarm/demo-1
+```
+
+### `--tasks-file` vs Goal Files
+
+Use high-level goal docs like `tasks/goal.md` as the positional goal text:
+
+```bash
+attocode swarm start .attocode/swarm.hybrid.yaml "$(cat tasks/goal.md)"
+```
+
+Use `--tasks-file` only for structured decomposition files like
+`tasks.yaml`, `tasks.yml`, or `tasks.md`:
+
+```bash
+attocode swarm start .attocode/swarm.hybrid.yaml --tasks-file tasks/tasks.yaml "Implement the planned work"
+```
+
+### Important Behavior
+
+- `--resume` cannot be combined with `--continue-from`.
+- If you changed the goal, do not use `resume`; use `start` or `continue`.
+- `--preview --no-monitor` automatically falls back to `--dry-run`.
+- Closing the dashboard detaches from the run; it does not stop the coordinator.
+- Shared-workspace planning failures stop the run as `planning_failed`; they are not converted into a synthetic catch-all task.
+- Merge/keep finalization excludes swarm runtime artifacts from `.agent/`.
+
+See [Hybrid Swarm](hybrid-swarm-operations.md) for the full runbook.
+
 ## Code Intelligence Server
 
 The `code-intel serve` subcommand starts the MCP or HTTP server for code intelligence tools.

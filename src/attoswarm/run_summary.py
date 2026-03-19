@@ -1,0 +1,163 @@
+"""Helpers for shutdown/resume summaries."""
+
+from __future__ import annotations
+
+import subprocess
+from pathlib import Path
+from typing import Any
+
+from attoswarm.config.loader import load_swarm_yaml
+from attoswarm.protocol.io import read_json
+
+
+def resolve_working_dir(run_dir: str | Path, state: dict[str, Any] | None = None) -> Path | None:
+    """Best-effort repo root resolution for a swarm run."""
+    run_path = Path(run_dir)
+    state = state or {}
+
+    direct = _normalize_working_dir(state.get("working_dir"), run_path)
+    if direct:
+        return direct
+
+    for agent in state.get("active_agents", []):
+        if not isinstance(agent, dict):
+            continue
+        direct = _normalize_working_dir(agent.get("cwd"), run_path)
+        if direct:
+            return direct
+
+    heuristic = _heuristic_root(run_path)
+    if heuristic:
+        return heuristic
+
+    cfg_path = run_path / "swarm.yaml"
+    if cfg_path.exists():
+        try:
+            cfg = load_swarm_yaml(cfg_path)
+        except Exception:
+            return None
+        return _normalize_working_dir(cfg.run.working_dir, run_path)
+
+    return None
+
+
+def collect_modified_files(run_dir: str | Path, state: dict[str, Any] | None = None) -> list[str]:
+    """Return best-effort modified file paths for a swarm run."""
+    run_path = Path(run_dir)
+    runtime_prefixes = _runtime_prefixes(run_path, state)
+
+    changed = _filter_runtime_files(_changed_files_from_manifest(run_path / "changes.json"), runtime_prefixes)
+    if changed:
+        return changed
+
+    changed = _filter_runtime_files(_changed_files_from_tasks(run_path / "tasks"), runtime_prefixes)
+    if changed:
+        return changed
+
+    working_dir = resolve_working_dir(run_path, state)
+    if not working_dir:
+        return []
+    return _filter_runtime_files(_changed_files_from_git(working_dir), runtime_prefixes)
+
+
+def _runtime_prefixes(run_dir: Path, state: dict[str, Any] | None = None) -> list[str]:
+    working_dir = resolve_working_dir(run_dir, state)
+    if not working_dir:
+        return [".agent"]
+
+    prefixes: set[str] = set()
+    try:
+        rel = run_dir.resolve().relative_to(working_dir.resolve()).as_posix()
+    except Exception:
+        rel = ""
+
+    if rel:
+        prefixes.add(rel)
+        if rel == ".agent" or rel.startswith(".agent/"):
+            prefixes.add(".agent")
+    else:
+        prefixes.add(".agent")
+    return sorted(prefixes)
+
+
+def _filter_runtime_files(files: list[str], runtime_prefixes: list[str]) -> list[str]:
+    if not runtime_prefixes:
+        return files
+    filtered: list[str] = []
+    for path in files:
+        if any(path == prefix or path.startswith(f"{prefix}/") for prefix in runtime_prefixes):
+            continue
+        filtered.append(path)
+    return filtered
+
+
+def _normalize_working_dir(raw: Any, run_dir: Path) -> Path | None:
+    if not isinstance(raw, str) or not raw.strip():
+        return None
+    path = Path(raw)
+    if not path.is_absolute():
+        path = (run_dir / raw).resolve()
+    else:
+        path = path.resolve()
+    return path if path.exists() else None
+
+
+def _heuristic_root(run_dir: Path) -> Path | None:
+    if run_dir.parent.name != ".agent":
+        return None
+    candidate = run_dir.parent.parent.resolve()
+    return candidate if candidate.exists() else None
+
+
+def _changed_files_from_manifest(path: Path) -> list[str]:
+    raw = read_json(path, default=[])
+    if not isinstance(raw, list):
+        return []
+    files = sorted({
+        str(item.get("file_path", "")).strip()
+        for item in raw
+        if isinstance(item, dict) and str(item.get("file_path", "")).strip()
+    })
+    return files
+
+
+def _changed_files_from_tasks(tasks_dir: Path) -> list[str]:
+    if not tasks_dir.exists():
+        return []
+    files: set[str] = set()
+    for task_path in tasks_dir.glob("task-*.json"):
+        task = read_json(task_path, default={})
+        if not isinstance(task, dict):
+            continue
+        for fp in task.get("files_modified", []):
+            if isinstance(fp, str) and fp.strip():
+                files.add(fp.strip())
+    return sorted(files)
+
+
+def _changed_files_from_git(working_dir: Path) -> list[str]:
+    try:
+        result = subprocess.run(
+            ["git", "status", "--short"],
+            cwd=working_dir,
+            capture_output=True,
+            text=True,
+            timeout=5,
+            check=False,
+        )
+    except Exception:
+        return []
+
+    if result.returncode != 0:
+        return []
+
+    files: set[str] = set()
+    for line in result.stdout.splitlines():
+        if len(line) < 4:
+            continue
+        path = line[3:].strip()
+        if " -> " in path:
+            path = path.split(" -> ", 1)[1].strip()
+        if path:
+            files.add(path)
+    return sorted(files)

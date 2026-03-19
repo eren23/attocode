@@ -487,20 +487,23 @@ def _run_tui(config: Any) -> None:
             pass
 
         if event.type == EventType.TOOL_START:
+            tool_id = ((event.metadata or {}).get("tool_id") or event.tool or "unknown")
             _post_event(ToolStarted(
-                tool_id=event.tool or "unknown",
+                tool_id=tool_id,
                 name=event.tool or "unknown",
                 args=event.args,
             ))
         elif event.type == EventType.TOOL_COMPLETE:
+            tool_id = ((event.metadata or {}).get("tool_id") or event.tool or "unknown")
             _post_event(ToolCompleted(
-                tool_id=event.tool or "unknown",
+                tool_id=tool_id,
                 name=event.tool or "unknown",
                 result=event.result,
             ))
         elif event.type == EventType.TOOL_ERROR:
+            tool_id = ((event.metadata or {}).get("tool_id") or event.tool or "unknown")
             _post_event(ToolCompleted(
-                tool_id=event.tool or "unknown",
+                tool_id=tool_id,
                 name=event.tool or "unknown",
                 error=event.error,
             ))

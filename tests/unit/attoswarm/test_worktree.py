@@ -244,6 +244,28 @@ def test_ensure_workspace_uses_base_ref_when_provided(mock_run: MagicMock, tmp_p
 
 
 @patch("attoswarm.workspace.worktree.subprocess.run")
+def test_ensure_workspace_prefers_base_commit_when_provided(mock_run: MagicMock, tmp_path: Path) -> None:
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    (repo / ".git").mkdir()
+    wt_root = tmp_path / "worktrees"
+
+    ensure_workspace_for_agent(
+        repo_root=repo,
+        worktrees_root=wt_root,
+        agent_id="worker-1",
+        workspace_mode="worktree",
+        write_access=True,
+        base_ref="attoswarm/parent",
+        base_commit="deadbeef",
+    )
+
+    assert mock_run.call_args_list[1][0][0] == [
+        "git", "worktree", "add", str(wt_root / "worker-1"), "-b", "attoswarm/worker-1", "deadbeef",
+    ]
+
+
+@patch("attoswarm.workspace.worktree.subprocess.run")
 def test_cleanup_worktrees_removes_all(mock_run: MagicMock, tmp_path: Path) -> None:
     repo = tmp_path / "repo"
     repo.mkdir()

@@ -14,20 +14,22 @@ This is the practical runbook for `attocodepy` + `attoswarm`.
 
 If your CLI tools are already authenticated (`claude login`, `codex login`), you do not need to export API keys again for swarm runs.
 
-## 2. Core Commands
+The shipped `.attocode/swarm.hybrid.yaml.example` uses `claude`, `codex`, and
+`attocode` only so `doctor` passes on a default install more often. If you
+prefer `aider` for judge/review roles, swap that backend explicitly in your
+project config.
+
+## 2. Command Selection
+
+Use `attocode swarm` as the user-facing wrapper. `attoswarm` is the engine
+CLI underneath; both support the same run flows.
 
 Initialize interactively (minimal or demo):
 
 ```bash
-attoswarm init .
-# or
 attocode swarm init .
-```
-
-Single launcher (run + monitor in one command):
-
-```bash
-attocode swarm start .attocode/swarm.hybrid.yaml "Implement a tiny feature and tests"
+# or
+attoswarm init .
 ```
 
 Preflight backend checks:
@@ -36,45 +38,89 @@ Preflight backend checks:
 attocode swarm doctor .attocode/swarm.hybrid.yaml
 ```
 
-Run with `attoswarm` directly (engine CLI; canonical user entrypoint is `attocode swarm`):
+### Scenario Matrix
+
+| Scenario | Command | Use this when |
+|----------|---------|---------------|
+| New standalone swarm | `attocode swarm start .attocode/swarm.hybrid.yaml "Implement a tiny feature and tests"` | Fresh run, fresh goal, no parent swarm lineage |
+| New standalone swarm from a goal file | `attocode swarm start .attocode/swarm.hybrid.yaml "$(cat tasks/goal.md)"` | Your high-level swarm goal lives in a Markdown file |
+| New child swarm from previous output | `attocode swarm continue .agent/hybrid-swarm/demo-1 --config .attocode/swarm.hybrid.yaml "$(cat tasks/goal-phase2.md)"` | Phase 2 / follow-up work should build on a previous swarm branch/output |
+| Resume the same run | `attoswarm resume .agent/hybrid-swarm/demo-1` | Continue the exact same run directory after stop/interruption |
+| Open dashboard only | `attocode swarm monitor .agent/hybrid-swarm/demo-1` | Inspect or reattach to an existing run without starting a new one |
+| Quick no-config run | `attoswarm quick "Implement a tiny feature and tests"` | Fast ad hoc swarm without a YAML config |
+
+### Start vs Continue vs Resume
+
+- `start`: creates a new standalone run. Use it for a new goal.
+- `continue`: creates a new child run from a previous swarm's preserved branch or result ref. Use it for follow-up or phase-2 work.
+- `resume`: keeps the same run directory and persisted goal. Use it only when you want to continue the exact same swarm.
+
+If you changed the goal text or wrote a new `goal-*.md`, that is a new swarm.
+Use `start` or `continue`, not `resume`.
+
+### Goal Files vs `--tasks-file`
+
+There are two different inputs:
+
+- High-level swarm goal file: pass the file contents as the positional goal text.
 
 ```bash
-attoswarm run .attocode/swarm.hybrid.yaml "Implement a tiny feature and tests"
+attocode swarm start .attocode/swarm.hybrid.yaml "$(cat tasks/goal.md)"
 ```
 
-Run through `attocode` wrapper:
+- Pre-defined decomposition file: use `--tasks-file` with `tasks.yaml`, `tasks.yml`, or `tasks.md`.
 
 ```bash
-attocode --swarm .attocode/swarm.hybrid.yaml --hybrid "Implement a tiny feature and tests"
+attocode swarm start .attocode/swarm.hybrid.yaml \
+  --tasks-file tasks/tasks.yaml \
+  "Implement the planned work"
 ```
 
-Override run directory:
+`--tasks-file` is not for `goal.md` or `goal-phase2.md`. It is for
+structured task decomposition files only.
+
+### Monitor, Detach, and Reattach
+
+Single launcher (run + monitor in one command):
 
 ```bash
-attoswarm run .attocode/swarm.hybrid.yaml --run-dir .agent/hybrid-swarm/demo-1 "task"
+attocode swarm start .attocode/swarm.hybrid.yaml "$(cat tasks/goal.md)"
 ```
 
-Resume from existing run-dir:
+Start coordinator in background and return immediately:
 
 ```bash
-attoswarm run .attocode/swarm.hybrid.yaml --run-dir .agent/hybrid-swarm/demo-1 --resume "task"
-# or
-attoswarm resume .agent/hybrid-swarm/demo-1
+attocode swarm start .attocode/swarm.hybrid.yaml --detach "$(cat tasks/goal.md)"
 ```
 
-Start a new child swarm from a previous swarm:
-
-```bash
-attocode swarm continue .agent/hybrid-swarm/demo-1 "Build on the previous swarm output"
-```
-
-Open dashboard:
+Open the dashboard later:
 
 ```bash
 attoswarm tui .agent/hybrid-swarm/demo-1
 # or
 attocode swarm monitor .agent/hybrid-swarm/demo-1
 ```
+
+Closing the dashboard detaches from the run. It does not stop the coordinator.
+
+### Terminal States and Finalization
+
+You should interpret the final swarm phase based on what actually happened:
+
+- `completed`: execution finished normally and there is no pending work left in the saved DAG.
+- `shutdown`: the swarm was intentionally stopped and can be resumed with `attoswarm resume <run-dir>` if pending tasks remain.
+- `planning_failed`: task decomposition or planning failed before runnable shared-workspace execution could start. This is not the same as a worker-task failure.
+
+When a run ends in `shutdown` or `planning_failed`, inspect the run before launching a fresh swarm:
+
+```bash
+attocode swarm monitor .agent/hybrid-swarm/demo-1
+attoswarm inspect .agent/hybrid-swarm/demo-1
+```
+
+Git finalization from the completion screen or CLI now routes through the same
+git safety path. Runtime bookkeeping under the swarm run directory is excluded
+from finalization so merge/keep actions only preserve product-code changes.
 
 ## 3. What Gets Written (Observability)
 
@@ -278,12 +324,19 @@ Notes:
 From the dashboard:
 
 - `p`: pause/resume
+- `s`: stop swarm (confirmation required)
 - `r`: manual refresh
 - `i`: inject control message into first active agent inbox
 - `n`: add a new task dynamically
 - `a`: approve task plan (when in `--preview` mode)
 - `x`: reject task plan (when in `--preview` mode)
-- `q`: quit dashboard
+- `q`: quit dashboard / detach
+
+If a run was interrupted or stopped with pending work left, resume it with:
+
+```bash
+attoswarm resume <run_dir>
+```
 
 On completion, a summary screen appears with options:
 
@@ -305,6 +358,14 @@ attoswarm quick --preview "Refactor module Y"
 The TUI shows the task plan and waits for approval (`a`) or rejection (`x`). On resume, a previously-approved run skips the approval gate automatically.
 
 Note: `--preview` requires `--monitor` (the TUI). Using `--preview --no-monitor` automatically falls back to `--dry-run` since there is no TUI to approve.
+
+### Common Mistakes
+
+- New goal file + old run dir: use `start` or `continue`, not `resume`.
+- `goal.md` with `--tasks-file`: wrong input type. Pass goal docs as positional text with `$(cat ...)`.
+- `tasks.yaml` / `tasks.md` without `--tasks-file`: the orchestrator will only auto-detect those after they are copied into the run dir.
+- Expecting `q` in the dashboard to stop the swarm: it only detaches. Use `s` for an explicit stop.
+- Expecting `--preview --no-monitor` to wait for approval: it degrades to `--dry-run`.
 
 ### Dynamic Task Addition
 
@@ -331,6 +392,8 @@ Git safety state is persisted to `git_safety.json` in the run directory for the 
 - Immediate `failed` phase: budget cap too low or `max_runtime_seconds` too low.
 - Task stuck as `ready`: no matching role (`role_hint` / `task_kinds` mismatch).
 - Frequent restarts: watchdog timeout too aggressive for chosen backend.
+- Run says `completed` but work is still conceptually unfinished: the swarm only knows the persisted run goal and task graph. Check `swarm.state.json` and `swarm.manifest.json` first to see what that run was actually executing.
+- Run says `completed` even though tasks remain pending: inspect `swarm.state.json` for pending nodes before trusting the phase alone. Treat that as a status bug / edge case, not proof that the product goal is fully satisfied.
 
 ## 8. Recommended First Real Task
 

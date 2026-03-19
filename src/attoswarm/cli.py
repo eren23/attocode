@@ -22,6 +22,7 @@ from attoswarm.config.schema import RoleConfig, SwarmYamlConfig
 from attoswarm.coordinator.loop import HybridCoordinator
 from attoswarm.protocol.io import read_json
 from attoswarm.protocol.models import LauncherInfo, LineageSpec
+from attoswarm.run_summary import collect_modified_files
 from attoswarm.tui.app import AttoswarmApp
 
 logger = logging.getLogger(__name__)
@@ -471,6 +472,10 @@ def _make_subprocess_decompose_fn(cfg: SwarmYamlConfig):  # noqa: ANN202
         )
         return prompt
 
+    def _decompose_timeout_seconds() -> float:
+        configured = float(cfg.run.max_runtime_seconds or 0)
+        return configured if configured > 0 else 300.0
+
     def _parse_tasks(raw: str) -> list[_TaskSpec]:
         """Parse JSON output into TaskSpec list with validation."""
         from attoswarm.coordinator.task_parser import extract_json_array
@@ -518,7 +523,7 @@ def _make_subprocess_decompose_fn(cfg: SwarmYamlConfig):  # noqa: ANN202
             env=clean_env,
             start_new_session=True,
         )
-        decompose_timeout = min(cfg.run.max_runtime_seconds or 300, 300)
+        decompose_timeout = _decompose_timeout_seconds()
         try:
             stdout_bytes, stderr_bytes = await asyncio.wait_for(
                 proc.communicate(input=stdin_text.encode() if stdin_text else None),
@@ -623,7 +628,9 @@ def _print_run_summary(orch: Any) -> None:
     done = summary.get("done", 0)
     total = sum(summary.values()) if isinstance(summary, dict) else 0
     failed = summary.get("failed", 0)
+    pending = summary.get("pending", 0) if isinstance(summary, dict) else 0
     cost = orch.budget.used_cost_usd
+    phase = getattr(orch, "phase", getattr(orch, "_phase", ""))
 
     elapsed_s = 0.0
     if hasattr(orch, '_start_time') and orch._start_time:
@@ -634,16 +641,69 @@ def _print_run_summary(orch: Any) -> None:
     elapsed_str = f"{mins}m{secs:02d}s" if mins else f"{secs}s"
 
     click.echo(f"\n{'=' * 50}")
-    click.echo(f"  Tasks: {done}/{total} completed" + (f" ({failed} failed)" if failed else ""))
+    if phase == "shutdown":
+        status_label = "Stopped"
+    elif phase == "planning_failed":
+        status_label = "Planning failed"
+    else:
+        status_label = "Tasks"
+    status_line = f"  {status_label}: {done}/{total} completed"
+    if failed:
+        status_line += f" ({failed} failed)"
+    click.echo(status_line)
     click.echo(f"  Cost:  ${cost:.2f}")
     click.echo(f"  Time:  {elapsed_str}")
+    if phase == "shutdown" and pending > 0:
+        run_dir = str(getattr(orch, "_run_dir", ""))
+        click.echo(f"  Pending: {pending}")
+        if run_dir:
+            click.echo(f"  Resume: attoswarm resume {run_dir}")
 
     # Change manifest summary
+    files_modified: list[str] = []
+    printed_change_summary = False
     if hasattr(orch, '_change_manifest') and orch._change_manifest:
         ms = orch._change_manifest.get_summary()
+        files_modified = [str(fp) for fp in ms.get("files_modified", []) if isinstance(fp, str)]
         if ms.get("total_changes"):
-            click.echo(f"  Files: {len(ms.get('files_modified', []))} modified ({ms['total_changes']} changes)")
+            click.echo(f"  Files: {len(files_modified)} modified ({ms['total_changes']} changes)")
+            printed_change_summary = True
+    run_dir = str(getattr(orch, "_run_dir", ""))
+    if not printed_change_summary and run_dir:
+        files_modified = collect_modified_files(run_dir, getattr(orch, "get_state", lambda: {})())
+    if not printed_change_summary and files_modified:
+        click.echo(f"  Files: {len(files_modified)} modified")
     click.echo(f"{'=' * 50}")
+
+
+def _run_monitor_app(run_dir: str, proc: Any) -> int:
+    """Run the dashboard against a coordinator subprocess."""
+    app = AttoswarmApp(run_dir, coordinator_pid=getattr(proc, "pid", None))
+    app.run()
+
+    exit_intent = getattr(app, "exit_intent", "detach")
+    if proc.poll() is None:
+        if exit_intent == "stop":
+            click.echo("Waiting for coordinator shutdown...")
+            try:
+                proc.wait(timeout=8)
+            except subprocess.TimeoutExpired:
+                try:
+                    proc.terminate()
+                    proc.wait(timeout=3)
+                except subprocess.TimeoutExpired:
+                    proc.kill()
+                    proc.wait(timeout=3)
+                except Exception:
+                    pass
+            except Exception:
+                pass
+        else:
+            click.echo(f"Dashboard detached; coordinator still running (pid={proc.pid})")
+            click.echo(f"Reattach: attocode swarm tui {run_dir}")
+            return 0
+
+    return proc.returncode or 0
 
 
 def _prompt_git_finalization(orch: Any) -> None:
@@ -740,7 +800,6 @@ def _build_continuation_lineage(parent_run_dir: Path) -> LineageSpec:
     base_ref = str(
         git_safety.get("result_ref")
         or git_safety.get("swarm_branch")
-        or git_safety.get("result_commit")
         or ""
     )
     base_commit = str(
@@ -749,7 +808,7 @@ def _build_continuation_lineage(parent_run_dir: Path) -> LineageSpec:
         or git_safety.get("pre_run_head")
         or ""
     )
-    if not base_ref:
+    if not (base_ref or base_commit):
         raise click.ClickException(
             f"Cannot continue from {parent_run_dir}: no preserved swarm branch or result commit found"
         )
@@ -952,6 +1011,7 @@ def start_command(
 
     # Determine approval mode
     approval_mode = "dry_run" if dry_run else ("preview" if preview else "auto")
+    effective_run_dir = cfg.run.run_dir
 
     def _build_start_cmd() -> list[str]:
         cmd = [
@@ -962,8 +1022,8 @@ def start_command(
             str(config_path),
             goal_text,
         ]
-        if run_dir:
-            cmd.extend(["--run-dir", run_dir])
+        if effective_run_dir:
+            cmd.extend(["--run-dir", effective_run_dir])
         if resume_flag:
             cmd.append("--resume")
         if continue_from:
@@ -980,12 +1040,12 @@ def start_command(
 
     if detach:
         cmd = _build_start_cmd()
-        log_path = Path(cfg.run.run_dir) / "coordinator.log"
+        log_path = Path(effective_run_dir) / "coordinator.log"
         log_path.parent.mkdir(parents=True, exist_ok=True)
         log_fh = open(log_path, "a", encoding="utf-8")  # noqa: SIM115
         proc = subprocess.Popen(cmd, stdout=log_fh, stderr=log_fh)
         click.echo(f"Coordinator started in background (pid={proc.pid})")
-        click.echo(f"Reattach: attocode swarm tui {cfg.run.run_dir}")
+        click.echo(f"Reattach: attocode swarm tui {effective_run_dir}")
         raise SystemExit(0)
 
     collector = _make_trace_collector(cfg) if trace_flag else None
@@ -1021,23 +1081,11 @@ def start_command(
         raise SystemExit(code)
 
     cmd = _build_start_cmd()
-    log_path = Path(cfg.run.run_dir) / "coordinator.log"
+    log_path = Path(effective_run_dir) / "coordinator.log"
     log_path.parent.mkdir(parents=True, exist_ok=True)
     log_fh = open(log_path, "a", encoding="utf-8")  # noqa: SIM115
     proc = subprocess.Popen(cmd, stdout=log_fh, stderr=log_fh)
-    try:
-        AttoswarmApp(cfg.run.run_dir, coordinator_pid=proc.pid).run()
-    finally:
-        if proc.poll() is None:
-            try:
-                proc.terminate()
-                proc.wait(timeout=8)
-            except subprocess.TimeoutExpired:
-                proc.kill()
-                proc.wait(timeout=3)
-            except Exception:
-                pass
-    raise SystemExit(proc.returncode or 0)
+    raise SystemExit(_run_monitor_app(effective_run_dir, proc))
 
 
 @main.command("continue")
@@ -1417,19 +1465,7 @@ def quick_command(
             raise SystemExit(0)
 
         proc = subprocess.Popen(cmd, stdout=log_fh, stderr=log_fh)
-        try:
-            AttoswarmApp(cfg.run.run_dir, coordinator_pid=proc.pid).run()
-        finally:
-            if proc.poll() is None:
-                try:
-                    proc.terminate()
-                    proc.wait(timeout=8)
-                except subprocess.TimeoutExpired:
-                    proc.kill()
-                    proc.wait(timeout=3)
-                except Exception:
-                    pass
-        raise SystemExit(proc.returncode or 0)
+        raise SystemExit(_run_monitor_app(cfg.run.run_dir, proc))
 
     # Inline execution (--no-monitor or --dry-run)
     # --preview without TUI has no way to approve — fall back to dry_run

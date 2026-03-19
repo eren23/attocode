@@ -184,7 +184,8 @@ class AgentInternalsPanel(Widget):
     def set_active_tools(self, tools: list[str]) -> None:
         """Update the active tool call stack."""
         self._active_tools = tools
-        self.refresh()
+        if self.has_class("visible"):
+            self.refresh()
 
 
 def _render_bar(fraction: float, width: int = 30) -> str:

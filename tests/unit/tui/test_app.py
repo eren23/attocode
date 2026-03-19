@@ -11,6 +11,9 @@ from attocode.tui.events import (
     AgentCompleted,
     AgentStarted,
     IterationUpdate,
+    LLMStreamChunk,
+    LLMStreamEnd,
+    LLMStreamStart,
     StatusUpdate,
     ToolCompleted,
     ToolStarted,
@@ -118,6 +121,43 @@ class TestAttocodeAppPilot:
             # Tool complete
             app.post_message(ToolCompleted(tool_id="t1", name="read_file", result="ok"))
             await pilot.pause()
+
+    @pytest.mark.asyncio
+    async def test_same_name_tools_keep_distinct_rows(self) -> None:
+        app = AttocodeApp()
+        async with app.run_test() as pilot:
+            app.post_message(ToolStarted(tool_id="spawn-1", name="spawn_agent", args={"task": "a"}))
+            app.post_message(ToolStarted(tool_id="spawn-2", name="spawn_agent", args={"task": "b"}))
+            await pilot.pause()
+
+            panel = app.query_one("#tool-panel", ToolCallsPanel)
+            assert len(panel._call_order) == 2
+            assert len(panel._calls) == 2
+
+            app.post_message(ToolCompleted(tool_id="spawn-1", name="spawn_agent", result="done"))
+            await pilot.pause()
+
+            statuses = [panel._calls[widget_id].status for widget_id in panel._call_order]
+            assert statuses.count("completed") == 1
+            assert statuses.count("running") == 1
+
+    @pytest.mark.asyncio
+    async def test_stream_bursts_switch_to_batched_mode_and_recover(self) -> None:
+        app = AttocodeApp()
+        async with app.run_test() as pilot:
+            app.on_llm_stream_start(LLMStreamStart())
+            for _ in range(12):
+                app.on_llm_stream_chunk(LLMStreamChunk(content="x"))
+            await pilot.pause(0.1)
+
+            status = app.query_one("#status-bar", StatusBar)
+            assert status.live_updates_coalesced is True
+
+            app.on_llm_stream_end(LLMStreamEnd(tokens=12, cost=0.01))
+            await pilot.pause()
+
+            assert status.live_updates_coalesced is False
+            assert app._last_response == "x" * 12
 
     @pytest.mark.asyncio
     async def test_iteration_update(self) -> None:

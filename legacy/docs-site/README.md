@@ -1,5 +1,12 @@
 # Website
 
+This Docusaurus site is legacy documentation for the older TypeScript
+implementation. It is not the source of truth for the current Python swarm
+flows.
+
+For current documentation, use the MkDocs site under `docs/` and
+`mkdocs.yml`, which publishes to `https://eren23.github.io/attocode/`.
+
 This website is built using [Docusaurus](https://docusaurus.io/), a modern static website generator.
 
 ## Installation

@@ -66,7 +66,11 @@ class GitSafetyNet:
             )
         return self._state
 
-    async def setup(self, base_ref: str | None = None) -> GitSafetyState:
+    async def setup(
+        self,
+        base_ref: str | None = None,
+        base_commit: str | None = None,
+    ) -> GitSafetyState:
         """Check if git repo, stash uncommitted changes, create swarm branch."""
         if not Path(self._wd, ".git").exists():
             self._state.is_git_repo = False
@@ -88,11 +92,22 @@ class GitSafetyNet:
         if rc == 0:
             self._state.pre_run_head = head.strip()
         self._state.base_ref = base_ref or self._state.original_branch
-        rc, base_head = await self._git("rev-parse", self._state.base_ref)
-        if rc == 0:
-            self._state.base_commit = base_head.strip()
-        elif head:
-            self._state.base_commit = head.strip()
+        anchor = ""
+        if base_commit:
+            rc, resolved = await self._git("rev-parse", base_commit)
+            if rc == 0:
+                self._state.base_commit = resolved.strip()
+                anchor = self._state.base_commit
+            else:
+                logger.warning("Could not resolve base commit %s; falling back to base ref", base_commit)
+        if not anchor:
+            rc, base_head = await self._git("rev-parse", self._state.base_ref)
+            if rc == 0:
+                self._state.base_commit = base_head.strip()
+                anchor = self._state.base_commit
+            elif head:
+                self._state.base_commit = head.strip()
+                anchor = self._state.base_commit
 
         # Stash uncommitted changes (if any)
         rc, status = await self._git("status", "--porcelain")
@@ -105,7 +120,7 @@ class GitSafetyNet:
 
         # Create swarm branch
         swarm_branch = f"attoswarm/{self._run_id}"
-        create_args = ("checkout", "-b", swarm_branch, base_ref) if base_ref else ("checkout", "-b", swarm_branch)
+        create_args = ("checkout", "-b", swarm_branch, anchor) if anchor else ("checkout", "-b", swarm_branch)
         rc, _ = await self._git(*create_args)
         if rc == 0:
             self._state.swarm_branch = swarm_branch
@@ -137,7 +152,7 @@ class GitSafetyNet:
             return False
 
         msg = message or f"attoswarm run {self._run_id}"
-        rc, _ = await self._git("add", "-A")
+        rc, _ = await self._stage_product_changes()
         if rc != 0:
             return False
 
@@ -174,6 +189,7 @@ class GitSafetyNet:
             self._state.result_commit = ""
         elif mode == "merge":
             await self.create_swarm_commit()
+            await self._cleanup_runtime_artifacts()
             await self._git("checkout", self._state.original_branch)
             if self._state.swarm_branch:
                 rc, out = await self._git("merge", self._state.swarm_branch)
@@ -186,6 +202,7 @@ class GitSafetyNet:
         else:  # "keep"
             await self.create_swarm_commit()
             swarm_head = await self._resolve_ref(self._state.swarm_branch)
+            await self._cleanup_runtime_artifacts()
             await self._git("checkout", self._state.original_branch)
             self._state.result_ref = self._state.swarm_branch
             if not self._state.result_commit:
@@ -217,9 +234,11 @@ class GitSafetyNet:
         if not self._state.is_git_repo or not self._state.original_branch:
             return []
 
-        rc, out = await self._git(
-            "diff", "--name-status", self._state.original_branch, "HEAD",
-        )
+        root = self._runtime_root()
+        args = ["diff", "--name-status", self._state.original_branch, "HEAD"]
+        if root:
+            args.extend(["--", ".", f":(exclude){root}"])
+        rc, out = await self._git(*args)
         if rc != 0:
             return []
 
@@ -229,6 +248,36 @@ class GitSafetyNet:
             if len(parts) == 2:
                 result.append({"action": parts[0], "file": parts[1]})
         return result
+
+    def _runtime_root(self) -> str:
+        """Return the top-level runtime directory to exclude from git finalization."""
+        try:
+            rel = Path(self._run_dir).resolve().relative_to(Path(self._wd).resolve())
+            if rel.parts:
+                return rel.parts[0]
+        except Exception:
+            pass
+        if (Path(self._wd) / ".agent").exists():
+            return ".agent"
+        return ""
+
+    async def _stage_product_changes(self) -> tuple[int, str]:
+        """Stage repo changes while excluding swarm runtime bookkeeping."""
+        root = self._runtime_root()
+        if root:
+            return await self._git("add", "-A", "--", ".", f":(exclude){root}")
+        return await self._git("add", "-A")
+
+    async def _cleanup_runtime_artifacts(self) -> None:
+        """Discard runtime bookkeeping changes before branch checkout/finalize."""
+        root = self._runtime_root()
+        if not root:
+            return
+
+        rc, _ = await self._git("restore", "--staged", "--worktree", "--source=HEAD", "--", root)
+        if rc != 0:
+            await self._git("checkout", "--", root)
+        await self._git("clean", "-fd", "--", root)
 
     def _persist_state(self) -> None:
         """Write git safety state to JSON for TUI consumption."""

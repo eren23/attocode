@@ -476,7 +476,13 @@ async def execute_single_tool(
         )
         return ToolResult(call_id=tc.id, error=denial), False
 
-    ctx.emit_simple(EventType.TOOL_START, tool=tc.name, args=tc.arguments, iteration=ctx.iteration)
+    ctx.emit_simple(
+        EventType.TOOL_START,
+        tool=tc.name,
+        args=tc.arguments,
+        iteration=ctx.iteration,
+        metadata={"tool_id": tc.id},
+    )
     start = time.monotonic()
 
     # Record tool call in economics if available
@@ -571,7 +577,7 @@ async def execute_single_tool(
                 error=result.error,
                 args=tc.arguments,
                 iteration=ctx.iteration,
-                metadata={"duration_ms": duration * 1000},
+                metadata={"duration_ms": duration * 1000, "tool_id": tc.id},
             )
         else:
             ctx.emit_simple(
@@ -580,7 +586,11 @@ async def execute_single_tool(
                 result=_truncate(result_content, 500),
                 args=tc.arguments,
                 iteration=ctx.iteration,
-                metadata={"duration_ms": duration * 1000, "truncated": was_truncated},
+                metadata={
+                    "duration_ms": duration * 1000,
+                    "truncated": was_truncated,
+                    "tool_id": tc.id,
+                },
             )
 
         return ToolResult(
@@ -598,7 +608,7 @@ async def execute_single_tool(
             error=error_msg,
             args=tc.arguments,
             iteration=ctx.iteration,
-            metadata={"duration_ms": duration * 1000, "timed_out": True},
+            metadata={"duration_ms": duration * 1000, "timed_out": True, "tool_id": tc.id},
         )
         return ToolResult(call_id=tc.id, error=error_msg), False
 
@@ -611,7 +621,7 @@ async def execute_single_tool(
             error=error_msg,
             args=tc.arguments,
             iteration=ctx.iteration,
-            metadata={"duration_ms": duration * 1000},
+            metadata={"duration_ms": duration * 1000, "tool_id": tc.id},
         )
         return ToolResult(call_id=tc.id, error=error_msg), False
 

@@ -1,11 +1,12 @@
 from __future__ import annotations
 
 import json
+import time
 from pathlib import Path
 
 from click.testing import CliRunner
 
-from attoswarm.cli import main
+from attoswarm.cli import _print_run_summary, main
 
 
 def _write_config(path: Path) -> None:
@@ -143,6 +144,118 @@ def test_build_start_cmd_forwards_no_git_safety(tmp_path: Path, monkeypatch) -> 
     assert "--no-git-safety" in cmd
 
 
+def test_start_monitor_detach_leaves_coordinator_running(tmp_path: Path, monkeypatch) -> None:  # type: ignore[no-untyped-def]
+    cfg = tmp_path / "swarm.yaml"
+    _write_config(cfg)
+    monkeypatch.setattr("shutil.which", lambda _: "/usr/bin/claude")
+
+    proc_holder: dict[str, object] = {}
+
+    class FakePopen:
+        pid = 4321
+
+        def __init__(self, cmd, **kwargs):
+            self.returncode = None
+            self.terminate_calls = 0
+            self.wait_calls: list[int | None] = []
+            proc_holder["proc"] = self
+
+        def poll(self):
+            return self.returncode
+
+        def wait(self, timeout=None):
+            self.wait_calls.append(timeout)
+            return 0
+
+        def terminate(self):
+            self.terminate_calls += 1
+            self.returncode = 0
+
+        def kill(self):
+            self.returncode = 1
+
+    class FakeApp:
+        def __init__(self, run_dir, coordinator_pid=None):
+            self.exit_intent = "detach"
+
+        def run(self):
+            return None
+
+    monkeypatch.setattr("subprocess.Popen", FakePopen)
+    monkeypatch.setattr("attoswarm.cli.AttoswarmApp", FakeApp)
+
+    run_dir = tmp_path / ".agent" / "hybrid-swarm"
+    run_dir.mkdir(parents=True, exist_ok=True)
+
+    runner = CliRunner()
+    result = runner.invoke(
+        main,
+        ["start", str(cfg), "--skip-doctor", "test goal"],
+    )
+
+    assert result.exit_code == 0
+    assert "Dashboard detached; coordinator still running" in result.output
+    proc = proc_holder["proc"]
+    assert getattr(proc, "terminate_calls") == 0
+
+
+def test_start_monitor_stop_waits_for_coordinator(tmp_path: Path, monkeypatch) -> None:  # type: ignore[no-untyped-def]
+    cfg = tmp_path / "swarm.yaml"
+    _write_config(cfg)
+    monkeypatch.setattr("shutil.which", lambda _: "/usr/bin/claude")
+
+    proc_holder: dict[str, object] = {}
+
+    class FakePopen:
+        pid = 4321
+
+        def __init__(self, cmd, **kwargs):
+            self.returncode = None
+            self.terminate_calls = 0
+            self.wait_calls: list[int | None] = []
+            proc_holder["proc"] = self
+
+        def poll(self):
+            return self.returncode
+
+        def wait(self, timeout=None):
+            self.wait_calls.append(timeout)
+            self.returncode = 0
+            return 0
+
+        def terminate(self):
+            self.terminate_calls += 1
+            self.returncode = 0
+
+        def kill(self):
+            self.returncode = 1
+
+    class FakeApp:
+        def __init__(self, run_dir, coordinator_pid=None):
+            self.exit_intent = "stop"
+
+        def run(self):
+            return None
+
+    monkeypatch.setattr("subprocess.Popen", FakePopen)
+    monkeypatch.setattr("attoswarm.cli.AttoswarmApp", FakeApp)
+
+    run_dir = tmp_path / ".agent" / "hybrid-swarm"
+    run_dir.mkdir(parents=True, exist_ok=True)
+
+    runner = CliRunner()
+    result = runner.invoke(
+        main,
+        ["start", str(cfg), "--skip-doctor", "test goal"],
+    )
+
+    assert result.exit_code == 0
+    assert "Waiting for coordinator shutdown..." in result.output
+    proc = proc_holder["proc"]
+    assert getattr(proc, "wait_calls") == [8]
+    assert getattr(proc, "terminate_calls") == 0
+
+
 # ── L2: --preview --no-monitor falls back to dry_run ─────────────────
 
 
@@ -177,6 +290,55 @@ def test_quick_preview_no_monitor_falls_back_to_dry_run(tmp_path: Path, monkeypa
     )
     # The output should mention the fallback
     assert "dry-run" in result.output.lower() or "dry_run" in result.output.lower()
+
+
+def test_quick_monitor_detach_leaves_coordinator_running(tmp_path: Path, monkeypatch) -> None:  # type: ignore[no-untyped-def]
+    monkeypatch.setattr("shutil.which", lambda _: "/usr/bin/claude")
+    monkeypatch.chdir(tmp_path)
+
+    proc_holder: dict[str, object] = {}
+
+    class FakePopen:
+        pid = 9876
+
+        def __init__(self, cmd, **kwargs):
+            self.returncode = None
+            self.terminate_calls = 0
+            proc_holder["proc"] = self
+
+        def poll(self):
+            return self.returncode
+
+        def wait(self, timeout=None):
+            return 0
+
+        def terminate(self):
+            self.terminate_calls += 1
+            self.returncode = 0
+
+        def kill(self):
+            self.returncode = 1
+
+    class FakeApp:
+        def __init__(self, run_dir, coordinator_pid=None):
+            self.exit_intent = "detach"
+
+        def run(self):
+            return None
+
+    monkeypatch.setattr("subprocess.Popen", FakePopen)
+    monkeypatch.setattr("attoswarm.cli.AttoswarmApp", FakeApp)
+
+    runner = CliRunner()
+    result = runner.invoke(
+        main,
+        ["quick", "test goal"],
+    )
+
+    assert result.exit_code == 0
+    assert "Dashboard detached; coordinator still running" in result.output
+    proc = proc_holder["proc"]
+    assert getattr(proc, "terminate_calls") == 0
 
 
 def test_start_preview_no_monitor_falls_back_to_dry_run(tmp_path: Path, monkeypatch) -> None:
@@ -251,7 +413,59 @@ def test_start_continue_from_builds_child_lineage(tmp_path: Path, monkeypatch) -
     assert getattr(lineage, "parent_run_id") == "parent-123"
     assert getattr(lineage, "continuation_mode") == "child"
     assert getattr(lineage, "base_ref") == "attoswarm/parent-123"
+    assert getattr(lineage, "base_commit") == "abc123"
     assert Path(str(captured["run_dir"])) != parent_run
+
+
+def test_start_continue_from_allows_commit_only_parent(tmp_path: Path, monkeypatch) -> None:
+    cfg = tmp_path / "swarm.yaml"
+    _write_config(cfg)
+    parent_run = tmp_path / ".agent" / "hybrid-swarm" / "parent"
+    _write_parent_run(parent_run)
+    (parent_run / "git_safety.json").write_text(
+        json.dumps(
+            {
+                "swarm_branch": "",
+                "result_ref": "",
+                "result_commit": "abc123",
+                "finalization_mode": "keep",
+            }
+        ),
+        encoding="utf-8",
+    )
+    monkeypatch.setattr("shutil.which", lambda _: "/usr/bin/claude")
+
+    from unittest.mock import MagicMock
+
+    captured: dict[str, object] = {}
+
+    class FakeOrch:
+        _subagent_mgr = MagicMock()
+
+        def __init__(self, cfg, goal, **kwargs):
+            captured["lineage"] = kwargs.get("lineage")
+            self._subagent_mgr._spawn_fn = None
+            self.aot_graph = MagicMock(summary=lambda: {"done": 0, "failed": 0, "total": 0})
+            self.budget = MagicMock(used_cost_usd=0.0)
+            self._change_manifest = None
+            self._git_safety = None
+            self._on_agent_activity = MagicMock()
+
+        async def run(self):
+            return 0
+
+    monkeypatch.setattr("attoswarm.coordinator.orchestrator.SwarmOrchestrator", FakeOrch)
+
+    runner = CliRunner()
+    result = runner.invoke(
+        main,
+        ["start", str(cfg), "--continue-from", str(parent_run), "--no-monitor", "--skip-doctor", "child goal"],
+    )
+
+    assert result.exit_code == 0
+    lineage = captured["lineage"]
+    assert getattr(lineage, "base_ref") == ""
+    assert getattr(lineage, "base_commit") == "abc123"
 
 
 def test_continue_command_invokes_child_run(tmp_path: Path, monkeypatch) -> None:
@@ -290,3 +504,108 @@ def test_continue_command_invokes_child_run(tmp_path: Path, monkeypatch) -> None
 
     assert result.exit_code == 0
     assert getattr(captured["lineage"], "parent_run_id") == "parent-123"
+
+
+def test_continue_monitor_uses_same_child_run_dir_for_subprocess_and_tui(tmp_path: Path, monkeypatch) -> None:
+    cfg = tmp_path / "swarm.yaml"
+    _write_config(cfg)
+    parent_run = tmp_path / ".agent" / "hybrid-swarm" / "parent"
+    _write_parent_run(parent_run)
+    monkeypatch.setattr("shutil.which", lambda _: "/usr/bin/claude")
+
+    captured: dict[str, object] = {}
+
+    class FakePopen:
+        pid = 2468
+
+        def __init__(self, cmd, **kwargs):
+            self.returncode = None
+            captured["cmd"] = list(cmd)
+
+        def poll(self):
+            return self.returncode
+
+        def wait(self, timeout=None):
+            return 0
+
+        def terminate(self):
+            self.returncode = 0
+
+        def kill(self):
+            self.returncode = 1
+
+    class FakeApp:
+        def __init__(self, run_dir, coordinator_pid=None):
+            captured["monitor_run_dir"] = run_dir
+            self.exit_intent = "detach"
+
+        def run(self):
+            return None
+
+    monkeypatch.setattr("subprocess.Popen", FakePopen)
+    monkeypatch.setattr("attoswarm.cli.AttoswarmApp", FakeApp)
+
+    runner = CliRunner()
+    result = runner.invoke(
+        main,
+        ["continue", str(parent_run), "--config", str(cfg), "--skip-doctor", "child goal"],
+    )
+
+    assert result.exit_code == 0
+    cmd = captured["cmd"]
+    assert "--run-dir" in cmd
+    run_dir_arg = cmd[cmd.index("--run-dir") + 1]
+    assert captured["monitor_run_dir"] == run_dir_arg
+
+
+def test_print_run_summary_uses_git_fallback_for_modified_files(tmp_path: Path, monkeypatch, capsys) -> None:
+    class FakeGraph:
+        @staticmethod
+        def summary() -> dict[str, int]:
+            return {"done": 4, "failed": 0, "pending": 7}
+
+    class FakeBudget:
+        used_cost_usd = 0.0
+
+    class FakeOrch:
+        aot_graph = FakeGraph()
+        budget = FakeBudget()
+        _phase = "shutdown"
+        _start_time = time.time()
+        _change_manifest = None
+        _run_dir = tmp_path / ".agent" / "hybrid-swarm"
+
+        @staticmethod
+        def get_state() -> dict[str, object]:
+            return {"phase": "shutdown"}
+
+    monkeypatch.setattr("attoswarm.cli.collect_modified_files", lambda run_dir, state: ["a.py", "b.py"])
+
+    _print_run_summary(FakeOrch())
+    out = capsys.readouterr().out
+
+    assert "Stopped: 4/11 completed" in out
+    assert "Files: 2 modified" in out
+
+
+def test_print_run_summary_labels_planning_failure(tmp_path: Path, capsys) -> None:
+    class FakeGraph:
+        @staticmethod
+        def summary() -> dict[str, int]:
+            return {"done": 0, "failed": 0, "pending": 0}
+
+    class FakeBudget:
+        used_cost_usd = 0.0
+
+    class FakeOrch:
+        aot_graph = FakeGraph()
+        budget = FakeBudget()
+        _phase = "planning_failed"
+        _start_time = time.time()
+        _change_manifest = None
+        _run_dir = tmp_path / ".agent" / "hybrid-swarm"
+
+    _print_run_summary(FakeOrch())
+    out = capsys.readouterr().out
+
+    assert "Planning failed: 0/0 completed" in out

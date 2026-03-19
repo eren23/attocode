@@ -27,8 +27,8 @@ roles:
 
   - role_id: judge
     role_type: judge
-    backend: aider
-    model: sonnet
+    backend: claude  # Swap to `aider` if you explicitly want Aider-backed review workers
+    model: claude-sonnet-4-20250514
     count: 2
     write_access: false
     workspace_mode: shared_ro

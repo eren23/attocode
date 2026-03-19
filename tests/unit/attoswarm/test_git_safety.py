@@ -159,6 +159,38 @@ class TestSetup:
         assert data["base_ref"] == "HEAD"
 
     @pytest.mark.asyncio
+    async def test_setup_prefers_base_commit_for_branch_creation(self, tmp_path: Path) -> None:
+        wd = tmp_path / "project"
+        wd.mkdir()
+        (wd / ".git").mkdir()
+        run_dir = tmp_path / "run"
+        run_dir.mkdir()
+        net = GitSafetyNet(str(wd), "r1", str(run_dir))
+
+        calls: list[tuple[str, ...]] = []
+
+        async def fake_git(*args: str) -> tuple[int, str]:
+            calls.append(tuple(args))
+            if args == ("rev-parse", "--abbrev-ref", "HEAD"):
+                return 0, "main\n"
+            if args == ("rev-parse", "HEAD"):
+                return 0, "feedface\n"
+            if args == ("rev-parse", "deadbeef"):
+                return 0, "deadbeef\n"
+            if args == ("status", "--porcelain"):
+                return 0, ""
+            if args == ("checkout", "-b", "attoswarm/r1", "deadbeef"):
+                return 0, ""
+            return 0, ""
+
+        net._git = fake_git  # type: ignore[assignment]
+
+        state = await net.setup(base_ref="main", base_commit="deadbeef")
+
+        assert state.base_commit == "deadbeef"
+        assert ("checkout", "-b", "attoswarm/r1", "deadbeef") in calls
+
+    @pytest.mark.asyncio
     async def test_reattach_restores_saved_branch(self, tmp_path: Path) -> None:
         wd = tmp_path / "project"
         wd.mkdir()
@@ -250,6 +282,41 @@ class TestCreateSwarmCommit:
         result = await net.create_swarm_commit("test")
         assert result is False
 
+    @pytest.mark.asyncio
+    async def test_excludes_agent_runtime_files_from_commit(self, tmp_path: Path) -> None:
+        import subprocess
+
+        wd = tmp_path / "project"
+        wd.mkdir()
+        _make_git_repo(wd)
+        agent_dir = wd / ".agent" / "hybrid-swarm"
+        agent_dir.mkdir(parents=True)
+        (agent_dir / "swarm.state.json").write_text('{"phase":"old"}', encoding="utf-8")
+        (wd / "code.txt").write_text("base\n", encoding="utf-8")
+        subprocess.run(["git", "add", "."], cwd=str(wd), check=True, capture_output=True)
+        subprocess.run(["git", "commit", "-m", "seed swarm files"], cwd=str(wd), check=True, capture_output=True)
+
+        run_dir = tmp_path / "run"
+        run_dir.mkdir()
+        net = GitSafetyNet(str(wd), "r1", str(run_dir))
+        await net.setup()
+
+        (agent_dir / "swarm.state.json").write_text('{"phase":"running"}', encoding="utf-8")
+        (wd / "code.txt").write_text("changed\n", encoding="utf-8")
+
+        result = await net.create_swarm_commit("test")
+        assert result is True
+
+        diff = subprocess.run(
+            ["git", "diff", "--name-only", "HEAD~1", "HEAD"],
+            cwd=str(wd),
+            check=True,
+            capture_output=True,
+            text=True,
+        ).stdout.splitlines()
+        assert "code.txt" in diff
+        assert ".agent/hybrid-swarm/swarm.state.json" not in diff
+
 
 # ── get_changed_files ─────────────────────────────────────────────────
 
@@ -281,3 +348,47 @@ class TestGetChangedFiles:
         assert len(files) == 1
         assert files[0]["file"] == "new.txt"
         assert files[0]["action"] == "A"
+
+    @pytest.mark.asyncio
+    async def test_finalize_merge_ignores_agent_runtime_files(self, tmp_path: Path) -> None:
+        import subprocess
+
+        wd = tmp_path / "project"
+        wd.mkdir()
+        _make_git_repo(wd)
+        agent_dir = wd / ".agent" / "hybrid-swarm"
+        agent_dir.mkdir(parents=True)
+        (agent_dir / "swarm.state.json").write_text('{"phase":"seed"}', encoding="utf-8")
+        (wd / "code.txt").write_text("base\n", encoding="utf-8")
+        subprocess.run(["git", "add", "."], cwd=str(wd), check=True, capture_output=True)
+        subprocess.run(["git", "commit", "-m", "seed swarm files"], cwd=str(wd), check=True, capture_output=True)
+
+        run_dir = tmp_path / "run"
+        run_dir.mkdir()
+        net = GitSafetyNet(str(wd), "r1", str(run_dir))
+        await net.setup()
+
+        (agent_dir / "swarm.state.json").write_text('{"phase":"runtime"}', encoding="utf-8")
+        (wd / "code.txt").write_text("merged\n", encoding="utf-8")
+
+        await net.finalize("merge")
+
+        branch = subprocess.run(
+            ["git", "rev-parse", "--abbrev-ref", "HEAD"],
+            cwd=str(wd),
+            check=True,
+            capture_output=True,
+            text=True,
+        ).stdout.strip()
+        assert branch in ("main", "master")
+        assert (wd / "code.txt").read_text(encoding="utf-8") == "merged\n"
+        assert (agent_dir / "swarm.state.json").read_text(encoding="utf-8") == '{"phase":"seed"}'
+
+        status = subprocess.run(
+            ["git", "status", "--porcelain"],
+            cwd=str(wd),
+            check=True,
+            capture_output=True,
+            text=True,
+        ).stdout.strip()
+        assert status == ""

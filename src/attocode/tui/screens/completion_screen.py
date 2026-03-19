@@ -63,6 +63,8 @@ class CompletionScreen(ModalScreen[str]):
         files_modified: int = 0,
         git_branch: str = "",
         phase: str = "completed",
+        pending: int = 0,
+        resume_command: str = "",
         **kwargs: Any,
     ) -> None:
         super().__init__(**kwargs)
@@ -74,9 +76,16 @@ class CompletionScreen(ModalScreen[str]):
         self._files_modified = files_modified
         self._git_branch = git_branch
         self._phase = phase
+        self._pending = pending
+        self._resume_command = resume_command
 
     def compose(self) -> ComposeResult:
-        title = "Swarm Interrupted" if self._phase == "shutdown" else "Swarm Complete"
+        if self._phase == "shutdown":
+            title = "Swarm Stopped"
+        elif self._phase == "planning_failed":
+            title = "Planning Failed"
+        else:
+            title = "Swarm Complete"
         with Vertical(id="completion-modal"):
             yield Static(title, id="completion-title")
             yield Static(self._build_body(), id="completion-body")
@@ -95,6 +104,9 @@ class CompletionScreen(ModalScreen[str]):
             text.append(f"  Files: {self._files_modified} modified\n", style="cyan")
         if self._git_branch:
             text.append(f"  Branch: {self._git_branch}\n", style="blue")
+        if self._resume_command and self._pending > 0:
+            text.append(f"  Pending: {self._pending}\n", style="yellow")
+            text.append(f"  Resume: {self._resume_command}\n", style="yellow dim")
         return text
 
     def _build_hint(self) -> str:

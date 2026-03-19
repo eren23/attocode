@@ -405,6 +405,7 @@ class HybridCoordinator:
                         write_access=role.write_access,
                         run_id=self.run_id,
                         base_ref=self._lineage.base_ref or None,
+                        base_commit=self._lineage.base_commit or None,
                     )
                     spec = AgentProcessSpec(
                         agent_id=agent_id,

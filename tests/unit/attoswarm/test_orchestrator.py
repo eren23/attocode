@@ -16,7 +16,7 @@ import pytest
 
 from attoswarm.config.schema import SwarmYamlConfig
 from attoswarm.coordinator.aot_graph import AoTGraph, AoTNode
-from attoswarm.coordinator.orchestrator import SwarmOrchestrator
+from attoswarm.coordinator.orchestrator import PlanningFailure, SwarmOrchestrator
 from attoswarm.coordinator.subagent_manager import TaskResult
 from attoswarm.protocol.io import read_json
 from attoswarm.protocol.models import LauncherInfo, LineageSpec, TaskSpec
@@ -279,6 +279,11 @@ class TestPersistState:
         assert node["result_summary"] == "Done"
         assert node["cost_usd"] == 0.05
 
+    def test_includes_working_dir(self, orch: SwarmOrchestrator) -> None:
+        orch._persist_state()
+        state = read_json(orch._layout["state"], default={})
+        assert state["working_dir"] == orch._root_dir
+
 
 # ── _persist_task ─────────────────────────────────────────────────────
 
@@ -356,6 +361,29 @@ class TestPersistManifest:
         assert data["lineage"]["parent_run_id"] == "parent-1"
         assert data["launcher"]["started_via"] == "attocode"
 
+    def test_persists_resume_fields(self, orch: SwarmOrchestrator) -> None:
+        from attoswarm.protocol.models import SwarmManifest
+
+        task = _add_task(orch, "t1", target_files=["src/a.py"], status="done")
+        task.read_files = ["src/shared.py"]
+        task.symbol_scope = ["build_graph"]
+        task.files_modified = ["src/a.py"]
+        task.timeout_seconds = 123
+        task.result_summary = "Done"
+        orch._manifest = SwarmManifest(
+            run_id=orch._run_id,
+            goal="test goal",
+            tasks=list(orch._tasks.values()),
+        )
+        orch._persist_manifest()
+
+        data = read_json(orch._layout["manifest"], default={})
+        row = data["tasks"][0]
+        assert row["status"] == "done"
+        assert row["read_files"] == ["src/shared.py"]
+        assert row["symbol_scope"] == ["build_graph"]
+        assert row["timeout_seconds"] == 123
+
 
 # ── get_state ─────────────────────────────────────────────────────────
 
@@ -401,15 +429,154 @@ class TestResumeIdentity:
         assert orch.run_id == "existing-123"
 
 
+class TestResumeRestore:
+    def test_load_existing_manifest_restores_task_details(self, tmp_path: Path) -> None:
+        from attoswarm.protocol.io import write_json_atomic
+
+        run_dir = tmp_path / "run"
+        tasks_dir = run_dir / "tasks"
+        tasks_dir.mkdir(parents=True)
+        write_json_atomic(
+            run_dir / "swarm.manifest.json",
+            {
+                "run_id": "resume-123",
+                "goal": "resume goal",
+                "tasks": [
+                    {
+                        "task_id": "t1",
+                        "title": "One",
+                        "description": "desc",
+                        "deps": [],
+                        "target_files": ["src/a.py"],
+                        "read_files": ["src/shared.py"],
+                        "symbol_scope": ["parse"],
+                        "timeout_seconds": 90,
+                        "status": "done",
+                    }
+                ],
+            },
+        )
+        write_json_atomic(
+            run_dir / "tasks" / "task-t1.json",
+            {
+                "task_id": "t1",
+                "attempt_count": 2,
+                "attempt_history": [{"attempt": 1, "error": "boom"}],
+            },
+        )
+        write_json_atomic(
+            run_dir / "swarm.state.json",
+            {
+                "budget": {"tokens_used": 12, "cost_used_usd": 0.5},
+                "state_seq": 7,
+                "decisions": [{"kind": "resume"}],
+                "errors": [{"message": "old"}],
+                "task_transition_log": [{"task_id": "t1"}],
+            },
+        )
+
+        cfg = SwarmYamlConfig()
+        cfg.run.run_dir = str(run_dir)
+        orch = SwarmOrchestrator(cfg, "resume goal", resume=True)
+
+        assert orch._load_existing_manifest() is True
+        assert orch._tasks["t1"].read_files == ["src/shared.py"]
+        assert orch._tasks["t1"].symbol_scope == ["parse"]
+        assert orch._tasks["t1"].timeout_seconds == 90
+        assert orch._task_attempts["t1"] == 2
+        assert orch._task_attempt_history["t1"][0]["error"] == "boom"
+        assert orch._budget.used_tokens == 12
+        assert orch._budget.used_cost_usd == pytest.approx(0.5)
+        assert orch._state_seq == 7
+
+    @pytest.mark.asyncio
+    async def test_run_resume_uses_saved_manifest_without_decomposition(self, tmp_path: Path, monkeypatch) -> None:
+        from attoswarm.protocol.io import write_json_atomic
+
+        run_dir = tmp_path / "run"
+        tasks_dir = run_dir / "tasks"
+        tasks_dir.mkdir(parents=True)
+        write_json_atomic(
+            run_dir / "swarm.manifest.json",
+            {
+                "run_id": "resume-123",
+                "goal": "resume goal",
+                "tasks": [
+                    {
+                        "task_id": "t1",
+                        "title": "Already done",
+                        "description": "done",
+                        "deps": [],
+                        "target_files": ["src/a.py"],
+                    },
+                    {
+                        "task_id": "t2",
+                        "title": "Pending",
+                        "description": "pending",
+                        "deps": [],
+                        "target_files": ["src/b.py"],
+                    },
+                ],
+            },
+        )
+        write_json_atomic(
+            run_dir / "swarm.state.json",
+            {
+                "phase": "shutdown",
+                "dag": {
+                    "nodes": [
+                        {"task_id": "t1", "status": "done"},
+                        {"task_id": "t2", "status": "pending"},
+                    ]
+                },
+            },
+        )
+
+        cfg = SwarmYamlConfig()
+        cfg.run.run_dir = str(run_dir)
+        cfg.workspace.git_safety = False
+        orch = SwarmOrchestrator(cfg, "resume goal", resume=True)
+
+        monkeypatch.setattr(orch, "_init_ast_service", lambda: None)
+        monkeypatch.setattr(orch, "_init_code_intel", lambda: (_ for _ in ()).throw(AssertionError("code-intel should be skipped")))
+        monkeypatch.setattr(orch, "_init_budget_projector", lambda: None)
+        monkeypatch.setattr(orch, "_init_trace_bridge", lambda: None)
+        monkeypatch.setattr(orch, "_init_file_ledger", lambda: None)
+        monkeypatch.setattr(orch, "_bootstrap_context", lambda: (_ for _ in ()).throw(AssertionError("bootstrap should be skipped")))
+        monkeypatch.setattr(orch, "_decompose_goal", AsyncMock(side_effect=AssertionError("decompose should be skipped")))
+        monkeypatch.setattr(orch, "_check_pause", AsyncMock(return_value=None))
+        monkeypatch.setattr(orch, "_check_control_messages", lambda: None)
+        monkeypatch.setattr(orch, "_check_stale_agents", lambda: None)
+        monkeypatch.setattr(orch._subagent_mgr, "execute_batch", AsyncMock(return_value=[
+            TaskResult(task_id="t2", success=True, files_modified=["src/b.py"], result_summary="ok"),
+        ]))
+        monkeypatch.setattr(orch._subagent_mgr, "shutdown_all", AsyncMock(return_value=None))
+
+        completed = await orch.run()
+
+        assert completed == 1
+        assert orch._aot_graph.get_node("t1").status == "done"
+        assert orch._aot_graph.get_node("t2").status == "done"
+
+
 # ── _decompose_goal ──────────────────────────────────────────────────
 
 
 class TestDecomposeGoal:
+    def test_bootstrap_context_includes_parent_summary_without_code_intel(self, orch: SwarmOrchestrator) -> None:
+        orch._lineage = LineageSpec(parent_summary={"parent_run_id": "parent-1", "branch": "attoswarm/demo"})
+        orch._code_intel = None
+
+        ctx = orch._bootstrap_context()
+
+        assert json.loads(ctx) == {
+            "parent_summary": {"parent_run_id": "parent-1", "branch": "attoswarm/demo"}
+        }
+
     @pytest.mark.asyncio
-    async def test_single_task_fallback(self, orch: SwarmOrchestrator) -> None:
-        tasks = await orch._decompose_goal()
-        assert len(tasks) == 1
-        assert tasks[0].title == "test goal"[:100]
+    async def test_missing_decomposer_raises_planning_failure(self, orch: SwarmOrchestrator) -> None:
+        with pytest.raises(PlanningFailure):
+            await orch._decompose_goal()
 
     @pytest.mark.asyncio
     async def test_custom_decompose_fn(self, tmp_path: Path) -> None:
@@ -429,7 +596,7 @@ class TestDecomposeGoal:
         assert tasks[0].task_id == "t1"
 
     @pytest.mark.asyncio
-    async def test_decompose_fn_failure_falls_back(self, tmp_path: Path) -> None:
+    async def test_decompose_fn_failure_raises_planning_failure(self, tmp_path: Path) -> None:
         async def failing_decompose(goal: str, **kwargs: Any) -> list[TaskSpec]:
             raise RuntimeError("LLM error")
 
@@ -438,8 +605,41 @@ class TestDecomposeGoal:
         o = SwarmOrchestrator(cfg, "goal", decompose_fn=failing_decompose)
         o._setup_directories()
 
-        tasks = await o._decompose_goal()
-        assert len(tasks) == 1  # single-task fallback
+        with pytest.raises(PlanningFailure):
+            await o._decompose_goal()
+
+    def test_resolve_task_timeout_uses_watchdog_default(self, tmp_path: Path) -> None:
+        cfg = SwarmYamlConfig()
+        cfg.run.run_dir = str(tmp_path / "run")
+        cfg.watchdog.task_max_duration_seconds = 123.0
+        o = SwarmOrchestrator(cfg, "goal")
+
+        task = TaskSpec(task_id="t1", title="One", description="desc", timeout_seconds=45)
+
+        assert o._resolve_task_timeout(None) == 123.0
+        assert o._resolve_task_timeout(task) == 45.0
+
+    @pytest.mark.asyncio
+    async def test_run_decompose_failure_sets_planning_failed_phase(self, tmp_path: Path, monkeypatch) -> None:
+        async def failing_decompose(goal: str, **kwargs: Any) -> list[TaskSpec]:
+            raise RuntimeError("LLM error")
+
+        cfg = SwarmYamlConfig()
+        cfg.run.run_dir = str(tmp_path / "run")
+        o = SwarmOrchestrator(cfg, "goal", decompose_fn=failing_decompose)
+        monkeypatch.setattr(o, "_init_ast_service", lambda: None)
+        monkeypatch.setattr(o, "_init_code_intel", lambda: None)
+        monkeypatch.setattr(o, "_init_budget_projector", lambda: None)
+        monkeypatch.setattr(o, "_init_trace_bridge", lambda: None)
+        monkeypatch.setattr(o, "_init_file_ledger", lambda: None)
+        monkeypatch.setattr(o, "_bootstrap_context", lambda: "")
+
+        code = await o.run()
+        state = read_json(o._layout["state"], default={})
+
+        assert code == 1
+        assert o.phase == "planning_failed"
+        assert state["phase"] == "planning_failed"
 
     @pytest.mark.asyncio
     async def test_tasks_file_takes_priority(self, orch: SwarmOrchestrator) -> None:

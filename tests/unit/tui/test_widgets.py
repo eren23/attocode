@@ -111,3 +111,11 @@ class TestStatusBar:
         assert "bud 90%" in line1
         assert "ctx 25,000/200,000" in line1
         assert "bud 900,000/1,000,000" in line1
+
+    def test_line2_shows_batched_indicator(self) -> None:
+        status = StatusBar()
+        status.live_updates_coalesced = True
+
+        line2 = status._render_line2().plain
+
+        assert "batched" in line2
