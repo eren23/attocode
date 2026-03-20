@@ -2063,5 +2063,52 @@ def _ai_assisted_task_builder(base_dir: Path, cfg: dict[str, Any]) -> list[dict[
         return _manual_task_builder()
 
 
+@main.command("trace")
+@click.argument("run_dir", type=click.Path(exists=True, file_okay=False, path_type=Path))
+@click.option("--task", "task_id", default="", help="Filter events by task ID")
+def trace_command(run_dir: Path, task_id: str) -> None:
+    """Query trace data from a completed run."""
+    from attoswarm.coordinator.trace_query import TraceQueryEngine
+
+    engine = TraceQueryEngine(run_dir=run_dir)
+    engine.load()
+    if task_id:
+        events = engine.events_for_task(task_id)
+    else:
+        events = engine.all_events
+    if not events:
+        click.echo("No trace events found.")
+        return
+    for e in events:
+        click.echo(f"[{e.timestamp:.1f}] {e.event_type:15s} {e.task_id:10s} {e.message}")
+
+
+@main.command("postmortem")
+@click.argument("run_dir", type=click.Path(exists=True, file_okay=False, path_type=Path))
+def postmortem_command(run_dir: Path) -> None:
+    """Generate or display post-mortem report for a completed run."""
+    pm_path = run_dir / "postmortem.md"
+    if pm_path.exists():
+        click.echo(pm_path.read_text(encoding="utf-8"))
+    else:
+        from attoswarm.coordinator.postmortem import PostMortemGenerator
+        from attoswarm.coordinator.trace_query import TraceQueryEngine
+
+        engine = TraceQueryEngine(run_dir=run_dir)
+        engine.load()
+        gen = PostMortemGenerator(query_engine=engine)
+        state = read_json(run_dir / "swarm.state.json", default={})
+        if not isinstance(state, dict):
+            state = {}
+        report = gen.generate(
+            dag_summary=state.get("dag_summary", {}),
+            budget_data=state.get("budget", {}),
+            wall_clock_s=state.get("elapsed_s", 0.0),
+            validation_result=state.get("validation_result"),
+        )
+        gen.persist(report, run_dir)
+        click.echo(gen.to_markdown(report))
+
+
 if __name__ == "__main__":
     main()

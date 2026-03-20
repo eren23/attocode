@@ -17,10 +17,13 @@ import time
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any
 
+from attoswarm.coordinator.concurrency import AdaptiveConcurrency
+
 if TYPE_CHECKING:
     from collections.abc import Callable
 
     from attocode.integrations.context.ast_service import ASTService
+    from attoswarm.coordinator.health_monitor import HealthMonitor
     from attoswarm.workspace.file_ledger import FileLedger
 
 logger = logging.getLogger(__name__)
@@ -89,12 +92,24 @@ class SubagentManager:
         file_ledger: FileLedger | None = None,
         ast_service: ASTService | None = None,
         spawn_fn: Callable[..., Any] | None = None,
+        *,
+        concurrency_floor: int = 1,
+        concurrency_ceiling: int = 8,
     ) -> None:
         self._max_concurrency = max_concurrency
-        self._semaphore = asyncio.Semaphore(max_concurrency)
+        self._concurrency = AdaptiveConcurrency(
+            initial=max_concurrency,
+            floor=concurrency_floor,
+            ceiling=concurrency_ceiling,
+        )
+        # Keep a plain semaphore reference for backward compat
+        self._semaphore = self._concurrency
         self._file_ledger = file_ledger
         self._ast_service = ast_service
         self._spawn_fn = spawn_fn
+
+        # Health monitor (set externally by orchestrator)
+        self._health_monitor: HealthMonitor | None = None
 
         # Status tracking
         self._agent_statuses: dict[str, AgentStatus] = {}
@@ -227,7 +242,7 @@ class SubagentManager:
         target_files = task.get("target_files", [])
         task_model = str(task.get("model", ""))
 
-        async with self._semaphore:
+        async with self._concurrency:
             start = time.time()
 
             # 1. Claim files
@@ -301,6 +316,24 @@ class SubagentManager:
             status = "done" if result.success else "error"
             self._emit_status(agent_id, task_id, status, tokens=result.tokens_used, model=task_model)
 
+            # Feed outcome to adaptive concurrency + health monitor
+            if result.success:
+                self._concurrency.on_success()
+            elif "rate limit" in (result.error or "").lower() or "rate_limit" in (result.error or "").lower():
+                self._concurrency.on_rate_limit()
+            elif "timed out" in (result.error or "").lower() or "timeout" in (result.error or "").lower():
+                self._concurrency.on_timeout()
+
+            if self._health_monitor and task_model:
+                outcome = "success" if result.success else "failure"
+                if "rate limit" in (result.error or "").lower():
+                    outcome = "rate_limit"
+                elif "timed out" in (result.error or "").lower():
+                    outcome = "timeout"
+                self._health_monitor.record_outcome(
+                    task_model, outcome, duration_s=result.duration_s,
+                )
+
             # Write trace entry
             self._write_trace_entry(agent_id, task_id, "cost_delta" if result.success else "error", {
                 "cost_usd": result.cost_usd,
@@ -368,12 +401,17 @@ class SubagentManager:
 
         try:
             trace_path = _Path(self._trace_dir) / f"agent-{task_id}.trace.jsonl"
+            # Attach trace context if available
+            from attoswarm.coordinator.trace_context import current_span as _current_span
+            span = _current_span()
             entry = {
                 "timestamp": time.time(),
                 "agent_id": agent_id,
                 "task_id": task_id,
                 "entry_type": entry_type,
                 "data": data,
+                "trace_id": span.trace_id if span else "",
+                "span_id": span.span_id if span else "",
             }
             with trace_path.open("a", encoding="utf-8") as f:
                 f.write(_json.dumps(entry) + "\n")

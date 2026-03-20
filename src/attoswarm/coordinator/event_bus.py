@@ -29,6 +29,8 @@ class SwarmEvent:
     agent_id: str = ""
     data: dict[str, Any] = field(default_factory=dict)
     message: str = ""
+    trace_id: str = ""
+    span_id: str = ""
 
 
 class EventBus:

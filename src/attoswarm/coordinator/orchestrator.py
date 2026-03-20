@@ -26,8 +26,17 @@ from typing import TYPE_CHECKING, Any
 
 from attoswarm.coordinator.aot_graph import AoTGraph, AoTNode
 from attoswarm.coordinator.budget import BudgetCounter
+from attoswarm.coordinator.budget_gate import BudgetGate
+from attoswarm.coordinator.cache import SwarmCache
+from attoswarm.coordinator.causal_analyzer import CausalChainAnalyzer
+from attoswarm.coordinator.decompose_validator import DecomposeValidator
 from attoswarm.coordinator.event_bus import EventBus, SwarmEvent
+from attoswarm.coordinator.health_monitor import HealthMonitor
+from attoswarm.coordinator.poison_detector import PoisonDetector
+from attoswarm.coordinator.preflight import PreflightValidator
+from attoswarm.coordinator.result_pipeline import ResultPipeline
 from attoswarm.coordinator.subagent_manager import SubagentManager, TaskResult
+from attoswarm.coordinator.trace_context import TraceContext, current_span, start_span
 from attoswarm.protocol.io import read_json, write_json_atomic, write_json_fast
 from attoswarm.protocol.models import (
     LauncherInfo,
@@ -113,9 +122,13 @@ class SwarmOrchestrator:
             max_tokens=config.budget.max_tokens,
             max_cost_usd=config.budget.max_cost_usd,
         )
+        adaptive_cfg = getattr(config, 'adaptive', None)
+        self._adaptive_cfg = adaptive_cfg
         self._subagent_mgr = SubagentManager(
             max_concurrency=config.workspace.max_concurrent_writers,
             spawn_fn=spawn_fn,
+            concurrency_floor=adaptive_cfg.concurrency_floor if adaptive_cfg else 1,
+            concurrency_ceiling=adaptive_cfg.concurrency_ceiling if adaptive_cfg else 8,
         )
 
         # Git safety + change manifest
@@ -132,6 +145,36 @@ class SwarmOrchestrator:
 
         # Trace bridge (EventBus → TraceCollector)
         self._trace_bridge: Any = None
+
+        # Phase 1: Distributed tracing
+        tracing_cfg = getattr(config, 'tracing', None)
+        self._tracing_enabled = tracing_cfg.enabled if tracing_cfg else True
+        self._trace_ctx: TraceContext | None = None
+        self._cache = SwarmCache(max_size=256, default_ttl=300.0)
+        self._result_pipeline = ResultPipeline()
+
+        # Phase 2: Adaptive systems
+        health_threshold = adaptive_cfg.health_threshold if adaptive_cfg else 0.5
+        self._health_monitor = HealthMonitor(health_threshold=health_threshold)
+        self._budget_gate: BudgetGate | None = None
+        self._speculative_enabled = adaptive_cfg.speculative_enabled if adaptive_cfg else False
+        self._speculative_executor: Any = None
+
+        # Phase 3: Intelligence layer
+        validation_cfg = getattr(config, 'validation', None)
+        self._decompose_validation = validation_cfg.decompose_validation if validation_cfg else True
+        self._preflight_enabled = validation_cfg.preflight_checks if validation_cfg else True
+        self._poison_detection = validation_cfg.poison_detection if validation_cfg else True
+        self._poison_detector = PoisonDetector(
+            max_varying_failures=validation_cfg.max_varying_failures if validation_cfg else 3,
+        )
+        self._causal_analyzer: CausalChainAnalyzer | None = None
+        self._preflight_validator: PreflightValidator | None = None
+        self._validation_result: dict[str, Any] | None = None
+        self._poison_reports: list[dict[str, Any]] = []
+
+        # Phase 4: Timing & post-mortem
+        self._timing_waterfall: Any = None
 
         # Decision log (Workstream 2.4)
         self._decisions: list[dict[str, Any]] = []
@@ -378,10 +421,29 @@ class SwarmOrchestrator:
         # 2. Initialize File Ledger
         self._init_file_ledger()
 
-        # Wire ledger + AST + trace dir into subagent manager
+        # Wire ledger + AST + trace dir + health monitor into subagent manager
         self._subagent_mgr._file_ledger = self._file_ledger
         self._subagent_mgr._ast_service = self._ast_service
         self._subagent_mgr._trace_dir = str(self._layout["agents"])
+        self._subagent_mgr._health_monitor = self._health_monitor
+
+        # Wire preflight validator (after file ledger is ready)
+        if self._preflight_enabled:
+            self._preflight_validator = PreflightValidator(
+                root_dir=self._root_dir,
+                health_monitor=self._health_monitor,
+                budget_gate=self._budget_gate,  # may be None — PreflightValidator handles it
+                file_ledger=self._file_ledger,
+            )
+
+        # Initialize trace context
+        if self._tracing_enabled:
+            self._trace_ctx = TraceContext(trace_id=self._run_id)
+
+        # Initialize timing waterfall
+        if self._trace_ctx:
+            from attoswarm.coordinator.timing import TimingWaterfall
+            self._timing_waterfall = TimingWaterfall(trace_id=self._run_id)
 
         # 2b. Git safety config — deferred to after approval gate
         ws_cfg = getattr(self._config, 'workspace', None)
@@ -416,7 +478,8 @@ class SwarmOrchestrator:
             self._emit("info", message=f"Decomposing goal: {self._goal[:100]}")
             self._persist_state()  # Update phase to "decomposing" for TUI
             try:
-                tasks = await self._decompose_goal(codebase_context=bootstrap_ctx)
+                async with start_span("decompose_goal", trace_id=self._run_id):
+                    tasks = await self._decompose_goal(codebase_context=bootstrap_ctx)
             except PlanningFailure as exc:
                 self._phase = "planning_failed"
                 self._errors.append({
@@ -442,7 +505,49 @@ class SwarmOrchestrator:
             self._record_decision("decomposing", "decomposition_complete",
                                   f"Produced {len(tasks)} tasks", f"Goal complexity drove task count")
 
-            # 3b. Enrich tasks with code-intel impact analysis
+            # 3b. Validate decomposition (Phase 3)
+            if self._decompose_validation:
+                try:
+                    validator = DecomposeValidator(
+                        root_dir=self._root_dir,
+                        ast_service=self._ast_service,
+                    )
+                    vr = validator.validate(tasks)
+                    self._validation_result = vr.to_dict()
+                    if vr.has_errors:
+                        self._emit("warning",
+                                   message=f"Decomposition has {vr.error_count} errors, {vr.warning_count} warnings (score: {vr.score:.2f})")
+                        # Re-decompose on severe issues in auto mode (1 retry max)
+                        if self._approval_mode == "auto" and self._decompose_fn:
+                            feedback = "\n".join(
+                                f"- [{i.severity}] {i.message}: {i.suggestion}"
+                                for i in vr.issues if i.severity == "error"
+                            )
+                            self._emit("info", message=f"Re-decomposing with {vr.error_count} error feedback items")
+                            try:
+                                retry_ctx = bootstrap_ctx + f"\n\n## Validation Feedback\n{feedback}"
+                                async with start_span("redecompose_goal", trace_id=self._run_id):
+                                    tasks = await self._decompose_goal(codebase_context=retry_ctx)
+                                # Re-validate after retry
+                                vr2 = validator.validate(tasks)
+                                self._validation_result = vr2.to_dict()
+                                if vr2.has_errors:
+                                    self._emit("warning",
+                                               message=f"Re-decomposition still has {vr2.error_count} errors (score: {vr2.score:.2f})")
+                                else:
+                                    self._emit("info",
+                                               message=f"Re-decomposition improved (score: {vr2.score:.2f})")
+                            except Exception as exc2:
+                                logger.debug("Re-decomposition failed: %s", exc2)
+                    elif vr.has_warnings:
+                        self._emit("info",
+                                   message=f"Decomposition validated with {vr.warning_count} warnings (score: {vr.score:.2f})")
+                    else:
+                        self._emit("info", message=f"Decomposition validated (score: {vr.score:.2f})")
+                except Exception as exc:
+                    logger.debug("Decomposition validation failed: %s", exc)
+
+            # 3c. Enrich tasks with code-intel impact analysis
             tasks = self._enrich_tasks_with_impact(tasks)
 
             # Build AoT DAG
@@ -473,6 +578,20 @@ class SwarmOrchestrator:
             )
             self._persist_manifest()
             self._persist_state()
+
+        # Initialize causal analyzer (Phase 3) — after AoT graph is populated (both fresh and resume)
+        from attoswarm.coordinator.failure_analyzer import FailureAnalyzer
+        self._causal_analyzer = CausalChainAnalyzer(self._aot_graph, FailureAnalyzer())
+
+        # Initialize speculative executor (Phase 2) — after AoT graph is populated
+        if self._speculative_enabled:
+            from attoswarm.coordinator.speculative import SpeculativeExecutor
+            self._speculative_executor = SpeculativeExecutor(
+                aot_graph=self._aot_graph,
+                health_monitor=self._health_monitor,
+                budget_gate=self._budget_gate,
+                confidence_threshold=self._adaptive_cfg.speculative_confidence if self._adaptive_cfg else 0.8,
+            )
 
         # ── Approval gate ──
         # Skip approval on resume if execution had already started
@@ -562,14 +681,62 @@ class SwarmOrchestrator:
                 if not ready:
                     break  # No more tasks can run
 
+                # Budget gate: filter and prioritize (Phase 2)
+                if self._budget_gate:
+                    ready = self._budget_gate.prioritize_remaining(ready)
+                    filtered_ready: list[str] = []
+                    estimated = self._budget_gate.estimated_task_cost()
+                    for tid in ready:
+                        decision = self._budget_gate.can_dispatch(tid, estimated_cost=estimated)
+                        if decision.allowed:
+                            filtered_ready.append(tid)
+                        else:
+                            self._emit("budget", task_id=tid,
+                                       message=f"Budget gate blocked {tid}: {decision.reason}")
+                            self._record_decision("executing", "budget_gate_block",
+                                                  f"Blocked {tid}", decision.reason)
+                    if not filtered_ready:
+                        self._emit("info", message="Budget gate blocked all ready tasks — stopping")
+                        break
+                    ready = filtered_ready
+
+                # Pre-flight checks (Phase 3)
+                if self._preflight_enabled and self._preflight_validator:
+                    preflight_ready: list[str] = []
+                    for tid in ready:
+                        task = self._tasks.get(tid)
+                        if task:
+                            try:
+                                pf = await self._preflight_validator.check(task)
+                                if pf.passed:
+                                    preflight_ready.append(tid)
+                                else:
+                                    # Reset to pending with recorded blocker
+                                    self._emit("info", task_id=tid,
+                                               message=f"Preflight blocked: {'; '.join(pf.blockers)}")
+                            except Exception as exc:
+                                logger.debug("Preflight check failed for %s: %s", tid, exc)
+                                preflight_ready.append(tid)  # Fail-open
+                        else:
+                            preflight_ready.append(tid)
+                    if not preflight_ready:
+                        break
+                    ready = preflight_ready
+
                 batch_num += 1
                 self._emit(
                     "info",
                     message=f"Batch {batch_num}: {len(ready)} tasks",
                 )
 
-                # Check parallel safety
-                conflicts = self._aot_graph.check_parallel_safety(ready, self._ast_service)
+                # Check parallel safety (with cache)
+                cache_key = f"conflict:{':'.join(sorted(ready))}"
+                cached_conflicts = self._cache.get(cache_key)
+                if cached_conflicts is not None:
+                    conflicts = cached_conflicts
+                else:
+                    conflicts = self._aot_graph.check_parallel_safety(ready, self._ast_service)
+                    self._cache.put(cache_key, conflicts, ttl=60.0)
                 parallel, serialized = self._split_by_conflicts(ready, conflicts)
                 if serialized:
                     self._record_decision("executing", "parallel_safety_split",
@@ -603,10 +770,63 @@ class SwarmOrchestrator:
                     for td in batch_tasks:
                         self._persist_prompt(td["task_id"], td)
                     task_timeout = max(self._resolve_task_timeout_from_dict(td) for td in batch_tasks)
-                    results = await self._subagent_mgr.execute_batch(batch_tasks, timeout=task_timeout)
 
-                    for result in results:
-                        completed += await self._handle_result(result)
+                    # Speculative execution: identify candidates BEFORE awaiting
+                    # batch results (while deps are still "running")
+                    spec_tasks: list[dict[str, Any]] = []
+                    if self._speculative_executor:
+                        try:
+                            default_model = getattr(self._config.run, 'default_model', '') or ''
+                            running_models = {tid: default_model for tid in parallel}
+                            candidates = self._speculative_executor.get_candidates(running_models)
+                            for c in candidates:
+                                self._speculative_executor.mark_speculative(c.task_id)
+                                self._aot_graph.mark_running(c.task_id)
+                                self._emit("spawn", task_id=c.task_id,
+                                           message=f"Speculative: {c.task_id} (confidence={c.confidence:.2f})")
+                                spec_tasks.append(self._task_to_dict(c.task_id))
+                        except Exception as exc:
+                            logger.debug("Speculative candidate identification failed: %s", exc)
+
+                    # Launch speculative tasks concurrently with main batch
+                    spec_task_future: asyncio.Task[list[TaskResult]] | None = None
+                    if spec_tasks:
+                        spec_timeout = self._default_task_timeout()
+                        spec_task_future = asyncio.create_task(
+                            self._subagent_mgr.execute_batch(spec_tasks, timeout=spec_timeout)
+                        )
+
+                    async with start_span("execute_batch", trace_id=self._run_id,
+                                          attributes={"batch_num": batch_num, "count": len(parallel)}):
+                        results = await self._subagent_mgr.execute_batch(batch_tasks, timeout=task_timeout)
+
+                    # Process results through the pipeline (concurrent fan-out)
+                    async with start_span("process_batch_results", trace_id=self._run_id,
+                                          attributes={"count": len(results)}):
+                        pipeline_result = await self._result_pipeline.process_batch(results, self)
+                    completed += pipeline_result.completed
+
+                    # Handle speculative cancellation on failures
+                    if self._speculative_executor and pipeline_result.failed > 0:
+                        for result in results:
+                            if not result.success:
+                                to_cancel = self._speculative_executor.on_dep_failed(result.task_id)
+                                for cancel_tid in to_cancel:
+                                    node = self._aot_graph.get_node(cancel_tid)
+                                    if node and node.status == "running":
+                                        node.status = "pending"
+                                        self._emit("info", task_id=cancel_tid,
+                                                   message=f"Speculative task cancelled: dep {result.task_id} failed")
+
+                    # Collect speculative results
+                    if spec_task_future is not None:
+                        try:
+                            spec_results = await spec_task_future
+                            for sr in spec_results:
+                                completed += await self._handle_result(sr)
+                        except Exception as exc:
+                            logger.debug("Speculative batch execution failed: %s", exc)
+
                     self._persist_state()
 
                 # Execute serialized tasks one by one
@@ -620,13 +840,18 @@ class SwarmOrchestrator:
                     task = self._tasks.get(tid)
                     task_timeout = self._resolve_task_timeout(task)
                     result = await self._subagent_mgr.execute_single(task_dict, timeout=task_timeout)
-                    completed += await self._handle_result(result)
+                    async with start_span("handle_result", trace_id=self._run_id,
+                                          attributes={"task_id": result.task_id}):
+                        completed += await self._handle_result(result)
                     self._persist_state()
 
                 # Post-batch: refresh AST index, check control messages, stall detection
                 if self._ast_service:
                     try:
-                        self._ast_service.refresh()
+                        async with start_span("ast_refresh", trace_id=self._run_id):
+                            self._ast_service.refresh()
+                        # Invalidate conflict cache after AST changes
+                        self._cache.invalidate_prefix("conflict:")
                     except Exception as exc:
                         logger.debug("AST index refresh failed: %s", exc)
                 self._check_control_messages()
@@ -677,7 +902,44 @@ class SwarmOrchestrator:
                 except Exception as exc:
                     logger.warning("Git safety finalize failed: %s", exc)
 
+            # Generate post-mortem report (Phase 4)
+            try:
+                from attoswarm.coordinator.decompose_metrics import DecomposeMetrics
+                from attoswarm.coordinator.postmortem import PostMortemGenerator
+                from attoswarm.coordinator.trace_query import TraceQueryEngine
+
+                query_engine = TraceQueryEngine(run_dir=self._run_dir)
+                query_engine.load()
+                pm_gen = PostMortemGenerator(
+                    query_engine=query_engine,
+                    causal_analyzer=self._causal_analyzer,
+                    decompose_metrics=DecomposeMetrics(),
+                )
+                concurrency_stats = self._subagent_mgr._concurrency.stats.to_dict()
+                report = pm_gen.generate(
+                    dag_summary=summary,
+                    budget_data=self._budget.as_dict(),
+                    wall_clock_s=elapsed,
+                    critical_path=self._aot_graph.get_critical_path(),
+                    max_concurrency=self._config.workspace.max_concurrent_writers,
+                    validation_result=self._validation_result,
+                    poison_reports=self._poison_reports,
+                    concurrency_stats=concurrency_stats,
+                )
+                pm_gen.persist(report, self._run_dir)
+                self._emit("info", message=f"Post-mortem: {report.outcome}, "
+                           f"score={report.decomposition_score:.2f}, "
+                           f"efficiency={report.parallel_efficiency:.0%}")
+            except Exception as exc:
+                logger.debug("Post-mortem generation failed: %s", exc)
+
             self._persist_state()
+
+            # Cleanup trace context and timing waterfall
+            if self._trace_ctx:
+                self._trace_ctx.cleanup()
+            if self._timing_waterfall:
+                self._timing_waterfall.cleanup()
 
             # Kill all remaining subprocesses
             await self._subagent_mgr.shutdown_all()
@@ -863,6 +1125,14 @@ class SwarmOrchestrator:
                 if self._git_safety and hasattr(self._git_safety, "state")
                 else ""
             ),
+            "timing": self._timing_waterfall.to_dict() if self._timing_waterfall else {},
+            "health_monitor": self._health_monitor.to_dict() if self._health_monitor else {},
+            "cache_stats": self._cache.stats.to_dict() if self._cache else {},
+            "causal_chains": (
+                self._causal_analyzer.to_dict()
+                if self._causal_analyzer and self._causal_analyzer.chains
+                else {}
+            ),
         }
 
         try:
@@ -1014,15 +1284,249 @@ class SwarmOrchestrator:
             "task_kind": task.task_kind,
             "timeout_seconds": task.timeout_seconds,
         }
-        # Inject per-task learning context
+        # Health-aware model selection
+        if not d.get("model") and self._health_monitor:
+            default_model = getattr(self._config.run, 'default_model', '') or ''
+            if default_model:
+                d["model"] = self._health_monitor.get_best_model([default_model])
+
+        # Inject per-task learning context (with cache)
         if self._learning_bridge:
-            try:
-                learning_ctx = self._learning_bridge.recall_for_task(task)
-                if learning_ctx:
-                    d["learning_context"] = learning_ctx
-            except Exception as exc:
-                logger.debug("Learning recall for task %s failed: %s", task.task_id, exc)
+            cache_key = f"learning:{hash(task.title + ':'.join(task.target_files[:3]))}"
+            cached = self._cache.get(cache_key) if self._cache else None
+            if cached is not None:
+                d["learning_context"] = cached
+            else:
+                try:
+                    learning_ctx = self._learning_bridge.recall_for_task(task)
+                    if learning_ctx:
+                        d["learning_context"] = learning_ctx
+                        if self._cache:
+                            self._cache.put(cache_key, learning_ctx, ttl=120.0)
+                except Exception as exc:
+                    logger.debug("Learning recall for task %s failed: %s", task.task_id, exc)
         return d
+
+    # ------------------------------------------------------------------
+    # PipelineHandlers protocol implementation (Fix 2)
+    # ------------------------------------------------------------------
+
+    async def pipeline_update_budget(self, result: TaskResult) -> None:
+        """Sequential budget update for the result pipeline."""
+        task = self._tasks.get(result.task_id)
+        if task:
+            task.files_modified = result.files_modified
+            task.result_summary = result.result_summary
+            task.tokens_used = result.tokens_used
+            task.cost_usd = result.cost_usd
+        if result.tokens_used or result.cost_usd:
+            self._budget.add_usage(
+                {"total": result.tokens_used} if result.tokens_used else None,
+                result.cost_usd if result.cost_usd else None,
+            )
+        if result.cost_usd > 0:
+            self._per_task_costs.append(result.cost_usd)
+
+    async def pipeline_test_verify(self, result: TaskResult) -> bool:
+        """Run test verification gate. Returns True if passed."""
+        task = self._tasks.get(result.task_id)
+        tv_cfg = getattr(self._config, 'test_verification', None)
+        if not (
+            tv_cfg and tv_cfg.enabled
+            and task and task.task_kind in tv_cfg.applicable_task_kinds
+            and result.files_modified
+        ):
+            return result.success
+        verification = await self._run_test_verification(result)
+        if not verification.passed:
+            result.error = (
+                f"Tests failed: {verification.tests_failed}/{verification.tests_total} "
+                f"(pass rate {verification.pass_rate:.0%} < threshold {tv_cfg.pass_rate_threshold:.0%})"
+            )
+            if verification.error:
+                result.error += f" — {verification.error}"
+            self._emit("test_verify_fail", task_id=result.task_id,
+                        agent_id=f"agent-{result.task_id}",
+                        message=f"Test verification failed for {result.task_id}",
+                        data={"pass_rate": verification.pass_rate,
+                              "tests_passed": verification.tests_passed,
+                              "tests_failed": verification.tests_failed,
+                              "duration_s": verification.duration_s})
+            return False
+        self._emit("test_verify_pass", task_id=result.task_id,
+                    agent_id=f"agent-{result.task_id}",
+                    message=f"Test verification passed for {result.task_id}",
+                    data={"pass_rate": verification.pass_rate,
+                          "tests_total": verification.tests_total,
+                          "duration_s": verification.duration_s})
+        return True
+
+    async def pipeline_record_learning(self, result: TaskResult) -> None:
+        """Record learning from task outcome."""
+        task = self._tasks.get(result.task_id)
+        if self._learning_bridge and task:
+            try:
+                self._learning_bridge.record_task_outcome(task, result)
+            except Exception as exc:
+                logger.debug("Learning record failed for %s: %s", result.task_id, exc)
+
+    async def pipeline_capture_diff(self, result: TaskResult) -> None:
+        """Capture git diff for modified files."""
+        self._capture_task_diff(result.task_id, result.files_modified)
+
+    async def pipeline_run_projection(self) -> None:
+        """Run budget projection."""
+        self._run_budget_projection()
+
+    async def pipeline_update_dag(self, result: TaskResult, success: bool) -> int:
+        """Update DAG state and handle failure/retry. Returns 1 if completed."""
+        if success:
+            old_status = self._aot_graph.get_node(result.task_id).status if self._aot_graph.get_node(result.task_id) else "running"
+            self._aot_graph.mark_complete(result.task_id)
+            self._transition_log.append({
+                "timestamp": utc_now_iso(),
+                "task_id": result.task_id,
+                "from_state": old_status,
+                "to_state": "done",
+                "reason": "completed successfully",
+                "assigned_agent": f"agent-{result.task_id}",
+            })
+            self._emit("complete", task_id=result.task_id,
+                        agent_id=f"agent-{result.task_id}",
+                        message=f"Task {result.task_id} completed",
+                        data={"files_modified": result.files_modified,
+                              "tokens_used": result.tokens_used,
+                              "cost_usd": result.cost_usd})
+            if self._causal_analyzer and result.cost_usd > 0:
+                self._causal_analyzer.record_task_cost(result.task_id, result.cost_usd)
+            self._capture_task_diff(result.task_id, result.files_modified)
+            # Promote speculative tasks whose deps are now all done
+            if self._speculative_executor:
+                self._speculative_executor.on_dep_completed(result.task_id)
+            return 1
+
+        # Failure path — delegate to the full _handle_result for retry/poison/cascade logic
+        # (budget already updated by pipeline_update_budget)
+        failure_attr = self._classify_failure(result)
+
+        if self._causal_analyzer:
+            try:
+                from attoswarm.coordinator.failure_analyzer import FailureAttribution
+                attr_obj = None
+                if failure_attr:
+                    attr_obj = FailureAttribution(
+                        task_id=result.task_id,
+                        cause=failure_attr.get("cause", ""),
+                        confidence=failure_attr.get("confidence", 0.0),
+                        evidence=failure_attr.get("evidence", ""),
+                    )
+                self._causal_analyzer.analyze_failure(result.task_id, attr_obj)
+                if result.cost_usd > 0:
+                    self._causal_analyzer.record_task_cost(result.task_id, result.cost_usd)
+            except Exception as exc:
+                logger.debug("Causal analysis failed for %s: %s", result.task_id, exc)
+
+        self._errors.append({
+            "timestamp": utc_now_iso(),
+            "message": result.error or "Task failed",
+            "phase": self._phase,
+            "task_id": result.task_id,
+        })
+
+        attempts = self._task_attempts.get(result.task_id, 0) + 1
+        self._task_attempts[result.task_id] = attempts
+        max_retries = getattr(getattr(self._config, 'retries', None), 'max_task_attempts', 2)
+
+        self._task_attempt_history.setdefault(result.task_id, []).append({
+            "attempt": attempts,
+            "error": (result.error or "")[:500],
+            "timestamp": utc_now_iso(),
+            "duration_s": result.duration_s,
+            "tokens_used": result.tokens_used,
+            "failure_cause": failure_attr.get("cause", "") if failure_attr else "",
+        })
+
+        # Poison detection
+        if self._poison_detection and attempts >= 2:
+            try:
+                history = self._task_attempt_history.get(result.task_id, [])
+                poison_report = self._poison_detector.check(result.task_id, history)
+                if poison_report.is_poison:
+                    self._poison_reports.append(poison_report.to_dict())
+                    self._emit("warning", task_id=result.task_id,
+                               message=f"Poison task detected: {poison_report.reason}")
+                    self._record_decision("executing", "poison_detected",
+                                          f"Task {result.task_id} is poisonous: {poison_report.recommendation}",
+                                          poison_report.reason)
+                    self._aot_graph.mark_failed(result.task_id)
+                    skipped = self._aot_graph.cascade_skip_blocked()
+                    self._emit("skip", task_id=result.task_id,
+                               message=f"Poison task {result.task_id} skipped",
+                               data={"poison": poison_report.to_dict(), "skipped": skipped})
+                    if skipped:
+                        for skip_tid in skipped:
+                            self._transition_log.append({
+                                "timestamp": utc_now_iso(),
+                                "task_id": skip_tid,
+                                "from_state": "pending",
+                                "to_state": "skipped",
+                                "reason": f"cascade skip from poison {result.task_id}",
+                                "assigned_agent": "",
+                            })
+                    return 0
+            except Exception as exc:
+                logger.debug("Poison detection failed for %s: %s", result.task_id, exc)
+
+        if attempts < max_retries:
+            node = self._aot_graph.get_node(result.task_id)
+            if node:
+                node.status = "pending"
+            self._cache.invalidate_prefix("conflict:")
+            self._transition_log.append({
+                "timestamp": utc_now_iso(),
+                "task_id": result.task_id,
+                "from_state": "running",
+                "to_state": "pending",
+                "reason": f"retry attempt {attempts}/{max_retries}",
+                "assigned_agent": f"agent-{result.task_id}",
+            })
+            self._record_decision("executing", "retry",
+                                  f"Retrying {result.task_id} (attempt {attempts}/{max_retries})",
+                                  failure_attr.get("suggestion", "") if failure_attr else "")
+            self._emit("retry", task_id=result.task_id,
+                        agent_id=f"agent-{result.task_id}",
+                        message=f"Task {result.task_id} failed (attempt {attempts}/{max_retries}), retrying")
+            return 0
+
+        self._aot_graph.mark_failed(result.task_id)
+        self._transition_log.append({
+            "timestamp": utc_now_iso(),
+            "task_id": result.task_id,
+            "from_state": "running",
+            "to_state": "failed",
+            "reason": f"max retries exhausted ({attempts}/{max_retries}): {(result.error or '')[:200]}",
+            "assigned_agent": f"agent-{result.task_id}",
+        })
+        skipped = self._aot_graph.cascade_skip_blocked()
+        self._record_decision("executing", "task_failed",
+                              f"Task {result.task_id} failed permanently",
+                              f"Cascade-skipped: {skipped}" if skipped else "No downstream tasks affected")
+        self._emit("fail", task_id=result.task_id,
+                    agent_id=f"agent-{result.task_id}",
+                    message=f"Task {result.task_id} failed: {result.error}",
+                    data={"skipped": skipped, "failure": failure_attr or {}})
+        if skipped:
+            for skip_tid in skipped:
+                self._transition_log.append({
+                    "timestamp": utc_now_iso(),
+                    "task_id": skip_tid,
+                    "from_state": "pending",
+                    "to_state": "skipped",
+                    "reason": f"cascade skip from {result.task_id}",
+                    "assigned_agent": "",
+                })
+            self._emit("skip", message=f"Cascade-skipped: {skipped}")
+        return 0
 
     def _capture_task_diff(self, task_id: str, files_modified: list[str]) -> None:
         """Capture git diff for files modified by a task (best-effort)."""
@@ -1111,6 +1615,9 @@ class SwarmOrchestrator:
                         data={"files_modified": result.files_modified,
                               "tokens_used": result.tokens_used,
                               "cost_usd": result.cost_usd})
+            # Record cost to causal analyzer (for accurate wasted-cost)
+            if self._causal_analyzer and result.cost_usd > 0:
+                self._causal_analyzer.record_task_cost(result.task_id, result.cost_usd)
             # Capture git diff for modified files
             self._capture_task_diff(result.task_id, result.files_modified)
             # Record learning from successful task
@@ -1125,6 +1632,24 @@ class SwarmOrchestrator:
 
         # Failure analysis
         failure_attr = self._classify_failure(result)
+
+        # Causal chain analysis (Phase 3)
+        if self._causal_analyzer:
+            try:
+                from attoswarm.coordinator.failure_analyzer import FailureAttribution
+                attr_obj = None
+                if failure_attr:
+                    attr_obj = FailureAttribution(
+                        task_id=result.task_id,
+                        cause=failure_attr.get("cause", ""),
+                        confidence=failure_attr.get("confidence", 0.0),
+                        evidence=failure_attr.get("evidence", ""),
+                    )
+                self._causal_analyzer.analyze_failure(result.task_id, attr_obj)
+                if result.cost_usd > 0:
+                    self._causal_analyzer.record_task_cost(result.task_id, result.cost_usd)
+            except Exception as exc:
+                logger.debug("Causal analysis failed for %s: %s", result.task_id, exc)
 
         # Track error (Fix S1)
         self._errors.append({
@@ -1149,11 +1674,35 @@ class SwarmOrchestrator:
             "failure_cause": failure_attr.get("cause", "") if failure_attr else "",
         })
 
+        # Poison task detection (Phase 3)
+        if self._poison_detection and attempts >= 2:
+            try:
+                history = self._task_attempt_history.get(result.task_id, [])
+                poison_report = self._poison_detector.check(result.task_id, history)
+                if poison_report.is_poison:
+                    self._poison_reports.append(poison_report.to_dict())
+                    self._emit("warning", task_id=result.task_id,
+                               message=f"Poison task detected: {poison_report.reason}")
+                    self._record_decision("executing", "poison_detected",
+                                          f"Task {result.task_id} is poisonous: {poison_report.recommendation}",
+                                          poison_report.reason)
+                    # Skip immediately
+                    self._aot_graph.mark_failed(result.task_id)
+                    skipped = self._aot_graph.cascade_skip_blocked()
+                    self._emit("skip", task_id=result.task_id,
+                               message=f"Poison task {result.task_id} skipped",
+                               data={"poison": poison_report.to_dict(), "skipped": skipped})
+                    self._run_budget_projection()
+                    return 0
+            except Exception as exc:
+                logger.debug("Poison detection failed for %s: %s", result.task_id, exc)
+
         if attempts < max_retries:
             # Reset for retry
             node = self._aot_graph.get_node(result.task_id)
             if node:
                 node.status = "pending"
+            self._cache.invalidate_prefix("conflict:")
             self._transition_log.append({
                 "timestamp": utc_now_iso(),
                 "task_id": result.task_id,
@@ -1509,6 +2058,13 @@ class SwarmOrchestrator:
             if self._lineage.parent_summary:
                 return json.dumps({"parent_summary": self._lineage.parent_summary}, indent=2)
             return ""
+
+        # Check cache first
+        cache_key = f"bootstrap:{hash(self._goal)}"
+        cached = self._cache.get(cache_key)
+        if cached is not None:
+            return cached
+
         parts: list[str] = []
         try:
             max_tokens = ci_cfg.bootstrap_max_tokens if ci_cfg else 4000
@@ -1537,6 +2093,7 @@ class SwarmOrchestrator:
 
         ctx = "\n\n".join(parts)
         if ctx:
+            self._cache.put(cache_key, ctx, ttl=600.0)
             self._emit("info", message=f"Bootstrap context: {len(ctx)} chars")
         return ctx
 
@@ -1626,6 +2183,12 @@ class SwarmOrchestrator:
         try:
             from attoswarm.coordinator.budget import BudgetProjector
             self._budget_projector = BudgetProjector()
+            # Wire budget gate
+            self._budget_gate = BudgetGate(
+                budget=self._budget,
+                projector=self._budget_projector,
+                aot_graph=self._aot_graph,
+            )
         except Exception as exc:
             logger.debug("Budget projector init failed: %s", exc)
 
@@ -1736,10 +2299,22 @@ class SwarmOrchestrator:
         message: str = "",
         data: dict[str, Any] | None = None,
     ) -> None:
+        # Attach trace context if available
+        trace_id = ""
+        span_id = ""
+        span = current_span()
+        if span:
+            trace_id = span.trace_id
+            span_id = span.span_id
+        elif self._trace_ctx:
+            trace_id = self._trace_ctx.trace_id
+
         self._event_bus.emit(SwarmEvent(
             event_type=event_type,
             task_id=task_id,
             agent_id=agent_id,
             message=message,
             data=data or {},
+            trace_id=trace_id,
+            span_id=span_id,
         ))

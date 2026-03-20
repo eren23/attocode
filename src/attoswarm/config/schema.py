@@ -130,6 +130,29 @@ class TestVerificationConfig:
 
 
 @dataclass(slots=True)
+class TracingConfig:
+    enabled: bool = True
+    persist_spans: bool = True
+
+
+@dataclass(slots=True)
+class AdaptiveConfig:
+    concurrency_floor: int = 1
+    concurrency_ceiling: int = 8
+    health_threshold: float = 0.5
+    speculative_enabled: bool = False  # opt-in
+    speculative_confidence: float = 0.8
+
+
+@dataclass(slots=True)
+class ValidationConfig:
+    decompose_validation: bool = True
+    preflight_checks: bool = True
+    poison_detection: bool = True
+    max_varying_failures: int = 3
+
+
+@dataclass(slots=True)
 class SwarmYamlConfig:
     version: int = 1
     run: RunConfig = field(default_factory=RunConfig)
@@ -144,3 +167,6 @@ class SwarmYamlConfig:
     code_intel: CodeIntelConfig = field(default_factory=CodeIntelConfig)
     research: ResearchConfig = field(default_factory=ResearchConfig)
     test_verification: TestVerificationConfig = field(default_factory=TestVerificationConfig)
+    tracing: TracingConfig = field(default_factory=TracingConfig)
+    adaptive: AdaptiveConfig = field(default_factory=AdaptiveConfig)
+    validation: ValidationConfig = field(default_factory=ValidationConfig)
