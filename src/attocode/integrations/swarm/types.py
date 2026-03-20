@@ -157,6 +157,7 @@ class AutoSplitConfig:
         default_factory=lambda: ["implement", "refactor", "test"]
     )
     max_subtasks: int = 4
+    max_split_depth: int = 2
 
 
 # =============================================================================
@@ -261,9 +262,11 @@ class SwarmConfig:
     file_conflict_strategy: FileConflictStrategy = FileConflictStrategy.CLAIM_BASED
     dispatch_stagger_ms: int = 1500
     dispatch_lease_stale_ms: int = 300_000  # 5 min
+    wave_stuck_timeout_ms: int = 60_000  # 60s
     retry_base_delay_ms: int = 5_000
     partial_dependency_threshold: float = 0.5
     artifact_aware_skip: bool = True
+    max_cascade_depth: int = 3
 
     # Throttle
     throttle: str | bool = "free"  # 'free' | 'paid' | false
@@ -272,7 +275,7 @@ class SwarmConfig:
     hollow_termination_ratio: float = 0.55
     hollow_termination_min_dispatches: int = 8
     hollow_output_threshold: int = 120  # chars
-    enable_hollow_termination: bool = False
+    enable_hollow_termination: bool = True
 
     # Features
     enable_planning: bool = True
@@ -296,6 +299,9 @@ class SwarmConfig:
     # Hierarchy
     hierarchy: HierarchyConfig = field(default_factory=HierarchyConfig)
     planner_model: str = ""
+
+    # Replanning
+    max_replans: int = 2
 
     # Auto-split
     auto_split: AutoSplitConfig = field(default_factory=AutoSplitConfig)
@@ -370,12 +376,22 @@ class RetryContext:
 
 
 @dataclass
+class PartialContextEntry:
+    """A partial context entry with task ID and description."""
+
+    task_id: str
+    description: str
+
+
+@dataclass
 class PartialContext:
     """Context for tasks running with partial dependency data."""
 
-    succeeded: list[str] = field(default_factory=list)  # descriptions
-    failed: list[str] = field(default_factory=list)  # descriptions
+    succeeded: list[str] = field(default_factory=list)  # descriptions (backward compat)
+    failed: list[str] = field(default_factory=list)  # descriptions (backward compat)
     ratio: float = 0.0
+    succeeded_entries: list[PartialContextEntry] = field(default_factory=list)
+    failed_entries: list[PartialContextEntry] = field(default_factory=list)
 
 
 # =============================================================================
@@ -435,6 +451,7 @@ class SwarmTask:
     subtask_ids: list[str] | None = None
     relevant_files: list[str] | None = None
     original_subtask: dict[str, Any] | None = None
+    split_depth: int = 0
 
 
 @dataclass

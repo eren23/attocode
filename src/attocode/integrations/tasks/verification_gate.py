@@ -237,7 +237,8 @@ class VerificationGate:
 
     async def _llm_verify(self, task: SubTask, result: str) -> CheckResult:
         """Use the LLM to evaluate the task result."""
-        assert self._provider is not None  # noqa: S101
+        if self._provider is None:
+            return CheckResult(name="llm", passed=False, message="No LLM provider configured")
 
         prompt = build_verification_prompt(task, result)
         try:

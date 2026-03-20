@@ -257,7 +257,7 @@ class StatusBar(Static):
         self._schedule_refresh()
 
     def _schedule_refresh(self) -> None:
-        """Coalesce frequent reactive updates into a single repaint."""
+        """Coalesce frequent reactive updates into a single repaint (16ms debounce)."""
         if self._refresh_pending:
             return
         try:
@@ -269,7 +269,7 @@ class StatusBar(Static):
             self.refresh()
             return
         self._refresh_pending = True
-        self.call_after_refresh(self._flush_refresh)
+        self.set_timer(0.016, self._flush_refresh)
 
     def _flush_refresh(self) -> None:
         self._refresh_pending = False

@@ -14,7 +14,9 @@ from attocode.integrations.swarm.types import (
     FileConflictStrategy,
     FixupTask,
     PartialContext,
+    PartialContextEntry,
     ResourceConflict,
+    RetryContext,
     SmartDecompositionResult,
     SmartSubtask,
     SubtaskType,
@@ -122,6 +124,7 @@ class SwarmTaskQueue:
         """Convert a decomposition result into the internal queue state."""
         self.partial_dependency_threshold = config.partial_dependency_threshold
         self.artifact_aware_skip = config.artifact_aware_skip
+        self._max_cascade_depth = getattr(config, "max_cascade_depth", 3)
         self.tasks.clear()
         self.waves.clear()
         self.current_wave = 0
@@ -191,6 +194,9 @@ class SwarmTaskQueue:
             self.tasks[task.id] = task
 
         self._rebuild_waves()
+        cycles = self._detect_cycles()
+        if cycles:
+            self._rebuild_waves()  # Rebuild after breaking cycles
         self._update_ready_status()
 
     # ------------------------------------------------------------------
@@ -366,9 +372,11 @@ class SwarmTaskQueue:
         original.subtask_ids = [s.id for s in subtasks]
 
         target_wave = original.wave
+        parent_depth = getattr(original, "split_depth", 0)
         for sub in subtasks:
             sub.wave = target_wave
             sub.parent_task_id = original_task_id
+            sub.split_depth = parent_depth + 1
             self.tasks[sub.id] = sub
 
         # Rewire dependencies: anything depending on the original now depends
@@ -632,14 +640,14 @@ class SwarmTaskQueue:
         stale_after_ms: int,
         now: float | None = None,
         active_task_ids: set[str] | None = None,
-    ) -> list[str]:
+    ) -> list[tuple[str, float]]:
         """Recover tasks stuck in DISPATCHED with no active worker.
 
-        Returns a list of recovered task IDs.
+        Returns a list of ``(task_id, elapsed_seconds)`` tuples.
         """
         now_ts = now if now is not None else time.time()
         stale_threshold = stale_after_ms / 1000.0
-        recovered: list[str] = []
+        recovered: list[tuple[str, float]] = []
 
         for task in self.tasks.values():
             if task.status != SwarmTaskStatus.DISPATCHED:
@@ -653,9 +661,14 @@ class SwarmTaskQueue:
             elapsed = now_ts - task.dispatched_at
             if elapsed >= stale_threshold:
                 task.status = SwarmTaskStatus.READY
+                task.failure_mode = TaskFailureMode.TIMEOUT
+                task.retry_context = RetryContext(
+                    previous_feedback=f"Task was stale-recovered after {elapsed:.0f}s with no active worker",
+                    attempt=task.attempts,
+                )
                 task.dispatched_at = None
-                recovered.append(task.id)
-                logger.info(
+                recovered.append((task.id, elapsed))
+                logger.warning(
                     "Recovered stale task %s (dispatched %.1fs ago)",
                     task.id,
                     elapsed,
@@ -679,6 +692,44 @@ class SwarmTaskQueue:
 
         max_wave = max(wave_map)
         self.waves = [wave_map.get(i, []) for i in range(max_wave + 1)]
+
+    def _detect_cycles(self) -> list[str]:
+        """Detect dependency cycles via DFS with in-stack tracking.
+
+        If cycles are found, breaks them by removing the back-edge
+        dependency and logs a warning. Returns list of broken edges
+        as 'A -> B' strings.
+        """
+        WHITE, GRAY, BLACK = 0, 1, 2
+        color: dict[str, int] = {tid: WHITE for tid in self.tasks}
+        broken: list[str] = []
+
+        def dfs(node: str) -> None:
+            color[node] = GRAY
+            task = self.tasks.get(node)
+            if task is None:
+                color[node] = BLACK
+                return
+            for dep_id in list(task.dependencies):
+                if dep_id not in color:
+                    continue
+                if color[dep_id] == GRAY:
+                    # Back edge — break it
+                    task.dependencies.remove(dep_id)
+                    broken.append(f"{node} -> {dep_id}")
+                    logger.warning(
+                        "Dependency cycle detected and broken: %s depends on %s",
+                        node, dep_id,
+                    )
+                elif color[dep_id] == WHITE:
+                    dfs(dep_id)
+            color[node] = BLACK
+
+        for tid in list(self.tasks):
+            if color.get(tid, WHITE) == WHITE:
+                dfs(tid)
+
+        return broken
 
     # ------------------------------------------------------------------
     # Private: ready-status propagation
@@ -710,22 +761,27 @@ class SwarmTaskQueue:
         """Cascade-skip downstream dependents of a failed task.
 
         Applies several heuristics before actually skipping:
-        1. Artifact-aware skip avoidance
-        2. Partial-dependency threshold
-        3. Timeout lenience
-        4. Pending cascade skip for dispatched tasks
+        1. Single-dependency rescue with artifact-producing parent
+        2. Artifact-aware skip avoidance
+        3. Partial-dependency threshold
+        4. Timeout lenience
+        5. Pending cascade skip for dispatched tasks
+        6. Max cascade depth limit
         """
         failed_task = self.tasks.get(failed_task_id)
         if failed_task is None:
             return
 
-        # Collect all transitive dependents via DFS
-        to_visit: list[str] = [failed_task_id]
+        max_depth = getattr(self, "_max_cascade_depth", 3)
+
+        # Collect transitive dependents via depth-limited DFS
+        # Each entry is (task_id, depth)
+        to_visit: list[tuple[str, int]] = [(failed_task_id, 0)]
         visited: set[str] = set()
-        dependents: list[str] = []
+        dependents: list[tuple[str, int]] = []  # (task_id, depth)
 
         while to_visit:
-            current_id = to_visit.pop()
+            current_id, depth = to_visit.pop()
             if current_id in visited:
                 continue
             visited.add(current_id)
@@ -735,17 +791,46 @@ class SwarmTaskQueue:
                 if task.status in _TERMINAL_STATUSES:
                     continue
                 if current_id in task.dependencies:
-                    dependents.append(task.id)
-                    to_visit.append(task.id)
+                    dependents.append((task.id, depth + 1))
+                    to_visit.append((task.id, depth + 1))
 
         skipped_ids: list[str] = []
 
-        for dep_id in dependents:
+        for dep_id, depth in dependents:
             dep_task = self.tasks.get(dep_id)
             if dep_task is None or dep_task.status in _TERMINAL_STATUSES:
                 continue
 
-            # 1. Artifact-aware skip avoidance: if 50%+ of the failed task's
+            # 0. Depth limit: tasks at the cascade boundary get pending flag
+            if depth > max_depth:
+                dep_task.pending_cascade_skip = True
+                logger.info(
+                    "Cascade depth limit (%d): deferring skip for %s",
+                    max_depth, dep_id,
+                )
+                continue
+
+            # 1. Single-dependency rescue: if the task depends only on the
+            #    failed parent and the parent had artifact-producing type,
+            #    set to READY with rescue note instead of SKIPPED.
+            if (
+                len(dep_task.dependencies) == 1
+                and dep_task.dependencies[0] == failed_task_id
+                and failed_task.target_files
+            ):
+                dep_task.status = SwarmTaskStatus.READY
+                dep_task.rescue_context = (
+                    f"Sole dependency {failed_task_id} failed but was artifact-producing; "
+                    f"proceeding without its output"
+                )
+                dep_task.dependency_context = self._build_dependency_context(dep_task)
+                logger.info(
+                    "Single-dep rescue: %s set READY despite %s failure",
+                    dep_id, failed_task_id,
+                )
+                continue
+
+            # 2. Artifact-aware skip avoidance: if 50%+ of the failed task's
             #    target_files exist on disk, keep the dependent ready.
             if self.artifact_aware_skip and failed_task.target_files:
                 existing = sum(
@@ -764,7 +849,7 @@ class SwarmTaskQueue:
                     )
                     continue
 
-            # 2. Partial-dependency threshold: if enough deps succeeded, run
+            # 3. Partial-dependency threshold: if enough deps succeeded, run
             #    the task with partial context.
             total_deps = len(dep_task.dependencies)
             if total_deps > 1:
@@ -785,19 +870,32 @@ class SwarmTaskQueue:
                     failed_deps, self.partial_dependency_threshold
                 )
                 if ratio >= threshold:
+                    succeeded_descs = [
+                        self.tasks[d].description
+                        for d in completed_deps
+                        if d in [t.id for t in self.tasks.values()]
+                    ]
+                    failed_descs = [
+                        self.tasks[d].description
+                        for d in dep_task.dependencies
+                        if self.tasks.get(d) is not None
+                        and self.tasks[d].status == SwarmTaskStatus.FAILED
+                    ]
                     dep_task.partial_context = PartialContext(
-                        succeeded=[
-                            self.tasks[d].description
+                        succeeded=succeeded_descs,
+                        failed=failed_descs,
+                        ratio=ratio,
+                        succeeded_entries=[
+                            PartialContextEntry(task_id=d, description=self.tasks[d].description)
                             for d in completed_deps
-                            if d in [t.id for t in self.tasks.values()]
+                            if d in self.tasks
                         ],
-                        failed=[
-                            self.tasks[d].description
+                        failed_entries=[
+                            PartialContextEntry(task_id=d, description=self.tasks[d].description)
                             for d in dep_task.dependencies
                             if self.tasks.get(d) is not None
                             and self.tasks[d].status == SwarmTaskStatus.FAILED
                         ],
-                        ratio=ratio,
                     )
                     dep_task.dependency_context = self._build_dependency_context(dep_task)
                     if dep_task.status == SwarmTaskStatus.PENDING:
@@ -810,13 +908,16 @@ class SwarmTaskQueue:
                     )
                     continue
 
-            # 3. Timeout lenience: timeout failures keep dependents ready with
+            # 4. Timeout lenience: timeout failures keep dependents ready with
             #    partial context rather than skipping.
             if failed_task.failure_mode == TaskFailureMode.TIMEOUT:
                 dep_task.partial_context = PartialContext(
                     succeeded=[],
                     failed=[failed_task.description],
                     ratio=0.0,
+                    failed_entries=[
+                        PartialContextEntry(task_id=failed_task_id, description=failed_task.description),
+                    ],
                 )
                 dep_task.dependency_context = self._build_dependency_context(dep_task)
                 if dep_task.status == SwarmTaskStatus.PENDING:
@@ -828,7 +929,7 @@ class SwarmTaskQueue:
                 )
                 continue
 
-            # 4. Pending cascade skip for already-dispatched tasks
+            # 5. Pending cascade skip for already-dispatched tasks
             if dep_task.status == SwarmTaskStatus.DISPATCHED:
                 dep_task.pending_cascade_skip = True
                 logger.info(
@@ -837,7 +938,7 @@ class SwarmTaskQueue:
                 )
                 continue
 
-            # 5. Standard skip
+            # 6. Standard skip
             dep_task.status = SwarmTaskStatus.SKIPPED
             dep_task.failure_mode = TaskFailureMode.CASCADE
             skipped_ids.append(dep_id)

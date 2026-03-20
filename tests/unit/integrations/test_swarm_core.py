@@ -1669,13 +1669,17 @@ class TestClassifyFailure:
         assert _classify_failure("too many requests") == "rate-limit"
 
     def test_payment_required_402(self) -> None:
-        assert _classify_failure("Error 402 Payment Required") == "rate-limit"
+        # 402 is now correctly classified as terminal (spend limit), not rate-limit
+        assert _classify_failure("Error 402 Payment Required") == "terminal"
 
     def test_payment_required_text(self) -> None:
-        assert _classify_failure("payment required") == "rate-limit"
+        assert _classify_failure("payment required") == "terminal"
 
     def test_insufficient_funds(self) -> None:
-        assert _classify_failure("insufficient balance") == "rate-limit"
+        # "insufficient_quota" maps to terminal; plain "insufficient" without
+        # 402/billing context is now classified as a generic error by the
+        # comprehensive classifier.
+        assert _classify_failure("insufficient_quota exceeded") == "terminal"
 
     def test_timeout_text(self) -> None:
         assert _classify_failure("request timeout") == "timeout"
@@ -1873,6 +1877,28 @@ class TestHandleTaskCompletionFailure:
 
         # Should be failed (max dispatch exceeded, no resilience recovery)
         assert task.status == SwarmTaskStatus.FAILED
+
+
+class TestRateLimitListCap:
+    """record_rate_limit hard-caps recent_rate_limits at 200."""
+
+    def test_capped_at_200_after_storm(self) -> None:
+        state = SwarmRecoveryState()
+        ctx = _make_ctx()
+        # Pre-fill with 250 in-window timestamps
+        now = time.time()
+        state.recent_rate_limits = [now - i * 0.01 for i in range(250)]
+        record_rate_limit(state, ctx)
+        assert len(state.recent_rate_limits) <= 200
+
+    def test_keeps_most_recent_entries(self) -> None:
+        state = SwarmRecoveryState()
+        ctx = _make_ctx()
+        now = time.time()
+        state.recent_rate_limits = [now - i * 0.01 for i in range(250)]
+        record_rate_limit(state, ctx)
+        # The last entry should be the most recently appended (close to now)
+        assert state.recent_rate_limits[-1] >= now - 0.1
 
 
 class TestWaveRecoveryThreshold:

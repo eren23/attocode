@@ -83,10 +83,16 @@ class GraphStore:
         self._conn.execute("PRAGMA synchronous=NORMAL")
         self._create_tables()
 
+    def _get_conn(self) -> sqlite3.Connection:
+        """Return the active connection or raise if closed."""
+        if self._conn is None:
+            raise RuntimeError("GraphStore connection is closed")
+        return self._conn
+
     def _create_tables(self) -> None:
         """Create tables if they don't exist."""
-        assert self._conn is not None
-        self._conn.executescript("""
+        conn = self._get_conn()
+        conn.executescript("""
             CREATE TABLE IF NOT EXISTS files (
                 relative_path TEXT PRIMARY KEY,
                 content_hash TEXT NOT NULL,
@@ -121,7 +127,7 @@ class GraphStore:
                 value TEXT
             );
         """)
-        self._conn.commit()
+        conn.commit()
 
     # ------------------------------------------------------------------
     # File metadata
@@ -129,8 +135,8 @@ class GraphStore:
 
     def get_cached_files(self) -> dict[str, CachedFileInfo]:
         """Load all cached file metadata."""
-        assert self._conn is not None
-        cursor = self._conn.execute(
+        conn = self._get_conn()
+        cursor = conn.execute(
             "SELECT relative_path, content_hash, language, line_count, importance, mtime FROM files"
         )
         result: dict[str, CachedFileInfo] = {}
@@ -147,8 +153,8 @@ class GraphStore:
 
     def upsert_file(self, info: CachedFileInfo) -> None:
         """Insert or update a single file's metadata."""
-        assert self._conn is not None
-        self._conn.execute(
+        conn = self._get_conn()
+        conn.execute(
             """INSERT OR REPLACE INTO files
                (relative_path, content_hash, language, line_count, importance, mtime)
                VALUES (?, ?, ?, ?, ?, ?)""",
@@ -158,13 +164,13 @@ class GraphStore:
 
     def remove_file(self, relative_path: str) -> None:
         """Remove a file and its associated data."""
-        assert self._conn is not None
-        self._conn.execute("DELETE FROM files WHERE relative_path = ?", (relative_path,))
-        self._conn.execute(
+        conn = self._get_conn()
+        conn.execute("DELETE FROM files WHERE relative_path = ?", (relative_path,))
+        conn.execute(
             "DELETE FROM dependencies WHERE source = ? OR target = ?",
             (relative_path, relative_path),
         )
-        self._conn.execute("DELETE FROM symbols WHERE file_path = ?", (relative_path,))
+        conn.execute("DELETE FROM symbols WHERE file_path = ?", (relative_path,))
 
     # ------------------------------------------------------------------
     # Dependencies
@@ -172,18 +178,18 @@ class GraphStore:
 
     def set_dependencies(self, source: str, targets: list[str]) -> None:
         """Replace all dependency edges for a source file."""
-        assert self._conn is not None
-        self._conn.execute("DELETE FROM dependencies WHERE source = ?", (source,))
+        conn = self._get_conn()
+        conn.execute("DELETE FROM dependencies WHERE source = ?", (source,))
         if targets:
-            self._conn.executemany(
+            conn.executemany(
                 "INSERT OR IGNORE INTO dependencies (source, target) VALUES (?, ?)",
                 [(source, t) for t in targets],
             )
 
     def get_forward_deps(self) -> dict[str, set[str]]:
         """Load all forward dependency edges."""
-        assert self._conn is not None
-        cursor = self._conn.execute("SELECT source, target FROM dependencies")
+        conn = self._get_conn()
+        cursor = conn.execute("SELECT source, target FROM dependencies")
         result: dict[str, set[str]] = {}
         for src, tgt in cursor:
             result.setdefault(src, set()).add(tgt)
@@ -191,8 +197,8 @@ class GraphStore:
 
     def get_reverse_deps(self) -> dict[str, set[str]]:
         """Load all reverse dependency edges."""
-        assert self._conn is not None
-        cursor = self._conn.execute("SELECT target, source FROM dependencies")
+        conn = self._get_conn()
+        cursor = conn.execute("SELECT target, source FROM dependencies")
         result: dict[str, set[str]] = {}
         for tgt, src in cursor:
             result.setdefault(tgt, set()).add(src)
@@ -204,10 +210,10 @@ class GraphStore:
 
     def set_symbols(self, file_path: str, symbols: list[dict]) -> None:
         """Replace all symbol definitions for a file."""
-        assert self._conn is not None
-        self._conn.execute("DELETE FROM symbols WHERE file_path = ?", (file_path,))
+        conn = self._get_conn()
+        conn.execute("DELETE FROM symbols WHERE file_path = ?", (file_path,))
         if symbols:
-            self._conn.executemany(
+            conn.executemany(
                 """INSERT INTO symbols (name, qualified_name, kind, file_path, start_line, end_line)
                    VALUES (?, ?, ?, ?, ?, ?)""",
                 [
@@ -220,8 +226,8 @@ class GraphStore:
 
     def get_symbols_for_file(self, file_path: str) -> list[dict]:
         """Load symbols for a specific file."""
-        assert self._conn is not None
-        cursor = self._conn.execute(
+        conn = self._get_conn()
+        cursor = conn.execute(
             "SELECT name, qualified_name, kind, start_line, end_line FROM symbols WHERE file_path = ?",
             (file_path,),
         )
@@ -273,15 +279,15 @@ class GraphStore:
 
     def get_meta(self, key: str) -> str | None:
         """Get a metadata value."""
-        assert self._conn is not None
-        cursor = self._conn.execute("SELECT value FROM meta WHERE key = ?", (key,))
+        conn = self._get_conn()
+        cursor = conn.execute("SELECT value FROM meta WHERE key = ?", (key,))
         row = cursor.fetchone()
         return row[0] if row else None
 
     def set_meta(self, key: str, value: str) -> None:
         """Set a metadata value."""
-        assert self._conn is not None
-        self._conn.execute(
+        conn = self._get_conn()
+        conn.execute(
             "INSERT OR REPLACE INTO meta (key, value) VALUES (?, ?)",
             (key, value),
         )
@@ -303,19 +309,19 @@ class GraphStore:
 
     def clear(self) -> None:
         """Clear all cached data."""
-        assert self._conn is not None
-        self._conn.executescript("""
+        conn = self._get_conn()
+        conn.executescript("""
             DELETE FROM files;
             DELETE FROM dependencies;
             DELETE FROM symbols;
             DELETE FROM meta;
         """)
-        self._conn.commit()
+        conn.commit()
 
     @property
     def file_count(self) -> int:
         """Number of cached files."""
-        assert self._conn is not None
-        cursor = self._conn.execute("SELECT COUNT(*) FROM files")
+        conn = self._get_conn()
+        cursor = conn.execute("SELECT COUNT(*) FROM files")
         row = cursor.fetchone()
         return row[0] if row else 0

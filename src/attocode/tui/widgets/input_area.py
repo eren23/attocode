@@ -125,6 +125,8 @@ class PromptInput(Widget):
             return
         if value and (not self._history or self._history[-1] != value):
             self._history.append(value)
+            if len(self._history) > 500:
+                self._history = self._history[-500:]
         self._history_index = -1
         ta = self.query_one("#prompt-input", _PromptTextArea)
         ta.clear()

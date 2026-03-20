@@ -73,6 +73,8 @@ class EventTimeline(Static):
 
     def update_events(self, events: list[dict[str, Any]]) -> None:
         """Replace all events."""
+        if len(events) > 100:
+            events = events[-100:]
         self.events = events
 
     def _rebuild(self, events: list[dict[str, Any]]) -> None:
@@ -166,7 +168,7 @@ class EventsLog(Widget):
         self._seen_count: int = 0
 
     def compose(self):
-        yield RichLog(id="events-log", auto_scroll=True, markup=True)
+        yield RichLog(id="events-log", auto_scroll=True, markup=True, max_lines=1000)
 
     def update_events_filtered(self, events: list[dict[str, Any]]) -> None:
         """Replace all events with a filtered set (resets delta tracking)."""

@@ -11,6 +11,10 @@ from textual.containers import VerticalScroll
 from textual.reactive import reactive
 from textual.widget import Widget
 from textual.widgets import Collapsible, Static
+from textual.css.query import NoMatches
+
+import logging
+logger = logging.getLogger(__name__)
 
 if TYPE_CHECKING:
     from textual.app import ComposeResult
@@ -84,7 +88,7 @@ class ToolCallsPanel(Widget):
             try:
                 old_widget = self.query_one(f"#{old_wid}", Collapsible)
                 old_widget.remove()
-            except Exception:
+            except NoMatches:
                 pass
 
         # Build collapsible content
@@ -143,8 +147,10 @@ class ToolCallsPanel(Widget):
             # Auto-collapse completed calls
             if status in ("completed", "error"):
                 collapsible.collapsed = True
-        except Exception:
+        except NoMatches:
             pass
+        except Exception:
+            logger.debug("ToolCallsPanel.update_call failed for %s", tool_id, exc_info=True)
 
         self._update_header()
 
@@ -162,7 +168,7 @@ class ToolCallsPanel(Widget):
             scroll = self.query_one("#tool-scroll", VerticalScroll)
             for collapsible in scroll.query(Collapsible):
                 collapsible.remove()
-        except Exception:
+        except NoMatches:
             pass
         self.remove_class("has-tools")
         self._update_header()
@@ -272,7 +278,7 @@ class ToolCallsPanel(Widget):
                     collapsible.display = info.status == "error"
                 elif self.filter_mode == "running":
                     collapsible.display = info.status == "running"
-            except Exception:
+            except NoMatches:
                 pass
         self._update_header()
 

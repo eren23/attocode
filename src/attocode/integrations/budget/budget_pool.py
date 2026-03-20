@@ -16,6 +16,7 @@ the combined consumption never exceeds the pool total.
 from __future__ import annotations
 
 import asyncio
+import time
 from dataclasses import dataclass
 
 # =============================================================================
@@ -42,6 +43,7 @@ class BudgetAllocation:
     cost_budget: float
     tokens_used: int = 0
     cost_used: float = 0.0
+    created_at: float = 0.0
 
 
 @dataclass(slots=True)
@@ -118,6 +120,7 @@ class SharedBudgetPool:
             id=child_id,
             token_budget=token_budget,
             cost_budget=cost_budget,
+            created_at=time.time(),
         )
 
         self._total_tokens_reserved += token_budget
@@ -172,6 +175,17 @@ class SharedBudgetPool:
         """Thread-safe async version of release."""
         async with self._lock:
             self.release(child_id)
+
+    def release_stale(self, max_age_s: float) -> list[str]:
+        """Release allocations older than max_age_s. Returns freed IDs."""
+        now = time.time()
+        stale_ids: list[str] = []
+        for child_id, alloc in list(self._allocations.items()):
+            if alloc.created_at > 0 and (now - alloc.created_at) > max_age_s:
+                stale_ids.append(child_id)
+        for child_id in stale_ids:
+            self.release(child_id)
+        return stale_ids
 
     # =========================================================================
     # Queries

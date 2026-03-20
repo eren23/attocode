@@ -89,6 +89,10 @@ def record_rate_limit(state: SwarmRecoveryState, ctx: Any) -> None:
         ts for ts in state.recent_rate_limits if ts >= window_start
     ]
 
+    # Hard cap to prevent unbounded growth during rate-limit storms
+    if len(state.recent_rate_limits) > 200:
+        state.recent_rate_limits = state.recent_rate_limits[-200:]
+
     # Trip breaker if threshold reached
     if len(state.recent_rate_limits) >= threshold:
         pause_until = now + (pause_ms / 1000.0)
@@ -180,6 +184,7 @@ async def try_resilience_recovery(
     if (
         task.complexity >= 4
         and task.attempts >= 2
+        and getattr(task, "split_depth", 0) < config.auto_split.max_split_depth
         and _budget_has_capacity(ctx)
     ):
         try:
@@ -214,8 +219,8 @@ async def try_resilience_recovery(
         task_result.degraded = True
         task_result.quality_score = 2
         task.degraded = True
-        task.status = SwarmTaskStatus.COMPLETED
-        task.result = task_result
+        # Use mark_completed() to trigger _update_ready_status() for downstream tasks
+        ctx.task_queue.mark_completed(task_id, task_result)
         ctx.emit(
             swarm_event(
                 "swarm.task.completed",
@@ -275,6 +280,8 @@ def should_auto_split(ctx: Any, task: SwarmTask) -> bool:
     config: SwarmConfig = ctx.config
     auto_split_cfg = config.auto_split
     if not auto_split_cfg.enabled:
+        return False
+    if getattr(task, "split_depth", 0) >= auto_split_cfg.max_split_depth:
         return False
     if task.complexity < auto_split_cfg.complexity_floor:
         return False
@@ -487,8 +494,10 @@ async def mid_swarm_replan(ctx: Any) -> None:
     Uses an LLM call to analyze completed/failed tasks and propose
     replacement subtasks for the stalled remainder.
     """
-    if getattr(ctx, "has_replanned", False):
-        logger.debug("Re-plan skipped: already replanned this session")
+    max_replans = getattr(ctx.config, "max_replans", 2)
+    replan_count = getattr(ctx, "replan_count", 0)
+    if replan_count >= max_replans:
+        logger.debug("Re-plan skipped: already replanned %d/%d times", replan_count, max_replans)
         return
 
     config: SwarmConfig = ctx.config
@@ -509,11 +518,21 @@ async def mid_swarm_replan(ctx: Any) -> None:
         elif t.status in (SwarmTaskStatus.PENDING, SwarmTaskStatus.READY):
             pending_summaries.append(desc)
 
+    replan_context = ""
+    if replan_count > 0:
+        replan_context = (
+            f"\n\nNOTE: This is replan attempt #{replan_count + 1}. "
+            f"Previous replan(s) did not fully resolve the stall. "
+            f"Try a different approach — simpler tasks, fewer dependencies, "
+            f"or skip tasks that are clearly blocked.\n"
+        )
+
     prompt = (
         "You are a swarm orchestrator performing mid-execution re-planning.\n\n"
         "COMPLETED tasks:\n" + "\n".join(completed_summaries or ["(none)"]) + "\n\n"
         "FAILED/SKIPPED tasks:\n" + "\n".join(failed_summaries or ["(none)"]) + "\n\n"
         "PENDING tasks:\n" + "\n".join(pending_summaries or ["(none)"]) + "\n\n"
+        + replan_context +
         "Analyze what has stalled and propose replacement subtasks for the "
         "failed/pending work. Keep it practical -- 2-5 subtasks max.\n\n"
         "Respond in JSON: {\"subtasks\": [{\"id\": str, \"description\": str, "
@@ -562,8 +581,9 @@ async def mid_swarm_replan(ctx: Any) -> None:
                 f"mid-swarm replan: {len(smart_subtasks)} new tasks",
                 "stall recovery",
             )
-            logger.info("Mid-swarm replan added %d tasks", len(smart_subtasks))
-            ctx.has_replanned = True
+            logger.info("Mid-swarm replan added %d tasks (attempt %d)", len(smart_subtasks), replan_count + 1)
+            ctx.replan_count = replan_count + 1
+            ctx.has_replanned = True  # Backward compat
     except Exception:
         logger.warning("Mid-swarm replan LLM call failed", exc_info=True)
 

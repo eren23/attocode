@@ -142,7 +142,7 @@ class TestAttocodeAppPilot:
             assert statuses.count("running") == 1
 
     @pytest.mark.asyncio
-    async def test_stream_bursts_switch_to_batched_mode_and_recover(self) -> None:
+    async def test_stream_bursts_use_graduated_flush_and_recover(self) -> None:
         app = AttocodeApp()
         async with app.run_test() as pilot:
             app.on_llm_stream_start(LLMStreamStart())
@@ -150,13 +150,15 @@ class TestAttocodeAppPilot:
                 app.on_llm_stream_chunk(LLMStreamChunk(content="x"))
             await pilot.pause(0.1)
 
-            status = app.query_one("#status-bar", StatusBar)
-            assert status.live_updates_coalesced is True
+            # Graduated flush: no visible coalescing indicator anymore
+            assert app._stream_chunks_seen_total == 12
 
             app.on_llm_stream_end(LLMStreamEnd(tokens=12, cost=0.01))
             await pilot.pause()
 
+            status = app.query_one("#status-bar", StatusBar)
             assert status.live_updates_coalesced is False
+            assert app._stream_chunks_seen_total == 0  # reset after stream end
             assert app._last_response == "x" * 12
 
     @pytest.mark.asyncio

@@ -556,8 +556,15 @@ class SwarmEventBridge:
             self._write_state()
 
     def _execute_deferred_write(self) -> None:
-        """Callback for the deferred state write timer."""
+        """Callback for the deferred state write timer.
+
+        Guard: skip the write if the bridge has been closed (events_file is None
+        and _pending_write was already cleared by close()).  In single-threaded
+        asyncio this is only reachable if close() races with call_later firing.
+        """
         self._pending_write = None
+        if self._events_file is None:
+            return  # Bridge closed — skip stale write
         self._write_state()
 
     def _write_state(self) -> None:

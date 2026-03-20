@@ -495,7 +495,7 @@ class ProductionAgent:
                         iterations=ctx.iteration,
                     )
                 except Exception:
-                    logger.debug("session_update_failed", exc_info=True)
+                    logger.warning("Session store update failed", exc_info=True)
 
             return result
 

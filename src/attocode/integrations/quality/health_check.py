@@ -201,9 +201,12 @@ class HealthChecker:
         self.stop_periodic_checks()
 
         async def _run_periodic() -> None:
-            while True:
-                await self.check_all()
-                await asyncio.sleep(interval_seconds)
+            try:
+                while True:
+                    await self.check_all()
+                    await asyncio.sleep(interval_seconds)
+            except asyncio.CancelledError:
+                return
 
         self._periodic_task = asyncio.create_task(_run_periodic())
 

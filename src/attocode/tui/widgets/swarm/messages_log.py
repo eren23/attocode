@@ -32,7 +32,7 @@ class MessagesLog(Widget):
         self._seen_count: int = 0
 
     def compose(self):
-        yield RichLog(id="messages-log", auto_scroll=True, markup=True)
+        yield RichLog(id="messages-log", auto_scroll=True, markup=True, max_lines=500)
 
     def update_messages(self, messages: list[dict[str, Any]]) -> None:
         """Append only new messages since last call."""

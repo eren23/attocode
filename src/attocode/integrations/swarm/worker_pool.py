@@ -207,15 +207,15 @@ class SwarmWorkerPool:
             try:
                 acquired = self._budget_pool.acquire(task.id, budget["max_tokens"])
                 if not acquired:
-                    logger.warning(
-                        "Budget pool exhausted for task %s; dispatching anyway",
-                        task.id,
+                    raise AgentError(
+                        f"Budget pool exhausted for task {task.id}"
                     )
-            except Exception:
-                logger.warning(
-                    "Budget acquisition failed for task %s; dispatching anyway",
-                    task.id,
-                )
+            except AgentError:
+                raise
+            except Exception as exc:
+                raise AgentError(
+                    f"Budget acquisition failed for task {task.id}: {exc}"
+                ) from exc
 
         # Build system prompt
         attempt = task.attempts
