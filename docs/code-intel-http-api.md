@@ -1,6 +1,6 @@
 # Code Intelligence HTTP API
 
-The HTTP API exposes all 36 code intelligence tools as REST endpoints, backed by the same analysis engine as the MCP server. It supports multi-project management, bearer token auth, and interactive API docs.
+The HTTP API exposes all 38 code intelligence tools as REST endpoints, backed by the same analysis engine as the MCP server. It supports multi-project management, bearer token auth, and interactive API docs.
 
 ## Quick Start
 
@@ -537,13 +537,13 @@ curl "http://localhost:8080/api/v1/projects/$PROJECT_ID/hotspots?top_n=10"
 | Tool invocation | MCP `tools/call` protocol | Standard HTTP methods (GET/POST) |
 | Client compatibility | MCP-compatible clients only | Any HTTP client |
 
-The same 36 analysis tools are available through both transports. Choose MCP for AI coding assistants with built-in MCP support; choose HTTP for custom integrations, CI pipelines, or multi-project scenarios.
+The same 38 analysis tools are available through both transports. Choose MCP for AI coding assistants with built-in MCP support; choose HTTP for custom integrations, CI pipelines, or multi-project scenarios.
 
 ---
 
 ## MCP Tools Reference
 
-The 36 MCP tools exposed by the code-intel server:
+The 38 MCP tools exposed by the code-intel server:
 
 **Navigation & Search:**
 `repo_map`, `project_summary`, `bootstrap`, `symbols`, `search_symbols`, `semantic_search`, `semantic_search_status`, `explore_codebase`

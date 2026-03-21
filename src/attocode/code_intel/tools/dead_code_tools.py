@@ -16,12 +16,25 @@ from __future__ import annotations
 import os
 import time
 
-from attocode.code_intel.server import (
-    _get_ast_service,
-    _get_context_mgr,
-    _get_project_dir,
-    mcp,
-)
+try:
+    from attocode.code_intel.server import (
+        _get_ast_service,
+        _get_context_mgr,
+        _get_project_dir,
+        mcp,
+    )
+except (ImportError, AttributeError):
+    # Deferred: will be available when server.py finishes loading.
+    # Private helpers (_find_dead_*) don't need these imports.
+    _get_ast_service = None  # type: ignore[assignment]
+    _get_context_mgr = None  # type: ignore[assignment]
+    _get_project_dir = None  # type: ignore[assignment]
+
+    class _StubMCP:
+        """Stub so @mcp.tool() doesn't crash during deferred import."""
+        def tool(self):
+            return lambda f: f
+    mcp = _StubMCP()  # type: ignore[assignment]
 from attocode.integrations.context.cross_references import (
     CrossRefIndex,
     SymbolLocation,

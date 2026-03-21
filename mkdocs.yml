@@ -71,6 +71,7 @@ nav:
       - Code History: guides/code-history.md
       - Observability: guides/observability.md
       - Architecture Decisions: guides/architecture-decisions.md
+      - Evaluation & Benchmarks: guides/evaluation-and-benchmarks.md
       - Providers: PROVIDERS.md
       - Provider Resilience: provider-resilience.md
       - Sandbox: SANDBOX.md

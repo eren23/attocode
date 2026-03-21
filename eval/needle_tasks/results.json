@@ -1,183 +1,67 @@
 {
   "repo": "attocode",
-  "total": 15,
-  "passed": 8,
+  "total": 3,
+  "passed": 3,
   "results": [
     {
-      "found_callers": [
-        "src/attocode/core/loop.py"
-      ],
-      "expected_callers": [
-        "src/attocode/core/loop.py"
-      ],
-      "recall": 1.0,
+      "dead_count": 27,
+      "stats": {
+        "total_definitions": 15423,
+        "total_files": 2143,
+        "dead_count": 27,
+        "min_confidence": 0.5
+      },
       "passed": true,
-      "dep_output_len": 130,
-      "xref_output_len": 488,
-      "task_id": "trace_budget_enforcement",
-      "task_type": "trace_call_chain",
-      "time_s": 8.6
-    },
-    {
-      "found_callers": [
-        "src/attocode/core/loop.py"
+      "sample_items": [
+        "{'symbol': '_normalize_timeout', 'name': '_normalize_timeout', 'kind': 'function', 'file': 'src/attocode/tools/bash.py', 'line': 39, 'end_line': 47, 'confidence': 0.8, 'reason': 'function never called or imported; private symbol'}",
+        "{'symbol': '_sanitize_env', 'name': '_sanitize_env', 'kind': 'function', 'file': 'src/attocode/tools/bash.py', 'line': 50, 'end_line': 56, 'confidence': 0.8, 'reason': 'function never called or imported; private symbol'}",
+        "{'symbol': '_kill_process', 'name': '_kill_process', 'kind': 'function', 'file': 'src/attocode/tools/bash.py', 'line': 77, 'end_line': 99, 'confidence': 0.8, 'reason': 'function never called or imported; private symbol'}",
+        "{'symbol': '_get_repo_map', 'name': '_get_repo_map', 'kind': 'function', 'file': 'src/attocode/tools/codebase.py', 'line': 22, 'end_line': 45, 'confidence': 0.8, 'reason': 'function never called or imported; private symbol'}",
+        "{'symbol': '_get_tree_view', 'name': '_get_tree_view', 'kind': 'function', 'file': 'src/attocode/tools/codebase.py', 'line': 48, 'end_line': 52, 'confidence': 0.8, 'reason': 'function never called or imported; private symbol'}"
       ],
-      "expected_callers": [
-        "src/attocode/core/loop.py"
-      ],
-      "recall": 1.0,
-      "passed": true,
-      "dep_output_len": 522,
-      "xref_output_len": 109,
-      "task_id": "trace_tool_executor",
-      "task_type": "trace_call_chain",
-      "time_s": 0.0
-    },
-    {
-      "found_callers": [],
-      "expected_callers": [],
-      "recall": 1.0,
-      "passed": true,
-      "dep_output_len": 1893,
-      "xref_output_len": 1572,
-      "task_id": "trace_bootstrap",
-      "task_type": "trace_call_chain",
-      "time_s": 0.0
-    },
-    {
-      "error": "module 'attocode.code_intel.tools.analysis_tools' has no attribute 'explore_codebase'",
-      "passed": false,
       "task_id": "dead_code_tools",
       "task_type": "find_dead_code",
-      "time_s": 0.27
+      "time_s": 13.39
     },
     {
-      "error": "module 'attocode.code_intel.tools.analysis_tools' has no attribute 'explore_codebase'",
-      "passed": false,
+      "dead_count": 19,
+      "stats": {
+        "total_definitions": 15423,
+        "total_files": 2143,
+        "dead_count": 19,
+        "min_confidence": 0.5
+      },
+      "passed": true,
+      "sample_items": [
+        "{'symbol': 'CompletionReason', 'name': 'CompletionReason', 'kind': 'class', 'file': 'src/attocode/types/agent.py', 'line': 20, 'end_line': 30, 'confidence': 0.5, 'reason': 'class never instantiated or referenced'}",
+        "{'symbol': 'AgentState', 'name': 'AgentState', 'kind': 'class', 'file': 'src/attocode/types/agent.py', 'line': 44, 'end_line': 52, 'confidence': 0.5, 'reason': 'class never instantiated or referenced'}",
+        "{'symbol': 'OpenTaskSummary.has_open', 'name': 'has_open', 'kind': 'method', 'file': 'src/attocode/types/agent.py', 'line': 105, 'end_line': 106, 'confidence': 0.5, 'reason': 'method with no external callers'}",
+        "{'symbol': 'AgentPlan.current_task', 'name': 'current_task', 'kind': 'method', 'file': 'src/attocode/types/agent.py', 'line': 128, 'end_line': 132, 'confidence': 0.5, 'reason': 'method with no external callers'}",
+        "{'symbol': 'RecoveryInfo', 'name': 'RecoveryInfo', 'kind': 'class', 'file': 'src/attocode/types/agent.py', 'line': 145, 'end_line': 150, 'confidence': 0.5, 'reason': 'class never instantiated or referenced'}"
+      ],
       "task_id": "dead_code_types",
       "task_type": "find_dead_code",
-      "time_s": 0.0
+      "time_s": 0.01
     },
     {
-      "error": "module 'attocode.code_intel.tools.analysis_tools' has no attribute 'explore_codebase'",
-      "passed": false,
+      "dead_count": 30,
+      "stats": {
+        "total_definitions": 15423,
+        "total_files": 2143,
+        "dead_count": 30,
+        "min_confidence": 0.5
+      },
+      "passed": true,
+      "sample_items": [
+        "{'symbol': 'AsyncSubagentManager._gen_id', 'name': '_gen_id', 'kind': 'method', 'file': 'src/attocode/integrations/agents/async_subagent.py', 'line': 74, 'end_line': 76, 'confidence': 0.8, 'reason': 'method with no external callers; private symbol'}",
+        "{'symbol': 'SharedBlackboard._cleanup_expired_inline', 'name': '_cleanup_expired_inline', 'kind': 'method', 'file': 'src/attocode/integrations/agents/blackboard.py', 'line': 389, 'end_line': 403, 'confidence': 0.8, 'reason': 'method with no external callers; private symbol'}",
+        "{'symbol': 'SharedBlackboard._expire_entry', 'name': '_expire_entry', 'kind': 'method', 'file': 'src/attocode/integrations/agents/blackboard.py', 'line': 405, 'end_line': 411, 'confidence': 0.8, 'reason': 'method with no external callers; private symbol'}",
+        "{'symbol': 'SharedBlackboard._extract_namespace', 'name': '_extract_namespace', 'kind': 'method', 'file': 'src/attocode/integrations/agents/blackboard.py', 'line': 587, 'end_line': 592, 'confidence': 0.8, 'reason': 'method with no external callers; private symbol'}",
+        "{'symbol': 'SharedBlackboard._get_or_create_metrics', 'name': '_get_or_create_metrics', 'kind': 'method', 'file': 'src/attocode/integrations/agents/blackboard.py', 'line': 594, 'end_line': 598, 'confidence': 0.8, 'reason': 'method with no external callers; private symbol'}"
+      ],
       "task_id": "dead_code_legacy",
       "task_type": "find_dead_code",
-      "time_s": 0.0
-    },
-    {
-      "affected_files": 99,
-      "min_required": 20,
-      "found_required": [
-        "src/attocode/core/loop.py",
-        "src/attocode/core/tool_executor.py"
-      ],
-      "expected_required": [
-        "src/attocode/core/loop.py",
-        "src/attocode/core/tool_executor.py"
-      ],
-      "passed": true,
-      "task_id": "impact_messages",
-      "task_type": "impact_assessment",
-      "time_s": 0.0
-    },
-    {
-      "affected_files": 34,
-      "min_required": 5,
-      "found_required": [
-        "src/attocode/integrations/budget/economics.py"
-      ],
-      "expected_required": [
-        "src/attocode/integrations/budget/economics.py"
-      ],
-      "passed": true,
-      "task_id": "impact_budget",
-      "task_type": "impact_assessment",
-      "time_s": 0.0
-    },
-    {
-      "affected_files": 9,
-      "min_required": 10,
-      "found_required": [],
-      "expected_required": [
-        "src/attocode/core/loop.py"
-      ],
-      "passed": false,
-      "task_id": "impact_context",
-      "task_type": "impact_assessment",
-      "time_s": 0.0
-    },
-    {
-      "passed": true,
-      "expected": [
-        "src/attocode/types/messages.py",
-        "src/attocode/errors/__init__.py"
-      ],
-      "output_len": 11527,
-      "task_id": "arch_highest_fanin",
-      "task_type": "architecture_quiz",
-      "time_s": 21.78
-    },
-    {
-      "passed": true,
-      "detected": 20,
-      "expected": 20,
-      "task_id": "arch_community_count",
-      "task_type": "architecture_quiz",
-      "time_s": 0.27
-    },
-    {
-      "passed": true,
-      "found": [
-        "src/attocode/types/messages.py",
-        "src/attocode/core/loop.py"
-      ],
-      "expected_any": [
-        "src/attocode/types/messages.py",
-        "src/attocode/core/loop.py",
-        "src/attocode/core/context.py"
-      ],
-      "task_id": "arch_critical_files",
-      "task_type": "architecture_quiz",
-      "time_s": 0.09
-    },
-    {
-      "found_definitions": [],
-      "expected_definitions": [
-        "src/attocode/integrations/context/codebase_ast.py"
-      ],
-      "usage_file_count": 14,
-      "min_usage_required": 10,
-      "passed": false,
-      "task_id": "symbol_codebase_context_manager",
-      "task_type": "cross_file_symbol_resolution",
-      "time_s": 0.0
-    },
-    {
-      "found_definitions": [],
-      "expected_definitions": [
-        "src/attocode/integrations/swarm/swarm_orchestrator.py"
-      ],
-      "usage_file_count": 11,
-      "min_usage_required": 5,
-      "passed": false,
-      "task_id": "symbol_swarm_orchestrator",
-      "task_type": "cross_file_symbol_resolution",
-      "time_s": 0.0
-    },
-    {
-      "found_definitions": [
-        "src/attocode/types/budget.py"
-      ],
-      "expected_definitions": [
-        "src/attocode/types/budget.py"
-      ],
-      "usage_file_count": 1,
-      "min_usage_required": 3,
-      "passed": false,
-      "task_id": "symbol_budget_enforcement",
-      "task_type": "cross_file_symbol_resolution",
-      "time_s": 0.0
+      "time_s": 0.26
     }
   ]
 }

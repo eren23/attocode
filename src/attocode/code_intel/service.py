@@ -1534,9 +1534,11 @@ class CodeIntelService:
             return "No files discovered in this project."
 
         total_files = len(files)
+        import os
+        _file_cap = int(os.environ.get("ATTOCODE_FILE_CAP", "2000"))
         if total_files < 100:
             size_tier = "small"
-        elif total_files < 2000:
+        elif total_files < _file_cap:
             size_tier = "medium"
         else:
             size_tier = "large"
