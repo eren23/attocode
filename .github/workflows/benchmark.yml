@@ -1,6 +1,5 @@
 name: Benchmark
 
-# TODO: Fix benchmark workflow and re-enable push/pull_request triggers
 on:
   # push:
   #   branches: [main, master]

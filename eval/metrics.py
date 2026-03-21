@@ -341,3 +341,45 @@ def _two_proportion_z_test(
 def _normal_cdf(x: float) -> float:
     """Approximate standard normal CDF using error function."""
     return 0.5 * (1 + math.erf(x / math.sqrt(2)))
+
+
+# =============================================================================
+# Search Quality Metrics
+# =============================================================================
+
+
+def compute_mrr(results: list[str], relevant: set[str], k: int = 10) -> float:
+    """Mean Reciprocal Rank — position of first relevant result."""
+    for i, path in enumerate(results[:k]):
+        if path in relevant:
+            return 1.0 / (i + 1)
+    return 0.0
+
+
+def compute_ndcg(results: list[str], relevant: set[str], k: int = 10) -> float:
+    """Normalized Discounted Cumulative Gain."""
+    import math
+
+    dcg = sum(
+        (1.0 if r in relevant else 0.0) / math.log2(i + 2)
+        for i, r in enumerate(results[:k])
+    )
+    ideal_count = min(len(relevant), k)
+    idcg = sum(1.0 / math.log2(i + 2) for i in range(ideal_count))
+    return dcg / idcg if idcg > 0 else 0.0
+
+
+def compute_precision_at_k(results: list[str], relevant: set[str], k: int = 10) -> float:
+    """Precision@k — fraction of top-k results that are relevant."""
+    if k == 0:
+        return 0.0
+    hits = sum(1 for r in results[:k] if r in relevant)
+    return hits / k
+
+
+def compute_recall_at_k(results: list[str], relevant: set[str], k: int = 20) -> float:
+    """Recall@k — fraction of relevant items found in top-k."""
+    if not relevant:
+        return 0.0
+    hits = sum(1 for r in results[:k] if r in relevant)
+    return hits / len(relevant)

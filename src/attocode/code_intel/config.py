@@ -19,6 +19,9 @@ class CodeIntelConfig:
     cors_origins: list[str] = field(default_factory=lambda: ["*"])
     log_level: str = "info"
 
+    # Indexing settings
+    file_cap: int = 2000  # Max files to index; higher = better coverage, slower bootstrap
+
     # Service mode (multi-user)
     database_url: str = ""
     secret_key: str = ""
@@ -76,6 +79,7 @@ class CodeIntelConfig:
             api_key=os.environ.get("ATTOCODE_API_KEY", ""),
             cors_origins=os.environ.get("ATTOCODE_CORS_ORIGINS", "*").split(","),
             log_level=os.environ.get("ATTOCODE_LOG_LEVEL", "info"),
+            file_cap=int(os.environ.get("ATTOCODE_FILE_CAP", "2000")),
             database_url=os.environ.get("DATABASE_URL", ""),
             secret_key=os.environ.get("SECRET_KEY", ""),
             redis_url=os.environ.get("REDIS_URL", ""),

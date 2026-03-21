@@ -1,6 +1,5 @@
 name: CI
 
-# TODO: Fix CI tests and re-enable push/pull_request triggers
 on:
   # push:
   #   branches: [main, master]

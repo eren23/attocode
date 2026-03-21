@@ -112,6 +112,70 @@ def score_semantic_search(preview: str, output_len: int) -> int:
     return min(score, 5)
 
 
+def score_dead_code(preview: str, output_len: int = 0) -> int:
+    """Score dead code analysis output quality (0-5)."""
+    score = 0
+    if re.search(r"(dead|unreferenced|unused)", preview, re.I):
+        score += 1
+    if re.search(r"confidence[:\s]+[\d.]+", preview):
+        score += 1
+    if re.search(r"(symbol|file|function|class)", preview, re.I) and len(preview) > 200:
+        score += 1
+    if re.search(r"\d+\s+(symbol|file)", preview, re.I):
+        score += 1
+    if output_len > 500:
+        score += 1
+    return score
+
+
+def score_distill(preview: str, output_len: int = 0) -> int:
+    """Score distill/compression output quality (0-5)."""
+    score = 0
+    if "signature" in preview.lower() or "def " in preview or "function" in preview.lower():
+        score += 1
+    if re.search(r"files?[:\s]+\d+", preview, re.I):
+        score += 1
+    if re.search(r"token", preview, re.I):
+        score += 1
+    if output_len > 200 and output_len < 20000:
+        score += 1
+    if re.search(r"(class|struct|interface|type)\s+\w+", preview):
+        score += 1
+    return score
+
+
+def score_graph_dsl(preview: str, output_len: int = 0) -> int:
+    """Score graph DSL query output quality (0-5)."""
+    score = 0
+    if re.search(r"(result|match|node|path)", preview, re.I):
+        score += 1
+    if re.search(r"(\u2192|->|IMPORTS|DEPENDS)", preview):
+        score += 1
+    if re.search(r"\d+\s*(result|match|node)", preview, re.I):
+        score += 1
+    if "error" not in preview.lower():
+        score += 1
+    if output_len > 100:
+        score += 1
+    return score
+
+
+def score_code_evolution(preview: str, output_len: int = 0) -> int:
+    """Score code evolution/history output quality (0-5)."""
+    score = 0
+    if re.search(r"(commit|sha|hash)[:\s]+[a-f0-9]", preview, re.I):
+        score += 1
+    if re.search(r"(author|by)[:\s]+\w", preview, re.I):
+        score += 1
+    if re.search(r"\d{4}-\d{2}-\d{2}", preview):
+        score += 1
+    if re.search(r"(message|subject|description)", preview, re.I):
+        score += 1
+    if output_len > 200:
+        score += 1
+    return score
+
+
 TASK_SCORERS = {
     "bootstrap": lambda d: score_bootstrap(d.get("output_preview", "")),
     "symbol_discovery": lambda d: score_symbol_discovery(d.get("output_preview", "")),
@@ -119,6 +183,18 @@ TASK_SCORERS = {
     "architecture": lambda d: score_architecture(d.get("output_preview", "")),
     "code_navigation": lambda d: score_code_navigation(d.get("output_preview", "")),
     "semantic_search": lambda d: score_semantic_search(
+        d.get("output_preview", ""), d.get("output_len", 0)
+    ),
+    "dead_code": lambda d: score_dead_code(
+        d.get("output_preview", ""), d.get("output_len", 0)
+    ),
+    "distill": lambda d: score_distill(
+        d.get("output_preview", ""), d.get("output_len", 0)
+    ),
+    "graph_dsl": lambda d: score_graph_dsl(
+        d.get("output_preview", ""), d.get("output_len", 0)
+    ),
+    "code_evolution": lambda d: score_code_evolution(
         d.get("output_preview", ""), d.get("output_len", 0)
     ),
 }
