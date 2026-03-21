@@ -1,7 +1,7 @@
 """Unified code intelligence service.
 
 Used by both the MCP server (server.py) and HTTP API (api/app.py) as a
-single source of truth for all 28 tool operations.
+single source of truth for all 38 tool operations.
 """
 
 from __future__ import annotations

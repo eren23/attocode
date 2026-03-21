@@ -1,6 +1,6 @@
 # Code Intelligence HTTP API
 
-The HTTP API exposes all 27 code intelligence tools as REST endpoints, backed by the same analysis engine as the MCP server. It supports multi-project management, bearer token auth, and interactive API docs.
+The HTTP API exposes all 36 code intelligence tools as REST endpoints, backed by the same analysis engine as the MCP server. It supports multi-project management, bearer token auth, and interactive API docs.
 
 ## Quick Start
 
@@ -299,6 +299,79 @@ curl -X POST http://localhost:8080/api/v1/projects/a1b2c3d4/lsp/definition \
 curl "http://localhost:8080/api/v1/projects/a1b2c3d4/lsp/diagnostics?file=src/auth.py"
 ```
 
+### History
+
+| Method | Path | Parameters | Description |
+|--------|------|-----------|-------------|
+| `GET` | `/api/v2/projects/{id}/evolution` | `path` (required), `symbol`, `since`, `max_results` | Change history for a file or symbol |
+| `GET` | `/api/v2/projects/{id}/recent-changes` | `days`, `path`, `top_n` | Recently modified files and change frequency |
+
+```bash
+# File evolution
+curl "http://localhost:8080/api/v2/projects/$PROJECT_ID/evolution?path=src/auth.py&since=2026-01-01" \
+  -H "Authorization: Bearer $TOKEN"
+
+# Recent changes (last 14 days)
+curl "http://localhost:8080/api/v2/projects/$PROJECT_ID/recent-changes?days=14&top_n=10" \
+  -H "Authorization: Bearer $TOKEN"
+```
+
+### Cross-Repository Search
+
+| Method | Path | Parameters | Description |
+|--------|------|-----------|-------------|
+| `POST` | `/api/v2/orgs/{org_id}/search` | `query`, `repo_ids`, `top_k`, `file_filter` | Semantic search across all repos in an org |
+
+Requires service mode (Postgres + pgvector). Searches all repositories in the user's org, or a subset specified by `repo_ids`. Results are sorted globally by cosine similarity.
+
+```bash
+# Search across all repos in an org
+curl -X POST "http://localhost:8080/api/v2/orgs/$ORG_ID/search" \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"query": "authentication middleware", "top_k": 20}'
+
+# Search specific repos only
+curl -X POST "http://localhost:8080/api/v2/orgs/$ORG_ID/search" \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"query": "database migration", "repo_ids": ["repo-uuid-1", "repo-uuid-2"], "file_filter": "*.py"}'
+```
+
+### Graph Visualization
+
+| Method | Path | Parameters | Description |
+|--------|------|-----------|-------------|
+| `GET` | `/api/v2/projects/{id}/graph-viz` | `root`, `depth`, `max_nodes` | D3-compatible graph data (nodes + links + communities) |
+
+Returns graph data in D3 force-directed format. If `root` is provided, performs BFS from that file up to `depth` hops. Otherwise returns the top files ranked by importance. Community detection data is included.
+
+```bash
+# Get full graph (top 100 files by importance)
+curl "http://localhost:8080/api/v2/projects/$PROJECT_ID/graph-viz" \
+  -H "Authorization: Bearer $TOKEN"
+
+# BFS from a root file
+curl "http://localhost:8080/api/v2/projects/$PROJECT_ID/graph-viz?root=src/api/app.py&depth=3&max_nodes=50" \
+  -H "Authorization: Bearer $TOKEN"
+```
+
+### Metrics
+
+| Method | Path | Parameters | Description |
+|--------|------|-----------|-------------|
+| `GET` | `/api/v1/metrics` | `format` (`json` or `prometheus`) | Aggregated query and performance metrics |
+
+Unauthenticated endpoint for monitoring infrastructure. See the [Observability guide](guides/observability.md) for details.
+
+```bash
+# JSON format
+curl http://localhost:8080/api/v1/metrics
+
+# Prometheus text exposition format
+curl "http://localhost:8080/api/v1/metrics?format=prometheus"
+```
+
 ### Service Mode Endpoints
 
 These endpoints provide DB-backed capabilities for remote repos (no local git clone required). Available only in service mode (Postgres + Redis).
@@ -464,4 +537,34 @@ curl "http://localhost:8080/api/v1/projects/$PROJECT_ID/hotspots?top_n=10"
 | Tool invocation | MCP `tools/call` protocol | Standard HTTP methods (GET/POST) |
 | Client compatibility | MCP-compatible clients only | Any HTTP client |
 
-The same 27 analysis tools are available through both transports. Choose MCP for AI coding assistants with built-in MCP support; choose HTTP for custom integrations, CI pipelines, or multi-project scenarios.
+The same 36 analysis tools are available through both transports. Choose MCP for AI coding assistants with built-in MCP support; choose HTTP for custom integrations, CI pipelines, or multi-project scenarios.
+
+---
+
+## MCP Tools Reference
+
+The 36 MCP tools exposed by the code-intel server:
+
+**Navigation & Search:**
+`repo_map`, `project_summary`, `bootstrap`, `symbols`, `search_symbols`, `semantic_search`, `semantic_search_status`, `explore_codebase`
+
+**Analysis:**
+`dependencies`, `impact_analysis`, `cross_references`, `file_analysis`, `dependency_graph`, `hotspots`, `conventions`, `security_scan`, `dead_code`, `distill`
+
+**Graph:**
+`graph_query`, `graph_dsl`, `find_related`, `community_detection`, `relevant_context`
+
+**History:**
+`code_evolution`, `recent_changes`
+
+**Learning:**
+`record_learning`, `recall`, `learning_feedback`, `list_learnings`
+
+**ADR (Architecture Decisions):**
+`record_adr`, `list_adrs`, `get_adr`, `update_adr_status`
+
+**LSP:**
+`lsp_definition`, `lsp_references`, `lsp_hover`, `lsp_diagnostics`
+
+**Events:**
+`notify_file_changed`

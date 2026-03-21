@@ -1,6 +1,6 @@
 """MCP server exposing Attocode's code intelligence capabilities.
 
-Provides 32 tools for deep codebase understanding:
+Provides 38 tools for deep codebase understanding:
 - bootstrap: All-in-one orientation (summary + map + conventions + search)
 - relevant_context: Subgraph capsule for file(s) with neighbors and symbols
 - repo_map: Token-budgeted file tree with symbols
@@ -18,10 +18,15 @@ Provides 32 tools for deep codebase understanding:
 - lsp_references: All references with type awareness
 - lsp_hover: Type signature + docs for symbol
 - lsp_diagnostics: Errors/warnings from language server
+- graph_query: Raw graph traversal query
 - graph_dsl: Graph query language for dependency traversal
 - explore_codebase: Hierarchical drill-down navigation
+- find_related: Find files related to a given file
+- community_detection: Detect module communities in the dependency graph
 - security_scan: Secret/anti-pattern/dependency scanning
 - semantic_search: Natural language code search
+- semantic_search_status: Check embedding index progress
+- notify_file_changed: Notify server of external file modifications
 - recall: Retrieve relevant project learnings
 - record_learning: Record patterns/conventions/gotchas
 - learning_feedback: Mark learnings as helpful/unhelpful
@@ -30,6 +35,10 @@ Provides 32 tools for deep codebase understanding:
 - list_adrs: Browse architecture decision records
 - get_adr: Get full details of an ADR
 - update_adr_status: Update ADR lifecycle status
+- dead_code: Detect unreachable/unused code
+- distill: Distill code into compressed representations
+- code_evolution: Trace how code has changed over time
+- recent_changes: Show recent file modifications
 
 Usage::
 
@@ -593,6 +602,14 @@ dependency_graph = _analysis_tools.dependency_graph  # noqa: E402
 hotspots = _analysis_tools.hotspots  # noqa: E402
 cross_references = _analysis_tools.cross_references  # noqa: E402
 dependencies = _analysis_tools.dependencies  # noqa: E402
+explore_codebase = _analysis_tools.explore_codebase  # noqa: E402
+find_related = _analysis_tools.find_related  # noqa: E402
+community_detection = _analysis_tools.community_detection  # noqa: E402
+graph_dsl = _analysis_tools.graph_dsl  # noqa: E402
+
+semantic_search = _search_tools.semantic_search  # noqa: E402
+semantic_search_status = _search_tools.semantic_search_status  # noqa: E402
+security_scan = _search_tools.security_scan  # noqa: E402
 
 recall = _learning_tools.recall  # noqa: E402
 record_learning = _learning_tools.record_learning  # noqa: E402
