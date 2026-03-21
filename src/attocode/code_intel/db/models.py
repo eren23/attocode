@@ -256,6 +256,26 @@ class Commit(Base):
     )
 
 
+class CommitFileStat(Base):
+    """Per-file statistics for each commit — lines added/removed, symbols changed."""
+    __tablename__ = "commit_file_stats"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=generate_uuid)
+    commit_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("commits.id", ondelete="CASCADE"), nullable=False)
+    repo_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("repositories.id", ondelete="CASCADE"), nullable=False)
+    path: Mapped[str] = mapped_column(Text, nullable=False)
+    lines_added: Mapped[int] = mapped_column(Integer, nullable=False, server_default="0")
+    lines_removed: Mapped[int] = mapped_column(Integer, nullable=False, server_default="0")
+    symbols_changed: Mapped[list] = mapped_column(JSONB, nullable=False, server_default="[]")
+    change_type: Mapped[str] = mapped_column(Text, nullable=False)  # added|modified|deleted|renamed
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+
+    __table_args__ = (
+        __import__("sqlalchemy").Index("ix_commit_file_stats_repo_path", "repo_id", "path"),
+        __import__("sqlalchemy").Index("ix_commit_file_stats_commit_id", "commit_id"),
+    )
+
+
 class IndexingJob(Base):
     __tablename__ = "indexing_jobs"
 

@@ -80,6 +80,7 @@ def create_app(config: CodeIntelConfig | None = None) -> FastAPI:
         files,
         graph,
         health,
+        history,
         learning,
         lsp,
         notify,
@@ -141,6 +142,7 @@ def create_app(config: CodeIntelConfig | None = None) -> FastAPI:
     app.include_router(learning.router_v2)
     app.include_router(notify.router)
     app.include_router(files.router)
+    app.include_router(history.router)
 
     # Service mode routes
     if config.is_service_mode:

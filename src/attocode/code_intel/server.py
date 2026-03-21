@@ -1,6 +1,6 @@
 """MCP server exposing Attocode's code intelligence capabilities.
 
-Provides 27 tools for deep codebase understanding:
+Provides 28 tools for deep codebase understanding:
 - bootstrap: All-in-one orientation (summary + map + conventions + search)
 - relevant_context: Subgraph capsule for file(s) with neighbors and symbols
 - repo_map: Token-budgeted file tree with symbols
@@ -18,6 +18,7 @@ Provides 27 tools for deep codebase understanding:
 - lsp_references: All references with type awareness
 - lsp_hover: Type signature + docs for symbol
 - lsp_diagnostics: Errors/warnings from language server
+- graph_dsl: Graph query language for dependency traversal
 - explore_codebase: Hierarchical drill-down navigation
 - security_scan: Secret/anti-pattern/dependency scanning
 - semantic_search: Natural language code search
@@ -568,7 +569,9 @@ def _instrument_all_tools() -> None:
 # ---------------------------------------------------------------------------
 
 import attocode.code_intel.tools.analysis_tools as _analysis_tools  # noqa: E402, F401
+import attocode.code_intel.tools.dead_code_tools as _dead_code_tools  # noqa: E402, F401
 import attocode.code_intel.tools.distill_tools as _distill_tools  # noqa: E402, F401
+import attocode.code_intel.tools.history_tools as _history_tools  # noqa: E402, F401
 import attocode.code_intel.tools.learning_tools as _learning_tools  # noqa: E402, F401
 import attocode.code_intel.tools.lsp_tools as _lsp_tools  # noqa: E402, F401
 import attocode.code_intel.tools.navigation_tools as _navigation_tools  # noqa: E402, F401
@@ -591,7 +594,11 @@ record_learning = _learning_tools.record_learning  # noqa: E402
 learning_feedback = _learning_tools.learning_feedback  # noqa: E402
 list_learnings = _learning_tools.list_learnings  # noqa: E402
 
+dead_code = _dead_code_tools.dead_code  # noqa: E402
 distill = _distill_tools.distill  # noqa: E402
+
+code_evolution = _history_tools.code_evolution  # noqa: E402
+recent_changes = _history_tools.recent_changes  # noqa: E402
 
 bootstrap = _navigation_tools.bootstrap  # noqa: E402
 conventions = _navigation_tools.conventions  # noqa: E402
@@ -610,7 +617,7 @@ _instrument_all_tools()
 
 # Subcommands that should be dispatched to the CLI handler instead of
 # starting the MCP server.
-_CLI_SUBCOMMANDS = {"install", "uninstall", "serve", "status", "notify", "connect", "test-connection", "watch", "help", "--help", "-h", "query", "symbols", "impact", "hotspots", "deps", "gc", "verify", "reindex"}
+_CLI_SUBCOMMANDS = {"install", "uninstall", "serve", "status", "notify", "connect", "test-connection", "watch", "help", "--help", "-h", "query", "symbols", "impact", "hotspots", "deps", "dead-code", "gc", "verify", "reindex"}
 
 
 def main() -> None:

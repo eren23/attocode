@@ -1,7 +1,7 @@
 """Unified code intelligence service.
 
 Used by both the MCP server (server.py) and HTTP API (api/app.py) as a
-single source of truth for all 27 tool operations.
+single source of truth for all 28 tool operations.
 """
 
 from __future__ import annotations
@@ -462,6 +462,46 @@ class CodeIntelService:
             "total_reachable": len(visited) - 1,
         }
 
+    def graph_dsl_data(self, query: str) -> dict:
+        """Execute a graph DSL query and return structured results.
+
+        Uses ``GraphQueryParser`` to parse the query and
+        ``GraphQueryExecutor`` to run it against the dependency graph.
+        """
+        from attocode.code_intel.graph_query_parser import (
+            GraphQueryExecutor,
+            GraphQueryParser,
+        )
+
+        parser = GraphQueryParser()
+        try:
+            ast = parser.parse(query)
+        except ValueError as exc:
+            return {"error": str(exc), "query": query, "results": []}
+
+        ctx = self._get_context_mgr()
+        dep_graph = ctx.dependency_graph
+        files = ctx._files
+
+        # If the context manager hasn't discovered files yet, initialize
+        if not files:
+            ctx.discover_files()
+            files = ctx._files
+            dep_graph = ctx.dependency_graph
+
+        executor = GraphQueryExecutor()
+        try:
+            results = executor.execute(ast, dep_graph, files)
+        except Exception as exc:
+            return {"error": f"Execution error: {exc}", "query": query, "results": []}
+
+        return {
+            "query": query,
+            "results": results,
+            "total": len(results),
+            "truncated": len(results) >= executor.MAX_RESULTS,
+        }
+
     def find_related_data(self, file: str, top_k: int = 10) -> dict:
         """Return structured related-files result."""
         svc = self._get_ast_service()
@@ -697,6 +737,162 @@ class CodeIntelService:
             "total": len(results),
         }
 
+    def code_evolution_data(
+        self,
+        path: str,
+        symbol: str = "",
+        since: str = "",
+        max_results: int = 20,
+    ) -> dict:
+        """Return structured code evolution data for a file or symbol.
+
+        Uses git subprocess in local mode. In service mode, queries the
+        Commit + CommitFileStat tables.
+
+        Args:
+            path: File path (relative to project root or absolute).
+            symbol: Optional symbol name to filter.
+            since: Optional date filter (e.g. "2024-01-01").
+            max_results: Maximum number of commits to return.
+        """
+        from attocode.code_intel.tools.history_tools import (
+            _filter_by_symbol,
+            _parse_evolution_output,
+            _run_git,
+        )
+
+        if os.path.isabs(path):
+            try:
+                rel_path = os.path.relpath(path, self._project_dir)
+            except ValueError:
+                rel_path = path
+        else:
+            rel_path = path
+
+        git_args = [
+            "log", "--follow", "--numstat",
+            "--format=%H|%an|%ae|%aI|%s",
+            f"-{max_results * 2}",
+        ]
+        if since:
+            git_args.append(f"--since={since}")
+        git_args.extend(["--", rel_path])
+
+        raw = _run_git(git_args, self._project_dir)
+        commits = _parse_evolution_output(raw)
+
+        if symbol:
+            commits = _filter_by_symbol(commits, symbol)
+        commits = commits[:max_results]
+
+        return {
+            "path": rel_path,
+            "symbol": symbol,
+            "since": since,
+            "commits": [
+                {
+                    "sha": c["sha"],
+                    "author": c["author"],
+                    "email": c["email"],
+                    "date": c["date"],
+                    "subject": c["subject"],
+                    "files": c["files"],
+                }
+                for c in commits
+            ],
+            "total": len(commits),
+        }
+
+    def recent_changes_data(
+        self,
+        days: int = 7,
+        path: str = "",
+        top_n: int = 20,
+    ) -> dict:
+        """Return structured recent changes data.
+
+        Uses git subprocess in local mode. In service mode, queries the
+        Commit + CommitFileStat tables.
+
+        Args:
+            days: Look back this many days.
+            path: Optional path prefix filter.
+            top_n: Number of top files to return.
+        """
+        from collections import defaultdict
+
+        from attocode.code_intel.tools.history_tools import _run_git
+
+        git_args = [
+            "log",
+            f"--since={days} days ago",
+            "--numstat",
+            "--format=%H|%aI|%s",
+        ]
+        if path:
+            git_args.extend(["--", path])
+
+        raw = _run_git(git_args, self._project_dir)
+
+        file_stats: dict[str, dict] = defaultdict(
+            lambda: {"commits": 0, "added": 0, "removed": 0, "last_date": ""}
+        )
+        commit_count = 0
+        current_date = ""
+
+        for line in raw.splitlines():
+            line = line.strip()
+            if not line:
+                continue
+            if "|" in line and line.count("|") >= 2:
+                parts = line.split("|", 2)
+                if len(parts) == 3 and len(parts[0]) >= 7:
+                    commit_count += 1
+                    current_date = parts[1][:10] if len(parts[1]) >= 10 else parts[1]
+                    continue
+            if "\t" in line:
+                parts = line.split("\t")
+                if len(parts) >= 3:
+                    try:
+                        added = int(parts[0]) if parts[0] != "-" else 0
+                        removed = int(parts[1]) if parts[1] != "-" else 0
+                    except ValueError:
+                        continue
+                    file_path = parts[2]
+                    if " => " in file_path:
+                        file_path = file_path.split(" => ")[-1].rstrip("}")
+                        if "{" in file_path:
+                            file_path = file_path.replace("{", "").replace("}", "")
+                    stats = file_stats[file_path]
+                    stats["commits"] += 1
+                    stats["added"] += added
+                    stats["removed"] += removed
+                    if current_date and (not stats["last_date"] or current_date > stats["last_date"]):
+                        stats["last_date"] = current_date
+
+        ranked = sorted(
+            file_stats.items(),
+            key=lambda kv: (kv[1]["commits"], kv[1]["added"] + kv[1]["removed"]),
+            reverse=True,
+        )[:top_n]
+
+        return {
+            "days": days,
+            "path": path,
+            "commit_count": commit_count,
+            "total_files_changed": len(file_stats),
+            "files": [
+                {
+                    "path": fpath,
+                    "commits": s["commits"],
+                    "added": s["added"],
+                    "removed": s["removed"],
+                    "last_date": s["last_date"],
+                }
+                for fpath, s in ranked
+            ],
+        }
+
     def security_scan_data(self, mode: str = "full", path: str = "") -> dict:
         """Return structured security scan results."""
         scanner = self._get_security_scanner()
@@ -864,6 +1060,78 @@ class CodeIntelService:
             "languages": dict(languages),
         }
 
+    def dead_code_data(
+        self,
+        scope: str = "",
+        entry_points: list[str] | None = None,
+        level: str = "symbol",
+        min_confidence: float = 0.5,
+        top_n: int = 30,
+    ) -> dict:
+        """Return structured dead-code detection results.
+
+        Args:
+            scope: Restrict analysis to files under this directory prefix.
+            entry_points: Additional names/paths to treat as entry points.
+            level: ``"symbol"``, ``"file"``, or ``"module"``.
+            min_confidence: Minimum confidence threshold (0.0-1.0).
+            top_n: Maximum results to return.
+        """
+        from attocode.code_intel.tools.dead_code_tools import (
+            _find_dead_files,
+            _find_dead_modules,
+            _find_dead_symbols,
+        )
+
+        svc = self._get_ast_service()
+        index = svc._index
+        ast_cache = svc._ast_cache
+
+        ctx = self._get_context_mgr()
+        all_file_paths = {fi.relative_path for fi in ctx._files}
+
+        ep_set = set(entry_points) if entry_points else set()
+
+        if scope and not scope.endswith("/"):
+            scope = scope + "/"
+
+        min_confidence = max(0.0, min(1.0, min_confidence))
+        top_n = max(1, min(200, top_n))
+
+        if level == "symbol":
+            items = _find_dead_symbols(
+                index, ast_cache, self._project_dir, scope, ep_set,
+                min_confidence, top_n,
+            )
+        elif level == "file":
+            items = _find_dead_files(
+                index, all_file_paths, scope, ep_set,
+                min_confidence, top_n, self._project_dir,
+            )
+        elif level == "module":
+            items = _find_dead_modules(
+                index, all_file_paths, scope, ep_set,
+                min_confidence, top_n, self._project_dir,
+            )
+        else:
+            items = []
+
+        # Aggregate stats
+        total_definitions = sum(len(v) for v in index.definitions.values())
+        total_files = len(all_file_paths)
+
+        return {
+            "level": level,
+            "scope": scope,
+            "items": items,
+            "stats": {
+                "total_definitions": total_definitions,
+                "total_files": total_files,
+                "dead_count": len(items),
+                "min_confidence": min_confidence,
+            },
+        }
+
     def symbols(self, path: str) -> str:
         svc = self._get_ast_service()
         locs = svc.get_file_symbols(path)
@@ -1017,6 +1285,22 @@ class CodeIntelService:
                 for f_path in hop["files"]:
                     lines.append(f"    {'>' * d} {f_path}")
         lines.append(f"\nTotal: {data['total_reachable']} files reachable")
+        return "\n".join(lines)
+
+    def graph_dsl(self, query: str) -> str:
+        """Execute a graph DSL query and return formatted text."""
+        data = self.graph_dsl_data(query)
+        if "error" in data and data["error"]:
+            return f"Error: {data['error']}"
+        results = data.get("results", [])
+        if not results:
+            return f"No results for query: {query}"
+        lines = [f"Graph DSL results ({len(results)} matches):"]
+        for i, row in enumerate(results, 1):
+            parts = [f"{k}={v}" for k, v in row.items()]
+            lines.append(f"  {i:3d}. {', '.join(parts)}")
+        if data.get("truncated"):
+            lines.append(f"\n  (results truncated at {data['total']})")
         return "\n".join(lines)
 
     def find_related(self, file: str, top_k: int = 10) -> str:
