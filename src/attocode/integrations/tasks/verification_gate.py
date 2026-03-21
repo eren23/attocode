@@ -168,6 +168,140 @@ def check_lint(working_dir: str) -> CheckResult:
 
 
 # ---------------------------------------------------------------------------
+# Targeted file compilation check
+# ---------------------------------------------------------------------------
+
+
+@dataclass
+class CompilationCheckResult:
+    """Result of running compilation checks on modified files.
+
+    Extends the basic CheckResult contract with an ``errors`` list
+    containing per-file error details.
+    """
+
+    passed: bool
+    message: str = ""
+    errors: list[dict[str, Any]] = field(default_factory=list)
+    files_checked: int = 0
+
+
+def check_modified_files_compile(
+    modified_files: list[str], working_dir: str
+) -> CompilationCheckResult:
+    """Run compilation / syntax checks on specific modified files only.
+
+    Performs per-language checks:
+    - Python (.py): ``compile(source, filename, 'exec')``
+    - JSON (.json): ``json.loads()``
+    - JavaScript (.js): ``node --check``
+    - TypeScript (.ts/.tsx): ``tsc --noEmit --isolatedModules`` on modified files
+
+    Returns a :class:`CompilationCheckResult` whose ``passed`` field is
+    ``True`` only if every file compiles successfully.
+    """
+    import json as _json
+
+    errors: list[dict[str, Any]] = []
+    files_checked = 0
+
+    for fpath in modified_files or []:
+        # Resolve path relative to working_dir
+        full_path = os.path.join(working_dir, fpath) if not os.path.isabs(fpath) else fpath
+        if not os.path.isfile(full_path):
+            continue
+
+        ext = os.path.splitext(full_path)[1].lower()
+        files_checked += 1
+
+        if ext == ".py":
+            try:
+                with open(full_path, encoding="utf-8", errors="replace") as f:
+                    source = f.read()
+                compile(source, fpath, "exec")
+            except SyntaxError as exc:
+                errors.append({
+                    "file": fpath,
+                    "line": exc.lineno,
+                    "message": f"SyntaxError: {exc.msg}",
+                })
+            except Exception as exc:
+                errors.append({
+                    "file": fpath,
+                    "line": None,
+                    "message": str(exc)[:200],
+                })
+
+        elif ext == ".json":
+            try:
+                with open(full_path, encoding="utf-8") as f:
+                    _json.loads(f.read())
+            except _json.JSONDecodeError as exc:
+                errors.append({
+                    "file": fpath,
+                    "line": exc.lineno,
+                    "message": f"JSONDecodeError: {exc.msg}",
+                })
+            except Exception as exc:
+                errors.append({
+                    "file": fpath,
+                    "line": None,
+                    "message": str(exc)[:200],
+                })
+
+        elif ext == ".js":
+            passed, output = _run_command(["node", "--check", full_path], working_dir)
+            if not passed:
+                # Try to extract line number from node output
+                line_no = None
+                for line in output.splitlines():
+                    if ":" in line:
+                        parts = line.split(":")
+                        for p in parts:
+                            p = p.strip()
+                            if p.isdigit():
+                                line_no = int(p)
+                                break
+                        if line_no is not None:
+                            break
+                errors.append({
+                    "file": fpath,
+                    "line": line_no,
+                    "message": output[:300],
+                })
+
+        elif ext in (".ts", ".tsx"):
+            passed, output = _run_command(
+                ["npx", "tsc", "--noEmit", "--isolatedModules", full_path],
+                working_dir,
+            )
+            if not passed:
+                errors.append({
+                    "file": fpath,
+                    "line": None,
+                    "message": output[:300],
+                })
+
+    if errors:
+        error_summary = "; ".join(
+            f"{e['file']}: {e['message']}" for e in errors[:5]
+        )
+        return CompilationCheckResult(
+            passed=False,
+            message=f"Compilation failed ({len(errors)} error(s)): {error_summary}"[:500],
+            errors=errors,
+            files_checked=files_checked,
+        )
+
+    return CompilationCheckResult(
+        passed=True,
+        message=f"All {files_checked} modified files compile successfully",
+        errors=[],
+        files_checked=files_checked,
+    )
+
+
+# ---------------------------------------------------------------------------
 # VerificationGate
 # ---------------------------------------------------------------------------
 

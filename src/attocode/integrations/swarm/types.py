@@ -346,6 +346,14 @@ class SwarmConfig:
     # Codebase context (injected at runtime)
     codebase_context: Any = None
 
+    # Task enrichment
+    enable_task_enrichment: bool = True
+    enrichment_min_description_chars: int = 80
+
+    # User intervention
+    enable_user_intervention: bool = False
+    user_intervention_threshold: int = 3  # pause after N failed attempts
+
     # Resume
     resume_session_id: str | None = None
 
@@ -368,6 +376,11 @@ class RetryContext:
     previous_model: str | None = None
     previous_files: list[str] | None = None
     swarm_progress: str | None = None
+
+    # Structured error data for precise retry feedback
+    compilation_errors: list[dict[str, Any]] | None = None  # [{file, line, message}]
+    test_failures: list[str] | None = None  # test names that failed
+    verification_suggestions: list[str] | None = None  # actionable fix suggestions
 
 
 # =============================================================================
@@ -821,6 +834,14 @@ class SmartSubtask:
     target_files: list[str] | None = None
     read_files: list[str] | None = None
     relevant_files: list[str] | None = None
+
+    # Enrichment fields — all default to None for backward compat
+    acceptance_criteria: list[str] | None = None
+    technical_constraints: list[str] | None = None
+    code_context_snippets: list[str] | None = None
+    modification_instructions: str | None = None
+    test_expectations: list[str] | None = None
+    integration_points: list[str] | None = None
 
 
 @dataclass

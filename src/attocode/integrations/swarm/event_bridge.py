@@ -249,6 +249,10 @@ class SwarmEventBridge:
             self._append_timeline(event)
         elif event_type == "swarm.model.failover" or event_type == "swarm.task.attempt":
             self._append_timeline(event)
+        elif event_type == "swarm.task.intervention_needed":
+            self._on_intervention_needed(data)
+        elif event_type == "swarm.compilation.failed":
+            self._append_timeline(event)
         else:
             # Generic timeline entry for all other events
             self._append_timeline(event)
@@ -525,6 +529,33 @@ class SwarmEventBridge:
             }
         if not data.get("passed", True):
             self._quality_rejections += 1
+
+    def _on_intervention_needed(self, data: dict[str, Any]) -> None:
+        """Handle a user intervention request for a repeatedly-failing task.
+
+        Records the event in the error log and timeline, and updates the
+        task status in our internal map so the TUI can display an
+        intervention prompt.
+        """
+        task_id = data.get("task_id", "")
+
+        # Record as a special error entry
+        self._errors.append({
+            "timestamp": time.time(),
+            "task_id": task_id,
+            "error": f"Intervention needed: {data.get('last_error', 'unknown')}",
+            "failure_mode": data.get("failure_mode"),
+            "intervention": True,
+            "attempts": data.get("attempts", 0),
+        })
+        if len(self._errors) > 100:
+            self._errors = self._errors[-100:]
+
+        # Timeline entry
+        self._append_timeline(SwarmEvent(
+            type="swarm.task.intervention_needed",
+            data=data,
+        ))
 
     # ------------------------------------------------------------------
     # State Writing (Rate-Limited)

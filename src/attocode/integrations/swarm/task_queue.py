@@ -189,6 +189,13 @@ class SwarmTaskQueue:
                     "type": sub.type,
                     "complexity": sub.complexity,
                     "dependencies": list(sub.dependencies),
+                    # Enrichment fields
+                    "acceptance_criteria": sub.acceptance_criteria,
+                    "technical_constraints": sub.technical_constraints,
+                    "code_context_snippets": sub.code_context_snippets,
+                    "modification_instructions": sub.modification_instructions,
+                    "test_expectations": sub.test_expectations,
+                    "integration_points": sub.integration_points,
                 },
             )
             self.tasks[task.id] = task

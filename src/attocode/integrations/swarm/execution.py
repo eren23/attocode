@@ -558,6 +558,65 @@ async def _handle_successful_completion(
             ctx.task_queue.mark_failed_without_cascade(task_id, max_retries)
             return
 
+    # Mandatory compilation check — runs for ALL action tasks that modify files,
+    # regardless of quality_gates setting. Catches syntax/compilation errors early.
+    if _is_action_task(task) and spawn_result.files_modified:
+        try:
+            from attocode.integrations.swarm.compilation_check import run_compilation_checks
+
+            working_dir = getattr(ctx, "working_dir", None) or "."
+            check_result = run_compilation_checks(
+                files_modified=spawn_result.files_modified,
+                working_dir=working_dir,
+            )
+
+            if not check_result.passed:
+                # Build structured RetryContext with compilation errors
+                from attocode.integrations.swarm.types import RetryContext
+
+                error_dicts = [
+                    {"file": e.file_path, "line": e.line, "message": e.message}
+                    for e in check_result.errors
+                    if e.severity == "error"
+                ]
+
+                task.retry_context = RetryContext(
+                    previous_feedback=_format_compilation_errors(check_result.errors),
+                    previous_score=0,
+                    attempt=task.attempts,
+                    previous_model=task.assigned_model,
+                    compilation_errors=error_dicts,
+                    verification_suggestions=[
+                        f"Fix {e.file_path}:{e.line}: {e.message}"
+                        for e in check_result.errors
+                        if e.severity == "error" and e.line is not None
+                    ],
+                )
+                task.failure_mode = TaskFailureMode.QUALITY
+                task_result.success = False
+                task_result.quality_feedback = _format_compilation_errors(check_result.errors)
+                max_retries = ctx.config.worker_retries
+                retried = ctx.task_queue.mark_failed_without_cascade(task_id, max_retries)
+
+                ctx.emit(swarm_event(
+                    "swarm.compilation.failed",
+                    task_id=task_id,
+                    errors=[
+                        {"file": e.file_path, "line": e.line, "message": e.message}
+                        for e in check_result.errors
+                        if e.severity == "error"
+                    ],
+                    files_checked=check_result.files_checked,
+                    duration_ms=check_result.duration_ms,
+                ))
+
+                if not retried:
+                    ctx.task_queue.trigger_cascade_skip(task_id)
+                return
+        except Exception as exc:
+            logger.warning("Compilation check error for task %s: %s", task_id, exc)
+            # Non-fatal: continue to quality gate if compilation check itself errors
+
     # Quality gate — run pre-flight + LLM judge if enabled
     if ctx.config.quality_gates:
         from attocode.integrations.swarm.quality_gate import (
@@ -627,37 +686,104 @@ async def _handle_successful_completion(
         task_result.quality_score = gate_result.score
 
     # Verification gate — run automated checks (tests, types, lint)
-    if ctx.config.quality_gates:
+    # Decoupled from quality_gates: runs independently for action tasks
+    # that modify files, controlled by enable_verification flag.
+    _vg_type_config = BUILTIN_TASK_TYPE_CONFIGS.get(task.type, None)
+    _should_verify = bool(
+        ctx.config.enable_verification
+        and _vg_type_config and _vg_type_config.requires_tool_calls
+        and spawn_result.files_modified
+    )
+    if _should_verify:
         try:
             from attocode.integrations.tasks.task_splitter import SubTask
-            from attocode.integrations.tasks.verification_gate import VerificationGate
+            from attocode.integrations.tasks.verification_gate import (
+                VerificationGate,
+                check_modified_files_compile,
+            )
 
             working_dir = getattr(ctx, "working_dir", None) or "."
+
+            # Run targeted compilation check on modified files first
+            compile_result = check_modified_files_compile(
+                spawn_result.files_modified, working_dir,
+            )
+            if not compile_result.passed:
+                # Emit compilation failure event
+                ctx.emit(swarm_event(
+                    "swarm.compilation.failed",
+                    task_id=task_id,
+                    errors=[
+                        {"file": e.get("file", ""), "message": e.get("message", "")}
+                        for e in (compile_result.errors or [])[:10]
+                    ],
+                ))
+                # Build structured retry context with compilation errors
+                from attocode.integrations.swarm.types import RetryContext
+                task.retry_context = RetryContext(
+                    previous_feedback=compile_result.message,
+                    previous_score=task_result.quality_score or 0,
+                    attempt=task.attempts,
+                    previous_model=task.assigned_model,
+                    compilation_errors=compile_result.errors[:10] if compile_result.errors else None,
+                    verification_suggestions=[
+                        f"Fix compilation error in {e.get('file', 'unknown')}: {e.get('message', '')}"
+                        for e in (compile_result.errors or [])[:5]
+                    ] or None,
+                )
+                task_result.quality_feedback = compile_result.message
+                max_retries = ctx.config.worker_retries
+                retried = ctx.task_queue.mark_failed_without_cascade(task_id, max_retries)
+                if not retried:
+                    ctx.task_queue.trigger_cascade_skip(task_id)
+                return
+
+            # Full verification gate: tests, types, lint
             gate = VerificationGate(
                 provider=ctx.provider if ctx.config.enable_wave_review else None,
                 model=ctx.config.orchestrator_model,
                 working_dir=working_dir,
-            )
-            # Only run tests for action tasks that modify files
-            type_config = BUILTIN_TASK_TYPE_CONFIGS.get(task.type, None)
-            should_run_tests = bool(
-                type_config and type_config.requires_tool_calls
-                and spawn_result.files_modified
             )
             # Adapt SwarmTask → SubTask for the verification gate interface
             sub_task = SubTask(id=task.id, description=task.description)
             verification = await gate.verify(
                 sub_task,
                 spawn_result.output or "",
-                run_tests=should_run_tests,
-                run_types=should_run_tests,
-                run_lint=should_run_tests,
-                run_llm=False,  # Quality gate LLM judge already ran above
+                run_tests=True,
+                run_types=True,
+                run_lint=True,
+                run_llm=False,  # Quality gate LLM judge already ran above (if enabled)
             )
             if not verification.passed:
-                task_result.quality_feedback = "; ".join(
-                    verification.suggestions[:3],
+                # Build structured retry context with verification details
+                _verif_suggestions = verification.suggestions[:3]
+                task_result.quality_feedback = "; ".join(_verif_suggestions)
+
+                # Populate structured error fields on retry context
+                from attocode.integrations.swarm.types import RetryContext
+                _comp_errors: list[dict[str, Any]] = []
+                _test_failures: list[str] = []
+                for c in verification.checks:
+                    if not c.passed:
+                        if c.name in ("tests",):
+                            _test_failures.append(c.message[:300])
+                        else:
+                            _comp_errors.append({
+                                "file": "",
+                                "line": None,
+                                "message": c.message[:300],
+                                "check": c.name,
+                            })
+                task.retry_context = RetryContext(
+                    previous_feedback=task_result.quality_feedback,
+                    previous_score=task_result.quality_score or 0,
+                    attempt=task.attempts,
+                    previous_model=task.assigned_model,
+                    compilation_errors=_comp_errors or None,
+                    test_failures=_test_failures or None,
+                    verification_suggestions=_verif_suggestions or None,
                 )
+
                 max_retries = ctx.config.worker_retries
                 retried = ctx.task_queue.mark_failed_without_cascade(task_id, max_retries)
                 ctx.emit(swarm_event(
@@ -869,6 +995,32 @@ async def _handle_failed_completion(
     else:
         retry_limit = base_retries
 
+    # User intervention hook: if enabled and task has failed N times,
+    # emit an intervention event instead of cascade-skipping immediately.
+    if (
+        ctx.config.enable_user_intervention
+        and task.attempts >= ctx.config.user_intervention_threshold
+    ):
+        _last_error = spawn_result.output[:500] if spawn_result.output else "Unknown error"
+        _comp_errors = None
+        if task.retry_context and task.retry_context.compilation_errors:
+            _comp_errors = task.retry_context.compilation_errors[:5]
+        ctx.emit(swarm_event(
+            "swarm.task.intervention_needed",
+            task_id=task_id,
+            description=task.description,
+            attempts=task.attempts,
+            last_error=_last_error,
+            compilation_errors=_comp_errors,
+            failure_mode=str(task.failure_mode),
+            model=task.assigned_model,
+        ))
+        # Task stays in its current state (DISPATCHED/FAILED) — does not
+        # cascade-skip yet. The TUI/dashboard should show the intervention
+        # prompt. Normal retry/fail logic still runs below so the task can
+        # be retried if the user provides guidance, but cascade skip is
+        # deferred.
+
     # Try retry or fail
     retried = ctx.task_queue.mark_failed_without_cascade(task_id, retry_limit)
     if retried:
@@ -877,12 +1029,23 @@ async def _handle_failed_completion(
         if task.failure_mode == TaskFailureMode.RATE_LIMIT:
             ctx.task_queue.set_retry_after(task_id, ctx.config.retry_base_delay_ms)
     else:
-        # Try resilience recovery before hard fail
-        recovered = await try_resilience_recovery(
-            ctx, recovery_state, task, task_id, task_result, spawn_result,
-        )
-        if not recovered:
-            ctx.task_queue.trigger_cascade_skip(task_id)
+        # If user intervention is active, skip cascade-skip to give user a chance
+        if (
+            ctx.config.enable_user_intervention
+            and task.attempts >= ctx.config.user_intervention_threshold
+        ):
+            logger.info(
+                "Task %s needs user intervention (attempt %d/%d). "
+                "Cascade skip deferred.",
+                task_id, task.attempts, ctx.config.user_intervention_threshold,
+            )
+        else:
+            # Try resilience recovery before hard fail
+            recovered = await try_resilience_recovery(
+                ctx, recovery_state, task, task_id, task_result, spawn_result,
+            )
+            if not recovered:
+                ctx.task_queue.trigger_cascade_skip(task_id)
 
     # Message bus: release file locks on failure
     if ctx.message_bus is not None:
@@ -1002,6 +1165,29 @@ async def _handle_hollow_completion(
 # =============================================================================
 # Helpers
 # =============================================================================
+
+
+_ACTION_TASK_TYPES: frozenset[str] = frozenset({
+    "implement", "test", "refactor", "integrate", "deploy",
+})
+
+
+def _is_action_task(task: SwarmTask) -> bool:
+    """Return True if *task* is an action task (produces code artifacts)."""
+    return task.type in _ACTION_TASK_TYPES
+
+
+def _format_compilation_errors(errors: list[Any]) -> str:
+    """Format a list of :class:`CompilationError` objects into a human-readable string."""
+    if not errors:
+        return "No compilation errors."
+    lines: list[str] = ["COMPILATION ERRORS:"]
+    for err in errors:
+        loc = f"{err.file_path}"
+        if err.line is not None:
+            loc += f":{err.line}"
+        lines.append(f"  - `{loc}`: {err.message}")
+    return "\n".join(lines)
 
 
 def _classify_failure(output: str, tool_calls: int | None = None) -> str:

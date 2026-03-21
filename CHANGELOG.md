@@ -42,6 +42,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **`GET /api/v1/metrics`** — aggregated query metrics in JSON and Prometheus text exposition format; tracks request latency by category (p50/p95/p99), search cache hit rates, and per-tool call success/failure; in-memory ring buffer with 10K cap; unauthenticated for monitoring infrastructure
 - **`MetricsCollector`** — thread-safe module-level singleton with ring-buffered recording of request, search, and tool call metrics; Prometheus formatter with HELP/TYPE annotations
 
+#### Swarm Quality Improvements
+
+- **Mandatory compilation checks** — per-language syntax/compilation checks (Python `compile()`, `tsc --noEmit`, `node --check`, `json.loads`) run on modified files before the LLM quality gate, catching broken code early and saving quality gate costs; structured `file:line` errors are attached to `RetryContext` for precise worker feedback
+- **Task enrichment pipeline** — post-decomposition enrichment adds acceptance criteria, code context snippets, technical constraints, and modification instructions to thin subtask descriptions; rule-based criteria generated per task type (implement, test, refactor, document, deploy); LLM enrichment for tasks still below `enrichment_min_description_chars` threshold; requests re-decomposition if >50% of tasks remain thin
+- **Verification gate decoupling** — `enable_verification` now operates independently of the `quality_gates` flag; runs pytest, mypy/tsc, and ruff/eslint on worker outputs with structured test failure and fix suggestion feedback in retry context
+- **User intervention hook** — opt-in feature (`enable_user_intervention: false` by default) that pauses tasks for human review after N failed attempts (`user_intervention_threshold: 3`); emits `swarm.task.intervention_needed` event with error details; defers cascade-skip to allow user action
+- **Structured retry context** — `RetryContext` now carries `compilation_errors`, `test_failures`, and `verification_suggestions` fields so retried workers see exact error locations and actionable fix suggestions instead of raw error text
+
 ### Documentation
 
 - **`docs/guides/cli-commands.md`** — comprehensive reference for all 8 new CLI commands with flags, usage examples, and sample output
@@ -50,6 +58,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **`docs/guides/observability.md`** — metrics endpoint documentation with JSON/Prometheus format examples, category reference, and Prometheus/Grafana setup instructions
 - **`docs/guides/architecture-decisions.md`** — ADR workflow guide with lifecycle diagram, transition rules, and end-to-end workflow example
 - **`docs/code-intel-http-api.md`** — updated with all new endpoints and expanded MCP tools list (27 -> 36 tools)
+- **`docs/guides/swarm-quality.md`** — guide covering mandatory compilation checks, task enrichment pipeline, verification gate, user intervention hook, structured retry context, and full SwarmConfig quality fields reference
 
 ## [0.2.2] - 2026-03-19
 

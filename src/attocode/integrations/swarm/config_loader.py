@@ -276,6 +276,12 @@ def yaml_to_swarm_config(
         failover = resilience.get("model_failover", resilience.get("modelFailover"))
         if failover is not None:
             cfg["enable_model_failover"] = bool(failover)
+        intervention_threshold = resilience.get(
+            "user_intervention_threshold",
+            resilience.get("userInterventionThreshold"),
+        )
+        if intervention_threshold is not None:
+            cfg["user_intervention_threshold"] = int(intervention_threshold)
 
     # --- Features ---
     features = raw.get("features", {})
@@ -286,6 +292,10 @@ def yaml_to_swarm_config(
             "waveReview": "enable_wave_review",
             "verification": "enable_verification",
             "persistence": "enable_persistence",
+            "task_enrichment": "enable_task_enrichment",
+            "taskEnrichment": "enable_task_enrichment",
+            "user_intervention": "enable_user_intervention",
+            "userIntervention": "enable_user_intervention",
         }
         for yaml_key, config_key in _feature_map.items():
             val = features.get(yaml_key)
