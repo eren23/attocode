@@ -7,6 +7,37 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.4] - 2026-03-21
+
+### Added
+
+#### Evaluation Framework
+
+- **12-repo benchmark suite** — expanded from 3 to 12 repos across 10 languages (Python, Go, C, C++, Kotlin, Swift, Elixir, Ruby, Zig, PHP) with 10 tasks per repo (6 original + dead_code, distill, graph_dsl, code_evolution)
+- **Ground-truth search quality evaluation** (`eval/search_quality.py`) — 30 queries across 5 repos with verified relevant file lists; computes MRR@10, NDCG@10, Precision@10, Recall@20
+- **Needle-in-the-haystack tasks** (`eval/needle_tasks/`) — 15 deep code understanding tasks across 5 types: call chain tracing, dead code detection, impact assessment, architecture quiz, cross-file symbol resolution
+- **Competitive comparison** (`eval/competitive/`) — latency and quality benchmarking against published baselines from Sourcegraph, GitHub Code Search, CodeSearchNet, Greptile
+- **Code-intel vs grep ablation** — `--mode both` flag on benchmark_ci.py, search_quality, and needle_tasks to run side-by-side comparison; grep baseline uses ripgrep for equivalent tasks
+- **LLM-as-judge scorer** (`eval/llm_judge.py`) — async Claude-powered evaluation on 5 rubric dimensions (completeness, accuracy, depth, actionability, signal-to-noise) with pairwise comparison support
+- **SWE-Atlas QnA adapter** (`eval/sweatlas/`) — loader for Scale Labs' 124-task deep codebase understanding benchmark
+- **PyCG call graph adapter** (`eval/pycg/`) — precision/recall evaluation against verified Python call graph ground truth
+- **OSS demo automated runner** — `cmd_run` in eval/oss_demo for executing evaluation tasks via CodeIntelService directly
+- **4 new quality scorers** — `score_dead_code`, `score_distill`, `score_graph_dsl`, `score_code_evolution` in eval/quality_scorers.py
+
+#### Configuration
+
+- **Configurable file indexing cap** — `ATTOCODE_FILE_CAP` environment variable (default 2000) replaces hardcoded limit in service.py and navigation_tools.py; higher values improve coverage on large repos at the cost of bootstrap time
+
+#### Documentation
+
+- **Evaluation & Benchmarks guide** (`docs/guides/evaluation-and-benchmarks.md`) — covers benchmark suite, search quality metrics, needle tasks, competitive comparison, online benchmarks, and ground-truth format
+- **Updated MCP tool count** — corrected 36 → 38 tools in docs/code-intel-http-api.md
+
+### Fixed
+
+- **dead_code MCP tool startup crash** — `explore_codebase` was referenced from `_analysis_tools` but is defined in `_navigation_tools`; fixed module reference in server.py
+- **dead_code circular import** — `dead_code_tools.py` top-level import of `server.py` caused circular import when `CodeIntelService.dead_code_data()` was called directly; added try/except guard with stub MCP for deferred loading
+
 ## [0.2.3] - 2026-03-21
 
 ### Added

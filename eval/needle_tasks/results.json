@@ -18,7 +18,7 @@
       "task_id": "trace_budget_enforcement",
       "task_type": "trace_call_chain",
       "mode": "code-intel",
-      "time_s": 8.69
+      "time_s": 9.05
     },
     {
       "found_callers": [
@@ -67,7 +67,7 @@
       "task_id": "dead_code_tools",
       "task_type": "find_dead_code",
       "mode": "code-intel",
-      "time_s": 2.85
+      "time_s": 3.67
     },
     {
       "dead_count": 19,
@@ -109,7 +109,7 @@
       "task_id": "dead_code_legacy",
       "task_type": "find_dead_code",
       "mode": "code-intel",
-      "time_s": 0.26
+      "time_s": 0.34
     },
     {
       "affected_files": 99,
@@ -166,7 +166,7 @@
       "task_id": "arch_highest_fanin",
       "task_type": "architecture_quiz",
       "mode": "code-intel",
-      "time_s": 16.11
+      "time_s": 17.02
     },
     {
       "passed": true,
@@ -175,7 +175,7 @@
       "task_id": "arch_community_count",
       "task_type": "architecture_quiz",
       "mode": "code-intel",
-      "time_s": 0.27
+      "time_s": 0.26
     },
     {
       "passed": true,
@@ -247,7 +247,7 @@
       "task_id": "trace_budget_enforcement",
       "task_type": "trace_call_chain",
       "mode": "grep",
-      "time_s": 0.05
+      "time_s": 0.03
     },
     {
       "found_callers": [
@@ -269,7 +269,7 @@
       "expected_callers": [],
       "recall": 1.0,
       "passed": true,
-      "grep_files_found": 40,
+      "grep_files_found": 41,
       "task_id": "trace_bootstrap",
       "task_type": "trace_call_chain",
       "mode": "grep",
@@ -281,7 +281,7 @@
       "task_id": "dead_code_tools",
       "task_type": "find_dead_code",
       "mode": "grep",
-      "time_s": 0.41
+      "time_s": 0.42
     },
     {
       "dead_count": 20,
@@ -289,7 +289,7 @@
       "task_id": "dead_code_types",
       "task_type": "find_dead_code",
       "mode": "grep",
-      "time_s": 0.61
+      "time_s": 0.63
     },
     {
       "dead_count": 18,
@@ -297,7 +297,7 @@
       "task_id": "dead_code_legacy",
       "task_type": "find_dead_code",
       "mode": "grep",
-      "time_s": 0.55
+      "time_s": 0.57
     },
     {
       "affected_files": 370,
@@ -402,7 +402,7 @@
       "task_id": "symbol_swarm_orchestrator",
       "task_type": "cross_file_symbol_resolution",
       "mode": "grep",
-      "time_s": 0.05
+      "time_s": 0.06
     },
     {
       "found_definitions": [

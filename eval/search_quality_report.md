@@ -1,32 +1,32 @@
 # Search Quality Evaluation Report
 
-_Generated: 2026-03-21 21:39:40_
+_Generated: 2026-03-21 22:38:46_
 
 ## Summary
 
 | Repo | Queries | MRR@10 | NDCG@10 | P@10 | R@20 | Time (ms) |
 |------|---------|--------|---------|------|------|-----------|
-| attocode | 10 | 0.550 | 0.304 | 0.140 | 0.305 | 16107 |
-| fastapi | 5 | 0.400 | 0.213 | 0.080 | 0.187 | 15794 |
-| gh-cli | 5 | 0.167 | 0.119 | 0.060 | 0.150 | 3706 |
-| pandas | 5 | 0.292 | 0.123 | 0.060 | 0.120 | 8188 |
-| redis | 5 | 0.247 | 0.214 | 0.140 | 0.310 | 6052 |
-| **Overall** | 30 | 0.367 | 0.213 | 0.103 | 0.229 | 49847 |
+| attocode | 10 | 0.550 | 0.304 | 0.140 | 0.305 | 18802 |
+| fastapi | 5 | 0.400 | 0.213 | 0.080 | 0.187 | 16955 |
+| gh-cli | 5 | 0.167 | 0.119 | 0.060 | 0.150 | 3770 |
+| pandas | 5 | 0.292 | 0.123 | 0.060 | 0.120 | 10555 |
+| redis | 5 | 0.247 | 0.214 | 0.140 | 0.310 | 6722 |
+| **Overall** | 30 | 0.367 | 0.213 | 0.103 | 0.229 | 56805 |
 
 ## attocode
 
 | Query | MRR | NDCG | P@10 | R@20 | Time |
 |-------|-----|------|------|------|------|
-| token budget management and enforcement | 1.000 | 0.485 | 0.200 | 0.400 | 16060ms |
-| message routing and tool dispatch | 0.167 | 0.139 | 0.100 | 0.250 | 6ms |
-| swarm task decomposition and scheduling | 1.000 | 0.339 | 0.100 | 0.200 | 8ms |
-| agent session persistence and checkpoints | 0.500 | 0.214 | 0.100 | 0.200 | 6ms |
-| code intelligence AST parsing and symbol indexing | 0.333 | 0.170 | 0.100 | 0.200 | 5ms |
-| safety guardrails and content filtering | 0.000 | 0.000 | 0.000 | 0.000 | 4ms |
-| MCP server integration and tool protocol | 0.500 | 0.581 | 0.300 | 0.750 | 6ms |
-| execution loop and iteration control | 0.500 | 0.246 | 0.100 | 0.250 | 4ms |
-| worker pool and parallel agent spawning | 0.500 | 0.214 | 0.100 | 0.200 | 6ms |
-| codebase embedding and semantic search | 1.000 | 0.655 | 0.300 | 0.600 | 3ms |
+| token budget management and enforcement | 1.000 | 0.485 | 0.200 | 0.400 | 18731ms |
+| message routing and tool dispatch | 0.167 | 0.139 | 0.100 | 0.250 | 10ms |
+| swarm task decomposition and scheduling | 1.000 | 0.339 | 0.100 | 0.200 | 12ms |
+| agent session persistence and checkpoints | 0.500 | 0.214 | 0.100 | 0.200 | 10ms |
+| code intelligence AST parsing and symbol indexing | 0.333 | 0.170 | 0.100 | 0.200 | 7ms |
+| safety guardrails and content filtering | 0.000 | 0.000 | 0.000 | 0.000 | 5ms |
+| MCP server integration and tool protocol | 0.500 | 0.581 | 0.300 | 0.750 | 8ms |
+| execution loop and iteration control | 0.500 | 0.246 | 0.100 | 0.250 | 6ms |
+| worker pool and parallel agent spawning | 0.500 | 0.214 | 0.100 | 0.200 | 9ms |
+| codebase embedding and semantic search | 1.000 | 0.655 | 0.300 | 0.600 | 5ms |
 
 <details>
 <summary>Low-MRR queries (3)</summary>
@@ -91,7 +91,7 @@ Retrieved (top 10):
 
 | Query | MRR | NDCG | P@10 | R@20 | Time |
 |-------|-----|------|------|------|------|
-| request validation and dependency injection | 0.000 | 0.000 | 0.000 | 0.000 | 15784ms |
+| request validation and dependency injection | 0.000 | 0.000 | 0.000 | 0.000 | 16943ms |
 | OpenAPI schema generation | 0.500 | 0.214 | 0.100 | 0.200 | 3ms |
 | WebSocket handling and connection management | 0.500 | 0.296 | 0.100 | 0.333 | 1ms |
 | middleware stack and request lifecycle | 1.000 | 0.553 | 0.200 | 0.400 | 2ms |
@@ -144,7 +144,7 @@ Retrieved (top 10):
 
 | Query | MRR | NDCG | P@10 | R@20 | Time |
 |-------|-----|------|------|------|------|
-| CLI command factory and command execution | 0.500 | 0.246 | 0.100 | 0.250 | 3701ms |
+| CLI command factory and command execution | 0.500 | 0.246 | 0.100 | 0.250 | 3765ms |
 | GitHub API client and authentication | 0.000 | 0.000 | 0.000 | 0.000 | 2ms |
 | pull request creation and review workflow | 0.000 | 0.000 | 0.000 | 0.000 | 1ms |
 | issue listing and filtering | 0.333 | 0.346 | 0.200 | 0.500 | 1ms |
@@ -232,7 +232,7 @@ Retrieved (top 10):
 
 | Query | MRR | NDCG | P@10 | R@20 | Time |
 |-------|-----|------|------|------|------|
-| missing data handling and NaN propagation | 0.000 | 0.000 | 0.000 | 0.000 | 8122ms |
+| missing data handling and NaN propagation | 0.000 | 0.000 | 0.000 | 0.000 | 10489ms |
 | DataFrame indexing and label-based access | 0.333 | 0.170 | 0.100 | 0.200 | 33ms |
 | CSV parsing and file I/O | 1.000 | 0.339 | 0.100 | 0.200 | 8ms |
 | groupby aggregation and split-apply-combine | 0.000 | 0.000 | 0.000 | 0.000 | 10ms |
@@ -323,7 +323,7 @@ Retrieved (top 10):
 
 | Query | MRR | NDCG | P@10 | R@20 | Time |
 |-------|-----|------|------|------|------|
-| event-driven server architecture and command handling | 0.200 | 0.131 | 0.100 | 0.200 | 6042ms |
+| event-driven server architecture and command handling | 0.200 | 0.131 | 0.100 | 0.200 | 6712ms |
 | data structure implementation for sorted sets | 0.000 | 0.000 | 0.000 | 0.000 | 3ms |
 | persistence and RDB snapshot mechanism | 0.200 | 0.131 | 0.100 | 0.200 | 2ms |
 | cluster communication and node discovery | 0.333 | 0.464 | 0.300 | 0.750 | 3ms |
@@ -404,3 +404,15 @@ Retrieved (top 10):
 - 7. `src/cluster.c` **relevant**
 
 </details>
+
+
+## Baseline Comparison: Code-Intel vs Grep
+
+| Repo | CI MRR | Grep MRR | MRR Delta | CI NDCG | Grep NDCG | NDCG Delta |
+|------|--------|----------|-----------|---------|-----------|------------|
+| attocode | 0.550 | 0.000 | +0.550 | 0.304 | 0.000 | +0.304 |
+| fastapi | 0.400 | 0.000 | +0.400 | 0.213 | 0.000 | +0.213 |
+| gh-cli | 0.167 | 0.000 | +0.167 | 0.119 | 0.000 | +0.119 |
+| pandas | 0.292 | 0.000 | +0.292 | 0.123 | 0.000 | +0.123 |
+| redis | 0.247 | 0.029 | +0.218 | 0.214 | 0.023 | +0.192 |
+| **Overall** | 0.367 | 0.005 | +0.363 | 0.213 | 0.004 | +0.209 |

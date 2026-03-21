@@ -1,7 +1,7 @@
 # Attocode Code-Intel Evaluation Report
 
 **Generated**: 2026-03-21
-**Version**: 0.2.3 (feat/update-64)
+**Version**: 0.2.4 (feat/update-64)
 **Benchmark repos**: 12 configured, 5 evaluated
 **Languages covered**: Python, Go, C, C++, Kotlin, Swift, Elixir, Ruby, Zig, PHP
 
@@ -13,22 +13,25 @@
 |--------|-------|-------|
 | **Repos benchmarked** | 5 (of 12 configured) | attocode, gh-cli, redis, fastapi, spdlog |
 | **Tasks per repo** | 10 | 6 original + 4 new (dead_code, distill, graph_dsl, code_evolution) |
+| **Code-Intel avg quality** | 3.6/5 | Across 5 repos, 10 tasks each |
+| **Grep baseline avg quality** | 1.4/5 | Same repos/tasks, grep-only |
+| **Code-Intel delta** | **+2.2** | Code-intel leads on every repo |
 | **Search MRR@10** | 0.367 | Across 30 ground-truth queries on 5 repos |
-| **Search NDCG@10** | 0.213 | Room for improvement vs CodeSearchNet baseline (~0.40) |
-| **Needle-in-haystack** | 8/15 (53%) | Strong on tracing (3/3) and architecture (3/3) |
+| **Search NDCG@10** | 0.213 | vs grep MRR=0.006 (code-intel dominates ranked search) |
+| **Needle-in-haystack** | 11/15 (73%) | CI wins architecture, grep wins symbol resolution |
 | **Avg search latency** | P50=5ms, P95=16.8s | P95 dominated by cold-start bootstrap |
 
 ### Key Findings
 
-1. **Dependency tracing and architecture analysis are unmatched** — 100% pass rate on call chain tracing and architecture quiz tasks. No competitor offers these capabilities.
+1. **Code-intel beats grep on every repo** — Average quality 3.6/5 vs 1.4/5 (+2.2 delta). Largest gap on attocode (+2.6), smallest on gh-cli (+1.5).
 
-2. **Semantic search quality varies by repo** — MRR ranges from 0.167 (gh-cli/Go) to 0.550 (attocode/Python). Python repos significantly outperform others.
+2. **Architecture analysis is the strongest differentiator** — Code-intel scores 3/3 on architecture quiz (community detection, fan-in, critical files). Grep scores 1/3 (can list files but can't compute structural metrics).
 
-3. **Dead code detection blocked** — Pre-existing import error in `analysis_tools.explore_codebase` prevents dead_code from running.
+3. **Semantic search dominates grep for ranked retrieval** — Code-intel MRR=0.367 across 30 queries; grep MRR~0.006 (returns 100s-1000s of unranked files, relevant results buried).
 
-4. **New 0.2.3 tools work well** — distill (5.6K chars structured output), graph_dsl (13 matches), code_evolution (commit history) all functional.
+4. **Dead code detection now works** — Fixed `explore_codebase` import bug (was in wrong module). Needle tasks improved from 8/15 to 11/15.
 
-5. **Quality scores lowered by new tasks** — Average quality dropped from 4.8 to 3.9 on attocode because new tasks dilute the average (expected).
+5. **Grep wins on cross-file symbol resolution** — Grep's raw `rg` is better at finding all definition sites (1/3 vs 0/3) because code-intel's output format doesn't match ground-truth path expectations.
 
 ---
 
@@ -46,6 +49,19 @@
 - Python repos: 3.8-3.9 average (best)
 - C/C++ repos: 3.2-3.4 (good)
 - Go repos: 2.8 (weakest — symbol extraction yields fewer results)
+
+### Code-Intel vs Grep Comparison (Broad Run)
+
+| Repo | CI Quality | Grep Quality | Delta | Winner |
+|------|-----------|-------------|-------|--------|
+| attocode | 4.1/5 | 1.5/5 | **+2.6** | Code-Intel |
+| fastapi | 4.0/5 | 1.5/5 | **+2.5** | Code-Intel |
+| redis | 3.6/5 | 1.3/5 | **+2.3** | Code-Intel |
+| spdlog | 3.4/5 | 1.4/5 | **+2.0** | Code-Intel |
+| gh-cli | 3.0/5 | 1.5/5 | **+1.5** | Code-Intel |
+| **Average** | **3.6** | **1.4** | **+2.2** | **Code-Intel** |
+
+Code-intel wins on all 5 repos. The grep baseline scores consistently ~1.4/5 because it produces flat file lists without ranking, structural analysis, or transitive insights.
 
 ---
 
@@ -86,29 +102,42 @@
 
 **Analysis**: MRR (0.367) is competitive with CodeSearchNet (~0.35), meaning the first relevant result is typically in position 2-3. NDCG (0.213) lags behind (~0.40), indicating ranking quality needs improvement — relevant files exist in results but not at top positions. Embedding-based search would likely close this gap.
 
+### vs Grep Baseline (Search Quality)
+
+| Repo | CI MRR | Grep MRR | Delta | CI NDCG | Grep NDCG | Delta |
+|------|--------|----------|-------|---------|-----------|-------|
+| attocode | 0.550 | 0.000 | +0.550 | 0.304 | 0.000 | +0.304 |
+| fastapi | 0.400 | 0.000 | +0.400 | 0.213 | 0.000 | +0.213 |
+| pandas | 0.292 | 0.000 | +0.292 | 0.123 | 0.000 | +0.123 |
+| redis | 0.247 | 0.029 | +0.218 | 0.214 | 0.023 | +0.192 |
+| gh-cli | 0.167 | 0.000 | +0.167 | 0.119 | 0.000 | +0.119 |
+
+Grep returns hundreds of unranked file matches per query (OR keyword matching). Relevant files are buried beyond top-20 in 29/30 queries. Redis is the only repo where grep found 1 relevant file in top-20 (MRR=0.029).
+
 ---
 
 ## 4. Needle-in-the-Haystack Results
 
-| Task Type | Pass Rate | Analysis |
-|-----------|-----------|----------|
-| **trace_call_chain** | **3/3 (100%)** | Dependency tracing correctly identifies callers at all depths |
-| **architecture_quiz** | **3/3 (100%)** | Bootstrap, community detection, hotspots all accurate |
-| **impact_assessment** | **2/3 (67%)** | Good on high-fan-in files, missed one edge case |
-| **find_dead_code** | **0/3 (0%)** | Blocked by pre-existing `explore_codebase` import error |
-| **cross_file_symbol_resolution** | **0/3 (0%)** | Output path format doesn't match ground-truth format |
+| Task Type | Code-Intel | Grep | Winner |
+|-----------|-----------|------|--------|
+| **trace_call_chain** | **3/3** | 3/3 | Tie |
+| **architecture_quiz** | **3/3** | 1/3 | **Code-Intel** |
+| **find_dead_code** | **3/3** | 3/3 | Tie |
+| **impact_assessment** | 2/3 | **3/3** | Grep |
+| **cross_file_symbol_resolution** | 0/3 | **1/3** | Grep |
 
-**Total: 8/15 (53%)**
+**Code-Intel: 11/15 (73%) | Grep: 11/15 (73%) — but wins differ**
 
-### Strengths Validated
-- **Transitive dependency tracing** — correctly traces `check_token_budget` → `loop.py` → `agent-builder.py`
-- **Community detection** — detected 20 communities with Louvain, matching ground truth (±5 tolerance)
-- **Fan-in identification** — correctly identifies `messages.py` as highest fan-in file
-- **Impact blast radius** — correctly finds 20+ affected files for `Message` type changes
+### Where Code-Intel Wins
+- **Architecture analysis** (3/3 vs 1/3) — grep cannot compute fan-in, community detection, or modularity. Code-intel's Louvain algorithm and hotspot scoring are unique capabilities.
 
-### Gaps Identified
-- **Dead code tool** — needs `explore_codebase` import fix in `analysis_tools.py`
-- **Symbol resolution output format** — `search_symbols` returns symbols but file paths don't always match the full relative path in ground truth
+### Where They Tie
+- **Call chain tracing** (3/3 each) — both find direct callers, but code-intel provides transitive closure that grep misses on harder queries
+- **Dead code detection** (3/3 each) — both can count references; code-intel adds confidence scoring and entry-point heuristics
+
+### Where Grep Wins
+- **Impact assessment** (3/3 vs 2/3) — grep's `rg -l SYMBOL` finds all files containing the symbol; code-intel missed one edge case in path matching
+- **Symbol resolution** (1/3 vs 0/3) — grep's raw pattern matching produces file paths that match ground truth format; code-intel's output needs path normalization
 
 ---
 
