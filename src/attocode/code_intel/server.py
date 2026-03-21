@@ -498,10 +498,77 @@ def _stop_file_watcher() -> None:
 
 
 # ---------------------------------------------------------------------------
+# Tool instrumentation — wraps MCP tool functions with metrics recording
+# ---------------------------------------------------------------------------
+
+
+def _instrument_tool(tool_fn, tool_name: str):
+    """Wrap an MCP tool function to record call metrics.
+
+    Records duration and success/failure for each invocation via the
+    module-level ``metrics_collector`` singleton.
+
+    Args:
+        tool_fn: The original tool function (sync).
+        tool_name: Human-readable tool name for metric labels.
+
+    Returns:
+        Wrapped function that records metrics then delegates to *tool_fn*.
+    """
+    import functools
+    import time as _time
+
+    @functools.wraps(tool_fn)
+    def _wrapper(*args, **kwargs):
+        from attocode.code_intel.api.middleware import metrics_collector
+
+        start = _time.monotonic()
+        success = True
+        try:
+            result = tool_fn(*args, **kwargs)
+            return result
+        except Exception:
+            success = False
+            raise
+        finally:
+            duration_ms = (_time.monotonic() - start) * 1000
+            metrics_collector.record_tool_call(tool_name, duration_ms, success)
+
+    return _wrapper
+
+
+def _instrument_all_tools() -> None:
+    """Wrap all registered MCP tools with metrics instrumentation.
+
+    Must be called after all tool modules have been imported (so that
+    ``@mcp.tool()`` decorators have fired). Patches the internal tool
+    registry in-place.
+    """
+    try:
+        # FastMCP stores tools in mcp._tool_manager._tools (dict[str, Tool])
+        tool_manager = getattr(mcp, "_tool_manager", None)
+        if tool_manager is None:
+            return
+        tools_dict = getattr(tool_manager, "_tools", None)
+        if tools_dict is None:
+            return
+
+        for name, tool_obj in tools_dict.items():
+            original_fn = getattr(tool_obj, "fn", None)
+            if original_fn is None:
+                continue
+            tool_obj.fn = _instrument_tool(original_fn, name)
+        logger.info("Instrumented %d MCP tools with metrics recording", len(tools_dict))
+    except Exception:
+        logger.debug("Failed to instrument MCP tools", exc_info=True)
+
+
+# ---------------------------------------------------------------------------
 # Register all tool modules (decorators fire on import)
 # ---------------------------------------------------------------------------
 
 import attocode.code_intel.tools.analysis_tools as _analysis_tools  # noqa: E402, F401
+import attocode.code_intel.tools.distill_tools as _distill_tools  # noqa: E402, F401
 import attocode.code_intel.tools.learning_tools as _learning_tools  # noqa: E402, F401
 import attocode.code_intel.tools.lsp_tools as _lsp_tools  # noqa: E402, F401
 import attocode.code_intel.tools.navigation_tools as _navigation_tools  # noqa: E402, F401
@@ -524,6 +591,8 @@ record_learning = _learning_tools.record_learning  # noqa: E402
 learning_feedback = _learning_tools.learning_feedback  # noqa: E402
 list_learnings = _learning_tools.list_learnings  # noqa: E402
 
+distill = _distill_tools.distill  # noqa: E402
+
 bootstrap = _navigation_tools.bootstrap  # noqa: E402
 conventions = _navigation_tools.conventions  # noqa: E402
 project_summary = _navigation_tools.project_summary  # noqa: E402
@@ -532,13 +601,16 @@ repo_map = _navigation_tools.repo_map  # noqa: E402
 search_symbols = _navigation_tools.search_symbols  # noqa: E402
 symbols = _navigation_tools.symbols  # noqa: E402
 
+# Instrument all registered tools with metrics recording
+_instrument_all_tools()
+
 # ---------------------------------------------------------------------------
 # Entry point
 # ---------------------------------------------------------------------------
 
 # Subcommands that should be dispatched to the CLI handler instead of
 # starting the MCP server.
-_CLI_SUBCOMMANDS = {"install", "uninstall", "serve", "status", "notify", "connect", "test-connection", "watch", "help", "--help", "-h", "query", "symbols", "impact", "hotspots", "deps"}
+_CLI_SUBCOMMANDS = {"install", "uninstall", "serve", "status", "notify", "connect", "test-connection", "watch", "help", "--help", "-h", "query", "symbols", "impact", "hotspots", "deps", "gc", "verify", "reindex"}
 
 
 def main() -> None:

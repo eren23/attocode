@@ -38,6 +38,11 @@ class CodeIntelConfig:
     remote_token: str = ""  # JWT or API key for remote server
     remote_repo_id: str = ""  # UUID of the repo on the remote server
 
+    # GC settings
+    gc_merged_branch_retention_days: int = 7
+    gc_inactive_branch_retention_days: int = 30
+    gc_content_min_age_minutes: int = 60
+
     # Auth settings
     jwt_expiry_minutes: int = 60
     refresh_expiry_days: int = 30
@@ -78,6 +83,9 @@ class CodeIntelConfig:
             git_ssh_key_path=os.environ.get("GIT_SSH_KEY_PATH", ""),
             embedding_model=os.environ.get("ATTOCODE_EMBEDDING_MODEL", ""),
             embedding_dimension=int(os.environ.get("ATTOCODE_EMBEDDING_DIMENSION", "0")),
+            gc_merged_branch_retention_days=int(os.environ.get("GC_MERGED_BRANCH_RETENTION_DAYS", "7")),
+            gc_inactive_branch_retention_days=int(os.environ.get("GC_INACTIVE_BRANCH_RETENTION_DAYS", "30")),
+            gc_content_min_age_minutes=int(os.environ.get("GC_CONTENT_MIN_AGE_MINUTES", "60")),
             jwt_expiry_minutes=int(os.environ.get("JWT_EXPIRY_MINUTES", "60")),
             refresh_expiry_days=int(os.environ.get("REFRESH_EXPIRY_DAYS", "30")),
             github_client_id=os.environ.get("GITHUB_CLIENT_ID", ""),

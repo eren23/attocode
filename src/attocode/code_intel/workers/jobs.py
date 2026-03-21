@@ -455,8 +455,8 @@ async def cleanup_stale_branches(ctx: dict) -> dict:
                     if db_branch.is_default:
                         continue
 
-                    # Clean up merged branches older than 7 days
-                    if db_branch.merged_at and (now - db_branch.merged_at) > timedelta(days=7):
+                    # Clean up merged branches older than retention threshold
+                    if db_branch.merged_at and (now - db_branch.merged_at) > timedelta(days=config.gc_merged_branch_retention_days):
                         logger.info(
                             "Removing merged branch %s from repo %s (merged %s)",
                             db_branch.name, repo.id, db_branch.merged_at,
@@ -465,7 +465,7 @@ async def cleanup_stale_branches(ctx: dict) -> dict:
                         cleaned += 1
                         continue
 
-                    # Clean up inactive branches: no overlay changes AND no commits in 30 days
+                    # Clean up inactive branches: no overlay changes AND no commits in retention period
                     if not db_branch.merged_at:
                         overlay_count_result = await session.execute(
                             select(sa_func.count()).select_from(
@@ -477,7 +477,7 @@ async def cleanup_stale_branches(ctx: dict) -> dict:
                         overlay_count = overlay_count_result.scalar() or 0
 
                         if overlay_count == 0:
-                            cutoff = now - timedelta(days=30)
+                            cutoff = now - timedelta(days=config.gc_inactive_branch_retention_days)
                             recent_commit_result = await session.execute(
                                 select(sa_func.count()).select_from(
                                     select(Commit.id)
@@ -536,13 +536,36 @@ async def gc_unreferenced_content(ctx: dict) -> dict:
 
     Runs every 24 hours.
     """
+    from attocode.code_intel.api.deps import get_config
     from attocode.code_intel.db.engine import get_session
     from attocode.code_intel.storage.content_store import ContentStore
 
     logger.info("Running content GC")
+    config = get_config()
     async for session in get_session():
         store = ContentStore(session)
-        count = await store.gc_unreferenced(min_age_minutes=60)
+        count = await store.gc_unreferenced(min_age_minutes=config.gc_content_min_age_minutes)
         await session.commit()
+        return {"removed": count}
+    return {"removed": 0}
+
+
+async def gc_orphaned_embeddings(ctx: dict) -> dict:
+    """Cron job: garbage collect orphaned embeddings.
+
+    Deletes embeddings whose content_sha is not referenced by any branch manifest.
+    Runs daily at 3:30am.
+    """
+    from attocode.code_intel.api.deps import get_config
+    from attocode.code_intel.db.engine import get_session
+    from attocode.code_intel.storage.embedding_store import EmbeddingStore
+
+    logger.info("Running orphaned embeddings GC")
+    config = get_config()
+    async for session in get_session():
+        store = EmbeddingStore(session)
+        count = await store.gc_orphaned(min_age_minutes=config.gc_content_min_age_minutes)
+        await session.commit()
+        logger.info("Orphaned embeddings GC complete: removed %d embeddings", count)
         return {"removed": count}
     return {"removed": 0}

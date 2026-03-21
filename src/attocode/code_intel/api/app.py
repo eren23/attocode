@@ -74,7 +74,7 @@ def create_app(config: CodeIntelConfig | None = None) -> FastAPI:
     from fastapi.middleware.cors import CORSMiddleware
 
     from attocode.code_intel.api import deps
-    from attocode.code_intel.api.middleware import RequestLoggingMiddleware
+    from attocode.code_intel.api.middleware import MetricsMiddleware, RequestLoggingMiddleware
     from attocode.code_intel.api.routes import (
         analysis,
         files,
@@ -118,6 +118,7 @@ def create_app(config: CodeIntelConfig | None = None) -> FastAPI:
         allow_headers=["*"],
     )
     app.add_middleware(RequestLoggingMiddleware)
+    app.add_middleware(MetricsMiddleware)
 
     # Rate limiting (service mode only)
     if config.is_service_mode:
@@ -148,6 +149,7 @@ def create_app(config: CodeIntelConfig | None = None) -> FastAPI:
             api_keys,
             auth,
             branches,
+            cross_repo_search,
             embeddings,
             files_v2,
             git_v2,
@@ -175,6 +177,7 @@ def create_app(config: CodeIntelConfig | None = None) -> FastAPI:
         app.include_router(presence.router)
         app.include_router(activity.router)
         app.include_router(preferences.router)
+        app.include_router(cross_repo_search.router)
 
     # SPA fallback — serve frontend static files (registered LAST so it
     # doesn't shadow /api/*, /docs, /redoc, /openapi.json).

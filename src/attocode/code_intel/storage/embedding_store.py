@@ -330,3 +330,109 @@ class EmbeddingStore:
                 "score": float(row.score),
             })
         return results
+
+    async def multi_branch_similarity_search(
+        self,
+        session: AsyncSession,
+        branch_manifests: dict[str, dict[str, str]],
+        query_vector: list[float],
+        top_k: int = 20,
+        model: str = "",
+        file_filter: str = "",
+    ) -> list[dict]:
+        """Find most similar content across multiple repo branch manifests.
+
+        Args:
+            session: Async DB session (uses self._session if same, but kept
+                     for API symmetry with callers that pass it explicitly).
+            branch_manifests: Mapping of repo_id (str) → manifest (path → content_sha).
+            query_vector: Embedded query vector.
+            top_k: Number of results to return globally.
+            model: Embedding model name to filter by.
+            file_filter: Optional glob pattern to filter file paths.
+
+        Returns:
+            List of dicts with repo_id, file, content_sha, chunk_text,
+            chunk_type, model, score — sorted by score descending.
+        """
+        import fnmatch
+
+        from sqlalchemy import text
+
+        # 1. Union all content_shas across repos, building reverse lookup
+        all_content_shas: set[str] = set()
+        # sha → (repo_id, path) for mapping results back
+        sha_to_context: dict[str, tuple[str, str]] = {}
+
+        for repo_id, manifest in branch_manifests.items():
+            for path, sha in manifest.items():
+                if file_filter and not fnmatch.fnmatch(path, file_filter):
+                    continue
+                all_content_shas.add(sha)
+                # First repo wins for a given sha (content-addressed dedup)
+                if sha not in sha_to_context:
+                    sha_to_context[sha] = (repo_id, path)
+
+        if not all_content_shas:
+            return []
+
+        # 2. Single pgvector query across all repos
+        result = await self._session.execute(
+            text("""
+                SELECT content_sha, chunk_text, chunk_type, embedding_model,
+                       1 - (vector <=> CAST(:qv AS vector)) AS score
+                FROM embeddings
+                WHERE content_sha = ANY(:shas)
+                  AND embedding_model = :model
+                  AND vector IS NOT NULL
+                ORDER BY vector <=> CAST(:qv AS vector)
+                LIMIT :top_k
+            """),
+            {
+                "qv": "[" + ",".join(str(v) for v in query_vector) + "]",
+                "shas": list(all_content_shas),
+                "model": model,
+                "top_k": top_k,
+            },
+        )
+
+        # 3. Map results back to repo context
+        results = []
+        for row in result:
+            ctx = sha_to_context.get(row.content_sha)
+            repo_id = ctx[0] if ctx else "unknown"
+            file_path = ctx[1] if ctx else "unknown"
+            results.append({
+                "repo_id": repo_id,
+                "file": file_path,
+                "content_sha": row.content_sha,
+                "chunk_text": row.chunk_text,
+                "chunk_type": row.chunk_type,
+                "model": row.embedding_model,
+                "score": float(row.score),
+            })
+        return results
+
+    async def gc_orphaned(self, min_age_minutes: int = 60) -> int:
+        """Delete embeddings whose content_sha is not in any branch manifest.
+
+        Only deletes embeddings older than *min_age_minutes* to avoid racing
+        with concurrent indexers that are still writing references.
+
+        Returns count of deleted rows.
+        """
+        from sqlalchemy import text
+
+        result = await self._session.execute(
+            text("""
+            DELETE FROM embeddings
+            WHERE created_at < NOW() - make_interval(mins => :age)
+              AND content_sha NOT IN (
+                SELECT DISTINCT content_sha FROM branch_files WHERE content_sha IS NOT NULL
+            )
+            """).bindparams(age=min_age_minutes)
+        )
+        count = result.rowcount
+        if count:
+            logger.info("GC: removed %d orphaned embeddings (older than %dm)", count, min_age_minutes)
+        return count

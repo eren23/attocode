@@ -63,6 +63,12 @@ def dispatch_code_intel(parts: tuple[str, ...] | list[str], *, debug: bool = Fal
         _cmd_hotspots(args[1:])
     elif cmd == "deps":
         _cmd_deps(args[1:])
+    elif cmd == "gc":
+        _cmd_gc(args[1:])
+    elif cmd == "verify":
+        _cmd_verify(args[1:])
+    elif cmd == "reindex":
+        _cmd_reindex(args[1:])
     else:
         print(f"Unknown code-intel command: {cmd}", file=sys.stderr)
         _print_help()
@@ -91,6 +97,11 @@ def _print_help() -> None:
         "  impact <file> ...   Show blast radius of file changes\n"
         "  hotspots            Show risk/complexity hotspots\n"
         "  deps <file>         Show file dependencies and dependents\n"
+        "\n"
+        "Maintenance commands:\n"
+        "  gc                  Run garbage collection (orphaned embeddings + content)\n"
+        "  verify              Run integrity checks on the index\n"
+        "  reindex             Force a full reindex of the project\n"
         "\n"
         "Targets (auto-install):\n"
         "  claude              Claude Code (via `claude mcp add` CLI)\n"
@@ -2335,6 +2346,325 @@ def _cmd_deps(args: list[str]) -> None:
     svc = CodeIntelService(project_dir)
     data = svc.dependencies_data(target_file)
     _print_dependencies(data)
+
+
+def _cmd_gc(args: list[str]) -> None:
+    """Run garbage collection on orphaned embeddings and unreferenced content."""
+    import asyncio
+
+    _, project_dir, _, _ = _parse_opts(args)
+    project_dir = os.path.abspath(project_dir)
+
+    from attocode.code_intel.config import CodeIntelConfig, load_remote_config
+
+    remote_cfg = load_remote_config(project_dir)
+
+    if remote_cfg.is_configured:
+        # Remote mode: trigger GC jobs via API
+        try:
+            import httpx
+        except ImportError:
+            print("Error: httpx not installed. Install with: pip install httpx", file=sys.stderr)
+            sys.exit(1)
+
+        base_url = remote_cfg.server.rstrip("/")
+        headers = {"Authorization": f"Bearer {remote_cfg.token}"}
+        print(f"Triggering GC on remote server {base_url}...", file=sys.stderr)
+
+        try:
+            with httpx.Client(timeout=60) as client:
+                # Trigger gc_orphaned_embeddings job
+                resp = client.post(
+                    f"{base_url}/api/v1/jobs/enqueue",
+                    json={"function": "gc_orphaned_embeddings"},
+                    headers=headers,
+                )
+                if resp.status_code == 200:
+                    print("  Enqueued gc_orphaned_embeddings job")
+                else:
+                    print(f"  Warning: could not enqueue gc_orphaned_embeddings: {resp.status_code}", file=sys.stderr)
+
+                # Trigger gc_unreferenced_content job
+                resp = client.post(
+                    f"{base_url}/api/v1/jobs/enqueue",
+                    json={"function": "gc_unreferenced_content"},
+                    headers=headers,
+                )
+                if resp.status_code == 200:
+                    print("  Enqueued gc_unreferenced_content job")
+                else:
+                    print(f"  Warning: could not enqueue gc_unreferenced_content: {resp.status_code}", file=sys.stderr)
+        except httpx.HTTPError as exc:
+            print(f"Error contacting remote server: {exc}", file=sys.stderr)
+            sys.exit(1)
+
+        print("GC jobs enqueued on remote server.")
+        return
+
+    # Local mode: run GC directly against the database
+    config = CodeIntelConfig.from_env()
+    if not config.database_url:
+        # Pure local mode (SQLite / no DB) — clear AST cache
+        print("Local mode: clearing AST cache...", file=sys.stderr)
+        from pathlib import Path
+
+        cache_dir = Path(project_dir) / ".attocode" / "cache"
+        if cache_dir.exists():
+            removed = 0
+            for f in cache_dir.iterdir():
+                if f.is_file():
+                    f.unlink()
+                    removed += 1
+            print(f"  Removed {removed} cached file(s).")
+        else:
+            print("  No cache directory found.")
+        print("GC complete.")
+        return
+
+    # Service mode with database: run GC operations
+    async def _run_gc() -> None:
+        from attocode.code_intel.db.engine import get_session
+        from attocode.code_intel.storage.content_store import ContentStore
+        from attocode.code_intel.storage.embedding_store import EmbeddingStore
+
+        print("Running garbage collection...", file=sys.stderr)
+
+        async for session in get_session():
+            # 1. GC orphaned embeddings
+            emb_store = EmbeddingStore(session)
+            emb_count = await emb_store.gc_orphaned(
+                min_age_minutes=config.gc_content_min_age_minutes,
+            )
+            print(f"  Orphaned embeddings removed: {emb_count}")
+
+            # 2. GC unreferenced content
+            content_store = ContentStore(session)
+            content_count = await content_store.gc_unreferenced(
+                min_age_minutes=config.gc_content_min_age_minutes,
+            )
+            print(f"  Unreferenced content removed: {content_count}")
+
+            await session.commit()
+            print("GC complete.")
+            return
+
+    asyncio.run(_run_gc())
+
+
+def _cmd_verify(args: list[str]) -> None:
+    """Run integrity checks on the code-intel index."""
+    import asyncio
+
+    _, project_dir, _, _ = _parse_opts(args)
+    project_dir = os.path.abspath(project_dir)
+
+    from attocode.code_intel.config import CodeIntelConfig
+
+    config = CodeIntelConfig.from_env()
+
+    if not config.database_url:
+        # Pure local mode — verify local index files exist
+        from pathlib import Path
+
+        print("Running local integrity checks...", file=sys.stderr)
+
+        cache_dir = Path(project_dir) / ".attocode" / "cache"
+        index_file = Path(project_dir) / ".attocode" / "index.json"
+
+        issues: list[str] = []
+        if not cache_dir.exists():
+            issues.append("Cache directory missing (.attocode/cache)")
+        if not index_file.exists():
+            issues.append("Index file missing (.attocode/index.json)")
+
+        if issues:
+            print(f"\nFound {len(issues)} issue(s):")
+            for issue in issues:
+                print(f"  [!] {issue}")
+            print("\nRun 'attocode code-intel reindex' to rebuild the index.")
+        else:
+            cache_files = list(cache_dir.iterdir()) if cache_dir.exists() else []
+            print(f"\nLocal index OK:")
+            print(f"  Cache files: {len(cache_files)}")
+            print(f"  Index file:  {index_file}")
+        return
+
+    # Service mode: run integrity checks against the database
+    async def _run_verify() -> None:
+        from sqlalchemy import func as sa_func
+        from sqlalchemy import select, text
+
+        from attocode.code_intel.db.engine import get_session
+        from attocode.code_intel.db.models import Branch, BranchFile, Embedding, FileContent, Symbol
+
+        print("Running integrity checks...\n", file=sys.stderr)
+        issues: list[str] = []
+        stats: dict[str, int] = {}
+
+        async for session in get_session():
+            # 1. Orphaned BranchFile entries (content_sha not in file_contents)
+            result = await session.execute(text("""
+                SELECT COUNT(*) FROM branch_files
+                WHERE content_sha IS NOT NULL
+                  AND content_sha NOT IN (SELECT sha256 FROM file_contents)
+            """))
+            orphaned_bf = result.scalar() or 0
+            stats["orphaned_branch_files"] = orphaned_bf
+            if orphaned_bf > 0:
+                issues.append(f"{orphaned_bf} branch_files reference missing file_contents")
+
+            # 2. Orphaned embeddings (content_sha not in any branch manifest)
+            result = await session.execute(text("""
+                SELECT COUNT(*) FROM embeddings
+                WHERE content_sha NOT IN (
+                    SELECT DISTINCT content_sha FROM branch_files WHERE content_sha IS NOT NULL
+                )
+            """))
+            orphaned_emb = result.scalar() or 0
+            stats["orphaned_embeddings"] = orphaned_emb
+            if orphaned_emb > 0:
+                issues.append(f"{orphaned_emb} embeddings reference content not in any branch manifest")
+
+            # 3. Missing embeddings (content_sha in branch manifest but no embedding)
+            result = await session.execute(text("""
+                SELECT COUNT(DISTINCT bf.content_sha) FROM branch_files bf
+                WHERE bf.content_sha IS NOT NULL
+                  AND bf.content_sha NOT IN (SELECT DISTINCT content_sha FROM embeddings)
+            """))
+            missing_emb = result.scalar() or 0
+            stats["missing_embeddings"] = missing_emb
+            if missing_emb > 0:
+                issues.append(f"{missing_emb} content SHAs in branch manifests have no embeddings")
+
+            # 4. Broken parent_branch_id references
+            result = await session.execute(text("""
+                SELECT COUNT(*) FROM branches
+                WHERE parent_branch_id IS NOT NULL
+                  AND parent_branch_id NOT IN (SELECT id FROM branches)
+            """))
+            broken_parents = result.scalar() or 0
+            stats["broken_parent_branch_refs"] = broken_parents
+            if broken_parents > 0:
+                issues.append(f"{broken_parents} branches reference non-existent parent branches")
+
+            # 5. Orphaned symbols (content_sha not in file_contents)
+            result = await session.execute(text("""
+                SELECT COUNT(*) FROM symbols
+                WHERE content_sha NOT IN (SELECT sha256 FROM file_contents)
+            """))
+            orphaned_sym = result.scalar() or 0
+            stats["orphaned_symbols"] = orphaned_sym
+            if orphaned_sym > 0:
+                issues.append(f"{orphaned_sym} symbols reference missing file_contents")
+
+            # Print results
+            print("Integrity check results:")
+            print(f"  Orphaned branch_files:      {stats['orphaned_branch_files']}")
+            print(f"  Orphaned embeddings:        {stats['orphaned_embeddings']}")
+            print(f"  Missing embeddings:         {stats['missing_embeddings']}")
+            print(f"  Broken parent_branch refs:  {stats['broken_parent_branch_refs']}")
+            print(f"  Orphaned symbols:           {stats['orphaned_symbols']}")
+
+            if issues:
+                print(f"\nFound {len(issues)} issue(s):")
+                for issue in issues:
+                    print(f"  [!] {issue}")
+                print("\nRun 'attocode code-intel gc' to clean up orphaned data.")
+                print("Run 'attocode code-intel reindex' to rebuild missing embeddings.")
+            else:
+                print("\nAll checks passed.")
+
+            return
+
+    asyncio.run(_run_verify())
+
+
+def _cmd_reindex(args: list[str]) -> None:
+    """Force a full reindex of the project."""
+    _, project_dir, _, _ = _parse_opts(args)
+    project_dir = os.path.abspath(project_dir)
+
+    from attocode.code_intel.config import load_remote_config
+
+    remote_cfg = load_remote_config(project_dir)
+
+    if remote_cfg.is_configured:
+        # Remote mode: trigger index_repository job via API
+        try:
+            import httpx
+        except ImportError:
+            print("Error: httpx not installed. Install with: pip install httpx", file=sys.stderr)
+            sys.exit(1)
+
+        base_url = remote_cfg.server.rstrip("/")
+        headers = {"Authorization": f"Bearer {remote_cfg.token}"}
+        repo_id = remote_cfg.repo_id
+        if not repo_id:
+            print("Error: no repo_id configured. Run 'attocode code-intel connect' first.", file=sys.stderr)
+            sys.exit(1)
+
+        print(f"Triggering full reindex on remote server {base_url}...", file=sys.stderr)
+
+        try:
+            with httpx.Client(timeout=60) as client:
+                resp = client.post(
+                    f"{base_url}/api/v1/repos/{repo_id}/index",
+                    headers=headers,
+                )
+                if resp.status_code in (200, 201, 202):
+                    data = resp.json()
+                    print(f"  Reindex job enqueued: {data}")
+                else:
+                    print(f"  Error: server returned {resp.status_code}: {resp.text}", file=sys.stderr)
+                    sys.exit(1)
+        except httpx.HTTPError as exc:
+            print(f"Error contacting remote server: {exc}", file=sys.stderr)
+            sys.exit(1)
+
+        print("Reindex triggered on remote server.")
+        return
+
+    # Local mode: clear cache and reinitialize
+    from pathlib import Path
+
+    print(f"Reindexing {project_dir}...", file=sys.stderr)
+
+    # 1. Clear AST cache
+    cache_dir = Path(project_dir) / ".attocode" / "cache"
+    if cache_dir.exists():
+        removed = 0
+        for f in cache_dir.iterdir():
+            if f.is_file():
+                f.unlink()
+                removed += 1
+        print(f"  Cleared {removed} cached file(s).")
+
+    # 2. Remove stale index file to force full rebuild
+    index_file = Path(project_dir) / ".attocode" / "index.json"
+    if index_file.exists():
+        index_file.unlink()
+        print("  Removed stale index file.")
+
+    # 3. Run full index
+    os.environ.setdefault("ATTOCODE_PROJECT_DIR", project_dir)
+
+    from attocode.integrations.context.semantic_search import SemanticSearchManager
+
+    mgr = SemanticSearchManager(root_dir=project_dir)
+
+    if not mgr.is_available:
+        print(
+            "No embedding provider available. Install sentence-transformers:\n"
+            "  pip install 'attocode[semantic]'",
+            file=sys.stderr,
+        )
+        mgr.close()
+        sys.exit(1)
+
+    count = mgr.index()
+    print(f"  Indexed {count} chunks.")
+    mgr.close()
+    print("Reindex complete.")
 
 
 # ---------------------------------------------------------------------------

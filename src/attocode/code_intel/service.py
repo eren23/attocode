@@ -573,6 +573,104 @@ class CodeIntelService:
             "communities": result_communities,
         }
 
+    def distill_data(
+        self,
+        files: list[str] | None = None,
+        depth: int = 1,
+        level: str = "signatures",
+        max_tokens: int = 4000,
+    ) -> dict:
+        """Return structured distillation result.
+
+        Args:
+            files: Specific file paths to distill. None = auto-select by importance.
+            depth: Dependency graph expansion hops (default 1, max 3).
+            level: Distillation level — "full", "signatures", or "structure".
+            max_tokens: Token budget (default 4000).
+        """
+        import os
+        from collections import deque
+
+        # Level: full — delegate to repo_map
+        if level == "full":
+            ctx = self._get_context_mgr()
+            repo = ctx.get_repo_map(include_symbols=True, max_tokens=max_tokens)
+            return {
+                "level": level,
+                "text": repo.tree,
+                "total_files": repo.total_files,
+                "total_lines": repo.total_lines,
+                "languages": repo.languages,
+            }
+
+        ctx = self._get_context_mgr()
+        all_files = ctx._files
+        if not all_files:
+            return {"level": level, "text": "", "files_included": 0}
+
+        svc = self._get_ast_service()
+        ast_cache = svc._ast_cache
+        dep_graph = ctx.dependency_graph
+        depth = min(depth, 3)
+
+        # File selection
+        if files is not None:
+            project_dir = ctx.root_dir
+            center_rels: list[str] = []
+            for f in files:
+                if os.path.isabs(f):
+                    try:
+                        rel = os.path.relpath(f, project_dir)
+                    except ValueError:
+                        rel = f
+                else:
+                    rel = f
+                center_rels.append(rel)
+
+            if depth > 0 and dep_graph is not None:
+                visited: set[str] = set(center_rels)
+                queue: deque[tuple[str, int]] = deque()
+                for f in center_rels:
+                    queue.append((f, 0))
+                while queue:
+                    current, d = queue.popleft()
+                    if d >= depth:
+                        continue
+                    for dep in dep_graph.get_imports(current):
+                        if dep not in visited:
+                            visited.add(dep)
+                            queue.append((dep, d + 1))
+                    for dep in dep_graph.get_importers(current):
+                        if dep not in visited:
+                            visited.add(dep)
+                            queue.append((dep, d + 1))
+                selected = sorted(visited)
+            else:
+                selected = sorted(set(center_rels))
+        else:
+            sorted_files = sorted(all_files, key=lambda fi: fi.importance, reverse=True)
+            avg_chars = 80 if level == "signatures" else 40
+            max_files_estimate = int(max_tokens * 3.5 / avg_chars)
+            selected = [fi.relative_path for fi in sorted_files[:max_files_estimate]]
+
+        if level == "signatures":
+            from attocode.code_intel.tools.distill_tools import _extract_signatures
+
+            text = _extract_signatures(ast_cache, selected, max_tokens)
+        elif level == "structure":
+            from attocode.code_intel.tools.distill_tools import _build_structure
+
+            text = _build_structure(all_files, dep_graph, selected, max_tokens)
+        else:
+            return {"level": level, "error": f"Unknown level: '{level}'", "files_included": 0}
+
+        return {
+            "level": level,
+            "text": text,
+            "files_included": len(selected),
+            "estimated_tokens": int(len(text) / 3.5) if text else 0,
+        }
+
     def semantic_search_data(self, query: str, top_k: int = 10, file_filter: str = "", branch: str = "") -> dict:
         """Return structured semantic search results.
 
