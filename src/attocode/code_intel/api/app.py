@@ -79,6 +79,7 @@ def create_app(config: CodeIntelConfig | None = None) -> FastAPI:
         analysis,
         files,
         graph,
+        graph_viz,
         health,
         history,
         learning,
@@ -143,6 +144,7 @@ def create_app(config: CodeIntelConfig | None = None) -> FastAPI:
     app.include_router(notify.router)
     app.include_router(files.router)
     app.include_router(history.router)
+    app.include_router(graph_viz.router)
 
     # Service mode routes
     if config.is_service_mode:
@@ -181,9 +183,21 @@ def create_app(config: CodeIntelConfig | None = None) -> FastAPI:
         app.include_router(preferences.router)
         app.include_router(cross_repo_search.router)
 
+    # Graph visualization — serve the bundled HTML page at /graph
+    import os
+    from pathlib import Path
+
+    from starlette.responses import FileResponse as _FileResponse
+
+    _graph_html = Path(__file__).resolve().parent / "static" / "graph.html"
+
+    @app.get("/graph", include_in_schema=False)
+    async def graph_visualization_page() -> _FileResponse:
+        """Serve the D3 dependency-graph visualization."""
+        return _FileResponse(str(_graph_html), media_type="text/html")
+
     # SPA fallback — serve frontend static files (registered LAST so it
     # doesn't shadow /api/*, /docs, /redoc, /openapi.json).
-    import os
 
     static_dir = os.environ.get("ATTOCODE_STATIC_DIR", "/app/static")
     if os.path.isdir(static_dir):

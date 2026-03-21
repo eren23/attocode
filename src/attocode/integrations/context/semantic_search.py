@@ -99,6 +99,7 @@ class SemanticSearchManager:
     """
 
     root_dir: str
+    nl_mode: str = ""  # "none" or "heuristic"; "" = read ATTOCODE_NL_EMBEDDING_MODE env var
     _provider: Any = field(default=None, repr=False)
     _store: Any = field(default=None, repr=False)
     _indexed: bool = field(default=False, repr=False)
@@ -114,6 +115,7 @@ class SemanticSearchManager:
     _bg_indexer: Any = field(default=None, repr=False)
     _bg_thread: Any = field(default=None, repr=False)
     _index_progress: IndexProgress = field(default_factory=IndexProgress, repr=False)
+    _summarizer: Any = field(default=None, repr=False)
 
     def __post_init__(self) -> None:
         from attocode.integrations.context.embeddings import (
@@ -131,6 +133,13 @@ class SemanticSearchManager:
                 db_path=os.path.join(db_dir, "embeddings.db"),
                 dimension=self._provider.dimension(),
             )
+
+        # Resolve NL embedding mode
+        if not self.nl_mode:
+            self.nl_mode = os.environ.get("ATTOCODE_NL_EMBEDDING_MODE", "none")
+        if self.nl_mode == "heuristic":
+            from attocode.code_intel.indexing.summarizer import get_summarizer
+            self._summarizer = get_summarizer()
 
     def _start_reindex_worker(self) -> None:
         """Start the background reindex worker once."""
@@ -227,8 +236,8 @@ class SemanticSearchManager:
         if not chunks:
             return 0
 
-        # Batch embed
-        texts = [c[3] for c in chunks]
+        # Batch embed (use NL summaries when heuristic mode is enabled)
+        texts = self._get_embedding_texts(chunks)
         batch_size = 64
         all_vectors: list[list[float]] = []
 
@@ -241,7 +250,7 @@ class SemanticSearchManager:
                 logger.warning("Embedding batch failed at offset %d", i, exc_info=True)
                 all_vectors.extend([[] for _ in batch])
 
-        # Store
+        # Store (original chunk text is preserved for display, not the NL summary)
         entries = []
         for (cid, fpath, ctype, text), vec in zip(chunks, all_vectors, strict=False):
             if not vec:
@@ -841,6 +850,36 @@ class SemanticSearchManager:
 
         return chunks
 
+    def _get_embedding_texts(
+        self, chunks: list[tuple[str, str, str, str]], language: str = "python",
+    ) -> list[str]:
+        """Return texts to feed to the embedding model.
+
+        When ``nl_mode`` is ``"heuristic"``, each chunk's text is transformed
+        into a natural language summary via :class:`CodeSummarizer` before
+        embedding.  The original chunk text (index 3) is still stored in
+        ``VectorEntry.text`` for display.
+
+        Args:
+            chunks: List of ``(id, file_path, chunk_type, text)`` tuples as
+                returned by :meth:`_chunk_single_file`.
+            language: Programming language hint for the summarizer.
+
+        Returns:
+            A list of strings, one per chunk, suitable for embedding.
+        """
+        if self._summarizer is None:
+            # No NL mode — embed the raw chunk text directly
+            return [c[3] for c in chunks]
+
+        result: list[str] = []
+        for cid, _fpath, ctype, text in chunks:
+            # Derive the symbol name from the chunk ID
+            name = cid.split(":")[-1] if ":" in cid else _fpath
+            summary = self._summarizer.summarize(text, ctype, name, language)
+            result.append(summary)
+        return result
+
     def reindex_file(self, file_path: str) -> int:
         """Re-index a single file: delete old vectors and re-embed.
 
@@ -877,7 +916,7 @@ class SemanticSearchManager:
 
         # Embed FIRST (before deleting old vectors) — if embed fails,
         # we keep existing vectors rather than losing them
-        texts = [c[3] for c in chunks]
+        texts = self._get_embedding_texts(chunks)
         try:
             vectors = self._provider.embed(texts)
         except Exception:
@@ -1130,7 +1169,7 @@ class SemanticSearchManager:
                         self._index_progress.failed_files += 1
                         continue
 
-                    texts = [c[3] for c in chunks]
+                    texts = self._get_embedding_texts(chunks)
                     vectors = self._provider.embed(texts)
                     entries = []
                     for (cid, fpath, ctype, text), vec in zip(chunks, vectors, strict=False):

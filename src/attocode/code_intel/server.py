@@ -1,6 +1,6 @@
 """MCP server exposing Attocode's code intelligence capabilities.
 
-Provides 28 tools for deep codebase understanding:
+Provides 32 tools for deep codebase understanding:
 - bootstrap: All-in-one orientation (summary + map + conventions + search)
 - relevant_context: Subgraph capsule for file(s) with neighbors and symbols
 - repo_map: Token-budgeted file tree with symbols
@@ -26,6 +26,10 @@ Provides 28 tools for deep codebase understanding:
 - record_learning: Record patterns/conventions/gotchas
 - learning_feedback: Mark learnings as helpful/unhelpful
 - list_learnings: Browse stored learnings
+- record_adr: Record an architecture decision
+- list_adrs: Browse architecture decision records
+- get_adr: Get full details of an ADR
+- update_adr_status: Update ADR lifecycle status
 
 Usage::
 
@@ -568,6 +572,7 @@ def _instrument_all_tools() -> None:
 # Register all tool modules (decorators fire on import)
 # ---------------------------------------------------------------------------
 
+import attocode.code_intel.tools.adr_tools as _adr_tools  # noqa: E402, F401
 import attocode.code_intel.tools.analysis_tools as _analysis_tools  # noqa: E402, F401
 import attocode.code_intel.tools.dead_code_tools as _dead_code_tools  # noqa: E402, F401
 import attocode.code_intel.tools.distill_tools as _distill_tools  # noqa: E402, F401
@@ -593,6 +598,11 @@ recall = _learning_tools.recall  # noqa: E402
 record_learning = _learning_tools.record_learning  # noqa: E402
 learning_feedback = _learning_tools.learning_feedback  # noqa: E402
 list_learnings = _learning_tools.list_learnings  # noqa: E402
+
+record_adr = _adr_tools.record_adr  # noqa: E402
+list_adrs = _adr_tools.list_adrs  # noqa: E402
+get_adr = _adr_tools.get_adr  # noqa: E402
+update_adr_status = _adr_tools.update_adr_status  # noqa: E402
 
 dead_code = _dead_code_tools.dead_code  # noqa: E402
 distill = _distill_tools.distill  # noqa: E402

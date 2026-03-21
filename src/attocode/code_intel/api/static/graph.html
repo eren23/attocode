@@ -1,0 +1,239 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Code Intelligence — Dependency Graph</title>
+<script src="https://d3js.org/d3.v7.min.js"></script>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:system-ui,-apple-system,sans-serif;background:#0d1117;color:#c9d1d9;overflow:hidden}
+#controls{position:fixed;top:12px;left:12px;z-index:10;display:flex;gap:8px;align-items:center;
+  background:#161b22;border:1px solid #30363d;border-radius:8px;padding:8px 12px;font-size:13px}
+#controls label{color:#8b949e}
+#controls input[type=range]{width:80px}
+#controls input[type=text]{background:#0d1117;border:1px solid #30363d;color:#c9d1d9;
+  border-radius:4px;padding:2px 8px;width:160px;font-size:13px}
+#controls button{background:#238636;color:#fff;border:none;border-radius:4px;padding:4px 10px;
+  cursor:pointer;font-size:12px}
+#controls button:hover{background:#2ea043}
+#controls button.secondary{background:#30363d}
+#controls button.secondary:hover{background:#484f58}
+#info{position:fixed;bottom:12px;left:12px;z-index:10;background:#161b22;border:1px solid #30363d;
+  border-radius:8px;padding:8px 12px;font-size:12px;color:#8b949e;max-width:300px}
+#tooltip{position:fixed;pointer-events:none;z-index:20;background:#1c2128;border:1px solid #30363d;
+  border-radius:6px;padding:8px 12px;font-size:12px;display:none;color:#c9d1d9;
+  box-shadow:0 4px 12px rgba(0,0,0,.4)}
+#tooltip .tt-path{font-weight:bold;margin-bottom:4px}
+#tooltip .tt-line{color:#8b949e}
+svg{display:block;width:100vw;height:100vh}
+.link{stroke-opacity:.4}
+.link:hover{stroke-opacity:.8}
+.node-circle{stroke-width:1.5;cursor:pointer}
+.node-label{font-size:10px;fill:#8b949e;pointer-events:none;text-anchor:middle}
+</style>
+</head>
+<body>
+<div id="controls">
+  <label>Depth</label>
+  <input type="range" id="depthSlider" min="1" max="6" value="3">
+  <span id="depthVal">3</span>
+  <label>Max</label>
+  <input type="range" id="maxSlider" min="20" max="300" value="100" step="10">
+  <span id="maxVal">100</span>
+  <input type="text" id="searchBox" placeholder="Search files...">
+  <button id="goBtn">Reload</button>
+  <button id="resetBtn" class="secondary">Reset</button>
+</div>
+<div id="info">Loading graph data...</div>
+<div id="tooltip">
+  <div class="tt-path"></div>
+  <div class="tt-line tt-lang"></div>
+  <div class="tt-line tt-lines"></div>
+  <div class="tt-line tt-imp"></div>
+  <div class="tt-line tt-comm"></div>
+</div>
+<svg></svg>
+
+<script>
+const LANG_COLORS = {
+  python:'#3572A5',typescript:'#3178c6',javascript:'#f1e05a',go:'#00ADD8',
+  rust:'#dea584',java:'#b07219',c:'#555555',cpp:'#f34b7d',ruby:'#701516',
+  swift:'#F05138',kotlin:'#A97BFF',html:'#e34c26',css:'#563d7c',
+  shell:'#89e051',yaml:'#cb171e',json:'#292929',markdown:'#083fa1',
+};
+const COMMUNITY_COLORS = d3.schemeTableau10;
+
+let projectId = 'default';
+let currentRoot = '';
+let simulation, svg, g, linkG, nodeG, labelG;
+let width = window.innerWidth, height = window.innerHeight;
+
+function init() {
+  svg = d3.select('svg').attr('width', width).attr('height', height);
+
+  svg.append('defs').append('marker')
+    .attr('id','arrow').attr('viewBox','0 -4 8 8').attr('refX',18)
+    .attr('markerWidth',6).attr('markerHeight',6).attr('orient','auto')
+    .append('path').attr('d','M0,-4L8,0L0,4').attr('fill','#484f58');
+
+  g = svg.append('g');
+  linkG = g.append('g').attr('class','links');
+  nodeG = g.append('g').attr('class','nodes');
+  labelG = g.append('g').attr('class','labels');
+
+  const zoom = d3.zoom().scaleExtent([0.1, 8])
+    .on('zoom', e => g.attr('transform', e.transform));
+  svg.call(zoom);
+
+  const depthSlider = document.getElementById('depthSlider');
+  const maxSlider = document.getElementById('maxSlider');
+  const depthVal = document.getElementById('depthVal');
+  const maxVal = document.getElementById('maxVal');
+  depthSlider.oninput = () => { depthVal.textContent = depthSlider.value; };
+  maxSlider.oninput = () => { maxVal.textContent = maxSlider.value; };
+  document.getElementById('goBtn').onclick = () => fetchAndRender();
+  document.getElementById('resetBtn').onclick = () => {
+    currentRoot = '';
+    document.getElementById('searchBox').value = '';
+    fetchAndRender();
+  };
+  document.getElementById('searchBox').addEventListener('keydown', e => {
+    if (e.key === 'Enter') fetchAndRender();
+  });
+
+  fetchAndRender();
+}
+
+async function fetchAndRender() {
+  const depth = document.getElementById('depthSlider').value;
+  const maxNodes = document.getElementById('maxSlider').value;
+  const search = document.getElementById('searchBox').value.trim();
+
+  let root = currentRoot;
+  if (search) root = search;
+
+  const params = new URLSearchParams({ depth, max_nodes: maxNodes });
+  if (root) params.set('root', root);
+
+  const info = document.getElementById('info');
+  info.textContent = 'Loading...';
+
+  try {
+    const resp = await fetch('/api/v2/projects/' + encodeURIComponent(projectId) + '/graph-viz?' + params);
+    if (!resp.ok) throw new Error('HTTP ' + resp.status);
+    const data = await resp.json();
+    info.textContent = data.nodes.length + ' nodes, ' + data.links.length + ' edges' +
+      (data.communities.length ? ', ' + data.communities.length + ' communities' : '');
+    render(data);
+  } catch (err) {
+    info.textContent = 'Error: ' + err.message;
+  }
+}
+
+function render(data) {
+  const { nodes, links, communities } = data;
+  if (!nodes.length) return;
+
+  const commIds = [...new Set(nodes.map(n => n.group))].filter(g => g >= 0).sort();
+  const commColor = id => id < 0 ? '#484f58' : COMMUNITY_COLORS[commIds.indexOf(id) % COMMUNITY_COLORS.length];
+
+  const maxImp = d3.max(nodes, d => d.importance) || 1;
+  const r = d => 4 + 12 * (d.importance / maxImp);
+
+  const color = d => {
+    if (d.language && LANG_COLORS[d.language]) return LANG_COLORS[d.language];
+    return commColor(d.group);
+  };
+
+  if (simulation) simulation.stop();
+
+  linkG.selectAll('*').remove();
+  const linkSel = linkG.selectAll('line').data(links).enter().append('line')
+    .attr('class', 'link')
+    .attr('stroke', '#30363d')
+    .attr('stroke-width', 1)
+    .attr('marker-end', 'url(#arrow)');
+
+  nodeG.selectAll('*').remove();
+  const nodeSel = nodeG.selectAll('circle').data(nodes, d => d.id).enter().append('circle')
+    .attr('class', 'node-circle')
+    .attr('r', r)
+    .attr('fill', color)
+    .attr('stroke', d => d3.color(color(d)).brighter(0.8))
+    .call(drag());
+
+  labelG.selectAll('*').remove();
+  const labelSel = labelG.selectAll('text').data(nodes, d => d.id).enter().append('text')
+    .attr('class', 'node-label')
+    .attr('dy', d => r(d) + 12)
+    .text(d => {
+      const parts = d.id.split('/');
+      return parts[parts.length - 1];
+    });
+
+  // Tooltip via textContent (safe DOM updates)
+  const tooltip = document.getElementById('tooltip');
+  const ttPath = tooltip.querySelector('.tt-path');
+  const ttLang = tooltip.querySelector('.tt-lang');
+  const ttLines = tooltip.querySelector('.tt-lines');
+  const ttImp = tooltip.querySelector('.tt-imp');
+  const ttComm = tooltip.querySelector('.tt-comm');
+
+  nodeSel
+    .on('mouseover', (e, d) => {
+      tooltip.style.display = 'block';
+      ttPath.textContent = d.id;
+      ttLang.textContent = 'Language: ' + (d.language || '(unknown)');
+      ttLines.textContent = 'Lines: ' + d.lines;
+      ttImp.textContent = 'Importance: ' + d.importance;
+      ttComm.textContent = 'Community: ' + (d.group >= 0 ? d.group : 'none');
+    })
+    .on('mousemove', e => {
+      tooltip.style.left = (e.clientX + 12) + 'px';
+      tooltip.style.top = (e.clientY - 10) + 'px';
+    })
+    .on('mouseout', () => { tooltip.style.display = 'none'; })
+    .on('click', (e, d) => {
+      currentRoot = d.id;
+      document.getElementById('searchBox').value = d.id;
+      fetchAndRender();
+    });
+
+  simulation = d3.forceSimulation(nodes)
+    .force('link', d3.forceLink(links).id(d => d.id).distance(60))
+    .force('charge', d3.forceManyBody().strength(-120))
+    .force('center', d3.forceCenter(width / 2, height / 2))
+    .force('collision', d3.forceCollide().radius(d => r(d) + 2))
+    .on('tick', () => {
+      linkSel
+        .attr('x1', d => d.source.x).attr('y1', d => d.source.y)
+        .attr('x2', d => d.target.x).attr('y2', d => d.target.y);
+      nodeSel.attr('cx', d => d.x).attr('cy', d => d.y);
+      labelSel.attr('x', d => d.x).attr('y', d => d.y);
+    });
+}
+
+function drag() {
+  return d3.drag()
+    .on('start', (e, d) => {
+      if (!e.active) simulation.alphaTarget(0.3).restart();
+      d.fx = d.x; d.fy = d.y;
+    })
+    .on('drag', (e, d) => { d.fx = e.x; d.fy = e.y; })
+    .on('end', (e, d) => {
+      if (!e.active) simulation.alphaTarget(0);
+      d.fx = null; d.fy = null;
+    });
+}
+
+window.addEventListener('resize', () => {
+  width = window.innerWidth; height = window.innerHeight;
+  svg.attr('width', width).attr('height', height);
+  if (simulation) simulation.force('center', d3.forceCenter(width / 2, height / 2)).alpha(0.3).restart();
+});
+
+init();
+</script>
+</body>
+</html>
