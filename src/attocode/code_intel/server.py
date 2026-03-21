@@ -281,6 +281,7 @@ def notify_file_changed(files: list[str]) -> str:
                     smgr = _get_semantic_search()
                 abs_path = os.path.join(project_dir, rel)
                 smgr.invalidate_file(abs_path)
+                smgr.queue_reindex(abs_path)
             except Exception:
                 pass
             updated += 1
@@ -364,6 +365,7 @@ def _process_notification_queue_locked() -> int:
                     smgr = _get_semantic_search()
                 abs_path = os.path.join(project_dir, norm)
                 smgr.invalidate_file(abs_path)
+                smgr.queue_reindex(abs_path)
             except Exception:
                 pass
             count += 1
@@ -413,11 +415,16 @@ _watcher_thread: threading.Thread | None = None
 _watcher_stop = threading.Event()
 
 
-def _start_file_watcher(project_dir: str) -> None:
+def _start_file_watcher(project_dir: str, *, debounce_ms: int = 500) -> None:
     """Start a background file watcher that updates the AST index on changes.
 
-    Uses watchfiles (Rust-backed, ~200ms debounce) if available, otherwise
-    skips silently. Calls ASTService.notify_file_changed() for modified code files.
+    Uses watchfiles (Rust-backed) if available, otherwise skips silently.
+    Calls ASTService.notify_file_changed() and queues background reindex for
+    modified code files. Second call is a no-op (idempotent).
+
+    Args:
+        project_dir: Absolute path to the project root.
+        debounce_ms: Debounce interval in milliseconds (default 500ms).
     """
     global _watcher_thread
 
@@ -436,6 +443,7 @@ def _start_file_watcher(project_dir: str) -> None:
                 project_dir,
                 stop_event=_watcher_stop,
                 recursive=True,
+                debounce=debounce_ms,
                 # Ignore hidden dirs, node_modules, __pycache__, .git
                 watch_filter=lambda _, path: (
                     not any(
@@ -462,6 +470,7 @@ def _start_file_watcher(project_dir: str) -> None:
 
                                 smgr = _get_semantic_search()
                                 smgr.invalidate_file(path_str)
+                                smgr.queue_reindex(path_str)
                             except Exception:
                                 pass
                             logger.debug("File watcher: updated %s", rel)
@@ -474,7 +483,7 @@ def _start_file_watcher(project_dir: str) -> None:
         target=_watcher_loop, daemon=True, name="code-intel-watcher"
     )
     _watcher_thread.start()
-    logger.info("File watcher started for %s", project_dir)
+    logger.info("File watcher started for %s (debounce=%dms)", project_dir, debounce_ms)
 
 
 def _stop_file_watcher() -> None:
@@ -529,7 +538,7 @@ symbols = _navigation_tools.symbols  # noqa: E402
 
 # Subcommands that should be dispatched to the CLI handler instead of
 # starting the MCP server.
-_CLI_SUBCOMMANDS = {"install", "uninstall", "serve", "status", "notify", "connect", "test-connection", "watch", "help", "--help", "-h"}
+_CLI_SUBCOMMANDS = {"install", "uninstall", "serve", "status", "notify", "connect", "test-connection", "watch", "help", "--help", "-h", "query", "symbols", "impact", "hotspots", "deps"}
 
 
 def main() -> None:

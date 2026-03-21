@@ -53,6 +53,16 @@ def dispatch_code_intel(parts: tuple[str, ...] | list[str], *, debug: bool = Fal
         _cmd_watch(args[1:])
     elif cmd == "setup":
         _cmd_setup(args[1:])
+    elif cmd == "query":
+        _cmd_query(args[1:])
+    elif cmd == "symbols":
+        _cmd_symbols(args[1:])
+    elif cmd == "impact":
+        _cmd_impact(args[1:])
+    elif cmd == "hotspots":
+        _cmd_hotspots(args[1:])
+    elif cmd == "deps":
+        _cmd_deps(args[1:])
     else:
         print(f"Unknown code-intel command: {cmd}", file=sys.stderr)
         _print_help()
@@ -74,6 +84,13 @@ def _print_help() -> None:
         "  test-connection     Verify connectivity to the remote server\n"
         "  watch               Watch filesystem for changes and notify remote server\n"
         "  setup               [Dev] Bootstrap local infrastructure for development\n"
+        "\n"
+        "Query commands:\n"
+        "  query <text>        Semantic search across the codebase\n"
+        "  symbols <file>      List symbols in a file (or --search <name>)\n"
+        "  impact <file> ...   Show blast radius of file changes\n"
+        "  hotspots            Show risk/complexity hotspots\n"
+        "  deps <file>         Show file dependencies and dependents\n"
         "\n"
         "Targets (auto-install):\n"
         "  claude              Claude Code (via `claude mcp add` CLI)\n"
@@ -98,6 +115,8 @@ def _print_help() -> None:
         "  --transport <type>  Transport protocol: stdio (default), sse, or http\n"
         "  --host <addr>       Server host address (default: 127.0.0.1)\n"
         "  --port <num>        Server port number (default: 8080)\n"
+        "  --no-watch          Disable filesystem watcher (watcher is on by default)\n"
+        "  --watch-debounce N  File-change debounce in milliseconds (default: 500)\n"
         "\n"
         "Notify options:\n"
         "  --file <path>       File that changed (repeatable)\n"
@@ -119,6 +138,11 @@ def _print_help() -> None:
         "  --reset             Wipe Docker volumes and dev state, then re-bootstrap\n"
         "  --skip-deps         Skip uv sync (use if deps already installed)\n"
         "  --project <path>    Project directory (default: .)\n"
+        "\n"
+        "Query options:\n"
+        "  --top <N>           Number of results (query: default 10, hotspots: default 15)\n"
+        "  --filter <glob>     File filter glob for semantic search (e.g. '*.py')\n"
+        "  --search <name>     Search for symbol by name (symbols command)\n"
     )
 
 
@@ -192,10 +216,12 @@ def _cmd_uninstall(args: list[str]) -> None:
 def _cmd_serve(args: list[str], *, debug: bool = False) -> None:
     _, project_dir, _, _ = _parse_opts(args)
 
-    # Parse transport flags
+    # Parse transport flags and watcher options
     transport = "stdio"
     host = "127.0.0.1"
     port = 8080
+    no_watch = False
+    watch_debounce = 500
     i = 0
     while i < len(args):
         arg = args[i]
@@ -217,25 +243,50 @@ def _cmd_serve(args: list[str], *, debug: bool = False) -> None:
         elif arg.startswith("--port="):
             port = int(arg.split("=", 1)[1])
             i += 1
+        elif arg == "--no-watch":
+            no_watch = True
+            i += 1
+        elif arg == "--watch-debounce" and i + 1 < len(args):
+            watch_debounce = int(args[i + 1])
+            i += 2
+        elif arg.startswith("--watch-debounce="):
+            watch_debounce = int(arg.split("=", 1)[1])
+            i += 1
         else:
             i += 1
 
-    os.environ["ATTOCODE_PROJECT_DIR"] = os.path.abspath(project_dir)
+    abs_dir = os.path.abspath(project_dir)
+    os.environ["ATTOCODE_PROJECT_DIR"] = abs_dir
 
     if debug:
         import logging
         logging.basicConfig(level=logging.DEBUG)
 
-    from attocode.code_intel.server import mcp
+    from attocode.code_intel.server import (
+        _start_file_watcher,
+        _start_queue_poller,
+        _stop_file_watcher,
+        mcp,
+    )
 
-    abs_dir = os.path.abspath(project_dir)
     print(f"Starting attocode-code-intel server for {abs_dir} (transport={transport})", file=sys.stderr)
-    if transport == "http":
-        _serve_http(abs_dir, host=host, port=port, debug=debug)
-    elif transport == "sse":
-        mcp.run(transport="sse", host=host, port=port)
-    else:
-        mcp.run(transport="stdio")
+
+    # Start file watcher and notification queue poller for stdio/sse transports.
+    # (HTTP transport manages its own lifecycle via the FastAPI app.)
+    if transport != "http" and not no_watch:
+        _start_file_watcher(abs_dir, debounce_ms=watch_debounce)
+        _start_queue_poller(abs_dir)
+
+    try:
+        if transport == "http":
+            _serve_http(abs_dir, host=host, port=port, debug=debug)
+        elif transport == "sse":
+            mcp.run(transport="sse", host=host, port=port)
+        else:
+            mcp.run(transport="stdio")
+    finally:
+        if transport != "http" and not no_watch:
+            _stop_file_watcher()
 
 
 def _serve_http(project_dir: str, *, host: str, port: int, debug: bool) -> None:
@@ -2094,3 +2145,360 @@ def _cmd_setup(args: list[str]) -> None:
         f"  attocode code-intel watch\n",
         file=sys.stderr,
     )
+
+
+# ---------------------------------------------------------------------------
+# CLI Query Commands
+# ---------------------------------------------------------------------------
+
+
+def _cmd_query(args: list[str]) -> None:
+    """Semantic search across the codebase."""
+    _, project_dir, _, _ = _parse_opts(args)
+    project_dir = os.path.abspath(project_dir)
+
+    # Parse positional query text and flags
+    query_parts: list[str] = []
+    top_k = 10
+    file_filter = ""
+
+    i = 0
+    while i < len(args):
+        arg = args[i]
+        if arg == "--top" and i + 1 < len(args):
+            top_k = int(args[i + 1])
+            i += 2
+        elif arg.startswith("--top="):
+            top_k = int(arg.split("=", 1)[1])
+            i += 1
+        elif arg == "--filter" and i + 1 < len(args):
+            file_filter = args[i + 1]
+            i += 2
+        elif arg.startswith("--filter="):
+            file_filter = arg.split("=", 1)[1]
+            i += 1
+        elif arg == "--project" and i + 1 < len(args):
+            i += 2  # already parsed by _parse_opts
+        elif arg.startswith("--project="):
+            i += 1
+        elif not arg.startswith("-"):
+            query_parts.append(arg)
+            i += 1
+        else:
+            i += 1
+
+    query = " ".join(query_parts)
+    if not query:
+        print("Usage: attocode code-intel query <text> [--top N] [--filter '*.py'] [--project <path>]", file=sys.stderr)
+        sys.exit(1)
+
+    from attocode.code_intel.service import CodeIntelService
+
+    svc = CodeIntelService(project_dir)
+    data = svc.semantic_search_data(query, top_k=top_k, file_filter=file_filter)
+    _print_search_results(data)
+
+
+def _cmd_symbols(args: list[str]) -> None:
+    """List symbols in a file or search symbols by name."""
+    _, project_dir, _, _ = _parse_opts(args)
+    project_dir = os.path.abspath(project_dir)
+
+    # Parse positional file and --search flag
+    target_file: str | None = None
+    search_name: str | None = None
+
+    i = 0
+    while i < len(args):
+        arg = args[i]
+        if arg == "--search" and i + 1 < len(args):
+            search_name = args[i + 1]
+            i += 2
+        elif arg.startswith("--search="):
+            search_name = arg.split("=", 1)[1]
+            i += 1
+        elif arg == "--project" and i + 1 < len(args):
+            i += 2
+        elif arg.startswith("--project="):
+            i += 1
+        elif not arg.startswith("-") and target_file is None:
+            target_file = arg
+            i += 1
+        else:
+            i += 1
+
+    if not target_file and not search_name:
+        print("Usage: attocode code-intel symbols <file> [--search <name>] [--project <path>]", file=sys.stderr)
+        sys.exit(1)
+
+    from attocode.code_intel.service import CodeIntelService
+
+    svc = CodeIntelService(project_dir)
+
+    if search_name:
+        data = svc.search_symbols_data(search_name)
+        _print_symbols_table(data, title=f"Search results for '{search_name}'")
+    else:
+        assert target_file is not None
+        data = svc.symbols_data(target_file)
+        _print_symbols_table(data, title=f"Symbols in {target_file}")
+
+
+def _cmd_impact(args: list[str]) -> None:
+    """Show blast radius of file changes."""
+    _, project_dir, _, _ = _parse_opts(args)
+    project_dir = os.path.abspath(project_dir)
+
+    # Collect positional file arguments
+    files: list[str] = []
+
+    i = 0
+    while i < len(args):
+        arg = args[i]
+        if arg == "--project" and i + 1 < len(args):
+            i += 2
+        elif arg.startswith("--project="):
+            i += 1
+        elif not arg.startswith("-"):
+            files.append(arg)
+            i += 1
+        else:
+            i += 1
+
+    if not files:
+        print("Usage: attocode code-intel impact <file> [file2 ...] [--project <path>]", file=sys.stderr)
+        sys.exit(1)
+
+    from attocode.code_intel.service import CodeIntelService
+
+    svc = CodeIntelService(project_dir)
+    data = svc.impact_analysis_data(files)
+    _print_impact_analysis(data)
+
+
+def _cmd_hotspots(args: list[str]) -> None:
+    """Show risk/complexity hotspots."""
+    _, project_dir, _, _ = _parse_opts(args)
+    project_dir = os.path.abspath(project_dir)
+
+    top_n = 15
+
+    i = 0
+    while i < len(args):
+        arg = args[i]
+        if arg == "--top" and i + 1 < len(args):
+            top_n = int(args[i + 1])
+            i += 2
+        elif arg.startswith("--top="):
+            top_n = int(arg.split("=", 1)[1])
+            i += 1
+        elif arg == "--project" and i + 1 < len(args):
+            i += 2
+        elif arg.startswith("--project="):
+            i += 1
+        else:
+            i += 1
+
+    from attocode.code_intel.service import CodeIntelService
+
+    svc = CodeIntelService(project_dir)
+    data = svc.hotspots_data(top_n=top_n)
+    _print_hotspots(data)
+
+
+def _cmd_deps(args: list[str]) -> None:
+    """Show file dependencies and dependents."""
+    _, project_dir, _, _ = _parse_opts(args)
+    project_dir = os.path.abspath(project_dir)
+
+    target_file: str | None = None
+
+    i = 0
+    while i < len(args):
+        arg = args[i]
+        if arg == "--project" and i + 1 < len(args):
+            i += 2
+        elif arg.startswith("--project="):
+            i += 1
+        elif not arg.startswith("-") and target_file is None:
+            target_file = arg
+            i += 1
+        else:
+            i += 1
+
+    if not target_file:
+        print("Usage: attocode code-intel deps <file> [--project <path>]", file=sys.stderr)
+        sys.exit(1)
+
+    from attocode.code_intel.service import CodeIntelService
+
+    svc = CodeIntelService(project_dir)
+    data = svc.dependencies_data(target_file)
+    _print_dependencies(data)
+
+
+# ---------------------------------------------------------------------------
+# Terminal formatters for query commands
+# ---------------------------------------------------------------------------
+
+
+def _print_search_results(data: dict) -> None:
+    """Print semantic search results as a numbered list with file, score, snippet."""
+    results = data.get("results", [])
+    total = data.get("total", len(results))
+    query = data.get("query", "")
+
+    print(f"Semantic search: \"{query}\" ({total} result(s))\n")
+
+    if not results:
+        print("  No results found.")
+        return
+
+    for idx, r in enumerate(results, 1):
+        file_path = r.get("file_path", "?")
+        score = r.get("score", 0.0)
+        snippet = r.get("snippet", "")
+        line = r.get("line")
+
+        loc = f"{file_path}:{line}" if line else file_path
+        print(f"  {idx:>3}. {loc}  (score: {score:.4f})")
+
+        if snippet:
+            # Indent snippet lines, truncate long ones
+            for sline in snippet.strip().splitlines()[:3]:
+                truncated = sline[:120] + "..." if len(sline) > 120 else sline
+                print(f"       {truncated}")
+        print()
+
+
+def _print_symbols_table(data: list[dict], title: str = "Symbols") -> None:
+    """Print symbols as a fixed-width table with name, kind, file, line."""
+    print(f"{title} ({len(data)} symbol(s))\n")
+
+    if not data:
+        print("  No symbols found.")
+        return
+
+    # Compute column widths
+    name_w = max(len(s.get("name", "")) for s in data)
+    name_w = max(name_w, 4)  # minimum "Name"
+    name_w = min(name_w, 40)  # cap width
+
+    kind_w = max(len(s.get("kind", "")) for s in data)
+    kind_w = max(kind_w, 4)
+    kind_w = min(kind_w, 15)
+
+    # Header
+    header = f"  {'Name':<{name_w}}  {'Kind':<{kind_w}}  {'File':<50}  {'Line':>5}"
+    print(header)
+    print(f"  {'-' * name_w}  {'-' * kind_w}  {'-' * 50}  {'-' * 5}")
+
+    for s in data:
+        name = s.get("name", "")[:name_w]
+        kind = s.get("kind", "")[:kind_w]
+        file_path = s.get("file_path", "")
+        if len(file_path) > 50:
+            file_path = "..." + file_path[-47:]
+        start_line = s.get("start_line", "")
+
+        print(f"  {name:<{name_w}}  {kind:<{kind_w}}  {file_path:<50}  {start_line:>5}")
+
+
+def _print_impact_analysis(data: dict) -> None:
+    """Print impact analysis as a tree of affected files."""
+    changed = data.get("changed_files", [])
+    impacted = data.get("impacted_files", [])
+    total = data.get("total_impacted", len(impacted))
+    layers = data.get("layers", [])
+
+    print(f"Impact analysis: {len(changed)} changed file(s), {total} impacted file(s)\n")
+
+    print("  Changed files:")
+    for f in changed:
+        print(f"    * {f}")
+
+    if not layers:
+        print("\n  No downstream impact detected.")
+        return
+
+    print()
+    for layer in layers:
+        depth = layer.get("depth", "?")
+        files = layer.get("files", [])
+        print(f"  Depth {depth} ({len(files)} file(s)):")
+        for f in files:
+            print(f"    {'|' * depth} {f}")
+
+
+def _print_hotspots(data: dict) -> None:
+    """Print hotspots as a ranked table with file, categories, score."""
+    file_hotspots = data.get("file_hotspots", [])
+    fn_hotspots = data.get("function_hotspots", [])
+    orphans = data.get("orphan_files", [])
+
+    # File hotspots
+    print(f"File hotspots ({len(file_hotspots)} file(s))\n")
+
+    if file_hotspots:
+        header = f"  {'#':>3}  {'File':<55}  {'Lines':>5}  {'Score':>6}  Categories"
+        print(header)
+        print(f"  {'-' * 3}  {'-' * 55}  {'-' * 5}  {'-' * 6}  {'-' * 25}")
+
+        for idx, h in enumerate(file_hotspots, 1):
+            path = h.get("path", "")
+            if len(path) > 55:
+                path = "..." + path[-52:]
+            lines = h.get("line_count", 0)
+            score = h.get("composite", 0.0)
+            cats = ", ".join(h.get("categories", []))
+
+            print(f"  {idx:>3}  {path:<55}  {lines:>5}  {score:>6.2f}  {cats}")
+    else:
+        print("  No file hotspots found.")
+
+    # Function hotspots
+    if fn_hotspots:
+        print(f"\nFunction hotspots ({len(fn_hotspots)} function(s))\n")
+        header = f"  {'Name':<35}  {'File':<40}  {'Lines':>5}  {'Params':>6}"
+        print(header)
+        print(f"  {'-' * 35}  {'-' * 40}  {'-' * 5}  {'-' * 6}")
+
+        for fh in fn_hotspots:
+            name = fh.get("name", "")[:35]
+            fp = fh.get("file_path", "")
+            if len(fp) > 40:
+                fp = "..." + fp[-37:]
+            lc = fh.get("line_count", 0)
+            pc = fh.get("param_count", 0)
+            print(f"  {name:<35}  {fp:<40}  {lc:>5}  {pc:>6}")
+
+    # Orphan files
+    if orphans:
+        print(f"\nOrphan files ({len(orphans)} file(s) — no imports/importers)\n")
+        for o in orphans:
+            path = o.get("path", "")
+            lines = o.get("line_count", 0)
+            print(f"    {path}  ({lines} lines)")
+
+
+def _print_dependencies(data: dict) -> None:
+    """Print dependency information: imports and imported-by lists."""
+    path = data.get("path", "?")
+    imports = data.get("imports", [])
+    imported_by = data.get("imported_by", [])
+
+    print(f"Dependencies for {path}\n")
+
+    print(f"  Imports ({len(imports)}):")
+    if imports:
+        for dep in imports:
+            print(f"    -> {dep}")
+    else:
+        print("    (none)")
+
+    print(f"\n  Imported by ({len(imported_by)}):")
+    if imported_by:
+        for dep in imported_by:
+            print(f"    <- {dep}")
+    else:
+        print("    (none)")

@@ -573,8 +573,16 @@ class CodeIntelService:
             "communities": result_communities,
         }
 
-    def semantic_search_data(self, query: str, top_k: int = 10, file_filter: str = "") -> dict:
-        """Return structured semantic search results."""
+    def semantic_search_data(self, query: str, top_k: int = 10, file_filter: str = "", branch: str = "") -> dict:
+        """Return structured semantic search results.
+
+        Args:
+            query: Natural language search query.
+            top_k: Number of results to return.
+            file_filter: Optional glob pattern to filter files.
+            branch: Optional branch name for scoping (service mode pass-through;
+                local mode automatically scopes to working-directory files).
+        """
         mgr = self._get_semantic_search()
         results = mgr.search(query, top_k=top_k, file_filter=file_filter)
         return {

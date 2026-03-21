@@ -199,6 +199,7 @@ class VectorStore:
         query_vector: list[float],
         top_k: int = 10,
         file_filter: str = "",
+        existing_files: set[str] | None = None,
     ) -> list[SearchResult]:
         """Search for similar vectors using linear scan.
 
@@ -206,6 +207,9 @@ class VectorStore:
             query_vector: Query embedding vector.
             top_k: Number of results to return.
             file_filter: Optional glob pattern to filter files (e.g. "*.py").
+            existing_files: Optional set of file paths that exist on disk.
+                When provided, vectors whose file_path is not in this set
+                are skipped (filters out stale branch data in local mode).
 
         Returns:
             Top-k results sorted by similarity score (highest first).
@@ -228,6 +232,8 @@ class VectorStore:
 
         results: list[SearchResult] = []
         for row in rows:
+            if existing_files is not None and row[1] not in existing_files:
+                continue
             if _file_filter_fn and not _file_filter_fn(row[1]):
                 continue
             try:
