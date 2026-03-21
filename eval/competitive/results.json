@@ -1,0 +1,356 @@
+{
+  "evaluations": [
+    {
+      "repo": "attocode",
+      "avg_latency_ms": 2106.4125,
+      "p50_latency_ms": 5.3,
+      "p95_latency_ms": 16820.7,
+      "queries": [
+        {
+          "query": "token budget management and enforcement",
+          "latency_ms": 16820.7,
+          "results_count": 8,
+          "difficulty": "medium",
+          "top_results": [
+            "src/attocode/types/budget.py",
+            "src/attocode/agent/context.py",
+            "src/attocode/tui/widgets/debug_panel.py",
+            "src/attocode/integrations/budget/economics.py",
+            "tests/unit/test_types.py"
+          ]
+        },
+        {
+          "query": "message routing and tool dispatch",
+          "latency_ms": 5.8,
+          "results_count": 8,
+          "difficulty": "medium",
+          "top_results": [
+            "src/attocode/tui/widgets/message_log.py",
+            "src/attocode/integrations/context/ast_server.py",
+            "lessons/22-model-routing/router.ts",
+            "src/attocode/integrations/swarm/worker_pool.py",
+            "src/attocode/code_intel/api/middleware.py"
+          ]
+        },
+        {
+          "query": "swarm task decomposition",
+          "latency_ms": 6.9,
+          "results_count": 7,
+          "difficulty": "hard",
+          "top_results": [
+            "src/attocode/integrations/swarm/task_queue.py",
+            "src/attocode/integrations/swarm/lifecycle.py",
+            "lessons/15-planning/decomposer.ts",
+            "legacy/src/integrations/swarm/task-queue.ts",
+            "src/attocode/integrations/swarm/types.py"
+          ]
+        },
+        {
+          "query": "agent session checkpoints",
+          "latency_ms": 5.3,
+          "results_count": 7,
+          "difficulty": "medium",
+          "top_results": [
+            "src/attocode/commands.py",
+            "src/attocode/integrations/persistence/store.py",
+            "src/attocode/integrations/quality/auto_checkpoint.py",
+            "tests/unit/test_commands_sessions.py",
+            "src/attocode/agent/builder.py"
+          ]
+        },
+        {
+          "query": "AST parsing and symbol indexing",
+          "latency_ms": 3.0,
+          "results_count": 6,
+          "difficulty": "hard",
+          "top_results": [
+            "src/attoswarm/workspace/reconciler.py",
+            "src/attocode/integrations/context/codebase_ast.py",
+            "src/attocode/integrations/context/ast_service.py",
+            "src/attocode/code_intel/tools/dead_code_tools.py",
+            "src/attocode/code_intel/service.py"
+          ]
+        },
+        {
+          "query": "execution loop iteration control",
+          "latency_ms": 3.6,
+          "results_count": 8,
+          "difficulty": "easy",
+          "top_results": [
+            "src/attoswarm/coordinator/orchestrator.py",
+            "src/attocode/core/loop.py",
+            "src/attocode/integrations/budget/economics.py",
+            "tests/unit/core/test_loop.py",
+            "src/attocode/types/messages.py"
+          ]
+        },
+        {
+          "query": "worker pool parallel spawning",
+          "latency_ms": 3.2,
+          "results_count": 8,
+          "difficulty": "hard",
+          "top_results": [
+            "src/attocode/integrations/swarm/worker_pool.py",
+            "tests/unit/attoswarm/test_scheduler.py",
+            "lessons/tricks/tool-batching.ts",
+            "tests/unit/integrations/test_swarm_infra.py",
+            "src/attocode/integrations/swarm/lifecycle.py"
+          ]
+        },
+        {
+          "query": "semantic search embeddings",
+          "latency_ms": 2.8,
+          "results_count": 7,
+          "difficulty": "easy",
+          "top_results": [
+            "src/attocode/code_intel/tools/search_tools.py",
+            "src/attocode/tools/semantic_search.py",
+            "src/attocode/code_intel/api/providers/remote_provider.py",
+            "eval/quality_scorers.py",
+            "src/attocode/code_intel/service.py"
+          ]
+        }
+      ]
+    },
+    {
+      "repo": "gh-cli",
+      "avg_latency_ms": 887.15,
+      "p50_latency_ms": 1.7,
+      "p95_latency_ms": 3545.2,
+      "queries": [
+        {
+          "query": "command factory and execution",
+          "latency_ms": 3545.2,
+          "results_count": 8,
+          "difficulty": "medium",
+          "top_results": [
+            "git/client.go",
+            "internal/ghcmd/cmd.go",
+            "pkg/cmd/extension/git.go",
+            "pkg/cmd/extension/mocks.go",
+            "pkg/cmd/root/help.go"
+          ]
+        },
+        {
+          "query": "GitHub API authentication",
+          "latency_ms": 1.7,
+          "results_count": 8,
+          "difficulty": "easy",
+          "top_results": [
+            "pkg/cmd/attestation/verify/options.go",
+            "internal/run/stub.go",
+            "api/queries_repo.go",
+            "api/queries_pr_review.go",
+            "pkg/cmd/attestation/verify/policy.go"
+          ]
+        },
+        {
+          "query": "pull request review workflow",
+          "latency_ms": 1.1,
+          "results_count": 8,
+          "difficulty": "medium",
+          "top_results": [
+            "api/queries_issue.go",
+            "pkg/search/result.go",
+            "internal/featuredetection/detector_mock.go",
+            "internal/featuredetection/feature_detection.go",
+            "pkg/cmd/pr/merge/http.go"
+          ]
+        },
+        {
+          "query": "repository fork handling",
+          "latency_ms": 0.6,
+          "results_count": 7,
+          "difficulty": "medium",
+          "top_results": [
+            "api/queries_repo.go",
+            "pkg/cmd/repo/fork/fork.go",
+            "pkg/cmd/repo/sync/http.go",
+            "internal/featuredetection/detector_mock.go",
+            "internal/featuredetection/feature_detection.go"
+          ]
+        }
+      ]
+    },
+    {
+      "repo": "redis",
+      "avg_latency_ms": 1515.0,
+      "p50_latency_ms": 2.8,
+      "p95_latency_ms": 6053.1,
+      "queries": [
+        {
+          "query": "event-driven command handling",
+          "latency_ms": 6053.1,
+          "results_count": 7,
+          "difficulty": "medium",
+          "top_results": [
+            "deps/hiredis/test.c",
+            "src/sentinel.c",
+            "deps/jemalloc/src/tcache.c",
+            "deps/hiredis/adapters/libevent.h",
+            "src/ae_kqueue.c"
+          ]
+        },
+        {
+          "query": "sorted set data structure",
+          "latency_ms": 2.3,
+          "results_count": 8,
+          "difficulty": "easy",
+          "top_results": [
+            "src/chk.c",
+            "src/t_stream.c",
+            "src/aof.c",
+            "src/server.c",
+            "src/db.c"
+          ]
+        },
+        {
+          "query": "RDB persistence snapshot",
+          "latency_ms": 1.8,
+          "results_count": 7,
+          "difficulty": "medium",
+          "top_results": [
+            "src/server.c",
+            "src/cluster_asm.c",
+            "tests/modules/hooks.c",
+            "src/redis-cli.c",
+            "src/rdb.c"
+          ]
+        },
+        {
+          "query": "cluster node discovery",
+          "latency_ms": 2.8,
+          "results_count": 7,
+          "difficulty": "hard",
+          "top_results": [
+            "src/redis-benchmark.c",
+            "src/redis-cli.c",
+            "src/cluster_legacy.c",
+            "src/cluster.h",
+            "src/cluster_legacy.h"
+          ]
+        }
+      ]
+    },
+    {
+      "repo": "fastapi",
+      "avg_latency_ms": 3819.425,
+      "p50_latency_ms": 3.0,
+      "p95_latency_ms": 15272.1,
+      "queries": [
+        {
+          "query": "request validation dependency injection",
+          "latency_ms": 15272.1,
+          "results_count": 8,
+          "difficulty": "medium",
+          "top_results": [
+            "fastapi/exception_handlers.py",
+            "fastapi/exceptions.py",
+            "docs_src/handling_errors/tutorial006_py310.py",
+            "docs_src/handling_errors/tutorial005_py310.py",
+            "docs_src/handling_errors/tutorial004_py310.py"
+          ]
+        },
+        {
+          "query": "OpenAPI schema generation",
+          "latency_ms": 3.0,
+          "results_count": 7,
+          "difficulty": "easy",
+          "top_results": [
+            "docs_src/generate_clients/tutorial004.js",
+            "fastapi/openapi/models.py",
+            "docs/en/docs/js/custom.js",
+            "fastapi/security/open_id_connect_url.py",
+            "fastapi/security/api_key.py"
+          ]
+        },
+        {
+          "query": "WebSocket connection management",
+          "latency_ms": 1.0,
+          "results_count": 6,
+          "difficulty": "medium",
+          "top_results": [
+            "fastapi/exceptions.py",
+            "fastapi/routing.py",
+            "docs_src/websockets_/tutorial003_py310.py",
+            "tests/test_http_connection_injection.py",
+            "tests/test_validation_error_context.py"
+          ]
+        },
+        {
+          "query": "middleware request lifecycle",
+          "latency_ms": 1.6,
+          "results_count": 9,
+          "difficulty": "medium",
+          "top_results": [
+            "fastapi/applications.py",
+            "tests/test_dependency_contextmanager.py",
+            "tests/test_dependency_contextvars.py",
+            "fastapi/middleware/asyncexitstack.py",
+            "tests/test_ws_router.py"
+          ]
+        }
+      ]
+    },
+    {
+      "repo": "pandas",
+      "avg_latency_ms": 1941.275,
+      "p50_latency_ms": 30.5,
+      "p95_latency_ms": 7716.1,
+      "queries": [
+        {
+          "query": "missing data NaN propagation",
+          "latency_ms": 7716.1,
+          "results_count": 8,
+          "difficulty": "medium",
+          "top_results": [
+            "pandas/tests/generic/test_frame.py",
+            "pandas/io/stata.py",
+            "pandas/tests/frame/test_subclass.py",
+            "pandas/tests/generic/test_generic.py",
+            "pandas/tests/groupby/test_groupby.py"
+          ]
+        },
+        {
+          "query": "DataFrame indexing label access",
+          "latency_ms": 30.5,
+          "results_count": 6,
+          "difficulty": "easy",
+          "top_results": [
+            "pandas/io/stata.py",
+            "pandas/core/indexing.py",
+            "pandas/core/indexes/period.py",
+            "asv_bench/benchmarks/indexing.py",
+            "pandas/tests/frame/indexing/test_indexing.py"
+          ]
+        },
+        {
+          "query": "CSV parsing file IO",
+          "latency_ms": 8.8,
+          "results_count": 8,
+          "difficulty": "easy",
+          "top_results": [
+            "asv_bench/benchmarks/io/csv.py",
+            "pandas/tests/io/parser/common/test_file_buffer_url.py",
+            "pandas/_testing/contexts.py",
+            "pandas/io/parsers/readers.py",
+            "pandas/tests/io/parser/test_encoding.py"
+          ]
+        },
+        {
+          "query": "groupby aggregation split apply combine",
+          "latency_ms": 9.7,
+          "results_count": 8,
+          "difficulty": "medium",
+          "top_results": [
+            "asv_bench/benchmarks/groupby.py",
+            "pandas/tests/resample/test_resample_api.py",
+            "pandas/tests/groupby/aggregate/test_aggregate.py",
+            "pandas/tests/groupby/test_categorical.py",
+            "pandas/tests/groupby/test_groupby.py"
+          ]
+        }
+      ]
+    }
+  ]
+}
