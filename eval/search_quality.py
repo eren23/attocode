@@ -14,6 +14,7 @@ from __future__ import annotations
 import argparse
 import os
 import re
+import subprocess
 import sys
 import time
 from dataclasses import dataclass, field
@@ -120,6 +121,95 @@ def parse_search_results(output: str, max_results: int = TOP_K_RESULTS) -> list[
                 break
 
     return paths
+
+
+# ---------------------------------------------------------------------------
+# Grep baseline
+# ---------------------------------------------------------------------------
+
+
+def run_grep_search(repo_path: str, query: str, top_k: int = 20) -> list[str]:
+    """Run grep-based search as baseline comparison."""
+    terms = query.lower().split()
+    pattern = "|".join(terms[:5])
+    try:
+        result = subprocess.run(
+            ["rg", "-l", "-i", pattern],
+            cwd=repo_path, capture_output=True, text=True, timeout=10,
+        )
+        files = result.stdout.strip().splitlines()[:top_k]
+        return files
+    except Exception:
+        return []
+
+
+@dataclass(slots=True)
+class GrepQueryResult:
+    """Grep baseline result for a single query."""
+
+    query: str
+    retrieved_files: list[str]
+    mrr: float
+    ndcg: float
+    precision_at_k: float
+    recall_at_k: float
+    search_time_ms: float
+
+
+@dataclass(slots=True)
+class GrepRepoResult:
+    """Aggregate grep baseline result for a repo."""
+
+    repo: str
+    query_results: list[GrepQueryResult] = field(default_factory=list)
+    avg_mrr: float = 0.0
+    avg_ndcg: float = 0.0
+    avg_precision: float = 0.0
+    avg_recall: float = 0.0
+
+
+def evaluate_grep_baseline(repo: str) -> GrepRepoResult:
+    """Run grep baseline evaluation for a single repo."""
+    repo_path = REPO_CONFIGS[repo]
+    queries = load_ground_truth(repo)
+    if not queries:
+        return GrepRepoResult(repo=repo)
+
+    result = GrepRepoResult(repo=repo)
+
+    for entry in queries:
+        query_text: str = entry["query"]
+        relevant: list[str] = entry["relevant_files"]
+        relevant_set = set(relevant)
+
+        t0 = time.perf_counter()
+        retrieved = run_grep_search(repo_path, query_text, top_k=TOP_K_RESULTS)
+        elapsed_ms = (time.perf_counter() - t0) * 1000
+
+        mrr = compute_mrr(retrieved, relevant_set, k=MRR_K)
+        ndcg = compute_ndcg(retrieved, relevant_set, k=NDCG_K)
+        precision = compute_precision_at_k(retrieved, relevant_set, k=PRECISION_K)
+        recall = compute_recall_at_k(retrieved, relevant_set, k=RECALL_K)
+
+        gqr = GrepQueryResult(
+            query=query_text,
+            retrieved_files=retrieved,
+            mrr=mrr,
+            ndcg=ndcg,
+            precision_at_k=precision,
+            recall_at_k=recall,
+            search_time_ms=elapsed_ms,
+        )
+        result.query_results.append(gqr)
+
+    n = len(result.query_results)
+    if n > 0:
+        result.avg_mrr = sum(q.mrr for q in result.query_results) / n
+        result.avg_ndcg = sum(q.ndcg for q in result.query_results) / n
+        result.avg_precision = sum(q.precision_at_k for q in result.query_results) / n
+        result.avg_recall = sum(q.recall_at_k for q in result.query_results) / n
+
+    return result
 
 
 # ---------------------------------------------------------------------------
@@ -383,6 +473,113 @@ def format_markdown_report(results: list[RepoResult]) -> str:
 
 
 # ---------------------------------------------------------------------------
+# Baseline comparison reports
+# ---------------------------------------------------------------------------
+
+
+def format_baseline_comparison(
+    ci_results: list[RepoResult], grep_results: list[GrepRepoResult]
+) -> str:
+    """Format a side-by-side text comparison of code-intel vs grep baseline."""
+    lines = [
+        "=" * 70,
+        "BASELINE COMPARISON: Code-Intel vs Grep",
+        "=" * 70,
+        "",
+        f"  {'Repo':<15} {'CI MRR':>8} {'Grep MRR':>9} {'Delta':>7}  |  "
+        f"{'CI NDCG':>8} {'Grep NDCG':>10} {'Delta':>7}",
+        f"  {'-' * 15} {'-' * 8} {'-' * 9} {'-' * 7}  |  "
+        f"{'-' * 8} {'-' * 10} {'-' * 7}",
+    ]
+
+    for ci, grep in zip(ci_results, grep_results):
+        mrr_delta = ci.avg_mrr - grep.avg_mrr
+        ndcg_delta = ci.avg_ndcg - grep.avg_ndcg
+        lines.append(
+            f"  {ci.repo:<15} {ci.avg_mrr:>8.3f} {grep.avg_mrr:>9.3f} {mrr_delta:>+7.3f}  |  "
+            f"{ci.avg_ndcg:>8.3f} {grep.avg_ndcg:>10.3f} {ndcg_delta:>+7.3f}"
+        )
+
+    # Grand averages
+    total_ci_queries = sum(rr.total_queries for rr in ci_results)
+    if total_ci_queries > 0 and len(ci_results) > 1:
+        grand_ci_mrr = sum(rr.avg_mrr * rr.total_queries for rr in ci_results) / total_ci_queries
+        grand_ci_ndcg = sum(rr.avg_ndcg * rr.total_queries for rr in ci_results) / total_ci_queries
+
+        n_grep = sum(len(gr.query_results) for gr in grep_results)
+        if n_grep > 0:
+            grand_grep_mrr = sum(
+                gr.avg_mrr * len(gr.query_results) for gr in grep_results
+            ) / n_grep
+            grand_grep_ndcg = sum(
+                gr.avg_ndcg * len(gr.query_results) for gr in grep_results
+            ) / n_grep
+        else:
+            grand_grep_mrr = grand_grep_ndcg = 0.0
+
+        mrr_delta = grand_ci_mrr - grand_grep_mrr
+        ndcg_delta = grand_ci_ndcg - grand_grep_ndcg
+
+        lines.append(
+            f"  {'-' * 15} {'-' * 8} {'-' * 9} {'-' * 7}  |  "
+            f"{'-' * 8} {'-' * 10} {'-' * 7}"
+        )
+        lines.append(
+            f"  {'OVERALL':<15} {grand_ci_mrr:>8.3f} {grand_grep_mrr:>9.3f} {mrr_delta:>+7.3f}  |  "
+            f"{grand_ci_ndcg:>8.3f} {grand_grep_ndcg:>10.3f} {ndcg_delta:>+7.3f}"
+        )
+
+    lines.extend(["", "=" * 70])
+    return "\n".join(lines)
+
+
+def format_baseline_comparison_markdown(
+    ci_results: list[RepoResult], grep_results: list[GrepRepoResult]
+) -> str:
+    """Format a Markdown side-by-side comparison of code-intel vs grep baseline."""
+    lines = [
+        "## Baseline Comparison: Code-Intel vs Grep",
+        "",
+        "| Repo | CI MRR | Grep MRR | MRR Delta | CI NDCG | Grep NDCG | NDCG Delta |",
+        "|------|--------|----------|-----------|---------|-----------|------------|",
+    ]
+
+    for ci, grep in zip(ci_results, grep_results):
+        mrr_delta = ci.avg_mrr - grep.avg_mrr
+        ndcg_delta = ci.avg_ndcg - grep.avg_ndcg
+        lines.append(
+            f"| {ci.repo} | {ci.avg_mrr:.3f} | {grep.avg_mrr:.3f} | {mrr_delta:+.3f} | "
+            f"{ci.avg_ndcg:.3f} | {grep.avg_ndcg:.3f} | {ndcg_delta:+.3f} |"
+        )
+
+    total_ci_queries = sum(rr.total_queries for rr in ci_results)
+    if total_ci_queries > 0 and len(ci_results) > 1:
+        grand_ci_mrr = sum(rr.avg_mrr * rr.total_queries for rr in ci_results) / total_ci_queries
+        grand_ci_ndcg = sum(rr.avg_ndcg * rr.total_queries for rr in ci_results) / total_ci_queries
+
+        n_grep = sum(len(gr.query_results) for gr in grep_results)
+        if n_grep > 0:
+            grand_grep_mrr = sum(
+                gr.avg_mrr * len(gr.query_results) for gr in grep_results
+            ) / n_grep
+            grand_grep_ndcg = sum(
+                gr.avg_ndcg * len(gr.query_results) for gr in grep_results
+            ) / n_grep
+        else:
+            grand_grep_mrr = grand_grep_ndcg = 0.0
+
+        mrr_delta = grand_ci_mrr - grand_grep_mrr
+        ndcg_delta = grand_ci_ndcg - grand_grep_ndcg
+        lines.append(
+            f"| **Overall** | {grand_ci_mrr:.3f} | {grand_grep_mrr:.3f} | {mrr_delta:+.3f} | "
+            f"{grand_ci_ndcg:.3f} | {grand_grep_ndcg:.3f} | {ndcg_delta:+.3f} |"
+        )
+
+    lines.append("")
+    return "\n".join(lines)
+
+
+# ---------------------------------------------------------------------------
 # CLI
 # ---------------------------------------------------------------------------
 
@@ -408,6 +605,11 @@ def main() -> None:
         action="store_true",
         help="Print per-query retrieved files",
     )
+    parser.add_argument(
+        "--baseline",
+        action="store_true",
+        help="Also run grep-based baseline and show side-by-side comparison",
+    )
     args = parser.parse_args()
 
     # Determine repos to evaluate
@@ -430,6 +632,7 @@ def main() -> None:
 
     # Run evaluations
     all_results: list[RepoResult] = []
+    all_grep_results: list[GrepRepoResult] = []
     for repo in repos:
         print(f"  Evaluating {repo}...")
         result = evaluate_repo(repo)
@@ -446,8 +649,23 @@ def main() -> None:
             f"| {result.total_time_ms:.0f}ms"
         )
 
+        # Run grep baseline if requested
+        if args.baseline:
+            grep_result = evaluate_grep_baseline(repo)
+            all_grep_results.append(grep_result)
+            mrr_delta = result.avg_mrr - grep_result.avg_mrr
+            ndcg_delta = result.avg_ndcg - grep_result.avg_ndcg
+            print(
+                f"    Code-Intel MRR={result.avg_mrr:.3f} vs Grep MRR={grep_result.avg_mrr:.3f} "
+                f"(delta={mrr_delta:+.3f})"
+            )
+            print(
+                f"    Code-Intel NDCG={result.avg_ndcg:.3f} vs Grep NDCG={grep_result.avg_ndcg:.3f} "
+                f"(delta={ndcg_delta:+.3f})"
+            )
+
         if args.verbose:
-            for qr in result.query_results:
+            for i, qr in enumerate(result.query_results):
                 print(f"      Q: {qr.query}")
                 print(f"        Retrieved: {qr.retrieved_files[:5]}")
                 print(f"        Relevant:  {qr.relevant_files}")
@@ -455,6 +673,13 @@ def main() -> None:
                     f"        MRR={qr.mrr:.3f} NDCG={qr.ndcg:.3f} "
                     f"P@{PRECISION_K}={qr.precision_at_k:.3f} R@{RECALL_K}={qr.recall_at_k:.3f}"
                 )
+                if args.baseline and i < len(all_grep_results[-1].query_results):
+                    gqr = all_grep_results[-1].query_results[i]
+                    print(
+                        f"        Grep: MRR={gqr.mrr:.3f} NDCG={gqr.ndcg:.3f} "
+                        f"P@{PRECISION_K}={gqr.precision_at_k:.3f} R@{RECALL_K}={gqr.recall_at_k:.3f}"
+                    )
+                    print(f"        Grep Retrieved: {gqr.retrieved_files[:5]}")
 
     if not all_results:
         print("\nNo results to report.")
@@ -464,9 +689,16 @@ def main() -> None:
     print()
     print(format_text_report(all_results))
 
+    # Print baseline comparison report if requested
+    if args.baseline and all_grep_results:
+        print()
+        print(format_baseline_comparison(all_results, all_grep_results))
+
     # Save markdown report if requested
     if args.report:
         md_report = format_markdown_report(all_results)
+        if args.baseline and all_grep_results:
+            md_report += "\n\n" + format_baseline_comparison_markdown(all_results, all_grep_results)
         with open(args.report, "w") as f:
             f.write(md_report)
         print(f"\nMarkdown report saved to: {args.report}")
