@@ -405,7 +405,7 @@ Create a file `swarm_smoke/hello.txt` with one line `hello from swarm` and repor
 
 Then scale to multi-file implementation tasks once telemetry and merge behavior look healthy.
 
-## 9. Agent Quality Features (v0.2.2+)
+## 9. Agent Quality Features (v0.2.3+)
 
 ### Shutdown Reason Tracking
 
