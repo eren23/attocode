@@ -1,0 +1,183 @@
+{
+  "repo": "attocode",
+  "total": 15,
+  "passed": 8,
+  "results": [
+    {
+      "found_callers": [
+        "src/attocode/core/loop.py"
+      ],
+      "expected_callers": [
+        "src/attocode/core/loop.py"
+      ],
+      "recall": 1.0,
+      "passed": true,
+      "dep_output_len": 130,
+      "xref_output_len": 488,
+      "task_id": "trace_budget_enforcement",
+      "task_type": "trace_call_chain",
+      "time_s": 8.6
+    },
+    {
+      "found_callers": [
+        "src/attocode/core/loop.py"
+      ],
+      "expected_callers": [
+        "src/attocode/core/loop.py"
+      ],
+      "recall": 1.0,
+      "passed": true,
+      "dep_output_len": 522,
+      "xref_output_len": 109,
+      "task_id": "trace_tool_executor",
+      "task_type": "trace_call_chain",
+      "time_s": 0.0
+    },
+    {
+      "found_callers": [],
+      "expected_callers": [],
+      "recall": 1.0,
+      "passed": true,
+      "dep_output_len": 1893,
+      "xref_output_len": 1572,
+      "task_id": "trace_bootstrap",
+      "task_type": "trace_call_chain",
+      "time_s": 0.0
+    },
+    {
+      "error": "module 'attocode.code_intel.tools.analysis_tools' has no attribute 'explore_codebase'",
+      "passed": false,
+      "task_id": "dead_code_tools",
+      "task_type": "find_dead_code",
+      "time_s": 0.27
+    },
+    {
+      "error": "module 'attocode.code_intel.tools.analysis_tools' has no attribute 'explore_codebase'",
+      "passed": false,
+      "task_id": "dead_code_types",
+      "task_type": "find_dead_code",
+      "time_s": 0.0
+    },
+    {
+      "error": "module 'attocode.code_intel.tools.analysis_tools' has no attribute 'explore_codebase'",
+      "passed": false,
+      "task_id": "dead_code_legacy",
+      "task_type": "find_dead_code",
+      "time_s": 0.0
+    },
+    {
+      "affected_files": 99,
+      "min_required": 20,
+      "found_required": [
+        "src/attocode/core/loop.py",
+        "src/attocode/core/tool_executor.py"
+      ],
+      "expected_required": [
+        "src/attocode/core/loop.py",
+        "src/attocode/core/tool_executor.py"
+      ],
+      "passed": true,
+      "task_id": "impact_messages",
+      "task_type": "impact_assessment",
+      "time_s": 0.0
+    },
+    {
+      "affected_files": 34,
+      "min_required": 5,
+      "found_required": [
+        "src/attocode/integrations/budget/economics.py"
+      ],
+      "expected_required": [
+        "src/attocode/integrations/budget/economics.py"
+      ],
+      "passed": true,
+      "task_id": "impact_budget",
+      "task_type": "impact_assessment",
+      "time_s": 0.0
+    },
+    {
+      "affected_files": 9,
+      "min_required": 10,
+      "found_required": [],
+      "expected_required": [
+        "src/attocode/core/loop.py"
+      ],
+      "passed": false,
+      "task_id": "impact_context",
+      "task_type": "impact_assessment",
+      "time_s": 0.0
+    },
+    {
+      "passed": true,
+      "expected": [
+        "src/attocode/types/messages.py",
+        "src/attocode/errors/__init__.py"
+      ],
+      "output_len": 11527,
+      "task_id": "arch_highest_fanin",
+      "task_type": "architecture_quiz",
+      "time_s": 21.78
+    },
+    {
+      "passed": true,
+      "detected": 20,
+      "expected": 20,
+      "task_id": "arch_community_count",
+      "task_type": "architecture_quiz",
+      "time_s": 0.27
+    },
+    {
+      "passed": true,
+      "found": [
+        "src/attocode/types/messages.py",
+        "src/attocode/core/loop.py"
+      ],
+      "expected_any": [
+        "src/attocode/types/messages.py",
+        "src/attocode/core/loop.py",
+        "src/attocode/core/context.py"
+      ],
+      "task_id": "arch_critical_files",
+      "task_type": "architecture_quiz",
+      "time_s": 0.09
+    },
+    {
+      "found_definitions": [],
+      "expected_definitions": [
+        "src/attocode/integrations/context/codebase_ast.py"
+      ],
+      "usage_file_count": 14,
+      "min_usage_required": 10,
+      "passed": false,
+      "task_id": "symbol_codebase_context_manager",
+      "task_type": "cross_file_symbol_resolution",
+      "time_s": 0.0
+    },
+    {
+      "found_definitions": [],
+      "expected_definitions": [
+        "src/attocode/integrations/swarm/swarm_orchestrator.py"
+      ],
+      "usage_file_count": 11,
+      "min_usage_required": 5,
+      "passed": false,
+      "task_id": "symbol_swarm_orchestrator",
+      "task_type": "cross_file_symbol_resolution",
+      "time_s": 0.0
+    },
+    {
+      "found_definitions": [
+        "src/attocode/types/budget.py"
+      ],
+      "expected_definitions": [
+        "src/attocode/types/budget.py"
+      ],
+      "usage_file_count": 1,
+      "min_usage_required": 3,
+      "passed": false,
+      "task_id": "symbol_budget_enforcement",
+      "task_type": "cross_file_symbol_resolution",
+      "time_s": 0.0
+    }
+  ]
+}

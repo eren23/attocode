@@ -345,6 +345,157 @@ def cmd_summarize(args: argparse.Namespace) -> None:
     print(f"Wrote report: {out_path}")
 
 
+def cmd_run(args: argparse.Namespace) -> None:
+    """Run evaluation tasks directly using CodeIntelService."""
+    import time
+    import sys
+    import os
+    sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "..", "src"))
+
+    manifest = load_manifest(Path(args.manifest))
+    output_path = Path(args.output) if args.output else Path(manifest.data.get("execution", {}).get("results_file", "eval/oss_demo/results.jsonl"))
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+
+    # Resolve repo paths
+    benchmark_base = Path("/Users/eren/Documents/ai/benchmark-repos")
+    project_root = Path(__file__).resolve().parent.parent.parent
+
+    repo_paths: dict[str, Path] = {}
+    for repo in manifest.repos:
+        repo_id = repo["id"]
+        # Check benchmark-repos first, then project root for "attocode"
+        candidate = benchmark_base / repo_id
+        if candidate.exists():
+            repo_paths[repo_id] = candidate
+        elif repo_id == "attocode":
+            repo_paths[repo_id] = project_root
+        else:
+            # Try the repo name (e.g., "vscode" -> "microsoft/vscode" won't exist locally)
+            print(f"  SKIP: repo '{repo_id}' not found at {candidate}")
+
+    if not repo_paths:
+        print("No repos available locally. Clone repos to benchmark-repos/ first.")
+        return
+
+    print(f"Running {len(manifest.tasks)} tasks across {len(repo_paths)} repos...")
+    print()
+
+    results: list[dict[str, Any]] = []
+    run_id = f"oss-demo-{int(time.time())}"
+
+    for repo_id, repo_path in repo_paths.items():
+        print(f"  Repo: {repo_id} ({repo_path})")
+
+        try:
+            from attocode.code_intel.service import CodeIntelService
+            svc = CodeIntelService(str(repo_path))
+        except Exception as e:
+            print(f"    ERROR initializing CodeIntelService: {e}")
+            continue
+
+        for task in manifest.tasks:
+            task_id = task["id"]
+            expected_tools = task.get("expected_tools", [])
+
+            print(f"    Task: {task_id}...", end=" ", flush=True)
+
+            t0 = time.perf_counter()
+            output_parts: list[str] = []
+
+            try:
+                # Map expected_tools to CodeIntelService methods
+                for tool in expected_tools:
+                    try:
+                        if tool == "bootstrap":
+                            output_parts.append(svc.bootstrap(task_hint=task.get("prompt", "")[:200], max_tokens=8000))
+                        elif tool == "project_summary":
+                            output_parts.append(svc.bootstrap(task_hint="project summary", max_tokens=4000))
+                        elif tool == "explore_codebase":
+                            output_parts.append(svc.bootstrap(task_hint="explore structure", max_tokens=4000))
+                        elif tool == "relevant_context":
+                            output_parts.append(svc.bootstrap(task_hint="relevant context", max_tokens=4000))
+                        elif tool == "semantic_search":
+                            output_parts.append(svc.semantic_search(task.get("prompt", "code analysis")[:100]))
+                        elif tool == "impact_analysis":
+                            # Use a representative file
+                            files = list(repo_path.rglob("*.py"))[:1] or list(repo_path.rglob("*.go"))[:1] or list(repo_path.rglob("*.ts"))[:1]
+                            if files:
+                                rel = str(files[0].relative_to(repo_path))
+                                output_parts.append(svc.impact_analysis([rel]))
+                        elif tool == "dependency_graph":
+                            files = list(repo_path.rglob("*.py"))[:1] or list(repo_path.rglob("*.go"))[:1]
+                            if files:
+                                rel = str(files[0].relative_to(repo_path))
+                                output_parts.append(svc.dependency_graph(rel, depth=2))
+                        elif tool == "cross_references":
+                            output_parts.append(svc.cross_references("main"))
+                        elif tool == "hotspots":
+                            output_parts.append(svc.hotspots(top_n=10))
+                        elif tool == "conventions":
+                            output_parts.append(svc.conventions())
+                        elif tool in ("lsp_references", "lsp_diagnostics"):
+                            pass  # Skip LSP tools for now
+                    except Exception as tool_err:
+                        output_parts.append(f"[{tool} error: {tool_err}]")
+
+                elapsed_s = time.perf_counter() - t0
+                combined_output = "\n---\n".join(output_parts)
+
+                result = {
+                    "run_id": run_id,
+                    "agent_id": "code_intel_direct",
+                    "repo_id": repo_id,
+                    "task_id": task_id,
+                    "mode": "with_code_intel",
+                    "status": "passed" if combined_output and "error" not in combined_output.lower()[:50] else "failed",
+                    "time_s": round(elapsed_s, 2),
+                    "estimated_cost_usd": 0.0,
+                    "tool_calls": len(expected_tools),
+                    "output_len": len(combined_output),
+                    "score_task_completion": 0,
+                    "score_evidence_quality": 0,
+                    "score_technical_correctness": 0,
+                    "score_actionability": 0,
+                    "score_clarity": 0,
+                    "evidence_paths": [],
+                }
+
+                print(f"{elapsed_s:.1f}s, {len(combined_output)} chars")
+
+            except Exception as e:
+                elapsed_s = time.perf_counter() - t0
+                result = {
+                    "run_id": run_id,
+                    "agent_id": "code_intel_direct",
+                    "repo_id": repo_id,
+                    "task_id": task_id,
+                    "mode": "with_code_intel",
+                    "status": "error",
+                    "time_s": round(elapsed_s, 2),
+                    "estimated_cost_usd": 0.0,
+                    "tool_calls": 0,
+                    "output_len": 0,
+                    "error": str(e),
+                    "score_task_completion": 0,
+                    "score_evidence_quality": 0,
+                    "score_technical_correctness": 0,
+                    "score_actionability": 0,
+                    "score_clarity": 0,
+                    "evidence_paths": [],
+                }
+                print(f"ERROR: {e}")
+
+            results.append(result)
+
+    # Write results
+    with open(output_path, "w") as f:
+        for r in results:
+            f.write(json.dumps(r) + "\n")
+
+    passed = sum(1 for r in results if r["status"] == "passed")
+    print(f"\nResults: {passed}/{len(results)} passed, written to {output_path}")
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="OSS Big-3 code-intel demo helper")
     sub = parser.add_subparsers(dest="cmd")
@@ -364,6 +515,10 @@ def build_parser() -> argparse.ArgumentParser:
     p_summary.add_argument("--results", required=True)
     p_summary.add_argument("--out", required=True)
 
+    run_p = sub.add_parser("run", help="Run evaluation tasks via CodeIntelService")
+    run_p.add_argument("--manifest", required=True, help="Path to manifest YAML")
+    run_p.add_argument("--output", default="", help="Output JSONL path")
+
     return parser
 
 
@@ -377,6 +532,8 @@ def main() -> None:
         cmd_validate_results(args)
     elif args.cmd == "summarize":
         cmd_summarize(args)
+    elif args.cmd == "run":
+        cmd_run(args)
     else:
         parser.print_help()
 

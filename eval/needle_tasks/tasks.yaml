@@ -1,0 +1,146 @@
+# Needle-in-the-haystack deep code understanding tasks
+repo: attocode
+repo_path: /Users/eren/Documents/AI/first-principles-agent
+
+tasks:
+  # Type 1: Trace the Call Chain
+  - id: trace_budget_enforcement
+    type: trace_call_chain
+    description: "Trace all callers of check_token_budget up to depth 3"
+    target_function: check_token_budget
+    target_file: src/attocode/core/context.py
+    ground_truth:
+      direct_callers:
+        - src/attocode/core/loop.py
+      transitive_callers:
+        - src/attocode/agent/agent-builder.py
+    max_depth: 3
+
+  - id: trace_tool_executor
+    type: trace_call_chain
+    description: "Trace all callers of execute_tool up to depth 2"
+    target_function: execute_tool
+    target_file: src/attocode/core/tool_executor.py
+    ground_truth:
+      direct_callers:
+        - src/attocode/core/loop.py
+    max_depth: 2
+
+  - id: trace_bootstrap
+    type: trace_call_chain
+    description: "Trace what bootstrap() calls internally"
+    target_function: bootstrap
+    target_file: src/attocode/code_intel/service.py
+    ground_truth:
+      direct_callees:
+        - src/attocode/integrations/context/codebase_ast.py
+        - src/attocode/integrations/context/code_analyzer.py
+    max_depth: 2
+
+  # Type 2: Find Dead Code
+  - id: dead_code_tools
+    type: find_dead_code
+    description: "Find unreferenced public functions in the tools directory"
+    scope: src/attocode/tools/
+    ground_truth_method: cross_reference_check
+
+  - id: dead_code_types
+    type: find_dead_code
+    description: "Find unused type definitions in types/"
+    scope: src/attocode/types/
+    ground_truth_method: cross_reference_check
+
+  - id: dead_code_legacy
+    type: find_dead_code
+    description: "Find dead code in legacy compatibility layers"
+    scope: src/attocode/integrations/
+    ground_truth_method: cross_reference_check
+
+  # Type 3: Impact Assessment
+  - id: impact_messages
+    type: impact_assessment
+    description: "What would break if we changed the Message type in messages.py?"
+    target_file: src/attocode/types/messages.py
+    target_symbol: Message
+    ground_truth:
+      min_affected_files: 20
+      must_include:
+        - src/attocode/core/loop.py
+        - src/attocode/core/tool_executor.py
+
+  - id: impact_budget
+    type: impact_assessment
+    description: "Impact of changing BudgetEnforcementMode enum"
+    target_file: src/attocode/types/budget.py
+    target_symbol: BudgetEnforcementMode
+    ground_truth:
+      min_affected_files: 5
+      must_include:
+        - src/attocode/integrations/budget/economics.py
+
+  - id: impact_context
+    type: impact_assessment
+    description: "Impact of modifying AgentContext class"
+    target_file: src/attocode/core/context.py
+    target_symbol: AgentContext
+    ground_truth:
+      min_affected_files: 10
+      must_include:
+        - src/attocode/core/loop.py
+
+  # Type 4: Architecture Quiz
+  - id: arch_highest_fanin
+    type: architecture_quiz
+    question: "Which file has the highest fan-in (most files import it)?"
+    answer_type: file_path
+    ground_truth:
+      expected_answer: src/attocode/types/messages.py
+      acceptable_answers:
+        - src/attocode/types/messages.py
+        - src/attocode/errors/__init__.py
+
+  - id: arch_community_count
+    type: architecture_quiz
+    question: "How many architectural communities does the Louvain algorithm detect?"
+    answer_type: integer
+    ground_truth:
+      expected_answer: 20
+      tolerance: 5
+
+  - id: arch_critical_files
+    type: architecture_quiz
+    question: "What are the 3 most critical files by coupling (fan-in + fan-out)?"
+    answer_type: file_list
+    ground_truth:
+      must_include_any:
+        - src/attocode/types/messages.py
+        - src/attocode/core/loop.py
+        - src/attocode/core/context.py
+
+  # Type 5: Cross-File Symbol Resolution
+  - id: symbol_codebase_context_manager
+    type: cross_file_symbol_resolution
+    description: "Find all definitions and usages of CodebaseContextManager"
+    symbol: CodebaseContextManager
+    ground_truth:
+      definition_files:
+        - src/attocode/integrations/context/codebase_ast.py
+      min_usage_files: 10
+
+  - id: symbol_swarm_orchestrator
+    type: cross_file_symbol_resolution
+    description: "Find all definitions of SwarmOrchestrator"
+    symbol: SwarmOrchestrator
+    ground_truth:
+      definition_files:
+        - src/attocode/integrations/swarm/swarm_orchestrator.py
+      min_usage_files: 5
+
+  - id: symbol_budget_enforcement
+    type: cross_file_symbol_resolution
+    description: "Find all usages of BudgetEnforcementMode across the codebase"
+    symbol: BudgetEnforcementMode
+    ground_truth:
+      definition_files:
+        - src/attocode/types/budget.py
+      min_usage_files: 3
