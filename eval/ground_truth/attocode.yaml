@@ -1,0 +1,79 @@
+# Ground-truth search quality evaluation for attocode
+# Repo root: /Users/eren/Documents/AI/first-principles-agent
+repo: attocode
+queries:
+  - query: "token budget management and enforcement"
+    relevant_files:
+      - src/attocode/types/budget.py
+      - src/attocode/integrations/budget/economics.py
+      - src/attocode/integrations/budget/budget_pool.py
+      - src/attocode/integrations/budget/dynamic_budget.py
+      - src/attocode/shared/budget_tracker.py
+
+  - query: "message routing and tool dispatch"
+    relevant_files:
+      - src/attocode/types/messages.py
+      - src/attocode/core/tool_executor.py
+      - src/attocode/tools/registry.py
+      - src/attocode/core/response_handler.py
+
+  - query: "swarm task decomposition and scheduling"
+    relevant_files:
+      - src/attocode/integrations/tasks/decomposer.py
+      - src/attocode/integrations/swarm/task_queue.py
+      - src/attocode/integrations/tasks/task_splitter.py
+      - src/attocode/integrations/tasks/dependency_analyzer.py
+      - src/attocode/integrations/swarm/task_enrichment.py
+
+  - query: "agent session persistence and checkpoints"
+    relevant_files:
+      - src/attocode/agent/session_api.py
+      - src/attocode/agent/checkpoint_api.py
+      - src/attocode/integrations/persistence/store.py
+      - src/attocode/integrations/persistence/history.py
+      - src/attocode/shared/persistence.py
+
+  - query: "code intelligence AST parsing and symbol indexing"
+    relevant_files:
+      - src/attocode/integrations/context/codebase_ast.py
+      - src/attocode/integrations/context/code_analyzer.py
+      - src/attocode/integrations/context/ast_chunker.py
+      - src/attocode/code_intel/indexing/parser.py
+      - src/attocode/code_intel/storage/symbol_store.py
+
+  - query: "safety guardrails and content filtering"
+    relevant_files:
+      - src/attocode/integrations/safety/policy_engine.py
+      - src/attocode/integrations/safety/bash_policy.py
+      - src/attocode/integrations/safety/edit_validator.py
+      - src/attocode/integrations/security/patterns.py
+
+  - query: "MCP server integration and tool protocol"
+    relevant_files:
+      - src/attocode/integrations/mcp/client_manager.py
+      - src/attocode/integrations/mcp/client.py
+      - src/attocode/integrations/mcp/config.py
+      - src/attocode/agent/mcp_connector.py
+
+  - query: "execution loop and iteration control"
+    relevant_files:
+      - src/attocode/core/loop.py
+      - src/attocode/core/completion.py
+      - src/attocode/core/agent_state_machine.py
+      - src/attocode/integrations/budget/loop_detector.py
+
+  - query: "worker pool and parallel agent spawning"
+    relevant_files:
+      - src/attocode/integrations/swarm/worker_pool.py
+      - src/attocode/integrations/swarm/execution.py
+      - src/attocode/integrations/swarm/orchestrator.py
+      - src/attocode/core/subagent_spawner.py
+      - src/attocode/integrations/swarm/cc_spawner.py
+
+  - query: "codebase embedding and semantic search"
+    relevant_files:
+      - src/attocode/integrations/context/embeddings.py
+      - src/attocode/code_intel/storage/embedding_store.py
+      - src/attocode/code_intel/tools/search_tools.py
+      - src/attocode/tools/semantic_search.py
+      - src/attocode/integrations/context/semantic_search.py

@@ -1,0 +1,43 @@
+# Ground-truth search quality evaluation for pandas
+# Repo root: /Users/eren/Documents/ai/benchmark-repos/pandas
+repo: pandas
+queries:
+  - query: "missing data handling and NaN propagation"
+    relevant_files:
+      - pandas/core/missing.py
+      - pandas/core/dtypes/missing.py
+      - pandas/core/ops/missing.py
+      - pandas/core/array_algos/masked_reductions.py
+      - pandas/core/nanops.py
+
+  - query: "DataFrame indexing and label-based access"
+    relevant_files:
+      - pandas/core/indexing.py
+      - pandas/core/frame.py
+      - pandas/core/indexes/base.py
+      - pandas/core/indexes/multi.py
+      - pandas/core/series.py
+
+  - query: "CSV parsing and file I/O"
+    relevant_files:
+      - pandas/io/parsers/readers.py
+      - pandas/io/parsers/python_parser.py
+      - pandas/io/parsers/c_parser_wrapper.py
+      - pandas/io/parsers/base_parser.py
+      - pandas/io/common.py
+
+  - query: "groupby aggregation and split-apply-combine"
+    relevant_files:
+      - pandas/core/groupby/groupby.py
+      - pandas/core/groupby/generic.py
+      - pandas/core/groupby/ops.py
+      - pandas/core/groupby/grouper.py
+      - pandas/core/apply.py
+
+  - query: "datetime and timedelta operations"
+    relevant_files:
+      - pandas/core/arrays/datetimes.py
+      - pandas/core/arrays/timedeltas.py
+      - pandas/core/arrays/datetimelike.py
+      - pandas/core/tools/datetimes.py
+      - pandas/core/indexes/datetimes.py

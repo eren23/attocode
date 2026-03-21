@@ -1,0 +1,42 @@
+# Ground-truth search quality evaluation for redis
+# Repo root: /Users/eren/Documents/ai/benchmark-repos/redis
+repo: redis
+queries:
+  - query: "event-driven server architecture and command handling"
+    relevant_files:
+      - src/server.c
+      - src/networking.c
+      - src/ae.c
+      - src/commands.c
+      - src/connection.c
+
+  - query: "data structure implementation for sorted sets"
+    relevant_files:
+      - src/t_zset.c
+      - src/ziplist.c
+      - src/listpack.c
+      - src/intset.c
+      - src/dict.c
+
+  - query: "persistence and RDB snapshot mechanism"
+    relevant_files:
+      - src/rdb.c
+      - src/aof.c
+      - src/rio.c
+      - src/bio.c
+      - src/childinfo.c
+
+  - query: "cluster communication and node discovery"
+    relevant_files:
+      - src/cluster.c
+      - src/cluster_legacy.c
+      - src/cluster_slot_stats.c
+      - src/cluster_asm.c
+
+  - query: "memory management and eviction policies"
+    relevant_files:
+      - src/evict.c
+      - src/zmalloc.c
+      - src/lazyfree.c
+      - src/defrag.c
+      - src/object.c

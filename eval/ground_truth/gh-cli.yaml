@@ -1,0 +1,40 @@
+# Ground-truth search quality evaluation for gh-cli
+# Repo root: /Users/eren/Documents/ai/benchmark-repos/gh-cli
+repo: gh-cli
+queries:
+  - query: "CLI command factory and command execution"
+    relevant_files:
+      - internal/ghcmd/cmd.go
+      - pkg/cmd/root/root.go
+      - pkg/cmd/factory/default.go
+      - pkg/cmdutil/factory.go
+
+  - query: "GitHub API client and authentication"
+    relevant_files:
+      - api/client.go
+      - api/http_client.go
+      - internal/authflow/flow.go
+      - pkg/cmd/auth/shared/login_flow.go
+      - internal/config/config.go
+
+  - query: "pull request creation and review workflow"
+    relevant_files:
+      - pkg/cmd/pr/create/create.go
+      - pkg/cmd/pr/review/review.go
+      - pkg/cmd/pr/shared/finder.go
+      - api/queries_pr.go
+      - pkg/cmd/pr/shared/survey.go
+
+  - query: "issue listing and filtering"
+    relevant_files:
+      - pkg/cmd/issue/list/list.go
+      - pkg/cmd/issue/list/http.go
+      - api/queries_issue.go
+      - pkg/cmd/issue/shared/lookup.go
+
+  - query: "repository cloning and forking"
+    relevant_files:
+      - pkg/cmd/repo/clone/clone.go
+      - pkg/cmd/repo/fork/fork.go
+      - pkg/cmd/repo/create/create.go
+      - git/client.go

@@ -1,0 +1,41 @@
+# Ground-truth search quality evaluation for fastapi
+# Repo root: /Users/eren/Documents/ai/benchmark-repos/fastapi
+repo: fastapi
+queries:
+  - query: "request validation and dependency injection"
+    relevant_files:
+      - fastapi/dependencies/utils.py
+      - fastapi/dependencies/models.py
+      - fastapi/routing.py
+      - fastapi/params.py
+      - fastapi/param_functions.py
+
+  - query: "OpenAPI schema generation"
+    relevant_files:
+      - fastapi/openapi/utils.py
+      - fastapi/openapi/models.py
+      - fastapi/openapi/constants.py
+      - fastapi/openapi/docs.py
+      - fastapi/utils.py
+
+  - query: "WebSocket handling and connection management"
+    relevant_files:
+      - fastapi/websockets.py
+      - fastapi/routing.py
+      - fastapi/applications.py
+
+  - query: "middleware stack and request lifecycle"
+    relevant_files:
+      - fastapi/middleware/asyncexitstack.py
+      - fastapi/middleware/cors.py
+      - fastapi/middleware/httpsredirect.py
+      - fastapi/middleware/trustedhost.py
+      - fastapi/applications.py
+
+  - query: "response model serialization and encoding"
+    relevant_files:
+      - fastapi/encoders.py
+      - fastapi/responses.py
+      - fastapi/routing.py
+      - fastapi/_compat/shared.py
+      - fastapi/utils.py
