@@ -74,12 +74,14 @@ def create_app(config: CodeIntelConfig | None = None) -> FastAPI:
     from fastapi.middleware.cors import CORSMiddleware
 
     from attocode.code_intel.api import deps
-    from attocode.code_intel.api.middleware import RequestLoggingMiddleware
+    from attocode.code_intel.api.middleware import MetricsMiddleware, RequestLoggingMiddleware
     from attocode.code_intel.api.routes import (
         analysis,
         files,
         graph,
+        graph_viz,
         health,
+        history,
         learning,
         lsp,
         notify,
@@ -118,6 +120,7 @@ def create_app(config: CodeIntelConfig | None = None) -> FastAPI:
         allow_headers=["*"],
     )
     app.add_middleware(RequestLoggingMiddleware)
+    app.add_middleware(MetricsMiddleware)
 
     # Rate limiting (service mode only)
     if config.is_service_mode:
@@ -140,6 +143,8 @@ def create_app(config: CodeIntelConfig | None = None) -> FastAPI:
     app.include_router(learning.router_v2)
     app.include_router(notify.router)
     app.include_router(files.router)
+    app.include_router(history.router)
+    app.include_router(graph_viz.router)
 
     # Service mode routes
     if config.is_service_mode:
@@ -148,6 +153,7 @@ def create_app(config: CodeIntelConfig | None = None) -> FastAPI:
             api_keys,
             auth,
             branches,
+            cross_repo_search,
             embeddings,
             files_v2,
             git_v2,
@@ -175,10 +181,23 @@ def create_app(config: CodeIntelConfig | None = None) -> FastAPI:
         app.include_router(presence.router)
         app.include_router(activity.router)
         app.include_router(preferences.router)
+        app.include_router(cross_repo_search.router)
+
+    # Graph visualization — serve the bundled HTML page at /graph
+    import os
+    from pathlib import Path
+
+    from starlette.responses import FileResponse as _FileResponse
+
+    _graph_html = Path(__file__).resolve().parent / "static" / "graph.html"
+
+    @app.get("/graph", include_in_schema=False)
+    async def graph_visualization_page() -> _FileResponse:
+        """Serve the D3 dependency-graph visualization."""
+        return _FileResponse(str(_graph_html), media_type="text/html")
 
     # SPA fallback — serve frontend static files (registered LAST so it
     # doesn't shadow /api/*, /docs, /redoc, /openapi.json).
-    import os
 
     static_dir = os.environ.get("ATTOCODE_STATIC_DIR", "/app/static")
     if os.path.isdir(static_dir):

@@ -1294,3 +1294,25 @@ class TestVerifyEmptyChecks:
         )
         assert result.passed is True
         assert result.checks == []
+
+
+# ---------------------------------------------------------------------------
+# VerificationGate._llm_verify — no-provider guard
+# ---------------------------------------------------------------------------
+
+
+class TestLLMVerifyNoProviderGuard:
+    """_llm_verify returns failed CheckResult when provider is None."""
+
+    @pytest.mark.asyncio
+    async def test_returns_failed_check_result(self) -> None:
+        gate = VerificationGate(provider=None)
+        result = await gate._llm_verify(_make_subtask(), "result")
+        assert result.name == "llm"
+        assert result.passed is False
+
+    @pytest.mark.asyncio
+    async def test_message_matches_expected_string(self) -> None:
+        gate = VerificationGate(provider=None)
+        result = await gate._llm_verify(_make_subtask(), "result")
+        assert result.message == "No LLM provider configured"

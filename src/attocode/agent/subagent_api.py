@@ -40,6 +40,8 @@ async def spawn_agent(
                 .with_provider(provider=agent._provider)
                 .with_model(model or agent._config.model or "")
                 .with_working_dir(agent._working_dir)
+                .with_project_root(agent._project_root)
+                .with_rules(list(agent._config.rules))
                 .with_budget(sub_budget)
                 .with_compaction(False)
                 .with_spawn_agent(False)

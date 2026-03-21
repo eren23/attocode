@@ -255,6 +255,13 @@ class ExecutionEconomicsManager:
 
     def __post_init__(self) -> None:
         self._start_time = time.monotonic()
+        if self.budget.max_tokens <= 0:
+            import logging as _logging
+            _logging.getLogger(__name__).warning(
+                "Invalid budget.max_tokens=%d, clamping to 100000",
+                self.budget.max_tokens,
+            )
+            self.budget.max_tokens = 100_000
         self._original_max_tokens = self.budget.max_tokens
         self._tuning = EconomicsTuning()
         self._progress = ProgressState()

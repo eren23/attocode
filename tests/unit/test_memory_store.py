@@ -308,3 +308,42 @@ class TestEdgeCases:
         c2 = [lr for lr in r2 if lr["id"] == lid][0]["confidence"]
 
         assert c1 == c2, "Decay should be time-gated, not applied on every recall"
+
+
+# =============================================================================
+# Closed-connection guard
+# =============================================================================
+
+
+class TestMemoryStoreClosedConnection:
+    """All public methods raise RuntimeError after close()."""
+
+    def test_recall_after_close_raises(self, tmp_path):
+        s = MemoryStore(project_dir=str(tmp_path))
+        s.close()
+        with pytest.raises(RuntimeError, match="MemoryStore connection is closed"):
+            s.recall("x")
+
+    def test_add_after_close_raises(self, tmp_path):
+        s = MemoryStore(project_dir=str(tmp_path))
+        s.close()
+        with pytest.raises(RuntimeError, match="MemoryStore connection is closed"):
+            s.add("pattern", "x")
+
+    def test_list_all_after_close_raises(self, tmp_path):
+        s = MemoryStore(project_dir=str(tmp_path))
+        s.close()
+        with pytest.raises(RuntimeError, match="MemoryStore connection is closed"):
+            s.list_all()
+
+    def test_record_feedback_after_close_raises(self, tmp_path):
+        s = MemoryStore(project_dir=str(tmp_path))
+        lid = s.add("pattern", "test")
+        s.close()
+        with pytest.raises(RuntimeError, match="MemoryStore connection is closed"):
+            s.record_feedback(lid, helpful=True)
+
+    def test_double_close_is_safe(self, tmp_path):
+        s = MemoryStore(project_dir=str(tmp_path))
+        s.close()
+        s.close()  # should not raise

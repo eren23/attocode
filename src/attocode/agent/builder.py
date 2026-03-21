@@ -37,6 +37,7 @@ class AgentBuilder:
         self._budget = STANDARD_BUDGET
         self._system_prompt: str | None = None
         self._working_dir: str = ""
+        self._project_root: str = ""
         self._event_handlers: list[EventHandler] = []
         self._provider_name: str | None = None
         self._provider_kwargs: dict[str, Any] = {}
@@ -136,6 +137,11 @@ class AgentBuilder:
         self._working_dir = path
         return self
 
+    def with_project_root(self, path: str) -> AgentBuilder:
+        """Set the resolved project root for project-scoped resources."""
+        self._project_root = path
+        return self
+
     def with_temperature(self, temp: float) -> AgentBuilder:
         """Set the LLM temperature."""
         self._config.temperature = temp
@@ -207,9 +213,15 @@ class AgentBuilder:
         self._session_dir = path
         return self
 
-    def with_resume_session(self, session_id: str) -> AgentBuilder:
+    def with_resume_session(self, session_id: str, *, explicit: bool = False) -> AgentBuilder:
         """Set a session ID to resume on first run."""
         self._config.resume_session = session_id
+        self._config.resume_session_explicit = explicit
+        return self
+
+    def with_rules(self, rules: list[str]) -> AgentBuilder:
+        """Set persistent prompt rules loaded from config/rules files."""
+        self._config.rules = list(rules)
         return self
 
     def with_spawn_agent(self, enabled: bool = True) -> AgentBuilder:
@@ -302,6 +314,8 @@ class AgentBuilder:
                 provider_name=self._provider_name,
                 api_key=self._provider_kwargs.get("api_key"),
                 model=self._provider_kwargs.get("model"),
+                project_root=self._project_root or self._working_dir or None,
+                rules=list(self._config.rules),
             )
 
         # Resolve policy engine
@@ -339,6 +353,7 @@ class AgentBuilder:
             budget=self._budget,
             system_prompt=self._system_prompt,
             working_dir=self._working_dir,
+            project_root=self._project_root,
             policy_engine=policy_engine,
             approval_callback=self._approval_callback,
             economics=economics,

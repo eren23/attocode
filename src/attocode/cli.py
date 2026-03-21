@@ -2,14 +2,80 @@
 
 from __future__ import annotations
 
-import sys
 import os
+import sys
+from pathlib import Path
 from typing import Any
 
 import click
 
 from attocode import __version__
-from attocode.config import load_config
+from attocode.config import infer_project_root_from_session_dir, load_config
+
+
+def _config_project_root(config: Any) -> str:
+    """Return the resolved project root for the active config."""
+    project_root = getattr(config, "project_root", "") or ""
+    if project_root:
+        return str(project_root)
+
+    inferred = infer_project_root_from_session_dir(getattr(config, "session_dir", "") or "")
+    if inferred:
+        return inferred
+
+    return str(Path(config.working_directory).resolve())
+
+
+async def _validate_staged_resume_for_tui(agent: Any, config: Any) -> list[str]:
+    """Drop stale staged resume IDs that do not belong to the current project."""
+    session_id = getattr(getattr(agent, "config", None), "resume_session", None)
+    if not session_id:
+        return []
+    explicit_resume = bool(getattr(getattr(agent, "config", None), "resume_session_explicit", False))
+
+    store = await agent.ensure_session_store()
+    if not store:
+        return []
+
+    try:
+        session = await store.get_session(session_id)
+    except Exception:
+        return []
+
+    if session is None:
+        agent.config.resume_session = None
+        agent.config.resume_session_explicit = False
+        return [f"Ignored staged resume '{session_id}' because it was not found in this project session store."]
+
+    metadata = session.metadata if isinstance(session.metadata, dict) else {}
+    current_project_root = _config_project_root(config)
+    current_session_dir = str(Path(config.session_dir).resolve()) if getattr(config, "session_dir", "") else ""
+
+    stored_session_dir = str(metadata.get("session_dir", "") or "")
+    if stored_session_dir and current_session_dir:
+        try:
+            if Path(stored_session_dir).resolve() != Path(current_session_dir):
+                agent.config.resume_session = None
+                agent.config.resume_session_explicit = False
+                return [f"Ignored staged resume '{session_id}' because it belongs to a different project session store."]
+        except OSError:
+            pass
+    elif not explicit_resume:
+        agent.config.resume_session = None
+        agent.config.resume_session_explicit = False
+        return [f"Ignored staged resume '{session_id}' because it lacks trusted project metadata."]
+
+    stored_project_root = str(metadata.get("project_root", "") or "")
+    if stored_project_root and current_project_root:
+        try:
+            if Path(stored_project_root).resolve() != Path(current_project_root).resolve():
+                agent.config.resume_session = None
+                agent.config.resume_session_explicit = False
+                return [f"Ignored staged resume '{session_id}' because it belongs to a different project root."]
+        except OSError:
+            pass
+
+    return []
 
 
 @click.command()
@@ -106,6 +172,7 @@ def main(
     # Session resume
     if resume:
         cli_args["resume_session"] = resume
+        cli_args["resume_session_explicit"] = True
 
     if swarm_config is not None:
         cli_args["swarm"] = True
@@ -182,6 +249,8 @@ def _run_single_turn(config: Any, prompt: str) -> None:
                 .with_provider(config.provider, api_key=config.api_key, timeout=config.timeout)
                 .with_model(config.model)
                 .with_working_dir(config.working_directory)
+                .with_project_root(_config_project_root(config))
+                .with_rules(config.rules)
                 .with_budget(ExecutionBudget(
                     max_tokens=config.budget_max_tokens,
                     max_iterations=config.max_iterations,
@@ -203,7 +272,10 @@ def _run_single_turn(config: Any, prompt: str) -> None:
             if config.session_dir:
                 builder = builder.with_session_dir(config.session_dir)
             if config.resume_session:
-                builder = builder.with_resume_session(config.resume_session)
+                builder = builder.with_resume_session(
+                    config.resume_session,
+                    explicit=bool(getattr(config, "resume_session_explicit", False)),
+                )
 
             if config.system_prompt:
                 builder = builder.with_system_prompt(config.system_prompt)
@@ -378,6 +450,8 @@ def _run_tui(config: Any) -> None:
         .with_provider(config.provider, api_key=config.api_key, timeout=config.timeout)
         .with_model(config.model)
         .with_working_dir(config.working_directory)
+        .with_project_root(_config_project_root(config))
+        .with_rules(config.rules)
         .with_budget(ExecutionBudget(
             max_tokens=config.budget_max_tokens,
             max_iterations=config.max_iterations,
@@ -399,7 +473,10 @@ def _run_tui(config: Any) -> None:
     if config.session_dir:
         builder = builder.with_session_dir(config.session_dir)
     if config.resume_session:
-        builder = builder.with_resume_session(config.resume_session)
+        builder = builder.with_resume_session(
+            config.resume_session,
+            explicit=bool(getattr(config, "resume_session_explicit", False)),
+        )
 
     # Set up trace writer for recording execution traces
     trace_writer = TraceWriter(
@@ -421,7 +498,7 @@ def _run_tui(config: Any) -> None:
     # Load MCP server configs from hierarchy and wire into builder
     from attocode.integrations.mcp.config import load_mcp_configs
 
-    mcp_configs = load_mcp_configs(config.working_directory)
+    mcp_configs = load_mcp_configs(_config_project_root(config))
     if mcp_configs:
         mcp_dicts = [
             {
@@ -442,11 +519,17 @@ def _run_tui(config: Any) -> None:
     builder = builder.with_approval_callback(approval_bridge.request_approval)
 
     agent = builder.build()
-    try:
-        asyncio.run(agent.ensure_command_context())
-    except Exception:
-        if config.debug:
-            click.echo("Warning: command context bootstrap failed.", err=True)
+
+    async def _bootstrap_tui_agent() -> list[str]:
+        messages = await _validate_staged_resume_for_tui(agent, config)
+        try:
+            await agent.ensure_command_context()
+        except Exception:
+            if config.debug:
+                click.echo("Warning: command context bootstrap failed.", err=True)
+        return messages
+
+    startup_messages = asyncio.run(_bootstrap_tui_agent())
 
     async def _request_budget_extension(
         current_tokens: int,
@@ -589,6 +672,12 @@ def _run_tui(config: Any) -> None:
                 (event.metadata or {}).get("message", "Loop guard activated."),
                 mode="warning",
             ))
+        elif event.type in (EventType.SESSION_RESUMED, EventType.SESSION_RESUME_REJECTED):
+            meta = event.metadata or {}
+            msg = meta.get("message") or (
+                f"Resumed session {event.session_id}" if event.session_id else "Session resume update."
+            )
+            _post_event(StatusUpdate(msg, mode=meta.get("mode", "info")))
 
     agent.on_event(_on_agent_event)
 
@@ -629,6 +718,7 @@ def _run_tui(config: Any) -> None:
         git_branch=git_branch,
         agent=agent,
         approval_bridge=approval_bridge,
+        startup_messages=startup_messages,
     )
     try:
         app.run()

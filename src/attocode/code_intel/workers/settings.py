@@ -9,6 +9,7 @@ from arq.cron import cron
 
 from attocode.code_intel.workers.jobs import (
     cleanup_stale_branches,
+    gc_orphaned_embeddings,
     gc_unreferenced_content,
     generate_embeddings,
     index_branch_delta,
@@ -38,6 +39,7 @@ class WorkerSettings:
         index_repository,
         index_branch_delta,
         generate_embeddings,
+        gc_orphaned_embeddings,
     ]
 
     cron_jobs = [
@@ -45,6 +47,8 @@ class WorkerSettings:
         cron(cleanup_stale_branches, hour={0, 6, 12, 18}, minute=0),
         # Every 24 hours: GC unreferenced content
         cron(gc_unreferenced_content, hour=3, minute=0),
+        # Daily at 3:30am: GC orphaned embeddings
+        cron(gc_orphaned_embeddings, hour=3, minute=30),
         # Every 24 hours: prune expired token revocations
         cron(prune_expired_revocations, hour=4, minute=0),
     ]

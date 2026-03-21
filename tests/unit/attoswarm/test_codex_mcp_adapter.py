@@ -8,6 +8,7 @@ from dataclasses import dataclass, field
 from unittest.mock import AsyncMock, MagicMock
 
 from attoswarm.adapters.codex_mcp import CodexMcpAdapter
+from attoswarm.adapters.base import AgentHandle, AgentMessage, AgentProcessSpec
 
 
 def _adapter() -> CodexMcpAdapter:
@@ -162,6 +163,35 @@ class TestThreadManagement:
         adapter.store_thread_id("agent-2", "t-2")
         assert adapter.get_thread_id("agent-1") == "t-1"
         assert adapter.get_thread_id("agent-2") == "t-2"
+
+    def test_new_task_on_same_worker_clears_old_thread(self) -> None:
+        adapter = _adapter()
+        adapter.store_thread_id("agent-1", "thread-old")
+        adapter._thread_task_ids["agent-1"] = "task-old"
+
+        writes: list[bytes] = []
+
+        class _FakeStdin:
+            def write(self, data: bytes) -> None:
+                writes.append(data)
+
+            async def drain(self) -> None:
+                return None
+
+        @dataclass
+        class _FakeProcess:
+            stdin: _FakeStdin = field(default_factory=_FakeStdin)
+
+        spec = AgentProcessSpec(agent_id="agent-1", backend="codex-mcp", binary="codex", args=[])
+        handle = AgentHandle(spec=spec, process=_FakeProcess())  # type: ignore[arg-type]
+        msg = AgentMessage(message_id="m1", task_id="task-new", kind="task_assign", content="do new task")
+
+        asyncio.new_event_loop().run_until_complete(adapter.send_message(handle, msg))
+
+        payload = json.loads(writes[0].decode("utf-8").strip())
+        assert payload["params"]["name"] == "codex"
+        assert adapter.get_thread_id("agent-1") is None
+        assert adapter._thread_task_ids["agent-1"] == "task-new"
 
 
 class TestCodexAdapterDefaultModel:

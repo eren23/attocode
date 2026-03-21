@@ -41,6 +41,20 @@ class StateStore:
         # Cross-run staleness detection
         self._last_run_id: str | None = None
 
+    def _invalidate_run_caches(self) -> None:
+        """Clear caches that can leak stale data across run_id transitions."""
+        self._events_cache.clear()
+        self._events_last_size = 0
+        self._task_cache.clear()
+
+        for attr in list(vars(self)):
+            if (
+                attr.startswith("_trace_summary_")
+                or attr.startswith("_trace_offset_")
+                or attr in {"_messages_cache", "_sidecar_cache", "_events_last_stat"}
+            ):
+                delattr(self, attr)
+
     def read_state(self) -> dict[str, Any]:
         """Read state with mtime + state_seq change detection."""
         try:
@@ -61,9 +75,7 @@ class StateStore:
                 # New run detected (or first run after _last_run_id was None)
                 if self._last_run_id is not None:
                     # Only clear caches if we had a PREVIOUS run cached
-                    self._events_cache.clear()
-                    self._events_last_size = 0
-                    self._task_cache.clear()
+                    self._invalidate_run_caches()
                 self._last_run_id = run_id
             elif run_id:
                 self._last_run_id = run_id

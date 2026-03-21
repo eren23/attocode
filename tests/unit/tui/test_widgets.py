@@ -95,6 +95,45 @@ class TestPlanTask:
         assert plan.current_task is None
 
 
+class TestEventTimelineTrim:
+    """EventTimeline trims events to 100."""
+
+    def test_update_events_trims_to_100(self) -> None:
+        from unittest.mock import patch
+
+        from attocode.tui.widgets.swarm.event_timeline import EventTimeline
+
+        with patch.object(EventTimeline, "_rebuild"):
+            et = EventTimeline()
+            et.update_events([{"type": f"e{i}", "data": {}} for i in range(150)])
+            assert len(et.events) == 100
+
+    def test_add_event_trims_to_100(self) -> None:
+        from unittest.mock import patch
+
+        from attocode.tui.widgets.swarm.event_timeline import EventTimeline
+
+        with patch.object(EventTimeline, "_rebuild"):
+            et = EventTimeline()
+            # Pre-set to exactly 100
+            et.events = [{"type": f"e{i}", "data": {}} for i in range(100)]
+            et.add_event({"type": "new", "data": {}})
+            assert len(et.events) == 100
+            assert et.events[-1]["type"] == "new"
+
+
+class TestEventsLogMaxLines:
+    """EventsLog compose yields RichLog with max_lines=1000."""
+
+    def test_compose_yields_richlog_with_max_lines(self) -> None:
+        from attocode.tui.widgets.swarm.event_timeline import EventsLog
+
+        log = EventsLog()
+        children = list(log.compose())
+        assert len(children) >= 1
+        assert children[0].max_lines == 1000
+
+
 class TestStatusBar:
     def test_line1_shows_context_and_budget_together(self) -> None:
         status = StatusBar()

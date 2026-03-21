@@ -207,15 +207,15 @@ class SwarmWorkerPool:
             try:
                 acquired = self._budget_pool.acquire(task.id, budget["max_tokens"])
                 if not acquired:
-                    logger.warning(
-                        "Budget pool exhausted for task %s; dispatching anyway",
-                        task.id,
+                    raise AgentError(
+                        f"Budget pool exhausted for task {task.id}"
                     )
-            except Exception:
-                logger.warning(
-                    "Budget acquisition failed for task %s; dispatching anyway",
-                    task.id,
-                )
+            except AgentError:
+                raise
+            except Exception as exc:
+                raise AgentError(
+                    f"Budget acquisition failed for task {task.id}: {exc}"
+                ) from exc
 
         # Build system prompt
         attempt = task.attempts
@@ -625,6 +625,49 @@ class SwarmWorkerPool:
             files_str = "\n".join(f"- {f}" for f in task.read_files)
             sections.append(f"**Reference files (read-only):**\n{files_str}")
 
+        # ---- Enrichment data from original_subtask (all tiers) ---- #
+        _orig = task.original_subtask
+        if _orig is not None:
+            if _orig.get("acceptance_criteria"):
+                criteria_str = "\n".join(
+                    f"- {c}" for c in _orig["acceptance_criteria"]
+                )
+                sections.append(
+                    f"**Acceptance criteria:**\n{criteria_str}"
+                )
+
+            if _orig.get("technical_constraints"):
+                constraints_str = "\n".join(
+                    f"- {c}" for c in _orig["technical_constraints"]
+                )
+                sections.append(
+                    f"**Technical constraints:**\n{constraints_str}"
+                )
+
+            if _orig.get("code_context_snippets"):
+                # Include up to 3 snippets, truncated to 1500 chars each
+                for i, snippet in enumerate(_orig["code_context_snippets"][:3]):
+                    truncated = snippet[:1500]
+                    if len(snippet) > 1500:
+                        truncated += "\n... (truncated)"
+                    sections.append(
+                        f"**Code context ({i + 1}):**\n{truncated}"
+                    )
+
+            if _orig.get("modification_instructions"):
+                sections.append(
+                    f"**Modification instructions:**\n"
+                    f"{_orig['modification_instructions']}"
+                )
+
+            if _orig.get("test_expectations"):
+                expectations_str = "\n".join(
+                    f"- {e}" for e in _orig["test_expectations"]
+                )
+                sections.append(
+                    f"**Test expectations:**\n{expectations_str}"
+                )
+
         # ---- Retry context (all tiers when attempt > 0) ---- #
         if attempt > 0 and task.retry_context is not None:
             rc = task.retry_context
@@ -647,6 +690,34 @@ class SwarmWorkerPool:
                 retry_parts.append(
                     f"**Swarm progress:** {rc.swarm_progress}"
                 )
+
+            # Structured error feedback for precise retries
+            if rc.compilation_errors:
+                retry_parts.append(
+                    "\n**COMPILATION ERRORS (must fix):**"
+                )
+                for ce in rc.compilation_errors:
+                    loc = ce.get("file", "unknown")
+                    line = ce.get("line")
+                    if line is not None:
+                        loc += f":{line}"
+                    msg = ce.get("message", "unknown error")
+                    retry_parts.append(f"  - `{loc}`: {msg}")
+
+            if rc.test_failures:
+                retry_parts.append(
+                    "\n**TEST FAILURES (must fix):**"
+                )
+                for tf in rc.test_failures:
+                    retry_parts.append(f"  - {tf}")
+
+            if rc.verification_suggestions:
+                retry_parts.append(
+                    "\n**FIX SUGGESTIONS:**"
+                )
+                for vs in rc.verification_suggestions:
+                    retry_parts.append(f"  - {vs}")
+
             sections.append("\n".join(retry_parts))
 
         # ---- Dependency context (all tiers) ---- #
@@ -700,7 +771,15 @@ class SwarmWorkerPool:
                 "- Make concrete changes (create/edit files, run commands).\n"
                 "- Do NOT just describe what you would do.\n"
                 "- Do NOT output plans or future-intent language.\n"
-                "- Verify your changes work (run tests if applicable)."
+            )
+            sections.append(
+                "\n## MANDATORY: Validation Before Completion\n\n"
+                "After making changes, you MUST:\n"
+                "1. For Python files: run `python -c \"compile(open('F').read(), 'F', 'exec')\"` on each modified file\n"
+                "2. For TypeScript files: run `npx tsc --noEmit` to check for type errors\n"
+                "3. Run the project's test suite if applicable (`pytest`, `npm test`)\n"
+                "4. Fix any errors before reporting completion\n\n"
+                "If you cannot fix an error, explicitly state what failed and why."
             )
 
         # ---- Quality self-assessment (full only) ---- #

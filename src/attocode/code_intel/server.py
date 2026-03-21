@@ -1,6 +1,6 @@
 """MCP server exposing Attocode's code intelligence capabilities.
 
-Provides 27 tools for deep codebase understanding:
+Provides 38 tools for deep codebase understanding:
 - bootstrap: All-in-one orientation (summary + map + conventions + search)
 - relevant_context: Subgraph capsule for file(s) with neighbors and symbols
 - repo_map: Token-budgeted file tree with symbols
@@ -18,13 +18,27 @@ Provides 27 tools for deep codebase understanding:
 - lsp_references: All references with type awareness
 - lsp_hover: Type signature + docs for symbol
 - lsp_diagnostics: Errors/warnings from language server
+- graph_query: Raw graph traversal query
+- graph_dsl: Graph query language for dependency traversal
 - explore_codebase: Hierarchical drill-down navigation
+- find_related: Find files related to a given file
+- community_detection: Detect module communities in the dependency graph
 - security_scan: Secret/anti-pattern/dependency scanning
 - semantic_search: Natural language code search
+- semantic_search_status: Check embedding index progress
+- notify_file_changed: Notify server of external file modifications
 - recall: Retrieve relevant project learnings
 - record_learning: Record patterns/conventions/gotchas
 - learning_feedback: Mark learnings as helpful/unhelpful
 - list_learnings: Browse stored learnings
+- record_adr: Record an architecture decision
+- list_adrs: Browse architecture decision records
+- get_adr: Get full details of an ADR
+- update_adr_status: Update ADR lifecycle status
+- dead_code: Detect unreachable/unused code
+- distill: Distill code into compressed representations
+- code_evolution: Trace how code has changed over time
+- recent_changes: Show recent file modifications
 
 Usage::
 
@@ -281,6 +295,7 @@ def notify_file_changed(files: list[str]) -> str:
                     smgr = _get_semantic_search()
                 abs_path = os.path.join(project_dir, rel)
                 smgr.invalidate_file(abs_path)
+                smgr.queue_reindex(abs_path)
             except Exception:
                 pass
             updated += 1
@@ -364,6 +379,7 @@ def _process_notification_queue_locked() -> int:
                     smgr = _get_semantic_search()
                 abs_path = os.path.join(project_dir, norm)
                 smgr.invalidate_file(abs_path)
+                smgr.queue_reindex(abs_path)
             except Exception:
                 pass
             count += 1
@@ -413,11 +429,16 @@ _watcher_thread: threading.Thread | None = None
 _watcher_stop = threading.Event()
 
 
-def _start_file_watcher(project_dir: str) -> None:
+def _start_file_watcher(project_dir: str, *, debounce_ms: int = 500) -> None:
     """Start a background file watcher that updates the AST index on changes.
 
-    Uses watchfiles (Rust-backed, ~200ms debounce) if available, otherwise
-    skips silently. Calls ASTService.notify_file_changed() for modified code files.
+    Uses watchfiles (Rust-backed) if available, otherwise skips silently.
+    Calls ASTService.notify_file_changed() and queues background reindex for
+    modified code files. Second call is a no-op (idempotent).
+
+    Args:
+        project_dir: Absolute path to the project root.
+        debounce_ms: Debounce interval in milliseconds (default 500ms).
     """
     global _watcher_thread
 
@@ -436,6 +457,7 @@ def _start_file_watcher(project_dir: str) -> None:
                 project_dir,
                 stop_event=_watcher_stop,
                 recursive=True,
+                debounce=debounce_ms,
                 # Ignore hidden dirs, node_modules, __pycache__, .git
                 watch_filter=lambda _, path: (
                     not any(
@@ -462,6 +484,7 @@ def _start_file_watcher(project_dir: str) -> None:
 
                                 smgr = _get_semantic_search()
                                 smgr.invalidate_file(path_str)
+                                smgr.queue_reindex(path_str)
                             except Exception:
                                 pass
                             logger.debug("File watcher: updated %s", rel)
@@ -474,7 +497,7 @@ def _start_file_watcher(project_dir: str) -> None:
         target=_watcher_loop, daemon=True, name="code-intel-watcher"
     )
     _watcher_thread.start()
-    logger.info("File watcher started for %s", project_dir)
+    logger.info("File watcher started for %s (debounce=%dms)", project_dir, debounce_ms)
 
 
 def _stop_file_watcher() -> None:
@@ -489,10 +512,80 @@ def _stop_file_watcher() -> None:
 
 
 # ---------------------------------------------------------------------------
+# Tool instrumentation — wraps MCP tool functions with metrics recording
+# ---------------------------------------------------------------------------
+
+
+def _instrument_tool(tool_fn, tool_name: str):
+    """Wrap an MCP tool function to record call metrics.
+
+    Records duration and success/failure for each invocation via the
+    module-level ``metrics_collector`` singleton.
+
+    Args:
+        tool_fn: The original tool function (sync).
+        tool_name: Human-readable tool name for metric labels.
+
+    Returns:
+        Wrapped function that records metrics then delegates to *tool_fn*.
+    """
+    import functools
+    import time as _time
+
+    @functools.wraps(tool_fn)
+    def _wrapper(*args, **kwargs):
+        from attocode.code_intel.api.middleware import metrics_collector
+
+        start = _time.monotonic()
+        success = True
+        try:
+            result = tool_fn(*args, **kwargs)
+            return result
+        except Exception:
+            success = False
+            raise
+        finally:
+            duration_ms = (_time.monotonic() - start) * 1000
+            metrics_collector.record_tool_call(tool_name, duration_ms, success)
+
+    return _wrapper
+
+
+def _instrument_all_tools() -> None:
+    """Wrap all registered MCP tools with metrics instrumentation.
+
+    Must be called after all tool modules have been imported (so that
+    ``@mcp.tool()`` decorators have fired). Patches the internal tool
+    registry in-place.
+    """
+    try:
+        # FastMCP stores tools in mcp._tool_manager._tools (dict[str, Tool])
+        tool_manager = getattr(mcp, "_tool_manager", None)
+        if tool_manager is None:
+            return
+        tools_dict = getattr(tool_manager, "_tools", None)
+        if tools_dict is None:
+            return
+
+        for name, tool_obj in tools_dict.items():
+            original_fn = getattr(tool_obj, "fn", None)
+            if original_fn is None:
+                continue
+            tool_obj.fn = _instrument_tool(original_fn, name)
+        logger.info("Instrumented %d MCP tools with metrics recording", len(tools_dict))
+    except Exception:
+        logger.debug("Failed to instrument MCP tools", exc_info=True)
+
+
+# ---------------------------------------------------------------------------
 # Register all tool modules (decorators fire on import)
 # ---------------------------------------------------------------------------
 
+import attocode.code_intel.tools.adr_tools as _adr_tools  # noqa: E402, F401
 import attocode.code_intel.tools.analysis_tools as _analysis_tools  # noqa: E402, F401
+import attocode.code_intel.tools.dead_code_tools as _dead_code_tools  # noqa: E402, F401
+import attocode.code_intel.tools.distill_tools as _distill_tools  # noqa: E402, F401
+import attocode.code_intel.tools.history_tools as _history_tools  # noqa: E402, F401
 import attocode.code_intel.tools.learning_tools as _learning_tools  # noqa: E402, F401
 import attocode.code_intel.tools.lsp_tools as _lsp_tools  # noqa: E402, F401
 import attocode.code_intel.tools.navigation_tools as _navigation_tools  # noqa: E402, F401
@@ -509,11 +602,30 @@ dependency_graph = _analysis_tools.dependency_graph  # noqa: E402
 hotspots = _analysis_tools.hotspots  # noqa: E402
 cross_references = _analysis_tools.cross_references  # noqa: E402
 dependencies = _analysis_tools.dependencies  # noqa: E402
+explore_codebase = _analysis_tools.explore_codebase  # noqa: E402
+find_related = _analysis_tools.find_related  # noqa: E402
+community_detection = _analysis_tools.community_detection  # noqa: E402
+graph_dsl = _analysis_tools.graph_dsl  # noqa: E402
+
+semantic_search = _search_tools.semantic_search  # noqa: E402
+semantic_search_status = _search_tools.semantic_search_status  # noqa: E402
+security_scan = _search_tools.security_scan  # noqa: E402
 
 recall = _learning_tools.recall  # noqa: E402
 record_learning = _learning_tools.record_learning  # noqa: E402
 learning_feedback = _learning_tools.learning_feedback  # noqa: E402
 list_learnings = _learning_tools.list_learnings  # noqa: E402
+
+record_adr = _adr_tools.record_adr  # noqa: E402
+list_adrs = _adr_tools.list_adrs  # noqa: E402
+get_adr = _adr_tools.get_adr  # noqa: E402
+update_adr_status = _adr_tools.update_adr_status  # noqa: E402
+
+dead_code = _dead_code_tools.dead_code  # noqa: E402
+distill = _distill_tools.distill  # noqa: E402
+
+code_evolution = _history_tools.code_evolution  # noqa: E402
+recent_changes = _history_tools.recent_changes  # noqa: E402
 
 bootstrap = _navigation_tools.bootstrap  # noqa: E402
 conventions = _navigation_tools.conventions  # noqa: E402
@@ -523,13 +635,16 @@ repo_map = _navigation_tools.repo_map  # noqa: E402
 search_symbols = _navigation_tools.search_symbols  # noqa: E402
 symbols = _navigation_tools.symbols  # noqa: E402
 
+# Instrument all registered tools with metrics recording
+_instrument_all_tools()
+
 # ---------------------------------------------------------------------------
 # Entry point
 # ---------------------------------------------------------------------------
 
 # Subcommands that should be dispatched to the CLI handler instead of
 # starting the MCP server.
-_CLI_SUBCOMMANDS = {"install", "uninstall", "serve", "status", "notify", "connect", "test-connection", "watch", "help", "--help", "-h"}
+_CLI_SUBCOMMANDS = {"install", "uninstall", "serve", "status", "notify", "connect", "test-connection", "watch", "help", "--help", "-h", "query", "symbols", "impact", "hotspots", "deps", "dead-code", "gc", "verify", "reindex"}
 
 
 def main() -> None:

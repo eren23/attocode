@@ -53,6 +53,22 @@ def dispatch_code_intel(parts: tuple[str, ...] | list[str], *, debug: bool = Fal
         _cmd_watch(args[1:])
     elif cmd == "setup":
         _cmd_setup(args[1:])
+    elif cmd == "query":
+        _cmd_query(args[1:])
+    elif cmd == "symbols":
+        _cmd_symbols(args[1:])
+    elif cmd == "impact":
+        _cmd_impact(args[1:])
+    elif cmd == "hotspots":
+        _cmd_hotspots(args[1:])
+    elif cmd == "deps":
+        _cmd_deps(args[1:])
+    elif cmd == "gc":
+        _cmd_gc(args[1:])
+    elif cmd == "verify":
+        _cmd_verify(args[1:])
+    elif cmd == "reindex":
+        _cmd_reindex(args[1:])
     else:
         print(f"Unknown code-intel command: {cmd}", file=sys.stderr)
         _print_help()
@@ -74,6 +90,18 @@ def _print_help() -> None:
         "  test-connection     Verify connectivity to the remote server\n"
         "  watch               Watch filesystem for changes and notify remote server\n"
         "  setup               [Dev] Bootstrap local infrastructure for development\n"
+        "\n"
+        "Query commands:\n"
+        "  query <text>        Semantic search across the codebase\n"
+        "  symbols <file>      List symbols in a file (or --search <name>)\n"
+        "  impact <file> ...   Show blast radius of file changes\n"
+        "  hotspots            Show risk/complexity hotspots\n"
+        "  deps <file>         Show file dependencies and dependents\n"
+        "\n"
+        "Maintenance commands:\n"
+        "  gc                  Run garbage collection (orphaned embeddings + content)\n"
+        "  verify              Run integrity checks on the index\n"
+        "  reindex             Force a full reindex of the project\n"
         "\n"
         "Targets (auto-install):\n"
         "  claude              Claude Code (via `claude mcp add` CLI)\n"
@@ -98,6 +126,8 @@ def _print_help() -> None:
         "  --transport <type>  Transport protocol: stdio (default), sse, or http\n"
         "  --host <addr>       Server host address (default: 127.0.0.1)\n"
         "  --port <num>        Server port number (default: 8080)\n"
+        "  --no-watch          Disable filesystem watcher (watcher is on by default)\n"
+        "  --watch-debounce N  File-change debounce in milliseconds (default: 500)\n"
         "\n"
         "Notify options:\n"
         "  --file <path>       File that changed (repeatable)\n"
@@ -119,6 +149,11 @@ def _print_help() -> None:
         "  --reset             Wipe Docker volumes and dev state, then re-bootstrap\n"
         "  --skip-deps         Skip uv sync (use if deps already installed)\n"
         "  --project <path>    Project directory (default: .)\n"
+        "\n"
+        "Query options:\n"
+        "  --top <N>           Number of results (query: default 10, hotspots: default 15)\n"
+        "  --filter <glob>     File filter glob for semantic search (e.g. '*.py')\n"
+        "  --search <name>     Search for symbol by name (symbols command)\n"
     )
 
 
@@ -192,10 +227,12 @@ def _cmd_uninstall(args: list[str]) -> None:
 def _cmd_serve(args: list[str], *, debug: bool = False) -> None:
     _, project_dir, _, _ = _parse_opts(args)
 
-    # Parse transport flags
+    # Parse transport flags and watcher options
     transport = "stdio"
     host = "127.0.0.1"
     port = 8080
+    no_watch = False
+    watch_debounce = 500
     i = 0
     while i < len(args):
         arg = args[i]
@@ -217,25 +254,50 @@ def _cmd_serve(args: list[str], *, debug: bool = False) -> None:
         elif arg.startswith("--port="):
             port = int(arg.split("=", 1)[1])
             i += 1
+        elif arg == "--no-watch":
+            no_watch = True
+            i += 1
+        elif arg == "--watch-debounce" and i + 1 < len(args):
+            watch_debounce = int(args[i + 1])
+            i += 2
+        elif arg.startswith("--watch-debounce="):
+            watch_debounce = int(arg.split("=", 1)[1])
+            i += 1
         else:
             i += 1
 
-    os.environ["ATTOCODE_PROJECT_DIR"] = os.path.abspath(project_dir)
+    abs_dir = os.path.abspath(project_dir)
+    os.environ["ATTOCODE_PROJECT_DIR"] = abs_dir
 
     if debug:
         import logging
         logging.basicConfig(level=logging.DEBUG)
 
-    from attocode.code_intel.server import mcp
+    from attocode.code_intel.server import (
+        _start_file_watcher,
+        _start_queue_poller,
+        _stop_file_watcher,
+        mcp,
+    )
 
-    abs_dir = os.path.abspath(project_dir)
     print(f"Starting attocode-code-intel server for {abs_dir} (transport={transport})", file=sys.stderr)
-    if transport == "http":
-        _serve_http(abs_dir, host=host, port=port, debug=debug)
-    elif transport == "sse":
-        mcp.run(transport="sse", host=host, port=port)
-    else:
-        mcp.run(transport="stdio")
+
+    # Start file watcher and notification queue poller for stdio/sse transports.
+    # (HTTP transport manages its own lifecycle via the FastAPI app.)
+    if transport != "http" and not no_watch:
+        _start_file_watcher(abs_dir, debounce_ms=watch_debounce)
+        _start_queue_poller(abs_dir)
+
+    try:
+        if transport == "http":
+            _serve_http(abs_dir, host=host, port=port, debug=debug)
+        elif transport == "sse":
+            mcp.run(transport="sse", host=host, port=port)
+        else:
+            mcp.run(transport="stdio")
+    finally:
+        if transport != "http" and not no_watch:
+            _stop_file_watcher()
 
 
 def _serve_http(project_dir: str, *, host: str, port: int, debug: bool) -> None:
@@ -2094,3 +2156,679 @@ def _cmd_setup(args: list[str]) -> None:
         f"  attocode code-intel watch\n",
         file=sys.stderr,
     )
+
+
+# ---------------------------------------------------------------------------
+# CLI Query Commands
+# ---------------------------------------------------------------------------
+
+
+def _cmd_query(args: list[str]) -> None:
+    """Semantic search across the codebase."""
+    _, project_dir, _, _ = _parse_opts(args)
+    project_dir = os.path.abspath(project_dir)
+
+    # Parse positional query text and flags
+    query_parts: list[str] = []
+    top_k = 10
+    file_filter = ""
+
+    i = 0
+    while i < len(args):
+        arg = args[i]
+        if arg == "--top" and i + 1 < len(args):
+            top_k = int(args[i + 1])
+            i += 2
+        elif arg.startswith("--top="):
+            top_k = int(arg.split("=", 1)[1])
+            i += 1
+        elif arg == "--filter" and i + 1 < len(args):
+            file_filter = args[i + 1]
+            i += 2
+        elif arg.startswith("--filter="):
+            file_filter = arg.split("=", 1)[1]
+            i += 1
+        elif arg == "--project" and i + 1 < len(args):
+            i += 2  # already parsed by _parse_opts
+        elif arg.startswith("--project="):
+            i += 1
+        elif not arg.startswith("-"):
+            query_parts.append(arg)
+            i += 1
+        else:
+            i += 1
+
+    query = " ".join(query_parts)
+    if not query:
+        print("Usage: attocode code-intel query <text> [--top N] [--filter '*.py'] [--project <path>]", file=sys.stderr)
+        sys.exit(1)
+
+    from attocode.code_intel.service import CodeIntelService
+
+    svc = CodeIntelService(project_dir)
+    data = svc.semantic_search_data(query, top_k=top_k, file_filter=file_filter)
+    _print_search_results(data)
+
+
+def _cmd_symbols(args: list[str]) -> None:
+    """List symbols in a file or search symbols by name."""
+    _, project_dir, _, _ = _parse_opts(args)
+    project_dir = os.path.abspath(project_dir)
+
+    # Parse positional file and --search flag
+    target_file: str | None = None
+    search_name: str | None = None
+
+    i = 0
+    while i < len(args):
+        arg = args[i]
+        if arg == "--search" and i + 1 < len(args):
+            search_name = args[i + 1]
+            i += 2
+        elif arg.startswith("--search="):
+            search_name = arg.split("=", 1)[1]
+            i += 1
+        elif arg == "--project" and i + 1 < len(args):
+            i += 2
+        elif arg.startswith("--project="):
+            i += 1
+        elif not arg.startswith("-") and target_file is None:
+            target_file = arg
+            i += 1
+        else:
+            i += 1
+
+    if not target_file and not search_name:
+        print("Usage: attocode code-intel symbols <file> [--search <name>] [--project <path>]", file=sys.stderr)
+        sys.exit(1)
+
+    from attocode.code_intel.service import CodeIntelService
+
+    svc = CodeIntelService(project_dir)
+
+    if search_name:
+        data = svc.search_symbols_data(search_name)
+        _print_symbols_table(data, title=f"Search results for '{search_name}'")
+    else:
+        assert target_file is not None
+        data = svc.symbols_data(target_file)
+        _print_symbols_table(data, title=f"Symbols in {target_file}")
+
+
+def _cmd_impact(args: list[str]) -> None:
+    """Show blast radius of file changes."""
+    _, project_dir, _, _ = _parse_opts(args)
+    project_dir = os.path.abspath(project_dir)
+
+    # Collect positional file arguments
+    files: list[str] = []
+
+    i = 0
+    while i < len(args):
+        arg = args[i]
+        if arg == "--project" and i + 1 < len(args):
+            i += 2
+        elif arg.startswith("--project="):
+            i += 1
+        elif not arg.startswith("-"):
+            files.append(arg)
+            i += 1
+        else:
+            i += 1
+
+    if not files:
+        print("Usage: attocode code-intel impact <file> [file2 ...] [--project <path>]", file=sys.stderr)
+        sys.exit(1)
+
+    from attocode.code_intel.service import CodeIntelService
+
+    svc = CodeIntelService(project_dir)
+    data = svc.impact_analysis_data(files)
+    _print_impact_analysis(data)
+
+
+def _cmd_hotspots(args: list[str]) -> None:
+    """Show risk/complexity hotspots."""
+    _, project_dir, _, _ = _parse_opts(args)
+    project_dir = os.path.abspath(project_dir)
+
+    top_n = 15
+
+    i = 0
+    while i < len(args):
+        arg = args[i]
+        if arg == "--top" and i + 1 < len(args):
+            top_n = int(args[i + 1])
+            i += 2
+        elif arg.startswith("--top="):
+            top_n = int(arg.split("=", 1)[1])
+            i += 1
+        elif arg == "--project" and i + 1 < len(args):
+            i += 2
+        elif arg.startswith("--project="):
+            i += 1
+        else:
+            i += 1
+
+    from attocode.code_intel.service import CodeIntelService
+
+    svc = CodeIntelService(project_dir)
+    data = svc.hotspots_data(top_n=top_n)
+    _print_hotspots(data)
+
+
+def _cmd_deps(args: list[str]) -> None:
+    """Show file dependencies and dependents."""
+    _, project_dir, _, _ = _parse_opts(args)
+    project_dir = os.path.abspath(project_dir)
+
+    target_file: str | None = None
+
+    i = 0
+    while i < len(args):
+        arg = args[i]
+        if arg == "--project" and i + 1 < len(args):
+            i += 2
+        elif arg.startswith("--project="):
+            i += 1
+        elif not arg.startswith("-") and target_file is None:
+            target_file = arg
+            i += 1
+        else:
+            i += 1
+
+    if not target_file:
+        print("Usage: attocode code-intel deps <file> [--project <path>]", file=sys.stderr)
+        sys.exit(1)
+
+    from attocode.code_intel.service import CodeIntelService
+
+    svc = CodeIntelService(project_dir)
+    data = svc.dependencies_data(target_file)
+    _print_dependencies(data)
+
+
+def _cmd_gc(args: list[str]) -> None:
+    """Run garbage collection on orphaned embeddings and unreferenced content."""
+    import asyncio
+
+    _, project_dir, _, _ = _parse_opts(args)
+    project_dir = os.path.abspath(project_dir)
+
+    from attocode.code_intel.config import CodeIntelConfig, load_remote_config
+
+    remote_cfg = load_remote_config(project_dir)
+
+    if remote_cfg.is_configured:
+        # Remote mode: trigger GC jobs via API
+        try:
+            import httpx
+        except ImportError:
+            print("Error: httpx not installed. Install with: pip install httpx", file=sys.stderr)
+            sys.exit(1)
+
+        base_url = remote_cfg.server.rstrip("/")
+        headers = {"Authorization": f"Bearer {remote_cfg.token}"}
+        print(f"Triggering GC on remote server {base_url}...", file=sys.stderr)
+
+        try:
+            with httpx.Client(timeout=60) as client:
+                # Trigger gc_orphaned_embeddings job
+                resp = client.post(
+                    f"{base_url}/api/v1/jobs/enqueue",
+                    json={"function": "gc_orphaned_embeddings"},
+                    headers=headers,
+                )
+                if resp.status_code == 200:
+                    print("  Enqueued gc_orphaned_embeddings job")
+                else:
+                    print(f"  Warning: could not enqueue gc_orphaned_embeddings: {resp.status_code}", file=sys.stderr)
+
+                # Trigger gc_unreferenced_content job
+                resp = client.post(
+                    f"{base_url}/api/v1/jobs/enqueue",
+                    json={"function": "gc_unreferenced_content"},
+                    headers=headers,
+                )
+                if resp.status_code == 200:
+                    print("  Enqueued gc_unreferenced_content job")
+                else:
+                    print(f"  Warning: could not enqueue gc_unreferenced_content: {resp.status_code}", file=sys.stderr)
+        except httpx.HTTPError as exc:
+            print(f"Error contacting remote server: {exc}", file=sys.stderr)
+            sys.exit(1)
+
+        print("GC jobs enqueued on remote server.")
+        return
+
+    # Local mode: run GC directly against the database
+    config = CodeIntelConfig.from_env()
+    if not config.database_url:
+        # Pure local mode (SQLite / no DB) — clear AST cache
+        print("Local mode: clearing AST cache...", file=sys.stderr)
+        from pathlib import Path
+
+        cache_dir = Path(project_dir) / ".attocode" / "cache"
+        if cache_dir.exists():
+            removed = 0
+            for f in cache_dir.iterdir():
+                if f.is_file():
+                    f.unlink()
+                    removed += 1
+            print(f"  Removed {removed} cached file(s).")
+        else:
+            print("  No cache directory found.")
+        print("GC complete.")
+        return
+
+    # Service mode with database: run GC operations
+    async def _run_gc() -> None:
+        from attocode.code_intel.db.engine import get_session
+        from attocode.code_intel.storage.content_store import ContentStore
+        from attocode.code_intel.storage.embedding_store import EmbeddingStore
+
+        print("Running garbage collection...", file=sys.stderr)
+
+        async for session in get_session():
+            # 1. GC orphaned embeddings
+            emb_store = EmbeddingStore(session)
+            emb_count = await emb_store.gc_orphaned(
+                min_age_minutes=config.gc_content_min_age_minutes,
+            )
+            print(f"  Orphaned embeddings removed: {emb_count}")
+
+            # 2. GC unreferenced content
+            content_store = ContentStore(session)
+            content_count = await content_store.gc_unreferenced(
+                min_age_minutes=config.gc_content_min_age_minutes,
+            )
+            print(f"  Unreferenced content removed: {content_count}")
+
+            await session.commit()
+            print("GC complete.")
+            return
+
+    asyncio.run(_run_gc())
+
+
+def _cmd_verify(args: list[str]) -> None:
+    """Run integrity checks on the code-intel index."""
+    import asyncio
+
+    _, project_dir, _, _ = _parse_opts(args)
+    project_dir = os.path.abspath(project_dir)
+
+    from attocode.code_intel.config import CodeIntelConfig
+
+    config = CodeIntelConfig.from_env()
+
+    if not config.database_url:
+        # Pure local mode — verify local index files exist
+        from pathlib import Path
+
+        print("Running local integrity checks...", file=sys.stderr)
+
+        cache_dir = Path(project_dir) / ".attocode" / "cache"
+        index_file = Path(project_dir) / ".attocode" / "index.json"
+
+        issues: list[str] = []
+        if not cache_dir.exists():
+            issues.append("Cache directory missing (.attocode/cache)")
+        if not index_file.exists():
+            issues.append("Index file missing (.attocode/index.json)")
+
+        if issues:
+            print(f"\nFound {len(issues)} issue(s):")
+            for issue in issues:
+                print(f"  [!] {issue}")
+            print("\nRun 'attocode code-intel reindex' to rebuild the index.")
+        else:
+            cache_files = list(cache_dir.iterdir()) if cache_dir.exists() else []
+            print(f"\nLocal index OK:")
+            print(f"  Cache files: {len(cache_files)}")
+            print(f"  Index file:  {index_file}")
+        return
+
+    # Service mode: run integrity checks against the database
+    async def _run_verify() -> None:
+        from sqlalchemy import func as sa_func
+        from sqlalchemy import select, text
+
+        from attocode.code_intel.db.engine import get_session
+        from attocode.code_intel.db.models import Branch, BranchFile, Embedding, FileContent, Symbol
+
+        print("Running integrity checks...\n", file=sys.stderr)
+        issues: list[str] = []
+        stats: dict[str, int] = {}
+
+        async for session in get_session():
+            # 1. Orphaned BranchFile entries (content_sha not in file_contents)
+            result = await session.execute(text("""
+                SELECT COUNT(*) FROM branch_files
+                WHERE content_sha IS NOT NULL
+                  AND content_sha NOT IN (SELECT sha256 FROM file_contents)
+            """))
+            orphaned_bf = result.scalar() or 0
+            stats["orphaned_branch_files"] = orphaned_bf
+            if orphaned_bf > 0:
+                issues.append(f"{orphaned_bf} branch_files reference missing file_contents")
+
+            # 2. Orphaned embeddings (content_sha not in any branch manifest)
+            result = await session.execute(text("""
+                SELECT COUNT(*) FROM embeddings
+                WHERE content_sha NOT IN (
+                    SELECT DISTINCT content_sha FROM branch_files WHERE content_sha IS NOT NULL
+                )
+            """))
+            orphaned_emb = result.scalar() or 0
+            stats["orphaned_embeddings"] = orphaned_emb
+            if orphaned_emb > 0:
+                issues.append(f"{orphaned_emb} embeddings reference content not in any branch manifest")
+
+            # 3. Missing embeddings (content_sha in branch manifest but no embedding)
+            result = await session.execute(text("""
+                SELECT COUNT(DISTINCT bf.content_sha) FROM branch_files bf
+                WHERE bf.content_sha IS NOT NULL
+                  AND bf.content_sha NOT IN (SELECT DISTINCT content_sha FROM embeddings)
+            """))
+            missing_emb = result.scalar() or 0
+            stats["missing_embeddings"] = missing_emb
+            if missing_emb > 0:
+                issues.append(f"{missing_emb} content SHAs in branch manifests have no embeddings")
+
+            # 4. Broken parent_branch_id references
+            result = await session.execute(text("""
+                SELECT COUNT(*) FROM branches
+                WHERE parent_branch_id IS NOT NULL
+                  AND parent_branch_id NOT IN (SELECT id FROM branches)
+            """))
+            broken_parents = result.scalar() or 0
+            stats["broken_parent_branch_refs"] = broken_parents
+            if broken_parents > 0:
+                issues.append(f"{broken_parents} branches reference non-existent parent branches")
+
+            # 5. Orphaned symbols (content_sha not in file_contents)
+            result = await session.execute(text("""
+                SELECT COUNT(*) FROM symbols
+                WHERE content_sha NOT IN (SELECT sha256 FROM file_contents)
+            """))
+            orphaned_sym = result.scalar() or 0
+            stats["orphaned_symbols"] = orphaned_sym
+            if orphaned_sym > 0:
+                issues.append(f"{orphaned_sym} symbols reference missing file_contents")
+
+            # Print results
+            print("Integrity check results:")
+            print(f"  Orphaned branch_files:      {stats['orphaned_branch_files']}")
+            print(f"  Orphaned embeddings:        {stats['orphaned_embeddings']}")
+            print(f"  Missing embeddings:         {stats['missing_embeddings']}")
+            print(f"  Broken parent_branch refs:  {stats['broken_parent_branch_refs']}")
+            print(f"  Orphaned symbols:           {stats['orphaned_symbols']}")
+
+            if issues:
+                print(f"\nFound {len(issues)} issue(s):")
+                for issue in issues:
+                    print(f"  [!] {issue}")
+                print("\nRun 'attocode code-intel gc' to clean up orphaned data.")
+                print("Run 'attocode code-intel reindex' to rebuild missing embeddings.")
+            else:
+                print("\nAll checks passed.")
+
+            return
+
+    asyncio.run(_run_verify())
+
+
+def _cmd_reindex(args: list[str]) -> None:
+    """Force a full reindex of the project."""
+    _, project_dir, _, _ = _parse_opts(args)
+    project_dir = os.path.abspath(project_dir)
+
+    from attocode.code_intel.config import load_remote_config
+
+    remote_cfg = load_remote_config(project_dir)
+
+    if remote_cfg.is_configured:
+        # Remote mode: trigger index_repository job via API
+        try:
+            import httpx
+        except ImportError:
+            print("Error: httpx not installed. Install with: pip install httpx", file=sys.stderr)
+            sys.exit(1)
+
+        base_url = remote_cfg.server.rstrip("/")
+        headers = {"Authorization": f"Bearer {remote_cfg.token}"}
+        repo_id = remote_cfg.repo_id
+        if not repo_id:
+            print("Error: no repo_id configured. Run 'attocode code-intel connect' first.", file=sys.stderr)
+            sys.exit(1)
+
+        print(f"Triggering full reindex on remote server {base_url}...", file=sys.stderr)
+
+        try:
+            with httpx.Client(timeout=60) as client:
+                resp = client.post(
+                    f"{base_url}/api/v1/repos/{repo_id}/index",
+                    headers=headers,
+                )
+                if resp.status_code in (200, 201, 202):
+                    data = resp.json()
+                    print(f"  Reindex job enqueued: {data}")
+                else:
+                    print(f"  Error: server returned {resp.status_code}: {resp.text}", file=sys.stderr)
+                    sys.exit(1)
+        except httpx.HTTPError as exc:
+            print(f"Error contacting remote server: {exc}", file=sys.stderr)
+            sys.exit(1)
+
+        print("Reindex triggered on remote server.")
+        return
+
+    # Local mode: clear cache and reinitialize
+    from pathlib import Path
+
+    print(f"Reindexing {project_dir}...", file=sys.stderr)
+
+    # 1. Clear AST cache
+    cache_dir = Path(project_dir) / ".attocode" / "cache"
+    if cache_dir.exists():
+        removed = 0
+        for f in cache_dir.iterdir():
+            if f.is_file():
+                f.unlink()
+                removed += 1
+        print(f"  Cleared {removed} cached file(s).")
+
+    # 2. Remove stale index file to force full rebuild
+    index_file = Path(project_dir) / ".attocode" / "index.json"
+    if index_file.exists():
+        index_file.unlink()
+        print("  Removed stale index file.")
+
+    # 3. Run full index
+    os.environ.setdefault("ATTOCODE_PROJECT_DIR", project_dir)
+
+    from attocode.integrations.context.semantic_search import SemanticSearchManager
+
+    mgr = SemanticSearchManager(root_dir=project_dir)
+
+    if not mgr.is_available:
+        print(
+            "No embedding provider available. Install sentence-transformers:\n"
+            "  pip install 'attocode[semantic]'",
+            file=sys.stderr,
+        )
+        mgr.close()
+        sys.exit(1)
+
+    count = mgr.index()
+    print(f"  Indexed {count} chunks.")
+    mgr.close()
+    print("Reindex complete.")
+
+
+# ---------------------------------------------------------------------------
+# Terminal formatters for query commands
+# ---------------------------------------------------------------------------
+
+
+def _print_search_results(data: dict) -> None:
+    """Print semantic search results as a numbered list with file, score, snippet."""
+    results = data.get("results", [])
+    total = data.get("total", len(results))
+    query = data.get("query", "")
+
+    print(f"Semantic search: \"{query}\" ({total} result(s))\n")
+
+    if not results:
+        print("  No results found.")
+        return
+
+    for idx, r in enumerate(results, 1):
+        file_path = r.get("file_path", "?")
+        score = r.get("score", 0.0)
+        snippet = r.get("snippet", "")
+        line = r.get("line")
+
+        loc = f"{file_path}:{line}" if line else file_path
+        print(f"  {idx:>3}. {loc}  (score: {score:.4f})")
+
+        if snippet:
+            # Indent snippet lines, truncate long ones
+            for sline in snippet.strip().splitlines()[:3]:
+                truncated = sline[:120] + "..." if len(sline) > 120 else sline
+                print(f"       {truncated}")
+        print()
+
+
+def _print_symbols_table(data: list[dict], title: str = "Symbols") -> None:
+    """Print symbols as a fixed-width table with name, kind, file, line."""
+    print(f"{title} ({len(data)} symbol(s))\n")
+
+    if not data:
+        print("  No symbols found.")
+        return
+
+    # Compute column widths
+    name_w = max(len(s.get("name", "")) for s in data)
+    name_w = max(name_w, 4)  # minimum "Name"
+    name_w = min(name_w, 40)  # cap width
+
+    kind_w = max(len(s.get("kind", "")) for s in data)
+    kind_w = max(kind_w, 4)
+    kind_w = min(kind_w, 15)
+
+    # Header
+    header = f"  {'Name':<{name_w}}  {'Kind':<{kind_w}}  {'File':<50}  {'Line':>5}"
+    print(header)
+    print(f"  {'-' * name_w}  {'-' * kind_w}  {'-' * 50}  {'-' * 5}")
+
+    for s in data:
+        name = s.get("name", "")[:name_w]
+        kind = s.get("kind", "")[:kind_w]
+        file_path = s.get("file_path", "")
+        if len(file_path) > 50:
+            file_path = "..." + file_path[-47:]
+        start_line = s.get("start_line", "")
+
+        print(f"  {name:<{name_w}}  {kind:<{kind_w}}  {file_path:<50}  {start_line:>5}")
+
+
+def _print_impact_analysis(data: dict) -> None:
+    """Print impact analysis as a tree of affected files."""
+    changed = data.get("changed_files", [])
+    impacted = data.get("impacted_files", [])
+    total = data.get("total_impacted", len(impacted))
+    layers = data.get("layers", [])
+
+    print(f"Impact analysis: {len(changed)} changed file(s), {total} impacted file(s)\n")
+
+    print("  Changed files:")
+    for f in changed:
+        print(f"    * {f}")
+
+    if not layers:
+        print("\n  No downstream impact detected.")
+        return
+
+    print()
+    for layer in layers:
+        depth = layer.get("depth", "?")
+        files = layer.get("files", [])
+        print(f"  Depth {depth} ({len(files)} file(s)):")
+        for f in files:
+            print(f"    {'|' * depth} {f}")
+
+
+def _print_hotspots(data: dict) -> None:
+    """Print hotspots as a ranked table with file, categories, score."""
+    file_hotspots = data.get("file_hotspots", [])
+    fn_hotspots = data.get("function_hotspots", [])
+    orphans = data.get("orphan_files", [])
+
+    # File hotspots
+    print(f"File hotspots ({len(file_hotspots)} file(s))\n")
+
+    if file_hotspots:
+        header = f"  {'#':>3}  {'File':<55}  {'Lines':>5}  {'Score':>6}  Categories"
+        print(header)
+        print(f"  {'-' * 3}  {'-' * 55}  {'-' * 5}  {'-' * 6}  {'-' * 25}")
+
+        for idx, h in enumerate(file_hotspots, 1):
+            path = h.get("path", "")
+            if len(path) > 55:
+                path = "..." + path[-52:]
+            lines = h.get("line_count", 0)
+            score = h.get("composite", 0.0)
+            cats = ", ".join(h.get("categories", []))
+
+            print(f"  {idx:>3}  {path:<55}  {lines:>5}  {score:>6.2f}  {cats}")
+    else:
+        print("  No file hotspots found.")
+
+    # Function hotspots
+    if fn_hotspots:
+        print(f"\nFunction hotspots ({len(fn_hotspots)} function(s))\n")
+        header = f"  {'Name':<35}  {'File':<40}  {'Lines':>5}  {'Params':>6}"
+        print(header)
+        print(f"  {'-' * 35}  {'-' * 40}  {'-' * 5}  {'-' * 6}")
+
+        for fh in fn_hotspots:
+            name = fh.get("name", "")[:35]
+            fp = fh.get("file_path", "")
+            if len(fp) > 40:
+                fp = "..." + fp[-37:]
+            lc = fh.get("line_count", 0)
+            pc = fh.get("param_count", 0)
+            print(f"  {name:<35}  {fp:<40}  {lc:>5}  {pc:>6}")
+
+    # Orphan files
+    if orphans:
+        print(f"\nOrphan files ({len(orphans)} file(s) — no imports/importers)\n")
+        for o in orphans:
+            path = o.get("path", "")
+            lines = o.get("line_count", 0)
+            print(f"    {path}  ({lines} lines)")
+
+
+def _print_dependencies(data: dict) -> None:
+    """Print dependency information: imports and imported-by lists."""
+    path = data.get("path", "?")
+    imports = data.get("imports", [])
+    imported_by = data.get("imported_by", [])
+
+    print(f"Dependencies for {path}\n")
+
+    print(f"  Imports ({len(imports)}):")
+    if imports:
+        for dep in imports:
+            print(f"    -> {dep}")
+    else:
+        print("    (none)")
+
+    print(f"\n  Imported by ({len(imported_by)}):")
+    if imported_by:
+        for dep in imported_by:
+            print(f"    <- {dep}")
+    else:
+        print("    (none)")

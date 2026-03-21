@@ -15,6 +15,8 @@ async def execute_spawn_agent(
     provider_name: str | None = None,
     api_key: str | None = None,
     model: str | None = None,
+    project_root: str | None = None,
+    rules: list[str] | None = None,
 ) -> str:
     """Spawn a subagent to handle a subtask.
 
@@ -39,6 +41,10 @@ async def execute_spawn_agent(
             builder = builder.with_model(subagent_model)
         if parent_working_dir:
             builder = builder.with_working_dir(parent_working_dir)
+        if project_root:
+            builder = builder.with_project_root(project_root)
+        if rules:
+            builder = builder.with_rules(list(rules))
 
         builder = (
             builder
@@ -64,6 +70,9 @@ def create_spawn_agent_tool(
     provider_name: str | None = None,
     api_key: str | None = None,
     model: str | None = None,
+    *,
+    project_root: str | None = None,
+    rules: list[str] | None = None,
 ) -> Tool:
     """Create the spawn_agent tool."""
 
@@ -74,6 +83,8 @@ def create_spawn_agent_tool(
             provider_name=provider_name,
             api_key=api_key,
             model=model,
+            project_root=project_root,
+            rules=rules,
         )
 
     return Tool(

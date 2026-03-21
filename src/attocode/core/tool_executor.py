@@ -28,6 +28,8 @@ if TYPE_CHECKING:
 if __name__ != "__main__":
     pass
 
+import logging
+logger = logging.getLogger(__name__)
 
 # Defaults
 DEFAULT_TOOL_TIMEOUT = 120.0  # 2 minutes per tool
@@ -324,7 +326,7 @@ def _notify_file_changed(ctx: AgentContext, path: str) -> None:
         try:
             cbc.mark_file_dirty(path)
         except Exception:
-            pass
+            logger.debug("notify_file_changed: codebase_context.mark_file_dirty failed", exc_info=True)
 
     # Invalidate hierarchical explorer cache
     explorer = getattr(ctx, "_hierarchical_explorer", None)
@@ -332,7 +334,7 @@ def _notify_file_changed(ctx: AgentContext, path: str) -> None:
         try:
             explorer.invalidate()
         except Exception:
-            pass
+            logger.debug("notify_file_changed: hierarchical_explorer.invalidate failed", exc_info=True)
 
     # Notify AST service of file change (invalidate AST cache + cross-refs)
     ast_svc = getattr(ctx, "_ast_service", None)
@@ -340,7 +342,7 @@ def _notify_file_changed(ctx: AgentContext, path: str) -> None:
         try:
             ast_svc.notify_file_changed(path)
         except Exception:
-            pass
+            logger.debug("notify_file_changed: ast_service.notify_file_changed failed", exc_info=True)
 
     # Notify semantic search to re-index the changed file.
     # Prefer the manager's bounded queue to avoid spawning unbounded threads.
@@ -352,7 +354,7 @@ def _notify_file_changed(ctx: AgentContext, path: str) -> None:
             else:
                 sem_search.reindex_file(path)
         except Exception:
-            pass
+            logger.debug("notify_file_changed: semantic_search reindex failed", exc_info=True)
 
     # Write to code_intel notification queue (.attocode/cache/file_changes)
     try:
@@ -363,7 +365,7 @@ def _notify_file_changed(ctx: AgentContext, path: str) -> None:
             with open(queue_path, "a", encoding="utf-8") as fh:
                 fh.write(rel + "\n")
     except Exception:
-        pass
+        logger.debug("notify_file_changed: file_changes queue write failed", exc_info=True)
 
 
 def _cap_result(content: str, max_chars: int = MAX_RESULT_CHARS) -> tuple[str, bool]:

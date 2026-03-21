@@ -38,6 +38,7 @@ class ProductionAgent:
         budget: ExecutionBudget | None = None,
         system_prompt: str | None = None,
         working_dir: str = "",
+        project_root: str = "",
         policy_engine: Any = None,
         approval_callback: Any = None,
         economics: Any = None,
@@ -62,6 +63,7 @@ class ProductionAgent:
         self._budget = budget or STANDARD_BUDGET
         self._system_prompt = system_prompt
         self._working_dir = working_dir
+        self._project_root = project_root or working_dir
         self._status = AgentStatus.IDLE
         self._event_handlers: list[EventHandler] = []
         self._ctx: AgentContext | None = None
@@ -125,6 +127,10 @@ class ProductionAgent:
     @property
     def working_dir(self) -> str:
         return self._working_dir
+
+    @property
+    def project_root(self) -> str:
+        return self._project_root
 
     @property
     def context(self) -> AgentContext | None:
@@ -220,6 +226,7 @@ class ProductionAgent:
             config=self._config,
             budget=self._budget,
             working_dir=self._working_dir,
+            project_root=self._project_root,
             system_prompt=self._system_prompt,
             policy_engine=self._policy_engine,
             approval_callback=self._approval_callback,
@@ -488,7 +495,7 @@ class ProductionAgent:
                         iterations=ctx.iteration,
                     )
                 except Exception:
-                    logger.debug("session_update_failed", exc_info=True)
+                    logger.warning("Session store update failed", exc_info=True)
 
             return result
 
@@ -553,6 +560,14 @@ class ProductionAgent:
     def reset_conversation(self) -> None:
         """Reset conversation history for a fresh start (/clear)."""
         self._conversation_messages = []
+        self._session_id = None
+        self._config.resume_session = None
+        self._config.resume_session_explicit = False
+        self._thread_manager = None
+        if self._ctx is not None:
+            self._ctx.messages.clear()
+            self._ctx.session_id = None
+            self._ctx.thread_manager = None
 
     def pop_image_warning(self) -> str | None:
         """Return and clear the last image warning, if any."""

@@ -4,6 +4,11 @@ from attocode.integrations.swarm.cc_spawner import (
     create_cc_spawn_fn,
     spawn_cc_worker,
 )
+from attocode.integrations.swarm.compilation_check import (
+    CompilationCheckResult,
+    CompilationError,
+    run_compilation_checks,
+)
 from attocode.integrations.swarm.config_loader import (
     load_swarm_yaml_config,
     merge_swarm_configs,
@@ -207,6 +212,10 @@ __all__ = [
     # cc_spawner
     "create_cc_spawn_fn",
     "spawn_cc_worker",
+    # compilation_check
+    "CompilationCheckResult",
+    "CompilationError",
+    "run_compilation_checks",
     # roles
     "BUILTIN_ROLES",
     "RoleConfig",

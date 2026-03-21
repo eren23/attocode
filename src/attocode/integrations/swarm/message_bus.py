@@ -103,6 +103,12 @@ class SwarmMessageBus:
         """)
         self._conn.commit()
 
+    def _get_conn(self) -> sqlite3.Connection:
+        """Return the active connection or raise if closed."""
+        if self._conn is None:
+            raise RuntimeError("SwarmMessageBus connection is closed")
+        return self._conn
+
     def send(
         self,
         sender: str,
@@ -122,7 +128,7 @@ class SwarmMessageBus:
         Returns:
             Message ID.
         """
-        assert self._conn is not None
+        conn = self._get_conn()
 
         now = time.time()
         payload = payload or {}
@@ -137,12 +143,12 @@ class SwarmMessageBus:
             if path:
                 self._release_lock(path, sender)
 
-        cursor = self._conn.execute(
+        cursor = conn.execute(
             """INSERT INTO messages (sender, recipient, type, payload_json, timestamp)
                VALUES (?, ?, ?, ?, ?)""",
             (sender, recipient, str(msg_type), json.dumps(payload), now),
         )
-        self._conn.commit()
+        conn.commit()
 
         msg_id = cursor.lastrowid or 0
         logger.debug(
@@ -172,7 +178,7 @@ class SwarmMessageBus:
         Returns:
             List of SwarmMessage objects.
         """
-        assert self._conn is not None
+        conn = self._get_conn()
 
         conditions = ["(recipient = ? OR recipient = 'all')"]
         params: list[Any] = [recipient]
@@ -187,7 +193,7 @@ class SwarmMessageBus:
         where = " AND ".join(conditions)
         params.append(limit)
 
-        cursor = self._conn.execute(
+        cursor = conn.execute(
             f"""SELECT id, sender, recipient, type, payload_json, timestamp, read
                 FROM messages WHERE {where}
                 ORDER BY timestamp ASC LIMIT ?""",
@@ -213,11 +219,11 @@ class SwarmMessageBus:
 
         if ids_to_mark:
             placeholders = ",".join("?" for _ in ids_to_mark)
-            self._conn.execute(
+            conn.execute(
                 f"UPDATE messages SET read = 1 WHERE id IN ({placeholders})",
                 ids_to_mark,
             )
-            self._conn.commit()
+            conn.commit()
 
         return messages
 
@@ -303,8 +309,8 @@ class SwarmMessageBus:
 
     def get_file_lock(self, path: str) -> FileLock | None:
         """Get the current lock holder for a file."""
-        assert self._conn is not None
-        cursor = self._conn.execute(
+        conn = self._get_conn()
+        cursor = conn.execute(
             "SELECT path, holder, acquired_at FROM file_locks WHERE path = ?",
             (path,),
         )
@@ -315,8 +321,8 @@ class SwarmMessageBus:
 
     def get_file_locks(self) -> list[FileLock]:
         """Get all current file locks."""
-        assert self._conn is not None
-        cursor = self._conn.execute(
+        conn = self._get_conn()
+        cursor = conn.execute(
             "SELECT path, holder, acquired_at FROM file_locks ORDER BY acquired_at",
         )
         return [
@@ -326,12 +332,12 @@ class SwarmMessageBus:
 
     def release_all_locks(self, holder: str) -> int:
         """Release all file locks held by a worker. Returns count released."""
-        assert self._conn is not None
-        cursor = self._conn.execute(
+        conn = self._get_conn()
+        cursor = conn.execute(
             "DELETE FROM file_locks WHERE holder = ?",
             (holder,),
         )
-        self._conn.commit()
+        conn.commit()
         count = cursor.rowcount
         if count > 0:
             logger.debug("Released %d file locks for %s", count, holder)
@@ -341,21 +347,21 @@ class SwarmMessageBus:
 
     def get_message_count(self, *, unread_only: bool = False) -> int:
         """Get total message count."""
-        assert self._conn is not None
+        conn = self._get_conn()
         if unread_only:
-            cursor = self._conn.execute("SELECT COUNT(*) FROM messages WHERE read = 0")
+            cursor = conn.execute("SELECT COUNT(*) FROM messages WHERE read = 0")
         else:
-            cursor = self._conn.execute("SELECT COUNT(*) FROM messages")
+            cursor = conn.execute("SELECT COUNT(*) FROM messages")
         return cursor.fetchone()[0]
 
     # ---- Lifecycle ----
 
     def clear(self) -> None:
         """Clear all messages and locks."""
-        assert self._conn is not None
-        self._conn.execute("DELETE FROM messages")
-        self._conn.execute("DELETE FROM file_locks")
-        self._conn.commit()
+        conn = self._get_conn()
+        conn.execute("DELETE FROM messages")
+        conn.execute("DELETE FROM file_locks")
+        conn.commit()
 
     def close(self) -> None:
         """Close the database connection."""
@@ -367,18 +373,18 @@ class SwarmMessageBus:
 
     def _acquire_lock(self, path: str, holder: str, timestamp: float) -> None:
         """Insert or update a file lock."""
-        assert self._conn is not None
-        self._conn.execute(
+        conn = self._get_conn()
+        conn.execute(
             "INSERT OR REPLACE INTO file_locks (path, holder, acquired_at) VALUES (?, ?, ?)",
             (path, holder, timestamp),
         )
-        self._conn.commit()
+        conn.commit()
 
     def _release_lock(self, path: str, holder: str) -> None:
         """Remove a file lock if held by holder."""
-        assert self._conn is not None
-        self._conn.execute(
+        conn = self._get_conn()
+        conn.execute(
             "DELETE FROM file_locks WHERE path = ? AND holder = ?",
             (path, holder),
         )
-        self._conn.commit()
+        conn.commit()

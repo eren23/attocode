@@ -168,6 +168,10 @@ def _build_review_prompt(
         if task.result:
             output = task.result.output
             if len(output) > 2000:
+                logger.debug(
+                    "Critic input truncated: %d -> 2000 chars for task %s",
+                    len(output), task.id,
+                )
                 output = output[:2000] + "\n... [truncated]"
             sections.append(f"**Output:**\n{output}")
             if task.result.files_modified:

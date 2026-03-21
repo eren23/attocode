@@ -99,6 +99,7 @@ class SemanticSearchManager:
     """
 
     root_dir: str
+    nl_mode: str = ""  # "none" or "heuristic"; "" = read ATTOCODE_NL_EMBEDDING_MODE env var
     _provider: Any = field(default=None, repr=False)
     _store: Any = field(default=None, repr=False)
     _indexed: bool = field(default=False, repr=False)
@@ -114,6 +115,7 @@ class SemanticSearchManager:
     _bg_indexer: Any = field(default=None, repr=False)
     _bg_thread: Any = field(default=None, repr=False)
     _index_progress: IndexProgress = field(default_factory=IndexProgress, repr=False)
+    _summarizer: Any = field(default=None, repr=False)
 
     def __post_init__(self) -> None:
         from attocode.integrations.context.embeddings import (
@@ -131,6 +133,13 @@ class SemanticSearchManager:
                 db_path=os.path.join(db_dir, "embeddings.db"),
                 dimension=self._provider.dimension(),
             )
+
+        # Resolve NL embedding mode
+        if not self.nl_mode:
+            self.nl_mode = os.environ.get("ATTOCODE_NL_EMBEDDING_MODE", "none")
+        if self.nl_mode == "heuristic":
+            from attocode.code_intel.indexing.summarizer import get_summarizer
+            self._summarizer = get_summarizer()
 
     def _start_reindex_worker(self) -> None:
         """Start the background reindex worker once."""
@@ -227,8 +236,8 @@ class SemanticSearchManager:
         if not chunks:
             return 0
 
-        # Batch embed
-        texts = [c[3] for c in chunks]
+        # Batch embed (use NL summaries when heuristic mode is enabled)
+        texts = self._get_embedding_texts(chunks)
         batch_size = 64
         all_vectors: list[list[float]] = []
 
@@ -241,7 +250,7 @@ class SemanticSearchManager:
                 logger.warning("Embedding batch failed at offset %d", i, exc_info=True)
                 all_vectors.extend([[] for _ in batch])
 
-        # Store
+        # Store (original chunk text is preserved for display, not the NL summary)
         entries = []
         for (cid, fpath, ctype, text), vec in zip(chunks, all_vectors, strict=False):
             if not vec:
@@ -283,12 +292,15 @@ class SemanticSearchManager:
         top_k: int = 10,
         file_filter: str = "",
         two_stage: bool = True,
+        rerank: bool = False,
     ) -> list[SemanticSearchResult]:
         """Search the codebase by natural language query.
 
         Uses two-stage retrieval when vector search is available:
         1. Wide recall: vector top-50 + keyword top-50
-        2. Merge with Reciprocal Rank Fusion (RRF)
+        2. Score normalization (min-max to [0,1])
+        3. Merge with Reciprocal Rank Fusion (RRF)
+        4. Optional cross-encoder reranking
 
         This approach outperforms single-stage search on code retrieval
         benchmarks by combining semantic similarity with keyword matching.
@@ -298,6 +310,7 @@ class SemanticSearchManager:
             top_k: Number of results to return.
             file_filter: Optional glob pattern (e.g. "*.py").
             two_stage: Whether to use two-stage retrieval (default True).
+            rerank: Whether to apply cross-encoder reranking after fusion.
 
         Returns:
             List of search results sorted by relevance.
@@ -325,11 +338,28 @@ class SemanticSearchManager:
             logger.warning("Query embedding failed, falling back to keyword", exc_info=True)
             return self._keyword_search(query, top_k, file_filter)
 
+        # Build set of files that exist on disk to filter out stale branch data.
+        # In local mode the filesystem is the source of truth — vectors from
+        # files that no longer exist (e.g. after a branch switch) are skipped.
+        existing_files: set[str] | None = None
+        try:
+            indexed_paths = self._store.get_all_indexed_files()
+            if indexed_paths:
+                existing_files = {
+                    p for p in indexed_paths
+                    if os.path.exists(os.path.join(self.root_dir, p))
+                }
+        except Exception:
+            logger.debug("Failed to build existing_files set", exc_info=True)
+
         # Stage 1a: Vector search (wide recall)
         wide_k = max(top_k * 5, 50) if two_stage else top_k
-        raw_results = self._store.search(query_vec, top_k=wide_k, file_filter=file_filter)
+        raw_results = self._store.search(
+            query_vec, top_k=wide_k, file_filter=file_filter,
+            existing_files=existing_files,
+        )
 
-        if not two_stage or not raw_results:
+        if not two_stage:
             return [
                 SemanticSearchResult(
                     file_path=r.file_path,
@@ -341,21 +371,27 @@ class SemanticSearchManager:
                 for r in raw_results[:top_k]
             ]
 
-        # Stage 1b: Keyword search (complementary recall)
+        # Stage 1b: Keyword search (complementary recall) — always run
         keyword_results = self._keyword_search(query, top_k=wide_k, file_filter=file_filter)
 
-        # Stage 2: Reciprocal Rank Fusion
+        # If both pipelines returned nothing, bail out early
+        if not raw_results and not keyword_results:
+            return []
+
+        # Stage 2: Score normalization + Reciprocal Rank Fusion
         from attocode.integrations.context.ast_chunker import reciprocal_rank_fusion
 
         # Map chunk_type to vector ID prefix for consistent key space
         _type_prefix = {"function": "func", "class": "cls", "method": "method", "file": "file"}
 
-        vector_ranked = [(r.id, r.score) for r in raw_results]
+        vector_ranked = self._normalize_scores(
+            [(r.id, r.score) for r in raw_results],
+        )
         # Use composite IDs for keyword results matching vector key space
-        keyword_ranked = [
+        keyword_ranked = self._normalize_scores([
             (f"{_type_prefix.get(r.chunk_type, r.chunk_type)}:{r.file_path}:{r.name}", r.score)
             for r in keyword_results
-        ]
+        ])
 
         fused = reciprocal_rank_fusion(vector_ranked, keyword_ranked)
 
@@ -374,6 +410,11 @@ class SemanticSearchManager:
             if kw_id not in result_map:
                 result_map[kw_id] = r
 
+        # Optional cross-encoder reranking
+        if rerank:
+            rerank_k = min(len(fused), 3 * top_k)
+            fused = self._rerank(query, fused[:rerank_k], result_map, top_k)
+
         # Return top-k by fused score
         merged: list[SemanticSearchResult] = []
         for item_id, fused_score in fused[:top_k]:
@@ -383,6 +424,66 @@ class SemanticSearchManager:
                 merged.append(result)
 
         return merged
+
+    def _normalize_scores(
+        self,
+        ranked: list[tuple[str, float]],
+        method: str = "min_max",
+    ) -> list[tuple[str, float]]:
+        """Normalize scores to [0, 1] range for fair fusion.
+
+        Ensures that vector similarity scores and BM25 scores are on
+        comparable scales before Reciprocal Rank Fusion.
+
+        Args:
+            ranked: List of (id, score) tuples.
+            method: Normalization method (currently only "min_max").
+
+        Returns:
+            List of (id, normalized_score) tuples in the same order.
+        """
+        if not ranked or len(ranked) < 2:
+            return ranked
+        scores = [s for _, s in ranked]
+        min_s, max_s = min(scores), max(scores)
+        if max_s == min_s:
+            return [(key, 1.0) for key, _ in ranked]
+        return [(key, (s - min_s) / (max_s - min_s)) for key, s in ranked]
+
+    def _rerank(
+        self,
+        query: str,
+        fused: list[tuple[str, float]],
+        result_map: dict[str, SemanticSearchResult],
+        top_k: int,
+    ) -> list[tuple[str, float]]:
+        """Apply cross-encoder reranking to fused results.
+
+        Args:
+            query: The search query.
+            fused: List of (id, fused_score) from RRF.
+            result_map: Lookup from item ID to SemanticSearchResult.
+            top_k: Number of final results desired.
+
+        Returns:
+            Reranked list of (id, score) tuples.
+        """
+        from attocode.integrations.context.reranker import get_reranker
+
+        reranker = get_reranker()
+
+        # Build candidates: (id, text, fused_score)
+        candidates: list[tuple[str, str, float]] = []
+        for item_id, score in fused:
+            result = result_map.get(item_id)
+            if result:
+                candidates.append((item_id, result.text, score))
+
+        if not candidates:
+            return fused[:top_k]
+
+        reranked = reranker.rerank(query, candidates, top_k=top_k)
+        return [(cid, score) for cid, _text, score in reranked]
 
     def _keyword_search(
         self,
@@ -749,6 +850,36 @@ class SemanticSearchManager:
 
         return chunks
 
+    def _get_embedding_texts(
+        self, chunks: list[tuple[str, str, str, str]], language: str = "python",
+    ) -> list[str]:
+        """Return texts to feed to the embedding model.
+
+        When ``nl_mode`` is ``"heuristic"``, each chunk's text is transformed
+        into a natural language summary via :class:`CodeSummarizer` before
+        embedding.  The original chunk text (index 3) is still stored in
+        ``VectorEntry.text`` for display.
+
+        Args:
+            chunks: List of ``(id, file_path, chunk_type, text)`` tuples as
+                returned by :meth:`_chunk_single_file`.
+            language: Programming language hint for the summarizer.
+
+        Returns:
+            A list of strings, one per chunk, suitable for embedding.
+        """
+        if self._summarizer is None:
+            # No NL mode — embed the raw chunk text directly
+            return [c[3] for c in chunks]
+
+        result: list[str] = []
+        for cid, _fpath, ctype, text in chunks:
+            # Derive the symbol name from the chunk ID
+            name = cid.split(":")[-1] if ":" in cid else _fpath
+            summary = self._summarizer.summarize(text, ctype, name, language)
+            result.append(summary)
+        return result
+
     def reindex_file(self, file_path: str) -> int:
         """Re-index a single file: delete old vectors and re-embed.
 
@@ -785,7 +916,7 @@ class SemanticSearchManager:
 
         # Embed FIRST (before deleting old vectors) — if embed fails,
         # we keep existing vectors rather than losing them
-        texts = [c[3] for c in chunks]
+        texts = self._get_embedding_texts(chunks)
         try:
             vectors = self._provider.embed(texts)
         except Exception:
@@ -1038,7 +1169,7 @@ class SemanticSearchManager:
                         self._index_progress.failed_files += 1
                         continue
 
-                    texts = [c[3] for c in chunks]
+                    texts = self._get_embedding_texts(chunks)
                     vectors = self._provider.embed(texts)
                     entries = []
                     for (cid, fpath, ctype, text), vec in zip(chunks, vectors, strict=False):

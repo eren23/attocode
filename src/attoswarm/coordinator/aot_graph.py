@@ -271,6 +271,69 @@ class AoTGraph:
     # Analysis
     # ------------------------------------------------------------------
 
+    def get_almost_ready(self) -> dict[str, list[str]]:
+        """Return tasks whose deps are all currently ``running`` (not yet done).
+
+        Used by speculative execution to identify pre-warmable tasks.
+
+        Returns:
+            Mapping of task_id -> list of running dependency IDs.
+        """
+        result: dict[str, list[str]] = {}
+        for node in self._nodes.values():
+            if node.status != "pending" or not node.depends_on:
+                continue
+            running_deps: list[str] = []
+            all_running_or_done = True
+            has_running = False
+            for dep_id in node.depends_on:
+                dep = self._nodes.get(dep_id)
+                if dep is None:
+                    all_running_or_done = False
+                    break
+                if dep.status == "running":
+                    running_deps.append(dep_id)
+                    has_running = True
+                elif dep.status == "done":
+                    pass
+                else:
+                    all_running_or_done = False
+                    break
+            if all_running_or_done and has_running:
+                result[node.task_id] = running_deps
+        return result
+
+    def get_blast_radius(self, task_id: str) -> dict[str, Any]:
+        """Compute the blast radius of a failed task.
+
+        Returns a dict with:
+        - ``directly_blocked``: tasks whose deps include task_id
+        - ``transitively_blocked``: all tasks blocked recursively
+        - ``total_blocked``: count of all blocked tasks
+        """
+        node = self._nodes.get(task_id)
+        if not node:
+            return {"directly_blocked": [], "transitively_blocked": [], "total_blocked": 0}
+
+        directly = list(node.depended_by)
+        visited: set[str] = set()
+        queue: list[str] = list(node.depended_by)
+        while queue:
+            tid = queue.pop(0)
+            if tid in visited:
+                continue
+            visited.add(tid)
+            child = self._nodes.get(tid)
+            if child:
+                queue.extend(child.depended_by)
+
+        transitively = sorted(visited - set(directly))
+        return {
+            "directly_blocked": directly,
+            "transitively_blocked": transitively,
+            "total_blocked": len(visited),
+        }
+
     def get_critical_path(self) -> list[str]:
         """Return the longest dependency chain (critical path)."""
         if not self._nodes:

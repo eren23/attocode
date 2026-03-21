@@ -430,8 +430,8 @@ class _LSPClient:
 
     async def _read_loop(self) -> None:
         """Background loop reading LSP responses."""
-        assert self._process is not None
-        assert self._process.stdout is not None
+        if self._process is None or self._process.stdout is None:
+            return
 
         try:
             while True:

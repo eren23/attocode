@@ -165,6 +165,8 @@ class AgentConfig:
     sandbox_enabled: bool = False
     debug: bool = False
     resume_session: str | None = None
+    resume_session_explicit: bool = False
+    rules: list[str] = field(default_factory=list)
 
 
 @dataclass(slots=True)

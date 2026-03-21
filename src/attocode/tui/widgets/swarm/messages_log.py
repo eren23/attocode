@@ -32,12 +32,18 @@ class MessagesLog(Widget):
         self._seen_count: int = 0
 
     def compose(self):
-        yield RichLog(id="messages-log", auto_scroll=True, markup=True)
+        yield RichLog(id="messages-log", auto_scroll=True, markup=True, max_lines=500)
 
     def update_messages(self, messages: list[dict[str, Any]]) -> None:
         """Append only new messages since last call."""
         if not messages:
             return
+        if len(messages) < self._seen_count:
+            self._seen_count = 0
+            try:
+                self.query_one("#messages-log", RichLog).clear()
+            except Exception:
+                pass
         new_messages = messages[self._seen_count:]
         if not new_messages:
             return

@@ -67,10 +67,16 @@ class MemoryStore:
         self._conn.execute("PRAGMA synchronous=NORMAL")
         self._create_tables()
 
+    def _get_conn(self) -> sqlite3.Connection:
+        """Return the active connection or raise if closed."""
+        if self._conn is None:
+            raise RuntimeError("MemoryStore connection is closed")
+        return self._conn
+
     def _create_tables(self) -> None:
         """Create tables if they don't exist."""
-        assert self._conn is not None
-        self._conn.executescript("""
+        conn = self._get_conn()
+        conn.executescript("""
             CREATE TABLE IF NOT EXISTS learnings (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 type TEXT NOT NULL,
@@ -94,7 +100,7 @@ class MemoryStore:
         # FTS5 virtual table — created separately (can't be in executescript
         # with IF NOT EXISTS reliably on all SQLite versions)
         with contextlib.suppress(sqlite3.OperationalError):
-            self._conn.execute("""
+            conn.execute("""
                 CREATE VIRTUAL TABLE IF NOT EXISTS learnings_fts
                 USING fts5(description, details, content=learnings, content_rowid=id)
             """)
@@ -117,9 +123,9 @@ class MemoryStore:
             END""",
         ]:
             with contextlib.suppress(sqlite3.OperationalError):
-                self._conn.execute(trigger_sql)
+                conn.execute(trigger_sql)
 
-        self._conn.commit()
+        conn.commit()
 
     # ------------------------------------------------------------------
     # Write operations
@@ -138,7 +144,7 @@ class MemoryStore:
         Deduplicates via FTS similarity — if a highly similar learning
         exists with the same type and scope, updates its confidence instead.
         """
-        assert self._conn is not None
+        conn = self._get_conn()
 
         if type not in VALID_TYPES:
             raise ValueError(f"Invalid type '{type}'. Must be one of: {VALID_TYPES}")
@@ -150,30 +156,30 @@ class MemoryStore:
         existing_id = self._find_duplicate(type, description, scope)
         if existing_id is not None:
             # Boost confidence of existing learning
-            self._conn.execute(
+            conn.execute(
                 """UPDATE learnings
                    SET confidence = MIN(?, confidence + 0.05),
                        updated_at = ?
                    WHERE id = ?""",
                 (_CONFIDENCE_CAP, now, existing_id),
             )
-            self._conn.commit()
+            conn.commit()
             return existing_id
 
-        cursor = self._conn.execute(
+        cursor = conn.execute(
             """INSERT INTO learnings
                (type, description, details, scope, confidence, created_at, updated_at)
                VALUES (?, ?, ?, ?, ?, ?, ?)""",
             (type, description, details, scope, confidence, now, now),
         )
-        self._conn.commit()
+        conn.commit()
         return cursor.lastrowid  # type: ignore[return-value]
 
     def _find_duplicate(self, type: str, description: str, scope: str) -> int | None:  # noqa: A002
         """Check if a similar learning already exists."""
-        assert self._conn is not None
+        conn = self._get_conn()
         try:
-            cursor = self._conn.execute(
+            cursor = conn.execute(
                 """SELECT l.id, rank
                    FROM learnings_fts f
                    JOIN learnings l ON l.id = f.rowid
@@ -199,11 +205,11 @@ class MemoryStore:
         Unhelpful: reduce confidence by 0.1 (floor 0.1).
         Auto-archive if unhelpful_count >= 5 or confidence < 0.15.
         """
-        assert self._conn is not None
+        conn = self._get_conn()
         now = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
 
         if helpful:
-            self._conn.execute(
+            conn.execute(
                 """UPDATE learnings
                    SET help_count = help_count + 1,
                        confidence = MIN(?, confidence + ?),
@@ -212,7 +218,7 @@ class MemoryStore:
                 (_CONFIDENCE_CAP, _HELPFUL_BOOST, now, learning_id),
             )
         else:
-            self._conn.execute(
+            conn.execute(
                 """UPDATE learnings
                    SET unhelpful_count = unhelpful_count + 1,
                        confidence = MAX(?, confidence - ?),
@@ -222,27 +228,27 @@ class MemoryStore:
             )
 
         # Auto-archive check
-        self._conn.execute(
+        conn.execute(
             """UPDATE learnings
                SET status = 'archived', updated_at = ?
                WHERE id = ?
                  AND (unhelpful_count >= ? OR confidence < ?)""",
             (now, learning_id, _UNHELPFUL_AUTO_ARCHIVE, _AUTO_ARCHIVE_THRESHOLD),
         )
-        self._conn.commit()
+        conn.commit()
 
     def record_applied(self, learning_id: int) -> None:
         """Increment apply_count (called when learning injected into context)."""
-        assert self._conn is not None
-        self._conn.execute(
+        conn = self._get_conn()
+        conn.execute(
             "UPDATE learnings SET apply_count = apply_count + 1 WHERE id = ?",
             (learning_id,),
         )
-        self._conn.commit()
+        conn.commit()
 
     def update(self, learning_id: int, **kwargs: str | float) -> None:
         """Update fields on a learning."""
-        assert self._conn is not None
+        conn = self._get_conn()
         allowed = {"type", "description", "details", "scope", "confidence", "status"}
         updates = {k: v for k, v in kwargs.items() if k in allowed}
         if not updates:
@@ -260,11 +266,11 @@ class MemoryStore:
 
         set_clause = ", ".join(f"{k} = ?" for k in updates)
         values = list(updates.values()) + [learning_id]
-        self._conn.execute(
+        conn.execute(
             f"UPDATE learnings SET {set_clause} WHERE id = ?",  # noqa: S608
             values,
         )
-        self._conn.commit()
+        conn.commit()
 
     # ------------------------------------------------------------------
     # Read operations
@@ -281,7 +287,7 @@ class MemoryStore:
         Scope hierarchy: exact match > parent dir > global.
         Results ranked by: FTS relevance x scope_proximity x confidence.
         """
-        assert self._conn is not None
+        conn = self._get_conn()
 
         # Apply slow confidence decay to all active learnings
         self._apply_decay()
@@ -295,7 +301,7 @@ class MemoryStore:
         # First: FTS-matched results
         if query.strip():
             try:
-                cursor = self._conn.execute(
+                cursor = conn.execute(
                     """SELECT l.id, l.type, l.description, l.details, l.scope,
                               l.confidence, l.apply_count, l.help_count,
                               l.unhelpful_count, l.created_at, l.updated_at,
@@ -319,7 +325,7 @@ class MemoryStore:
         # Second: scope-matched results (for when FTS doesn't match but scope does)
         if len(results) < max_results and scope_candidates:
             placeholders = ",".join("?" * len(scope_candidates))
-            cursor = self._conn.execute(
+            cursor = conn.execute(
                 f"""SELECT id, type, description, details, scope,
                            confidence, apply_count, help_count,
                            unhelpful_count, created_at, updated_at
@@ -347,7 +353,7 @@ class MemoryStore:
         type: str | None = None,  # noqa: A002
     ) -> list[dict]:
         """List all learnings, optionally filtered by status and type."""
-        assert self._conn is not None
+        conn = self._get_conn()
 
         query = (
             "SELECT id, type, description, details, scope, confidence,"
@@ -362,7 +368,7 @@ class MemoryStore:
 
         query += " ORDER BY confidence DESC, updated_at DESC"
 
-        cursor = self._conn.execute(query, params)
+        cursor = conn.execute(query, params)
         return [self._row_to_dict(row) for row in cursor]
 
     # ------------------------------------------------------------------
@@ -435,8 +441,8 @@ class MemoryStore:
             return
         self._last_decay_at = now
 
-        assert self._conn is not None
-        self._conn.execute(
+        conn = self._get_conn()
+        conn.execute(
             """UPDATE learnings
                SET confidence = MAX(?, confidence - ?)
                WHERE status = 'active'""",
@@ -444,13 +450,13 @@ class MemoryStore:
         )
         # Auto-archive any that fell below threshold
         now = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
-        self._conn.execute(
+        conn.execute(
             """UPDATE learnings
                SET status = 'archived', updated_at = ?
                WHERE status = 'active' AND confidence < ?""",
             (now, _AUTO_ARCHIVE_THRESHOLD),
         )
-        self._conn.commit()
+        conn.commit()
 
     # ------------------------------------------------------------------
     # Lifecycle

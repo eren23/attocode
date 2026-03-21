@@ -1,7 +1,8 @@
 """Analysis tools for the code-intel MCP server.
 
 Tools: file_analysis, impact_analysis, dependency_graph, hotspots,
-cross_references, dependencies, graph_query, find_related, community_detection.
+cross_references, dependencies, graph_query, graph_dsl, find_related,
+community_detection.
 """
 
 from __future__ import annotations
@@ -350,6 +351,71 @@ def graph_query(
             for f_path in result_by_depth[d]:
                 lines.append(f"    {'>' * d} {f_path}")
     lines.append(f"\nTotal: {len(visited) - 1} files reachable")
+    return "\n".join(lines)
+
+
+@mcp.tool()
+def graph_dsl(query: str) -> str:
+    """Query the dependency graph with a simple graph query language.
+
+    Supports a Cypher-inspired syntax for traversing import relationships
+    with depth constraints, filters, and multi-hop chains.
+
+    Example queries:
+      MATCH "src/api/app.py" -[IMPORTS*1..3]-> target RETURN target
+      MATCH file <-[IMPORTED_BY]- caller WHERE caller.language = "python" RETURN caller
+      MATCH a -[IMPORTS]-> b -[IMPORTS]-> c RETURN a, c
+
+    Syntax:
+      MATCH node -[EDGE_TYPE*min..max]-> node [WHERE conditions] RETURN variables
+      - Node: variable name (e.g. 'target') or quoted path ("src/app.py")
+      - Edge types: IMPORTS, IMPORTED_BY
+      - Direction: -> (outbound), <- (inbound with <-[TYPE]-)
+      - Depth: *N (exact), *N..M (range), omit for 1
+      - WHERE: variable.field op value (AND-separated)
+        Fields: language, line_count, importance, path, fan_in, fan_out, is_test, is_config
+        Operators: =, !=, >, <, >=, <=, LIKE
+      - RETURN: comma-separated variable names, or variable.field, or COUNT
+
+    Args:
+        query: Graph DSL query string.
+    """
+    from attocode.code_intel.graph_query_parser import (
+        GraphQueryExecutor,
+        GraphQueryParser,
+    )
+
+    ctx = _get_context_mgr()
+    dep_graph = ctx.dependency_graph
+    files = ctx._files
+
+    parser = GraphQueryParser()
+    try:
+        ast = parser.parse(query)
+    except ValueError as exc:
+        return f"Query syntax error: {exc}"
+
+    executor = GraphQueryExecutor()
+    try:
+        results = executor.execute(ast, dep_graph, files)
+    except Exception as exc:
+        return f"Execution error: {exc}"
+
+    if not results:
+        return f"No results for query: {query}"
+
+    lines = [f"Graph DSL results ({len(results)} matches):"]
+
+    # Format results based on what's returned
+    for i, row in enumerate(results, 1):
+        parts = []
+        for key, value in row.items():
+            parts.append(f"{key}={value}")
+        lines.append(f"  {i:3d}. {', '.join(parts)}")
+
+    if len(results) >= executor.MAX_RESULTS:
+        lines.append(f"\n  (results truncated at {executor.MAX_RESULTS})")
+
     return "\n".join(lines)
 
 

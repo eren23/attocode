@@ -264,6 +264,8 @@ class AgentTraceEntry:
     task_id: str
     entry_type: str  # tool_call|llm_request|llm_response|cost_delta|reasoning|file_write|error
     data: dict[str, Any] = field(default_factory=dict)
+    trace_id: str = ""
+    span_id: str = ""
 
 
 @dataclass(slots=True)

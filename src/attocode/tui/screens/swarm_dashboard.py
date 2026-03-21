@@ -207,8 +207,12 @@ class SwarmDashboardScreen(Screen):
         yield SwarmStatusFooter(id="swarm-status-footer")
         yield Footer()
 
+    _ACTIVE_POLL_INTERVAL = 1.0
+    _IDLE_POLL_INTERVAL = 5.0
+
     def on_mount(self) -> None:
-        self._poll_timer = self.set_interval(1.0, self._poll_state)
+        self._poll_timer = self.set_interval(self._ACTIVE_POLL_INTERVAL, self._poll_state)
+        self._current_poll_interval = self._ACTIVE_POLL_INTERVAL
 
     def on_unmount(self) -> None:
         if self._poll_timer:
@@ -260,6 +264,18 @@ class SwarmDashboardScreen(Screen):
 
         self._update_footer(state)
         self._update_active_pane(state)
+
+        # Adaptive polling: slow down when idle/completed/failed
+        phase = state.get("status", {}).get("phase", "").lower()
+        if phase in ("completed", "failed", "idle"):
+            desired = self._IDLE_POLL_INTERVAL
+        else:
+            desired = self._ACTIVE_POLL_INTERVAL
+
+        if desired != self._current_poll_interval and self._poll_timer:
+            self._poll_timer.stop()
+            self._poll_timer = self.set_interval(desired, self._poll_state)
+            self._current_poll_interval = desired
 
     def _get_state(self) -> dict[str, Any] | None:
         """Get state from event bridge (preferred) or state_fn."""
@@ -323,6 +339,12 @@ class SwarmDashboardScreen(Screen):
 
     def on_swarm_event_message(self, event: SwarmEventMessage) -> None:
         """Handle live swarm events for immediate pane refresh."""
+        # Speed up polling on event receipt if currently in idle mode
+        if self._current_poll_interval > self._ACTIVE_POLL_INTERVAL and self._poll_timer:
+            self._poll_timer.stop()
+            self._poll_timer = self.set_interval(self._ACTIVE_POLL_INTERVAL, self._poll_state)
+            self._current_poll_interval = self._ACTIVE_POLL_INTERVAL
+
         etype = event.event.get("type", "")
         # Force immediate update on task lifecycle events
         if etype.startswith(("swarm.task.", "swarm.wave.", "swarm.quality.")):

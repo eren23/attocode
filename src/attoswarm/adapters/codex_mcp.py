@@ -21,6 +21,7 @@ class CodexMcpAdapter(SubprocessAdapter):
         super().__init__(backend="codex-mcp")
         self._model = model
         self._thread_ids: dict[str, str] = {}  # agent_id -> threadId
+        self._thread_task_ids: dict[str, str] = {}  # agent_id -> task_id owning threadId
         self._rpc_id = 0
 
     @staticmethod
@@ -59,6 +60,16 @@ class CodexMcpAdapter(SubprocessAdapter):
             return
 
         agent_id = handle.spec.agent_id
+        task_id = msg.task_id or ""
+        previous_task_id = self._thread_task_ids.get(agent_id, "")
+        if task_id and previous_task_id and previous_task_id != task_id:
+            # New task on the same worker: force a fresh Codex thread so
+            # previous task context cannot bleed into the new assignment.
+            self._thread_ids.pop(agent_id, None)
+
+        if task_id:
+            self._thread_task_ids[agent_id] = task_id
+
         thread_id = self._thread_ids.get(agent_id)
 
         if thread_id is None:

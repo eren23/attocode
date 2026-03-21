@@ -204,6 +204,52 @@ def _build_backend_cmd_stdin(backend: str, model: str, prompt: str) -> tuple[lis
     raise ValueError(f"Unsupported backend: {backend!r}")
 
 
+def build_agent_prompt(task: dict) -> str:
+    """Build the full prompt that a worker agent receives.
+
+    Includes task description, file lists, symbol scope, test map,
+    and learning context from previous runs.
+    """
+    parts = [f"# Task: {task.get('title', '')}", "", task.get("description", "")]
+
+    target_files = task.get("target_files", [])
+    read_files = task.get("read_files", [])
+    if target_files:
+        parts.append(f"\nTarget files: {', '.join(target_files)}")
+    if read_files:
+        parts.append(f"\nReference files: {', '.join(read_files)}")
+
+    # Symbol scope — structural awareness of relevant code
+    symbols = task.get("symbol_scope", [])
+    if symbols:
+        parts.append("\n## Relevant Symbols")
+        for sym in symbols[:15]:
+            parts.append(f"- {sym}")
+
+    # Test map — which tests cover the target files
+    test_files = task.get("test_files", [])
+    test_command = task.get("test_command", "")
+    if test_files:
+        parts.append("\n## Related Tests")
+        parts.append("These test files cover your target files — run them to verify:")
+        for tf in test_files[:10]:
+            parts.append(f"- {tf}")
+        if test_command:
+            scoped = f"{test_command} {' '.join(test_files[:10])}"
+            parts.append(f"\nVerify: {scoped}")
+    elif test_command:
+        parts.append("\n## Testing")
+        parts.append(f"Verify: {test_command}")
+
+    # Learning context — patterns/antipatterns from previous runs
+    learning = task.get("learning_context", "")
+    if learning:
+        parts.append("\n## Context from Previous Runs")
+        parts.append(learning)
+
+    return "\n".join(parts)
+
+
 def _make_subprocess_spawn_fn(
     cfg: SwarmYamlConfig,
     process_registry: Any = None,
@@ -249,21 +295,16 @@ def _make_subprocess_spawn_fn(
             backend = fallback_backend
             model = fallback_model
 
-        target_files = task.get("target_files", [])
-        read_files = task.get("read_files", [])
-        prompt_parts = [f"# Task: {task.get('title', '')}", "", task.get("description", "")]
-        if target_files:
-            prompt_parts.append(f"\nTarget files: {', '.join(target_files)}")
-        if read_files:
-            prompt_parts.append(f"\nReference files: {', '.join(read_files)}")
-        prompt = "\n".join(prompt_parts)
+        prompt = build_agent_prompt(task)
 
-        cmd = _build_backend_cmd(backend, model, prompt)
+        cmd, stdin_text = _build_backend_cmd_stdin(backend, model, prompt)
         is_claude = backend == "claude"
-        if is_claude:
+        if is_claude and not stdin_text:
             # Inject stream-json only for worker spawns (not decompose);
             # --verbose is required by claude CLI when combining -p with stream-json
             cmd = cmd[:-1] + ["--verbose", "--output-format", "stream-json"] + cmd[-1:]
+        elif is_claude and stdin_text:
+            cmd.extend(["--verbose", "--output-format", "stream-json"])
         task_id = task["task_id"]
 
         t0 = _time.monotonic()
@@ -272,6 +313,7 @@ def _make_subprocess_spawn_fn(
                 *cmd,
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE,
+                stdin=asyncio.subprocess.PIPE if stdin_text else None,
                 cwd=wd,
                 env=clean_env,
                 start_new_session=True,
@@ -344,6 +386,12 @@ def _make_subprocess_spawn_fn(
                 if proc.stderr is None:
                     raise RuntimeError("Process stderr not available (subprocess created without PIPE)")
                 return await proc.stderr.read()
+
+            # Write prompt via stdin if using stdin mode (e.g. claude -p)
+            if stdin_text and proc.stdin:
+                proc.stdin.write(stdin_text.encode())
+                await proc.stdin.drain()
+                proc.stdin.close()
 
             try:
                 stdout_bytes, stderr_bytes = await asyncio.wait_for(
@@ -2061,6 +2109,53 @@ def _ai_assisted_task_builder(base_dir: Path, cfg: dict[str, Any]) -> list[dict[
         click.echo(f"AI decomposition failed: {exc}")
         click.echo("Falling back to manual builder.")
         return _manual_task_builder()
+
+
+@main.command("trace")
+@click.argument("run_dir", type=click.Path(exists=True, file_okay=False, path_type=Path))
+@click.option("--task", "task_id", default="", help="Filter events by task ID")
+def trace_command(run_dir: Path, task_id: str) -> None:
+    """Query trace data from a completed run."""
+    from attoswarm.coordinator.trace_query import TraceQueryEngine
+
+    engine = TraceQueryEngine(run_dir=run_dir)
+    engine.load()
+    if task_id:
+        events = engine.events_for_task(task_id)
+    else:
+        events = engine.all_events
+    if not events:
+        click.echo("No trace events found.")
+        return
+    for e in events:
+        click.echo(f"[{e.timestamp:.1f}] {e.event_type:15s} {e.task_id:10s} {e.message}")
+
+
+@main.command("postmortem")
+@click.argument("run_dir", type=click.Path(exists=True, file_okay=False, path_type=Path))
+def postmortem_command(run_dir: Path) -> None:
+    """Generate or display post-mortem report for a completed run."""
+    pm_path = run_dir / "postmortem.md"
+    if pm_path.exists():
+        click.echo(pm_path.read_text(encoding="utf-8"))
+    else:
+        from attoswarm.coordinator.postmortem import PostMortemGenerator
+        from attoswarm.coordinator.trace_query import TraceQueryEngine
+
+        engine = TraceQueryEngine(run_dir=run_dir)
+        engine.load()
+        gen = PostMortemGenerator(query_engine=engine)
+        state = read_json(run_dir / "swarm.state.json", default={})
+        if not isinstance(state, dict):
+            state = {}
+        report = gen.generate(
+            dag_summary=state.get("dag_summary", {}),
+            budget_data=state.get("budget", {}),
+            wall_clock_s=state.get("elapsed_s", 0.0),
+            validation_result=state.get("validation_result"),
+        )
+        gen.persist(report, run_dir)
+        click.echo(gen.to_markdown(report))
 
 
 if __name__ == "__main__":

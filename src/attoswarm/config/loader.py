@@ -8,6 +8,7 @@ from typing import Any
 import yaml
 
 from attoswarm.config.schema import (
+    AdaptiveConfig,
     BudgetConfig,
     CodeIntelConfig,
     MergeConfig,
@@ -17,7 +18,10 @@ from attoswarm.config.schema import (
     RoleConfig,
     RunConfig,
     SwarmYamlConfig,
+    TestVerificationConfig,
+    TracingConfig,
     UIConfig,
+    ValidationConfig,
     WatchdogConfig,
     WorkspaceConfig,
 )
@@ -41,6 +45,14 @@ def load_swarm_yaml(path: str | Path) -> SwarmYamlConfig:
     workspace_raw = raw.get("workspace", {}) if isinstance(raw.get("workspace"), dict) else {}
     code_intel_raw = raw.get("code_intel", {}) if isinstance(raw.get("code_intel"), dict) else {}
     research_raw = raw.get("research", {}) if isinstance(raw.get("research"), dict) else {}
+    tracing_raw = raw.get("tracing", {}) if isinstance(raw.get("tracing"), dict) else {}
+    adaptive_raw = raw.get("adaptive", {}) if isinstance(raw.get("adaptive"), dict) else {}
+    validation_raw = raw.get("validation", {}) if isinstance(raw.get("validation"), dict) else {}
+    test_verification_raw = (
+        raw.get("test_verification", {})
+        if isinstance(raw.get("test_verification"), dict)
+        else {}
+    )
 
     run = RunConfig(**_pick(run_raw, RunConfig))
     budget = BudgetConfig(**_pick(budget_raw, BudgetConfig))
@@ -52,6 +64,10 @@ def load_swarm_yaml(path: str | Path) -> SwarmYamlConfig:
     workspace = WorkspaceConfig(**_pick(workspace_raw, WorkspaceConfig))
     code_intel = CodeIntelConfig(**_pick(code_intel_raw, CodeIntelConfig))
     research = ResearchConfig(**_pick(research_raw, ResearchConfig))
+    tracing = TracingConfig(**_pick(tracing_raw, TracingConfig))
+    adaptive = AdaptiveConfig(**_pick(adaptive_raw, AdaptiveConfig))
+    validation = ValidationConfig(**_pick(validation_raw, ValidationConfig))
+    test_verification = TestVerificationConfig(**_pick(test_verification_raw, TestVerificationConfig))
 
     roles: list[RoleConfig] = []
     raw_roles = raw.get("roles", [])
@@ -74,6 +90,10 @@ def load_swarm_yaml(path: str | Path) -> SwarmYamlConfig:
         workspace=workspace,
         code_intel=code_intel,
         research=research,
+        test_verification=test_verification,
+        tracing=tracing,
+        adaptive=adaptive,
+        validation=validation,
     )
 
 

@@ -130,9 +130,12 @@ class PTYShellManager:
         if self._process is None or self._process.returncode is not None:
             await self.start()
 
-        assert self._process is not None
-        assert self._process.stdin is not None
-        assert self._process.stdout is not None
+        if self._process is None:
+            raise ToolError("Shell process is not running", tool_name="bash")
+        if self._process.stdin is None:
+            raise ToolError("Shell stdin is not available", tool_name="bash")
+        if self._process.stdout is None:
+            raise ToolError("Shell stdout is not available", tool_name="bash")
 
         self._history.append(command)
         start_time = time.monotonic()
@@ -194,8 +197,10 @@ class PTYShellManager:
 
     async def _read_until_marker(self, parts: list[str]) -> str:
         """Read from stdout until the prompt pattern is found."""
-        assert self._process is not None
-        assert self._process.stdout is not None
+        if self._process is None:
+            raise ToolError("Shell process is not running", tool_name="bash")
+        if self._process.stdout is None:
+            raise ToolError("Shell stdout is not available", tool_name="bash")
 
         buffer = ""
         while True:

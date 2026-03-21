@@ -6,6 +6,7 @@ workers, manages quality gates, recovery, and produces a final result.
 
 from __future__ import annotations
 
+import asyncio
 import logging
 from dataclasses import dataclass, field
 from typing import Any
@@ -65,6 +66,8 @@ class OrchestratorInternals:
     # Mutable orchestrator state
     cancelled: bool = False
     paused: bool = False
+    pause_event: asyncio.Event = field(default_factory=lambda: asyncio.Event())
+    _role_map_cache: dict[str, Any] | None = None
     current_phase: SwarmPhase = SwarmPhase.IDLE
     total_tokens: int = 0
     total_cost: float = 0.0
@@ -80,7 +83,9 @@ class OrchestratorInternals:
     total_dispatches: int = 0
     total_hollows: int = 0
     original_prompt: str = ""
-    has_replanned: bool = False
+    has_replanned: bool = False  # Kept for backward compat
+    replan_count: int = 0
+    scout_tokens: int = 0
 
     # Collected data
     errors: list[SwarmError] = field(default_factory=list)
@@ -202,6 +207,8 @@ class SwarmOrchestrator:
             codebase_context=self._config.codebase_context,
         )
 
+        ctx.pause_event.set()  # Start unpaused
+
         # Bind callables
         ctx.emit = self._emit
         ctx.log_decision = self._log_decision
@@ -228,6 +235,7 @@ class SwarmOrchestrator:
         self._total_hollows = ctx.total_hollows
         self._original_prompt = ctx.original_prompt
         self._has_replanned = ctx.has_replanned
+        self._replan_count = ctx.replan_count
 
     async def execute(self, task: str) -> SwarmExecutionResult:
         """Execute a full swarm pipeline for the given task.
@@ -280,6 +288,7 @@ class SwarmOrchestrator:
         self._total_hollows = 0
         self._original_prompt = task
         self._has_replanned = False
+        self._replan_count = 0
 
         ctx = self._get_internals()
         ctx.original_prompt = task
@@ -476,6 +485,7 @@ class SwarmOrchestrator:
         self._paused = True
         if self._active_ctx:
             self._active_ctx.paused = True
+            self._active_ctx.pause_event.clear()
         self._emit(swarm_event("swarm.paused", message="Dispatch paused by user"))
 
     async def resume(self) -> None:
@@ -483,6 +493,7 @@ class SwarmOrchestrator:
         self._paused = False
         if self._active_ctx:
             self._active_ctx.paused = False
+            self._active_ctx.pause_event.set()
         self._emit(swarm_event("swarm.resumed", message="Dispatch resumed"))
 
     @property

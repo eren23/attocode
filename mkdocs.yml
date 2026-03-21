@@ -66,6 +66,11 @@ nav:
       - Local Development: guides/local-development.md
       - Repos & Branches: guides/repos-and-branches.md
       - Semantic Search: guides/semantic-search.md
+      - CLI Commands: guides/cli-commands.md
+      - Advanced Analysis: guides/advanced-analysis.md
+      - Code History: guides/code-history.md
+      - Observability: guides/observability.md
+      - Architecture Decisions: guides/architecture-decisions.md
       - Providers: PROVIDERS.md
       - Provider Resilience: provider-resilience.md
       - Sandbox: SANDBOX.md
@@ -73,6 +78,7 @@ nav:
       - MCP Integration: MCP.md
       - OSS Demo Playbook: code-intel-oss-demo-playbook.md
       - Swarm Mode: swarm-guide.md
+      - Swarm Quality: guides/swarm-quality.md
       - Hybrid Swarm: hybrid-swarm-operations.md
       - Skills & Agents: skills-and-agents.md
       - Tracing: tracing-guide.md

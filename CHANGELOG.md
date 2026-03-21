@@ -7,6 +7,59 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.3] - 2026-03-21
+
+### Added
+
+#### Phase 1 — CLI & Maintenance Commands
+
+- **8 new CLI commands** — `query`, `symbols`, `impact`, `hotspots`, `deps`, `gc`, `verify`, `reindex` under `attocode code-intel`, providing direct terminal access to code intelligence without needing a running server
+- **`gc` garbage collection** — clears orphaned embeddings and unreferenced content in local, remote, and service modes; clears AST cache in pure local mode
+- **`verify` integrity checks** — validates branch files, embeddings, parent branch refs, and symbols against the database; in local mode checks for cache and index file presence
+- **`reindex` full rebuild** — clears cache and stale index, re-runs embedding indexing from scratch; triggers `index_repository` job in remote mode
+
+#### Phase 2 — Advanced Analysis Tools
+
+- **`dead_code` MCP tool** — detects unreferenced symbols, files, and modules at three analysis levels using the cross-reference index; entry-point heuristics auto-exclude tests, CLI mains, and framework routes; confidence scoring ranks results by removal safety
+- **`distill` MCP tool** — compresses codebase information at three fidelity levels: `full` (repo map), `signatures` (~70% compression, public API surface with type hints and first-line docstrings), `structure` (~90%+ compression, file tree + import adjacency list); supports dependency-graph expansion from seed files
+- **`graph_dsl` MCP tool** — Cypher-inspired query language for dependency graph traversal with depth ranges, WHERE filters (language, line_count, importance, fan_in, fan_out, is_test, is_config), LIKE operator, multi-hop chains, COUNT aggregation, and glob patterns; backed by `GraphQueryParser` + `GraphQueryExecutor`
+
+#### Phase 3 — History & ADR Tools
+
+- **`code_evolution` MCP tool** — traces commit history for a file or symbol with line-level change stats, author tracking, date filtering, and rename-following via `git log --follow --numstat`
+- **`recent_changes` MCP tool** — aggregates recent git activity, ranks files by commit frequency and churn, shows contributor breakdown; useful for identifying active development areas and merge conflict hotspots
+- **`record_adr` MCP tool** — records architecture decision records with context, decision, consequences, related files, and tags; persisted in `.attocode/adrs.db` (SQLite, WAL mode)
+- **`list_adrs` MCP tool** — lists ADRs with filtering by status, tag, or free-text search
+- **`get_adr` MCP tool** — retrieves full ADR details in Markdown format
+- **`update_adr_status` MCP tool** — updates ADR status with lifecycle transition validation (proposed -> accepted -> deprecated -> superseded); enforces `superseded_by` requirement
+
+#### Phase 4 — HTTP API & Observability
+
+- **`POST /api/v2/orgs/{org_id}/search`** — cross-repository semantic search across all repos in an org; single pgvector query with per-repo manifest scoping; supports `repo_ids` filter and `file_filter` glob
+- **`GET /api/v2/projects/{id}/evolution`** — structured JSON endpoint for code evolution (commit history with per-file stats)
+- **`GET /api/v2/projects/{id}/recent-changes`** — structured JSON endpoint for recent file changes with aggregation
+- **`GET /api/v2/projects/{id}/graph-viz`** — D3 force-directed compatible graph data with nodes, links, and community detection; supports BFS from root file or top-N by importance
+- **`GET /api/v1/metrics`** — aggregated query metrics in JSON and Prometheus text exposition format; tracks request latency by category (p50/p95/p99), search cache hit rates, and per-tool call success/failure; in-memory ring buffer with 10K cap; unauthenticated for monitoring infrastructure
+- **`MetricsCollector`** — thread-safe module-level singleton with ring-buffered recording of request, search, and tool call metrics; Prometheus formatter with HELP/TYPE annotations
+
+#### Swarm Quality Improvements
+
+- **Mandatory compilation checks** — per-language syntax/compilation checks (Python `compile()`, `tsc --noEmit`, `node --check`, `json.loads`) run on modified files before the LLM quality gate, catching broken code early and saving quality gate costs; structured `file:line` errors are attached to `RetryContext` for precise worker feedback
+- **Task enrichment pipeline** — post-decomposition enrichment adds acceptance criteria, code context snippets, technical constraints, and modification instructions to thin subtask descriptions; rule-based criteria generated per task type (implement, test, refactor, document, deploy); LLM enrichment for tasks still below `enrichment_min_description_chars` threshold; requests re-decomposition if >50% of tasks remain thin
+- **Verification gate decoupling** — `enable_verification` now operates independently of the `quality_gates` flag; runs pytest, mypy/tsc, and ruff/eslint on worker outputs with structured test failure and fix suggestion feedback in retry context
+- **User intervention hook** — opt-in feature (`enable_user_intervention: false` by default) that pauses tasks for human review after N failed attempts (`user_intervention_threshold: 3`); emits `swarm.task.intervention_needed` event with error details; defers cascade-skip to allow user action
+- **Structured retry context** — `RetryContext` now carries `compilation_errors`, `test_failures`, and `verification_suggestions` fields so retried workers see exact error locations and actionable fix suggestions instead of raw error text
+
+### Documentation
+
+- **`docs/guides/cli-commands.md`** — comprehensive reference for all 8 new CLI commands with flags, usage examples, and sample output
+- **`docs/guides/advanced-analysis.md`** — guide covering dead code detection (3 levels, entry-point heuristics, confidence scoring), code distillation (3 levels with compression examples), and graph DSL (full syntax reference with 10 example queries)
+- **`docs/guides/code-history.md`** — guide for `code_evolution` and `recent_changes` tools with use cases and HTTP API examples
+- **`docs/guides/observability.md`** — metrics endpoint documentation with JSON/Prometheus format examples, category reference, and Prometheus/Grafana setup instructions
+- **`docs/guides/architecture-decisions.md`** — ADR workflow guide with lifecycle diagram, transition rules, and end-to-end workflow example
+- **`docs/code-intel-http-api.md`** — updated with all new endpoints and expanded MCP tools list (27 -> 36 tools)
+- **`docs/guides/swarm-quality.md`** — guide covering mandatory compilation checks, task enrichment pipeline, verification gate, user intervention hook, structured retry context, and full SwarmConfig quality fields reference
+
 ## [0.2.2] - 2026-03-19
 
 ### Added

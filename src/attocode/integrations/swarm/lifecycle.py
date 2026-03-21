@@ -135,10 +135,22 @@ async def last_resort_decompose(
     ast_context = _get_ast_context(ctx)
     ast_section = f"\n\n{ast_context}\n" if ast_context else ""
 
-    prompt = f"""Break this task into 2-5 subtasks. Return ONLY JSON:
+    prompt = f"""Break this task into 2-5 subtasks. Each subtask description MUST be detailed enough for a worker to complete it without additional context.
+
+## GOOD task descriptions (detailed, actionable, with target files):
+- BAD:  "Implement user authentication"
+- GOOD: "Add JWT-based authentication to src/auth.py: create login(email, password) -> token function using bcrypt for password hashing and PyJWT for token generation. Add /login POST endpoint to src/routes.py that calls login() and returns {{token: str}}. Target files: src/auth.py, src/routes.py"
+
+- BAD:  "Write tests"
+- GOOD: "Write pytest tests in tests/test_auth.py for the login() function: test valid credentials return a JWT token, test invalid password raises AuthError, test missing user returns 404, test expired token is rejected. Use fixtures from conftest.py for test database setup."
+
+- BAD:  "Refactor the code"
+- GOOD: "Extract the database connection logic from src/app.py (lines 45-120) into a new src/db.py module. Create a DatabasePool class with connect(), disconnect(), and execute() methods. Update all imports in src/routes.py and src/models.py to use the new module. Ensure all existing tests still pass."
+
+Return ONLY JSON:
 {{
   "subtasks": [
-    {{"id": "st-0", "description": "...", "type": "implement", "complexity": 5, "dependencies": [], "relevantFiles": []}},
+    {{"id": "st-0", "description": "Detailed description with specific files, functions, and expected behavior...", "type": "implement", "complexity": 5, "dependencies": [], "relevantFiles": ["src/example.py"]}},
     {{"id": "st-1", "description": "...", "type": "test", "complexity": 3, "dependencies": ["st-0"], "relevantFiles": []}}
   ],
   "strategy": "sequential",
@@ -234,6 +246,9 @@ async def decompose_task(
     1. Primary: decomposer.decompose() (if available)
     2. Last resort: simplified LLM prompt with AST context
     3. Emergency: deterministic 4-task fallback
+
+    After successful decomposition, runs the task enrichment pipeline
+    if ``ctx.config.enable_task_enrichment`` is True.
     """
     result: SmartDecompositionResult | None = None
     failure_reason: str | None = None
@@ -245,6 +260,7 @@ async def decompose_task(
             if result and len(result.subtasks) > 0:
                 # Enrich subtasks with AST-suggested related files
                 _enrich_subtasks_with_ast(ctx, result.subtasks)
+                result = await _maybe_enrich(ctx, result, task)
                 return {"result": result}
         except Exception as exc:
             failure_reason = str(exc)
@@ -255,6 +271,7 @@ async def decompose_task(
         result = await last_resort_decompose(ctx, task)
         if result and len(result.subtasks) >= 2:
             _enrich_subtasks_with_ast(ctx, result.subtasks)
+            result = await _maybe_enrich(ctx, result, task)
             return {"result": result}
     except Exception as exc:
         failure_reason = failure_reason or str(exc)
@@ -262,7 +279,50 @@ async def decompose_task(
 
     # Tier 3: Emergency
     result = build_emergency_decomposition(ctx, task, failure_reason or "all decomposers failed")
+    result = await _maybe_enrich(ctx, result, task)
     return {"result": result, "failure_reason": failure_reason}
+
+
+async def _maybe_enrich(
+    ctx: OrchestratorInternals,
+    result: SmartDecompositionResult,
+    task: str,
+) -> SmartDecompositionResult:
+    """Run the task enrichment pipeline if enabled.
+
+    If >50% of tasks are rejected as too thin, logs a warning but keeps
+    the enriched versions (re-decomposition is left for the caller to
+    decide on in a future iteration).
+    """
+    if not ctx.config.enable_task_enrichment:
+        return result
+
+    if not result.subtasks:
+        return result
+
+    try:
+        from attocode.integrations.swarm.task_enrichment import (
+            EnrichmentConfig,
+            enrich_subtasks,
+        )
+
+        config = EnrichmentConfig(
+            min_description_chars=ctx.config.enrichment_min_description_chars,
+        )
+        enrichment = await enrich_subtasks(ctx, result.subtasks, task, config)
+
+        if enrichment.re_decompose_requested:
+            logger.warning(
+                "Enrichment: >50%% of subtasks too thin (%d rejected). "
+                "Keeping enriched versions.",
+                len(enrichment.rejected_ids),
+            )
+
+        result.subtasks = enrichment.enriched_subtasks
+    except Exception as exc:
+        logger.warning("Task enrichment failed (non-fatal): %s", exc)
+
+    return result
 
 
 # =============================================================================

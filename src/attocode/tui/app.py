@@ -3,12 +3,14 @@
 from __future__ import annotations
 
 import asyncio
+import logging
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 from textual.app import App, ComposeResult
 from textual.binding import Binding
 from textual.containers import Vertical
+from textual.css.query import NoMatches
 from textual.widgets import Footer, Static
 
 from attocode.tui.bridges.approval_bridge import ApprovalBridge, BudgetBridge
@@ -57,6 +59,8 @@ if TYPE_CHECKING:
         ToolStarted,
     )
 
+logger = logging.getLogger(__name__)
+
 # Path to TCSS files
 _STYLES_DIR = Path(__file__).parent / "styles"
 
@@ -103,6 +107,7 @@ class AttocodeApp(App):
         git_branch: str = "",
         agent: Any = None,
         approval_bridge: ApprovalBridge | None = None,
+        startup_messages: list[str] | None = None,
         **kwargs,
     ) -> None:
         super().__init__(**kwargs)
@@ -111,6 +116,7 @@ class AttocodeApp(App):
         self._processing = False
         self._exit_pressed = False
         self._agent = agent
+        self._startup_messages = list(startup_messages or [])
 
         # Bridges — use externally provided or create internal
         self.approval_bridge = approval_bridge or ApprovalBridge()
@@ -144,10 +150,16 @@ class AttocodeApp(App):
         self._stream_chunks_since_window_start = 0
         self._stream_window_started_at = 0.0
         self._stream_chunks_seen_total = 0
+        self._stream_chunks_per_sec: float = 0.0
         self._coalescing_live_updates = False
+        self._MAX_PENDING_CHUNKS = 500
 
         # Rate-limit failure toasts (I4)
         self._last_failure_toast_time: float = 0.0
+
+        # Swarm panel update debounce
+        self._swarm_panel_update_timer: Timer | None = None
+        self._swarm_panel_last_hash: int = 0
 
     def compose(self) -> ComposeResult:
         with Vertical(id="main-container"):
@@ -229,6 +241,8 @@ class AttocodeApp(App):
         # Hint below banner
         log = self.query_one("#message-log", MessageLog)
         log.add_system_message("Type a prompt to start, or /help for commands.")
+        for text in self._startup_messages:
+            log.add_system_message(text)
 
         # Focus input
         self.query_one("#input-area", PromptInput).focus_input()
@@ -563,14 +577,20 @@ class AttocodeApp(App):
     def on_llm_stream_chunk(self, event: LLMStreamChunk) -> None:
         """A chunk of streaming content arrived."""
         self._record_stream_activity()
+
+        # Buffer cap: force-flush before appending if we hit the limit
+        pending_count = len(self._pending_stream_text) + len(self._pending_thinking_text)
+        if pending_count >= self._MAX_PENDING_CHUNKS:
+            self._flush_stream_chunks()
+
         if event.chunk_type == "thinking":
             self._pending_thinking_text.append(event.content)
         else:
             self._pending_stream_text.append(event.content)
-        self._maybe_enable_stream_coalescing()
 
         if self._stream_flush_timer is None:
-            self._stream_flush_timer = self.set_timer(0.05, self._flush_stream_chunks)
+            interval = self._get_flush_interval()
+            self._stream_flush_timer = self.set_timer(interval, self._flush_stream_chunks)
 
     def on_llm_stream_end(self, event: LLMStreamEnd) -> None:
         """LLM streaming ended — finalize to message log."""
@@ -657,7 +677,7 @@ class AttocodeApp(App):
             status_bar.swarm_done = queue.get("completed", 0)
             status_bar.swarm_total = queue.get("total", 0)
             status_bar.swarm_cost = budget.get("cost_used", 0.0)
-        except Exception:
+        except NoMatches:
             pass
 
     # --- Swarm event handler ---
@@ -785,30 +805,28 @@ class AttocodeApp(App):
             self._pending_stream_text.clear()
 
     def _record_stream_activity(self) -> None:
-        """Track stream event rates and mark the UI as batched under load."""
+        """Track stream event rates in 0.5s windows."""
         now = asyncio.get_running_loop().time()
-        if self._stream_window_started_at == 0.0 or now - self._stream_window_started_at > 0.5:
+        elapsed = now - self._stream_window_started_at if self._stream_window_started_at else 0.0
+        if self._stream_window_started_at == 0.0 or elapsed > 0.5:
+            # Compute chunks/sec from the closing window
+            if elapsed > 0 and self._stream_chunks_since_window_start > 0:
+                self._stream_chunks_per_sec = self._stream_chunks_since_window_start / elapsed
             self._stream_window_started_at = now
             self._stream_chunks_since_window_start = 0
         self._stream_chunks_since_window_start += 1
         self._stream_chunks_seen_total += 1
 
-    def _maybe_enable_stream_coalescing(self) -> None:
-        """Enable the batched-live indicator once chunk volume gets high enough."""
-        pending_chunks = len(self._pending_stream_text) + len(self._pending_thinking_text)
-        if self._coalescing_live_updates:
-            return
-        if (
-            self._stream_chunks_seen_total < 12
-            and self._stream_chunks_since_window_start < 12
-            and pending_chunks < 8
-        ):
-            return
-        self._coalescing_live_updates = True
-        self.query_one("#status-bar", StatusBar).live_updates_coalesced = True
-        self.query_one("#message-log", MessageLog).add_system_message(
-            "High event rate detected; batching live updates to keep the TUI responsive."
-        )
+    def _get_flush_interval(self) -> float:
+        """Return adaptive flush interval based on stream volume."""
+        total = self._stream_chunks_seen_total
+        if self._stream_chunks_per_sec > 200:
+            return 0.075  # Very fast models
+        if total <= 4:
+            return 0.016  # Near-immediate for first chunks
+        if total <= 15:
+            return 0.033  # Light batching
+        return 0.050  # Standard batching
 
     def _reset_stream_coalescing(self) -> None:
         """Clear batching state after a response finishes."""
@@ -820,30 +838,50 @@ class AttocodeApp(App):
         self._stream_chunks_since_window_start = 0
         self._stream_window_started_at = 0.0
         self._stream_chunks_seen_total = 0
+        self._stream_chunks_per_sec = 0.0
         self._coalescing_live_updates = False
         try:
             self.query_one("#status-bar", StatusBar).live_updates_coalesced = False
         except Exception:
-            pass
+            logger.debug("Could not reset live_updates_coalesced on status bar")
 
     def _update_swarm_panel_from_event(self, evt: dict) -> None:
-        """Push quality stats and start time to SwarmPanel."""
+        """Push quality stats and start time to SwarmPanel (debounced 100ms)."""
+        # Immediate handling for swarm.start (rare, non-repeating)
+        etype = evt.get("type", "")
+        if etype == "swarm.start":
+            try:
+                panel = self.query_one("#swarm-panel", SwarmPanel)
+                if panel._start_time == 0:
+                    import time as _time
+                    panel.set_start_time(evt.get("timestamp", 0) or _time.time())
+            except Exception:
+                logger.debug("Could not set swarm panel start time")
+
+        # Debounce quality stats updates
+        if self._swarm_panel_update_timer is None:
+            self._swarm_panel_update_timer = self.set_timer(
+                0.1, self._flush_swarm_panel_update,
+            )
+
+    def _flush_swarm_panel_update(self) -> None:
+        """Flush debounced swarm panel quality stats."""
+        self._swarm_panel_update_timer = None
         try:
-            panel = self.query_one("#swarm-panel", SwarmPanel)
-            etype = evt.get("type", "")
-            if etype == "swarm.start" and panel._start_time == 0:
-                import time as _time
-                panel.set_start_time(evt.get("timestamp", 0) or _time.time())
-            # Pull quality_stats from event bridge's public API
             if self._agent and hasattr(self._agent, "event_bridge"):
                 bridge = self._agent.event_bridge
                 if bridge and hasattr(bridge, "get_live_state"):
                     live_state = bridge.get_live_state()
                     qs = live_state.get("quality_stats", {})
                     if qs:
-                        panel.update_quality_stats(qs)
+                        # Dedup: hash key fields to skip no-op updates
+                        state_hash = hash(frozenset(qs.items()) if isinstance(qs, dict) else 0)
+                        if state_hash != self._swarm_panel_last_hash:
+                            self._swarm_panel_last_hash = state_hash
+                            panel = self.query_one("#swarm-panel", SwarmPanel)
+                            panel.update_quality_stats(qs)
         except Exception:
-            pass
+            logger.debug("Failed to flush swarm panel update")
 
     def on_compaction_completed(self, event: CompactionCompleted) -> None:
         """Compaction event — update status bar and internals panel."""
@@ -852,7 +890,7 @@ class AttocodeApp(App):
         try:
             panel = self.query_one("#agent-internals", AgentInternalsPanel)
             panel.record_compaction(event.tokens_saved)
-        except Exception:
+        except NoMatches:
             pass
 
     def on_phase_transition(self, event: PhaseTransition) -> None:
@@ -861,7 +899,7 @@ class AttocodeApp(App):
         try:
             panel = self.query_one("#agent-internals", AgentInternalsPanel)
             panel.update_phase(event.new_phase)
-        except Exception:
+        except NoMatches:
             pass
 
     def on_doom_loop_warning(self, event: DoomLoopWarning) -> None:
@@ -874,7 +912,7 @@ class AttocodeApp(App):
         try:
             panel = self.query_one("#agent-internals", AgentInternalsPanel)
             panel.set_doom_loop(event.tool_name, event.count)
-        except Exception:
+        except NoMatches:
             pass
 
     def on_cache_stats(self, event: CacheStats) -> None:
@@ -891,7 +929,7 @@ class AttocodeApp(App):
                 self.query_one("#status-bar", StatusBar).cache_hit_rate = (
                     panel.cache_read / total
                 )
-        except Exception:
+        except NoMatches:
             pass
 
     def on_plan_updated(self, event: PlanUpdated) -> None:
@@ -899,7 +937,7 @@ class AttocodeApp(App):
         try:
             plan_panel = self.query_one("#plan-panel", PlanPanel)
             plan_panel.set_plan(event.plan)
-        except Exception:
+        except NoMatches:
             pass
 
     # --- Dialog bridges ---

@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import time
+
 import pytest
 
 from attocode.integrations.budget.budget_pool import (
@@ -620,3 +622,66 @@ class TestEdgeCases:
         assert a2 is not None
         # Both reservations counted towards reserved total
         assert pool.get_stats().active_allocations == 1
+
+
+# =============================================================================
+# Release Stale
+# =============================================================================
+
+
+class TestReleaseStale:
+    """release_stale removes old allocations and returns tokens to pool."""
+
+    def test_removes_old_allocation(self) -> None:
+        pool = SharedBudgetPool(
+            BudgetPoolConfig(total_tokens=100_000, max_per_child=30_000)
+        )
+        alloc = pool.reserve("old")
+        assert alloc is not None
+        alloc.created_at = time.time() - 600
+        freed = pool.release_stale(300)
+        assert "old" in freed
+        assert pool.get_allocation("old") is None
+
+    def test_keeps_fresh_allocation(self) -> None:
+        pool = SharedBudgetPool(
+            BudgetPoolConfig(total_tokens=100_000, max_per_child=30_000)
+        )
+        alloc = pool.reserve("fresh")
+        assert alloc is not None
+        freed = pool.release_stale(300)
+        assert freed == []
+        assert pool.get_allocation("fresh") is not None
+
+    def test_mixed_ages(self) -> None:
+        pool = SharedBudgetPool(
+            BudgetPoolConfig(total_tokens=100_000, max_per_child=30_000)
+        )
+        old = pool.reserve("old")
+        assert old is not None
+        old.created_at = time.time() - 600
+        fresh = pool.reserve("fresh")
+        assert fresh is not None
+        freed = pool.release_stale(300)
+        assert "old" in freed
+        assert "fresh" not in freed
+        assert pool.get_stats().active_allocations == 1
+
+    def test_returns_freed_tokens_to_pool(self) -> None:
+        pool = SharedBudgetPool(
+            BudgetPoolConfig(total_tokens=100_000, max_per_child=30_000)
+        )
+        alloc = pool.reserve("old")
+        assert alloc is not None
+        alloc.created_at = time.time() - 600
+        before = pool.get_remaining()
+        pool.release_stale(300)
+        after = pool.get_remaining()
+        assert after > before
+
+    def test_empty_pool_noop(self) -> None:
+        pool = SharedBudgetPool(
+            BudgetPoolConfig(total_tokens=100_000, max_per_child=30_000)
+        )
+        freed = pool.release_stale(300)
+        assert freed == []

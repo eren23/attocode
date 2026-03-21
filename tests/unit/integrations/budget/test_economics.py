@@ -159,3 +159,23 @@ class TestReset:
         assert em.total_tokens == 0
         assert em.llm_calls == 0
         assert em.loop_detector.total_calls == 0
+
+
+class TestPostInitClamping:
+    """__post_init__ clamps invalid max_tokens to 100_000."""
+
+    def test_zero_max_tokens_clamped_to_100k(self) -> None:
+        em = ExecutionEconomicsManager(budget=ExecutionBudget(max_tokens=0))
+        assert em.budget.max_tokens == 100_000
+
+    def test_negative_max_tokens_clamped_to_100k(self) -> None:
+        em = ExecutionEconomicsManager(budget=ExecutionBudget(max_tokens=-500))
+        assert em.budget.max_tokens == 100_000
+
+    def test_positive_max_tokens_unchanged(self) -> None:
+        em = ExecutionEconomicsManager(budget=ExecutionBudget(max_tokens=50_000))
+        assert em.budget.max_tokens == 50_000
+
+    def test_clamped_value_stored_as_original(self) -> None:
+        em = ExecutionEconomicsManager(budget=ExecutionBudget(max_tokens=0))
+        assert em._original_max_tokens == 100_000

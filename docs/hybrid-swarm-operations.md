@@ -404,3 +404,58 @@ Create a file `swarm_smoke/hello.txt` with one line `hello from swarm` and repor
 ```
 
 Then scale to multi-file implementation tasks once telemetry and merge behavior look healthy.
+
+## 9. Agent Quality Features (v0.2.3+)
+
+### Shutdown Reason Tracking
+
+When a run ends in `shutdown`, the state file now records *why*:
+
+```bash
+jq '.shutdown_reason' .agent/hybrid-swarm/demo-1/swarm.state.json
+```
+
+Possible values: `signal:SIGTERM`, `signal:SIGINT`, `control:shutdown`, `control:reject`, `approval_timeout`, `budget_exhausted`, `unknown`.
+
+The events file also contains a diagnostic event:
+```bash
+grep "Shutdown requested" .agent/hybrid-swarm/demo-1/swarm.events.jsonl
+```
+
+### Context Injection
+
+Worker agents now receive enriched prompts containing:
+
+- **Symbol scope**: relevant AST symbols from code-intel impact analysis (up to 15)
+- **Test map**: related test files discovered by naming convention (e.g., `test_<module>.py`)
+- **Test command**: auto-detected test command (pytest, npm test, cargo test, go test)
+- **Learning context**: patterns and antipatterns from previous runs
+
+Inspect the full prompt an agent received:
+```bash
+cat .agent/hybrid-swarm/demo-1/agents/agent-task-1.prompt.txt
+```
+
+### Syntax Verification Gate
+
+After a worker completes, modified Python and JSON files are parsed to catch syntax errors before the task is marked done. If a file doesn't parse:
+
+- The task is marked failed
+- A `warning` event is emitted with the specific syntax errors
+- The task enters the retry pipeline
+
+This runs concurrently with test verification in the result pipeline.
+
+### PID Lockfile
+
+A `.orchestrator.pid` file prevents concurrent orchestrators from corrupting the same run directory. Stale lockfiles are cleaned automatically by `ensure_clean_slate` on the next run.
+
+### Diagnostic Events
+
+Every loop exit now emits a diagnostic event explaining *why* execution stopped:
+
+- No ready tasks (with pending task list)
+- Preflight blocked all tasks
+- Budget gate blocked all tasks
+- Batch safety bound reached
+- Shutdown requested (with reason)

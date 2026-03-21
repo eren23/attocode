@@ -60,10 +60,23 @@ async def execute_waves(
         # Reconcile stale dispatched tasks
         stale_ms = ctx.config.dispatch_lease_stale_ms
         active_ids = ctx.worker_pool.get_active_task_ids() if ctx.worker_pool else set()
-        ctx.task_queue.reconcile_stale_dispatched(
+        stale_recovered = ctx.task_queue.reconcile_stale_dispatched(
             stale_after_ms=stale_ms,
             active_task_ids=active_ids,
         )
+        for stale_id, stale_elapsed in stale_recovered:
+            ctx.emit(swarm_event(
+                "swarm.task.stale_recovered",
+                task_id=stale_id,
+                elapsed_s=stale_elapsed,
+            ))
+
+        # Release stale budget allocations from crashed children
+        if ctx.budget_pool and hasattr(ctx.budget_pool, "release_stale"):
+            timeout = ctx.config.worker_timeout / 1000.0
+            freed = ctx.budget_pool.release_stale(timeout * 2)
+            if freed:
+                logger.info("Released %d stale budget allocations: %s", len(freed), freed)
 
         # Get ready tasks for this wave
         ready_tasks = ctx.task_queue.get_ready_tasks()
@@ -120,7 +133,7 @@ async def execute_waves(
                         severity=esc.payload.get("severity", "medium"),
                     ))
             except Exception:
-                pass
+                logger.warning("Failed to process message bus escalations", exc_info=True)
 
         # Wave review: run critic if configured
         if ctx.config.enable_wave_review:
@@ -173,7 +186,44 @@ async def execute_waves(
 
         # Advance to next wave
         if not ctx.task_queue.advance_wave():
-            break
+            # Wave not complete — check stuck timeout
+            wave_stuck_timeout_s = ctx.config.wave_stuck_timeout_ms / 1000.0
+            wave_start = time.time()
+            advanced = False
+            while not ctx.cancelled:
+                # If all non-terminal tasks are DISPATCHED, they'll finish async — ok to advance
+                all_non_terminal_dispatched = all(
+                    t.status == SwarmTaskStatus.DISPATCHED
+                    for tid in ctx.task_queue.waves[ctx.task_queue.current_wave]
+                    for t in [ctx.task_queue.get_task(tid)]
+                    if t is not None and t.status not in (
+                        SwarmTaskStatus.COMPLETED, SwarmTaskStatus.FAILED,
+                        SwarmTaskStatus.SKIPPED, SwarmTaskStatus.DECOMPOSED,
+                    )
+                )
+                if all_non_terminal_dispatched:
+                    ctx.task_queue.current_wave += 1
+                    advanced = True
+                    break
+                # Stuck timeout: if ready tasks exist in later waves, advance
+                elapsed = time.time() - wave_start
+                if elapsed > wave_stuck_timeout_s:
+                    later_ready = any(
+                        t.status == SwarmTaskStatus.READY
+                        for t in ctx.task_queue.get_all_tasks().values()
+                        if t.wave > ctx.task_queue.current_wave
+                    )
+                    if later_ready:
+                        logger.warning(
+                            "Wave %d stuck for %.0fs, advancing to unblock ready tasks",
+                            wave_index + 1, elapsed,
+                        )
+                        ctx.task_queue.current_wave += 1
+                        advanced = True
+                    break
+                break  # Don't loop — just check once per wave cycle
+            if not advanced:
+                break
         wave_index = ctx.task_queue.get_current_wave()
         total_waves = ctx.task_queue.get_total_waves()
 
@@ -209,8 +259,8 @@ async def execute_wave(
         and not ctx.cancelled
     ):
         # Pause check: wait until unpaused
-        while getattr(ctx, "paused", False) and not ctx.cancelled:
-            await asyncio.sleep(0.5)
+        if getattr(ctx, "paused", False):
+            await ctx.pause_event.wait()
 
         if is_circuit_breaker_active(recovery_state, ctx):
             wait_ms = recovery_state.circuit_breaker_until - time.time()
@@ -244,8 +294,8 @@ async def execute_wave(
         ctx.emit(swarm_event("swarm.status", status=get_status()))
 
         # Pause check before slot re-fill
-        while getattr(ctx, "paused", False) and not ctx.cancelled:
-            await asyncio.sleep(0.5)
+        if getattr(ctx, "paused", False):
+            await ctx.pause_event.wait()
 
         # Fill freed slots with remaining tasks
         while (
@@ -338,7 +388,7 @@ async def dispatch_task(
             for fpath in task.target_files[:20]:
                 ctx.message_bus.lock_file(fpath, task.id)
         except Exception:
-            pass
+            logger.warning("Failed to lock files for task %s", task.id, exc_info=True)
 
     try:
         await ctx.worker_pool.dispatch(task, worker)
@@ -508,6 +558,65 @@ async def _handle_successful_completion(
             ctx.task_queue.mark_failed_without_cascade(task_id, max_retries)
             return
 
+    # Mandatory compilation check — runs for ALL action tasks that modify files,
+    # regardless of quality_gates setting. Catches syntax/compilation errors early.
+    if _is_action_task(task) and spawn_result.files_modified:
+        try:
+            from attocode.integrations.swarm.compilation_check import run_compilation_checks
+
+            working_dir = getattr(ctx, "working_dir", None) or "."
+            check_result = run_compilation_checks(
+                files_modified=spawn_result.files_modified,
+                working_dir=working_dir,
+            )
+
+            if not check_result.passed:
+                # Build structured RetryContext with compilation errors
+                from attocode.integrations.swarm.types import RetryContext
+
+                error_dicts = [
+                    {"file": e.file_path, "line": e.line, "message": e.message}
+                    for e in check_result.errors
+                    if e.severity == "error"
+                ]
+
+                task.retry_context = RetryContext(
+                    previous_feedback=_format_compilation_errors(check_result.errors),
+                    previous_score=0,
+                    attempt=task.attempts,
+                    previous_model=task.assigned_model,
+                    compilation_errors=error_dicts,
+                    verification_suggestions=[
+                        f"Fix {e.file_path}:{e.line}: {e.message}"
+                        for e in check_result.errors
+                        if e.severity == "error" and e.line is not None
+                    ],
+                )
+                task.failure_mode = TaskFailureMode.QUALITY
+                task_result.success = False
+                task_result.quality_feedback = _format_compilation_errors(check_result.errors)
+                max_retries = ctx.config.worker_retries
+                retried = ctx.task_queue.mark_failed_without_cascade(task_id, max_retries)
+
+                ctx.emit(swarm_event(
+                    "swarm.compilation.failed",
+                    task_id=task_id,
+                    errors=[
+                        {"file": e.file_path, "line": e.line, "message": e.message}
+                        for e in check_result.errors
+                        if e.severity == "error"
+                    ],
+                    files_checked=check_result.files_checked,
+                    duration_ms=check_result.duration_ms,
+                ))
+
+                if not retried:
+                    ctx.task_queue.trigger_cascade_skip(task_id)
+                return
+        except Exception as exc:
+            logger.warning("Compilation check error for task %s: %s", task_id, exc)
+            # Non-fatal: continue to quality gate if compilation check itself errors
+
     # Quality gate — run pre-flight + LLM judge if enabled
     if ctx.config.quality_gates:
         from attocode.integrations.swarm.quality_gate import (
@@ -577,37 +686,104 @@ async def _handle_successful_completion(
         task_result.quality_score = gate_result.score
 
     # Verification gate — run automated checks (tests, types, lint)
-    if ctx.config.quality_gates:
+    # Decoupled from quality_gates: runs independently for action tasks
+    # that modify files, controlled by enable_verification flag.
+    _vg_type_config = BUILTIN_TASK_TYPE_CONFIGS.get(task.type, None)
+    _should_verify = bool(
+        ctx.config.enable_verification
+        and _vg_type_config and _vg_type_config.requires_tool_calls
+        and spawn_result.files_modified
+    )
+    if _should_verify:
         try:
             from attocode.integrations.tasks.task_splitter import SubTask
-            from attocode.integrations.tasks.verification_gate import VerificationGate
+            from attocode.integrations.tasks.verification_gate import (
+                VerificationGate,
+                check_modified_files_compile,
+            )
 
             working_dir = getattr(ctx, "working_dir", None) or "."
+
+            # Run targeted compilation check on modified files first
+            compile_result = check_modified_files_compile(
+                spawn_result.files_modified, working_dir,
+            )
+            if not compile_result.passed:
+                # Emit compilation failure event
+                ctx.emit(swarm_event(
+                    "swarm.compilation.failed",
+                    task_id=task_id,
+                    errors=[
+                        {"file": e.get("file", ""), "message": e.get("message", "")}
+                        for e in (compile_result.errors or [])[:10]
+                    ],
+                ))
+                # Build structured retry context with compilation errors
+                from attocode.integrations.swarm.types import RetryContext
+                task.retry_context = RetryContext(
+                    previous_feedback=compile_result.message,
+                    previous_score=task_result.quality_score or 0,
+                    attempt=task.attempts,
+                    previous_model=task.assigned_model,
+                    compilation_errors=compile_result.errors[:10] if compile_result.errors else None,
+                    verification_suggestions=[
+                        f"Fix compilation error in {e.get('file', 'unknown')}: {e.get('message', '')}"
+                        for e in (compile_result.errors or [])[:5]
+                    ] or None,
+                )
+                task_result.quality_feedback = compile_result.message
+                max_retries = ctx.config.worker_retries
+                retried = ctx.task_queue.mark_failed_without_cascade(task_id, max_retries)
+                if not retried:
+                    ctx.task_queue.trigger_cascade_skip(task_id)
+                return
+
+            # Full verification gate: tests, types, lint
             gate = VerificationGate(
                 provider=ctx.provider if ctx.config.enable_wave_review else None,
                 model=ctx.config.orchestrator_model,
                 working_dir=working_dir,
-            )
-            # Only run tests for action tasks that modify files
-            type_config = BUILTIN_TASK_TYPE_CONFIGS.get(task.type, None)
-            should_run_tests = bool(
-                type_config and type_config.requires_tool_calls
-                and spawn_result.files_modified
             )
             # Adapt SwarmTask → SubTask for the verification gate interface
             sub_task = SubTask(id=task.id, description=task.description)
             verification = await gate.verify(
                 sub_task,
                 spawn_result.output or "",
-                run_tests=should_run_tests,
-                run_types=should_run_tests,
-                run_lint=should_run_tests,
-                run_llm=False,  # Quality gate LLM judge already ran above
+                run_tests=True,
+                run_types=True,
+                run_lint=True,
+                run_llm=False,  # Quality gate LLM judge already ran above (if enabled)
             )
             if not verification.passed:
-                task_result.quality_feedback = "; ".join(
-                    verification.suggestions[:3],
+                # Build structured retry context with verification details
+                _verif_suggestions = verification.suggestions[:3]
+                task_result.quality_feedback = "; ".join(_verif_suggestions)
+
+                # Populate structured error fields on retry context
+                from attocode.integrations.swarm.types import RetryContext
+                _comp_errors: list[dict[str, Any]] = []
+                _test_failures: list[str] = []
+                for c in verification.checks:
+                    if not c.passed:
+                        if c.name in ("tests",):
+                            _test_failures.append(c.message[:300])
+                        else:
+                            _comp_errors.append({
+                                "file": "",
+                                "line": None,
+                                "message": c.message[:300],
+                                "check": c.name,
+                            })
+                task.retry_context = RetryContext(
+                    previous_feedback=task_result.quality_feedback,
+                    previous_score=task_result.quality_score or 0,
+                    attempt=task.attempts,
+                    previous_model=task.assigned_model,
+                    compilation_errors=_comp_errors or None,
+                    test_failures=_test_failures or None,
+                    verification_suggestions=_verif_suggestions or None,
                 )
+
                 max_retries = ctx.config.worker_retries
                 retried = ctx.task_queue.mark_failed_without_cascade(task_id, max_retries)
                 ctx.emit(swarm_event(
@@ -622,7 +798,13 @@ async def _handle_successful_completion(
                     ctx.task_queue.trigger_cascade_skip(task_id)
                 return
         except Exception as exc:
-            logger.debug("Verification gate error (non-fatal): %s", exc)
+            logger.warning("Verification gate error for task %s: %s", task_id, exc)
+            task_result.quality_feedback = "Verification skipped due to error"
+            ctx.emit(swarm_event(
+                "swarm.verification.skipped",
+                task_id=task_id,
+                reason=str(exc)[:200],
+            ))
 
     # File conflict detection via blackboard
     blackboard = getattr(ctx, "blackboard", None)
@@ -644,7 +826,9 @@ async def _handle_successful_completion(
                     task_id, conflicts,
                 )
         except Exception:
-            pass
+            logger.warning(
+                "Blackboard conflict detection failed for task %s", task_id, exc_info=True,
+            )
 
     # Mark completed
     ctx.task_queue.mark_completed(task_id, task_result)
@@ -660,7 +844,9 @@ async def _handle_successful_completion(
             )
             ctx.message_bus.release_all_locks(task_id)
         except Exception:
-            pass
+            logger.warning(
+                "Message bus broadcast_done/release failed for task %s", task_id, exc_info=True,
+            )
 
     ctx.emit(swarm_event(
         "swarm.task.completed",
@@ -694,9 +880,45 @@ async def _handle_failed_completion(
         try_resilience_recovery,
     )
 
-    # Classify failure
-    failure_class = _classify_failure(spawn_result.output)
+    # Classify failure using comprehensive classifier
+    failure_class = _classify_failure(spawn_result.output, spawn_result.tool_calls)
     task.failure_mode = TaskFailureMode(failure_class) if failure_class in TaskFailureMode.__members__.values() else TaskFailureMode.ERROR
+
+    # Skip retries for terminal failures (auth, spend limit, etc.)
+    try:
+        from attocode.integrations.swarm.failure_classifier import classify_swarm_failure
+        full_classification = classify_swarm_failure(spawn_result.output, spawn_result.tool_calls)
+        if not full_classification.retryable:
+            ctx.task_queue.mark_failed(task_id, 0)  # Zero retries for terminal failures
+            ctx.task_queue.trigger_cascade_skip(task_id)
+            logger.warning(
+                "Terminal failure for task %s: %s", task_id, full_classification.reason,
+            )
+            # Still emit the event below, but skip retry logic
+            ctx.emit(swarm_event(
+                "swarm.task.failed",
+                task_id=task_id,
+                error=spawn_result.output[:500] if spawn_result.output else "Unknown error",
+                attempt=task.attempts,
+                max_attempts=1,
+                will_retry=False,
+                failure_mode=str(task.failure_mode),
+                output=(spawn_result.output or "")[:1000],
+                files_modified=spawn_result.files_modified,
+                tool_calls=spawn_result.tool_calls,
+                session_id=spawn_result.session_id,
+                num_turns=spawn_result.num_turns,
+                stderr=(spawn_result.stderr or "")[:500],
+            ))
+            # Release locks
+            if ctx.message_bus is not None:
+                try:
+                    ctx.message_bus.release_all_locks(task_id)
+                except Exception:
+                    logger.warning("Message bus release failed for task %s", task_id)
+            return
+    except ImportError:
+        pass
 
     # Record health failure
     if ctx.health_tracker and task.assigned_model:
@@ -773,6 +995,32 @@ async def _handle_failed_completion(
     else:
         retry_limit = base_retries
 
+    # User intervention hook: if enabled and task has failed N times,
+    # emit an intervention event instead of cascade-skipping immediately.
+    if (
+        ctx.config.enable_user_intervention
+        and task.attempts >= ctx.config.user_intervention_threshold
+    ):
+        _last_error = spawn_result.output[:500] if spawn_result.output else "Unknown error"
+        _comp_errors = None
+        if task.retry_context and task.retry_context.compilation_errors:
+            _comp_errors = task.retry_context.compilation_errors[:5]
+        ctx.emit(swarm_event(
+            "swarm.task.intervention_needed",
+            task_id=task_id,
+            description=task.description,
+            attempts=task.attempts,
+            last_error=_last_error,
+            compilation_errors=_comp_errors,
+            failure_mode=str(task.failure_mode),
+            model=task.assigned_model,
+        ))
+        # Task stays in its current state (DISPATCHED/FAILED) — does not
+        # cascade-skip yet. The TUI/dashboard should show the intervention
+        # prompt. Normal retry/fail logic still runs below so the task can
+        # be retried if the user provides guidance, but cascade skip is
+        # deferred.
+
     # Try retry or fail
     retried = ctx.task_queue.mark_failed_without_cascade(task_id, retry_limit)
     if retried:
@@ -781,19 +1029,32 @@ async def _handle_failed_completion(
         if task.failure_mode == TaskFailureMode.RATE_LIMIT:
             ctx.task_queue.set_retry_after(task_id, ctx.config.retry_base_delay_ms)
     else:
-        # Try resilience recovery before hard fail
-        recovered = await try_resilience_recovery(
-            ctx, recovery_state, task, task_id, task_result, spawn_result,
-        )
-        if not recovered:
-            ctx.task_queue.trigger_cascade_skip(task_id)
+        # If user intervention is active, skip cascade-skip to give user a chance
+        if (
+            ctx.config.enable_user_intervention
+            and task.attempts >= ctx.config.user_intervention_threshold
+        ):
+            logger.info(
+                "Task %s needs user intervention (attempt %d/%d). "
+                "Cascade skip deferred.",
+                task_id, task.attempts, ctx.config.user_intervention_threshold,
+            )
+        else:
+            # Try resilience recovery before hard fail
+            recovered = await try_resilience_recovery(
+                ctx, recovery_state, task, task_id, task_result, spawn_result,
+            )
+            if not recovered:
+                ctx.task_queue.trigger_cascade_skip(task_id)
 
     # Message bus: release file locks on failure
     if ctx.message_bus is not None:
         try:
             ctx.message_bus.release_all_locks(task_id)
         except Exception:
-            pass
+            logger.warning(
+                "Message bus release_all_locks failed for task %s", task_id, exc_info=True,
+            )
 
     ctx.emit(swarm_event(
         "swarm.task.failed",
@@ -871,25 +1132,34 @@ async def _handle_hollow_completion(
 
     # Hollow streak termination
     if ctx.config.enable_hollow_termination:
-        # Single model + 3+ hollow streak + unhealthy
-        if (
-            ctx.hollow_streak >= 3
-            and task.assigned_model
-            and ctx.health_tracker
-            and not ctx.health_tracker.is_healthy(task.assigned_model)
-        ):
-            # Check if only one model
-            models = {w.model for w in ctx.config.workers}
-            if len(models) <= 1:
-                skip_remaining_tasks(ctx, "Hollow streak termination")
-                return
+        # Safety valve: don't terminate if >60% tasks already completed
+        stats = ctx.task_queue.get_stats()
+        completion_ratio = stats.completed / max(1, stats.total) if stats.total else 0.0
+        if completion_ratio > 0.6:
+            logger.info(
+                "Hollow termination suppressed: %.0f%% tasks completed",
+                completion_ratio * 100,
+            )
+        else:
+            # Single model + 3+ hollow streak + unhealthy
+            if (
+                ctx.hollow_streak >= 3
+                and task.assigned_model
+                and ctx.health_tracker
+                and not ctx.health_tracker.is_healthy(task.assigned_model)
+            ):
+                # Check if only one model
+                models = {w.model for w in ctx.config.workers}
+                if len(models) <= 1:
+                    skip_remaining_tasks(ctx, "Hollow streak termination")
+                    return
 
-        # Hollow ratio termination
-        if (
-            ctx.total_dispatches >= ctx.config.hollow_termination_min_dispatches
-            and ctx.total_hollows / max(1, ctx.total_dispatches) > ctx.config.hollow_termination_ratio
-        ):
-            skip_remaining_tasks(ctx, "Hollow ratio exceeded")
+            # Hollow ratio termination
+            if (
+                ctx.total_dispatches >= ctx.config.hollow_termination_min_dispatches
+                and ctx.total_hollows / max(1, ctx.total_dispatches) > ctx.config.hollow_termination_ratio
+            ):
+                skip_remaining_tasks(ctx, "Hollow ratio exceeded")
 
 
 # =============================================================================
@@ -897,26 +1167,77 @@ async def _handle_hollow_completion(
 # =============================================================================
 
 
-def _classify_failure(output: str) -> str:
-    """Classify a failure from the output text."""
-    lower = output.lower() if output else ""
+_ACTION_TASK_TYPES: frozenset[str] = frozenset({
+    "implement", "test", "refactor", "integrate", "deploy",
+})
 
+
+def _is_action_task(task: SwarmTask) -> bool:
+    """Return True if *task* is an action task (produces code artifacts)."""
+    return task.type in _ACTION_TASK_TYPES
+
+
+def _format_compilation_errors(errors: list[Any]) -> str:
+    """Format a list of :class:`CompilationError` objects into a human-readable string."""
+    if not errors:
+        return "No compilation errors."
+    lines: list[str] = ["COMPILATION ERRORS:"]
+    for err in errors:
+        loc = f"{err.file_path}"
+        if err.line is not None:
+            loc += f":{err.line}"
+        lines.append(f"  - `{loc}`: {err.message}")
+    return "\n".join(lines)
+
+
+def _classify_failure(output: str, tool_calls: int | None = None) -> str:
+    """Classify a failure from the output text.
+
+    Returns a ``TaskFailureMode``-compatible string (``"rate-limit"``,
+    ``"timeout"``, ``"error"``, ``"terminal"`` etc.).
+
+    Delegates to the comprehensive ``classify_swarm_failure`` classifier
+    when available, mapping its structured result back to the simple
+    string expected by the rest of the execution layer.
+    """
+    try:
+        from attocode.integrations.swarm.failure_classifier import (
+            SwarmFailureClass,
+            classify_swarm_failure,
+        )
+        classification = classify_swarm_failure(output, tool_calls)
+        # Map failure classes back to TaskFailureMode-compatible strings
+        _CLASS_TO_MODE: dict[SwarmFailureClass, str] = {
+            SwarmFailureClass.RATE_LIMITED: "rate-limit",
+            SwarmFailureClass.TIMEOUT: "timeout",
+            SwarmFailureClass.PROVIDER_SPEND_LIMIT: "terminal",
+            SwarmFailureClass.PROVIDER_AUTH: "terminal",
+            SwarmFailureClass.POLICY_BLOCKED: "terminal",
+            SwarmFailureClass.INVALID_TOOL_ARGS: "terminal",
+            SwarmFailureClass.MISSING_TARGET_PATH: "terminal",
+            SwarmFailureClass.PERMISSION_REQUIRED: "terminal",
+            SwarmFailureClass.PROVIDER_TRANSIENT: "recoverable",
+        }
+        return _CLASS_TO_MODE.get(classification.failure_class, "error")
+    except Exception:
+        pass
+
+    lower = output.lower() if output else ""
     if "429" in lower or "rate limit" in lower or "too many requests" in lower:
         return "rate-limit"
     if "402" in lower or "payment required" in lower or "insufficient" in lower:
         return "rate-limit"
     if "timeout" in lower or "timed out" in lower:
         return "timeout"
-
     return "error"
 
 
 def _get_role_map(ctx: OrchestratorInternals) -> dict[str, Any]:
     """Build role map from config, caching on ctx."""
-    if not hasattr(ctx, "_role_map_cache"):
+    if ctx._role_map_cache is None:
         from attocode.integrations.swarm.roles import build_role_map
-        ctx._role_map_cache = build_role_map(ctx.config.roles or None)  # type: ignore[attr-defined]
-    return ctx._role_map_cache  # type: ignore[attr-defined]
+        ctx._role_map_cache = build_role_map(ctx.config.roles or None)
+    return ctx._role_map_cache
 
 
 def _track_judge_usage(ctx: OrchestratorInternals, usage: dict[str, Any]) -> None:
@@ -1087,10 +1408,23 @@ async def _run_scout_for_task(
             scout_section = f"\n\n## Scout Findings\n\n{scout_result.output[:3000]}"
             task.dependency_context = existing + scout_section
 
+            # Track scout token usage
+            scout_tokens = getattr(scout_result, "metrics", {})
+            if isinstance(scout_tokens, dict):
+                tokens = scout_tokens.get("tokens", 0)
+            else:
+                tokens = getattr(scout_tokens, "tokens", 0)
+            if tokens:
+                ctx.orchestrator_tokens += tokens
+                if not hasattr(ctx, "scout_tokens"):
+                    ctx.scout_tokens = 0
+                ctx.scout_tokens += tokens
+
             ctx.emit(swarm_event(
                 "swarm.scout.complete",
                 task_id=task.id,
                 findings_length=len(scout_result.output),
+                tokens=tokens,
             ))
             logger.info("Scout gathered %d chars of context for task %s",
                         len(scout_result.output), task.id)

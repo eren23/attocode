@@ -16,6 +16,27 @@ from typing import Any
 logger = logging.getLogger(__name__)
 
 
+def _safe_move(src: Path, dest: Path) -> None:
+    """Move src to dest, handling pre-existing destinations."""
+    try:
+        if not src.exists():
+            return
+        if dest.exists():
+            if dest.is_dir() and src.is_dir():
+                # Merge: move contents individually
+                for child in src.iterdir():
+                    _safe_move(child, dest / child.name)
+                shutil.rmtree(src, ignore_errors=True)
+            else:
+                # File: overwrite
+                dest.unlink(missing_ok=True)
+                shutil.move(str(src), str(dest))
+        else:
+            shutil.move(str(src), str(dest))
+    except Exception as exc:
+        logger.warning("Archive move %s → %s failed: %s", src, dest, exc)
+
+
 def archive_previous_run(layout: dict[str, Any]) -> None:
     """Move previous run artifacts to ``history/{run_id}/`` and start clean.
 
@@ -53,6 +74,7 @@ def archive_previous_run(layout: dict[str, Any]) -> None:
             pass
 
     if not old_run_id:
+        control_path = root / "control.jsonl"
         has_data = any(
             p.exists()
             for p in (
@@ -60,7 +82,7 @@ def archive_previous_run(layout: dict[str, Any]) -> None:
                 layout["manifest"],
                 layout["events"],
             )
-        ) or any(
+        ) or (control_path.exists() and control_path.stat().st_size > 0) or any(
             d.is_dir() and any(d.iterdir())
             for d in (layout["agents"], layout["tasks"])
             if d.is_dir()
@@ -89,10 +111,10 @@ def _do_archive_moves(layout: dict[str, Any], history_dir: Path) -> None:
     for name in ("control.jsonl",):
         src = root / name
         if src.exists() and src.stat().st_size > 0:
-            shutil.move(str(src), str(history_dir / name))
+            _safe_move(src, history_dir / name)
 
     if layout["events"].exists() and layout["events"].stat().st_size > 0:
-        shutil.move(str(layout["events"]), str(history_dir / "swarm.events.jsonl"))
+        _safe_move(layout["events"], history_dir / "swarm.events.jsonl")
 
     for key, dest_name in (
         ("state", "swarm.state.json"),
@@ -100,22 +122,22 @@ def _do_archive_moves(layout: dict[str, Any], history_dir: Path) -> None:
     ):
         src = layout[key]
         if src.exists():
-            shutil.move(str(src), str(history_dir / dest_name))
+            _safe_move(src, history_dir / dest_name)
 
     git_safety = root / "git_safety.json"
     if git_safety.exists():
-        shutil.move(str(git_safety), str(history_dir / "git_safety.json"))
+        _safe_move(git_safety, history_dir / "git_safety.json")
 
     # Additional root-level files that were previously lost
     for extra in ("changes.json", "coordinator.log", "swarm.yaml", "index.snapshot.json"):
         src = root / extra
         if src.exists() and src.stat().st_size > 0:
-            shutil.move(str(src), str(history_dir / extra))
+            _safe_move(src, history_dir / extra)
 
     for dir_key in ("agents", "tasks"):
         src_dir = layout[dir_key]
         if src_dir.is_dir() and any(src_dir.iterdir()):
-            shutil.move(str(src_dir), str(history_dir / dir_key))
+            _safe_move(src_dir, history_dir / dir_key)
             src_dir.mkdir(parents=True, exist_ok=True)
 
     locks_dir = layout["locks"]
@@ -129,3 +151,54 @@ def _do_archive_moves(layout: dict[str, Any], history_dir: Path) -> None:
     ):
         if not path.exists():
             path.write_text("", encoding="utf-8")
+
+
+def ensure_clean_slate(layout: dict[str, Any]) -> int:
+    """Guarantee no stale state remains. Called after archive on fresh runs.
+
+    This is the nuclear option — if archive failed to move something,
+    we delete it. Losing old review data is acceptable; starting with
+    poisoned state is not.
+
+    Returns the number of stale items removed.
+    """
+    root: Path = layout["root"]
+    cleaned = 0
+
+    # Remove stale root-level files
+    for path in (
+        layout["state"],
+        layout["manifest"],
+        root / "git_safety.json",
+        root / "changes.json",
+        root / "coordinator.log",
+        root / "swarm.yaml",
+        root / "index.snapshot.json",
+        root / ".orchestrator.pid",
+    ):
+        if path.exists():
+            logger.warning("Clean slate: removing stale %s", path.name)
+            path.unlink(missing_ok=True)
+            cleaned += 1
+
+    # Remove .archiving marker
+    marker = root / ".archiving"
+    if marker.exists():
+        logger.warning("Clean slate: removing stale .archiving marker")
+        marker.unlink(missing_ok=True)
+        cleaned += 1
+
+    # Clear directories (don't delete — recreate empty)
+    for dir_key in ("agents", "tasks", "locks"):
+        d = layout[dir_key]
+        if d.is_dir() and any(d.iterdir()):
+            logger.warning("Clean slate: clearing stale %s/", dir_key)
+            shutil.rmtree(d, ignore_errors=True)
+            d.mkdir(parents=True, exist_ok=True)
+            cleaned += 1
+
+    # Ensure fresh empty JSONL files
+    for path in (root / "control.jsonl", layout["events"]):
+        path.write_text("", encoding="utf-8")
+
+    return cleaned

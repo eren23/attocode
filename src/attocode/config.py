@@ -89,6 +89,7 @@ class AttoConfig:
     # Paths
     working_directory: str = ""
     session_dir: str = ""
+    project_root: str = ""
 
     # Features
     sandbox_mode: str = "auto"
@@ -96,6 +97,7 @@ class AttoConfig:
 
     # Session resume
     resume_session: str | None = None
+    resume_session_explicit: bool = False
 
     # Permission mode
     permission_mode: str = "interactive"
@@ -121,13 +123,46 @@ class AttoConfig:
 
 
 def find_project_root(start: Path | None = None) -> Path | None:
-    """Find the project root by looking for .attocode/ or .git/."""
-    current = start or Path.cwd()
+    """Find the project root for a working directory."""
+    return resolve_project_root(start).path
+
+
+@dataclass(slots=True)
+class ProjectRootResolution:
+    """Resolved project root and the marker that identified it."""
+
+    path: Path | None
+    source: str = "none"
+
+
+def resolve_project_root(start: Path | None = None) -> ProjectRootResolution:
+    """Resolve the nearest project root.
+
+    Walk upward from the current directory and stop at the first ancestor
+    that looks like a project boundary. If both markers are present at the
+    same directory, prefer ``.attocode``.
+    """
+    current = (start or Path.cwd()).resolve()
+
     for parent in [current, *current.parents]:
         if (parent / PROJECT_DIR).exists():
-            return parent
+            return ProjectRootResolution(path=parent, source=".attocode")
         if (parent / ".git").exists():
-            return parent
+            return ProjectRootResolution(path=parent, source=".git")
+
+    return ProjectRootResolution(path=None, source="none")
+
+
+def infer_project_root_from_session_dir(session_dir: str) -> str | None:
+    """If *session_dir* is ``.../.attocode/sessions``, return the project root path."""
+    if not str(session_dir).strip():
+        return None
+    try:
+        session_path = Path(session_dir).resolve()
+    except OSError:
+        return None
+    if session_path.name == "sessions" and session_path.parent.name == ".attocode":
+        return str(session_path.parent.parent)
     return None
 
 
@@ -193,8 +228,10 @@ def load_config(
         config.rules.append(user_rules)
 
     # 2. Project-level config (.attocode/config.json)
-    project_root = find_project_root(Path(config.working_directory))
+    resolution = resolve_project_root(Path(config.working_directory))
+    project_root = resolution.path
     if project_root:
+        config.project_root = str(project_root)
         project_config = load_json_config(project_root / PROJECT_DIR / "config.json")
         _apply_dict(config, project_config)
 
@@ -240,7 +277,8 @@ def load_config(
 
     # Default session dir
     if not config.session_dir:
-        config.session_dir = str(Path(config.working_directory) / PROJECT_DIR / "sessions")
+        base = Path(config.project_root) if config.project_root else Path(config.working_directory)
+        config.session_dir = str(base / PROJECT_DIR / "sessions")
 
     return config
 
@@ -291,10 +329,12 @@ def _apply_dict(config: AttoConfig, data: dict[str, Any]) -> None:
         "record": "record",
         "system_prompt": "system_prompt",
         "resume_session": "resume_session",
+        "resume_session_explicit": "resume_session_explicit",
         "permission_mode": "permission_mode",
         # Aliases from JSON config
         "maxTokens": "max_tokens",
         "resumeSession": "resume_session",
+        "resumeSessionExplicit": "resume_session_explicit",
         "permissionMode": "permission_mode",
         "maxIterations": "max_iterations",
         "maxContextTokens": "max_context_tokens",

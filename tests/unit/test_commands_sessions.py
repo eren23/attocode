@@ -56,13 +56,23 @@ class _FakeAgent:
     def __init__(self, store: _FakeStore) -> None:
         self._store = store
         self.context = None
-        self.config = SimpleNamespace(resume_session=None)
+        self.config = SimpleNamespace(resume_session=None, resume_session_explicit=False)
         self._working_dir = "/tmp"
         self.session_store = None
+        self._conversation_messages = ["old"]
+        self._session_id = "stale"
+        self.reset_called = False
 
     async def ensure_session_store(self) -> _FakeStore:
         self.session_store = self._store
         return self._store
+
+    def reset_conversation(self) -> None:
+        self.reset_called = True
+        self._conversation_messages = []
+        self._session_id = None
+        self.config.resume_session = None
+        self.config.resume_session_explicit = False
 
 
 @pytest.mark.asyncio
@@ -79,6 +89,7 @@ async def test_load_stages_resume_without_active_context() -> None:
     result = await commands._load_command(agent, "abc123")
     assert "staged for resume" in result.output
     assert agent.config.resume_session == "abc123"
+    assert agent.config.resume_session_explicit is True
 
 
 @pytest.mark.asyncio
@@ -87,6 +98,7 @@ async def test_resume_without_id_uses_latest_session() -> None:
     result = await commands._resume_command(agent, "")
     assert "staged for resume" in result.output
     assert agent.config.resume_session == "abc123"
+    assert agent.config.resume_session_explicit is True
 
 
 @pytest.mark.asyncio
@@ -95,3 +107,22 @@ async def test_trace_id_returns_guidance() -> None:
     result = await commands._resume_command(agent, "trace-1727543556")
     assert "trace session" in result.output.lower()
     assert "Use /sessions" in result.output
+
+
+@pytest.mark.asyncio
+async def test_reset_clears_session_state() -> None:
+    agent = _FakeAgent(_FakeStore())
+    agent.context = SimpleNamespace(
+        messages=[{"role": "user", "content": "hello"}],
+        iteration=3,
+        metrics=object(),
+        session_id="abc123",
+    )
+
+    result = commands._reset_command(agent)
+
+    assert "Session reset" in result.output
+    assert agent.reset_called is True
+    assert agent.config.resume_session is None
+    assert agent.config.resume_session_explicit is False
+    assert agent._session_id is None

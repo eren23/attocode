@@ -55,6 +55,7 @@ def semantic_search(
     query: str,
     top_k: int = 10,
     file_filter: str = "",
+    branch: str = "",
 ) -> str:
     """Search the codebase using natural language queries.
 
@@ -66,6 +67,9 @@ def semantic_search(
         query: Natural language search query (e.g. "authentication middleware").
         top_k: Number of results to return (default 10).
         file_filter: Optional glob pattern to filter files (e.g. "*.py").
+        branch: Optional branch name for scoping results (service mode).
+            In local mode, results are automatically scoped to files
+            present in the working directory.
     """
     mgr = _get_semantic_search()
     results = mgr.search(query, top_k=top_k, file_filter=file_filter)
