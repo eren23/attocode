@@ -49,7 +49,7 @@ class EventBus:
         """Emit an event to all subscribers and persist."""
         self._history.append(event)
 
-        for cb in self._subscribers:
+        for cb in list(self._subscribers):
             try:
                 cb(event)
             except Exception as exc:
@@ -61,6 +61,7 @@ class EventBus:
                 p.parent.mkdir(parents=True, exist_ok=True)
                 with p.open("a", encoding="utf-8") as f:
                     f.write(json.dumps(asdict(event)) + "\n")
+                    f.flush()
             except Exception as exc:
                 logger.warning("EventBus persist error: %s", exc)
 

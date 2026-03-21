@@ -187,6 +187,7 @@ class SwarmOrchestrator:
 
         # Shutdown / pause
         self._shutdown_requested = False
+        self._shutdown_reason: str = ""
         self._paused = False
 
         # State
@@ -198,6 +199,8 @@ class SwarmOrchestrator:
         self._task_attempts: dict[str, int] = {}
         self._task_attempt_history: dict[str, list[dict[str, Any]]] = {}
         self._control_cursor: int = 0  # line offset into control.jsonl
+        self._control_lock: asyncio.Lock | None = None  # initialized in run()
+        self._cached_test_command: str | None = None
 
     def _load_resume_metadata(self) -> dict[str, Any]:
         manifest = read_json(self._run_dir / "swarm.manifest.json", default={})
@@ -369,10 +372,15 @@ class SwarmOrchestrator:
     def aot_graph(self) -> AoTGraph:
         return self._aot_graph
 
-    def _request_shutdown(self) -> None:
+    def _request_shutdown(self, reason: str = "unknown") -> None:
         """Signal handler callback — request graceful shutdown."""
+        if self._shutdown_requested:
+            return  # Already shutting down
         self._shutdown_requested = True
-        logger.info("Shutdown requested")
+        self._shutdown_reason = reason
+        logger.warning("SHUTDOWN: reason=%s, phase=%s", reason, self._phase)
+        self._emit("info", message=f"Shutdown requested: {reason}",
+                   data={"reason": reason, "phase": self._phase})
 
     async def run(self) -> int:
         """Execute the full orchestration loop.
@@ -383,13 +391,43 @@ class SwarmOrchestrator:
         self._setup_directories()
         resumed_existing_plan = False
 
+        # PID lockfile — detect concurrent orchestrators
+        lockfile = self._layout["root"] / ".orchestrator.pid"
+        if lockfile.exists():
+            try:
+                old_pid = int(lockfile.read_text(encoding="utf-8").strip())
+                try:
+                    os.kill(old_pid, 0)
+                    logger.warning("Another orchestrator (PID %d) may be running", old_pid)
+                except OSError:
+                    pass  # Stale PID
+            except (ValueError, OSError):
+                pass
+        lockfile.write_text(str(os.getpid()), encoding="utf-8")
+
+        # Initialize control lock (requires event loop)
+        self._control_lock = asyncio.Lock()
+
+        # Recover from orphaned swarm branch before archive
+        ws_cfg_early = getattr(self._config, 'workspace', None)
+        if ws_cfg_early and ws_cfg_early.git_safety and not self._resume:
+            try:
+                from attoswarm.workspace.git_safety import GitSafetyNet
+                _recovery_net = GitSafetyNet(self._root_dir, self._run_id, str(self._run_dir))
+                await _recovery_net.recover_orphaned_state()
+            except Exception as exc:
+                logger.warning("Git orphan recovery failed: %s", exc)
+
         if not self._resume:
             self._archive_previous_run()
         else:
-            self._prime_control_cursor()
             resumed_existing_plan = self._load_existing_manifest()
             if resumed_existing_plan:
                 self._restore_state()
+
+        # Always prime control cursor — defense against stale shutdown commands
+        # even when archive fails or is skipped
+        self._prime_control_cursor()
 
         self._phase = "initializing"
         self._persist_state()  # Early write — lets TUI detect subprocess start
@@ -398,7 +436,7 @@ class SwarmOrchestrator:
         loop = asyncio.get_running_loop()
         for sig in (signal.SIGTERM, signal.SIGINT):
             try:
-                loop.add_signal_handler(sig, self._request_shutdown)
+                loop.add_signal_handler(sig, lambda s=sig: self._request_shutdown(f"signal:{s.name}"))
             except (NotImplementedError, OSError):
                 pass  # Windows or non-main thread
 
@@ -616,11 +654,11 @@ class SwarmOrchestrator:
             approval_timeout = 1800  # 30 min max wait
             approval_start = time.time()
             while not self._shutdown_requested and not self._approved:
-                self._check_control_messages()
+                await self._safe_check_control()
                 await asyncio.sleep(1.0)
                 if time.time() - approval_start > approval_timeout:
                     self._emit("warning", message="Approval timeout — shutting down")
-                    self._request_shutdown()
+                    self._request_shutdown("approval_timeout")
                     break
 
             if self._shutdown_requested and not self._approved:
@@ -679,7 +717,10 @@ class SwarmOrchestrator:
 
                 ready = self._aot_graph.get_ready_batch()
                 if not ready:
-                    break  # No more tasks can run
+                    pending = [tid for tid, n in self._aot_graph.nodes.items() if n.status == "pending"]
+                    self._emit("info", message=f"No ready tasks (pending={len(pending)}) — loop ending",
+                               data={"pending_tasks": pending[:10]})
+                    break
 
                 # Budget gate: filter and prioritize (Phase 2)
                 if self._budget_gate:
@@ -696,7 +737,7 @@ class SwarmOrchestrator:
                             self._record_decision("executing", "budget_gate_block",
                                                   f"Blocked {tid}", decision.reason)
                     if not filtered_ready:
-                        self._emit("info", message="Budget gate blocked all ready tasks — stopping")
+                        self._request_shutdown("budget_exhausted")
                         break
                     ready = filtered_ready
 
@@ -720,6 +761,8 @@ class SwarmOrchestrator:
                         else:
                             preflight_ready.append(tid)
                     if not preflight_ready:
+                        self._emit("info", message=f"Preflight blocked all {len(ready)} ready tasks — stopping",
+                                   data={"blocked_tasks": ready[:10]})
                         break
                     ready = preflight_ready
 
@@ -854,8 +897,12 @@ class SwarmOrchestrator:
                         self._cache.invalidate_prefix("conflict:")
                     except Exception as exc:
                         logger.debug("AST index refresh failed: %s", exc)
-                self._check_control_messages()
+                await self._safe_check_control()
                 self._check_stale_agents()
+
+            # Diagnostic: why did the loop end?
+            if batch_num >= max_batches:
+                self._emit("warning", message=f"Batch safety bound reached: {batch_num}/{max_batches}")
 
             # Warn if tasks remain pending after the loop
             remaining = [tid for tid, n in self._aot_graph.nodes.items() if n.status == "pending"]
@@ -881,6 +928,8 @@ class SwarmOrchestrator:
                 message=f"Swarm {self._phase.replace('_', ' ')}: {completed}/{len(tasks)} tasks in {elapsed:.1f}s",
                 data=summary,
             )
+            # Persist immediately so TUI sees phase transition before git/post-mortem
+            self._persist_state()
 
             # Persist change manifest
             if self._change_manifest:
@@ -896,6 +945,7 @@ class SwarmOrchestrator:
                         await self._git_safety.create_swarm_commit(
                             f"attoswarm: {completed}/{len(tasks)} tasks completed"
                         )
+                        await self._git_safety.finalize("keep")
                     else:
                         await self._git_safety.finalize("discard")
                         self._emit("info", message="Git safety: no tasks completed, restored original branch")
@@ -943,6 +993,14 @@ class SwarmOrchestrator:
 
             # Kill all remaining subprocesses
             await self._subagent_mgr.shutdown_all()
+
+            # Clean up PID lockfile
+            try:
+                lockfile = self._layout["root"] / ".orchestrator.pid"
+                if lockfile.exists() and lockfile.read_text(encoding="utf-8").strip() == str(os.getpid()):
+                    lockfile.unlink(missing_ok=True)
+            except Exception:
+                pass
 
         return completed
 
@@ -1105,6 +1163,7 @@ class SwarmOrchestrator:
             "run_id": self._run_id,
             "goal": self._goal,
             "phase": self._phase,
+            "shutdown_reason": self._shutdown_reason,
             "working_dir": self._root_dir,
             "lineage": asdict(self._lineage),
             "launcher": asdict(self._launcher),
@@ -1151,9 +1210,15 @@ class SwarmOrchestrator:
 
     def _archive_previous_run(self) -> None:
         """Move previous run artifacts to history/{run_id}/ and start clean."""
-        from attoswarm.coordinator.archive import archive_previous_run
+        from attoswarm.coordinator.archive import archive_previous_run, ensure_clean_slate
 
-        archive_previous_run(self._layout)
+        try:
+            archive_previous_run(self._layout)
+        except Exception as exc:
+            logger.warning("Archive failed (will clean slate anyway): %s", exc)
+
+        cleaned = ensure_clean_slate(self._layout)
+        self._emit("info", message=f"Clean slate: {cleaned} stale items removed" if cleaned else "Clean slate: verified clean")
 
     def _init_ast_service(self) -> None:
         try:
@@ -1305,6 +1370,19 @@ class SwarmOrchestrator:
                             self._cache.put(cache_key, learning_ctx, ttl=120.0)
                 except Exception as exc:
                     logger.debug("Learning recall for task %s failed: %s", task.task_id, exc)
+
+        # Test file discovery for prompt injection
+        try:
+            if self._cached_test_command is None:
+                from attoswarm.coordinator.test_verifier import detect_test_command
+                self._cached_test_command = detect_test_command(self._root_dir) or ""
+            d["test_command"] = self._cached_test_command
+
+            from attoswarm.coordinator.test_verifier import discover_related_test_files
+            d["test_files"] = discover_related_test_files(task.target_files, self._root_dir)
+        except Exception as exc:
+            logger.debug("Test file discovery for task %s failed: %s", task.task_id, exc)
+
         return d
 
     # ------------------------------------------------------------------
@@ -1359,6 +1437,35 @@ class SwarmOrchestrator:
                     data={"pass_rate": verification.pass_rate,
                           "tests_total": verification.tests_total,
                           "duration_s": verification.duration_s})
+        return True
+
+    async def pipeline_syntax_verify(self, result: TaskResult) -> bool:
+        """Check modified files parse correctly. Returns True if all pass."""
+        import ast as _ast
+
+        errors: list[str] = []
+        for f in result.files_modified or []:
+            fpath = Path(self._root_dir) / f
+            if not fpath.exists():
+                continue
+            ext = fpath.suffix
+            if ext == ".py":
+                try:
+                    source = fpath.read_text(encoding="utf-8")
+                    _ast.parse(source, filename=str(fpath))
+                except SyntaxError as exc:
+                    errors.append(f"{f}:{exc.lineno}: {exc.msg}")
+            elif ext == ".json":
+                try:
+                    import json as _json
+                    _json.loads(fpath.read_text(encoding="utf-8"))
+                except (ValueError, _json.JSONDecodeError) as exc:
+                    errors.append(f"{f}: {exc}")
+        if errors:
+            self._emit("warning", message=f"Syntax errors in {result.task_id}",
+                       data={"errors": errors})
+            result.error = f"Syntax errors: {'; '.join(errors[:5])}"
+            return False
         return True
 
     async def pipeline_record_learning(self, result: TaskResult) -> None:
@@ -1848,27 +1955,30 @@ class SwarmOrchestrator:
     async def _check_pause(self) -> None:
         """If paused, sleep-loop until resumed or shutdown requested."""
         while self._paused and not self._shutdown_requested:
-            self._check_control_messages()
+            await self._safe_check_control()
             await asyncio.sleep(1.0)
+
+    async def _safe_check_control(self) -> None:
+        """Check control messages with lock to prevent concurrent mutation."""
+        if self._control_lock:
+            async with self._control_lock:
+                self._check_control_messages()
+        else:
+            self._check_control_messages()
 
     async def _control_poll_loop(self) -> None:
         """Background task that checks control.jsonl every 5s during execution."""
         while self._phase in ("executing", "paused", "awaiting_approval") and not self._shutdown_requested:
-            self._check_control_messages()
+            await self._safe_check_control()
             await asyncio.sleep(5.0)
 
     def _persist_prompt(self, task_id: str, task_dict: dict[str, Any]) -> None:
         """Write the full agent prompt to disk for TUI inspection."""
-        parts = [f"# Task: {task_dict.get('title', '')}", "", task_dict.get("description", "")]
-        target_files = task_dict.get("target_files", [])
-        if target_files:
-            parts.append(f"\nTarget files: {', '.join(target_files)}")
-        read_files = task_dict.get("read_files", [])
-        if read_files:
-            parts.append(f"\nReference files: {', '.join(read_files)}")
+        from attoswarm.cli import build_agent_prompt
+        prompt_text = build_agent_prompt(task_dict)
         prompt_path = self._layout["agents"] / f"agent-{task_id}.prompt.txt"
         try:
-            prompt_path.write_text("\n".join(parts), encoding="utf-8")
+            prompt_path.write_text(prompt_text, encoding="utf-8")
         except Exception as exc:
             logger.debug("Failed to persist prompt for task %s: %s", task_id, exc)
 
@@ -1890,13 +2000,21 @@ class SwarmOrchestrator:
             try:
                 msg = _json.loads(line)
             except Exception:
+                if line.strip():
+                    logger.warning("Unparseable control message: %s", line[:200])
+                continue
+            # Ignore messages from before this run started
+            msg_ts = msg.get("timestamp", 0)
+            if msg_ts and self._start_time and msg_ts < self._start_time:
+                logger.info("Ignoring stale control message: action=%s, ts=%.0f (run started at %.0f)",
+                            msg.get("action", ""), msg_ts, self._start_time)
                 continue
             action = msg.get("action", "")
             task_id = msg.get("task_id", "")
 
             # Global actions (no task_id required)
             if action == "shutdown":
-                self._request_shutdown()
+                self._request_shutdown("control:shutdown")
                 continue
             if action == "paused":
                 self._paused = True
@@ -1917,7 +2035,7 @@ class SwarmOrchestrator:
                 self._persist_state()
                 continue
             if action == "reject":
-                self._request_shutdown()
+                self._request_shutdown("control:reject")
                 self._emit("info", message="Execution rejected by user")
                 continue
             if action == "add_task":

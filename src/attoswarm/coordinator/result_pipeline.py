@@ -33,6 +33,7 @@ class PipelineHandlers(Protocol):
 
     async def pipeline_update_budget(self, result: TaskResult) -> None: ...
     async def pipeline_test_verify(self, result: TaskResult) -> bool: ...
+    async def pipeline_syntax_verify(self, result: TaskResult) -> bool: ...
     async def pipeline_record_learning(self, result: TaskResult) -> None: ...
     async def pipeline_capture_diff(self, result: TaskResult) -> None: ...
     async def pipeline_run_projection(self) -> None: ...
@@ -90,6 +91,7 @@ class ResultPipeline:
         # Stage 2: Concurrent fan-out per result
         semaphore = asyncio.Semaphore(self._max_concurrent)
         verification_results: dict[str, bool] = {}
+        syntax_results: dict[str, bool] = {}
 
         async def _process_one(result: TaskResult) -> None:
             async with semaphore:
@@ -106,6 +108,17 @@ class ResultPipeline:
                             verification_results[result.task_id] = result.success
 
                     tasks.append(asyncio.create_task(_verify()))
+
+                # Syntax verification (only for successful results with modified files)
+                if result.success and result.files_modified:
+                    async def _syntax() -> None:
+                        try:
+                            passed = await handlers.pipeline_syntax_verify(result)
+                            syntax_results[result.task_id] = passed
+                        except Exception:
+                            syntax_results[result.task_id] = True  # fail-open
+
+                    tasks.append(asyncio.create_task(_syntax()))
 
                 # Learning recording (always)
                 async def _learn() -> None:
@@ -137,6 +150,10 @@ class ResultPipeline:
             # Check if test verification changed success status
             if result.task_id in verification_results:
                 if not verification_results[result.task_id]:
+                    result.success = False
+            # Check if syntax verification changed success status
+            if result.task_id in syntax_results:
+                if not syntax_results[result.task_id]:
                     result.success = False
 
             try:

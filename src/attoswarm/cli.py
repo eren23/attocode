@@ -204,6 +204,52 @@ def _build_backend_cmd_stdin(backend: str, model: str, prompt: str) -> tuple[lis
     raise ValueError(f"Unsupported backend: {backend!r}")
 
 
+def build_agent_prompt(task: dict) -> str:
+    """Build the full prompt that a worker agent receives.
+
+    Includes task description, file lists, symbol scope, test map,
+    and learning context from previous runs.
+    """
+    parts = [f"# Task: {task.get('title', '')}", "", task.get("description", "")]
+
+    target_files = task.get("target_files", [])
+    read_files = task.get("read_files", [])
+    if target_files:
+        parts.append(f"\nTarget files: {', '.join(target_files)}")
+    if read_files:
+        parts.append(f"\nReference files: {', '.join(read_files)}")
+
+    # Symbol scope — structural awareness of relevant code
+    symbols = task.get("symbol_scope", [])
+    if symbols:
+        parts.append("\n## Relevant Symbols")
+        for sym in symbols[:15]:
+            parts.append(f"- {sym}")
+
+    # Test map — which tests cover the target files
+    test_files = task.get("test_files", [])
+    test_command = task.get("test_command", "")
+    if test_files:
+        parts.append("\n## Related Tests")
+        parts.append("These test files cover your target files — run them to verify:")
+        for tf in test_files[:10]:
+            parts.append(f"- {tf}")
+        if test_command:
+            scoped = f"{test_command} {' '.join(test_files[:10])}"
+            parts.append(f"\nVerify: {scoped}")
+    elif test_command:
+        parts.append("\n## Testing")
+        parts.append(f"Verify: {test_command}")
+
+    # Learning context — patterns/antipatterns from previous runs
+    learning = task.get("learning_context", "")
+    if learning:
+        parts.append("\n## Context from Previous Runs")
+        parts.append(learning)
+
+    return "\n".join(parts)
+
+
 def _make_subprocess_spawn_fn(
     cfg: SwarmYamlConfig,
     process_registry: Any = None,
@@ -249,21 +295,16 @@ def _make_subprocess_spawn_fn(
             backend = fallback_backend
             model = fallback_model
 
-        target_files = task.get("target_files", [])
-        read_files = task.get("read_files", [])
-        prompt_parts = [f"# Task: {task.get('title', '')}", "", task.get("description", "")]
-        if target_files:
-            prompt_parts.append(f"\nTarget files: {', '.join(target_files)}")
-        if read_files:
-            prompt_parts.append(f"\nReference files: {', '.join(read_files)}")
-        prompt = "\n".join(prompt_parts)
+        prompt = build_agent_prompt(task)
 
-        cmd = _build_backend_cmd(backend, model, prompt)
+        cmd, stdin_text = _build_backend_cmd_stdin(backend, model, prompt)
         is_claude = backend == "claude"
-        if is_claude:
+        if is_claude and not stdin_text:
             # Inject stream-json only for worker spawns (not decompose);
             # --verbose is required by claude CLI when combining -p with stream-json
             cmd = cmd[:-1] + ["--verbose", "--output-format", "stream-json"] + cmd[-1:]
+        elif is_claude and stdin_text:
+            cmd.extend(["--verbose", "--output-format", "stream-json"])
         task_id = task["task_id"]
 
         t0 = _time.monotonic()
@@ -272,6 +313,7 @@ def _make_subprocess_spawn_fn(
                 *cmd,
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE,
+                stdin=asyncio.subprocess.PIPE if stdin_text else None,
                 cwd=wd,
                 env=clean_env,
                 start_new_session=True,
@@ -344,6 +386,12 @@ def _make_subprocess_spawn_fn(
                 if proc.stderr is None:
                     raise RuntimeError("Process stderr not available (subprocess created without PIPE)")
                 return await proc.stderr.read()
+
+            # Write prompt via stdin if using stdin mode (e.g. claude -p)
+            if stdin_text and proc.stdin:
+                proc.stdin.write(stdin_text.encode())
+                await proc.stdin.drain()
+                proc.stdin.close()
 
             try:
                 stdout_bytes, stderr_bytes = await asyncio.wait_for(

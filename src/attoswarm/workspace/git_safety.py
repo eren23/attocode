@@ -45,6 +45,58 @@ class GitSafetyNet:
     def state(self) -> GitSafetyState:
         return self._state
 
+    async def recover_orphaned_state(self) -> None:
+        """Recover from a previous run that didn't finalize properly.
+
+        Checks if we're on an attoswarm/* branch and returns to original.
+        """
+        if not Path(self._wd, ".git").exists():
+            return
+
+        rc, branch = await self._git("rev-parse", "--abbrev-ref", "HEAD")
+        if rc != 0:
+            return
+        branch = branch.strip()
+
+        if not branch.startswith("attoswarm/"):
+            return
+
+        logger.warning("Recovering from orphaned swarm branch: %s", branch)
+
+        # Try to find the original branch from persisted state
+        original = ""
+        state_path = Path(self._run_dir) / "git_safety.json"
+        if state_path.exists():
+            try:
+                from attoswarm.protocol.io import read_json
+                raw = read_json(state_path, default={})
+                original = raw.get("original_branch", "")
+            except Exception:
+                pass
+
+        # Fallback: try main, then master
+        if not original:
+            for candidate in ("main", "master"):
+                rc, _ = await self._git("rev-parse", "--verify", candidate)
+                if rc == 0:
+                    original = candidate
+                    break
+
+        if not original:
+            logger.warning("Cannot determine original branch, staying on %s", branch)
+            return
+
+        # Checkout original, pop stash if present
+        await self._git("checkout", "--force", original)
+        rc, stash_list = await self._git("stash", "list")
+        if rc == 0:
+            for line in stash_list.splitlines():
+                if "attoswarm-" in line and "-pre-run" in line:
+                    await self._git("stash", "pop")
+                    break
+
+        logger.info("Recovered to branch %s", original)
+
     def load_state(self) -> GitSafetyState:
         """Load persisted git safety state if present."""
         from attoswarm.protocol.io import read_json

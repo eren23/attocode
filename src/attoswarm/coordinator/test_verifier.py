@@ -81,6 +81,51 @@ def detect_test_command(working_dir: str) -> str | None:
     return None
 
 
+# ── Test file discovery ───────────────────────────────────────────────
+
+
+def discover_related_test_files(
+    files: list[str],
+    working_dir: str,
+) -> list[str]:
+    """Find test files related to the given source files.
+
+    Searches for ``test_<stem>.py`` / ``<stem>_test.py`` in the same
+    directory, ``tests/``, and ``test/``.  Returns deduplicated sorted
+    list of relative paths, capped at 20.
+    """
+    root = Path(working_dir)
+    test_files: list[str] = []
+
+    for fpath in files:
+        p = Path(fpath)
+        stem = p.stem
+        parent = root / p.parent if not p.is_absolute() else p.parent
+
+        # Direct: file is itself a test
+        if stem.startswith("test_") or stem.endswith("_test"):
+            candidate = root / fpath
+            if candidate.exists():
+                try:
+                    test_files.append(str(candidate.relative_to(root)))
+                except ValueError:
+                    test_files.append(str(candidate))
+                continue
+
+        # Heuristic: look for test_<stem>.py or <stem>_test.py
+        for search_dir in [parent, root / "tests", root / "test"]:
+            if not search_dir.is_dir():
+                continue
+            for pattern in [f"test_{stem}.py", f"{stem}_test.py"]:
+                for m in search_dir.glob(pattern):
+                    try:
+                        test_files.append(str(m.relative_to(root)))
+                    except ValueError:
+                        test_files.append(str(m))
+
+    return sorted(set(test_files))[:20]
+
+
 # ── Test scoping ──────────────────────────────────────────────────────
 
 
@@ -97,32 +142,11 @@ def scope_tests_to_files(
     if "pytest" not in test_command:
         return test_command
 
-    root = Path(working_dir)
-    test_files: list[str] = []
-
-    for fpath in files_modified:
-        p = Path(fpath)
-        stem = p.stem
-        parent = root / p.parent if not p.is_absolute() else p.parent
-
-        # Direct: modified file is itself a test
-        if stem.startswith("test_") or stem.endswith("_test"):
-            candidate = root / fpath
-            if candidate.exists():
-                test_files.append(str(candidate))
-                continue
-
-        # Heuristic: look for test_<stem>.py or <stem>_test.py in same dir and tests/ dirs
-        for search_dir in [parent, root / "tests", root / "test"]:
-            if not search_dir.is_dir():
-                continue
-            for pattern in [f"test_{stem}.py", f"{stem}_test.py"]:
-                matches = list(search_dir.glob(pattern))
-                test_files.extend(str(m) for m in matches)
-
-    if test_files:
-        unique = sorted(set(test_files))[:20]  # cap at 20 test files
-        return f"{test_command} {' '.join(unique)}"
+    found = discover_related_test_files(files_modified, working_dir)
+    if found:
+        root = Path(working_dir)
+        abs_paths = [str(root / f) for f in found]
+        return f"{test_command} {' '.join(abs_paths)}"
 
     return test_command
 
