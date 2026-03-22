@@ -2,7 +2,7 @@
 
 Tools: file_analysis, impact_analysis, dependency_graph, hotspots,
 cross_references, dependencies, graph_query, graph_dsl, find_related,
-community_detection.
+community_detection, repo_map_ranked, bug_scan.
 """
 
 from __future__ import annotations
@@ -592,3 +592,97 @@ def community_detection(
             lines.append(f"    ... and {len(community) - 5} more")
 
     return "\n".join(lines)
+
+
+@mcp.tool()
+def repo_map_ranked(
+    task_context: str = "",
+    token_budget: int = 1024,
+    exclude_tests: bool = True,
+) -> str:
+    """Generate a graph-ranked repository map using PageRank.
+
+    Ranks files by their importance in the dependency graph, weighted
+    by relevance to the current task. Produces a token-budgeted map
+    of the most important files and their key symbols.
+
+    Args:
+        task_context: Description of the current task for relevance scoring.
+        token_budget: Maximum tokens for the output (default 1024).
+        exclude_tests: Whether to exclude test files from ranking.
+    """
+    from attocode.code_intel.repo_ranker import format_repo_map, rank_repo_files
+
+    ctx_mgr = _get_context_mgr()
+
+    # Build adjacency from the dependency graph
+    adjacency: dict[str, list[str]] = {}
+    symbols_by_file: dict[str, list[str]] = {}
+
+    for file_path in ctx_mgr.list_files():
+        rel = os.path.relpath(file_path, _get_project_dir())
+        deps = ctx_mgr.get_dependencies(file_path)
+        adjacency[rel] = [os.path.relpath(d, _get_project_dir()) for d in deps]
+
+        # Extract symbols if available
+        try:
+            analyzer = _get_code_analyzer()
+            result = analyzer.analyze_file(file_path)
+            symbols_by_file[rel] = [
+                c.name for c in (result.chunks or []) if hasattr(c, "name") and c.name
+            ][:10]
+        except Exception:
+            pass
+
+    if not adjacency:
+        return "No files indexed. Run bootstrap first."
+
+    result = rank_repo_files(
+        adjacency,
+        task_context=task_context,
+        token_budget=token_budget,
+        symbols_by_file=symbols_by_file,
+        exclude_tests=exclude_tests,
+    )
+    return format_repo_map(result)
+
+
+@mcp.tool()
+def bug_scan(base_branch: str = "main", min_confidence: float = 0.5) -> str:
+    """Scan the diff between current branch and base for potential bugs.
+
+    Analyzes added lines for common patterns: bare excepts, eval/exec usage,
+    shell injection, swallowed exceptions, and more. Reports findings with
+    severity and confidence levels.
+
+    Args:
+        base_branch: Base branch to diff against (default "main").
+        min_confidence: Minimum confidence threshold for reported findings (0.0-1.0).
+    """
+    import subprocess
+
+    from attocode.code_intel.bug_finder import scan_diff
+
+    project_dir = _get_project_dir()
+
+    try:
+        result = subprocess.run(
+            ["git", "diff", f"{base_branch}...HEAD"],
+            cwd=project_dir,
+            capture_output=True,
+            text=True,
+            timeout=30,
+        )
+        diff_text = result.stdout
+    except FileNotFoundError:
+        return "git not found. Install git to use bug_scan."
+    except subprocess.TimeoutExpired:
+        return "git diff timed out (>30s). Try a smaller diff range."
+    except Exception as e:
+        return f"Failed to get diff: {e}"
+
+    if not diff_text.strip():
+        return f"No diff found between {base_branch} and HEAD."
+
+    report = scan_diff(diff_text)
+    return report.format_report(min_confidence=min_confidence)

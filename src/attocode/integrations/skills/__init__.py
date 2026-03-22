@@ -1,5 +1,10 @@
 """Skill loading, execution, dependency resolution, and state persistence."""
 
+from attocode.integrations.skills.progressive_loader import (
+    ProgressiveSkillLoader,
+    SkillLevel,
+    SkillMetadata,
+)
 from attocode.integrations.skills.dependency_graph import (
     SkillDependencyError,
     SkillDependencyGraph,
@@ -16,4 +21,8 @@ __all__ = [
     "SkillDependencyError",
     "SkillDependencyGraph",
     "SkillStateStore",
+    # Progressive loading
+    "ProgressiveSkillLoader",
+    "SkillLevel",
+    "SkillMetadata",
 ]

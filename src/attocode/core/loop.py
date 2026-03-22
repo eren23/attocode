@@ -3,6 +3,7 @@
 Includes extracted testable functions:
 - check_iteration_budget() — budget pre-flight with recovery actions
 - handle_auto_compaction() — trigger compaction at thresholds
+- handle_fresh_context_refresh() — refresh context at dumb zone
 - apply_context_overflow_guard() — mass tool result truncation
 - check_external_cancellation() — subagent cancellation + wrapup
 - inject_recitation() — periodic goal reinforcement
@@ -412,6 +413,146 @@ async def handle_auto_compaction(
 
     except Exception as e:
         ctx.emit_simple(EventType.COMPACTION_ERROR, error=str(e))
+        return CompactionResult(compacted=False, error=str(e))
+
+
+async def handle_fresh_context_refresh(ctx: AgentContext) -> CompactionResult:
+    """Refresh context when in the dumb zone (40-60% fill).
+
+    Preserves the old conversation in a thread fork and replaces
+    messages with a structured handoff summary for peak-quality
+    continuation.
+
+    Returns CompactionResult with stats.
+    """
+    if ctx.compaction_manager is None:
+        return CompactionResult(compacted=False)
+
+    if not ctx.compaction_manager.should_refresh_context(ctx.messages):
+        return CompactionResult(compacted=False)
+
+    messages_before = len(ctx.messages)
+    check = ctx.compaction_manager.check(ctx.messages)
+    refresh_count = ctx.compaction_manager.fresh_context_count + 1
+
+    ctx.emit_simple(
+        EventType.CONTEXT_FRESH_REFRESH,
+        metadata={
+            "phase": "start",
+            "usage_fraction": check.usage_fraction,
+            "messages": messages_before,
+            "refresh_number": refresh_count,
+        },
+    )
+
+    try:
+        # Ask LLM for structured handoff summary
+        handoff_prompt = ctx.compaction_manager.create_handoff_summary_prompt()
+        ctx.add_message(Message(role=Role.USER, content=handoff_prompt))
+
+        summary_response = await call_llm(ctx, max_retries=1)
+        summary_text = summary_response.content or ""
+
+        if summary_response.usage and ctx.economics:
+            ctx.economics.record_llm_usage(
+                summary_response.usage.input_tokens,
+                summary_response.usage.output_tokens,
+                summary_response.usage.cost,
+            )
+
+        if not summary_text.strip():
+            return CompactionResult(compacted=False, error="Empty handoff summary")
+
+        # Fork old conversation if thread manager is available
+        thread_manager = getattr(ctx, "thread_manager", None)
+        if thread_manager is not None:
+            try:
+                thread_manager.create_fork(
+                    label=f"Fresh context #{refresh_count}",
+                    fork_at=messages_before,
+                    messages=list(ctx.messages),
+                )
+            except Exception:
+                pass  # Fork is optional — don't block refresh
+
+        # Build fresh context: system msgs + handoff exchange + recent msgs
+        system_msgs = [
+            m for m in ctx.messages
+            if hasattr(m, "role") and m.role == Role.SYSTEM
+        ]
+        non_system = [
+            m for m in ctx.messages
+            if not (hasattr(m, "role") and m.role == Role.SYSTEM)
+        ]
+
+        keep_recent = min(ctx.compaction_manager.min_messages_to_keep, len(non_system))
+        recent = non_system[-keep_recent:] if keep_recent > 0 else []
+
+        new_messages: list[Message | Any] = list(system_msgs)
+        new_messages.append(Message(
+            role=Role.USER,
+            content=(
+                "Context has been refreshed for optimal quality. "
+                "Here is a structured handoff summary of the work so far:"
+            ),
+        ))
+        new_messages.append(Message(
+            role=Role.ASSISTANT,
+            content=summary_text,
+        ))
+
+        if ctx.goal:
+            new_messages.append(Message(
+                role=Role.USER,
+                content=f"Current goal: {ctx.goal}\n\nPlease continue.",
+            ))
+
+        new_messages.extend(recent)
+
+        messages_after = len(new_messages)
+        ctx.messages = new_messages
+
+        tokens_after = ctx.compaction_manager.check(ctx.messages).estimated_tokens
+        tokens_saved = max(0, check.estimated_tokens - tokens_after)
+
+        ctx.compaction_manager.record_fresh_context()
+
+        if ctx.economics:
+            ctx.economics.update_baseline(ctx.metrics.total_tokens)
+
+        if ctx.session_store and ctx.session_id:
+            try:
+                await ctx.session_store.log_compaction(
+                    ctx.session_id,
+                    ctx.iteration,
+                    messages_before,
+                    messages_after,
+                    tokens_saved=tokens_saved,
+                    strategy="fresh_context",
+                )
+            except Exception:
+                pass
+
+        ctx.emit_simple(
+            EventType.CONTEXT_FRESH_REFRESH,
+            metadata={
+                "phase": "complete",
+                "messages_before": messages_before,
+                "messages_after": messages_after,
+                "tokens_saved": tokens_saved,
+                "refresh_number": refresh_count,
+            },
+        )
+
+        return CompactionResult(
+            compacted=True,
+            messages_before=messages_before,
+            messages_after=messages_after,
+            tokens_saved=tokens_saved,
+        )
+
+    except Exception as e:
+        ctx.emit_simple(EventType.COMPACTION_ERROR, error=f"fresh_context: {e}")
         return CompactionResult(compacted=False, error=str(e))
 
 
@@ -905,8 +1046,12 @@ async def run_execution_loop(
                     metadata={"truncations": truncation_count},
                 )
 
-            # 3. Auto-compaction check
-            _compaction_result = await handle_auto_compaction(ctx)
+            # 2.5. Fresh context check (before compaction)
+            _fresh_result = await handle_fresh_context_refresh(ctx)
+
+            # 3. Auto-compaction check (skip if fresh context already triggered)
+            if not _fresh_result.compacted:
+                _compaction_result = await handle_auto_compaction(ctx)
 
             # 4. Call LLM (streaming when provider supports it)
             try:

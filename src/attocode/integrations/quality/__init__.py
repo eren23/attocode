@@ -36,6 +36,12 @@ from attocode.integrations.quality.tool_recommendation import (
     ToolRecommendation,
     ToolRecommendationEngine,
 )
+from attocode.integrations.quality.trajectory import (
+    PatternDetection,
+    TrajectoryPattern,
+    TrajectoryTracker,
+    TrajectoryTriple,
+)
 
 __all__ = [
     "Learning",
@@ -62,4 +68,8 @@ __all__ = [
     "format_health_report",
     "ToolRecommendation",
     "ToolRecommendationEngine",
+    "PatternDetection",
+    "TrajectoryPattern",
+    "TrajectoryTracker",
+    "TrajectoryTriple",
 ]

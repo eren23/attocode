@@ -75,6 +75,11 @@ class AttoConfig:
     # Execution
     max_tokens: int = DEFAULT_MAX_TOKENS
     temperature: float = DEFAULT_TEMPERATURE
+
+    # Dual model (architect/editor split)
+    architect_model: str = ""
+    editor_model: str = ""
+
     max_iterations: int = 100
     max_context_tokens: int = 200_000
     compaction_warning_threshold: float = 0.7
@@ -344,6 +349,10 @@ def _apply_dict(config: AttoConfig, data: dict[str, Any]) -> None:
         "systemPrompt": "system_prompt",
         "openrouter_preferences": "openrouter_preferences",
         "openrouterPreferences": "openrouter_preferences",
+        "architect_model": "architect_model",
+        "editor_model": "editor_model",
+        "architectModel": "architect_model",
+        "editorModel": "editor_model",
     }
     compaction_block = data.get("compaction")
     if isinstance(compaction_block, dict):

@@ -1201,10 +1201,10 @@ class CodeIntelService:
             lines.append("    (none found)")
         lines.append(f"\n  References ({len(references)}):")
         if references:
-            for ref in references[:50]:
+            for ref in references[:100]:
                 lines.append(f"    [{ref.ref_kind}] {ref.file_path}:{ref.line}")
-            if len(references) > 50:
-                lines.append(f"    ... and {len(references) - 50} more")
+            if len(references) > 100:
+                lines.append(f"    ... and {len(references) - 100} more")
         else:
             lines.append("    (none found)")
         return "\n".join(lines)
@@ -1467,7 +1467,7 @@ class CodeIntelService:
 
         entries = _find_entry_points(files, index)
         if entries:
-            entry_lines = [f"  {path} — {reason}" for path, reason in entries[:10]]
+            entry_lines = [f"  {path} — {reason}" for path, reason in entries[:20]]
             sections.append(("Entry Points", "\n".join(entry_lines), 9))
 
         if index.file_dependents:
@@ -1535,7 +1535,7 @@ class CodeIntelService:
 
         total_files = len(files)
         import os
-        _file_cap = int(os.environ.get("ATTOCODE_FILE_CAP", "2000"))
+        _file_cap = int(os.environ.get("ATTOCODE_FILE_CAP", "5000"))
         if total_files < 100:
             size_tier = "small"
         elif total_files < _file_cap:
@@ -1802,7 +1802,7 @@ class CodeIntelService:
         if not locs:
             return f"No references found at {file}:{line}:{col}"
         lines = [f"References ({len(locs)}):"]
-        for loc in locs[:50]:
+        for loc in locs[:100]:
             uri = loc.uri
             if uri.startswith("file://"):
                 uri = uri[7:]

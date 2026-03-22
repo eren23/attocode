@@ -7,6 +7,135 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Planned (v0.2.6)
+- Fuzzy/substring symbol search (find `IO` in `cats.effect.IO`, `Router` in `Phoenix.Router`)
+- Language-specific symbol extraction fixes for Scala traits/objects, Elixir defp, Lua table OOP, Zig pub const, HCL resource/data blocks, Haskell type classes
+- Symbol name inverted index for O(1) lookup
+- Ground truth YAML for all 19 benchmark repos
+- Optional ast-grep integration for structural pattern searches
+
+## [0.2.5] - 2026-03-22
+
+### Added
+
+#### Fresh Context Protocol (F1)
+- Dumb zone detection at 40-60% context fill with quality degradation warnings
+- `handle_fresh_context_refresh()` in execution loop — spawns fresh context with structured handoff
+- Thread fork preservation of old conversation before refresh
+- `CONTEXT_FRESH_REFRESH` event type for observability
+
+#### Dynamic Tool Creation (F2)
+- `DynamicToolRegistry` for runtime tool definition with sandboxed execution
+- JSON Schema parameter validation and blocked builtin protection
+- Persistence to `.attocode/tools/` with auto-load on session start
+- `/define-tool` command for listing and creating dynamic tools
+
+#### MCP Server Scaffolding (F3)
+- `MCPScaffolder` generates Python MCP servers from specifications
+- Template-based code generation using FastMCP pattern
+- Persistence to `.attocode/mcp-servers/` with spec.json for reload
+- `/scaffold-mcp` command for creating local MCP servers
+
+#### Autonomous Pipeline (F4)
+- `AutonomousPipeline` with 5 phases: Research → Plan → Implement → Verify → Commit
+- Phase-level result tracking with duration and artifact collection
+- Fresh context per phase option for peak quality
+- Enhanced `/auto` command integration
+
+#### Graph-Ranked Repo Map (F6)
+- PageRank algorithm on import/dependency graphs
+- Task-relevance scoring combined with connectivity importance
+- Token-budgeted output with configurable limits (default 1024 tokens)
+- File categorization (core, util, test, api, config)
+
+#### Architect/Editor Model Split (F7)
+- `DualModelWorkflow` separating reasoning (architect) from editing (editor)
+- Architect prompt generation for analysis-only passes
+- Editor prompt generation with file contents injection
+- Response parsing with confidence extraction and change detection
+- Config fields: `architect_model`, `editor_model` in AttoConfig
+
+#### Boomerang Orchestrator Mode (F8)
+- `Orchestrator` decomposes complex tasks into mode-specific subtasks
+- Dependency-aware scheduling with `get_ready_subtasks()`
+- Context summaries passed between subtasks to prevent explosion
+- Synthesis prompt generation for final result aggregation
+- `/orchestrate` command
+
+#### File-Driven Project State (F9)
+- `ProjectStateManager` persists state in `.attocode/project/` directory
+- `STATE.md` for cross-session decisions (append-only with timestamps)
+- `PLAN.md` for current task plan (overwrite semantics)
+- `CONVENTIONS.md` for code conventions
+- Auto-loaded on session start, injected into system prompt
+- `/project-state` command for viewing and adding entries
+
+#### Parallel Background Agents (F10)
+- `ParallelAgentManager` with pipe-separated task parsing
+- Git worktree isolation per agent (configurable max agents)
+- Merge conflict detection for overlapping file modifications
+- Status tracking and result aggregation
+- `/parallel` command
+
+#### Watch Mode (F11)
+- `FileWatcher` scans for `# AI:`, `// AI:`, `/* AI: */` trigger comments
+- Directory tree scanning with configurable extensions and ignore patterns
+- Trigger removal after processing
+- File modification detection via mtime polling
+- `/watch` command for scanning triggers
+
+#### Bug Finder (F12)
+- Pattern-based static analysis for common bug patterns
+- Detects: bare excepts, eval/exec, shell injection, swallowed exceptions, TODOs
+- Unified diff parsing for branch comparison
+- Confidence-rated findings with severity levels (critical/high/medium/low)
+- `/bugfind [branch]` command with structured report output
+
+#### Progressive Disclosure Skills (F13)
+- 3-tier loading: L1 (name+desc, ~100 tokens), L2 (instructions, <5K), L3 (resources)
+- Trigger-based skill matching with confidence scoring
+- Zero-token overhead for unused skills
+- Context token estimation and skill unloading
+
+#### Trajectory Analysis (F14)
+- `TrajectoryTracker` records (reasoning, tool_call, result) triples
+- Pattern detection: repetitive loops, spinning, regression, productive exploration
+- `detect_spinning()` complements existing loop detector
+- Summary generation for `/trace` command integration
+- Exported from `integrations/quality/__init__.py`
+
+#### Code Intelligence Improvements
+- Added `repo_map_ranked` MCP tool — PageRank-based file ranking with task-relevance weighting
+- Added `bug_scan` MCP tool — diff scanning for bug patterns with confidence rating
+- MCP server now exposes **40 tools** (up from 38)
+- Fixed language support for **7 languages**: Scala, Elixir, Zig, Haskell, HCL, Bash, Lua
+- Added `.scala`, `.ex/.exs`, `.zig`, `.hs`, `.tf/.tfvars`, `.hcl` to file discovery
+- Fixed `shell` → `bash` language normalization in AST service
+- Raised file indexing cap: 2,000 → 5,000 (configurable via `ATTOCODE_FILE_CAP`)
+- Raised dynamic cap tiers: 5K/10K → 10K/20K for large repos
+- Increased symbol slicing limits across repo map, search index, and context selection
+- Extended tree depth from 4 → 6, reference display from 50 → 100, entry points from 10 → 20
+- Extended file watcher to cover all 25+ supported languages
+
+#### 3-Way Benchmark Framework
+- New `scripts/benchmark_3way.py` — compares grep vs ast-grep vs code-intel across 19 repos
+- New `scripts/.internal/gen_3way_chart.py` — generates 4-panel comparison PNG chart
+- Quality-based scoring (rewards signal density over output volume)
+- Results: code-intel 4.4/5, grep 3.8/5, ast-grep 2.4/5 across 19 repos and 15+ languages
+
+### Fixed
+- TUI snapshot tests regenerated after widget/theme changes
+- `cleanup_worktrees()` now skips non-git directories (prevents spurious warnings)
+- Code-intel symbol extraction for Scala, Elixir, Zig, Bash, Lua, HCL repos (was returning empty)
+- `EXTENSION_LANGUAGES` missing 5 file extensions causing 0 symbols indexed for those languages
+- Benchmark scoring bias rewarding output volume over structured quality
+
+### Changed
+- `__init__.py` barrel exports updated across 6 packages (core, tools, code_intel, persistence, skills, mcp)
+- Feature initializer extended with project_state, dynamic_tools, and trajectory features
+- Command palette updated with 7 new commands
+- Version bumped to 0.2.5
+
 ## [0.2.4] - 2026-03-22
 
 ### Added

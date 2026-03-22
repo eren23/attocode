@@ -276,7 +276,7 @@ def bootstrap(task_hint: str = "", max_tokens: int = 8000) -> str:
 
     # Determine codebase size tier
     import os
-    _file_cap = int(os.environ.get("ATTOCODE_FILE_CAP", "2000"))
+    _file_cap = int(os.environ.get("ATTOCODE_FILE_CAP", "5000"))
     if total_files < 100:
         size_tier = "small"
     elif total_files < _file_cap:

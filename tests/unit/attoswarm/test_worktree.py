@@ -269,6 +269,7 @@ def test_ensure_workspace_prefers_base_commit_when_provided(mock_run: MagicMock,
 def test_cleanup_worktrees_removes_all(mock_run: MagicMock, tmp_path: Path) -> None:
     repo = tmp_path / "repo"
     repo.mkdir()
+    (repo / ".git").mkdir()
     wt_root = tmp_path / "worktrees"
     (wt_root / "worker-1").mkdir(parents=True)
     (wt_root / "worker-2").mkdir(parents=True)
@@ -287,6 +288,7 @@ def test_cleanup_worktrees_removes_all(mock_run: MagicMock, tmp_path: Path) -> N
 def test_cleanup_worktrees_uses_run_scoped_branch_names(mock_run: MagicMock, tmp_path: Path) -> None:
     repo = tmp_path / "repo"
     repo.mkdir()
+    (repo / ".git").mkdir()
     wt_root = tmp_path / "worktrees"
     (wt_root / "worker-1").mkdir(parents=True)
 

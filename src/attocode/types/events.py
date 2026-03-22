@@ -77,6 +77,7 @@ class EventType(StrEnum):
     COMPACTION_START = "compaction.start"
     COMPACTION_COMPLETE = "compaction.complete"
     COMPACTION_ERROR = "compaction.error"
+    CONTEXT_FRESH_REFRESH = "context.fresh_refresh"
     CONTEXT_OVERFLOW = "context.overflow"
     CONTEXT_BREAKDOWN = "context.breakdown"
 

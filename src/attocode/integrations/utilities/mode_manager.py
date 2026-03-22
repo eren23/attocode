@@ -1,10 +1,14 @@
 """Mode manager for agent execution modes.
 
-Implements 4 modes that restrict tool access:
+Implements 8 modes that restrict tool access:
 - Build (default): All tools available
 - Plan: Read-only + intercepts writes → queues as proposed changes
 - Review: Read-only access only
 - Debug: Read-only + test execution tools
+- Code: Full access (alias for Build, focused on implementation)
+- Architect: Read-only + markdown write only (system design)
+- Ask: Read-only (explain code, answer questions)
+- Orchestrate: Full access (delegates to other modes)
 """
 
 from __future__ import annotations
@@ -21,6 +25,11 @@ class AgentMode(StrEnum):
     PLAN = "plan"
     REVIEW = "review"
     DEBUG = "debug"
+    # Role-based modes
+    CODE = "code"
+    ARCHITECT = "architect"
+    ASK = "ask"
+    ORCHESTRATE = "orchestrate"
 
 
 # Tool access groups
@@ -50,6 +59,11 @@ MODE_TOOL_ACCESS: dict[AgentMode, frozenset[str]] = {
     AgentMode.PLAN: READ_TOOLS,
     AgentMode.REVIEW: READ_TOOLS,
     AgentMode.DEBUG: READ_TOOLS | TEST_TOOLS,
+    # Role-based modes
+    AgentMode.CODE: READ_TOOLS | WRITE_TOOLS | EXEC_TOOLS | AGENT_TOOLS,
+    AgentMode.ARCHITECT: READ_TOOLS,  # Write interception for .md files only
+    AgentMode.ASK: READ_TOOLS,
+    AgentMode.ORCHESTRATE: READ_TOOLS | WRITE_TOOLS | EXEC_TOOLS | AGENT_TOOLS,
 }
 
 # System prompt supplements per mode
@@ -74,6 +88,33 @@ MODE_PROMPTS: dict[AgentMode, str] = {
         "You are in DEBUG mode. You can read files and run test commands. "
         "You CANNOT write or edit files. Focus on diagnosing issues by "
         "reading code, running tests, and analyzing outputs."
+    ),
+    # Role-based modes
+    AgentMode.CODE: (
+        "\n\n[MODE: CODE]\n"
+        "You are in CODE mode. Full tool access. Focus on writing clean, "
+        "well-tested implementation code. You can read, write, edit files, "
+        "run commands, and spawn agents."
+    ),
+    AgentMode.ARCHITECT: (
+        "\n\n[MODE: ARCHITECT]\n"
+        "You are in ARCHITECT mode. You can read files and write markdown "
+        "documents only. Focus on system design, architecture decisions, "
+        "and documentation. You CANNOT modify code files or run commands. "
+        "Describe designs in markdown documents."
+    ),
+    AgentMode.ASK: (
+        "\n\n[MODE: ASK]\n"
+        "You are in ASK mode. You can only read files and search the codebase. "
+        "Focus on explaining code, answering questions, and providing guidance. "
+        "You CANNOT write, edit, or execute any commands."
+    ),
+    AgentMode.ORCHESTRATE: (
+        "\n\n[MODE: ORCHESTRATE]\n"
+        "You are in ORCHESTRATE mode. You have full tool access and should "
+        "break complex tasks into subtasks. Delegate work by spawning agents "
+        "or switching to appropriate modes (code, architect, debug) for each subtask. "
+        "Focus on coordination and synthesis, not direct implementation."
     ),
 }
 
@@ -111,6 +152,7 @@ class ModeManager:
     mode: AgentMode = AgentMode.BUILD
     proposed_changes: list[ProposedChange] = field(default_factory=list)
     _mode_history: list[AgentMode] = field(default_factory=list, repr=False)
+    _mode_models: dict[AgentMode, str] = field(default_factory=dict, repr=False)
 
     def switch_mode(self, new_mode: AgentMode | str) -> str:
         """Switch to a new mode.
@@ -140,6 +182,17 @@ class ModeManager:
         old = self.mode
         self.mode = prev
         return f"Switched from {old.value} back to {prev.value} mode"
+
+    def set_mode_model(self, mode: AgentMode | str, model: str) -> None:
+        """Set preferred model for a mode."""
+        if isinstance(mode, str):
+            mode = AgentMode(mode)
+        self._mode_models[mode] = model
+
+    def get_mode_model(self, mode: AgentMode | None = None) -> str | None:
+        """Get preferred model for current or specified mode."""
+        m = mode or self.mode
+        return self._mode_models.get(m)
 
     def check_tool_access(
         self,
@@ -206,6 +259,40 @@ class ModeManager:
             return ModeCheckResult(
                 allowed=False,
                 reason=f"Tool '{tool_name}' not allowed in debug mode",
+            )
+
+        # Code mode: full access (alias for BUILD)
+        if self.mode == AgentMode.CODE:
+            return ModeCheckResult(allowed=True)
+
+        # Orchestrate mode: full access
+        if self.mode == AgentMode.ORCHESTRATE:
+            return ModeCheckResult(allowed=True)
+
+        # Architect mode: reads + markdown-only writes
+        if self.mode == AgentMode.ARCHITECT:
+            if tool_name in READ_TOOLS:
+                return ModeCheckResult(allowed=True)
+            if tool_name in WRITE_TOOLS:
+                file_path = (arguments or {}).get("path", "") or (arguments or {}).get("file_path", "")
+                if file_path.endswith(".md") or file_path.endswith(".markdown"):
+                    return ModeCheckResult(allowed=True)
+                return ModeCheckResult(
+                    allowed=False,
+                    reason=f"ARCHITECT mode: can only write markdown files, not '{file_path}'",
+                )
+            return ModeCheckResult(
+                allowed=False,
+                reason=f"Tool '{tool_name}' not allowed in architect mode",
+            )
+
+        # Ask mode: read-only
+        if self.mode == AgentMode.ASK:
+            if tool_name in READ_TOOLS:
+                return ModeCheckResult(allowed=True)
+            return ModeCheckResult(
+                allowed=False,
+                reason=f"Tool '{tool_name}' not allowed in ask mode (read-only)",
             )
 
         # Check general tool access

@@ -624,8 +624,8 @@ class SemanticSearchManager:
 
             # File-level doc: path components + import modules + symbol names
             file_text_parts = list(re.split(r"[/\\]", rel))
-            file_text_parts.extend(imp.module for imp in ast.imports[:20])
-            file_text_parts.extend(ast.get_symbols()[:20])
+            file_text_parts.extend(imp.module for imp in ast.imports[:30])
+            file_text_parts.extend(ast.get_symbols()[:30])
             file_text = " ".join(file_text_parts)
             file_tokens = _tokenize(file_text)
 
@@ -780,8 +780,8 @@ class SemanticSearchManager:
         chunks: list[tuple[str, str, str, str]] = []
 
         # File-level summary
-        imports = [imp.module for imp in ast.imports[:10]]
-        symbols = ast.get_symbols()[:10]
+        imports = [imp.module for imp in ast.imports[:20]]
+        symbols = ast.get_symbols()[:20]
         summary_parts = []
         if ast.docstring:
             summary_parts.append(ast.docstring[:200])

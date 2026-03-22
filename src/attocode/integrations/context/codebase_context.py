@@ -159,6 +159,11 @@ EXTENSION_LANGUAGES: dict[str, str] = {
     ".swift": "swift",
     ".cs": "csharp",
     ".lua": "lua",
+    ".scala": "scala", ".sc": "scala",
+    ".ex": "elixir", ".exs": "elixir",
+    ".zig": "zig",
+    ".hs": "haskell", ".lhs": "haskell",
+    ".tf": "hcl", ".tfvars": "hcl", ".hcl": "hcl",
     ".sh": "shell", ".bash": "shell", ".zsh": "shell",
     ".yaml": "yaml", ".yml": "yaml",
     ".json": "json",
@@ -700,8 +705,8 @@ def _compute_dynamic_cap(files: list[FileInfo], configured_max: int) -> int:
     Rules:
     - <1,000 source files → no cap (keep all)
     - 1,000–5,000 source files → cap at source count (keep all source, trim non-source)
-    - 5,000–20,000 → cap at 5,000
-    - 20,000+ → cap at 10,000
+    - 5,000–20,000 → cap at 10,000
+    - 20,000+ → cap at 20,000
 
     Args:
         files: All discovered files (before truncation).
@@ -718,9 +723,9 @@ def _compute_dynamic_cap(files: list[FileInfo], configured_max: int) -> int:
     elif source_count <= 5_000:
         cap = max(source_count, configured_max)
     elif source_count <= 20_000:
-        cap = max(5_000, configured_max)
-    else:
         cap = max(10_000, configured_max)
+    else:
+        cap = max(20_000, configured_max)
 
     return cap
 
@@ -1033,7 +1038,7 @@ class CodebaseContextManager:
                     ast = _parse_file(f.path)
                 syms = ast.get_symbols()
                 if syms:
-                    file_symbols[f.relative_path] = syms[:8]  # Cap at 8 symbols
+                    file_symbols[f.relative_path] = syms[:15]  # Cap at 15 symbols
             except Exception:
                 pass
         return file_symbols
@@ -1496,7 +1501,7 @@ class CodebaseContextManager:
         for f in tier1:
             syms = file_symbols.get(f.relative_path, [])
             if syms:
-                included_symbols[f.relative_path] = syms[:5]
+                included_symbols[f.relative_path] = syms[:10]
 
         # Count omitted files per directory for collapse annotations
         omitted_per_dir = self._count_omitted_per_dir(
@@ -1507,7 +1512,7 @@ class CodebaseContextManager:
         root = Path(self.root_dir)
         tree_dict: dict[str, Any] = {}
         leaf_rel_paths: dict[str, str] = {}
-        max_depth = 4
+        max_depth = 6
 
         for f in tier1 + tier2:
             parts = Path(f.relative_path).parts

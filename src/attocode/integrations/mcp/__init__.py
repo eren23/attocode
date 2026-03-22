@@ -24,6 +24,7 @@ from attocode.integrations.mcp.tool_search import (
     MCPToolSearchIndex,
     create_mcp_tool_search_tool,
 )
+from attocode.integrations.mcp.scaffolder import MCPScaffolder, MCPScaffolderError, MCPServerSpec
 from attocode.integrations.mcp.tool_validator import MCPToolValidator
 
 __all__ = [
@@ -47,6 +48,10 @@ __all__ = [
     # custom_tools
     "MCPCustomToolConfig",
     "MCPCustomTools",
+    # scaffolder
+    "MCPScaffolder",
+    "MCPScaffolderError",
+    "MCPServerSpec",
     # meta_tools
     "MCPContextStats",
     "MCPMetaTools",

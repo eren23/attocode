@@ -195,6 +195,9 @@ async def handle_command(
     if cmd == "/mode":
         return _mode_command(agent, arg)
 
+    if cmd in ("/code", "/architect", "/ask", "/orchestrate"):
+        return _mode_command(agent, cmd[1:])
+
     if cmd == "/plan":
         return _plan_command(agent, arg, app=app)
 
@@ -329,6 +332,28 @@ async def handle_command(
     if cmd == "/setup":
         return await _setup_command(agent, app)
 
+    # --- New feature commands ---
+    if cmd == "/define-tool":
+        return _define_tool_command(agent, arg)
+
+    if cmd == "/scaffold-mcp":
+        return _scaffold_mcp_command(agent, arg)
+
+    if cmd == "/parallel":
+        return _parallel_command(agent, arg)
+
+    if cmd == "/bugfind":
+        return _bugfind_command(agent, arg)
+
+    if cmd in ("/orchestrate", "/orch"):
+        return _orchestrate_command(agent, arg)
+
+    if cmd == "/watch":
+        return _watch_command(agent, arg)
+
+    if cmd == "/project-state":
+        return _project_state_command(agent, arg)
+
     return CommandResult(output=f"Unknown command: {cmd}. Type /help for available commands.")
 
 
@@ -362,7 +387,11 @@ def _help_text() -> str:
         "  /export [html|md] Export session as HTML or markdown file\n"
         "\n"
         "Mode:\n"
-        "  /mode [name]      Show or switch mode (build/plan/review/debug)\n"
+        "  /mode [name]      Show or switch mode (build/plan/review/debug/code/architect/ask/orchestrate)\n"
+        "  /code             Switch to code mode (full access, implementation focus)\n"
+        "  /architect        Switch to architect mode (read + markdown write only)\n"
+        "  /ask              Switch to ask mode (read-only, Q&A focus)\n"
+        "  /orchestrate      Switch to orchestrate mode (full access, delegation focus)\n"
         "  /plan [desc]      Enter plan mode (or show current plan)\n"
         "  /show-plan        Show detailed plan with pending diffs\n"
         "  /approve [n|all]  Approve proposed change(s)\n"
@@ -389,6 +418,8 @@ def _help_text() -> str:
         "Tools:\n"
         "  /mcp [subcmd]     MCP management (list/tools/connect/disconnect/search/stats)\n"
         "  /skills [subcmd]  Skill management (list/info/new/edit/enable/disable/reload)\n"
+        "  /define-tool      List dynamic tools (or describe one to create)\n"
+        "  /scaffold-mcp <n> Scaffold a local MCP server\n"
         "  /undo [path]      Undo last file change (or specific file)\n"
         "  /diff             Show recent file changes\n"
         "\n"
@@ -429,6 +460,12 @@ def _help_text() -> str:
         "  /tui              Show TUI feature list\n"
         "  /dashboard        Open the trace analysis dashboard (Ctrl+D)\n"
         "  /swarm-monitor    Open multi-run swarm monitor (Ctrl+M)\n"
+        "\n"
+        "Analysis:\n"
+        "  /bugfind [branch] Scan diff for potential bugs (default: main)\n"
+        "  /watch            Scan for inline AI trigger comments (# AI: ...)\n"
+        "  /parallel t1|t2   Spawn parallel agents in isolated worktrees\n"
+        "  /project-state    Show or update file-driven project state\n"
         "\n"
         "Config:\n"
         "  /init             Initialize .attocode/ directory\n"
@@ -3414,3 +3451,175 @@ def _theme_command(app: Any, arg: str) -> CommandResult:
         return CommandResult(output=f"Theme switched to: {arg}")
 
     return CommandResult(output="Theme switching not supported by this app.")
+
+
+# ============================================================
+# New feature command handlers (F2-F13 wiring)
+# ============================================================
+
+
+def _define_tool_command(agent: Any, arg: str) -> CommandResult:
+    """Handle /define-tool — list or describe dynamic tool capabilities."""
+    ctx = getattr(agent, "context", None)
+    dynamic_reg = getattr(ctx, "dynamic_tools", None) if ctx else None
+
+    if not arg:
+        if dynamic_reg is None:
+            return CommandResult(output="Dynamic tools not initialized.")
+        tools = dynamic_reg.list_tools()
+        if not tools:
+            return CommandResult(output="No dynamic tools defined. Use /define-tool <name> to create one.")
+        lines = ["Dynamic tools:"]
+        for t in tools:
+            lines.append(f"  {t['name']}: {t['description']}")
+        return CommandResult(output="\n".join(lines))
+
+    return CommandResult(
+        output=(
+            "To define a dynamic tool, describe it in your message and the agent "
+            "will use the DynamicToolRegistry to create it.\n"
+            f"Requested: {arg}"
+        )
+    )
+
+
+def _scaffold_mcp_command(agent: Any, arg: str) -> CommandResult:
+    """Handle /scaffold-mcp — scaffold a local MCP server."""
+    if not arg:
+        return CommandResult(output="Usage: /scaffold-mcp <server-name>\nScaffolds a local MCP server in .attocode/mcp-servers/")
+
+    from attocode.integrations.mcp.scaffolder import MCPScaffolder
+
+    ctx = getattr(agent, "context", None)
+    project_root = getattr(ctx, "project_root", "") if ctx else ""
+    if not project_root:
+        return CommandResult(output="No project root found. Run from a project directory.")
+
+    from pathlib import Path
+    servers_dir = Path(project_root) / ".attocode" / "mcp-servers"
+    scaffolder = MCPScaffolder(servers_dir=servers_dir)
+    existing = scaffolder.list_servers()
+    if existing:
+        lines = ["Existing MCP servers:"]
+        for s in existing:
+            lines.append(f"  {s['name']}: {s['description']} ({s['tools']} tools)")
+        lines.append(f"\nTo create '{arg}', describe the tools in your message.")
+        return CommandResult(output="\n".join(lines))
+
+    return CommandResult(
+        output=f"Ready to scaffold MCP server '{arg}'. Describe the tools it should have."
+    )
+
+
+def _parallel_command(agent: Any, arg: str) -> CommandResult:
+    """Handle /parallel — spawn parallel agents for independent tasks."""
+    if not arg:
+        return CommandResult(
+            output="Usage: /parallel task1 | task2 | task3\nSpawns agents in isolated git worktrees."
+        )
+
+    from attocode.core.parallel_agents import ParallelAgentManager
+
+    mgr = ParallelAgentManager()
+    tasks = mgr.parse_tasks(arg)
+    lines = [f"Parsed {len(tasks)} parallel tasks:"]
+    for t in tasks:
+        lines.append(f"  [{t.id}] {t.description}")
+    lines.append("\nParallel execution would spawn each in an isolated git worktree.")
+    return CommandResult(output="\n".join(lines))
+
+
+def _bugfind_command(agent: Any, arg: str) -> CommandResult:
+    """Handle /bugfind — scan diff for potential bugs."""
+    import subprocess
+
+    base_branch = arg.strip() or "main"
+    try:
+        result = subprocess.run(
+            ["git", "diff", f"{base_branch}...HEAD"],
+            capture_output=True,
+            text=True,
+            timeout=30,
+        )
+        diff_text = result.stdout
+    except Exception as e:
+        return CommandResult(output=f"Failed to get diff: {e}")
+
+    if not diff_text:
+        return CommandResult(output=f"No diff found between {base_branch} and HEAD.")
+
+    from attocode.code_intel.bug_finder import scan_diff
+
+    report = scan_diff(diff_text)
+    return CommandResult(output=report.format_report())
+
+
+def _orchestrate_command(agent: Any, arg: str) -> CommandResult:
+    """Handle /orchestrate — decompose task across agent modes."""
+    if not arg:
+        return CommandResult(
+            output="Usage: /orchestrate <complex task>\nDecomposes into subtasks assigned to Code/Architect/Debug/Ask modes."
+        )
+
+    from attocode.core.orchestrator import Orchestrator
+
+    orch = Orchestrator()
+    prompt = orch.create_decomposition_prompt(arg)
+    return CommandResult(
+        output=f"Orchestrator ready. Decomposition prompt prepared for:\n{arg}\n\n"
+        "The agent will break this into mode-specific subtasks."
+    )
+
+
+def _watch_command(agent: Any, arg: str) -> CommandResult:
+    """Handle /watch — scan for inline AI trigger comments."""
+    from pathlib import Path
+
+    from attocode.agent.watch import FileWatcher, WatchConfig
+
+    ctx = getattr(agent, "context", None)
+    project_root = getattr(ctx, "project_root", ".") if ctx else "."
+
+    config = WatchConfig(watch_dirs=[project_root])
+    watcher = FileWatcher(config)
+    matches = watcher.scan_all()
+
+    if not matches:
+        return CommandResult(output="No AI trigger comments found (# AI: ... or // AI: ...).")
+
+    lines = [f"Found {len(matches)} trigger(s):"]
+    for m in matches[:20]:
+        lines.append(f"  {m.file_path}:{m.line_number} — {m.trigger_text}")
+    if len(matches) > 20:
+        lines.append(f"  ... and {len(matches) - 20} more")
+    return CommandResult(output="\n".join(lines))
+
+
+def _project_state_command(agent: Any, arg: str) -> CommandResult:
+    """Handle /project-state — show or update file-driven project state."""
+    ctx = getattr(agent, "context", None)
+    project_state = getattr(ctx, "project_state", None) if ctx else None
+
+    if project_state is None:
+        # Try to create one on the fly
+        project_root = getattr(ctx, "project_root", "") if ctx else ""
+        if not project_root:
+            return CommandResult(output="No project root found.")
+        from pathlib import Path
+
+        from attocode.integrations.persistence.project_state import ProjectStateManager
+        project_state = ProjectStateManager(Path(project_root))
+
+    state = project_state.load()
+    if state.is_empty:
+        return CommandResult(
+            output="No project state found. Use '/project-state add <decision>' to record a decision."
+        )
+
+    if arg.startswith("add "):
+        entry = arg[4:].strip()
+        if entry:
+            project_state.update_state(entry)
+            return CommandResult(output=f"Added to project state: {entry}")
+
+    return CommandResult(output=state.as_context_block() or "Project state is empty.")

@@ -251,7 +251,7 @@ class CodeSelector:
 
         # Sort files by total importance
         ranked_files = sorted(file_total_importance.items(), key=lambda x: -x[1])
-        top_files = {f for f, _ in ranked_files[:5]}  # Focus on top 5 files
+        top_files = {f for f, _ in ranked_files[:10]}  # Focus on top 10 files
 
         scored: list[tuple[CodeChunk, float]] = []
         for chunk in chunks:
