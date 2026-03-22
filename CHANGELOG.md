@@ -7,24 +7,58 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.4] - 2026-03-22
+
 ### Added
 
 #### Swarm Test Task Quality Enforcement
 
-- **Test-specific quality gate** — test tasks now require score 4/5 (vs 3/5 for other tasks), configurable via `test_quality_threshold`
-- **V11 pre-flight check** — test tasks auto-rejected (score 1) if output contains no test execution evidence (pytest/npm test/go test keywords); controlled by `test_require_execution_evidence`
-- **Test-specific judge rubric** — LLM judge uses stricter scoring criteria for test tasks ("no test output = score 1-2 regardless of narrative")
-- **Verification-before-judge reorder** — for test tasks, verification gate runs before the LLM judge so the judge sees actual test pass/fail data
-- **Fail-safe score=2 for test tasks** — on LLM judge error, test tasks default to score 2 (reject) instead of score 3 (pass)
-- **ToolAction transparency** — each subagent tool call captured with tool name, arguments, output, exit code, and test execution flag; surfaced in judge prompt, events, and state.json
-- **Worker package installation instructions** — test task prompts explicitly allow `pip install`, `npm install`, `go mod tidy`, `cargo build` for missing dependencies
-- **Go and Cargo test runner support** — verification gate now detects `go.mod` and `Cargo.toml` and runs `go test ./...` / `cargo test`
-- **Test task timeout increase** — test tasks get 360s (was 240s) to allow complex test suites to complete
-- **Test evidence in checkpoint restoration** — `test_output` and `tool_actions_summary` persisted across checkpoint resume
+- **Test-specific quality gate** — test tasks require score 4/5 (vs 3/5 for others), configurable via `test_quality_threshold`
+- **V11 pre-flight check** — test tasks auto-rejected (score 1) if output contains no test execution evidence; controlled by `test_require_execution_evidence`
+- **Test-specific judge rubric** — LLM judge uses stricter 1-5 scale for test tasks; no test output = score 1-2 regardless of narrative
+- **Verification-before-judge reorder** — for test tasks, verification gate runs before the judge so it sees actual test pass/fail data
+- **Fail-safe score=2 for test tasks** — on LLM judge error, test tasks default to reject instead of pass
+- **ToolAction transparency** — each subagent tool call captured (tool name, arguments, output, exit code, test flag); surfaced in judge prompt, events, and state.json
+- **Worker package installation** — test task prompts explicitly allow `pip install`, `npm install`, `go mod tidy`, `cargo build`
+- **Go and Cargo test runner support** — verification gate detects `go.mod`/`Cargo.toml` and runs `go test ./...` / `cargo test`
+- **Test task timeout increase** — 360s (was 240s)
+- **Test evidence in checkpoint restoration** — `test_output` and `tool_actions_summary` persisted across resume
 
-## [0.2.4] - 2026-03-21
+#### Swarm Event Bridge & TUI Transparency
 
-### Added
+- **10 new event handlers** — circuit breaker open/closed, pause/resume, wave start/complete, verification failures, file conflicts now tracked in state.json instead of silently dropped
+- **Circuit breaker visibility** — rate limit backoff state (open/closed, pause_until, rate_limit_count) exposed in state.json
+- **Pause/resume tracking** — swarm pause state and reason visible to TUI
+- **Wave lifecycle tracking** — per-wave start/complete times, task counts, pass/fail stats
+- **Verification results tracking** — per-task verification pass/fail with check details
+- **File conflict tracking** — worker file collision details surfaced
+- **Expanded timeline fields** — 11 new data fields extracted from events (pause_ms, checks, assessment, strategy, etc.)
+
+#### Swarm Event Bridge Performance
+
+- **Batched event file flushes** — `.flush()` every 20 events or 0.5s instead of every event
+- **Batched task detail writes** — dirty-set debouncing (0.3s) instead of immediate per-event file writes
+- **Compact task detail JSON** — `indent=None` instead of `indent=2`
+- **Quality results eviction** — capped at 100 entries with oldest-first eviction
+
+#### Bug Fixes
+
+- **Go import parser** — fixed tree-sitter node traversal for `import_declaration` → `import_spec` → `path` field
+- **YAML parser** — recursive traversal for `document → block_node → block_mapping → block_mapping_pair`
+- **Semantic search config penalty** — strengthened from 0.3 to 0.15 to properly deprioritize config files
+- **CLI remote tests** — added httpx.get mock to prevent real HTTP calls
+- **Economics unlimited budget test** — fixed assertion for clamped max_tokens
+- **Archive test** — assertion accepts clean-slate info event after archive
+- **Hollow termination default** — test aligned with code default (`True`)
+- **Stale dispatch recovery** — test handles `list[tuple]` return type correctly
+- **Artifact-aware skip** — test avoids single-dep rescue heuristic
+- **Verification gate** — test updated for new `is_test_task` parameter
+
+#### New Tests
+
+- **66 cc_spawner tests** — 24 new tests for `_extract_tool_actions()`, `_is_test_command()`, `_extract_test_output()`, `_parse_cc_output()` with tool actions
+- **80 verification gate tests** — 4 new tests for `is_test_task`, Go runner, Cargo runner
+- **19 quality gate tests** — new `test_quality_gate.py` covering V11 pre-flight, test rubric, threshold=4, fail-safe=2, verification evidence
 
 #### Evaluation Framework
 
