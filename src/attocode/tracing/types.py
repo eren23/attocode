@@ -83,6 +83,7 @@ class TraceEventKind(StrEnum):
     SWARM_TASK_START = "swarm_task_start"
     SWARM_TASK_COMPLETE = "swarm_task_complete"
     SWARM_TASK_FAILED = "swarm_task_failed"
+    SWARM_TOOL_ACTION = "swarm_tool_action"
 
     # --- Planning ---
     PLAN_CREATED = "plan_created"

@@ -423,6 +423,8 @@ def _start_queue_poller(project_dir: str) -> None:
 _CODE_EXTENSIONS = {
     ".py", ".js", ".jsx", ".ts", ".tsx", ".go", ".rs", ".java",
     ".rb", ".c", ".cpp", ".h", ".hpp", ".cs", ".swift", ".kt",
+    ".scala", ".sc", ".ex", ".exs", ".zig", ".hs", ".tf", ".tfvars",
+    ".hcl", ".lua", ".sh", ".bash", ".php",
 }
 
 _watcher_thread: threading.Thread | None = None

@@ -460,6 +460,17 @@ async def handle_task_completion(
         duration_ms=duration_ms,
         files_modified=spawn_result.files_modified,
         tool_calls=spawn_result.tool_calls,
+        test_output=spawn_result.test_output,
+        tool_actions_summary=[
+            {
+                "tool": a.tool_name,
+                "args": a.arguments_summary[:100],
+                "output": a.output_summary[:200],
+                "exit_code": a.exit_code,
+                "is_test": a.is_test_execution,
+            }
+            for a in (spawn_result.tool_actions or [])[:15]
+        ] or None,
         model=task.assigned_model or "",
     )
 
@@ -617,6 +628,91 @@ async def _handle_successful_completion(
             logger.warning("Compilation check error for task %s: %s", task_id, exc)
             # Non-fatal: continue to quality gate if compilation check itself errors
 
+    # For test tasks: run verification gate BEFORE the quality gate so the
+    # judge can see actual test pass/fail data.
+    task_type_val = task.type.value if hasattr(task.type, "value") else str(task.type)
+    _is_test = task_type_val == "test"
+    _verification_evidence_for_judge: dict[str, Any] | None = None
+
+    _vg_type_config_early = BUILTIN_TASK_TYPE_CONFIGS.get(task.type, None)
+    _should_verify_early = bool(
+        _is_test
+        and ctx.config.enable_verification
+        and _vg_type_config_early and _vg_type_config_early.requires_tool_calls
+    )
+    if _should_verify_early:
+        try:
+            from attocode.integrations.tasks.task_splitter import SubTask as _SubTask
+            from attocode.integrations.tasks.verification_gate import (
+                VerificationGate as _VG,
+            )
+
+            _wd = getattr(ctx, "working_dir", None) or "."
+            _gate = _VG(
+                provider=ctx.provider if ctx.config.enable_wave_review else None,
+                model=ctx.config.orchestrator_model,
+                working_dir=_wd,
+            )
+            _sub = _SubTask(id=task.id, description=task.description)
+            _verif = await _gate.verify(
+                _sub,
+                spawn_result.output or "",
+                run_tests=True,
+                run_types=True,
+                run_lint=True,
+                run_llm=False,
+                is_test_task=True,
+            )
+            # Package verification results for the judge prompt
+            _verification_evidence_for_judge = {
+                "passed": _verif.passed,
+                "checks": [
+                    {"name": c.name, "passed": c.passed, "message": c.message[:200]}
+                    for c in _verif.checks
+                ],
+            }
+
+            if not _verif.passed:
+                # Verification failed — retry immediately, skip judge
+                from attocode.integrations.swarm.types import RetryContext
+                _verif_suggestions = _verif.suggestions[:3]
+                _test_failures: list[str] = []
+                _comp_errors: list[dict[str, Any]] = []
+                for c in _verif.checks:
+                    if not c.passed:
+                        if c.name == "tests":
+                            _test_failures.append(c.message[:300])
+                        else:
+                            _comp_errors.append({
+                                "file": "", "line": None,
+                                "message": c.message[:300], "check": c.name,
+                            })
+                task.retry_context = RetryContext(
+                    previous_feedback="; ".join(_verif_suggestions),
+                    previous_score=task_result.quality_score or 0,
+                    attempt=task.attempts,
+                    previous_model=task.assigned_model,
+                    compilation_errors=_comp_errors or None,
+                    test_failures=_test_failures or None,
+                    verification_suggestions=_verif_suggestions or None,
+                )
+                task_result.quality_feedback = "; ".join(_verif_suggestions)
+                max_retries = ctx.config.worker_retries
+                retried = ctx.task_queue.mark_failed_without_cascade(task_id, max_retries)
+                ctx.emit(swarm_event(
+                    "swarm.verification.failed",
+                    task_id=task_id,
+                    checks=[
+                        {"name": c.name, "passed": c.passed, "message": c.message[:200]}
+                        for c in _verif.checks
+                    ],
+                ))
+                if not retried:
+                    ctx.task_queue.trigger_cascade_skip(task_id)
+                return
+        except Exception as exc:
+            logger.warning("Early verification gate error for test task %s: %s", task_id, exc)
+
     # Quality gate — run pre-flight + LLM judge if enabled
     if ctx.config.quality_gates:
         from attocode.integrations.swarm.quality_gate import (
@@ -646,6 +742,7 @@ async def _handle_successful_completion(
             on_usage=lambda u: _track_judge_usage(ctx, u),
             swarm_config=ctx.config,
             emit=ctx.emit,
+            verification_evidence=_verification_evidence_for_judge if _is_test else None,
         )
 
         if not gate_result.passed:
@@ -688,9 +785,11 @@ async def _handle_successful_completion(
     # Verification gate — run automated checks (tests, types, lint)
     # Decoupled from quality_gates: runs independently for action tasks
     # that modify files, controlled by enable_verification flag.
+    # Skip for test tasks — already ran verification before judge above.
     _vg_type_config = BUILTIN_TASK_TYPE_CONFIGS.get(task.type, None)
     _should_verify = bool(
-        ctx.config.enable_verification
+        not _is_test  # test tasks already verified before quality gate
+        and ctx.config.enable_verification
         and _vg_type_config and _vg_type_config.requires_tool_calls
         and spawn_result.files_modified
     )
@@ -859,6 +958,8 @@ async def _handle_successful_completion(
         output=(spawn_result.output or "")[:1000],
         files_modified=spawn_result.files_modified,
         tool_calls=spawn_result.tool_calls,
+        tool_actions_summary=task_result.tool_actions_summary,
+        test_output=(task_result.test_output or "")[:500] if task_result.test_output else None,
         session_id=spawn_result.session_id,
         num_turns=spawn_result.num_turns,
         stderr=(spawn_result.stderr or "")[:500],
@@ -906,6 +1007,8 @@ async def _handle_failed_completion(
                 output=(spawn_result.output or "")[:1000],
                 files_modified=spawn_result.files_modified,
                 tool_calls=spawn_result.tool_calls,
+                tool_actions_summary=task_result.tool_actions_summary,
+                test_output=(task_result.test_output or "")[:500] if task_result.test_output else None,
                 session_id=spawn_result.session_id,
                 num_turns=spawn_result.num_turns,
                 stderr=(spawn_result.stderr or "")[:500],
@@ -1067,6 +1170,8 @@ async def _handle_failed_completion(
         output=(spawn_result.output or "")[:1000],
         files_modified=spawn_result.files_modified,
         tool_calls=spawn_result.tool_calls,
+        tool_actions_summary=task_result.tool_actions_summary,
+        test_output=(task_result.test_output or "")[:500] if task_result.test_output else None,
         session_id=spawn_result.session_id,
         num_turns=spawn_result.num_turns,
         stderr=(spawn_result.stderr or "")[:500],

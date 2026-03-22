@@ -109,7 +109,7 @@ BUILTIN_TASK_TYPE_CONFIGS: dict[str, TaskTypeConfig] = {
     "analysis": TaskTypeConfig(WorkerCapability.RESEARCH, False, "research", 300, 20_000, 80_000),
     "design": TaskTypeConfig(WorkerCapability.RESEARCH, False, "research", 300, 20_000, 80_000),
     "implement": TaskTypeConfig(WorkerCapability.CODE, True, "code", 300, 40_000, 150_000),
-    "test": TaskTypeConfig(WorkerCapability.TEST, True, "code", 240, 20_000, 60_000),
+    "test": TaskTypeConfig(WorkerCapability.TEST, True, "code", 360, 20_000, 60_000),
     "refactor": TaskTypeConfig(WorkerCapability.CODE, True, "code", 240, 30_000, 100_000),
     "review": TaskTypeConfig(WorkerCapability.REVIEW, False, "research", 240, 15_000, 50_000),
     "document": TaskTypeConfig(WorkerCapability.DOCUMENT, True, "document", 240, 15_000, 50_000),
@@ -244,6 +244,8 @@ class SwarmConfig:
     quality_threshold: int = 3  # 1-5
     quality_gate_model: str = ""
     enable_concrete_validation: bool = True
+    test_quality_threshold: int = 4  # Higher bar for test tasks
+    test_require_execution_evidence: bool = True  # Require actual test runner output
 
     # Retry & resilience
     worker_retries: int = 2
@@ -427,6 +429,8 @@ class SwarmTaskResult:
     files_modified: list[str] | None = None
     findings: list[str] | None = None
     tool_calls: int | None = None
+    test_output: str | None = None  # captured test stdout/stderr
+    tool_actions_summary: list[dict[str, Any]] | None = None  # per-tool-call details
     model: str = ""
     degraded: bool = False
     budget_utilization: dict[str, float] | None = None
@@ -756,6 +760,23 @@ class SwarmStatus:
 
 
 # =============================================================================
+# Tool Action (per-tool-call transparency record)
+# =============================================================================
+
+
+@dataclass
+class ToolAction:
+    """Record of a single tool invocation by a subagent."""
+
+    tool_name: str  # "Bash", "Write", "Edit", "Read", etc.
+    arguments_summary: str  # truncated (e.g., command for Bash)
+    output_summary: str  # truncated output/result
+    duration_ms: int = 0
+    exit_code: int | None = None  # for Bash tool calls
+    is_test_execution: bool = False  # True if this looks like a test run
+
+
+# =============================================================================
 # Spawn Result (from agent spawning)
 # =============================================================================
 
@@ -768,6 +789,8 @@ class SpawnResult:
     output: str = ""
     tool_calls: int = 0
     files_modified: list[str] | None = None
+    tool_actions: list[ToolAction] | None = None  # per-tool-call details
+    test_output: str | None = None  # combined stdout/stderr from test executions
     closure_report: dict[str, Any] | None = None
     metrics: dict[str, Any] | None = None  # {tokens, duration}
     stderr: str = ""

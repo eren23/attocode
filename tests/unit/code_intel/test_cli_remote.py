@@ -15,11 +15,19 @@ from attocode.code_intel.config import RemoteConfig, load_remote_config
 # ---------------------------------------------------------------------------
 
 
+def _mock_httpx_get(monkeypatch):
+    """Mock httpx.get to avoid real HTTP calls in tests."""
+    resp = MagicMock()
+    resp.status_code = 200
+    monkeypatch.setattr("httpx.get", lambda *a, **kw: resp)
+
+
 class TestCmdConnect:
     def test_writes_config(self, tmp_path, monkeypatch):
         monkeypatch.delenv("ATTOCODE_REMOTE_URL", raising=False)
         monkeypatch.delenv("ATTOCODE_REMOTE_TOKEN", raising=False)
         monkeypatch.delenv("ATTOCODE_REMOTE_REPO_ID", raising=False)
+        _mock_httpx_get(monkeypatch)
 
         _cmd_connect([
             "--server", "https://example.com/",
@@ -41,6 +49,7 @@ class TestCmdConnect:
         monkeypatch.delenv("ATTOCODE_REMOTE_URL", raising=False)
         monkeypatch.delenv("ATTOCODE_REMOTE_TOKEN", raising=False)
         monkeypatch.delenv("ATTOCODE_REMOTE_REPO_ID", raising=False)
+        _mock_httpx_get(monkeypatch)
 
         _cmd_connect([
             "--server", "https://example.com",
@@ -71,6 +80,7 @@ class TestCmdConnect:
         monkeypatch.delenv("ATTOCODE_REMOTE_URL", raising=False)
         monkeypatch.delenv("ATTOCODE_REMOTE_TOKEN", raising=False)
         monkeypatch.delenv("ATTOCODE_REMOTE_REPO_ID", raising=False)
+        _mock_httpx_get(monkeypatch)
 
         _cmd_connect([
             "--server", "https://example.com///",
@@ -86,6 +96,7 @@ class TestCmdConnect:
         monkeypatch.delenv("ATTOCODE_REMOTE_URL", raising=False)
         monkeypatch.delenv("ATTOCODE_REMOTE_TOKEN", raising=False)
         monkeypatch.delenv("ATTOCODE_REMOTE_REPO_ID", raising=False)
+        _mock_httpx_get(monkeypatch)
 
         _cmd_connect([
             "--server=https://eq.example.com",

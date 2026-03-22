@@ -6,6 +6,8 @@ from attocode.core.agent_state_machine import (
     InvalidTransitionError,
 )
 from attocode.core.completion import CompletionAnalysis, analyze_completion
+from attocode.core.autonomous import AutonomousPipeline, PipelineConfig, PipelinePhase
+from attocode.core.dual_model import DualModelConfig, DualModelWorkflow
 from attocode.core.loop import (
     BudgetPreflightResult,
     CompactionResult,
@@ -13,9 +15,12 @@ from attocode.core.loop import (
     apply_context_overflow_guard,
     check_iteration_budget,
     handle_auto_compaction,
+    handle_fresh_context_refresh,
     loop_result_to_agent_result,
     run_execution_loop,
 )
+from attocode.core.orchestrator import Orchestrator, OrchestratorPlan, Subtask
+from attocode.core.parallel_agents import ParallelAgentManager, ParallelConfig
 from attocode.core.response_handler import call_llm
 from attocode.core.subagent_spawner import (
     ClosureReport,
@@ -41,6 +46,13 @@ __all__ = [
     # Completion
     "CompletionAnalysis",
     "analyze_completion",
+    # Autonomous pipeline
+    "AutonomousPipeline",
+    "PipelineConfig",
+    "PipelinePhase",
+    # Dual model
+    "DualModelConfig",
+    "DualModelWorkflow",
     # Loop
     "BudgetPreflightResult",
     "CompactionResult",
@@ -48,8 +60,16 @@ __all__ = [
     "apply_context_overflow_guard",
     "check_iteration_budget",
     "handle_auto_compaction",
+    "handle_fresh_context_refresh",
     "loop_result_to_agent_result",
     "run_execution_loop",
+    # Orchestrator
+    "Orchestrator",
+    "OrchestratorPlan",
+    "Subtask",
+    # Parallel agents
+    "ParallelAgentManager",
+    "ParallelConfig",
     # Response
     "call_llm",
     # Subagent

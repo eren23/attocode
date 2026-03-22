@@ -373,6 +373,10 @@ def yaml_to_swarm_config(
         "circuitBreakerThreshold": ("circuit_breaker_threshold", int),
         "circuit_breaker_pause_ms": ("circuit_breaker_pause_ms", int),
         "circuitBreakerPauseMs": ("circuit_breaker_pause_ms", int),
+        "test_quality_threshold": ("test_quality_threshold", int),
+        "testQualityThreshold": ("test_quality_threshold", int),
+        "test_require_execution_evidence": ("test_require_execution_evidence", bool),
+        "testRequireExecutionEvidence": ("test_require_execution_evidence", bool),
     }
     for yaml_key, (config_key, coerce) in _direct_mappings.items():
         if yaml_key in raw and config_key not in cfg:

@@ -488,7 +488,9 @@ class TestArchivePreviousRun:
         assert control.exists()
         assert control.read_text(encoding="utf-8") == ""
         assert events.exists()
-        assert events.read_text(encoding="utf-8") == ""
+        # Events file may contain a "Clean slate" info event emitted after archive
+        events_text = events.read_text(encoding="utf-8")
+        assert events_text == "" or "Clean slate" in events_text
 
     def test_archive_preserves_agents_and_tasks(self, orch: SwarmOrchestrator) -> None:
         """Old agent prompts/traces and task JSONs end up in history."""

@@ -946,7 +946,7 @@ class TestSwarmConfig:
         assert DEFAULT_SWARM_CONFIG.hollow_termination_ratio == 0.55
         assert DEFAULT_SWARM_CONFIG.hollow_termination_min_dispatches == 8
         assert DEFAULT_SWARM_CONFIG.hollow_output_threshold == 120
-        assert DEFAULT_SWARM_CONFIG.enable_hollow_termination is False
+        assert DEFAULT_SWARM_CONFIG.enable_hollow_termination is True
 
     def test_feature_defaults(self) -> None:
         assert DEFAULT_SWARM_CONFIG.enable_planning is True
@@ -1761,6 +1761,26 @@ class TestYamlToSwarmConfig:
     def test_empty_raw(self) -> None:
         cfg = yaml_to_swarm_config({}, "default-model")
         assert cfg["orchestrator_model"] == "default-model"
+
+    def test_test_quality_threshold_snake(self) -> None:
+        raw = {"test_quality_threshold": 5}
+        cfg = yaml_to_swarm_config(raw, "orch")
+        assert cfg["test_quality_threshold"] == 5
+
+    def test_test_quality_threshold_camel(self) -> None:
+        raw = {"testQualityThreshold": 3}
+        cfg = yaml_to_swarm_config(raw, "orch")
+        assert cfg["test_quality_threshold"] == 3
+
+    def test_test_require_execution_evidence_snake(self) -> None:
+        raw = {"test_require_execution_evidence": False}
+        cfg = yaml_to_swarm_config(raw, "orch")
+        assert cfg["test_require_execution_evidence"] is False
+
+    def test_test_require_execution_evidence_camel(self) -> None:
+        raw = {"testRequireExecutionEvidence": True}
+        cfg = yaml_to_swarm_config(raw, "orch")
+        assert cfg["test_require_execution_evidence"] is True
 
 
 # ============================================================================

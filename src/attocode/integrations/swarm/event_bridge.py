@@ -86,6 +86,26 @@ class SwarmEventBridge:
         self._total_dispatches: int = 0
         self._total_hollows: int = 0
 
+        # Circuit breaker state
+        self._circuit_breaker_open: bool = False
+        self._circuit_breaker_pause_until: float | None = None
+        self._rate_limit_count: int = 0
+        # Pause state
+        self._paused: bool = False
+        self._pause_reason: str | None = None
+        # Wave tracking
+        self._waves: list[dict[str, Any]] = []
+        # Verification tracking (per-task)
+        self._verification_results: list[dict[str, Any]] = []
+        # File conflict tracking
+        self._file_conflicts: list[dict[str, Any]] = []
+        # Batched flush for events file
+        self._events_unflushed: int = 0
+        self._last_flush: float = 0.0
+        # Batched task detail writes
+        self._dirty_tasks: dict[str, dict[str, Any]] = {}
+        self._task_write_scheduled: bool = False
+
         # TUI live callback (set via set_tui_callback)
         self._tui_callback: Callable[[dict[str, Any]], None] | None = None
 
@@ -186,6 +206,10 @@ class SwarmEventBridge:
         except Exception:
             logger.debug("Failed to write final state on close", exc_info=True)
 
+        # Flush pending task details
+        if self._dirty_tasks:
+            self._flush_dirty_tasks()
+
         # Close events file
         if self._events_file is not None:
             try:
@@ -253,6 +277,35 @@ class SwarmEventBridge:
             self._on_intervention_needed(data)
         elif event_type == "swarm.compilation.failed":
             self._append_timeline(event)
+        elif event_type == "swarm.circuit.open":
+            self._on_circuit_open(data)
+            self._append_timeline(event)
+        elif event_type == "swarm.circuit.closed":
+            self._on_circuit_closed(data)
+            self._append_timeline(event)
+        elif event_type == "swarm.paused":
+            self._on_paused(data)
+            self._append_timeline(event)
+        elif event_type == "swarm.resumed":
+            self._on_resumed(data)
+            self._append_timeline(event)
+        elif event_type == "swarm.wave.start":
+            self._on_wave_start(data)
+            self._append_timeline(event)
+        elif event_type in ("swarm.wave.complete", "swarm.wave.allFailed"):
+            self._on_wave_complete(data)
+            self._append_timeline(event)
+        elif event_type == "swarm.verification.failed":
+            self._on_verification_failed(data)
+            self._append_timeline(event)
+        elif event_type == "swarm.file_conflict":
+            self._on_file_conflict(data)
+            self._append_timeline(event)
+        elif event_type in (
+            "swarm.verification.skipped", "swarm.task.decomposed",
+            "swarm.replan", "swarm.rescue.final", "swarm.task.stale_recovered",
+        ):
+            self._append_timeline(event)
         else:
             # Generic timeline entry for all other events
             self._append_timeline(event)
@@ -294,6 +347,17 @@ class SwarmEventBridge:
         self._hollow_streak = 0
         self._total_dispatches = 0
         self._total_hollows = 0
+        self._circuit_breaker_open = False
+        self._circuit_breaker_pause_until = None
+        self._rate_limit_count = 0
+        self._paused = False
+        self._pause_reason = None
+        self._waves.clear()
+        self._verification_results.clear()
+        self._file_conflicts.clear()
+        self._events_unflushed = 0
+        self._dirty_tasks.clear()
+        self._task_write_scheduled = False
         self._seq = 1
 
         self._last_status = SwarmStatus(phase=SwarmPhase.DECOMPOSING)
@@ -338,7 +402,7 @@ class SwarmEventBridge:
             task.status = SwarmTaskStatus.DISPATCHED
             task.dispatched_at = time.time()
             task.assigned_model = data.get("model")
-            self._write_task_detail(task_id, data)
+            self._mark_task_dirty(task_id, data)
 
         if self._last_status:
             self._last_status.phase = SwarmPhase.EXECUTING
@@ -363,7 +427,7 @@ class SwarmEventBridge:
         if task:
             task.status = SwarmTaskStatus.COMPLETED
             task.degraded = data.get("degraded", False)
-            self._write_task_detail(task_id, data)
+            self._mark_task_dirty(task_id, data)
 
         if self._last_status:
             self._last_status.active_workers = [
@@ -383,7 +447,7 @@ class SwarmEventBridge:
         if task:
             task.status = SwarmTaskStatus.FAILED
             task.failure_mode = data.get("failure_mode")
-            self._write_task_detail(task_id, data)
+            self._mark_task_dirty(task_id, data)
 
         if self._last_status:
             self._last_status.active_workers = [
@@ -409,7 +473,7 @@ class SwarmEventBridge:
         task = self._tasks.get(task_id)
         if task:
             task.status = SwarmTaskStatus.SKIPPED
-            self._write_task_detail(task_id, data)
+            self._mark_task_dirty(task_id, data)
 
         if self._last_status:
             self._update_queue_stats()
@@ -527,6 +591,11 @@ class SwarmEventBridge:
                 "passed": data.get("passed", False),
                 "artifact_auto_fail": data.get("artifact_auto_fail", False),
             }
+        if len(self._quality_results) > 100:
+            # Evict oldest entries
+            to_remove = sorted(self._quality_results)[:20]
+            for k in to_remove:
+                del self._quality_results[k]
         if not data.get("passed", True):
             self._quality_rejections += 1
 
@@ -556,6 +625,73 @@ class SwarmEventBridge:
             type="swarm.task.intervention_needed",
             data=data,
         ))
+
+    def _on_circuit_open(self, data: dict[str, Any]) -> None:
+        """Track circuit breaker opening (rate limit backoff)."""
+        self._circuit_breaker_open = True
+        pause_ms = data.get("pause_ms", 0)
+        self._circuit_breaker_pause_until = time.time() + pause_ms / 1000
+        self._rate_limit_count = data.get("rate_limit_count", self._rate_limit_count + 1)
+
+    def _on_circuit_closed(self, data: dict[str, Any]) -> None:
+        """Track circuit breaker closing (rate limit resolved)."""
+        self._circuit_breaker_open = False
+        self._circuit_breaker_pause_until = None
+
+    def _on_paused(self, data: dict[str, Any]) -> None:
+        """Track swarm pause state."""
+        self._paused = True
+        self._pause_reason = data.get("reason", "unknown")
+
+    def _on_resumed(self, data: dict[str, Any]) -> None:
+        """Track swarm resume state."""
+        self._paused = False
+        self._pause_reason = None
+
+    def _on_wave_start(self, data: dict[str, Any]) -> None:
+        """Track wave lifecycle start."""
+        wave_num = data.get("wave", len(self._waves))
+        self._waves.append({
+            "wave": wave_num,
+            "started_at": time.time(),
+            "completed_at": None,
+            "task_count": data.get("task_count", 0),
+            "passed": 0,
+            "failed": 0,
+        })
+        if self._last_status:
+            self._last_status.current_wave = wave_num
+
+    def _on_wave_complete(self, data: dict[str, Any]) -> None:
+        """Track wave lifecycle completion."""
+        wave_num = data.get("wave", len(self._waves) - 1)
+        for w in reversed(self._waves):
+            if w["wave"] == wave_num:
+                w["completed_at"] = time.time()
+                w["passed"] = data.get("passed", w["passed"])
+                w["failed"] = data.get("failed", w["failed"])
+                break
+
+    def _on_verification_failed(self, data: dict[str, Any]) -> None:
+        """Track per-task verification failures."""
+        self._verification_results.append({
+            "timestamp": time.time(),
+            "task_id": data.get("task_id", ""),
+            "passed": False,
+            "checks": data.get("checks", []),
+        })
+        if len(self._verification_results) > 100:
+            self._verification_results = self._verification_results[-100:]
+
+    def _on_file_conflict(self, data: dict[str, Any]) -> None:
+        """Track file conflicts between workers."""
+        self._file_conflicts.append({
+            "timestamp": time.time(),
+            "task_id": data.get("task_id", ""),
+            "files": data.get("conflicting_files", []),
+        })
+        if len(self._file_conflicts) > 50:
+            self._file_conflicts = self._file_conflicts[-50:]
 
     # ------------------------------------------------------------------
     # State Writing (Rate-Limited)
@@ -648,6 +784,10 @@ class SwarmEventBridge:
                 tasks_dict[tid]["duration_ms"] = task.result.duration_ms
                 tasks_dict[tid]["tool_calls"] = task.result.tool_calls
                 tasks_dict[tid]["tokens_used"] = task.result.tokens_used
+                if getattr(task.result, "tool_actions_summary", None):
+                    tasks_dict[tid]["tool_actions"] = task.result.tool_actions_summary
+                if getattr(task.result, "test_output", None):
+                    tasks_dict[tid]["test_output"] = (task.result.test_output or "")[:500]
 
         status_dict: dict[str, Any] = {}
         if self._last_status:
@@ -675,6 +815,8 @@ class SwarmEventBridge:
                     "cost": self._last_status.orchestrator.cost,
                     "calls": self._last_status.orchestrator.calls,
                 },
+                "paused": self._paused,
+                "pause_reason": self._pause_reason,
             }
 
         return {
@@ -722,6 +864,16 @@ class SwarmEventBridge:
             },
             "wave_reviews": self._wave_reviews[-50:],
             "quality_results": self._quality_results,
+            "circuit_breaker": {
+                "open": self._circuit_breaker_open,
+                "pause_until": self._circuit_breaker_pause_until,
+                "rate_limit_count": self._rate_limit_count,
+            },
+            "paused": self._paused,
+            "pause_reason": self._pause_reason,
+            "waves": self._waves[-20:],
+            "verification_results": self._verification_results[-50:],
+            "file_conflicts": self._file_conflicts[-50:],
         }
 
     # ------------------------------------------------------------------
@@ -750,9 +902,27 @@ class SwarmEventBridge:
                 detail["degraded"] = task.degraded
 
             with open(path, "w", encoding="utf-8") as f:
-                json.dump(detail, f, default=_json_default, indent=2)
+                json.dump(detail, f, default=_json_default, indent=None)
         except Exception:
             logger.debug("Failed to write task detail for %s", task_id, exc_info=True)
+
+    def _mark_task_dirty(self, task_id: str, data: dict[str, Any]) -> None:
+        """Mark a task as needing a detail file write (batched)."""
+        self._dirty_tasks[task_id] = data
+        if not self._task_write_scheduled:
+            self._task_write_scheduled = True
+            try:
+                loop = asyncio.get_running_loop()
+                loop.call_later(0.3, self._flush_dirty_tasks)
+            except RuntimeError:
+                self._flush_dirty_tasks()
+
+    def _flush_dirty_tasks(self) -> None:
+        """Write all pending task detail files."""
+        self._task_write_scheduled = False
+        for task_id, data in self._dirty_tasks.items():
+            self._write_task_detail(task_id, data)
+        self._dirty_tasks.clear()
 
     # ------------------------------------------------------------------
     # Timeline
@@ -769,9 +939,14 @@ class SwarmEventBridge:
         for key in (
             "task_id", "wave", "model", "reason", "phase", "message",
             "score", "feedback", "passed", "success", "duration_ms",
-            "tool_calls", "from_model", "to_model", "failure_mode",
+            "tool_calls", "tool_actions_summary", "test_output",
+            "from_model", "to_model", "failure_mode",
             "attempt", "output", "files_modified", "session_id",
             "num_turns", "stderr", "tokens_used", "cost_used",
+            "pause_ms", "rate_limit_count", "subtask_count",
+            "new_task_count", "rescued_count", "checks",
+            "conflicting_files", "assessment", "elapsed_s",
+            "strategy", "task_count",
         ):
             if key in event.data:
                 entry[key] = event.data[key]
@@ -821,7 +996,6 @@ class SwarmEventBridge:
         """Append a single event as a JSON line to events.jsonl."""
         if self._events_file is None:
             return
-
         try:
             line = json.dumps(
                 {
@@ -833,7 +1007,12 @@ class SwarmEventBridge:
                 default=_json_default,
             )
             self._events_file.write(line + "\n")
-            self._events_file.flush()
+            self._events_unflushed += 1
+            now = time.monotonic()
+            if self._events_unflushed >= 20 or (now - self._last_flush) > 0.5:
+                self._events_file.flush()
+                self._events_unflushed = 0
+                self._last_flush = now
         except Exception:
             logger.debug("Failed to append event to JSONL", exc_info=True)
 

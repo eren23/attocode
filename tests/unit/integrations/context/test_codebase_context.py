@@ -623,15 +623,15 @@ class TestDynamicCap:
         cap = _compute_dynamic_cap(files, 2000)
         assert cap == 2000  # max(source_count, configured_max)
 
-    def test_large_repo_caps_at_5000(self) -> None:
+    def test_large_repo_caps_at_10000(self) -> None:
         files = self._make_files(8000, 1000)
         cap = _compute_dynamic_cap(files, 2000)
-        assert cap == 5000
+        assert cap == 10000
 
-    def test_huge_repo_caps_at_10000(self) -> None:
+    def test_huge_repo_caps_at_20000(self) -> None:
         files = self._make_files(25000, 5000)
         cap = _compute_dynamic_cap(files, 2000)
-        assert cap == 10000
+        assert cap == 20000
 
 
 # --- Rust import resolver tests ---

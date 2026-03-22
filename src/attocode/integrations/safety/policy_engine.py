@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import fnmatch
 import json
+import os
 import re
 from dataclasses import dataclass, field
 from enum import StrEnum
@@ -50,6 +51,26 @@ class PolicyRule:
     decision: PolicyDecision
     danger_level: DangerLevel = DangerLevel.SAFE
     condition: str = ""
+
+
+# Directories that are always read-only (no writes, edits, deletes, renames)
+PROTECTED_PATHS = frozenset({".git", ".attocode", ".env"})
+
+# Write operations that should be checked against protected paths
+_WRITE_OPERATIONS = frozenset({
+    "write_file", "edit_file", "create_file", "delete_file", "rename_file",
+})
+
+
+def is_protected_path(file_path: str) -> bool:
+    """Check if a file path falls under a protected directory.
+
+    Uses path component matching — any component of the path matching
+    a protected name triggers protection.  This catches both
+    ``.git/config`` and ``subdir/.git/hooks/pre-commit``.
+    """
+    parts = os.path.normpath(file_path).replace("\\", "/").split("/")
+    return any(part in PROTECTED_PATHS for part in parts)
 
 
 # Default policy rules
@@ -123,6 +144,18 @@ class PolicyEngine:
         Returns:
             PolicyResult with the decision.
         """
+        # Protected-path enforcement: write operations on .git / .attocode / .env
+        # are always denied regardless of grants or approval mode.
+        if tool_name in _WRITE_OPERATIONS and arguments:
+            file_path = arguments.get("path") or arguments.get("file_path", "")
+            if file_path and is_protected_path(file_path):
+                return PolicyResult(
+                    decision=PolicyDecision.DENY,
+                    danger_level=DangerLevel.CRITICAL,
+                    reason=f"Write to protected path '{file_path}' is not allowed",
+                    tool_name=tool_name,
+                )
+
         # Check session-approved commands (from "Always Allow")
         if self._is_granted(tool_name, arguments):
             return PolicyResult(

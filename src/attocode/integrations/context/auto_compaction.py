@@ -27,6 +27,7 @@ class CompactionStatus(StrEnum):
     """Status of compaction check."""
 
     OK = "ok"
+    DUMB_ZONE = "dumb_zone"  # 40-60% fill — quality degradation likely
     WARNING = "warning"
     NEEDS_COMPACTION = "needs_compaction"
     NEEDS_APPROVAL = "needs_approval"
@@ -94,6 +95,9 @@ class AutoCompactionManager:
     max_context_tokens: int = 200_000
     warning_threshold: float = 0.7
     compaction_threshold: float = 0.8
+    dumb_zone_start: float = 0.4  # Quality begins degrading here
+    dumb_zone_end: float = 0.6  # Significant degradation by here
+    fresh_context_enabled: bool = True  # Enable fresh context protocol
     strategy: CompactionStrategy = CompactionStrategy.SUMMARIZE
     require_approval: bool = False
     min_messages_to_keep: int = 4  # Always keep at least this many recent messages
@@ -101,6 +105,9 @@ class AutoCompactionManager:
     _compacted_messages: list[Message] | None = field(default=None, repr=False)
     _stats: CompactionStats = field(default_factory=CompactionStats, repr=False)
     _last_check_tokens: int = field(default=0, repr=False)
+    _dumb_zone_entered: bool = field(default=False, repr=False)
+    _dumb_zone_enter_time: float = field(default=0.0, repr=False)
+    _fresh_context_count: int = field(default=0, repr=False)
 
     @property
     def stats(self) -> CompactionStats:
@@ -108,6 +115,12 @@ class AutoCompactionManager:
 
     def check(self, messages: list[Message | Any]) -> CompactionCheckResult:
         """Check if compaction is needed.
+
+        Detects three zones:
+        - OK: < 40% fill — peak quality
+        - DUMB_ZONE: 40-60% fill — quality begins degrading
+        - WARNING: 60-80% fill — approaching limit
+        - NEEDS_COMPACTION: > 80% fill — compaction required
 
         Args:
             messages: Current conversation messages.
@@ -144,6 +157,25 @@ class AutoCompactionManager:
                 estimated_tokens=total_tokens,
                 messages_count=len(messages),
             )
+
+        # Dumb zone detection: quality degrades between 40-60% fill
+        if self.fresh_context_enabled and fraction >= self.dumb_zone_start:
+            if not self._dumb_zone_entered:
+                self._dumb_zone_entered = True
+                self._dumb_zone_enter_time = time.monotonic()
+            return CompactionCheckResult(
+                status=CompactionStatus.DUMB_ZONE,
+                usage_fraction=fraction,
+                message=(
+                    f"Context at {fraction:.0%} — entering dumb zone. "
+                    "Quality may degrade. Consider fresh context refresh."
+                ),
+                estimated_tokens=total_tokens,
+                messages_count=len(messages),
+            )
+
+        # Reset dumb zone tracking if we're below threshold
+        self._dumb_zone_entered = False
 
         return CompactionCheckResult(
             status=CompactionStatus.OK,
@@ -264,6 +296,56 @@ class AutoCompactionManager:
 
         self._stats.record(len(messages), len(result), 0)
         return result
+
+    def create_handoff_summary_prompt(self) -> str:
+        """Create a prompt for generating a fresh context handoff summary.
+
+        Used when refreshing context at the dumb zone boundary.
+        More structured than compaction summary — designed to
+        transfer maximum information to a fresh context.
+        """
+        return (
+            "Context is being refreshed for optimal quality. "
+            "Please provide a structured handoff summary:\n\n"
+            "## Current Task\n"
+            "What is the current goal and where are we in achieving it?\n\n"
+            "## Completed Work\n"
+            "List specific files created/modified with brief descriptions.\n\n"
+            "## Pending Work\n"
+            "What remains to be done? List specific next steps.\n\n"
+            "## Key Decisions\n"
+            "Important architectural or design decisions made.\n\n"
+            "## Critical Context\n"
+            "Any information that would be lost without this summary "
+            "(error patterns found, API quirks discovered, etc.).\n\n"
+            "Be specific — include file paths, function names, and exact values."
+        )
+
+    def should_refresh_context(self, messages: list[Message | Any]) -> bool:
+        """Check if a fresh context refresh is recommended.
+
+        Returns True when the context is in the dumb zone and
+        the fresh context protocol is enabled.
+        """
+        if not self.fresh_context_enabled:
+            return False
+        check = self.check(messages)
+        return check.status == CompactionStatus.DUMB_ZONE and check.usage_fraction >= self.dumb_zone_end
+
+    @property
+    def in_dumb_zone(self) -> bool:
+        """Whether we're currently in the dumb zone."""
+        return self._dumb_zone_entered
+
+    @property
+    def fresh_context_count(self) -> int:
+        """Number of fresh context refreshes performed."""
+        return self._fresh_context_count
+
+    def record_fresh_context(self) -> None:
+        """Record that a fresh context refresh was performed."""
+        self._fresh_context_count += 1
+        self._dumb_zone_entered = False
 
     @property
     def compaction_pending(self) -> bool:

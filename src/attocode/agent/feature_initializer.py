@@ -57,6 +57,9 @@ class FeatureConfig:
     enable_thread_manager: bool = True
     enable_semantic_search_reindex: bool = True  # Auto-reindex on file change
     enable_diverse_serialization: bool = False  # Off by default
+    enable_project_state: bool = True
+    enable_dynamic_tools: bool = True
+    enable_trajectory: bool = True
 
     # Tuning
     compaction_max_tokens: int = 200_000
@@ -586,6 +589,52 @@ async def initialize_features(
         except Exception:
             logger.debug("feature_init_failed", extra={"feature": "semantic_reindex_bg"}, exc_info=True)
             results["semantic_reindex_bg"] = False
+
+    # 34. Project state (file-driven)
+    if cfg.enable_project_state and not getattr(ctx, "project_state", None):
+        try:
+            from pathlib import Path
+
+            from attocode.integrations.persistence.project_state import ProjectStateManager
+
+            pr = project_root or getattr(ctx, "project_root", "")
+            if pr:
+                ctx.project_state = ProjectStateManager(Path(pr))
+                ctx.project_state.load()
+                results["project_state"] = True
+            else:
+                results["project_state"] = False
+        except Exception:
+            logger.warning("feature_init_failed", extra={"feature": "project_state"}, exc_info=True)
+            results["project_state"] = False
+
+    # 35. Dynamic tool registry
+    if cfg.enable_dynamic_tools and not getattr(ctx, "dynamic_tools", None):
+        try:
+            from pathlib import Path
+
+            from attocode.tools.dynamic import DynamicToolRegistry
+
+            pr = project_root or getattr(ctx, "project_root", "")
+            persist_dir = Path(pr) / ".attocode" / "tools" if pr else None
+            ctx.dynamic_tools = DynamicToolRegistry(persist_dir=persist_dir)
+            if persist_dir:
+                ctx.dynamic_tools.load_persisted()
+            results["dynamic_tools"] = True
+        except Exception:
+            logger.warning("feature_init_failed", extra={"feature": "dynamic_tools"}, exc_info=True)
+            results["dynamic_tools"] = False
+
+    # 36. Trajectory analysis
+    if cfg.enable_trajectory and not getattr(ctx, "trajectory_tracker", None):
+        try:
+            from attocode.integrations.quality.trajectory import TrajectoryTracker
+
+            ctx.trajectory_tracker = TrajectoryTracker()
+            results["trajectory"] = True
+        except Exception:
+            logger.warning("feature_init_failed", extra={"feature": "trajectory"}, exc_info=True)
+            results["trajectory"] = False
 
     # Wire cross-references between features
     wire_cross_references(ctx, results)

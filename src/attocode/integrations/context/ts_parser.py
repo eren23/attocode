@@ -439,6 +439,21 @@ def _extract_import_module(node, source_bytes: bytes, language: str) -> str:
             return text[7:].strip().strip("'\"`;")
     elif language == "go":
         # import "fmt" or import ( "fmt" "os" )
+        # Tree-sitter Go grammar: import_declaration → import_spec → path
+        # or import_declaration → import_spec_list → import_spec* → path
+        for child in node.children:
+            if child.type == "import_spec":
+                path_node = child.child_by_field_name("path")
+                if path_node:
+                    return _node_text(path_node, source_bytes).strip('"')
+            elif child.type == "import_spec_list":
+                # Grouped imports: return first one
+                for spec in child.children:
+                    if spec.type == "import_spec":
+                        path_node = spec.child_by_field_name("path")
+                        if path_node:
+                            return _node_text(path_node, source_bytes).strip('"')
+        # Fallback: try direct path field (some grammar versions)
         mod_node = node.child_by_field_name("path")
         if mod_node:
             return _node_text(mod_node, source_bytes).strip('"')
@@ -870,13 +885,20 @@ def _extract_data_symbols(
     """Extract structural symbols from data/config files."""
     if language == "yaml":
         # Extract top-level mapping keys
-        for child in root.children:
-            if child.type == "block_mapping_pair":
-                key_node = child.child_by_field_name("key")
+        # Tree-sitter YAML: root → document → block_node → block_mapping → block_mapping_pair
+        def _find_yaml_pairs(node, depth: int = 0):
+            if depth > 5:
+                return
+            if node.type == "block_mapping_pair":
+                key_node = node.child_by_field_name("key")
                 if key_node:
                     key = _node_text(key_node, source_bytes).strip()
                     if key:
                         top_level_vars.append(key)
+                return  # don't recurse into values
+            for child in node.children:
+                _find_yaml_pairs(child, depth + 1)
+        _find_yaml_pairs(root)
     elif language == "toml":
         # Extract table names and top-level keys
         for child in root.children:

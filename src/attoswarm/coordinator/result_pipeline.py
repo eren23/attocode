@@ -39,6 +39,14 @@ class PipelineHandlers(Protocol):
     async def pipeline_run_projection(self) -> None: ...
     async def pipeline_update_dag(self, result: TaskResult, success: bool) -> int: ...
 
+    async def pipeline_git_commit(self, result: TaskResult) -> str | None:
+        """Create an atomic git commit for a completed task.
+
+        Returns the commit hash on success, or None if nothing was committed.
+        Default implementation is a no-op.
+        """
+        return None
+
 
 @dataclass(slots=True)
 class PipelineResult:
@@ -47,6 +55,8 @@ class PipelineResult:
     completed: int = 0
     failed: int = 0
     errors: list[str] = field(default_factory=list)
+    commits: dict[str, str] = field(default_factory=dict)
+    """Mapping of task_id → commit hash for tasks that were auto-committed."""
 
 
 class ResultPipeline:
@@ -92,6 +102,7 @@ class ResultPipeline:
         semaphore = asyncio.Semaphore(self._max_concurrent)
         verification_results: dict[str, bool] = {}
         syntax_results: dict[str, bool] = {}
+        commit_results: dict[str, str] = {}
 
         async def _process_one(result: TaskResult) -> None:
             async with semaphore:
@@ -139,11 +150,26 @@ class ResultPipeline:
 
                     tasks.append(asyncio.create_task(_diff()))
 
+                # Atomic git commit (only for successful results with modified files)
+                if result.success and result.files_modified:
+                    async def _git_commit() -> None:
+                        try:
+                            commit_hash = await handlers.pipeline_git_commit(result)
+                            if commit_hash:
+                                commit_results[result.task_id] = commit_hash
+                        except Exception as exc:
+                            logger.debug("Git commit failed for %s: %s", result.task_id, exc)
+
+                    tasks.append(asyncio.create_task(_git_commit()))
+
                 if tasks:
                     await asyncio.gather(*tasks, return_exceptions=True)
 
         fan_out_tasks = [_process_one(r) for r in results]
         await asyncio.gather(*fan_out_tasks, return_exceptions=True)
+
+        # Collect commit results from fan-out
+        pipeline_result.commits.update(commit_results)
 
         # Stage 3: Sequential DAG updates
         for result in results:

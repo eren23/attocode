@@ -5,7 +5,7 @@ Provides ~55 slash commands organized into groups:
 - Session: /sessions, /load, /resume, /checkpoint, /checkpoints, /reset, /handoff
 - Mode: /mode, /plan, /show-plan, /approve, /reject
 - Agent: /agents, /spawn, /find, /suggest, /auto
-- Thread: /fork, /threads, /switch, /rollback, /restore
+- Thread: /fork, /threads, /switch, /tree, /rollback, /restore
 - Goals: /goals
 - MCP: /mcp
 - Skills: /skills
@@ -188,9 +188,15 @@ async def handle_command(
     if cmd == "/handoff":
         return _handoff_command(agent, arg)
 
+    if cmd == "/export":
+        return _export_command(agent, arg)
+
     # --- Mode commands ---
     if cmd == "/mode":
         return _mode_command(agent, arg)
+
+    if cmd in ("/code", "/architect", "/ask", "/orchestrate"):
+        return _mode_command(agent, cmd[1:])
 
     if cmd == "/plan":
         return _plan_command(agent, arg, app=app)
@@ -229,6 +235,9 @@ async def handle_command(
 
     if cmd == "/switch":
         return _switch_command(agent, arg)
+
+    if cmd == "/tree":
+        return _tree_command(agent)
 
     if cmd == "/rollback":
         return _rollback_command(agent, arg)
@@ -323,6 +332,28 @@ async def handle_command(
     if cmd == "/setup":
         return await _setup_command(agent, app)
 
+    # --- New feature commands ---
+    if cmd == "/define-tool":
+        return _define_tool_command(agent, arg)
+
+    if cmd == "/scaffold-mcp":
+        return _scaffold_mcp_command(agent, arg)
+
+    if cmd == "/parallel":
+        return _parallel_command(agent, arg)
+
+    if cmd == "/bugfind":
+        return _bugfind_command(agent, arg)
+
+    if cmd in ("/orchestrate", "/orch"):
+        return _orchestrate_command(agent, arg)
+
+    if cmd == "/watch":
+        return _watch_command(agent, arg)
+
+    if cmd == "/project-state":
+        return _project_state_command(agent, arg)
+
     return CommandResult(output=f"Unknown command: {cmd}. Type /help for available commands.")
 
 
@@ -353,9 +384,14 @@ def _help_text() -> str:
         "  /checkpoints [id] List checkpoints for a session\n"
         "  /reset            Reset conversation (clear messages & metrics)\n"
         "  /handoff [fmt]    Export session handoff summary (markdown)\n"
+        "  /export [html|md] Export session as HTML or markdown file\n"
         "\n"
         "Mode:\n"
-        "  /mode [name]      Show or switch mode (build/plan/review/debug)\n"
+        "  /mode [name]      Show or switch mode (build/plan/review/debug/code/architect/ask/orchestrate)\n"
+        "  /code             Switch to code mode (full access, implementation focus)\n"
+        "  /architect        Switch to architect mode (read + markdown write only)\n"
+        "  /ask              Switch to ask mode (read-only, Q&A focus)\n"
+        "  /orchestrate      Switch to orchestrate mode (full access, delegation focus)\n"
         "  /plan [desc]      Enter plan mode (or show current plan)\n"
         "  /show-plan        Show detailed plan with pending diffs\n"
         "  /approve [n|all]  Approve proposed change(s)\n"
@@ -372,6 +408,7 @@ def _help_text() -> str:
         "  /fork [label]     Fork conversation into a new thread\n"
         "  /threads          List all conversation threads\n"
         "  /switch <id>      Switch to a different thread\n"
+        "  /tree             Show thread/fork tree visualization\n"
         "  /rollback [n]     Remove last N messages (default: 1 turn)\n"
         "  /restore <id>     Restore from a checkpoint\n"
         "\n"
@@ -381,6 +418,8 @@ def _help_text() -> str:
         "Tools:\n"
         "  /mcp [subcmd]     MCP management (list/tools/connect/disconnect/search/stats)\n"
         "  /skills [subcmd]  Skill management (list/info/new/edit/enable/disable/reload)\n"
+        "  /define-tool      List dynamic tools (or describe one to create)\n"
+        "  /scaffold-mcp <n> Scaffold a local MCP server\n"
         "  /undo [path]      Undo last file change (or specific file)\n"
         "  /diff             Show recent file changes\n"
         "\n"
@@ -421,6 +460,12 @@ def _help_text() -> str:
         "  /tui              Show TUI feature list\n"
         "  /dashboard        Open the trace analysis dashboard (Ctrl+D)\n"
         "  /swarm-monitor    Open multi-run swarm monitor (Ctrl+M)\n"
+        "\n"
+        "Analysis:\n"
+        "  /bugfind [branch] Scan diff for potential bugs (default: main)\n"
+        "  /watch            Scan for inline AI trigger comments (# AI: ...)\n"
+        "  /parallel t1|t2   Spawn parallel agents in isolated worktrees\n"
+        "  /project-state    Show or update file-driven project state\n"
         "\n"
         "Config:\n"
         "  /init             Initialize .attocode/ directory\n"
@@ -517,17 +562,70 @@ def _model_command(agent: Any, arg: str) -> CommandResult:
     if agent is None:
         return CommandResult(output="No agent running.")
 
-    if not arg:
-        model = "unknown"
-        if agent and hasattr(agent, "config"):
-            model = agent.config.model or "default"
-        return CommandResult(output=f"Model: {model}")
+    current_model = "unknown"
+    if agent and hasattr(agent, "config"):
+        current_model = agent.config.model or "default"
 
-    # Switch model
-    if hasattr(agent, "_config"):
-        agent._config.model = arg
-        return CommandResult(output=f"Switched model to: {arg}")
-    return CommandResult(output="Cannot switch model on this agent.")
+    if not arg:
+        # Show current model + list available
+        from attocode.providers.catalog import format_model_table, get_catalog
+        catalog = get_catalog()
+        provider = agent.config.provider if hasattr(agent, "config") else None
+        entries = catalog.list_models(provider=provider, limit=15)
+        table = format_model_table(entries, current_model=current_model)
+        return CommandResult(
+            output=f"Current model: {current_model}\n\n"
+            f"Available models ({catalog.count} total, showing {provider or 'all'}):\n{table}\n\n"
+            "Use /model <query> to search, /model set <model_id> to switch."
+        )
+
+    # Handle subcommands
+    parts = arg.split(maxsplit=1)
+    subcmd = parts[0].lower()
+
+    if subcmd == "set" and len(parts) > 1:
+        # Direct model switch
+        new_model = parts[1].strip()
+        if hasattr(agent, "_config"):
+            agent._config.model = new_model
+            return CommandResult(output=f"Switched model to: {new_model}")
+        return CommandResult(output="Cannot switch model on this agent.")
+
+    if subcmd == "list":
+        # List all models (optionally filtered by provider)
+        from attocode.providers.catalog import format_model_table, get_catalog
+        catalog = get_catalog()
+        provider_filter = parts[1].strip() if len(parts) > 1 else None
+        entries = catalog.list_models(provider=provider_filter, limit=50)
+        table = format_model_table(entries, current_model=current_model)
+        return CommandResult(
+            output=f"Models ({len(entries)} shown):\n{table}"
+        )
+
+    if subcmd == "refresh":
+        from attocode.providers.catalog import get_catalog
+        catalog = get_catalog()
+        catalog.refresh()
+        return CommandResult(output=f"Model catalog refreshed: {catalog.count} models loaded.")
+
+    # Fuzzy search — treat entire arg as search query
+    from attocode.providers.catalog import format_model_table, get_catalog
+    catalog = get_catalog()
+    results = catalog.search(arg, limit=10)
+    if not results:
+        return CommandResult(output=f"No models matching '{arg}'. Try /model list to see all.")
+
+    table = format_model_table(results, show_score=True, current_model=current_model)
+
+    # If there's a strong match, offer to switch
+    top_entry, top_score = results[0]
+    hint = ""
+    if top_score > 0.8:
+        hint = f"\nTop match: {top_entry.model_id} — use /model set {top_entry.model_id} to switch."
+
+    return CommandResult(
+        output=f"Search results for '{arg}':\n{table}{hint}"
+    )
 
 
 async def _compact_command(agent: Any) -> CommandResult:
@@ -830,6 +928,116 @@ def _handoff_command(agent: Any, arg: str) -> CommandResult:
             lines.append(f"- Changes:\n{summary}")
 
     return CommandResult(output="\n".join(lines))
+
+
+def _export_command(agent: Any, arg: str) -> CommandResult:
+    """Export session as HTML or markdown."""
+    import datetime as _dt
+    from pathlib import Path
+
+    ctx = _get_ctx(agent)
+    if not ctx:
+        return CommandResult(output="No active context.")
+
+    fmt = (arg.split()[0] if arg else "html").lower()
+    if fmt == "md" or fmt == "markdown":
+        return _handoff_command(agent, arg)
+
+    # HTML export
+    m = ctx.metrics
+    model = "unknown"
+    if agent and hasattr(agent, "config"):
+        model = agent.config.model or "unknown"
+
+    now = _dt.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    session_id = ctx.session_id or "unsaved"
+
+    # Build message HTML
+    msg_html_parts: list[str] = []
+    for msg in ctx.messages:
+        role = getattr(msg, "role", "unknown")
+        content = getattr(msg, "content", "")
+        if not content or not isinstance(content, str):
+            continue
+
+        role_class = role.replace(" ", "-")
+        # Escape HTML
+        import html as _html
+        safe_content = _html.escape(str(content))
+        # Preserve newlines and code blocks
+        safe_content = safe_content.replace("\n", "<br>")
+
+        msg_html_parts.append(
+            f'<div class="message {role_class}">'
+            f'<div class="role">{role}</div>'
+            f'<div class="content">{safe_content}</div>'
+            f"</div>"
+        )
+
+    messages_html = "\n".join(msg_html_parts)
+
+    html = f"""<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Attocode Session: {session_id}</title>
+<style>
+  * {{ margin: 0; padding: 0; box-sizing: border-box; }}
+  body {{ font-family: 'SF Mono', 'Cascadia Code', 'Fira Code', monospace;
+         background: #0d1117; color: #c9d1d9; padding: 20px; max-width: 900px; margin: 0 auto; }}
+  h1 {{ color: #58a6ff; margin-bottom: 10px; font-size: 1.4em; }}
+  .meta {{ color: #8b949e; margin-bottom: 20px; font-size: 0.85em; }}
+  .meta span {{ margin-right: 16px; }}
+  .stats {{ background: #161b22; border: 1px solid #30363d; border-radius: 6px;
+            padding: 12px 16px; margin-bottom: 20px; display: flex; gap: 24px; flex-wrap: wrap; }}
+  .stat {{ text-align: center; }}
+  .stat-value {{ color: #58a6ff; font-size: 1.2em; font-weight: bold; }}
+  .stat-label {{ color: #8b949e; font-size: 0.75em; }}
+  .messages {{ display: flex; flex-direction: column; gap: 8px; }}
+  .message {{ background: #161b22; border: 1px solid #30363d; border-radius: 6px; padding: 12px; }}
+  .message.user {{ border-left: 3px solid #58a6ff; }}
+  .message.assistant {{ border-left: 3px solid #3fb950; }}
+  .message.system {{ border-left: 3px solid #8b949e; opacity: 0.7; }}
+  .message.tool {{ border-left: 3px solid #d29922; }}
+  .role {{ color: #8b949e; font-size: 0.75em; text-transform: uppercase; margin-bottom: 6px; }}
+  .content {{ white-space: pre-wrap; word-wrap: break-word; font-size: 0.9em; line-height: 1.5; }}
+  .footer {{ margin-top: 20px; color: #484f58; font-size: 0.75em; text-align: center; }}
+</style>
+</head>
+<body>
+<h1>Attocode Session Export</h1>
+<div class="meta">
+  <span>Session: {session_id}</span>
+  <span>Model: {model}</span>
+  <span>Exported: {now}</span>
+</div>
+<div class="stats">
+  <div class="stat"><div class="stat-value">{len(ctx.messages)}</div><div class="stat-label">Messages</div></div>
+  <div class="stat"><div class="stat-value">{ctx.iteration}</div><div class="stat-label">Iterations</div></div>
+  <div class="stat"><div class="stat-value">{m.llm_calls}</div><div class="stat-label">LLM Calls</div></div>
+  <div class="stat"><div class="stat-value">{m.tool_calls}</div><div class="stat-label">Tool Calls</div></div>
+  <div class="stat"><div class="stat-value">{m.total_tokens:,}</div><div class="stat-label">Tokens</div></div>
+  <div class="stat"><div class="stat-value">${m.estimated_cost:.4f}</div><div class="stat-label">Cost</div></div>
+</div>
+<div class="messages">
+{messages_html}
+</div>
+<div class="footer">Generated by Attocode v0.2.4</div>
+</body>
+</html>"""
+
+    # Write to file
+    export_dir = Path(".attocode/exports")
+    export_dir.mkdir(parents=True, exist_ok=True)
+    ts = _dt.datetime.now().strftime("%Y%m%d-%H%M%S")
+    export_path = export_dir / f"session-{ts}.html"
+    export_path.write_text(html)
+
+    return CommandResult(
+        output=f"Session exported to: {export_path}\n"
+        f"  Messages: {len(ctx.messages)}, Tokens: {m.total_tokens:,}, Cost: ${m.estimated_cost:.4f}"
+    )
 
 
 # ============================================================
@@ -1364,6 +1572,61 @@ def _switch_command(agent: Any, thread_id: str) -> CommandResult:
         )
     except Exception as e:
         return CommandResult(output=f"Switch failed: {e}")
+
+
+def render_thread_tree(mgr: Any) -> str:
+    """Build an ASCII tree visualization of thread/fork structure."""
+    tree = mgr.get_thread_tree()
+    active_id = mgr.active_thread_id
+    threads = {t.thread_id: t for t in mgr.list_threads()}
+
+    def _format_node(tid: str) -> str:
+        info = threads.get(tid)
+        if not info:
+            return tid
+        label_part = f': "{info.label}"' if info.label else ""
+        msg_part = f" ({info.message_count} messages)"
+        active_part = " [active]" if tid == active_id else ""
+        return f"{tid}{label_part}{msg_part}{active_part}"
+
+    lines: list[str] = []
+
+    def _walk(parent_id: str, prefix: str, is_last: bool, is_root: bool) -> None:
+        if not is_root:
+            connector = "\u2514\u2500\u2500 " if is_last else "\u251c\u2500\u2500 "
+            lines.append(f"{prefix}{connector}{_format_node(parent_id)}")
+            child_prefix = prefix + ("    " if is_last else "\u2502   ")
+        else:
+            lines.append(_format_node(parent_id))
+            child_prefix = ""
+
+        children = tree.get(parent_id, [])
+        for i, child_id in enumerate(children):
+            _walk(child_id, child_prefix, i == len(children) - 1, False)
+
+    root_children = tree.get("root", [])
+    if not root_children:
+        return _format_node("main")
+
+    for i, root_id in enumerate(root_children):
+        _walk(root_id, "", i == len(root_children) - 1, True)
+
+    return "\n".join(lines)
+
+
+def _tree_command(agent: Any) -> CommandResult:
+    """Show thread/fork tree visualization."""
+    ctx = _get_ctx(agent)
+    mgr = getattr(ctx, "thread_manager", None) if ctx else None
+
+    if not mgr:
+        return _feature_unavailable("Thread management", "/fork to create the first thread")
+
+    try:
+        output = render_thread_tree(mgr)
+        return CommandResult(output=output)
+    except Exception as e:
+        return CommandResult(output=f"Error rendering tree: {e}")
 
 
 def _rollback_command(agent: Any, arg: str) -> CommandResult:
@@ -3188,3 +3451,175 @@ def _theme_command(app: Any, arg: str) -> CommandResult:
         return CommandResult(output=f"Theme switched to: {arg}")
 
     return CommandResult(output="Theme switching not supported by this app.")
+
+
+# ============================================================
+# New feature command handlers (F2-F13 wiring)
+# ============================================================
+
+
+def _define_tool_command(agent: Any, arg: str) -> CommandResult:
+    """Handle /define-tool — list or describe dynamic tool capabilities."""
+    ctx = getattr(agent, "context", None)
+    dynamic_reg = getattr(ctx, "dynamic_tools", None) if ctx else None
+
+    if not arg:
+        if dynamic_reg is None:
+            return CommandResult(output="Dynamic tools not initialized.")
+        tools = dynamic_reg.list_tools()
+        if not tools:
+            return CommandResult(output="No dynamic tools defined. Use /define-tool <name> to create one.")
+        lines = ["Dynamic tools:"]
+        for t in tools:
+            lines.append(f"  {t['name']}: {t['description']}")
+        return CommandResult(output="\n".join(lines))
+
+    return CommandResult(
+        output=(
+            "To define a dynamic tool, describe it in your message and the agent "
+            "will use the DynamicToolRegistry to create it.\n"
+            f"Requested: {arg}"
+        )
+    )
+
+
+def _scaffold_mcp_command(agent: Any, arg: str) -> CommandResult:
+    """Handle /scaffold-mcp — scaffold a local MCP server."""
+    if not arg:
+        return CommandResult(output="Usage: /scaffold-mcp <server-name>\nScaffolds a local MCP server in .attocode/mcp-servers/")
+
+    from attocode.integrations.mcp.scaffolder import MCPScaffolder
+
+    ctx = getattr(agent, "context", None)
+    project_root = getattr(ctx, "project_root", "") if ctx else ""
+    if not project_root:
+        return CommandResult(output="No project root found. Run from a project directory.")
+
+    from pathlib import Path
+    servers_dir = Path(project_root) / ".attocode" / "mcp-servers"
+    scaffolder = MCPScaffolder(servers_dir=servers_dir)
+    existing = scaffolder.list_servers()
+    if existing:
+        lines = ["Existing MCP servers:"]
+        for s in existing:
+            lines.append(f"  {s['name']}: {s['description']} ({s['tools']} tools)")
+        lines.append(f"\nTo create '{arg}', describe the tools in your message.")
+        return CommandResult(output="\n".join(lines))
+
+    return CommandResult(
+        output=f"Ready to scaffold MCP server '{arg}'. Describe the tools it should have."
+    )
+
+
+def _parallel_command(agent: Any, arg: str) -> CommandResult:
+    """Handle /parallel — spawn parallel agents for independent tasks."""
+    if not arg:
+        return CommandResult(
+            output="Usage: /parallel task1 | task2 | task3\nSpawns agents in isolated git worktrees."
+        )
+
+    from attocode.core.parallel_agents import ParallelAgentManager
+
+    mgr = ParallelAgentManager()
+    tasks = mgr.parse_tasks(arg)
+    lines = [f"Parsed {len(tasks)} parallel tasks:"]
+    for t in tasks:
+        lines.append(f"  [{t.id}] {t.description}")
+    lines.append("\nParallel execution would spawn each in an isolated git worktree.")
+    return CommandResult(output="\n".join(lines))
+
+
+def _bugfind_command(agent: Any, arg: str) -> CommandResult:
+    """Handle /bugfind — scan diff for potential bugs."""
+    import subprocess
+
+    base_branch = arg.strip() or "main"
+    try:
+        result = subprocess.run(
+            ["git", "diff", f"{base_branch}...HEAD"],
+            capture_output=True,
+            text=True,
+            timeout=30,
+        )
+        diff_text = result.stdout
+    except Exception as e:
+        return CommandResult(output=f"Failed to get diff: {e}")
+
+    if not diff_text:
+        return CommandResult(output=f"No diff found between {base_branch} and HEAD.")
+
+    from attocode.code_intel.bug_finder import scan_diff
+
+    report = scan_diff(diff_text)
+    return CommandResult(output=report.format_report())
+
+
+def _orchestrate_command(agent: Any, arg: str) -> CommandResult:
+    """Handle /orchestrate — decompose task across agent modes."""
+    if not arg:
+        return CommandResult(
+            output="Usage: /orchestrate <complex task>\nDecomposes into subtasks assigned to Code/Architect/Debug/Ask modes."
+        )
+
+    from attocode.core.orchestrator import Orchestrator
+
+    orch = Orchestrator()
+    prompt = orch.create_decomposition_prompt(arg)
+    return CommandResult(
+        output=f"Orchestrator ready. Decomposition prompt prepared for:\n{arg}\n\n"
+        "The agent will break this into mode-specific subtasks."
+    )
+
+
+def _watch_command(agent: Any, arg: str) -> CommandResult:
+    """Handle /watch — scan for inline AI trigger comments."""
+    from pathlib import Path
+
+    from attocode.agent.watch import FileWatcher, WatchConfig
+
+    ctx = getattr(agent, "context", None)
+    project_root = getattr(ctx, "project_root", ".") if ctx else "."
+
+    config = WatchConfig(watch_dirs=[project_root])
+    watcher = FileWatcher(config)
+    matches = watcher.scan_all()
+
+    if not matches:
+        return CommandResult(output="No AI trigger comments found (# AI: ... or // AI: ...).")
+
+    lines = [f"Found {len(matches)} trigger(s):"]
+    for m in matches[:20]:
+        lines.append(f"  {m.file_path}:{m.line_number} — {m.trigger_text}")
+    if len(matches) > 20:
+        lines.append(f"  ... and {len(matches) - 20} more")
+    return CommandResult(output="\n".join(lines))
+
+
+def _project_state_command(agent: Any, arg: str) -> CommandResult:
+    """Handle /project-state — show or update file-driven project state."""
+    ctx = getattr(agent, "context", None)
+    project_state = getattr(ctx, "project_state", None) if ctx else None
+
+    if project_state is None:
+        # Try to create one on the fly
+        project_root = getattr(ctx, "project_root", "") if ctx else ""
+        if not project_root:
+            return CommandResult(output="No project root found.")
+        from pathlib import Path
+
+        from attocode.integrations.persistence.project_state import ProjectStateManager
+        project_state = ProjectStateManager(Path(project_root))
+
+    state = project_state.load()
+    if state.is_empty:
+        return CommandResult(
+            output="No project state found. Use '/project-state add <decision>' to record a decision."
+        )
+
+    if arg.startswith("add "):
+        entry = arg[4:].strip()
+        if entry:
+            project_state.update_state(entry)
+            return CommandResult(output=f"Added to project state: {entry}")
+
+    return CommandResult(output=state.as_context_block() or "Project state is empty.")

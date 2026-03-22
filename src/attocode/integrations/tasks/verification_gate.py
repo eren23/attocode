@@ -107,11 +107,14 @@ def _run_command(
         return False, f"OS error: {exc}"
 
 
-def check_tests_pass(working_dir: str) -> CheckResult:
+def check_tests_pass(working_dir: str, *, is_test_task: bool = False) -> CheckResult:
     """Run the project test suite and return a :class:`CheckResult`.
 
     Tries ``pytest`` first, then falls back to ``npm test`` if a
-    ``package.json`` is present.
+    ``package.json`` is present.  Also checks for Go and Cargo projects.
+
+    When *is_test_task* is ``True`` and no test runner is detected, returns
+    a **failing** result instead of silently passing.
     """
     # Try pytest
     if os.path.isfile(os.path.join(working_dir, "pyproject.toml")) or os.path.isdir(
@@ -125,6 +128,23 @@ def check_tests_pass(working_dir: str) -> CheckResult:
         passed, output = _run_command(["npm", "test", "--", "--passWithNoTests"], working_dir)
         return CheckResult(name="tests", passed=passed, message=output[:500])
 
+    # Try go test
+    if os.path.isfile(os.path.join(working_dir, "go.mod")):
+        passed, output = _run_command(["go", "test", "./..."], working_dir)
+        return CheckResult(name="tests", passed=passed, message=output[:500])
+
+    # Try cargo test
+    if os.path.isfile(os.path.join(working_dir, "Cargo.toml")):
+        passed, output = _run_command(["cargo", "test"], working_dir)
+        return CheckResult(name="tests", passed=passed, message=output[:500])
+
+    # No test runner found
+    if is_test_task:
+        return CheckResult(
+            name="tests",
+            passed=False,
+            message="No test runner detected but this is a test task -- tests must be runnable",
+        )
     return CheckResult(name="tests", passed=True, message="No test runner detected (skipped)")
 
 
@@ -332,17 +352,19 @@ class VerificationGate:
         run_types: bool = True,
         run_lint: bool = True,
         run_llm: bool = True,
+        is_test_task: bool = False,
     ) -> VerificationResult:
         """Run all configured checks against a task result.
 
         Returns a :class:`VerificationResult` aggregating every check.
+        When *is_test_task* is ``True``, missing test runners cause failure.
         """
         checks: list[CheckResult] = []
         suggestions: list[str] = []
 
         # Automated filesystem checks
         if run_tests:
-            checks.append(check_tests_pass(self._working_dir))
+            checks.append(check_tests_pass(self._working_dir, is_test_task=is_test_task))
         if run_types:
             checks.append(check_type_errors(self._working_dir))
         if run_lint:

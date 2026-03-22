@@ -14,6 +14,7 @@ from textual.css.query import NoMatches
 from textual.widgets import Footer, Static
 
 from attocode.tui.bridges.approval_bridge import ApprovalBridge, BudgetBridge
+from attocode.tui.theme import ThemeWatcher
 from attocode.tui.bridges.swarm_bridge import SwarmEventMessage
 from attocode.tui.dialogs.approval import ApprovalDialog, ApprovalResult
 from attocode.tui.dialogs.budget import BudgetDialog
@@ -161,6 +162,9 @@ class AttocodeApp(App):
         self._swarm_panel_update_timer: Timer | None = None
         self._swarm_panel_last_hash: int = 0
 
+        # Hot-reload watcher for CSS theme files
+        self._theme_watcher: ThemeWatcher | None = None
+
     def compose(self) -> ComposeResult:
         with Vertical(id="main-container"):
             yield WelcomeBanner(
@@ -187,6 +191,13 @@ class AttocodeApp(App):
 
     async def on_unmount(self) -> None:
         """Clean up persistent resources on app teardown."""
+        # Stop CSS hot-reload watcher
+        if self._theme_watcher is not None:
+            try:
+                await self._theme_watcher.stop()
+            except Exception:
+                pass
+            self._theme_watcher = None
         if self._stream_flush_timer is not None:
             self._stream_flush_timer.stop()
             self._stream_flush_timer = None
@@ -246,6 +257,31 @@ class AttocodeApp(App):
 
         # Focus input
         self.query_one("#input-area", PromptInput).focus_input()
+
+        # Start CSS hot-reload watcher
+        try:
+            css_paths = [Path(p) for p in self.CSS_PATH if Path(p).is_file()]
+            if css_paths:
+                self._theme_watcher = ThemeWatcher(
+                    callback=self._reload_css,
+                    watch_paths=css_paths,
+                )
+                asyncio.create_task(self._theme_watcher.start())
+        except Exception:
+            logger.debug("Failed to start theme watcher", exc_info=True)
+
+    def _reload_css(self) -> None:
+        """Reload stylesheets from disk — called by ThemeWatcher on change."""
+        try:
+            # Textual >=0.44 exposes reload_css(); fall back to manual reload.
+            if hasattr(self, "reload_css"):
+                self.call_later(self.reload_css)  # type: ignore[attr-defined]
+            else:
+                self.stylesheet.read_all()
+                self.stylesheet.parse()
+                self.call_later(self.refresh)
+        except Exception:
+            logger.debug("CSS hot-reload failed", exc_info=True)
 
     def _sync_status_metrics(self, *, refresh_context_window: bool = False) -> None:
         """Sync status bar context+budget values from the active agent."""

@@ -110,10 +110,14 @@ class ASTService:
             _ts_langs = set(supported_languages())
         except ImportError:
             pass
-        _supported = {"python", "javascript", "typescript"} | _ts_langs
+        _supported = {"python", "javascript", "typescript", "shell"} | _ts_langs
 
         for fi in files:
-            if fi.language not in _supported:
+            lang = fi.language
+            # Normalize: discover_files uses "shell", ts_parser uses "bash"
+            if lang == "shell":
+                lang = "bash"
+            if lang not in _supported:
                 continue
             try:
                 ast = parse_file(fi.path)

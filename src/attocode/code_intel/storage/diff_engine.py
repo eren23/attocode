@@ -124,7 +124,7 @@ async def compute_branch_diff(
     branch_a_id: uuid.UUID,
     branch_b_id: uuid.UUID,
     path_filter: str = "",
-    max_files: int = 500,
+    max_files: int = 1000,
 ) -> list[PatchEntry]:
     """Compute line-level diff between two branches using DB-stored content.
 

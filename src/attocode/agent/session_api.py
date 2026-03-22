@@ -44,6 +44,7 @@ class SessionSnapshot:
     pending_plan: dict[str, Any] | None
     model: str = ""
     iterations: int = 0
+    metadata: dict[str, Any] | None = None
 
 
 class SessionAPI:
@@ -89,14 +90,37 @@ class SessionAPI:
         *,
         model: str = "",
         status: str = "active",
+        thread_manager: Any = None,
     ) -> None:
-        """Save a session with its current messages as a checkpoint."""
+        """Save a session with its current messages as a checkpoint.
+
+        Args:
+            session_id: Unique session identifier.
+            task: The session task description.
+            messages: Conversation messages.
+            metrics: Optional agent metrics.
+            model: Model name.
+            status: Session status.
+            thread_manager: Optional ThreadManager to persist.
+        """
         store = await self._ensure_store()
 
         # Check if session exists
         existing = await store.get_session(session_id)
         if existing is None:
             await store.create_session(session_id, task, model=model)
+
+        # Build session metadata, preserving existing metadata
+        metadata: dict[str, Any] = {}
+        if existing and existing.metadata:
+            metadata.update(existing.metadata)
+
+        # Serialize thread manager state into metadata
+        if thread_manager is not None:
+            try:
+                metadata["thread_manager"] = thread_manager.to_dict()
+            except Exception:
+                pass  # Don't fail the save if thread serialization fails
 
         # Update session status
         metrics_dict = {}
@@ -115,6 +139,7 @@ class SessionAPI:
             status=status,
             total_tokens=metrics.total_tokens if metrics else None,
             total_cost=metrics.estimated_cost if metrics else None,
+            metadata=metadata if metadata else None,
         )
 
         # Save checkpoint
@@ -122,13 +147,20 @@ class SessionAPI:
         await store.save_checkpoint(session_id, serialized_messages, metrics_dict)
 
     async def load_session(self, session_id: str) -> SessionSnapshot | None:
-        """Load a session snapshot for resuming."""
+        """Load a session snapshot for resuming.
+
+        If the session metadata contains thread_manager state, it is
+        included in the snapshot's metadata field so the caller can
+        restore the ThreadManager via ``ThreadManager.from_dict()``.
+        """
         store = await self._ensure_store()
         result = await store.resume_session(session_id)
         if result is None:
             return None
 
         session_data = result["session"]
+        metadata = session_data.get("metadata") or {}
+
         return SessionSnapshot(
             session_id=session_data["id"],
             task=session_data["task"],
@@ -138,6 +170,7 @@ class SessionAPI:
             pending_plan=result["pending_plan"],
             model=session_data.get("model", ""),
             iterations=session_data.get("iterations", 0),
+            metadata=metadata if metadata else None,
         )
 
     async def list_sessions(

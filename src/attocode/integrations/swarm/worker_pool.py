@@ -782,6 +782,25 @@ class SwarmWorkerPool:
                 "If you cannot fix an error, explicitly state what failed and why."
             )
 
+            # Test-specific enforcement for test tasks
+            task_type_val = task.type.value if hasattr(task.type, "value") else str(task.type)
+            if task_type_val == "test":
+                sections.append(
+                    "\n## Test Execution Requirements (CRITICAL)\n\n"
+                    "You are assigned a TEST task. You MUST:\n"
+                    "- Actually RUN the test suite (pytest, npm test, go test, cargo test, etc.)\n"
+                    "- If you encounter ModuleNotFoundError or missing packages, install them:\n"
+                    "  - Python: `pip install <package>` or `pip install -e .`\n"
+                    "  - Node.js: `npm install`\n"
+                    "  - Go: `go mod tidy`\n"
+                    "  - Rust: `cargo build` first\n"
+                    "- Include the FULL test execution output in your response\n"
+                    "- Report: number of tests passed, failed, and errors\n"
+                    "- If tests fail, explain which tests failed and attempt to fix them\n"
+                    "- A test task with zero test execution is an AUTOMATIC FAILURE\n"
+                    "- Do NOT just write tests without running them"
+                )
+
         # ---- Quality self-assessment (full only) ---- #
         if tier == "full":
             sections.append(

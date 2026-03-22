@@ -556,6 +556,8 @@ class SwarmTaskQueue:
                     files_modified=result_data.get("files_modified"),
                     findings=result_data.get("findings"),
                     tool_calls=result_data.get("tool_calls"),
+                    test_output=result_data.get("test_output"),
+                    tool_actions_summary=result_data.get("tool_actions_summary"),
                     model=result_data.get("model", ""),
                     degraded=result_data.get("degraded", False),
                     budget_utilization=result_data.get("budget_utilization"),

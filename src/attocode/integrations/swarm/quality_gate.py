@@ -305,6 +305,40 @@ def run_pre_flight_checks(
                 pre_flight_reject=True,
             )
 
+    # V11: Test tasks must show evidence of test execution
+    if (
+        task_type_str == "test"
+        and swarm_config is not None
+        and getattr(swarm_config, "test_require_execution_evidence", True)
+        and result.tool_calls is not None
+        and result.tool_calls > 0
+    ):
+        output_lower = (result.output or "").lower()
+        # Check for test runner keywords in output
+        has_test_evidence = any(
+            kw in output_lower
+            for kw in (
+                "pytest", "npm test", "go test", "cargo test",
+                "jest", "vitest", "mocha", "rspec", "unittest",
+                "passed", "failed", "error", "tests ran",
+                "test suite", "test result", "ok  ",
+            )
+        )
+        # Also check test_output field if present
+        if getattr(result, "test_output", None):
+            has_test_evidence = True
+
+        if not has_test_evidence:
+            return QualityGateResult(
+                score=1,
+                feedback=(
+                    f"Test task '{task.id}' made {result.tool_calls} tool calls but "
+                    f"shows no evidence of test execution (no pytest/npm test/go test output)."
+                ),
+                passed=False,
+                pre_flight_reject=True,
+            )
+
     return None
 
 
@@ -450,6 +484,7 @@ async def evaluate_worker_output(
     swarm_config: SwarmConfig | None = None,
     cached_artifact_report: ArtifactReport | None = None,
     emit: Callable[..., None] | None = None,
+    verification_evidence: dict[str, Any] | None = None,
 ) -> QualityGateResult:
     """Evaluate a worker's output using pre-flight checks and an LLM judge.
 
@@ -459,8 +494,23 @@ async def evaluate_worker_output(
     3. Build judge prompt with scoring rubric (1-5).
     4. Call ``provider.chat()`` with ``max_tokens=800, temperature=0.1``.
     5. Parse response for ``SCORE: N`` and ``FEEDBACK: text``.
-    6. On LLM error: return score=3, gate_error=True.
+    6. On LLM error: return score=3 (or 2 for test tasks), gate_error=True.
+
+    When *verification_evidence* is provided (typically for test tasks), it is
+    included in the judge prompt so the LLM can see actual test pass/fail data.
     """
+    # Determine task type for type-aware gating
+    task_type_str = task.type.value if hasattr(task.type, "value") else str(task.type)
+    is_test_task = task_type_str == "test"
+
+    # Compute effective threshold: higher for test tasks
+    effective_threshold = quality_threshold
+    if is_test_task and swarm_config is not None:
+        effective_threshold = max(
+            quality_threshold,
+            getattr(swarm_config, "test_quality_threshold", 4),
+        )
+
     # Step 1: Compute artifact report
     artifact_report = cached_artifact_report or file_artifacts
     if artifact_report is None:
@@ -487,13 +537,19 @@ async def evaluate_worker_output(
                 pass
         return pre_flight
 
-    # Step 3: Build judge prompt
-    judge_prompt = _build_quality_prompt(task, result, artifact_report)
+    # Step 3: Build judge prompt (with verification evidence for test tasks)
+    judge_prompt = _build_quality_prompt(
+        task, result, artifact_report,
+        verification_evidence=verification_evidence,
+    )
 
     # Determine model
     model = orchestrator_model
     if judge_config and judge_config.model:
         model = judge_config.model
+
+    # Fail-safe score: 2 for test tasks (reject), 3 for others (pass)
+    _failsafe_score = 2 if is_test_task else 3
 
     # Step 4: Call LLM
     try:
@@ -527,16 +583,16 @@ async def evaluate_worker_output(
 
         if not content:
             return QualityGateResult(
-                score=3,
+                score=_failsafe_score,
                 feedback="Quality gate received empty response from judge LLM.",
-                passed=quality_threshold <= 3,
+                passed=_failsafe_score >= effective_threshold,
                 gate_error=True,
                 gate_error_message="Empty response from LLM judge",
             )
 
         # Step 5: Parse response
         score, feedback = _parse_quality_response(content)
-        passed = score >= quality_threshold
+        passed = score >= effective_threshold
 
         gate_result = QualityGateResult(
             score=score,
@@ -562,12 +618,12 @@ async def evaluate_worker_output(
         return gate_result
 
     except Exception as exc:
-        # Step 6: On LLM error, return safe default
+        # Step 6: On LLM error, return fail-safe default
         logger.warning("Quality gate LLM error: %s", exc)
         return QualityGateResult(
-            score=3,
+            score=_failsafe_score,
             feedback=f"Quality gate encountered an error: {exc}",
-            passed=quality_threshold <= 3,
+            passed=_failsafe_score >= effective_threshold,
             gate_error=True,
             gate_error_message=str(exc),
         )
@@ -589,6 +645,7 @@ def _build_quality_prompt(
     task: SwarmTask,
     result: SwarmTaskResult,
     artifact_report: ArtifactReport,
+    verification_evidence: dict[str, Any] | None = None,
 ) -> str:
     """Build the LLM judge prompt with scoring rubric."""
     task_type_str = task.type.value if hasattr(task.type, "value") else str(task.type)
@@ -622,6 +679,36 @@ def _build_quality_prompt(
     if result.model:
         sections.append(f"- Model: {result.model}")
 
+    # Tool actions summary (transparency)
+    if getattr(result, "tool_actions_summary", None):
+        sections.append("")
+        sections.append("## Tool Actions (what the worker actually did)")
+        for ta in result.tool_actions_summary[:10]:
+            tool = ta.get("tool", "?")
+            args = ta.get("args", "")[:150]
+            exit_code = ta.get("exit_code")
+            is_test = ta.get("is_test", False)
+            marker = " [TEST]" if is_test else ""
+            exit_str = f" (exit={exit_code})" if exit_code is not None else ""
+            sections.append(f"  - {tool}: {args}{exit_str}{marker}")
+
+    # Test execution output (for test tasks)
+    test_output = getattr(result, "test_output", None)
+    if test_output:
+        sections.append("")
+        sections.append("## Test Execution Output")
+        if len(test_output) > 3000:
+            test_output = test_output[:3000] + "\n... [truncated]"
+        sections.append(test_output)
+
+    # Verification gate results (fed in for test tasks)
+    if verification_evidence is not None:
+        sections.append("")
+        sections.append("## Verification Gate Results")
+        for check in verification_evidence.get("checks", []):
+            status = "PASS" if check.get("passed") else "FAIL"
+            sections.append(f"  - {check.get('name', '?')}: {status} -- {str(check.get('message', ''))[:200]}")
+
     sections.append("")
     sections.append("## Artifact Report")
     sections.append(artifact_report.summary)
@@ -633,14 +720,28 @@ def _build_quality_prompt(
 
     sections.append("")
     sections.append("## Scoring Rubric")
-    sections.append(
-        "Rate the output on a scale of 1-5:\n"
-        "  1 = No meaningful work done (hollow, boilerplate only, all failures)\n"
-        "  2 = Partial attempt, major issues (wrong approach, missing key files)\n"
-        "  3 = Acceptable but incomplete (core work done, some gaps)\n"
-        "  4 = Good quality (task fulfilled, minor issues at most)\n"
-        "  5 = Excellent (thorough, well-structured, all requirements met)\n"
-    )
+
+    if task_type_str == "test":
+        # Stricter rubric for test tasks
+        sections.append(
+            "Rate the TEST task output on a scale of 1-5:\n"
+            "  1 = No test execution evidence (no pytest/npm test/go test output at all)\n"
+            "  2 = Tests written but NOT executed, or all tests fail with no attempt to fix\n"
+            "  3 = Tests run but significant failures or poor coverage of requirements\n"
+            "  4 = Tests run and mostly pass, good coverage of core cases\n"
+            "  5 = All tests pass, edge cases covered, clear test output included\n\n"
+            "CRITICAL: A test task that does not show actual test execution output "
+            "(pytest/npm test/go test stdout) MUST score 1-2 regardless of narrative quality.\n"
+        )
+    else:
+        sections.append(
+            "Rate the output on a scale of 1-5:\n"
+            "  1 = No meaningful work done (hollow, boilerplate only, all failures)\n"
+            "  2 = Partial attempt, major issues (wrong approach, missing key files)\n"
+            "  3 = Acceptable but incomplete (core work done, some gaps)\n"
+            "  4 = Good quality (task fulfilled, minor issues at most)\n"
+            "  5 = Excellent (thorough, well-structured, all requirements met)\n"
+        )
 
     sections.append(
         "Respond with exactly two lines:\n"

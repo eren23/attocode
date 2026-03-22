@@ -126,6 +126,8 @@ def cleanup_worktrees(repo_root: Path, worktrees_root: Path, run_id: str = "") -
     """Remove all agent worktrees and their branches, then prune."""
     if not worktrees_root.exists():
         return
+    if not (repo_root / ".git").exists():
+        return
 
     for child in sorted(worktrees_root.iterdir()):
         if not child.is_dir():

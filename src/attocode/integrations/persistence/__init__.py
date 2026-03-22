@@ -1,5 +1,9 @@
 """Persistence integrations."""
 
+from attocode.integrations.persistence.project_state import (
+    ProjectState,
+    ProjectStateManager,
+)
 from attocode.integrations.persistence.history import (
     HistoryEntry,
     HistoryManager,
@@ -31,6 +35,9 @@ __all__ = [
     "SessionStore",
     "ToolCallRecord",
     "UsageLogRecord",
+    # project state
+    "ProjectState",
+    "ProjectStateManager",
     # history
     "HistoryEntry",
     "HistoryManager",

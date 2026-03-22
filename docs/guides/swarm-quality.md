@@ -163,6 +163,91 @@ swarm:
 
 ---
 
+## Test Task Quality Enforcement
+
+Test tasks receive stricter quality enforcement than implementation tasks. Multiple reinforcing layers ensure subagents actually run tests rather than just describing what they would do.
+
+### Pre-flight Check: Test Execution Evidence (V11)
+
+Before the LLM judge runs, a pre-flight check verifies that test task output contains evidence of actual test execution. The check looks for keywords like `pytest`, `npm test`, `go test`, `cargo test`, `passed`, `failed`, `error`, `test suite`, etc.
+
+If a test task makes tool calls but shows no test execution evidence, it is **auto-rejected with score 1** and retried.
+
+### Verification Before Judge
+
+For test tasks, the verification gate runs **before** the LLM quality judge (not after, as with other task types). This means the judge sees actual test pass/fail results when scoring:
+
+1. **Verification gate** runs first (tests, types, lint)
+2. If verification fails, task is retried immediately (judge never runs)
+3. If verification passes, results are injected into the judge prompt
+4. **LLM judge** scores with full test evidence visible
+
+### Test-Specific Scoring Rubric
+
+The LLM judge uses a stricter rubric for test tasks:
+
+| Score | Meaning |
+|-------|---------|
+| 1 | No test execution evidence (no pytest/npm test/go test output) |
+| 2 | Tests written but NOT executed, or all tests fail with no fix attempt |
+| 3 | Tests run but significant failures or poor coverage |
+| 4 | Tests run and mostly pass, good coverage of core cases |
+| 5 | All tests pass, edge cases covered, clear test output |
+
+!!! warning "Test tasks without test output"
+    A test task that does not include actual test execution output (stdout/stderr from pytest, npm test, etc.) **must score 1--2** regardless of narrative quality.
+
+### Higher Threshold and Fail-Safe
+
+- **Quality threshold**: Test tasks require a score of **4/5** (configurable via `test_quality_threshold`), vs 3/5 for other tasks
+- **Fail-safe on LLM error**: If the judge LLM fails, test tasks default to **score 2** (reject and retry), not score 3 (pass)
+
+### Worker Package Installation
+
+Test task workers are instructed to install missing packages when they encounter import errors:
+
+- Python: `pip install <package>` or `pip install -e .`
+- Node.js: `npm install`
+- Go: `go mod tidy`
+- Rust: `cargo build`
+
+### Supported Test Runners
+
+The verification gate supports these test runners (auto-detected by project files):
+
+| Runner | Detection | Command |
+|--------|-----------|---------|
+| pytest | `pyproject.toml` or `tests/` directory | `python -m pytest --tb=short -q` |
+| npm test | `package.json` | `npm test -- --passWithNoTests` |
+| go test | `go.mod` | `go test ./...` |
+| cargo test | `Cargo.toml` | `cargo test` |
+
+When no test runner is detected and the task is a test task, the verification gate **fails** instead of silently passing.
+
+### Tool Action Transparency
+
+Each subagent's tool calls are captured and displayed in task results:
+
+- **Tool name**: Bash, Write, Edit, Read, etc.
+- **Arguments**: Command or file path
+- **Output**: Truncated stdout/stderr
+- **Test flag**: Whether the command was a test execution
+
+The LLM judge sees this data in a "Tool Actions" section, enabling it to verify what the worker actually did vs. what it claimed.
+
+### Configuration
+
+```yaml
+swarm:
+  test_quality_threshold: 4                  # default: 4 (higher bar for test tasks)
+  test_require_execution_evidence: true      # default: true (V11 pre-flight check)
+  enable_verification: true                  # default: true
+  quality_gates: true                        # default: true
+  quality_threshold: 3                       # default: 3 (general tasks)
+```
+
+---
+
 ## User Intervention Hook
 
 When a task fails repeatedly, the swarm can pause and request human intervention instead of immediately cascade-skipping the task and its dependents.
@@ -263,6 +348,8 @@ All quality-related configuration fields added to `SwarmConfig`:
 | `user_intervention_threshold` | `int` | `3` | Number of failed attempts before requesting intervention |
 | `quality_gates` | `bool` | `true` | Enable LLM-based quality scoring |
 | `quality_threshold` | `int` | `3` | Minimum quality score (1--5) to accept task output |
+| `test_quality_threshold` | `int` | `4` | Minimum quality score for test tasks (higher bar) |
+| `test_require_execution_evidence` | `bool` | `true` | Require test execution output in test task results (V11) |
 | `quality_gate_model` | `str` | `""` | Model override for quality gate LLM calls |
 | `enable_concrete_validation` | `bool` | `true` | Validate task outputs against concrete criteria |
 | `max_verification_retries` | `int` | `2` | Maximum verification retry attempts |

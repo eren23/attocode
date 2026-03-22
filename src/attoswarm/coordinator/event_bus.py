@@ -23,7 +23,7 @@ logger = logging.getLogger(__name__)
 class SwarmEvent:
     """A single swarm orchestration event."""
 
-    event_type: str         # "spawn" | "claim" | "write" | "conflict" | "complete" | "fail" | "skip" | "budget" | "info"
+    event_type: str         # "spawn" | "claim" | "write" | "conflict" | "complete" | "fail" | "skip" | "budget" | "info" | "git_commit"
     timestamp: float = field(default_factory=time.time)
     task_id: str = ""
     agent_id: str = ""
