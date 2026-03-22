@@ -306,6 +306,58 @@ class TestCheckTestsPass:
         args = mock_run.call_args[0][0]
         assert "pytest" in args
 
+    # --- is_test_task parameter tests ---
+
+    @patch("attocode.integrations.tasks.verification_gate.os.path.isfile")
+    @patch("attocode.integrations.tasks.verification_gate.os.path.isdir")
+    def test_is_test_task_true_no_runner_fails(
+        self, mock_isdir: MagicMock, mock_isfile: MagicMock
+    ) -> None:
+        mock_isfile.return_value = False
+        mock_isdir.return_value = False
+        result = check_tests_pass("/empty", is_test_task=True)
+        assert result.passed is False
+        assert "test task" in result.message.lower()
+
+    @patch("attocode.integrations.tasks.verification_gate.os.path.isfile")
+    @patch("attocode.integrations.tasks.verification_gate.os.path.isdir")
+    def test_is_test_task_false_no_runner_passes(
+        self, mock_isdir: MagicMock, mock_isfile: MagicMock
+    ) -> None:
+        mock_isfile.return_value = False
+        mock_isdir.return_value = False
+        result = check_tests_pass("/empty", is_test_task=False)
+        assert result.passed is True
+        assert "skipped" in result.message.lower()
+
+    @patch("attocode.integrations.tasks.verification_gate._run_command")
+    @patch("attocode.integrations.tasks.verification_gate.os.path.isfile")
+    @patch("attocode.integrations.tasks.verification_gate.os.path.isdir")
+    def test_go_project_runs_go_test(
+        self, mock_isdir: MagicMock, mock_isfile: MagicMock, mock_run: MagicMock
+    ) -> None:
+        mock_isfile.side_effect = lambda p: p.endswith("go.mod")
+        mock_isdir.return_value = False
+        mock_run.return_value = (True, "ok  mypackage 0.5s")
+        result = check_tests_pass("/go-project")
+        assert result.passed is True
+        args = mock_run.call_args[0][0]
+        assert args == ["go", "test", "./..."]
+
+    @patch("attocode.integrations.tasks.verification_gate._run_command")
+    @patch("attocode.integrations.tasks.verification_gate.os.path.isfile")
+    @patch("attocode.integrations.tasks.verification_gate.os.path.isdir")
+    def test_cargo_project_runs_cargo_test(
+        self, mock_isdir: MagicMock, mock_isfile: MagicMock, mock_run: MagicMock
+    ) -> None:
+        mock_isfile.side_effect = lambda p: p.endswith("Cargo.toml")
+        mock_isdir.return_value = False
+        mock_run.return_value = (True, "test result: ok. 5 passed")
+        result = check_tests_pass("/rust-project")
+        assert result.passed is True
+        args = mock_run.call_args[0][0]
+        assert args == ["cargo", "test"]
+
 
 # ---------------------------------------------------------------------------
 # check_type_errors
@@ -1053,7 +1105,7 @@ class TestVerifyCombined:
 
         gate = VerificationGate(working_dir="/my/project")
         await gate.verify(_make_subtask(), "result", run_llm=False)
-        mock_tests.assert_called_once_with("/my/project")
+        mock_tests.assert_called_once_with("/my/project", is_test_task=False)
         mock_types.assert_called_once_with("/my/project")
         mock_lint.assert_called_once_with("/my/project")
 

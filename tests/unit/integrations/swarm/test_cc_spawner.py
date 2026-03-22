@@ -11,7 +11,10 @@ import pytest
 from attocode.integrations.swarm.cc_spawner import (
     _build_cli_args,
     _extract_files_modified,
+    _extract_test_output,
+    _extract_tool_actions,
     _find_claude_binary,
+    _is_test_command,
     _parse_cc_output,
     create_cc_spawn_fn,
 )
@@ -455,3 +458,168 @@ class TestCreateCcSpawnFn:
         call_kwargs = mock_spawn.call_args
         assert call_kwargs.kwargs["working_dir"] == "/projects/demo"
         assert call_kwargs.kwargs["max_iterations"] == 20
+
+
+# =============================================================================
+# _is_test_command
+# =============================================================================
+
+
+class TestIsTestCommand:
+    def test_pytest(self):
+        assert _is_test_command("pytest tests/") is True
+
+    def test_npm_test(self):
+        assert _is_test_command("npm test") is True
+
+    def test_go_test(self):
+        assert _is_test_command("go test ./...") is True
+
+    def test_cargo_test(self):
+        assert _is_test_command("cargo test") is True
+
+    def test_python_m_pytest(self):
+        assert _is_test_command("python -m pytest --tb=short") is True
+
+    def test_make_test(self):
+        assert _is_test_command("make test") is True
+
+    def test_jest(self):
+        assert _is_test_command("npx jest") is True
+
+    def test_vitest(self):
+        assert _is_test_command("vitest run") is True
+
+    def test_not_test_command(self):
+        assert _is_test_command("ls -la") is False
+
+    def test_not_test_build(self):
+        assert _is_test_command("npm run build") is False
+
+
+# =============================================================================
+# _extract_tool_actions
+# =============================================================================
+
+
+class TestExtractToolActions:
+    def test_empty_string(self):
+        assert _extract_tool_actions("") == []
+
+    def test_fenced_bash_block(self):
+        text = "I ran:\n```bash\npytest tests/\n```\nAll passed."
+        actions = _extract_tool_actions(text)
+        assert len(actions) >= 1
+        assert actions[0].tool_name == "Bash"
+        assert "pytest" in actions[0].arguments_summary
+        assert actions[0].is_test_execution is True
+
+    def test_dollar_command_pattern(self):
+        text = "$ go test ./...\nok  mypackage 0.5s\n"
+        actions = _extract_tool_actions(text)
+        assert len(actions) >= 1
+        assert actions[0].tool_name == "Bash"
+        assert "go test" in actions[0].arguments_summary
+        assert actions[0].is_test_execution is True
+
+    def test_file_operation_created(self):
+        text = "Created file: src/app.py\n"
+        actions = _extract_tool_actions(text)
+        assert len(actions) >= 1
+        assert actions[0].tool_name == "Write"
+        assert "src/app.py" in actions[0].arguments_summary
+
+    def test_file_operation_edited(self):
+        text = "Edited src/main.ts\n"
+        actions = _extract_tool_actions(text)
+        assert len(actions) >= 1
+        assert actions[0].tool_name == "Edit"
+
+    def test_non_test_command_not_flagged(self):
+        text = "```bash\nls -la\n```\n"
+        actions = _extract_tool_actions(text)
+        assert len(actions) >= 1
+        assert actions[0].is_test_execution is False
+
+    def test_deduplicates_commands(self):
+        text = "```bash\npytest\n```\n\n$ pytest\nok\n"
+        actions = _extract_tool_actions(text)
+        bash_actions = [a for a in actions if a.tool_name == "Bash"]
+        assert len(bash_actions) == 1  # deduplicated
+
+    def test_multiple_blocks(self):
+        text = (
+            "```bash\npip install flask\n```\n"
+            "```bash\npytest tests/\n```\n"
+        )
+        actions = _extract_tool_actions(text)
+        bash_actions = [a for a in actions if a.tool_name == "Bash"]
+        assert len(bash_actions) == 2
+        assert bash_actions[0].is_test_execution is False
+        assert bash_actions[1].is_test_execution is True
+
+
+# =============================================================================
+# _extract_test_output
+# =============================================================================
+
+
+class TestExtractTestOutput:
+    def test_no_test_actions(self):
+        from attocode.integrations.swarm.types import ToolAction
+        actions = [
+            ToolAction(tool_name="Bash", arguments_summary="ls", output_summary="files", is_test_execution=False),
+        ]
+        assert _extract_test_output(actions) is None
+
+    def test_collects_test_output(self):
+        from attocode.integrations.swarm.types import ToolAction
+        actions = [
+            ToolAction(tool_name="Bash", arguments_summary="pytest", output_summary="2 passed", is_test_execution=True),
+        ]
+        result = _extract_test_output(actions)
+        assert result is not None
+        assert "2 passed" in result
+        assert "pytest" in result
+
+    def test_empty_list(self):
+        assert _extract_test_output([]) is None
+
+    def test_truncates_long_output(self):
+        from attocode.integrations.swarm.types import ToolAction
+        actions = [
+            ToolAction(tool_name="Bash", arguments_summary="pytest", output_summary="x" * 6000, is_test_execution=True),
+        ]
+        result = _extract_test_output(actions)
+        assert result is not None
+        assert len(result) <= 5000
+
+
+# =============================================================================
+# _parse_cc_output populates tool_actions/test_output
+# =============================================================================
+
+
+class TestParseCcOutputToolActions:
+    def test_result_with_test_command(self):
+        data = json.dumps({
+            "result": "I ran:\n```bash\npytest tests/\n```\n2 passed, 0 failed",
+            "is_error": False,
+            "num_turns": 3,
+            "usage": {"input_tokens": 100, "output_tokens": 50},
+        })
+        result = _parse_cc_output(data)
+        assert result.tool_actions is not None
+        assert len(result.tool_actions) >= 1
+        assert result.test_output is not None
+        assert "pytest" in result.test_output
+
+    def test_result_without_test_commands(self):
+        data = json.dumps({
+            "result": "I created the file successfully.",
+            "is_error": False,
+            "num_turns": 2,
+            "usage": {"input_tokens": 100, "output_tokens": 50},
+        })
+        result = _parse_cc_output(data)
+        assert result.test_output is None

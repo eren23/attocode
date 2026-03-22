@@ -849,7 +849,7 @@ class TestReconcileStaleDispatched:
         recovered = q.reconcile_stale_dispatched(
             stale_after_ms=300_000, now=now
         )
-        assert "t1" in recovered
+        assert any(r[0] == "t1" for r in recovered)
         assert q.tasks["t1"].status == SwarmTaskStatus.READY
 
     def test_keeps_fresh_dispatched(self) -> None:
@@ -2168,7 +2168,9 @@ class TestArtifactAwareSkip:
         q = SwarmTaskQueue(working_directory="/nonexistent/dir")
         q.artifact_aware_skip = True
 
-        t1 = _make_task("t1", status=SwarmTaskStatus.FAILED, target_files=["missing.py"])
+        # t1 has no target_files so artifact-aware skip and single-dep rescue
+        # do not apply — t2 should be cascade-skipped.
+        t1 = _make_task("t1", status=SwarmTaskStatus.FAILED)
         q.tasks["t1"] = t1
         q.tasks["t2"] = _make_task("t2", dependencies=["t1"], status=SwarmTaskStatus.PENDING)
         q.waves = [["t1"], ["t2"]]

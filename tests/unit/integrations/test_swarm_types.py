@@ -946,7 +946,7 @@ class TestSwarmConfig:
         assert DEFAULT_SWARM_CONFIG.hollow_termination_ratio == 0.55
         assert DEFAULT_SWARM_CONFIG.hollow_termination_min_dispatches == 8
         assert DEFAULT_SWARM_CONFIG.hollow_output_threshold == 120
-        assert DEFAULT_SWARM_CONFIG.enable_hollow_termination is False
+        assert DEFAULT_SWARM_CONFIG.enable_hollow_termination is True
 
     def test_feature_defaults(self) -> None:
         assert DEFAULT_SWARM_CONFIG.enable_planning is True
