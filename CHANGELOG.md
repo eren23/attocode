@@ -7,6 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+#### Swarm Test Task Quality Enforcement
+
+- **Test-specific quality gate** — test tasks now require score 4/5 (vs 3/5 for other tasks), configurable via `test_quality_threshold`
+- **V11 pre-flight check** — test tasks auto-rejected (score 1) if output contains no test execution evidence (pytest/npm test/go test keywords); controlled by `test_require_execution_evidence`
+- **Test-specific judge rubric** — LLM judge uses stricter scoring criteria for test tasks ("no test output = score 1-2 regardless of narrative")
+- **Verification-before-judge reorder** — for test tasks, verification gate runs before the LLM judge so the judge sees actual test pass/fail data
+- **Fail-safe score=2 for test tasks** — on LLM judge error, test tasks default to score 2 (reject) instead of score 3 (pass)
+- **ToolAction transparency** — each subagent tool call captured with tool name, arguments, output, exit code, and test execution flag; surfaced in judge prompt, events, and state.json
+- **Worker package installation instructions** — test task prompts explicitly allow `pip install`, `npm install`, `go mod tidy`, `cargo build` for missing dependencies
+- **Go and Cargo test runner support** — verification gate now detects `go.mod` and `Cargo.toml` and runs `go test ./...` / `cargo test`
+- **Test task timeout increase** — test tasks get 360s (was 240s) to allow complex test suites to complete
+- **Test evidence in checkpoint restoration** — `test_output` and `tool_actions_summary` persisted across checkpoint resume
+
 ## [0.2.4] - 2026-03-21
 
 ### Added

@@ -648,6 +648,10 @@ class SwarmEventBridge:
                 tasks_dict[tid]["duration_ms"] = task.result.duration_ms
                 tasks_dict[tid]["tool_calls"] = task.result.tool_calls
                 tasks_dict[tid]["tokens_used"] = task.result.tokens_used
+                if getattr(task.result, "tool_actions_summary", None):
+                    tasks_dict[tid]["tool_actions"] = task.result.tool_actions_summary
+                if getattr(task.result, "test_output", None):
+                    tasks_dict[tid]["test_output"] = (task.result.test_output or "")[:500]
 
         status_dict: dict[str, Any] = {}
         if self._last_status:
@@ -769,7 +773,8 @@ class SwarmEventBridge:
         for key in (
             "task_id", "wave", "model", "reason", "phase", "message",
             "score", "feedback", "passed", "success", "duration_ms",
-            "tool_calls", "from_model", "to_model", "failure_mode",
+            "tool_calls", "tool_actions_summary", "test_output",
+            "from_model", "to_model", "failure_mode",
             "attempt", "output", "files_modified", "session_id",
             "num_turns", "stderr", "tokens_used", "cost_used",
         ):

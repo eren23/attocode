@@ -14,6 +14,7 @@ import asyncio
 import json
 import logging
 import os
+import re
 import shutil
 import time
 from typing import Any
@@ -22,6 +23,7 @@ from attocode.integrations.swarm.types import (
     SpawnResult,
     SwarmTask,
     SwarmWorkerSpec,
+    ToolAction,
 )
 
 logger = logging.getLogger(__name__)
@@ -116,6 +118,107 @@ def _build_cli_args(
     return args
 
 
+# Patterns that indicate a test runner command
+_TEST_COMMAND_PATTERNS: list[re.Pattern[str]] = [
+    re.compile(r"\bpytest\b"),
+    re.compile(r"\bnpm\s+test\b"),
+    re.compile(r"\bgo\s+test\b"),
+    re.compile(r"\bcargo\s+test\b"),
+    re.compile(r"\bjest\b"),
+    re.compile(r"\bvitest\b"),
+    re.compile(r"\bmocha\b"),
+    re.compile(r"\brspec\b"),
+    re.compile(r"\bpython\s+-m\s+(?:pytest|unittest)\b"),
+    re.compile(r"\bmake\s+test\b"),
+]
+
+# Regex for fenced bash blocks: ```bash\n<cmd>\n```\n<output>
+_BASH_BLOCK_RE = re.compile(
+    r"```(?:bash|sh|shell|console)?\s*\n(.+?)\n```"
+    r"(?:\s*\n((?:(?!```)[\s\S])*?)(?=\n```|\n##|\Z))?",
+    re.MULTILINE,
+)
+
+# Regex for $ command patterns: $ <cmd>\n<output>
+_DOLLAR_CMD_RE = re.compile(
+    r"^\$\s+(.+?)$\n((?:(?!\$\s).*\n)*)",
+    re.MULTILINE,
+)
+
+# Regex for file operations in narrative
+_FILE_OP_RE = re.compile(
+    r"(?:Created|Wrote|Modified|Edited|Updated|Deleted)\s+(?:file:?\s+)?`?([^\s`,]+\.\w+)`?",
+    re.IGNORECASE,
+)
+
+
+def _is_test_command(cmd: str) -> bool:
+    """Check whether a command string looks like a test runner invocation."""
+    return any(p.search(cmd) for p in _TEST_COMMAND_PATTERNS)
+
+
+def _extract_tool_actions(result_text: str) -> list[ToolAction]:
+    """Extract structured tool actions from subagent output text.
+
+    Parses bash command blocks, $ command patterns, and file operations
+    to create ToolAction records for transparency.
+    """
+    actions: list[ToolAction] = []
+    seen_commands: set[str] = set()
+
+    # Parse fenced bash blocks
+    for match in _BASH_BLOCK_RE.finditer(result_text):
+        cmd = match.group(1).strip()
+        output = (match.group(2) or "").strip()
+        if cmd and cmd not in seen_commands:
+            seen_commands.add(cmd)
+            is_test = _is_test_command(cmd)
+            actions.append(ToolAction(
+                tool_name="Bash",
+                arguments_summary=cmd[:300],
+                output_summary=output[:1000],
+                is_test_execution=is_test,
+            ))
+
+    # Parse $ command patterns
+    for match in _DOLLAR_CMD_RE.finditer(result_text):
+        cmd = match.group(1).strip()
+        output = match.group(2).strip()
+        if cmd and cmd not in seen_commands:
+            seen_commands.add(cmd)
+            is_test = _is_test_command(cmd)
+            actions.append(ToolAction(
+                tool_name="Bash",
+                arguments_summary=cmd[:300],
+                output_summary=output[:1000],
+                is_test_execution=is_test,
+            ))
+
+    # Parse file operations
+    for match in _FILE_OP_RE.finditer(result_text):
+        fpath = match.group(1).strip("'\"")
+        op_text = match.group(0).strip()
+        actions.append(ToolAction(
+            tool_name="Write" if "creat" in op_text.lower() else "Edit",
+            arguments_summary=fpath[:300],
+            output_summary=op_text[:200],
+        ))
+
+    return actions
+
+
+def _extract_test_output(actions: list[ToolAction]) -> str | None:
+    """Concatenate output from test execution actions."""
+    parts: list[str] = []
+    for a in actions:
+        if a.is_test_execution and a.output_summary:
+            parts.append(f"$ {a.arguments_summary}\n{a.output_summary}")
+    if not parts:
+        return None
+    combined = "\n\n".join(parts)
+    return combined[:5000]
+
+
 def _parse_cc_output(raw: str) -> SpawnResult:
     """Parse the JSON output from ``claude --output-format json``.
 
@@ -170,11 +273,17 @@ def _parse_cc_output(raw: str) -> SpawnResult:
     # Count tool calls from num_turns (rough proxy)
     tool_calls = max(0, num_turns - 1) if num_turns > 0 else 0
 
+    # Extract per-tool-call actions for transparency
+    tool_actions = _extract_tool_actions(result_text)
+    test_output = _extract_test_output(tool_actions)
+
     return SpawnResult(
         success=not is_error,
         output=result_text or "",
         tool_calls=tool_calls,
         files_modified=files_modified or None,
+        tool_actions=tool_actions or None,
+        test_output=test_output,
         metrics={
             "tokens": total_tokens,
             "cost": total_cost,
