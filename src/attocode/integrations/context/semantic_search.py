@@ -546,7 +546,7 @@ class SemanticSearchManager:
 
             # Config/doc file penalty
             if doc.is_config:
-                score *= 0.3
+                score *= 0.15
 
             # Test file mild penalty
             if doc.is_test:

@@ -148,6 +148,21 @@ class TestKeywordSearchContent:
             '    return True\n',
             encoding="utf-8",
         )
+        (tmp_path / "project.py").write_text(
+            'class ProjectManager:\n'
+            '    """Manage project name and metadata."""\n'
+            '    def __init__(self, name: str):\n'
+            '        self.name = name\n'
+            '    def get_project_name(self) -> str:\n'
+            '        return self.name\n',
+            encoding="utf-8",
+        )
+        (tmp_path / "naming.py").write_text(
+            'def validate_project_name(name: str) -> bool:\n'
+            '    """Validate a project name meets requirements."""\n'
+            '    return len(name) > 0 and name.isidentifier()\n',
+            encoding="utf-8",
+        )
         return tmp_path
 
     def _make_mgr(self, root: Path) -> SemanticSearchManager:

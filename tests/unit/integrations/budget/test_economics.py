@@ -81,7 +81,9 @@ class TestBudgetChecks:
         assert check.budget_type == "iterations"
 
     def test_no_limit(self) -> None:
-        em = ExecutionEconomicsManager(budget=ExecutionBudget(max_tokens=0, max_iterations=0))
+        # Use a very large budget to simulate "unlimited" — max_tokens=0
+        # gets clamped to 100k by __post_init__, so we use an explicit huge value.
+        em = ExecutionEconomicsManager(budget=ExecutionBudget(max_tokens=999_999_999, max_iterations=0))
         em.record_llm_usage(999999, 999999)
         check = em.check_budget()
         assert check.can_continue
