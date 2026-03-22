@@ -5,7 +5,7 @@ Provides ~55 slash commands organized into groups:
 - Session: /sessions, /load, /resume, /checkpoint, /checkpoints, /reset, /handoff
 - Mode: /mode, /plan, /show-plan, /approve, /reject
 - Agent: /agents, /spawn, /find, /suggest, /auto
-- Thread: /fork, /threads, /switch, /rollback, /restore
+- Thread: /fork, /threads, /switch, /tree, /rollback, /restore
 - Goals: /goals
 - MCP: /mcp
 - Skills: /skills
@@ -188,6 +188,9 @@ async def handle_command(
     if cmd == "/handoff":
         return _handoff_command(agent, arg)
 
+    if cmd == "/export":
+        return _export_command(agent, arg)
+
     # --- Mode commands ---
     if cmd == "/mode":
         return _mode_command(agent, arg)
@@ -229,6 +232,9 @@ async def handle_command(
 
     if cmd == "/switch":
         return _switch_command(agent, arg)
+
+    if cmd == "/tree":
+        return _tree_command(agent)
 
     if cmd == "/rollback":
         return _rollback_command(agent, arg)
@@ -353,6 +359,7 @@ def _help_text() -> str:
         "  /checkpoints [id] List checkpoints for a session\n"
         "  /reset            Reset conversation (clear messages & metrics)\n"
         "  /handoff [fmt]    Export session handoff summary (markdown)\n"
+        "  /export [html|md] Export session as HTML or markdown file\n"
         "\n"
         "Mode:\n"
         "  /mode [name]      Show or switch mode (build/plan/review/debug)\n"
@@ -372,6 +379,7 @@ def _help_text() -> str:
         "  /fork [label]     Fork conversation into a new thread\n"
         "  /threads          List all conversation threads\n"
         "  /switch <id>      Switch to a different thread\n"
+        "  /tree             Show thread/fork tree visualization\n"
         "  /rollback [n]     Remove last N messages (default: 1 turn)\n"
         "  /restore <id>     Restore from a checkpoint\n"
         "\n"
@@ -517,17 +525,70 @@ def _model_command(agent: Any, arg: str) -> CommandResult:
     if agent is None:
         return CommandResult(output="No agent running.")
 
-    if not arg:
-        model = "unknown"
-        if agent and hasattr(agent, "config"):
-            model = agent.config.model or "default"
-        return CommandResult(output=f"Model: {model}")
+    current_model = "unknown"
+    if agent and hasattr(agent, "config"):
+        current_model = agent.config.model or "default"
 
-    # Switch model
-    if hasattr(agent, "_config"):
-        agent._config.model = arg
-        return CommandResult(output=f"Switched model to: {arg}")
-    return CommandResult(output="Cannot switch model on this agent.")
+    if not arg:
+        # Show current model + list available
+        from attocode.providers.catalog import format_model_table, get_catalog
+        catalog = get_catalog()
+        provider = agent.config.provider if hasattr(agent, "config") else None
+        entries = catalog.list_models(provider=provider, limit=15)
+        table = format_model_table(entries, current_model=current_model)
+        return CommandResult(
+            output=f"Current model: {current_model}\n\n"
+            f"Available models ({catalog.count} total, showing {provider or 'all'}):\n{table}\n\n"
+            "Use /model <query> to search, /model set <model_id> to switch."
+        )
+
+    # Handle subcommands
+    parts = arg.split(maxsplit=1)
+    subcmd = parts[0].lower()
+
+    if subcmd == "set" and len(parts) > 1:
+        # Direct model switch
+        new_model = parts[1].strip()
+        if hasattr(agent, "_config"):
+            agent._config.model = new_model
+            return CommandResult(output=f"Switched model to: {new_model}")
+        return CommandResult(output="Cannot switch model on this agent.")
+
+    if subcmd == "list":
+        # List all models (optionally filtered by provider)
+        from attocode.providers.catalog import format_model_table, get_catalog
+        catalog = get_catalog()
+        provider_filter = parts[1].strip() if len(parts) > 1 else None
+        entries = catalog.list_models(provider=provider_filter, limit=50)
+        table = format_model_table(entries, current_model=current_model)
+        return CommandResult(
+            output=f"Models ({len(entries)} shown):\n{table}"
+        )
+
+    if subcmd == "refresh":
+        from attocode.providers.catalog import get_catalog
+        catalog = get_catalog()
+        catalog.refresh()
+        return CommandResult(output=f"Model catalog refreshed: {catalog.count} models loaded.")
+
+    # Fuzzy search — treat entire arg as search query
+    from attocode.providers.catalog import format_model_table, get_catalog
+    catalog = get_catalog()
+    results = catalog.search(arg, limit=10)
+    if not results:
+        return CommandResult(output=f"No models matching '{arg}'. Try /model list to see all.")
+
+    table = format_model_table(results, show_score=True, current_model=current_model)
+
+    # If there's a strong match, offer to switch
+    top_entry, top_score = results[0]
+    hint = ""
+    if top_score > 0.8:
+        hint = f"\nTop match: {top_entry.model_id} — use /model set {top_entry.model_id} to switch."
+
+    return CommandResult(
+        output=f"Search results for '{arg}':\n{table}{hint}"
+    )
 
 
 async def _compact_command(agent: Any) -> CommandResult:
@@ -830,6 +891,116 @@ def _handoff_command(agent: Any, arg: str) -> CommandResult:
             lines.append(f"- Changes:\n{summary}")
 
     return CommandResult(output="\n".join(lines))
+
+
+def _export_command(agent: Any, arg: str) -> CommandResult:
+    """Export session as HTML or markdown."""
+    import datetime as _dt
+    from pathlib import Path
+
+    ctx = _get_ctx(agent)
+    if not ctx:
+        return CommandResult(output="No active context.")
+
+    fmt = (arg.split()[0] if arg else "html").lower()
+    if fmt == "md" or fmt == "markdown":
+        return _handoff_command(agent, arg)
+
+    # HTML export
+    m = ctx.metrics
+    model = "unknown"
+    if agent and hasattr(agent, "config"):
+        model = agent.config.model or "unknown"
+
+    now = _dt.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    session_id = ctx.session_id or "unsaved"
+
+    # Build message HTML
+    msg_html_parts: list[str] = []
+    for msg in ctx.messages:
+        role = getattr(msg, "role", "unknown")
+        content = getattr(msg, "content", "")
+        if not content or not isinstance(content, str):
+            continue
+
+        role_class = role.replace(" ", "-")
+        # Escape HTML
+        import html as _html
+        safe_content = _html.escape(str(content))
+        # Preserve newlines and code blocks
+        safe_content = safe_content.replace("\n", "<br>")
+
+        msg_html_parts.append(
+            f'<div class="message {role_class}">'
+            f'<div class="role">{role}</div>'
+            f'<div class="content">{safe_content}</div>'
+            f"</div>"
+        )
+
+    messages_html = "\n".join(msg_html_parts)
+
+    html = f"""<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Attocode Session: {session_id}</title>
+<style>
+  * {{ margin: 0; padding: 0; box-sizing: border-box; }}
+  body {{ font-family: 'SF Mono', 'Cascadia Code', 'Fira Code', monospace;
+         background: #0d1117; color: #c9d1d9; padding: 20px; max-width: 900px; margin: 0 auto; }}
+  h1 {{ color: #58a6ff; margin-bottom: 10px; font-size: 1.4em; }}
+  .meta {{ color: #8b949e; margin-bottom: 20px; font-size: 0.85em; }}
+  .meta span {{ margin-right: 16px; }}
+  .stats {{ background: #161b22; border: 1px solid #30363d; border-radius: 6px;
+            padding: 12px 16px; margin-bottom: 20px; display: flex; gap: 24px; flex-wrap: wrap; }}
+  .stat {{ text-align: center; }}
+  .stat-value {{ color: #58a6ff; font-size: 1.2em; font-weight: bold; }}
+  .stat-label {{ color: #8b949e; font-size: 0.75em; }}
+  .messages {{ display: flex; flex-direction: column; gap: 8px; }}
+  .message {{ background: #161b22; border: 1px solid #30363d; border-radius: 6px; padding: 12px; }}
+  .message.user {{ border-left: 3px solid #58a6ff; }}
+  .message.assistant {{ border-left: 3px solid #3fb950; }}
+  .message.system {{ border-left: 3px solid #8b949e; opacity: 0.7; }}
+  .message.tool {{ border-left: 3px solid #d29922; }}
+  .role {{ color: #8b949e; font-size: 0.75em; text-transform: uppercase; margin-bottom: 6px; }}
+  .content {{ white-space: pre-wrap; word-wrap: break-word; font-size: 0.9em; line-height: 1.5; }}
+  .footer {{ margin-top: 20px; color: #484f58; font-size: 0.75em; text-align: center; }}
+</style>
+</head>
+<body>
+<h1>Attocode Session Export</h1>
+<div class="meta">
+  <span>Session: {session_id}</span>
+  <span>Model: {model}</span>
+  <span>Exported: {now}</span>
+</div>
+<div class="stats">
+  <div class="stat"><div class="stat-value">{len(ctx.messages)}</div><div class="stat-label">Messages</div></div>
+  <div class="stat"><div class="stat-value">{ctx.iteration}</div><div class="stat-label">Iterations</div></div>
+  <div class="stat"><div class="stat-value">{m.llm_calls}</div><div class="stat-label">LLM Calls</div></div>
+  <div class="stat"><div class="stat-value">{m.tool_calls}</div><div class="stat-label">Tool Calls</div></div>
+  <div class="stat"><div class="stat-value">{m.total_tokens:,}</div><div class="stat-label">Tokens</div></div>
+  <div class="stat"><div class="stat-value">${m.estimated_cost:.4f}</div><div class="stat-label">Cost</div></div>
+</div>
+<div class="messages">
+{messages_html}
+</div>
+<div class="footer">Generated by Attocode v0.2.4</div>
+</body>
+</html>"""
+
+    # Write to file
+    export_dir = Path(".attocode/exports")
+    export_dir.mkdir(parents=True, exist_ok=True)
+    ts = _dt.datetime.now().strftime("%Y%m%d-%H%M%S")
+    export_path = export_dir / f"session-{ts}.html"
+    export_path.write_text(html)
+
+    return CommandResult(
+        output=f"Session exported to: {export_path}\n"
+        f"  Messages: {len(ctx.messages)}, Tokens: {m.total_tokens:,}, Cost: ${m.estimated_cost:.4f}"
+    )
 
 
 # ============================================================
@@ -1364,6 +1535,61 @@ def _switch_command(agent: Any, thread_id: str) -> CommandResult:
         )
     except Exception as e:
         return CommandResult(output=f"Switch failed: {e}")
+
+
+def render_thread_tree(mgr: Any) -> str:
+    """Build an ASCII tree visualization of thread/fork structure."""
+    tree = mgr.get_thread_tree()
+    active_id = mgr.active_thread_id
+    threads = {t.thread_id: t for t in mgr.list_threads()}
+
+    def _format_node(tid: str) -> str:
+        info = threads.get(tid)
+        if not info:
+            return tid
+        label_part = f': "{info.label}"' if info.label else ""
+        msg_part = f" ({info.message_count} messages)"
+        active_part = " [active]" if tid == active_id else ""
+        return f"{tid}{label_part}{msg_part}{active_part}"
+
+    lines: list[str] = []
+
+    def _walk(parent_id: str, prefix: str, is_last: bool, is_root: bool) -> None:
+        if not is_root:
+            connector = "\u2514\u2500\u2500 " if is_last else "\u251c\u2500\u2500 "
+            lines.append(f"{prefix}{connector}{_format_node(parent_id)}")
+            child_prefix = prefix + ("    " if is_last else "\u2502   ")
+        else:
+            lines.append(_format_node(parent_id))
+            child_prefix = ""
+
+        children = tree.get(parent_id, [])
+        for i, child_id in enumerate(children):
+            _walk(child_id, child_prefix, i == len(children) - 1, False)
+
+    root_children = tree.get("root", [])
+    if not root_children:
+        return _format_node("main")
+
+    for i, root_id in enumerate(root_children):
+        _walk(root_id, "", i == len(root_children) - 1, True)
+
+    return "\n".join(lines)
+
+
+def _tree_command(agent: Any) -> CommandResult:
+    """Show thread/fork tree visualization."""
+    ctx = _get_ctx(agent)
+    mgr = getattr(ctx, "thread_manager", None) if ctx else None
+
+    if not mgr:
+        return _feature_unavailable("Thread management", "/fork to create the first thread")
+
+    try:
+        output = render_thread_tree(mgr)
+        return CommandResult(output=output)
+    except Exception as e:
+        return CommandResult(output=f"Error rendering tree: {e}")
 
 
 def _rollback_command(agent: Any, arg: str) -> CommandResult:

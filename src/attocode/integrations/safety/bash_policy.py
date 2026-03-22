@@ -64,6 +64,9 @@ BLOCKED_PATTERNS = [
     r"sudo\s+rm",
     r"sudo\s+chmod",
     r"sudo\s+chown",
+    # Protect .git and .attocode directories from destructive bash commands
+    r"rm\s+.*\.git\b",
+    r"rm\s+.*\.attocode\b",
 ]
 
 # Patterns that warrant a warning

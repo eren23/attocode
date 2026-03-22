@@ -2,8 +2,14 @@
 
 from __future__ import annotations
 
+import asyncio
+import logging
 from dataclasses import dataclass
 from enum import StrEnum
+from pathlib import Path
+from typing import Callable
+
+logger = logging.getLogger(__name__)
 
 
 class ThemeName(StrEnum):
@@ -134,3 +140,115 @@ def get_theme(name: ThemeName | str = ThemeName.DARK) -> ThemeColors:
     if isinstance(name, str):
         name = ThemeName(name)
     return THEMES.get(name, DARK_THEME)
+
+
+class ThemeWatcher:
+    """Watch CSS/TCSS theme files for changes and trigger a callback on modification.
+
+    Uses asyncio polling (checks mtime every ``poll_interval`` seconds) to avoid
+    an external dependency on ``watchfiles`` or similar packages.
+    """
+
+    DEFAULT_POLL_INTERVAL: float = 2.0
+
+    def __init__(
+        self,
+        callback: Callable[[], None],
+        watch_paths: list[Path] | None = None,
+        poll_interval: float | None = None,
+    ) -> None:
+        self._callback = callback
+        self._watch_paths = list(watch_paths or [])
+        self._poll_interval = poll_interval or self.DEFAULT_POLL_INTERVAL
+        self._mtimes: dict[Path, float] = {}
+        self._task: asyncio.Task[None] | None = None
+        self._running = False
+
+    # ------------------------------------------------------------------
+    # Public API
+    # ------------------------------------------------------------------
+
+    async def start(self) -> None:
+        """Begin watching files in a background asyncio task."""
+        if self._running:
+            return
+        self._running = True
+        # Snapshot initial mtimes so we only fire on *subsequent* changes.
+        self._snapshot_mtimes()
+        self._task = asyncio.create_task(self._poll_loop())
+
+    async def stop(self) -> None:
+        """Stop watching and cancel the background task."""
+        self._running = False
+        if self._task is not None:
+            self._task.cancel()
+            try:
+                await self._task
+            except asyncio.CancelledError:
+                pass
+            self._task = None
+
+    @property
+    def is_running(self) -> bool:
+        """Return True if the watcher is actively polling."""
+        return self._running
+
+    @property
+    def watch_paths(self) -> list[Path]:
+        """Return the list of paths being watched."""
+        return list(self._watch_paths)
+
+    # ------------------------------------------------------------------
+    # Internals
+    # ------------------------------------------------------------------
+
+    def _snapshot_mtimes(self) -> None:
+        """Record current mtime for every watched path that exists."""
+        self._mtimes.clear()
+        for path in self._watch_paths:
+            try:
+                if path.is_file():
+                    self._mtimes[path] = path.stat().st_mtime
+            except OSError:
+                # File might be inaccessible — skip it silently.
+                pass
+
+    def _check_for_changes(self) -> bool:
+        """Return True if any watched file has been modified since last check."""
+        changed = False
+        for path in self._watch_paths:
+            try:
+                if not path.is_file():
+                    # File was removed — if we tracked it, that counts as a change.
+                    if path in self._mtimes:
+                        del self._mtimes[path]
+                        changed = True
+                    continue
+                current_mtime = path.stat().st_mtime
+                previous_mtime = self._mtimes.get(path)
+                if previous_mtime is None or current_mtime != previous_mtime:
+                    self._mtimes[path] = current_mtime
+                    if previous_mtime is not None:
+                        # Only flag as changed if we had a previous snapshot
+                        # (new files appearing aren't treated as changes).
+                        changed = True
+            except OSError:
+                pass
+        return changed
+
+    async def _poll_loop(self) -> None:
+        """Continuously poll file mtimes and invoke the callback on changes."""
+        while self._running:
+            try:
+                await asyncio.sleep(self._poll_interval)
+                if not self._running:
+                    break
+                if self._check_for_changes():
+                    try:
+                        self._callback()
+                    except Exception:
+                        logger.exception("ThemeWatcher callback failed")
+            except asyncio.CancelledError:
+                break
+            except Exception:
+                logger.exception("ThemeWatcher poll error")

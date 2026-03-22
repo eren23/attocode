@@ -1481,6 +1481,24 @@ class SwarmOrchestrator:
         """Capture git diff for modified files."""
         self._capture_task_diff(result.task_id, result.files_modified)
 
+    async def pipeline_git_commit(self, result: TaskResult) -> str | None:
+        """Create an atomic git commit for a completed task."""
+        if not self._git_safety:
+            return None
+        commit_hash = await self._git_safety.create_task_commit(
+            task_id=result.task_id,
+            summary=result.result_summary or result.task_id,
+            files=result.files_modified or None,
+        )
+        if commit_hash:
+            self._emit(
+                "git_commit",
+                task_id=result.task_id,
+                message=f"Committed {result.task_id}: {commit_hash[:8]}",
+                data={"commit": commit_hash, "files": result.files_modified},
+            )
+        return commit_hash
+
     async def pipeline_run_projection(self) -> None:
         """Run budget projection."""
         self._run_budget_projection()

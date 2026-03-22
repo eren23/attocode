@@ -221,6 +221,49 @@ class GitSafetyNet:
             return True
         return False
 
+    async def create_task_commit(
+        self,
+        task_id: str,
+        summary: str,
+        files: list[str] | None = None,
+    ) -> str | None:
+        """Commit changes for a single completed task.
+
+        Returns the commit hash on success, or *None* if nothing was
+        committed or an error occurred.  Errors are logged but never
+        raised — a failed commit must not fail the task.
+        """
+        if not self._state.is_git_repo or not self._state.swarm_branch:
+            return None
+
+        try:
+            # Stage files
+            if files:
+                for f in files:
+                    rc, _ = await self._git("add", "--", f)
+                    if rc != 0:
+                        logger.debug("git add failed for %s (task %s)", f, task_id)
+            else:
+                rc, _ = await self._stage_product_changes()
+                if rc != 0:
+                    return None
+
+            # Anything staged?
+            rc, _ = await self._git("diff", "--cached", "--quiet")
+            if rc == 0:
+                return None  # nothing to commit
+
+            msg = f"swarm({task_id}): {summary[:80]}"
+            rc, _ = await self._git("commit", "-m", msg)
+            if rc != 0:
+                return None
+
+            commit_hash = await self._current_head()
+            return commit_hash or None
+        except Exception as exc:
+            logger.warning("create_task_commit failed for %s: %s", task_id, exc)
+            return None
+
     async def finalize(self, mode: str = "keep") -> None:
         """Finalize the swarm run: merge, keep, or discard the swarm branch.
 

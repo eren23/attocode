@@ -8,12 +8,13 @@ from attocode.tui.event_hooks import (
     PruneConfig,
     prune_messages,
 )
-from attocode.tui.theme import ThemeColors, ThemeName, get_theme
+from attocode.tui.theme import ThemeColors, ThemeName, ThemeWatcher, get_theme
 
 __all__ = [
     "AttocodeApp",
     "ThemeColors",
     "ThemeName",
+    "ThemeWatcher",
     "get_theme",
     "AgentEventBridge",
     "EventFilterLevel",
