@@ -200,6 +200,14 @@ LANG_EXTENSIONS: dict[str, str] = {
     ".hcl": "hcl",
     ".tfvars": "hcl",
     ".zig": "zig",
+    # Phase 3: Additional programming languages
+    ".nim": "nim",
+    ".fs": "fsharp",
+    ".fsi": "fsharp",
+    ".fsx": "fsharp",
+    ".cr": "crystal",
+    ".m": "objc",
+    ".mm": "objc",
     # Phase 2: Data/config languages
     ".yaml": "yaml",
     ".yml": "yaml",
