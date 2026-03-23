@@ -13,6 +13,7 @@ from collections import Counter, deque
 from attocode.code_intel.helpers import (
     _compute_file_metrics,
     _compute_function_hotspots,
+    _get_churn_scores,
 )
 from attocode.code_intel.server import (
     _get_ast_service,
@@ -173,8 +174,10 @@ def hotspots(top_n: int = 15) -> str:
     svc = _get_ast_service()
     index = svc._index
     ast_cache = svc._ast_cache
+    project_dir = _get_project_dir()
+    churn_scores = _get_churn_scores(project_dir, files)
 
-    all_metrics = _compute_file_metrics(files, index, ast_cache)
+    all_metrics = _compute_file_metrics(files, index, ast_cache, churn_scores)
     if not all_metrics:
         return "No analyzable files found."
 

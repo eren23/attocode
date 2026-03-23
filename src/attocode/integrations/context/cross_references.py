@@ -6,8 +6,15 @@ file-level import dependencies, and dependents from parsed AST data.
 
 from __future__ import annotations
 
+import logging
 import re
 from dataclasses import dataclass, field
+from typing import TYPE_CHECKING, Any
+
+if TYPE_CHECKING:
+    from attocode.integrations.context.index_store import IndexStore
+
+logger = logging.getLogger(__name__)
 
 
 def _split_name_tokens(name: str) -> list[str]:
@@ -49,6 +56,7 @@ class SymbolRef:
     ref_kind: str           # "call" | "import" | "attribute"
     file_path: str
     line: int
+    source: str = "tree-sitter"  # "tree-sitter" | "lsp"
 
 
 @dataclass(slots=True)
@@ -61,6 +69,7 @@ class SymbolLocation:
     file_path: str
     start_line: int
     end_line: int
+    source: str = "tree-sitter"  # "tree-sitter" | "lsp"
 
 
 @dataclass(slots=True)
@@ -70,6 +79,8 @@ class CrossRefIndex:
     Tracks symbol definitions, call sites, file-level import dependencies,
     and reverse dependents.  Includes an inverted name index for fast
     multi-strategy symbol search.
+
+    Optionally backed by an ``IndexStore`` for persistence across restarts.
     """
 
     # qualified_name -> list of definition locations
@@ -90,6 +101,147 @@ class CrossRefIndex:
     _lower_to_qnames: dict[str, set[str]] = field(default_factory=dict)
     # individual token -> set of qualified names
     _tokens_to_qnames: dict[str, set[str]] = field(default_factory=dict)
+
+    # Optional persistent store (set via set_store)
+    _store: Any = field(default=None, repr=False)
+
+    def set_store(self, store: IndexStore) -> None:
+        """Attach an IndexStore for write-through persistence."""
+        self._store = store
+
+    def persist_file(self, file_path: str) -> None:
+        """Write-through: save current in-memory symbols/refs for a file to the store."""
+        if self._store is None:
+            return
+        # Collect symbols for this file
+        sym_dicts: list[dict[str, Any]] = []
+        for qname in self.file_symbols.get(file_path, set()):
+            for loc in self.definitions.get(qname, []):
+                if loc.file_path == file_path:
+                    sym_dicts.append({
+                        "name": loc.name,
+                        "qualified_name": loc.qualified_name,
+                        "kind": loc.kind,
+                        "line": loc.start_line,
+                        "end_line": loc.end_line,
+                        "source": loc.source,
+                    })
+        self._store.save_symbols(file_path, sym_dicts)
+
+        # Collect references originating from this file
+        ref_dicts: list[dict[str, Any]] = []
+        for ref_name, refs in self.references.items():
+            for ref in refs:
+                if ref.file_path == file_path:
+                    ref_dicts.append({
+                        "symbol_name": ref.symbol_name,
+                        "ref_kind": ref.ref_kind,
+                        "line": ref.line,
+                        "column": 0,
+                        "source": ref.source,
+                    })
+        self._store.save_references(file_path, ref_dicts)
+
+    def load_from_store(self) -> int:
+        """Bulk-load symbols, references, and dependencies from the store.
+
+        Returns the number of files loaded.
+        """
+        if self._store is None:
+            return 0
+
+        stored_symbols = self._store.load_symbols()
+        stored_refs = self._store.load_references()
+        stored_deps = self._store.load_dependencies()
+
+        files_loaded: set[str] = set()
+
+        for s in stored_symbols:
+            loc = SymbolLocation(
+                name=s.name,
+                qualified_name=s.qualified_name,
+                kind=s.kind,
+                file_path=s.file_path,
+                start_line=s.line,
+                end_line=s.end_line,
+                source=s.source,
+            )
+            self.add_definition(loc)
+            files_loaded.add(s.file_path)
+
+        for r in stored_refs:
+            ref = SymbolRef(
+                symbol_name=r.symbol_name,
+                ref_kind=r.ref_kind,
+                file_path=r.file_path,
+                line=r.line,
+                source=r.source,
+            )
+            self.add_reference(ref)
+
+        for src, targets in stored_deps.items():
+            for tgt in targets:
+                self.add_file_dependency(src, tgt)
+
+        logger.debug(
+            "CrossRefIndex loaded from store: %d files, %d symbols, %d refs",
+            len(files_loaded), len(stored_symbols), len(stored_refs),
+        )
+        return len(files_loaded)
+
+    def merge_lsp_results(
+        self,
+        file_path: str,
+        definitions: list[SymbolLocation],
+        references: list[SymbolRef],
+    ) -> int:
+        """Merge LSP-sourced results into the index.
+
+        Deduplicates by (qualified_name, file, line) — LSP wins on conflict.
+        Returns the number of new entries added.
+        """
+        added = 0
+
+        for loc in definitions:
+            # Create a copy with source="lsp" — don't mutate caller's input
+            lsp_loc = SymbolLocation(
+                name=loc.name, qualified_name=loc.qualified_name,
+                kind=loc.kind, file_path=loc.file_path,
+                start_line=loc.start_line, end_line=loc.end_line,
+                source="lsp",
+            )
+            existing = self.definitions.get(lsp_loc.qualified_name, [])
+            # Check for duplicate at same location
+            dup = False
+            for i, ex in enumerate(existing):
+                if ex.file_path == lsp_loc.file_path and ex.start_line == lsp_loc.start_line:
+                    # LSP wins: replace tree-sitter entry
+                    existing[i] = lsp_loc
+                    dup = True
+                    break
+            if not dup:
+                self.add_definition(lsp_loc)
+                added += 1
+
+        for ref in references:
+            lsp_ref = SymbolRef(
+                symbol_name=ref.symbol_name, ref_kind=ref.ref_kind,
+                file_path=ref.file_path, line=ref.line,
+                source="lsp",
+            )
+            existing = self.references.get(lsp_ref.symbol_name, [])
+            dup = False
+            for ex in existing:
+                if ex.file_path == lsp_ref.file_path and ex.line == lsp_ref.line:
+                    dup = True
+                    break
+            if not dup:
+                self.add_reference(lsp_ref)
+                added += 1
+
+        # Persist if store is available
+        self.persist_file(file_path)
+        return added
 
     def add_definition(self, loc: SymbolLocation) -> None:
         """Register a symbol definition."""
@@ -112,7 +264,9 @@ class CrossRefIndex:
         self.file_dependents.setdefault(target, set()).add(source)
 
     def remove_file(self, file_path: str) -> None:
-        """Remove all index entries for a file."""
+        """Remove all index entries for a file (in-memory and store)."""
+        if self._store is not None:
+            self._store.remove_file(file_path)
         # Remove definitions and clean up inverted indexes
         for qname in list(self.file_symbols.get(file_path, [])):
             defs = self.definitions.get(qname, [])
@@ -289,4 +443,7 @@ def _rank_score(loc: SymbolLocation, match_score: float) -> float:
         importance += 0.02
     kind_boost = {"class": 0.03, "interface": 0.03, "function": 0.01, "method": 0.0}
     importance += kind_boost.get(loc.kind, 0.0)
+    # LSP-sourced entries are more precise
+    if loc.source == "lsp":
+        importance += 0.05
     return match_score + importance

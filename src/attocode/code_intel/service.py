@@ -113,6 +113,12 @@ class CodeIntelService:
                         root_uri=f"file://{self._project_dir}",
                     )
                     mgr = LSPManager(config=config)
+                    # Wire LSP results back into the cross-ref index
+                    try:
+                        ast_svc = self._get_ast_service()
+                        mgr.on_result_callback = ast_svc.ingest_lsp_results
+                    except Exception:
+                        pass  # ASTService may not be ready yet
                     # auto_start is async, will be called on first LSP request
                     self._lsp_manager = mgr
                     self._lsp_auto_started = False
@@ -162,6 +168,92 @@ class CodeIntelService:
     # ------------------------------------------------------------------
     # Tool operations — same signatures as server.py tool functions
     # ------------------------------------------------------------------
+
+    def reindex(self, *, force: bool = False) -> dict:
+        """Re-index the codebase. Returns stats."""
+        svc = self._get_ast_service()
+        svc.initialize(force=force)
+        stats = svc._store.stats() if hasattr(svc, "_store") else {}
+        return {"mode": "full" if force else "incremental", **stats}
+
+    def _get_temporal_analyzer(self):
+        if not hasattr(self, "_temporal_analyzer") or self._temporal_analyzer is None:
+            from attocode.integrations.context.temporal_coupling import (
+                TemporalCouplingAnalyzer,
+            )
+            self._temporal_analyzer = TemporalCouplingAnalyzer(
+                project_dir=self._project_dir,
+            )
+        return self._temporal_analyzer
+
+    def change_coupling_data(
+        self, file: str, *, days: int = 90, min_coupling: float = 0.3, top_k: int = 20,
+    ) -> dict:
+        """Get change coupling data for a file."""
+        analyzer = self._get_temporal_analyzer()
+        results = analyzer.get_change_coupling(
+            file, days=days, min_coupling=min_coupling, top_k=top_k,
+        )
+        return {
+            "file": file,
+            "days": days,
+            "results": [
+                {
+                    "path": e.path,
+                    "coupling_score": e.coupling_score,
+                    "co_changes": e.co_changes,
+                    "individual_changes": e.individual_changes,
+                }
+                for e in results
+            ],
+        }
+
+    def churn_hotspots_data(self, *, days: int = 90, top_n: int = 20) -> dict:
+        """Get churn hotspot data."""
+        analyzer = self._get_temporal_analyzer()
+        results = analyzer.get_churn_hotspots(days=days, top_n=top_n)
+        return {
+            "days": days,
+            "results": [
+                {
+                    "path": e.path,
+                    "commits": e.commits,
+                    "authors": e.authors,
+                    "lines_added": e.lines_added,
+                    "lines_removed": e.lines_removed,
+                    "churn_score": e.churn_score,
+                }
+                for e in results
+            ],
+        }
+
+    def merge_risk_data(self, files: list[str], *, days: int = 90) -> dict:
+        """Get merge risk predictions."""
+        analyzer = self._get_temporal_analyzer()
+        svc = self._get_ast_service()
+        results = analyzer.get_merge_risk(
+            files,
+            days=days,
+            dep_graph_forward=svc.index.file_dependencies,
+            dep_graph_reverse=svc.index.file_dependents,
+        )
+        max_conf = max((e.confidence for e in results), default=0.0)
+        risk_level = "high" if max_conf >= 0.7 else "medium" if max_conf >= 0.4 else "low"
+        return {
+            "files": files,
+            "days": days,
+            "risk_level": risk_level,
+            "predictions": [
+                {
+                    "path": e.path,
+                    "reason": e.reason,
+                    "confidence": e.confidence,
+                    "coupling_score": e.coupling_score,
+                    "structural_distance": e.structural_distance,
+                }
+                for e in results
+            ],
+        }
 
     def repo_map(self, *, include_symbols: bool = True, max_tokens: int = 6000) -> str:
         ctx = self._get_context_mgr()
@@ -292,7 +384,7 @@ class CodeIntelService:
 
     def hotspots_data(self, top_n: int = 15) -> dict:
         """Return structured hotspot data."""
-        from attocode.code_intel.helpers import _compute_file_metrics, _compute_function_hotspots
+        from attocode.code_intel.helpers import _compute_file_metrics, _compute_function_hotspots, _get_churn_scores
 
         ctx = self._get_context_mgr()
         files = ctx._files
@@ -302,8 +394,9 @@ class CodeIntelService:
         svc = self._get_ast_service()
         index = svc._index
         ast_cache = svc._ast_cache
+        churn_scores = _get_churn_scores(self._project_dir, files)
 
-        all_metrics = _compute_file_metrics(files, index, ast_cache)
+        all_metrics = _compute_file_metrics(files, index, ast_cache, churn_scores)
         all_metrics.sort(key=lambda m: m.composite, reverse=True)
 
         def _fm_dict(m):
@@ -1628,7 +1721,7 @@ class CodeIntelService:
         return "\n\n".join(sections)
 
     def hotspots(self, top_n: int = 15) -> str:
-        from attocode.code_intel.helpers import _compute_file_metrics, _compute_function_hotspots
+        from attocode.code_intel.helpers import _compute_file_metrics, _compute_function_hotspots, _get_churn_scores
 
         ctx = self._get_context_mgr()
         files = ctx._files
@@ -1638,8 +1731,9 @@ class CodeIntelService:
         svc = self._get_ast_service()
         index = svc._index
         ast_cache = svc._ast_cache
+        churn_scores = _get_churn_scores(self._project_dir, files)
 
-        all_metrics = _compute_file_metrics(files, index, ast_cache)
+        all_metrics = _compute_file_metrics(files, index, ast_cache, churn_scores)
         if not all_metrics:
             return "No analyzable files found."
 

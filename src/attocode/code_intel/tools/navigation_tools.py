@@ -646,3 +646,31 @@ def relevant_context(
         f"(depth={depth}, {len(visited)} files):\n"
     )
     return header_text + "\n".join(sections)
+
+
+@mcp.tool()
+def reindex(force: bool = False) -> str:
+    """Trigger a re-index of the codebase symbol database.
+
+    By default performs an incremental update — only re-parses files whose
+    mtime has changed since the last scan.  Pass ``force=True`` to rebuild
+    the entire index from scratch.
+
+    Args:
+        force: If True, discard the cached index and re-parse every file.
+    """
+    svc = _get_ast_service()
+    if force:
+        svc.force_reindex()
+    else:
+        svc.initialize(force=False)
+
+    stats = svc._store.stats() if hasattr(svc, "_store") else {}
+    mode = "full rebuild" if force else "incremental"
+    return (
+        f"Reindex complete ({mode}).\n"
+        f"  Files: {stats.get('files', '?')}\n"
+        f"  Symbols: {stats.get('symbols', '?')}\n"
+        f"  References: {stats.get('references', '?')}\n"
+        f"  Dependencies: {stats.get('dependencies', '?')}"
+    )

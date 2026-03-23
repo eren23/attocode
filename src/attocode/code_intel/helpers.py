@@ -282,8 +282,43 @@ def _compute_function_hotspots(ast_cache: dict, top_n: int = 10) -> list[_Functi
     return all_fns[:top_n]
 
 
-def _compute_file_metrics(files: list, index, ast_cache: dict) -> list[_FileMetrics]:
-    """Compute composite metrics for all files using percentile-based scoring."""
+def _get_churn_scores(project_dir: str, files: list) -> dict[str, float] | None:
+    """Compute churn scores for files via TemporalCouplingAnalyzer.
+
+    Returns a dict of relative_path -> churn_score (0.0-1.0), or None
+    if temporal coupling is unavailable (e.g. not a git repo).
+    """
+    try:
+        from attocode.integrations.context.temporal_coupling import (
+            TemporalCouplingAnalyzer,
+        )
+
+        analyzer = TemporalCouplingAnalyzer(project_dir=project_dir)
+        scores: dict[str, float] = {}
+        for fi in files:
+            score = analyzer.get_churn_score(fi.relative_path, days=90)
+            if score > 0:
+                scores[fi.relative_path] = score
+        return scores if scores else None
+    except Exception:
+        return None
+
+
+def _compute_file_metrics(
+    files: list,
+    index,
+    ast_cache: dict,
+    churn_scores: dict[str, float] | None = None,
+) -> list[_FileMetrics]:
+    """Compute composite metrics for all files using percentile-based scoring.
+
+    Args:
+        files: List of FileInfo objects.
+        index: CrossRefIndex instance.
+        ast_cache: Dict of relative_path -> FileAST.
+        churn_scores: Optional dict of relative_path -> churn_score (0.0-1.0).
+            When provided, churn is included in the composite score.
+    """
     # First pass: collect raw values for all eligible files
     raw: list[dict] = []
     for fi in files:
@@ -307,6 +342,7 @@ def _compute_file_metrics(files: list, index, ast_cache: dict) -> list[_FileMetr
         fan_in = len(index.file_dependents.get(rel, set()))
         fan_out = len(index.file_dependencies.get(rel, set()))
         density = sym_count / lc * 100 if lc > 0 else 0.0
+        churn = churn_scores.get(rel, 0.0) if churn_scores else 0.0
 
         raw.append({
             "path": rel,
@@ -316,10 +352,13 @@ def _compute_file_metrics(files: list, index, ast_cache: dict) -> list[_FileMetr
             "fan_in": fan_in,
             "fan_out": fan_out,
             "density": density,
+            "churn": churn,
         })
 
     if not raw:
         return []
+
+    has_churn = churn_scores is not None and any(r["churn"] > 0 for r in raw)
 
     # Second pass: compute percentile ranks for each metric
     lines_pct = _percentile_ranks([r["line_count"] for r in raw])
@@ -327,6 +366,7 @@ def _compute_file_metrics(files: list, index, ast_cache: dict) -> list[_FileMetr
     fan_in_pct = _percentile_ranks([r["fan_in"] for r in raw])
     fan_out_pct = _percentile_ranks([r["fan_out"] for r in raw])
     density_pct = _percentile_ranks([r["density"] for r in raw])
+    churn_pct = _percentile_ranks([r["churn"] for r in raw]) if has_churn else [0.0] * len(raw)
 
     # Adaptive thresholds: P90 with minimum floors
     n = len(raw)
@@ -345,14 +385,25 @@ def _compute_file_metrics(files: list, index, ast_cache: dict) -> list[_FileMetr
     thresh_fan_out = max(sorted_fan_out[p90_idx], 5)
 
     # Third pass: build results with percentile composite and adaptive categories
+    # Weights: with churn data, rebalance to include temporal dimension
+    if has_churn:
+        w_lines, w_sym, w_fan_in, w_fan_out, w_density, w_churn = (
+            0.20, 0.15, 0.25, 0.10, 0.10, 0.20,
+        )
+    else:
+        w_lines, w_sym, w_fan_in, w_fan_out, w_density, w_churn = (
+            0.25, 0.20, 0.30, 0.15, 0.10, 0.0,
+        )
+
     results: list[_FileMetrics] = []
     for i, r in enumerate(raw):
         composite = (
-            lines_pct[i] * 0.25
-            + sym_pct[i] * 0.20
-            + fan_in_pct[i] * 0.30
-            + fan_out_pct[i] * 0.15
-            + density_pct[i] * 0.10
+            lines_pct[i] * w_lines
+            + sym_pct[i] * w_sym
+            + fan_in_pct[i] * w_fan_in
+            + fan_out_pct[i] * w_fan_out
+            + density_pct[i] * w_density
+            + churn_pct[i] * w_churn
         )
 
         cats: list[str] = []
@@ -364,6 +415,8 @@ def _compute_file_metrics(files: list, index, ast_cache: dict) -> list[_FileMetr
             cats.append("coupling-magnet")
         if r["public_symbols"] >= thresh_pub:
             cats.append("wide-api")
+        if has_churn and churn_pct[i] >= 0.9:
+            cats.append("churn-hotspot")
 
         results.append(_FileMetrics(
             path=r["path"],

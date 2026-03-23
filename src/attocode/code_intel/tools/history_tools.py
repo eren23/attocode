@@ -1,6 +1,7 @@
 """History tools for the code-intel MCP server.
 
-Tools: code_evolution, recent_changes.
+Tools: code_evolution, recent_changes, change_coupling, churn_hotspots,
+merge_risk.
 
 Local mode uses git subprocess calls directly.
 Service mode queries the Commit + CommitFileStat DB tables.
@@ -11,6 +12,7 @@ from __future__ import annotations
 import logging
 import os
 import subprocess
+import threading
 from collections import defaultdict
 from datetime import datetime, timezone
 
@@ -370,5 +372,199 @@ def recent_changes(
                 f"Contributors: {', '.join(sorted_authors[:5])}, "
                 f"+{len(sorted_authors) - 5} more"
             )
+
+    return "\n".join(lines)
+
+
+# ---------------------------------------------------------------------------
+# Temporal coupling helpers
+# ---------------------------------------------------------------------------
+
+_temporal_analyzer = None
+_temporal_lock = threading.Lock()
+
+
+def _get_temporal_analyzer():
+    """Lazily initialize the TemporalCouplingAnalyzer singleton."""
+    global _temporal_analyzer
+    if _temporal_analyzer is None:
+        with _temporal_lock:
+            if _temporal_analyzer is None:
+                from attocode.integrations.context.temporal_coupling import (
+                    TemporalCouplingAnalyzer,
+                )
+
+                project_dir = _get_project_dir()
+                _temporal_analyzer = TemporalCouplingAnalyzer(project_dir=project_dir)
+    return _temporal_analyzer
+
+
+@mcp.tool()
+def change_coupling(
+    file: str,
+    days: int = 90,
+    min_coupling: float = 0.3,
+    top_k: int = 20,
+) -> str:
+    """Find files that frequently change alongside a given file.
+
+    Uses git history to build a co-change frequency matrix.  Files that
+    appear in the same commit as the target file are scored by how often
+    they co-occur relative to their individual change frequency.
+
+    A coupling score of 1.0 means the files ALWAYS change together.
+    A score of 0.5 means they change together half the time.
+
+    Args:
+        file: Target file path (relative to project root).
+        days: Time window in days (default 90).
+        min_coupling: Minimum coupling score to include (0.0-1.0, default 0.3).
+        top_k: Maximum number of results (default 20).
+    """
+    analyzer = _get_temporal_analyzer()
+
+    # Normalize path
+    project_dir = _get_project_dir()
+    if os.path.isabs(file):
+        try:
+            file = os.path.relpath(file, project_dir)
+        except ValueError:
+            pass
+
+    results = analyzer.get_change_coupling(
+        file, days=days, min_coupling=min_coupling, top_k=top_k,
+    )
+
+    if not results:
+        return f"No temporal coupling found for '{file}' in the last {days} days."
+
+    lines = [
+        f"Change coupling for {file} (last {days} days)",
+        f"({len(results)} coupled files, min_coupling={min_coupling})\n",
+        f"  {'#':>3}  {'Score':>6}  {'Co-chg':>6}  {'Indiv':>5}  File",
+        f"  {'':->3}  {'':->6}  {'':->6}  {'':->5}  {'':->40}",
+    ]
+
+    for i, entry in enumerate(results, 1):
+        lines.append(
+            f"  {i:>3}  {entry.coupling_score:>6.3f}  "
+            f"{entry.co_changes:>6}  {entry.individual_changes:>5}  {entry.path}"
+        )
+
+    return "\n".join(lines)
+
+
+@mcp.tool()
+def churn_hotspots(
+    days: int = 90,
+    top_n: int = 20,
+) -> str:
+    """Rank files by change frequency and churn intensity.
+
+    Combines commit frequency with line-level churn to identify the
+    most actively modified files.  High-churn files are candidates for
+    refactoring, increased test coverage, or architectural attention.
+
+    Args:
+        days: Time window in days (default 90).
+        top_n: Number of top files to return (default 20).
+    """
+    analyzer = _get_temporal_analyzer()
+    results = analyzer.get_churn_hotspots(days=days, top_n=top_n)
+
+    if not results:
+        return f"No file changes found in the last {days} days."
+
+    lines = [
+        f"Churn hotspots (last {days} days)",
+        f"({len(results)} files shown)\n",
+        f"  {'#':>3}  {'Score':>6}  {'Commits':>7}  {'Added':>6}  {'Removed':>7}  {'Authors':>7}  File",
+        f"  {'':->3}  {'':->6}  {'':->7}  {'':->6}  {'':->7}  {'':->7}  {'':->40}",
+    ]
+
+    for i, entry in enumerate(results, 1):
+        lines.append(
+            f"  {i:>3}  {entry.churn_score:>6.4f}  {entry.commits:>7}  "
+            f"+{entry.lines_added:>5}  -{entry.lines_removed:>6}  "
+            f"{len(entry.authors):>7}  {entry.path}"
+        )
+
+    return "\n".join(lines)
+
+
+@mcp.tool()
+def merge_risk(
+    files: list[str],
+    days: int = 90,
+) -> str:
+    """Predict which other files will likely need changes.
+
+    Given a set of files you're about to modify, predicts which other
+    files are at risk of needing changes too — based on both temporal
+    coupling (git co-change history) and structural coupling (import
+    dependencies).
+
+    Each prediction is annotated with its source ("temporal",
+    "structural", or "both") and a confidence score.
+
+    Args:
+        files: List of file paths being modified.
+        days: Time window for temporal coupling (default 90).
+    """
+    from attocode.code_intel.server import _get_ast_service
+
+    analyzer = _get_temporal_analyzer()
+    project_dir = _get_project_dir()
+
+    # Normalize paths
+    normalized = []
+    for f in files:
+        if os.path.isabs(f):
+            try:
+                f = os.path.relpath(f, project_dir)
+            except ValueError:
+                pass
+        normalized.append(f)
+
+    # Get dependency graph from ASTService
+    dep_forward: dict[str, set[str]] | None = None
+    dep_reverse: dict[str, set[str]] | None = None
+    try:
+        ast_svc = _get_ast_service()
+        dep_forward = ast_svc.index.file_dependencies
+        dep_reverse = ast_svc.index.file_dependents
+    except Exception:
+        logger.debug("Could not load dependency graph for merge_risk")
+
+    results = analyzer.get_merge_risk(
+        normalized,
+        days=days,
+        dep_graph_forward=dep_forward,
+        dep_graph_reverse=dep_reverse,
+    )
+
+    if not results:
+        return f"No additional files predicted to need changes alongside {', '.join(normalized)}."
+
+    # Determine overall risk level
+    max_conf = max(e.confidence for e in results)
+    if max_conf >= 0.7:
+        risk_level = "HIGH"
+    elif max_conf >= 0.4:
+        risk_level = "MEDIUM"
+    else:
+        risk_level = "LOW"
+
+    lines = [
+        f"Merge risk analysis for {', '.join(normalized)}",
+        f"Overall risk: {risk_level} ({len(results)} predicted changes)\n",
+        f"  {'#':>3}  {'Conf':>5}  {'Source':>10}  File",
+        f"  {'':->3}  {'':->5}  {'':->10}  {'':->40}",
+    ]
+
+    for i, entry in enumerate(results, 1):
+        lines.append(
+            f"  {i:>3}  {entry.confidence:>5.3f}  {entry.reason:>10}  {entry.path}"
+        )
 
     return "\n".join(lines)
