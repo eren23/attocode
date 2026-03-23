@@ -1112,6 +1112,17 @@ _GENERIC_FUNCTION_TYPES = frozenset({
     "init_declaration", "arrow_function", "generator_function_declaration",
     "function",  # Haskell
     "bind",  # Haskell
+    "proc_declaration", "template_declaration",  # Nim
+    "fun_def", "val_def", "let_binding",  # OCaml, F#
+    "defn", "defn-", "defmacro",  # Clojure
+    "function_clause",  # Erlang
+    "macro_definition",  # Clojure, Elixir
+    "subroutine_definition", "subroutine",  # Fortran
+    "class_method_definition", "instance_method_definition",  # Obj-C
+    "fun_declaration",  # Crystal, Dart
+    "abstract_method_signature",  # Dart
+    "short_function_definition",  # Julia
+    "function_assignment",  # R
 })
 
 # Node types that indicate a "class-like" definition
@@ -1125,6 +1136,14 @@ _GENERIC_CLASS_TYPES = frozenset({
     "object_declaration", "record_declaration",
     "data_type", "newtype", "type_synonym",  # Haskell
     "union_declaration",  # Zig
+    "type_section", "object_type",  # Nim
+    "deftype", "defrecord", "defprotocol",  # Clojure
+    "record_definition", "type_spec",  # Erlang
+    "category_interface", "category_implementation",  # Obj-C
+    "class_interface", "class_implementation",  # Obj-C
+    "abstract_type_definition",  # Julia
+    "mixin_declaration",  # Dart
+    "lib_declaration",  # Crystal
 })
 
 # Node types that indicate imports
@@ -1134,6 +1153,13 @@ _GENERIC_IMPORT_TYPES = frozenset({
     "namespace_use_declaration", "import_header",
     "import",  # Haskell
     "using_namespace_declaration",  # Zig
+    "open_directive", "open_statement",  # OCaml, F#
+    "require_expression", "require",  # Clojure, Crystal
+    "include_statement", "include_directive",  # Nim, C
+    "import_attribute", "attribute",  # Erlang
+    "import_header",  # Obj-C
+    "using_statement",  # Julia
+    "library_import",  # R
 })
 
 
@@ -1147,39 +1173,58 @@ class GenericTreeSitterExtractor:
     def __init__(self) -> None:
         self._grammar_cache: dict[str, object | None] = {}
 
-    def _get_language_obj(self, grammar_module: str):
-        """Try to load a tree-sitter Language from a grammar module."""
-        if grammar_module in self._grammar_cache:
-            return self._grammar_cache[grammar_module]
+    def _get_language_obj(self, grammar_module: str, language: str = ""):
+        """Try to load a tree-sitter Language from a grammar module.
+
+        Attempts in order:
+        1. Individual PyPI grammar package (e.g. tree_sitter_perl)
+        2. tree-sitter-language-pack (170+ bundled languages)
+        """
+        cache_key = grammar_module or language
+        if cache_key in self._grammar_cache:
+            return self._grammar_cache[cache_key]
 
         if not _TS_AVAILABLE and not _try_init_tree_sitter():
-            self._grammar_cache[grammar_module] = None
+            self._grammar_cache[cache_key] = None
             return None
 
-        try:
-            import importlib
+        # Strategy 1: Individual grammar package
+        if grammar_module:
+            try:
+                import importlib
 
-            import tree_sitter as ts
+                import tree_sitter as ts
 
-            mod = importlib.import_module(grammar_module)
-            # Try standard language(), fall back to language_<name>() for
-            # grammars like tree_sitter_php that export language_php()
-            lang_fn = getattr(mod, "language", None)
-            if lang_fn is None:
-                # Search for language_* functions
-                for attr in dir(mod):
-                    if attr.startswith("language_") and callable(getattr(mod, attr)):
-                        lang_fn = getattr(mod, attr)
-                        break
-            if lang_fn is None:
-                raise AttributeError(f"No language function found in {grammar_module}")
-            lang = ts.Language(lang_fn())
-            self._grammar_cache[grammar_module] = lang
-            return lang
-        except (ImportError, AttributeError, Exception) as e:
-            logger.debug("Generic extractor: grammar %s not available: %s", grammar_module, e)
-            self._grammar_cache[grammar_module] = None
-            return None
+                mod = importlib.import_module(grammar_module)
+                # Try standard language(), fall back to language_<name>() for
+                # grammars like tree_sitter_php that export language_php()
+                lang_fn = getattr(mod, "language", None)
+                if lang_fn is None:
+                    # Search for language_* functions
+                    for attr in dir(mod):
+                        if attr.startswith("language_") and callable(getattr(mod, attr)):
+                            lang_fn = getattr(mod, attr)
+                            break
+                if lang_fn is not None:
+                    lang = ts.Language(lang_fn())
+                    self._grammar_cache[cache_key] = lang
+                    return lang
+            except (ImportError, AttributeError, Exception) as e:
+                logger.debug("Generic extractor: grammar %s not available: %s", grammar_module, e)
+
+        # Strategy 2: tree-sitter-language-pack fallback
+        if language:
+            try:
+                from tree_sitter_language_pack import get_language
+                lang_obj = get_language(language)
+                self._grammar_cache[cache_key] = lang_obj
+                logger.debug("Loaded %s from tree-sitter-language-pack", language)
+                return lang_obj
+            except (ImportError, KeyError, Exception) as e:
+                logger.debug("language-pack fallback for %s not available: %s", language, e)
+
+        self._grammar_cache[cache_key] = None
+        return None
 
     def parse(
         self, file_path: str, content: str, grammar_module: str, language: str = "",
@@ -1195,7 +1240,7 @@ class GenericTreeSitterExtractor:
         Returns:
             Dict matching ``ts_parse_file`` output format, or None on failure.
         """
-        lang_obj = self._get_language_obj(grammar_module)
+        lang_obj = self._get_language_obj(grammar_module, language=language)
         if lang_obj is None:
             return None
 
@@ -1315,6 +1360,12 @@ EXTRA_GRAMMAR_MODULES: dict[str, str] = {
     "fortran": "tree_sitter_fortran",
     "ada": "tree_sitter_ada",
     "d": "tree_sitter_d",
+    # Phase 3: Languages added for 50-repo benchmark
+    "objc": "tree_sitter_objc",
+    "nim": "tree_sitter_nim",
+    "fsharp": "tree_sitter_fsharp",
+    "crystal": "tree_sitter_crystal",
+    "haskell": "tree_sitter_haskell",
 }
 
 # Extension mapping for extra grammars
@@ -1364,6 +1415,17 @@ EXTRA_LANG_EXTENSIONS: dict[str, str] = {
     ".adb": "ada",
     ".ads": "ada",
     ".d": "d",
+    # Phase 3: Languages added for 50-repo benchmark
+    ".nim": "nim",
+    ".nimble": "nim",
+    ".fs": "fsharp",
+    ".fsi": "fsharp",
+    ".fsx": "fsharp",
+    ".cr": "crystal",
+    ".m": "objc",
+    ".mm": "objc",
+    ".hs": "haskell",
+    ".lhs": "haskell",
 }
 
 

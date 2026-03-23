@@ -34,12 +34,13 @@ def test_symbols_finds_known_class(service: CodeIntelService):
 
 
 def test_search_symbols_finds_by_name(service: CodeIntelService):
-    """search_symbols() can find a symbol by name."""
+    """search_symbols() returns ranked results with scores."""
     result = service.search_symbols("App")
     assert isinstance(result, str)
     assert len(result) > 0
-    # Should mention the App class or main.py
+    # Should mention the App class or main.py and include ranking output.
     assert "App" in result
+    assert "%" in result
 
 
 def test_dependencies_reports_imports(service: CodeIntelService):

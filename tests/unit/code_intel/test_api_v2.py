@@ -43,7 +43,7 @@ def _make_mock_service(project_dir: str = "/tmp/test-project") -> MagicMock:
     ]
     svc.search_symbols_data.return_value = [
         {"kind": "class", "name": "Bar", "qualified_name": "mod.Bar",
-         "file_path": "src/mod.py", "start_line": 10, "end_line": 20},
+         "file_path": "src/mod.py", "start_line": 10, "end_line": 20, "score": 0.98},
     ]
     svc.dependencies_data.return_value = {
         "path": "src/mod.py",
@@ -222,6 +222,7 @@ async def test_v2_search_symbols(client):
     assert data["query"] == "Bar"
     assert len(data["definitions"]) == 1
     assert data["definitions"][0]["kind"] == "class"
+    assert data["definitions"][0]["score"] == 0.98
 
 
 @pytest.mark.asyncio

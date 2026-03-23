@@ -79,6 +79,19 @@ class TestServerTools:
                 end_line=50,
             ),
         ]
+        svc.search_symbol.return_value = [
+            (
+                SymbolLocation(
+                    name="MyClass",
+                    qualified_name="MyClass",
+                    kind="class",
+                    file_path="b.py",
+                    start_line=5,
+                    end_line=50,
+                ),
+                0.98,
+            ),
+        ]
 
         svc.get_callers.return_value = [
             SymbolRef(
@@ -122,12 +135,15 @@ class TestServerTools:
         import attocode.code_intel.server as srv
         from attocode.code_intel.server import search_symbols
 
-        srv._ast_service = self._make_mock_ast_service()
+        svc = self._make_mock_ast_service()
+        srv._ast_service = svc
 
-        result = search_symbols("MyClass")
+        result = search_symbols("MyClass", limit=5, kind="class")
         assert "MyClass" in result
         assert "class" in result
         assert "b.py" in result
+        assert "[98%]" in result
+        svc.search_symbol.assert_called_once_with("MyClass", limit=5, kind_filter="class")
 
     def test_dependencies_tool(self):
         import attocode.code_intel.server as srv
