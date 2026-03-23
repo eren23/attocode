@@ -332,6 +332,13 @@ def _find_name(node, source_bytes: bytes) -> str:
         if child.type == "type_identifier":
             return _node_text(child, source_bytes)
 
+    # Go: type_declaration → type_spec → type_identifier
+    for child in node.children:
+        if child.type == "type_spec":
+            for grandchild in child.children:
+                if grandchild.type == "type_identifier":
+                    return _node_text(grandchild, source_bytes)
+
     return ""
 
 
@@ -819,6 +826,35 @@ def ts_parse_file(file_path: str, content: str | None = None, language: str = ""
                 else:
                     for child in node.children:
                         _process_node(child, parent_class=name)
+
+                # Go interface methods: type_declaration → type_spec → interface_type → method_elem
+                if language == "go":
+                    for child in node.children:
+                        if child.type == "type_spec":
+                            for gchild in child.children:
+                                if gchild.type == "interface_type":
+                                    for method in gchild.children:
+                                        if method.type == "method_elem":
+                                            # Name is in field_identifier child
+                                            mname = ""
+                                            for mc in method.children:
+                                                if mc.type == "field_identifier":
+                                                    mname = _node_text(mc, source_bytes)
+                                                    break
+                                            if not mname:
+                                                mname = _find_name(method, source_bytes)
+                                            if mname:
+                                                params = _find_parameters(method, source_bytes)
+                                                fn_data = {
+                                                    "name": mname, "parameters": params,
+                                                    "return_type": "",
+                                                    "start_line": method.start_point[0] + 1,
+                                                    "end_line": method.end_point[0] + 1,
+                                                    "is_async": False, "decorators": [],
+                                                    "visibility": "public",
+                                                    "parent_class": name,
+                                                }
+                                                cls_data["methods"].append(fn_data)
                 return
 
         # Imports
@@ -849,6 +885,15 @@ def ts_parse_file(file_path: str, content: str | None = None, language: str = ""
             var_name = _find_name(node, source_bytes)
             if var_name:
                 top_level_vars.append(var_name)
+            return
+
+        # Go top-level const/var blocks: const ( X = 1; Y = 2 )
+        if language == "go" and ntype in ("const_declaration", "var_declaration") and not parent_class:
+            for child in node.children:
+                if child.type in ("const_spec", "var_spec"):
+                    var_name = _find_name(child, source_bytes)
+                    if var_name:
+                        top_level_vars.append(var_name)
             return
 
         # Elixir: macro calls (def, defmodule, import, etc.)
