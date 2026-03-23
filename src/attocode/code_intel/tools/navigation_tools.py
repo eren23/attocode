@@ -76,25 +76,29 @@ def symbols(path: str) -> str:
 
 
 @mcp.tool()
-def search_symbols(name: str) -> str:
+def search_symbols(name: str, limit: int = 30, kind: str = "") -> str:
     """Search for symbol definitions across the entire codebase.
 
-    Finds functions, classes, and methods matching the given name
-    (exact or suffix match).
+    Multi-strategy search: exact match, prefix, substring, case-insensitive,
+    and camelCase/snake_case token matching.  Results ranked by match quality
+    and symbol importance.
 
     Args:
-        name: Symbol name to search for (e.g. "parse_file", "AgentBuilder").
+        name: Symbol name or pattern (e.g. "parse_file", "Router", "exitCode").
+        limit: Maximum results to return (default 30).
+        kind: Filter by symbol kind: "function", "class", "method", "variable",
+            "constant", "interface", "type". Empty = all kinds.
     """
     svc = _get_ast_service()
-    locs = svc.find_symbol(name)
+    scored = svc.search_symbol(name, limit=limit, kind_filter=kind)
 
-    if not locs:
+    if not scored:
         return f"No definitions found for '{name}'"
 
-    lines = [f"Definitions of '{name}':"]
-    for loc in locs:
+    lines = [f"Definitions matching '{name}' ({len(scored)} results):"]
+    for loc, score in scored:
         lines.append(
-            f"  {loc.kind} {loc.qualified_name}  "
+            f"  [{score:.0%}] {loc.kind} {loc.qualified_name}  "
             f"in {loc.file_path}:{loc.start_line}-{loc.end_line}"
         )
     return "\n".join(lines)

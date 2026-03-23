@@ -191,18 +191,19 @@ class CodeIntelService:
             for loc in sorted(locs, key=lambda s: s.start_line)
         ]
 
-    def search_symbols_data(self, name: str) -> list[dict]:
-        """Return raw symbol search results."""
+    def search_symbols_data(self, name: str, limit: int = 30, kind: str = "") -> list[dict]:
+        """Return raw symbol search results with scores."""
         svc = self._get_ast_service()
-        locs = svc.find_symbol(name)
+        scored = svc.search_symbol(name, limit=limit, kind_filter=kind)
         return [
             {
                 "kind": loc.kind, "name": loc.name,
                 "qualified_name": loc.qualified_name,
                 "file_path": loc.file_path,
                 "start_line": loc.start_line, "end_line": loc.end_line,
+                "score": round(score, 3),
             }
-            for loc in locs
+            for loc, score in scored
         ]
 
     def dependencies_data(self, path: str) -> dict:
@@ -1142,15 +1143,15 @@ class CodeIntelService:
             lines.append(f"  {loc.kind} {loc.qualified_name}  (L{loc.start_line}-{loc.end_line})")
         return "\n".join(lines)
 
-    def search_symbols(self, name: str) -> str:
+    def search_symbols(self, name: str, limit: int = 30, kind: str = "") -> str:
         svc = self._get_ast_service()
-        locs = svc.find_symbol(name)
-        if not locs:
+        scored = svc.search_symbol(name, limit=limit, kind_filter=kind)
+        if not scored:
             return f"No definitions found for '{name}'"
-        lines = [f"Definitions of '{name}':"]
-        for loc in locs:
+        lines = [f"Definitions matching '{name}' ({len(scored)} results):"]
+        for loc, score in scored:
             lines.append(
-                f"  {loc.kind} {loc.qualified_name}  "
+                f"  [{score:.0%}] {loc.kind} {loc.qualified_name}  "
                 f"in {loc.file_path}:{loc.start_line}-{loc.end_line}"
             )
         return "\n".join(lines)

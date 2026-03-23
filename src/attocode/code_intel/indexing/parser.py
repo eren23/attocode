@@ -223,7 +223,7 @@ def _extract_with_tree_sitter(text: str, language: str) -> list[dict]:
     import tree_sitter
 
     # This will raise if tree-sitter is not available
-    from attocode.code_intel.helpers import get_parser
+    from attocode.integrations.context.ts_parser import _get_parser as get_parser
 
     parser = get_parser(language)
     if parser is None:
@@ -243,12 +243,21 @@ def _walk_tree(node, symbols: list[dict], language: str) -> None:
         "function_definition": "function",
         "function_declaration": "function",
         "method_definition": "method",
+        "method_declaration": "method",
         "class_definition": "class",
         "class_declaration": "class",
         "interface_declaration": "interface",
         "type_alias_declaration": "type",
         "variable_declaration": "variable",
         "const_declaration": "constant",
+        "struct_item": "class",
+        "enum_item": "class",
+        "trait_item": "interface",
+        "type_declaration": "type",
+        "enum_declaration": "class",
+        "struct_declaration": "class",
+        "object_declaration": "class",
+        "protocol_declaration": "interface",
     }
 
     node_type = node.type

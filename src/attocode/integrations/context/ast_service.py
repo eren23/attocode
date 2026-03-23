@@ -305,6 +305,24 @@ class ASTService:
         self._ensure_initialized()
         return self._index.get_definitions(name)
 
+    def search_symbol(
+        self,
+        name: str,
+        *,
+        limit: int = 50,
+        kind_filter: str = "",
+    ) -> list[tuple[SymbolLocation, float]]:
+        """Enhanced symbol search with multi-strategy matching and scoring.
+
+        Searches by exact match, bare name, case-insensitive, prefix,
+        substring, and camelCase/snake_case token overlap.  Results are
+        ranked by match quality and symbol importance.
+        """
+        self._ensure_initialized()
+        return self._index.search_definitions(
+            name, limit=limit, kind_filter=kind_filter,
+        )
+
     def get_callers(self, symbol: str) -> list[SymbolRef]:
         """Return all call sites / references for *symbol*."""
         self._ensure_initialized()
@@ -502,6 +520,18 @@ class ASTService:
                     end_line=method.end_line,
                 )
                 self._index.add_definition(method_loc)
+
+        # Top-level variables/constants
+        for var_name in ast.top_level_vars:
+            var_loc = SymbolLocation(
+                name=var_name,
+                qualified_name=var_name,
+                kind="variable",
+                file_path=rel_path,
+                start_line=0,
+                end_line=0,
+            )
+            self._index.add_definition(var_loc)
 
     def _index_references(self, rel_path: str, ast: FileAST) -> None:
         """Phase 2: Index import references and call-site references.

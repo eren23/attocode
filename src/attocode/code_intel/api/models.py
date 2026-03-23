@@ -207,6 +207,7 @@ class SymbolItem(BaseModel):
     file_path: str = ""
     start_line: int = 0
     end_line: int = 0
+    score: float = 0.0
 
 
 class SymbolListResponse(BaseModel):

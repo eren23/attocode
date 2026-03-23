@@ -1,225 +1,222 @@
 # 3-Way Code Intelligence Comparison
 
-Generated: 2026-03-22 23:38
+Generated: 2026-03-23 00:48
 Tools: grep, ast-grep, code-intel
-Repos: 19 (attocode, fastapi, pandas, deno, aspnetcore, laravel, swiftformat, okhttp, gh-cli, faker, redis, spdlog, cats-effect, luarocks, phoenix, postgrest, acme-sh, terraform-eks, zls)
-Languages: Python, Go, C, C++, C#, Rust, Kotlin, Swift, Ruby, PHP, Scala, Elixir, Lua, Zig, Bash, HCL, Haskell
-
-![3-Way Comparison Chart](../scripts/3way_comparison.png)
+Repos: attocode, fastapi, pandas, deno, aspnetcore, laravel, swiftformat, okhttp, gh-cli, faker, redis, spdlog, cats-effect, luarocks, phoenix, postgrest, acme-sh, terraform-eks, zls
 
 ## attocode
 
 | Task | grep | ast-grep | code-intel | grep Q | ast-grep Q | code-intel Q |
 |------|------|----------|------------|--------|------------|--------------|
-| Project Orientation | 59ms | 331ms | 11885ms | 3/5 | 1/5 | 5/5 |
-| Symbol Discovery | 46ms | 96ms | 0ms | 4/5 | 4/5 | 5/5 |
+| Project Orientation | 47ms | 313ms | 11604ms | 3/5 | 1/5 | 5/5 |
+| Symbol Discovery | 44ms | 90ms | 2ms | 4/5 | 4/5 | 5/5 |
 | Dependency Tracing | 24ms | 11ms | 0ms | 5/5 | 4/5 | 5/5 |
-| Architecture | 0ms | 107ms | 128ms | 2/5 | 0/5 | 5/5 |
-| Code Navigation | 26ms | 98ms | 0ms | 4/5 | 4/5 | 5/5 |
-| Semantic Search | 32ms | 303ms | 15965ms | 5/5 | 3/5 | 5/5 |
+| Architecture | 0ms | 102ms | 90ms | 2/5 | 0/5 | 5/5 |
+| Code Navigation | 26ms | 94ms | 0ms | 4/5 | 4/5 | 5/5 |
+| Semantic Search | 32ms | 296ms | 17249ms | 5/5 | 3/5 | 5/5 |
 
 ## fastapi
 
 | Task | grep | ast-grep | code-intel | grep Q | ast-grep Q | code-intel Q |
 |------|------|----------|------------|--------|------------|--------------|
-| Project Orientation | 81ms | 187ms | 1298ms | 3/5 | 1/5 | 5/5 |
-| Symbol Discovery | 94ms | 62ms | 0ms | 5/5 | 5/5 | 5/5 |
-| Dependency Tracing | 47ms | 16ms | 0ms | 5/5 | 5/5 | 5/5 |
-| Architecture | 1ms | 63ms | 15ms | 2/5 | 0/5 | 4/5 |
-| Code Navigation | 46ms | 61ms | 0ms | 5/5 | 5/5 | 5/5 |
-| Semantic Search | 46ms | 180ms | 18007ms | 3/5 | 3/5 | 5/5 |
+| Project Orientation | 78ms | 168ms | 1293ms | 3/5 | 1/5 | 5/5 |
+| Symbol Discovery | 91ms | 57ms | 0ms | 5/5 | 5/5 | 5/5 |
+| Dependency Tracing | 43ms | 18ms | 0ms | 5/5 | 5/5 | 5/5 |
+| Architecture | 1ms | 56ms | 14ms | 2/5 | 0/5 | 4/5 |
+| Code Navigation | 46ms | 55ms | 0ms | 5/5 | 5/5 | 5/5 |
+| Semantic Search | 46ms | 159ms | 16396ms | 3/5 | 3/5 | 5/5 |
 
 ## pandas
 
 | Task | grep | ast-grep | code-intel | grep Q | ast-grep Q | code-intel Q |
 |------|------|----------|------------|--------|------------|--------------|
-| Project Orientation | 74ms | 1042ms | 9539ms | 3/5 | 1/5 | 5/5 |
-| Symbol Discovery | 94ms | 326ms | 0ms | 5/5 | 5/5 | 5/5 |
-| Dependency Tracing | 41ms | 35ms | 0ms | 5/5 | 5/5 | 5/5 |
-| Architecture | 1ms | 348ms | 39ms | 2/5 | 0/5 | 4/5 |
-| Code Navigation | 53ms | 309ms | 0ms | 5/5 | 5/5 | 5/5 |
-| Semantic Search | 48ms | 892ms | 9686ms | 5/5 | 5/5 | 5/5 |
+| Project Orientation | 65ms | 932ms | 9738ms | 3/5 | 1/5 | 5/5 |
+| Symbol Discovery | 75ms | 314ms | 5ms | 5/5 | 5/5 | 5/5 |
+| Dependency Tracing | 41ms | 33ms | 0ms | 5/5 | 5/5 | 5/5 |
+| Architecture | 1ms | 271ms | 34ms | 2/5 | 0/5 | 4/5 |
+| Code Navigation | 50ms | 320ms | 0ms | 5/5 | 5/5 | 5/5 |
+| Semantic Search | 49ms | 819ms | 8437ms | 5/5 | 5/5 | 5/5 |
 
 ## deno
 
 | Task | grep | ast-grep | code-intel | grep Q | ast-grep Q | code-intel Q |
 |------|------|----------|------------|--------|------------|--------------|
-| Project Orientation | 349ms | 457ms | 18960ms | 3/5 | 1/5 | 5/5 |
-| Symbol Discovery | 252ms | 171ms | 0ms | 4/5 | 3/5 | 5/5 |
-| Dependency Tracing | 133ms | 18ms | 0ms | 5/5 | 4/5 | 5/5 |
-| Architecture | 3ms | 240ms | 10ms | 2/5 | 3/5 | 4/5 |
-| Code Navigation | 135ms | 198ms | 2ms | 4/5 | 3/5 | 5/5 |
-| Semantic Search | 149ms | 535ms | 48104ms | 5/5 | 3/5 | 5/5 |
+| Project Orientation | 268ms | 431ms | 18708ms | 3/5 | 1/5 | 5/5 |
+| Symbol Discovery | 251ms | 189ms | 3ms | 4/5 | 3/5 | 5/5 |
+| Dependency Tracing | 136ms | 19ms | 0ms | 5/5 | 4/5 | 5/5 |
+| Architecture | 3ms | 217ms | 10ms | 2/5 | 3/5 | 4/5 |
+| Code Navigation | 138ms | 159ms | 1ms | 4/5 | 3/5 | 5/5 |
+| Semantic Search | 151ms | 580ms | 40891ms | 5/5 | 3/5 | 5/5 |
 
 ## aspnetcore
 
 | Task | grep | ast-grep | code-intel | grep Q | ast-grep Q | code-intel Q |
 |------|------|----------|------------|--------|------------|--------------|
-| Project Orientation | 413ms | 2786ms | 40059ms | 3/5 | 1/5 | 5/5 |
-| Symbol Discovery | 362ms | 1326ms | 0ms | 5/5 | 0/5 | 5/5 |
-| Dependency Tracing | 184ms | 17ms | 0ms | 5/5 | 3/5 | 5/5 |
-| Architecture | 5ms | 1355ms | 6ms | 2/5 | 2/5 | 4/5 |
-| Code Navigation | 346ms | 1225ms | 0ms | 5/5 | 0/5 | 5/5 |
-| Semantic Search | 250ms | 4119ms | 24755ms | 5/5 | 1/5 | 5/5 |
+| Project Orientation | 329ms | 1988ms | 35192ms | 3/5 | 1/5 | 5/5 |
+| Symbol Discovery | 376ms | 966ms | 7ms | 5/5 | 0/5 | 5/5 |
+| Dependency Tracing | 196ms | 16ms | 0ms | 5/5 | 3/5 | 5/5 |
+| Architecture | 5ms | 1333ms | 6ms | 2/5 | 2/5 | 4/5 |
+| Code Navigation | 190ms | 974ms | 0ms | 5/5 | 0/5 | 5/5 |
+| Semantic Search | 234ms | 2795ms | 24693ms | 5/5 | 1/5 | 5/5 |
 
 ## laravel
 
 | Task | grep | ast-grep | code-intel | grep Q | ast-grep Q | code-intel Q |
 |------|------|----------|------------|--------|------------|--------------|
-| Project Orientation | 83ms | 459ms | 6343ms | 3/5 | 1/5 | 4/5 |
-| Symbol Discovery | 77ms | 166ms | 0ms | 3/5 | 3/5 | 5/5 |
-| Dependency Tracing | 45ms | 15ms | 0ms | 5/5 | 4/5 | 5/5 |
-| Architecture | 1ms | 201ms | 0ms | 2/5 | 2/5 | 3/5 |
-| Code Navigation | 50ms | 173ms | 0ms | 5/5 | 4/5 | 5/5 |
-| Semantic Search | 43ms | 508ms | 3040ms | 5/5 | 3/5 | 5/5 |
+| Project Orientation | 78ms | 437ms | 6846ms | 3/5 | 1/5 | 4/5 |
+| Symbol Discovery | 80ms | 169ms | 4ms | 3/5 | 3/5 | 5/5 |
+| Dependency Tracing | 47ms | 17ms | 0ms | 5/5 | 4/5 | 5/5 |
+| Architecture | 1ms | 202ms | 0ms | 2/5 | 2/5 | 3/5 |
+| Code Navigation | 52ms | 166ms | 0ms | 5/5 | 4/5 | 5/5 |
+| Semantic Search | 43ms | 510ms | 3112ms | 5/5 | 3/5 | 5/5 |
 
 ## swiftformat
 
 | Task | grep | ast-grep | code-intel | grep Q | ast-grep Q | code-intel Q |
 |------|------|----------|------------|--------|------------|--------------|
-| Project Orientation | 40ms | 311ms | 1331ms | 3/5 | 1/5 | 4/5 |
-| Symbol Discovery | 38ms | 121ms | 0ms | 5/5 | 5/5 | 5/5 |
-| Dependency Tracing | 27ms | 15ms | 0ms | 5/5 | 3/5 | 5/5 |
-| Architecture | 0ms | 115ms | 0ms | 2/5 | 1/5 | 3/5 |
-| Code Navigation | 30ms | 113ms | 0ms | 5/5 | 4/5 | 5/5 |
-| Semantic Search | 22ms | 345ms | 1326ms | 3/5 | 3/5 | 5/5 |
+| Project Orientation | 42ms | 331ms | 1090ms | 3/5 | 1/5 | 4/5 |
+| Symbol Discovery | 40ms | 105ms | 2ms | 5/5 | 5/5 | 5/5 |
+| Dependency Tracing | 29ms | 16ms | 0ms | 5/5 | 3/5 | 5/5 |
+| Architecture | 0ms | 110ms | 0ms | 2/5 | 1/5 | 3/5 |
+| Code Navigation | 30ms | 108ms | 0ms | 5/5 | 4/5 | 5/5 |
+| Semantic Search | 22ms | 367ms | 1640ms | 3/5 | 3/5 | 5/5 |
 
 ## okhttp
 
 | Task | grep | ast-grep | code-intel | grep Q | ast-grep Q | code-intel Q |
 |------|------|----------|------------|--------|------------|--------------|
-| Project Orientation | 50ms | 167ms | 883ms | 3/5 | 1/5 | 4/5 |
-| Symbol Discovery | 49ms | 76ms | 0ms | 3/5 | 3/5 | 5/5 |
-| Dependency Tracing | 31ms | 15ms | 0ms | 5/5 | 4/5 | 5/5 |
-| Architecture | 0ms | 77ms | 0ms | 2/5 | 2/5 | 3/5 |
-| Code Navigation | 35ms | 78ms | 0ms | 5/5 | 4/5 | 5/5 |
-| Semantic Search | 28ms | 236ms | 2024ms | 3/5 | 3/5 | 5/5 |
+| Project Orientation | 52ms | 173ms | 879ms | 3/5 | 1/5 | 4/5 |
+| Symbol Discovery | 52ms | 78ms | 1ms | 3/5 | 3/5 | 5/5 |
+| Dependency Tracing | 33ms | 19ms | 0ms | 5/5 | 4/5 | 5/5 |
+| Architecture | 0ms | 84ms | 0ms | 2/5 | 2/5 | 3/5 |
+| Code Navigation | 37ms | 74ms | 0ms | 5/5 | 4/5 | 5/5 |
+| Semantic Search | 28ms | 238ms | 1884ms | 3/5 | 3/5 | 5/5 |
 
 ## gh-cli
 
 | Task | grep | ast-grep | code-intel | grep Q | ast-grep Q | code-intel Q |
 |------|------|----------|------------|--------|------------|--------------|
-| Project Orientation | 53ms | 272ms | 1705ms | 3/5 | 1/5 | 4/5 |
-| Symbol Discovery | 46ms | 85ms | 0ms | 4/5 | 4/5 | 1/5 |
-| Dependency Tracing | 31ms | 15ms | 0ms | 5/5 | 4/5 | 5/5 |
-| Architecture | 0ms | 95ms | 1ms | 2/5 | 2/5 | 4/5 |
-| Code Navigation | 34ms | 89ms | 0ms | 5/5 | 4/5 | 1/5 |
-| Semantic Search | 33ms | 272ms | 2997ms | 3/5 | 3/5 | 5/5 |
+| Project Orientation | 51ms | 246ms | 1693ms | 3/5 | 1/5 | 4/5 |
+| Symbol Discovery | 47ms | 86ms | 1ms | 4/5 | 4/5 | 4/5 |
+| Dependency Tracing | 34ms | 16ms | 0ms | 5/5 | 4/5 | 5/5 |
+| Architecture | 0ms | 94ms | 1ms | 2/5 | 2/5 | 4/5 |
+| Code Navigation | 39ms | 93ms | 0ms | 5/5 | 4/5 | 1/5 |
+| Semantic Search | 32ms | 266ms | 3028ms | 3/5 | 3/5 | 5/5 |
 
 ## faker
 
 | Task | grep | ast-grep | code-intel | grep Q | ast-grep Q | code-intel Q |
 |------|------|----------|------------|--------|------------|--------------|
-| Project Orientation | 44ms | 104ms | 1488ms | 3/5 | 1/5 | 4/5 |
-| Symbol Discovery | 46ms | 31ms | 0ms | 4/5 | 5/5 | 5/5 |
-| Dependency Tracing | 31ms | 14ms | 0ms | 5/5 | 4/5 | 5/5 |
-| Architecture | 0ms | 43ms | 0ms | 2/5 | 2/5 | 4/5 |
-| Code Navigation | 31ms | 31ms | 0ms | 3/5 | 5/5 | 5/5 |
-| Semantic Search | 33ms | 90ms | 3770ms | 5/5 | 3/5 | 5/5 |
+| Project Orientation | 47ms | 104ms | 1519ms | 3/5 | 1/5 | 4/5 |
+| Symbol Discovery | 47ms | 31ms | 1ms | 4/5 | 5/5 | 5/5 |
+| Dependency Tracing | 30ms | 16ms | 0ms | 5/5 | 4/5 | 5/5 |
+| Architecture | 0ms | 45ms | 0ms | 2/5 | 2/5 | 4/5 |
+| Code Navigation | 35ms | 32ms | 0ms | 3/5 | 5/5 | 5/5 |
+| Semantic Search | 35ms | 91ms | 3882ms | 5/5 | 3/5 | 5/5 |
 
 ## redis
 
 | Task | grep | ast-grep | code-intel | grep Q | ast-grep Q | code-intel Q |
 |------|------|----------|------------|--------|------------|--------------|
-| Project Orientation | 57ms | 549ms | 4634ms | 3/5 | 1/5 | 5/5 |
-| Symbol Discovery | 49ms | 219ms | 0ms | 4/5 | 0/5 | 5/5 |
-| Dependency Tracing | 35ms | 24ms | 0ms | 5/5 | 4/5 | 5/5 |
-| Architecture | 1ms | 256ms | 8ms | 3/5 | 0/5 | 4/5 |
-| Code Navigation | 37ms | 302ms | 0ms | 5/5 | 2/5 | 5/5 |
-| Semantic Search | 37ms | 723ms | 7263ms | 5/5 | 5/5 | 5/5 |
+| Project Orientation | 60ms | 563ms | 4433ms | 3/5 | 1/5 | 5/5 |
+| Symbol Discovery | 55ms | 226ms | 2ms | 4/5 | 0/5 | 5/5 |
+| Dependency Tracing | 40ms | 25ms | 0ms | 5/5 | 4/5 | 5/5 |
+| Architecture | 0ms | 255ms | 8ms | 3/5 | 0/5 | 4/5 |
+| Code Navigation | 36ms | 228ms | 0ms | 5/5 | 2/5 | 5/5 |
+| Semantic Search | 38ms | 707ms | 6793ms | 5/5 | 5/5 | 5/5 |
 
 ## spdlog
 
 | Task | grep | ast-grep | code-intel | grep Q | ast-grep Q | code-intel Q |
 |------|------|----------|------------|--------|------------|--------------|
-| Project Orientation | 31ms | 59ms | 1191ms | 3/5 | 1/5 | 4/5 |
-| Symbol Discovery | 29ms | 23ms | 0ms | 4/5 | 3/5 | 1/5 |
-| Dependency Tracing | 27ms | 24ms | 0ms | 5/5 | 0/5 | 5/5 |
+| Project Orientation | 31ms | 51ms | 1521ms | 3/5 | 1/5 | 4/5 |
+| Symbol Discovery | 32ms | 22ms | 0ms | 4/5 | 3/5 | 4/5 |
+| Dependency Tracing | 25ms | 22ms | 0ms | 5/5 | 0/5 | 5/5 |
 | Architecture | 0ms | 22ms | 4ms | 2/5 | 0/5 | 4/5 |
-| Code Navigation | 29ms | 21ms | 0ms | 5/5 | 3/5 | 5/5 |
-| Semantic Search | 32ms | 65ms | 941ms | 3/5 | 2/5 | 5/5 |
+| Code Navigation | 29ms | 23ms | 0ms | 5/5 | 3/5 | 5/5 |
+| Semantic Search | 16ms | 63ms | 928ms | 3/5 | 2/5 | 5/5 |
 
 ## cats-effect
 
 | Task | grep | ast-grep | code-intel | grep Q | ast-grep Q | code-intel Q |
 |------|------|----------|------------|--------|------------|--------------|
-| Project Orientation | 43ms | 183ms | 609ms | 3/5 | 1/5 | 4/5 |
-| Symbol Discovery | 50ms | 94ms | 0ms | 4/5 | 5/5 | 5/5 |
-| Dependency Tracing | 32ms | 29ms | 0ms | 5/5 | 4/5 | 5/5 |
-| Architecture | 0ms | 90ms | 0ms | 2/5 | 2/5 | 3/5 |
-| Code Navigation | 33ms | 91ms | 0ms | 5/5 | 5/5 | 5/5 |
-| Semantic Search | 24ms | 255ms | 1353ms | 5/5 | 3/5 | 5/5 |
+| Project Orientation | 46ms | 179ms | 601ms | 3/5 | 1/5 | 4/5 |
+| Symbol Discovery | 53ms | 84ms | 1ms | 4/5 | 5/5 | 5/5 |
+| Dependency Tracing | 33ms | 30ms | 0ms | 5/5 | 4/5 | 5/5 |
+| Architecture | 0ms | 91ms | 0ms | 2/5 | 2/5 | 3/5 |
+| Code Navigation | 32ms | 90ms | 0ms | 5/5 | 5/5 | 5/5 |
+| Semantic Search | 26ms | 256ms | 1303ms | 5/5 | 3/5 | 5/5 |
 
 ## luarocks
 
 | Task | grep | ast-grep | code-intel | grep Q | ast-grep Q | code-intel Q |
 |------|------|----------|------------|--------|------------|--------------|
-| Project Orientation | 41ms | 44ms | 218ms | 3/5 | 1/5 | 4/5 |
-| Symbol Discovery | 37ms | 32ms | 0ms | 5/5 | 4/5 | 1/5 |
-| Dependency Tracing | 30ms | 14ms | 0ms | 5/5 | 4/5 | 5/5 |
-| Architecture | 0ms | 85ms | 0ms | 2/5 | 3/5 | 4/5 |
-| Code Navigation | 30ms | 50ms | 0ms | 4/5 | 3/5 | 5/5 |
-| Semantic Search | 21ms | 134ms | 4211ms | 3/5 | 3/5 | 5/5 |
+| Project Orientation | 37ms | 45ms | 154ms | 3/5 | 1/5 | 4/5 |
+| Symbol Discovery | 37ms | 30ms | 0ms | 5/5 | 4/5 | 4/5 |
+| Dependency Tracing | 27ms | 16ms | 0ms | 5/5 | 4/5 | 5/5 |
+| Architecture | 0ms | 42ms | 0ms | 2/5 | 3/5 | 4/5 |
+| Code Navigation | 28ms | 32ms | 0ms | 4/5 | 3/5 | 5/5 |
+| Semantic Search | 21ms | 96ms | 3768ms | 3/5 | 3/5 | 5/5 |
 
 ## phoenix
 
 | Task | grep | ast-grep | code-intel | grep Q | ast-grep Q | code-intel Q |
 |------|------|----------|------------|--------|------------|--------------|
-| Project Orientation | 46ms | 18ms | 950ms | 3/5 | 1/5 | 4/5 |
-| Symbol Discovery | 40ms | 60ms | 0ms | 3/5 | 3/5 | 5/5 |
-| Dependency Tracing | 31ms | 18ms | 0ms | 5/5 | 4/5 | 5/5 |
-| Architecture | 0ms | 13ms | 0ms | 2/5 | 0/5 | 4/5 |
-| Code Navigation | 33ms | 61ms | 0ms | 5/5 | 3/5 | 5/5 |
-| Semantic Search | 23ms | 189ms | 1884ms | 5/5 | 3/5 | 5/5 |
+| Project Orientation | 38ms | 18ms | 563ms | 3/5 | 1/5 | 4/5 |
+| Symbol Discovery | 37ms | 53ms | 0ms | 3/5 | 3/5 | 5/5 |
+| Dependency Tracing | 30ms | 18ms | 0ms | 5/5 | 4/5 | 5/5 |
+| Architecture | 0ms | 12ms | 0ms | 2/5 | 0/5 | 4/5 |
+| Code Navigation | 30ms | 54ms | 0ms | 5/5 | 3/5 | 5/5 |
+| Semantic Search | 21ms | 165ms | 1751ms | 5/5 | 3/5 | 5/5 |
 
 ## postgrest
 
 | Task | grep | ast-grep | code-intel | grep Q | ast-grep Q | code-intel Q |
 |------|------|----------|------------|--------|------------|--------------|
-| Project Orientation | 36ms | 47ms | 1713ms | 3/5 | 1/5 | 5/5 |
-| Symbol Discovery | 34ms | 35ms | 0ms | 4/5 | 3/5 | 1/5 |
-| Dependency Tracing | 28ms | 12ms | 0ms | 5/5 | 0/5 | 5/5 |
-| Architecture | 0ms | 38ms | 0ms | 2/5 | 2/5 | 3/5 |
+| Project Orientation | 37ms | 47ms | 1650ms | 3/5 | 1/5 | 5/5 |
+| Symbol Discovery | 37ms | 34ms | 0ms | 4/5 | 3/5 | 5/5 |
+| Dependency Tracing | 25ms | 12ms | 0ms | 5/5 | 0/5 | 5/5 |
+| Architecture | 0ms | 37ms | 0ms | 2/5 | 2/5 | 3/5 |
 | Code Navigation | 29ms | 34ms | 0ms | 4/5 | 3/5 | 1/5 |
-| Semantic Search | 19ms | 125ms | 4079ms | 5/5 | 3/5 | 5/5 |
+| Semantic Search | 21ms | 104ms | 3907ms | 5/5 | 3/5 | 5/5 |
 
 ## acme-sh
 
 | Task | grep | ast-grep | code-intel | grep Q | ast-grep Q | code-intel Q |
 |------|------|----------|------------|--------|------------|--------------|
-| Project Orientation | 33ms | 18ms | 193ms | 3/5 | 1/5 | 4/5 |
-| Symbol Discovery | 32ms | 46ms | 0ms | 3/5 | 0/5 | 1/5 |
+| Project Orientation | 30ms | 15ms | 195ms | 3/5 | 1/5 | 4/5 |
+| Symbol Discovery | 31ms | 48ms | 0ms | 3/5 | 0/5 | 4/5 |
 | Dependency Tracing | 27ms | 0ms | 0ms | 5/5 | 0/5 | 5/5 |
-| Architecture | 0ms | 12ms | 0ms | 2/5 | 0/5 | 3/5 |
+| Architecture | 0ms | 13ms | 0ms | 2/5 | 0/5 | 3/5 |
 | Code Navigation | 28ms | 48ms | 0ms | 4/5 | 2/5 | 5/5 |
-| Semantic Search | 15ms | 137ms | 213ms | 3/5 | 1/5 | 5/5 |
+| Semantic Search | 16ms | 145ms | 177ms | 3/5 | 1/5 | 5/5 |
 
 ## terraform-eks
 
 | Task | grep | ast-grep | code-intel | grep Q | ast-grep Q | code-intel Q |
 |------|------|----------|------------|--------|------------|--------------|
-| Project Orientation | 31ms | 37ms | 133ms | 3/5 | 1/5 | 4/5 |
-| Symbol Discovery | 30ms | 33ms | 0ms | 3/5 | 3/5 | 1/5 |
-| Dependency Tracing | 27ms | 0ms | 0ms | 5/5 | 0/5 | 5/5 |
-| Architecture | 0ms | 36ms | 0ms | 3/5 | 3/5 | 3/5 |
-| Code Navigation | 27ms | 33ms | 0ms | 5/5 | 3/5 | 5/5 |
-| Semantic Search | 17ms | 99ms | 866ms | 3/5 | 3/5 | 5/5 |
+| Project Orientation | 32ms | 41ms | 526ms | 3/5 | 1/5 | 4/5 |
+| Symbol Discovery | 31ms | 32ms | 0ms | 3/5 | 3/5 | 4/5 |
+| Dependency Tracing | 24ms | 0ms | 0ms | 5/5 | 0/5 | 5/5 |
+| Architecture | 0ms | 35ms | 0ms | 3/5 | 3/5 | 3/5 |
+| Code Navigation | 28ms | 33ms | 0ms | 5/5 | 3/5 | 5/5 |
+| Semantic Search | 17ms | 98ms | 892ms | 3/5 | 3/5 | 5/5 |
 
 ## zls
 
 | Task | grep | ast-grep | code-intel | grep Q | ast-grep Q | code-intel Q |
 |------|------|----------|------------|--------|------------|--------------|
-| Project Orientation | 31ms | 27ms | 285ms | 3/5 | 1/5 | 4/5 |
-| Symbol Discovery | 29ms | 11ms | 0ms | 4/5 | 0/5 | 1/5 |
-| Dependency Tracing | 25ms | 12ms | 0ms | 4/5 | 0/5 | 5/5 |
-| Architecture | 0ms | 13ms | 0ms | 2/5 | 0/5 | 3/5 |
-| Code Navigation | 26ms | 14ms | 0ms | 5/5 | 0/5 | 5/5 |
-| Semantic Search | 13ms | 39ms | 238ms | 3/5 | 1/5 | 5/5 |
+| Project Orientation | 33ms | 28ms | 264ms | 3/5 | 1/5 | 4/5 |
+| Symbol Discovery | 30ms | 11ms | 0ms | 4/5 | 0/5 | 4/5 |
+| Dependency Tracing | 26ms | 11ms | 0ms | 4/5 | 0/5 | 5/5 |
+| Architecture | 0ms | 11ms | 0ms | 2/5 | 0/5 | 3/5 |
+| Code Navigation | 25ms | 12ms | 0ms | 5/5 | 0/5 | 5/5 |
+| Semantic Search | 17ms | 33ms | 226ms | 3/5 | 1/5 | 5/5 |
 
 ## Summary Averages
 
 | Metric | grep | ast-grep | code-intel |
 |--------|------|----------|------------|
-| Avg Time | 51ms | 227ms | 2231ms |
-| Avg Quality | 3.8/5 | 2.4/5 | 4.4/5 |
-| Total Output | 59,110,828 chars | 5,283,367 chars | 288,037 chars |
+| Avg Time | 48ms | 197ms | 2102ms |
+| Avg Quality | 3.8/5 | 2.4/5 | 4.5/5 |
+| Total Output | 59,113,282 chars | 5,284,326 chars | 323,529 chars |

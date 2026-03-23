@@ -783,6 +783,20 @@ def ts_parse_file(file_path: str, content: str | None = None, language: str = ""
                 if type_node:
                     name = _node_text(type_node, source_bytes)
 
+            # HCL blocks: resource "aws_eks_cluster" "this" { ... }
+            # Extract resource type as a top-level var in addition to
+            # using the block keyword (resource/data/module) as class name
+            if language == "hcl" and ntype == "block":
+                string_lits = [
+                    c for c in node.children if c.type == "string_lit"
+                ]
+                for sl in string_lits:
+                    for sc in sl.children:
+                        if sc.type == "template_literal":
+                            resource_name = _node_text(sc, source_bytes)
+                            if resource_name and resource_name not in top_level_vars:
+                                top_level_vars.append(resource_name)
+
             if name:
                 decorators = _find_decorators(node, source_bytes)
                 bases = _extract_bases(node, source_bytes, language)
@@ -828,6 +842,13 @@ def ts_parse_file(file_path: str, content: str | None = None, language: str = ""
                     var_name = _node_text(left, source_bytes)
                     if var_name.isupper() or var_name == "__all__":
                         top_level_vars.append(var_name)
+            return
+
+        # Zig top-level const/var declarations: const Server = @This();
+        if language == "zig" and ntype == "variable_declaration" and not parent_class:
+            var_name = _find_name(node, source_bytes)
+            if var_name:
+                top_level_vars.append(var_name)
             return
 
         # Elixir: macro calls (def, defmodule, import, etc.)
