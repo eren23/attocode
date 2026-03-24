@@ -8,6 +8,10 @@ from attocode.integrations.swarm.opencode_spawner import (
     create_opencode_spawn_fn,
     spawn_opencode_worker,
 )
+from attocode.integrations.swarm.openshell_spawner import (
+    create_openshell_spawn_fn,
+    spawn_openshell_worker,
+)
 from attocode.integrations.swarm.compilation_check import (
     CompilationCheckResult,
     CompilationError,
@@ -219,6 +223,9 @@ __all__ = [
     # opencode_spawner
     "create_opencode_spawn_fn",
     "spawn_opencode_worker",
+    # openshell_spawner
+    "create_openshell_spawn_fn",
+    "spawn_openshell_worker",
     # compilation_check
     "CompilationCheckResult",
     "CompilationError",

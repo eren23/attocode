@@ -1,6 +1,6 @@
 """MCP server exposing Attocode's code intelligence capabilities.
 
-Provides 38 tools for deep codebase understanding:
+Provides 39 tools for deep codebase understanding:
 - bootstrap: All-in-one orientation (summary + map + conventions + search)
 - relevant_context: Subgraph capsule for file(s) with neighbors and symbols
 - repo_map: Token-budgeted file tree with symbols
@@ -591,6 +591,7 @@ import attocode.code_intel.tools.history_tools as _history_tools  # noqa: E402, 
 import attocode.code_intel.tools.learning_tools as _learning_tools  # noqa: E402, F401
 import attocode.code_intel.tools.lsp_tools as _lsp_tools  # noqa: E402, F401
 import attocode.code_intel.tools.navigation_tools as _navigation_tools  # noqa: E402, F401
+import attocode.code_intel.tools.readiness_tools as _readiness_tools  # noqa: E402, F401
 import attocode.code_intel.tools.search_tools as _search_tools  # noqa: E402, F401
 from attocode.code_intel.helpers import (  # noqa: E402, F401
     _compute_file_metrics,
@@ -625,6 +626,7 @@ update_adr_status = _adr_tools.update_adr_status  # noqa: E402
 
 dead_code = _dead_code_tools.dead_code  # noqa: E402
 distill = _distill_tools.distill  # noqa: E402
+readiness_report = _readiness_tools.readiness_report  # noqa: E402
 
 code_evolution = _history_tools.code_evolution  # noqa: E402
 recent_changes = _history_tools.recent_changes  # noqa: E402

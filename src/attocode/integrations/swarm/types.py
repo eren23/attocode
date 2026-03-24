@@ -140,6 +140,7 @@ class SwarmWorkerSpec:
     denied_tools: list[str] | None = None
     extra_tools: list[str] | None = None
     prompt_tier: str = "full"  # 'full' | 'reduced' | 'minimal'
+    sandbox_policy: dict[str, Any] | None = None  # Per-worker sandbox policy override
 
 
 # =============================================================================
@@ -292,6 +293,13 @@ class SwarmConfig:
 
     # Worker isolation
     enable_worktree_isolation: bool = False  # git worktree per worker
+
+    # Sandbox isolation (OpenShell / Docker / etc.)
+    sandbox_mode: str = "none"  # 'none' | 'basic' | 'seatbelt' | 'landlock' | 'docker' | 'openshell' | 'auto'
+    sandbox_policy: dict[str, Any] | None = None  # Inline YAML policy for OpenShell
+    sandbox_policy_path: str = ""  # Path to a YAML policy file
+    sandbox_gateway_url: str = ""  # OpenShell gateway URL (empty = local)
+    sandbox_credentials: dict[str, str] | None = None  # Env vars injected into sandboxes
 
     # Model probing
     probe_models: bool = True
@@ -469,6 +477,7 @@ class SwarmTask:
     relevant_files: list[str] | None = None
     original_subtask: dict[str, Any] | None = None
     split_depth: int = 0
+    sandbox_policy: dict[str, Any] | None = None  # Per-task sandbox policy override
 
 
 @dataclass

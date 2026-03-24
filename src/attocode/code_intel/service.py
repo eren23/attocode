@@ -176,6 +176,27 @@ class CodeIntelService:
         stats = svc._store.stats() if hasattr(svc, "_store") else {}
         return {"mode": "full" if force else "incremental", **stats}
 
+    def readiness_report_data(
+        self,
+        phases: list[int] | None = None,
+        scope: str = "",
+        tracer_bullets: bool = True,
+    ) -> dict:
+        """Return structured readiness report data."""
+        from attocode.code_intel.readiness import ReadinessEngine
+
+        engine = ReadinessEngine(project_dir=self._project_dir)
+        report = engine.run(phases=phases, scope=scope, tracer_bullets=tracer_bullets)
+        return report.to_dict()
+
+    def readiness_report(self, **kwargs) -> str:
+        """Return formatted text readiness report."""
+        from attocode.code_intel.readiness import ReadinessEngine
+
+        engine = ReadinessEngine(project_dir=self._project_dir)
+        report = engine.run(**kwargs)
+        return engine.format_report(report)
+
     def _get_temporal_analyzer(self):
         if not hasattr(self, "_temporal_analyzer") or self._temporal_analyzer is None:
             from attocode.integrations.context.temporal_coupling import (
