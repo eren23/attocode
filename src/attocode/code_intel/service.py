@@ -674,6 +674,13 @@ class CodeIntelService:
         communities.sort(key=len, reverse=True)
         communities = [c for c in communities if len(c) >= min_community_size][:max_communities]
 
+        # Detect trivial results: single community or near-zero modularity
+        is_trivial = len(communities) <= 1 or modularity_score < 0.05
+
+        if is_trivial:
+            # Fallback: directory-based module analysis for sparse graphs
+            return self._directory_based_module_analysis(svc, adj, method, modularity_score)
+
         result_communities = []
         for i, community in enumerate(communities, 1):
             from collections import Counter as _Counter
@@ -705,6 +712,78 @@ class CodeIntelService:
             "method": method,
             "modularity": round(modularity_score, 3),
             "communities": result_communities,
+        }
+
+    def _directory_based_module_analysis(
+        self, svc, adj: dict[str, set[str]], method: str, modularity_score: float,
+    ) -> dict:
+        """Fallback module analysis using directory structure when graph is sparse."""
+        from collections import Counter as _Counter
+
+        ast_cache = svc._ast_cache
+
+        # Group all indexed files by top-level directory
+        dir_groups: dict[str, list[str]] = {}
+        for rel_path in ast_cache:
+            parts = rel_path.split("/")
+            top_dir = parts[0] if len(parts) > 1 else "(root)"
+            dir_groups.setdefault(top_dir, []).append(rel_path)
+
+        # Build directory modules sorted by file count descending
+        modules = []
+        for i, (dir_name, file_list) in enumerate(
+            sorted(dir_groups.items(), key=lambda x: len(x[1]), reverse=True), 1,
+        ):
+            total_symbols = 0
+            file_symbol_counts: list[tuple[str, int]] = []
+            for f in file_list:
+                file_ast = ast_cache.get(f)
+                sc = file_ast.symbol_count if file_ast else 0
+                total_symbols += sc
+                file_symbol_counts.append((f, sc))
+
+            # Key files: top 3 by symbol count
+            file_symbol_counts.sort(key=lambda x: x[1], reverse=True)
+            key_files = [
+                {"path": path, "symbols": count}
+                for path, count in file_symbol_counts[:3]
+            ]
+
+            modules.append({
+                "id": i,
+                "directory": dir_name,
+                "files": sorted(file_list),
+                "file_count": len(file_list),
+                "total_symbols": total_symbols,
+                "key_files": key_files,
+            })
+
+        # Hub files: top 5 by total edge count (incoming + outgoing)
+        edge_counts: _Counter = _Counter()
+        for node, neighbors in adj.items():
+            edge_counts[node] = len(neighbors)
+        # Also count files from ast_cache that may not be in adj
+        for f in ast_cache:
+            if f not in edge_counts:
+                edge_counts[f] = 0
+
+        hub_files = []
+        for path, degree in edge_counts.most_common(5):
+            file_ast = ast_cache.get(path)
+            hub_files.append({
+                "path": path,
+                "cross_references": degree,
+                "symbols": file_ast.symbol_count if file_ast else 0,
+            })
+
+        return {
+            "method": f"{method}+directory-fallback",
+            "modularity": round(modularity_score, 3),
+            "note": "Graph too sparse for meaningful community detection; using directory-based module analysis",
+            "modules": modules,
+            "hub_files": hub_files,
+            "total_files": len(ast_cache),
+            "total_directories": len(dir_groups),
         }
 
     def distill_data(
@@ -1416,6 +1495,42 @@ class CodeIntelService:
 
     def community_detection(self, min_community_size: int = 3, max_communities: int = 20) -> str:
         data = self.community_detection_data(min_community_size, max_communities)
+
+        # Directory-based fallback format
+        if "modules" in data:
+            lines = [
+                f"Architecture module analysis ({data['method']}): "
+                f"{data['total_directories']} directory modules, "
+                f"{data['total_files']} total files "
+                f"(modularity={data['modularity']:.3f})"
+            ]
+            if data.get("note"):
+                lines.append(f"  Note: {data['note']}")
+
+            for mod in data["modules"]:
+                lines.append(
+                    f"\n  Module {mod['id']}: directory '{mod['directory']}' "
+                    f"— {mod['file_count']} files, {mod['total_symbols']} symbols"
+                )
+                for kf in mod.get("key_files", []):
+                    lines.append(f"    key file: {kf['path']} ({kf['symbols']} symbols)")
+                sample = mod["files"][:5]
+                for f in sample:
+                    lines.append(f"    - {f}")
+                if mod["file_count"] > 5:
+                    lines.append(f"    ... and {mod['file_count'] - 5} more")
+
+            if data.get("hub_files"):
+                lines.append("\n  Hub Files (most cross-references):")
+                for hf in data["hub_files"]:
+                    lines.append(
+                        f"    hub: {hf['path']} "
+                        f"({hf['cross_references']} cross-references, {hf['symbols']} symbols)"
+                    )
+
+            return "\n".join(lines)
+
+        # Standard community format
         lines = [
             f"Community detection ({data['method']}): {len(data['communities'])} communities "
             f"(min size {min_community_size}, modularity={data['modularity']:.3f})"

@@ -225,6 +225,88 @@ LANGUAGE_CONFIGS: dict[str, _LangConfig] = {
         class_types=("rule_set",),  # CSS selectors
         import_types=("import_statement",),  # @import
     ),
+    # ---------------------------------------------------------------
+    # Phase 3: 11 new programming languages (25 → 36)
+    # ---------------------------------------------------------------
+    "erlang": _LangConfig(
+        grammar_module="tree_sitter_erlang",
+        function_types=("function_clause",),
+        class_types=("module_attribute",),  # -module(name). attribute
+        import_types=("attribute",),  # -import(Module, [Functions]).
+    ),
+    "clojure": _LangConfig(
+        grammar_module="tree_sitter_clojure",
+        # Clojure uses macro calls for everything — handled specially in _process_node
+        function_types=(),
+        class_types=(),
+        import_types=(),
+    ),
+    "perl": _LangConfig(
+        grammar_module="tree_sitter_perl",
+        function_types=("subroutine_declaration_statement", "function_definition"),
+        class_types=("package_statement",),  # package Foo;
+        import_types=("use_statement", "require_statement"),
+    ),
+    "crystal": _LangConfig(
+        grammar_module="tree_sitter_crystal",
+        function_types=("method_def", "fun_def"),
+        class_types=("class_def", "module_def", "struct_def", "lib_def"),
+        import_types=("require",),
+    ),
+    "dart": _LangConfig(
+        grammar_module="tree_sitter_dart",
+        function_types=("function_signature", "method_signature", "function_body"),
+        class_types=(
+            "class_definition", "enum_declaration",
+            "mixin_declaration", "extension_declaration",
+        ),
+        import_types=("import_or_export",),
+    ),
+    "ocaml": _LangConfig(
+        grammar_module="tree_sitter_ocaml",
+        function_types=("value_definition", "let_binding"),
+        class_types=("type_definition", "module_definition", "class_definition"),
+        import_types=("open_statement",),
+        language_func="language_ocaml",
+    ),
+    "fsharp": _LangConfig(
+        grammar_module="tree_sitter_fsharp",
+        function_types=("function_or_value_defn", "member_defn"),
+        class_types=("type_definition", "module_defn", "namespace_defn"),
+        import_types=("open_declaration", "module_abbrev"),
+    ),
+    "julia": _LangConfig(
+        grammar_module="tree_sitter_julia",
+        function_types=("function_definition", "short_function_definition", "macro_definition"),
+        class_types=("struct_definition", "abstract_definition", "module_definition"),
+        import_types=("import_statement", "using_statement"),
+    ),
+    "nim": _LangConfig(
+        grammar_module="tree_sitter_nim",
+        function_types=(
+            "proc_declaration", "func_declaration", "method_declaration",
+            "template_declaration", "macro_declaration",
+        ),
+        class_types=("type_section", "object_declaration"),
+        import_types=("import_statement", "from_statement"),
+    ),
+    "r": _LangConfig(
+        grammar_module="tree_sitter_r",
+        # R functions are assignments like `f <- function() {}` — handled specially
+        function_types=(),
+        class_types=(),  # R uses S4/R6 classes via function calls
+        import_types=("call",),  # library() and require() are function calls
+    ),
+    "objc": _LangConfig(
+        grammar_module="tree_sitter_objc",
+        function_types=("function_definition",),  # C-style functions
+        class_types=(
+            "class_interface", "class_implementation",
+            "protocol_declaration", "category_interface",
+        ),
+        import_types=("preproc_import", "preproc_include"),
+        method_types=("method_declaration",),
+    ),
 }
 
 # Aliases
@@ -234,6 +316,10 @@ LANGUAGE_CONFIGS["shell"] = LANGUAGE_CONFIGS["bash"]
 LANGUAGE_CONFIGS["sh"] = LANGUAGE_CONFIGS["bash"]
 LANGUAGE_CONFIGS["terraform"] = LANGUAGE_CONFIGS["hcl"]
 LANGUAGE_CONFIGS["scss"] = LANGUAGE_CONFIGS["css"]
+# Phase 3 aliases
+LANGUAGE_CONFIGS["objective-c"] = LANGUAGE_CONFIGS["objc"]
+LANGUAGE_CONFIGS["objective_c"] = LANGUAGE_CONFIGS["objc"]
+LANGUAGE_CONFIGS["f#"] = LANGUAGE_CONFIGS["fsharp"]
 
 
 def _try_init_tree_sitter() -> bool:
@@ -275,7 +361,19 @@ def _get_parser(language: str):
         _PARSERS[language] = parser
         return parser
     except (ImportError, AttributeError, Exception) as e:
-        logger.debug("tree-sitter grammar for %s not available: %s", language, e)
+        logger.debug("tree-sitter grammar for %s not available via module: %s", language, e)
+
+    # Fallback: try tree-sitter-language-pack
+    try:
+        import tree_sitter as ts
+        from tree_sitter_language_pack import get_language as _pack_get_language
+
+        lang = _pack_get_language(language)
+        parser = ts.Parser(lang)
+        _PARSERS[language] = parser
+        return parser
+    except Exception as e2:
+        logger.debug("tree-sitter grammar for %s not in language-pack: %s", language, e2)
         _PARSERS[language] = None  # Cache the failure
         return None
 
@@ -408,7 +506,8 @@ def _get_visibility(name: str, language: str) -> str:
         if name.startswith("_"):
             return "private"
         return "public"
-    elif language in ("java", "typescript", "c", "cpp", "csharp", "kotlin", "swift", "scala"):
+    elif language in ("java", "typescript", "c", "cpp", "csharp", "kotlin", "swift", "scala",
+                       "dart", "objc", "crystal", "fsharp"):
         # Would need modifier parsing; default to public
         return "public"
     elif language == "php":
@@ -421,6 +520,34 @@ def _get_visibility(name: str, language: str) -> str:
     elif language == "lua":
         # Lua convention: _prefix means private
         if name.startswith("_"):
+            return "private"
+        return "public"
+    elif language == "erlang":
+        # Erlang: all exported functions are public; default to public
+        return "public"
+    elif language == "clojure":
+        # Handled by _process_clojure_call which checks defn vs defn-
+        return "public"
+    elif language == "perl":
+        # Perl convention: _ prefix means private
+        if name.startswith("_"):
+            return "private"
+        return "public"
+    elif language == "ocaml":
+        # OCaml: visibility determined by .mli files; default to public
+        return "public"
+    elif language == "julia":
+        # Julia convention: _ prefix means private/internal
+        if name.startswith("_"):
+            return "private"
+        return "public"
+    elif language == "nim":
+        # Nim: exported procs use * suffix, but that's in the type, not the name
+        # Convention: default to public
+        return "public"
+    elif language == "r":
+        # R: . prefix means hidden/private
+        if name.startswith("."):
             return "private"
         return "public"
     return "public"
@@ -516,6 +643,78 @@ def _extract_import_module(node, source_bytes: bytes, language: str) -> str:
                 idx += 1
             if idx < len(parts):
                 return parts[idx]
+    elif language == "erlang":
+        # -import(module, [func/arity, ...]). or -module(name).
+        # Attribute text looks like: -import(lists, [map/2]).
+        if text.startswith("-import("):
+            inner = text[8:].rstrip(").").strip()
+            return inner.split(",")[0].strip()
+        if text.startswith("-module("):
+            inner = text[8:].rstrip(").").strip()
+            return inner
+        # Generic attribute: extract attribute name
+        if text.startswith("-"):
+            return text.split("(")[0].lstrip("-").strip()
+    elif language == "clojure":
+        # Handled by _process_clojure_call; fallback for raw import text
+        return text
+    elif language == "perl":
+        # use Module::Name; or use Module::Name qw(...);
+        # require Module::Name;
+        if text.startswith("use "):
+            mod = text[4:].rstrip(";").strip()
+            return mod.split()[0].split("(")[0]
+        if text.startswith("require "):
+            mod = text[8:].rstrip(";").strip()
+            return mod.split()[0].strip("'\"")
+    elif language == "crystal":
+        # require "module_name"
+        if "require" in text:
+            parts = text.split('"')
+            if len(parts) >= 2:
+                return parts[1]
+    elif language == "dart":
+        # import 'package:flutter/material.dart'; or export '...';
+        for quote in ("'", '"'):
+            if quote in text:
+                parts = text.split(quote)
+                if len(parts) >= 2:
+                    return parts[1]
+    elif language == "ocaml":
+        # open Module_name
+        if text.startswith("open "):
+            return text[5:].strip()
+    elif language == "fsharp":
+        # open System.Collections.Generic or module M = Module.Path
+        if text.startswith("open "):
+            return text[5:].strip()
+        if text.startswith("module ") and "=" in text:
+            return text.split("=")[1].strip()
+    elif language == "julia":
+        # import Module or import Module: func1, func2
+        # using Module or using Module: func1, func2
+        if text.startswith(("import ", "using ")):
+            mod = text.split(None, 1)[1] if len(text.split(None, 1)) > 1 else ""
+            return mod.split(":")[0].strip()
+    elif language == "nim":
+        # import module or from module import symbol
+        if text.startswith("from "):
+            parts = text.split()
+            if len(parts) >= 2:
+                return parts[1]
+        if text.startswith("import "):
+            return text[7:].strip().split(",")[0].strip()
+    elif language == "r":
+        # library(pkg) or require(pkg)
+        if "library(" in text or "require(" in text:
+            inner = text.split("(")[1].split(")")[0].strip() if "(" in text else ""
+            return inner.strip('"').strip("'")
+    elif language == "objc":
+        # #import <Foundation/Foundation.h> or #import "header.h"
+        # #include <stdio.h> or #include "header.h"
+        for ch in ('<', '"'):
+            if ch in text:
+                return text.split(ch)[1].split('>' if ch == '<' else '"')[0]
 
     return text
 
@@ -559,6 +758,37 @@ def _extract_bases(node, source_bytes: bytes, language: str) -> list[str]:
                 for ident in child.children:
                     if ident.type in ("type_identifier", "generic_type"):
                         bases.append(_node_text(ident, source_bytes))
+    elif language == "dart":
+        # class Foo extends Bar implements Baz, Qux
+        for child in node.children:
+            if child.type in ("superclass", "interfaces", "mixins"):
+                for ident in child.children:
+                    if ident.type in ("type_identifier", "identifier", "generic_type"):
+                        bases.append(_node_text(ident, source_bytes))
+    elif language == "crystal":
+        # class Foo < Bar
+        for child in node.children:
+            if child.type in ("superclass", "type_identifier"):
+                text = _node_text(child, source_bytes).strip()
+                if text and text != "<":
+                    bases.append(text)
+    elif language == "objc":
+        # @interface Foo : Bar <Protocol1, Protocol2>
+        for child in node.children:
+            if child.type in ("superclass_reference", "type_identifier",
+                              "protocol_qualifiers", "parameterized_class_type_arguments"):
+                text = _node_text(child, source_bytes).strip()
+                if text:
+                    bases.append(text)
+    elif language == "nim":
+        # type Foo = ref object of Bar
+        for child in node.children:
+            if child.type in ("of_clause", "type_identifier"):
+                text = _node_text(child, source_bytes).strip()
+                if text.startswith("of "):
+                    text = text[3:].strip()
+                if text:
+                    bases.append(text)
 
     return bases
 
@@ -663,6 +893,165 @@ def _process_elixir_call(
                 })
 
     return ""
+
+
+# ---------------------------------------------------------------------------
+# Clojure-specific helpers (macro-based definitions)
+# ---------------------------------------------------------------------------
+
+_CLOJURE_FN_MACROS = frozenset({"defn", "defn-", "defmacro", "defmulti", "defmethod", "defonce"})
+_CLOJURE_CLASS_MACROS = frozenset({"defprotocol", "defrecord", "deftype"})
+
+
+def _process_clojure_call(
+    node, source_bytes: bytes,
+    functions: list[dict], classes: list[dict], imports: list[dict],
+    parent_class: str,
+) -> str:
+    """Handle Clojure list nodes that represent defn/defprotocol/ns forms.
+
+    Returns the name if a namespace/protocol was found (for use as parent_class
+    when recursing into children), empty string otherwise.
+    """
+    # Clojure forms are lists: (defn name [args] body)
+    # The first child is the macro symbol
+    children = [c for c in node.children if c.type not in ("(", ")", "meta_lit", "metadata")]
+    if not children:
+        return ""
+
+    head = children[0]
+    macro_name = _node_text(head, source_bytes).strip()
+
+    if macro_name in _CLOJURE_FN_MACROS:
+        # (defn name [params] ...) or (defn- name [params] ...)
+        if len(children) >= 2:
+            name = _node_text(children[1], source_bytes).strip()
+            if name:
+                decorators = [macro_name] if macro_name != "defn" else []
+                visibility = "public" if macro_name != "defn-" else "private"
+                functions.append({
+                    "name": name,
+                    "parameters": [],
+                    "return_type": "",
+                    "start_line": node.start_point[0] + 1,
+                    "end_line": node.end_point[0] + 1,
+                    "is_async": False,
+                    "decorators": decorators,
+                    "visibility": visibility,
+                    "parent_class": parent_class,
+                })
+        return ""
+
+    elif macro_name in _CLOJURE_CLASS_MACROS:
+        # (defprotocol Name ...) / (defrecord Name [...] ...) / (deftype Name [...] ...)
+        if len(children) >= 2:
+            name = _node_text(children[1], source_bytes).strip()
+            if name:
+                decorators = [macro_name] if macro_name != "defprotocol" else []
+                classes.append({
+                    "name": name,
+                    "bases": [],
+                    "methods": [],
+                    "decorators": decorators,
+                    "start_line": node.start_point[0] + 1,
+                    "end_line": node.end_point[0] + 1,
+                })
+                return name
+        return ""
+
+    elif macro_name == "ns":
+        # (ns my.namespace (:require [dep1] [dep2]))
+        if len(children) >= 2:
+            name = _node_text(children[1], source_bytes).strip()
+            if name:
+                classes.append({
+                    "name": name,
+                    "bases": [],
+                    "methods": [],
+                    "decorators": [],
+                    "start_line": node.start_point[0] + 1,
+                    "end_line": node.end_point[0] + 1,
+                })
+                # Extract :require dependencies
+                for child in children[2:]:
+                    child_text = _node_text(child, source_bytes).strip()
+                    if ":require" in child_text:
+                        # Extract module names from require vector
+                        for sub in child.children:
+                            sub_text = _node_text(sub, source_bytes).strip()
+                            if sub_text.startswith("["):
+                                mod = sub_text.strip("[]").split()[0] if sub_text.strip("[]") else ""
+                                if mod and mod != ":require":
+                                    imports.append({
+                                        "module": mod,
+                                        "is_from": False,
+                                        "start_line": sub.start_point[0] + 1,
+                                    })
+                            elif sub.type == "sym_lit" and sub_text != ":require":
+                                imports.append({
+                                    "module": sub_text,
+                                    "is_from": False,
+                                    "start_line": sub.start_point[0] + 1,
+                                })
+                return name
+        return ""
+
+    return ""
+
+
+# ---------------------------------------------------------------------------
+# R-specific helpers (function assignment detection)
+# ---------------------------------------------------------------------------
+
+
+def _process_r_assignment(
+    node, source_bytes: bytes,
+    functions: list[dict], parent_class: str,
+) -> bool:
+    """Handle R assignment nodes where RHS is a function_definition.
+
+    R defines functions via `f <- function(x) { ... }` or `f = function(x) { ... }`.
+    Returns True if a function was extracted.
+    """
+    # Left side: variable name
+    left = node.child_by_field_name("left")
+    if not left:
+        # Try first child
+        children = [c for c in node.children if c.type not in ("<-", "=", "<<-")]
+        if len(children) >= 2:
+            left = children[0]
+        else:
+            return False
+
+    # Right side: check for function_definition
+    right = node.child_by_field_name("right")
+    if not right:
+        children = [c for c in node.children if c.type not in ("<-", "=", "<<-")]
+        if len(children) >= 2:
+            right = children[-1]
+        else:
+            return False
+
+    if right.type != "function_definition":
+        return False
+
+    name = _node_text(left, source_bytes).strip()
+    if not name:
+        return False
+
+    params = _find_parameters(right, source_bytes)
+    functions.append({
+        "name": name,
+        "parameters": params,
+        "return_type": "",
+        "start_line": node.start_point[0] + 1,
+        "end_line": node.end_point[0] + 1,
+        "is_async": False,
+        "decorators": [],
+        "visibility": "public",
+        "parent_class": parent_class,
+    })
+    return True
 
 
 # ---------------------------------------------------------------------------
@@ -908,6 +1297,43 @@ def ts_parse_file(file_path: str, content: str | None = None, language: str = ""
                     for sub in child.children:
                         _process_node(sub, parent_class=inner_parent)
             return
+
+        # Clojure: list nodes represent forms like (defn ...), (ns ...), etc.
+        if language == "clojure" and ntype in ("list_lit", "list"):
+            mod_name = _process_clojure_call(
+                node, source_bytes, functions, classes, imports, parent_class,
+            )
+            # Recurse into children for nested definitions
+            if mod_name:
+                for child in node.children:
+                    _process_node(child, parent_class=mod_name)
+            return
+
+        # R: detect function assignments (f <- function(...) { ... })
+        if language == "r" and ntype in ("left_assignment", "equals_assignment", "binary_operator"):
+            if _process_r_assignment(node, source_bytes, functions, parent_class):
+                return
+
+        # R: filter import calls to only library() and require()
+        if language == "r" and ntype == "call":
+            # Only treat library() and require() as imports
+            fn_node = node.child_by_field_name("function")
+            if not fn_node:
+                for child in node.children:
+                    if child.type == "identifier":
+                        fn_node = child
+                        break
+            if fn_node:
+                fn_name = _node_text(fn_node, source_bytes).strip()
+                if fn_name in ("library", "require"):
+                    module = _extract_import_module(node, source_bytes, language)
+                    if module:
+                        imports.append({
+                            "module": module,
+                            "is_from": False,
+                            "start_line": node.start_point[0] + 1,
+                        })
+                        return
 
         # Recurse into children
         for child in node.children:

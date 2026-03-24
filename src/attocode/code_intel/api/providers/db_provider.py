@@ -778,6 +778,39 @@ class DbGraphProvider:
             communities.sort(key=len, reverse=True)
             communities = communities[:max_communities]
 
+            # Detect trivial results and use directory-based fallback
+            is_trivial = len(communities) <= 1 or modularity < 0.05
+            if is_trivial:
+                # Group files by top-level directory as modules
+                dir_groups: dict[str, list[str]] = {}
+                for f in all_files:
+                    parts = f.split("/")
+                    top_dir = parts[0] if len(parts) > 1 else "(root)"
+                    dir_groups.setdefault(top_dir, []).append(f)
+
+                fallback_items: list[CommunityItem] = []
+                for idx_fb, (dir_name, file_list) in enumerate(
+                    sorted(dir_groups.items(), key=lambda x: len(x[1]), reverse=True),
+                ):
+                    fallback_items.append(CommunityItem(
+                        id=idx_fb,
+                        files=sorted(file_list),
+                        size=len(file_list),
+                        theme=dir_name,
+                        internal_edges=0,
+                        external_edges=0,
+                        hub=sorted(file_list)[0] if file_list else "",
+                        hub_internal_degree=0,
+                        top_dirs=[dir_name],
+                    ))
+
+                return CommunityResponse(
+                    method=f"{method}+directory-fallback",
+                    modularity=round(modularity, 4),
+                    communities=fallback_items,
+                    bridges=[],
+                )
+
             # Build file-to-community-index mapping
             file_to_comm: dict[str, int] = {}
             items: list[CommunityItem] = []
