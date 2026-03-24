@@ -7,12 +7,79 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### Planned (v0.2.6)
-- Fuzzy/substring symbol search (find `IO` in `cats.effect.IO`, `Router` in `Phoenix.Router`)
-- Language-specific symbol extraction fixes for Scala traits/objects, Elixir defp, Lua table OOP, Zig pub const, HCL resource/data blocks, Haskell type classes
-- Symbol name inverted index for O(1) lookup
-- Ground truth YAML for all 19 benchmark repos
-- Optional ast-grep integration for structural pattern searches
+### Planned (v0.2.7)
+- Embedding-based semantic search (NDCG target: 0.40+)
+- Ground truth YAML for 20+ benchmark repos
+- Persistent index cache across CodeIntelService instances
+- Go-specific search ranking improvements
+
+## [0.2.6] - 2026-03-24
+
+### Added
+
+#### Phase 3 Language Support (11 new languages)
+- Added tree-sitter configs for Erlang, Clojure, Perl, Crystal, Dart, OCaml, F#, Julia, Nim, R, and Objective-C
+- `tree-sitter-language-pack` fallback when individual grammar packages are not installed (10/11 languages available)
+- Clojure macro-call handler (`_process_clojure_call`) for `defn`, `defn-`, `defmacro`, `defmulti`, `defmethod`, `defprotocol`, `defrecord`, `deftype`, `ns`
+- R assignment-based function extraction (`_process_r_assignment`) for `f <- function() {}` patterns
+- Language aliases: `objective-c` → `objc`, `f#` → `fsharp`
+- Import extraction for all 11 new languages in `_extract_import_module`
+- Visibility and base class extraction for Dart, Crystal, Objective-C, Nim
+
+#### Architecture Analysis Fallback
+- Directory-based module analysis when Louvain community detection returns trivial results (single community or modularity < 0.05)
+- `_directory_based_module_analysis()` groups files by top-level directory with symbol counts and hub file detection
+- Fallback propagated to `LocalGraphProvider`, `DbGraphProvider`, `graph_viz`, and MCP `community_detection` tool
+- 22 repos improved from 2/5 to 4/5 on architecture task
+
+#### 3-Way Benchmark Expansion
+- Extended `benchmark_3way.py` from 19 to 49 repos across 30+ languages
+- Added repo configs for cockroach, express, prisma, rails, requests, cosmopolitan, ripgrep, starship, spring-boot, spark, vapor, WordPress, protobuf, crystal, dart-sdk, elixir, emqx, fsharp, ggplot2, iTerm2, julia, kemal, metabase, mojo, nickel, Nim, ocaml, otp, perl5, ring
+- Added ast-grep patterns for Java; updated `_AST_GREP_UNSUPPORTED` with 12 unsupported languages
+
+#### Churn Analysis & Code Evolution
+- `churn_hotspots` and `change_coupling` data methods in `CodeIntelService`
+- `TemporalCouplingAnalyzer` integration for file churn scoring
+- Churn scores integrated into `_compute_file_metrics` composite metrics
+
+#### OpenCode Backend Integration
+- OpenCode spawner and command handling in swarm module
+- Adapter registry support for dynamic backend selection
+- `HybridCoordinator` OpenCode command management
+
+#### SWE-Atlas QnA Evaluation Framework
+- `repo_manager.py` for repository cloning and caching
+- `runner.py` for task execution with CodeIntelService + LLM answer generation
+- `scorer.py` for rubric-based scoring with LLM judges
+- CLI commands for running evaluations and reporting results
+
+### Changed
+
+#### Search Quality Improvements
+- Lazy embedding provider initialization — model loads on first `semantic_search()` call, not on construction (bootstrap latency: 20s → 0.8s for non-search tasks)
+- Graduated symbol name boosting in BM25: exact match 3.0x, substring 2.0x, tokenized 1.5x (was flat 1.5x)
+- Multi-term coverage bonus: 80%+ term coverage gets 1.4x, 50%+ gets 1.15x
+- Source directory path boost: files in `src/`, `lib/`, `pkg/`, `core/` get 1.2x
+- Non-code file penalty: `.md`, `.txt`, `.yml`, `.json` etc. get 0.3x
+- Definition-type boost: class 1.3x, function 1.15x, method 1.1x
+- Search quality metrics: MRR@10 0.367→0.453 (+23%), NDCG@10 0.213→0.248 (+16%), Recall@20 0.200→0.256 (+28%)
+
+#### Persistent Index Store
+- SQLite-backed `IndexStore` for symbols, references, and dependencies
+- Incremental indexing: only re-parses files with changed mtime
+- Cross-reference index supports LSP-sourced results
+
+### Fixed
+- Foreign key constraint failure in `ast_service.py` — files must be saved before symbols/refs (reordered `save_files_batch` before `persist_file`)
+- Multi-strategy symbol search with scoring in `ASTService`
+- Version bump: `__init__.py` synced to 0.2.6
+
+### Metrics (49-repo benchmark)
+- **Code-intel avg quality**: 4.2/5 → 4.4/5
+- **Failure rate**: 19% → ~12% (below 5/5)
+- **Bootstrap latency** (non-search): 20s → 0.8s (warm cache)
+- **MRR@10**: 0.367 → 0.453
+- **Languages supported**: 25 → 36 (tree-sitter configs)
 
 ## [0.2.5] - 2026-03-22
 

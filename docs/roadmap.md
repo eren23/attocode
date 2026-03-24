@@ -1,12 +1,21 @@
 # Attocode Roadmap
 
-## v0.2.6 -- Symbol Extraction & Search Quality
+## v0.2.6 -- Language Support, Search Quality & Architecture (Released 2026-03-24)
 
-1. **Fuzzy symbol search** -- `find_symbol()` currently does exact match on qualified names; add substring, prefix, and fuzzy matching so `search_symbols("IO")` finds `cats.effect.IO` and `search_symbols("Router")` finds `Phoenix.Router`
-2. **Language-specific symbol extraction queries** -- validate and fix tree-sitter query patterns for all 25 languages; current gaps: Scala `object`/`trait` methods, Elixir `defp` private functions, Lua table-based OOP, Zig `pub const` declarations, HCL `resource`/`data` block names, Haskell type class instances
-3. **Symbol search index** -- build a name→locations inverted index during `initialize()` for O(1) lookup instead of scanning all definitions
-4. **Search quality ground truth expansion** -- add ground truth YAML files for all 19 benchmark repos (currently only 5 have them: attocode, fastapi, gh-cli, pandas, redis)
-5. **ast-grep integration** -- optionally use ast-grep for structural pattern searches alongside tree-sitter parsing
+1. ~~**Language-specific symbol extraction**~~ -- DONE: 11 new tree-sitter configs (Erlang, Clojure, Perl, Crystal, Dart, OCaml, F#, Julia, Nim, R, Objective-C); total 36 languages supported
+2. ~~**Architecture analysis fallback**~~ -- DONE: directory-based module detection when dependency graph is sparse; 22 repos improved from 2/5 to 4/5
+3. ~~**Search ranking improvements**~~ -- DONE: graduated symbol boosting, multi-term coverage, path relevance, non-code penalty; MRR +23%, NDCG +16%
+4. ~~**Lazy embedding initialization**~~ -- DONE: embedding model loads on first `semantic_search()` call, not on construction; bootstrap latency 20s → 0.8s
+5. ~~**3-way benchmark expansion**~~ -- DONE: 19 → 49 repos benchmarked across 30+ languages
+6. ~~**FK constraint fix**~~ -- DONE: save files before symbols in `ast_service.py`
+
+## v0.2.7 -- Search Quality & Evaluation
+
+1. **Embedding-based semantic search** -- NDCG target: 0.40+ (currently 0.248); hybrid vector + BM25 ranking
+2. **Ground truth expansion** -- add YAML files for 15+ more benchmark repos (currently 5)
+3. **Go-specific search improvements** -- Go MRR 0.200 lags Python 0.725; index package docs, use module paths
+4. **Persistent index across instances** -- cache survives CodeIntelService reconstruction; warm start for all repos
+5. **ast-grep integration** -- optional structural pattern searches alongside tree-sitter parsing
 
 ## v0.2.x -- Code Intel Infrastructure
 
@@ -16,7 +25,6 @@
 4. **More tests** -- integration tests for all 40 MCP tools, Playwright E2E, target 60% coverage
 5. **Full MCP feature parity** -- ensure all tools work in all modes (local, remote, service)
 6. **Better offline mode**:
-   - Persistent incremental indexing (cache in `.attocode/cache/`, reparse only changed files via git diff)
    - Offline embedding fallback (auto-switch to local model like `all-MiniLM-L6-v2`)
    - Pre-computed analysis bundles (`.attocode-bundle` export for air-gapped use)
    - Offline learning sync (queue locally, sync on reconnect)

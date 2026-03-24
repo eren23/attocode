@@ -73,22 +73,40 @@ python -m eval.competitive --report eval/competitive_report.md
 | graph_dsl | Cypher-like dependency query | `svc.graph_dsl()` |
 | code_evolution | Git history for a file | `svc.code_evolution_data()` |
 
-## Configured Repos (12)
+### Run 3-way comparison (grep vs ast-grep vs code-intel)
 
-| Repo | Language | Path |
-|------|----------|------|
-| attocode | Python/TypeScript | Project root |
-| gh-cli | Go | `benchmark-repos/gh-cli` |
-| redis | C/Tcl | `benchmark-repos/redis` |
-| fastapi | Python | `benchmark-repos/fastapi` |
-| pandas | Python/Cython | `benchmark-repos/pandas` |
-| okhttp | Kotlin/Java | `benchmark-repos/okhttp` |
-| swiftformat | Swift | `benchmark-repos/SwiftFormat` |
-| phoenix | Elixir | `benchmark-repos/phoenix` |
-| spdlog | C++ | `benchmark-repos/spdlog` |
-| faker | Ruby | `benchmark-repos/faker` |
-| zls | Zig | `benchmark-repos/zls` |
-| laravel | PHP | `benchmark-repos/framework` |
+```bash
+# Default 3 repos
+python scripts/benchmark_3way.py
+
+# All 49 repos
+python scripts/benchmark_3way.py --repos all
+
+# Specific repos
+python scripts/benchmark_3way.py --repos fastapi,redis,metabase
+
+# Skip code-intel (quick grep vs ast-grep only)
+python scripts/benchmark_3way.py --skip-code-intel
+```
+
+## Configured Repos (49)
+
+The 3-way benchmark covers 49 repositories across 30+ languages:
+
+| Language | Repos |
+|----------|-------|
+| Python | attocode, fastapi, pandas, requests |
+| Go | gh-cli, cockroach |
+| Rust | deno, ripgrep, starship, nickel |
+| C/C++ | redis, spdlog, cosmopolitan, protobuf |
+| Java/Kotlin/Scala | spring-boot, okhttp, spark, cats-effect |
+| JavaScript/TypeScript | express, prisma |
+| Ruby | faker, rails |
+| PHP | laravel, WordPress |
+| Swift | SwiftFormat, vapor |
+| Elixir/Erlang | phoenix, elixir, emqx, otp |
+| Clojure | metabase, ring |
+| Other | zls (Zig), luarocks (Lua), postgrest (Haskell), acme-sh (Bash), terraform-eks (HCL), crystal, dart-sdk, fsharp, ggplot2 (R), iTerm2 (Obj-C), julia, kemal (Crystal), mojo (Perl), Nim, ocaml, perl5 |
 
 ## Search Quality Metrics
 
