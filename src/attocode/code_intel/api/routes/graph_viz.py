@@ -108,7 +108,14 @@ async def get_graph_data(
     communities_list: list[dict] = []
     try:
         cd = svc.community_detection_data(min_community_size=2, max_communities=30)
-        for comm in cd.get("communities", []):
+        # Handle both standard communities and directory-based fallback modules
+        community_entries = cd.get("communities", [])
+        if not community_entries and "modules" in cd:
+            community_entries = [
+                {"id": m["id"], "files": m["files"]}
+                for m in cd["modules"]
+            ]
+        for comm in community_entries:
             cid = comm["id"]
             comm_files_in_view = [f for f in comm["files"] if f in selected_set]
             if comm_files_in_view:

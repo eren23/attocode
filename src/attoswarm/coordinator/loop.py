@@ -1164,6 +1164,9 @@ class HybridCoordinator:
         if backend == "attocode":
             agent_cmd = f"attocode {model_flag}--non-interactive \"$line\""
             return ["sh", "-c", self._build_heartbeat_script(agent_cmd, debug=debug)]
+        if backend == "opencode":
+            agent_cmd = f"opencode run {model_flag}--format json \"$line\""
+            return ["sh", "-c", self._build_heartbeat_script(agent_cmd, debug=debug)]
         if backend == "codex-mcp":
             return ["codex", "mcp-server"]
         raise ValueError(f"Unsupported backend: {backend}")

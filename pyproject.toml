@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "attocode"
-version = "0.2.5"
+version = "0.2.6"
 description = "Production AI coding agent"
 readme = "README.md"
 requires-python = ">=3.12"
@@ -76,6 +76,10 @@ tree-sitter = [
     "tree-sitter-json",
     "tree-sitter-html",
     "tree-sitter-css",
+]
+tree-sitter-all = [
+    # Universal fallback: 170+ languages in one package
+    "tree-sitter-language-pack>=0.6",
 ]
 watch = ["watchfiles>=1.0"]
 semantic = ["sentence-transformers>=3.0"]
@@ -197,7 +201,7 @@ exclude_lines = [
 ]
 
 [tool.bumpversion]
-current_version = "0.2.5"
+current_version = "0.2.6"
 commit = false
 tag = false
 

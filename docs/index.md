@@ -11,6 +11,7 @@ Production AI coding agent built in Python. Features a Textual-based TUI, multi-
 - **Session persistence** --- SQLite-backed sessions, checkpoints, goals, and permission grants
 - **Multi-provider** --- Anthropic, OpenRouter, and OpenAI adapters
 - **Skills & agents** --- Extensible skill and agent system with project-level and user-level customization
+- **Code intelligence** --- 36-language AST parsing, semantic search, dependency graphs, architecture analysis via MCP server
 - **MCP support** --- Connect external tools via the Model Context Protocol
 
 ## Quick Start
@@ -36,8 +37,8 @@ attocode --swarm "Build a REST API with tests"
 
 | Metric | Count |
 |--------|-------|
-| Source files | 318 |
-| Source lines | ~75,000 |
+| Source files | ~450 |
+| Source lines | ~122,000 |
 | Test files | 120+ |
 | Total tests | 3,370+ |
 

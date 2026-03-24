@@ -4,6 +4,10 @@ from attocode.integrations.swarm.cc_spawner import (
     create_cc_spawn_fn,
     spawn_cc_worker,
 )
+from attocode.integrations.swarm.opencode_spawner import (
+    create_opencode_spawn_fn,
+    spawn_opencode_worker,
+)
 from attocode.integrations.swarm.compilation_check import (
     CompilationCheckResult,
     CompilationError,
@@ -212,6 +216,9 @@ __all__ = [
     # cc_spawner
     "create_cc_spawn_fn",
     "spawn_cc_worker",
+    # opencode_spawner
+    "create_opencode_spawn_fn",
+    "spawn_opencode_worker",
     # compilation_check
     "CompilationCheckResult",
     "CompilationError",

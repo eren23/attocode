@@ -200,6 +200,14 @@ LANG_EXTENSIONS: dict[str, str] = {
     ".hcl": "hcl",
     ".tfvars": "hcl",
     ".zig": "zig",
+    # Phase 3: Additional programming languages
+    ".nim": "nim",
+    ".fs": "fsharp",
+    ".fsi": "fsharp",
+    ".fsx": "fsharp",
+    ".cr": "crystal",
+    ".m": "objc",
+    ".mm": "objc",
     # Phase 2: Data/config languages
     ".yaml": "yaml",
     ".yml": "yaml",
@@ -702,7 +710,7 @@ def parse_python(content: str, path: str = "") -> FileAST:
 
         # Top-level variable
         if not line.startswith((" ", "\t")) and "=" in stripped and not stripped.startswith(("#", "def ", "class ", "@", "if ", "for ", "while ", "return ")):
-            var_match = re.match(r"^([A-Z_][A-Z_0-9]*)\s*[=:]", stripped)
+            var_match = re.match(r"^([A-Z][A-Za-z_0-9]*|[A-Z_][A-Z_0-9]*)\s*[=:]", stripped)
             if var_match:
                 ast.top_level_vars.append(var_match.group(1))
 
@@ -1016,7 +1024,7 @@ def parse_rust(content: str, path: str = "") -> FileAST:
             continue
 
         # Top-level constants: (pub)? const NAME: ...
-        const_match = re.match(r"^(?:pub\s+)?(?:const|static)\s+([A-Z_][A-Z_0-9]*)\s*:", stripped)
+        const_match = re.match(r"^(?:pub\s+)?(?:const|static)\s+(\w+)\s*:", stripped)
         if const_match:
             ast.top_level_vars.append(const_match.group(1))
 
@@ -1141,7 +1149,7 @@ def parse_go(content: str, path: str = "") -> FileAST:
             continue
 
         # Top-level constants
-        const_match = re.match(r"^(?:var|const)\s+([A-Z_][A-Za-z_0-9]*)\s+", stripped)
+        const_match = re.match(r"^(?:var|const)\s+(\w+)\s+", stripped)
         if const_match:
             ast.top_level_vars.append(const_match.group(1))
 

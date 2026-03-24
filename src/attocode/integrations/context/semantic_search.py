@@ -118,6 +118,17 @@ class SemanticSearchManager:
     _summarizer: Any = field(default=None, repr=False)
 
     def __post_init__(self) -> None:
+        # Defer provider creation to first use (_ensure_provider) to avoid
+        # 5-15s model-load latency on construction.
+        self._provider = None
+        self._keyword_fallback = True  # assume keyword-only until provider loads
+        if not self.nl_mode:
+            self.nl_mode = os.environ.get("ATTOCODE_NL_EMBEDDING_MODE", "none")
+
+    def _ensure_provider(self) -> None:
+        """Initialize embedding provider on first use."""
+        if self._provider is not None:
+            return
         from attocode.integrations.context.embeddings import (
             NullEmbeddingProvider,
             create_embedding_provider,
@@ -134,10 +145,9 @@ class SemanticSearchManager:
                 dimension=self._provider.dimension(),
             )
 
-        # Resolve NL embedding mode
         if not self.nl_mode:
             self.nl_mode = os.environ.get("ATTOCODE_NL_EMBEDDING_MODE", "none")
-        if self.nl_mode == "heuristic":
+        if self.nl_mode == "heuristic" and self._summarizer is None:
             from attocode.code_intel.indexing.summarizer import get_summarizer
             self._summarizer = get_summarizer()
 
@@ -170,6 +180,7 @@ class SemanticSearchManager:
 
     def queue_reindex(self, file_path: str) -> None:
         """Queue a file for background reindex with de-duplication."""
+        self._ensure_provider()
         if self._keyword_fallback or not self._store:
             return
         try:
@@ -187,10 +198,12 @@ class SemanticSearchManager:
     @property
     def is_available(self) -> bool:
         """Check if semantic search is fully available."""
+        self._ensure_provider()
         return not self._keyword_fallback
 
     @property
     def provider_name(self) -> str:
+        self._ensure_provider()
         return self._provider.name if self._provider else "none"
 
     def index(self, context_manager: Any = None) -> int:
@@ -202,6 +215,7 @@ class SemanticSearchManager:
         Returns:
             Number of chunks indexed.
         """
+        self._ensure_provider()
         if self._keyword_fallback:
             logger.info("Semantic search: no provider, skipping indexing")
             return 0
@@ -315,6 +329,7 @@ class SemanticSearchManager:
         Returns:
             List of search results sorted by relevance.
         """
+        self._ensure_provider()
         if self._keyword_fallback:
             return self._keyword_search(query, top_k, file_filter)
 
@@ -538,23 +553,62 @@ class SemanticSearchManager:
             _name_lower = doc.name.lower()
             name_tokens = _tokenize(doc.name)
 
-            # Symbol name match boost
+            # Graduated symbol name match boost
+            _name_boost_applied = False
             for term in query_tokens:
-                if term in name_tokens:
-                    score *= 1.5
+                if term == _name_lower:
+                    # Exact symbol name match (query term IS the doc name)
+                    score *= 3.0
+                    _name_boost_applied = True
                     break
+                if term in _name_lower:
+                    # Symbol name contains query term as substring
+                    score *= 2.0
+                    _name_boost_applied = True
+                    break
+            if not _name_boost_applied:
+                for term in query_tokens:
+                    if term in name_tokens:
+                        # Query term appears in tokenized name parts
+                        score *= 1.5
+                        break
 
-            # Config/doc file penalty
+            # Definition-type boost: classes and functions rank above file-level
+            if doc.chunk_type == "class":
+                score *= 1.3
+            elif doc.chunk_type == "function":
+                score *= 1.15
+            elif doc.chunk_type == "method":
+                score *= 1.1
+
+            # Path relevance boost: source directories rank higher
+            _SRC_DIRS = {"src", "lib", "pkg", "core", "internal", "app", "main"}  # noqa: N806
+            _first_dir = doc.file_path.split("/")[0] if "/" in doc.file_path else ""
+            if _first_dir.lower() in _SRC_DIRS:
+                score *= 1.2
+
+            # Multi-term coverage bonus
+            if len(query_tokens) > 1:
+                _matched_terms = sum(1 for t in query_tokens if doc.term_freqs.get(t, 0) > 0)
+                _coverage = _matched_terms / len(query_tokens)
+                if _coverage >= 0.8:
+                    score *= 1.4
+                elif _coverage >= 0.5:
+                    score *= 1.15
+
+            # Non-code file penalty (markdown, text, config formats)
+            _NON_CODE_EXTS = {".md", ".txt", ".rst", ".cfg", ".ini", ".yml", ".yaml", ".json", ".toml", ".xml", ".csv"}  # noqa: N806
+            _ext = os.path.splitext(doc.file_path)[1].lower()
+            if _ext in _NON_CODE_EXTS:
+                score *= 0.3
+
+            # Config/doc file penalty (stacks with non-code ext penalty)
             if doc.is_config:
                 score *= 0.15
 
             # Test file mild penalty
             if doc.is_test:
                 score *= 0.7
-
-            # Function/method chunk preference over file-level
-            if doc.chunk_type in ("function", "method"):
-                score *= 1.1
 
             # Exact phrase bonus: multi-word query substring match in text
             if len(query_tokens) > 1 and query_lower in doc.text.lower():
@@ -889,6 +943,7 @@ class SemanticSearchManager:
         Returns:
             Number of chunks indexed (0 if skipped).
         """
+        self._ensure_provider()
         if self._keyword_fallback or not self._store:
             return 0
 
@@ -974,6 +1029,7 @@ class SemanticSearchManager:
         Returns:
             Number of chunks re-indexed.
         """
+        self._ensure_provider()
         if self._keyword_fallback or not self._store:
             return 0
 
@@ -1032,6 +1088,7 @@ class SemanticSearchManager:
 
     def is_index_ready(self) -> bool:
         """Check if the vector index has sufficient coverage (>=80%)."""
+        self._ensure_provider()
         if self._keyword_fallback or not self._store:
             return False
         progress = self.get_index_progress()
@@ -1080,6 +1137,7 @@ class SemanticSearchManager:
         """Start background progressive embedding indexing."""
         import time
 
+        self._ensure_provider()
         if self._keyword_fallback or not self._store:
             self._index_progress.status = "error"
             return self._index_progress

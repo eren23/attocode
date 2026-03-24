@@ -1,0 +1,1933 @@
+Warning: You are sending unauthenticated requests to the HF Hub. Please set a HF_TOKEN to enable higher rate limits and faster downloads.
+
+============================================================
+  Benchmarking: attocode
+============================================================
+
+  --- grep ---
+    Project Orientation: 59ms, 26 chars, Q=3/5
+    Symbol Discovery: 44ms, 2024 chars, Q=4/5
+    Dependency Tracing: 26ms, 1126 chars, Q=5/5
+    Architecture: 0ms, 167 chars, Q=3/5
+    Code Navigation: 25ms, 2233 chars, Q=4/5
+    Semantic Search: 31ms, 616506 chars, Q=5/5
+
+  --- ast-grep ---
+    Project Orientation: 348ms, 34 chars, Q=1/5
+    Symbol Discovery: 396ms, 8419 chars, Q=4/5
+    Dependency Tracing: 10ms, 1346 chars, Q=4/5
+    Architecture: 114ms, 0 chars, Q=0/5
+    Code Navigation: 106ms, 638 chars, Q=4/5
+    Semantic Search: 301ms, 44681 chars, Q=3/5
+
+  --- code-intel ---
+    ERROR: FOREIGN KEY constraint failed
+
+============================================================
+  Benchmarking: fastapi
+============================================================
+
+  --- grep ---
+    Project Orientation: 78ms, 26 chars, Q=3/5
+    Symbol Discovery: 83ms, 97045 chars, Q=5/5
+    Dependency Tracing: 35ms, 1436 chars, Q=5/5
+    Architecture: 1ms, 141 chars, Q=3/5
+    Code Navigation: 36ms, 93280 chars, Q=5/5
+    Semantic Search: 41ms, 804643 chars, Q=3/5
+
+  --- ast-grep ---
+    Project Orientation: 160ms, 33 chars, Q=1/5
+    Symbol Discovery: 226ms, 92934 chars, Q=5/5
+    Dependency Tracing: 14ms, 2611 chars, Q=5/5
+    Architecture: 54ms, 0 chars, Q=0/5
+    Code Navigation: 61ms, 10787 chars, Q=5/5
+    Semantic Search: 150ms, 52896 chars, Q=3/5
+
+  --- code-intel ---
+Loading weights:   0%|          | 0/103 [00:00<?, ?it/s]Loading weights:   1%|          | 1/103 [00:00<00:00, 6223.00it/s, Materializing param=embeddings.LayerNorm.bias]Loading weights:   1%|          | 1/103 [00:00<00:00, 4860.14it/s, Materializing param=embeddings.LayerNorm.bias]Loading weights:   2%|▏         | 2/103 [00:00<00:00, 4578.93it/s, Materializing param=embeddings.LayerNorm.weight]Loading weights:   2%|▏         | 2/103 [00:00<00:00, 4249.55it/s, Materializing param=embeddings.LayerNorm.weight]Loading weights:   3%|▎         | 3/103 [00:00<00:00, 5673.09it/s, Materializing param=embeddings.position_embeddings.weight]Loading weights:   3%|▎         | 3/103 [00:00<00:00, 5426.01it/s, Materializing param=embeddings.position_embeddings.weight]Loading weights:   4%|▍         | 4/103 [00:00<00:00, 6311.97it/s, Materializing param=embeddings.token_type_embeddings.weight]Loading weights:   4%|▍         | 4/103 [00:00<00:00, 5919.98it/s, Materializing param=embeddings.token_type_embeddings.weight]Loading weights:   5%|▍         | 5/103 [00:00<00:00, 6713.03it/s, Materializing param=embeddings.word_embeddings.weight]      Loading weights:   5%|▍         | 5/103 [00:00<00:00, 6545.42it/s, Materializing param=embeddings.word_embeddings.weight]Loading weights:   6%|▌         | 6/103 [00:00<00:00, 7373.52it/s, Materializing param=encoder.layer.0.attention.output.LayerNorm.bias]Loading weights:   6%|▌         | 6/103 [00:00<00:00, 7145.32it/s, Materializing param=encoder.layer.0.attention.output.LayerNorm.bias]Loading weights:   7%|▋         | 7/103 [00:00<00:00, 7736.53it/s, Materializing param=encoder.layer.0.attention.output.LayerNorm.weight]Loading weights:   7%|▋         | 7/103 [00:00<00:00, 7602.31it/s, Materializing param=encoder.layer.0.attention.output.LayerNorm.weight]Loading weights:   8%|▊         | 8/103 [00:00<00:00, 6939.90it/s, Materializing param=encoder.layer.0.attention.output.dense.bias]      Loading weights:   8%|▊         | 8/103 [00:00<00:00, 6821.39it/s, Materializing param=encoder.layer.0.attention.output.dense.bias]Loading weights:   9%|▊         | 9/103 [00:00<00:00, 6085.56it/s, Materializing param=encoder.layer.0.attention.output.dense.weight]Loading weights:   9%|▊         | 9/103 [00:00<00:00, 6009.03it/s, Materializing param=encoder.layer.0.attention.output.dense.weight]Loading weights:  10%|▉         | 10/103 [00:00<00:00, 4458.71it/s, Materializing param=encoder.layer.0.attention.self.key.bias]     Loading weights:  10%|▉         | 10/103 [00:00<00:00, 4388.27it/s, Materializing param=encoder.layer.0.attention.self.key.bias]Loading weights:  11%|█         | 11/103 [00:00<00:00, 4677.35it/s, Materializing param=encoder.layer.0.attention.self.key.weight]Loading weights:  11%|█         | 11/103 [00:00<00:00, 4642.05it/s, Materializing param=encoder.layer.0.attention.self.key.weight]Loading weights:  12%|█▏        | 12/103 [00:00<00:00, 4561.51it/s, Materializing param=encoder.layer.0.attention.self.query.bias]Loading weights:  12%|█▏        | 12/103 [00:00<00:00, 4498.32it/s, Materializing param=encoder.layer.0.attention.self.query.bias]Loading weights:  13%|█▎        | 13/103 [00:00<00:00, 4757.11it/s, Materializing param=encoder.layer.0.attention.self.query.weight]Loading weights:  13%|█▎        | 13/103 [00:00<00:00, 4722.91it/s, Materializing param=encoder.layer.0.attention.self.query.weight]Loading weights:  14%|█▎        | 14/103 [00:00<00:00, 4986.43it/s, Materializing param=encoder.layer.0.attention.self.value.bias]  Loading weights:  14%|█▎        | 14/103 [00:00<00:00, 4949.45it/s, Materializing param=encoder.layer.0.attention.self.value.bias]Loading weights:  15%|█▍        | 15/103 [00:00<00:00, 5230.24it/s, Materializing param=encoder.layer.0.attention.self.value.weight]Loading weights:  15%|█▍        | 15/103 [00:00<00:00, 5196.11it/s, Materializing param=encoder.layer.0.attention.self.value.weight]Loading weights:  16%|█▌        | 16/103 [00:00<00:00, 5455.56it/s, Materializing param=encoder.layer.0.intermediate.dense.bias]    Loading weights:  16%|█▌        | 16/103 [00:00<00:00, 5066.73it/s, Materializing param=encoder.layer.0.intermediate.dense.bias]Loading weights:  17%|█▋        | 17/103 [00:00<00:00, 5294.66it/s, Materializing param=encoder.layer.0.intermediate.dense.weight]Loading weights:  17%|█▋        | 17/103 [00:00<00:00, 5266.89it/s, Materializing param=encoder.layer.0.intermediate.dense.weight]Loading weights:  17%|█▋        | 18/103 [00:00<00:00, 5483.15it/s, Materializing param=encoder.layer.0.output.LayerNorm.bias]    Loading weights:  17%|█▋        | 18/103 [00:00<00:00, 5449.90it/s, Materializing param=encoder.layer.0.output.LayerNorm.bias]Loading weights:  18%|█▊        | 19/103 [00:00<00:00, 5254.63it/s, Materializing param=encoder.layer.0.output.LayerNorm.weight]Loading weights:  18%|█▊        | 19/103 [00:00<00:00, 5227.06it/s, Materializing param=encoder.layer.0.output.LayerNorm.weight]Loading weights:  19%|█▉        | 20/103 [00:00<00:00, 5445.38it/s, Materializing param=encoder.layer.0.output.dense.bias]      Loading weights:  19%|█▉        | 20/103 [00:00<00:00, 5420.40it/s, Materializing param=encoder.layer.0.output.dense.bias]Loading weights:  20%|██        | 21/103 [00:00<00:00, 5624.19it/s, Materializing param=encoder.layer.0.output.dense.weight]Loading weights:  20%|██        | 21/103 [00:00<00:00, 5602.01it/s, Materializing param=encoder.layer.0.output.dense.weight]Loading weights:  21%|██▏       | 22/103 [00:00<00:00, 5799.06it/s, Materializing param=encoder.layer.1.attention.output.LayerNorm.bias]Loading weights:  21%|██▏       | 22/103 [00:00<00:00, 5770.05it/s, Materializing param=encoder.layer.1.attention.output.LayerNorm.bias]Loading weights:  22%|██▏       | 23/103 [00:00<00:00, 5894.48it/s, Materializing param=encoder.layer.1.attention.output.LayerNorm.weight]Loading weights:  22%|██▏       | 23/103 [00:00<00:00, 5849.80it/s, Materializing param=encoder.layer.1.attention.output.LayerNorm.weight]Loading weights:  23%|██▎       | 24/103 [00:00<00:00, 5866.84it/s, Materializing param=encoder.layer.1.attention.output.dense.bias]      Loading weights:  23%|██▎       | 24/103 [00:00<00:00, 5833.86it/s, Materializing param=encoder.layer.1.attention.output.dense.bias]Loading weights:  24%|██▍       | 25/103 [00:00<00:00, 6021.80it/s, Materializing param=encoder.layer.1.attention.output.dense.weight]Loading weights:  24%|██▍       | 25/103 [00:00<00:00, 5995.29it/s, Materializing param=encoder.layer.1.attention.output.dense.weight]Loading weights:  25%|██▌       | 26/103 [00:00<00:00, 6190.85it/s, Materializing param=encoder.layer.1.attention.self.key.bias]      Loading weights:  25%|██▌       | 26/103 [00:00<00:00, 6168.79it/s, Materializing param=encoder.layer.1.attention.self.key.bias]Loading weights:  26%|██▌       | 27/103 [00:00<00:00, 5858.57it/s, Materializing param=encoder.layer.1.attention.self.key.weight]Loading weights:  26%|██▌       | 27/103 [00:00<00:00, 5830.82it/s, Materializing param=encoder.layer.1.attention.self.key.weight]Loading weights:  27%|██▋       | 28/103 [00:00<00:00, 5988.50it/s, Materializing param=encoder.layer.1.attention.self.query.bias]Loading weights:  27%|██▋       | 28/103 [00:00<00:00, 5966.60it/s, Materializing param=encoder.layer.1.attention.self.query.bias]Loading weights:  28%|██▊       | 29/103 [00:00<00:00, 5875.51it/s, Materializing param=encoder.layer.1.attention.self.query.weight]Loading weights:  28%|██▊       | 29/103 [00:00<00:00, 5848.11it/s, Materializing param=encoder.layer.1.attention.self.query.weight]Loading weights:  29%|██▉       | 30/103 [00:00<00:00, 5940.94it/s, Materializing param=encoder.layer.1.attention.self.value.bias]  Loading weights:  29%|██▉       | 30/103 [00:00<00:00, 5919.98it/s, Materializing param=encoder.layer.1.attention.self.value.bias]Loading weights:  30%|███       | 31/103 [00:00<00:00, 5972.05it/s, Materializing param=encoder.layer.1.attention.self.value.weight]Loading weights:  30%|███       | 31/103 [00:00<00:00, 5951.55it/s, Materializing param=encoder.layer.1.attention.self.value.weight]Loading weights:  31%|███       | 32/103 [00:00<00:00, 6060.86it/s, Materializing param=encoder.layer.1.intermediate.dense.bias]    Loading weights:  31%|███       | 32/103 [00:00<00:00, 6040.13it/s, Materializing param=encoder.layer.1.intermediate.dense.bias]Loading weights:  32%|███▏      | 33/103 [00:00<00:00, 5857.72it/s, Materializing param=encoder.layer.1.intermediate.dense.weight]Loading weights:  32%|███▏      | 33/103 [00:00<00:00, 5837.71it/s, Materializing param=encoder.layer.1.intermediate.dense.weight]Loading weights:  33%|███▎      | 34/103 [00:00<00:00, 5960.81it/s, Materializing param=encoder.layer.1.output.LayerNorm.bias]    Loading weights:  33%|███▎      | 34/103 [00:00<00:00, 5895.75it/s, Materializing param=encoder.layer.1.output.LayerNorm.bias]Loading weights:  34%|███▍      | 35/103 [00:00<00:00, 5639.02it/s, Materializing param=encoder.layer.1.output.LayerNorm.weight]Loading weights:  34%|███▍      | 35/103 [00:00<00:00, 5454.43it/s, Materializing param=encoder.layer.1.output.LayerNorm.weight]Loading weights:  35%|███▍      | 36/103 [00:00<00:00, 5365.47it/s, Materializing param=encoder.layer.1.output.dense.bias]      Loading weights:  35%|███▍      | 36/103 [00:00<00:00, 5322.53it/s, Materializing param=encoder.layer.1.output.dense.bias]Loading weights:  36%|███▌      | 37/103 [00:00<00:00, 5324.00it/s, Materializing param=encoder.layer.1.output.dense.weight]Loading weights:  36%|███▌      | 37/103 [00:00<00:00, 5182.30it/s, Materializing param=encoder.layer.1.output.dense.weight]Loading weights:  37%|███▋      | 38/103 [00:00<00:00, 5229.29it/s, Materializing param=encoder.layer.2.attention.output.LayerNorm.bias]Loading weights:  37%|███▋      | 38/103 [00:00<00:00, 5204.87it/s, Materializing param=encoder.layer.2.attention.output.LayerNorm.bias]Loading weights:  38%|███▊      | 39/103 [00:00<00:00, 4940.59it/s, Materializing param=encoder.layer.2.attention.output.LayerNorm.weight]Loading weights:  38%|███▊      | 39/103 [00:00<00:00, 4691.08it/s, Materializing param=encoder.layer.2.attention.output.LayerNorm.weight]Loading weights:  39%|███▉      | 40/103 [00:00<00:00, 4746.30it/s, Materializing param=encoder.layer.2.attention.output.dense.bias]      Loading weights:  39%|███▉      | 40/103 [00:00<00:00, 4637.79it/s, Materializing param=encoder.layer.2.attention.output.dense.bias]Loading weights:  40%|███▉      | 41/103 [00:00<00:00, 4706.25it/s, Materializing param=encoder.layer.2.attention.output.dense.weight]Loading weights:  40%|███▉      | 41/103 [00:00<00:00, 4695.46it/s, Materializing param=encoder.layer.2.attention.output.dense.weight]Loading weights:  41%|████      | 42/103 [00:00<00:00, 4705.40it/s, Materializing param=encoder.layer.2.attention.self.key.bias]      Loading weights:  41%|████      | 42/103 [00:00<00:00, 4689.74it/s, Materializing param=encoder.layer.2.attention.self.key.bias]Loading weights:  42%|████▏     | 43/103 [00:00<00:00, 4777.87it/s, Materializing param=encoder.layer.2.attention.self.key.weight]Loading weights:  42%|████▏     | 43/103 [00:00<00:00, 4769.41it/s, Materializing param=encoder.layer.2.attention.self.key.weight]Loading weights:  43%|████▎     | 44/103 [00:00<00:00, 4859.25it/s, Materializing param=encoder.layer.2.attention.self.query.bias]Loading weights:  43%|████▎     | 44/103 [00:00<00:00, 4850.82it/s, Materializing param=encoder.layer.2.attention.self.query.bias]Loading weights:  44%|████▎     | 45/103 [00:00<00:00, 4918.66it/s, Materializing param=encoder.layer.2.attention.self.query.weight]Loading weights:  44%|████▎     | 45/103 [00:00<00:00, 4883.91it/s, Materializing param=encoder.layer.2.attention.self.query.weight]Loading weights:  45%|████▍     | 46/103 [00:00<00:00, 4845.25it/s, Materializing param=encoder.layer.2.attention.self.value.bias]  Loading weights:  45%|████▍     | 46/103 [00:00<00:00, 4836.63it/s, Materializing param=encoder.layer.2.attention.self.value.bias]Loading weights:  46%|████▌     | 47/103 [00:00<00:00, 4917.98it/s, Materializing param=encoder.layer.2.attention.self.value.weight]Loading weights:  46%|████▌     | 47/103 [00:00<00:00, 4910.26it/s, Materializing param=encoder.layer.2.attention.self.value.weight]Loading weights:  47%|████▋     | 48/103 [00:00<00:00, 4986.05it/s, Materializing param=encoder.layer.2.intermediate.dense.bias]    Loading weights:  47%|████▋     | 48/103 [00:00<00:00, 4948.06it/s, Materializing param=encoder.layer.2.intermediate.dense.bias]Loading weights:  48%|████▊     | 49/103 [00:00<00:00, 5007.33it/s, Materializing param=encoder.layer.2.intermediate.dense.weight]Loading weights:  48%|████▊     | 49/103 [00:00<00:00, 4998.56it/s, Materializing param=encoder.layer.2.intermediate.dense.weight]Loading weights:  49%|████▊     | 50/103 [00:00<00:00, 5078.34it/s, Materializing param=encoder.layer.2.output.LayerNorm.bias]    Loading weights:  49%|████▊     | 50/103 [00:00<00:00, 5070.12it/s, Materializing param=encoder.layer.2.output.LayerNorm.bias]Loading weights:  50%|████▉     | 51/103 [00:00<00:00, 5152.58it/s, Materializing param=encoder.layer.2.output.LayerNorm.weight]Loading weights:  50%|████▉     | 51/103 [00:00<00:00, 5144.40it/s, Materializing param=encoder.layer.2.output.LayerNorm.weight]Loading weights:  50%|█████     | 52/103 [00:00<00:00, 5223.67it/s, Materializing param=encoder.layer.2.output.dense.bias]      Loading weights:  50%|█████     | 52/103 [00:00<00:00, 5213.68it/s, Materializing param=encoder.layer.2.output.dense.bias]Loading weights:  51%|█████▏    | 53/103 [00:00<00:00, 5290.17it/s, Materializing param=encoder.layer.2.output.dense.weight]Loading weights:  51%|█████▏    | 53/103 [00:00<00:00, 5281.62it/s, Materializing param=encoder.layer.2.output.dense.weight]Loading weights:  52%|█████▏    | 54/103 [00:00<00:00, 5359.88it/s, Materializing param=encoder.layer.3.attention.output.LayerNorm.bias]Loading weights:  52%|█████▏    | 54/103 [00:00<00:00, 5350.38it/s, Materializing param=encoder.layer.3.attention.output.LayerNorm.bias]Loading weights:  53%|█████▎    | 55/103 [00:00<00:00, 5220.81it/s, Materializing param=encoder.layer.3.attention.output.LayerNorm.weight]Loading weights:  53%|█████▎    | 55/103 [00:00<00:00, 5164.47it/s, Materializing param=encoder.layer.3.attention.output.LayerNorm.weight]Loading weights:  54%|█████▍    | 56/103 [00:00<00:00, 5051.10it/s, Materializing param=encoder.layer.3.attention.output.dense.bias]      Loading weights:  54%|█████▍    | 56/103 [00:00<00:00, 5042.96it/s, Materializing param=encoder.layer.3.attention.output.dense.bias]Loading weights:  55%|█████▌    | 57/103 [00:00<00:00, 5088.98it/s, Materializing param=encoder.layer.3.attention.output.dense.weight]Loading weights:  55%|█████▌    | 57/103 [00:00<00:00, 5081.63it/s, Materializing param=encoder.layer.3.attention.output.dense.weight]Loading weights:  56%|█████▋    | 58/103 [00:00<00:00, 5147.47it/s, Materializing param=encoder.layer.3.attention.self.key.bias]      Loading weights:  56%|█████▋    | 58/103 [00:00<00:00, 5140.08it/s, Materializing param=encoder.layer.3.attention.self.key.bias]Loading weights:  57%|█████▋    | 59/103 [00:00<00:00, 5189.66it/s, Materializing param=encoder.layer.3.attention.self.key.weight]Loading weights:  57%|█████▋    | 59/103 [00:00<00:00, 5180.10it/s, Materializing param=encoder.layer.3.attention.self.key.weight]Loading weights:  58%|█████▊    | 60/103 [00:00<00:00, 5249.44it/s, Materializing param=encoder.layer.3.attention.self.query.bias]Loading weights:  58%|█████▊    | 60/103 [00:00<00:00, 5242.12it/s, Materializing param=encoder.layer.3.attention.self.query.bias]Loading weights:  59%|█████▉    | 61/103 [00:00<00:00, 5301.22it/s, Materializing param=encoder.layer.3.attention.self.query.weight]Loading weights:  59%|█████▉    | 61/103 [00:00<00:00, 5289.82it/s, Materializing param=encoder.layer.3.attention.self.query.weight]Loading weights:  60%|██████    | 62/103 [00:00<00:00, 5354.61it/s, Materializing param=encoder.layer.3.attention.self.value.bias]  Loading weights:  60%|██████    | 62/103 [00:00<00:00, 5346.80it/s, Materializing param=encoder.layer.3.attention.self.value.bias]Loading weights:  61%|██████    | 63/103 [00:00<00:00, 5410.12it/s, Materializing param=encoder.layer.3.attention.self.value.weight]Loading weights:  61%|██████    | 63/103 [00:00<00:00, 5400.83it/s, Materializing param=encoder.layer.3.attention.self.value.weight]Loading weights:  62%|██████▏   | 64/103 [00:00<00:00, 5436.78it/s, Materializing param=encoder.layer.3.intermediate.dense.bias]    Loading weights:  62%|██████▏   | 64/103 [00:00<00:00, 5429.41it/s, Materializing param=encoder.layer.3.intermediate.dense.bias]Loading weights:  63%|██████▎   | 65/103 [00:00<00:00, 5399.68it/s, Materializing param=encoder.layer.3.intermediate.dense.weight]Loading weights:  63%|██████▎   | 65/103 [00:00<00:00, 5345.47it/s, Materializing param=encoder.layer.3.intermediate.dense.weight]Loading weights:  64%|██████▍   | 66/103 [00:00<00:00, 5410.84it/s, Materializing param=encoder.layer.3.output.LayerNorm.bias]    Loading weights:  64%|██████▍   | 66/103 [00:00<00:00, 5404.08it/s, Materializing param=encoder.layer.3.output.LayerNorm.bias]Loading weights:  65%|██████▌   | 67/103 [00:00<00:00, 5438.82it/s, Materializing param=encoder.layer.3.output.LayerNorm.weight]Loading weights:  65%|██████▌   | 67/103 [00:00<00:00, 5139.33it/s, Materializing param=encoder.layer.3.output.LayerNorm.weight]Loading weights:  66%|██████▌   | 68/103 [00:00<00:00, 5192.10it/s, Materializing param=encoder.layer.3.output.dense.bias]      Loading weights:  66%|██████▌   | 68/103 [00:00<00:00, 5118.68it/s, Materializing param=encoder.layer.3.output.dense.bias]Loading weights:  67%|██████▋   | 69/103 [00:00<00:00, 5139.71it/s, Materializing param=encoder.layer.3.output.dense.weight]Loading weights:  67%|██████▋   | 69/103 [00:00<00:00, 5092.32it/s, Materializing param=encoder.layer.3.output.dense.weight]Loading weights:  68%|██████▊   | 70/103 [00:00<00:00, 5085.06it/s, Materializing param=encoder.layer.4.attention.output.LayerNorm.bias]Loading weights:  68%|██████▊   | 70/103 [00:00<00:00, 5075.48it/s, Materializing param=encoder.layer.4.attention.output.LayerNorm.bias]Loading weights:  69%|██████▉   | 71/103 [00:00<00:00, 5071.88it/s, Materializing param=encoder.layer.4.attention.output.LayerNorm.weight]Loading weights:  69%|██████▉   | 71/103 [00:00<00:00, 5052.35it/s, Materializing param=encoder.layer.4.attention.output.LayerNorm.weight]Loading weights:  70%|██████▉   | 72/103 [00:00<00:00, 5108.69it/s, Materializing param=encoder.layer.4.attention.output.dense.bias]      Loading weights:  70%|██████▉   | 72/103 [00:00<00:00, 5076.91it/s, Materializing param=encoder.layer.4.attention.output.dense.bias]Loading weights:  71%|███████   | 73/103 [00:00<00:00, 5134.05it/s, Materializing param=encoder.layer.4.attention.output.dense.weight]Loading weights:  71%|███████   | 73/103 [00:00<00:00, 5128.28it/s, Materializing param=encoder.layer.4.attention.output.dense.weight]Loading weights:  72%|███████▏  | 74/103 [00:00<00:00, 5189.06it/s, Materializing param=encoder.layer.4.attention.self.key.bias]      Loading weights:  72%|███████▏  | 74/103 [00:00<00:00, 5183.60it/s, Materializing param=encoder.layer.4.attention.self.key.bias]Loading weights:  73%|███████▎  | 75/103 [00:00<00:00, 5244.10it/s, Materializing param=encoder.layer.4.attention.self.key.weight]Loading weights:  73%|███████▎  | 75/103 [00:00<00:00, 5239.04it/s, Materializing param=encoder.layer.4.attention.self.key.weight]Loading weights:  74%|███████▍  | 76/103 [00:00<00:00, 5299.18it/s, Materializing param=encoder.layer.4.attention.self.query.bias]Loading weights:  74%|███████▍  | 76/103 [00:00<00:00, 5293.99it/s, Materializing param=encoder.layer.4.attention.self.query.bias]Loading weights:  75%|███████▍  | 77/103 [00:00<00:00, 5352.89it/s, Materializing param=encoder.layer.4.attention.self.query.weight]Loading weights:  75%|███████▍  | 77/103 [00:00<00:00, 5347.66it/s, Materializing param=encoder.layer.4.attention.self.query.weight]Loading weights:  76%|███████▌  | 78/103 [00:00<00:00, 5408.16it/s, Materializing param=encoder.layer.4.attention.self.value.bias]  Loading weights:  76%|███████▌  | 78/103 [00:00<00:00, 5402.89it/s, Materializing param=encoder.layer.4.attention.self.value.bias]Loading weights:  77%|███████▋  | 79/103 [00:00<00:00, 5461.87it/s, Materializing param=encoder.layer.4.attention.self.value.weight]Loading weights:  77%|███████▋  | 79/103 [00:00<00:00, 5456.66it/s, Materializing param=encoder.layer.4.attention.self.value.weight]Loading weights:  78%|███████▊  | 80/103 [00:00<00:00, 5516.92it/s, Materializing param=encoder.layer.4.intermediate.dense.bias]    Loading weights:  78%|███████▊  | 80/103 [00:00<00:00, 5511.57it/s, Materializing param=encoder.layer.4.intermediate.dense.bias]Loading weights:  79%|███████▊  | 81/103 [00:00<00:00, 5570.58it/s, Materializing param=encoder.layer.4.intermediate.dense.weight]Loading weights:  79%|███████▊  | 81/103 [00:00<00:00, 5565.20it/s, Materializing param=encoder.layer.4.intermediate.dense.weight]Loading weights:  80%|███████▉  | 82/103 [00:00<00:00, 5624.60it/s, Materializing param=encoder.layer.4.output.LayerNorm.bias]    Loading weights:  80%|███████▉  | 82/103 [00:00<00:00, 5619.54it/s, Materializing param=encoder.layer.4.output.LayerNorm.bias]Loading weights:  81%|████████  | 83/103 [00:00<00:00, 5678.06it/s, Materializing param=encoder.layer.4.output.LayerNorm.weight]Loading weights:  81%|████████  | 83/103 [00:00<00:00, 5672.13it/s, Materializing param=encoder.layer.4.output.LayerNorm.weight]Loading weights:  82%|████████▏ | 84/103 [00:00<00:00, 5731.23it/s, Materializing param=encoder.layer.4.output.dense.bias]      Loading weights:  82%|████████▏ | 84/103 [00:00<00:00, 5726.11it/s, Materializing param=encoder.layer.4.output.dense.bias]Loading weights:  83%|████████▎ | 85/103 [00:00<00:00, 5784.78it/s, Materializing param=encoder.layer.4.output.dense.weight]Loading weights:  83%|████████▎ | 85/103 [00:00<00:00, 5779.24it/s, Materializing param=encoder.layer.4.output.dense.weight]Loading weights:  83%|████████▎ | 86/103 [00:00<00:00, 5838.06it/s, Materializing param=encoder.layer.5.attention.output.LayerNorm.bias]Loading weights:  83%|████████▎ | 86/103 [00:00<00:00, 5832.20it/s, Materializing param=encoder.layer.5.attention.output.LayerNorm.bias]Loading weights:  84%|████████▍ | 87/103 [00:00<00:00, 5888.50it/s, Materializing param=encoder.layer.5.attention.output.LayerNorm.weight]Loading weights:  84%|████████▍ | 87/103 [00:00<00:00, 5882.42it/s, Materializing param=encoder.layer.5.attention.output.LayerNorm.weight]Loading weights:  85%|████████▌ | 88/103 [00:00<00:00, 5939.98it/s, Materializing param=encoder.layer.5.attention.output.dense.bias]      Loading weights:  85%|████████▌ | 88/103 [00:00<00:00, 5934.45it/s, Materializing param=encoder.layer.5.attention.output.dense.bias]Loading weights:  86%|████████▋ | 89/103 [00:00<00:00, 5990.90it/s, Materializing param=encoder.layer.5.attention.output.dense.weight]Loading weights:  86%|████████▋ | 89/103 [00:00<00:00, 5985.23it/s, Materializing param=encoder.layer.5.attention.output.dense.weight]Loading weights:  87%|████████▋ | 90/103 [00:00<00:00, 6042.79it/s, Materializing param=encoder.layer.5.attention.self.key.bias]      Loading weights:  87%|████████▋ | 90/103 [00:00<00:00, 6037.09it/s, Materializing param=encoder.layer.5.attention.self.key.bias]Loading weights:  88%|████████▊ | 91/103 [00:00<00:00, 6093.55it/s, Materializing param=encoder.layer.5.attention.self.key.weight]Loading weights:  88%|████████▊ | 91/103 [00:00<00:00, 6087.43it/s, Materializing param=encoder.layer.5.attention.self.key.weight]Loading weights:  89%|████████▉ | 92/103 [00:00<00:00, 6144.42it/s, Materializing param=encoder.layer.5.attention.self.query.bias]Loading weights:  89%|████████▉ | 92/103 [00:00<00:00, 6138.66it/s, Materializing param=encoder.layer.5.attention.self.query.bias]Loading weights:  90%|█████████ | 93/103 [00:00<00:00, 6195.62it/s, Materializing param=encoder.layer.5.attention.self.query.weight]Loading weights:  90%|█████████ | 93/103 [00:00<00:00, 6189.72it/s, Materializing param=encoder.layer.5.attention.self.query.weight]Loading weights:  91%|█████████▏| 94/103 [00:00<00:00, 6246.37it/s, Materializing param=encoder.layer.5.attention.self.value.bias]  Loading weights:  91%|█████████▏| 94/103 [00:00<00:00, 6240.63it/s, Materializing param=encoder.layer.5.attention.self.value.bias]Loading weights:  92%|█████████▏| 95/103 [00:00<00:00, 6296.96it/s, Materializing param=encoder.layer.5.attention.self.value.weight]Loading weights:  92%|█████████▏| 95/103 [00:00<00:00, 6291.09it/s, Materializing param=encoder.layer.5.attention.self.value.weight]Loading weights:  93%|█████████▎| 96/103 [00:00<00:00, 6346.39it/s, Materializing param=encoder.layer.5.intermediate.dense.bias]    Loading weights:  93%|█████████▎| 96/103 [00:00<00:00, 6340.90it/s, Materializing param=encoder.layer.5.intermediate.dense.bias]Loading weights:  94%|█████████▍| 97/103 [00:00<00:00, 6397.27it/s, Materializing param=encoder.layer.5.intermediate.dense.weight]Loading weights:  94%|█████████▍| 97/103 [00:00<00:00, 6391.35it/s, Materializing param=encoder.layer.5.intermediate.dense.weight]Loading weights:  95%|█████████▌| 98/103 [00:00<00:00, 6447.82it/s, Materializing param=encoder.layer.5.output.LayerNorm.bias]    Loading weights:  95%|█████████▌| 98/103 [00:00<00:00, 6442.46it/s, Materializing param=encoder.layer.5.output.LayerNorm.bias]Loading weights:  96%|█████████▌| 99/103 [00:00<00:00, 6497.00it/s, Materializing param=encoder.layer.5.output.LayerNorm.weight]Loading weights:  96%|█████████▌| 99/103 [00:00<00:00, 6491.01it/s, Materializing param=encoder.layer.5.output.LayerNorm.weight]Loading weights:  97%|█████████▋| 100/103 [00:00<00:00, 6546.64it/s, Materializing param=encoder.layer.5.output.dense.bias]     Loading weights:  97%|█████████▋| 100/103 [00:00<00:00, 6540.72it/s, Materializing param=encoder.layer.5.output.dense.bias]Loading weights:  98%|█████████▊| 101/103 [00:00<00:00, 6596.67it/s, Materializing param=encoder.layer.5.output.dense.weight]Loading weights:  98%|█████████▊| 101/103 [00:00<00:00, 6591.02it/s, Materializing param=encoder.layer.5.output.dense.weight]Loading weights:  99%|█████████▉| 102/103 [00:00<00:00, 6646.76it/s, Materializing param=pooler.dense.bias]                  Loading weights:  99%|█████████▉| 102/103 [00:00<00:00, 6641.09it/s, Materializing param=pooler.dense.bias]Loading weights: 100%|██████████| 103/103 [00:00<00:00, 6695.80it/s, Materializing param=pooler.dense.weight]Loading weights: 100%|██████████| 103/103 [00:00<00:00, 6689.69it/s, Materializing param=pooler.dense.weight]Loading weights: 100%|██████████| 103/103 [00:00<00:00, 6652.09it/s, Materializing param=pooler.dense.weight]
+[1mBertModel LOAD REPORT[0m from: sentence-transformers/all-MiniLM-L6-v2
+Key                     | Status     |  | 
+------------------------+------------+--+-
+embeddings.position_ids | UNEXPECTED |  | 
+
+[3mNotes:
+- UNEXPECTED[3m	:can be ignored when loading from different task/architecture; not ok if you expect identical arch.[0m
+    Project Orientation: 1775ms, 2526 chars, Q=5/5
+    Symbol Discovery: 1ms, 2280 chars, Q=5/5
+    Dependency Tracing: 0ms, 417 chars, Q=5/5
+    Architecture: 150ms, 7961 chars, Q=4/5
+    Code Navigation: 0ms, 6956 chars, Q=5/5
+    Semantic Search: 24157ms, 1553 chars, Q=5/5
+
+============================================================
+  Benchmarking: pandas
+============================================================
+
+  --- grep ---
+    Project Orientation: 66ms, 26 chars, Q=3/5
+    Symbol Discovery: 71ms, 43840 chars, Q=5/5
+    Dependency Tracing: 37ms, 2418 chars, Q=5/5
+    Architecture: 1ms, 169 chars, Q=3/5
+    Code Navigation: 48ms, 2625740 chars, Q=5/5
+    Semantic Search: 48ms, 1146740 chars, Q=5/5
+
+  --- ast-grep ---
+    Project Orientation: 906ms, 34 chars, Q=1/5
+    Symbol Discovery: 1144ms, 1242543 chars, Q=5/5
+    Dependency Tracing: 28ms, 14557 chars, Q=5/5
+    Architecture: 274ms, 0 chars, Q=0/5
+    Code Navigation: 321ms, 1242543 chars, Q=5/5
+    Semantic Search: 940ms, 739486 chars, Q=5/5
+
+  --- code-intel ---
+    Project Orientation: 26978ms, 1934 chars, Q=5/5
+    Symbol Discovery: 7ms, 2601 chars, Q=5/5
+    Dependency Tracing: 0ms, 2093 chars, Q=5/5
+    Architecture: 37ms, 4608 chars, Q=4/5
+    Code Navigation: 0ms, 16935 chars, Q=5/5
+    Semantic Search: 8738ms, 1680 chars, Q=5/5
+
+============================================================
+  Benchmarking: deno
+============================================================
+
+  --- grep ---
+    Project Orientation: 269ms, 28 chars, Q=3/5
+    Symbol Discovery: 250ms, 2775 chars, Q=4/5
+    Dependency Tracing: 134ms, 2130 chars, Q=5/5
+    Architecture: 3ms, 128 chars, Q=3/5
+    Code Navigation: 137ms, 40668 chars, Q=4/5
+    Semantic Search: 145ms, 11492561 chars, Q=5/5
+
+  --- ast-grep ---
+    Project Orientation: 486ms, 34 chars, Q=1/5
+    Symbol Discovery: 791ms, 171502 chars, Q=5/5
+    Dependency Tracing: 17ms, 3223 chars, Q=4/5
+    Architecture: 211ms, 706 chars, Q=3/5
+    Code Navigation: 173ms, 17433 chars, Q=4/5
+    Semantic Search: 600ms, 15872 chars, Q=3/5
+
+  --- code-intel ---
+    Project Orientation: 53792ms, 2576 chars, Q=5/5
+    Symbol Discovery: 3ms, 2124 chars, Q=5/5
+    Dependency Tracing: 0ms, 110 chars, Q=5/5
+    Architecture: 10ms, 7902 chars, Q=4/5
+    Code Navigation: 1ms, 18002 chars, Q=5/5
+    Semantic Search: 36512ms, 1318 chars, Q=5/5
+
+============================================================
+  Benchmarking: aspnetcore
+============================================================
+
+  --- grep ---
+    Project Orientation: 338ms, 28 chars, Q=3/5
+    Symbol Discovery: 366ms, 24285 chars, Q=5/5
+    Dependency Tracing: 185ms, 176 chars, Q=5/5
+    Architecture: 5ms, 71 chars, Q=3/5
+    Code Navigation: 192ms, 209876 chars, Q=5/5
+    Semantic Search: 227ms, 35460072 chars, Q=5/5
+
+  --- ast-grep ---
+    Project Orientation: 1880ms, 33 chars, Q=1/5
+    Symbol Discovery: 3628ms, 2055158 chars, Q=5/5
+    Dependency Tracing: 13ms, 392 chars, Q=3/5
+    Architecture: 1021ms, 1671 chars, Q=3/5
+    Code Navigation: 851ms, 0 chars, Q=0/5
+    Semantic Search: 2695ms, 2 chars, Q=1/5
+
+  --- code-intel ---
+    Project Orientation: 89011ms, 2608 chars, Q=5/5
+    Symbol Discovery: 7ms, 4863 chars, Q=5/5
+    Dependency Tracing: 0ms, 138 chars, Q=5/5
+    Architecture: 7ms, 10793 chars, Q=4/5
+    Code Navigation: 0ms, 530 chars, Q=5/5
+    Semantic Search: 24577ms, 1733 chars, Q=5/5
+
+============================================================
+  Benchmarking: laravel
+============================================================
+
+  --- grep ---
+    Project Orientation: 81ms, 26 chars, Q=3/5
+    Symbol Discovery: 79ms, 12713 chars, Q=4/5
+    Dependency Tracing: 46ms, 1624 chars, Q=5/5
+    Architecture: 1ms, 132 chars, Q=3/5
+    Code Navigation: 51ms, 788025 chars, Q=5/5
+    Semantic Search: 43ms, 927761 chars, Q=5/5
+
+  --- ast-grep ---
+    Project Orientation: 457ms, 32 chars, Q=1/5
+    Symbol Discovery: 513ms, 187680 chars, Q=5/5
+    Dependency Tracing: 17ms, 2943 chars, Q=4/5
+    Architecture: 203ms, 1138 chars, Q=3/5
+    Code Navigation: 168ms, 60539 chars, Q=4/5
+    Semantic Search: 482ms, 247674 chars, Q=3/5
+
+  --- code-intel ---
+    Project Orientation: 13331ms, 534 chars, Q=4/5
+    Symbol Discovery: 4ms, 3145 chars, Q=5/5
+    Dependency Tracing: 0ms, 134 chars, Q=5/5
+    Architecture: 2ms, 3038 chars, Q=4/5
+    Code Navigation: 0ms, 9915 chars, Q=5/5
+    Semantic Search: 3277ms, 1766 chars, Q=5/5
+
+============================================================
+  Benchmarking: swiftformat
+============================================================
+
+  --- grep ---
+    Project Orientation: 39ms, 25 chars, Q=3/5
+    Symbol Discovery: 37ms, 6720 chars, Q=5/5
+    Dependency Tracing: 25ms, 127 chars, Q=5/5
+    Architecture: 0ms, 307 chars, Q=3/5
+    Code Navigation: 29ms, 41176 chars, Q=5/5
+    Semantic Search: 22ms, 312582 chars, Q=3/5
+
+  --- ast-grep ---
+    Project Orientation: 312ms, 33 chars, Q=1/5
+    Symbol Discovery: 460ms, 14194 chars, Q=5/5
+    Dependency Tracing: 15ms, 46 chars, Q=3/5
+    Architecture: 120ms, 67 chars, Q=2/5
+    Code Navigation: 108ms, 14194 chars, Q=4/5
+    Semantic Search: 336ms, 142456 chars, Q=3/5
+
+  --- code-intel ---
+    Project Orientation: 1571ms, 818 chars, Q=4/5
+    Symbol Discovery: 2ms, 2301 chars, Q=5/5
+    Dependency Tracing: 0ms, 117 chars, Q=5/5
+    Architecture: 0ms, 4611 chars, Q=4/5
+    Code Navigation: 0ms, 19282 chars, Q=5/5
+    Semantic Search: 1251ms, 1219 chars, Q=5/5
+
+============================================================
+  Benchmarking: okhttp
+============================================================
+
+  --- grep ---
+    Project Orientation: 52ms, 25 chars, Q=3/5
+    Symbol Discovery: 51ms, 17304 chars, Q=4/5
+    Dependency Tracing: 33ms, 1273 chars, Q=5/5
+    Architecture: 0ms, 528 chars, Q=3/5
+    Code Navigation: 36ms, 84679 chars, Q=5/5
+    Semantic Search: 28ms, 290782 chars, Q=3/5
+
+  --- ast-grep ---
+    Project Orientation: 178ms, 33 chars, Q=1/5
+    Symbol Discovery: 227ms, 17359 chars, Q=3/5
+    Dependency Tracing: 17ms, 11275 chars, Q=4/5
+    Architecture: 83ms, 1698 chars, Q=3/5
+    Code Navigation: 72ms, 17359 chars, Q=4/5
+    Semantic Search: 235ms, 264164 chars, Q=3/5
+
+  --- code-intel ---
+    Project Orientation: 1438ms, 987 chars, Q=4/5
+    Symbol Discovery: 1ms, 3574 chars, Q=5/5
+    Dependency Tracing: 0ms, 151 chars, Q=5/5
+    Architecture: 1ms, 20181 chars, Q=4/5
+    Code Navigation: 0ms, 9294 chars, Q=5/5
+    Semantic Search: 1814ms, 1753 chars, Q=5/5
+
+============================================================
+  Benchmarking: gh-cli
+============================================================
+
+  --- grep ---
+    Project Orientation: 51ms, 26 chars, Q=3/5
+    Symbol Discovery: 47ms, 145 chars, Q=4/5
+    Dependency Tracing: 33ms, 54 chars, Q=5/5
+    Architecture: 0ms, 231 chars, Q=3/5
+    Code Navigation: 37ms, 164716 chars, Q=5/5
+    Semantic Search: 32ms, 544701 chars, Q=3/5
+
+  --- ast-grep ---
+    Project Orientation: 259ms, 35 chars, Q=1/5
+    Symbol Discovery: 355ms, 777 chars, Q=4/5
+    Dependency Tracing: 14ms, 1362 chars, Q=4/5
+    Architecture: 101ms, 873 chars, Q=3/5
+    Code Navigation: 98ms, 11633 chars, Q=4/5
+    Semantic Search: 274ms, 10621 chars, Q=3/5
+
+  --- code-intel ---
+    Project Orientation: 2548ms, 1395 chars, Q=4/5
+    Symbol Discovery: 1ms, 2085 chars, Q=5/5
+    Dependency Tracing: 0ms, 114 chars, Q=5/5
+    Architecture: 1ms, 627 chars, Q=4/5
+    Code Navigation: 0ms, 7157 chars, Q=5/5
+    Semantic Search: 2940ms, 991 chars, Q=5/5
+
+============================================================
+  Benchmarking: faker
+============================================================
+
+  --- grep ---
+    Project Orientation: 45ms, 26 chars, Q=3/5
+    Symbol Discovery: 47ms, 9191 chars, Q=4/5
+    Dependency Tracing: 31ms, 84 chars, Q=5/5
+    Architecture: 0ms, 188 chars, Q=3/5
+    Code Navigation: 34ms, 30888 chars, Q=5/5
+    Semantic Search: 33ms, 406957 chars, Q=5/5
+
+  --- ast-grep ---
+    Project Orientation: 107ms, 35 chars, Q=1/5
+    Symbol Discovery: 96ms, 33210 chars, Q=5/5
+    Dependency Tracing: 15ms, 246 chars, Q=4/5
+    Architecture: 44ms, 899 chars, Q=3/5
+    Code Navigation: 29ms, 6319 chars, Q=5/5
+    Semantic Search: 88ms, 500 chars, Q=3/5
+
+  --- code-intel ---
+    Project Orientation: 1652ms, 693 chars, Q=4/5
+    Symbol Discovery: 1ms, 770 chars, Q=5/5
+    Dependency Tracing: 0ms, 147 chars, Q=5/5
+    Architecture: 1ms, 1635 chars, Q=4/5
+    Code Navigation: 0ms, 7131 chars, Q=5/5
+    Semantic Search: 4147ms, 1201 chars, Q=5/5
+
+============================================================
+  Benchmarking: redis
+============================================================
+
+  --- grep ---
+    Project Orientation: 60ms, 26 chars, Q=3/5
+    Symbol Discovery: 54ms, 207 chars, Q=4/5
+    Dependency Tracing: 37ms, 3052 chars, Q=5/5
+    Architecture: 1ms, 110 chars, Q=3/5
+    Code Navigation: 37ms, 11904 chars, Q=5/5
+    Semantic Search: 37ms, 457248 chars, Q=5/5
+
+  --- ast-grep ---
+    Project Orientation: 542ms, 33 chars, Q=1/5
+    Symbol Discovery: 657ms, 53164 chars, Q=5/5
+    Dependency Tracing: 24ms, 2578 chars, Q=4/5
+    Architecture: 259ms, 0 chars, Q=0/5
+    Code Navigation: 238ms, 78 chars, Q=2/5
+    Semantic Search: 693ms, 392501 chars, Q=5/5
+
+  --- code-intel ---
+    Project Orientation: 5374ms, 1565 chars, Q=5/5
+    Symbol Discovery: 2ms, 1937 chars, Q=5/5
+    Dependency Tracing: 0ms, 1996 chars, Q=5/5
+    Architecture: 8ms, 3865 chars, Q=4/5
+    Code Navigation: 0ms, 17646 chars, Q=5/5
+    Semantic Search: 6976ms, 1118 chars, Q=5/5
+
+============================================================
+  Benchmarking: spdlog
+============================================================
+
+  --- grep ---
+    Project Orientation: 32ms, 24 chars, Q=3/5
+    Symbol Discovery: 27ms, 2404 chars, Q=4/5
+    Dependency Tracing: 26ms, 556 chars, Q=5/5
+    Architecture: 0ms, 160 chars, Q=3/5
+    Code Navigation: 25ms, 322239 chars, Q=5/5
+    Semantic Search: 16ms, 45365 chars, Q=3/5
+
+  --- ast-grep ---
+    Project Orientation: 53ms, 31 chars, Q=1/5
+    Symbol Discovery: 84ms, 15467 chars, Q=5/5
+    Dependency Tracing: 23ms, 0 chars, Q=0/5
+    Architecture: 21ms, 0 chars, Q=0/5
+    Code Navigation: 19ms, 976 chars, Q=3/5
+    Semantic Search: 61ms, 58 chars, Q=2/5
+
+  --- code-intel ---
+    Project Orientation: 1196ms, 1604 chars, Q=4/5
+    Symbol Discovery: 0ms, 470 chars, Q=4/5
+    Dependency Tracing: 0ms, 473 chars, Q=5/5
+    Architecture: 4ms, 3367 chars, Q=4/5
+    Code Navigation: 0ms, 8171 chars, Q=5/5
+    Semantic Search: 933ms, 1442 chars, Q=5/5
+
+============================================================
+  Benchmarking: cats-effect
+============================================================
+
+  --- grep ---
+    Project Orientation: 46ms, 24 chars, Q=3/5
+    Symbol Discovery: 51ms, 39093 chars, Q=4/5
+    Dependency Tracing: 34ms, 655 chars, Q=5/5
+    Architecture: 0ms, 359 chars, Q=3/5
+    Code Navigation: 31ms, 15612 chars, Q=5/5
+    Semantic Search: 23ms, 147694 chars, Q=5/5
+
+  --- ast-grep ---
+    Project Orientation: 185ms, 33 chars, Q=1/5
+    Symbol Discovery: 345ms, 343247 chars, Q=5/5
+    Dependency Tracing: 27ms, 3140 chars, Q=4/5
+    Architecture: 89ms, 666 chars, Q=3/5
+    Code Navigation: 79ms, 9810 chars, Q=5/5
+    Semantic Search: 265ms, 15814 chars, Q=3/5
+
+  --- code-intel ---
+    Project Orientation: 808ms, 823 chars, Q=4/5
+    Symbol Discovery: 1ms, 2905 chars, Q=5/5
+    Dependency Tracing: 0ms, 140 chars, Q=5/5
+    Architecture: 0ms, 8828 chars, Q=4/5
+    Code Navigation: 0ms, 5328 chars, Q=5/5
+    Semantic Search: 1286ms, 1375 chars, Q=5/5
+
+============================================================
+  Benchmarking: luarocks
+============================================================
+
+  --- grep ---
+    Project Orientation: 38ms, 24 chars, Q=3/5
+    Symbol Discovery: 36ms, 1452 chars, Q=5/5
+    Dependency Tracing: 26ms, 187 chars, Q=5/5
+    Architecture: 0ms, 141 chars, Q=3/5
+    Code Navigation: 28ms, 73821 chars, Q=4/5
+    Semantic Search: 21ms, 135647 chars, Q=3/5
+
+  --- ast-grep ---
+    Project Orientation: 46ms, 33 chars, Q=1/5
+    Symbol Discovery: 69ms, 1040 chars, Q=4/5
+    Dependency Tracing: 18ms, 280 chars, Q=4/5
+    Architecture: 43ms, 771 chars, Q=3/5
+    Code Navigation: 32ms, 23500 chars, Q=3/5
+    Semantic Search: 99ms, 20223 chars, Q=3/5
+
+  --- code-intel ---
+    Project Orientation: 174ms, 786 chars, Q=4/5
+    Symbol Discovery: 0ms, 343 chars, Q=4/5
+    Dependency Tracing: 0ms, 116 chars, Q=5/5
+    Architecture: 0ms, 2033 chars, Q=4/5
+    Code Navigation: 0ms, 827 chars, Q=5/5
+    Semantic Search: 3670ms, 1339 chars, Q=5/5
+
+============================================================
+  Benchmarking: phoenix
+============================================================
+
+  --- grep ---
+    Project Orientation: 37ms, 24 chars, Q=3/5
+    Symbol Discovery: 39ms, 2075 chars, Q=3/5
+    Dependency Tracing: 28ms, 1265 chars, Q=5/5
+    Architecture: 0ms, 199 chars, Q=3/5
+    Code Navigation: 30ms, 200386 chars, Q=5/5
+    Semantic Search: 21ms, 350457 chars, Q=5/5
+
+  --- ast-grep ---
+    Project Orientation: 15ms, 30 chars, Q=1/5
+    Symbol Discovery: 77ms, 16695 chars, Q=5/5
+    Dependency Tracing: 17ms, 161 chars, Q=4/5
+    Architecture: 12ms, 0 chars, Q=0/5
+    Code Navigation: 51ms, 30837 chars, Q=4/5
+    Semantic Search: 159ms, 3193 chars, Q=3/5
+
+  --- code-intel ---
+    Project Orientation: 1053ms, 1566 chars, Q=4/5
+    Symbol Discovery: 0ms, 2355 chars, Q=5/5
+    Dependency Tracing: 0ms, 114 chars, Q=5/5
+    Architecture: 0ms, 902 chars, Q=4/5
+    Code Navigation: 0ms, 8191 chars, Q=5/5
+    Semantic Search: 1732ms, 1077 chars, Q=5/5
+
+============================================================
+  Benchmarking: postgrest
+============================================================
+
+  --- grep ---
+    Project Orientation: 34ms, 24 chars, Q=3/5
+    Symbol Discovery: 33ms, 4509 chars, Q=4/5
+    Dependency Tracing: 26ms, 2130 chars, Q=5/5
+    Architecture: 0ms, 120 chars, Q=3/5
+    Code Navigation: 28ms, 8484 chars, Q=4/5
+    Semantic Search: 19ms, 250054 chars, Q=5/5
+
+  --- ast-grep ---
+    Project Orientation: 46ms, 32 chars, Q=1/5
+    Symbol Discovery: 73ms, 563 chars, Q=3/5
+    Dependency Tracing: 13ms, 0 chars, Q=0/5
+    Architecture: 39ms, 832 chars, Q=3/5
+    Code Navigation: 32ms, 618 chars, Q=3/5
+    Semantic Search: 103ms, 82925 chars, Q=3/5
+
+  --- code-intel ---
+    Project Orientation: 3322ms, 611 chars, Q=5/5
+    Symbol Discovery: 0ms, 1106 chars, Q=5/5
+    Dependency Tracing: 0ms, 113 chars, Q=5/5
+    Architecture: 0ms, 2450 chars, Q=4/5
+    Code Navigation: 0ms, 1903 chars, Q=5/5
+    Semantic Search: 2323ms, 1119 chars, Q=5/5
+
+============================================================
+  Benchmarking: acme-sh
+============================================================
+
+  --- grep ---
+    Project Orientation: 34ms, 24 chars, Q=3/5
+    Symbol Discovery: 32ms, 36 chars, Q=3/5
+    Dependency Tracing: 27ms, 4075 chars, Q=5/5
+    Architecture: 0ms, 75 chars, Q=3/5
+    Code Navigation: 28ms, 400988 chars, Q=4/5
+    Semantic Search: 16ms, 28533 chars, Q=3/5
+
+  --- ast-grep ---
+    Project Orientation: 19ms, 30 chars, Q=1/5
+    Symbol Discovery: 53ms, 0 chars, Q=0/5
+    Dependency Tracing: 0ms, 37 chars, Q=2/5
+    Architecture: 13ms, 0 chars, Q=0/5
+    Code Navigation: 46ms, 45 chars, Q=2/5
+    Semantic Search: 134ms, 2 chars, Q=1/5
+
+  --- code-intel ---
+    Project Orientation: 223ms, 298 chars, Q=4/5
+    Symbol Discovery: 0ms, 160 chars, Q=4/5
+    Dependency Tracing: 0ms, 100 chars, Q=5/5
+    Architecture: 0ms, 1694 chars, Q=4/5
+    Code Navigation: 0ms, 7815 chars, Q=5/5
+    Semantic Search: 168ms, 1152 chars, Q=5/5
+
+============================================================
+  Benchmarking: terraform-eks
+============================================================
+
+  --- grep ---
+    Project Orientation: 29ms, 24 chars, Q=3/5
+    Symbol Discovery: 30ms, 171 chars, Q=3/5
+    Dependency Tracing: 23ms, 57 chars, Q=5/5
+    Architecture: 0ms, 114 chars, Q=3/5
+    Code Navigation: 25ms, 123175 chars, Q=5/5
+    Semantic Search: 17ms, 124978 chars, Q=3/5
+
+  --- ast-grep ---
+    Project Orientation: 35ms, 32 chars, Q=1/5
+    Symbol Discovery: 63ms, 10227 chars, Q=5/5
+    Dependency Tracing: 0ms, 37 chars, Q=2/5
+    Architecture: 34ms, 737 chars, Q=3/5
+    Code Navigation: 37ms, 10496 chars, Q=3/5
+    Semantic Search: 99ms, 2806 chars, Q=3/5
+
+  --- code-intel ---
+    Project Orientation: 160ms, 391 chars, Q=4/5
+    Symbol Discovery: 0ms, 957 chars, Q=4/5
+    Dependency Tracing: 0ms, 100 chars, Q=5/5
+    Architecture: 0ms, 2278 chars, Q=4/5
+    Code Navigation: 0ms, 33163 chars, Q=5/5
+    Semantic Search: 834ms, 1622 chars, Q=5/5
+
+============================================================
+  Benchmarking: zls
+============================================================
+
+  --- grep ---
+    Project Orientation: 32ms, 24 chars, Q=3/5
+    Symbol Discovery: 30ms, 802 chars, Q=4/5
+    Dependency Tracing: 26ms, 205 chars, Q=4/5
+    Architecture: 0ms, 51 chars, Q=3/5
+    Code Navigation: 27ms, 15162 chars, Q=5/5
+    Semantic Search: 14ms, 28343 chars, Q=3/5
+
+  --- ast-grep ---
+    Project Orientation: 0ms, 31 chars, Q=1/5
+    Symbol Discovery: 0ms, 31 chars, Q=1/5
+    Dependency Tracing: 0ms, 31 chars, Q=1/5
+    Architecture: 0ms, 31 chars, Q=1/5
+    Code Navigation: 0ms, 31 chars, Q=1/5
+    Semantic Search: 0ms, 31 chars, Q=1/5
+
+  --- code-intel ---
+    Project Orientation: 326ms, 333 chars, Q=4/5
+    Symbol Discovery: 0ms, 563 chars, Q=4/5
+    Dependency Tracing: 0ms, 107 chars, Q=5/5
+    Architecture: 0ms, 1568 chars, Q=4/5
+    Code Navigation: 0ms, 4589 chars, Q=5/5
+    Semantic Search: 224ms, 1692 chars, Q=5/5
+
+============================================================
+  Benchmarking: cockroach
+============================================================
+
+  --- grep ---
+    Project Orientation: 414ms, 28 chars, Q=3/5
+    Symbol Discovery: 461ms, 5560 chars, Q=5/5
+    Dependency Tracing: 262ms, 760 chars, Q=5/5
+    Architecture: 4ms, 212 chars, Q=3/5
+    Code Navigation: 263ms, 1583566 chars, Q=5/5
+    Semantic Search: 292ms, 5966081 chars, Q=5/5
+
+  --- ast-grep ---
+    Project Orientation: 3384ms, 38 chars, Q=1/5
+    Symbol Discovery: 4323ms, 106790 chars, Q=5/5
+    Dependency Tracing: 20ms, 0 chars, Q=0/5
+    Architecture: 1938ms, 1153 chars, Q=3/5
+    Code Navigation: 1144ms, 18212 chars, Q=3/5
+    Semantic Search: 3431ms, 17626 chars, Q=3/5
+
+  --- code-intel ---
+    Project Orientation: 424704ms, 2992 chars, Q=5/5
+    Symbol Discovery: 19ms, 2239 chars, Q=5/5
+    Dependency Tracing: 0ms, 99 chars, Q=5/5
+    Architecture: 27ms, 9372 chars, Q=4/5
+    Code Navigation: 1ms, 117248 chars, Q=5/5
+    Semantic Search: 41541ms, 1261 chars, Q=5/5
+
+============================================================
+  Benchmarking: express
+============================================================
+
+  --- grep ---
+    Project Orientation: 37ms, 24 chars, Q=3/5
+    Symbol Discovery: 29ms, 267 chars, Q=3/5
+    Dependency Tracing: 27ms, 35 chars, Q=4/5
+    Architecture: 0ms, 71 chars, Q=3/5
+    Code Navigation: 27ms, 215049 chars, Q=4/5
+    Semantic Search: 17ms, 36036 chars, Q=3/5
+
+  --- ast-grep ---
+    Project Orientation: 67ms, 32 chars, Q=1/5
+    Symbol Discovery: 78ms, 2734 chars, Q=3/5
+    Dependency Tracing: 16ms, 0 chars, Q=0/5
+    Architecture: 53ms, 0 chars, Q=0/5
+    Code Navigation: 27ms, 145994 chars, Q=4/5
+    Semantic Search: 78ms, 54714 chars, Q=3/5
+
+  --- code-intel ---
+    Project Orientation: 313ms, 1048 chars, Q=4/5
+    Symbol Discovery: 0ms, 33 chars, Q=1/5
+    Dependency Tracing: 0ms, 105 chars, Q=5/5
+    Architecture: 0ms, 1859 chars, Q=4/5
+    Code Navigation: 0ms, 196 chars, Q=5/5
+    Semantic Search: 813ms, 463 chars, Q=5/5
+
+============================================================
+  Benchmarking: prisma
+============================================================
+
+  --- grep ---
+    Project Orientation: 134ms, 26 chars, Q=3/5
+    Symbol Discovery: 133ms, 45044 chars, Q=5/5
+    Dependency Tracing: 74ms, 3161 chars, Q=5/5
+    Architecture: 1ms, 202 chars, Q=3/5
+    Code Navigation: 74ms, 7426 chars, Q=5/5
+    Semantic Search: 93ms, 1217400 chars, Q=5/5
+
+  --- ast-grep ---
+    Project Orientation: 196ms, 31 chars, Q=1/5
+    Symbol Discovery: 386ms, 88842 chars, Q=5/5
+    Dependency Tracing: 16ms, 0 chars, Q=0/5
+    Architecture: 92ms, 1328 chars, Q=3/5
+    Code Navigation: 91ms, 831 chars, Q=4/5
+    Semantic Search: 275ms, 117166 chars, Q=3/5
+
+  --- code-intel ---
+    Project Orientation: 4924ms, 2838 chars, Q=5/5
+    Symbol Discovery: 0ms, 3098 chars, Q=5/5
+    Dependency Tracing: 0ms, 121 chars, Q=5/5
+    Architecture: 21ms, 10548 chars, Q=4/5
+    Code Navigation: 0ms, 392 chars, Q=5/5
+    Semantic Search: 8336ms, 2018 chars, Q=5/5
+
+============================================================
+  Benchmarking: rails
+============================================================
+
+  --- grep ---
+    Project Orientation: 132ms, 26 chars, Q=3/5
+    Symbol Discovery: 125ms, 46123 chars, Q=5/5
+    Dependency Tracing: 67ms, 4333 chars, Q=5/5
+    Architecture: 1ms, 389 chars, Q=3/5
+    Code Navigation: 73ms, 186151 chars, Q=5/5
+    Semantic Search: 71ms, 709985 chars, Q=5/5
+
+  --- ast-grep ---
+    Project Orientation: 1121ms, 37 chars, Q=1/5
+    Symbol Discovery: 681ms, 178213 chars, Q=5/5
+    Dependency Tracing: 19ms, 1136 chars, Q=4/5
+    Architecture: 447ms, 1191 chars, Q=3/5
+    Code Navigation: 260ms, 7058 chars, Q=5/5
+    Semantic Search: 665ms, 963378 chars, Q=5/5
+
+  --- code-intel ---
+    Project Orientation: 18831ms, 2997 chars, Q=4/5
+    Symbol Discovery: 6ms, 2741 chars, Q=5/5
+    Dependency Tracing: 0ms, 126 chars, Q=5/5
+    Architecture: 1ms, 2314 chars, Q=4/5
+    Code Navigation: 0ms, 7368 chars, Q=5/5
+    Semantic Search: 10678ms, 1671 chars, Q=5/5
+
+============================================================
+  Benchmarking: requests
+============================================================
+
+  --- grep ---
+    Project Orientation: 35ms, 24 chars, Q=3/5
+    Symbol Discovery: 35ms, 394 chars, Q=4/5
+    Dependency Tracing: 33ms, 577 chars, Q=5/5
+    Architecture: 0ms, 85 chars, Q=3/5
+    Code Navigation: 36ms, 12360 chars, Q=5/5
+    Semantic Search: 19ms, 909171 chars, Q=3/5
+
+  --- ast-grep ---
+    Project Orientation: 88ms, 32 chars, Q=1/5
+    Symbol Discovery: 134ms, 3727 chars, Q=4/5
+    Dependency Tracing: 20ms, 2064 chars, Q=4/5
+    Architecture: 29ms, 0 chars, Q=0/5
+    Code Navigation: 30ms, 3727 chars, Q=5/5
+    Semantic Search: 89ms, 3854 chars, Q=3/5
+
+  --- code-intel ---
+    Project Orientation: 125ms, 1494 chars, Q=5/5
+    Symbol Discovery: 0ms, 1951 chars, Q=5/5
+    Dependency Tracing: 0ms, 471 chars, Q=5/5
+    Architecture: 1ms, 999 chars, Q=4/5
+    Code Navigation: 0ms, 5530 chars, Q=5/5
+    Semantic Search: 863ms, 1297 chars, Q=5/5
+
+============================================================
+  Benchmarking: cosmopolitan
+============================================================
+
+  --- grep ---
+    Project Orientation: 425ms, 28 chars, Q=3/5
+    Symbol Discovery: 332ms, 78593 chars, Q=5/5
+    Dependency Tracing: 169ms, 2059 chars, Q=5/5
+    Architecture: 3ms, 222 chars, Q=3/5
+    Code Navigation: 208ms, 64645 chars, Q=5/5
+    Semantic Search: 254ms, 4102946 chars, Q=5/5
+
+  --- ast-grep ---
+    Project Orientation: 3239ms, 34 chars, Q=1/5
+    Symbol Discovery: 4314ms, 47294 chars, Q=5/5
+    Dependency Tracing: 17ms, 0 chars, Q=0/5
+    Architecture: 1546ms, 255 chars, Q=3/5
+    Code Navigation: 1355ms, 1078 chars, Q=4/5
+    Semantic Search: 3846ms, 8773 chars, Q=3/5
+
+  --- code-intel ---
+    Project Orientation: 197838ms, 1945 chars, Q=5/5
+    Symbol Discovery: 16ms, 2196 chars, Q=4/5
+    Dependency Tracing: 0ms, 101 chars, Q=5/5
+    Architecture: 269ms, 6551 chars, Q=4/5
+    Code Navigation: 0ms, 986 chars, Q=1/5
+    Semantic Search: 46148ms, 1103 chars, Q=5/5
+
+============================================================
+  Benchmarking: ripgrep
+============================================================
+
+  --- grep ---
+    Project Orientation: 42ms, 24 chars, Q=3/5
+    Symbol Discovery: 35ms, 235 chars, Q=4/5
+    Dependency Tracing: 27ms, 339 chars, Q=5/5
+    Architecture: 0ms, 162 chars, Q=4/5
+    Code Navigation: 30ms, 157008 chars, Q=5/5
+    Semantic Search: 19ms, 90516 chars, Q=3/5
+
+  --- ast-grep ---
+    Project Orientation: 111ms, 32 chars, Q=1/5
+    Symbol Discovery: 171ms, 105 chars, Q=2/5
+    Dependency Tracing: 15ms, 0 chars, Q=0/5
+    Architecture: 47ms, 690 chars, Q=3/5
+    Code Navigation: 47ms, 592 chars, Q=3/5
+    Semantic Search: 137ms, 5096 chars, Q=3/5
+
+  --- code-intel ---
+    Project Orientation: 596ms, 1116 chars, Q=4/5
+    Symbol Discovery: 0ms, 2291 chars, Q=5/5
+    Dependency Tracing: 0ms, 103 chars, Q=5/5
+    Architecture: 0ms, 1982 chars, Q=4/5
+    Code Navigation: 0ms, 3746 chars, Q=5/5
+    Semantic Search: 1631ms, 1177 chars, Q=5/5
+
+============================================================
+  Benchmarking: starship
+============================================================
+
+  --- grep ---
+    Project Orientation: 49ms, 25 chars, Q=3/5
+    Symbol Discovery: 45ms, 3864 chars, Q=4/5
+    Dependency Tracing: 35ms, 767 chars, Q=4/5
+    Architecture: 0ms, 91 chars, Q=3/5
+    Code Navigation: 36ms, 110975 chars, Q=4/5
+    Semantic Search: 27ms, 336009 chars, Q=3/5
+
+  --- ast-grep ---
+    Project Orientation: 78ms, 32 chars, Q=1/5
+    Symbol Discovery: 155ms, 7461 chars, Q=3/5
+    Dependency Tracing: 18ms, 0 chars, Q=0/5
+    Architecture: 38ms, 491 chars, Q=3/5
+    Code Navigation: 39ms, 7461 chars, Q=4/5
+    Semantic Search: 111ms, 59394 chars, Q=3/5
+
+  --- code-intel ---
+    Project Orientation: 650ms, 1485 chars, Q=4/5
+    Symbol Discovery: 0ms, 1670 chars, Q=5/5
+    Dependency Tracing: 0ms, 103 chars, Q=5/5
+    Architecture: 4ms, 1818 chars, Q=4/5
+    Code Navigation: 0ms, 991 chars, Q=5/5
+    Semantic Search: 7386ms, 1136 chars, Q=5/5
+
+============================================================
+  Benchmarking: spring-boot
+============================================================
+
+  --- grep ---
+    Project Orientation: 477ms, 27 chars, Q=3/5
+    Symbol Discovery: 454ms, 49702 chars, Q=5/5
+    Dependency Tracing: 361ms, 1599 chars, Q=5/5
+    Architecture: 4ms, 442 chars, Q=3/5
+    Code Navigation: 282ms, 290093 chars, Q=5/5
+    Semantic Search: 335ms, 6658739 chars, Q=5/5
+
+  --- ast-grep ---
+    Project Orientation: 748ms, 36 chars, Q=1/5
+    Symbol Discovery: 872ms, 81545 chars, Q=5/5
+    Dependency Tracing: 17ms, 0 chars, Q=0/5
+    Architecture: 364ms, 2817 chars, Q=3/5
+    Code Navigation: 286ms, 81545 chars, Q=5/5
+    Semantic Search: 882ms, 213319 chars, Q=3/5
+
+  --- code-intel ---
+    Project Orientation: 139319ms, 979 chars, Q=4/5
+    Symbol Discovery: 11ms, 4741 chars, Q=5/5
+    Dependency Tracing: 0ms, 105 chars, Q=5/5
+    Architecture: 7ms, 15468 chars, Q=4/5
+    Code Navigation: 0ms, 19915 chars, Q=5/5
+    Semantic Search: 30258ms, 2677 chars, Q=5/5
+
+============================================================
+  Benchmarking: spark
+============================================================
+
+  --- grep ---
+    Project Orientation: 531ms, 28 chars, Q=3/5
+    Symbol Discovery: 658ms, 67079 chars, Q=5/5
+    Dependency Tracing: 337ms, 1897 chars, Q=5/5
+    Architecture: 6ms, 407 chars, Q=3/5
+    Code Navigation: 349ms, 707766 chars, Q=5/5
+    Semantic Search: 466ms, 13295222 chars, Q=5/5
+
+  --- ast-grep ---
+    Project Orientation: 2682ms, 36 chars, Q=1/5
+    Symbol Discovery: 5085ms, 415704 chars, Q=5/5
+    Dependency Tracing: 19ms, 0 chars, Q=0/5
+    Architecture: 1404ms, 1940 chars, Q=4/5
+    Code Navigation: 1233ms, 74685 chars, Q=5/5
+    Semantic Search: 4117ms, 734601 chars, Q=5/5
+
+  --- code-intel ---
+    Project Orientation: 350842ms, 1549 chars, Q=5/5
+    Symbol Discovery: 13ms, 3636 chars, Q=5/5
+    Dependency Tracing: 0ms, 100 chars, Q=5/5
+    Architecture: 6ms, 14306 chars, Q=4/5
+    Code Navigation: 0ms, 21280 chars, Q=5/5
+    Semantic Search: 42265ms, 1847 chars, Q=5/5
+
+============================================================
+  Benchmarking: vapor
+============================================================
+
+  --- grep ---
+    Project Orientation: 48ms, 24 chars, Q=3/5
+    Symbol Discovery: 38ms, 3900 chars, Q=4/5
+    Dependency Tracing: 34ms, 42 chars, Q=5/5
+    Architecture: 0ms, 56 chars, Q=3/5
+    Code Navigation: 35ms, 36349 chars, Q=5/5
+    Semantic Search: 22ms, 125171 chars, Q=3/5
+
+  --- ast-grep ---
+    Project Orientation: 132ms, 32 chars, Q=1/5
+    Symbol Discovery: 209ms, 10088 chars, Q=3/5
+    Dependency Tracing: 19ms, 42 chars, Q=3/5
+    Architecture: 47ms, 0 chars, Q=0/5
+    Code Navigation: 48ms, 10088 chars, Q=3/5
+    Semantic Search: 154ms, 39768 chars, Q=3/5
+
+  --- code-intel ---
+    Project Orientation: 415ms, 475 chars, Q=4/5
+    Symbol Discovery: 0ms, 2546 chars, Q=5/5
+    Dependency Tracing: 0ms, 106 chars, Q=5/5
+    Architecture: 0ms, 1693 chars, Q=4/5
+    Code Navigation: 0ms, 6533 chars, Q=5/5
+    Semantic Search: 423ms, 2068 chars, Q=5/5
+
+============================================================
+  Benchmarking: wordpress
+============================================================
+
+  --- grep ---
+    Project Orientation: 146ms, 27 chars, Q=3/5
+    Symbol Discovery: 128ms, 18020 chars, Q=4/5
+    Dependency Tracing: 77ms, 20394 chars, Q=5/5
+    Architecture: 1ms, 91 chars, Q=3/5
+    Code Navigation: 78ms, 82019 chars, Q=5/5
+    Semantic Search: 97ms, 13184335 chars, Q=5/5
+
+  --- ast-grep ---
+    Project Orientation: 1587ms, 32 chars, Q=1/5
+    Symbol Discovery: 2185ms, 287566 chars, Q=5/5
+    Dependency Tracing: 20ms, 0 chars, Q=0/5
+    Architecture: 824ms, 1168 chars, Q=3/5
+    Code Navigation: 785ms, 72609 chars, Q=4/5
+    Semantic Search: 2285ms, 176515 chars, Q=5/5
+
+  --- code-intel ---
+    Project Orientation: 40230ms, 605 chars, Q=4/5
+    Symbol Discovery: 4ms, 2718 chars, Q=5/5
+    Dependency Tracing: 0ms, 108 chars, Q=5/5
+    Architecture: 2ms, 2365 chars, Q=4/5
+    Code Navigation: 0ms, 6492 chars, Q=5/5
+    Semantic Search: 9616ms, 1457 chars, Q=5/5
+
+============================================================
+  Benchmarking: protobuf
+============================================================
+
+  --- grep ---
+    Project Orientation: 100ms, 27 chars, Q=3/5
+    Symbol Discovery: 91ms, 23138 chars, Q=5/5
+    Dependency Tracing: 57ms, 122 chars, Q=5/5
+    Architecture: 1ms, 405 chars, Q=3/5
+    Code Navigation: 72ms, 4379787 chars, Q=5/5
+    Semantic Search: 75ms, 811769 chars, Q=5/5
+
+  --- ast-grep ---
+    Project Orientation: 459ms, 33 chars, Q=1/5
+    Symbol Discovery: 720ms, 615 chars, Q=4/5
+    Dependency Tracing: 20ms, 0 chars, Q=0/5
+    Architecture: 203ms, 0 chars, Q=0/5
+    Code Navigation: 169ms, 778 chars, Q=3/5
+    Semantic Search: 518ms, 35352 chars, Q=3/5
+
+  --- code-intel ---
+    Project Orientation: 16896ms, 2586 chars, Q=5/5
+    Symbol Discovery: 4ms, 3042 chars, Q=5/5
+    Dependency Tracing: 0ms, 107 chars, Q=5/5
+    Architecture: 37ms, 5331 chars, Q=4/5
+    Code Navigation: 0ms, 16382 chars, Q=5/5
+    Semantic Search: 16919ms, 2150 chars, Q=5/5
+
+============================================================
+  Benchmarking: crystal-lang
+============================================================
+
+  --- grep ---
+    Project Orientation: 95ms, 26 chars, Q=3/5
+    Symbol Discovery: 78ms, 2052 chars, Q=5/5
+    Dependency Tracing: 54ms, 647 chars, Q=5/5
+    Architecture: 1ms, 192 chars, Q=3/5
+    Code Navigation: 58ms, 749331 chars, Q=5/5
+    Semantic Search: 55ms, 1044507 chars, Q=5/5
+
+  --- ast-grep ---
+    Project Orientation: 0ms, 35 chars, Q=1/5
+    Symbol Discovery: 0ms, 35 chars, Q=1/5
+    Dependency Tracing: 0ms, 35 chars, Q=1/5
+    Architecture: 0ms, 35 chars, Q=1/5
+    Code Navigation: 0ms, 35 chars, Q=1/5
+    Semantic Search: 0ms, 35 chars, Q=1/5
+
+  --- code-intel ---
+    Project Orientation: 137ms, 650 chars, Q=4/5
+    Symbol Discovery: 0ms, 46 chars, Q=1/5
+    Dependency Tracing: 0ms, 102 chars, Q=5/5
+    Architecture: 0ms, 2996 chars, Q=4/5
+    Code Navigation: 0ms, 151 chars, Q=1/5
+    Semantic Search: 45044ms, 1060 chars, Q=5/5
+
+============================================================
+  Benchmarking: dart-sdk
+============================================================
+
+  --- grep ---
+    Project Orientation: 901ms, 28 chars, Q=3/5
+    Symbol Discovery: 1355ms, 2387 chars, Q=4/5
+    Dependency Tracing: 882ms, 6821 chars, Q=5/5
+    Architecture: 11ms, 237 chars, Q=3/5
+    Code Navigation: 881ms, 27092 chars, Q=5/5
+    Semantic Search: 791ms, 6093075 chars, Q=5/5
+
+  --- ast-grep ---
+    Project Orientation: 0ms, 32 chars, Q=1/5
+    Symbol Discovery: 0ms, 32 chars, Q=1/5
+    Dependency Tracing: 0ms, 32 chars, Q=1/5
+    Architecture: 0ms, 32 chars, Q=1/5
+    Code Navigation: 0ms, 32 chars, Q=1/5
+    Semantic Search: 0ms, 32 chars, Q=1/5
+
+  --- code-intel ---
+    Project Orientation: 16529ms, 1998 chars, Q=5/5
+    Symbol Discovery: 2ms, 43 chars, Q=1/5
+    Dependency Tracing: 0ms, 105 chars, Q=5/5
+    Architecture: 1ms, 2640 chars, Q=4/5
+    Code Navigation: 2ms, 180 chars, Q=1/5
+    Semantic Search: 23241ms, 1303 chars, Q=5/5
+
+============================================================
+  Benchmarking: elixir-lang
+============================================================
+
+  --- grep ---
+    Project Orientation: 54ms, 25 chars, Q=3/5
+    Symbol Discovery: 53ms, 9863 chars, Q=5/5
+    Dependency Tracing: 40ms, 2727 chars, Q=5/5
+    Architecture: 0ms, 85 chars, Q=3/5
+    Code Navigation: 41ms, 69526 chars, Q=5/5
+    Semantic Search: 29ms, 195109 chars, Q=5/5
+
+  --- ast-grep ---
+    Project Orientation: 29ms, 30 chars, Q=1/5
+    Symbol Discovery: 175ms, 21159 chars, Q=5/5
+    Dependency Tracing: 19ms, 0 chars, Q=0/5
+    Architecture: 17ms, 0 chars, Q=0/5
+    Code Navigation: 126ms, 27412 chars, Q=4/5
+    Semantic Search: 382ms, 14743 chars, Q=5/5
+
+  --- code-intel ---
+    Project Orientation: 2245ms, 430 chars, Q=4/5
+    Symbol Discovery: 1ms, 176 chars, Q=5/5
+    Dependency Tracing: 0ms, 111 chars, Q=5/5
+    Architecture: 0ms, 1129 chars, Q=4/5
+    Code Navigation: 0ms, 15195 chars, Q=5/5
+    Semantic Search: 3790ms, 1194 chars, Q=5/5
+
+============================================================
+  Benchmarking: emqx
+============================================================
+
+  --- grep ---
+    Project Orientation: 115ms, 26 chars, Q=3/5
+    Symbol Discovery: 96ms, 1919 chars, Q=3/5
+    Dependency Tracing: 62ms, 268 chars, Q=4/5
+    Architecture: 1ms, 150 chars, Q=3/5
+    Code Navigation: 66ms, 108931 chars, Q=4/5
+    Semantic Search: 63ms, 3272527 chars, Q=5/5
+
+  --- ast-grep ---
+    Project Orientation: 0ms, 34 chars, Q=1/5
+    Symbol Discovery: 0ms, 34 chars, Q=1/5
+    Dependency Tracing: 0ms, 34 chars, Q=1/5
+    Architecture: 0ms, 34 chars, Q=1/5
+    Code Navigation: 0ms, 34 chars, Q=1/5
+    Semantic Search: 0ms, 34 chars, Q=1/5
+
+  --- code-intel ---
+    Project Orientation: 348ms, 773 chars, Q=5/5
+    Symbol Discovery: 0ms, 2272 chars, Q=4/5
+    Dependency Tracing: 0ms, 100 chars, Q=5/5
+    Architecture: 1ms, 2997 chars, Q=4/5
+    Code Navigation: 0ms, 157 chars, Q=1/5
+    Semantic Search: 28908ms, 1751 chars, Q=5/5
+
+============================================================
+  Benchmarking: fsharp
+============================================================
+
+  --- grep ---
+    Project Orientation: 210ms, 27 chars, Q=3/5
+    Symbol Discovery: 197ms, 1281 chars, Q=3/5
+    Dependency Tracing: 109ms, 2030 chars, Q=4/5
+    Architecture: 2ms, 158 chars, Q=3/5
+    Code Navigation: 112ms, 33210 chars, Q=4/5
+    Semantic Search: 180ms, 5408357 chars, Q=5/5
+
+  --- ast-grep ---
+    Project Orientation: 0ms, 34 chars, Q=1/5
+    Symbol Discovery: 0ms, 34 chars, Q=1/5
+    Dependency Tracing: 0ms, 34 chars, Q=1/5
+    Architecture: 0ms, 34 chars, Q=1/5
+    Code Navigation: 0ms, 34 chars, Q=1/5
+    Semantic Search: 0ms, 34 chars, Q=1/5
+
+  --- code-intel ---
+    Project Orientation: 912ms, 626 chars, Q=5/5
+    Symbol Discovery: 0ms, 3075 chars, Q=5/5
+    Dependency Tracing: 0ms, 136 chars, Q=5/5
+    Architecture: 0ms, 3961 chars, Q=4/5
+    Code Navigation: 0ms, 171 chars, Q=1/5
+    Semantic Search: 883449ms, 1551 chars, Q=5/5
+
+============================================================
+  Benchmarking: ggplot2
+============================================================
+
+  --- grep ---
+    Project Orientation: 48ms, 26 chars, Q=3/5
+    Symbol Discovery: 43ms, 666 chars, Q=4/5
+    Dependency Tracing: 30ms, 89 chars, Q=5/5
+    Architecture: 1ms, 201 chars, Q=3/5
+    Code Navigation: 30ms, 7791 chars, Q=5/5
+    Semantic Search: 27ms, 351566 chars, Q=3/5
+
+  --- ast-grep ---
+    Project Orientation: 0ms, 29 chars, Q=1/5
+    Symbol Discovery: 0ms, 29 chars, Q=1/5
+    Dependency Tracing: 0ms, 29 chars, Q=1/5
+    Architecture: 0ms, 29 chars, Q=1/5
+    Code Navigation: 0ms, 29 chars, Q=1/5
+    Semantic Search: 0ms, 29 chars, Q=1/5
+
+  --- code-intel ---
+    Project Orientation: 31ms, 633 chars, Q=4/5
+    Symbol Discovery: 0ms, 43 chars, Q=1/5
+    Dependency Tracing: 0ms, 104 chars, Q=5/5
+    Architecture: 0ms, 524 chars, Q=4/5
+    Code Navigation: 0ms, 143 chars, Q=1/5
+    Semantic Search: 8468ms, 794 chars, Q=5/5
+
+============================================================
+  Benchmarking: iterm2
+============================================================
+
+  --- grep ---
+    Project Orientation: 126ms, 27 chars, Q=3/5
+    Symbol Discovery: 106ms, 3470 chars, Q=5/5
+    Dependency Tracing: 71ms, 66 chars, Q=4/5
+    Architecture: 2ms, 486 chars, Q=3/5
+    Code Navigation: 65ms, 847929 chars, Q=5/5
+    Semantic Search: 63ms, 1213280 chars, Q=5/5
+
+  --- ast-grep ---
+    Project Orientation: 0ms, 32 chars, Q=1/5
+    Symbol Discovery: 0ms, 32 chars, Q=1/5
+    Dependency Tracing: 0ms, 32 chars, Q=1/5
+    Architecture: 0ms, 32 chars, Q=1/5
+    Code Navigation: 0ms, 32 chars, Q=1/5
+    Semantic Search: 0ms, 32 chars, Q=1/5
+
+  --- code-intel ---
+    Project Orientation: 9019ms, 2549 chars, Q=5/5
+    Symbol Discovery: 2ms, 2881 chars, Q=5/5
+    Dependency Tracing: 0ms, 125 chars, Q=5/5
+    Architecture: 3ms, 2142 chars, Q=4/5
+    Code Navigation: 0ms, 1128 chars, Q=1/5
+    Semantic Search: 5943ms, 1529 chars, Q=5/5
+
+============================================================
+  Benchmarking: julia
+============================================================
+
+  --- grep ---
+    Project Orientation: 71ms, 26 chars, Q=3/5
+    Symbol Discovery: 66ms, 69719 chars, Q=5/5
+    Dependency Tracing: 38ms, 715 chars, Q=5/5
+    Architecture: 1ms, 249 chars, Q=3/5
+    Code Navigation: 44ms, 529097 chars, Q=5/5
+    Semantic Search: 39ms, 702949 chars, Q=5/5
+
+  --- ast-grep ---
+    Project Orientation: 0ms, 33 chars, Q=1/5
+    Symbol Discovery: 0ms, 33 chars, Q=1/5
+    Dependency Tracing: 0ms, 33 chars, Q=1/5
+    Architecture: 0ms, 33 chars, Q=1/5
+    Code Navigation: 0ms, 33 chars, Q=1/5
+    Semantic Search: 0ms, 33 chars, Q=1/5
+
+  --- code-intel ---
+    Project Orientation: 2412ms, 1685 chars, Q=4/5
+    Symbol Discovery: 1ms, 1022 chars, Q=4/5
+    Dependency Tracing: 0ms, 105 chars, Q=5/5
+    Architecture: 5ms, 2723 chars, Q=4/5
+    Code Navigation: 1ms, 136 chars, Q=1/5
+    Semantic Search: 19592ms, 1124 chars, Q=5/5
+
+============================================================
+  Benchmarking: kemal
+============================================================
+
+  --- grep ---
+    Project Orientation: 30ms, 22 chars, Q=3/5
+    Symbol Discovery: 28ms, 2036 chars, Q=4/5
+    Dependency Tracing: 26ms, 24 chars, Q=3/5
+    Architecture: 0ms, 71 chars, Q=3/5
+    Code Navigation: 27ms, 4221 chars, Q=4/5
+    Semantic Search: 15ms, 58894 chars, Q=3/5
+
+  --- ast-grep ---
+    Project Orientation: 0ms, 35 chars, Q=1/5
+    Symbol Discovery: 0ms, 35 chars, Q=1/5
+    Dependency Tracing: 0ms, 35 chars, Q=1/5
+    Architecture: 0ms, 35 chars, Q=1/5
+    Code Navigation: 0ms, 35 chars, Q=1/5
+    Semantic Search: 0ms, 35 chars, Q=1/5
+
+  --- code-intel ---
+    Project Orientation: 5ms, 348 chars, Q=4/5
+    Symbol Discovery: 0ms, 32 chars, Q=1/5
+    Dependency Tracing: 0ms, 102 chars, Q=5/5
+    Architecture: 0ms, 610 chars, Q=4/5
+    Code Navigation: 0ms, 143 chars, Q=1/5
+    Semantic Search: 1094ms, 1110 chars, Q=5/5
+
+============================================================
+  Benchmarking: metabase
+============================================================
+
+  --- grep ---
+    Project Orientation: 388ms, 28 chars, Q=3/5
+    Symbol Discovery: 420ms, 3257 chars, Q=4/5
+    Dependency Tracing: 223ms, 1057 chars, Q=5/5
+    Architecture: 4ms, 405 chars, Q=3/5
+    Code Navigation: 222ms, 15693 chars, Q=5/5
+    Semantic Search: 284ms, 7309693 chars, Q=5/5
+
+  --- ast-grep ---
+    Project Orientation: 0ms, 35 chars, Q=1/5
+    Symbol Discovery: 0ms, 35 chars, Q=1/5
+    Dependency Tracing: 0ms, 35 chars, Q=1/5
+    Architecture: 0ms, 35 chars, Q=1/5
+    Code Navigation: 0ms, 35 chars, Q=1/5
+    Semantic Search: 0ms, 35 chars, Q=1/5
+
+  --- code-intel ---
+    Project Orientation: 22313ms, 3179 chars, Q=5/5
+    Symbol Discovery: 1ms, 44 chars, Q=1/5
+    Dependency Tracing: 0ms, 101 chars, Q=5/5
+    Architecture: 127ms, 13037 chars, Q=4/5
+    Code Navigation: 1ms, 171 chars, Q=1/5
+    Semantic Search: 35980ms, 1637 chars, Q=5/5
+
+============================================================
+  Benchmarking: mojo-perl
+============================================================
+
+  --- grep ---
+    Project Orientation: 45ms, 24 chars, Q=3/5
+    Symbol Discovery: 45ms, 7547 chars, Q=4/5
+    Dependency Tracing: 38ms, 320 chars, Q=5/5
+    Architecture: 0ms, 107 chars, Q=4/5
+    Code Navigation: 37ms, 96205 chars, Q=5/5
+    Semantic Search: 22ms, 885557 chars, Q=3/5
+
+  --- ast-grep ---
+    Project Orientation: 0ms, 32 chars, Q=1/5
+    Symbol Discovery: 0ms, 32 chars, Q=1/5
+    Dependency Tracing: 0ms, 32 chars, Q=1/5
+    Architecture: 0ms, 32 chars, Q=1/5
+    Code Navigation: 0ms, 32 chars, Q=1/5
+    Semantic Search: 0ms, 32 chars, Q=1/5
+
+  --- code-intel ---
+    Project Orientation: 149ms, 417 chars, Q=4/5
+    Symbol Discovery: 0ms, 38 chars, Q=1/5
+    Dependency Tracing: 0ms, 104 chars, Q=5/5
+    Architecture: 0ms, 1942 chars, Q=4/5
+    Code Navigation: 0ms, 144 chars, Q=1/5
+    Semantic Search: 6005ms, 1150 chars, Q=5/5
+
+============================================================
+  Benchmarking: nickel
+============================================================
+
+  --- grep ---
+    Project Orientation: 62ms, 26 chars, Q=3/5
+    Symbol Discovery: 57ms, 330 chars, Q=4/5
+    Dependency Tracing: 43ms, 93 chars, Q=4/5
+    Architecture: 0ms, 357 chars, Q=3/5
+    Code Navigation: 47ms, 2906 chars, Q=3/5
+    Semantic Search: 31ms, 101495 chars, Q=3/5
+
+  --- ast-grep ---
+    Project Orientation: 140ms, 32 chars, Q=1/5
+    Symbol Discovery: 210ms, 2138 chars, Q=3/5
+    Dependency Tracing: 19ms, 0 chars, Q=0/5
+    Architecture: 55ms, 765 chars, Q=3/5
+    Code Navigation: 48ms, 396 chars, Q=3/5
+    Semantic Search: 155ms, 293 chars, Q=3/5
+
+  --- code-intel ---
+    Project Orientation: 1020ms, 1744 chars, Q=4/5
+    Symbol Discovery: 0ms, 592 chars, Q=5/5
+    Dependency Tracing: 0ms, 108 chars, Q=5/5
+    Architecture: 1ms, 5541 chars, Q=4/5
+    Code Navigation: 0ms, 1950 chars, Q=5/5
+    Semantic Search: 17147ms, 1319 chars, Q=5/5
+
+============================================================
+  Benchmarking: nim
+============================================================
+
+  --- grep ---
+    Project Orientation: 100ms, 26 chars, Q=3/5
+    Symbol Discovery: 91ms, 261 chars, Q=3/5
+    Dependency Tracing: 61ms, 14 chars, Q=3/5
+    Architecture: 1ms, 334 chars, Q=4/5
+    Code Navigation: 59ms, 504 chars, Q=4/5
+    Semantic Search: 53ms, 192606 chars, Q=3/5
+
+  --- ast-grep ---
+    Project Orientation: 0ms, 31 chars, Q=1/5
+    Symbol Discovery: 0ms, 31 chars, Q=1/5
+    Dependency Tracing: 0ms, 31 chars, Q=1/5
+    Architecture: 0ms, 31 chars, Q=1/5
+    Code Navigation: 0ms, 31 chars, Q=1/5
+    Semantic Search: 0ms, 31 chars, Q=1/5
+
+  --- code-intel ---
+    Project Orientation: 232ms, 978 chars, Q=4/5
+    Symbol Discovery: 0ms, 42 chars, Q=1/5
+    Dependency Tracing: 0ms, 103 chars, Q=5/5
+    Architecture: 0ms, 2604 chars, Q=4/5
+    Code Navigation: 0ms, 151 chars, Q=1/5
+    Semantic Search: 6617ms, 1088 chars, Q=5/5
+
+============================================================
+  Benchmarking: ocaml
+============================================================
+
+  --- grep ---
+    Project Orientation: 120ms, 26 chars, Q=3/5
+    Symbol Discovery: 105ms, 3139 chars, Q=4/5
+    Dependency Tracing: 67ms, 609 chars, Q=5/5
+    Architecture: 1ms, 408 chars, Q=3/5
+    Code Navigation: 67ms, 6264 chars, Q=5/5
+    Semantic Search: 77ms, 1100922 chars, Q=5/5
+
+  --- ast-grep ---
+    Project Orientation: 0ms, 33 chars, Q=1/5
+    Symbol Discovery: 0ms, 33 chars, Q=1/5
+    Dependency Tracing: 0ms, 33 chars, Q=1/5
+    Architecture: 0ms, 33 chars, Q=1/5
+    Code Navigation: 0ms, 33 chars, Q=1/5
+    Semantic Search: 0ms, 33 chars, Q=1/5
+
+  --- code-intel ---
+    Project Orientation: 1075ms, 1958 chars, Q=4/5
+    Symbol Discovery: 1ms, 995 chars, Q=5/5
+    Dependency Tracing: 0ms, 109 chars, Q=5/5
+    Architecture: 8ms, 2747 chars, Q=4/5
+    Code Navigation: 0ms, 151 chars, Q=1/5
+    Semantic Search: 73279ms, 1048 chars, Q=5/5
+
+============================================================
+  Benchmarking: otp
+============================================================
+
+  --- grep ---
+    Project Orientation: 260ms, 28 chars, Q=3/5
+    Symbol Discovery: 233ms, 16420 chars, Q=4/5
+    Dependency Tracing: 131ms, 335 chars, Q=5/5
+    Architecture: 3ms, 231 chars, Q=3/5
+    Code Navigation: 170ms, 7344414 chars, Q=5/5
+    Semantic Search: 153ms, 4683444 chars, Q=3/5
+
+  --- ast-grep ---
+    Project Orientation: 0ms, 34 chars, Q=1/5
+    Symbol Discovery: 0ms, 34 chars, Q=1/5
+    Dependency Tracing: 0ms, 34 chars, Q=1/5
+    Architecture: 0ms, 34 chars, Q=1/5
+    Code Navigation: 0ms, 34 chars, Q=1/5
+    Semantic Search: 0ms, 34 chars, Q=1/5
+
+  --- code-intel ---
+    Project Orientation: 13622ms, 1940 chars, Q=4/5
+    Symbol Discovery: 3ms, 2857 chars, Q=5/5
+    Dependency Tracing: 0ms, 122 chars, Q=5/5
+    Architecture: 17ms, 8281 chars, Q=4/5
+    Code Navigation: 2ms, 151 chars, Q=1/5
+    Semantic Search: 23894ms, 1117 chars, Q=5/5
+
+============================================================
+  Benchmarking: perl5
+============================================================
+
+  --- grep ---
+    Project Orientation: 171ms, 27 chars, Q=3/5
+    Symbol Discovery: 142ms, 28 chars, Q=3/5
+    Dependency Tracing: 90ms, 6486 chars, Q=5/5
+    Architecture: 1ms, 352 chars, Q=3/5
+    Code Navigation: 88ms, 12451 chars, Q=5/5
+    Semantic Search: 80ms, 289108 chars, Q=5/5
+
+  --- ast-grep ---
+    Project Orientation: 0ms, 32 chars, Q=1/5
+    Symbol Discovery: 0ms, 32 chars, Q=1/5
+    Dependency Tracing: 0ms, 32 chars, Q=1/5
+    Architecture: 0ms, 32 chars, Q=1/5
+    Code Navigation: 0ms, 32 chars, Q=1/5
+    Semantic Search: 0ms, 32 chars, Q=1/5
+
+  --- code-intel ---
+    Project Orientation: 5323ms, 1539 chars, Q=4/5
+    Symbol Discovery: 1ms, 1705 chars, Q=5/5
+    Dependency Tracing: 0ms, 1674 chars, Q=5/5
+    Architecture: 4ms, 3378 chars, Q=4/5
+    Code Navigation: 0ms, 12981 chars, Q=5/5
+    Semantic Search: 94615ms, 973 chars, Q=5/5
+
+============================================================
+  Benchmarking: ring
+============================================================
+
+  --- grep ---
+    Project Orientation: 42ms, 23 chars, Q=3/5
+    Symbol Discovery: 40ms, 264 chars, Q=4/5
+    Dependency Tracing: 35ms, 76 chars, Q=4/5
+    Architecture: 0ms, 237 chars, Q=3/5
+    Code Navigation: 37ms, 97958 chars, Q=4/5
+    Semantic Search: 22ms, 62073 chars, Q=3/5
+
+  --- ast-grep ---
+    Project Orientation: 0ms, 35 chars, Q=1/5
+    Symbol Discovery: 0ms, 35 chars, Q=1/5
+    Dependency Tracing: 0ms, 35 chars, Q=1/5
+    Architecture: 0ms, 35 chars, Q=1/5
+    Code Navigation: 0ms, 35 chars, Q=1/5
+    Semantic Search: 0ms, 35 chars, Q=1/5
+
+  --- code-intel ---
+    Project Orientation: 10ms, 668 chars, Q=4/5
+    Symbol Discovery: 0ms, 35 chars, Q=1/5
+    Dependency Tracing: 0ms, 114 chars, Q=5/5
+    Architecture: 0ms, 1361 chars, Q=4/5
+    Code Navigation: 0ms, 162 chars, Q=1/5
+    Semantic Search: 1867ms, 1294 chars, Q=5/5
+
+
+Report saved to eval/3way_comparison_report_v2.md
+
+# 3-Way Code Intelligence Comparison
+
+Generated: 2026-03-24 12:34
+Tools: grep, ast-grep, code-intel
+Repos: attocode, fastapi, pandas, deno, aspnetcore, laravel, swiftformat, okhttp, gh-cli, faker, redis, spdlog, cats-effect, luarocks, phoenix, postgrest, acme-sh, terraform-eks, zls, cockroach, express, prisma, rails, requests, cosmopolitan, ripgrep, starship, spring-boot, spark, vapor, wordpress, protobuf, crystal-lang, dart-sdk, elixir-lang, emqx, fsharp, ggplot2, iterm2, julia, kemal, metabase, mojo-perl, nickel, nim, ocaml, otp, perl5, ring
+
+## attocode
+
+| Task | grep | ast-grep | code-intel | grep Q | ast-grep Q | code-intel Q |
+|------|------|----------|------------|--------|------------|--------------|
+| Project Orientation | 59ms | 348ms | — | 3/5 | 1/5 | — |
+| Symbol Discovery | 44ms | 396ms | — | 4/5 | 4/5 | — |
+| Dependency Tracing | 26ms | 10ms | — | 5/5 | 4/5 | — |
+| Architecture | 0ms | 114ms | — | 3/5 | 0/5 | — |
+| Code Navigation | 25ms | 106ms | — | 4/5 | 4/5 | — |
+| Semantic Search | 31ms | 301ms | — | 5/5 | 3/5 | — |
+
+## fastapi
+
+| Task | grep | ast-grep | code-intel | grep Q | ast-grep Q | code-intel Q |
+|------|------|----------|------------|--------|------------|--------------|
+| Project Orientation | 78ms | 160ms | 1775ms | 3/5 | 1/5 | 5/5 |
+| Symbol Discovery | 83ms | 226ms | 1ms | 5/5 | 5/5 | 5/5 |
+| Dependency Tracing | 35ms | 14ms | 0ms | 5/5 | 5/5 | 5/5 |
+| Architecture | 1ms | 54ms | 150ms | 3/5 | 0/5 | 4/5 |
+| Code Navigation | 36ms | 61ms | 0ms | 5/5 | 5/5 | 5/5 |
+| Semantic Search | 41ms | 150ms | 24157ms | 3/5 | 3/5 | 5/5 |
+
+## pandas
+
+| Task | grep | ast-grep | code-intel | grep Q | ast-grep Q | code-intel Q |
+|------|------|----------|------------|--------|------------|--------------|
+| Project Orientation | 66ms | 906ms | 26978ms | 3/5 | 1/5 | 5/5 |
+| Symbol Discovery | 71ms | 1144ms | 7ms | 5/5 | 5/5 | 5/5 |
+| Dependency Tracing | 37ms | 28ms | 0ms | 5/5 | 5/5 | 5/5 |
+| Architecture | 1ms | 274ms | 37ms | 3/5 | 0/5 | 4/5 |
+| Code Navigation | 48ms | 321ms | 0ms | 5/5 | 5/5 | 5/5 |
+| Semantic Search | 48ms | 940ms | 8738ms | 5/5 | 5/5 | 5/5 |
+
+## deno
+
+| Task | grep | ast-grep | code-intel | grep Q | ast-grep Q | code-intel Q |
+|------|------|----------|------------|--------|------------|--------------|
+| Project Orientation | 269ms | 486ms | 53792ms | 3/5 | 1/5 | 5/5 |
+| Symbol Discovery | 250ms | 791ms | 3ms | 4/5 | 5/5 | 5/5 |
+| Dependency Tracing | 134ms | 17ms | 0ms | 5/5 | 4/5 | 5/5 |
+| Architecture | 3ms | 211ms | 10ms | 3/5 | 3/5 | 4/5 |
+| Code Navigation | 137ms | 173ms | 1ms | 4/5 | 4/5 | 5/5 |
+| Semantic Search | 145ms | 600ms | 36512ms | 5/5 | 3/5 | 5/5 |
+
+## aspnetcore
+
+| Task | grep | ast-grep | code-intel | grep Q | ast-grep Q | code-intel Q |
+|------|------|----------|------------|--------|------------|--------------|
+| Project Orientation | 338ms | 1880ms | 89011ms | 3/5 | 1/5 | 5/5 |
+| Symbol Discovery | 366ms | 3628ms | 7ms | 5/5 | 5/5 | 5/5 |
+| Dependency Tracing | 185ms | 13ms | 0ms | 5/5 | 3/5 | 5/5 |
+| Architecture | 5ms | 1021ms | 7ms | 3/5 | 3/5 | 4/5 |
+| Code Navigation | 192ms | 851ms | 0ms | 5/5 | 0/5 | 5/5 |
+| Semantic Search | 227ms | 2695ms | 24577ms | 5/5 | 1/5 | 5/5 |
+
+## laravel
+
+| Task | grep | ast-grep | code-intel | grep Q | ast-grep Q | code-intel Q |
+|------|------|----------|------------|--------|------------|--------------|
+| Project Orientation | 81ms | 457ms | 13331ms | 3/5 | 1/5 | 4/5 |
+| Symbol Discovery | 79ms | 513ms | 4ms | 4/5 | 5/5 | 5/5 |
+| Dependency Tracing | 46ms | 17ms | 0ms | 5/5 | 4/5 | 5/5 |
+| Architecture | 1ms | 203ms | 2ms | 3/5 | 3/5 | 4/5 |
+| Code Navigation | 51ms | 168ms | 0ms | 5/5 | 4/5 | 5/5 |
+| Semantic Search | 43ms | 482ms | 3277ms | 5/5 | 3/5 | 5/5 |
+
+## swiftformat
+
+| Task | grep | ast-grep | code-intel | grep Q | ast-grep Q | code-intel Q |
+|------|------|----------|------------|--------|------------|--------------|
+| Project Orientation | 39ms | 312ms | 1571ms | 3/5 | 1/5 | 4/5 |
+| Symbol Discovery | 37ms | 460ms | 2ms | 5/5 | 5/5 | 5/5 |
+| Dependency Tracing | 25ms | 15ms | 0ms | 5/5 | 3/5 | 5/5 |
+| Architecture | 0ms | 120ms | 0ms | 3/5 | 2/5 | 4/5 |
+| Code Navigation | 29ms | 108ms | 0ms | 5/5 | 4/5 | 5/5 |
+| Semantic Search | 22ms | 336ms | 1251ms | 3/5 | 3/5 | 5/5 |
+
+## okhttp
+
+| Task | grep | ast-grep | code-intel | grep Q | ast-grep Q | code-intel Q |
+|------|------|----------|------------|--------|------------|--------------|
+| Project Orientation | 52ms | 178ms | 1438ms | 3/5 | 1/5 | 4/5 |
+| Symbol Discovery | 51ms | 227ms | 1ms | 4/5 | 3/5 | 5/5 |
+| Dependency Tracing | 33ms | 17ms | 0ms | 5/5 | 4/5 | 5/5 |
+| Architecture | 0ms | 83ms | 1ms | 3/5 | 3/5 | 4/5 |
+| Code Navigation | 36ms | 72ms | 0ms | 5/5 | 4/5 | 5/5 |
+| Semantic Search | 28ms | 235ms | 1814ms | 3/5 | 3/5 | 5/5 |
+
+## gh-cli
+
+| Task | grep | ast-grep | code-intel | grep Q | ast-grep Q | code-intel Q |
+|------|------|----------|------------|--------|------------|--------------|
+| Project Orientation | 51ms | 259ms | 2548ms | 3/5 | 1/5 | 4/5 |
+| Symbol Discovery | 47ms | 355ms | 1ms | 4/5 | 4/5 | 5/5 |
+| Dependency Tracing | 33ms | 14ms | 0ms | 5/5 | 4/5 | 5/5 |
+| Architecture | 0ms | 101ms | 1ms | 3/5 | 3/5 | 4/5 |
+| Code Navigation | 37ms | 98ms | 0ms | 5/5 | 4/5 | 5/5 |
+| Semantic Search | 32ms | 274ms | 2940ms | 3/5 | 3/5 | 5/5 |
+
+## faker
+
+| Task | grep | ast-grep | code-intel | grep Q | ast-grep Q | code-intel Q |
+|------|------|----------|------------|--------|------------|--------------|
+| Project Orientation | 45ms | 107ms | 1652ms | 3/5 | 1/5 | 4/5 |
+| Symbol Discovery | 47ms | 96ms | 1ms | 4/5 | 5/5 | 5/5 |
+| Dependency Tracing | 31ms | 15ms | 0ms | 5/5 | 4/5 | 5/5 |
+| Architecture | 0ms | 44ms | 1ms | 3/5 | 3/5 | 4/5 |
+| Code Navigation | 34ms | 29ms | 0ms | 5/5 | 5/5 | 5/5 |
+| Semantic Search | 33ms | 88ms | 4147ms | 5/5 | 3/5 | 5/5 |
+
+## redis
+
+| Task | grep | ast-grep | code-intel | grep Q | ast-grep Q | code-intel Q |
+|------|------|----------|------------|--------|------------|--------------|
+| Project Orientation | 60ms | 542ms | 5374ms | 3/5 | 1/5 | 5/5 |
+| Symbol Discovery | 54ms | 657ms | 2ms | 4/5 | 5/5 | 5/5 |
+| Dependency Tracing | 37ms | 24ms | 0ms | 5/5 | 4/5 | 5/5 |
+| Architecture | 1ms | 259ms | 8ms | 3/5 | 0/5 | 4/5 |
+| Code Navigation | 37ms | 238ms | 0ms | 5/5 | 2/5 | 5/5 |
+| Semantic Search | 37ms | 693ms | 6976ms | 5/5 | 5/5 | 5/5 |
+
+## spdlog
+
+| Task | grep | ast-grep | code-intel | grep Q | ast-grep Q | code-intel Q |
+|------|------|----------|------------|--------|------------|--------------|
+| Project Orientation | 32ms | 53ms | 1196ms | 3/5 | 1/5 | 4/5 |
+| Symbol Discovery | 27ms | 84ms | 0ms | 4/5 | 5/5 | 4/5 |
+| Dependency Tracing | 26ms | 23ms | 0ms | 5/5 | 0/5 | 5/5 |
+| Architecture | 0ms | 21ms | 4ms | 3/5 | 0/5 | 4/5 |
+| Code Navigation | 25ms | 19ms | 0ms | 5/5 | 3/5 | 5/5 |
+| Semantic Search | 16ms | 61ms | 933ms | 3/5 | 2/5 | 5/5 |
+
+## cats-effect
+
+| Task | grep | ast-grep | code-intel | grep Q | ast-grep Q | code-intel Q |
+|------|------|----------|------------|--------|------------|--------------|
+| Project Orientation | 46ms | 185ms | 808ms | 3/5 | 1/5 | 4/5 |
+| Symbol Discovery | 51ms | 345ms | 1ms | 4/5 | 5/5 | 5/5 |
+| Dependency Tracing | 34ms | 27ms | 0ms | 5/5 | 4/5 | 5/5 |
+| Architecture | 0ms | 89ms | 0ms | 3/5 | 3/5 | 4/5 |
+| Code Navigation | 31ms | 79ms | 0ms | 5/5 | 5/5 | 5/5 |
+| Semantic Search | 23ms | 265ms | 1286ms | 5/5 | 3/5 | 5/5 |
+
+## luarocks
+
+| Task | grep | ast-grep | code-intel | grep Q | ast-grep Q | code-intel Q |
+|------|------|----------|------------|--------|------------|--------------|
+| Project Orientation | 38ms | 46ms | 174ms | 3/5 | 1/5 | 4/5 |
+| Symbol Discovery | 36ms | 69ms | 0ms | 5/5 | 4/5 | 4/5 |
+| Dependency Tracing | 26ms | 18ms | 0ms | 5/5 | 4/5 | 5/5 |
+| Architecture | 0ms | 43ms | 0ms | 3/5 | 3/5 | 4/5 |
+| Code Navigation | 28ms | 32ms | 0ms | 4/5 | 3/5 | 5/5 |
+| Semantic Search | 21ms | 99ms | 3670ms | 3/5 | 3/5 | 5/5 |
+
+## phoenix
+
+| Task | grep | ast-grep | code-intel | grep Q | ast-grep Q | code-intel Q |
+|------|------|----------|------------|--------|------------|--------------|
+| Project Orientation | 37ms | 15ms | 1053ms | 3/5 | 1/5 | 4/5 |
+| Symbol Discovery | 39ms | 77ms | 0ms | 3/5 | 5/5 | 5/5 |
+| Dependency Tracing | 28ms | 17ms | 0ms | 5/5 | 4/5 | 5/5 |
+| Architecture | 0ms | 12ms | 0ms | 3/5 | 0/5 | 4/5 |
+| Code Navigation | 30ms | 51ms | 0ms | 5/5 | 4/5 | 5/5 |
+| Semantic Search | 21ms | 159ms | 1732ms | 5/5 | 3/5 | 5/5 |
+
+## postgrest
+
+| Task | grep | ast-grep | code-intel | grep Q | ast-grep Q | code-intel Q |
+|------|------|----------|------------|--------|------------|--------------|
+| Project Orientation | 34ms | 46ms | 3322ms | 3/5 | 1/5 | 5/5 |
+| Symbol Discovery | 33ms | 73ms | 0ms | 4/5 | 3/5 | 5/5 |
+| Dependency Tracing | 26ms | 13ms | 0ms | 5/5 | 0/5 | 5/5 |
+| Architecture | 0ms | 39ms | 0ms | 3/5 | 3/5 | 4/5 |
+| Code Navigation | 28ms | 32ms | 0ms | 4/5 | 3/5 | 5/5 |
+| Semantic Search | 19ms | 103ms | 2323ms | 5/5 | 3/5 | 5/5 |
+
+## acme-sh
+
+| Task | grep | ast-grep | code-intel | grep Q | ast-grep Q | code-intel Q |
+|------|------|----------|------------|--------|------------|--------------|
+| Project Orientation | 34ms | 19ms | 223ms | 3/5 | 1/5 | 4/5 |
+| Symbol Discovery | 32ms | 53ms | 0ms | 3/5 | 0/5 | 4/5 |
+| Dependency Tracing | 27ms | 0ms | 0ms | 5/5 | 2/5 | 5/5 |
+| Architecture | 0ms | 13ms | 0ms | 3/5 | 0/5 | 4/5 |
+| Code Navigation | 28ms | 46ms | 0ms | 4/5 | 2/5 | 5/5 |
+| Semantic Search | 16ms | 134ms | 168ms | 3/5 | 1/5 | 5/5 |
+
+## terraform-eks
+
+| Task | grep | ast-grep | code-intel | grep Q | ast-grep Q | code-intel Q |
+|------|------|----------|------------|--------|------------|--------------|
+| Project Orientation | 29ms | 35ms | 160ms | 3/5 | 1/5 | 4/5 |
+| Symbol Discovery | 30ms | 63ms | 0ms | 3/5 | 5/5 | 4/5 |
+| Dependency Tracing | 23ms | 0ms | 0ms | 5/5 | 2/5 | 5/5 |
+| Architecture | 0ms | 34ms | 0ms | 3/5 | 3/5 | 4/5 |
+| Code Navigation | 25ms | 37ms | 0ms | 5/5 | 3/5 | 5/5 |
+| Semantic Search | 17ms | 99ms | 834ms | 3/5 | 3/5 | 5/5 |
+
+## zls
+
+| Task | grep | ast-grep | code-intel | grep Q | ast-grep Q | code-intel Q |
+|------|------|----------|------------|--------|------------|--------------|
+| Project Orientation | 32ms | 0ms | 326ms | 3/5 | 1/5 | 4/5 |
+| Symbol Discovery | 30ms | 0ms | 0ms | 4/5 | 1/5 | 4/5 |
+| Dependency Tracing | 26ms | 0ms | 0ms | 4/5 | 1/5 | 5/5 |
+| Architecture | 0ms | 0ms | 0ms | 3/5 | 1/5 | 4/5 |
+| Code Navigation | 27ms | 0ms | 0ms | 5/5 | 1/5 | 5/5 |
+| Semantic Search | 14ms | 0ms | 224ms | 3/5 | 1/5 | 5/5 |
+
+## cockroach
+
+| Task | grep | ast-grep | code-intel | grep Q | ast-grep Q | code-intel Q |
+|------|------|----------|------------|--------|------------|--------------|
+| Project Orientation | 414ms | 3384ms | 424704ms | 3/5 | 1/5 | 5/5 |
+| Symbol Discovery | 461ms | 4323ms | 19ms | 5/5 | 5/5 | 5/5 |
+| Dependency Tracing | 262ms | 20ms | 0ms | 5/5 | 0/5 | 5/5 |
+| Architecture | 4ms | 1938ms | 27ms | 3/5 | 3/5 | 4/5 |
+| Code Navigation | 263ms | 1144ms | 1ms | 5/5 | 3/5 | 5/5 |
+| Semantic Search | 292ms | 3431ms | 41541ms | 5/5 | 3/5 | 5/5 |
+
+## express
+
+| Task | grep | ast-grep | code-intel | grep Q | ast-grep Q | code-intel Q |
+|------|------|----------|------------|--------|------------|--------------|
+| Project Orientation | 37ms | 67ms | 313ms | 3/5 | 1/5 | 4/5 |
+| Symbol Discovery | 29ms | 78ms | 0ms | 3/5 | 3/5 | 1/5 |
+| Dependency Tracing | 27ms | 16ms | 0ms | 4/5 | 0/5 | 5/5 |
+| Architecture | 0ms | 53ms | 0ms | 3/5 | 0/5 | 4/5 |
+| Code Navigation | 27ms | 27ms | 0ms | 4/5 | 4/5 | 5/5 |
+| Semantic Search | 17ms | 78ms | 813ms | 3/5 | 3/5 | 5/5 |
+
+## prisma
+
+| Task | grep | ast-grep | code-intel | grep Q | ast-grep Q | code-intel Q |
+|------|------|----------|------------|--------|------------|--------------|
+| Project Orientation | 134ms | 196ms | 4924ms | 3/5 | 1/5 | 5/5 |
+| Symbol Discovery | 133ms | 386ms | 0ms | 5/5 | 5/5 | 5/5 |
+| Dependency Tracing | 74ms | 16ms | 0ms | 5/5 | 0/5 | 5/5 |
+| Architecture | 1ms | 92ms | 21ms | 3/5 | 3/5 | 4/5 |
+| Code Navigation | 74ms | 91ms | 0ms | 5/5 | 4/5 | 5/5 |
+| Semantic Search | 93ms | 275ms | 8336ms | 5/5 | 3/5 | 5/5 |
+
+## rails
+
+| Task | grep | ast-grep | code-intel | grep Q | ast-grep Q | code-intel Q |
+|------|------|----------|------------|--------|------------|--------------|
+| Project Orientation | 132ms | 1121ms | 18831ms | 3/5 | 1/5 | 4/5 |
+| Symbol Discovery | 125ms | 681ms | 6ms | 5/5 | 5/5 | 5/5 |
+| Dependency Tracing | 67ms | 19ms | 0ms | 5/5 | 4/5 | 5/5 |
+| Architecture | 1ms | 447ms | 1ms | 3/5 | 3/5 | 4/5 |
+| Code Navigation | 73ms | 260ms | 0ms | 5/5 | 5/5 | 5/5 |
+| Semantic Search | 71ms | 665ms | 10678ms | 5/5 | 5/5 | 5/5 |
+
+## requests
+
+| Task | grep | ast-grep | code-intel | grep Q | ast-grep Q | code-intel Q |
+|------|------|----------|------------|--------|------------|--------------|
+| Project Orientation | 35ms | 88ms | 125ms | 3/5 | 1/5 | 5/5 |
+| Symbol Discovery | 35ms | 134ms | 0ms | 4/5 | 4/5 | 5/5 |
+| Dependency Tracing | 33ms | 20ms | 0ms | 5/5 | 4/5 | 5/5 |
+| Architecture | 0ms | 29ms | 1ms | 3/5 | 0/5 | 4/5 |
+| Code Navigation | 36ms | 30ms | 0ms | 5/5 | 5/5 | 5/5 |
+| Semantic Search | 19ms | 89ms | 863ms | 3/5 | 3/5 | 5/5 |
+
+## cosmopolitan
+
+| Task | grep | ast-grep | code-intel | grep Q | ast-grep Q | code-intel Q |
+|------|------|----------|------------|--------|------------|--------------|
+| Project Orientation | 425ms | 3239ms | 197838ms | 3/5 | 1/5 | 5/5 |
+| Symbol Discovery | 332ms | 4314ms | 16ms | 5/5 | 5/5 | 4/5 |
+| Dependency Tracing | 169ms | 17ms | 0ms | 5/5 | 0/5 | 5/5 |
+| Architecture | 3ms | 1546ms | 269ms | 3/5 | 3/5 | 4/5 |
+| Code Navigation | 208ms | 1355ms | 0ms | 5/5 | 4/5 | 1/5 |
+| Semantic Search | 254ms | 3846ms | 46148ms | 5/5 | 3/5 | 5/5 |
+
+## ripgrep
+
+| Task | grep | ast-grep | code-intel | grep Q | ast-grep Q | code-intel Q |
+|------|------|----------|------------|--------|------------|--------------|
+| Project Orientation | 42ms | 111ms | 596ms | 3/5 | 1/5 | 4/5 |
+| Symbol Discovery | 35ms | 171ms | 0ms | 4/5 | 2/5 | 5/5 |
+| Dependency Tracing | 27ms | 15ms | 0ms | 5/5 | 0/5 | 5/5 |
+| Architecture | 0ms | 47ms | 0ms | 4/5 | 3/5 | 4/5 |
+| Code Navigation | 30ms | 47ms | 0ms | 5/5 | 3/5 | 5/5 |
+| Semantic Search | 19ms | 137ms | 1631ms | 3/5 | 3/5 | 5/5 |
+
+## starship
+
+| Task | grep | ast-grep | code-intel | grep Q | ast-grep Q | code-intel Q |
+|------|------|----------|------------|--------|------------|--------------|
+| Project Orientation | 49ms | 78ms | 650ms | 3/5 | 1/5 | 4/5 |
+| Symbol Discovery | 45ms | 155ms | 0ms | 4/5 | 3/5 | 5/5 |
+| Dependency Tracing | 35ms | 18ms | 0ms | 4/5 | 0/5 | 5/5 |
+| Architecture | 0ms | 38ms | 4ms | 3/5 | 3/5 | 4/5 |
+| Code Navigation | 36ms | 39ms | 0ms | 4/5 | 4/5 | 5/5 |
+| Semantic Search | 27ms | 111ms | 7386ms | 3/5 | 3/5 | 5/5 |
+
+## spring-boot
+
+| Task | grep | ast-grep | code-intel | grep Q | ast-grep Q | code-intel Q |
+|------|------|----------|------------|--------|------------|--------------|
+| Project Orientation | 477ms | 748ms | 139319ms | 3/5 | 1/5 | 4/5 |
+| Symbol Discovery | 454ms | 872ms | 11ms | 5/5 | 5/5 | 5/5 |
+| Dependency Tracing | 361ms | 17ms | 0ms | 5/5 | 0/5 | 5/5 |
+| Architecture | 4ms | 364ms | 7ms | 3/5 | 3/5 | 4/5 |
+| Code Navigation | 282ms | 286ms | 0ms | 5/5 | 5/5 | 5/5 |
+| Semantic Search | 335ms | 882ms | 30258ms | 5/5 | 3/5 | 5/5 |
+
+## spark
+
+| Task | grep | ast-grep | code-intel | grep Q | ast-grep Q | code-intel Q |
+|------|------|----------|------------|--------|------------|--------------|
+| Project Orientation | 531ms | 2682ms | 350842ms | 3/5 | 1/5 | 5/5 |
+| Symbol Discovery | 658ms | 5085ms | 13ms | 5/5 | 5/5 | 5/5 |
+| Dependency Tracing | 337ms | 19ms | 0ms | 5/5 | 0/5 | 5/5 |
+| Architecture | 6ms | 1404ms | 6ms | 3/5 | 4/5 | 4/5 |
+| Code Navigation | 349ms | 1233ms | 0ms | 5/5 | 5/5 | 5/5 |
+| Semantic Search | 466ms | 4117ms | 42265ms | 5/5 | 5/5 | 5/5 |
+
+## vapor
+
+| Task | grep | ast-grep | code-intel | grep Q | ast-grep Q | code-intel Q |
+|------|------|----------|------------|--------|------------|--------------|
+| Project Orientation | 48ms | 132ms | 415ms | 3/5 | 1/5 | 4/5 |
+| Symbol Discovery | 38ms | 209ms | 0ms | 4/5 | 3/5 | 5/5 |
+| Dependency Tracing | 34ms | 19ms | 0ms | 5/5 | 3/5 | 5/5 |
+| Architecture | 0ms | 47ms | 0ms | 3/5 | 0/5 | 4/5 |
+| Code Navigation | 35ms | 48ms | 0ms | 5/5 | 3/5 | 5/5 |
+| Semantic Search | 22ms | 154ms | 423ms | 3/5 | 3/5 | 5/5 |
+
+## wordpress
+
+| Task | grep | ast-grep | code-intel | grep Q | ast-grep Q | code-intel Q |
+|------|------|----------|------------|--------|------------|--------------|
+| Project Orientation | 146ms | 1587ms | 40230ms | 3/5 | 1/5 | 4/5 |
+| Symbol Discovery | 128ms | 2185ms | 4ms | 4/5 | 5/5 | 5/5 |
+| Dependency Tracing | 77ms | 20ms | 0ms | 5/5 | 0/5 | 5/5 |
+| Architecture | 1ms | 824ms | 2ms | 3/5 | 3/5 | 4/5 |
+| Code Navigation | 78ms | 785ms | 0ms | 5/5 | 4/5 | 5/5 |
+| Semantic Search | 97ms | 2285ms | 9616ms | 5/5 | 5/5 | 5/5 |
+
+## protobuf
+
+| Task | grep | ast-grep | code-intel | grep Q | ast-grep Q | code-intel Q |
+|------|------|----------|------------|--------|------------|--------------|
+| Project Orientation | 100ms | 459ms | 16896ms | 3/5 | 1/5 | 5/5 |
+| Symbol Discovery | 91ms | 720ms | 4ms | 5/5 | 4/5 | 5/5 |
+| Dependency Tracing | 57ms | 20ms | 0ms | 5/5 | 0/5 | 5/5 |
+| Architecture | 1ms | 203ms | 37ms | 3/5 | 0/5 | 4/5 |
+| Code Navigation | 72ms | 169ms | 0ms | 5/5 | 3/5 | 5/5 |
+| Semantic Search | 75ms | 518ms | 16919ms | 5/5 | 3/5 | 5/5 |
+
+## crystal-lang
+
+| Task | grep | ast-grep | code-intel | grep Q | ast-grep Q | code-intel Q |
+|------|------|----------|------------|--------|------------|--------------|
+| Project Orientation | 95ms | 0ms | 137ms | 3/5 | 1/5 | 4/5 |
+| Symbol Discovery | 78ms | 0ms | 0ms | 5/5 | 1/5 | 1/5 |
+| Dependency Tracing | 54ms | 0ms | 0ms | 5/5 | 1/5 | 5/5 |
+| Architecture | 1ms | 0ms | 0ms | 3/5 | 1/5 | 4/5 |
+| Code Navigation | 58ms | 0ms | 0ms | 5/5 | 1/5 | 1/5 |
+| Semantic Search | 55ms | 0ms | 45044ms | 5/5 | 1/5 | 5/5 |
+
+## dart-sdk
+
+| Task | grep | ast-grep | code-intel | grep Q | ast-grep Q | code-intel Q |
+|------|------|----------|------------|--------|------------|--------------|
+| Project Orientation | 901ms | 0ms | 16529ms | 3/5 | 1/5 | 5/5 |
+| Symbol Discovery | 1355ms | 0ms | 2ms | 4/5 | 1/5 | 1/5 |
+| Dependency Tracing | 882ms | 0ms | 0ms | 5/5 | 1/5 | 5/5 |
+| Architecture | 11ms | 0ms | 1ms | 3/5 | 1/5 | 4/5 |
+| Code Navigation | 881ms | 0ms | 2ms | 5/5 | 1/5 | 1/5 |
+| Semantic Search | 791ms | 0ms | 23241ms | 5/5 | 1/5 | 5/5 |
+
+## elixir-lang
+
+| Task | grep | ast-grep | code-intel | grep Q | ast-grep Q | code-intel Q |
+|------|------|----------|------------|--------|------------|--------------|
+| Project Orientation | 54ms | 29ms | 2245ms | 3/5 | 1/5 | 4/5 |
+| Symbol Discovery | 53ms | 175ms | 1ms | 5/5 | 5/5 | 5/5 |
+| Dependency Tracing | 40ms | 19ms | 0ms | 5/5 | 0/5 | 5/5 |
+| Architecture | 0ms | 17ms | 0ms | 3/5 | 0/5 | 4/5 |
+| Code Navigation | 41ms | 126ms | 0ms | 5/5 | 4/5 | 5/5 |
+| Semantic Search | 29ms | 382ms | 3790ms | 5/5 | 5/5 | 5/5 |
+
+## emqx
+
+| Task | grep | ast-grep | code-intel | grep Q | ast-grep Q | code-intel Q |
+|------|------|----------|------------|--------|------------|--------------|
+| Project Orientation | 115ms | 0ms | 348ms | 3/5 | 1/5 | 5/5 |
+| Symbol Discovery | 96ms | 0ms | 0ms | 3/5 | 1/5 | 4/5 |
+| Dependency Tracing | 62ms | 0ms | 0ms | 4/5 | 1/5 | 5/5 |
+| Architecture | 1ms | 0ms | 1ms | 3/5 | 1/5 | 4/5 |
+| Code Navigation | 66ms | 0ms | 0ms | 4/5 | 1/5 | 1/5 |
+| Semantic Search | 63ms | 0ms | 28908ms | 5/5 | 1/5 | 5/5 |
+
+## fsharp
+
+| Task | grep | ast-grep | code-intel | grep Q | ast-grep Q | code-intel Q |
+|------|------|----------|------------|--------|------------|--------------|
+| Project Orientation | 210ms | 0ms | 912ms | 3/5 | 1/5 | 5/5 |
+| Symbol Discovery | 197ms | 0ms | 0ms | 3/5 | 1/5 | 5/5 |
+| Dependency Tracing | 109ms | 0ms | 0ms | 4/5 | 1/5 | 5/5 |
+| Architecture | 2ms | 0ms | 0ms | 3/5 | 1/5 | 4/5 |
+| Code Navigation | 112ms | 0ms | 0ms | 4/5 | 1/5 | 1/5 |
+| Semantic Search | 180ms | 0ms | 883449ms | 5/5 | 1/5 | 5/5 |
+
+## ggplot2
+
+| Task | grep | ast-grep | code-intel | grep Q | ast-grep Q | code-intel Q |
+|------|------|----------|------------|--------|------------|--------------|
+| Project Orientation | 48ms | 0ms | 31ms | 3/5 | 1/5 | 4/5 |
+| Symbol Discovery | 43ms | 0ms | 0ms | 4/5 | 1/5 | 1/5 |
+| Dependency Tracing | 30ms | 0ms | 0ms | 5/5 | 1/5 | 5/5 |
+| Architecture | 1ms | 0ms | 0ms | 3/5 | 1/5 | 4/5 |
+| Code Navigation | 30ms | 0ms | 0ms | 5/5 | 1/5 | 1/5 |
+| Semantic Search | 27ms | 0ms | 8468ms | 3/5 | 1/5 | 5/5 |
+
+## iterm2
+
+| Task | grep | ast-grep | code-intel | grep Q | ast-grep Q | code-intel Q |
+|------|------|----------|------------|--------|------------|--------------|
+| Project Orientation | 126ms | 0ms | 9019ms | 3/5 | 1/5 | 5/5 |
+| Symbol Discovery | 106ms | 0ms | 2ms | 5/5 | 1/5 | 5/5 |
+| Dependency Tracing | 71ms | 0ms | 0ms | 4/5 | 1/5 | 5/5 |
+| Architecture | 2ms | 0ms | 3ms | 3/5 | 1/5 | 4/5 |
+| Code Navigation | 65ms | 0ms | 0ms | 5/5 | 1/5 | 1/5 |
+| Semantic Search | 63ms | 0ms | 5943ms | 5/5 | 1/5 | 5/5 |
+
+## julia
+
+| Task | grep | ast-grep | code-intel | grep Q | ast-grep Q | code-intel Q |
+|------|------|----------|------------|--------|------------|--------------|
+| Project Orientation | 71ms | 0ms | 2412ms | 3/5 | 1/5 | 4/5 |
+| Symbol Discovery | 66ms | 0ms | 1ms | 5/5 | 1/5 | 4/5 |
+| Dependency Tracing | 38ms | 0ms | 0ms | 5/5 | 1/5 | 5/5 |
+| Architecture | 1ms | 0ms | 5ms | 3/5 | 1/5 | 4/5 |
+| Code Navigation | 44ms | 0ms | 1ms | 5/5 | 1/5 | 1/5 |
+| Semantic Search | 39ms | 0ms | 19592ms | 5/5 | 1/5 | 5/5 |
+
+## kemal
+
+| Task | grep | ast-grep | code-intel | grep Q | ast-grep Q | code-intel Q |
+|------|------|----------|------------|--------|------------|--------------|
+| Project Orientation | 30ms | 0ms | 5ms | 3/5 | 1/5 | 4/5 |
+| Symbol Discovery | 28ms | 0ms | 0ms | 4/5 | 1/5 | 1/5 |
+| Dependency Tracing | 26ms | 0ms | 0ms | 3/5 | 1/5 | 5/5 |
+| Architecture | 0ms | 0ms | 0ms | 3/5 | 1/5 | 4/5 |
+| Code Navigation | 27ms | 0ms | 0ms | 4/5 | 1/5 | 1/5 |
+| Semantic Search | 15ms | 0ms | 1094ms | 3/5 | 1/5 | 5/5 |
+
+## metabase
+
+| Task | grep | ast-grep | code-intel | grep Q | ast-grep Q | code-intel Q |
+|------|------|----------|------------|--------|------------|--------------|
+| Project Orientation | 388ms | 0ms | 22313ms | 3/5 | 1/5 | 5/5 |
+| Symbol Discovery | 420ms | 0ms | 1ms | 4/5 | 1/5 | 1/5 |
+| Dependency Tracing | 223ms | 0ms | 0ms | 5/5 | 1/5 | 5/5 |
+| Architecture | 4ms | 0ms | 127ms | 3/5 | 1/5 | 4/5 |
+| Code Navigation | 222ms | 0ms | 1ms | 5/5 | 1/5 | 1/5 |
+| Semantic Search | 284ms | 0ms | 35980ms | 5/5 | 1/5 | 5/5 |
+
+## mojo-perl
+
+| Task | grep | ast-grep | code-intel | grep Q | ast-grep Q | code-intel Q |
+|------|------|----------|------------|--------|------------|--------------|
+| Project Orientation | 45ms | 0ms | 149ms | 3/5 | 1/5 | 4/5 |
+| Symbol Discovery | 45ms | 0ms | 0ms | 4/5 | 1/5 | 1/5 |
+| Dependency Tracing | 38ms | 0ms | 0ms | 5/5 | 1/5 | 5/5 |
+| Architecture | 0ms | 0ms | 0ms | 4/5 | 1/5 | 4/5 |
+| Code Navigation | 37ms | 0ms | 0ms | 5/5 | 1/5 | 1/5 |
+| Semantic Search | 22ms | 0ms | 6005ms | 3/5 | 1/5 | 5/5 |
+
+## nickel
+
+| Task | grep | ast-grep | code-intel | grep Q | ast-grep Q | code-intel Q |
+|------|------|----------|------------|--------|------------|--------------|
+| Project Orientation | 62ms | 140ms | 1020ms | 3/5 | 1/5 | 4/5 |
+| Symbol Discovery | 57ms | 210ms | 0ms | 4/5 | 3/5 | 5/5 |
+| Dependency Tracing | 43ms | 19ms | 0ms | 4/5 | 0/5 | 5/5 |
+| Architecture | 0ms | 55ms | 1ms | 3/5 | 3/5 | 4/5 |
+| Code Navigation | 47ms | 48ms | 0ms | 3/5 | 3/5 | 5/5 |
+| Semantic Search | 31ms | 155ms | 17147ms | 3/5 | 3/5 | 5/5 |
+
+## nim
+
+| Task | grep | ast-grep | code-intel | grep Q | ast-grep Q | code-intel Q |
+|------|------|----------|------------|--------|------------|--------------|
+| Project Orientation | 100ms | 0ms | 232ms | 3/5 | 1/5 | 4/5 |
+| Symbol Discovery | 91ms | 0ms | 0ms | 3/5 | 1/5 | 1/5 |
+| Dependency Tracing | 61ms | 0ms | 0ms | 3/5 | 1/5 | 5/5 |
+| Architecture | 1ms | 0ms | 0ms | 4/5 | 1/5 | 4/5 |
+| Code Navigation | 59ms | 0ms | 0ms | 4/5 | 1/5 | 1/5 |
+| Semantic Search | 53ms | 0ms | 6617ms | 3/5 | 1/5 | 5/5 |
+
+## ocaml
+
+| Task | grep | ast-grep | code-intel | grep Q | ast-grep Q | code-intel Q |
+|------|------|----------|------------|--------|------------|--------------|
+| Project Orientation | 120ms | 0ms | 1075ms | 3/5 | 1/5 | 4/5 |
+| Symbol Discovery | 105ms | 0ms | 1ms | 4/5 | 1/5 | 5/5 |
+| Dependency Tracing | 67ms | 0ms | 0ms | 5/5 | 1/5 | 5/5 |
+| Architecture | 1ms | 0ms | 8ms | 3/5 | 1/5 | 4/5 |
+| Code Navigation | 67ms | 0ms | 0ms | 5/5 | 1/5 | 1/5 |
+| Semantic Search | 77ms | 0ms | 73279ms | 5/5 | 1/5 | 5/5 |
+
+## otp
+
+| Task | grep | ast-grep | code-intel | grep Q | ast-grep Q | code-intel Q |
+|------|------|----------|------------|--------|------------|--------------|
+| Project Orientation | 260ms | 0ms | 13622ms | 3/5 | 1/5 | 4/5 |
+| Symbol Discovery | 233ms | 0ms | 3ms | 4/5 | 1/5 | 5/5 |
+| Dependency Tracing | 131ms | 0ms | 0ms | 5/5 | 1/5 | 5/5 |
+| Architecture | 3ms | 0ms | 17ms | 3/5 | 1/5 | 4/5 |
+| Code Navigation | 170ms | 0ms | 2ms | 5/5 | 1/5 | 1/5 |
+| Semantic Search | 153ms | 0ms | 23894ms | 3/5 | 1/5 | 5/5 |
+
+## perl5
+
+| Task | grep | ast-grep | code-intel | grep Q | ast-grep Q | code-intel Q |
+|------|------|----------|------------|--------|------------|--------------|
+| Project Orientation | 171ms | 0ms | 5323ms | 3/5 | 1/5 | 4/5 |
+| Symbol Discovery | 142ms | 0ms | 1ms | 3/5 | 1/5 | 5/5 |
+| Dependency Tracing | 90ms | 0ms | 0ms | 5/5 | 1/5 | 5/5 |
+| Architecture | 1ms | 0ms | 4ms | 3/5 | 1/5 | 4/5 |
+| Code Navigation | 88ms | 0ms | 0ms | 5/5 | 1/5 | 5/5 |
+| Semantic Search | 80ms | 0ms | 94615ms | 5/5 | 1/5 | 5/5 |
+
+## ring
+
+| Task | grep | ast-grep | code-intel | grep Q | ast-grep Q | code-intel Q |
+|------|------|----------|------------|--------|------------|--------------|
+| Project Orientation | 42ms | 0ms | 10ms | 3/5 | 1/5 | 4/5 |
+| Symbol Discovery | 40ms | 0ms | 0ms | 4/5 | 1/5 | 1/5 |
+| Dependency Tracing | 35ms | 0ms | 0ms | 4/5 | 1/5 | 5/5 |
+| Architecture | 0ms | 0ms | 0ms | 3/5 | 1/5 | 4/5 |
+| Code Navigation | 37ms | 0ms | 0ms | 4/5 | 1/5 | 1/5 |
+| Semantic Search | 22ms | 0ms | 1867ms | 3/5 | 1/5 | 5/5 |
+
+## Summary Averages
+
+| Metric | grep | ast-grep | code-intel |
+|--------|------|----------|------------|
+| Avg Time | 94ms | 315ms | 10757ms |
+| Avg Quality | 4.0/5 | 2.1/5 | 4.4/5 |
+| Total Output | 157,846,121 chars | 11,982,480 chars | 872,707 chars |
+

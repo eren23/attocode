@@ -130,7 +130,7 @@ wheels = [
 
 [[package]]
 name = "attocode"
-version = "0.2.4"
+version = "0.2.5"
 source = { editable = "." }
 dependencies = [
     { name = "aiosqlite" },
@@ -272,6 +272,9 @@ tree-sitter = [
     { name = "tree-sitter-yaml" },
     { name = "tree-sitter-zig" },
 ]
+tree-sitter-all = [
+    { name = "tree-sitter-language-pack" },
+]
 watch = [
     { name = "watchfiles" },
 ]
@@ -349,6 +352,7 @@ requires-dist = [
     { name = "tree-sitter-javascript", marker = "extra == 'tree-sitter'" },
     { name = "tree-sitter-json", marker = "extra == 'tree-sitter'" },
     { name = "tree-sitter-kotlin", marker = "extra == 'tree-sitter'" },
+    { name = "tree-sitter-language-pack", marker = "extra == 'tree-sitter-all'", specifier = ">=0.6" },
     { name = "tree-sitter-lua", marker = "extra == 'tree-sitter'" },
     { name = "tree-sitter-php", marker = "extra == 'tree-sitter'" },
     { name = "tree-sitter-python", marker = "extra == 'tree-sitter'" },
@@ -363,7 +367,7 @@ requires-dist = [
     { name = "uvicorn", extras = ["standard"], marker = "extra == 'service'", specifier = ">=0.34" },
     { name = "watchfiles", marker = "extra == 'watch'", specifier = ">=1.0" },
 ]
-provides-extras = ["anthropic", "openai", "tree-sitter", "watch", "semantic", "semantic-nomic", "graph", "code-intel", "service", "full", "docs", "dev"]
+provides-extras = ["anthropic", "openai", "tree-sitter", "tree-sitter-all", "watch", "semantic", "semantic-nomic", "graph", "code-intel", "service", "full", "docs", "dev"]
 
 [[package]]
 name = "attrs"
@@ -3684,6 +3688,20 @@ wheels = [
     { url = "https://files.pythonhosted.org/packages/08/dc/4944abf3a8bc630262e93e0857bd7044d521995c1f6af50650e4fe1fdde0/tree_sitter_kotlin-1.1.0-cp39-abi3-musllinux_1_2_x86_64.whl", hash = "sha256:5960034a5c5bcc7ccb21dc7a29e4267ac4f0ef37884f39d75695eac7f004deff", size = 328921, upload-time = "2025-01-09T19:02:10.346Z" },
     { url = "https://files.pythonhosted.org/packages/24/c9/5cca0a44db41224f7f10992450af17ff432c1a336852efb312246d5705e5/tree_sitter_kotlin-1.1.0-cp39-abi3-win_amd64.whl", hash = "sha256:d4d3f330f515ba8b91da04a5335eb9ff3ce071c7b7855958912f2560f6e14976", size = 315933, upload-time = "2025-01-09T19:02:12.637Z" },
     { url = "https://files.pythonhosted.org/packages/fb/b9/12fa97f63d2b7517c6f5d16938f0c5bfe84d925c652c75ff1c5e29bf6a44/tree_sitter_kotlin-1.1.0-cp39-abi3-win_arm64.whl", hash = "sha256:e030f127a7d07952907adb9070248bd42fb86dc76fd92744727551b50e131ee7", size = 310414, upload-time = "2025-01-09T19:02:16.23Z" },
+]
+
+[[package]]
+name = "tree-sitter-language-pack"
+version = "1.1.2"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "tree-sitter" },
+]
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/48/02/ca1dcb0434c225b1ce2fd41460a14f4684db36b0f35ec5fc937fba587010/tree_sitter_language_pack-1.1.2-cp310-abi3-macosx_11_0_arm64.whl", hash = "sha256:1672eb14b897a9178173b2ec4e9271a4b5c45850fd3cc5c3d65ef4a3005285d1", size = 2018612, upload-time = "2026-03-23T17:32:33.404Z" },
+    { url = "https://files.pythonhosted.org/packages/38/df/2f105ed5dc61cc49331f1b8424446159ec3aa0d953ef5d42f5b5b5cd09fd/tree_sitter_language_pack-1.1.2-cp310-abi3-manylinux_2_34_aarch64.whl", hash = "sha256:223b8eb605ca8deec5ececd7e960eb9e7ad6886cfc5d0023bbcbce727a36e671", size = 2192031, upload-time = "2026-03-23T17:32:34.99Z" },
+    { url = "https://files.pythonhosted.org/packages/64/66/8effcbc880ecc4230f17598c4129dbf42de03c913dea5a10870b7925aeaa/tree_sitter_language_pack-1.1.2-cp310-abi3-manylinux_2_34_x86_64.whl", hash = "sha256:51e86bca31a30af257be6e1a75796e40e31781c0717f494a165fd52a9c07fbad", size = 2333157, upload-time = "2026-03-23T17:32:36.325Z" },
+    { url = "https://files.pythonhosted.org/packages/5e/4c/f6bcfecc1fecea2194c2a069dd66dd23c12dc82b75bc146e6430e60632af/tree_sitter_language_pack-1.1.2-cp310-abi3-win_amd64.whl", hash = "sha256:07b67a9a4c4b6045bae6f3d30c73627ff2dc1af63be4bb390f3ef8789829d15c", size = 2126566, upload-time = "2026-03-23T17:32:37.692Z" },
 ]
 
 [[package]]

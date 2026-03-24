@@ -113,6 +113,12 @@ class CodeIntelService:
                         root_uri=f"file://{self._project_dir}",
                     )
                     mgr = LSPManager(config=config)
+                    # Wire LSP results back into the cross-ref index
+                    try:
+                        ast_svc = self._get_ast_service()
+                        mgr.on_result_callback = ast_svc.ingest_lsp_results
+                    except Exception:
+                        pass  # ASTService may not be ready yet
                     # auto_start is async, will be called on first LSP request
                     self._lsp_manager = mgr
                     self._lsp_auto_started = False
@@ -163,6 +169,92 @@ class CodeIntelService:
     # Tool operations — same signatures as server.py tool functions
     # ------------------------------------------------------------------
 
+    def reindex(self, *, force: bool = False) -> dict:
+        """Re-index the codebase. Returns stats."""
+        svc = self._get_ast_service()
+        svc.initialize(force=force)
+        stats = svc._store.stats() if hasattr(svc, "_store") else {}
+        return {"mode": "full" if force else "incremental", **stats}
+
+    def _get_temporal_analyzer(self):
+        if not hasattr(self, "_temporal_analyzer") or self._temporal_analyzer is None:
+            from attocode.integrations.context.temporal_coupling import (
+                TemporalCouplingAnalyzer,
+            )
+            self._temporal_analyzer = TemporalCouplingAnalyzer(
+                project_dir=self._project_dir,
+            )
+        return self._temporal_analyzer
+
+    def change_coupling_data(
+        self, file: str, *, days: int = 90, min_coupling: float = 0.3, top_k: int = 20,
+    ) -> dict:
+        """Get change coupling data for a file."""
+        analyzer = self._get_temporal_analyzer()
+        results = analyzer.get_change_coupling(
+            file, days=days, min_coupling=min_coupling, top_k=top_k,
+        )
+        return {
+            "file": file,
+            "days": days,
+            "results": [
+                {
+                    "path": e.path,
+                    "coupling_score": e.coupling_score,
+                    "co_changes": e.co_changes,
+                    "individual_changes": e.individual_changes,
+                }
+                for e in results
+            ],
+        }
+
+    def churn_hotspots_data(self, *, days: int = 90, top_n: int = 20) -> dict:
+        """Get churn hotspot data."""
+        analyzer = self._get_temporal_analyzer()
+        results = analyzer.get_churn_hotspots(days=days, top_n=top_n)
+        return {
+            "days": days,
+            "results": [
+                {
+                    "path": e.path,
+                    "commits": e.commits,
+                    "authors": e.authors,
+                    "lines_added": e.lines_added,
+                    "lines_removed": e.lines_removed,
+                    "churn_score": e.churn_score,
+                }
+                for e in results
+            ],
+        }
+
+    def merge_risk_data(self, files: list[str], *, days: int = 90) -> dict:
+        """Get merge risk predictions."""
+        analyzer = self._get_temporal_analyzer()
+        svc = self._get_ast_service()
+        results = analyzer.get_merge_risk(
+            files,
+            days=days,
+            dep_graph_forward=svc.index.file_dependencies,
+            dep_graph_reverse=svc.index.file_dependents,
+        )
+        max_conf = max((e.confidence for e in results), default=0.0)
+        risk_level = "high" if max_conf >= 0.7 else "medium" if max_conf >= 0.4 else "low"
+        return {
+            "files": files,
+            "days": days,
+            "risk_level": risk_level,
+            "predictions": [
+                {
+                    "path": e.path,
+                    "reason": e.reason,
+                    "confidence": e.confidence,
+                    "coupling_score": e.coupling_score,
+                    "structural_distance": e.structural_distance,
+                }
+                for e in results
+            ],
+        }
+
     def repo_map(self, *, include_symbols: bool = True, max_tokens: int = 6000) -> str:
         ctx = self._get_context_mgr()
         repo = ctx.get_repo_map(include_symbols=include_symbols, max_tokens=max_tokens)
@@ -191,18 +283,19 @@ class CodeIntelService:
             for loc in sorted(locs, key=lambda s: s.start_line)
         ]
 
-    def search_symbols_data(self, name: str) -> list[dict]:
-        """Return raw symbol search results."""
+    def search_symbols_data(self, name: str, limit: int = 30, kind: str = "") -> list[dict]:
+        """Return raw symbol search results with scores."""
         svc = self._get_ast_service()
-        locs = svc.find_symbol(name)
+        scored = svc.search_symbol(name, limit=limit, kind_filter=kind)
         return [
             {
                 "kind": loc.kind, "name": loc.name,
                 "qualified_name": loc.qualified_name,
                 "file_path": loc.file_path,
                 "start_line": loc.start_line, "end_line": loc.end_line,
+                "score": round(score, 3),
             }
-            for loc in locs
+            for loc, score in scored
         ]
 
     def dependencies_data(self, path: str) -> dict:
@@ -291,7 +384,7 @@ class CodeIntelService:
 
     def hotspots_data(self, top_n: int = 15) -> dict:
         """Return structured hotspot data."""
-        from attocode.code_intel.helpers import _compute_file_metrics, _compute_function_hotspots
+        from attocode.code_intel.helpers import _compute_file_metrics, _compute_function_hotspots, _get_churn_scores
 
         ctx = self._get_context_mgr()
         files = ctx._files
@@ -301,8 +394,9 @@ class CodeIntelService:
         svc = self._get_ast_service()
         index = svc._index
         ast_cache = svc._ast_cache
+        churn_scores = _get_churn_scores(self._project_dir, files)
 
-        all_metrics = _compute_file_metrics(files, index, ast_cache)
+        all_metrics = _compute_file_metrics(files, index, ast_cache, churn_scores)
         all_metrics.sort(key=lambda m: m.composite, reverse=True)
 
         def _fm_dict(m):
@@ -580,6 +674,13 @@ class CodeIntelService:
         communities.sort(key=len, reverse=True)
         communities = [c for c in communities if len(c) >= min_community_size][:max_communities]
 
+        # Detect trivial results: single community or near-zero modularity
+        is_trivial = len(communities) <= 1 or modularity_score < 0.05
+
+        if is_trivial:
+            # Fallback: directory-based module analysis for sparse graphs
+            return self._directory_based_module_analysis(svc, adj, method, modularity_score)
+
         result_communities = []
         for i, community in enumerate(communities, 1):
             from collections import Counter as _Counter
@@ -611,6 +712,78 @@ class CodeIntelService:
             "method": method,
             "modularity": round(modularity_score, 3),
             "communities": result_communities,
+        }
+
+    def _directory_based_module_analysis(
+        self, svc, adj: dict[str, set[str]], method: str, modularity_score: float,
+    ) -> dict:
+        """Fallback module analysis using directory structure when graph is sparse."""
+        from collections import Counter as _Counter
+
+        ast_cache = svc._ast_cache
+
+        # Group all indexed files by top-level directory
+        dir_groups: dict[str, list[str]] = {}
+        for rel_path in ast_cache:
+            parts = rel_path.split("/")
+            top_dir = parts[0] if len(parts) > 1 else "(root)"
+            dir_groups.setdefault(top_dir, []).append(rel_path)
+
+        # Build directory modules sorted by file count descending
+        modules = []
+        for i, (dir_name, file_list) in enumerate(
+            sorted(dir_groups.items(), key=lambda x: len(x[1]), reverse=True), 1,
+        ):
+            total_symbols = 0
+            file_symbol_counts: list[tuple[str, int]] = []
+            for f in file_list:
+                file_ast = ast_cache.get(f)
+                sc = file_ast.symbol_count if file_ast else 0
+                total_symbols += sc
+                file_symbol_counts.append((f, sc))
+
+            # Key files: top 3 by symbol count
+            file_symbol_counts.sort(key=lambda x: x[1], reverse=True)
+            key_files = [
+                {"path": path, "symbols": count}
+                for path, count in file_symbol_counts[:3]
+            ]
+
+            modules.append({
+                "id": i,
+                "directory": dir_name,
+                "files": sorted(file_list),
+                "file_count": len(file_list),
+                "total_symbols": total_symbols,
+                "key_files": key_files,
+            })
+
+        # Hub files: top 5 by total edge count (incoming + outgoing)
+        edge_counts: _Counter = _Counter()
+        for node, neighbors in adj.items():
+            edge_counts[node] = len(neighbors)
+        # Also count files from ast_cache that may not be in adj
+        for f in ast_cache:
+            if f not in edge_counts:
+                edge_counts[f] = 0
+
+        hub_files = []
+        for path, degree in edge_counts.most_common(5):
+            file_ast = ast_cache.get(path)
+            hub_files.append({
+                "path": path,
+                "cross_references": degree,
+                "symbols": file_ast.symbol_count if file_ast else 0,
+            })
+
+        return {
+            "method": f"{method}+directory-fallback",
+            "modularity": round(modularity_score, 3),
+            "note": "Graph too sparse for meaningful community detection; using directory-based module analysis",
+            "modules": modules,
+            "hub_files": hub_files,
+            "total_files": len(ast_cache),
+            "total_directories": len(dir_groups),
         }
 
     def distill_data(
@@ -1142,15 +1315,15 @@ class CodeIntelService:
             lines.append(f"  {loc.kind} {loc.qualified_name}  (L{loc.start_line}-{loc.end_line})")
         return "\n".join(lines)
 
-    def search_symbols(self, name: str) -> str:
+    def search_symbols(self, name: str, limit: int = 30, kind: str = "") -> str:
         svc = self._get_ast_service()
-        locs = svc.find_symbol(name)
-        if not locs:
+        scored = svc.search_symbol(name, limit=limit, kind_filter=kind)
+        if not scored:
             return f"No definitions found for '{name}'"
-        lines = [f"Definitions of '{name}':"]
-        for loc in locs:
+        lines = [f"Definitions matching '{name}' ({len(scored)} results):"]
+        for loc, score in scored:
             lines.append(
-                f"  {loc.kind} {loc.qualified_name}  "
+                f"  [{score:.0%}] {loc.kind} {loc.qualified_name}  "
                 f"in {loc.file_path}:{loc.start_line}-{loc.end_line}"
             )
         return "\n".join(lines)
@@ -1322,6 +1495,42 @@ class CodeIntelService:
 
     def community_detection(self, min_community_size: int = 3, max_communities: int = 20) -> str:
         data = self.community_detection_data(min_community_size, max_communities)
+
+        # Directory-based fallback format
+        if "modules" in data:
+            lines = [
+                f"Architecture module analysis ({data['method']}): "
+                f"{data['total_directories']} directory modules, "
+                f"{data['total_files']} total files "
+                f"(modularity={data['modularity']:.3f})"
+            ]
+            if data.get("note"):
+                lines.append(f"  Note: {data['note']}")
+
+            for mod in data["modules"]:
+                lines.append(
+                    f"\n  Module {mod['id']}: directory '{mod['directory']}' "
+                    f"— {mod['file_count']} files, {mod['total_symbols']} symbols"
+                )
+                for kf in mod.get("key_files", []):
+                    lines.append(f"    key file: {kf['path']} ({kf['symbols']} symbols)")
+                sample = mod["files"][:5]
+                for f in sample:
+                    lines.append(f"    - {f}")
+                if mod["file_count"] > 5:
+                    lines.append(f"    ... and {mod['file_count'] - 5} more")
+
+            if data.get("hub_files"):
+                lines.append("\n  Hub Files (most cross-references):")
+                for hf in data["hub_files"]:
+                    lines.append(
+                        f"    hub: {hf['path']} "
+                        f"({hf['cross_references']} cross-references, {hf['symbols']} symbols)"
+                    )
+
+            return "\n".join(lines)
+
+        # Standard community format
         lines = [
             f"Community detection ({data['method']}): {len(data['communities'])} communities "
             f"(min size {min_community_size}, modularity={data['modularity']:.3f})"
@@ -1627,7 +1836,7 @@ class CodeIntelService:
         return "\n\n".join(sections)
 
     def hotspots(self, top_n: int = 15) -> str:
-        from attocode.code_intel.helpers import _compute_file_metrics, _compute_function_hotspots
+        from attocode.code_intel.helpers import _compute_file_metrics, _compute_function_hotspots, _get_churn_scores
 
         ctx = self._get_context_mgr()
         files = ctx._files
@@ -1637,8 +1846,9 @@ class CodeIntelService:
         svc = self._get_ast_service()
         index = svc._index
         ast_cache = svc._ast_cache
+        churn_scores = _get_churn_scores(self._project_dir, files)
 
-        all_metrics = _compute_file_metrics(files, index, ast_cache)
+        all_metrics = _compute_file_metrics(files, index, ast_cache, churn_scores)
         if not all_metrics:
             return "No analyzable files found."
 

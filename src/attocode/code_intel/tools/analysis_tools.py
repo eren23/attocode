@@ -13,6 +13,7 @@ from collections import Counter, deque
 from attocode.code_intel.helpers import (
     _compute_file_metrics,
     _compute_function_hotspots,
+    _get_churn_scores,
 )
 from attocode.code_intel.server import (
     _get_ast_service,
@@ -173,8 +174,10 @@ def hotspots(top_n: int = 15) -> str:
     svc = _get_ast_service()
     index = svc._index
     ast_cache = svc._ast_cache
+    project_dir = _get_project_dir()
+    churn_scores = _get_churn_scores(project_dir, files)
 
-    all_metrics = _compute_file_metrics(files, index, ast_cache)
+    all_metrics = _compute_file_metrics(files, index, ast_cache, churn_scores)
     if not all_metrics:
         return "No analyzable files found."
 
@@ -547,6 +550,75 @@ def community_detection(
     # Sort by size descending, filter by min size
     communities.sort(key=len, reverse=True)
     communities = [c for c in communities if len(c) >= min_community_size][:max_communities]
+
+    # Detect trivial results: single community or near-zero modularity
+    is_trivial = len(communities) <= 1 or modularity_score < 0.05
+
+    if is_trivial:
+        # Fallback: directory-based module analysis for sparse graphs
+        ast_cache = svc._ast_cache
+
+        # Group all indexed files by top-level directory
+        dir_groups: dict[str, list[str]] = {}
+        for rel_path in ast_cache:
+            parts = rel_path.split("/")
+            top_dir = parts[0] if len(parts) > 1 else "(root)"
+            dir_groups.setdefault(top_dir, []).append(rel_path)
+
+        lines = [
+            f"Architecture module analysis ({method}+directory-fallback): "
+            f"{len(dir_groups)} directory modules, "
+            f"{len(ast_cache)} total files "
+            f"(modularity={modularity_score:.3f})",
+            "  Note: Graph too sparse for meaningful community detection; "
+            "using directory-based module analysis",
+        ]
+
+        # Build directory modules sorted by file count descending
+        for i, (dir_name, file_list) in enumerate(
+            sorted(dir_groups.items(), key=lambda x: len(x[1]), reverse=True), 1,
+        ):
+            total_symbols = 0
+            file_symbol_counts: list[tuple[str, int]] = []
+            for f in file_list:
+                file_ast = ast_cache.get(f)
+                sc = file_ast.symbol_count if file_ast else 0
+                total_symbols += sc
+                file_symbol_counts.append((f, sc))
+
+            file_symbol_counts.sort(key=lambda x: x[1], reverse=True)
+
+            lines.append(
+                f"\n  Module {i}: directory '{dir_name}' "
+                f"— {len(file_list)} files, {total_symbols} symbols"
+            )
+            for path, count in file_symbol_counts[:3]:
+                lines.append(f"    key file: {path} ({count} symbols)")
+            sample = sorted(file_list)[:5]
+            for f in sample:
+                lines.append(f"    - {f}")
+            if len(file_list) > 5:
+                lines.append(f"    ... and {len(file_list) - 5} more")
+
+        # Hub files: top 5 by total edge count
+        edge_counts: Counter[str] = Counter()
+        for node, neighbors in adj.items():
+            edge_counts[node] = len(neighbors)
+        for f in ast_cache:
+            if f not in edge_counts:
+                edge_counts[f] = 0
+
+        if edge_counts:
+            lines.append("\n  Hub Files (most cross-references):")
+            for path, degree in edge_counts.most_common(5):
+                file_ast = ast_cache.get(path)
+                sym_count = file_ast.symbol_count if file_ast else 0
+                lines.append(
+                    f"    hub: {path} "
+                    f"({degree} cross-references, {sym_count} symbols)"
+                )
+
+        return "\n".join(lines)
 
     lines = [
         f"Community detection ({method}): {len(communities)} communities "

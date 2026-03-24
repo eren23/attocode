@@ -33,11 +33,16 @@ from attocode.integrations.context.cross_references import (
     SymbolLocation,
     SymbolRef,
 )
+from attocode.integrations.context.index_store import IndexStore, StoredFile
 
 logger = logging.getLogger(__name__)
 
 # Singleton registry: root_dir -> ASTService
 _instances: dict[str, ASTService] = {}
+
+# Default location for the persistent index
+_INDEX_DIR = ".attocode/index"
+_INDEX_DB = "symbols.db"
 
 
 class ASTService:
@@ -56,12 +61,19 @@ class ASTService:
     # Construction
     # ------------------------------------------------------------------
 
-    def __init__(self, root_dir: str) -> None:
+    def __init__(self, root_dir: str, *, store: IndexStore | None = None) -> None:
         self._root_dir = os.path.abspath(root_dir)
         self._context_mgr = CodebaseContextManager(root_dir=self._root_dir)
         self._index = CrossRefIndex()
         self._ast_cache: dict[str, FileAST] = {}   # rel_path -> FileAST
         self._initialized = False
+        # Persistent index store
+        if store is not None:
+            self._store = store
+        else:
+            db_path = os.path.join(self._root_dir, _INDEX_DIR, _INDEX_DB)
+            self._store = IndexStore(db_path=db_path)
+        self._index.set_store(self._store)
 
     @classmethod
     def get_instance(cls, root_dir: str) -> ASTService:
@@ -97,13 +109,19 @@ class ASTService:
     # Lifecycle
     # ------------------------------------------------------------------
 
-    def initialize(self) -> None:
-        """Full scan: discover files, parse ASTs, build cross-ref index."""
+    def initialize(self, *, force: bool = False) -> None:
+        """Discover files, parse ASTs, build cross-ref index.
+
+        When a persistent ``IndexStore`` is available and *force* is False,
+        loads cached symbols/refs from SQLite and only re-parses files whose
+        mtime has changed (incremental mode).  Otherwise does a full scan.
+        """
         files = self._context_mgr.discover_files()
         self._index = CrossRefIndex()
+        self._index.set_store(self._store)
         self._ast_cache.clear()
 
-        # Supported languages: Python, JS, TS always; others when tree-sitter available
+        # Supported languages
         _ts_langs: set[str] = set()
         try:
             from attocode.integrations.context.ts_parser import supported_languages
@@ -112,39 +130,132 @@ class ASTService:
             pass
         _supported = {"python", "javascript", "typescript", "shell"} | _ts_langs
 
+        # Build mtime map for parseable files
+        parseable: list[Any] = []
+        mtime_map: dict[str, float] = {}
         for fi in files:
             lang = fi.language
-            # Normalize: discover_files uses "shell", ts_parser uses "bash"
             if lang == "shell":
                 lang = "bash"
             if lang not in _supported:
                 continue
+            parseable.append(fi)
+            try:
+                mtime_map[fi.relative_path] = os.path.getmtime(fi.path)
+            except OSError:
+                mtime_map[fi.relative_path] = 0.0
+
+        # Try incremental load from store
+        last_scan = self._store.get_last_scan_time() if not force else None
+        if last_scan is not None and not force:
+            # Load cached data
+            loaded = self._index.load_from_store()
+            if loaded > 0:
+                stale = self._store.get_stale_files(mtime_map)
+                deleted = self._store.get_deleted_files(set(mtime_map.keys()))
+
+                # Remove deleted files
+                for d in deleted:
+                    self._index.remove_file(d)
+
+                # Re-parse stale files
+                stale_set = set(stale)
+                for fi in parseable:
+                    rel = fi.relative_path
+                    if rel in stale_set:
+                        try:
+                            ast = parse_file(fi.path)
+                        except Exception:
+                            continue
+                        self._index.remove_file(rel)
+                        self._ast_cache[rel] = ast
+                        self._index_definitions(rel, ast)
+
+                # Phase 2 for stale files only
+                for rel in stale_set:
+                    ast = self._ast_cache.get(rel)
+                    if ast:
+                        self._index_references(rel, ast)
+                        self._index.persist_file(rel)
+                        # Update stored file metadata
+                        self._store.save_file(StoredFile(
+                            path=rel,
+                            mtime=mtime_map.get(rel, 0.0),
+                            size=0,
+                            language="",
+                            line_count=ast.line_count if hasattr(ast, "line_count") else 0,
+                            content_hash="",
+                        ))
+
+                # Reload dependency graph edges
+                dep_graph = self._context_mgr.dependency_graph
+                if dep_graph:
+                    for src, targets in dep_graph.forward.items():
+                        for tgt in targets:
+                            self._index.add_file_dependency(src, tgt)
+
+                self._initialized = True
+                self._store.record_scan_time()
+                logger.debug(
+                    "ASTService incremental init: %d cached, %d stale, %d deleted",
+                    loaded, len(stale), len(deleted),
+                )
+                return
+
+        # Full scan fallback
+        self._store.clear_all()
+        for fi in parseable:
             try:
                 ast = parse_file(fi.path)
             except Exception:
                 continue
             rel = fi.relative_path
             self._ast_cache[rel] = ast
-            # Phase 1: index definitions only
             self._index_definitions(rel, ast)
 
-        # Phase 2: index references (now known_symbols is complete)
+        # Phase 2: index references
         for rel, ast in self._ast_cache.items():
             self._index_references(rel, ast)
 
-        # Copy dependency graph edges into the cross-ref index
+        # Persist all to store — files must be saved BEFORE symbols/refs
+        # (foreign key: symbols.file_path REFERENCES files(path))
+        stored_files: list[StoredFile] = []
+        for rel, ast in self._ast_cache.items():
+            stored_files.append(StoredFile(
+                path=rel,
+                mtime=mtime_map.get(rel, 0.0),
+                size=0,
+                language="",
+                line_count=ast.line_count if hasattr(ast, "line_count") else 0,
+                content_hash="",
+            ))
+        if stored_files:
+            self._store.save_files_batch(stored_files)
+        for rel in self._ast_cache:
+            self._index.persist_file(rel)
+
+        # Copy dependency graph edges
         dep_graph = self._context_mgr.dependency_graph
         if dep_graph:
+            edges: list[tuple[str, str]] = []
             for src, targets in dep_graph.forward.items():
                 for tgt in targets:
                     self._index.add_file_dependency(src, tgt)
+                    edges.append((src, tgt))
+            if edges:
+                self._store.save_dependencies_batch(edges)
 
+        self._store.record_scan_time()
         self._initialized = True
         logger.debug(
-            "ASTService initialized: %d files, %d definitions",
+            "ASTService full init: %d files, %d definitions",
             len(self._ast_cache),
             sum(len(v) for v in self._index.definitions.values()),
         )
+
+    def force_reindex(self) -> None:
+        """Force a full re-scan, ignoring cached data."""
+        self.initialize(force=True)
 
     async def async_initialize(self, batch_size: int = 50) -> None:
         """Async version of initialize that parses files in batches.
@@ -264,6 +375,18 @@ class ASTService:
             for tgt in dep_graph.forward.get(rel, set()):
                 self._index.add_file_dependency(rel, tgt)
 
+        # Persist changes to store
+        self._index.persist_file(rel)
+        try:
+            mtime = os.path.getmtime(abs_path)
+        except OSError:
+            mtime = 0.0
+        self._store.save_file(StoredFile(
+            path=rel, mtime=mtime, size=0, language="",
+            line_count=new_ast.line_count if hasattr(new_ast, "line_count") else 0,
+            content_hash="",
+        ))
+
         return symbol_changes
 
     def refresh(self) -> list[Any]:
@@ -305,6 +428,24 @@ class ASTService:
         self._ensure_initialized()
         return self._index.get_definitions(name)
 
+    def search_symbol(
+        self,
+        name: str,
+        *,
+        limit: int = 50,
+        kind_filter: str = "",
+    ) -> list[tuple[SymbolLocation, float]]:
+        """Enhanced symbol search with multi-strategy matching and scoring.
+
+        Searches by exact match, bare name, case-insensitive, prefix,
+        substring, and camelCase/snake_case token overlap.  Results are
+        ranked by match quality and symbol importance.
+        """
+        self._ensure_initialized()
+        return self._index.search_definitions(
+            name, limit=limit, kind_filter=kind_filter,
+        )
+
     def get_callers(self, symbol: str) -> list[SymbolRef]:
         """Return all call sites / references for *symbol*."""
         self._ensure_initialized()
@@ -342,6 +483,78 @@ class ASTService:
         for p in changed:
             visited.discard(self._to_rel(p))
         return visited
+
+    # ------------------------------------------------------------------
+    # LSP enrichment
+    # ------------------------------------------------------------------
+
+    def ingest_lsp_results(
+        self,
+        tool_name: str,
+        file_path: str,
+        results: list[Any],
+    ) -> int:
+        """Ingest LSP results into the cross-reference index.
+
+        Called by LSPManager's on_result_callback. Converts LSP locations
+        to SymbolLocation/SymbolRef with ``source="lsp"`` and merges them
+        into the index.
+
+        Returns the number of new entries added.
+        """
+        if not self._initialized:
+            return 0
+
+        rel = self._to_rel(file_path)
+        definitions: list[SymbolLocation] = []
+        references: list[SymbolRef] = []
+
+        for item in results:
+            # LSPLocation has .uri, .range (.start.line, .start.character)
+            if not hasattr(item, "range"):
+                continue
+
+            item_file = file_path
+            if hasattr(item, "uri"):
+                uri = item.uri
+                if uri.startswith("file://"):
+                    item_file = uri[7:]
+                item_rel = self._to_rel(item_file)
+            else:
+                item_rel = rel
+
+            line = item.range.start.line + 1  # LSP is 0-indexed
+
+            # Look up symbol name from AST cache at this line
+            name, qname, kind = self._resolve_symbol_at_line(item_rel, line)
+            if not name:
+                # Can't determine symbol name — skip to avoid polluting index
+                continue
+
+            if tool_name == "definition":
+                loc = SymbolLocation(
+                    name=name,
+                    qualified_name=qname,
+                    kind=kind,
+                    file_path=item_rel,
+                    start_line=line,
+                    end_line=item.range.end.line + 1,
+                    source="lsp",
+                )
+                definitions.append(loc)
+            elif tool_name == "references":
+                ref = SymbolRef(
+                    symbol_name=name,
+                    ref_kind="call",
+                    file_path=item_rel,
+                    line=line,
+                    source="lsp",
+                )
+                references.append(ref)
+
+        if definitions or references:
+            return self._index.merge_lsp_results(rel, definitions, references)
+        return 0
 
     # ------------------------------------------------------------------
     # Task allocation (swarm-specific)
@@ -446,6 +659,32 @@ class ASTService:
     # Internals
     # ------------------------------------------------------------------
 
+    def _resolve_symbol_at_line(
+        self, rel_path: str, line: int,
+    ) -> tuple[str, str, str]:
+        """Find the symbol name at a given line from the AST cache.
+
+        Returns (name, qualified_name, kind) or ("", "", "") if not found.
+        """
+        ast = self._ast_cache.get(rel_path)
+        if ast is None:
+            return ("", "", "")
+
+        # Check functions
+        for func in ast.functions:
+            if func.start_line <= line <= func.end_line:
+                return (func.name, func.name, "function")
+
+        # Check classes and their methods
+        for cls in ast.classes:
+            if cls.start_line <= line <= cls.end_line:
+                for method in cls.methods:
+                    if method.start_line <= line <= method.end_line:
+                        return (method.name, f"{cls.name}.{method.name}", "method")
+                return (cls.name, cls.name, "class")
+
+        return ("", "", "")
+
     def _to_rel(self, path: str) -> str:
         """Normalize *path* to a relative path from root."""
         if os.path.isabs(path):
@@ -502,6 +741,18 @@ class ASTService:
                     end_line=method.end_line,
                 )
                 self._index.add_definition(method_loc)
+
+        # Top-level variables/constants
+        for var_name in ast.top_level_vars:
+            var_loc = SymbolLocation(
+                name=var_name,
+                qualified_name=var_name,
+                kind="variable",
+                file_path=rel_path,
+                start_line=0,
+                end_line=0,
+            )
+            self._index.add_definition(var_loc)
 
     def _index_references(self, rel_path: str, ast: FileAST) -> None:
         """Phase 2: Index import references and call-site references.

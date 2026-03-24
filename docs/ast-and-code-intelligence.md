@@ -15,9 +15,10 @@ The AST system provides:
 ```mermaid
 flowchart TB
     subgraph AST["AST System"]
-        Parser[Regex Parsers<br/>Python, JS/TS]
+        Parser[Tree-sitter Parsers<br/>36 languages + fallback]
         Service[ASTService<br/>Singleton per project]
         Index[CrossRefIndex<br/>Bidirectional index]
+        Store[IndexStore<br/>SQLite persistence]
         Server[ASTServer<br/>Unix socket]
         Client[ASTClient<br/>Socket client]
     end
@@ -40,19 +41,55 @@ flowchart TB
     Tools --> Commands
 ```
 
-## Supported Languages
+## Supported Languages (36 with tree-sitter configs)
 
-| Language | Extensions | Support Level | Details |
-|----------|-----------|--------------|---------|
-| Python | `.py`, `.pyi` | Full | Params, decorators, visibility, generators, properties, abstract classes |
-| JavaScript | `.js`, `.jsx` | Good | Functions, classes, methods, imports, decorators |
-| TypeScript | `.ts`, `.tsx` | Good | Same as JS plus type annotations |
-| Go | `.go` | Minimal | Line count, basic function detection |
-| Rust | `.rs` | Minimal | Line count, basic function detection |
-| Java | `.java` | Minimal | Line count, basic function detection |
-| Ruby | `.rb` | Minimal | Line count, basic function detection |
+### Tier 1: Full AST Support (9 languages)
 
-Python gets the most detailed parsing: parameter types, default values, `*args`/`**kwargs`, visibility detection (`__private`, `_protected`, `public`), generator detection (`yield`), `@staticmethod`/`@classmethod`/`@property`, abstract classes, and class-level properties from `__init__`.
+| Language | Extensions | Details |
+|----------|-----------|---------|
+| Python | `.py`, `.pyi` | Params, decorators, visibility, generators, properties, abstract classes |
+| JavaScript | `.js`, `.jsx`, `.mjs` | Functions, classes, methods, imports, decorators |
+| TypeScript | `.ts`, `.tsx`, `.mts` | Same as JS plus type annotations |
+| Go | `.go` | Functions, methods, types, interfaces, imports |
+| Rust | `.rs` | Functions, structs, enums, traits, impl blocks, use declarations |
+| Java | `.java` | Methods, constructors, classes, interfaces, enums |
+| Ruby | `.rb` | Methods, classes, modules, require/require_relative |
+| C | `.c`, `.h` | Functions, structs, enums, unions, #include |
+| C++ | `.cpp`, `.hpp`, `.cc` | Functions, classes, structs, namespaces, #include |
+
+### Tier 2: Good Support (16 languages)
+
+| Language | Extensions | Details |
+|----------|-----------|---------|
+| C# | `.cs` | Methods, classes, structs, interfaces, using directives |
+| PHP | `.php` | Functions, classes, interfaces, traits, namespace use |
+| Swift | `.swift` | Functions, init, classes, structs, protocols, extensions |
+| Kotlin | `.kt` | Functions, classes, objects, interfaces |
+| Scala | `.scala` | Functions, classes, objects, traits |
+| Lua | `.lua` | Function declarations (no native classes) |
+| Elixir | `.ex`, `.exs` | def/defp/defmacro/defmodule via macro-call handler |
+| Haskell | `.hs` | Functions, data types, newtypes, type classes |
+| Bash | `.sh`, `.bash` | Function definitions |
+| HCL | `.tf`, `.hcl` | Resource/data/module blocks |
+| Zig | `.zig` | Functions, structs, enums, unions |
+
+### Tier 3: New in v0.2.6 (11 languages)
+
+| Language | Extensions | Details |
+|----------|-----------|---------|
+| Erlang | `.erl`, `.hrl` | Function clauses, module attributes |
+| Clojure | `.clj`, `.cljs`, `.cljc` | defn/defmulti/defprotocol/defrecord via macro-call handler |
+| Perl | `.pl`, `.pm` | Subroutines, package declarations, use/require |
+| Crystal | `.cr` | Methods, classes, modules, structs, libs (no grammar available) |
+| Dart | `.dart` | Functions, classes, enums, mixins, extensions |
+| OCaml | `.ml`, `.mli` | Value definitions, let bindings, type/module/class definitions |
+| F# | `.fs`, `.fsi` | Function/value definitions, type/module/namespace definitions |
+| Julia | `.jl` | Functions, macros, structs, abstract types, modules |
+| Nim | `.nim` | Procs, funcs, methods, templates, macros, type sections |
+| R | `.R`, `.r` | Assignment-based function extraction, library/require imports |
+| Objective-C | `.m`, `.mm` | Functions, class interfaces/implementations, protocols, methods |
+
+All languages fall back to `tree-sitter-language-pack` when individual grammar packages aren't installed. Languages without tree-sitter support degrade to the generic extractor or `universal-ctags`.
 
 ## The `codebase_overview` Tool
 

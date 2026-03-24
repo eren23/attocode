@@ -547,6 +547,10 @@ class LSPManager:
         self._clients: dict[str, _LSPClient] = {}
         self._listeners: set[LSPEventListener] = set()
         self._diagnostics_cache: dict[str, list[LSPDiagnostic]] = {}
+        # Optional callback: (tool_name, file_path, results) -> None
+        # Fired after get_definition/get_references to feed results back
+        # into the cross-reference index.
+        self.on_result_callback: Callable[[str, str, list], None] | None = None
 
     def has_clients(self) -> bool:
         """Return True if any LSP clients are running."""
@@ -629,7 +633,13 @@ class LSPManager:
         if not client:
             return None
         uri = self._to_uri(file)
-        return await client.get_definition(uri, line, col)
+        result = await client.get_definition(uri, line, col)
+        if result and self.on_result_callback:
+            try:
+                self.on_result_callback("definition", file, [result])
+            except Exception:
+                pass  # don't let callback errors break LSP flow
+        return result
 
     async def get_completions(
         self, file: str, line: int, col: int
@@ -660,7 +670,13 @@ class LSPManager:
         if not client:
             return []
         uri = self._to_uri(file)
-        return await client.get_references(uri, line, col, include_declaration)
+        results = await client.get_references(uri, line, col, include_declaration)
+        if results and self.on_result_callback:
+            try:
+                self.on_result_callback("references", file, results)
+            except Exception:
+                pass  # don't let callback errors break LSP flow
+        return results
 
     def get_diagnostics(self, file: str) -> list[LSPDiagnostic]:
         """Get cached diagnostics for a file."""

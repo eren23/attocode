@@ -242,6 +242,28 @@ class LocalGraphProvider:
             max_communities=max_communities,
         )
 
+        # Handle directory-based fallback: convert modules to CommunityItem format
+        if "modules" in data:
+            fallback_communities = []
+            for mod in data["modules"]:
+                fallback_communities.append(CommunityItem(
+                    id=mod["id"],
+                    files=mod["files"],
+                    size=mod["file_count"],
+                    theme=mod["directory"],
+                    internal_edges=0,
+                    external_edges=0,
+                    hub=mod["key_files"][0]["path"] if mod.get("key_files") else "",
+                    hub_internal_degree=0,
+                    top_dirs=[mod["directory"]],
+                ))
+            return CommunityResponse(
+                method=data["method"],
+                modularity=data["modularity"],
+                communities=fallback_communities,
+                bridges=[],
+            )
+
         # Build file-to-community-index mapping
         file_to_comm: dict[str, int] = {}
         communities = data["communities"]

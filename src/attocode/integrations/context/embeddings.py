@@ -191,8 +191,9 @@ def create_embedding_provider(
         return provider
     except ImportError:
         logger.debug("sentence-transformers not installed, trying OpenAI")
-    except Exception:
-        logger.debug("Local embedding provider failed", exc_info=True)
+    except Exception as exc:
+        logger.warning("Local embedding provider unavailable: %s", exc)
+        logger.debug("Local embedding provider traceback", exc_info=True)
 
     # Try OpenAI API
     if os.environ.get("OPENAI_API_KEY"):

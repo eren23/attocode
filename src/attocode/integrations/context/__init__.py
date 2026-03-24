@@ -57,6 +57,18 @@ from attocode.integrations.context.cross_references import (
     SymbolLocation,
     SymbolRef,
 )
+from attocode.integrations.context.index_store import (
+    IndexStore,
+    StoredFile,
+    StoredReference,
+    StoredSymbol,
+)
+from attocode.integrations.context.temporal_coupling import (
+    ChurnEntry,
+    CoChangeEntry,
+    MergeRiskEntry,
+    TemporalCouplingAnalyzer,
+)
 from attocode.integrations.context.embeddings import (
     EmbeddingProvider,
     NullEmbeddingProvider,
@@ -150,6 +162,16 @@ __all__ = [
     "CrossRefIndex",
     "SymbolLocation",
     "SymbolRef",
+    # index_store
+    "IndexStore",
+    "StoredFile",
+    "StoredReference",
+    "StoredSymbol",
+    # temporal_coupling
+    "ChurnEntry",
+    "CoChangeEntry",
+    "MergeRiskEntry",
+    "TemporalCouplingAnalyzer",
     # hierarchical_explorer
     "DirectoryNode",
     "ExplorerResult",

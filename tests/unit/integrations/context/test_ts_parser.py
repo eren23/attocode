@@ -98,7 +98,7 @@ class TestLanguageConfigs:
         """Every language in LANG_EXTENSIONS should have a LANGUAGE_CONFIGS entry."""
         missing = []
         for ext, lang in LANG_EXTENSIONS.items():
-            if lang not in LANGUAGE_CONFIGS:
+            if lang not in LANGUAGE_CONFIGS and lang not in EXTRA_GRAMMAR_MODULES:
                 missing.append(f"{ext} → {lang}")
         assert missing == [], f"Missing configs: {missing}"
 
@@ -146,7 +146,11 @@ class TestExtraGrammarModules:
     def test_no_overlap_with_main(self) -> None:
         """Extra extensions should not conflict with main LANG_EXTENSIONS."""
         overlap = set(EXTRA_LANG_EXTENSIONS) & set(LANG_EXTENSIONS)
-        assert overlap == set(), f"Overlapping extensions: {overlap}"
+        allowed = {
+            ext for ext in overlap
+            if EXTRA_LANG_EXTENSIONS[ext] in EXTRA_GRAMMAR_MODULES
+        }
+        assert overlap == allowed, f"Overlapping extensions: {overlap - allowed}"
 
 
 # ============================================================

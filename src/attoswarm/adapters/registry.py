@@ -9,6 +9,7 @@ from attoswarm.adapters.attocode import AttocodeAdapter
 from attoswarm.adapters.claude import ClaudeAdapter
 from attoswarm.adapters.codex import CodexAdapter
 from attoswarm.adapters.codex_mcp import CodexMcpAdapter
+from attoswarm.adapters.opencode import OpencodeAdapter
 
 if TYPE_CHECKING:
     from attoswarm.adapters.base import AgentAdapter
@@ -26,4 +27,6 @@ def get_adapter(backend: str) -> AgentAdapter:
         return AiderAdapter()
     if b == "attocode":
         return AttocodeAdapter()
+    if b == "opencode":
+        return OpencodeAdapter()
     raise ValueError(f"Unsupported backend: {backend}")
