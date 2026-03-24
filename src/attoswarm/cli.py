@@ -126,7 +126,39 @@ def _build_backend_cmd(backend: str, model: str, prompt: str) -> list[str]:
             cmd.extend(["--model", model])
         cmd.extend(["--non-interactive", prompt])
         return cmd
+    if backend == "opencode":
+        cmd = ["opencode", "run", "--format", "json"]
+        if model:
+            cmd.extend(["--model", model])
+        cmd.append(prompt)
+        return cmd
     raise ValueError(f"Unsupported backend: {backend!r}")
+
+
+def _unwrap_opencode_jsonl(raw: str) -> str:
+    """Extract LLM text from opencode run --format json JSONL output.
+
+    OpenCode emits ``text`` events with ``part.text`` containing content
+    chunks.  We concatenate all text chunks to get the full response.
+    """
+    text_parts: list[str] = []
+    for line in raw.splitlines():
+        line = line.strip()
+        if not line:
+            continue
+        try:
+            obj = json.loads(line)
+        except (ValueError, json.JSONDecodeError):
+            continue
+        if not isinstance(obj, dict):
+            continue
+        if obj.get("type") == "text":
+            part = obj.get("part", {})
+            if isinstance(part, dict):
+                text = part.get("text", "")
+                if text:
+                    text_parts.append(text)
+    return "".join(text_parts) if text_parts else raw
 
 
 def _unwrap_codex_jsonl(raw: str) -> str:
@@ -201,6 +233,13 @@ def _build_backend_cmd_stdin(backend: str, model: str, prompt: str) -> tuple[lis
             cmd.extend(["--model", model])
         cmd.extend(["--non-interactive", prompt])
         return cmd, ""
+    if backend == "opencode":
+        # OpenCode stdin piping has known bugs — use positional arg
+        cmd = ["opencode", "run", "--format", "json"]
+        if model:
+            cmd.extend(["--model", model])
+        cmd.append(prompt)
+        return cmd, ""
     raise ValueError(f"Unsupported backend: {backend!r}")
 
 
@@ -257,7 +296,7 @@ def _make_subprocess_spawn_fn(
 ):  # noqa: ANN202
     """Build a spawn function that delegates to backend CLIs as subprocesses.
 
-    Selects the correct backend (claude, codex, aider, attocode) based on the
+    Selects the correct backend (claude, codex, aider, attocode, opencode) based on the
     task's ``role_hint`` field, falling back to the first configured role's
     backend (or ``"claude"`` if no roles are defined).
 
@@ -591,9 +630,11 @@ def _make_subprocess_decompose_fn(cfg: SwarmYamlConfig):  # noqa: ANN202
                 f"Decomposition subprocess exited {proc.returncode}: {stderr_text[:500]}"
             )
 
-        # Codex --json wraps the LLM response in JSONL events; unwrap it
+        # Codex/OpenCode wrap the LLM response in JSONL events; unwrap it
         if backend == "codex":
             stdout_text = _unwrap_codex_jsonl(stdout_text)
+        elif backend == "opencode":
+            stdout_text = _unwrap_opencode_jsonl(stdout_text)
 
         return _parse_tasks(stdout_text)
 

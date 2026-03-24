@@ -34,6 +34,7 @@ node_modules/
 attocode/attocode_py/.attocode/cache
 tests/unit/tui/__snapshots__/
 .attocode/exports/
+.attocode/index/
 
 # Legacy TS runtime artifacts
 legacy/.attocode/traces/

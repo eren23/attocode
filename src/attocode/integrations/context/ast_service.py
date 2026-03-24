@@ -217,10 +217,10 @@ class ASTService:
         for rel, ast in self._ast_cache.items():
             self._index_references(rel, ast)
 
-        # Persist all to store
+        # Persist all to store — files must be saved BEFORE symbols/refs
+        # (foreign key: symbols.file_path REFERENCES files(path))
         stored_files: list[StoredFile] = []
         for rel, ast in self._ast_cache.items():
-            self._index.persist_file(rel)
             stored_files.append(StoredFile(
                 path=rel,
                 mtime=mtime_map.get(rel, 0.0),
@@ -231,6 +231,8 @@ class ASTService:
             ))
         if stored_files:
             self._store.save_files_batch(stored_files)
+        for rel in self._ast_cache:
+            self._index.persist_file(rel)
 
         # Copy dependency graph edges
         dep_graph = self._context_mgr.dependency_graph
