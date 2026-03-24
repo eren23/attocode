@@ -1,6 +1,6 @@
 """Search and security tools for the code-intel MCP server.
 
-Tools: semantic_search, security_scan, relevant_context helpers.
+Tools: semantic_search, semantic_search_status, security_scan, fast_search.
 """
 
 from __future__ import annotations
@@ -18,6 +18,9 @@ from attocode.code_intel.server import (
 
 _semantic_search = None
 _semantic_search_lock = threading.Lock()
+
+_trigram_index = None
+_trigram_index_lock = threading.Lock()
 
 
 def _get_semantic_search():
@@ -43,6 +46,30 @@ def _get_security_scanner():
         project_dir = _get_project_dir()
         _security_scanner = SecurityScanner(root_dir=project_dir)
     return _security_scanner
+
+
+def _get_trigram_index():
+    """Lazily initialize the trigram index (thread-safe).
+
+    Loads an existing index from disk if available. Returns None
+    if no index has been built yet.
+    """
+    global _trigram_index
+    if _trigram_index is None:
+        with _trigram_index_lock:
+            if _trigram_index is None:
+                import os
+                project_dir = _get_project_dir()
+                index_dir = os.path.join(project_dir, ".attocode", "index")
+                if os.path.isdir(index_dir):
+                    try:
+                        from attocode.integrations.context.trigram_index import TrigramIndex
+                        idx = TrigramIndex(index_dir=index_dir)
+                        if idx.load():
+                            _trigram_index = idx
+                    except Exception:
+                        pass
+    return _trigram_index
 
 
 # ---------------------------------------------------------------------------
@@ -117,3 +144,108 @@ def security_scan(
     scanner = _get_security_scanner()
     report = scanner.scan(mode=mode, path=path)
     return scanner.format_report(report)
+
+
+@mcp.tool()
+def fast_search(
+    pattern: str,
+    path: str = "",
+    max_results: int = 50,
+    case_insensitive: bool = False,
+) -> str:
+    """Fast regex search using trigram index pre-filtering.
+
+    Uses a trigram inverted index to identify candidate files before
+    running the full regex, typically 10-100x faster than brute-force grep
+    on large codebases. Falls back to standard grep when:
+      - No trigram index has been built (run ``reindex`` first)
+      - The pattern yields no extractable trigrams (e.g., ``.*``)
+
+    Args:
+        pattern: Regex pattern to search for (e.g. "def process_.*event").
+        path: Subdirectory to search (relative to project root, empty for all).
+        max_results: Maximum number of matching lines to return (default 50).
+        case_insensitive: Whether to match case-insensitively.
+    """
+    import os
+    import re
+    from pathlib import Path
+
+    project_dir = _get_project_dir()
+    root = Path(project_dir)
+    if path:
+        root = root / path
+    root = root.resolve()
+
+    if not root.exists():
+        return f"Error: Path not found: {root}"
+
+    flags = re.IGNORECASE if case_insensitive else 0
+    try:
+        regex = re.compile(pattern, flags)
+    except re.error as e:
+        return f"Error: Invalid regex pattern: {e}"
+
+    # Try trigram pre-filtering
+    trigram_idx = _get_trigram_index()
+    candidates: list[str] | None = None
+    index_status = "no index"
+
+    if trigram_idx is not None and trigram_idx.is_ready():
+        candidates = trigram_idx.query(pattern, case_insensitive=case_insensitive)
+        if candidates is not None:
+            index_status = f"trigram filter: {len(candidates)} candidates"
+        else:
+            index_status = "no trigrams extractable, full scan"
+    else:
+        # Try to build the index on first use
+        try:
+            from attocode.integrations.context.trigram_index import TrigramIndex
+            index_dir = os.path.join(project_dir, ".attocode", "index")
+            idx = TrigramIndex(index_dir=index_dir)
+            stats = idx.build(project_dir)
+            global _trigram_index
+            _trigram_index = idx
+            candidates = idx.query(pattern, case_insensitive=case_insensitive)
+            index_status = (
+                f"built index ({stats['files_indexed']} files, "
+                f"{stats['build_time_ms']}ms), "
+                f"{len(candidates) if candidates is not None else 'N/A'} candidates"
+            )
+        except Exception:
+            index_status = "index build failed, full scan"
+
+    # Determine files to search
+    if candidates is not None:
+        files = sorted(root / c for c in candidates)
+    else:
+        files = sorted(root.rglob("*"))
+
+    matches: list[str] = []
+    for file in files:
+        if not file.is_file() or file.name.startswith("."):
+            continue
+        try:
+            content = file.read_text(encoding="utf-8", errors="strict")
+        except (UnicodeDecodeError, OSError):
+            continue
+        for i, line in enumerate(content.splitlines(), 1):
+            if regex.search(line):
+                try:
+                    rel = file.relative_to(Path(project_dir))
+                except ValueError:
+                    rel = file.name
+                matches.append(f"{rel}:{i}: {line.strip()}")
+                if len(matches) >= max_results:
+                    break
+        if len(matches) >= max_results:
+            break
+
+    if not matches:
+        return f"No matches found ({index_status})"
+
+    result = "\n".join(matches)
+    if len(matches) >= max_results:
+        result += f"\n... (limited to {max_results} results)"
+    result += f"\n({index_status})"
+    return result

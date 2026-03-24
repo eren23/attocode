@@ -159,9 +159,28 @@ class SwarmOrchestrator:
 
         self._budget_pool = _SimpleBudgetPool(self._config.total_budget)
 
+        # Auto-select OpenShell spawn function when sandbox_mode=openshell
+        # and no explicit spawn function was provided
+        effective_spawn_fn = self._spawn_agent_fn
+        if self._config.sandbox_mode == "openshell" and effective_spawn_fn is None:
+            try:
+                import os
+
+                from attocode.integrations.swarm.openshell_spawner import (
+                    create_openshell_spawn_fn,
+                )
+
+                effective_spawn_fn = create_openshell_spawn_fn(
+                    working_dir=os.getcwd(),
+                    config=self._config,
+                )
+                logger.info("Auto-selected OpenShell spawn function (sandbox_mode=openshell)")
+            except Exception as exc:
+                logger.warning("Failed to create OpenShell spawn function: %s", exc)
+
         self._worker_pool = SwarmWorkerPool(
             config=self._config,
-            spawn_agent_fn=self._spawn_agent_fn,
+            spawn_agent_fn=effective_spawn_fn or self._spawn_agent_fn,
             budget_pool=self._budget_pool,
             health_tracker=self._health_tracker,
         )

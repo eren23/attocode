@@ -1,6 +1,6 @@
 """MCP server exposing Attocode's code intelligence capabilities.
 
-Provides 39 tools for deep codebase understanding:
+Provides 40 tools for deep codebase understanding:
 - bootstrap: All-in-one orientation (summary + map + conventions + search)
 - relevant_context: Subgraph capsule for file(s) with neighbors and symbols
 - repo_map: Token-budgeted file tree with symbols
@@ -298,6 +298,15 @@ def notify_file_changed(files: list[str]) -> str:
                 smgr.queue_reindex(abs_path)
             except Exception:
                 pass
+            # Also invalidate trigram index
+            try:
+                from attocode.code_intel.tools.search_tools import _get_trigram_index
+                tri_idx = _get_trigram_index()
+                if tri_idx is not None:
+                    abs_path = os.path.join(project_dir, rel)
+                    tri_idx.update_file(rel, b"")
+            except Exception:
+                pass
             updated += 1
         except Exception as exc:
             logger.debug("notify_file_changed: error for %s: %s", f, exc)
@@ -380,6 +389,13 @@ def _process_notification_queue_locked() -> int:
                 abs_path = os.path.join(project_dir, norm)
                 smgr.invalidate_file(abs_path)
                 smgr.queue_reindex(abs_path)
+            except Exception:
+                pass
+            try:
+                from attocode.code_intel.tools.search_tools import _get_trigram_index
+                tri_idx = _get_trigram_index()
+                if tri_idx is not None:
+                    tri_idx.update_file(norm, b"")
             except Exception:
                 pass
             count += 1
@@ -487,6 +503,16 @@ def _start_file_watcher(project_dir: str, *, debounce_ms: int = 500) -> None:
                                 smgr = _get_semantic_search()
                                 smgr.invalidate_file(path_str)
                                 smgr.queue_reindex(path_str)
+                            except Exception:
+                                pass
+                            try:
+                                from attocode.code_intel.tools.search_tools import (
+                                    _get_trigram_index,
+                                )
+
+                                tri_idx = _get_trigram_index()
+                                if tri_idx is not None:
+                                    tri_idx.update_file(rel, b"")
                             except Exception:
                                 pass
                             logger.debug("File watcher: updated %s", rel)
@@ -613,6 +639,7 @@ graph_dsl = _analysis_tools.graph_dsl  # noqa: E402
 semantic_search = _search_tools.semantic_search  # noqa: E402
 semantic_search_status = _search_tools.semantic_search_status  # noqa: E402
 security_scan = _search_tools.security_scan  # noqa: E402
+fast_search = _search_tools.fast_search  # noqa: E402
 
 recall = _learning_tools.recall  # noqa: E402
 record_learning = _learning_tools.record_learning  # noqa: E402

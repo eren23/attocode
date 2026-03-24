@@ -84,6 +84,15 @@ class SwarmWorkerPool:
         # Signaled whenever a worker finishes so wait_for_any() can wake up
         self._completion_event: asyncio.Event = asyncio.Event()
 
+        # Sandbox mode for OpenShell / Docker / etc.
+        self._sandbox_mode: str = config.sandbox_mode
+        self._sandbox_config: dict[str, Any] = {
+            "policy": config.sandbox_policy,
+            "policy_path": config.sandbox_policy_path,
+            "gateway_url": config.sandbox_gateway_url,
+            "credentials": config.sandbox_credentials,
+        }
+
         # Worktree manager for file isolation
         self._worktree_manager: Any | None = None
         if config.enable_worktree_isolation:
@@ -363,6 +372,13 @@ class SwarmWorkerPool:
                     task.id, exc,
                 )
 
+        # Create sandbox session if configured
+        sandbox_session = None
+        if self._sandbox_mode and self._sandbox_mode != "none":
+            sandbox_session = await self._create_task_sandbox(
+                task, worker, worktree_path,
+            )
+
         try:
             spawn_kwargs: dict[str, Any] = {
                 "task": task,
@@ -373,6 +389,8 @@ class SwarmWorkerPool:
             }
             if worktree_path:
                 spawn_kwargs["working_dir"] = worktree_path
+            if sandbox_session is not None:
+                spawn_kwargs["sandbox_session"] = sandbox_session
 
             result: SpawnResult = await asyncio.wait_for(
                 self._spawn_agent_fn(**spawn_kwargs),
@@ -429,7 +447,69 @@ class SwarmWorkerPool:
                     task.id, worktree_path, exc,
                 )
 
+        # Always destroy sandbox session
+        if sandbox_session is not None:
+            try:
+                await sandbox_session.destroy()
+            except Exception as exc:
+                logger.debug("Sandbox cleanup failed for task %s: %s", task.id, exc)
+
         return result
+
+    async def _create_task_sandbox(
+        self,
+        task: SwarmTask,
+        worker: SwarmWorkerSpec,
+        working_dir: str | None,
+    ) -> Any | None:
+        """Create a sandbox session for a worker task if sandbox mode is configured.
+
+        Resolves the effective sandbox policy using the cascade:
+        task-level > worker-level > swarm-level.
+
+        Returns an OpenShellSandboxSession or None if sandbox is unavailable.
+        """
+        if self._sandbox_mode == "openshell":
+            try:
+                from attocode.integrations.safety.sandbox.openshell import (
+                    OpenShellOptions,
+                    OpenShellSandbox,
+                )
+                from attocode.integrations.swarm.openshell_spawner import (
+                    _map_agent_type,
+                    _resolve_sandbox_policy,
+                )
+
+                effective_policy = _resolve_sandbox_policy(task, worker, self._config)
+                agent_type = _map_agent_type(worker)
+
+                options = OpenShellOptions(
+                    gateway_url=self._sandbox_config.get("gateway_url", ""),
+                    policy=effective_policy,
+                    policy_path=self._sandbox_config.get("policy_path", ""),
+                    network_allowed=True,  # Setup phase: network ON
+                    agent_type=agent_type,
+                    credential_env=dict(self._sandbox_config.get("credentials") or {}),
+                )
+
+                sandbox = OpenShellSandbox(options=options)
+                if not sandbox.is_available():
+                    logger.warning("OpenShell requested but CLI not available, skipping sandbox")
+                    return None
+
+                import os
+                session = await sandbox.create_session(
+                    name=f"swarm-{task.id[:8]}-{worker.name}",
+                    working_dir=working_dir or os.getcwd(),
+                )
+                return session
+            except Exception as exc:
+                logger.warning("Failed to create sandbox for task %s: %s", task.id, exc)
+                return None
+        else:
+            # For non-OpenShell sandbox modes, the existing sandbox infrastructure
+            # handles isolation at the command execution level, not the session level.
+            return None
 
     def _on_worker_done(
         self,
