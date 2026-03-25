@@ -64,6 +64,7 @@ nav:
       - Advanced Features: advanced-features.md
   - Guides:
       - Local Development: guides/local-development.md
+      - MCP & Model Connections: guides/mcp-and-model-connections.md
       - Repos & Branches: guides/repos-and-branches.md
       - Semantic Search: guides/semantic-search.md
       - CLI Commands: guides/cli-commands.md
