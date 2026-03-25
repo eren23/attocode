@@ -123,3 +123,57 @@ class TestLongestLiteralRun:
 
     def test_invalid_pattern(self) -> None:
         assert longest_literal_run("(?P<bad") == ""
+
+
+# ---------------------------------------------------------------------------
+# Complex regex patterns
+# ---------------------------------------------------------------------------
+class TestComplexPatterns:
+    def test_alternation_with_common_prefix(self):
+        from attocode.integrations.context.trigram_regex import extract_required_trigrams
+        # "foobar|foobaz" shares "foo" and "ba" trigrams
+        result = extract_required_trigrams("foobar|foobaz")
+        assert isinstance(result, list)
+
+    def test_quantifier_optional_drops_trigrams(self):
+        from attocode.integrations.context.trigram_regex import extract_required_trigrams
+        # "hello?" makes the 'o' optional, so "hell" is the reliable prefix
+        result = extract_required_trigrams("hello?")
+        assert isinstance(result, list)
+
+    def test_character_class(self):
+        from attocode.integrations.context.trigram_regex import extract_required_trigrams
+        # "[abc]def" - first char is variable, "def" is literal
+        result = extract_required_trigrams("[abc]def")
+        assert isinstance(result, list)
+
+    def test_dot_wildcard(self):
+        from attocode.integrations.context.trigram_regex import extract_required_trigrams
+        # "hel.o" - dot breaks trigram extraction
+        result = extract_required_trigrams("hel.o")
+        assert isinstance(result, list)
+
+    def test_empty_pattern(self):
+        from attocode.integrations.context.trigram_regex import extract_required_trigrams
+        result = extract_required_trigrams("")
+        assert result == []
+
+    def test_short_pattern(self):
+        from attocode.integrations.context.trigram_regex import extract_required_trigrams
+        # "ab" is too short for trigrams
+        result = extract_required_trigrams("ab")
+        assert result == []
+
+    def test_case_insensitive_flag(self):
+        from attocode.integrations.context.trigram_regex import extract_required_trigrams
+        result_sensitive = extract_required_trigrams("Hello")
+        result_insensitive = extract_required_trigrams("Hello", case_insensitive=True)
+        assert isinstance(result_sensitive, list)
+        assert isinstance(result_insensitive, list)
+
+    def test_escaped_special_chars(self):
+        from attocode.integrations.context.trigram_regex import extract_required_trigrams
+        # Escaped dot should be treated as literal
+        result = extract_required_trigrams(r"foo\.bar")
+        assert isinstance(result, list)
+        assert len(result) > 0

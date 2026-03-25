@@ -5,6 +5,7 @@ and repo maps as MCP tools for Claude Code, Cursor, Windsurf, etc.
 """
 
 from attocode.code_intel.bug_finder import BugReport, Finding, scan_diff, scan_text
+from attocode.code_intel.readiness import ReadinessEngine, ReadinessReport
 from attocode.code_intel.repo_ranker import (
     RepoMapResult,
     format_repo_map,
@@ -15,6 +16,8 @@ from attocode.code_intel.repo_ranker import (
 __all__ = [
     "BugReport",
     "Finding",
+    "ReadinessEngine",
+    "ReadinessReport",
     "RepoMapResult",
     "format_repo_map",
     "pagerank",

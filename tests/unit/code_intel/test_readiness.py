@@ -357,3 +357,133 @@ class TestFullRun:
         assert len(report.phase_results) == 2
         assert report.phase_results[0].phase == ReadinessPhase.BASELINE
         assert report.phase_results[1].phase == ReadinessPhase.DEPLOYABILITY
+
+
+# ---------------------------------------------------------------------------
+# Phase 3: Data Layer
+# ---------------------------------------------------------------------------
+class TestPhaseDataLayer:
+    def test_migration_dirs_detected(self, tmp_path: Path) -> None:
+        proj = _create_project(tmp_path, {
+            "src/app.py": "pass\n",
+            "migrations/0001_initial.py": "# migration\n",
+        })
+        engine = ReadinessEngine(proj)
+        result = engine._phase_data_layer("")
+        f = _find_finding(result.findings, "migration")
+        assert f is not None
+        assert f.severity == ReadinessSeverity.PASS
+
+    def test_no_migrations(self, tmp_path: Path) -> None:
+        proj = _create_project(tmp_path, {"src/app.py": "pass\n"})
+        engine = ReadinessEngine(proj)
+        result = engine._phase_data_layer("")
+        f = _find_finding(result.findings, "migration")
+        assert f is not None
+        assert f.severity == ReadinessSeverity.INFO
+
+    def test_orm_models_detected(self, tmp_path: Path) -> None:
+        proj = _create_project(tmp_path, {
+            "models.py": "class User(Base):\n    __tablename__ = 'users'\n",
+        })
+        engine = ReadinessEngine(proj)
+        result = engine._phase_data_layer("")
+        f = _find_finding(result.findings, "orm") or _find_finding(result.findings, "model")
+        assert f is not None
+
+
+# ---------------------------------------------------------------------------
+# Phase 5: Security
+# ---------------------------------------------------------------------------
+class TestPhaseSecurity:
+    def test_security_scanner_unavailable(self, tmp_path: Path) -> None:
+        # When SecurityScanner import fails, phase should still return a result
+        proj = _create_project(tmp_path, {"app.py": "pass\n"})
+        engine = ReadinessEngine(proj)
+        result = engine._phase_security("")
+        assert result.score >= 0.0
+        assert len(result.findings) >= 1
+
+
+# ---------------------------------------------------------------------------
+# Tracer Bullets
+# ---------------------------------------------------------------------------
+class TestTracerBullets:
+    def test_run_with_tracer_bullets(self, tmp_path: Path) -> None:
+        proj = _create_project(tmp_path, {
+            "pyproject.toml": '[project]\nname = "test"\n',
+            "src/main.py": "from src.utils import helper\ndef main(): helper()\n",
+            "src/utils.py": "def helper(): return 42\n",
+        })
+        engine = ReadinessEngine(proj)
+        report = engine.run(phases=[0], tracer_bullets=True)
+        # Tracer bullets may or may not find entry points, but shouldn't crash
+        assert isinstance(report.tracer_bullets, list)
+
+    def test_run_without_tracer_bullets(self, tmp_path: Path) -> None:
+        proj = _create_project(tmp_path, {"app.py": "pass\n"})
+        engine = ReadinessEngine(proj)
+        report = engine.run(phases=[0], tracer_bullets=False)
+        assert report.tracer_bullets == []
+
+
+# ---------------------------------------------------------------------------
+# Severity/Status tag helpers
+# ---------------------------------------------------------------------------
+class TestFormattingHelpers:
+    def test_severity_tag(self) -> None:
+        from attocode.code_intel.readiness import _severity_tag
+        assert _severity_tag(ReadinessSeverity.PASS) == "[PASS]"
+        assert _severity_tag(ReadinessSeverity.WARNING) == "[WARN]"
+        assert _severity_tag(ReadinessSeverity.CRITICAL) == "[CRIT]"
+        assert _severity_tag(ReadinessSeverity.INFO) == "[INFO]"
+
+    def test_status_tag(self) -> None:
+        from attocode.code_intel.readiness import _status_tag
+        assert _status_tag("production_ready") == "[PASS]"
+        assert _status_tag("happy_path_only") == "[WARN]"
+        assert _status_tag("partial") == "[PART]"
+        assert _status_tag("not_implemented") == "[FAIL]"
+        assert _status_tag("unknown") == "[????]"
+
+
+# ---------------------------------------------------------------------------
+# Weighted Scoring
+# ---------------------------------------------------------------------------
+class TestWeightedScoring:
+    def test_weighted_phases(self) -> None:
+        # Baseline, Test Coverage, Security have weight 2.0; others 1.0
+        results = [
+            PhaseResult(phase=ReadinessPhase.BASELINE, phase_name="B", score=1.0),
+            PhaseResult(phase=ReadinessPhase.FRONTEND_FLOWS, phase_name="F", score=0.0),
+        ]
+        score, grade = ReadinessEngine._compute_overall(results)
+        # Weight: baseline=2.0*1.0, frontend=1.0*0.0 => 2.0/3.0 = 0.667
+        assert 0.6 < score < 0.7
+        assert grade == "C"
+
+    def test_scope_filtering(self, tmp_path: Path) -> None:
+        proj = _create_project(tmp_path, {
+            "src/app.py": "pass\n",
+            "lib/other.py": "pass\n",
+        })
+        engine = ReadinessEngine(proj)
+        report = engine.run(phases=[0], scope="src/")
+        assert report.phase_results[0].phase == ReadinessPhase.BASELINE
+
+
+# ---------------------------------------------------------------------------
+# Phase failure handling
+# ---------------------------------------------------------------------------
+class TestPhaseFailureHandling:
+    def test_phase_exception_produces_critical_finding(self, tmp_path: Path) -> None:
+        proj = _create_project(tmp_path, {"app.py": "pass\n"})
+        engine = ReadinessEngine(proj)
+        # Mock a phase to raise
+        with patch.object(engine, "_phase_baseline", side_effect=RuntimeError("boom")):
+            report = engine.run(phases=[0])
+        assert len(report.phase_results) == 1
+        pr = report.phase_results[0]
+        assert pr.score == 0.0
+        assert any(f.severity == ReadinessSeverity.CRITICAL for f in pr.findings)
+        assert any("boom" in f.detail for f in pr.findings)

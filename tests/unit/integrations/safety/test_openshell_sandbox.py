@@ -279,3 +279,132 @@ class TestOpenShellPolicyHelpers:
         assert "pypi" in policy
         assert "github" in policy
         assert "npm" in policy
+
+
+# ---------------------------------------------------------------------------
+# Session update_network_policy
+# ---------------------------------------------------------------------------
+class TestSessionUpdateNetworkPolicy:
+    def test_update_network_policy_destroyed(self):
+        session = OpenShellSandboxSession(
+            sandbox_name="test-sb",
+            working_dir="/sandbox",
+            options=OpenShellOptions(),
+        )
+        session._destroyed = True
+        with pytest.raises(RuntimeError, match="already destroyed"):
+            asyncio.get_event_loop().run_until_complete(
+                session.update_network_policy({"allow": ["*.example.com"]})
+            )
+
+    @patch("attocode.integrations.safety.sandbox.openshell.asyncio.create_subprocess_exec")
+    def test_update_network_policy_get_fails(self, mock_exec):
+        proc = AsyncMock()
+        proc.returncode = 1
+        proc.communicate = AsyncMock(return_value=(b"", b"error"))
+        mock_exec.return_value = proc
+
+        session = OpenShellSandboxSession(
+            sandbox_name="test-sb",
+            working_dir="/sandbox",
+            options=OpenShellOptions(),
+        )
+        # Should not raise, just log warning
+        asyncio.get_event_loop().run_until_complete(
+            session.update_network_policy({"allow": ["*.example.com"]})
+        )
+
+    @patch("attocode.integrations.safety.sandbox.openshell.asyncio.create_subprocess_exec")
+    def test_update_network_policy_no_yaml(self, mock_exec):
+        proc = AsyncMock()
+        proc.returncode = 0
+        proc.communicate = AsyncMock(return_value=(b"network_policies: {}", b""))
+        mock_exec.return_value = proc
+
+        session = OpenShellSandboxSession(
+            sandbox_name="test-sb",
+            working_dir="/sandbox",
+            options=OpenShellOptions(),
+        )
+        # Mock yaml not available
+        import sys
+        yaml_mod = sys.modules.get("yaml")
+        sys.modules["yaml"] = None  # type: ignore
+        try:
+            asyncio.get_event_loop().run_until_complete(
+                session.update_network_policy({"allow": ["*.example.com"]})
+            )
+        except (ImportError, TypeError):
+            pass  # Expected when yaml is None
+        finally:
+            if yaml_mod is not None:
+                sys.modules["yaml"] = yaml_mod
+            else:
+                sys.modules.pop("yaml", None)
+
+
+# ---------------------------------------------------------------------------
+# Session output truncation
+# ---------------------------------------------------------------------------
+class TestSessionOutputTruncation:
+    @patch("attocode.integrations.safety.sandbox.openshell.asyncio.create_subprocess_exec")
+    def test_output_truncated_at_max_bytes(self, mock_exec):
+        opts = OpenShellOptions(max_output_bytes=100)
+        big_output = "x" * 200
+
+        proc = AsyncMock()
+        proc.returncode = 0
+        proc.communicate = AsyncMock(return_value=(big_output.encode(), b""))
+        mock_exec.return_value = proc
+
+        session = OpenShellSandboxSession(
+            sandbox_name="test-sb",
+            working_dir="/sandbox",
+            options=opts,
+        )
+        output, code = asyncio.get_event_loop().run_until_complete(
+            session.exec_command("echo lots")
+        )
+        assert len(output) < 200
+        assert "truncated" in output
+
+
+# ---------------------------------------------------------------------------
+# Session destroy idempotency
+# ---------------------------------------------------------------------------
+class TestSessionDestroyIdempotent:
+    @patch("attocode.integrations.safety.sandbox.openshell.asyncio.create_subprocess_exec")
+    def test_double_destroy(self, mock_exec):
+        proc = AsyncMock()
+        proc.returncode = 0
+        proc.communicate = AsyncMock(return_value=(b"", b""))
+        mock_exec.return_value = proc
+
+        session = OpenShellSandboxSession(
+            sandbox_name="test-sb",
+            working_dir="/sandbox",
+            options=OpenShellOptions(),
+        )
+        asyncio.get_event_loop().run_until_complete(session.destroy())
+        assert session._destroyed
+        # Second destroy should be a no-op
+        asyncio.get_event_loop().run_until_complete(session.destroy())
+        # exec should have been called only once (first destroy)
+        assert mock_exec.call_count == 1
+
+
+# ---------------------------------------------------------------------------
+# Session credential injection
+# ---------------------------------------------------------------------------
+class TestSessionCredentialInjection:
+    def test_inject_credentials_destroyed(self):
+        session = OpenShellSandboxSession(
+            sandbox_name="test-sb",
+            working_dir="/sandbox",
+            options=OpenShellOptions(),
+        )
+        session._destroyed = True
+        with pytest.raises(RuntimeError, match="already destroyed"):
+            asyncio.get_event_loop().run_until_complete(
+                session.inject_credentials({"API_KEY": "secret"})
+            )

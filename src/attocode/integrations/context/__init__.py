@@ -86,6 +86,7 @@ from attocode.integrations.context.hierarchical_explorer import (
     HierarchicalExplorer,
 )
 from attocode.integrations.context.memory_store import MemoryStore
+from attocode.integrations.context.trigram_index import TrigramIndex
 from attocode.integrations.context.semantic_cache import (
     SemanticCacheConfig,
     SemanticCacheManager,
@@ -190,4 +191,6 @@ __all__ = [
     "create_embedding_provider",
     # memory_store
     "MemoryStore",
+    # trigram_index
+    "TrigramIndex",
 ]

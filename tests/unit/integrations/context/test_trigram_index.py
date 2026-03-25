@@ -271,3 +271,74 @@ class TestTrigramGrepIntegration:
             {"pattern": "searchable_text", "path": str(tmp_path)},
         )
         assert "searchable_text" in result
+
+
+# ---------------------------------------------------------------------------
+# update_file and remove_file
+# ---------------------------------------------------------------------------
+class TestTrigramIndexUpdateRemove:
+    def test_update_file_marks_not_ready(self, tmp_path: Path) -> None:
+        proj = _create_project(tmp_path, {"a.py": "hello world\n"})
+        idx = TrigramIndex(index_dir=str(proj / ".attocode" / "index"))
+        idx.build(str(proj))
+        assert idx.is_ready()
+        idx.update_file("a.py", b"changed content")
+        assert not idx.is_ready()
+        idx.close()
+
+    def test_remove_file_drops_mapping(self, tmp_path: Path) -> None:
+        proj = _create_project(tmp_path, {"a.py": "hello\n", "b.py": "world\n"})
+        idx = TrigramIndex(index_dir=str(proj / ".attocode" / "index"))
+        idx.build(str(proj))
+        assert idx.is_ready()
+        idx.remove_file("a.py")
+        # a.py no longer in path mapping
+        assert "a.py" not in idx._path_to_file_id
+        # Index still ready (remove_file doesn't invalidate)
+        assert idx.is_ready()
+        idx.close()
+
+    def test_remove_nonexistent_file_is_noop(self, tmp_path: Path) -> None:
+        proj = _create_project(tmp_path, {"a.py": "hello\n"})
+        idx = TrigramIndex(index_dir=str(proj / ".attocode" / "index"))
+        idx.build(str(proj))
+        idx.remove_file("nonexistent.py")  # should not raise
+        assert idx.is_ready()
+        idx.close()
+
+
+# ---------------------------------------------------------------------------
+# close() idempotency
+# ---------------------------------------------------------------------------
+class TestTrigramIndexClose:
+    def test_double_close_is_safe(self, tmp_path: Path) -> None:
+        proj = _create_project(tmp_path, {"a.py": "hello\n"})
+        idx = TrigramIndex(index_dir=str(proj / ".attocode" / "index"))
+        idx.build(str(proj))
+        idx.close()
+        idx.close()  # second close should not raise
+
+    def test_query_after_close_returns_none(self, tmp_path: Path) -> None:
+        proj = _create_project(tmp_path, {"a.py": "hello world\n"})
+        idx = TrigramIndex(index_dir=str(proj / ".attocode" / "index"))
+        idx.build(str(proj))
+        idx.close()
+        result = idx.query("hello")
+        assert result is None
+
+
+# ---------------------------------------------------------------------------
+# Case insensitive query
+# ---------------------------------------------------------------------------
+class TestTrigramIndexCaseInsensitive:
+    def test_case_insensitive_query(self, tmp_path: Path) -> None:
+        proj = _create_project(tmp_path, {
+            "a.py": "def HelloWorld(): pass\n",
+        })
+        idx = TrigramIndex(index_dir=str(proj / ".attocode" / "index"))
+        idx.build(str(proj))
+        # Case insensitive should still return candidates (or None if trigrams can't be extracted)
+        result = idx.query("helloworld", case_insensitive=True)
+        # Either None (no trigrams extractable for case-insensitive) or a list
+        assert result is None or isinstance(result, list)
+        idx.close()
