@@ -1,0 +1,37 @@
+{
+  "name": "metal-shading-language",
+  "displayName": "Metal Shading Language",
+  "description": "Syntax highlighting for Apple Metal Shading Language (.metal) files",
+  "version": "0.1.0",
+  "publisher": "attocode",
+  "license": "MIT",
+  "engines": {
+    "vscode": "^1.60.0"
+  },
+  "categories": [
+    "Programming Languages"
+  ],
+  "contributes": {
+    "languages": [
+      {
+        "id": "metal",
+        "aliases": [
+          "Metal",
+          "Metal Shading Language",
+          "MSL"
+        ],
+        "extensions": [
+          ".metal"
+        ],
+        "configuration": "./language-configuration.json"
+      }
+    ],
+    "grammars": [
+      {
+        "language": "metal",
+        "scopeName": "source.metal",
+        "path": "./syntaxes/metal.tmLanguage.json"
+      }
+    ]
+  }
+}

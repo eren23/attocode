@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+#### Metal Shading Language Support
+- `.metal` file extension mapped to C++ parser across all code-intel layers (`LANG_EXTENSIONS`, `_EXT_TO_LANG`, `LANG_MAP`, `LANGUAGE_CONFIGS`)
+- `LANGUAGE_CONFIGS["metal"]` alias for C++ tree-sitter config
+- VS Code/Cursor extension (`extensions/vscode-metal/`) with TextMate grammar for Metal-specific syntax highlighting
+  - Function qualifiers: `kernel`, `vertex`, `fragment`, `compute`, `mesh`, `object`
+  - Address space qualifiers: `device`, `constant`, `threadgroup`, `thread`
+  - Vector/matrix/texture types, SIMD group operations, atomic operations
+  - Metal attribute syntax: `[[buffer(N)]]`, `[[thread_position_in_grid]]`, etc.
+  - Packaged as `.vsix` for easy installation
+
 ### Planned (v0.2.7)
 - Embedding-based semantic search (NDCG target: 0.40+)
 - Ground truth YAML for 20+ benchmark repos

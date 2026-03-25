@@ -1,0 +1,323 @@
+{
+  "$schema": "https://raw.githubusercontent.com/martinring/tmlanguage/master/tmlanguage.json",
+  "name": "Metal Shading Language",
+  "scopeName": "source.metal",
+  "patterns": [
+    { "include": "#comments" },
+    { "include": "#preprocessor" },
+    { "include": "#attributes" },
+    { "include": "#metal-function-qualifiers" },
+    { "include": "#metal-address-spaces" },
+    { "include": "#metal-types" },
+    { "include": "#metal-builtin-functions" },
+    { "include": "#metal-constants" },
+    { "include": "#control-keywords" },
+    { "include": "#storage-keywords" },
+    { "include": "#cpp-keywords" },
+    { "include": "#strings" },
+    { "include": "#numbers" },
+    { "include": "#operators" },
+    { "include": "#function-call" },
+    { "include": "#function-definition" }
+  ],
+  "repository": {
+    "comments": {
+      "patterns": [
+        {
+          "name": "comment.line.double-slash.metal",
+          "match": "//.*$"
+        },
+        {
+          "name": "comment.block.metal",
+          "begin": "/\\*",
+          "end": "\\*/"
+        }
+      ]
+    },
+    "preprocessor": {
+      "patterns": [
+        {
+          "name": "meta.preprocessor.include.metal",
+          "match": "^\\s*(#include)\\s+(<[^>]+>|\"[^\"]+\")",
+          "captures": {
+            "1": { "name": "keyword.control.directive.include.metal" },
+            "2": { "name": "string.quoted.other.include.metal" }
+          }
+        },
+        {
+          "name": "meta.preprocessor.metal",
+          "match": "^\\s*(#\\s*(?:define|undef|ifdef|ifndef|if|elif|else|endif|pragma|error|warning|line))\\b(.*)$",
+          "captures": {
+            "1": { "name": "keyword.control.directive.metal" },
+            "2": {
+              "patterns": [
+                { "include": "#comments" },
+                { "include": "#numbers" },
+                { "include": "#strings" }
+              ]
+            }
+          }
+        },
+        {
+          "name": "constant.language.preprocessor.metal",
+          "match": "\\b__METAL_VERSION__\\b"
+        }
+      ]
+    },
+    "attributes": {
+      "patterns": [
+        {
+          "name": "meta.attribute.metal",
+          "match": "\\[\\[(buffer|texture|sampler|color|position|point_size|stage_in|stageIn)\\s*\\(\\s*(\\d+)\\s*\\)\\]\\]",
+          "captures": {
+            "1": { "name": "entity.other.attribute-name.metal" },
+            "2": { "name": "constant.numeric.metal" }
+          }
+        },
+        {
+          "name": "meta.attribute.metal",
+          "match": "\\[\\[(thread_position_in_grid|thread_position_in_threadgroup|threadgroup_position_in_grid|thread_index_in_simdgroup|simdgroup_index_in_threadgroup|threads_per_threadgroup|threads_per_simdgroup|threadgroups_per_grid|thread_execution_width|dispatch_quadgroups_per_threadgroup|flat|centroid|sample|center_perspective|center_no_perspective)\\]\\]",
+          "captures": {
+            "0": { "name": "entity.other.attribute-name.metal" }
+          }
+        },
+        {
+          "name": "meta.attribute.metal",
+          "match": "\\[\\[(early_fragment_tests|patch|post_tessellation_vertex|max_total_threadgroups_per_meshgrid)\\]\\]",
+          "captures": {
+            "0": { "name": "entity.other.attribute-name.metal" }
+          }
+        }
+      ]
+    },
+    "metal-function-qualifiers": {
+      "patterns": [
+        {
+          "name": "storage.type.function.metal",
+          "match": "\\b(kernel|vertex|fragment|compute|mesh|object)\\b"
+        }
+      ]
+    },
+    "metal-address-spaces": {
+      "patterns": [
+        {
+          "name": "storage.modifier.address-space.metal",
+          "match": "\\b(device|constant|threadgroup|threadgroup_imageblock|thread|ray_data)\\b"
+        }
+      ]
+    },
+    "metal-types": {
+      "patterns": [
+        {
+          "comment": "Scalar types",
+          "name": "storage.type.scalar.metal",
+          "match": "\\b(half|bfloat|ushort|uchar|ulong|atomic_int|atomic_uint|atomic_bool)\\b"
+        },
+        {
+          "comment": "Vector types: float2, half4, uint3, int2, etc.",
+          "name": "storage.type.vector.metal",
+          "match": "\\b(float|half|int|uint|short|ushort|char|uchar|bool|long|ulong)(2|3|4)\\b"
+        },
+        {
+          "comment": "Matrix types: float2x2, half4x4, etc.",
+          "name": "storage.type.matrix.metal",
+          "match": "\\b(float|half)(2x2|2x3|2x4|3x2|3x3|3x4|4x2|4x3|4x4)\\b"
+        },
+        {
+          "comment": "SIMD group matrix types",
+          "name": "storage.type.simd.metal",
+          "match": "\\b(simdgroup_float8x8|simdgroup_half8x8|simdgroup_float4x4|simdgroup_half4x4)\\b"
+        },
+        {
+          "comment": "Texture types",
+          "name": "storage.type.texture.metal",
+          "match": "\\b(texture1d|texture2d|texture3d|texture2d_ms|texture_buffer|texturecube|texture2d_array|texturecube_array|depth2d|depth2d_ms|depth2d_array|depthcube|depthcube_array)\\b"
+        },
+        {
+          "comment": "Sampler type",
+          "name": "storage.type.sampler.metal",
+          "match": "\\b(sampler)\\b"
+        },
+        {
+          "comment": "Packed vector types",
+          "name": "storage.type.packed.metal",
+          "match": "\\b(packed_float2|packed_float3|packed_float4|packed_half2|packed_half3|packed_half4|packed_int2|packed_int3|packed_int4|packed_uint2|packed_uint3|packed_uint4)\\b"
+        }
+      ]
+    },
+    "metal-builtin-functions": {
+      "patterns": [
+        {
+          "comment": "Math functions",
+          "name": "support.function.builtin.math.metal",
+          "match": "\\b(abs|acos|acosh|asin|asinh|atan|atan2|atanh|ceil|clamp|copysign|cos|cosh|exp|exp2|exp10|fabs|fdim|floor|fma|fmax|fmin|fmod|fract|frexp|ilogb|ldexp|length|lgamma|log|log2|log10|mad|max|min|mix|modf|normalize|pow|powr|rint|round|rsqrt|sign|sin|sincos|sinh|smoothstep|sqrt|step|tan|tanh|trunc|saturate|select|dot|cross|distance|fast_length|fast_distance|fast_normalize|precise_length|precise_distance|precise_normalize)\\b"
+        },
+        {
+          "comment": "Threadgroup barrier and memory functions",
+          "name": "support.function.builtin.barrier.metal",
+          "match": "\\b(threadgroup_barrier|simdgroup_barrier|threadfence|threadfence_block)\\b"
+        },
+        {
+          "comment": "SIMD group operations",
+          "name": "support.function.builtin.simd.metal",
+          "match": "\\b(simdgroup_load|simdgroup_store|simdgroup_multiply|simdgroup_multiply_accumulate|simd_shuffle|simd_shuffle_up|simd_shuffle_down|simd_shuffle_xor|simd_broadcast|simd_sum|simd_product|simd_min|simd_max|simd_and|simd_or|simd_xor|simd_prefix_exclusive_sum|simd_prefix_inclusive_sum|simd_prefix_exclusive_product|simd_prefix_inclusive_product|simd_active_threads_mask|simd_ballot|simd_is_first|simd_all|simd_any)\\b"
+        },
+        {
+          "comment": "Atomic operations",
+          "name": "support.function.builtin.atomic.metal",
+          "match": "\\b(atomic_fetch_add_explicit|atomic_fetch_sub_explicit|atomic_fetch_and_explicit|atomic_fetch_or_explicit|atomic_fetch_xor_explicit|atomic_fetch_min_explicit|atomic_fetch_max_explicit|atomic_exchange_explicit|atomic_compare_exchange_weak_explicit|atomic_load_explicit|atomic_store_explicit)\\b"
+        },
+        {
+          "comment": "Texture sample and read functions",
+          "name": "support.function.builtin.texture.metal",
+          "match": "\\b(sample|read|write|gather|get_width|get_height|get_depth|get_num_mip_levels|get_num_samples)\\b"
+        }
+      ]
+    },
+    "metal-constants": {
+      "patterns": [
+        {
+          "comment": "Memory flags",
+          "name": "constant.language.mem-flags.metal",
+          "match": "\\bmem_flags\\s*::\\s*(mem_none|mem_device|mem_threadgroup|mem_texture|mem_device_and_threadgroup)\\b"
+        },
+        {
+          "comment": "Memory order",
+          "name": "constant.language.mem-order.metal",
+          "match": "\\bmemory_order\\s*::\\s*(memory_order_relaxed|memory_order_acquire|memory_order_release|memory_order_acq_rel)\\b"
+        },
+        {
+          "comment": "Special float constants",
+          "name": "constant.language.float.metal",
+          "match": "\\b(INFINITY|NAN)\\b|-INFINITY"
+        }
+      ]
+    },
+    "control-keywords": {
+      "patterns": [
+        {
+          "name": "keyword.control.metal",
+          "match": "\\b(if|else|for|while|do|switch|case|default|break|continue|return|discard_fragment|goto)\\b"
+        }
+      ]
+    },
+    "storage-keywords": {
+      "patterns": [
+        {
+          "name": "storage.type.metal",
+          "match": "\\b(void|bool|char|short|int|long|float|double|unsigned|signed|size_t|ptrdiff_t|auto)\\b"
+        },
+        {
+          "name": "storage.modifier.metal",
+          "match": "\\b(const|constexpr|volatile|static|inline|extern|register|typedef|struct|union|enum|class|namespace|template|typename|using)\\b"
+        }
+      ]
+    },
+    "cpp-keywords": {
+      "patterns": [
+        {
+          "name": "constant.language.metal",
+          "match": "\\b(true|false|nullptr|NULL)\\b"
+        },
+        {
+          "name": "keyword.operator.metal",
+          "match": "\\b(sizeof|alignof|static_cast|reinterpret_cast|const_cast|dynamic_cast)\\b"
+        }
+      ]
+    },
+    "strings": {
+      "patterns": [
+        {
+          "name": "string.quoted.double.metal",
+          "begin": "\"",
+          "end": "\"",
+          "patterns": [
+            {
+              "name": "constant.character.escape.metal",
+              "match": "\\\\."
+            }
+          ]
+        },
+        {
+          "name": "string.quoted.single.metal",
+          "match": "'(?:[^'\\\\]|\\\\.)'"
+        }
+      ]
+    },
+    "numbers": {
+      "patterns": [
+        {
+          "name": "constant.numeric.hex.metal",
+          "match": "\\b0[xX][0-9a-fA-F]+(?:[uU]|[lL]|[uU][lL]|[lL][uU])?\\b"
+        },
+        {
+          "name": "constant.numeric.octal.metal",
+          "match": "\\b0[0-7]+(?:[uU]|[lL])?\\b"
+        },
+        {
+          "name": "constant.numeric.float.metal",
+          "match": "\\b(?:[0-9]+\\.[0-9]*|\\.[0-9]+)(?:[eE][+-]?[0-9]+)?[fFhH]?\\b|\\b[0-9]+[eE][+-]?[0-9]+[fFhH]?\\b|\\b[0-9]+[fFhH]\\b"
+        },
+        {
+          "name": "constant.numeric.integer.metal",
+          "match": "\\b[0-9]+(?:[uU]|[lL]|[uU][lL]|[lL][uU])?\\b"
+        }
+      ]
+    },
+    "operators": {
+      "patterns": [
+        {
+          "name": "keyword.operator.assignment.metal",
+          "match": "(?:<<|>>|\\+|-|\\*|/|%|&|\\||\\^)?="
+        },
+        {
+          "name": "keyword.operator.comparison.metal",
+          "match": "==|!=|<=|>=|<|>"
+        },
+        {
+          "name": "keyword.operator.logical.metal",
+          "match": "&&|\\|\\||!"
+        },
+        {
+          "name": "keyword.operator.bitwise.metal",
+          "match": "&|\\||\\^|~|<<|>>"
+        },
+        {
+          "name": "keyword.operator.arithmetic.metal",
+          "match": "\\+\\+|--|\\+|-|\\*|/|%"
+        },
+        {
+          "name": "keyword.operator.ternary.metal",
+          "match": "\\?|:"
+        },
+        {
+          "name": "keyword.operator.access.metal",
+          "match": "\\.|->|::"
+        }
+      ]
+    },
+    "function-call": {
+      "patterns": [
+        {
+          "match": "\\b([a-zA-Z_][a-zA-Z0-9_]*)\\s*(?=\\()",
+          "captures": {
+            "1": { "name": "entity.name.function.metal" }
+          }
+        }
+      ]
+    },
+    "function-definition": {
+      "patterns": [
+        {
+          "comment": "Metal kernel/vertex/fragment function definition",
+          "match": "\\b(kernel|vertex|fragment|compute|mesh|object)\\s+(\\w[\\w\\s\\*&<>,]*?)\\s+([a-zA-Z_][a-zA-Z0-9_]*)\\s*(?=\\()",
+          "captures": {
+            "1": { "name": "storage.type.function.metal" },
+            "2": { "name": "storage.type.metal" },
+            "3": { "name": "entity.name.function.definition.metal" }
+          }
+        }
+      ]
+    }
+  }
+}

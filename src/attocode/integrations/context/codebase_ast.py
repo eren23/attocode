@@ -180,6 +180,7 @@ LANG_EXTENSIONS: dict[str, str] = {
     ".cxx": "cpp",
     ".hxx": "cpp",
     ".hh": "cpp",
+    ".metal": "cpp",
     # Phase 1: 11 new programming languages
     ".cs": "csharp",
     ".php": "php",
