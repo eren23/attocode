@@ -93,9 +93,6 @@ class ProductionAgent:
         self._total_cost_all_runs: float = 0.0
         self._subagent_registry: dict[str, Any] = {}
         self._mcp_client_manager: Any = None  # MCPClientManager, set during _connect_mcp_servers()
-        self._swarm_orchestrator: Any = None
-        self._event_bridge: Any = None
-        self._tui_swarm_callback: Callable[[dict], None] | None = None
         self._ast_server: Any = None
         self._thread_manager: Any = None
         self._trace_collector: Any = None
@@ -136,20 +133,6 @@ class ProductionAgent:
     def context(self) -> AgentContext | None:
         """The current execution context, if running."""
         return self._ctx
-
-    @property
-    def event_bridge(self) -> Any:
-        """The swarm event bridge, if swarm mode is active."""
-        return self._event_bridge
-
-    @property
-    def swarm_orchestrator(self) -> Any:
-        """The swarm orchestrator, if swarm mode is active."""
-        return self._swarm_orchestrator
-
-    def set_tui_swarm_callback(self, cb: Callable[[dict], None] | None) -> None:
-        """Set a callback that receives swarm events for TUI rendering."""
-        self._tui_swarm_callback = cb
 
     @property
     def session_store(self) -> Any:
@@ -427,35 +410,6 @@ class ProductionAgent:
 
         self._status = AgentStatus.RUNNING
 
-        # Check if swarm mode is enabled (needs minimal context setup first)
-        if getattr(self._config, 'swarm_enabled', False):
-            # Swarm path: the swarm runner only needs _ctx set with event
-            # handlers + integrations. We set up a minimal context here.
-            ctx = AgentContext(
-                provider=self._provider,
-                registry=self._registry,
-                config=self._config,
-                budget=self._budget,
-                working_dir=self._working_dir,
-                system_prompt=self._system_prompt,
-                policy_engine=self._policy_engine,
-                approval_callback=self._approval_callback,
-                economics=self._economics,
-                compaction_manager=self._compaction_manager,
-                recitation_manager=self._recitation_manager,
-                failure_tracker=self._failure_tracker,
-                learning_store=self._learning_store,
-                auto_checkpoint=self._auto_checkpoint,
-                mcp_server_configs=self._mcp_server_configs or [],
-                goal=prompt[:500],
-            )
-            if self._extension_handler:
-                ctx.extension_handler = self._extension_handler  # type: ignore[attr-defined]
-            for handler in self._event_handlers:
-                ctx.on_event(handler)
-            self._ctx = ctx
-            return await self._run_with_swarm(prompt)
-
         # Build context, wire integrations, load skills, connect MCP, build messages
         from attocode.agent.run_context_builder import build_run_context
         ctx, mcp_clients = await build_run_context(self, prompt, images=images)
@@ -675,18 +629,6 @@ class ProductionAgent:
         except Exception:
             logger.warning("budget_extension_failed", exc_info=True)
             return False
-
-    # --- Swarm / multi-agent execution ---
-
-    async def _run_with_swarm(self, prompt: str) -> AgentResult:
-        """Delegate execution to the swarm orchestrator for parallel multi-agent work."""
-        from attocode.agent.swarm_runner import run_with_swarm
-        return await run_with_swarm(self, prompt)
-
-    def _build_worker_specs(self, orchestrator_model: str) -> list:
-        """Build SwarmWorkerSpec list from agent config or defaults."""
-        from attocode.agent.swarm_runner import build_worker_specs
-        return build_worker_specs(self, orchestrator_model)
 
     async def spawn_agent(
         self,

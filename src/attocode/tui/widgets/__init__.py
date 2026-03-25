@@ -35,7 +35,6 @@ from attocode.tui.widgets.repo_overview import RepoOverviewWidget
 from attocode.tui.widgets.side_by_side_diff import SideBySideDiff, SideBySideLine
 from attocode.tui.widgets.status_bar import StatusBar
 from attocode.tui.widgets.streaming_buffer import StreamingBuffer
-from attocode.tui.widgets.swarm_panel import SwarmPanel
 from attocode.tui.widgets.tasks_panel import TasksPanel
 from attocode.tui.widgets.thinking_panel import ThinkingPanel
 from attocode.tui.widgets.token_sparkline import TokenSparkline
@@ -52,7 +51,6 @@ __all__ = [
     "PromptInput",
     "StatusBar",
     "StreamingBuffer",
-    "SwarmPanel",
     "TasksPanel",
     "ThinkingPanel",
     "ToolCallInfo",

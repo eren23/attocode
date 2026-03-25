@@ -5,11 +5,43 @@ These tests verify the service actually works end-to-end — no mocks.
 
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
 import pytest
 
 from attocode.code_intel.service import CodeIntelService
+from attocode.integrations.context.ast_service import ASTService
+
+if TYPE_CHECKING:
+    from pathlib import Path
 
 pytestmark = pytest.mark.integration
+
+
+def _make_temp_project(tmp_path: Path) -> Path:
+    project_dir = tmp_path / "project"
+    project_dir.mkdir()
+    (project_dir / "main.py").write_text(
+        "from utils import helper\n\ndef main():\n    return helper()\n",
+        encoding="utf-8",
+    )
+    (project_dir / "utils.py").write_text(
+        "def helper():\n    return 42\n",
+        encoding="utf-8",
+    )
+    return project_dir
+
+
+def _reset_code_intel_singletons() -> None:
+    import attocode.code_intel.server as srv
+
+    srv._ast_service = None
+    srv._context_mgr = None
+    srv._code_analyzer = None
+    srv._semantic_search = None
+    srv._explorer = None
+    CodeIntelService._reset_instances()
+    ASTService.clear_instances()
 
 
 def test_service_initializes(service: CodeIntelService, sample_project_dir: str):
@@ -84,3 +116,54 @@ def test_explore_codebase_lists_files(service: CodeIntelService):
     assert len(result) > 0
     # Should list at least one of our fixture files
     assert "main.py" in result or "utils.py" in result or "models.py" in result
+
+
+def test_server_notify_file_changed_updates_real_index(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+    import attocode.code_intel.server as srv
+
+    project_dir = _make_temp_project(tmp_path)
+    monkeypatch.setenv("ATTOCODE_PROJECT_DIR", str(project_dir))
+    _reset_code_intel_singletons()
+
+    try:
+        bootstrap_result = srv.bootstrap(max_tokens=1500)
+        assert "Project:" in bootstrap_result or "Overview" in bootstrap_result
+
+        (project_dir / "utils.py").write_text(
+            "def helper():\n    return 99\n\ndef added_later():\n    return helper()\n",
+            encoding="utf-8",
+        )
+
+        notify_result = srv.notify_file_changed(["utils.py"])
+        assert "1 file(s)" in notify_result
+
+        symbols = srv.symbols("utils.py")
+        assert "added_later" in symbols
+    finally:
+        _reset_code_intel_singletons()
+
+
+def test_server_bootstrap_survives_stale_local_index(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+    import attocode.code_intel.server as srv
+
+    project_dir = _make_temp_project(tmp_path)
+    monkeypatch.setenv("ATTOCODE_PROJECT_DIR", str(project_dir))
+    _reset_code_intel_singletons()
+
+    try:
+        first = srv.bootstrap(max_tokens=1500)
+        assert "Project:" in first or "Overview" in first
+
+        (project_dir / "utils.py").write_text(
+            "def helper():\n    return 1\n\ndef after_restart():\n    return helper()\n",
+            encoding="utf-8",
+        )
+
+        _reset_code_intel_singletons()
+        monkeypatch.setenv("ATTOCODE_PROJECT_DIR", str(project_dir))
+
+        second = srv.bootstrap(max_tokens=1500)
+        assert "Project:" in second or "Overview" in second
+        assert "after_restart" in srv.symbols("utils.py")
+    finally:
+        _reset_code_intel_singletons()

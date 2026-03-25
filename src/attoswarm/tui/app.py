@@ -28,27 +28,40 @@ from textual.widgets import (
     TabPane,
 )
 
-from attocode.tui.widgets.swarm.agent_grid import AgentCard, AgentsDataTable
-from attocode.tui.widgets.swarm.agent_trace_stream import AgentTraceStream
-from attocode.tui.widgets.swarm.budget_projection_widget import BudgetProjectionWidget
-from attocode.tui.widgets.swarm.conflict_panel import ConflictPanel
-from attocode.tui.widgets.swarm.decisions_pane import DecisionsPane
-from attocode.tui.widgets.swarm.detail_inspector import DetailInspector
-from attocode.tui.widgets.swarm.event_timeline import EventsLog
-from attocode.tui.widgets.swarm.failure_chain_widget import FailureChainWidget
-from attocode.tui.widgets.swarm.messages_log import MessagesLog
-from attocode.tui.widgets.swarm.overview_pane import OverviewPane
-from attocode.tui.widgets.swarm.task_board import TaskCard, TasksDataTable
 from attoswarm.protocol.io import read_json, write_json_atomic
 from attoswarm.protocol.models import utc_now_iso
 from attoswarm.run_summary import collect_modified_files
+from attoswarm.tui.screens import (
+    AddTaskScreen,
+    CompletionScreen,
+    ConfirmStopScreen,
+    EditTaskScreen,
+    FocusScreen,
+    GraphScreen,
+    TimelineScreen,
+)
 from attoswarm.tui.stores import StateStore
+from attoswarm.tui.widgets import (
+    AgentCard,
+    AgentTraceStream,
+    AgentsDataTable,
+    BudgetProjectionWidget,
+    ConflictPanel,
+    DecisionsPane,
+    DetailInspector,
+    EventsLog,
+    FailureChainWidget,
+    MessagesLog,
+    OverviewPane,
+    TaskCard,
+    TasksDataTable,
+)
 
 if TYPE_CHECKING:
     from textual import events
     from textual.widgets import Input, TextArea
 
-    from attocode.tui.widgets.swarm.dag_view import DependencyTree
+    from attoswarm.tui.widgets import DependencyTree
 
 _CSS_PATH = Path(__file__).resolve().parent / "styles" / "swarm.tcss"
 
@@ -465,8 +478,6 @@ class AttoswarmApp(App[None]):
         if phase in ("completed", "shutdown", "planning_failed") and not self._completion_shown:
             self._completion_shown = True
             try:
-                from attocode.tui.screens.completion_screen import CompletionScreen
-
                 # Read git branch from state or git_safety.json
                 git_branch = state.get("git_branch", "")
                 if not git_branch:
@@ -809,7 +820,6 @@ class AttoswarmApp(App[None]):
             detail = self._store.read_task(event.task_id)
             desc = detail.get("description", desc) if detail else desc
 
-        from attocode.tui.screens.edit_task_screen import EditTaskScreen
         self.push_screen(
             EditTaskScreen(task_id=event.task_id, description=desc),
             callback=self._on_edit_task_dismiss,
@@ -908,8 +918,6 @@ class AttoswarmApp(App[None]):
         if state.get("phase") in ("completed", "shutdown", "failed", "planning_failed", "rejected"):
             self.notify("Run is no longer active", severity="warning")
             return
-        from attocode.tui.screens.confirm_stop_screen import ConfirmStopScreen
-
         self.push_screen(ConfirmStopScreen(), callback=self._on_stop_swarm_dismiss)
 
     def action_inject_message(self) -> None:
@@ -966,16 +974,12 @@ class AttoswarmApp(App[None]):
         """Push FocusScreen for single-agent stream view."""
         if self._input_has_focus():
             return
-        from attocode.tui.screens.focus_screen import FocusScreen
-
         self.push_screen(FocusScreen(state_fn=self._state_fn_adapter))
 
     def action_show_graph(self) -> None:
         """Push GraphScreen for full-screen interactive DAG."""
         if self._input_has_focus():
             return
-        from attocode.tui.screens.graph_screen import GraphScreen
-
         # Derive working_dir from state or cwd
         working_dir = ""
         if self._last_state:
@@ -992,8 +996,6 @@ class AttoswarmApp(App[None]):
         """Push TimelineScreen for full-screen event timeline."""
         if self._input_has_focus():
             return
-        from attocode.tui.screens.timeline_screen import TimelineScreen
-
         self.push_screen(TimelineScreen(
             state_fn=self._state_fn_adapter,
             events=self._last_events,
@@ -1071,7 +1073,6 @@ class AttoswarmApp(App[None]):
     def action_add_task(self) -> None:
         if self._input_has_focus():
             return
-        from attocode.tui.screens.add_task_screen import AddTaskScreen
         self.push_screen(AddTaskScreen(), callback=self._on_add_task_dismiss)
 
     def _on_add_task_dismiss(self, result: dict[str, Any] | None) -> None:

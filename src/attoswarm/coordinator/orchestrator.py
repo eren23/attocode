@@ -1985,10 +1985,10 @@ class SwarmOrchestrator:
             self._check_control_messages()
 
     async def _control_poll_loop(self) -> None:
-        """Background task that checks control.jsonl every 5s during execution."""
+        """Background task that checks control.jsonl with low-latency polling."""
         while self._phase in ("executing", "paused", "awaiting_approval") and not self._shutdown_requested:
             await self._safe_check_control()
-            await asyncio.sleep(5.0)
+            await asyncio.sleep(0.5)
 
     def _persist_prompt(self, task_id: str, task_dict: dict[str, Any]) -> None:
         """Write the full agent prompt to disk for TUI inspection."""
@@ -2029,35 +2029,52 @@ class SwarmOrchestrator:
                 continue
             action = msg.get("action", "")
             task_id = msg.get("task_id", "")
+            self._emit(
+                "control.received",
+                task_id=task_id,
+                message=f"Received control action: {action or 'unknown'}",
+                data={"action": action, "task_id": task_id, "raw": msg},
+            )
 
             # Global actions (no task_id required)
             if action == "shutdown":
                 self._request_shutdown("control:shutdown")
+                self._emit("control.applied", message="Applied control action: shutdown", data={"action": action})
                 continue
             if action == "paused":
                 self._paused = True
                 self._phase = "paused"
                 self._emit("info", message="Orchestrator paused by user")
+                self._emit("control.applied", message="Applied control action: paused", data={"action": action})
                 self._persist_state()
                 continue
             if action == "executing":
                 self._paused = False
                 self._phase = "executing"
                 self._emit("info", message="Orchestrator resumed by user")
+                self._emit("control.applied", message="Applied control action: executing", data={"action": action})
                 self._persist_state()
                 continue
             if action == "approve":
                 self._approved = True
                 self._phase = "executing"
                 self._emit("info", message="Execution approved by user")
+                self._emit("control.applied", message="Applied control action: approve", data={"action": action})
                 self._persist_state()
                 continue
             if action == "reject":
                 self._request_shutdown("control:reject")
                 self._emit("info", message="Execution rejected by user")
+                self._emit("control.applied", message="Applied control action: reject", data={"action": action})
                 continue
             if action == "add_task":
                 self._handle_add_task(msg)
+                self._emit(
+                    "control.applied",
+                    task_id=task_id,
+                    message="Applied control action: add_task",
+                    data={"action": action, "task_id": task_id},
+                )
                 continue
 
             if not task_id:
@@ -2071,6 +2088,7 @@ class SwarmOrchestrator:
                     self._emit("skip", task_id=task_id,
                                message=f"Task {task_id} skipped by user",
                                data={"skipped": skipped})
+                    self._emit("control.applied", task_id=task_id, message="Applied control action: skip", data={"action": action, "task_id": task_id, "skipped": skipped})
             elif action == "retry":
                 node = self._aot_graph.get_node(task_id)
                 if node and node.status in ("failed", "skipped"):
@@ -2078,6 +2096,7 @@ class SwarmOrchestrator:
                     self._task_attempts.pop(task_id, None)
                     self._emit("retry", task_id=task_id,
                                message=f"Task {task_id} retry requested by user")
+                    self._emit("control.applied", task_id=task_id, message="Applied control action: retry", data={"action": action, "task_id": task_id})
             elif action == "edit_task":
                 new_desc = msg.get("description", "")
                 task = self._tasks.get(task_id)
@@ -2086,6 +2105,7 @@ class SwarmOrchestrator:
                     self._persist_task(task_id)
                     self._emit("info", task_id=task_id,
                                message=f"Task {task_id} description updated by user")
+                    self._emit("control.applied", task_id=task_id, message="Applied control action: edit_task", data={"action": action, "task_id": task_id})
 
     def _handle_add_task(self, msg: dict[str, Any]) -> None:
         """Handle add_task control message — inject a new task into the DAG."""

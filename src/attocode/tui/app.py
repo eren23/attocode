@@ -15,11 +15,9 @@ from textual.widgets import Footer, Static
 
 from attocode.tui.bridges.approval_bridge import ApprovalBridge, BudgetBridge
 from attocode.tui.theme import ThemeWatcher
-from attocode.tui.bridges.swarm_bridge import SwarmEventMessage
 from attocode.tui.dialogs.approval import ApprovalDialog, ApprovalResult
 from attocode.tui.dialogs.budget import BudgetDialog
 from attocode.tui.screens.dashboard import DashboardScreen
-from attocode.tui.screens.swarm_monitor import SwarmMonitorScreen
 from attocode.tui.widgets.agent_internals_panel import AgentInternalsPanel
 from attocode.tui.widgets.agents_panel import AgentsPanel
 from attocode.tui.widgets.dashboard.live_dashboard import LiveTraceAccumulator
@@ -28,7 +26,6 @@ from attocode.tui.widgets.message_log import MessageLog
 from attocode.tui.widgets.plan_panel import PlanPanel
 from attocode.tui.widgets.status_bar import StatusBar
 from attocode.tui.widgets.streaming_buffer import StreamingBuffer
-from attocode.tui.widgets.swarm_panel import SwarmPanel
 from attocode.tui.widgets.tasks_panel import TasksPanel
 from attocode.tui.widgets.thinking_panel import ThinkingPanel
 from attocode.tui.widgets.token_sparkline import TokenSparkline
@@ -55,7 +52,6 @@ if TYPE_CHECKING:
         PhaseTransition,
         PlanUpdated,
         StatusUpdate,
-        SwarmStatusUpdate,
         ToolCompleted,
         ToolStarted,
     )
@@ -79,8 +75,6 @@ class AttocodeApp(App):
     CSS_PATH = [
         _STYLES_DIR / "app.tcss",
         _STYLES_DIR / "dialogs.tcss",
-        _STYLES_DIR / "swarm.tcss",
-        _STYLES_DIR / "swarm_dashboard.tcss",
     ]
 
     TITLE = "Attocode"
@@ -93,10 +87,7 @@ class AttocodeApp(App):
         Binding("escape", "cancel", "Cancel", show=False),
         # Alt-key toggles (using option-key unicode on macOS)
         Binding("ctrl+t", "toggle_tools", "Toggle Tools", show=False),
-        Binding("ctrl+w", "toggle_swarm", "Swarm", show=False),
         Binding("ctrl+d", "toggle_dashboard", "Dashboard", show=True),
-        Binding("ctrl+m", "toggle_swarm_monitor", "Swarm Monitor", show=True),
-        Binding("ctrl+s", "swarm_dashboard", "Swarm Dashboard", show=False),
         Binding("ctrl+i", "toggle_internals", "Agent Internals", show=False),
     ]
 
@@ -158,10 +149,6 @@ class AttocodeApp(App):
         # Rate-limit failure toasts (I4)
         self._last_failure_toast_time: float = 0.0
 
-        # Swarm panel update debounce
-        self._swarm_panel_update_timer: Timer | None = None
-        self._swarm_panel_last_hash: int = 0
-
         # Hot-reload watcher for CSS theme files
         self._theme_watcher: ThemeWatcher | None = None
 
@@ -181,7 +168,6 @@ class AttocodeApp(App):
             yield PlanPanel(id="plan-panel")
             yield TasksPanel(id="tasks-panel")
             yield AgentsPanel(id="agents-panel")
-            yield SwarmPanel(id="swarm-panel")
             yield AgentInternalsPanel(id="agent-internals")
             # Input + status bar inside the Vertical so they stack
             # (dock:bottom causes overlapping, not stacking)
@@ -201,9 +187,6 @@ class AttocodeApp(App):
         if self._stream_flush_timer is not None:
             self._stream_flush_timer.stop()
             self._stream_flush_timer = None
-        # Detach swarm callback before closing agent
-        if self._agent and hasattr(self._agent, "set_tui_swarm_callback"):
-            self._agent.set_tui_swarm_callback(None)
         if self._agent and hasattr(self._agent, "close"):
             await self._agent.close()
 
@@ -242,12 +225,6 @@ class AttocodeApp(App):
         # Set up bridge handlers
         self.approval_bridge.set_handler(self._show_approval_dialog)
         self.budget_bridge.set_handler(self._show_budget_dialog)
-
-        # Wire swarm event callback to push Textual messages
-        if self._agent and hasattr(self._agent, "set_tui_swarm_callback"):
-            self._agent.set_tui_swarm_callback(
-                lambda evt: self.post_message(SwarmEventMessage(evt))
-            )
 
         # Hint below banner
         log = self.query_one("#message-log", MessageLog)
@@ -694,137 +671,6 @@ class AttocodeApp(App):
             self.query_one("#message-log", MessageLog).add_system_message(event.text)
         self._sync_status_metrics()
 
-    def on_swarm_status_update(self, event: SwarmStatusUpdate) -> None:
-        """Swarm status snapshot update."""
-        self.query_one("#swarm-panel", SwarmPanel).update_status(event.status)
-
-        # Update status bar swarm indicator
-        try:
-            status_bar = self.query_one("#status-bar", StatusBar)
-            s = event.status or {}
-            st = s.get("status", {})
-            queue = st.get("queue", {})
-            budget = st.get("budget", {})
-            phase = st.get("phase", "")
-
-            status_bar.swarm_active = phase not in ("", "idle", "completed", "failed")
-            status_bar.swarm_wave = str(st.get("current_wave", ""))
-            status_bar.swarm_active_workers = len(st.get("active_workers", []))
-            status_bar.swarm_done = queue.get("completed", 0)
-            status_bar.swarm_total = queue.get("total", 0)
-            status_bar.swarm_cost = budget.get("cost_used", 0.0)
-        except NoMatches:
-            pass
-
-    # --- Swarm event handler ---
-
-    def on_swarm_event_message(self, event: SwarmEventMessage) -> None:
-        """Route swarm events to message log, toasts, and panel updates."""
-        etype = event.event.get("type", "")
-        data = event.event.get("data", {})
-        log = self.query_one("#message-log", MessageLog)
-
-        # Route key events to message log
-        if etype == "swarm.start":
-            log.add_swarm_phase("Swarm started", data.get("message", ""))
-            # Auto-show swarm panel and hint
-            try:
-                self.query_one("#swarm-panel", SwarmPanel).add_class("visible")
-            except Exception:
-                pass
-            log.add_system_message("Press Ctrl+S for full swarm dashboard")
-
-        elif etype == "swarm.tasks.loaded":
-            tasks = data.get("tasks", [])
-            log.add_swarm_phase(
-                f"Decomposed into {len(tasks)} tasks",
-                f"{data.get('total_waves', '?')} waves",
-            )
-
-        elif etype == "swarm.task.dispatched":
-            log.add_swarm_dispatch(
-                data.get("description", data.get("task_id", "?")),
-                worker=data.get("worker_name", ""),
-                model=data.get("model", ""),
-            )
-
-        elif etype == "swarm.task.completed":
-            files = data.get("files_modified") or []
-            log.add_swarm_complete(
-                data.get("description", data.get("task_id", "?")),
-                quality_score=data.get("quality_score"),
-                files=files,
-            )
-
-        elif etype == "swarm.task.failed":
-            desc = data.get("description", data.get("task_id", "?"))
-            fm = data.get("failure_mode", "")
-            log.add_swarm_failure(desc, error=data.get("error", ""), failure_mode=fm)
-            # Rate-limit per-task failure toasts to avoid spam on rapid failures
-            import time as _time
-            now = _time.time()
-            if now - self._last_failure_toast_time > 3.0:
-                self._last_failure_toast_time = now
-                self.notify(
-                    f"Task failed ({fm}): {desc[:40]}" if fm else f"Task failed: {desc[:40]}",
-                    severity="error",
-                    timeout=8,
-                )
-
-        elif etype == "swarm.wave.complete":
-            wave = data.get("wave", "?")
-            total = data.get("total_waves", "?")
-            completed = data.get("completed", 0)
-            failed = data.get("failed", 0)
-            log.add_swarm_wave(wave, total, completed, failed)
-            self.notify(
-                f"Wave {wave}/{total}: {completed} done, {failed} failed",
-                severity="information",
-            )
-
-        elif etype == "swarm.quality.rejected":
-            desc = data.get("description", data.get("task_id", "?"))
-            score = data.get("score")
-            feedback = data.get("feedback", "")
-            log.add_swarm_quality_reject(desc, score, feedback)
-            self.notify(
-                f"Quality rejected ({score}/5): {feedback[:50]}",
-                severity="warning",
-                timeout=6,
-            )
-
-        elif etype == "swarm.hollow_detected":
-            streak = data.get("streak", data.get("hollow_streak", 0))
-            self.notify(
-                f"Hollow completion (streak: {streak})",
-                severity="warning",
-                timeout=4,
-            )
-
-        elif etype == "swarm.model.failover":
-            from_model = data.get("from_model", "?")
-            to_model = data.get("to_model", "?")
-            self.notify(
-                f"Failover: {from_model} \u2192 {to_model}",
-                severity="warning",
-                timeout=4,
-            )
-
-        elif etype == "swarm.paused":
-            log.add_swarm_phase("Dispatch paused")
-            self.notify("Swarm paused", severity="information")
-
-        elif etype == "swarm.resumed":
-            log.add_swarm_phase("Dispatch resumed")
-            self.notify("Swarm resumed", severity="information")
-
-        elif etype == "swarm.complete":
-            log.add_swarm_phase("Swarm completed", data.get("message", ""))
-            self.notify("Swarm execution complete!", severity="information", timeout=10)
-
-        # Update SwarmPanel quality stats from event bridge state
-        self._update_swarm_panel_from_event(event.event)
-
     def _flush_stream_chunks(self) -> None:
         """Flush buffered stream chunks into the visible widgets."""
         self._stream_flush_timer = None
@@ -880,44 +726,6 @@ class AttocodeApp(App):
             self.query_one("#status-bar", StatusBar).live_updates_coalesced = False
         except Exception:
             logger.debug("Could not reset live_updates_coalesced on status bar")
-
-    def _update_swarm_panel_from_event(self, evt: dict) -> None:
-        """Push quality stats and start time to SwarmPanel (debounced 100ms)."""
-        # Immediate handling for swarm.start (rare, non-repeating)
-        etype = evt.get("type", "")
-        if etype == "swarm.start":
-            try:
-                panel = self.query_one("#swarm-panel", SwarmPanel)
-                if panel._start_time == 0:
-                    import time as _time
-                    panel.set_start_time(evt.get("timestamp", 0) or _time.time())
-            except Exception:
-                logger.debug("Could not set swarm panel start time")
-
-        # Debounce quality stats updates
-        if self._swarm_panel_update_timer is None:
-            self._swarm_panel_update_timer = self.set_timer(
-                0.1, self._flush_swarm_panel_update,
-            )
-
-    def _flush_swarm_panel_update(self) -> None:
-        """Flush debounced swarm panel quality stats."""
-        self._swarm_panel_update_timer = None
-        try:
-            if self._agent and hasattr(self._agent, "event_bridge"):
-                bridge = self._agent.event_bridge
-                if bridge and hasattr(bridge, "get_live_state"):
-                    live_state = bridge.get_live_state()
-                    qs = live_state.get("quality_stats", {})
-                    if qs:
-                        # Dedup: hash key fields to skip no-op updates
-                        state_hash = hash(frozenset(qs.items()) if isinstance(qs, dict) else 0)
-                        if state_hash != self._swarm_panel_last_hash:
-                            self._swarm_panel_last_hash = state_hash
-                            panel = self.query_one("#swarm-panel", SwarmPanel)
-                            panel.update_quality_stats(qs)
-        except Exception:
-            logger.debug("Failed to flush swarm panel update")
 
     def on_compaction_completed(self, event: CompactionCompleted) -> None:
         """Compaction event — update status bar and internals panel."""
@@ -1088,11 +896,6 @@ class AttocodeApp(App):
         """Toggle tool call details."""
         self.query_one("#tool-panel", ToolCallsPanel).toggle_expanded()
 
-    def action_toggle_swarm(self) -> None:
-        """Toggle swarm panel visibility."""
-        panel = self.query_one("#swarm-panel", SwarmPanel)
-        panel.toggle_class("visible")
-
     def action_toggle_internals(self) -> None:
         """Toggle agent internals panel (Ctrl+I)."""
         panel = self.query_one("#agent-internals", AgentInternalsPanel)
@@ -1121,44 +924,6 @@ class AttocodeApp(App):
                 accumulator=self._live_accumulator,
             )
         )
-
-    def action_toggle_swarm_monitor(self) -> None:
-        """Open fleet-level swarm monitor (Ctrl+M)."""
-        root = "."
-        if self._agent:
-            wd = getattr(self._agent, "working_dir", "") or ""
-            if wd:
-                root = wd
-        self.push_screen(SwarmMonitorScreen(root=root))
-
-    def action_swarm_dashboard(self) -> None:
-        """Open the AoT swarm dashboard (Ctrl+S)."""
-        from attocode.tui.screens.swarm_dashboard import SwarmDashboardScreen
-
-        state_fn = None
-        event_bridge = None
-        blackboard = None
-        ast_service = None
-        orch = None
-
-        if self._agent and hasattr(self._agent, "_swarm_orchestrator"):
-            orch = self._agent._swarm_orchestrator
-            if orch and hasattr(orch, "get_state"):
-                state_fn = orch.get_state
-            if orch and hasattr(orch, "event_bridge"):
-                event_bridge = orch.event_bridge
-            if orch and hasattr(orch, "blackboard"):
-                blackboard = orch.blackboard
-            if orch and hasattr(orch, "ast_service"):
-                ast_service = orch.ast_service
-
-        self.push_screen(SwarmDashboardScreen(
-            state_fn=state_fn,
-            event_bridge=event_bridge,
-            blackboard=blackboard,
-            ast_service=ast_service,
-            orchestrator=orch,
-        ))
 
     # --- Helpers ---
 

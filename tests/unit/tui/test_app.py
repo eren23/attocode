@@ -64,6 +64,13 @@ class TestAttocodeAppComposition:
         assert app._model_name == "claude-sonnet-4-20250514"
         assert app._git_branch == "main"
 
+    def test_app_bindings_do_not_expose_embedded_swarm_actions(self) -> None:
+        action_names = {binding.action for binding in AttocodeApp.BINDINGS}
+
+        assert "toggle_swarm" not in action_names
+        assert "toggle_swarm_monitor" not in action_names
+        assert "swarm_dashboard" not in action_names
+
 
 class TestAttocodeAppPilot:
     """Test app behavior using Textual's async pilot."""
@@ -77,6 +84,7 @@ class TestAttocodeAppPilot:
             assert app.query_one("#tool-panel", ToolCallsPanel)
             assert app.query_one("#input-area", PromptInput)
             assert app.query_one("#status-bar", StatusBar)
+            assert not app.query("#swarm-panel")
 
     @pytest.mark.asyncio
     async def test_status_bar_initial(self) -> None:

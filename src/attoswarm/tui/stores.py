@@ -174,6 +174,7 @@ class StateStore:
         "task.completed": "Completed",
         "fail": "Failed",
         "task.failed": "Failed",
+        "task.unschedulable": "Unschedulable",
     }
 
     def build_agent_activity(
@@ -462,6 +463,7 @@ class StateStore:
                 "task.claimed": "claim",
                 "task.completed": "complete",
                 "task.failed": "fail",
+                "task.unschedulable": "fail",
                 "task.skipped": "skip",
                 "file.written": "write",
                 "conflict.detected": "conflict",

@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from pathlib import Path
+from typing import TYPE_CHECKING
 
 import pytest
 
@@ -12,6 +12,9 @@ from attocode.integrations.context.cross_references import (
     SymbolLocation,
     SymbolRef,
 )
+
+if TYPE_CHECKING:
+    from pathlib import Path
 
 
 # ---------------------------------------------------------------------------
@@ -145,8 +148,28 @@ class TestASTService:
             "def helper():\n    return 99\n\ndef new_func():\n    pass\n"
         )
         changes = svc.notify_file_changed("utils.py")
-        # Should detect modifications
         assert isinstance(changes, list)
+        names = {s.name for s in svc.get_file_symbols("utils.py")}
+        assert "helper" in names
+        assert "new_func" in names
+        assert "unused" not in names
+        ASTService.clear_instances()
+
+    def test_incremental_initialize_updates_stale_file_without_fk_error(self, project_dir: Path) -> None:
+        ASTService.clear_instances()
+        svc = ASTService.get_instance(str(project_dir))
+        svc.initialize()
+        ASTService.clear_instances()
+
+        (project_dir / "utils.py").write_text(
+            "def helper():\n    return 7\n\ndef later_added():\n    pass\n"
+        )
+
+        svc2 = ASTService.get_instance(str(project_dir))
+        svc2.initialize()
+
+        names = {s.name for s in svc2.get_file_symbols("utils.py")}
+        assert "later_added" in names
         ASTService.clear_instances()
 
     def test_detect_conflicts(self, project_dir: Path) -> None:
