@@ -9,7 +9,7 @@ LANG_MAP: dict[str, str] = {
     ".py": "python", ".js": "javascript", ".ts": "typescript",
     ".tsx": "typescriptreact", ".jsx": "javascriptreact",
     ".rs": "rust", ".go": "go", ".java": "java", ".rb": "ruby",
-    ".c": "c", ".cpp": "cpp", ".h": "c", ".hpp": "cpp",
+    ".c": "c", ".cpp": "cpp", ".h": "c", ".hpp": "cpp", ".metal": "cpp",
     ".cs": "csharp", ".swift": "swift", ".kt": "kotlin",
     ".sh": "shell", ".bash": "shell", ".zsh": "shell",
     ".json": "json", ".yaml": "yaml", ".yml": "yaml",

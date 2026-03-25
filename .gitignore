@@ -46,6 +46,7 @@ tests/unit/tui/__snapshots__/
 
 
 # Build outputs
+*.vsix
 site/
 snapshot_report.html
 .internal

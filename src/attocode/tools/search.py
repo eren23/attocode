@@ -1,13 +1,49 @@
-"""Search tools: grep."""
+"""Search tools: grep with optional trigram index pre-filtering."""
 
 from __future__ import annotations
 
+import logging
 import os
 import re
 from pathlib import Path
 from typing import Any
 
 from attocode.tools.base import Tool, ToolSpec
+
+logger = logging.getLogger(__name__)
+
+# ---------------------------------------------------------------------------
+# Trigram index cache: one TrigramIndex per resolved project root.
+# Populated lazily on first grep call; None = index unavailable.
+# ---------------------------------------------------------------------------
+_trigram_indexes: dict[str, Any] = {}
+
+
+def _get_trigram_index(root: Path) -> Any | None:
+    """Return a loaded TrigramIndex for *root*, or None if unavailable."""
+    key = str(root)
+    if key in _trigram_indexes:
+        return _trigram_indexes[key]
+
+    index_dir = root / ".attocode" / "index"
+    if not index_dir.is_dir():
+        _trigram_indexes[key] = None
+        return None
+
+    try:
+        from attocode.integrations.context.trigram_index import TrigramIndex
+
+        idx = TrigramIndex(index_dir=str(index_dir))
+        if idx.load():
+            _trigram_indexes[key] = idx
+            logger.debug("trigram index loaded for %s", root)
+        else:
+            _trigram_indexes[key] = None
+    except Exception:
+        logger.debug("Failed to load trigram index for %s", root, exc_info=True)
+        _trigram_indexes[key] = None
+
+    return _trigram_indexes[key]
 
 
 async def grep_search(args: dict[str, Any], working_dir: str | None = None) -> str:
@@ -29,8 +65,37 @@ async def grep_search(args: dict[str, Any], working_dir: str | None = None) -> s
     except re.error as e:
         return f"Error: Invalid regex pattern: {e}"
 
+    # ------------------------------------------------------------------
+    # Determine candidate file list.
+    # Fast path: trigram index pre-filters to a narrow candidate set.
+    # Slow path: full rglob (original behaviour, always correct).
+    # ------------------------------------------------------------------
+    if root.is_file():
+        files: list[Path] = [root]
+    else:
+        trigram_idx = _get_trigram_index(root)
+        if trigram_idx is not None and trigram_idx.is_ready():
+            candidate_paths = trigram_idx.query(
+                pattern, case_insensitive=case_insensitive
+            )
+            if candidate_paths is not None:
+                if glob_filter:
+                    import fnmatch
+                    candidate_paths = [
+                        p for p in candidate_paths
+                        if fnmatch.fnmatch(Path(p).name, glob_filter)
+                    ]
+                files = sorted(root / p for p in candidate_paths)
+                logger.debug(
+                    "trigram filter: %d candidates for pattern %r",
+                    len(files), pattern,
+                )
+            else:
+                files = sorted(root.rglob(glob_filter or "*"))
+        else:
+            files = sorted(root.rglob(glob_filter or "*"))
+
     matches: list[str] = []
-    files = [root] if root.is_file() else sorted(root.rglob(glob_filter or "*"))
 
     for file in files:
         if not file.is_file() or file.name.startswith("."):

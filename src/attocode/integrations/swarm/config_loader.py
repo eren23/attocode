@@ -172,6 +172,11 @@ def _parse_worker_spec(raw: dict[str, Any]) -> dict[str, Any]:
             val = raw[list_field]
             spec[snake] = list(val) if isinstance(val, (list, tuple)) else [val]
 
+    # Per-worker sandbox policy override
+    sandbox_policy = raw.get("sandbox_policy", raw.get("sandboxPolicy"))
+    if isinstance(sandbox_policy, dict):
+        spec["sandbox_policy"] = sandbox_policy
+
     return spec
 
 
@@ -347,6 +352,35 @@ def yaml_to_swarm_config(
     guard = raw.get("completion_guard", raw.get("completionGuard", {}))
     if isinstance(guard, dict) and guard:
         cfg["completion_guard"] = guard
+
+    # --- Sandbox configuration ---
+    sandbox = raw.get("sandbox", {})
+    if isinstance(sandbox, dict) and sandbox:
+        if "mode" in sandbox:
+            cfg["sandbox_mode"] = str(sandbox["mode"])
+        if "gateway" in sandbox:
+            cfg["sandbox_gateway_url"] = str(sandbox["gateway"])
+        if "policy_path" in sandbox:
+            cfg["sandbox_policy_path"] = str(sandbox["policy_path"])
+        if "policy" in sandbox and isinstance(sandbox["policy"], dict):
+            cfg["sandbox_policy"] = sandbox["policy"]
+        if "credentials" in sandbox and isinstance(sandbox["credentials"], dict):
+            # Expand ${VAR} references from environment
+            import os as _os
+            creds: dict[str, str] = {}
+            for k, v in sandbox["credentials"].items():
+                val = str(v)
+                if val.startswith("${") and val.endswith("}"):
+                    env_key = val[2:-1]
+                    creds[k] = _os.environ.get(env_key, "")
+                else:
+                    creds[k] = val
+            cfg["sandbox_credentials"] = creds
+    # Also support top-level sandbox_mode
+    if "sandbox_mode" in raw and "sandbox_mode" not in cfg:
+        cfg["sandbox_mode"] = str(raw["sandbox_mode"])
+    if "sandboxMode" in raw and "sandbox_mode" not in cfg:
+        cfg["sandbox_mode"] = str(raw["sandboxMode"])
 
     # --- Misc top-level fields (snake_case and camelCase) ---
     _direct_mappings: dict[str, tuple[str, type]] = {

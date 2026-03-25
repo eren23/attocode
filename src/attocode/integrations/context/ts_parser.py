@@ -320,6 +320,7 @@ LANGUAGE_CONFIGS["scss"] = LANGUAGE_CONFIGS["css"]
 LANGUAGE_CONFIGS["objective-c"] = LANGUAGE_CONFIGS["objc"]
 LANGUAGE_CONFIGS["objective_c"] = LANGUAGE_CONFIGS["objc"]
 LANGUAGE_CONFIGS["f#"] = LANGUAGE_CONFIGS["fsharp"]
+LANGUAGE_CONFIGS["metal"] = LANGUAGE_CONFIGS["cpp"]
 
 
 def _try_init_tree_sitter() -> bool:

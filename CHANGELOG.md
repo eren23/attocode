@@ -7,7 +7,48 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### Planned (v0.2.7)
+## [0.2.7] - 2026-03-25
+
+### Added
+
+#### Metal Shading Language Support
+- `.metal` file extension mapped to C++ parser across all code-intel layers (`LANG_EXTENSIONS`, `_EXT_TO_LANG`, `LANG_MAP`, `LANGUAGE_CONFIGS`)
+- `LANGUAGE_CONFIGS["metal"]` alias for C++ tree-sitter config
+- VS Code/Cursor extension (`extensions/vscode-metal/`) with TextMate grammar for Metal-specific syntax highlighting
+  - Function qualifiers: `kernel`, `vertex`, `fragment`, `compute`, `mesh`, `object`
+  - Address space qualifiers: `device`, `constant`, `threadgroup`, `thread`
+  - Vector/matrix/texture types, SIMD group operations, atomic operations
+  - Metal attribute syntax: `[[buffer(N)]]`, `[[thread_position_in_grid]]`, etc.
+  - Packaged as `.vsix` for easy installation
+
+#### Readiness Report Engine
+- 8-phase codebase audit: Baseline, API & Business Logic, Frontend Flows, Data Layer, Test Coverage, Security Surface, Observability, Deployability
+- Tracer bullet end-to-end verification tracing entry points through dependency chains
+- Weighted scoring with letter grades (A-F) per phase and overall
+- MCP tool `readiness_report` via `readiness_tools.py` for agent-accessible audits
+- `ReadinessEngine.run()` with configurable phase selection and scope filtering
+- `ReadinessEngine.format_report()` for human-readable output
+- Implementation: `src/attocode/code_intel/readiness.py` (972 lines)
+
+#### Trigram Index & Fast Search
+- Memory-mapped trigram inverted index for fast regex candidate pre-filtering
+- Two-file mmap storage: lookup table (binary search) + postings (file-ID lists)
+- File-ID mapping persisted in SQLite for cross-session reuse
+- `extract_required_trigrams()` regex analysis for optimal candidate filtering
+- Integrated into `fast_search` MCP tool and `grep_search` code path
+- Skips binary files, dotfiles, `node_modules`, `.venv`, and other non-source directories
+- Implementation: `trigram_index.py` (648 lines) + `trigram_regex.py` (160 lines)
+
+#### OpenShell Sandbox Integration
+- NVIDIA OpenShell sandbox for policy-governed agent isolation
+- `OpenShellSandboxSession` for persistent sessions with exec, credential injection, and network policy hot-reload
+- `OpenShellSandbox` with declarative YAML policy enforcement (Landlock LSM, network proxy, seccomp)
+- Two-phase spawner: network ON during setup (install deps), restricted during agent work
+- Policy cascade: task > worker > swarm config with `network_policies` concatenation
+- All subprocess calls use `asyncio.create_subprocess_exec` (no shell injection)
+- Implementation: `openshell.py` (542 lines) + `openshell_spawner.py` (315 lines)
+
+### Planned (v0.2.8)
 - Embedding-based semantic search (NDCG target: 0.40+)
 - Ground truth YAML for 20+ benchmark repos
 - Persistent index cache across CodeIntelService instances

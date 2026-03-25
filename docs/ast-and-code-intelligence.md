@@ -15,7 +15,7 @@ The AST system provides:
 ```mermaid
 flowchart TB
     subgraph AST["AST System"]
-        Parser[Tree-sitter Parsers<br/>36 languages + fallback]
+        Parser[Tree-sitter Parsers<br/>37 languages + fallback]
         Service[ASTService<br/>Singleton per project]
         Index[CrossRefIndex<br/>Bidirectional index]
         Store[IndexStore<br/>SQLite persistence]
@@ -41,7 +41,7 @@ flowchart TB
     Tools --> Commands
 ```
 
-## Supported Languages (36 with tree-sitter configs)
+## Supported Languages (37 with tree-sitter configs)
 
 ### Tier 1: Full AST Support (9 languages)
 
@@ -55,7 +55,7 @@ flowchart TB
 | Java | `.java` | Methods, constructors, classes, interfaces, enums |
 | Ruby | `.rb` | Methods, classes, modules, require/require_relative |
 | C | `.c`, `.h` | Functions, structs, enums, unions, #include |
-| C++ | `.cpp`, `.hpp`, `.cc` | Functions, classes, structs, namespaces, #include |
+| C++ | `.cpp`, `.hpp`, `.cc`, `.metal` | Functions, classes, structs, namespaces, #include. Metal files parsed via C++ grammar. |
 
 ### Tier 2: Good Support (16 languages)
 
@@ -90,6 +90,16 @@ flowchart TB
 | Objective-C | `.m`, `.mm` | Functions, class interfaces/implementations, protocols, methods |
 
 All languages fall back to `tree-sitter-language-pack` when individual grammar packages aren't installed. Languages without tree-sitter support degrade to the generic extractor or `universal-ctags`.
+
+### Language Aliases
+
+Some file extensions are mapped to an existing language parser when the source language is syntactically close:
+
+| Alias Extension | Parsed As | Rationale |
+|----------------|-----------|-----------|
+| `.metal` (Metal Shading Language) | C++ | MSL is C++14-based with GPU extensions |
+
+Metal files get full C++ symbol extraction (functions, structs, enums, `#include`). Metal-specific constructs (`kernel`, `device`, `threadgroup`, `[[buffer(N)]]`) are parsed as C++ identifiers/attributes --- sufficient for symbol indexing and cross-references. See the [Metal Language Support guide](guides/metal-language-support.md) for details.
 
 ## The `codebase_overview` Tool
 

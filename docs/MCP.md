@@ -1,5 +1,9 @@
 # MCP Integration
 
+For a host-by-host setup guide covering Codex, Claude Code, Claude Desktop,
+Cursor, Windsurf, VS Code, Zed, and Attocode/swarm model routing, see
+[MCP & Model Connections](guides/mcp-and-model-connections.md).
+
 ## Overview
 
 Attocode supports the [Model Context Protocol](https://modelcontextprotocol.io/) for connecting external tools. Located in `src/attocode/integrations/mcp/`.

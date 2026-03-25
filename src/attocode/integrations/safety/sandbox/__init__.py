@@ -5,6 +5,7 @@ Available sandboxes:
 - SeatbeltSandbox: macOS sandbox-exec isolation
 - LandlockSandbox: Linux Landlock LSM isolation
 - DockerSandbox: Docker container isolation
+- OpenShellSandbox: NVIDIA OpenShell policy-governed isolation
 
 Use create_sandbox() to auto-detect the best available sandbox.
 Use create_two_phase_sandbox() for two-phase mode (network ON for setup, OFF for agent).
@@ -29,6 +30,9 @@ __all__ = [
     "TwoPhaseContext",
     "create_sandbox",
     "create_two_phase_sandbox",
+    "OpenShellSandbox",
+    "OpenShellOptions",
+    "OpenShellSandboxSession",
 ]
 
 
@@ -43,6 +47,7 @@ class SandboxPhase(StrEnum):
 _SeatbeltSandbox: type | None = None
 _LandlockSandbox: type | None = None
 _DockerSandbox: type | None = None
+_OpenShellSandbox: type | None = None
 
 
 def _load_seatbelt() -> type | None:
@@ -78,6 +83,17 @@ def _load_docker() -> type | None:
     return _DockerSandbox
 
 
+def _load_openshell() -> type | None:
+    global _OpenShellSandbox
+    if _OpenShellSandbox is None:
+        try:
+            from attocode.integrations.safety.sandbox.openshell import OpenShellSandbox
+            _OpenShellSandbox = OpenShellSandbox
+        except ImportError:
+            pass
+    return _OpenShellSandbox
+
+
 def _apply_network_option(cls: type, network_allowed: bool | None, kwargs: dict[str, Any]) -> Any:
     """Create a sandbox instance, injecting network_allowed into its options."""
     instance = cls(**kwargs)
@@ -97,7 +113,7 @@ def create_sandbox(
     """Create the best available sandbox for the current platform.
 
     Args:
-        mode: Sandbox mode - 'auto', 'basic', 'seatbelt', 'landlock', 'docker'.
+        mode: Sandbox mode - 'auto', 'basic', 'seatbelt', 'landlock', 'docker', 'openshell'.
         network_allowed: Override the default network_allowed setting on the
             sandbox options. When *None* (default), the sandbox's own default
             is used.
@@ -127,6 +143,12 @@ def create_sandbox(
             return _apply_network_option(cls, network_allowed, kwargs)
         raise ConfigurationError("Docker sandbox not available")
 
+    if mode == "openshell":
+        cls = _load_openshell()
+        if cls and cls.is_available():
+            return _apply_network_option(cls, network_allowed, kwargs)
+        raise ConfigurationError("OpenShell sandbox not available (install: pip install openshell)")
+
     # Auto-detect
     if sys.platform == "darwin":
         cls = _load_seatbelt()
@@ -137,6 +159,11 @@ def create_sandbox(
         cls = _load_landlock()
         if cls and cls.is_available():
             return _apply_network_option(cls, network_allowed, kwargs)
+
+    # OpenShell provides stronger isolation than basic but may not always be available
+    cls = _load_openshell()
+    if cls and cls.is_available():
+        return _apply_network_option(cls, network_allowed, kwargs)
 
     cls = _load_docker()
     if cls and cls.is_available():
@@ -219,7 +246,7 @@ def create_two_phase_sandbox(
     restricted) via :meth:`TwoPhaseContext.transition_to_agent`.
 
     Args:
-        mode: Sandbox mode - 'auto', 'basic', 'seatbelt', 'landlock', 'docker'.
+        mode: Sandbox mode - 'auto', 'basic', 'seatbelt', 'landlock', 'docker', 'openshell'.
         **kwargs: Extra options forwarded to the underlying sandbox constructor.
 
     Returns:

@@ -78,6 +78,7 @@ class TestLanguageDetection:
         assert detect_language("foo.hxx") == "cpp"
         assert detect_language("foo.hh") == "cpp"
         assert detect_language("foo.cxx") == "cpp"
+        assert detect_language("foo.metal") == "cpp"
 
     def test_python_stub_files(self) -> None:
         assert detect_language("foo.pyi") == "python"
@@ -115,6 +116,7 @@ class TestLanguageConfigs:
         assert LANGUAGE_CONFIGS["sh"] is LANGUAGE_CONFIGS["bash"]
         assert LANGUAGE_CONFIGS["terraform"] is LANGUAGE_CONFIGS["hcl"]
         assert LANGUAGE_CONFIGS["scss"] is LANGUAGE_CONFIGS["css"]
+        assert LANGUAGE_CONFIGS["metal"] is LANGUAGE_CONFIGS["cpp"]
 
     def test_supported_languages_count(self) -> None:
         """Should support 25+ languages (including aliases)."""
@@ -336,6 +338,45 @@ class TestCppTreeSitter:
         assert "pointerFunc" in names
         for bad in ("void", "int"):
             assert bad not in names
+
+
+@pytest.mark.skipif(not _has_grammar("cpp"), reason="tree-sitter-cpp not installed")
+class TestMetalTreeSitter:
+    """Metal files use the C++ parser — verify symbol extraction works."""
+
+    def test_kernel_function_extracted(self) -> None:
+        code = (
+            "#include <metal_stdlib>\n"
+            "using namespace metal;\n"
+            "kernel void matmul(\n"
+            "    device const float* A [[buffer(0)]],\n"
+            "    device float* C [[buffer(1)]],\n"
+            "    uint tid [[thread_position_in_grid]]\n"
+            ") {\n"
+            "    C[tid] = A[tid] * 2.0;\n"
+            "}\n"
+        )
+        result = ts_parse_file("matmul.metal", content=code, language="cpp")
+        assert result is not None
+        names = [f["name"] for f in result["functions"]]
+        assert "matmul" in names
+
+    def test_struct_and_include_extracted(self) -> None:
+        code = (
+            "#include <metal_stdlib>\n"
+            "using namespace metal;\n"
+            "struct Params {\n"
+            "    uint width;\n"
+            "    uint height;\n"
+            "};\n"
+            "kernel void process(constant Params& p [[buffer(0)]]) {}\n"
+        )
+        result = ts_parse_file("process.metal", content=code, language="cpp")
+        assert result is not None
+        assert any(c["name"] == "Params" for c in result["classes"])
+        assert len(result["imports"]) >= 1
+        names = [f["name"] for f in result["functions"]]
+        assert "process" in names
 
 
 @pytest.mark.skipif(not _has_grammar("php"), reason="tree-sitter-php not installed")
