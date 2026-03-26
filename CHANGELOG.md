@@ -7,6 +7,43 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.8] - 2026-03-26
+
+### Added
+
+#### Research Campaign Worktree Engine
+- Isolated research experiments now run in dedicated git worktrees instead of mutating the main repository in place
+- Research campaign persistence now stores experiment lineage, related experiment IDs, findings, steering notes, and checkpointed run state in SQLite
+- New research strategies and operator flows for `ablate`, `compose`, `reproduce`, `hold`, `resume`, `kill`, and manual promotion
+- Real patch-import and compose pre-application support through `WorktreeManager.apply_diff()`
+
+#### Research CLI Surface
+- `attoswarm research start` now supports parallel experiment batches, resume, promotion repeats, and worktree-backed execution
+- Added `attoswarm research leaderboard`, `feed`, `monitor`, `compare`, `reproduce`, and `import-patch`
+- Legacy `attoswarm research "<goal>" -e ...` invocation remains supported as a compatibility alias to `research start`
+
+#### Research Testing & CI
+- Hermetic research integration harness using real subprocess CLI execution, real git repos, real worktrees, and fake local workers
+- Real CLI coverage for research start, resume, compare, reproduce, import-patch, feed, monitor, and operator controls
+- Added focused research unit coverage for accept policies, evaluators, hypothesis generation, worktree management, and orchestrator failure paths
+- Dedicated GitHub Actions job for research integration tests, with slow/local scenarios excluded from default CI
+
+### Changed
+
+#### Evaluator & Promotion Semantics
+- Command evaluator accepts structured JSON metric output with secondary metrics, constraint checks, artifacts, and seed metadata
+- Candidate promotion now supports validation-gated acceptance instead of immediate promotion-only workflows
+- Findings generation now distinguishes accepted wins from invalid/error results for better campaign memory
+
+#### Worker Launching
+- Research subprocess workers now honor `role.command` overrides consistently, including fallback role selection
+
+### Fixed
+
+#### Patch Import Reliability
+- Patch application now strips non-patch preambles and normalizes trailing newlines before `git apply --3way`
+- Failed patch imports reset the worktree back to `HEAD` cleanly instead of leaving partial state behind
+
 ## [0.2.7] - 2026-03-25
 
 ### Added
@@ -48,7 +85,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - All subprocess calls use `asyncio.create_subprocess_exec` (no shell injection)
 - Implementation: `openshell.py` (542 lines) + `openshell_spawner.py` (315 lines)
 
-### Planned (v0.2.8)
+### Planned (v0.2.9)
 - Embedding-based semantic search (NDCG target: 0.40+)
 - Ground truth YAML for 20+ benchmark repos
 - Persistent index cache across CodeIntelService instances
