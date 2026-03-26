@@ -18,11 +18,12 @@ from attoswarm.research.evaluator import (
     ScriptEvaluator,
     TestPassRateEvaluator,
 )
-from attoswarm.research.experiment import Experiment, ResearchState
+from attoswarm.research.experiment import Experiment, FindingRecord, ResearchState, SteeringNote
 from attoswarm.research.experiment_db import ExperimentDB
 from attoswarm.research.hypothesis import HypothesisGenerator
 from attoswarm.research.research_orchestrator import ResearchOrchestrator
 from attoswarm.research.scoreboard import Scoreboard
+from attoswarm.research.worktree_manager import WorktreeManager
 
 __all__ = [
     "AcceptPolicy",
@@ -32,6 +33,7 @@ __all__ = [
     "Evaluator",
     "Experiment",
     "ExperimentDB",
+    "FindingRecord",
     "HypothesisGenerator",
     "NeverRegressPolicy",
     "ResearchConfig",
@@ -39,7 +41,9 @@ __all__ = [
     "ResearchState",
     "Scoreboard",
     "ScriptEvaluator",
+    "SteeringNote",
     "StatisticalPolicy",
     "TestPassRateEvaluator",
     "ThresholdPolicy",
+    "WorktreeManager",
 ]

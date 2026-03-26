@@ -48,18 +48,20 @@ def _make_stable_app(run_dir: Path) -> "AttoswarmApp":
             from textual.containers import Horizontal, Vertical
             from textual.widgets import Footer, Header, Input, ProgressBar, Static, TabbedContent, TabPane
 
-            from attocode.tui.widgets.swarm.agent_trace_stream import AgentTraceStream
-            from attocode.tui.widgets.swarm.agent_grid import AgentsDataTable
-            from attocode.tui.widgets.swarm.budget_projection_widget import BudgetProjectionWidget
-            from attocode.tui.widgets.swarm.conflict_panel import ConflictPanel
-            from attocode.tui.widgets.swarm.decisions_pane import DecisionsPane
-            from attocode.tui.widgets.swarm.dag_view import DependencyTree
-            from attocode.tui.widgets.swarm.detail_inspector import DetailInspector
-            from attocode.tui.widgets.swarm.event_timeline import EventsLog
-            from attocode.tui.widgets.swarm.failure_chain_widget import FailureChainWidget
-            from attocode.tui.widgets.swarm.messages_log import MessagesLog
-            from attocode.tui.widgets.swarm.overview_pane import OverviewPane
-            from attocode.tui.widgets.swarm.task_board import TasksDataTable
+            from attoswarm.tui.widgets import (
+                AgentTraceStream,
+                AgentsDataTable,
+                BudgetProjectionWidget,
+                ConflictPanel,
+                DecisionsPane,
+                DependencyTree,
+                DetailInspector,
+                EventsLog,
+                FailureChainWidget,
+                MessagesLog,
+                OverviewPane,
+                TasksDataTable,
+            )
 
             yield Header(show_clock=False)
             with Vertical(id="swarm-outer"):

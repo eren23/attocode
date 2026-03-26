@@ -226,6 +226,16 @@ class TestCLI:
         assert called["parts"] == ("doctor", ".attocode/swarm.hybrid.yaml")
         assert called["debug"] is False
 
+    def test_top_level_swarm_flags_exit_with_migration_message(self) -> None:
+        runner = CliRunner()
+
+        result = runner.invoke(main, ["--hybrid", "ship it"])
+
+        assert result.exit_code == 2
+        assert "Top-level swarm mode was removed from `attocode`." in result.output
+        assert "attocode swarm start .attocode/swarm.hybrid.yaml" in result.output
+        assert "attocode swarm tui <run_dir>" in result.output
+
     def test_invoke_attoswarm_marks_launcher_env(self, monkeypatch) -> None:  # type: ignore[no-untyped-def]
         captured: dict[str, str | list[str]] = {}
 

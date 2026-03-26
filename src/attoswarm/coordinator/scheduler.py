@@ -26,6 +26,16 @@ class Assignment:
     role_id: str
 
 
+@dataclass(slots=True)
+class UnschedulableTask:
+    task_id: str
+    task_kind: str
+    role_hint: str
+    reason: str
+    eligible_role_ids: list[str]
+    available_role_ids: list[str]
+
+
 def compute_ready_tasks(tasks: list[TaskSpec], task_state: dict[str, str]) -> list[TaskSpec]:
     ready: list[TaskSpec] = []
     for t in tasks:
@@ -79,3 +89,61 @@ def assign_tasks(
         assignments.append(Assignment(task_id=task.task_id, agent_id=picked.agent_id, role_id=picked.role_id))
         available = [a for a in available if a.agent_id != picked.agent_id]
     return assignments
+
+
+def find_unschedulable_tasks(
+    ready_tasks: Iterable[TaskSpec],
+    agents: Iterable[AgentSlot],
+    roles: list[RoleSpec],
+) -> list[UnschedulableTask]:
+    """Return ready tasks that cannot ever run with the current role/agent set."""
+    role_by_id = {r.role_id: r for r in roles}
+    available_role_ids = sorted({agent.role_id for agent in agents})
+    out: list[UnschedulableTask] = []
+
+    for task in ready_tasks:
+        if task.role_hint:
+            candidate_roles = [role_by_id[task.role_hint]] if task.role_hint in role_by_id else []
+        else:
+            candidate_roles = roles
+
+        if not candidate_roles:
+            out.append(
+                UnschedulableTask(
+                    task_id=task.task_id,
+                    task_kind=task.task_kind,
+                    role_hint=task.role_hint or "",
+                    reason="role_hint_unmatched",
+                    eligible_role_ids=[],
+                    available_role_ids=available_role_ids,
+                )
+            )
+            continue
+
+        eligible_role_ids = [
+            role.role_id
+            for role in candidate_roles
+            if not role.task_kinds or task.task_kind in role.task_kinds
+        ]
+        if eligible_role_ids:
+            if any(role_id in available_role_ids for role_id in eligible_role_ids):
+                continue
+            reason = "no_agent_for_eligible_role"
+        else:
+            reason = (
+                "role_hint_cannot_run_task_kind"
+                if task.role_hint
+                else "no_role_for_task_kind"
+            )
+        out.append(
+            UnschedulableTask(
+                task_id=task.task_id,
+                task_kind=task.task_kind,
+                role_hint=task.role_hint or "",
+                reason=reason,
+                eligible_role_ids=eligible_role_ids,
+                available_role_ids=available_role_ids,
+            )
+        )
+
+    return out

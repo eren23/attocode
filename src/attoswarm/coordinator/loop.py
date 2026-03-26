@@ -740,8 +740,16 @@ class HybridCoordinator:
                 "error_type": type(exc).__name__,
             })
 
+    @staticmethod
+    def _role_supports_task_kind(role: RoleSpec | None, task_kind: str) -> bool:
+        if role is None:
+            return False
+        return not role.task_kinds or task_kind in role.task_kinds
+
     def _decompose_initial_tasks(self, roles: list[RoleSpec]) -> list[TaskSpec]:
         mode = self.config.orchestration.decomposition
+        worker_role = next((r for r in roles if r.role_type == "worker"), roles[0] if roles else None)
+        role_worker = worker_role.role_id if worker_role else None
         if mode == "manual":
             return [
                 TaskSpec(
@@ -755,10 +763,6 @@ class HybridCoordinator:
             ]
 
         if mode == "fast":
-            role_worker = next(
-                (r.role_id for r in roles if r.role_type == "worker"),
-                roles[0].role_id if roles else None,
-            )
             tasks: list[TaskSpec] = [
                 TaskSpec(
                     task_id="t0",
@@ -770,7 +774,9 @@ class HybridCoordinator:
                 ),
             ]
             worker_count = sum(r.count for r in roles if r.role_type == "worker")
-            if worker_count > 1:
+            worker_supports_test = self._role_supports_task_kind(worker_role, "test")
+            worker_supports_integrate = self._role_supports_task_kind(worker_role, "integrate")
+            if worker_count > 1 and worker_supports_test:
                 tasks.append(
                     TaskSpec(
                         task_id="t1",
@@ -782,18 +788,19 @@ class HybridCoordinator:
                         status="pending",
                     )
                 )
-            integrate_deps = [t.task_id for t in tasks]
-            tasks.append(
-                TaskSpec(
-                    task_id=f"t{len(tasks)}",
-                    title="Integrate and finalize",
-                    description="Integrate implementation and tests into coherent final output.",
-                    deps=integrate_deps,
-                    role_hint=role_worker,
-                    task_kind="integrate",
-                    status="pending",
+            if worker_supports_integrate:
+                integrate_deps = [t.task_id for t in tasks]
+                tasks.append(
+                    TaskSpec(
+                        task_id=f"t{len(tasks)}",
+                        title="Integrate and finalize",
+                        description="Integrate implementation and tests into coherent final output.",
+                        deps=integrate_deps,
+                        role_hint=role_worker,
+                        task_kind="integrate",
+                        status="pending",
+                    )
                 )
-            )
             return tasks[: max(1, self.config.orchestration.max_tasks)]
 
         if mode == "parallel":
@@ -814,75 +821,111 @@ class HybridCoordinator:
                 {"reason": "unknown_mode", "mode": mode, "using": "default_pipeline"},
             )
         max_tasks = max(1, self.config.orchestration.max_tasks)
-        role_worker = next((r.role_id for r in roles if r.role_type == "worker"), roles[0].role_id if roles else None)
         role_judge = next((r.role_id for r in roles if r.role_type == "judge"), None)
         role_critic = next((r.role_id for r in roles if r.role_type == "critic"), None)
         role_research = next((r.role_id for r in roles if r.role_type in {"researcher", "orchestrator"}), None)
 
-        base: list[TaskSpec] = [
+        base: list[TaskSpec] = []
+        next_idx = 0
+        analysis_id: str | None = None
+        if role_research or self._role_supports_task_kind(worker_role, "analysis"):
+            analysis_id = f"t{next_idx}"
+            base.append(
+                TaskSpec(
+                    task_id=analysis_id,
+                    title="Analyze goal and constraints",
+                    description=f"Analyze objective and identify required modules: {self.goal}",
+                    role_hint=role_research or role_worker,
+                    task_kind="analysis",
+                    status="pending",
+                )
+            )
+            next_idx += 1
+
+        design_id: str | None = None
+        if role_research or self._role_supports_task_kind(worker_role, "design"):
+            design_id = f"t{next_idx}"
+            base.append(
+                TaskSpec(
+                    task_id=design_id,
+                    title="Design implementation plan",
+                    description="Design concrete implementation and file-level plan.",
+                    deps=[analysis_id] if analysis_id else [],
+                    role_hint=role_research or role_worker,
+                    task_kind="design",
+                    status="pending",
+                )
+            )
+            next_idx += 1
+
+        worker_deps = [design_id] if design_id else ([analysis_id] if analysis_id else [])
+
+        implement_id = f"t{next_idx}"
+        base.append(
             TaskSpec(
-                task_id="t0",
-                title="Analyze goal and constraints",
-                description=f"Analyze objective and identify required modules: {self.goal}",
-                role_hint=role_research or role_worker,
-                task_kind="analysis",
-                status="pending",
-            ),
-            TaskSpec(
-                task_id="t1",
-                title="Design implementation plan",
-                description="Design concrete implementation and file-level plan.",
-                deps=["t0"],
-                role_hint=role_research or role_worker,
-                task_kind="design",
-                status="pending",
-            ),
-            TaskSpec(
-                task_id="t2",
+                task_id=implement_id,
                 title="Implement core changes",
                 description=self.goal,
-                deps=["t1"],
+                deps=worker_deps,
                 role_hint=role_worker,
                 task_kind="implement",
                 status="pending",
-            ),
-            TaskSpec(
-                task_id="t3",
-                title="Add/adjust tests",
-                description="Add tests that validate behavior and edge cases.",
-                deps=["t1"],
-                role_hint=role_worker,
-                task_kind="test",
-                status="pending",
-            ),
-            TaskSpec(
-                task_id="t4",
-                title="Integrate and finalize",
-                description="Integrate implementation and tests into coherent final output.",
-                deps=["t2", "t3"],
-                role_hint=role_worker,
-                task_kind="integrate",
-                status="pending",
-            ),
-        ]
+            )
+        )
+        next_idx += 1
+
+        test_id: str | None = None
+        if self._role_supports_task_kind(worker_role, "test"):
+            test_id = f"t{next_idx}"
+            base.append(
+                TaskSpec(
+                    task_id=test_id,
+                    title="Add/adjust tests",
+                    description="Add tests that validate behavior and edge cases.",
+                    deps=worker_deps,
+                    role_hint=role_worker,
+                    task_kind="test",
+                    status="pending",
+                )
+            )
+            next_idx += 1
+
+        final_task_id = implement_id
+        if self._role_supports_task_kind(worker_role, "integrate"):
+            final_task_id = f"t{next_idx}"
+            integrate_deps = [implement_id] + ([test_id] if test_id else [])
+            base.append(
+                TaskSpec(
+                    task_id=final_task_id,
+                    title="Integrate and finalize",
+                    description="Integrate implementation and tests into coherent final output.",
+                    deps=integrate_deps,
+                    role_hint=role_worker,
+                    task_kind="integrate",
+                    status="pending",
+                )
+            )
+            next_idx += 1
 
         if role_judge:
             base.append(
                 TaskSpec(
-                    task_id="t5",
+                    task_id=f"t{next_idx}",
                     title="Judge final quality",
                     description="Evaluate correctness, completeness, and clarity.",
-                    deps=["t4"],
+                    deps=[final_task_id],
                     role_hint=role_judge,
                     task_kind="judge",
                     status="pending",
                 )
             )
+            next_idx += 1
         if role_critic:
-            deps = ["t4"] + (["t5"] if role_judge else [])
+            judge_task_id = f"t{next_idx - 1}" if role_judge else None
+            deps = [final_task_id] + ([judge_task_id] if judge_task_id else [])
             base.append(
                 TaskSpec(
-                    task_id="t6",
+                    task_id=f"t{next_idx}",
                     title="Critic risk review",
                     description="Identify contradictions, weak assumptions, and regressions.",
                     deps=deps,
@@ -908,10 +951,8 @@ class HybridCoordinator:
         Judge/critic tasks are appended after integrate if those roles exist.
         """
         max_tasks = max(1, self.config.orchestration.max_tasks)
-        role_worker = next(
-            (r.role_id for r in roles if r.role_type == "worker"),
-            roles[0].role_id if roles else None,
-        )
+        worker_role = next((r for r in roles if r.role_type == "worker"), roles[0] if roles else None)
+        role_worker = worker_role.role_id if worker_role else None
         role_judge = next((r.role_id for r in roles if r.role_type == "judge"), None)
         role_critic = next((r.role_id for r in roles if r.role_type == "critic"), None)
         worker_count = sum(r.count for r in roles if r.role_type == "worker")
@@ -933,7 +974,10 @@ class HybridCoordinator:
         # Build focus areas based on worker count.
         focus_areas: list[tuple[str, str]] = [
             ("Implement core logic and main features", "implement"),
-            ("Implement tests and edge cases", "test"),
+            (
+                "Implement tests and edge cases",
+                "test" if self._role_supports_task_kind(worker_role, "test") else "implement",
+            ),
         ]
         if worker_count >= 3:
             focus_areas.append(("Implement integration, docs, and auxiliary modules", "implement"))
@@ -958,19 +1002,23 @@ class HybridCoordinator:
             )
             impl_tasks.append(task)
 
-        integrate_idx = len(impl_tasks)
-        integrate_task = TaskSpec(
-            task_id=f"t{integrate_idx}",
-            title="Integrate and finalize",
-            description="Integrate all parallel work into coherent final output. Run tests, fix conflicts.",
-            deps=[t.task_id for t in impl_tasks],
-            role_hint=role_worker,
-            task_kind="integrate",
-            status="pending",
-        )
+        all_tasks: list[TaskSpec] = [*impl_tasks]
+        final_task_id = impl_tasks[-1].task_id if impl_tasks else "t0"
+        next_idx = len(impl_tasks)
 
-        all_tasks: list[TaskSpec] = [*impl_tasks, integrate_task]
-        next_idx = integrate_idx + 1
+        if self._role_supports_task_kind(worker_role, "integrate"):
+            integrate_task = TaskSpec(
+                task_id=f"t{next_idx}",
+                title="Integrate and finalize",
+                description="Integrate all parallel work into coherent final output. Run tests, fix conflicts.",
+                deps=[t.task_id for t in impl_tasks],
+                role_hint=role_worker,
+                task_kind="integrate",
+                status="pending",
+            )
+            all_tasks.append(integrate_task)
+            final_task_id = integrate_task.task_id
+            next_idx += 1
 
         if role_judge:
             all_tasks.append(
@@ -978,7 +1026,7 @@ class HybridCoordinator:
                     task_id=f"t{next_idx}",
                     title="Judge final quality",
                     description="Evaluate correctness, completeness, and clarity.",
-                    deps=[integrate_task.task_id],
+                    deps=[final_task_id],
                     role_hint=role_judge,
                     task_kind="judge",
                     status="pending",
@@ -987,7 +1035,7 @@ class HybridCoordinator:
             next_idx += 1
 
         if role_critic:
-            critic_deps = [integrate_task.task_id]
+            critic_deps = [final_task_id]
             if role_judge:
                 critic_deps.append(f"t{next_idx - 1}")
             all_tasks.append(

@@ -5,7 +5,12 @@ import pytest
 
 from attoswarm.config.schema import SwarmYamlConfig, WatchdogConfig
 from attoswarm.coordinator.loop import HybridCoordinator
-from attoswarm.coordinator.scheduler import AgentSlot, assign_tasks, compute_ready_tasks
+from attoswarm.coordinator.scheduler import (
+    AgentSlot,
+    assign_tasks,
+    compute_ready_tasks,
+    find_unschedulable_tasks,
+)
 from attoswarm.protocol.models import RoleSpec, TaskSpec
 
 
@@ -34,6 +39,56 @@ def test_assign_tasks_role_and_kind_filtering() -> None:
     ]
     out = assign_tasks(tasks, free, roles)
     assert {(a.task_id, a.agent_id) for a in out} == {("t1", "a1"), ("t2", "a2")}
+
+
+def test_find_unschedulable_tasks_reports_missing_task_kind_support() -> None:
+    tasks = [
+        TaskSpec(task_id="t1", title="impl", description="", task_kind="implement"),
+        TaskSpec(task_id="t2", title="test", description="", task_kind="test"),
+    ]
+    agents = [AgentSlot(agent_id="a1", role_id="impl", backend="codex", busy=False)]
+    roles = [
+        RoleSpec(role_id="impl", role_type="worker", backend="codex", model="o3", task_kinds=["implement"]),
+    ]
+
+    out = find_unschedulable_tasks(tasks, agents, roles)
+
+    assert len(out) == 1
+    assert out[0].task_id == "t2"
+    assert out[0].reason == "no_role_for_task_kind"
+
+
+def test_parallel_decomposition_avoids_unsupported_generated_task_kinds() -> None:
+    from attoswarm.config.schema import OrchestrationConfig, RoleConfig
+
+    cfg = SwarmYamlConfig()
+    cfg.orchestration = OrchestrationConfig(decomposition="parallel", max_tasks=8)
+    cfg.roles = [
+        RoleConfig(
+            role_id="impl",
+            role_type="worker",
+            backend="claude",
+            model="fake",
+            count=2,
+            task_kinds=["implement"],
+        ),
+    ]
+    coord = HybridCoordinator(cfg, goal="test goal", resume=False)
+    roles = [
+        RoleSpec(
+            role_id="impl",
+            role_type="worker",
+            backend="claude",
+            model="fake",
+            count=2,
+            task_kinds=["implement"],
+        )
+    ]
+
+    tasks = coord._decompose_parallel(roles)
+
+    assert tasks
+    assert {task.task_kind for task in tasks} == {"implement"}
 
 
 def test_judge_critic_tasks_ready_when_dep_reviewing() -> None:

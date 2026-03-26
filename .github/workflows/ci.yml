@@ -54,3 +54,19 @@ jobs:
 
       - name: Verify all extras resolve
         run: uv sync --locked --all-extras
+
+  research-integration:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: astral-sh/setup-uv@v7
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: uv sync --locked --extra dev --extra code-intel
+
+      - name: Run research integration tests
+        run: uv run pytest tests/integration/test_research_cli.py tests/integration/test_research_orchestrator_real.py tests/integration/test_research_failure_modes.py -q -m "integration and not live_swarm and not slow"

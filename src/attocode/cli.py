@@ -138,6 +138,16 @@ def main(
         _dispatch_swarm_command(prompt[1:], debug=debug)
         return
 
+    if swarm_config is not None or swarm_resume or hybrid:
+        click.echo(
+            "Top-level swarm mode was removed from `attocode`.\n"
+            "Use the wrapper form instead:\n"
+            "  attocode swarm start .attocode/swarm.hybrid.yaml \"<goal>\"\n"
+            "  attocode swarm tui <run_dir>",
+            err=True,
+        )
+        sys.exit(2)
+
     # Build CLI args dict
     cli_args: dict[str, Any] = {}
     if model:
@@ -174,15 +184,6 @@ def main(
         cli_args["resume_session"] = resume
         cli_args["resume_session_explicit"] = True
 
-    if swarm_config is not None:
-        cli_args["swarm"] = True
-        cli_args["swarm_config"] = swarm_config if swarm_config != "true" else None
-    if swarm_resume:
-        cli_args["swarm"] = True
-        cli_args["swarm_resume"] = swarm_resume
-    if hybrid:
-        cli_args["swarm_hybrid"] = True
-
     # Load configuration
     config = load_config(cli_args=cli_args)
 
@@ -197,12 +198,7 @@ def main(
     # Join prompt parts (--task flag takes precedence over positional args)
     prompt_text = task or (" ".join(prompt) if prompt else "")
 
-    if config.swarm and (prompt_text or config.swarm_resume):
-        # Swarm multi-agent mode
-        if getattr(config, "record", False):
-            click.echo("Warning: --record is not supported in swarm mode (ignored)", err=True)
-        _run_swarm(config, prompt_text)
-    elif prompt_text or non_interactive:
+    if prompt_text or non_interactive:
         # Non-interactive single-turn mode
         _run_single_turn(config, prompt_text)
     elif use_tui is False:
@@ -724,115 +720,6 @@ def _run_tui(config: Any) -> None:
         app.run()
     finally:
         trace_writer.close()
-
-
-def _run_swarm(config: Any, prompt: str) -> None:
-    """Run in swarm multi-agent mode."""
-    if getattr(config, "swarm_hybrid", False):
-        args: list[str] = ["start"]
-        if config.swarm_config:
-            args.append(config.swarm_config)
-        else:
-            args.append(".attocode/swarm.hybrid.yaml")
-        args.append(prompt)
-        _invoke_attoswarm(args)
-        return
-
-    import asyncio
-
-    async def _run() -> None:
-        from attocode.integrations.swarm import (
-            create_swarm_orchestrator,
-            load_swarm_yaml_config,
-            yaml_to_swarm_config,
-        )
-        from attocode.integrations.swarm.types import SwarmConfig
-        from attocode.providers.model_cache import init_model_cache
-        from attocode.providers.registry import create_provider
-
-        await init_model_cache()
-
-        # Create the LLM provider
-        provider = create_provider(config.provider, api_key=config.api_key, model=config.model, timeout=config.timeout)
-
-        # Load swarm config from YAML or use defaults
-        swarm_cfg_overrides: dict = {}
-        if config.swarm_config:
-            # Explicit config path
-            raw = load_swarm_yaml_config(config.swarm_config)
-            if raw:
-                swarm_cfg_overrides = yaml_to_swarm_config(raw, config.model)
-        else:
-            # Auto-detect from working directory
-            raw = load_swarm_yaml_config(config.working_directory)
-            if raw:
-                swarm_cfg_overrides = yaml_to_swarm_config(raw, config.model)
-
-        # Build SwarmConfig from overrides
-        safe_overrides = {
-            k: v for k, v in swarm_cfg_overrides.items()
-            if k != "orchestrator_model" and hasattr(SwarmConfig, k)
-        }
-        swarm_config = SwarmConfig(
-            orchestrator_model=swarm_cfg_overrides.get("orchestrator_model", config.model),
-            **safe_overrides,
-        )
-
-        # Optionally force paid-only throttle
-        if config.paid_only:
-            swarm_config.throttle = "paid"
-
-        # Create orchestrator
-        orchestrator = create_swarm_orchestrator(
-            config=swarm_config,
-            provider=provider,
-        )
-
-        # Wire event listener for CLI output
-        def _on_swarm_event(event: Any) -> None:
-            event_type = getattr(event, "type", "")
-            if config.debug:
-                click.echo(f"  [Swarm: {event_type}]", err=True)
-            if event_type == "task.completed":
-                task_desc = getattr(event, "description", "")
-                click.echo(f"  Task completed: {task_desc}", err=True)
-            elif event_type == "wave.completed":
-                click.echo("  Wave completed", err=True)
-            elif event_type == "swarm.error":
-                error = getattr(event, "error", "")
-                click.echo(f"  Swarm error: {error}", err=True)
-
-        orchestrator.subscribe(_on_swarm_event)
-
-        # Execute
-        click.echo(f"Starting swarm execution with model: {config.model}", err=True)
-        click.echo(f"Task: {prompt[:200]}", err=True)
-        click.echo("---", err=True)
-
-        try:
-            result = await orchestrator.execute(prompt)
-
-            # Display result
-            if result.success:
-                click.echo("\n--- Swarm Completed ---")
-                if result.summary:
-                    click.echo(result.summary)
-                click.echo(f"\nStats: {result.stats.total_tasks} tasks, "
-                           f"{result.stats.total_tokens} tokens, "
-                           f"${result.stats.total_cost:.4f}")
-            else:
-                errors_str = "; ".join(
-                    e.get("error", str(e)) for e in (result.errors or [])
-                ) or "Unknown error"
-                click.echo(f"\nSwarm failed: {errors_str}", err=True)
-                sys.exit(1)
-        except Exception as e:
-            click.echo(f"Swarm error: {e}", err=True)
-            sys.exit(1)
-
-    asyncio.run(_run())
-
-
 def _dispatch_swarm_command(parts: tuple[str, ...], *, debug: bool = False) -> None:
     """Support `attocode swarm ...` as a convenience wrapper around attoswarm."""
     args = list(parts)

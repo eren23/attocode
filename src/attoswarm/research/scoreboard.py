@@ -1,21 +1,27 @@
-"""Research scoreboard — experiment history rendering and analysis."""
+"""Research scoreboard and leaderboard rendering."""
 
 from __future__ import annotations
 
 from typing import Any
 
-from attoswarm.research.experiment import Experiment, ResearchState
+from attoswarm.research.experiment import Experiment, FindingRecord, ResearchState, SteeringNote
 
 
 class Scoreboard:
-    """Renders experiment history as formatted reports."""
+    """Renders campaign state, leaderboard, and findings."""
 
-    def __init__(self, state: ResearchState, experiments: list[Experiment]) -> None:
+    def __init__(
+        self,
+        state: ResearchState,
+        experiments: list[Experiment],
+        *,
+        findings: list[FindingRecord] | None = None,
+    ) -> None:
         self._state = state
         self._experiments = experiments
+        self._findings = findings or []
 
     def render_summary(self) -> str:
-        """Render a brief summary of the research run."""
         s = self._state
         lines = [
             f"Research Run: {s.run_id}",
@@ -24,79 +30,119 @@ class Scoreboard:
             f"Status: {s.status}",
             "",
             f"Baseline: {s.baseline_value}",
-            f"Best: {s.best_value} (experiment {s.best_experiment_id})",
-            f"Experiments: {s.total_experiments} ({s.accepted_count} accepted, {s.rejected_count} rejected)",
+            f"Best: {s.best_value} (experiment {s.best_experiment_id or 'n/a'})",
+            f"Best branch: {s.best_branch or 'n/a'}",
+            (
+                "Experiments: "
+                f"{s.total_experiments} ({s.accepted_count} accepted, "
+                f"{s.candidate_count} pending, {s.held_count} held, "
+                f"{s.killed_count} killed, {s.rejected_count} rejected, {s.invalid_count} invalid)"
+            ),
             f"Cost: ${s.total_cost_usd:.4f} | Tokens: {s.total_tokens:,}",
-            f"Wall time: {s.wall_seconds:.0f}s",
+            f"Wall time: {s.wall_seconds:.0f}s | Active: {s.active_experiments}",
         ]
         return "\n".join(lines)
 
-    def render_table(self) -> str:
-        """Render experiment history as a table."""
+    def render_table(self, limit: int = 20) -> str:
         header = (
-            f"{'#':>3} {'Status':<8} {'Metric':>10} {'Delta':>10} "
-            f"{'Cost':>8} {'Hypothesis':<40}"
+            f"{'#':>3} {'Status':<8} {'Strat':<9} {'Metric':>10} "
+            f"{'Delta':>10} {'Branch':<20} {'Hypothesis':<32}"
         )
         sep = "-" * len(header)
         lines = [header, sep]
-
         baseline = self._state.baseline_value or 0.0
-        prev_best = baseline
 
-        for exp in self._experiments:
-            status = "ACCEPT" if exp.accepted else "REJECT"
+        if self._state.metric_direction == "minimize":
+            ranked = sorted(
+                self._experiments,
+                key=lambda exp: (
+                    exp.metric_value is None,
+                    exp.metric_value if exp.metric_value is not None else float("inf"),
+                ),
+            )
+        else:
+            ranked = sorted(
+                self._experiments,
+                key=lambda exp: (
+                    exp.metric_value is None,
+                    -(exp.metric_value if exp.metric_value is not None else float("-inf")),
+                ),
+            )
+
+        for exp in ranked[:limit]:
             metric = f"{exp.metric_value:.4f}" if exp.metric_value is not None else "N/A"
             delta = ""
             if exp.metric_value is not None:
-                d = exp.metric_value - (exp.baseline_value or baseline)
-                sign = "+" if d >= 0 else ""
-                delta = f"{sign}{d:.4f}"
-                if exp.accepted:
-                    prev_best = exp.metric_value
-
-            hyp = exp.hypothesis[:38] + ".." if len(exp.hypothesis) > 40 else exp.hypothesis
-            cost = f"${exp.cost_usd:.3f}"
-
+                d = exp.metric_value - baseline
+                delta = f"{d:+.4f}"
+            branch = exp.branch[-20:] if exp.branch else "-"
+            hyp = exp.hypothesis[:30] + ".." if len(exp.hypothesis) > 32 else exp.hypothesis
             lines.append(
-                f"{exp.iteration:>3} {status:<8} {metric:>10} {delta:>10} "
-                f"{cost:>8} {hyp:<40}"
+                f"{exp.iteration:>3} {exp.status[:8]:<8} {exp.strategy[:9]:<9} "
+                f"{metric:>10} {delta:>10} {branch:<20} {hyp:<32}"
             )
-
         return "\n".join(lines)
 
-    def render_trend(self) -> str:
-        """Render metric progression trend."""
-        if not self._experiments:
-            return "No experiments yet."
-
-        accepted = [e for e in self._experiments if e.accepted and e.metric_value is not None]
-        if not accepted:
-            return "No accepted experiments."
-
-        lines = ["Metric Progression (accepted only):"]
-        baseline = self._state.baseline_value or 0.0
-        lines.append(f"  Baseline: {baseline:.4f}")
-
-        for exp in accepted:
-            improvement = (exp.metric_value or 0.0) - baseline
-            bar_len = min(int(abs(improvement) * 50), 40)
-            bar = "+" * bar_len if improvement >= 0 else "-" * bar_len
-            lines.append(f"  #{exp.iteration:>3}: {exp.metric_value:.4f} [{bar}]")
-
-        # Summary stats
-        values = [e.metric_value for e in accepted if e.metric_value is not None]
-        if len(values) >= 2:
-            trend = values[-1] - values[0]
-            lines.append(f"\n  Overall trend: {'+' if trend >= 0 else ''}{trend:.4f}")
-            lines.append(f"  Mean: {sum(values) / len(values):.4f}")
-            lines.append(f"  Best: {max(values) if self._state.metric_direction == 'maximize' else min(values):.4f}")
-
+    def render_findings(self, limit: int = 10) -> str:
+        if not self._findings:
+            return "No findings recorded."
+        lines = ["Findings:"]
+        for finding in self._findings[:limit]:
+            pct = int(finding.confidence * 100)
+            lines.append(f"- [{finding.status}] {finding.claim} ({pct}%)")
         return "\n".join(lines)
+
+    def render_steering_notes(self, notes: list[SteeringNote], limit: int = 10) -> str:
+        if not notes:
+            return "No active steering notes."
+        lines = ["Steering Notes:"]
+        for note in notes[:limit]:
+            target = f" target={note.target}" if note.target else ""
+            lines.append(f"- [{note.scope}{target}] {note.content}")
+        return "\n".join(lines)
+
+    def render_candidates(self, limit: int = 10, promotion_repeats: int = 1) -> str:
+        roots = [
+            exp for exp in self._experiments
+            if exp.status in {"candidate", "held"} and not exp.parent_experiment_id
+        ]
+        if not roots:
+            return "No pending candidates."
+        lines = ["Candidates:"]
+        for exp in roots[:limit]:
+            validations = 1 + sum(
+                1 for child in self._experiments
+                if child.parent_experiment_id == exp.experiment_id and child.status in {"validated", "accepted"}
+            )
+            lines.append(
+                f"- [{exp.status}] {exp.experiment_id} metric={exp.metric_value} "
+                f"progress={validations}/{max(promotion_repeats, 1)} strategy={exp.strategy}"
+            )
+            lines.append(f"  hypothesis={exp.hypothesis[:180]}")
+        return "\n".join(lines)
+
+    def render_feed(
+        self,
+        *,
+        notes: list[SteeringNote] | None = None,
+        leaderboard_limit: int = 5,
+        findings_limit: int = 10,
+        notes_limit: int = 10,
+        promotion_repeats: int = 1,
+    ) -> str:
+        sections = [
+            self.render_summary(),
+            self.render_candidates(limit=leaderboard_limit, promotion_repeats=promotion_repeats),
+            self.render_table(limit=leaderboard_limit),
+            self.render_findings(limit=findings_limit),
+            self.render_steering_notes(notes or [], limit=notes_limit),
+        ]
+        return "\n\n".join(sections)
 
     def to_dict(self) -> dict[str, Any]:
-        """Full scoreboard as dict."""
         return {
             "state": self._state.to_dict(),
             "experiments": [e.to_dict() for e in self._experiments],
+            "findings": [f.to_dict() for f in self._findings],
             "summary": self.render_summary(),
         }

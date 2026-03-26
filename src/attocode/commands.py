@@ -9,7 +9,7 @@ Provides ~55 slash commands organized into groups:
 - Goals: /goals
 - MCP: /mcp
 - Skills: /skills
-- Swarm: /swarm (init/start/status/stop/dashboard/config)
+- Swarm: /swarm (migration help only)
 - Context: /context, /repomap
 - Debug: /trace, /grants, /audit
 - Capabilities: /powers
@@ -445,21 +445,12 @@ def _help_text() -> str:
         "Capabilities:\n"
         "  /powers [model]   Show capabilities (or model-specific caps)\n"
         "\n"
-        "Swarm:\n"
-        "  /swarm              Show swarm status or help\n"
-        "  /swarm init         Initialize swarm config (auto-detects your model)\n"
-        "  /swarm start <task> Start a swarm execution\n"
-        "  /swarm status       Show running swarm state\n"
-        "  /swarm stop         Cancel running swarm\n"
-        "  /swarm dashboard    Open swarm dashboard (Ctrl+S)\n"
-        "  /swarm config       Show swarm configuration\n"
-        "\n"
         "Info:\n"
         "  /sandbox          Show sandbox configuration\n"
         "  /lsp              Show LSP integration status\n"
         "  /tui              Show TUI feature list\n"
         "  /dashboard        Open the trace analysis dashboard (Ctrl+D)\n"
-        "  /swarm-monitor    Open multi-run swarm monitor (Ctrl+M)\n"
+        "  /swarm            Show attoswarm migration help\n"
         "\n"
         "Analysis:\n"
         "  /bugfind [branch] Scan diff for potential bugs (default: main)\n"
@@ -2833,369 +2824,68 @@ def _dashboard_command(app: Any) -> CommandResult:
 
 async def _swarm_command(agent: Any, arg: str, app: Any) -> CommandResult:
     """Route /swarm subcommands."""
-    if not arg:
-        # No args: show status if swarm running, else show help
-        orch = getattr(agent, "_swarm_orchestrator", None) if agent else None
-        if orch:
-            return _swarm_status(agent)
-        return CommandResult(output=_swarm_help())
-
-    parts = arg.split(maxsplit=1)
-    subcmd = parts[0].lower()
-    subarg = parts[1] if len(parts) > 1 else ""
-
-    if subcmd == "init":
-        return _swarm_init(agent)
-    if subcmd == "start":
-        return await _swarm_start(agent, subarg, app)
-    if subcmd == "status":
-        return _swarm_status(agent)
-    if subcmd == "stop":
-        return _swarm_stop(agent)
-    if subcmd == "dashboard":
-        return _swarm_dashboard(app)
-    if subcmd == "config":
-        return _swarm_config_show(agent)
-    if subcmd == "help":
-        return CommandResult(output=_swarm_help())
-
-    return CommandResult(output=f"Unknown swarm subcommand: {subcmd}\n\n{_swarm_help()}")
+    return CommandResult(output=_swarm_help())
 
 
 def _swarm_help() -> str:
     """Return swarm command help text."""
     return (
-        "Swarm commands:\n"
-        "  /swarm              Show swarm status (or this help if idle)\n"
-        "  /swarm init         Generate .attocode/swarm.yaml from your current model\n"
-        "  /swarm start <task> Start a swarm execution with the given prompt\n"
-        "  /swarm status       Show running swarm state\n"
-        "  /swarm stop         Cancel running swarm\n"
-        "  /swarm dashboard    Open swarm dashboard (Ctrl+S)\n"
-        "  /swarm config       Show current swarm configuration\n"
+        "Swarm moved out of the embedded Attocode TUI.\n"
+        "Use the wrapper commands in your shell instead:\n"
+        "  attocode swarm start .attocode/swarm.hybrid.yaml \"<goal>\"\n"
+        "  attocode swarm tui <run_dir>\n"
+        "  attocode swarm doctor .attocode/swarm.hybrid.yaml\n"
         "\n"
-        "Quick start:\n"
-        "  /swarm start Build a REST API with tests\n"
-        "\n"
-        "The swarm works with zero config — it uses your current model\n"
-        "for the orchestrator and all workers. Use /swarm init to\n"
-        "customize worker count, models, or quality gates."
+        "The Attocode TUI no longer hosts swarm dashboards or monitors."
     )
+
+
+def _swarm_shell_message(suffix: str = "") -> str:
+    base = (
+        "Swarm moved out of the embedded Attocode TUI.\n"
+        "Use the shell wrapper instead:\n"
+        "  attocode swarm start .attocode/swarm.hybrid.yaml \"<goal>\"\n"
+        "  attocode swarm tui <run_dir>"
+    )
+    return f"{base}\n\n{suffix}" if suffix else base
 
 
 def _swarm_init(agent: Any) -> CommandResult:
     """Generate .attocode/swarm.yaml using the user's current model."""
-    wd = _get_working_dir(agent)
-    if not wd:
-        wd = os.getcwd()
-
-    # Get model from agent config
-    model = "anthropic/claude-sonnet-4-20250514"
-    config = getattr(agent, "_config", None) if agent else None
-    if config:
-        model = getattr(config, "model", None) or model
-
-    base = Path(wd) / ".attocode"
-    base.mkdir(parents=True, exist_ok=True)
-
-    yaml_path = base / "swarm.yaml"
-    if yaml_path.exists():
-        # Show existing config and ask about overwrite
-        try:
-            existing = yaml_path.read_text()
-            return CommandResult(
-                output=f"Swarm config already exists at {yaml_path}\n\n"
-                f"Current contents:\n{existing}\n"
-                "Delete the file and run /swarm init again to regenerate."
-            )
-        except Exception:
-            pass
-
-    yaml_content = (
-        f"# Swarm configuration — auto-generated by /swarm init\n"
-        f"# Model auto-detected from your current session: {model}\n"
-        f"\n"
-        f"models:\n"
-        f"  orchestrator: {model}\n"
-        f"\n"
-        f"workers:\n"
-        f"  - name: builder\n"
-        f"    model: {model}\n"
-        f"    capabilities: [code, test]\n"
-        f"    count: 2\n"
-        f"  - name: reviewer\n"
-        f"    model: {model}\n"
-        f"    capabilities: [review, research]\n"
-        f"    count: 1\n"
-        f"\n"
-        f"budget:\n"
-        f"  totalTokens: 5000000\n"
-        f"  maxCost: 10.0\n"
-        f"  maxConcurrency: 2\n"
-        f"\n"
-        f"quality:\n"
-        f"  enabled: true\n"
-        f"\n"
-        f"features:\n"
-        f"  planning: true\n"
-        f"  verification: true\n"
-    )
-    yaml_path.write_text(yaml_content)
-
-    return CommandResult(
-        output=f"Created {yaml_path}\n"
-        f"  Orchestrator: {model}\n"
-        f"  Workers: 2 builders + 1 reviewer (all using {model})\n"
-        f"  Budget: $10 / 5M tokens, concurrency 2\n"
-        f"  Quality gates: enabled\n"
-        f"\n"
-        f"Start with: /swarm start <your task>"
-    )
+    return CommandResult(output=_swarm_shell_message("Use `attocode swarm init` from your shell if you want a scaffolded config."))
 
 
 async def _swarm_start(agent: Any, prompt: str, app: Any) -> CommandResult:
     """Start a swarm execution with the given prompt."""
     if not prompt:
-        return CommandResult(
-            output="Usage: /swarm start <task description>\n"
-            "Example: /swarm start Build a REST API with authentication and tests"
-        )
-
-    if agent is None:
-        return CommandResult(output="No agent running.")
-
-    # Check if swarm is already running
-    orch = getattr(agent, "_swarm_orchestrator", None)
-    if orch:
-        phase = "unknown"
-        try:
-            state = orch.get_state()
-            phase = getattr(state, "phase", "unknown")
-        except Exception:
-            pass
-        if phase not in ("idle", "completed", "failed", "unknown"):
-            return CommandResult(
-                output=f"Swarm is already running (phase: {phase}).\n"
-                "Use /swarm stop to cancel, or wait for completion."
-            )
-
-    # Enable swarm mode on the config
-    config = getattr(agent, "_config", None)
-    if config:
-        config.swarm_enabled = True  # type: ignore[attr-defined]
-
-    # Submit through the TUI callback (same path as regular prompt)
-    if app and hasattr(app, "_on_submit") and app._on_submit:
-        # Add as user message and trigger agent via the TUI's submit path
-        try:
-            log = app.query_one("#message-log")
-            log.add_user_message(f"[swarm] {prompt}")
-        except Exception:
-            pass
-        app._processing = True
-        try:
-            app.query_one("#input-area").set_enabled(False)
-        except Exception:
-            pass
-        try:
-            app.query_one("#status-bar").start_processing()
-        except Exception:
-            pass
-        app._on_submit(prompt)
-        return CommandResult(
-            output=f"Swarm started: {prompt[:80]}{'...' if len(prompt) > 80 else ''}\n"
-            "Use /swarm status to monitor progress, or Ctrl+S for the dashboard."
-        )
-
-    # Fallback: run directly if no TUI app
-    try:
-        result = await agent.run(prompt)
-        success = "succeeded" if result.success else "failed"
-        metrics = result.metrics
-        tokens = metrics.total_tokens if metrics else 0
-        cost = metrics.estimated_cost if metrics else 0.0
-        return CommandResult(
-            output=f"Swarm {success}.\n"
-            f"  Tokens: {tokens:,}\n"
-            f"  Cost: ${cost:.4f}\n"
-            f"  Response: {result.response[:200] if result.response else '(none)'}"
-        )
-    except Exception as e:
-        return CommandResult(output=f"Swarm execution failed: {e}")
-    finally:
-        # Reset swarm_enabled so the next regular prompt doesn't go to swarm
-        if config:
-            config.swarm_enabled = False  # type: ignore[attr-defined]
+        return CommandResult(output=_swarm_shell_message("Pass your goal to `attocode swarm start ...` in the shell."))
+    return CommandResult(output=_swarm_shell_message(f"Requested goal: {prompt}"))
 
 
 def _swarm_status(agent: Any) -> CommandResult:
     """Show current swarm state."""
-    if agent is None:
-        return CommandResult(output="No agent running.")
-
-    orch = getattr(agent, "_swarm_orchestrator", None)
-    if not orch:
-        return CommandResult(
-            output="No swarm session active.\n"
-            "Use /swarm start <task> to begin."
-        )
-
-    lines = ["Swarm status:"]
-
-    try:
-        state = orch.get_state()
-
-        phase = getattr(state, "phase", "unknown")
-        lines.append(f"  Phase: {phase}")
-
-        current_wave = getattr(state, "current_wave", None)
-        if current_wave is not None:
-            lines.append(f"  Wave: {current_wave}")
-
-        active_workers = getattr(state, "active_workers", None)
-        if active_workers is not None:
-            lines.append(f"  Active workers: {active_workers}")
-
-        # Queue stats
-        queue = getattr(state, "queue", None)
-        if queue:
-            completed = getattr(queue, "completed", 0)
-            total = getattr(queue, "total", 0)
-            failed = getattr(queue, "failed", 0)
-            lines.append(f"  Tasks: {completed}/{total} completed"
-                         + (f", {failed} failed" if failed else ""))
-
-        # Budget
-        budget_info = getattr(state, "budget", None)
-        if budget_info:
-            tokens_used = getattr(budget_info, "tokens_used", 0)
-            cost = getattr(budget_info, "cost", 0.0)
-            lines.append(f"  Tokens: {tokens_used:,}")
-            lines.append(f"  Cost: ${cost:.4f}")
-
-        # Orchestrator status
-        orch_status = getattr(state, "orchestrator_status", None)
-        if orch_status:
-            lines.append(f"  Orchestrator: {orch_status}")
-
-    except Exception as e:
-        lines.append(f"  (Error reading state: {e})")
-
-    # Event bridge stats
-    bridge = getattr(agent, "_event_bridge", None)
-    if bridge:
-        try:
-            last_status = getattr(bridge, "last_status", None)
-            if last_status:
-                lines.append(f"  Last event: {getattr(last_status, 'phase', 'n/a')}")
-        except Exception:
-            pass
-
-    return CommandResult(output="\n".join(lines))
+    return CommandResult(output=_swarm_shell_message("Use `attocode swarm tui <run_dir>` to inspect a run."))
 
 
 def _swarm_stop(agent: Any) -> CommandResult:
     """Cancel a running swarm."""
-    if agent is None:
-        return CommandResult(output="No agent running.")
-
-    orch = getattr(agent, "_swarm_orchestrator", None)
-    if not orch:
-        return CommandResult(output="No swarm session to stop.")
-
-    try:
-        if hasattr(orch, "cancel"):
-            orch.cancel()
-            return CommandResult(output="Swarm cancellation requested.")
-        return CommandResult(output="Swarm orchestrator does not support cancel.")
-    except Exception as e:
-        return CommandResult(output=f"Failed to stop swarm: {e}")
+    return CommandResult(output=_swarm_shell_message("Use the attoswarm control flow from the shell to stop or reject a run."))
 
 
 def _swarm_dashboard(app: Any) -> CommandResult:
     """Open the swarm dashboard screen."""
-    if not app:
-        return CommandResult(output="Swarm dashboard requires TUI mode. Use Ctrl+S in TUI.")
-
-    try:
-        if hasattr(app, "action_swarm_dashboard"):
-            app.action_swarm_dashboard()
-        else:
-            app.action_toggle_swarm_monitor()
-        return CommandResult(output="Swarm dashboard opened. Press Escape to return.")
-    except Exception as e:
-        return CommandResult(output=f"Failed to open dashboard: {e}")
+    return CommandResult(output="Embedded swarm dashboard was removed. Use `attocode swarm tui <run_dir>`.")
 
 
 def _swarm_config_show(agent: Any) -> CommandResult:
     """Show current swarm configuration."""
-    lines = ["Swarm configuration:"]
-
-    # Check for YAML config file
-    wd = _get_working_dir(agent) or os.getcwd()
-    yaml_path = Path(wd) / ".attocode" / "swarm.yaml"
-    if yaml_path.exists():
-        lines.append(f"  Config file: {yaml_path}")
-        try:
-            from attocode.integrations.swarm.config_loader import load_swarm_yaml_config
-            raw = load_swarm_yaml_config(wd)
-            if raw:
-                models = raw.get("models", {})
-                if isinstance(models, dict):
-                    lines.append(f"  Orchestrator model: {models.get('orchestrator', 'default')}")
-                workers = raw.get("workers", [])
-                if isinstance(workers, list):
-                    total = sum(w.get("count", 1) for w in workers if isinstance(w, dict))
-                    lines.append(f"  Workers: {total}")
-                    for w in workers:
-                        if isinstance(w, dict):
-                            name = w.get("name", "worker")
-                            model = w.get("model", "default")
-                            caps = w.get("capabilities", [])
-                            count = w.get("count", 1)
-                            lines.append(
-                                f"    {name} x{count}: {model} [{', '.join(caps)}]"
-                            )
-                budget = raw.get("budget", {})
-                if isinstance(budget, dict):
-                    cost = budget.get("maxCost", budget.get("max_cost", "?"))
-                    conc = budget.get("maxConcurrency", budget.get("max_concurrency", "?"))
-                    lines.append(f"  Max cost: ${cost}")
-                    lines.append(f"  Concurrency: {conc}")
-                quality = raw.get("quality", {})
-                if isinstance(quality, dict):
-                    lines.append(f"  Quality gates: {quality.get('enabled', False)}")
-                elif isinstance(quality, bool):
-                    lines.append(f"  Quality gates: {quality}")
-        except Exception:
-            lines.append("  (Could not parse config file)")
-    else:
-        lines.append("  Config file: not found (using defaults)")
-
-    # Show runtime model info
-    config = getattr(agent, "_config", None) if agent else None
-    if config:
-        model = getattr(config, "model", None) or "default"
-        lines.append(f"  Runtime model: {model}")
-        lines.append("  Defaults: 2 builders + 1 reviewer (all use runtime model)")
-
-    return CommandResult(output="\n".join(lines))
+    return CommandResult(output=_swarm_shell_message("Use `attocode swarm doctor <config>` or open the YAML directly from the shell."))
 
 
 def _swarm_monitor_command(app: Any, arg: str) -> CommandResult:
     """Open the swarm fleet monitor screen."""
-    if not app:
-        return CommandResult(output="Swarm Monitor requires TUI mode.")
-    try:
-        if arg.strip():
-            from attocode.tui.screens.swarm_monitor import SwarmMonitorScreen
-
-            app.push_screen(SwarmMonitorScreen(root=arg.strip()))
-        else:
-            app.action_toggle_swarm_monitor()
-        return CommandResult(output="Swarm Monitor opened. Press Escape to return.")
-    except Exception as e:
-        return CommandResult(output=f"Failed to open Swarm Monitor: {e}")
+    target = arg.strip() or "<run_dir>"
+    return CommandResult(output=f"Embedded swarm monitor was removed. Use `attocode swarm tui {target}`.")
 
 
 # ============================================================

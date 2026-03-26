@@ -165,6 +165,47 @@ class CodeIntelService:
                     self._memory_store = MemoryStore(self._project_dir)
         return self._memory_store
 
+    def _health_snapshot(self) -> dict[str, object]:
+        """Return discovery/index health for status endpoints."""
+        discovered_files = 0
+        indexed_files = 0
+        degradation_reasons: list[str] = []
+
+        try:
+            ctx = self._get_context_mgr()
+            discovered = getattr(ctx, "_files", None)
+            if isinstance(discovered, list):
+                discovered_files = len(discovered)
+            if discovered_files == 0:
+                refreshed = ctx.discover_files()
+                discovered_files = len(refreshed)
+        except Exception as exc:
+            degradation_reasons.append(f"context_error:{type(exc).__name__}")
+
+        try:
+            svc = self._get_ast_service()
+            stats = svc._store.stats() if hasattr(svc, "_store") else {}
+            indexed_files = int(
+                stats.get("files", 0)
+                or stats.get("files_indexed", 0)
+                or len(getattr(svc, "_ast_cache", {}))
+            )
+        except Exception as exc:
+            degradation_reasons.append(f"ast_error:{type(exc).__name__}")
+
+        if discovered_files == 0:
+            degradation_reasons.append("no_files_discovered")
+        if indexed_files == 0:
+            degradation_reasons.append("no_files_indexed")
+
+        return {
+            "health_status": "degraded" if degradation_reasons else "healthy",
+            "discovery_count": discovered_files,
+            "ast_indexed_files": indexed_files,
+            "degradation_reason": ", ".join(degradation_reasons),
+            "active_backend": "local",
+        }
+
     # ------------------------------------------------------------------
     # Tool operations — same signatures as server.py tool functions
     # ------------------------------------------------------------------
@@ -2102,7 +2143,7 @@ class CodeIntelService:
         """Start background embedding indexing."""
         mgr = self._get_semantic_search()
         progress = mgr.start_background_indexing()
-        return {
+        result = {
             "provider": mgr.provider_name,
             "available": mgr.is_available,
             "status": progress.status,
@@ -2113,12 +2154,14 @@ class CodeIntelService:
             "elapsed_seconds": progress.elapsed_seconds,
             "vector_search_active": mgr.is_index_ready(),
         }
+        result.update(self._health_snapshot())
+        return result
 
     def indexing_status(self) -> dict:
         """Get current indexing status."""
         mgr = self._get_semantic_search()
         progress = mgr.get_index_progress()
-        return {
+        result = {
             "provider": mgr.provider_name,
             "available": mgr.is_available,
             "status": progress.status,
@@ -2129,6 +2172,8 @@ class CodeIntelService:
             "elapsed_seconds": progress.elapsed_seconds,
             "vector_search_active": mgr.is_index_ready(),
         }
+        result.update(self._health_snapshot())
+        return result
 
     def recall(self, query: str, scope: str = "", max_results: int = 10) -> str:
         store = self._get_memory_store()

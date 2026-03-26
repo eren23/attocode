@@ -22,6 +22,10 @@ class EvalResult:
     metric_value: float
     raw_output: str = ""
     metadata: dict[str, Any] = field(default_factory=dict)
+    metrics: dict[str, Any] = field(default_factory=dict)
+    constraint_checks: dict[str, Any] = field(default_factory=dict)
+    artifacts: list[str] = field(default_factory=list)
+    seed: int | None = None
     error: str = ""
     success: bool = True
 
@@ -62,7 +66,10 @@ class CommandEvaluator:
                     success=False,
                 )
 
-            # Parse last numeric line
+            structured = self._parse_structured_output(stdout)
+            if structured is not None:
+                return structured
+
             value = self._parse_last_numeric(stdout)
             if value is None:
                 return EvalResult(
@@ -99,6 +106,78 @@ class CommandEvaluator:
                     return float(match.group())
         return None
 
+    @staticmethod
+    def _parse_structured_output(text: str) -> EvalResult | None:
+        """Parse JSON evaluator output when available.
+
+        Accepts either:
+        - a JSON object in the last non-empty line
+        - a full JSON object as stdout
+        """
+        candidate = text.strip()
+        if not candidate:
+            return None
+
+        raw_candidates = [candidate]
+        lines = [line.strip() for line in candidate.splitlines() if line.strip()]
+        if lines:
+            raw_candidates.append(lines[-1])
+
+        for raw in raw_candidates:
+            try:
+                data = json.loads(raw)
+            except json.JSONDecodeError:
+                continue
+            if not isinstance(data, dict):
+                continue
+
+            primary = data.get("primary_metric", data.get("metric"))
+            if primary is None:
+                continue
+
+            secondary = data.get("secondary_metrics")
+            if not isinstance(secondary, dict):
+                secondary = {}
+
+            constraints = data.get("constraint_checks")
+            if not isinstance(constraints, dict):
+                constraints = {}
+
+            artifacts = data.get("artifacts")
+            if not isinstance(artifacts, list):
+                artifacts = []
+
+            metadata = {
+                k: v
+                for k, v in data.items()
+                if k not in {
+                    "metric",
+                    "primary_metric",
+                    "secondary_metrics",
+                    "constraint_checks",
+                    "artifacts",
+                    "seed",
+                    "success",
+                    "error",
+                }
+            }
+
+            success = bool(data.get("success", True))
+            error = str(data.get("error", "")) if data.get("error") else ""
+            return EvalResult(
+                metric_value=float(primary),
+                raw_output=text,
+                metadata=metadata,
+                metrics=secondary,
+                constraint_checks=constraints,
+                artifacts=[str(item) for item in artifacts],
+                seed=int(data["seed"]) if isinstance(data.get("seed"), int) else None,
+                error=error,
+                success=success and not error,
+            )
+
+        return None
+
 
 class ScriptEvaluator:
     """Evaluator that runs a Python script expecting JSON with a "metric" key."""
@@ -129,6 +208,9 @@ class ScriptEvaluator:
                     success=False,
                 )
 
+            parsed = CommandEvaluator._parse_structured_output(stdout)
+            if parsed is not None:
+                return parsed
             data = json.loads(stdout)
             value = float(data["metric"])
             metadata = {k: v for k, v in data.items() if k != "metric"}

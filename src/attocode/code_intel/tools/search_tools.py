@@ -8,6 +8,8 @@ from __future__ import annotations
 import threading
 
 from attocode.code_intel.server import (
+    _get_ast_service,
+    _get_context_mgr,
     _get_project_dir,
     mcp,
 )
@@ -112,6 +114,36 @@ def semantic_search_status() -> str:
     """
     mgr = _get_semantic_search()
     progress = mgr.get_index_progress()
+    discovered_files = 0
+    ast_indexed_files = 0
+    degradation_reasons: list[str] = []
+
+    try:
+        ctx = _get_context_mgr()
+        discovered = getattr(ctx, "_files", None)
+        if isinstance(discovered, list):
+            discovered_files = len(discovered)
+        if discovered_files == 0:
+            discovered_files = len(ctx.discover_files())
+    except Exception as exc:
+        degradation_reasons.append(f"context_error:{type(exc).__name__}")
+
+    try:
+        ast_svc = _get_ast_service()
+        stats = ast_svc._store.stats() if hasattr(ast_svc, "_store") else {}
+        ast_indexed_files = int(
+            stats.get("files", 0)
+            or stats.get("files_indexed", 0)
+            or len(getattr(ast_svc, "_ast_cache", {}))
+        )
+    except Exception as exc:
+        degradation_reasons.append(f"ast_error:{type(exc).__name__}")
+
+    if discovered_files == 0:
+        degradation_reasons.append("no_files_discovered")
+    if ast_indexed_files == 0:
+        degradation_reasons.append("no_files_indexed")
+
     lines = [
         "Semantic search status:",
         f"  Provider: {mgr.provider_name}",
@@ -120,7 +152,12 @@ def semantic_search_status() -> str:
         f"  Coverage: {progress.coverage:.0%} ({progress.indexed_files}/{progress.total_files} files)",
         f"  Failed: {progress.failed_files}",
         f"  Vector search active: {mgr.is_index_ready()}",
+        f"  Discovery count: {discovered_files}",
+        f"  AST indexed files: {ast_indexed_files}",
+        f"  Health: {'degraded' if degradation_reasons else 'healthy'}",
     ]
+    if degradation_reasons:
+        lines.append(f"  Degradation reason: {', '.join(degradation_reasons)}")
     if progress.elapsed_seconds > 0:
         lines.append(f"  Elapsed: {progress.elapsed_seconds:.1f}s")
     return "\n".join(lines)

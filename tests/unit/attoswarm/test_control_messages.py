@@ -148,6 +148,20 @@ class TestCheckControlMessages:
         assert node is not None
         assert node.status == "failed"
 
+    def test_emits_control_received_and_applied_events(self, orch: SwarmOrchestrator) -> None:
+        _add_task(orch, "task-1", "failed")
+        control_path = orch._layout["root"] / "control.jsonl"
+        control_path.write_text(
+            json.dumps({"action": "retry", "task_id": "task-1"}) + "\n",
+            encoding="utf-8",
+        )
+
+        orch._check_control_messages()
+
+        event_types = [event.event_type for event in orch._event_bus.history[-3:]]
+        assert "control.received" in event_types
+        assert "control.applied" in event_types
+
 
 # ── _persist_prompt ───────────────────────────────────────────────────
 

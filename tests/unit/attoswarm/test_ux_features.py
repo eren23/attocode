@@ -12,7 +12,7 @@ import pytest
 
 from attoswarm.cli import _parse_activity_label
 from attoswarm.tui.stores import StateStore
-from attocode.tui.widgets.swarm.event_timeline import _agent_color, _agent_color_cache, _AGENT_COLORS
+from attoswarm.tui.widgets import _AGENT_COLORS, _agent_color, _agent_color_cache
 
 
 # ── _parse_activity_label ─────────────────────────────────────────────

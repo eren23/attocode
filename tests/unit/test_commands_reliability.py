@@ -17,7 +17,6 @@ class _DummyApp:
         self.exited = False
         self.pushed = 0
         self.dashboard_toggled = 0
-        self.swarm_monitor_toggled = 0
         self.tasks_toggled = 0
         self.debug_toggled = 0
 
@@ -32,9 +31,6 @@ class _DummyApp:
 
     def action_toggle_dashboard(self) -> None:
         self.dashboard_toggled += 1
-
-    def action_toggle_swarm_monitor(self) -> None:
-        self.swarm_monitor_toggled += 1
 
     def action_toggle_tasks(self) -> None:
         self.tasks_toggled += 1
@@ -168,3 +164,22 @@ def test_command_palette_entries_are_routed() -> None:
 
     assert palette.issubset(routed)
 
+
+@pytest.mark.asyncio
+async def test_swarm_commands_return_attoswarm_migration_help(tmp_path: Path) -> None:
+    agent = (
+        AgentBuilder()
+        .with_provider("mock")
+        .with_model("mock-model")
+        .with_working_dir(str(tmp_path))
+        .build()
+    )
+    app = _DummyApp()
+
+    swarm_result = await handle_command("/swarm status", agent=agent, app=app)
+    monitor_result = await handle_command("/swarm-monitor run-123", agent=agent, app=app)
+
+    assert "Swarm moved out of the embedded Attocode TUI." in swarm_result.output
+    assert "attocode swarm tui <run_dir>" in swarm_result.output
+    assert "Embedded swarm monitor was removed." in monitor_result.output
+    assert "attocode swarm tui run-123" in monitor_result.output

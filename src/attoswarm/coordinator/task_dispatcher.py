@@ -7,7 +7,12 @@ from dataclasses import replace
 from typing import TYPE_CHECKING
 
 from attoswarm.adapters.base import AgentMessage
-from attoswarm.coordinator.scheduler import AgentSlot, assign_tasks, compute_ready_tasks
+from attoswarm.coordinator.scheduler import (
+    AgentSlot,
+    assign_tasks,
+    compute_ready_tasks,
+    find_unschedulable_tasks,
+)
 from attoswarm.protocol.io import read_json, write_json_atomic
 from attoswarm.protocol.locks import locked_file
 from attoswarm.protocol.models import (
@@ -30,7 +35,7 @@ async def dispatch_ready_tasks(coordinator: HybridCoordinator) -> None:
         for t in coordinator.manifest.tasks
     ]
     ready = compute_ready_tasks(tasks, coordinator.task_state)
-    free = [
+    all_agents = [
         AgentSlot(
             agent_id=aid,
             role_id=coordinator.role_by_agent[aid].role_id,
@@ -39,7 +44,36 @@ async def dispatch_ready_tasks(coordinator: HybridCoordinator) -> None:
         )
         for aid in coordinator.handles
     ]
-    assignments = assign_tasks(ready, free, coordinator.manifest.roles)
+    unschedulable = find_unschedulable_tasks(ready, all_agents, coordinator.manifest.roles)
+    unschedulable_ids = {item.task_id for item in unschedulable}
+    for item in unschedulable:
+        task = coordinator._find_task(item.task_id)
+        if task is None:
+            continue
+        coordinator._transition_task(task.task_id, "failed", "scheduler", item.reason)
+        coordinator._persist_task(task, status="failed", last_error=item.reason)
+        coordinator._append_event(
+            "task.unschedulable",
+            {
+                "task_id": item.task_id,
+                "task_kind": item.task_kind,
+                "role_hint": item.role_hint,
+                "reason": item.reason,
+                "eligible_role_ids": item.eligible_role_ids,
+                "available_role_ids": item.available_role_ids,
+            },
+        )
+        coordinator._error(
+            "scheduler_unschedulable",
+            (
+                f"{item.task_id} ({item.task_kind}) cannot be scheduled: {item.reason}; "
+                f"eligible_roles={item.eligible_role_ids or '[]'} "
+                f"available_roles={item.available_role_ids or '[]'}"
+            ),
+        )
+
+    schedulable_ready = [task for task in ready if task.task_id not in unschedulable_ids]
+    assignments = assign_tasks(schedulable_ready, all_agents, coordinator.manifest.roles)
     for assignment in assignments:
         task = coordinator._find_task(assignment.task_id)
         if task is None:

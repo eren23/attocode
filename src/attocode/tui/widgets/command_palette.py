@@ -160,7 +160,7 @@ def register_default_commands(registry: CommandRegistry) -> None:
         ("/debug", "Toggle debug panel", "Ctrl+I"),
         ("/diff", "Show recent file changes", ""),
         ("/trace", "Show trace summary", ""),
-        ("/swarm", "Show swarm status", ""),
+        ("/swarm", "Show attoswarm migration help", ""),
         # Thread commands
         ("/fork", "Fork conversation into a new thread", ""),
         ("/threads", "List conversation threads", ""),

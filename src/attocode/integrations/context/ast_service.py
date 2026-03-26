@@ -16,6 +16,7 @@ import asyncio
 import logging
 import os
 import re
+import sqlite3
 from pathlib import Path
 from typing import Any
 
@@ -148,58 +149,55 @@ class ASTService:
         # Try incremental load from store
         last_scan = self._store.get_last_scan_time() if not force else None
         if last_scan is not None and not force:
-            # Load cached data
-            loaded = self._index.load_from_store()
-            if loaded > 0:
-                stale = self._store.get_stale_files(mtime_map)
-                deleted = self._store.get_deleted_files(set(mtime_map.keys()))
+            try:
+                loaded = self._index.load_from_store()
+                if loaded > 0:
+                    stale = self._store.get_stale_files(mtime_map)
+                    deleted = self._store.get_deleted_files(set(mtime_map.keys()))
 
-                # Remove deleted files
-                for d in deleted:
-                    self._index.remove_file(d)
+                    for d in deleted:
+                        self._index.remove_file(d)
 
-                # Re-parse stale files
-                stale_set = set(stale)
-                for fi in parseable:
-                    rel = fi.relative_path
-                    if rel in stale_set:
-                        try:
-                            ast = parse_file(fi.path)
-                        except Exception:
-                            continue
-                        self._index.remove_file(rel)
-                        self._ast_cache[rel] = ast
-                        self._index_definitions(rel, ast)
+                    stale_set = set(stale)
+                    for fi in parseable:
+                        rel = fi.relative_path
+                        if rel in stale_set:
+                            try:
+                                ast = parse_file(fi.path)
+                            except Exception:
+                                continue
+                            self._index.remove_file(rel)
+                            self._ast_cache[rel] = ast
+                            self._index_definitions(rel, ast)
 
-                # Phase 2 for stale files only
-                for rel in stale_set:
-                    ast = self._ast_cache.get(rel)
-                    if ast:
-                        self._index_references(rel, ast)
-                        self._index.persist_file(rel)
-                        # Update stored file metadata
-                        self._store.save_file(StoredFile(
-                            path=rel,
-                            mtime=mtime_map.get(rel, 0.0),
-                            size=0,
-                            language="",
-                            line_count=ast.line_count if hasattr(ast, "line_count") else 0,
-                            content_hash="",
-                        ))
+                    dep_graph = self._context_mgr.dependency_graph
+                    if dep_graph:
+                        for src, targets in dep_graph.forward.items():
+                            for tgt in targets:
+                                self._index.add_file_dependency(src, tgt)
 
-                # Reload dependency graph edges
-                dep_graph = self._context_mgr.dependency_graph
-                if dep_graph:
-                    for src, targets in dep_graph.forward.items():
-                        for tgt in targets:
-                            self._index.add_file_dependency(src, tgt)
+                    for rel in stale_set:
+                        ast = self._ast_cache.get(rel)
+                        if ast:
+                            self._index_references(rel, ast)
+                            self._persist_indexed_file(rel, ast, mtime_map.get(rel, 0.0))
 
-                self._initialized = True
-                self._store.record_scan_time()
-                logger.debug(
-                    "ASTService incremental init: %d cached, %d stale, %d deleted",
-                    loaded, len(stale), len(deleted),
+                    self._initialized = True
+                    self._store.record_scan_time()
+                    logger.debug(
+                        "ASTService incremental init: %d cached, %d stale, %d deleted",
+                        loaded, len(stale), len(deleted),
+                    )
+                    return
+            except sqlite3.IntegrityError:
+                if force:
+                    raise
+                logger.warning(
+                    "ASTService incremental init hit sqlite integrity error; rebuilding index",
+                    exc_info=True,
                 )
+                self._store.clear_all()
+                self.initialize(force=True)
                 return
 
         # Full scan fallback
@@ -217,23 +215,6 @@ class ASTService:
         for rel, ast in self._ast_cache.items():
             self._index_references(rel, ast)
 
-        # Persist all to store — files must be saved BEFORE symbols/refs
-        # (foreign key: symbols.file_path REFERENCES files(path))
-        stored_files: list[StoredFile] = []
-        for rel, ast in self._ast_cache.items():
-            stored_files.append(StoredFile(
-                path=rel,
-                mtime=mtime_map.get(rel, 0.0),
-                size=0,
-                language="",
-                line_count=ast.line_count if hasattr(ast, "line_count") else 0,
-                content_hash="",
-            ))
-        if stored_files:
-            self._store.save_files_batch(stored_files)
-        for rel in self._ast_cache:
-            self._index.persist_file(rel)
-
         # Copy dependency graph edges
         dep_graph = self._context_mgr.dependency_graph
         if dep_graph:
@@ -244,6 +225,16 @@ class ASTService:
                     edges.append((src, tgt))
             if edges:
                 self._store.save_dependencies_batch(edges)
+
+        # Persist all to store — files must be saved BEFORE symbols/refs
+        # (foreign key: symbols.file_path REFERENCES files(path))
+        stored_files: list[StoredFile] = []
+        for rel, ast in self._ast_cache.items():
+            stored_files.append(self._build_stored_file(rel, ast, mtime_map.get(rel, 0.0)))
+        if stored_files:
+            self._store.save_files_batch(stored_files)
+        for rel in self._ast_cache:
+            self._index.persist_file(rel)
 
         self._store.record_scan_time()
         self._initialized = True
@@ -362,30 +353,32 @@ class ASTService:
             symbol_changes = []
             _dep_changes = None
 
-        # Update index: remove old entries, re-index
-        self._index.remove_file(rel)
-        self._ast_cache[rel] = new_ast
-        self._index_file(rel, new_ast)
-
-        # Update dependency edges from dependency graph
-        self._context_mgr.mark_file_dirty(path)
-        self._context_mgr.update_dirty_files()
-        dep_graph = self._context_mgr.dependency_graph
-        if dep_graph:
-            for tgt in dep_graph.forward.get(rel, set()):
-                self._index.add_file_dependency(rel, tgt)
-
-        # Persist changes to store
-        self._index.persist_file(rel)
         try:
-            mtime = os.path.getmtime(abs_path)
-        except OSError:
-            mtime = 0.0
-        self._store.save_file(StoredFile(
-            path=rel, mtime=mtime, size=0, language="",
-            line_count=new_ast.line_count if hasattr(new_ast, "line_count") else 0,
-            content_hash="",
-        ))
+            # Update index: remove old entries, re-index
+            self._index.remove_file(rel)
+            self._ast_cache[rel] = new_ast
+            self._index_file(rel, new_ast)
+
+            # Update dependency edges from dependency graph
+            self._context_mgr.mark_file_dirty(path)
+            self._context_mgr.update_dirty_files()
+            dep_graph = self._context_mgr.dependency_graph
+            if dep_graph:
+                for tgt in dep_graph.forward.get(rel, set()):
+                    self._index.add_file_dependency(rel, tgt)
+
+            try:
+                mtime = os.path.getmtime(abs_path)
+            except OSError:
+                mtime = 0.0
+            self._persist_indexed_file(rel, new_ast, mtime)
+        except sqlite3.IntegrityError as exc:
+            logger.warning(
+                "ASTService notify_file_changed hit sqlite integrity error for %s; rebuilding index",
+                rel,
+                exc_info=True,
+            )
+            self._recover_from_store_error(exc, rel)
 
         return symbol_changes
 
@@ -704,6 +697,33 @@ class ASTService:
         """
         self._index_definitions(rel_path, ast)
         self._index_references(rel_path, ast)
+
+    def _build_stored_file(self, rel_path: str, ast: FileAST, mtime: float) -> StoredFile:
+        """Build the persisted metadata row for one indexed file."""
+        return StoredFile(
+            path=rel_path,
+            mtime=mtime,
+            size=0,
+            language="",
+            line_count=ast.line_count if hasattr(ast, "line_count") else 0,
+            content_hash="",
+        )
+
+    def _persist_indexed_file(self, rel_path: str, ast: FileAST, mtime: float) -> None:
+        """Persist one file's metadata, symbols, refs, and dependency edges in FK-safe order."""
+        self._store.save_file(self._build_stored_file(rel_path, ast, mtime))
+        self._index.persist_file(rel_path)
+        self._store.save_dependencies(rel_path, self._index.get_dependencies(rel_path))
+
+    def _recover_from_store_error(self, exc: Exception, rel_path: str) -> None:
+        """Clear the local store and rebuild once after a persistence integrity error."""
+        self._store.clear_all()
+        try:
+            self.initialize(force=True)
+        except Exception as rebuild_exc:  # pragma: no cover - defensive escalation
+            raise RuntimeError(
+                f"AST index rebuild failed after store integrity error for {rel_path}"
+            ) from rebuild_exc
 
     def _index_definitions(self, rel_path: str, ast: FileAST) -> None:
         """Phase 1: Index all *definitions* (functions, classes, methods)."""
