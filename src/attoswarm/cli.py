@@ -28,6 +28,20 @@ from attoswarm.tui.app import AttoswarmApp
 logger = logging.getLogger(__name__)
 
 
+class ResearchCommandGroup(click.Group):
+    """Routes bare `research <goal> ...` invocations to `research start`."""
+
+    def resolve_command(
+        self,
+        ctx: click.Context,
+        args: list[str],
+    ) -> tuple[str | None, click.Command | None, list[str]]:
+        if args and args[0] not in self.commands:
+            cmd = self.get_command(ctx, "start")
+            return "start", cmd, args
+        return super().resolve_command(ctx, args)
+
+
 def _make_trace_collector(cfg: SwarmYamlConfig) -> Any:
     """Create a TraceCollector for the run if tracing is enabled. Returns None on failure."""
     try:
@@ -315,6 +329,7 @@ def _make_subprocess_spawn_fn(
     role_map: dict[str, RoleConfig] = {r.role_id: r for r in cfg.roles}
     fallback_backend = cfg.roles[0].backend if cfg.roles else "claude"
     fallback_model = cfg.roles[0].model if cfg.roles else ""
+    fallback_command = list(cfg.roles[0].command or []) if cfg.roles else []
 
     # Build a clean env without CLAUDECODE vars
     clean_env = {k: v for k, v in os.environ.items() if k not in _STRIP_ENV_VARS}
@@ -322,7 +337,7 @@ def _make_subprocess_spawn_fn(
     async def _spawn_agent(task: dict) -> _TaskResult:
         import time as _time
 
-        wd = cfg.run.working_dir or "."
+        wd = task.get("working_dir") or cfg.run.working_dir or "."
 
         # Resolve backend + model from role_hint
         role_hint = task.get("role_hint", "")
@@ -330,14 +345,20 @@ def _make_subprocess_spawn_fn(
         if role_cfg:
             backend = role_cfg.backend
             model = role_cfg.model
+            command_override = list(role_cfg.command or [])
         else:
             backend = fallback_backend
             model = fallback_model
+            command_override = fallback_command
 
         prompt = build_agent_prompt(task)
 
-        cmd, stdin_text = _build_backend_cmd_stdin(backend, model, prompt)
-        is_claude = backend == "claude"
+        if command_override:
+            cmd = command_override
+            stdin_text = prompt
+        else:
+            cmd, stdin_text = _build_backend_cmd_stdin(backend, model, prompt)
+        is_claude = backend == "claude" and not command_override
         if is_claude and not stdin_text:
             # Inject stream-json only for worker spawns (not decompose);
             # --verbose is required by claude CLI when combining -p with stream-json
@@ -569,7 +590,7 @@ def _make_subprocess_decompose_fn(cfg: SwarmYamlConfig):  # noqa: ANN202
 
         data = extract_json_array(raw)
         if len(data) < 2:
-            raise ValueError("Expected array with >=2 tasks, got %d items" % len(data))
+            raise ValueError(f"Expected array with >=2 tasks, got {len(data)} items")
 
         # Validate task_ids are unique
         ids = [t["task_id"] for t in data]
@@ -616,12 +637,12 @@ def _make_subprocess_decompose_fn(cfg: SwarmYamlConfig):  # noqa: ANN202
                 proc.communicate(input=stdin_text.encode() if stdin_text else None),
                 timeout=decompose_timeout,
             )
-        except (asyncio.TimeoutError, TimeoutError):
+        except TimeoutError as err:
             proc.kill()
             await proc.wait()
             raise RuntimeError(
                 f"Decomposition subprocess timed out after {decompose_timeout}s"
-            )
+            ) from err
         stdout_text = (stdout_bytes or b"").decode("utf-8", errors="replace")
 
         if proc.returncode != 0:
@@ -1334,46 +1355,766 @@ def inspect_command(run_dir: Path, tail: int, agent: str | None, task_id: str | 
         click.echo(line)
 
 
-@main.command("research")
+@main.group("research", cls=ResearchCommandGroup)
+def research_group() -> None:
+    """Run or inspect iterative research campaigns."""
+
+
+@research_group.command("start")
 @click.argument("goal", type=str)
 @click.option("--eval-command", "-e", type=str, required=True, help="Shell command that outputs numeric metric")
 @click.option("--target-files", "-t", type=str, multiple=True, help="Files the agent should modify")
 @click.option("--max-experiments", type=int, default=100, help="Maximum number of experiments")
+@click.option("--max-parallel", type=int, default=1, help="Maximum parallel experiments per batch")
 @click.option("--experiment-timeout", type=float, default=300.0, help="Timeout per experiment (seconds)")
 @click.option("--metric-direction", type=click.Choice(["maximize", "minimize"]), default="maximize")
 @click.option("--metric-name", type=str, default="score", help="Name of the metric being optimized")
 @click.option("--max-cost", type=float, default=50.0, help="Total cost budget (USD)")
+@click.option("--baseline-repeats", type=int, default=1, help="How many times to evaluate the initial baseline")
+@click.option("--promotion-repeats", type=int, default=1, help="How many reproduction passes to queue for promoted wins")
 @click.option("--resume", type=str, default="", help="Resume a previous research run by ID")
 @click.option("--config", "config_path", type=click.Path(exists=True, dir_okay=False, path_type=Path), default=None)
 @click.option("--db", type=click.Path(path_type=Path), default=None, help="Path to experiment database")
 @click.option("--working-dir", "-w", type=click.Path(exists=True, path_type=Path), default=None)
-def research_command(
+def research_start_command(
     goal: str,
     eval_command: str,
     target_files: tuple[str, ...],
     max_experiments: int,
+    max_parallel: int,
     experiment_timeout: float,
     metric_direction: str,
     metric_name: str,
     max_cost: float,
+    baseline_repeats: int,
+    promotion_repeats: int,
     resume: str,
     config_path: Path | None,
     db: Path | None,
     working_dir: Path | None,
 ) -> None:
-    """Run iterative research experiments with numeric evaluation.
+    _run_research_campaign(
+        goal=goal,
+        eval_command=eval_command,
+        target_files=target_files,
+        max_experiments=max_experiments,
+        max_parallel=max_parallel,
+        experiment_timeout=experiment_timeout,
+        metric_direction=metric_direction,
+        metric_name=metric_name,
+        max_cost=max_cost,
+        baseline_repeats=baseline_repeats,
+        promotion_repeats=promotion_repeats,
+        resume=resume,
+        config_path=config_path,
+        db=db,
+        working_dir=working_dir,
+    )
 
-    The agent will repeatedly modify code, evaluate using --eval-command,
-    and accept/reject changes based on whether the metric improves.
 
-    Example:
-        attoswarm research "improve test pass rate" -e "pytest --tb=no -q | tail -1"
-    """
+@research_group.command("leaderboard")
+@click.option("--run-id", required=True, type=str, help="Research run ID")
+@click.option("--db", type=click.Path(path_type=Path), default=None, help="Path to research database")
+@click.option("--run-dir", type=click.Path(path_type=Path), default=None, help="Research run directory")
+@click.option("--limit", type=int, default=10, help="Maximum leaderboard rows")
+def research_leaderboard_command(
+    run_id: str,
+    db: Path | None,
+    run_dir: Path | None,
+    limit: int,
+) -> None:
+    from attoswarm.research.experiment_db import ExperimentDB
+    from attoswarm.research.scoreboard import Scoreboard
+
+    db_path = _resolve_research_db_path(db=db, run_dir=run_dir)
+    store = ExperimentDB(db_path)
+    try:
+        run_meta, config, state, experiments = _load_research_view(store, run_id)
+        findings = store.list_findings(run_id, limit=limit)
+        scoreboard = Scoreboard(state, experiments, findings=findings)
+        click.echo(scoreboard.render_summary())
+        click.echo("\n" + scoreboard.render_table(limit=limit))
+        click.echo("\n" + scoreboard.render_findings(limit=limit))
+    finally:
+        store.close()
+
+
+@research_group.command("inject")
+@click.argument("run_id", type=str)
+@click.argument("note", type=str)
+@click.option("--scope", type=click.Choice(["global", "strategy", "experiment"]), default="global")
+@click.option("--target", type=str, default="", help="Optional strategy or experiment target")
+@click.option("--db", type=click.Path(path_type=Path), default=None, help="Path to research database")
+@click.option("--run-dir", type=click.Path(path_type=Path), default=None, help="Research run directory")
+def research_inject_command(
+    run_id: str,
+    note: str,
+    scope: str,
+    target: str,
+    db: Path | None,
+    run_dir: Path | None,
+) -> None:
+    from attoswarm.research.experiment import SteeringNote
+    from attoswarm.research.experiment_db import ExperimentDB
+
+    db_path = _resolve_research_db_path(db=db, run_dir=run_dir)
+    store = ExperimentDB(db_path)
+    try:
+        steering = SteeringNote(
+            note_id=f"note-{uuid.uuid4().hex[:8]}",
+            run_id=run_id,
+            content=note.strip(),
+            scope=scope,
+            target=target,
+            active=True,
+            created_at=time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+        )
+        store.add_steering_note(steering)
+        click.echo(f"Injected steering note {steering.note_id} into run {run_id}")
+    finally:
+        store.close()
+
+
+@research_group.command("feed")
+@click.option("--run-id", required=True, type=str, help="Research run ID")
+@click.option("--db", type=click.Path(path_type=Path), default=None, help="Path to research database")
+@click.option("--run-dir", type=click.Path(path_type=Path), default=None, help="Research run directory")
+@click.option("--leaderboard-limit", type=int, default=5, help="Maximum leaderboard rows")
+@click.option("--findings-limit", type=int, default=10, help="Maximum findings to show")
+@click.option("--notes-limit", type=int, default=10, help="Maximum steering notes to show")
+def research_feed_command(
+    run_id: str,
+    db: Path | None,
+    run_dir: Path | None,
+    leaderboard_limit: int,
+    findings_limit: int,
+    notes_limit: int,
+) -> None:
+    from attoswarm.research.experiment_db import ExperimentDB
+    from attoswarm.research.scoreboard import Scoreboard
+
+    db_path = _resolve_research_db_path(db=db, run_dir=run_dir)
+    store = ExperimentDB(db_path)
+    try:
+        _, config, state, experiments = _load_research_view(store, run_id)
+        findings = store.list_findings(run_id, limit=findings_limit)
+        notes = store.list_active_steering_notes(run_id)
+        scoreboard = Scoreboard(state, experiments, findings=findings)
+        click.echo(scoreboard.render_feed(
+            notes=notes,
+            leaderboard_limit=leaderboard_limit,
+            findings_limit=findings_limit,
+            notes_limit=notes_limit,
+            promotion_repeats=int(config.get("promotion_repeats") or 1),
+        ))
+    finally:
+        store.close()
+
+
+@research_group.command("monitor")
+@click.option("--run-id", required=True, type=str, help="Research run ID")
+@click.option("--db", type=click.Path(path_type=Path), default=None, help="Path to research database")
+@click.option("--run-dir", type=click.Path(path_type=Path), default=None, help="Research run directory")
+@click.option("--candidate-limit", type=int, default=10, help="Maximum pending candidates to show")
+@click.option("--findings-limit", type=int, default=10, help="Maximum findings to show")
+@click.option("--notes-limit", type=int, default=10, help="Maximum steering notes to show")
+def research_monitor_command(
+    run_id: str,
+    db: Path | None,
+    run_dir: Path | None,
+    candidate_limit: int,
+    findings_limit: int,
+    notes_limit: int,
+) -> None:
+    from attoswarm.research.experiment_db import ExperimentDB
+    from attoswarm.research.scoreboard import Scoreboard
+
+    db_path = _resolve_research_db_path(db=db, run_dir=run_dir)
+    store = ExperimentDB(db_path)
+    try:
+        _, config, state, experiments = _load_research_view(store, run_id)
+        findings = store.list_findings(run_id, limit=findings_limit)
+        notes = store.list_active_steering_notes(run_id)
+        scoreboard = Scoreboard(state, experiments, findings=findings)
+        click.echo(scoreboard.render_summary())
+        click.echo("\n" + scoreboard.render_candidates(
+            limit=candidate_limit,
+            promotion_repeats=int(config.get("promotion_repeats") or 1),
+        ))
+        click.echo("\n" + scoreboard.render_findings(limit=findings_limit))
+        click.echo("\n" + scoreboard.render_steering_notes(notes, limit=notes_limit))
+    finally:
+        store.close()
+
+
+@research_group.command("promote")
+@click.argument("run_id", type=str)
+@click.argument("experiment_id", type=str)
+@click.option("--db", type=click.Path(path_type=Path), default=None, help="Path to research database")
+@click.option("--run-dir", type=click.Path(path_type=Path), default=None, help="Research run directory")
+def research_promote_command(
+    run_id: str,
+    experiment_id: str,
+    db: Path | None,
+    run_dir: Path | None,
+) -> None:
+    from attoswarm.research.experiment import FindingRecord
+    from attoswarm.research.experiment_db import ExperimentDB
+
+    db_path = _resolve_research_db_path(db=db, run_dir=run_dir)
+    store = ExperimentDB(db_path)
+    try:
+        run_meta, _, _, experiments = _load_research_view(store, run_id)
+        target = _resolve_experiment_root(experiments, experiment_id)
+        if target.status == "accepted":
+            click.echo(f"Experiment already accepted: {target.experiment_id}")
+            return
+        if target.status not in {"candidate", "held"}:
+            raise click.ClickException(
+                f"Only candidate or held experiments can be promoted, got {target.status}."
+            )
+
+        target.status = "accepted"
+        target.accepted = True
+        target.reject_reason = ""
+        store.save_experiment(run_id, target)
+
+        findings = store.list_findings(run_id, limit=200)
+        if target.experiment_id not in {finding.experiment_id for finding in findings}:
+            store.add_finding(
+                run_id,
+                FindingRecord(
+                    finding_id=f"finding-{uuid.uuid4().hex[:8]}",
+                    experiment_id=target.experiment_id,
+                    claim=f"manual promotion accepted {target.experiment_id} at {target.metric_value:.4f}",
+                    evidence=target.hypothesis,
+                    confidence=0.85,
+                    scope="experiment",
+                    composeability="manual",
+                    status="validated",
+                    created_at=target.timestamp,
+                ),
+            )
+
+        state = _rebuild_research_state(
+            run_id,
+            run_meta,
+            store.get_experiments(run_id),
+            checkpoint=store.load_checkpoint(run_id),
+        )
+        store.save_checkpoint(run_id, state)
+        click.echo(f"Promoted experiment {target.experiment_id} to accepted")
+    finally:
+        store.close()
+
+
+@research_group.command("hold")
+@click.argument("run_id", type=str)
+@click.argument("experiment_id", type=str)
+@click.option("--reason", type=str, default="held by operator")
+@click.option("--db", type=click.Path(path_type=Path), default=None, help="Path to research database")
+@click.option("--run-dir", type=click.Path(path_type=Path), default=None, help="Research run directory")
+def research_hold_command(
+    run_id: str,
+    experiment_id: str,
+    reason: str,
+    db: Path | None,
+    run_dir: Path | None,
+) -> None:
+    from attoswarm.research.experiment_db import ExperimentDB
+
+    db_path = _resolve_research_db_path(db=db, run_dir=run_dir)
+    store = ExperimentDB(db_path)
+    try:
+        run_meta, _, _, experiments = _load_research_view(store, run_id)
+        target = _resolve_experiment_root(experiments, experiment_id)
+        if target.status == "accepted":
+            raise click.ClickException("Accepted experiments cannot be held.")
+        if target.status not in {"candidate", "held"}:
+            raise click.ClickException(
+                f"Only candidate or held experiments can be held, got {target.status}."
+            )
+
+        target.status = "held"
+        target.accepted = False
+        target.reject_reason = reason.strip() or "held by operator"
+        store.save_experiment(run_id, target)
+
+        state = _rebuild_research_state(
+            run_id,
+            run_meta,
+            store.get_experiments(run_id),
+            checkpoint=store.load_checkpoint(run_id),
+        )
+        store.save_checkpoint(run_id, state)
+        click.echo(f"Held experiment {target.experiment_id}")
+    finally:
+        store.close()
+
+
+@research_group.command("resume")
+@click.argument("run_id", type=str)
+@click.argument("experiment_id", type=str)
+@click.option("--db", type=click.Path(path_type=Path), default=None, help="Path to research database")
+@click.option("--run-dir", type=click.Path(path_type=Path), default=None, help="Research run directory")
+def research_resume_command(
+    run_id: str,
+    experiment_id: str,
+    db: Path | None,
+    run_dir: Path | None,
+) -> None:
+    from attoswarm.research.experiment_db import ExperimentDB
+
+    db_path = _resolve_research_db_path(db=db, run_dir=run_dir)
+    store = ExperimentDB(db_path)
+    try:
+        run_meta, _, _, experiments = _load_research_view(store, run_id)
+        target = _resolve_experiment_root(experiments, experiment_id)
+        if target.status == "accepted":
+            raise click.ClickException("Accepted experiments do not need to be resumed.")
+        if target.status not in {"held", "killed"}:
+            raise click.ClickException(
+                f"Only held or killed experiments can be resumed, got {target.status}."
+            )
+
+        target.status = "candidate"
+        target.accepted = False
+        target.reject_reason = ""
+        store.save_experiment(run_id, target)
+
+        state = _rebuild_research_state(
+            run_id,
+            run_meta,
+            store.get_experiments(run_id),
+            checkpoint=store.load_checkpoint(run_id),
+        )
+        store.save_checkpoint(run_id, state)
+        click.echo(f"Resumed experiment {target.experiment_id}")
+    finally:
+        store.close()
+
+
+@research_group.command("kill")
+@click.argument("run_id", type=str)
+@click.argument("experiment_id", type=str)
+@click.option("--reason", type=str, default="killed by operator")
+@click.option("--db", type=click.Path(path_type=Path), default=None, help="Path to research database")
+@click.option("--run-dir", type=click.Path(path_type=Path), default=None, help="Research run directory")
+def research_kill_command(
+    run_id: str,
+    experiment_id: str,
+    reason: str,
+    db: Path | None,
+    run_dir: Path | None,
+) -> None:
+    from attoswarm.research.experiment_db import ExperimentDB
+
+    db_path = _resolve_research_db_path(db=db, run_dir=run_dir)
+    store = ExperimentDB(db_path)
+    try:
+        run_meta, _, _, experiments = _load_research_view(store, run_id)
+        target = _resolve_experiment_root(experiments, experiment_id)
+        if target.status == "accepted":
+            raise click.ClickException("Accepted experiments cannot be killed.")
+        if target.status not in {"candidate", "held", "killed"}:
+            raise click.ClickException(
+                f"Only candidate, held, or killed experiments can be killed, got {target.status}."
+            )
+
+        target.status = "killed"
+        target.accepted = False
+        target.reject_reason = reason.strip() or "killed by operator"
+        store.save_experiment(run_id, target)
+
+        state = _rebuild_research_state(
+            run_id,
+            run_meta,
+            store.get_experiments(run_id),
+            checkpoint=store.load_checkpoint(run_id),
+        )
+        store.save_checkpoint(run_id, state)
+        click.echo(f"Killed experiment {target.experiment_id}")
+    finally:
+        store.close()
+
+
+@research_group.command("compare")
+@click.argument("run_id", type=str)
+@click.argument("experiment_a", type=str)
+@click.argument("experiment_b", type=str)
+@click.option("--db", type=click.Path(path_type=Path), default=None, help="Path to research database")
+@click.option("--run-dir", type=click.Path(path_type=Path), default=None, help="Research run directory")
+def research_compare_command(
+    run_id: str,
+    experiment_a: str,
+    experiment_b: str,
+    db: Path | None,
+    run_dir: Path | None,
+) -> None:
+    from attoswarm.research.experiment_db import ExperimentDB
+
+    db_path = _resolve_research_db_path(db=db, run_dir=run_dir)
+    store = ExperimentDB(db_path)
+    try:
+        run_meta = store.get_run(run_id)
+        exp_a = store.get_experiment(run_id, experiment_a)
+        exp_b = store.get_experiment(run_id, experiment_b)
+        if exp_a is None or exp_b is None:
+            missing = experiment_a if exp_a is None else experiment_b
+            raise click.ClickException(f"Experiment not found in run {run_id}: {missing}")
+
+        metric_direction = "maximize"
+        metric_name = "score"
+        if run_meta:
+            config = run_meta.get("config", {})
+            metric_direction = str(config.get("metric_direction", metric_direction))
+            metric_name = str(config.get("metric_name", metric_name))
+
+        click.echo(f"Run: {run_id}")
+        click.echo(f"Metric: {metric_name} ({metric_direction})")
+        click.echo("")
+        click.echo(f"A: {exp_a.experiment_id} [{exp_a.status}] {exp_a.metric_value}")
+        click.echo(f"   strategy={exp_a.strategy} branch={exp_a.branch or '-'}")
+        click.echo(f"   hypothesis={exp_a.hypothesis}")
+        click.echo("")
+        click.echo(f"B: {exp_b.experiment_id} [{exp_b.status}] {exp_b.metric_value}")
+        click.echo(f"   strategy={exp_b.strategy} branch={exp_b.branch or '-'}")
+        click.echo(f"   hypothesis={exp_b.hypothesis}")
+        click.echo("")
+        delta = _metric_delta(exp_a.metric_value, exp_b.metric_value, metric_direction=metric_direction)
+        click.echo(f"Delta (B - A): {delta}")
+    finally:
+        store.close()
+
+
+@research_group.command("reproduce")
+@click.argument("run_id", type=str)
+@click.option("--experiment-id", type=str, default="", help="Existing experiment to reproduce")
+@click.option("--ref", "git_ref", type=str, default="", help="Git ref to import and score")
+@click.option("--eval-command", "-e", type=str, default="", help="Override eval command")
+@click.option("--working-dir", "-w", type=click.Path(exists=True, path_type=Path), default=None)
+@click.option("--db", type=click.Path(path_type=Path), default=None, help="Path to research database")
+@click.option("--run-dir", type=click.Path(path_type=Path), default=None, help="Research run directory")
+def research_reproduce_command(
+    run_id: str,
+    experiment_id: str,
+    git_ref: str,
+    eval_command: str,
+    working_dir: Path | None,
+    db: Path | None,
+    run_dir: Path | None,
+) -> None:
+    from attoswarm.research.evaluator import CommandEvaluator
+    from attoswarm.research.experiment import Experiment, FindingRecord, ResearchState
+    from attoswarm.research.experiment_db import ExperimentDB
+    from attoswarm.research.worktree_manager import WorktreeManager
+
+    if not experiment_id and not git_ref:
+        raise click.ClickException("Pass either --experiment-id or --ref.")
+    if experiment_id and git_ref:
+        raise click.ClickException("Pass only one of --experiment-id or --ref.")
+
+    db_path = _resolve_research_db_path(db=db, run_dir=run_dir)
+    campaign_run_dir = run_dir or db_path.parent
+    store = ExperimentDB(db_path)
+    try:
+        run_meta = store.get_run(run_id)
+        if run_meta is None:
+            raise click.ClickException(f"Research run not found: {run_id}")
+
+        config = run_meta.get("config", {})
+        repo_root = str(working_dir or Path(config.get("working_dir") or ".").resolve())
+        effective_eval = eval_command or str(config.get("eval_command") or "")
+        if not effective_eval:
+            raise click.ClickException("No eval command available. Pass --eval-command or use a run created with one.")
+
+        state = store.load_checkpoint(run_id) or ResearchState(
+            run_id=run_id,
+            goal=str(run_meta.get("goal") or ""),
+            metric_name=str(config.get("metric_name") or "score"),
+            metric_direction=str(config.get("metric_direction") or "maximize"),
+        )
+
+        source_exp = store.get_experiment(run_id, experiment_id) if experiment_id else None
+        source_ref = git_ref or (source_exp.commit_hash if source_exp and source_exp.commit_hash else "")
+        if not source_ref:
+            raise click.ClickException(f"Experiment {experiment_id} has no saved commit_hash to reproduce.")
+
+        worktrees = WorktreeManager(repo_root, campaign_run_dir)
+        new_exp_id = f"{run_id}-manual-{uuid.uuid4().hex[:8]}"
+        worktree_path, branch = worktrees.create_worktree(new_exp_id, source_ref)
+        try:
+            evaluator = CommandEvaluator(effective_eval)
+            result = asyncio.run(evaluator.evaluate(str(worktree_path)))
+
+            exp = Experiment(
+                experiment_id=new_exp_id,
+                iteration=state.total_experiments + 1,
+                hypothesis=(
+                    f"Manual reproduce of {experiment_id}: {source_exp.hypothesis}"
+                    if source_exp is not None
+                    else f"Manual import of ref {source_ref}"
+                ),
+                parent_experiment_id=experiment_id if source_exp is not None else "",
+                strategy="reproduce" if source_exp is not None else "import",
+                status="invalid",
+                branch=branch,
+                worktree_path=str(worktree_path),
+                commit_hash=source_ref,
+                diff=worktrees.capture_diff(worktree_path),
+                metric_value=result.metric_value,
+                metrics={
+                    "primary_metric": result.metric_value,
+                    "secondary_metrics": result.metrics,
+                    "metadata": result.metadata,
+                    "constraint_checks": result.constraint_checks,
+                },
+                baseline_value=state.best_value if state.best_value is not None else state.baseline_value,
+                artifacts=list(result.artifacts),
+                raw_output=result.raw_output,
+                error=result.error,
+                timestamp=time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+            )
+
+            if result.success and _constraints_pass(result.constraint_checks):
+                if state.best_value is None and state.baseline_value is None:
+                    improved = True
+                    state.baseline_value = result.metric_value
+                else:
+                    baseline = _state_accept_baseline(state, result.metric_value)
+                    improved = (
+                        result.metric_value < baseline
+                        if state.metric_direction == "minimize"
+                        else result.metric_value > baseline
+                    )
+                if improved:
+                    exp.accepted = True
+                    exp.status = "accepted"
+                    exp.reject_reason = ""
+                    state.best_value = result.metric_value
+                    state.best_experiment_id = exp.experiment_id
+                    state.best_branch = exp.branch
+                    state.accepted_count += 1
+                    store.add_finding(
+                        run_id,
+                        FindingRecord(
+                            finding_id=f"finding-{uuid.uuid4().hex[:8]}",
+                            experiment_id=exp.experiment_id,
+                            claim=f"manual {exp.strategy} improved {state.metric_name} to {result.metric_value:.4f}",
+                            evidence=exp.hypothesis,
+                            confidence=0.8,
+                            scope="experiment",
+                            composeability="manual",
+                            status="validated",
+                            created_at=exp.timestamp,
+                        ),
+                    )
+                else:
+                    exp.status = "reproduced" if source_exp is not None else "imported"
+                    exp.reject_reason = "did not improve current best"
+                    state.rejected_count += 1
+            else:
+                exp.status = "invalid"
+                exp.reject_reason = result.error or "constraint checks failed"
+                state.invalid_count += 1
+
+            state.total_experiments += 1
+            state.total_cost_usd += exp.cost_usd
+            state.total_tokens += exp.tokens_used
+            store.save_experiment(run_id, exp)
+            store.save_checkpoint(run_id, state)
+
+            click.echo(f"Stored experiment: {exp.experiment_id}")
+            click.echo(f"Status: {exp.status}")
+            click.echo(f"Metric: {exp.metric_value}")
+            click.echo(f"Branch: {exp.branch}")
+        finally:
+            if not bool(config.get("preserve_worktrees", True)):
+                worktrees.remove_worktree(worktree_path, branch=branch)
+    finally:
+        store.close()
+
+
+@research_group.command("import-patch")
+@click.argument("run_id", type=str)
+@click.argument("patch_path", type=click.Path(exists=True, dir_okay=False, path_type=Path))
+@click.option("--base-experiment-id", type=str, default="", help="Candidate or accepted experiment to apply the patch on top of")
+@click.option("--base-ref", type=str, default="", help="Git ref to apply the patch on top of")
+@click.option("--eval-command", "-e", type=str, default="", help="Override eval command")
+@click.option("--working-dir", "-w", type=click.Path(exists=True, path_type=Path), default=None)
+@click.option("--db", type=click.Path(path_type=Path), default=None, help="Path to research database")
+@click.option("--run-dir", type=click.Path(path_type=Path), default=None, help="Research run directory")
+def research_import_patch_command(
+    run_id: str,
+    patch_path: Path,
+    base_experiment_id: str,
+    base_ref: str,
+    eval_command: str,
+    working_dir: Path | None,
+    db: Path | None,
+    run_dir: Path | None,
+) -> None:
+    from attoswarm.research.evaluator import CommandEvaluator
+    from attoswarm.research.experiment import Experiment, FindingRecord, ResearchState
+    from attoswarm.research.experiment_db import ExperimentDB
+    from attoswarm.research.worktree_manager import WorktreeManager
+
+    if base_experiment_id and base_ref:
+        raise click.ClickException("Pass only one of --base-experiment-id or --base-ref.")
+
+    db_path = _resolve_research_db_path(db=db, run_dir=run_dir)
+    campaign_run_dir = run_dir or db_path.parent
+    store = ExperimentDB(db_path)
+    try:
+        run_meta = store.get_run(run_id)
+        if run_meta is None:
+            raise click.ClickException(f"Research run not found: {run_id}")
+
+        config = run_meta.get("config", {})
+        repo_root = str(working_dir or Path(config.get("working_dir") or ".").resolve())
+        effective_eval = eval_command or str(config.get("eval_command") or "")
+        if not effective_eval:
+            raise click.ClickException("No eval command available. Pass --eval-command or use a run created with one.")
+
+        state = store.load_checkpoint(run_id) or ResearchState(
+            run_id=run_id,
+            goal=str(run_meta.get("goal") or ""),
+            metric_name=str(config.get("metric_name") or "score"),
+            metric_direction=str(config.get("metric_direction") or "maximize"),
+        )
+        base_experiment = store.get_experiment(run_id, base_experiment_id) if base_experiment_id else None
+        start_ref = base_ref or (base_experiment.commit_hash if base_experiment and base_experiment.commit_hash else "")
+        if not start_ref:
+            start_ref = state.best_branch or WorktreeManager(repo_root, campaign_run_dir).get_head_commit()
+
+        worktrees = WorktreeManager(repo_root, campaign_run_dir)
+        new_exp_id = f"{run_id}-patch-{uuid.uuid4().hex[:8]}"
+        worktree_path, branch = worktrees.create_worktree(new_exp_id, start_ref)
+        try:
+            patch_text = patch_path.read_text(encoding="utf-8")
+            applied, detail = worktrees.apply_diff(worktree_path, patch_text)
+
+            exp = Experiment(
+                experiment_id=new_exp_id,
+                iteration=state.total_experiments + 1,
+                hypothesis=f"Import patch {patch_path.name}",
+                parent_experiment_id=base_experiment.experiment_id if base_experiment is not None else "",
+                strategy="import_patch",
+                status="invalid",
+                branch=branch,
+                worktree_path=str(worktree_path),
+                baseline_value=state.best_value if state.best_value is not None else state.baseline_value,
+                raw_output=f"patch import: {detail}",
+                timestamp=time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+            )
+
+            if applied:
+                evaluator = CommandEvaluator(effective_eval)
+                result = asyncio.run(evaluator.evaluate(str(worktree_path)))
+                exp.diff = worktrees.capture_diff(worktree_path)
+                exp.files_modified = worktrees.list_changed_files(worktree_path)
+                exp.commit_hash = worktrees.commit_all(
+                    worktree_path,
+                    f"[research] {new_exp_id}: import patch {patch_path.name}",
+                )
+                exp.metric_value = result.metric_value
+                exp.metrics = {
+                    "primary_metric": result.metric_value,
+                    "secondary_metrics": result.metrics,
+                    "metadata": result.metadata,
+                    "constraint_checks": result.constraint_checks,
+                }
+                exp.artifacts = list(result.artifacts)
+                exp.error = result.error
+                exp.raw_output = f"{exp.raw_output}\n{result.raw_output}".strip()
+
+                if result.success and _constraints_pass(result.constraint_checks):
+                    if state.best_value is None and state.baseline_value is None:
+                        improved = True
+                        state.baseline_value = result.metric_value
+                    else:
+                        baseline = _state_accept_baseline(state, result.metric_value)
+                        improved = (
+                            result.metric_value < baseline
+                            if state.metric_direction == "minimize"
+                            else result.metric_value > baseline
+                        )
+                    if improved:
+                        exp.accepted = True
+                        exp.status = "accepted"
+                        exp.reject_reason = ""
+                        state.best_value = result.metric_value
+                        state.best_experiment_id = exp.experiment_id
+                        state.best_branch = exp.branch
+                        state.accepted_count += 1
+                        store.add_finding(
+                            run_id,
+                            FindingRecord(
+                                finding_id=f"finding-{uuid.uuid4().hex[:8]}",
+                                experiment_id=exp.experiment_id,
+                                claim=f"imported patch improved {state.metric_name} to {result.metric_value:.4f}",
+                                evidence=exp.hypothesis,
+                                confidence=0.8,
+                                scope="experiment",
+                                composeability="manual",
+                                status="validated",
+                                created_at=exp.timestamp,
+                            ),
+                        )
+                    else:
+                        exp.status = "imported"
+                        exp.reject_reason = "did not improve current best"
+                        state.rejected_count += 1
+                else:
+                    exp.status = "invalid"
+                    exp.reject_reason = result.error or "constraint checks failed"
+                    state.invalid_count += 1
+            else:
+                exp.reject_reason = detail
+                exp.error = detail
+                exp.status = "invalid"
+                state.invalid_count += 1
+
+            state.total_experiments += 1
+            state.total_cost_usd += exp.cost_usd
+            state.total_tokens += exp.tokens_used
+            store.save_experiment(run_id, exp)
+            store.save_checkpoint(run_id, state)
+
+            click.echo(f"Stored experiment: {exp.experiment_id}")
+            click.echo(f"Status: {exp.status}")
+            click.echo(f"Metric: {exp.metric_value}")
+            click.echo(f"Branch: {exp.branch}")
+        finally:
+            if not bool(config.get("preserve_worktrees", True)):
+                worktrees.remove_worktree(worktree_path, branch=branch)
+    finally:
+        store.close()
+
+
+def _run_research_campaign(
+    *,
+    goal: str,
+    eval_command: str,
+    target_files: tuple[str, ...],
+    max_experiments: int,
+    max_parallel: int,
+    experiment_timeout: float,
+    metric_direction: str,
+    metric_name: str,
+    max_cost: float,
+    baseline_repeats: int,
+    promotion_repeats: int,
+    resume: str,
+    config_path: Path | None,
+    db: Path | None,
+    working_dir: Path | None,
+) -> None:
     from attoswarm.research.config import ResearchConfig as _ResearchConfig
     from attoswarm.research.research_orchestrator import ResearchOrchestrator
 
     wd = str(working_dir) if working_dir else "."
-    run_dir = str(db.parent) if db else ".agent/research"
+    run_dir = str(_resolve_research_run_dir(db=db, working_dir=working_dir))
 
     research_cfg = _ResearchConfig(
         metric_name=metric_name,
@@ -1383,11 +2124,13 @@ def research_command(
         total_max_cost_usd=max_cost,
         eval_command=eval_command,
         target_files=list(target_files),
+        baseline_repeats=max(1, baseline_repeats),
+        promotion_repeats=max(1, promotion_repeats),
+        max_parallel_experiments=max(1, max_parallel),
         working_dir=wd,
         run_dir=run_dir,
     )
 
-    # Load swarm config for spawn_fn if available
     spawn_fn = None
     if config_path:
         cfg = load_swarm_yaml(config_path)
@@ -1401,18 +2144,149 @@ def research_command(
 
     click.echo(f"Starting research: {goal[:80]}")
     click.echo(f"Eval: {eval_command}")
-    click.echo(f"Direction: {metric_direction} | Max experiments: {max_experiments} | Budget: ${max_cost}")
+    click.echo(
+        "Direction: "
+        f"{metric_direction} | Max experiments: {max_experiments} | "
+        f"Parallel: {max_parallel} | Budget: ${max_cost}"
+    )
 
     state = asyncio.run(orchestrator.run(resume_run_id=resume))
-
-    # Print scoreboard
     scoreboard = orchestrator.get_scoreboard()
     click.echo("\n" + "=" * 60)
     click.echo(scoreboard.render_summary())
     click.echo("\n" + scoreboard.render_table())
-    click.echo("\n" + scoreboard.render_trend())
+    click.echo("\n" + scoreboard.render_findings())
 
     raise SystemExit(0 if state.status == "completed" else 1)
+
+
+def _resolve_research_run_dir(*, db: Path | None, working_dir: Path | None) -> Path:
+    if db is not None:
+        return db.parent
+    if working_dir is not None:
+        return working_dir / ".agent" / "research"
+    return Path(".agent/research")
+
+
+def _resolve_research_db_path(*, db: Path | None, run_dir: Path | None) -> Path:
+    if db is not None:
+        return db
+    if run_dir is not None:
+        return run_dir / "research.db"
+    return Path(".agent/research/research.db")
+
+
+def _metric_delta(
+    metric_a: float | None,
+    metric_b: float | None,
+    *,
+    metric_direction: str,
+) -> str:
+    if metric_a is None or metric_b is None:
+        return "N/A"
+    delta = metric_b - metric_a
+    if metric_direction == "minimize":
+        quality = metric_a - metric_b
+        return f"raw={delta:+.4f}, quality={quality:+.4f}"
+    return f"raw={delta:+.4f}, quality={delta:+.4f}"
+
+
+def _state_accept_baseline(state: Any, fallback: float) -> float:
+    if getattr(state, "best_value", None) is not None:
+        return float(state.best_value)
+    if getattr(state, "baseline_value", None) is not None:
+        return float(state.baseline_value)
+    return fallback
+
+
+def _constraints_pass(constraints: dict[str, Any]) -> bool:
+    if not constraints:
+        return True
+    for value in constraints.values():
+        if isinstance(value, bool):
+            if not value:
+                return False
+            continue
+        if isinstance(value, dict) and "passed" in value and not bool(value["passed"]):
+            return False
+    return True
+
+
+def _load_research_view(store: Any, run_id: str) -> tuple[dict[str, Any], dict[str, Any], Any, list[Any]]:
+    run_meta = store.get_run(run_id)
+    if run_meta is None:
+        raise click.ClickException(f"Research run not found: {run_id}")
+    experiments = store.get_experiments(run_id)
+    config = run_meta.get("config", {}) if run_meta else {}
+    checkpoint = store.load_checkpoint(run_id)
+    state = _rebuild_research_state(run_id, run_meta, experiments, checkpoint=checkpoint)
+    return run_meta, config, state, experiments
+
+
+def _rebuild_research_state(
+    run_id: str,
+    run_meta: dict[str, Any],
+    experiments: list[Any],
+    *,
+    checkpoint: Any | None = None,
+) -> Any:
+    from attoswarm.research.experiment import ResearchState
+
+    config = run_meta.get("config", {}) if run_meta else {}
+    state = ResearchState(
+        run_id=run_id,
+        goal=str(run_meta.get("goal") or "") if run_meta else "",
+        metric_name=str(config.get("metric_name") or "score"),
+        metric_direction=str(config.get("metric_direction") or "maximize"),
+        baseline_value=getattr(checkpoint, "baseline_value", None),
+        status=str(run_meta.get("status") or "running") if run_meta else "running",
+    )
+    state.wall_seconds = float(getattr(checkpoint, "wall_seconds", 0.0) or 0.0)
+    state.total_experiments = len(experiments)
+    state.total_cost_usd = sum(float(getattr(exp, "cost_usd", 0.0) or 0.0) for exp in experiments)
+    state.total_tokens = sum(int(getattr(exp, "tokens_used", 0) or 0) for exp in experiments)
+    state.accepted_count = sum(1 for exp in experiments if exp.status == "accepted")
+    state.candidate_count = sum(1 for exp in experiments if exp.status in {"candidate", "validated"})
+    state.held_count = sum(1 for exp in experiments if exp.status == "held")
+    state.rejected_count = sum(1 for exp in experiments if exp.status == "rejected")
+    state.invalid_count = sum(1 for exp in experiments if exp.status in {"invalid", "error"})
+
+    accepted = [
+        exp for exp in experiments
+        if exp.status == "accepted" and exp.metric_value is not None
+    ]
+    if accepted:
+        accepted.sort(key=lambda exp: _experiment_rank(exp, state.metric_direction))
+        best = accepted[0]
+        state.best_value = best.metric_value
+        state.best_experiment_id = best.experiment_id
+        state.best_branch = best.branch
+    return state
+
+
+def _experiment_rank(exp: Any, metric_direction: str) -> tuple[bool, float, int]:
+    if metric_direction == "minimize":
+        return (
+            exp.metric_value is None,
+            exp.metric_value if exp.metric_value is not None else float("inf"),
+            int(getattr(exp, "iteration", 0)),
+        )
+    return (
+        exp.metric_value is None,
+        -(exp.metric_value if exp.metric_value is not None else float("-inf")),
+        int(getattr(exp, "iteration", 0)),
+    )
+
+
+def _resolve_experiment_root(experiments: list[Any], experiment_id: str) -> Any:
+    target = next((exp for exp in experiments if exp.experiment_id == experiment_id), None)
+    if target is None:
+        raise click.ClickException(f"Experiment not found: {experiment_id}")
+    if target.parent_experiment_id:
+        parent = next((exp for exp in experiments if exp.experiment_id == target.parent_experiment_id), None)
+        if parent is not None:
+            return parent
+    return target
 
 
 def _detect_first_available_backend() -> str:
@@ -2161,10 +3035,7 @@ def trace_command(run_dir: Path, task_id: str) -> None:
 
     engine = TraceQueryEngine(run_dir=run_dir)
     engine.load()
-    if task_id:
-        events = engine.events_for_task(task_id)
-    else:
-        events = engine.all_events
+    events = engine.events_for_task(task_id) if task_id else engine.all_events
     if not events:
         click.echo("No trace events found.")
         return
