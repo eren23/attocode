@@ -138,13 +138,14 @@ class AgentGrid(Widget):
     }
     """
 
-    agents: reactive[list[dict[str, Any]]] = reactive(list, layout=True)
+    agents: reactive[list[dict[str, Any]]] = reactive(list)
 
     def compose(self):
         yield Horizontal(id="agent-grid-row")
 
     def on_mount(self) -> None:
         self._pulse_on = False
+        self._prev_fingerprint: str = ""
 
     def watch_agents(self, agents: list[dict[str, Any]]) -> None:
         self._rebuild(agents)
@@ -154,6 +155,15 @@ class AgentGrid(Widget):
         self.agents = agents
 
     def _rebuild(self, agents: list[dict[str, Any]]) -> None:
+        # Quick fingerprint check — skip DOM work when nothing changed
+        fp = "|".join(
+            f"{a.get('agent_id','')},{a.get('status','')},{a.get('tokens_used',0)}"
+            for a in agents
+        )
+        if fp == self._prev_fingerprint:
+            return
+        self._prev_fingerprint = fp
+
         try:
             row = self.query_one("#agent-grid-row", Horizontal)
         except Exception:

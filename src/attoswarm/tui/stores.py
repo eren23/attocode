@@ -223,8 +223,14 @@ class StateStore:
         self,
         state: dict[str, Any],
         activity: dict[str, str] | None = None,
+        enrich_trace: bool = True,
     ) -> list[dict[str, Any]]:
-        """Transform active_agents into AgentsDataTable-compatible format."""
+        """Transform active_agents into AgentsDataTable-compatible format.
+
+        Args:
+            enrich_trace: When False, skip per-agent trace file reads (N+1 I/O).
+                          Use False for overview tab where trace data isn't displayed.
+        """
         now = time.time()
 
         # Build task_id -> title lookup from DAG
@@ -242,8 +248,8 @@ class StateStore:
                 elapsed = f"{secs // 60}m{secs % 60:02d}s"
             else:
                 elapsed = ""
-            # Trace summary enrichment
-            trace = self.build_agent_trace_summary(task_id) if task_id else {}
+            # Trace summary enrichment (skip for overview to avoid N+1 file reads)
+            trace = self.build_agent_trace_summary(task_id) if (enrich_trace and task_id) else {}
 
             out.append({
                 "agent_id": agent_id,

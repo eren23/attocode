@@ -393,7 +393,7 @@ class AttoswarmApp(App[None]):
     ) -> None:
         """Suppress refresh during tab transitions to prevent focus stealing."""
         self._tab_switching = True
-        self.set_timer(0.3, self._end_tab_switch)
+        self.set_timer(0.05, self._end_tab_switch)
         # Stop trace polling when leaving agents tab
         if event.tab and str(event.tab.id) != "tab-agents" and self._trace_timer is not None:
             self._trace_timer.stop()
@@ -455,7 +455,7 @@ class AttoswarmApp(App[None]):
             tab_data: dict[str, Any] = {}
             if active_tab == "tab-overview":
                 activity = self._store.build_agent_activity(raw_events)
-                agents = self._store.build_agent_list(state, activity=activity)
+                agents = self._store.build_agent_list(state, activity=activity, enrich_trace=False)
                 tasks = self._store.build_task_list(state)
                 tab_data = {"activity": activity, "agents": agents, "tasks": tasks}
             elif active_tab == "tab-tasks":
@@ -464,8 +464,18 @@ class AttoswarmApp(App[None]):
                 activity = self._store.build_agent_activity(raw_events)
                 sidecars = self._store.read_activity_sidecars()
                 tab_data = {"activity": activity, "sidecars": sidecars}
+            elif active_tab == "tab-messages":
+                tab_data = {"messages": self._store.read_all_messages()}
             elif active_tab == "tab-decisions":
-                tab_data = {"raw_events": raw_events}
+                decisions = self._store.build_decision_list(state)
+                failures = self._store.build_failure_chain(state, events=raw_events)
+                conflicts = self._store.build_conflict_list(state, events=raw_events)
+                tab_data = {
+                    "raw_events": raw_events,
+                    "decisions": decisions,
+                    "failures": failures,
+                    "conflicts": conflicts,
+                }
 
             # Post to main thread for widget updates
             self.call_from_thread(
@@ -529,9 +539,14 @@ class AttoswarmApp(App[None]):
             elif actual_tab == "tab-events":
                 self._refresh_events()
             elif actual_tab == "tab-messages":
-                self._refresh_messages()
+                self._refresh_messages_with_data(tab_data.get("messages", []))
             elif actual_tab == "tab-decisions":
-                self._refresh_decisions(state, tab_data.get("raw_events"))
+                self._refresh_decisions_with_data(
+                    state, tab_data.get("raw_events", []),
+                    tab_data.get("decisions", []),
+                    tab_data.get("failures", []),
+                    tab_data.get("conflicts", []),
+                )
 
         self._refreshing = False
 
@@ -739,16 +754,35 @@ class AttoswarmApp(App[None]):
         except Exception:
             pass
 
+    def _refresh_messages_with_data(self, messages: list[dict[str, Any]]) -> None:
+        """Update messages tab with pre-built data (no I/O)."""
+        try:
+            self.query_one("#messages-log-widget", MessagesLog).update_messages(messages)
+        except Exception:
+            pass
+
     def _refresh_decisions(
         self, state: dict[str, Any], raw_events: list[dict[str, Any]] | None = None,
     ) -> None:
         """Refresh the Decisions tab with decisions, budget, failures, conflicts."""
         if raw_events is None:
             raw_events = self._store.read_events(limit=500)
+        decisions = self._store.build_decision_list(state)
+        failures = self._store.build_failure_chain(state, events=raw_events)
+        conflicts = self._store.build_conflict_list(state, events=raw_events)
+        self._refresh_decisions_with_data(state, raw_events, decisions, failures, conflicts)
 
+    def _refresh_decisions_with_data(
+        self,
+        state: dict[str, Any],
+        raw_events: list[dict[str, Any]],
+        decisions: list[dict[str, Any]],
+        failures: list[dict[str, Any]],
+        conflicts: list[dict[str, Any]],
+    ) -> None:
+        """Update decisions tab with pre-built data (no I/O)."""
         # Decisions
         try:
-            decisions = self._store.build_decision_list(state)
             self.query_one("#decisions-pane", DecisionsPane).update_state({
                 "decisions": decisions,
                 "errors": state.get("errors", []),
@@ -799,16 +833,14 @@ class AttoswarmApp(App[None]):
         except Exception:
             pass
 
-        # Failure chain (pass events to avoid re-read)
+        # Failure chain
         try:
-            failures = self._store.build_failure_chain(state, events=raw_events)
             self.query_one("#failure-chain", FailureChainWidget).update_failures(failures)
         except Exception:
             pass
 
-        # Conflicts (pass events to avoid re-read)
+        # Conflicts
         try:
-            conflicts = self._store.build_conflict_list(state, events=raw_events)
             self.query_one("#conflict-panel", ConflictPanel).update_conflicts(conflicts)
         except Exception:
             pass
@@ -885,7 +917,7 @@ class AttoswarmApp(App[None]):
                     pass
                 # Start polling timer if not already running
                 if self._trace_timer is None:
-                    self._trace_timer = self.set_interval(0.5, self._poll_trace)
+                    self._trace_timer = self.set_interval(1.5, self._poll_trace)
 
     def on_task_card_selected(self, event: TaskCard.Selected) -> None:
         """When a task card is clicked in OverviewPane, show detail + switch tab."""

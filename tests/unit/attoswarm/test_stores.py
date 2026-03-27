@@ -549,6 +549,60 @@ class TestBuildAgentList:
         result = store.build_agent_list(state)
         assert result[0]["elapsed"] == ""
 
+    def test_enrich_trace_false_skips_file_reads(
+        self, store: StateStore, tmp_run_dir: Path
+    ) -> None:
+        """enrich_trace=False should skip per-agent trace file reads."""
+        # Write a trace file that would be read if enrich_trace=True
+        agents_dir = tmp_run_dir / "agents"
+        trace_data = json.dumps({"type": "tool_call", "tool": "read_file"}) + "\n"
+        (agents_dir / "agent-t1.trace.jsonl").write_text(trace_data)
+
+        state = {
+            "active_agents": [
+                {"agent_id": "w1", "task_id": "t1", "status": "running"},
+            ]
+        }
+
+        # With enrich_trace=True, trace data is populated
+        enriched = store.build_agent_list(state, enrich_trace=True)
+        assert enriched[0]["agent_id"] == "w1"
+
+        # With enrich_trace=False, trace fields get defaults (no file I/O)
+        lean = store.build_agent_list(state, enrich_trace=False)
+        assert lean[0]["agent_id"] == "w1"
+        assert lean[0]["tool_calls"] == []
+        assert lean[0]["error_count"] == 0
+        assert lean[0]["files_written"] == []
+        assert lean[0]["total_cost"] == 0.0
+
+    def test_enrich_trace_true_reads_trace_files(
+        self, store: StateStore, tmp_run_dir: Path
+    ) -> None:
+        """enrich_trace=True (default) reads trace JSONL for each agent."""
+        agents_dir = tmp_run_dir / "agents"
+        lines = [
+            json.dumps({"type": "tool_use", "tool": "write_file", "args": {"path": "a.py"}}),
+            json.dumps({"type": "error", "message": "oops"}),
+        ]
+        (agents_dir / "agent-t1.trace.jsonl").write_text("\n".join(lines) + "\n")
+
+        state = {
+            "active_agents": [
+                {"agent_id": "w1", "task_id": "t1", "status": "running"},
+            ]
+        }
+        result = store.build_agent_list(state, enrich_trace=True)
+        # Trace data should be populated (exact values depend on trace parser)
+        assert result[0]["agent_id"] == "w1"
+        # At minimum the trace was attempted (non-default error_count or tool_calls)
+        trace_accessed = (
+            result[0]["error_count"] > 0
+            or len(result[0]["tool_calls"]) > 0
+            or len(result[0]["files_written"]) > 0
+        )
+        assert trace_accessed
+
 
 # ── build_task_list ───────────────────────────────────────────────────
 
