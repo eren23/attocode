@@ -5,6 +5,7 @@ import subprocess
 from pathlib import Path
 from types import SimpleNamespace
 
+import pytest
 from click.testing import CliRunner
 
 from attoswarm.cli import main
@@ -13,6 +14,32 @@ from attoswarm.research.evaluator import CommandEvaluator, EvalResult
 from attoswarm.research.experiment import Experiment, FindingRecord, SteeringNote
 from attoswarm.research.experiment_db import ExperimentDB
 from attoswarm.research.research_orchestrator import ResearchOrchestrator
+
+
+def _init_repo(repo: Path, files: dict[str, str]) -> None:
+    repo.mkdir(parents=True, exist_ok=True)
+    subprocess.run(["git", "init"], cwd=repo, check=True, capture_output=True, text=True)
+    for relative_path, content in files.items():
+        target = repo / relative_path
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_text(content, encoding="utf-8")
+    subprocess.run(["git", "add", "-A"], cwd=repo, check=True, capture_output=True, text=True)
+    subprocess.run(
+        [
+            "git",
+            "-c",
+            "user.name=test",
+            "-c",
+            "user.email=test@example.com",
+            "commit",
+            "-m",
+            "init",
+        ],
+        cwd=repo,
+        check=True,
+        capture_output=True,
+        text=True,
+    )
 
 
 def test_command_evaluator_parses_structured_json() -> None:
@@ -801,3 +828,116 @@ def test_research_cli_legacy_invocation_routes_to_start(monkeypatch) -> None:  #
 
     assert result.exit_code == 0
     assert captured["goal"] == "improve metric"
+
+
+def test_experiment_db_ensure_column_rejects_bad_table(tmp_path: Path) -> None:
+    from attoswarm.research.experiment_db import ExperimentDB
+    db = ExperimentDB(tmp_path / "test.db")
+    try:
+        with pytest.raises(ValueError, match="Unknown table"):
+            db._ensure_column("DROP TABLE x; --", "col", "TEXT")
+    finally:
+        db.close()
+
+
+def test_experiment_db_ensure_column_rejects_bad_column(tmp_path: Path) -> None:
+    from attoswarm.research.experiment_db import ExperimentDB
+    db = ExperimentDB(tmp_path / "test.db")
+    try:
+        with pytest.raises(ValueError, match="Invalid column"):
+            db._ensure_column("experiments", "col; DROP", "TEXT")
+    finally:
+        db.close()
+
+
+def test_experiment_db_ensure_column_accepts_valid(tmp_path: Path) -> None:
+    from attoswarm.research.experiment_db import ExperimentDB
+    db = ExperimentDB(tmp_path / "test.db")
+    try:
+        # Should not raise
+        db._ensure_column("experiments", "test_col", "TEXT DEFAULT ''")
+    finally:
+        db.close()
+
+
+def test_refresh_state_uses_candidate_branch_not_head(tmp_path: Path) -> None:
+    """When no accepted experiments exist, _refresh_state should use candidate's branch/id."""
+    from attoswarm.research.config import ResearchConfig
+    from attoswarm.research.experiment import Experiment
+
+    repo = tmp_path / "repo"
+    _init_repo(repo, {"target.txt": "base\n"})
+
+    class DummyEvaluator:
+        async def evaluate(self, working_dir: str) -> EvalResult:
+            return EvalResult(metric_value=0.0)
+
+    orchestrator = ResearchOrchestrator(
+        ResearchConfig(
+            working_dir=str(repo),
+            run_dir=str(tmp_path / "runs"),
+            eval_command="",
+            total_max_experiments=0,
+            target_files=["target.txt"],
+        ),
+        "test goal",
+        evaluator=DummyEvaluator(),
+    )
+    from attoswarm.research.worktree_manager import WorktreeManager
+    orchestrator._worktrees = WorktreeManager(repo, tmp_path / "runs")
+    orchestrator._state.baseline_value = 0.0
+    orchestrator._state.best_value = 0.0
+
+    # Pre-seed a candidate experiment
+    candidate = Experiment(
+        experiment_id="exp-cand-01",
+        iteration=1,
+        hypothesis="test",
+        strategy="explore",
+        status="candidate",
+        accepted=True,
+        metric_value=5.0,
+        branch="research/exp-cand-01",
+    )
+    orchestrator._experiments = [candidate]
+
+    orchestrator._refresh_state()
+
+    assert orchestrator._state.best_experiment_id == "exp-cand-01"
+    assert orchestrator._state.best_branch == "research/exp-cand-01"
+    assert orchestrator._state.best_value == 0.0  # stays at baseline
+
+
+def test_research_orchestrator_cleans_worktree_on_no_spawn_fn_error(tmp_path: Path) -> None:
+    from attoswarm.research.config import ResearchConfig
+
+    repo = tmp_path / "repo"
+    _init_repo(repo, {"target.txt": "base\n"})
+
+    class StaticEvaluator:
+        async def evaluate(self, working_dir: str) -> EvalResult:
+            return EvalResult(metric_value=1.0)
+
+    orchestrator = ResearchOrchestrator(
+        ResearchConfig(
+            working_dir=str(repo),
+            run_dir=str(tmp_path / "runs"),
+            eval_command="",
+            total_max_experiments=1,
+            preserve_worktrees=False,
+            target_files=["target.txt"],
+        ),
+        "test cleanup",
+        evaluator=StaticEvaluator(),
+        spawn_fn=None,
+    )
+
+    state = asyncio.run(orchestrator.run())
+
+    assert state.invalid_count == 1 or any(
+        exp.status == "error" for exp in orchestrator._experiments
+    )
+    # Worktree should be cleaned up since preserve_worktrees=False
+    for exp in orchestrator._experiments:
+        if exp.status == "error":
+            assert exp.worktree_path == "", f"Worktree not cleaned up: {exp.worktree_path}"

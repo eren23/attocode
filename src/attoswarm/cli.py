@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import atexit
 import json
 import logging
 import os
@@ -36,7 +37,7 @@ class ResearchCommandGroup(click.Group):
         ctx: click.Context,
         args: list[str],
     ) -> tuple[str | None, click.Command | None, list[str]]:
-        if args and args[0] not in self.commands:
+        if args and args[0] not in self.commands and not args[0].startswith("-"):
             cmd = self.get_command(ctx, "start")
             return "start", cmd, args
         return super().resolve_command(ctx, args)
@@ -461,10 +462,11 @@ def _make_subprocess_spawn_fn(
             except TimeoutError:
                 proc.kill()
                 raise
+            finally:
+                if process_registry is not None:
+                    process_registry.unregister_process(proc)
 
             await proc.wait()
-            if process_registry is not None:
-                process_registry.unregister_process(proc)
             elapsed = _time.monotonic() - t0
             stdout_text = (stdout_bytes or b"").decode("utf-8", errors="replace")
             stderr_text = (stderr_bytes or b"").decode("utf-8", errors="replace")
@@ -1153,6 +1155,7 @@ def start_command(
         log_path = Path(effective_run_dir) / "coordinator.log"
         log_path.parent.mkdir(parents=True, exist_ok=True)
         log_fh = open(log_path, "a", encoding="utf-8")  # noqa: SIM115
+        atexit.register(log_fh.close)
         proc = subprocess.Popen(cmd, stdout=log_fh, stderr=log_fh)
         click.echo(f"Coordinator started in background (pid={proc.pid})")
         click.echo(f"Reattach: attocode swarm tui {effective_run_dir}")
@@ -1194,6 +1197,7 @@ def start_command(
     log_path = Path(effective_run_dir) / "coordinator.log"
     log_path.parent.mkdir(parents=True, exist_ok=True)
     log_fh = open(log_path, "a", encoding="utf-8")  # noqa: SIM115
+    atexit.register(log_fh.close)
     proc = subprocess.Popen(cmd, stdout=log_fh, stderr=log_fh)
     raise SystemExit(_run_monitor_app(effective_run_dir, proc))
 
@@ -1804,7 +1808,7 @@ def research_reproduce_command(
     db: Path | None,
     run_dir: Path | None,
 ) -> None:
-    from attoswarm.research.evaluator import CommandEvaluator
+    from attoswarm.research.evaluator import CommandEvaluator, constraints_pass
     from attoswarm.research.experiment import Experiment, FindingRecord, ResearchState
     from attoswarm.research.experiment_db import ExperimentDB
     from attoswarm.research.worktree_manager import WorktreeManager
@@ -1876,7 +1880,7 @@ def research_reproduce_command(
                 timestamp=time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
             )
 
-            if result.success and _constraints_pass(result.constraint_checks):
+            if result.success and constraints_pass(result.constraint_checks):
                 if state.best_value is None and state.baseline_value is None:
                     improved = True
                     state.baseline_value = result.metric_value
@@ -1954,7 +1958,7 @@ def research_import_patch_command(
     db: Path | None,
     run_dir: Path | None,
 ) -> None:
-    from attoswarm.research.evaluator import CommandEvaluator
+    from attoswarm.research.evaluator import CommandEvaluator, constraints_pass
     from attoswarm.research.experiment import Experiment, FindingRecord, ResearchState
     from attoswarm.research.experiment_db import ExperimentDB
     from attoswarm.research.worktree_manager import WorktreeManager
@@ -2028,7 +2032,7 @@ def research_import_patch_command(
                 exp.error = result.error
                 exp.raw_output = f"{exp.raw_output}\n{result.raw_output}".strip()
 
-                if result.success and _constraints_pass(result.constraint_checks):
+                if result.success and constraints_pass(result.constraint_checks):
                     if state.best_value is None and state.baseline_value is None:
                         improved = True
                         state.baseline_value = result.metric_value
@@ -2197,19 +2201,6 @@ def _state_accept_baseline(state: Any, fallback: float) -> float:
     if getattr(state, "baseline_value", None) is not None:
         return float(state.baseline_value)
     return fallback
-
-
-def _constraints_pass(constraints: dict[str, Any]) -> bool:
-    if not constraints:
-        return True
-    for value in constraints.values():
-        if isinstance(value, bool):
-            if not value:
-                return False
-            continue
-        if isinstance(value, dict) and "passed" in value and not bool(value["passed"]):
-            return False
-    return True
 
 
 def _load_research_view(store: Any, run_id: str) -> tuple[dict[str, Any], dict[str, Any], Any, list[Any]]:
@@ -2420,6 +2411,7 @@ def quick_command(
             cmd.append("--resume")
         log_path = run_path / "coordinator.log"
         log_fh = open(log_path, "a", encoding="utf-8")  # noqa: SIM115
+        atexit.register(log_fh.close)
 
         if detach:
             proc = subprocess.Popen(cmd, stdout=log_fh, stderr=log_fh)

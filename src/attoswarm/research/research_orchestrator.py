@@ -12,7 +12,7 @@ from typing import Any
 
 from attoswarm.research.accept_policy import NeverRegressPolicy
 from attoswarm.research.config import ResearchConfig
-from attoswarm.research.evaluator import CommandEvaluator, EvalResult, Evaluator
+from attoswarm.research.evaluator import CommandEvaluator, EvalResult, Evaluator, constraints_pass
 from attoswarm.research.experiment import Experiment, FindingRecord, ResearchState, SteeringNote
 from attoswarm.research.experiment_db import ExperimentDB
 from attoswarm.research.hypothesis import HypothesisGenerator
@@ -96,44 +96,46 @@ class ResearchOrchestrator:
 
         loop_start = time.time() - self._state.wall_seconds
 
-        if self._state.baseline_value is None:
-            self._emit("research_baseline", message="Evaluating baseline metric")
-            baseline = await self._evaluate_with_retry(repeats=max(self._config.baseline_repeats, 1))
-            if not baseline.success:
-                self._state.status = "error"
+        try:
+            if self._state.baseline_value is None:
+                self._emit("research_baseline", message="Evaluating baseline metric")
+                baseline = await self._evaluate_with_retry(repeats=max(self._config.baseline_repeats, 1))
+                if not baseline.success:
+                    self._state.status = "error"
+                    self._state.wall_seconds = time.time() - loop_start
+                    return self._state
+                self._state.baseline_value = baseline.metric_value
+                self._state.best_value = baseline.metric_value
+                self._state.best_branch = self._worktrees.get_head_commit()
+
+            while self._should_continue(loop_start):
+                batch = self._plan_batch()
+                if not batch:
+                    break
+
+                self._state.active_experiments = len(batch)
+                results = await asyncio.gather(*(self._execute_candidate(spec) for spec in batch))
+                self._state.active_experiments = 0
+
+                for exp in results:
+                    self._experiments.append(exp)
+                    touched = self._reconcile_candidate(exp)
+                    for item in touched:
+                        self._db.save_experiment(self._run_id, item)
+                    self._record_findings(touched)
+
+                self._refresh_state()
                 self._state.wall_seconds = time.time() - loop_start
-                return self._state
-            self._state.baseline_value = baseline.metric_value
-            self._state.best_value = baseline.metric_value
-            self._state.best_branch = self._worktrees.get_head_commit()
+                self._db.save_checkpoint(self._run_id, self._state)
 
-        while self._should_continue(loop_start):
-            batch = self._plan_batch()
-            if not batch:
-                break
-
-            self._state.active_experiments = len(batch)
-            results = await asyncio.gather(*(self._execute_candidate(spec) for spec in batch))
-            self._state.active_experiments = 0
-
-            for exp in results:
-                self._experiments.append(exp)
-                touched = self._reconcile_candidate(exp)
-                for item in touched:
-                    self._db.save_experiment(self._run_id, item)
-                self._record_findings(touched)
-
-            self._refresh_state()
+            if self._state.status == "running":
+                self._state.status = "completed"
             self._state.wall_seconds = time.time() - loop_start
+            self._db.update_run_status(self._run_id, self._state.status)
             self._db.save_checkpoint(self._run_id, self._state)
-
-        if self._state.status == "running":
-            self._state.status = "completed"
-        self._state.wall_seconds = time.time() - loop_start
-        self._db.update_run_status(self._run_id, self._state.status)
-        self._db.save_checkpoint(self._run_id, self._state)
-        self._db.close()
-        return self._state
+            return self._state
+        finally:
+            self._db.close()
 
     def get_scoreboard(self) -> Scoreboard:
         return Scoreboard(self._state, self._experiments, findings=self._findings)
@@ -255,62 +257,70 @@ class ResearchOrchestrator:
     async def _execute_candidate(self, spec: CandidateSpec) -> Experiment:
         assert self._worktrees is not None
         start_ref = self._resolve_start_ref(spec.parent_experiment_id)
-        worktree_path, branch = self._worktrees.create_worktree(spec.experiment_id, start_ref)
         timestamp = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
-        exp = Experiment(
-            experiment_id=spec.experiment_id,
-            iteration=spec.iteration,
-            hypothesis=spec.hypothesis,
-            parent_experiment_id=spec.parent_experiment_id,
-            related_experiment_ids=list(spec.related_experiment_ids or []),
-            strategy=spec.strategy,
-            status="running",
-            branch=branch,
-            worktree_path=str(worktree_path),
-            baseline_value=self._state.best_value,
-            steering_notes=list(spec.steering_notes or []),
-            timestamp=timestamp,
-        )
-        self._emit("experiment_start", message=f"{exp.experiment_id} ({exp.strategy})", data=exp.to_dict())
 
         started = time.time()
         eval_result: EvalResult | None = None
         agent_result: Any = None
         preparation_notes: list[str] = []
+        worktree_path: str | None = None
+        branch: str = ""
         try:
+            worktree_path, branch = self._worktrees.create_worktree(spec.experiment_id, start_ref)
+            exp = Experiment(
+                experiment_id=spec.experiment_id,
+                iteration=spec.iteration,
+                hypothesis=spec.hypothesis,
+                parent_experiment_id=spec.parent_experiment_id,
+                related_experiment_ids=list(spec.related_experiment_ids or []),
+                strategy=spec.strategy,
+                status="running",
+                branch=branch,
+                worktree_path=str(worktree_path),
+                baseline_value=self._state.best_value,
+                steering_notes=list(spec.steering_notes or []),
+                timestamp=timestamp,
+            )
+            self._emit("experiment_start", message=f"{exp.experiment_id} ({exp.strategy})", data=exp.to_dict())
             preparation_notes = self._prepare_candidate_workspace(spec, worktree_path)
             if spec.strategy != "reproduce":
                 agent_result = await self._run_agent(spec, worktree_path)
                 if agent_result is None and self._spawn_fn is None:
                     exp.status = "error"
                     exp.error = "No spawn function configured for non-reproduce experiment"
-                    return exp
+                    return self._finalize_candidate(exp)
 
             exp.files_modified = self._worktrees.list_changed_files(worktree_path)
-            exp.diff = self._worktrees.capture_diff(worktree_path)
             exp.commit_hash = self._worktrees.commit_all(
                 worktree_path,
                 f"[research] {spec.experiment_id}: {spec.hypothesis[:60]}",
             )
+            exp.diff = self._worktrees.capture_commit_diff(worktree_path)
 
             eval_result = await self._evaluate_with_retry(
                 working_dir=str(worktree_path),
                 repeats=max(self._config.eval_repeat, 1),
             )
         except Exception as exc:
+            if "exp" not in locals():
+                # create_worktree or Experiment() itself failed — clean up worktree if created
+                if worktree_path:
+                    self._worktrees.remove_worktree(worktree_path, branch=branch)
+                raise
             exp.status = "error"
             exp.error = str(exc)
             eval_result = None
         finally:
-            exp.duration_s = time.time() - started
-            exp.tokens_used = int(getattr(agent_result, "tokens_used", 0) or 0)
-            exp.cost_usd = float(getattr(agent_result, "cost_usd", 0.0) or 0.0)
-            agent_summary = getattr(agent_result, "result_summary", "") or ""
-            prep_summary = "\n".join(preparation_notes).strip()
-            if prep_summary and agent_summary:
-                exp.raw_output = f"{prep_summary}\n\n{agent_summary}"
-            else:
-                exp.raw_output = prep_summary or agent_summary
+            if "exp" in locals():
+                exp.duration_s = time.time() - started
+                exp.tokens_used = int(getattr(agent_result, "tokens_used", 0) or 0)
+                exp.cost_usd = float(getattr(agent_result, "cost_usd", 0.0) or 0.0)
+                agent_summary = getattr(agent_result, "result_summary", "") or ""
+                prep_summary = "\n".join(preparation_notes).strip()
+                if prep_summary and agent_summary:
+                    exp.raw_output = f"{prep_summary}\n\n{agent_summary}"
+                else:
+                    exp.raw_output = prep_summary or agent_summary
 
         if eval_result is None:
             exp.status = "error"
@@ -331,7 +341,7 @@ class ResearchOrchestrator:
             exp.status = "invalid"
             exp.reject_reason = eval_result.error or "evaluation failed"
             exp.error = exp.reject_reason
-        elif not _constraints_pass(eval_result.constraint_checks):
+        elif not constraints_pass(eval_result.constraint_checks):
             exp.status = "invalid"
             exp.reject_reason = "constraint checks failed"
         else:
@@ -342,7 +352,7 @@ class ResearchOrchestrator:
                 self._metric_history(),
             )
             if accepted:
-                exp.accepted = False
+                exp.accepted = True
                 exp.reject_reason = ""
                 if self._config.promotion_repeats > 1:
                     exp.status = "validated" if spec.strategy == "reproduce" else "candidate"
@@ -614,9 +624,21 @@ class ResearchOrchestrator:
             self._state.best_experiment_id = best.experiment_id
             self._state.best_branch = best.branch
         else:
+            # Fall back to candidates awaiting validation so exploit/ablate/compose
+            # strategies still target the right starting ref (branch/experiment_id),
+            # but keep best_value at baseline so the accept policy isn't inflated.
+            candidates = [
+                exp for exp in self._experiments
+                if exp.status == "candidate" and exp.metric_value is not None
+            ]
+            if candidates:
+                best_candidate = self._rank_experiments(candidates)[0]
+                self._state.best_experiment_id = best_candidate.experiment_id
+                self._state.best_branch = best_candidate.branch
+            else:
+                self._state.best_experiment_id = ""
+                self._state.best_branch = self._worktrees.get_head_commit() if self._worktrees is not None else ""
             self._state.best_value = self._state.baseline_value
-            self._state.best_experiment_id = ""
-            self._state.best_branch = self._worktrees.get_head_commit() if self._worktrees is not None else ""
 
     def _reconcile_candidate(self, exp: Experiment) -> list[Experiment]:
         touched = [exp]
@@ -710,17 +732,3 @@ class ResearchOrchestrator:
                 ))
             except Exception:
                 pass
-
-
-def _constraints_pass(constraints: dict[str, Any]) -> bool:
-    if not constraints:
-        return True
-    for value in constraints.values():
-        if isinstance(value, bool):
-            if not value:
-                return False
-            continue
-        if isinstance(value, dict) and "passed" in value:
-            if not bool(value["passed"]):
-                return False
-    return True

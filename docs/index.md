@@ -11,6 +11,7 @@ Production AI coding agent built in Python. Features a Textual-based TUI, multi-
 - **Session persistence** --- SQLite-backed sessions, checkpoints, goals, and permission grants
 - **Multi-provider** --- Anthropic, OpenRouter, and OpenAI adapters
 - **Skills & agents** --- Extensible skill and agent system with project-level and user-level customization
+- **Research campaigns** --- Multi-experiment research workflows with dedicated worktrees, hypothesis tracking, and persistent campaign state
 - **Code intelligence** --- 36-language AST parsing, semantic search, dependency graphs, architecture analysis via MCP server
 - **MCP support** --- Connect external tools via the Model Context Protocol
 
@@ -53,6 +54,7 @@ attocode --swarm "Build a REST API with tests"
 - [AST & Code Intelligence](ast-and-code-intelligence.md) --- Symbol indexing, cross-references, and impact analysis
 - [MCP & Model Connections](guides/mcp-and-model-connections.md) --- Local vs global MCP setup across Codex, Claude, Cursor-family hosts, and Attocode/swarm model routing
 - [OSS Demo Playbook](code-intel-oss-demo-playbook.md) --- Big-3 agent benchmarking on large OSS repos with code-intel tools
+- [Research Campaigns](research-guide.md) --- Dedicated worktrees, hypothesis tracking, and experiment management
 - [Advanced Features](advanced-features.md) --- Plan mode, task decomposition, permissions, danger classification
 - [Provider Resilience](provider-resilience.md) --- Retry, circuit breaker, fallback chain, model cache
 - [Skills & Agents](skills-and-agents.md) --- Custom skills and agent definitions

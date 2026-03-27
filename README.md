@@ -14,6 +14,7 @@ Production AI coding agent built in Python. Features a Textual-based TUI, multi-
 - **Session persistence** --- SQLite-backed sessions, checkpoints, goals, audit logs, and permission grants that persist across prompts
 - **MCP support** --- Connect external tools via the Model Context Protocol
 - **Multi-provider** --- Anthropic, OpenRouter, OpenAI, Azure, and ZAI adapters
+- **Research campaigns** --- Multi-experiment research workflows with dedicated worktrees, hypothesis tracking, and persistent campaign state
 - **Skills & agents** --- Extensible skill and agent system with project-level and user-level customization
 
 ## Requirements
@@ -84,6 +85,12 @@ attocode --swarm "Build a REST API for a todo app with tests"
 
 ```bash
 attocode swarm start .attocode/swarm.hybrid.yaml "Build a REST API for a todo app with tests"
+```
+
+**Research campaign** --- run structured multi-experiment research:
+
+```bash
+attocode research start "Evaluate caching strategies for the query layer"
 ```
 
 ## Swarm Command Chooser
@@ -203,6 +210,7 @@ Full documentation is available at **[eren23.github.io/attocode](https://eren23.
 - [MCP](docs/MCP.md) --- Model Context Protocol integration
 - [Swarm Guide](docs/swarm-guide.md) --- Multi-agent orchestration
 - [Hybrid Swarm](docs/hybrid-swarm-operations.md) --- Start vs continue vs resume, monitor/detach flows, and runbook
+- [Research Campaigns](docs/research-guide.md) --- Multi-experiment research workflows with dedicated worktrees
 - [Contributing](CONTRIBUTING.md) --- How to contribute
 
 ## License

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import os
 import re
 import shlex
 import subprocess
@@ -225,7 +226,7 @@ def write_swarm_config(path: Path, *, working_dir: Path, run_dir: Path, worker_s
 
 
 def run_attoswarm(args: list[str], *, cwd: Path, env: dict[str, str] | None = None, timeout: int = 60) -> subprocess.CompletedProcess[str]:
-    merged_env = dict(env or {})
+    merged_env = {**os.environ, **(env or {})}
     return subprocess.run(
         [sys.executable, "-m", "attoswarm", *args],
         cwd=cwd,
