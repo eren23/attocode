@@ -112,6 +112,75 @@ attocode swarm start .attocode/swarm.hybrid.yaml --tasks-file tasks/tasks.yaml "
 
 See [Hybrid Swarm](hybrid-swarm-operations.md) for the full runbook.
 
+### Utility Commands
+
+| Command | Purpose |
+|---------|---------|
+| `attoswarm quick "<goal>"` | No-config swarm with sensible defaults |
+| `attoswarm doctor <config>` | Validate backend binaries and runtime readiness |
+| `attoswarm init .` | Interactive config generator |
+| `attoswarm inspect <run-dir>` | View run state and recent events |
+| `attoswarm postmortem <run-dir>` | Post-mortem analysis of a completed run |
+| `attoswarm trace <run-dir>` | Query trace data from a run |
+| `attoswarm tui <run-dir>` | Reattach TUI dashboard to a running/completed swarm |
+
+#### Quick Start (No Config)
+
+```bash
+# Simplest way to use swarm — no YAML needed
+attoswarm quick "Build a REST API for user auth with tests"
+attoswarm quick --budget 5 --workers 3 "Fix all failing tests"
+attoswarm quick --preview "Refactor the parser module"
+attoswarm quick --dry-run "Add caching layer"  # just see the decomposition
+```
+
+### Research Campaigns (`attoswarm research`)
+
+Iterative experiment campaigns that evaluate code changes against a numeric metric.
+
+| Command | Purpose |
+|---------|---------|
+| `attoswarm research start "<goal>" -e "<eval-cmd>"` | Start a new research campaign |
+| `attoswarm research leaderboard --run-id <id>` | Show experiment rankings |
+| `attoswarm research feed --run-id <id>` | Show findings and steering notes |
+| `attoswarm research monitor --run-id <id>` | Snapshot of current campaign state |
+| `attoswarm research inject <run-id> "<note>"` | Inject a steering note into a running campaign |
+| `attoswarm research promote <run-id> <exp-id>` | Force-accept an experiment |
+| `attoswarm research hold <run-id> <exp-id>` | Pause an experiment |
+| `attoswarm research resume <run-id> <exp-id>` | Resume a paused experiment |
+| `attoswarm research kill <run-id> <exp-id>` | Terminate an experiment |
+| `attoswarm research compare <run-id> <exp1> <exp2>` | Compare two experiments |
+| `attoswarm research reproduce --run-id <id> ...` | Reproduce a specific experiment |
+| `attoswarm research import-patch --run-id <id> ...` | Import a patch into a campaign |
+| `attoswarm research cleanup --run-dir <dir>` | Remove experiment worktrees |
+
+#### Research Examples
+
+```bash
+# Start a research campaign (eval command extracts the last number from stdout)
+attoswarm research start "Improve test pass rate" \
+  -e 'uv run python -m pytest tests/ -q --tb=no 2>&1 | tail -1' \
+  -t src/mymodule.py --max-experiments 10 --max-cost 5.0
+
+# With mini-swarm mode (full decompose → implement → review per experiment)
+attoswarm research start "Improve test pass rate" \
+  -e 'uv run python -m pytest tests/ -q --tb=no 2>&1 | tail -1' \
+  -t src/mymodule.py --max-experiments 5 --experiment-mode swarm \
+  --config .attocode/swarm.hybrid.yaml --monitor
+
+# Check results
+attoswarm research leaderboard --run-id abc123 --run-dir .agent/research
+attoswarm research feed --run-id abc123 --run-dir .agent/research
+
+# Inject guidance mid-campaign
+attoswarm research inject abc123 "Focus on the caching layer, not the parser"
+
+# Clean up worktrees after campaign
+attoswarm research cleanup --run-dir .agent/research
+```
+
+See [Research Campaigns](research-guide.md) for the full guide.
+
 ## Code Intelligence Server
 
 The `code-intel serve` subcommand starts the MCP or HTTP server for code intelligence tools.

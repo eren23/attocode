@@ -544,14 +544,20 @@ class ResearchOrchestrator:
         hypothesis = spec.hypothesis
         support_context = spec.support_context or ""
 
-        # Build description with verification context
-        description_parts = [hypothesis]
+        # Build description with concrete instructions
+        description_parts = [
+            hypothesis,
+            "\nIMPORTANT: Make code changes directly. Do NOT ask questions. Read files, modify them, verify.",
+        ]
         if support_context:
             description_parts.append(support_context)
-        description_parts.append(f"\n## Verification\nRun: {self._config.eval_command}")
-        description_parts.append(f"Current baseline: {self._state.baseline_value}")
-        description_parts.append(f"Metric direction: {self._config.metric_direction}")
-        description_parts.append("Your changes must IMPROVE this metric. Do NOT break existing tests.")
+        description_parts.append(
+            f"\n## Verification\n"
+            f"Run this command to check your work:\n```\n{self._config.eval_command}\n```\n"
+            f"Current baseline: **{self._state.baseline_value}**\n"
+            f"Direction: {self._config.metric_direction}\n"
+            f"Your changes must IMPROVE this metric. If the metric drops, revert and try differently."
+        )
 
         # Discover symbols from target files (lightweight AST parsing)
         symbol_scope: list[str] = []
@@ -604,25 +610,82 @@ class ResearchOrchestrator:
         }
         return task
 
+    def _build_mini_swarm_goal(self, spec: CandidateSpec, worktree_path: Path) -> str:
+        """Build a concrete, actionable goal for the mini-swarm coordinator."""
+        import ast as _ast
+
+        sections: list[str] = []
+
+        # 1. Clear objective — not the abstract hypothesis, but a concrete coding task
+        sections.append(f"# Objective\n\n{spec.hypothesis}")
+        sections.append(
+            "IMPORTANT: You are an autonomous coding agent. Make code changes directly. "
+            "Do NOT ask clarifying questions. Do NOT explain what you would do — just do it. "
+            "Read the target files, understand them, make improvements, and verify your changes work."
+        )
+
+        # 2. Support context from strategy (compose diffs, ablate context, etc.)
+        if spec.support_context:
+            sections.append(f"## Additional Context\n\n{spec.support_context}")
+
+        # 3. Target files with actual content summaries
+        if self._config.target_files:
+            file_section = ["## Target Files\n\nThese are the files you should modify:\n"]
+            for tf in self._config.target_files[:5]:
+                tf_path = Path(str(worktree_path)) / tf
+                if tf_path.exists():
+                    try:
+                        content = tf_path.read_text(encoding="utf-8")
+                        lines = content.splitlines()
+                        # Include structure: classes, functions, first 50 lines
+                        symbols: list[str] = []
+                        if tf.endswith(".py"):
+                            try:
+                                tree = _ast.parse(content)
+                                for node in _ast.walk(tree):
+                                    if isinstance(node, _ast.ClassDef):
+                                        symbols.append(f"  class {node.name} (line {node.lineno})")
+                                    elif isinstance(node, (_ast.FunctionDef, _ast.AsyncFunctionDef)):
+                                        symbols.append(f"  def {node.name}() (line {node.lineno})")
+                            except Exception:
+                                pass
+                        file_section.append(f"### `{tf}` ({len(lines)} lines)")
+                        if symbols:
+                            file_section.append("Structure:")
+                            file_section.extend(symbols[:20])
+                        # Include first 80 lines as preview
+                        preview = "\n".join(lines[:80])
+                        file_section.append(f"\n```\n{preview}\n```\n")
+                    except Exception:
+                        file_section.append(f"### `{tf}` (could not read)")
+                else:
+                    file_section.append(f"### `{tf}` (file not found in worktree)")
+            sections.append("\n".join(file_section))
+
+        # 4. Learning from prior experiments
+        learning = self._build_learning_summary()
+        if learning:
+            sections.append(f"## Prior Experiment Results\n\n{learning}")
+
+        # 5. Verification — how to check your work
+        sections.append(
+            f"## Verification\n\n"
+            f"After making changes, verify by running:\n"
+            f"```\n{self._config.eval_command}\n```\n\n"
+            f"Current baseline metric: **{self._state.baseline_value}**\n"
+            f"Direction: **{self._config.metric_direction}** (higher is {'better' if self._config.metric_direction == 'maximize' else 'worse'})\n\n"
+            f"Your changes MUST improve this metric. If the eval command fails or the metric drops, "
+            f"revert your changes and try a different approach."
+        )
+
+        return "\n\n".join(sections)
+
     async def _run_mini_swarm(self, spec: CandidateSpec, worktree_path: Path) -> Any:
         """Run a full swarm pipeline (decompose -> implement -> review -> merge) in the experiment worktree."""
         from types import SimpleNamespace
 
         micro_cfg = self._derive_experiment_config(worktree_path, spec.experiment_id)
-
-        # Build rich goal from hypothesis + learning context + verification
-        goal_parts = [spec.hypothesis]
-        if spec.support_context:
-            goal_parts.append(spec.support_context)
-        learning = self._build_learning_summary()
-        if learning:
-            goal_parts.append(f"\n## Prior experiment learnings\n{learning}")
-        goal_parts.append(f"\n## Target files\n{', '.join(self._config.target_files)}")
-        goal_parts.append(f"\n## Metric verification\nEval command: {self._config.eval_command}")
-        goal_parts.append(f"Current baseline: {self._state.baseline_value}")
-        goal_parts.append(f"Direction: {self._config.metric_direction}")
-        goal_parts.append("Your changes must IMPROVE this metric. Do NOT break existing functionality.")
-        goal = "\n\n".join(goal_parts)
+        goal = self._build_mini_swarm_goal(spec, worktree_path)
 
         self._write_event("mini_swarm_start", f"Starting mini-swarm for {spec.experiment_id}", experiment_id=spec.experiment_id)
 

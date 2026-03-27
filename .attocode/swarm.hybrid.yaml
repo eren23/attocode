@@ -15,7 +15,7 @@ roles:
     count: 1
     write_access: true
     workspace_mode: shared
-    task_kinds: [implement, refactor, test]
+    task_kinds: [implement, refactor, test, merge, synthesize]
     execution_mode: oneshot
 
   - role_id: reviewer
