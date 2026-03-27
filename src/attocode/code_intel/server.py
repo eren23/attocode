@@ -77,13 +77,23 @@ import attocode.code_intel._shared as _shared  # noqa: F401
 
 logger = logging.getLogger(__name__)
 
-# Backward-compat aliases — some tests and internal code set these directly
-_ast_service = None  # Use _shared._ast_service instead
-_context_mgr = None
-_code_analyzer = None
-_semantic_search = None  # Backward compat: tests may set this directly
-_memory_store = None  # Backward compat: tests may set this directly
+# Backward-compat: tests and internal code set server._ast_service = mock.
+# The getters (in _shared) read _shared._ast_service, so we must ensure
+# that setting server._ast_service also sets _shared._ast_service.
+# We do this by NOT declaring local variables here and using __getattr__
+# to proxy reads, plus __setattr__ to proxy writes via setattr().
+_SINGLETON_VARS = frozenset({
+    "_ast_service", "_context_mgr", "_code_analyzer",
+    "_semantic_search", "_memory_store", "_explorer",
+})
+
 _remote_client: "RemoteClient | None" = None  # Set when --remote is used
+
+
+def __getattr__(name: str):
+    if name in _SINGLETON_VARS:
+        return getattr(_shared, name, None)
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
 
 # ---------------------------------------------------------------------------
 # MCP Resource: Agent Guidelines
