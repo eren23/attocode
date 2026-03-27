@@ -187,6 +187,7 @@ class ScriptEvaluator:
         self._timeout = timeout
 
     async def evaluate(self, working_dir: str) -> EvalResult:
+        stdout = ""
         try:
             proc = await asyncio.create_subprocess_exec(
                 "python", self._script_path,
@@ -219,7 +220,7 @@ class ScriptEvaluator:
         except (json.JSONDecodeError, KeyError) as exc:
             return EvalResult(
                 metric_value=0.0,
-                raw_output=stdout if "stdout" in dir() else "",
+                raw_output=stdout,
                 error=f"Failed to parse script output: {exc}",
                 success=False,
             )
@@ -277,7 +278,9 @@ class CompositeEvaluator:
     def __init__(self, evaluators: list[tuple[Evaluator, float]]) -> None:
         self._evaluators = evaluators
         total_weight = sum(w for _, w in evaluators)
-        self._weights = [(e, w / total_weight) for e, w in evaluators] if total_weight > 0 else evaluators
+        if total_weight == 0:
+            raise ValueError("All evaluator weights are zero")
+        self._weights = [(e, w / total_weight) for e, w in evaluators]
 
     async def evaluate(self, working_dir: str) -> EvalResult:
         results = await asyncio.gather(
@@ -309,7 +312,21 @@ class CompositeEvaluator:
             )
 
         return EvalResult(
-            metric_value=weighted_sum / total_weight * (sum(w for _, w in self._weights)),
+            metric_value=weighted_sum / total_weight,
             raw_output="\n---\n".join(raw_parts),
             metadata={"errors": errors} if errors else {},
         )
+
+
+def constraints_pass(constraints: dict[str, Any]) -> bool:
+    """Check whether all constraint checks passed."""
+    if not constraints:
+        return True
+    for value in constraints.values():
+        if isinstance(value, bool):
+            if not value:
+                return False
+            continue
+        if isinstance(value, dict) and "passed" in value and not bool(value["passed"]):
+            return False
+    return True

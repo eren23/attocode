@@ -9,7 +9,7 @@ from __future__ import annotations
 import contextlib
 import os
 
-from attocode.code_intel.server import (
+from attocode.code_intel._shared import (
     _get_project_dir,
     mcp,
 )
@@ -191,7 +191,7 @@ async def lsp_enrich(files: list[str]) -> str:
     Args:
         files: List of file paths to enrich (relative or absolute).
     """
-    from attocode.code_intel.server import _get_ast_service
+    from attocode.code_intel._shared import _get_ast_service
 
     lsp = _get_lsp_manager()
     project_dir = _get_project_dir()

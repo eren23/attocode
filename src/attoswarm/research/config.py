@@ -41,6 +41,7 @@ class ResearchConfig:
         "reproduce": 1,
     })
     steering_enabled: bool = True
-    preserve_worktrees: bool = True
+    preserve_worktrees: bool = False
     working_dir: str = "."
     run_dir: str = ".agent/research"
+    experiment_mode: str = "auto"

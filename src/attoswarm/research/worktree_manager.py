@@ -2,9 +2,12 @@
 
 from __future__ import annotations
 
+import logging
 import shutil
 import subprocess
 from pathlib import Path
+
+logger = logging.getLogger(__name__)
 
 
 class WorktreeManager:
@@ -44,7 +47,15 @@ class WorktreeManager:
         return changed
 
     def capture_diff(self, worktree_path: str | Path) -> str:
-        return self._git_output(["diff", "--stat", "--patch"], cwd=worktree_path)
+        return self._git_output(["diff", "--patch"], cwd=worktree_path)
+
+    def capture_commit_diff(self, worktree_path: str | Path) -> str:
+        """Capture diff of the latest commit (works for new files too)."""
+        try:
+            return self._git_output(["diff", "HEAD~1", "HEAD", "--patch"], cwd=worktree_path)
+        except subprocess.CalledProcessError as exc:
+            logger.warning("capture_commit_diff failed in %s: %s", worktree_path, exc)
+            return ""
 
     def apply_diff(self, worktree_path: str | Path, diff_text: str) -> tuple[bool, str]:
         patch_text = self._extract_patch(diff_text)

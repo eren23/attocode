@@ -87,7 +87,7 @@ def test_hypothesis_generate_candidate_covers_strategies_and_notes() -> None:
         steering_notes=["focus on quantization"],
     )
     assert explore.startswith("Steering: focus on quantization.")
-    assert "opens a new direction" in explore
+    assert "NOVEL approach" in explore
     assert "Avoid repeating the last rejected pattern" in explore
 
     exploit = generator.generate_candidate(
@@ -96,7 +96,7 @@ def test_hypothesis_generate_candidate_covers_strategies_and_notes() -> None:
         history=[],
         best_metric=1.0,
     )
-    assert "Build on the current best branch" in exploit
+    assert "Build on the current best result" in exploit
 
     ablate = generator.generate_candidate(
         iteration=8,
@@ -104,7 +104,7 @@ def test_hypothesis_generate_candidate_covers_strategies_and_notes() -> None:
         history=[],
         best_metric=1.0,
     )
-    assert "remove or simplify one mechanism" in ablate
+    assert "REMOVE or simplify one mechanism" in ablate
 
     compose = generator.generate_candidate(
         iteration=8,
@@ -112,7 +112,7 @@ def test_hypothesis_generate_candidate_covers_strategies_and_notes() -> None:
         history=[],
         best_metric=1.0,
     )
-    assert "integrate one proven technique" in compose
+    assert "Combine proven techniques" in compose
 
     reproduce = generator.generate_candidate(
         iteration=8,
@@ -120,7 +120,7 @@ def test_hypothesis_generate_candidate_covers_strategies_and_notes() -> None:
         history=[],
         best_metric=1.0,
     )
-    assert "validate the gain" in reproduce
+    assert "validate the improvement" in reproduce
 
     fallback = generator.generate_candidate(
         iteration=8,

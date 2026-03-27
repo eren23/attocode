@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import logging
+import re
 import sqlite3
 from pathlib import Path
 from typing import Any
@@ -109,7 +110,16 @@ class ExperimentDB:
         )
         self._conn.commit()
 
+    _ALLOWED_TABLES = frozenset({
+        "experiments", "checkpoints", "findings", "steering_notes", "research_runs",
+    })
+    _IDENTIFIER_RE = re.compile(r"^[a-z_][a-z0-9_]*$")
+
     def _ensure_column(self, table: str, column: str, column_def: str) -> None:
+        if table not in self._ALLOWED_TABLES:
+            raise ValueError(f"Unknown table: {table!r}")
+        if not self._IDENTIFIER_RE.match(column):
+            raise ValueError(f"Invalid column name: {column!r}")
         columns = {
             row["name"]
             for row in self._conn.execute(f"PRAGMA table_info({table})").fetchall()

@@ -1,0 +1,53 @@
+version: 1
+
+run:
+  name: research-swarm
+  working_dir: .
+  run_dir: .agent/hybrid-swarm/research-swarm
+  poll_interval_ms: 250
+  max_runtime_seconds: 600
+
+roles:
+  - role_id: implementer
+    role_type: worker
+    backend: claude
+    model: claude-sonnet-4-20250514
+    count: 1
+    write_access: true
+    workspace_mode: shared
+    task_kinds: [implement, refactor, test, merge, synthesize]
+    execution_mode: oneshot
+
+  - role_id: reviewer
+    role_type: judge
+    backend: claude
+    model: claude-sonnet-4-20250514
+    count: 1
+    write_access: false
+    workspace_mode: shared_ro
+    task_kinds: [review, judge]
+    execution_mode: oneshot
+
+budget:
+  max_tokens: 2000000
+  max_cost_usd: 10.0
+  reserve_ratio: 0.10
+  chars_per_token_fallback: 4.0
+
+merge:
+  authority_role: implementer
+  judge_roles: [reviewer]
+  quality_threshold: 0.6
+
+watchdog:
+  heartbeat_timeout_seconds: 60
+  task_silence_timeout_seconds: 180
+  task_max_duration_seconds: 300
+
+retries:
+  max_task_attempts: 2
+
+orchestration:
+  decomposition: llm
+  max_tasks: 5
+  max_depth: 2

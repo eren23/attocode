@@ -728,7 +728,7 @@ def _dispatch_swarm_command(parts: tuple[str, ...], *, debug: bool = False) -> N
     elif args[0] == "monitor":
         args[0] = "tui"
     if debug and args and args[0] in ("start", "run", "continue"):
-        args.insert(1, "--debug")
+        args.append("--debug")
     _invoke_attoswarm(args)
 
 

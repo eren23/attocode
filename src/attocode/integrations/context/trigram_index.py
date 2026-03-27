@@ -27,9 +27,29 @@ import time
 import zlib
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal, overload
 
 logger = logging.getLogger(__name__)
+
+# ---------------------------------------------------------------------------
+# QueryResult (explain mode)
+# ---------------------------------------------------------------------------
+
+
+@dataclass
+class QueryResult:
+    """Diagnostics returned by ``TrigramIndex.query(explain=True)``."""
+
+    candidates: list[str] | None
+    trigram_literals: list[str]
+    posting_sizes: list[int]
+    total_files: int
+    candidate_count: int
+    selectivity: float
+    threshold: float
+    threshold_triggered: bool
+    mode: str  # "trigram-filtered" | "full-scan-threshold" | "full-scan-no-trigrams" | "no-index"
+
 
 # ---------------------------------------------------------------------------
 # Constants
@@ -237,35 +257,147 @@ class TrigramIndex:
             self._close_mmap()
             return self._load_unlocked()
 
+    @overload
     def query(
         self,
         pattern: str,
         *,
         case_insensitive: bool = False,
-    ) -> list[str] | None:
+        selectivity_threshold: float = 0.10,
+        explain: Literal[False] = False,
+    ) -> list[str] | None: ...
+
+    @overload
+    def query(
+        self,
+        pattern: str,
+        *,
+        case_insensitive: bool = False,
+        selectivity_threshold: float = 0.10,
+        explain: Literal[True],
+    ) -> QueryResult: ...
+
+    def query(
+        self,
+        pattern: str,
+        *,
+        case_insensitive: bool = False,
+        selectivity_threshold: float = 0.10,
+        explain: bool = False,
+    ) -> list[str] | None | QueryResult:
         """Return candidate file paths that MAY contain a match for *pattern*.
 
         Extracts required trigrams from the regex, intersects their posting
         lists, and maps file-IDs back to relative paths.
 
-        Returns:
+        Args:
+            pattern: Regex pattern to search for.
+            case_insensitive: Lowercase trigrams before matching.
+            selectivity_threshold: If the fraction of matching files exceeds
+                this value (0.0–1.0), the index is skipped and ``None`` is
+                returned so the caller falls back to a full scan.  Default
+                is 0.10 (10%).
+            explain: When True, return a :class:`QueryResult` with full
+                diagnostics instead of a bare candidate list.
+
+        Returns (when *explain* is False):
             None  -- no trigrams extractable; caller must scan all files.
             []    -- trigrams found but no file contains all of them.
             [str] -- relative file paths that contain all required trigrams.
+        Returns (when *explain* is True):
+            :class:`QueryResult` with diagnostics.
         """
         if not self._ready:
+            if explain:
+                return QueryResult(
+                    candidates=None, trigram_literals=[], posting_sizes=[],
+                    total_files=0, candidate_count=0, selectivity=0.0,
+                    threshold=selectivity_threshold, threshold_triggered=False,
+                    mode="no-index",
+                )
             return None
 
         from attocode.integrations.context.trigram_regex import extract_required_trigrams
 
-        required = extract_required_trigrams(pattern, case_insensitive=case_insensitive)
+        if explain:
+            result = extract_required_trigrams(
+                pattern, case_insensitive=case_insensitive, include_literals=True,
+            )
+            required, literals = result  # type: ignore[misc]
+        else:
+            required = extract_required_trigrams(pattern, case_insensitive=case_insensitive)
+            literals = []
+
         if not required:
+            if explain:
+                return QueryResult(
+                    candidates=None, trigram_literals=[], posting_sizes=[],
+                    total_files=len(self._file_id_to_path),
+                    candidate_count=0, selectivity=0.0,
+                    threshold=selectivity_threshold, threshold_triggered=False,
+                    mode="full-scan-no-trigrams",
+                )
             return None
 
         with self._lock:
             if not self._ready:
+                if explain:
+                    return QueryResult(
+                        candidates=None, trigram_literals=literals, posting_sizes=[],
+                        total_files=0, candidate_count=0, selectivity=0.0,
+                        threshold=selectivity_threshold, threshold_triggered=False,
+                        mode="no-index",
+                    )
                 return None
-            return self._intersect_postings(required)
+
+            if explain:
+                raw, posting_sizes = self._intersect_postings(
+                    required, collect_sizes=True,
+                )
+            else:
+                raw = self._intersect_postings(required)
+                posting_sizes = []
+
+            # Apply selectivity threshold.
+            # Only meaningful for large codebases — below 100 files,
+            # searching all candidates is trivially fast.
+            _MIN_FILES_FOR_THRESHOLD = 100
+            total_files = len(self._file_id_to_path)
+            candidates: list[str] | None = raw  # type: ignore[assignment]
+            candidate_count = len(candidates) if candidates else 0
+            selectivity = (
+                candidate_count / total_files if total_files > 0 else 0.0
+            )
+            threshold_triggered = (
+                candidates is not None
+                and len(candidates) > 0
+                and total_files >= _MIN_FILES_FOR_THRESHOLD
+                and selectivity > selectivity_threshold
+            )
+
+            if threshold_triggered:
+                candidates = None  # signal caller to fall back to full scan
+
+            if explain:
+                if threshold_triggered:
+                    mode = "full-scan-threshold"
+                elif candidates is None:
+                    mode = "full-scan-no-trigrams"
+                else:
+                    mode = "trigram-filtered"
+                return QueryResult(
+                    candidates=candidates,
+                    trigram_literals=literals,
+                    posting_sizes=posting_sizes,
+                    total_files=total_files,
+                    candidate_count=candidate_count,
+                    selectivity=selectivity,
+                    threshold=selectivity_threshold,
+                    threshold_triggered=threshold_triggered,
+                    mode=mode,
+                )
+
+            return candidates
 
     def update_file(self, rel_path: str, content: bytes) -> None:
         """Invalidate the index for *rel_path*.
@@ -492,32 +624,72 @@ class TrigramIndex:
     # Internal: query helpers
     # ------------------------------------------------------------------
 
-    def _intersect_postings(self, required_hashes: list[int]) -> list[str] | None:
-        """Intersect posting lists for all required trigram hashes."""
+    @overload
+    def _intersect_postings(
+        self,
+        required_hashes: list[int],
+        *,
+        collect_sizes: Literal[False] = False,
+    ) -> list[str] | None: ...
+
+    @overload
+    def _intersect_postings(
+        self,
+        required_hashes: list[int],
+        *,
+        collect_sizes: Literal[True],
+    ) -> tuple[list[str] | None, list[int]]: ...
+
+    def _intersect_postings(
+        self,
+        required_hashes: list[int],
+        *,
+        collect_sizes: bool = False,
+    ) -> list[str] | None | tuple[list[str] | None, list[int]]:
+        """Intersect posting lists for all required trigram hashes.
+
+        When *collect_sizes* is True, returns ``(candidates, posting_sizes)``
+        where *posting_sizes[i]* is the length of the posting list for
+        *required_hashes[i]*.
+        """
         candidate_ids: set[int] | None = None
+        posting_sizes: list[int] = [] if collect_sizes else []
 
         for h in required_hashes:
             result = self._binary_search(h)
             if result is None:
+                if collect_sizes:
+                    posting_sizes.append(0)
+                    # Fill remaining sizes for hashes not yet looked up
+                    remaining = len(required_hashes) - len(posting_sizes)
+                    posting_sizes.extend([0] * remaining)
+                    return ([], posting_sizes)
                 return []
             offset, length = result
             file_ids = self._read_posting_list(offset, length)
+            if collect_sizes:
+                posting_sizes.append(len(file_ids))
             if candidate_ids is None:
                 candidate_ids = set(file_ids)
             else:
                 candidate_ids &= set(file_ids)
             if not candidate_ids:
+                if collect_sizes:
+                    # Fill remaining sizes with 0 for hashes not yet looked up
+                    remaining = len(required_hashes) - len(posting_sizes)
+                    posting_sizes.extend([0] * remaining)
+                    return ([], posting_sizes)
                 return []
 
         if candidate_ids is None:
-            return None
+            return (None, posting_sizes) if collect_sizes else None
 
         paths: list[str] = []
         for fid in candidate_ids:
             path = self._file_id_to_path.get(fid)
             if path is not None:
                 paths.append(path)
-        return paths
+        return (paths, posting_sizes) if collect_sizes else paths
 
     def _binary_search(self, trigram_hash: int) -> tuple[int, int] | None:
         """Binary search the lookup mmap for *trigram_hash*.

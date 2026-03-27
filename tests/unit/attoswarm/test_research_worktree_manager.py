@@ -121,3 +121,28 @@ def test_worktree_manager_extract_patch_handles_stat_bundle_and_empty_text() -> 
     extracted = WorktreeManager._extract_patch(diff_text)
     assert extracted.startswith("diff --git ")
     assert WorktreeManager._extract_patch("") == ""
+
+
+def test_capture_commit_diff_returns_patch_for_committed_change(tmp_path: Path) -> None:
+    from attoswarm.research.worktree_manager import WorktreeManager
+    repo = tmp_path / "repo"
+    _init_repo(repo, {"f.txt": "original\n"})
+    mgr = WorktreeManager(repo, tmp_path / "runs")
+
+    wt_path, branch = mgr.create_worktree("exp-diff-1", "HEAD")
+    (Path(wt_path) / "f.txt").write_text("changed\n", encoding="utf-8")
+    mgr.commit_all(wt_path, "change f.txt")
+    diff = mgr.capture_commit_diff(wt_path)
+    assert "changed" in diff
+    assert "original" in diff
+    mgr.remove_worktree(wt_path, branch=branch)
+
+
+def test_capture_commit_diff_returns_empty_on_initial_commit(tmp_path: Path) -> None:
+    from attoswarm.research.worktree_manager import WorktreeManager
+    repo = tmp_path / "repo"
+    _init_repo(repo, {"f.txt": "content\n"})
+    mgr = WorktreeManager(repo, tmp_path / "runs")
+    # The repo has only one commit so HEAD~1 doesn't exist
+    diff = mgr.capture_commit_diff(repo)
+    assert diff == ""

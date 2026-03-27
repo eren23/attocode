@@ -11,6 +11,7 @@ TabbedContent layout with 5 tabs:
 from __future__ import annotations
 
 import json
+import time
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
@@ -40,7 +41,7 @@ from attoswarm.tui.screens import (
     GraphScreen,
     TimelineScreen,
 )
-from attoswarm.tui.stores import StateStore
+from attoswarm.tui.stores import ResearchStateStore, StateStore
 from attoswarm.tui.widgets import (
     AgentCard,
     AgentTraceStream,
@@ -64,6 +65,124 @@ if TYPE_CHECKING:
     from attoswarm.tui.widgets import DependencyTree
 
 _CSS_PATH = Path(__file__).resolve().parent / "styles" / "swarm.tcss"
+
+
+class ResearchOverview(Static):
+    """Research campaign overview widget."""
+
+    def update_research(self, data: dict[str, Any]) -> None:
+        if not data:
+            self.update("Waiting for research data...")
+            return
+        state = data.get("state", {})
+        experiments = data.get("experiments", [])
+        findings = data.get("findings", [])
+
+        lines: list[str] = []
+        lines.append(f"[bold]Research Run:[/bold] {state.get('run_id', '?')}")
+        lines.append(f"[bold]Goal:[/bold] {state.get('goal', '?')[:80]}")
+        status = state.get("status", "?")
+        status_color = {"running": "yellow", "completed": "green", "error": "red"}.get(
+            status, "white"
+        )
+        lines.append(f"[bold]Status:[/bold] [{status_color}]{status}[/{status_color}]")
+        if state.get("error"):
+            lines.append(f"[bold red]Error:[/bold red] {state['error']}")
+        lines.append("")
+        lines.append(f"[bold]Baseline:[/bold] {state.get('baseline_value', 'N/A')}")
+        lines.append(
+            f"[bold]Best:[/bold] {state.get('best_value', 'N/A')} "
+            f"(exp {state.get('best_experiment_id', 'n/a')})"
+        )
+        lines.append(
+            f"[bold]Experiments:[/bold] {state.get('total_experiments', 0)} "
+            f"({state.get('accepted_count', 0)} accepted, "
+            f"{state.get('rejected_count', 0)} rejected, "
+            f"{state.get('invalid_count', 0)} invalid)"
+        )
+        lines.append(
+            f"[bold]Cost:[/bold] ${state.get('total_cost_usd', 0):.4f} "
+            f"| Tokens: {state.get('total_tokens', 0):,}"
+        )
+        lines.append(
+            f"[bold]Wall time:[/bold] {state.get('wall_seconds', 0):.0f}s "
+            f"| Active: {state.get('active_experiments', 0)}"
+        )
+        lines.append("")
+
+        # Experiment table
+        baseline_val = state.get("baseline_value")
+        if experiments:
+            lines.append("[bold underline]Recent Experiments[/bold underline]")
+            lines.append(
+                f"{'#':>3} {'Status':<10} {'Strategy':<10} {'Metric':>8} {'Delta':>8} {'Hypothesis'}"
+            )
+            lines.append("-" * 80)
+            for exp in experiments[-15:]:
+                metric_val = exp.get("metric_value")
+                metric = f"{metric_val}" if metric_val is not None else "-"
+
+                # Delta from baseline
+                if metric_val is not None and baseline_val is not None:
+                    try:
+                        delta_num = float(metric_val) - float(baseline_val)
+                        delta = f"{delta_num:+.4f}"
+                    except (TypeError, ValueError):
+                        delta = "-"
+                else:
+                    delta = "-"
+
+                # Color-coded status
+                exp_status = exp.get("status", "?")
+                status_colors = {
+                    "accepted": "green",
+                    "rejected": "red",
+                    "error": "red",
+                    "invalid": "red",
+                    "running": "yellow",
+                    "candidate": "yellow",
+                    "pending": "yellow",
+                }
+                sc = status_colors.get(exp_status, "white")
+                status_str = f"[{sc}]{exp_status:<10}[/{sc}]"
+
+                hyp = (exp.get("hypothesis") or "")[:35]
+                reject = exp.get("reject_reason") or ""
+                suffix = f" [dim red]({reject[:30]})[/dim red]" if reject and exp_status in ("rejected", "invalid") else ""
+
+                lines.append(
+                    f"{exp.get('iteration', '?'):>3} "
+                    f"{status_str} "
+                    f"{exp.get('strategy', '?'):<10} "
+                    f"{metric:>8} "
+                    f"{delta:>8} "
+                    f"{hyp}{suffix}"
+                )
+
+        # Findings
+        if findings:
+            lines.append("")
+            lines.append("[bold underline]Findings[/bold underline]")
+            for f in findings[-5:]:
+                lines.append(
+                    f"  [{f.get('scope', '?')}] {f.get('claim', '?')[:60]}"
+                )
+
+        # Recent events from event log
+        try:
+            events_path = Path(self.app._store.run_dir) / "research.events.jsonl"
+            if events_path.exists():
+                event_lines = events_path.read_text().strip().splitlines()[-10:]
+                lines.append("")
+                lines.append("[bold underline]Recent Events[/bold underline]")
+                for el in event_lines:
+                    ev = json.loads(el)
+                    ts = time.strftime("%H:%M:%S", time.localtime(ev.get("ts", 0)))
+                    lines.append(f"  {ts} {ev.get('type', '?')}: {ev.get('message', '')[:60]}")
+        except Exception:
+            pass
+
+        self.update("\n".join(lines))
 
 
 class SwarmSummaryBar(Static):
@@ -173,9 +292,18 @@ class AttoswarmApp(App[None]):
         Binding("q", "quit", "Detach"),
     ]
 
-    def __init__(self, run_dir: str, coordinator_pid: int | None = None) -> None:
+    def __init__(
+        self,
+        run_dir: str,
+        coordinator_pid: int | None = None,
+        research_mode: bool = False,
+    ) -> None:
         super().__init__()
         self._store = StateStore(run_dir)
+        self._research_mode = research_mode
+        self._research_store: ResearchStateStore | None = (
+            ResearchStateStore(run_dir) if research_mode else None
+        )
         self._last_events: list[dict[str, Any]] = []
         self._tab_switching = False
         self._refreshing = False
@@ -202,6 +330,12 @@ class AttoswarmApp(App[None]):
 
     def compose(self) -> ComposeResult:
         yield Header(show_clock=True)
+
+        if self._research_mode:
+            with Vertical(id="research-outer"):
+                yield ResearchOverview(id="research-overview")
+            yield Footer()
+            return
 
         with Vertical(id="swarm-outer"):
             # Summary bar + budget progress + breakdown
@@ -286,6 +420,14 @@ class AttoswarmApp(App[None]):
     def _refresh_io(self) -> None:
         """Worker thread: all file I/O and data transforms."""
         try:
+            # Research mode: only read research state
+            if self._research_mode and self._research_store is not None:
+                data = self._research_store.read_state()
+                if data is None:
+                    data = self._research_store.last_state
+                self.call_from_thread(self._apply_research_refresh, data)
+                return
+
             state = self._store.read_state()
             if not state:
                 state = {}
@@ -391,6 +533,15 @@ class AttoswarmApp(App[None]):
             elif actual_tab == "tab-decisions":
                 self._refresh_decisions(state, tab_data.get("raw_events"))
 
+        self._refreshing = False
+
+    def _apply_research_refresh(self, data: dict[str, Any] | None) -> None:
+        """Main thread: update research overview widget."""
+        try:
+            widget = self.query_one("#research-overview", ResearchOverview)
+            widget.update_research(data or {})
+        except Exception:
+            pass
         self._refreshing = False
 
     def _refresh_summary(self, state: dict[str, Any]) -> None:

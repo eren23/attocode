@@ -28,6 +28,7 @@ class Scoreboard:
             f"Goal: {s.goal[:100]}",
             f"Metric: {s.metric_name} ({s.metric_direction})",
             f"Status: {s.status}",
+            *([ f"Error: {s.error}"] if getattr(s, 'error', '') else []),
             "",
             f"Baseline: {s.baseline_value}",
             f"Best: {s.best_value} (experiment {s.best_experiment_id or 'n/a'})",
@@ -46,7 +47,7 @@ class Scoreboard:
     def render_table(self, limit: int = 20) -> str:
         header = (
             f"{'#':>3} {'Status':<8} {'Strat':<9} {'Metric':>10} "
-            f"{'Delta':>10} {'Branch':<20} {'Hypothesis':<32}"
+            f"{'Delta':>10} {'Files':>5} {'Hypothesis':<40}"
         )
         sep = "-" * len(header)
         lines = [header, sep]
@@ -75,11 +76,17 @@ class Scoreboard:
             if exp.metric_value is not None:
                 d = exp.metric_value - baseline
                 delta = f"{d:+.4f}"
-            branch = exp.branch[-20:] if exp.branch else "-"
-            hyp = exp.hypothesis[:30] + ".." if len(exp.hypothesis) > 32 else exp.hypothesis
+            n_files = str(len(exp.files_modified)) if exp.files_modified else "-"
+            # Build hypothesis text with optional reject reason suffix
+            hyp_text = exp.hypothesis[:36]
+            if exp.reject_reason:
+                reason_short = exp.reject_reason[:20]
+                hyp_text = f"{exp.hypothesis[:24]}.. [{reason_short}]"
+            elif len(exp.hypothesis) > 38:
+                hyp_text = exp.hypothesis[:36] + ".."
             lines.append(
                 f"{exp.iteration:>3} {exp.status[:8]:<8} {exp.strategy[:9]:<9} "
-                f"{metric:>10} {delta:>10} {branch:<20} {hyp:<32}"
+                f"{metric:>10} {delta:>10} {n_files:>5} {hyp_text:<40}"
             )
         return "\n".join(lines)
 

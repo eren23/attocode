@@ -107,7 +107,8 @@ def extract_required_trigrams(
     pattern: str,
     *,
     case_insensitive: bool = False,
-) -> list[int]:
+    include_literals: bool = False,
+) -> list[int] | tuple[list[int], list[str]]:
     """Extract trigram hashes that MUST appear in any string matching the regex.
 
     Returns a list of CRC32 trigram hashes (u32). An empty list means the
@@ -119,31 +120,45 @@ def extract_required_trigrams(
         case_insensitive: When True, trigrams are extracted from the
             lowercased literal runs so they match lowercased content
             used during case-insensitive index queries.
+        include_literals: When True, also return the human-readable trigram
+            strings alongside hashes (for diagnostics / explain mode).
 
     Returns:
-        Deduplicated list of trigram hashes, possibly empty.
+        When *include_literals* is False (default): deduplicated list of
+        trigram hashes, possibly empty.
+        When *include_literals* is True: ``(hashes, literals)`` tuple where
+        *literals* contains the decoded trigram strings in the same order.
     """
     try:
         parsed = sre_parse.parse(pattern)
     except Exception:
-        return []
+        return ([], []) if include_literals else []
 
     try:
         literal_runs = _extract_literal_runs(parsed)
     except Exception:
-        return []
+        return ([], []) if include_literals else []
 
     if case_insensitive:
         literal_runs = [run.lower() for run in literal_runs]
 
-    trigram_hashes: set[int] = set()
+    seen: set[int] = set()
+    hashes: list[int] = []
+    literals: list[str] = []
     for run in literal_runs:
         run_bytes = run.encode("utf-8", errors="replace")
         for i in range(len(run_bytes) - 2):
             tri = run_bytes[i : i + 3]
-            trigram_hashes.add(_trigram_hash(tri))
+            h = _trigram_hash(tri)
+            if h not in seen:
+                seen.add(h)
+                hashes.append(h)
+                if include_literals:
+                    literals.append(tri.decode("utf-8", errors="replace"))
 
-    return list(trigram_hashes)
+    if include_literals:
+        return (hashes, literals)
+    return hashes
 
 
 def longest_literal_run(pattern: str) -> str:

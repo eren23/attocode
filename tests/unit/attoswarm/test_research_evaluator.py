@@ -119,3 +119,14 @@ def test_composite_evaluator_handles_partial_and_total_failure() -> None:
     failed = asyncio.run(total_failure.evaluate("."))
     assert failed.success is False
     assert "All evaluators failed" in failed.error
+
+
+def test_composite_evaluator_rejects_zero_weights() -> None:
+    from attoswarm.research.evaluator import CompositeEvaluator
+
+    class DummyEval:
+        async def evaluate(self, working_dir: str):
+            pass
+
+    with pytest.raises(ValueError, match="zero"):
+        CompositeEvaluator([(DummyEval(), 0.0), (DummyEval(), 0.0)])

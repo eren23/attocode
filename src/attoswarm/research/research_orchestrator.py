@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import json
 import logging
 import time
 import uuid
@@ -12,7 +13,7 @@ from typing import Any
 
 from attoswarm.research.accept_policy import NeverRegressPolicy
 from attoswarm.research.config import ResearchConfig
-from attoswarm.research.evaluator import CommandEvaluator, EvalResult, Evaluator
+from attoswarm.research.evaluator import CommandEvaluator, EvalResult, Evaluator, constraints_pass
 from attoswarm.research.experiment import Experiment, FindingRecord, ResearchState, SteeringNote
 from attoswarm.research.experiment_db import ExperimentDB
 from attoswarm.research.hypothesis import HypothesisGenerator
@@ -48,6 +49,9 @@ class ResearchOrchestrator:
         spawn_fn: Any | None = None,
         event_bus: Any | None = None,
         code_intel: Any = None,
+        on_progress: Any | None = None,
+        swarm_config: Any = None,
+        experiment_mode: str = "auto",
     ) -> None:
         self._config = config
         self._goal = goal
@@ -59,6 +63,11 @@ class ResearchOrchestrator:
         self._spawn_fn = spawn_fn
         self._event_bus = event_bus
         self._code_intel = code_intel
+        self._on_progress = on_progress
+        self._swarm_config = swarm_config
+        self._experiment_mode = experiment_mode
+        if experiment_mode == "auto":
+            self._experiment_mode = "swarm" if (swarm_config and len(getattr(swarm_config, 'roles', [])) >= 2) else "simple"
         self._hypothesis_gen = HypothesisGenerator(
             goal=goal,
             target_files=config.target_files,
@@ -96,44 +105,152 @@ class ResearchOrchestrator:
 
         loop_start = time.time() - self._state.wall_seconds
 
-        if self._state.baseline_value is None:
-            self._emit("research_baseline", message="Evaluating baseline metric")
-            baseline = await self._evaluate_with_retry(repeats=max(self._config.baseline_repeats, 1))
-            if not baseline.success:
-                self._state.status = "error"
+        try:
+            if self._state.baseline_value is None:
+                # Pre-flight: verify eval command works in the working directory
+                preflight = await self._evaluator.evaluate(self._working_dir)
+                if not preflight.success:
+                    self._state.status = "error"
+                    self._state.error = f"Eval command pre-flight failed: {preflight.error}"
+                    self._emit("research_error", message=self._state.error)
+                    return self._state
+
+                self._emit("research_baseline", message="Evaluating baseline metric")
+                baseline = await self._evaluate_with_retry(repeats=max(self._config.baseline_repeats, 1))
+                if not baseline.success:
+                    self._state.status = "error"
+                    self._state.error = baseline.error or f"Baseline eval failed (output: {baseline.raw_output[:500]})"
+                    self._state.wall_seconds = time.time() - loop_start
+                    return self._state
+                self._state.baseline_value = baseline.metric_value
+                self._state.best_value = baseline.metric_value
+                self._state.best_branch = self._worktrees.get_head_commit()
+                self._write_event("baseline_complete", f"Baseline: {baseline.metric_value}")
+                self._notify_progress()
+
+            while self._should_continue(loop_start):
+                batch = self._plan_batch()
+                if not batch:
+                    break
+
+                self._state.active_experiments = len(batch)
+                results = await asyncio.gather(*(self._execute_candidate(spec) for spec in batch))
+                self._state.active_experiments = 0
+
+                for exp in results:
+                    self._experiments.append(exp)
+                    self._write_event(
+                        f"experiment_{exp.status}",
+                        f"{exp.experiment_id} ({exp.strategy}): metric={exp.metric_value}",
+                        experiment_id=exp.experiment_id,
+                        strategy=exp.strategy,
+                        metric=exp.metric_value,
+                        status=exp.status,
+                    )
+                    touched = self._reconcile_candidate(exp)
+                    for item in touched:
+                        self._db.save_experiment(self._run_id, item)
+                    self._record_findings(touched)
+
+                self._refresh_state()
                 self._state.wall_seconds = time.time() - loop_start
-                return self._state
-            self._state.baseline_value = baseline.metric_value
-            self._state.best_value = baseline.metric_value
-            self._state.best_branch = self._worktrees.get_head_commit()
+                self._db.save_checkpoint(self._run_id, self._state)
+                self._notify_progress()
 
-        while self._should_continue(loop_start):
-            batch = self._plan_batch()
-            if not batch:
-                break
-
-            self._state.active_experiments = len(batch)
-            results = await asyncio.gather(*(self._execute_candidate(spec) for spec in batch))
-            self._state.active_experiments = 0
-
-            for exp in results:
-                self._experiments.append(exp)
-                touched = self._reconcile_candidate(exp)
-                for item in touched:
-                    self._db.save_experiment(self._run_id, item)
-                self._record_findings(touched)
-
-            self._refresh_state()
+            if self._state.status == "running":
+                self._state.status = "completed"
+                self._write_event("campaign_complete", f"Completed: {self._state.accepted_count} accepted, {self._state.rejected_count} rejected")
             self._state.wall_seconds = time.time() - loop_start
+            self._db.update_run_status(self._run_id, self._state.status)
             self._db.save_checkpoint(self._run_id, self._state)
+            return self._state
+        finally:
+            self._db.close()
 
-        if self._state.status == "running":
-            self._state.status = "completed"
-        self._state.wall_seconds = time.time() - loop_start
-        self._db.update_run_status(self._run_id, self._state.status)
-        self._db.save_checkpoint(self._run_id, self._state)
-        self._db.close()
-        return self._state
+    def _notify_progress(self) -> None:
+        self._write_state_file()
+        if self._on_progress:
+            try:
+                self._on_progress(self._state, self._experiments)
+            except Exception:
+                pass  # never let progress callback crash the campaign
+
+    def _build_learning_summary(self) -> str:
+        """Build a learning context from prior experiments for the next agent."""
+        if not self._experiments:
+            return ""
+        lines: list[str] = []
+        accepted = [e for e in self._experiments if e.status == "accepted"]
+        rejected = [e for e in self._experiments if e.status == "rejected"]
+        errors = [e for e in self._experiments if e.status in ("error", "invalid")]
+
+        if accepted:
+            lines.append("## What worked (accepted experiments):")
+            for e in accepted[-5:]:
+                lines.append(f"- Hypothesis: {e.hypothesis[:120]} → metric={e.metric_value}")
+                if e.files_modified:
+                    lines.append(f"  Modified: {', '.join(e.files_modified[:5])}")
+                if e.diff:
+                    lines.append(f"  Diff preview: {e.diff[:300]}")
+
+        if rejected:
+            lines.append("\n## What failed (rejected experiments — DO NOT repeat these):")
+            for e in rejected[-5:]:
+                lines.append(f"- Hypothesis: {e.hypothesis[:120]} → metric={e.metric_value} (reason: {e.reject_reason[:80]})")
+                if e.files_modified:
+                    lines.append(f"  Modified: {', '.join(e.files_modified[:5])}")
+
+        if errors:
+            lines.append("\n## Errors to avoid:")
+            for e in errors[-3:]:
+                lines.append(f"- {e.error[:200]}")
+
+        if self._state.baseline_value is not None:
+            lines.append(f"\nBaseline metric: {self._state.baseline_value}")
+        if self._state.best_value is not None and self._state.best_value != self._state.baseline_value:
+            lines.append(f"Current best: {self._state.best_value}")
+
+        return "\n".join(lines)
+
+    def _write_state_file(self) -> None:
+        """Write a JSON state snapshot for external monitors (TUI, watch)."""
+        try:
+            state_path = self._run_dir / "research.state.json"
+            data = {
+                "state": asdict(self._state),
+                "experiments": [exp.to_dict() for exp in self._experiments[-30:]],
+                "findings": [asdict(f) for f in self._findings[-10:]],
+            }
+            tmp = state_path.with_suffix(".tmp")
+            tmp.write_text(json.dumps(data, default=str), encoding="utf-8")
+            tmp.rename(state_path)
+        except Exception:
+            pass  # never let state file writes crash the campaign
+
+    def _write_event(self, event_type: str, message: str = "", **data: Any) -> None:
+        """Append an event to research.events.jsonl for TUI/external monitors."""
+        try:
+            event_path = self._run_dir / "research.events.jsonl"
+            entry = {"ts": time.time(), "type": event_type, "message": message, **data}
+            with event_path.open("a", encoding="utf-8") as f:
+                f.write(json.dumps(entry, default=str) + "\n")
+        except Exception:
+            pass
+
+    def _derive_experiment_config(self, worktree_path: Path, experiment_id: str) -> Any:
+        """Create a micro-SwarmYamlConfig scoped to one experiment's worktree."""
+        import copy
+        cfg = copy.deepcopy(self._swarm_config)
+        cfg.run.working_dir = str(worktree_path)
+        cfg.run.run_dir = str(self._run_dir / experiment_id / "swarm")
+        cfg.run.max_runtime_seconds = int(self._config.experiment_timeout_seconds)
+        cfg.run.name = f"research-{experiment_id}"
+        cfg.budget.max_tokens = self._config.experiment_max_tokens
+        cfg.budget.max_cost_usd = self._config.experiment_max_cost_usd
+        cfg.watchdog.task_max_duration_seconds = self._config.experiment_timeout_seconds * 0.8
+        cfg.orchestration.max_tasks = 5
+        cfg.workspace.mode = "shared"
+        return cfg
 
     def get_scoreboard(self) -> Scoreboard:
         return Scoreboard(self._state, self._experiments, findings=self._findings)
@@ -255,62 +372,70 @@ class ResearchOrchestrator:
     async def _execute_candidate(self, spec: CandidateSpec) -> Experiment:
         assert self._worktrees is not None
         start_ref = self._resolve_start_ref(spec.parent_experiment_id)
-        worktree_path, branch = self._worktrees.create_worktree(spec.experiment_id, start_ref)
         timestamp = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
-        exp = Experiment(
-            experiment_id=spec.experiment_id,
-            iteration=spec.iteration,
-            hypothesis=spec.hypothesis,
-            parent_experiment_id=spec.parent_experiment_id,
-            related_experiment_ids=list(spec.related_experiment_ids or []),
-            strategy=spec.strategy,
-            status="running",
-            branch=branch,
-            worktree_path=str(worktree_path),
-            baseline_value=self._state.best_value,
-            steering_notes=list(spec.steering_notes or []),
-            timestamp=timestamp,
-        )
-        self._emit("experiment_start", message=f"{exp.experiment_id} ({exp.strategy})", data=exp.to_dict())
 
         started = time.time()
         eval_result: EvalResult | None = None
         agent_result: Any = None
         preparation_notes: list[str] = []
+        worktree_path: str | None = None
+        branch: str = ""
         try:
+            worktree_path, branch = self._worktrees.create_worktree(spec.experiment_id, start_ref)
+            exp = Experiment(
+                experiment_id=spec.experiment_id,
+                iteration=spec.iteration,
+                hypothesis=spec.hypothesis,
+                parent_experiment_id=spec.parent_experiment_id,
+                related_experiment_ids=list(spec.related_experiment_ids or []),
+                strategy=spec.strategy,
+                status="running",
+                branch=branch,
+                worktree_path=str(worktree_path),
+                baseline_value=self._state.best_value,
+                steering_notes=list(spec.steering_notes or []),
+                timestamp=timestamp,
+            )
+            self._emit("experiment_start", message=f"{exp.experiment_id} ({exp.strategy})", data=exp.to_dict())
             preparation_notes = self._prepare_candidate_workspace(spec, worktree_path)
             if spec.strategy != "reproduce":
                 agent_result = await self._run_agent(spec, worktree_path)
                 if agent_result is None and self._spawn_fn is None:
                     exp.status = "error"
                     exp.error = "No spawn function configured for non-reproduce experiment"
-                    return exp
+                    return self._finalize_candidate(exp)
 
             exp.files_modified = self._worktrees.list_changed_files(worktree_path)
-            exp.diff = self._worktrees.capture_diff(worktree_path)
             exp.commit_hash = self._worktrees.commit_all(
                 worktree_path,
                 f"[research] {spec.experiment_id}: {spec.hypothesis[:60]}",
             )
+            exp.diff = self._worktrees.capture_commit_diff(worktree_path)
 
             eval_result = await self._evaluate_with_retry(
                 working_dir=str(worktree_path),
                 repeats=max(self._config.eval_repeat, 1),
             )
         except Exception as exc:
+            if "exp" not in locals():
+                # create_worktree or Experiment() itself failed — clean up worktree if created
+                if worktree_path:
+                    self._worktrees.remove_worktree(worktree_path, branch=branch)
+                raise
             exp.status = "error"
             exp.error = str(exc)
             eval_result = None
         finally:
-            exp.duration_s = time.time() - started
-            exp.tokens_used = int(getattr(agent_result, "tokens_used", 0) or 0)
-            exp.cost_usd = float(getattr(agent_result, "cost_usd", 0.0) or 0.0)
-            agent_summary = getattr(agent_result, "result_summary", "") or ""
-            prep_summary = "\n".join(preparation_notes).strip()
-            if prep_summary and agent_summary:
-                exp.raw_output = f"{prep_summary}\n\n{agent_summary}"
-            else:
-                exp.raw_output = prep_summary or agent_summary
+            if "exp" in locals():
+                exp.duration_s = time.time() - started
+                exp.tokens_used = int(getattr(agent_result, "tokens_used", 0) or 0)
+                exp.cost_usd = float(getattr(agent_result, "cost_usd", 0.0) or 0.0)
+                agent_summary = getattr(agent_result, "result_summary", "") or ""
+                prep_summary = "\n".join(preparation_notes).strip()
+                if prep_summary and agent_summary:
+                    exp.raw_output = f"{prep_summary}\n\n{agent_summary}"
+                else:
+                    exp.raw_output = prep_summary or agent_summary
 
         if eval_result is None:
             exp.status = "error"
@@ -327,11 +452,18 @@ class ResearchOrchestrator:
         }
         exp.artifacts = list(eval_result.artifacts)
 
-        if not eval_result.success:
+        # Guard against catastrophic regression (>50% drop from baseline)
+        if (self._state.baseline_value is not None
+                and eval_result.metric_value is not None
+                and self._state.baseline_value > 0
+                and eval_result.metric_value < self._state.baseline_value * 0.5):
+            exp.status = "invalid"
+            exp.reject_reason = f"catastrophic regression ({eval_result.metric_value:.1f} vs baseline {self._state.baseline_value:.1f})"
+        elif not eval_result.success:
             exp.status = "invalid"
             exp.reject_reason = eval_result.error or "evaluation failed"
             exp.error = exp.reject_reason
-        elif not _constraints_pass(eval_result.constraint_checks):
+        elif not constraints_pass(eval_result.constraint_checks):
             exp.status = "invalid"
             exp.reject_reason = "constraint checks failed"
         else:
@@ -342,7 +474,7 @@ class ResearchOrchestrator:
                 self._metric_history(),
             )
             if accepted:
-                exp.accepted = False
+                exp.accepted = True
                 exp.reject_reason = ""
                 if self._config.promotion_repeats > 1:
                     exp.status = "validated" if spec.strategy == "reproduce" else "candidate"
@@ -405,20 +537,191 @@ class ResearchOrchestrator:
 
         return EvalResult(metric_value=0.0, error="All retries exhausted", success=False)
 
+    def _build_rich_task_dict(self, spec: CandidateSpec, worktree_path: str | Path) -> dict:
+        """Build an enriched task dict for the agent, matching swarm-level context."""
+        import ast as _ast
+
+        hypothesis = spec.hypothesis
+        support_context = spec.support_context or ""
+
+        # Build description with concrete instructions
+        description_parts = [
+            hypothesis,
+            "\nIMPORTANT: Make code changes directly. Do NOT ask questions. Read files, modify them, verify.",
+        ]
+        if support_context:
+            description_parts.append(support_context)
+        description_parts.append(
+            f"\n## Verification\n"
+            f"Run this command to check your work:\n```\n{self._config.eval_command}\n```\n"
+            f"Current baseline: **{self._state.baseline_value}**\n"
+            f"Direction: {self._config.metric_direction}\n"
+            f"Your changes must IMPROVE this metric. If the metric drops, revert and try differently."
+        )
+
+        # Discover symbols from target files (lightweight AST parsing)
+        symbol_scope: list[str] = []
+        for tf in self._config.target_files[:3]:
+            tf_path = Path(self._working_dir) / tf
+            if tf_path.exists() and tf_path.suffix == ".py":
+                try:
+                    tree = _ast.parse(tf_path.read_text(encoding="utf-8"))
+                    for node in _ast.walk(tree):
+                        if isinstance(node, (_ast.FunctionDef, _ast.AsyncFunctionDef)):
+                            symbol_scope.append(f"{tf}:{node.name}()")
+                        elif isinstance(node, _ast.ClassDef):
+                            symbol_scope.append(f"{tf}:{node.name}")
+                except Exception:
+                    pass
+
+        # Discover test files
+        test_files: list[str] = []
+        for tf in self._config.target_files:
+            name = Path(tf).stem
+            candidates = [
+                f"tests/unit/**/test_{name}.py",
+                f"tests/**/test_{name}.py",
+                f"test_{name}.py",
+            ]
+            base = Path(self._working_dir)
+            for pattern in candidates:
+                for match in base.glob(pattern):
+                    rel = str(match.relative_to(base))
+                    if rel not in test_files:
+                        test_files.append(rel)
+
+        # Read files from parent experiment
+        read_files = list(spec.read_files or [])
+
+        # Learning context
+        learning_context = self._build_learning_summary()
+
+        task = {
+            "task_id": f"research-{spec.experiment_id}",
+            "title": hypothesis[:80],
+            "description": "\n\n".join(description_parts),
+            "target_files": list(self._config.target_files),
+            "read_files": read_files,
+            "working_dir": str(worktree_path),
+            "symbol_scope": symbol_scope[:15],
+            "test_files": test_files[:10],
+            "test_command": self._config.eval_command,
+            "learning_context": learning_context,
+        }
+        return task
+
+    def _build_mini_swarm_goal(self, spec: CandidateSpec, worktree_path: Path) -> str:
+        """Build a concrete, actionable goal for the mini-swarm coordinator."""
+        import ast as _ast
+
+        sections: list[str] = []
+
+        # 1. Clear objective — not the abstract hypothesis, but a concrete coding task
+        sections.append(f"# Objective\n\n{spec.hypothesis}")
+        sections.append(
+            "IMPORTANT: You are an autonomous coding agent. Make code changes directly. "
+            "Do NOT ask clarifying questions. Do NOT explain what you would do — just do it. "
+            "Read the target files, understand them, make improvements, and verify your changes work."
+        )
+
+        # 2. Support context from strategy (compose diffs, ablate context, etc.)
+        if spec.support_context:
+            sections.append(f"## Additional Context\n\n{spec.support_context}")
+
+        # 3. Target files with actual content summaries
+        if self._config.target_files:
+            file_section = ["## Target Files\n\nThese are the files you should modify:\n"]
+            for tf in self._config.target_files[:5]:
+                tf_path = Path(str(worktree_path)) / tf
+                if tf_path.exists():
+                    try:
+                        content = tf_path.read_text(encoding="utf-8")
+                        lines = content.splitlines()
+                        # Include structure: classes, functions, first 50 lines
+                        symbols: list[str] = []
+                        if tf.endswith(".py"):
+                            try:
+                                tree = _ast.parse(content)
+                                for node in _ast.walk(tree):
+                                    if isinstance(node, _ast.ClassDef):
+                                        symbols.append(f"  class {node.name} (line {node.lineno})")
+                                    elif isinstance(node, (_ast.FunctionDef, _ast.AsyncFunctionDef)):
+                                        symbols.append(f"  def {node.name}() (line {node.lineno})")
+                            except Exception:
+                                pass
+                        file_section.append(f"### `{tf}` ({len(lines)} lines)")
+                        if symbols:
+                            file_section.append("Structure:")
+                            file_section.extend(symbols[:20])
+                        # Include first 80 lines as preview
+                        preview = "\n".join(lines[:80])
+                        file_section.append(f"\n```\n{preview}\n```\n")
+                    except Exception:
+                        file_section.append(f"### `{tf}` (could not read)")
+                else:
+                    file_section.append(f"### `{tf}` (file not found in worktree)")
+            sections.append("\n".join(file_section))
+
+        # 4. Learning from prior experiments
+        learning = self._build_learning_summary()
+        if learning:
+            sections.append(f"## Prior Experiment Results\n\n{learning}")
+
+        # 5. Verification — how to check your work
+        sections.append(
+            f"## Verification\n\n"
+            f"After making changes, verify by running:\n"
+            f"```\n{self._config.eval_command}\n```\n\n"
+            f"Current baseline metric: **{self._state.baseline_value}**\n"
+            f"Direction: **{self._config.metric_direction}** (higher is {'better' if self._config.metric_direction == 'maximize' else 'worse'})\n\n"
+            f"Your changes MUST improve this metric. If the eval command fails or the metric drops, "
+            f"revert your changes and try a different approach."
+        )
+
+        return "\n\n".join(sections)
+
+    async def _run_mini_swarm(self, spec: CandidateSpec, worktree_path: Path) -> Any:
+        """Run a full swarm pipeline (decompose -> implement -> review -> merge) in the experiment worktree."""
+        from types import SimpleNamespace
+
+        micro_cfg = self._derive_experiment_config(worktree_path, spec.experiment_id)
+        goal = self._build_mini_swarm_goal(spec, worktree_path)
+
+        self._write_event("mini_swarm_start", f"Starting mini-swarm for {spec.experiment_id}", experiment_id=spec.experiment_id)
+
+        from attoswarm.coordinator.loop import HybridCoordinator
+
+        coordinator = HybridCoordinator(micro_cfg, goal)
+        try:
+            exit_code = await coordinator.run()
+            tokens = getattr(coordinator.budget, 'total_tokens', 0)
+            cost = getattr(coordinator.budget, 'total_cost', 0.0)
+            self._write_event("mini_swarm_complete", f"Mini-swarm exit={exit_code} tokens={tokens}", experiment_id=spec.experiment_id)
+            return SimpleNamespace(
+                result_summary=f"Mini-swarm completed (exit={exit_code})",
+                tokens_used=tokens,
+                cost_usd=cost,
+            )
+        except Exception as exc:
+            logger.warning("Mini-swarm failed for %s: %s", spec.experiment_id, exc)
+            self._write_event("mini_swarm_error", f"Mini-swarm failed: {exc}", experiment_id=spec.experiment_id)
+            tokens = getattr(coordinator.budget, 'total_tokens', 0) if hasattr(coordinator, 'budget') else 0
+            cost = getattr(coordinator.budget, 'total_cost', 0.0) if hasattr(coordinator, 'budget') else 0.0
+            return SimpleNamespace(
+                result_summary=f"Mini-swarm failed: {exc}",
+                tokens_used=tokens,
+                cost_usd=cost,
+            )
+
     async def _run_agent(self, spec: CandidateSpec, worktree_path: Path) -> Any:
+        if self._experiment_mode == "swarm" and self._swarm_config:
+            return await asyncio.wait_for(
+                self._run_mini_swarm(spec, worktree_path),
+                timeout=self._config.experiment_timeout_seconds,
+            )
         if not self._spawn_fn:
             return None
-        description = spec.hypothesis
-        if spec.support_context:
-            description = f"{description}\n\n{spec.support_context}"
-        task = {
-            "task_id": f"research-{uuid.uuid4().hex[:8]}",
-            "title": spec.hypothesis[:80],
-            "description": description,
-            "target_files": self._config.target_files,
-            "read_files": list(spec.read_files or []),
-            "working_dir": str(worktree_path),
-        }
+        task = self._build_rich_task_dict(spec, worktree_path)
         return await asyncio.wait_for(
             self._spawn_fn(task),
             timeout=self._config.experiment_timeout_seconds,
@@ -614,9 +917,21 @@ class ResearchOrchestrator:
             self._state.best_experiment_id = best.experiment_id
             self._state.best_branch = best.branch
         else:
+            # Fall back to candidates awaiting validation so exploit/ablate/compose
+            # strategies still target the right starting ref (branch/experiment_id),
+            # but keep best_value at baseline so the accept policy isn't inflated.
+            candidates = [
+                exp for exp in self._experiments
+                if exp.status == "candidate" and exp.metric_value is not None
+            ]
+            if candidates:
+                best_candidate = self._rank_experiments(candidates)[0]
+                self._state.best_experiment_id = best_candidate.experiment_id
+                self._state.best_branch = best_candidate.branch
+            else:
+                self._state.best_experiment_id = ""
+                self._state.best_branch = self._worktrees.get_head_commit() if self._worktrees is not None else ""
             self._state.best_value = self._state.baseline_value
-            self._state.best_experiment_id = ""
-            self._state.best_branch = self._worktrees.get_head_commit() if self._worktrees is not None else ""
 
     def _reconcile_candidate(self, exp: Experiment) -> list[Experiment]:
         touched = [exp]
@@ -710,17 +1025,3 @@ class ResearchOrchestrator:
                 ))
             except Exception:
                 pass
-
-
-def _constraints_pass(constraints: dict[str, Any]) -> bool:
-    if not constraints:
-        return True
-    for value in constraints.values():
-        if isinstance(value, bool):
-            if not value:
-                return False
-            continue
-        if isinstance(value, dict) and "passed" in value:
-            if not bool(value["passed"]):
-                return False
-    return True
