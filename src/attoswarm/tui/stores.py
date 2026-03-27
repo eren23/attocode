@@ -1216,3 +1216,31 @@ class StateStore:
                 "path": str(entry),
             })
         return runs
+
+
+class ResearchStateStore:
+    """Reads research.state.json written by ResearchOrchestrator."""
+
+    def __init__(self, run_dir: str) -> None:
+        self._state_path = Path(run_dir) / "research.state.json"
+        self._mtime: float = 0.0
+        self._cached: dict[str, Any] | None = None
+
+    def read_state(self) -> dict[str, Any] | None:
+        """Returns parsed state dict if file changed since last read, else None."""
+        if not self._state_path.exists():
+            return self._cached
+        try:
+            mtime = self._state_path.stat().st_mtime
+            if mtime <= self._mtime:
+                return None  # no change
+            self._mtime = mtime
+            data = json.loads(self._state_path.read_text(encoding="utf-8"))
+            self._cached = data
+            return data
+        except (json.JSONDecodeError, OSError):
+            return None
+
+    @property
+    def last_state(self) -> dict[str, Any] | None:
+        return self._cached

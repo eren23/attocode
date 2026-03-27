@@ -1,0 +1,38 @@
+version: 1
+
+run:
+  name: research-test
+  working_dir: .
+  run_dir: .agent/hybrid-swarm/research-test
+  poll_interval_ms: 250
+  max_runtime_seconds: 600
+
+roles:
+  - role_id: researcher
+    role_type: worker
+    backend: claude
+    model: claude-sonnet-4-20250514
+    count: 1
+    write_access: true
+    workspace_mode: shared
+    task_kinds: [implement, refactor, test]
+    execution_mode: oneshot
+
+budget:
+  max_tokens: 2000000
+  max_cost_usd: 5.0
+  reserve_ratio: 0.10
+  chars_per_token_fallback: 4.0
+
+merge:
+  authority_role: researcher
+  judge_roles: []
+  quality_threshold: 0.5
+
+watchdog:
+  heartbeat_timeout_seconds: 60
+  task_silence_timeout_seconds: 180
+  task_max_duration_seconds: 300
+
+retries:
+  max_task_attempts: 1

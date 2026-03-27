@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import json
 import logging
 import time
 import uuid
@@ -48,6 +49,7 @@ class ResearchOrchestrator:
         spawn_fn: Any | None = None,
         event_bus: Any | None = None,
         code_intel: Any = None,
+        on_progress: Any | None = None,
     ) -> None:
         self._config = config
         self._goal = goal
@@ -59,6 +61,7 @@ class ResearchOrchestrator:
         self._spawn_fn = spawn_fn
         self._event_bus = event_bus
         self._code_intel = code_intel
+        self._on_progress = on_progress
         self._hypothesis_gen = HypothesisGenerator(
             goal=goal,
             target_files=config.target_files,
@@ -102,11 +105,13 @@ class ResearchOrchestrator:
                 baseline = await self._evaluate_with_retry(repeats=max(self._config.baseline_repeats, 1))
                 if not baseline.success:
                     self._state.status = "error"
+                    self._state.error = baseline.error or f"Baseline eval failed (output: {baseline.raw_output[:500]})"
                     self._state.wall_seconds = time.time() - loop_start
                     return self._state
                 self._state.baseline_value = baseline.metric_value
                 self._state.best_value = baseline.metric_value
                 self._state.best_branch = self._worktrees.get_head_commit()
+                self._notify_progress()
 
             while self._should_continue(loop_start):
                 batch = self._plan_batch()
@@ -127,6 +132,7 @@ class ResearchOrchestrator:
                 self._refresh_state()
                 self._state.wall_seconds = time.time() - loop_start
                 self._db.save_checkpoint(self._run_id, self._state)
+                self._notify_progress()
 
             if self._state.status == "running":
                 self._state.status = "completed"
@@ -136,6 +142,29 @@ class ResearchOrchestrator:
             return self._state
         finally:
             self._db.close()
+
+    def _notify_progress(self) -> None:
+        self._write_state_file()
+        if self._on_progress:
+            try:
+                self._on_progress(self._state, self._experiments)
+            except Exception:
+                pass  # never let progress callback crash the campaign
+
+    def _write_state_file(self) -> None:
+        """Write a JSON state snapshot for external monitors (TUI, watch)."""
+        try:
+            state_path = self._run_dir / "research.state.json"
+            data = {
+                "state": asdict(self._state),
+                "experiments": [exp.to_dict() for exp in self._experiments[-30:]],
+                "findings": [asdict(f) for f in self._findings[-10:]],
+            }
+            tmp = state_path.with_suffix(".tmp")
+            tmp.write_text(json.dumps(data, default=str), encoding="utf-8")
+            tmp.rename(state_path)
+        except Exception:
+            pass  # never let state file writes crash the campaign
 
     def get_scoreboard(self) -> Scoreboard:
         return Scoreboard(self._state, self._experiments, findings=self._findings)

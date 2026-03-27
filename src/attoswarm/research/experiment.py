@@ -142,6 +142,7 @@ class ResearchState:
     wall_seconds: float = 0.0
     active_experiments: int = 0
     status: str = "running"  # running|completed|budget_exceeded|error
+    error: str = ""
 
     def is_improvement(self, candidate: float, baseline: float) -> bool:
         if self.metric_direction == "minimize":

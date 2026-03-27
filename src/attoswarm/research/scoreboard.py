@@ -28,6 +28,7 @@ class Scoreboard:
             f"Goal: {s.goal[:100]}",
             f"Metric: {s.metric_name} ({s.metric_direction})",
             f"Status: {s.status}",
+            *([ f"Error: {s.error}"] if getattr(s, 'error', '') else []),
             "",
             f"Baseline: {s.baseline_value}",
             f"Best: {s.best_value} (experiment {s.best_experiment_id or 'n/a'})",

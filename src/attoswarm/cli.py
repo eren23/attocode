@@ -1366,7 +1366,7 @@ def research_group() -> None:
 
 @research_group.command("start")
 @click.argument("goal", type=str)
-@click.option("--eval-command", "-e", type=str, required=True, help="Shell command that outputs numeric metric")
+@click.option("--eval-command", "-e", type=str, required=True, help="Shell command whose stdout contains a number (last numeric value is used). For structured output, emit JSON with a 'primary_metric' key.")
 @click.option("--target-files", "-t", type=str, multiple=True, help="Files the agent should modify")
 @click.option("--max-experiments", type=int, default=100, help="Maximum number of experiments")
 @click.option("--max-parallel", type=int, default=1, help="Maximum parallel experiments per batch")
@@ -1380,6 +1380,7 @@ def research_group() -> None:
 @click.option("--config", "config_path", type=click.Path(exists=True, dir_okay=False, path_type=Path), default=None)
 @click.option("--db", type=click.Path(path_type=Path), default=None, help="Path to experiment database")
 @click.option("--working-dir", "-w", type=click.Path(exists=True, path_type=Path), default=None)
+@click.option("--monitor/--no-monitor", default=False, help="Launch TUI monitor for live dashboard")
 def research_start_command(
     goal: str,
     eval_command: str,
@@ -1396,24 +1397,44 @@ def research_start_command(
     config_path: Path | None,
     db: Path | None,
     working_dir: Path | None,
+    monitor: bool,
 ) -> None:
-    _run_research_campaign(
-        goal=goal,
-        eval_command=eval_command,
-        target_files=target_files,
-        max_experiments=max_experiments,
-        max_parallel=max_parallel,
-        experiment_timeout=experiment_timeout,
-        metric_direction=metric_direction,
-        metric_name=metric_name,
-        max_cost=max_cost,
-        baseline_repeats=baseline_repeats,
-        promotion_repeats=promotion_repeats,
-        resume=resume,
-        config_path=config_path,
-        db=db,
-        working_dir=working_dir,
-    )
+    if monitor:
+        _run_research_with_monitor(
+            goal=goal,
+            eval_command=eval_command,
+            target_files=target_files,
+            max_experiments=max_experiments,
+            max_parallel=max_parallel,
+            experiment_timeout=experiment_timeout,
+            metric_direction=metric_direction,
+            metric_name=metric_name,
+            max_cost=max_cost,
+            baseline_repeats=baseline_repeats,
+            promotion_repeats=promotion_repeats,
+            resume=resume,
+            config_path=config_path,
+            db=db,
+            working_dir=working_dir,
+        )
+    else:
+        _run_research_campaign(
+            goal=goal,
+            eval_command=eval_command,
+            target_files=target_files,
+            max_experiments=max_experiments,
+            max_parallel=max_parallel,
+            experiment_timeout=experiment_timeout,
+            metric_direction=metric_direction,
+            metric_name=metric_name,
+            max_cost=max_cost,
+            baseline_repeats=baseline_repeats,
+            promotion_repeats=promotion_repeats,
+            resume=resume,
+            config_path=config_path,
+            db=db,
+            working_dir=working_dir,
+        )
 
 
 @research_group.command("leaderboard")
@@ -2096,6 +2117,56 @@ def research_import_patch_command(
         store.close()
 
 
+def _run_research_with_monitor(**kwargs: Any) -> None:
+    """Launch research campaign in subprocess with TUI monitor overlay."""
+    run_dir = _resolve_research_run_dir(
+        db=kwargs.get("db"),
+        working_dir=kwargs.get("working_dir"),
+    )
+    run_dir.mkdir(parents=True, exist_ok=True)
+    log_path = run_dir / "research.log"
+
+    # Rebuild the CLI command without --monitor
+    cmd = [sys.executable, "-m", "attoswarm", "research", "start", kwargs["goal"]]
+    cmd.extend(["-e", kwargs["eval_command"]])
+    for tf in kwargs.get("target_files", ()):
+        cmd.extend(["-t", tf])
+    cmd.extend(["--max-experiments", str(kwargs.get("max_experiments", 100))])
+    cmd.extend(["--max-parallel", str(kwargs.get("max_parallel", 1))])
+    cmd.extend(["--experiment-timeout", str(kwargs.get("experiment_timeout", 300.0))])
+    cmd.extend(["--metric-direction", kwargs.get("metric_direction", "maximize")])
+    cmd.extend(["--metric-name", kwargs.get("metric_name", "score")])
+    cmd.extend(["--max-cost", str(kwargs.get("max_cost", 50.0))])
+    cmd.extend(["--baseline-repeats", str(kwargs.get("baseline_repeats", 1))])
+    cmd.extend(["--promotion-repeats", str(kwargs.get("promotion_repeats", 1))])
+    if kwargs.get("resume"):
+        cmd.extend(["--resume", kwargs["resume"]])
+    if kwargs.get("config_path"):
+        cmd.extend(["--config", str(kwargs["config_path"])])
+    if kwargs.get("db"):
+        cmd.extend(["--db", str(kwargs["db"])])
+    if kwargs.get("working_dir"):
+        cmd.extend(["-w", str(kwargs["working_dir"])])
+
+    log_fh = open(log_path, "a", encoding="utf-8")  # noqa: SIM115
+    atexit.register(log_fh.close)
+    proc = subprocess.Popen(cmd, stdout=log_fh, stderr=log_fh)
+
+    from attoswarm.tui.app import AttoswarmApp
+
+    app = AttoswarmApp(str(run_dir), coordinator_pid=proc.pid, research_mode=True)
+    app.run()
+
+    if proc.poll() is None:
+        proc.terminate()
+        try:
+            proc.wait(timeout=10)
+        except subprocess.TimeoutExpired:
+            proc.kill()
+
+    raise SystemExit(proc.returncode or 0)
+
+
 def _run_research_campaign(
     *,
     goal: str,
@@ -2140,10 +2211,21 @@ def _run_research_campaign(
         cfg = load_swarm_yaml(config_path)
         spawn_fn = _make_subprocess_spawn_fn(cfg)
 
+    def _print_progress(state: Any, experiments: list) -> None:
+        from attoswarm.research.scoreboard import Scoreboard as _Sb
+
+        click.clear()
+        click.echo("=" * 60)
+        sb = _Sb(state, experiments)
+        click.echo(sb.render_summary())
+        click.echo("\n" + sb.render_table(limit=10))
+        click.echo("\n(live — updates after each batch)")
+
     orchestrator = ResearchOrchestrator(
         config=research_cfg,
         goal=goal,
         spawn_fn=spawn_fn,
+        on_progress=_print_progress,
     )
 
     click.echo(f"Starting research: {goal[:80]}")
@@ -2153,6 +2235,7 @@ def _run_research_campaign(
         f"{metric_direction} | Max experiments: {max_experiments} | "
         f"Parallel: {max_parallel} | Budget: ${max_cost}"
     )
+    click.echo("")
 
     state = asyncio.run(orchestrator.run(resume_run_id=resume))
     scoreboard = orchestrator.get_scoreboard()
@@ -2160,6 +2243,9 @@ def _run_research_campaign(
     click.echo(scoreboard.render_summary())
     click.echo("\n" + scoreboard.render_table())
     click.echo("\n" + scoreboard.render_findings())
+
+    if state.error:
+        click.secho(f"\nError: {state.error}", fg="red", err=True)
 
     raise SystemExit(0 if state.status == "completed" else 1)
 
