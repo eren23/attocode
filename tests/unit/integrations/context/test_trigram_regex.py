@@ -177,3 +177,49 @@ class TestComplexPatterns:
         result = extract_required_trigrams(r"foo\.bar")
         assert isinstance(result, list)
         assert len(result) > 0
+
+
+# ---------------------------------------------------------------------------
+# include_literals
+# ---------------------------------------------------------------------------
+class TestIncludeLiterals:
+    def test_returns_tuple(self) -> None:
+        result = extract_required_trigrams("grep_search", include_literals=True)
+        assert isinstance(result, tuple)
+        hashes, literals = result
+        assert len(hashes) == len(literals)
+        assert len(hashes) > 0
+
+    def test_literals_are_3_chars(self) -> None:
+        _, literals = extract_required_trigrams("hello_world", include_literals=True)
+        for lit in literals:
+            assert len(lit) == 3
+
+    def test_known_trigram(self) -> None:
+        hashes, literals = extract_required_trigrams("abc", include_literals=True)
+        assert hashes == [_hash("abc")]
+        assert literals == ["abc"]
+
+    def test_case_insensitive_lowercases(self) -> None:
+        _, literals = extract_required_trigrams(
+            "Hello", include_literals=True, case_insensitive=True,
+        )
+        for lit in literals:
+            assert lit == lit.lower()
+
+    def test_empty_pattern(self) -> None:
+        hashes, literals = extract_required_trigrams(".*", include_literals=True)
+        assert hashes == []
+        assert literals == []
+
+    def test_invalid_regex(self) -> None:
+        hashes, literals = extract_required_trigrams("(?P<bad", include_literals=True)
+        assert hashes == []
+        assert literals == []
+
+    def test_hashes_match_non_literal_mode(self) -> None:
+        hashes_only = extract_required_trigrams("def process_event")
+        hashes_with, _ = extract_required_trigrams(
+            "def process_event", include_literals=True,
+        )
+        assert set(hashes_only) == set(hashes_with)

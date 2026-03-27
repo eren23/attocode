@@ -7,7 +7,7 @@ from __future__ import annotations
 
 import threading
 
-from attocode.code_intel.server import (
+from attocode.code_intel._shared import (
     _get_ast_service,
     _get_context_mgr,
     _get_project_dir,
@@ -189,6 +189,8 @@ def fast_search(
     path: str = "",
     max_results: int = 50,
     case_insensitive: bool = False,
+    selectivity_threshold: float = 0.10,
+    explain: bool = False,
 ) -> str:
     """Fast regex search using trigram index pre-filtering.
 
@@ -197,12 +199,16 @@ def fast_search(
     on large codebases. Falls back to standard grep when:
       - No trigram index has been built (run ``reindex`` first)
       - The pattern yields no extractable trigrams (e.g., ``.*``)
+      - The trigram filter is not selective enough (> *selectivity_threshold*)
 
     Args:
         pattern: Regex pattern to search for (e.g. "def process_.*event").
         path: Subdirectory to search (relative to project root, empty for all).
         max_results: Maximum number of matching lines to return (default 50).
         case_insensitive: Whether to match case-insensitively.
+        selectivity_threshold: Skip the trigram index when the fraction of
+            matching files exceeds this value (0.0-1.0, default 0.10).
+        explain: When True, append a search diagnostics section to the output.
     """
     import os
     import re
@@ -227,13 +233,30 @@ def fast_search(
     trigram_idx = _get_trigram_index()
     candidates: list[str] | None = None
     index_status = "no index"
+    query_result = None  # QueryResult when explain=True
 
     if trigram_idx is not None and trigram_idx.is_ready():
-        candidates = trigram_idx.query(pattern, case_insensitive=case_insensitive)
-        if candidates is not None:
-            index_status = f"trigram filter: {len(candidates)} candidates"
+        if explain:
+            from attocode.integrations.context.trigram_index import QueryResult
+
+            query_result = trigram_idx.query(
+                pattern,
+                case_insensitive=case_insensitive,
+                selectivity_threshold=selectivity_threshold,
+                explain=True,
+            )
+            candidates = query_result.candidates
+            index_status = query_result.mode
         else:
-            index_status = "no trigrams extractable, full scan"
+            candidates = trigram_idx.query(
+                pattern,
+                case_insensitive=case_insensitive,
+                selectivity_threshold=selectivity_threshold,
+            )
+            if candidates is not None:
+                index_status = f"trigram filter: {len(candidates)} candidates"
+            else:
+                index_status = "no trigrams extractable or threshold exceeded, full scan"
     else:
         # Try to build the index on first use
         try:
@@ -243,14 +266,40 @@ def fast_search(
             stats = idx.build(project_dir)
             global _trigram_index
             _trigram_index = idx
-            candidates = idx.query(pattern, case_insensitive=case_insensitive)
-            index_status = (
-                f"built index ({stats['files_indexed']} files, "
-                f"{stats['build_time_ms']}ms), "
-                f"{len(candidates) if candidates is not None else 'N/A'} candidates"
-            )
+            if explain:
+                query_result = idx.query(
+                    pattern,
+                    case_insensitive=case_insensitive,
+                    selectivity_threshold=selectivity_threshold,
+                    explain=True,
+                )
+                candidates = query_result.candidates
+                index_status = (
+                    f"built index ({stats['files_indexed']} files, "
+                    f"{stats['build_time_ms']}ms), mode: {query_result.mode}"
+                )
+            else:
+                candidates = idx.query(
+                    pattern,
+                    case_insensitive=case_insensitive,
+                    selectivity_threshold=selectivity_threshold,
+                )
+                index_status = (
+                    f"built index ({stats['files_indexed']} files, "
+                    f"{stats['build_time_ms']}ms), "
+                    f"{len(candidates) if candidates is not None else 'N/A'} candidates"
+                )
         except Exception:
             index_status = "index build failed, full scan"
+            if explain:
+                from attocode.integrations.context.trigram_index import QueryResult
+
+                query_result = QueryResult(
+                    candidates=None, trigram_literals=[], posting_sizes=[],
+                    total_files=0, candidate_count=0, selectivity=0.0,
+                    threshold=selectivity_threshold, threshold_triggered=False,
+                    mode="index-build-failed",
+                )
 
     # Determine files to search
     if candidates is not None:
@@ -279,10 +328,29 @@ def fast_search(
             break
 
     if not matches:
-        return f"No matches found ({index_status})"
+        result = f"No matches found ({index_status})"
+    else:
+        result = "\n".join(matches)
+        if len(matches) >= max_results:
+            result += f"\n... (limited to {max_results} results)"
+        result += f"\n({index_status})"
 
-    result = "\n".join(matches)
-    if len(matches) >= max_results:
-        result += f"\n... (limited to {max_results} results)"
-    result += f"\n({index_status})"
+    # Append diagnostics when explain=True
+    if explain and query_result is not None:
+        qr = query_result
+        sel_pct = f"{qr.selectivity * 100:.2f}%"
+        threshold_pct = f"{qr.threshold * 100:.1f}%"
+        verdict = "SKIP (threshold exceeded)" if qr.threshold_triggered else "PASS"
+        diag_lines = [
+            "",
+            "--- Search Diagnostics ---",
+            f"Pattern:            {pattern}",
+            f"Trigrams:           {qr.trigram_literals!r}",
+            f"Posting sizes:      {qr.posting_sizes!r}",
+            f"Candidates:         {qr.candidate_count} / {qr.total_files} files ({sel_pct})",
+            f"Selectivity:        {verdict} (threshold: {threshold_pct})",
+            f"Mode:               {qr.mode}",
+        ]
+        result += "\n".join(diag_lines)
+
     return result

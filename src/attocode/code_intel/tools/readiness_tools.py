@@ -5,7 +5,7 @@ Tools: readiness_report.
 
 from __future__ import annotations
 
-from attocode.code_intel.server import (
+from attocode.code_intel._shared import (
     _get_project_dir,
     mcp,
 )

@@ -20,7 +20,7 @@ from attocode.code_intel.helpers import (
     _format_conventions,
     _summarize_directories,
 )
-from attocode.code_intel.server import (
+from attocode.code_intel._shared import (
     _get_ast_service,
     _get_context_mgr,
     _get_project_dir,
@@ -121,7 +121,7 @@ def explore_codebase(
         max_items: Maximum items (dirs + files) to return (default 30).
         importance_threshold: Minimum file importance to show (0.0-1.0, default 0.3).
     """
-    from attocode.code_intel.server import _get_explorer
+    from attocode.code_intel._shared import _get_explorer
 
     explorer = _get_explorer()
     result = explorer.explore(
@@ -267,7 +267,7 @@ def bootstrap(task_hint: str = "", max_tokens: int = 8000) -> str:
             When provided, includes semantic search results for relevant code.
         max_tokens: Token budget for the entire output (default 8000).
     """
-    from attocode.code_intel.server import _get_explorer
+    from attocode.code_intel._shared import _get_explorer
     from attocode.code_intel.tools.search_tools import _get_semantic_search
 
     ctx = _get_context_mgr()

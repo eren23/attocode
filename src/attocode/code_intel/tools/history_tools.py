@@ -16,7 +16,7 @@ import threading
 from collections import defaultdict
 from datetime import datetime, timezone
 
-from attocode.code_intel.server import (
+from attocode.code_intel._shared import (
     _get_project_dir,
     mcp,
 )
@@ -511,7 +511,7 @@ def merge_risk(
         files: List of file paths being modified.
         days: Time window for temporal coupling (default 90).
     """
-    from attocode.code_intel.server import _get_ast_service
+    from attocode.code_intel._shared import _get_ast_service
 
     analyzer = _get_temporal_analyzer()
     project_dir = _get_project_dir()

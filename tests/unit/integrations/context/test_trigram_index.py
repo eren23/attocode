@@ -342,3 +342,204 @@ class TestTrigramIndexCaseInsensitive:
         # Either None (no trigrams extractable for case-insensitive) or a list
         assert result is None or isinstance(result, list)
         idx.close()
+
+
+# ---------------------------------------------------------------------------
+# Selectivity threshold
+# ---------------------------------------------------------------------------
+class TestSelectivityThreshold:
+    def _create_large_project(self, tmp_path: Path, n_files: int = 150) -> Path:
+        """Create a project with enough files to trigger threshold logic."""
+        files = {f"f{i:04d}.py": f"def common_func_{i}(): pass\n" for i in range(n_files)}
+        return _create_project(tmp_path, files)
+
+    def test_threshold_triggers_on_broad_match(self, tmp_path: Path) -> None:
+        """When >10% of files match, query() returns None (fall back to full scan)."""
+        # All 150 files contain "def " and "(): " so querying "def" should
+        # match all of them -> 100% selectivity -> threshold triggers
+        proj = self._create_large_project(tmp_path)
+        idx = TrigramIndex(index_dir=str(proj / ".attocode" / "index"))
+        idx.build(str(proj))
+
+        result = idx.query("def common", selectivity_threshold=0.10)
+        # With 150 files all matching, selectivity >> 10%
+        assert result is None
+        idx.close()
+
+    def test_threshold_not_triggered_on_selective_query(self, tmp_path: Path) -> None:
+        """When only a few files match, threshold does not trigger."""
+        files = {f"f{i:04d}.py": f"def func_{i}(): pass\n" for i in range(150)}
+        files["unique.py"] = "def extremely_unique_snowflake(): pass\n"
+        proj = _create_project(tmp_path, files)
+        idx = TrigramIndex(index_dir=str(proj / ".attocode" / "index"))
+        idx.build(str(proj))
+
+        result = idx.query("extremely_unique_snowflake", selectivity_threshold=0.10)
+        assert result is not None
+        assert "unique.py" in result
+        idx.close()
+
+    def test_threshold_zero_always_falls_back(self, tmp_path: Path) -> None:
+        """threshold=0.0 means any match exceeds it."""
+        proj = self._create_large_project(tmp_path)
+        idx = TrigramIndex(index_dir=str(proj / ".attocode" / "index"))
+        idx.build(str(proj))
+
+        files = {f"f{i:04d}.py": f"def unique_xyz_{i}(): pass\n" for i in range(150)}
+        files["target.py"] = "def only_target_has_this_xyzzy(): pass\n"
+        proj2 = _create_project(tmp_path / "sub", files)
+        idx2 = TrigramIndex(index_dir=str(proj2 / ".attocode" / "index"))
+        idx2.build(str(proj2))
+
+        result = idx2.query("only_target_has_this_xyzzy", selectivity_threshold=0.0)
+        assert result is None  # threshold=0 means always fall back
+        idx2.close()
+
+    def test_threshold_one_never_triggers(self, tmp_path: Path) -> None:
+        """threshold=1.0 means the index is always used."""
+        proj = self._create_large_project(tmp_path)
+        idx = TrigramIndex(index_dir=str(proj / ".attocode" / "index"))
+        idx.build(str(proj))
+
+        result = idx.query("def common", selectivity_threshold=1.0)
+        assert result is not None  # threshold=1.0, never triggers
+        idx.close()
+
+    def test_threshold_skipped_for_small_projects(self, tmp_path: Path) -> None:
+        """Below 100 files, threshold is never applied."""
+        proj = _create_project(tmp_path, {
+            "a.py": "def common(): pass\n",
+            "b.py": "def common(): pass\n",
+        })
+        idx = TrigramIndex(index_dir=str(proj / ".attocode" / "index"))
+        idx.build(str(proj))
+
+        # 2 files, both match -> 100% selectivity, but <100 files so threshold skipped
+        result = idx.query("common", selectivity_threshold=0.10)
+        assert result is not None
+        idx.close()
+
+
+# ---------------------------------------------------------------------------
+# Explain mode
+# ---------------------------------------------------------------------------
+class TestExplainMode:
+    def test_explain_returns_query_result(self, tmp_path: Path) -> None:
+        from attocode.integrations.context.trigram_index import QueryResult
+
+        proj = _create_project(tmp_path, {
+            "a.py": "def hello_world(): pass\n",
+            "b.py": "def other_thing(): pass\n",
+        })
+        idx = TrigramIndex(index_dir=str(proj / ".attocode" / "index"))
+        idx.build(str(proj))
+
+        result = idx.query("hello_world", explain=True)
+        assert isinstance(result, QueryResult)
+        assert result.candidates is not None
+        assert "a.py" in result.candidates
+        assert len(result.trigram_literals) > 0
+        assert len(result.posting_sizes) > 0
+        assert len(result.posting_sizes) == len(result.trigram_literals)
+        assert result.total_files == 2
+        assert result.candidate_count >= 1
+        assert result.mode == "trigram-filtered"
+        assert result.threshold_triggered is False
+        idx.close()
+
+    def test_explain_no_trigrams(self, tmp_path: Path) -> None:
+        from attocode.integrations.context.trigram_index import QueryResult
+
+        proj = _create_project(tmp_path, {"a.py": "hello\n"})
+        idx = TrigramIndex(index_dir=str(proj / ".attocode" / "index"))
+        idx.build(str(proj))
+
+        result = idx.query(".*", explain=True)
+        assert isinstance(result, QueryResult)
+        assert result.candidates is None
+        assert result.mode == "full-scan-no-trigrams"
+        assert result.trigram_literals == []
+        idx.close()
+
+    def test_explain_not_ready(self, tmp_path: Path) -> None:
+        from attocode.integrations.context.trigram_index import QueryResult
+
+        index_dir = tmp_path / "index"
+        index_dir.mkdir()
+        idx = TrigramIndex(index_dir=str(index_dir))
+
+        result = idx.query("hello", explain=True)
+        assert isinstance(result, QueryResult)
+        assert result.mode == "no-index"
+        assert result.candidates is None
+
+    def test_explain_threshold_triggered(self, tmp_path: Path) -> None:
+        from attocode.integrations.context.trigram_index import QueryResult
+
+        files = {f"f{i:04d}.py": f"def common_func_{i}(): pass\n" for i in range(150)}
+        proj = _create_project(tmp_path, files)
+        idx = TrigramIndex(index_dir=str(proj / ".attocode" / "index"))
+        idx.build(str(proj))
+
+        result = idx.query("def common", explain=True, selectivity_threshold=0.10)
+        assert isinstance(result, QueryResult)
+        assert result.threshold_triggered is True
+        assert result.candidates is None
+        assert result.mode == "full-scan-threshold"
+        assert result.selectivity > 0.10
+        idx.close()
+
+    def test_explain_posting_sizes_populated(self, tmp_path: Path) -> None:
+        from attocode.integrations.context.trigram_index import QueryResult
+
+        proj = _create_project(tmp_path, {
+            "a.py": "def unique_alpha_function(): pass\n",
+            "b.py": "def unique_beta_function(): pass\n",
+        })
+        idx = TrigramIndex(index_dir=str(proj / ".attocode" / "index"))
+        idx.build(str(proj))
+
+        result = idx.query("unique_alpha_function", explain=True)
+        assert isinstance(result, QueryResult)
+        # Every posting size should be > 0 (the trigrams exist in at least one file)
+        assert all(s > 0 for s in result.posting_sizes)
+        idx.close()
+
+    def test_explain_posting_sizes_length_matches_trigrams(self, tmp_path: Path) -> None:
+        """posting_sizes must always have same length as trigram_literals."""
+        from attocode.integrations.context.trigram_index import QueryResult
+
+        proj = _create_project(tmp_path, {
+            "a.py": "def hello_world(): pass\n",
+        })
+        idx = TrigramIndex(index_dir=str(proj / ".attocode" / "index"))
+        idx.build(str(proj))
+
+        # Query with a pattern where some trigrams may not exist in the index
+        # "hello_xyzzy" — "xyzzy" trigrams won't be in any file
+        result = idx.query("hello_xyzzy", explain=True)
+        assert isinstance(result, QueryResult)
+        assert len(result.posting_sizes) == len(result.trigram_literals)
+
+        # Also verify with a pattern that fully matches
+        result2 = idx.query("hello_world", explain=True)
+        assert isinstance(result2, QueryResult)
+        assert len(result2.posting_sizes) == len(result2.trigram_literals)
+        idx.close()
+
+    def test_explain_boundary_selectivity_equals_threshold(self, tmp_path: Path) -> None:
+        """When selectivity == threshold exactly, threshold should NOT trigger (uses >)."""
+        from attocode.integrations.context.trigram_index import QueryResult
+
+        # Create 100 files with "common" in all of them, query with threshold=1.0
+        # 100/100 = 1.0 selectivity, threshold 1.0 → > not >= → should NOT trigger
+        files = {f"f{i:04d}.py": "def common(): pass\n" for i in range(100)}
+        proj = _create_project(tmp_path, files)
+        idx = TrigramIndex(index_dir=str(proj / ".attocode" / "index"))
+        idx.build(str(proj))
+
+        result = idx.query("common", explain=True, selectivity_threshold=1.0)
+        assert isinstance(result, QueryResult)
+        assert result.threshold_triggered is False
+        assert result.candidates is not None
+        idx.close()

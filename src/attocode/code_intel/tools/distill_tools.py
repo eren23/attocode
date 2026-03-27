@@ -10,7 +10,7 @@ from __future__ import annotations
 import os
 from collections import deque
 
-from attocode.code_intel.server import (
+from attocode.code_intel._shared import (
     _get_ast_service,
     _get_context_mgr,
     mcp,

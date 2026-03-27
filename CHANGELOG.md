@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+#### Trigram Search: Selectivity Threshold & Explain Mode
+- Configurable selectivity threshold (`selectivity_threshold`, default 10%) — skips the trigram index and falls back to full scan when the filter returns too many candidates, avoiding overhead on broad queries (inspired by [NGI](https://github.com/erogol/ngi))
+- Explain mode (`explain=True`) on `fast_search` MCP tool — returns search diagnostics: extracted trigrams, per-trigram posting list sizes, selectivity ratio, threshold decision, and search mode
+- `QueryResult` dataclass for structured explain output, exported from `attocode.integrations.context`
+- `extract_required_trigrams()` gains `include_literals` param for returning human-readable trigram strings alongside CRC32 hashes
+- `@overload` type signatures on `TrigramIndex.query()` and `_intersect_postings()` for proper type narrowing in callers
+- Threshold only applies to codebases with ≥100 indexed files (small projects skip the check)
+
 ## [0.2.8] - 2026-03-26
 
 ### Added

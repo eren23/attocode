@@ -15,7 +15,7 @@ from attocode.code_intel.helpers import (
     _compute_function_hotspots,
     _get_churn_scores,
 )
-from attocode.code_intel.server import (
+from attocode.code_intel._shared import (
     _get_ast_service,
     _get_code_analyzer,
     _get_context_mgr,
