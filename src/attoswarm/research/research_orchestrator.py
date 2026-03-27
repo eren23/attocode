@@ -50,6 +50,8 @@ class ResearchOrchestrator:
         event_bus: Any | None = None,
         code_intel: Any = None,
         on_progress: Any | None = None,
+        swarm_config: Any = None,
+        experiment_mode: str = "auto",
     ) -> None:
         self._config = config
         self._goal = goal
@@ -62,6 +64,10 @@ class ResearchOrchestrator:
         self._event_bus = event_bus
         self._code_intel = code_intel
         self._on_progress = on_progress
+        self._swarm_config = swarm_config
+        self._experiment_mode = experiment_mode
+        if experiment_mode == "auto":
+            self._experiment_mode = "swarm" if (swarm_config and len(getattr(swarm_config, 'roles', [])) >= 2) else "simple"
         self._hypothesis_gen = HypothesisGenerator(
             goal=goal,
             target_files=config.target_files,
@@ -101,6 +107,14 @@ class ResearchOrchestrator:
 
         try:
             if self._state.baseline_value is None:
+                # Pre-flight: verify eval command works in the working directory
+                preflight = await self._evaluator.evaluate(self._working_dir)
+                if not preflight.success:
+                    self._state.status = "error"
+                    self._state.error = f"Eval command pre-flight failed: {preflight.error}"
+                    self._emit("research_error", message=self._state.error)
+                    return self._state
+
                 self._emit("research_baseline", message="Evaluating baseline metric")
                 baseline = await self._evaluate_with_retry(repeats=max(self._config.baseline_repeats, 1))
                 if not baseline.success:
@@ -111,6 +125,7 @@ class ResearchOrchestrator:
                 self._state.baseline_value = baseline.metric_value
                 self._state.best_value = baseline.metric_value
                 self._state.best_branch = self._worktrees.get_head_commit()
+                self._write_event("baseline_complete", f"Baseline: {baseline.metric_value}")
                 self._notify_progress()
 
             while self._should_continue(loop_start):
@@ -124,6 +139,14 @@ class ResearchOrchestrator:
 
                 for exp in results:
                     self._experiments.append(exp)
+                    self._write_event(
+                        f"experiment_{exp.status}",
+                        f"{exp.experiment_id} ({exp.strategy}): metric={exp.metric_value}",
+                        experiment_id=exp.experiment_id,
+                        strategy=exp.strategy,
+                        metric=exp.metric_value,
+                        status=exp.status,
+                    )
                     touched = self._reconcile_candidate(exp)
                     for item in touched:
                         self._db.save_experiment(self._run_id, item)
@@ -136,6 +159,7 @@ class ResearchOrchestrator:
 
             if self._state.status == "running":
                 self._state.status = "completed"
+                self._write_event("campaign_complete", f"Completed: {self._state.accepted_count} accepted, {self._state.rejected_count} rejected")
             self._state.wall_seconds = time.time() - loop_start
             self._db.update_run_status(self._run_id, self._state.status)
             self._db.save_checkpoint(self._run_id, self._state)
@@ -151,6 +175,43 @@ class ResearchOrchestrator:
             except Exception:
                 pass  # never let progress callback crash the campaign
 
+    def _build_learning_summary(self) -> str:
+        """Build a learning context from prior experiments for the next agent."""
+        if not self._experiments:
+            return ""
+        lines: list[str] = []
+        accepted = [e for e in self._experiments if e.status == "accepted"]
+        rejected = [e for e in self._experiments if e.status == "rejected"]
+        errors = [e for e in self._experiments if e.status in ("error", "invalid")]
+
+        if accepted:
+            lines.append("## What worked (accepted experiments):")
+            for e in accepted[-5:]:
+                lines.append(f"- Hypothesis: {e.hypothesis[:120]} → metric={e.metric_value}")
+                if e.files_modified:
+                    lines.append(f"  Modified: {', '.join(e.files_modified[:5])}")
+                if e.diff:
+                    lines.append(f"  Diff preview: {e.diff[:300]}")
+
+        if rejected:
+            lines.append("\n## What failed (rejected experiments — DO NOT repeat these):")
+            for e in rejected[-5:]:
+                lines.append(f"- Hypothesis: {e.hypothesis[:120]} → metric={e.metric_value} (reason: {e.reject_reason[:80]})")
+                if e.files_modified:
+                    lines.append(f"  Modified: {', '.join(e.files_modified[:5])}")
+
+        if errors:
+            lines.append("\n## Errors to avoid:")
+            for e in errors[-3:]:
+                lines.append(f"- {e.error[:200]}")
+
+        if self._state.baseline_value is not None:
+            lines.append(f"\nBaseline metric: {self._state.baseline_value}")
+        if self._state.best_value is not None and self._state.best_value != self._state.baseline_value:
+            lines.append(f"Current best: {self._state.best_value}")
+
+        return "\n".join(lines)
+
     def _write_state_file(self) -> None:
         """Write a JSON state snapshot for external monitors (TUI, watch)."""
         try:
@@ -165,6 +226,31 @@ class ResearchOrchestrator:
             tmp.rename(state_path)
         except Exception:
             pass  # never let state file writes crash the campaign
+
+    def _write_event(self, event_type: str, message: str = "", **data: Any) -> None:
+        """Append an event to research.events.jsonl for TUI/external monitors."""
+        try:
+            event_path = self._run_dir / "research.events.jsonl"
+            entry = {"ts": time.time(), "type": event_type, "message": message, **data}
+            with event_path.open("a", encoding="utf-8") as f:
+                f.write(json.dumps(entry, default=str) + "\n")
+        except Exception:
+            pass
+
+    def _derive_experiment_config(self, worktree_path: Path, experiment_id: str) -> Any:
+        """Create a micro-SwarmYamlConfig scoped to one experiment's worktree."""
+        import copy
+        cfg = copy.deepcopy(self._swarm_config)
+        cfg.run.working_dir = str(worktree_path)
+        cfg.run.run_dir = str(self._run_dir / experiment_id / "swarm")
+        cfg.run.max_runtime_seconds = int(self._config.experiment_timeout_seconds)
+        cfg.run.name = f"research-{experiment_id}"
+        cfg.budget.max_tokens = self._config.experiment_max_tokens
+        cfg.budget.max_cost_usd = self._config.experiment_max_cost_usd
+        cfg.watchdog.task_max_duration_seconds = self._config.experiment_timeout_seconds * 0.8
+        cfg.orchestration.max_tasks = 5
+        cfg.workspace.mode = "shared"
+        return cfg
 
     def get_scoreboard(self) -> Scoreboard:
         return Scoreboard(self._state, self._experiments, findings=self._findings)
@@ -366,7 +452,14 @@ class ResearchOrchestrator:
         }
         exp.artifacts = list(eval_result.artifacts)
 
-        if not eval_result.success:
+        # Guard against catastrophic regression (>50% drop from baseline)
+        if (self._state.baseline_value is not None
+                and eval_result.metric_value is not None
+                and self._state.baseline_value > 0
+                and eval_result.metric_value < self._state.baseline_value * 0.5):
+            exp.status = "invalid"
+            exp.reject_reason = f"catastrophic regression ({eval_result.metric_value:.1f} vs baseline {self._state.baseline_value:.1f})"
+        elif not eval_result.success:
             exp.status = "invalid"
             exp.reject_reason = eval_result.error or "evaluation failed"
             exp.error = exp.reject_reason
@@ -444,20 +537,128 @@ class ResearchOrchestrator:
 
         return EvalResult(metric_value=0.0, error="All retries exhausted", success=False)
 
+    def _build_rich_task_dict(self, spec: CandidateSpec, worktree_path: str | Path) -> dict:
+        """Build an enriched task dict for the agent, matching swarm-level context."""
+        import ast as _ast
+
+        hypothesis = spec.hypothesis
+        support_context = spec.support_context or ""
+
+        # Build description with verification context
+        description_parts = [hypothesis]
+        if support_context:
+            description_parts.append(support_context)
+        description_parts.append(f"\n## Verification\nRun: {self._config.eval_command}")
+        description_parts.append(f"Current baseline: {self._state.baseline_value}")
+        description_parts.append(f"Metric direction: {self._config.metric_direction}")
+        description_parts.append("Your changes must IMPROVE this metric. Do NOT break existing tests.")
+
+        # Discover symbols from target files (lightweight AST parsing)
+        symbol_scope: list[str] = []
+        for tf in self._config.target_files[:3]:
+            tf_path = Path(self._working_dir) / tf
+            if tf_path.exists() and tf_path.suffix == ".py":
+                try:
+                    tree = _ast.parse(tf_path.read_text(encoding="utf-8"))
+                    for node in _ast.walk(tree):
+                        if isinstance(node, (_ast.FunctionDef, _ast.AsyncFunctionDef)):
+                            symbol_scope.append(f"{tf}:{node.name}()")
+                        elif isinstance(node, _ast.ClassDef):
+                            symbol_scope.append(f"{tf}:{node.name}")
+                except Exception:
+                    pass
+
+        # Discover test files
+        test_files: list[str] = []
+        for tf in self._config.target_files:
+            name = Path(tf).stem
+            candidates = [
+                f"tests/unit/**/test_{name}.py",
+                f"tests/**/test_{name}.py",
+                f"test_{name}.py",
+            ]
+            base = Path(self._working_dir)
+            for pattern in candidates:
+                for match in base.glob(pattern):
+                    rel = str(match.relative_to(base))
+                    if rel not in test_files:
+                        test_files.append(rel)
+
+        # Read files from parent experiment
+        read_files = list(spec.read_files or [])
+
+        # Learning context
+        learning_context = self._build_learning_summary()
+
+        task = {
+            "task_id": f"research-{spec.experiment_id}",
+            "title": hypothesis[:80],
+            "description": "\n\n".join(description_parts),
+            "target_files": list(self._config.target_files),
+            "read_files": read_files,
+            "working_dir": str(worktree_path),
+            "symbol_scope": symbol_scope[:15],
+            "test_files": test_files[:10],
+            "test_command": self._config.eval_command,
+            "learning_context": learning_context,
+        }
+        return task
+
+    async def _run_mini_swarm(self, spec: CandidateSpec, worktree_path: Path) -> Any:
+        """Run a full swarm pipeline (decompose -> implement -> review -> merge) in the experiment worktree."""
+        from types import SimpleNamespace
+
+        micro_cfg = self._derive_experiment_config(worktree_path, spec.experiment_id)
+
+        # Build rich goal from hypothesis + learning context + verification
+        goal_parts = [spec.hypothesis]
+        if spec.support_context:
+            goal_parts.append(spec.support_context)
+        learning = self._build_learning_summary()
+        if learning:
+            goal_parts.append(f"\n## Prior experiment learnings\n{learning}")
+        goal_parts.append(f"\n## Target files\n{', '.join(self._config.target_files)}")
+        goal_parts.append(f"\n## Metric verification\nEval command: {self._config.eval_command}")
+        goal_parts.append(f"Current baseline: {self._state.baseline_value}")
+        goal_parts.append(f"Direction: {self._config.metric_direction}")
+        goal_parts.append("Your changes must IMPROVE this metric. Do NOT break existing functionality.")
+        goal = "\n\n".join(goal_parts)
+
+        self._write_event("mini_swarm_start", f"Starting mini-swarm for {spec.experiment_id}", experiment_id=spec.experiment_id)
+
+        from attoswarm.coordinator.loop import HybridCoordinator
+
+        coordinator = HybridCoordinator(micro_cfg, goal)
+        try:
+            exit_code = await coordinator.run()
+            tokens = getattr(coordinator.budget, 'total_tokens', 0)
+            cost = getattr(coordinator.budget, 'total_cost', 0.0)
+            self._write_event("mini_swarm_complete", f"Mini-swarm exit={exit_code} tokens={tokens}", experiment_id=spec.experiment_id)
+            return SimpleNamespace(
+                result_summary=f"Mini-swarm completed (exit={exit_code})",
+                tokens_used=tokens,
+                cost_usd=cost,
+            )
+        except Exception as exc:
+            logger.warning("Mini-swarm failed for %s: %s", spec.experiment_id, exc)
+            self._write_event("mini_swarm_error", f"Mini-swarm failed: {exc}", experiment_id=spec.experiment_id)
+            tokens = getattr(coordinator.budget, 'total_tokens', 0) if hasattr(coordinator, 'budget') else 0
+            cost = getattr(coordinator.budget, 'total_cost', 0.0) if hasattr(coordinator, 'budget') else 0.0
+            return SimpleNamespace(
+                result_summary=f"Mini-swarm failed: {exc}",
+                tokens_used=tokens,
+                cost_usd=cost,
+            )
+
     async def _run_agent(self, spec: CandidateSpec, worktree_path: Path) -> Any:
+        if self._experiment_mode == "swarm" and self._swarm_config:
+            return await asyncio.wait_for(
+                self._run_mini_swarm(spec, worktree_path),
+                timeout=self._config.experiment_timeout_seconds,
+            )
         if not self._spawn_fn:
             return None
-        description = spec.hypothesis
-        if spec.support_context:
-            description = f"{description}\n\n{spec.support_context}"
-        task = {
-            "task_id": f"research-{uuid.uuid4().hex[:8]}",
-            "title": spec.hypothesis[:80],
-            "description": description,
-            "target_files": self._config.target_files,
-            "read_files": list(spec.read_files or []),
-            "working_dir": str(worktree_path),
-        }
+        task = self._build_rich_task_dict(spec, worktree_path)
         return await asyncio.wait_for(
             self._spawn_fn(task),
             timeout=self._config.experiment_timeout_seconds,

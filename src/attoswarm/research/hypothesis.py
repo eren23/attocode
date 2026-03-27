@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import logging
 from typing import Any
 
@@ -53,13 +54,27 @@ class HypothesisGenerator:
         if history:
             parts.append("\n## Previous Experiments")
             for exp in history[-10:]:
-                status = "ACCEPTED" if exp.accepted else "REJECTED"
-                parts.append(
-                    f"\n### Experiment {exp.iteration} [{status}]"
-                    f"\n- Hypothesis: {exp.hypothesis[:200]}"
-                    f"\n- Metric: {exp.metric_value}"
-                    f"\n- Reason: {exp.reject_reason or 'accepted'}"
-                )
+                if exp.accepted:
+                    status_label = "ACCEPTED"
+                elif exp.status == "error":
+                    status_label = "ERROR"
+                elif exp.reject_reason:
+                    status_label = "REJECTED"
+                else:
+                    status_label = exp.status.upper()
+                lines = [
+                    f"\n### Experiment {exp.iteration} [{status_label}] strategy={exp.strategy}",
+                    f"- Hypothesis: {exp.hypothesis[:200]}",
+                    f"- Metric: {exp.metric_value}",
+                ]
+                if exp.reject_reason:
+                    lines.append(f"- Reject reason: {exp.reject_reason[:150]}")
+                if exp.files_modified:
+                    files_str = ", ".join(exp.files_modified[:3])
+                    if len(exp.files_modified) > 3:
+                        files_str += f" (+{len(exp.files_modified) - 3} more)"
+                    lines.append(f"- Files modified: {files_str}")
+                parts.append("\n".join(lines))
             parts.append("")
 
         # Target files context
@@ -111,11 +126,11 @@ class HypothesisGenerator:
         notes = [note.strip() for note in steering_notes or [] if note.strip()]
         note_prefix = f"Steering: {notes[0]}. " if notes else ""
         focus = {
-            "explore": "Try one targeted code change that opens a new direction.",
-            "exploit": "Build on the current best branch and refine the most promising mechanism.",
-            "ablate": "Start from the current best branch and remove or simplify one mechanism to test whether it is actually carrying the gain.",
-            "compose": "Start from the current best branch and integrate one proven technique from another accepted experiment without disturbing the rest of the stack.",
-            "reproduce": "Re-run the current best branch in a fresh workspace to validate the gain.",
+            "explore": "Try a NOVEL approach different from all prior experiments. Think creatively — what hasn't been tried yet?",
+            "exploit": "Build on the current best result and refine the most promising mechanism. Make a targeted improvement.",
+            "ablate": "Start from the best branch and REMOVE or simplify one mechanism to test if it was actually helping.",
+            "compose": "Combine proven techniques from multiple accepted experiments into a single improved approach.",
+            "reproduce": "Re-run the current best approach in a fresh workspace to validate the improvement is real.",
         }.get(strategy, "Try one targeted code change likely to improve the metric.")
         history_hint = ""
         if history:
@@ -127,4 +142,116 @@ class HypothesisGenerator:
             f" Optimize {metric_name} ({metric_direction})."
             f"{history_hint} Target files: {', '.join(self._target_files[:5]) or 'repo-local changes'}."
             f" [strategy={strategy}; iteration={iteration}; ctx={len(prompt)}]"
+        )
+
+    async def generate_candidate_llm(
+        self,
+        *,
+        iteration: int,
+        strategy: str,
+        history: list[Experiment],
+        best_metric: float | None,
+        metric_name: str = "score",
+        metric_direction: str = "maximize",
+        steering_notes: list[str] | None = None,
+        spawn_fn: Any | None = None,
+    ) -> str:
+        """Generate a hypothesis using the LLM via spawn_fn.
+
+        Falls back to the static ``generate_candidate()`` when *spawn_fn* is
+        ``None`` or when the LLM call fails.
+        """
+        if spawn_fn is None:
+            return self.generate_candidate(
+                iteration=iteration,
+                strategy=strategy,
+                history=history,
+                best_metric=best_metric,
+                metric_name=metric_name,
+                metric_direction=metric_direction,
+                steering_notes=steering_notes,
+            )
+
+        prompt = self.build_prompt(
+            iteration=iteration,
+            history=history,
+            best_metric=best_metric,
+            metric_name=metric_name,
+            metric_direction=metric_direction,
+        )
+
+        # Strategy-specific instruction
+        strategy_instruction = {
+            "explore": (
+                "Generate a NOVEL hypothesis different from all prior experiments. "
+                "Try a completely new approach that hasn't been tried."
+            ),
+            "exploit": (
+                "Analyze the best accepted experiment. What made it work? "
+                "Propose a specific refinement that pushes the metric further."
+            ),
+            "ablate": (
+                "The best experiment made several changes. Propose removing ONE "
+                "specific change to test if it was actually helping or hurting."
+            ),
+            "compose": (
+                "Multiple experiments improved the metric independently. "
+                "Propose a way to combine their approaches for a bigger gain."
+            ),
+            "reproduce": (
+                "Re-run the current best experiment to validate the gain is "
+                "real and reproducible."
+            ),
+        }.get(strategy, "Propose a targeted improvement.")
+
+        notes = [n.strip() for n in steering_notes or [] if n.strip()]
+        steering_block = ""
+        if notes:
+            steering_block = (
+                "\n\n## Steering Notes\n" + "\n".join(f"- {n}" for n in notes)
+            )
+
+        full_prompt = (
+            f"{prompt}{steering_block}"
+            f"\n\n## Your Task\n{strategy_instruction}\n\n"
+            "Respond with ONLY the hypothesis text (1-3 sentences). "
+            "Be specific about what code change to make."
+        )
+
+        try:
+            import shutil
+            import tempfile
+            from pathlib import Path
+
+            # Create a temp working dir for the hypothesis generation call
+            tmp = Path(tempfile.mkdtemp(prefix="hypothesis-"))
+            result = await asyncio.wait_for(
+                spawn_fn(
+                    {
+                        "task_id": f"hypothesis-{iteration}",
+                        "title": f"Generate research hypothesis ({strategy})",
+                        "description": full_prompt,
+                        "target_files": self._target_files,
+                        "working_dir": str(tmp),
+                    }
+                ),
+                timeout=60.0,
+            )
+            hypothesis = getattr(result, "result_summary", "") or ""
+            # Clean up temp dir
+            shutil.rmtree(tmp, ignore_errors=True)
+
+            if hypothesis and len(hypothesis) > 10:
+                return hypothesis[:500]
+        except Exception:
+            logger.debug("LLM hypothesis generation failed, falling back to static", exc_info=True)
+
+        return self.generate_candidate(
+            iteration=iteration,
+            strategy=strategy,
+            history=history,
+            best_metric=best_metric,
+            metric_name=metric_name,
+            metric_direction=metric_direction,
+            steering_notes=steering_notes,
         )

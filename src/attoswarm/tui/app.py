@@ -11,6 +11,7 @@ TabbedContent layout with 5 tabs:
 from __future__ import annotations
 
 import json
+import time
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
@@ -110,25 +111,52 @@ class ResearchOverview(Static):
         lines.append("")
 
         # Experiment table
+        baseline_val = state.get("baseline_value")
         if experiments:
             lines.append("[bold underline]Recent Experiments[/bold underline]")
             lines.append(
-                f"{'#':>3} {'Status':<10} {'Strategy':<10} {'Metric':>8} {'Hypothesis'}"
+                f"{'#':>3} {'Status':<10} {'Strategy':<10} {'Metric':>8} {'Delta':>8} {'Hypothesis'}"
             )
-            lines.append("-" * 70)
+            lines.append("-" * 80)
             for exp in experiments[-15:]:
-                metric = (
-                    f"{exp.get('metric_value', '')}"
-                    if exp.get("metric_value") is not None
-                    else "-"
-                )
-                hyp = (exp.get("hypothesis") or "")[:40]
+                metric_val = exp.get("metric_value")
+                metric = f"{metric_val}" if metric_val is not None else "-"
+
+                # Delta from baseline
+                if metric_val is not None and baseline_val is not None:
+                    try:
+                        delta_num = float(metric_val) - float(baseline_val)
+                        delta = f"{delta_num:+.4f}"
+                    except (TypeError, ValueError):
+                        delta = "-"
+                else:
+                    delta = "-"
+
+                # Color-coded status
+                exp_status = exp.get("status", "?")
+                status_colors = {
+                    "accepted": "green",
+                    "rejected": "red",
+                    "error": "red",
+                    "invalid": "red",
+                    "running": "yellow",
+                    "candidate": "yellow",
+                    "pending": "yellow",
+                }
+                sc = status_colors.get(exp_status, "white")
+                status_str = f"[{sc}]{exp_status:<10}[/{sc}]"
+
+                hyp = (exp.get("hypothesis") or "")[:35]
+                reject = exp.get("reject_reason") or ""
+                suffix = f" [dim red]({reject[:30]})[/dim red]" if reject and exp_status in ("rejected", "invalid") else ""
+
                 lines.append(
                     f"{exp.get('iteration', '?'):>3} "
-                    f"{exp.get('status', '?'):<10} "
+                    f"{status_str} "
                     f"{exp.get('strategy', '?'):<10} "
                     f"{metric:>8} "
-                    f"{hyp}"
+                    f"{delta:>8} "
+                    f"{hyp}{suffix}"
                 )
 
         # Findings
@@ -139,6 +167,20 @@ class ResearchOverview(Static):
                 lines.append(
                     f"  [{f.get('scope', '?')}] {f.get('claim', '?')[:60]}"
                 )
+
+        # Recent events from event log
+        try:
+            events_path = Path(self.app._store.run_dir) / "research.events.jsonl"
+            if events_path.exists():
+                event_lines = events_path.read_text().strip().splitlines()[-10:]
+                lines.append("")
+                lines.append("[bold underline]Recent Events[/bold underline]")
+                for el in event_lines:
+                    ev = json.loads(el)
+                    ts = time.strftime("%H:%M:%S", time.localtime(ev.get("ts", 0)))
+                    lines.append(f"  {ts} {ev.get('type', '?')}: {ev.get('message', '')[:60]}")
+        except Exception:
+            pass
 
         self.update("\n".join(lines))
 

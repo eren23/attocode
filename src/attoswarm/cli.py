@@ -1381,6 +1381,8 @@ def research_group() -> None:
 @click.option("--db", type=click.Path(path_type=Path), default=None, help="Path to experiment database")
 @click.option("--working-dir", "-w", type=click.Path(exists=True, path_type=Path), default=None)
 @click.option("--monitor/--no-monitor", default=False, help="Launch TUI monitor for live dashboard")
+@click.option("--experiment-mode", type=click.Choice(["auto", "simple", "swarm"]), default="auto",
+              help="How experiments run: 'simple' (single agent), 'swarm' (full mini-swarm pipeline), 'auto' (detect from config)")
 def research_start_command(
     goal: str,
     eval_command: str,
@@ -1398,6 +1400,7 @@ def research_start_command(
     db: Path | None,
     working_dir: Path | None,
     monitor: bool,
+    experiment_mode: str,
 ) -> None:
     if monitor:
         _run_research_with_monitor(
@@ -1416,6 +1419,7 @@ def research_start_command(
             config_path=config_path,
             db=db,
             working_dir=working_dir,
+            experiment_mode=experiment_mode,
         )
     else:
         _run_research_campaign(
@@ -1434,6 +1438,7 @@ def research_start_command(
             config_path=config_path,
             db=db,
             working_dir=working_dir,
+            experiment_mode=experiment_mode,
         )
 
 
@@ -2117,6 +2122,49 @@ def research_import_patch_command(
         store.close()
 
 
+@research_group.command("cleanup")
+@click.option("--run-id", type=str, default="", help="Research run ID (cleans all if empty)")
+@click.option("--run-dir", type=click.Path(path_type=Path), default=None, help="Research run directory")
+@click.option("--db", type=click.Path(path_type=Path), default=None, help="Path to research database")
+@click.option("--dry-run", is_flag=True, help="Show what would be removed without removing")
+def research_cleanup_command(
+    run_id: str,
+    run_dir: Path | None,
+    db: Path | None,
+    dry_run: bool,
+) -> None:
+    """Remove experiment worktrees to free disk space."""
+    base = _resolve_research_run_dir(db=db, working_dir=run_dir)
+    experiments_dir = base / "experiments"
+    if not experiments_dir.exists():
+        click.echo("No experiments directory found.")
+        return
+
+    removed = 0
+    for entry in sorted(experiments_dir.iterdir()):
+        if not entry.is_dir():
+            continue
+        if run_id and not entry.name.startswith(run_id):
+            continue
+        if dry_run:
+            click.echo(f"Would remove: {entry}")
+        else:
+            shutil.rmtree(entry, ignore_errors=True)
+            click.echo(f"Removed: {entry}")
+        removed += 1
+
+    # Also clean git worktree references
+    if not dry_run and removed > 0:
+        subprocess.run(
+            ["git", "worktree", "prune"],
+            cwd=str(base.parent.parent),  # repo root
+            capture_output=True,
+            check=False,
+        )
+
+    click.echo(f"\n{'Would remove' if dry_run else 'Removed'} {removed} experiment directories.")
+
+
 def _run_research_with_monitor(**kwargs: Any) -> None:
     """Launch research campaign in subprocess with TUI monitor overlay."""
     run_dir = _resolve_research_run_dir(
@@ -2147,6 +2195,8 @@ def _run_research_with_monitor(**kwargs: Any) -> None:
         cmd.extend(["--db", str(kwargs["db"])])
     if kwargs.get("working_dir"):
         cmd.extend(["-w", str(kwargs["working_dir"])])
+    if kwargs.get("experiment_mode", "auto") != "auto":
+        cmd.extend(["--experiment-mode", kwargs["experiment_mode"]])
 
     log_fh = open(log_path, "a", encoding="utf-8")  # noqa: SIM115
     atexit.register(log_fh.close)
@@ -2184,6 +2234,7 @@ def _run_research_campaign(
     config_path: Path | None,
     db: Path | None,
     working_dir: Path | None,
+    experiment_mode: str = "auto",
 ) -> None:
     from attoswarm.research.config import ResearchConfig as _ResearchConfig
     from attoswarm.research.research_orchestrator import ResearchOrchestrator
@@ -2206,10 +2257,22 @@ def _run_research_campaign(
         run_dir=run_dir,
     )
 
+    swarm_config = None
     spawn_fn = None
     if config_path:
-        cfg = load_swarm_yaml(config_path)
-        spawn_fn = _make_subprocess_spawn_fn(cfg)
+        swarm_config = load_swarm_yaml(config_path)
+        spawn_fn = _make_subprocess_spawn_fn(swarm_config)
+
+    if spawn_fn is None:
+        click.secho(
+            "Warning: No --config provided or config has no roles. "
+            "Experiments will not have an agent to make changes.",
+            fg="yellow", err=True,
+        )
+        click.secho(
+            "Pass --config <yaml> with at least one role to enable agent-driven experiments.",
+            fg="yellow", err=True,
+        )
 
     def _print_progress(state: Any, experiments: list) -> None:
         from attoswarm.research.scoreboard import Scoreboard as _Sb
@@ -2225,6 +2288,8 @@ def _run_research_campaign(
         config=research_cfg,
         goal=goal,
         spawn_fn=spawn_fn,
+        swarm_config=swarm_config,
+        experiment_mode=experiment_mode,
         on_progress=_print_progress,
     )
 
@@ -2235,6 +2300,10 @@ def _run_research_campaign(
         f"{metric_direction} | Max experiments: {max_experiments} | "
         f"Parallel: {max_parallel} | Budget: ${max_cost}"
     )
+    resolved_mode = "swarm" if (swarm_config and len(getattr(swarm_config, 'roles', [])) >= 2 and experiment_mode != "simple") else "simple"
+    if experiment_mode == "simple" or (experiment_mode == "auto" and not swarm_config):
+        resolved_mode = "simple"
+    click.echo(f"Experiment mode: {resolved_mode}")
     click.echo("")
 
     state = asyncio.run(orchestrator.run(resume_run_id=resume))
