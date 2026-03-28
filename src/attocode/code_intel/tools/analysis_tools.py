@@ -690,16 +690,21 @@ def repo_map_ranked(
     # Build adjacency from the dependency graph
     adjacency: dict[str, list[str]] = {}
     symbols_by_file: dict[str, list[str]] = {}
+    dep_graph = ctx_mgr._dep_graph
+    project_dir = _get_project_dir()
 
-    for file_path in ctx_mgr.list_files():
-        rel = os.path.relpath(file_path, _get_project_dir())
-        deps = ctx_mgr.get_dependencies(file_path)
-        adjacency[rel] = [os.path.relpath(d, _get_project_dir()) for d in deps]
+    for fi in ctx_mgr._files:
+        rel = fi.relative_path
+        if dep_graph is not None:
+            deps = dep_graph.get_imports(rel)
+            adjacency[rel] = list(deps)
+        else:
+            adjacency[rel] = []
 
         # Extract symbols if available
         try:
             analyzer = _get_code_analyzer()
-            result = analyzer.analyze_file(file_path)
+            result = analyzer.analyze_file(fi.full_path)
             symbols_by_file[rel] = [
                 c.name for c in (result.chunks or []) if hasattr(c, "name") and c.name
             ][:10]

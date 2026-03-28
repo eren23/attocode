@@ -21,7 +21,10 @@ from typing import Any
 logger = logging.getLogger(__name__)
 
 # Minimum seconds between successive increases
-_INCREASE_COOLDOWN = 30.0
+_INCREASE_COOLDOWN = 60.0
+
+# Consecutive successes required before increasing concurrency
+_HYSTERESIS_THRESHOLD = 2
 
 
 @dataclass(slots=True)
@@ -68,6 +71,8 @@ class AdaptiveConcurrency:
         self._current = max(min(initial, self._ceiling), self._floor)
         self._semaphore = asyncio.Semaphore(self._current)
         self._last_increase_time: float = 0.0
+        self._consecutive_successes: int = 0
+        self._adjustments: list[tuple[float, str, int, int]] = []
         self._stats = ConcurrencyStats(
             current=self._current,
             floor=self._floor,
@@ -99,18 +104,24 @@ class AdaptiveConcurrency:
         self.release()
 
     def on_success(self) -> None:
-        """Additive increase: +1 if below ceiling and cooldown has elapsed."""
+        """Additive increase: +1 if below ceiling, cooldown elapsed, and hysteresis met."""
+        self._consecutive_successes += 1
+        if self._consecutive_successes < _HYSTERESIS_THRESHOLD:
+            return
         now = time.time()
         if now - self._last_increase_time < _INCREASE_COOLDOWN:
             return
         if self._current >= self._ceiling:
             return
 
+        old = self._current
         self._current += 1
         self._semaphore.release()  # Add one permit
         self._last_increase_time = now
+        self._consecutive_successes = 0
         self._stats.increases += 1
         self._stats.current = self._current
+        self._adjustments.append((now, "success", old, self._current))
         logger.debug("Concurrency increased to %d", self._current)
 
     def on_rate_limit(self) -> None:
@@ -119,8 +130,10 @@ class AdaptiveConcurrency:
         if new == self._current:
             return
 
+        old = self._current
         reduction = self._current - new
         self._current = new
+        self._consecutive_successes = 0
 
         # Drain excess permits by acquiring without releasing
         for _ in range(reduction):
@@ -131,6 +144,7 @@ class AdaptiveConcurrency:
 
         self._stats.decreases += 1
         self._stats.current = self._current
+        self._adjustments.append((time.time(), "rate_limit", old, self._current))
         logger.info("Concurrency halved to %d (rate limit)", self._current)
 
     def on_timeout(self) -> None:
@@ -138,10 +152,21 @@ class AdaptiveConcurrency:
         if self._current <= self._floor:
             return
 
+        old = self._current
         self._current -= 1
+        self._consecutive_successes = 0
         if self._semaphore._value > 0:  # noqa: SLF001
             self._semaphore._value -= 1  # noqa: SLF001
 
         self._stats.decreases += 1
         self._stats.current = self._current
+        self._adjustments.append((time.time(), "timeout", old, self._current))
         logger.debug("Concurrency decreased to %d (timeout)", self._current)
+
+    def get_adjustment_log(self) -> list[tuple[float, str, int, int]]:
+        """Return the history of concurrency adjustments for postmortem analysis.
+
+        Each entry is ``(timestamp, reason, old_level, new_level)``
+        where *reason* is one of ``"success"``, ``"rate_limit"``, or ``"timeout"``.
+        """
+        return list(self._adjustments)

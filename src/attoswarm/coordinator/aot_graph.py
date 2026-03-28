@@ -31,7 +31,7 @@ class AoTNode:
     depended_by: list[str] = field(default_factory=list)    # reverse edges
     target_files: list[str] = field(default_factory=list)
     symbol_scope: list[str] = field(default_factory=list)
-    status: str = "pending"             # pending | running | done | failed | skipped
+    status: str = "pending"             # pending | running | done | failed | skipped | needs_review
 
 
 class AoTGraph:
@@ -158,7 +158,7 @@ class AoTGraph:
                 ready.append(node.task_id)
                 continue
             all_done = all(
-                self._nodes.get(d) is not None and self._nodes[d].status == "done"
+                self._nodes.get(d) is not None and self._nodes[d].status in ("done", "needs_review")
                 for d in node.depends_on
             )
             if all_done:
@@ -167,13 +167,13 @@ class AoTGraph:
             # Partial: all deps terminal, >= 50% succeeded
             all_terminal = all(
                 self._nodes.get(d) is not None
-                and self._nodes[d].status in ("done", "failed", "skipped")
+                and self._nodes[d].status in ("done", "needs_review", "failed", "skipped")
                 for d in node.depends_on
             )
             if all_terminal and node.depends_on:
                 done_count = sum(
                     1 for d in node.depends_on
-                    if self._nodes.get(d) and self._nodes[d].status == "done"
+                    if self._nodes.get(d) and self._nodes[d].status in ("done", "needs_review")
                 )
                 if done_count / len(node.depends_on) >= 0.5:
                     ready.append(node.task_id)
@@ -250,7 +250,7 @@ class AoTGraph:
                 # Check if ANY dependency can still succeed
                 has_viable = any(
                     self._nodes.get(d) is not None
-                    and self._nodes[d].status in ("pending", "running", "done")
+                    and self._nodes[d].status in ("pending", "running", "done", "needs_review")
                     for d in node.depends_on
                 )
                 if has_viable:
@@ -258,7 +258,7 @@ class AoTGraph:
                 # All deps terminal — check if enough succeeded for partial execution
                 done_count = sum(
                     1 for d in node.depends_on
-                    if self._nodes.get(d) and self._nodes[d].status == "done"
+                    if self._nodes.get(d) and self._nodes[d].status in ("done", "needs_review")
                 )
                 if node.depends_on and done_count / len(node.depends_on) >= 0.5:
                     continue  # Let it run with partial context

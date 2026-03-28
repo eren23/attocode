@@ -46,6 +46,8 @@ class TaskResult:
     cost_usd: float = 0.0
     duration_s: float = 0.0
     error: str = ""
+    timed_out: bool = False
+    near_timeout: bool = False
 
 
 @dataclass(slots=True)
@@ -292,6 +294,7 @@ class SubagentManager:
                     task_id=task_id,
                     success=False,
                     error=f"Task timed out after {timeout}s",
+                    timed_out=True,
                 )
             except Exception as exc:
                 result = TaskResult(
@@ -313,6 +316,23 @@ class SubagentManager:
                 await self._file_ledger.release_all_claims(agent_id)
 
             result.duration_s = time.time() - start
+
+            # Near-timeout detection: task completed but used >90% of the timeout
+            if not result.timed_out and result.duration_s >= timeout * 0.9:
+                result.near_timeout = True
+                logger.warning(
+                    "Task %s near timeout: %.1fs elapsed of %.1fs limit (%.0f%%)",
+                    task_id, result.duration_s, timeout,
+                    (result.duration_s / timeout) * 100,
+                )
+
+            # Suspicious zero-token check
+            if result.success and result.tokens_used == 0:
+                logger.warning(
+                    "Task %s reported success but tokens_used=0 — possible instrumentation gap",
+                    task_id,
+                )
+
             status = "done" if result.success else "error"
             self._emit_status(agent_id, task_id, status, tokens=result.tokens_used, model=task_model)
 
@@ -341,6 +361,8 @@ class SubagentManager:
                 "duration_s": result.duration_s,
                 "files_modified": result.files_modified,
                 "error": result.error or "",
+                "timed_out": result.timed_out,
+                "near_timeout": result.near_timeout,
             })
 
             return result

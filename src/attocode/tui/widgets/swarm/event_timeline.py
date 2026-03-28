@@ -54,12 +54,14 @@ class EventTimeline(Static):
 
     def __init__(self, **kwargs: Any) -> None:
         super().__init__(**kwargs)
-        self._prev_event_count: int = 0
+        self._prev_fingerprint: tuple[int, float, str] = (0, 0.0, "")
 
     def watch_events(self, events: list[dict[str, Any]]) -> None:
         self._rebuild(events)
 
     def watch_filter_type(self, _: str) -> None:
+        # Filter changed — force rebuild by clearing fingerprint
+        self._prev_fingerprint = (0, 0.0, "")
         self._rebuild(self.events)
 
     def add_event(self, event: dict[str, Any]) -> None:
@@ -79,16 +81,17 @@ class EventTimeline(Static):
 
     def _rebuild(self, events: list[dict[str, Any]]) -> None:
         if not events:
-            self.update(Text("(no events yet)", style="dim"))
-            self._prev_event_count = 0
+            if self._prev_fingerprint != (0, 0.0, ""):
+                self.update(Text("(no events yet)", style="dim"))
+                self._prev_fingerprint = (0, 0.0, "")
             return
 
-        # Skip rebuild if event count hasn't changed (append-only feed from
-        # last-30 slice — same count means same events). Always rebuild when
-        # a filter is active since the filter_type may have changed.
-        if len(events) == self._prev_event_count and not self.filter_type:
+        # Fingerprint: (count, last timestamp, filter) — skip when unchanged
+        last_ts = events[-1].get("timestamp", 0.0) if events else 0.0
+        fp = (len(events), last_ts, self.filter_type)
+        if fp == self._prev_fingerprint:
             return
-        self._prev_event_count = len(events)
+        self._prev_fingerprint = fp
 
         filtered = events
         if self.filter_type:

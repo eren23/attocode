@@ -57,6 +57,8 @@ class PipelineResult:
     errors: list[str] = field(default_factory=list)
     commits: dict[str, str] = field(default_factory=dict)
     """Mapping of task_id → commit hash for tasks that were auto-committed."""
+    syntax_failures: list[str] = field(default_factory=list)
+    """Task IDs that failed syntax verification (demoted from success)."""
 
 
 class ResultPipeline:
@@ -181,6 +183,7 @@ class ResultPipeline:
             if result.task_id in syntax_results:
                 if not syntax_results[result.task_id]:
                     result.success = False
+                    pipeline_result.syntax_failures.append(result.task_id)
 
             try:
                 completed = await handlers.pipeline_update_dag(result, result.success)

@@ -2,12 +2,16 @@
 
 from __future__ import annotations
 
+import json
+import logging
 import subprocess
 from pathlib import Path
 from typing import Any
 
 from attoswarm.config.loader import load_swarm_yaml
 from attoswarm.protocol.io import read_json
+
+logger = logging.getLogger(__name__)
 
 
 def resolve_working_dir(run_dir: str | Path, state: dict[str, Any] | None = None) -> Path | None:
@@ -161,3 +165,68 @@ def _changed_files_from_git(working_dir: Path) -> list[str]:
         if path:
             files.add(path)
     return sorted(files)
+
+
+# ---------------------------------------------------------------------------
+# Timeout statistics
+# ---------------------------------------------------------------------------
+
+
+def collect_timeout_stats(run_dir: str | Path) -> dict[str, Any]:
+    """Scan agent trace files and return timeout/near-timeout counts.
+
+    Returns a dict with:
+      - timed_out:      number of tasks that hit the timeout wall
+      - near_timeout:   number of tasks that completed but used >90% of timeout
+      - zero_token:     number of tasks that reported success with 0 tokens
+      - timed_out_ids:  list of task IDs that timed out
+      - near_timeout_ids: list of task IDs that were near timeout
+      - zero_token_ids:  list of task IDs with suspicious zero-token results
+    """
+    agents_dir = Path(run_dir) / "agents"
+    stats: dict[str, Any] = {
+        "timed_out": 0,
+        "near_timeout": 0,
+        "zero_token": 0,
+        "timed_out_ids": [],
+        "near_timeout_ids": [],
+        "zero_token_ids": [],
+    }
+    if not agents_dir.is_dir():
+        return stats
+
+    for trace_path in agents_dir.glob("*.trace.jsonl"):
+        try:
+            with trace_path.open("r", encoding="utf-8") as f:
+                for line in f:
+                    line = line.strip()
+                    if not line:
+                        continue
+                    try:
+                        entry = json.loads(line)
+                    except json.JSONDecodeError:
+                        continue
+                    data = entry.get("data", {})
+                    if not isinstance(data, dict):
+                        continue
+                    entry_type = entry.get("entry_type", "")
+                    task_id = entry.get("task_id", "")
+
+                    # Only inspect cost_delta / error entries (final result traces)
+                    if entry_type not in ("cost_delta", "error"):
+                        continue
+
+                    if data.get("timed_out"):
+                        stats["timed_out"] += 1
+                        stats["timed_out_ids"].append(task_id)
+                    if data.get("near_timeout"):
+                        stats["near_timeout"] += 1
+                        stats["near_timeout_ids"].append(task_id)
+                    # Zero-token on successful entries only
+                    if entry_type == "cost_delta" and data.get("tokens_used", -1) == 0:
+                        stats["zero_token"] += 1
+                        stats["zero_token_ids"].append(task_id)
+        except OSError:
+            continue
+
+    return stats

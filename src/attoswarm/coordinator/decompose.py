@@ -16,8 +16,8 @@ logger = logging.getLogger(__name__)
 _TASK_RANGE: dict[str, tuple[int, int]] = {
     "simple": (2, 3),
     "medium": (3, 5),
-    "complex": (6, 10),
-    "deep_research": (8, 15),
+    "complex": (6, 15),
+    "deep_research": (10, 30),
 }
 
 # Keywords that signal high complexity (each match adds weight)

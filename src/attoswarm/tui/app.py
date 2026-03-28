@@ -315,6 +315,7 @@ class AttoswarmApp(App[None]):
         self._approval_shown: bool = False
         self._last_summary_key: tuple[str, int, int, int, int, int, int, int] | None = None
         self._last_refreshed_tab: str = ""
+        self._tab_cache: dict[str, dict[str, Any]] = {}  # Per-tab cached data
         self._coordinator_pid: int | None = coordinator_pid
         self._exit_intent = "detach"
         # Track whether coordinator has written fresh state.
@@ -393,11 +394,16 @@ class AttoswarmApp(App[None]):
     ) -> None:
         """Suppress refresh during tab transitions to prevent focus stealing."""
         self._tab_switching = True
-        self.set_timer(0.3, self._end_tab_switch)
         # Stop trace polling when leaving agents tab
         if event.tab and str(event.tab.id) != "tab-agents" and self._trace_timer is not None:
             self._trace_timer.stop()
             self._trace_timer = None
+        # Immediately apply cached data for the new tab (no I/O wait)
+        new_tab = str(event.tab.id) if event.tab else ""
+        if new_tab and new_tab in self._tab_cache and self._last_state:
+            self._apply_tab_data(new_tab, self._tab_cache[new_tab])
+        self._last_refreshed_tab = new_tab
+        self.set_timer(0.05, self._end_tab_switch)
 
     def _end_tab_switch(self) -> None:
         self._tab_switching = False
@@ -451,25 +457,40 @@ class AttoswarmApp(App[None]):
                 pass
             event_list = self._store.build_event_list(raw_events)
 
-            # Build tab-specific data (I/O + transforms)
-            tab_data: dict[str, Any] = {}
-            if active_tab == "tab-overview":
-                activity = self._store.build_agent_activity(raw_events)
-                agents = self._store.build_agent_list(state, activity=activity)
-                tasks = self._store.build_task_list(state)
-                tab_data = {"activity": activity, "agents": agents, "tasks": tasks}
-            elif active_tab == "tab-tasks":
-                tab_data = {"tasks": self._store.build_task_list(state)}
-            elif active_tab == "tab-agents":
-                activity = self._store.build_agent_activity(raw_events)
-                sidecars = self._store.read_activity_sidecars()
-                tab_data = {"activity": activity, "sidecars": sidecars}
-            elif active_tab == "tab-decisions":
-                tab_data = {"raw_events": raw_events}
+            # Build core data shared across tabs (always fresh)
+            activity = self._store.build_agent_activity(raw_events)
+            tasks = self._store.build_task_list(state)
+
+            # Build per-tab data and cache it so tab switches are instant
+            all_tab_data: dict[str, dict[str, Any]] = {}
+            # Overview + tasks + agents share core data
+            agents = self._store.build_agent_list(state, activity=activity, enrich_trace=False)
+            all_tab_data["tab-overview"] = {"activity": activity, "agents": agents, "tasks": tasks}
+            all_tab_data["tab-tasks"] = {"tasks": tasks}
+            all_tab_data["tab-agents"] = {"activity": activity, "sidecars": {}}
+
+            # Only fetch expensive tab-specific data for the active tab
+            if active_tab == "tab-agents":
+                all_tab_data["tab-agents"]["sidecars"] = self._store.read_activity_sidecars()
+            if active_tab == "tab-messages" or "tab-messages" not in self._tab_cache:
+                all_tab_data["tab-messages"] = {"messages": self._store.read_all_messages()}
+            if active_tab == "tab-decisions" or "tab-decisions" not in self._tab_cache:
+                decisions = self._store.build_decision_list(state)
+                failures = self._store.build_failure_chain(state, events=raw_events)
+                conflicts = self._store.build_conflict_list(state, events=raw_events)
+                all_tab_data["tab-decisions"] = {
+                    "raw_events": raw_events,
+                    "decisions": decisions,
+                    "failures": failures,
+                    "conflicts": conflicts,
+                }
+
+            tab_data = all_tab_data.get(active_tab, {})
 
             # Post to main thread for widget updates
             self.call_from_thread(
                 self._apply_refresh, seq, active_tab, state, event_list, raw_events, tab_data,
+                all_tab_data,
             )
         except Exception:
             self._refreshing = False
@@ -482,11 +503,16 @@ class AttoswarmApp(App[None]):
         event_list: list[dict[str, Any]],
         raw_events: list[dict[str, Any]],
         tab_data: dict[str, Any],
+        all_tab_data: dict[str, dict[str, Any]] | None = None,
     ) -> None:
         """Main thread: widget updates only."""
         self._last_seq = seq
         self._last_state = state
         self._last_events = event_list
+
+        # Cache all built tab data so tab switches are instant
+        if all_tab_data:
+            self._tab_cache.update(all_tab_data)
 
         # Determine actual current tab (may have changed since worker started)
         try:
@@ -518,22 +544,37 @@ class AttoswarmApp(App[None]):
 
         self._refresh_summary(state)
 
-        # Only apply tab data if tab hasn't changed since worker started
-        if actual_tab == active_tab:
-            if actual_tab == "tab-overview":
-                self._refresh_overview(state, tab_data["agents"], tab_data["tasks"], raw_events)
-            elif actual_tab == "tab-tasks":
-                self._refresh_tasks_with_data(tab_data["tasks"])
-            elif actual_tab == "tab-agents":
-                self._refresh_agents_with_data(state, tab_data["activity"], tab_data.get("sidecars", {}))
-            elif actual_tab == "tab-events":
-                self._refresh_events()
-            elif actual_tab == "tab-messages":
-                self._refresh_messages()
-            elif actual_tab == "tab-decisions":
-                self._refresh_decisions(state, tab_data.get("raw_events"))
+        # Apply data for the actual current tab — use cached data if the
+        # worker built data for a different tab (tab switched mid-cycle)
+        effective_data = tab_data
+        if actual_tab != active_tab and actual_tab in self._tab_cache:
+            effective_data = self._tab_cache[actual_tab]
+        self._apply_tab_data(actual_tab, effective_data)
 
         self._refreshing = False
+
+    def _apply_tab_data(self, tab_id: str, tab_data: dict[str, Any]) -> None:
+        """Apply pre-built data to the specified tab's widgets."""
+        if not tab_data:
+            return
+        state = self._last_state or {}
+        if tab_id == "tab-overview":
+            self._refresh_overview(state, tab_data.get("agents", []), tab_data.get("tasks", []), [])
+        elif tab_id == "tab-tasks":
+            self._refresh_tasks_with_data(tab_data.get("tasks", []))
+        elif tab_id == "tab-agents":
+            self._refresh_agents_with_data(state, tab_data.get("activity", {}), tab_data.get("sidecars", {}))
+        elif tab_id == "tab-events":
+            self._refresh_events()
+        elif tab_id == "tab-messages":
+            self._refresh_messages_with_data(tab_data.get("messages", []))
+        elif tab_id == "tab-decisions":
+            self._refresh_decisions_with_data(
+                state, tab_data.get("raw_events", []),
+                tab_data.get("decisions", []),
+                tab_data.get("failures", []),
+                tab_data.get("conflicts", []),
+            )
 
     def _apply_research_refresh(self, data: dict[str, Any] | None) -> None:
         """Main thread: update research overview widget."""
@@ -739,16 +780,35 @@ class AttoswarmApp(App[None]):
         except Exception:
             pass
 
+    def _refresh_messages_with_data(self, messages: list[dict[str, Any]]) -> None:
+        """Update messages tab with pre-built data (no I/O)."""
+        try:
+            self.query_one("#messages-log-widget", MessagesLog).update_messages(messages)
+        except Exception:
+            pass
+
     def _refresh_decisions(
         self, state: dict[str, Any], raw_events: list[dict[str, Any]] | None = None,
     ) -> None:
         """Refresh the Decisions tab with decisions, budget, failures, conflicts."""
         if raw_events is None:
             raw_events = self._store.read_events(limit=500)
+        decisions = self._store.build_decision_list(state)
+        failures = self._store.build_failure_chain(state, events=raw_events)
+        conflicts = self._store.build_conflict_list(state, events=raw_events)
+        self._refresh_decisions_with_data(state, raw_events, decisions, failures, conflicts)
 
+    def _refresh_decisions_with_data(
+        self,
+        state: dict[str, Any],
+        raw_events: list[dict[str, Any]],
+        decisions: list[dict[str, Any]],
+        failures: list[dict[str, Any]],
+        conflicts: list[dict[str, Any]],
+    ) -> None:
+        """Update decisions tab with pre-built data (no I/O)."""
         # Decisions
         try:
-            decisions = self._store.build_decision_list(state)
             self.query_one("#decisions-pane", DecisionsPane).update_state({
                 "decisions": decisions,
                 "errors": state.get("errors", []),
@@ -799,16 +859,14 @@ class AttoswarmApp(App[None]):
         except Exception:
             pass
 
-        # Failure chain (pass events to avoid re-read)
+        # Failure chain
         try:
-            failures = self._store.build_failure_chain(state, events=raw_events)
             self.query_one("#failure-chain", FailureChainWidget).update_failures(failures)
         except Exception:
             pass
 
-        # Conflicts (pass events to avoid re-read)
+        # Conflicts
         try:
-            conflicts = self._store.build_conflict_list(state, events=raw_events)
             self.query_one("#conflict-panel", ConflictPanel).update_conflicts(conflicts)
         except Exception:
             pass
@@ -885,7 +943,7 @@ class AttoswarmApp(App[None]):
                     pass
                 # Start polling timer if not already running
                 if self._trace_timer is None:
-                    self._trace_timer = self.set_interval(0.5, self._poll_trace)
+                    self._trace_timer = self.set_interval(1.5, self._poll_trace)
 
     def on_task_card_selected(self, event: TaskCard.Selected) -> None:
         """When a task card is clicked in OverviewPane, show detail + switch tab."""

@@ -208,7 +208,7 @@ class TaskBoard(Widget):
     }
     """
 
-    tasks: reactive[list[dict[str, Any]]] = reactive(list, layout=True)
+    tasks: reactive[list[dict[str, Any]]] = reactive(list)
 
     def compose(self):
         with Horizontal():

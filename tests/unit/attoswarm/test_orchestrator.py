@@ -548,7 +548,7 @@ class TestResumeRestore:
         monkeypatch.setattr(orch, "_check_control_messages", lambda: None)
         monkeypatch.setattr(orch, "_check_stale_agents", lambda: None)
         monkeypatch.setattr(orch._subagent_mgr, "execute_batch", AsyncMock(return_value=[
-            TaskResult(task_id="t2", success=True, files_modified=["src/b.py"], result_summary="ok"),
+            TaskResult(task_id="t2", success=True, files_modified=["src/b.py"], result_summary="ok", tokens_used=500),
         ]))
         monkeypatch.setattr(orch._subagent_mgr, "shutdown_all", AsyncMock(return_value=None))
 
@@ -659,3 +659,115 @@ class TestDecomposeGoal:
             tasks = await orch._decompose_goal()
             assert len(tasks) == 1
             assert tasks[0].title == "From file"
+
+
+# ── _validate_task_result ────────────────────────────────────────────
+
+
+class TestValidateTaskResultNone:
+    """quality_gate='none' always passes."""
+
+    def test_none_gate_passes_regardless(self, orch: SwarmOrchestrator) -> None:
+        orch._config.orchestration.quality_gate = "none"
+        _add_task(orch, "t1", status="running")
+        result = TaskResult(task_id="t1", success=True, files_modified=[], tokens_used=0)
+        passed, reason = orch._validate_task_result(result)
+        assert passed is True
+        assert reason == ""
+
+    def test_none_gate_passes_unknown_task(self, orch: SwarmOrchestrator) -> None:
+        orch._config.orchestration.quality_gate = "none"
+        # Task not registered in orch._tasks — should still pass
+        result = TaskResult(task_id="unknown", success=True, files_modified=[], tokens_used=0)
+        passed, reason = orch._validate_task_result(result)
+        assert passed is True
+
+
+class TestValidateTaskResultBasic:
+    """quality_gate='basic' checks files_modified and tokens_used."""
+
+    def test_implement_empty_files_fails(self, orch: SwarmOrchestrator) -> None:
+        orch._config.orchestration.quality_gate = "basic"
+        task = _add_task(orch, "t1", status="running")
+        task.task_kind = "implement"
+        result = TaskResult(task_id="t1", success=True, files_modified=[], tokens_used=500)
+        passed, reason = orch._validate_task_result(result)
+        assert passed is False
+        assert "implement task produced no file modifications" in reason
+
+    def test_test_empty_files_fails(self, orch: SwarmOrchestrator) -> None:
+        orch._config.orchestration.quality_gate = "basic"
+        task = _add_task(orch, "t1", status="running")
+        task.task_kind = "test"
+        result = TaskResult(task_id="t1", success=True, files_modified=[], tokens_used=500)
+        passed, reason = orch._validate_task_result(result)
+        assert passed is False
+        assert "test task produced no file modifications" in reason
+
+    def test_implement_with_files_and_tokens_passes(self, orch: SwarmOrchestrator) -> None:
+        orch._config.orchestration.quality_gate = "basic"
+        task = _add_task(orch, "t1", status="running")
+        task.task_kind = "implement"
+        result = TaskResult(task_id="t1", success=True, files_modified=["src/a.py"], tokens_used=1000)
+        passed, reason = orch._validate_task_result(result)
+        assert passed is True
+        assert reason == ""
+
+    def test_zero_tokens_fails(self, orch: SwarmOrchestrator) -> None:
+        orch._config.orchestration.quality_gate = "basic"
+        task = _add_task(orch, "t1", status="running")
+        task.task_kind = "analysis"
+        result = TaskResult(task_id="t1", success=True, files_modified=["report.md"], tokens_used=0)
+        passed, reason = orch._validate_task_result(result)
+        assert passed is False
+        assert "zero tokens used" in reason
+
+    def test_analysis_empty_files_passes(self, orch: SwarmOrchestrator) -> None:
+        orch._config.orchestration.quality_gate = "basic"
+        task = _add_task(orch, "t1", status="running")
+        task.task_kind = "analysis"
+        result = TaskResult(task_id="t1", success=True, files_modified=[], tokens_used=500)
+        passed, reason = orch._validate_task_result(result)
+        assert passed is True
+        assert reason == ""
+
+
+class TestValidateTaskResultStrict:
+    """quality_gate='strict' also checks target files exist on disk."""
+
+    def test_strict_missing_target_file_fails(self, orch: SwarmOrchestrator, tmp_path: Path) -> None:
+        orch._config.orchestration.quality_gate = "strict"
+        orch._root_dir = str(tmp_path)
+        task = _add_task(orch, "t1", status="running", target_files=["src/missing.py"])
+        task.task_kind = "implement"
+        result = TaskResult(task_id="t1", success=True, files_modified=["src/missing.py"], tokens_used=1000)
+        passed, reason = orch._validate_task_result(result)
+        assert passed is False
+        assert "target file missing: src/missing.py" in reason
+
+    def test_strict_existing_target_file_passes(self, orch: SwarmOrchestrator, tmp_path: Path) -> None:
+        orch._config.orchestration.quality_gate = "strict"
+        orch._root_dir = str(tmp_path)
+        # Create the target file on disk
+        target = tmp_path / "src" / "a.py"
+        target.parent.mkdir(parents=True)
+        target.write_text("print('hello')")
+        task = _add_task(orch, "t1", status="running", target_files=["src/a.py"])
+        task.task_kind = "implement"
+        result = TaskResult(task_id="t1", success=True, files_modified=["src/a.py"], tokens_used=1000)
+        passed, reason = orch._validate_task_result(result)
+        assert passed is True
+        assert reason == ""
+
+    def test_strict_partial_missing_lists_all(self, orch: SwarmOrchestrator, tmp_path: Path) -> None:
+        """When some target files exist and some don't, reason lists each missing one."""
+        orch._config.orchestration.quality_gate = "strict"
+        orch._root_dir = str(tmp_path)
+        (tmp_path / "exists.py").write_text("ok")
+        task = _add_task(orch, "t1", status="running", target_files=["exists.py", "gone.py"])
+        task.task_kind = "implement"
+        result = TaskResult(task_id="t1", success=True, files_modified=["exists.py"], tokens_used=500)
+        passed, reason = orch._validate_task_result(result)
+        assert passed is False
+        assert "gone.py" in reason
+        assert "exists.py" not in reason  # exists.py is present, should not appear in reason

@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.10] - 2026-03-28
+
+### Fixed
+- **`repo_map_ranked` MCP tool crash**: Fixed `AttributeError: 'CodebaseContextManager' object has no attribute 'list_files'` — tool was calling non-existent methods. Now uses `_files` list and `DependencyGraph.get_imports()` with proper `None` guard
+
+### Added
+- **MCP tools audit test suite**: Comprehensive 51-test audit covering all 43 code-intel MCP tools across 6 categories (analysis, navigation, dead code, distill, history, ADR, learning, LSP, search, readiness, server). Tests import tool functions directly against mocked singletons to catch AttributeError/TypeError crashes early
+
+### Changed
+- Updated TUI snapshots for attoswarm app (tab data handling, agent grid, event timeline changes)
+
 ## [0.2.9] - 2026-03-27
 
 ### Added
