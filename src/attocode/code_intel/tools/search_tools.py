@@ -85,6 +85,7 @@ def semantic_search(
     top_k: int = 10,
     file_filter: str = "",
     branch: str = "",
+    mode: str = "auto",
 ) -> str:
     """Search the codebase using natural language queries.
 
@@ -99,9 +100,23 @@ def semantic_search(
         branch: Optional branch name for scoping results (service mode).
             In local mode, results are automatically scoped to files
             present in the working directory.
+        mode: Search mode. "auto" uses vector if available. "keyword" forces
+            keyword search. "vector" waits for embeddings then uses vector.
     """
     mgr = _get_semantic_search()
-    results = mgr.search(query, top_k=top_k, file_filter=file_filter)
+    if mode == "keyword":
+        results = mgr._keyword_search(query, top_k, file_filter)
+    elif mode == "vector":
+        if not mgr.is_index_ready():
+            mgr.start_background_indexing()
+            import time
+            for _ in range(600):
+                if mgr.is_index_ready():
+                    break
+                time.sleep(0.1)
+        results = mgr.search(query, top_k=top_k, file_filter=file_filter)
+    else:
+        results = mgr.search(query, top_k=top_k, file_filter=file_filter)
     return mgr.format_results(results)
 
 

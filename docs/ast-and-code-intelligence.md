@@ -11,6 +11,7 @@ The AST system provides:
 - **Impact analysis** --- BFS traversal of the dependency graph to find all files affected by a change
 - **Conflict detection** --- Identifies overlapping file/symbol/dependency conflicts between parallel tasks
 - **Incremental updates** --- Only re-parses files that have changed (mtime-based)
+- **Progressive hydration** --- Adaptive tier-based initialization for large repos. Repos with >1K source files use skeleton init (top 200-500 files parsed in <2s), with remaining files hydrated in a background thread. On-demand parsing fills gaps when tools request data not yet indexed.
 
 ```mermaid
 flowchart TB
@@ -19,6 +20,7 @@ flowchart TB
         Service[ASTService<br/>Singleton per project]
         Index[CrossRefIndex<br/>Bidirectional index]
         Store[IndexStore<br/>SQLite persistence]
+        Hydration[HydrationState<br/>Progressive indexing]
         Server[ASTServer<br/>Unix socket]
         Client[ASTClient<br/>Socket client]
     end
@@ -35,6 +37,7 @@ flowchart TB
 
     Parser --> Service
     Service --> Index
+    Service --> Hydration
     Service --> Server
     Client --> Server
     Service --> Tools

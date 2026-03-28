@@ -905,14 +905,21 @@ class CodebaseContextManager:
             f.importance = self._score_importance(f)
 
         # Build dependency graph and boost hub files using PageRank
-        self._dep_graph = build_dependency_graph(files, self.root_dir)
-        pr_scores = self._dep_graph.pagerank()
-        for f in files:
-            pr = pr_scores.get(f.relative_path, 0.0)
-            # Normalize PageRank to 0.0-0.3 boost range (stronger than old linear 0.0-0.2)
-            hub_boost = pr * 0.3
-            if hub_boost > 0.01:
-                f.importance = min(1.0, f.importance + hub_boost)
+        # Skip for large repos (>5K source files) — dep graph parsing is the
+        # main bootstrap bottleneck.  Heuristic importance is good enough for
+        # skeleton init; full dep graph is built during background hydration.
+        source_count = sum(1 for f in files if f.language)
+        if source_count < 5_000:
+            self._dep_graph = build_dependency_graph(files, self.root_dir)
+            pr_scores = self._dep_graph.pagerank()
+            for f in files:
+                pr = pr_scores.get(f.relative_path, 0.0)
+                # Normalize PageRank to 0.0-0.3 boost range
+                hub_boost = pr * 0.3
+                if hub_boost > 0.01:
+                    f.importance = min(1.0, f.importance + hub_boost)
+        else:
+            self._dep_graph = DependencyGraph()  # empty placeholder
 
         # Sort by importance (highest first)
         files.sort(key=lambda f: f.importance, reverse=True)

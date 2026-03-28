@@ -44,6 +44,16 @@ ATTOCODE_EMBEDDING_MODEL=nomic-embed-text
 ATTOCODE_EMBEDDING_MODEL=openai
 ```
 
+## Search Modes
+
+The `semantic_search` tool accepts an optional `mode` parameter:
+
+| Mode | Behavior | Use When |
+|------|----------|----------|
+| `auto` (default) | Vector search if embeddings available, keyword fallback otherwise | Normal usage |
+| `keyword` | BM25 keyword search only — skips embedding entirely | Speed-critical, large repos, or no embedding model |
+| `vector` | Waits for embedding index to be ready (up to 60s), then uses vector search | Need highest quality results |
+
 ## Vector Store Backends
 
 | | SQLite (CLI mode) | pgvector (service mode) |

@@ -46,6 +46,7 @@ _code_analyzer = None
 _semantic_search = None  # Backward compat: tests may set this directly
 _memory_store = None  # Backward compat: tests may set this directly
 _explorer = None
+_service = None
 
 
 def _check_server_override(name: str):
@@ -120,6 +121,20 @@ def _get_code_analyzer():
 
         _code_analyzer = CodeAnalyzer()
     return _code_analyzer
+
+
+def _get_service():
+    """Lazily initialize and return the CodeIntelService singleton."""
+    global _service
+    override = _check_server_override("_service")
+    if override is not None:
+        return override
+    if _service is None:
+        from attocode.code_intel.service import CodeIntelService
+
+        project_dir = _get_project_dir()
+        _service = CodeIntelService.get_instance(project_dir)
+    return _service
 
 
 def _get_explorer():

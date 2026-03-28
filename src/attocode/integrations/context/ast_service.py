@@ -17,6 +17,7 @@ import logging
 import os
 import re
 import sqlite3
+import threading
 from pathlib import Path
 from typing import Any
 
@@ -25,6 +26,12 @@ from attocode.integrations.context.codebase_ast import (
     diff_file_ast,
     diff_imports,
     parse_file,
+)
+from attocode.integrations.context.hydration import (
+    HydrationState,
+    classify_tier,
+    skeleton_budget,
+    TIER_SMALL,
 )
 from attocode.integrations.context.codebase_context import (
     CodebaseContextManager,
@@ -68,6 +75,10 @@ class ASTService:
         self._index = CrossRefIndex()
         self._ast_cache: dict[str, FileAST] = {}   # rel_path -> FileAST
         self._initialized = False
+        self._hydration_state: HydrationState | None = None
+        self._reference_indexed_files: set[str] = set()
+        self._hydration_thread: threading.Thread | None = None
+        self._hydration_stop: threading.Event = threading.Event()
         # Persistent index store
         if store is not None:
             self._store = store
@@ -247,6 +258,232 @@ class ASTService:
     def force_reindex(self) -> None:
         """Force a full re-scan, ignoring cached data."""
         self.initialize(force=True)
+
+    def initialize_skeleton(self, *, indexing_depth: str = "auto") -> HydrationState:
+        """Phase 1: Fast skeleton initialization.
+
+        Discovers files, classifies tier, and parses only the top-N most
+        important files.  For small repos this is equivalent to full
+        ``initialize()``.  For larger repos, remaining files are left for
+        background hydration or on-demand parsing.
+        """
+        files = self._context_mgr.discover_files()
+        self._index = CrossRefIndex()
+        self._index.set_store(self._store)
+        self._ast_cache.clear()
+        self._reference_indexed_files.clear()
+
+        _ts_langs: set[str] = set()
+        try:
+            from attocode.integrations.context.ts_parser import supported_languages
+            _ts_langs = set(supported_languages())
+        except ImportError:
+            pass
+        _supported = {"python", "javascript", "typescript", "shell"} | _ts_langs
+
+        parseable = []
+        for fi in files:
+            lang = fi.language
+            if lang == "shell":
+                lang = "bash"
+            if lang in _supported:
+                parseable.append(fi)
+
+        source_count = len(parseable)
+        tier = classify_tier(source_count)
+
+        if indexing_depth == "eager":
+            tier = TIER_SMALL
+        elif indexing_depth == "minimal":
+            self._hydration_state = HydrationState(
+                tier=tier, total_files=source_count, phase="skeleton",
+            )
+            self._initialized = True
+            return self._hydration_state
+
+        budget = skeleton_budget(tier, source_count)
+        is_full_parse = budget >= source_count
+
+        state = HydrationState(
+            tier=tier,
+            total_files=source_count,
+            phase="ready" if is_full_parse else "skeleton",
+        )
+        self._hydration_state = state
+
+        to_parse = parseable[:budget]
+
+        for fi in to_parse:
+            try:
+                ast = parse_file(fi.path)
+            except Exception:
+                continue
+            rel = fi.relative_path
+            self._ast_cache[rel] = ast
+            self._index_definitions(rel, ast)
+            state.parsed_files += 1
+
+        if is_full_parse:
+            for rel, ast in self._ast_cache.items():
+                self._index_references(rel, ast)
+                self._reference_indexed_files.add(rel)
+                state.reference_indexed_files += 1
+
+            dep_graph = self._context_mgr.dependency_graph
+            if dep_graph:
+                for src, targets in dep_graph.forward.items():
+                    for tgt in targets:
+                        self._index.add_file_dependency(src, tgt)
+
+            if self._store:
+                stored_files: list[StoredFile] = []
+                for rel, ast_item in self._ast_cache.items():
+                    stored_files.append(self._build_stored_file(rel, ast_item, 0.0))
+                if stored_files:
+                    self._store.save_files_batch(stored_files)
+                for rel in self._ast_cache:
+                    self._index.persist_file(rel)
+                self._store.record_scan_time()
+
+        self._initialized = True
+        return state
+
+    def ensure_file_parsed(self, rel_path: str) -> bool:
+        """Parse a single file on-demand if not already in cache.
+
+        Returns True if the file was newly parsed, False if already cached.
+        """
+        if rel_path in self._ast_cache:
+            return False
+        abs_path = os.path.join(self._root_dir, rel_path)
+        if not os.path.isfile(abs_path):
+            return False
+        try:
+            ast = parse_file(abs_path)
+        except Exception:
+            return False
+        self._ast_cache[rel_path] = ast
+        self._index_definitions(rel_path, ast)
+        if self._hydration_state:
+            self._hydration_state.parsed_files += 1
+        return True
+
+    def ensure_references_indexed(self, rel_path: str) -> bool:
+        """Index references for a file on-demand if not already done."""
+        if rel_path in self._reference_indexed_files:
+            return False
+        self.ensure_file_parsed(rel_path)
+        ast = self._ast_cache.get(rel_path)
+        if ast is None:
+            return False
+        self._index_references(rel_path, ast)
+        self._reference_indexed_files.add(rel_path)
+        if self._hydration_state:
+            self._hydration_state.reference_indexed_files += 1
+        return True
+
+    def start_hydration(self) -> None:
+        """Phase 2: Start background hydration of remaining files."""
+        state = self._hydration_state
+        if state is None or state.phase == "ready":
+            return
+        if self._hydration_thread is not None and self._hydration_thread.is_alive():
+            return
+
+        self._hydration_stop.clear()
+        state.phase = "hydrating"
+
+        def _worker():
+            try:
+                self._run_hydration()
+            except Exception:
+                logger.error("Hydration worker crashed", exc_info=True)
+
+        self._hydration_thread = threading.Thread(
+            target=_worker, daemon=True, name="ast-hydration",
+        )
+        self._hydration_thread.start()
+
+    def stop_hydration(self) -> None:
+        """Stop background hydration if running."""
+        self._hydration_stop.set()
+        t = self._hydration_thread
+        if t is not None and t.is_alive():
+            t.join(timeout=5.0)
+        self._hydration_thread = None
+
+    def _run_hydration(self) -> None:
+        """Background hydration loop: parse remaining files, index refs."""
+        state = self._hydration_state
+        if state is None:
+            return
+
+        ctx_files = self._context_mgr._files
+        _ts_langs: set[str] = set()
+        try:
+            from attocode.integrations.context.ts_parser import supported_languages
+            _ts_langs = set(supported_languages())
+        except ImportError:
+            pass
+        _supported = {"python", "javascript", "typescript", "shell"} | _ts_langs
+
+        remaining = []
+        for fi in ctx_files:
+            lang = fi.language
+            if lang == "shell":
+                lang = "bash"
+            if lang in _supported and fi.relative_path not in self._ast_cache:
+                remaining.append(fi)
+
+        # Phase 2a: Parse remaining files and index definitions
+        batch_size = 50
+        for i in range(0, len(remaining), batch_size):
+            if self._hydration_stop.is_set():
+                return
+            batch = remaining[i:i + batch_size]
+            for fi in batch:
+                if self._hydration_stop.is_set():
+                    return
+                rel = fi.relative_path
+                if rel in self._ast_cache:
+                    continue  # on-demand already parsed this file
+                try:
+                    ast = parse_file(fi.path)
+                except Exception:
+                    continue
+                self._ast_cache[rel] = ast
+                self._index_definitions(rel, ast)
+                state.parsed_files += 1
+
+        # Phase 2b: Index references for all parsed files
+        # Snapshot keys to avoid dict-changed-size during concurrent on-demand
+        try:
+            cache_snapshot = list(self._ast_cache.items())
+        except RuntimeError:
+            cache_snapshot = list(self._ast_cache.items())
+        for rel, ast in cache_snapshot:
+            if self._hydration_stop.is_set():
+                return
+            if rel not in self._reference_indexed_files:
+                self._index_references(rel, ast)
+                self._reference_indexed_files.add(rel)
+                state.reference_indexed_files += 1
+
+        # Phase 2c: Wire dependency graph if available
+        dep_graph = self._context_mgr.dependency_graph
+        if dep_graph:
+            for src, targets in dep_graph.forward.items():
+                for tgt in targets:
+                    self._index.add_file_dependency(src, tgt)
+
+        # Persist using the same pattern as initialize_skeleton
+        if self._store:
+            try:
+                self._store.record_scan_time()
+            except Exception:
+                logger.debug("Failed to persist after hydration", exc_info=True)
+
+        state.phase = "ready"
 
     async def async_initialize(self, batch_size: int = 50) -> None:
         """Async version of initialize that parses files in batches.
