@@ -1,6 +1,6 @@
 # Code Intelligence MCP Server — Agent Guidelines
 
-> **27 tools** for deep codebase understanding. This guide helps AI agents use them
+> **28 tools** for deep codebase understanding. This guide helps AI agents use them
 > efficiently, minimizing token usage while maximizing insight.
 >
 > These tools are available via MCP (stdio/SSE) **and** as a REST API over HTTP.
@@ -21,7 +21,8 @@
 | `explore_codebase` | Drill down one directory at a time | Large codebases, targeted exploration |
 | `hotspots` | Files ranked by complexity/coupling/risk | Identify risky areas before changes |
 | `conventions` | Coding style and patterns detected from code | Before writing new code |
-| `bootstrap` | All-in-one orientation (summary + map + conventions + search) | **Best first call** — replaces 2-4 sequential calls |
+| `bootstrap` | All-in-one orientation (summary + map + conventions + search). Optional `indexing_depth` param: "auto" (default), "eager", "lazy", "minimal" | **Best first call** — replaces 2-4 sequential calls |
+| `hydration_status` | Check indexing progress (tier, phase, coverage) | Large repos — decide whether to wait or proceed |
 
 ### Symbol Lookup (50–3000 tokens each)
 
@@ -57,7 +58,7 @@
 
 | Tool | Purpose | When to Use |
 |------|---------|-------------|
-| `semantic_search` | Natural language code search | Find code by description, not name |
+| `semantic_search` | Natural language code search. Optional `mode`: "auto" (default), "keyword" (fast), "vector" (wait for embeddings) | Find code by description, not name |
 | `security_scan` | Secret detection, anti-patterns, dependency issues | Security review |
 
 ### Memory & Recall (50–500 tokens each)
@@ -120,6 +121,12 @@ bootstrap(task_hint="your task", max_tokens=8000)
 ```
 
 **Never call `repo_map` on large codebases** — it wastes tokens. Use `explore_codebase` to drill down.
+
+> **Progressive hydration**: For repos with >1K source files, code-intel uses skeleton
+> initialization (parses only the top ~300-500 most important files in <2s). Remaining
+> files are parsed in the background. Use `hydration_status` to check progress.
+> Tools like `symbols()` and `cross_references()` automatically trigger on-demand
+> parsing for files not yet in the index — you don't need to wait for full hydration.
 
 ---
 

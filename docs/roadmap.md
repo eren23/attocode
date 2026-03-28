@@ -9,13 +9,16 @@
 5. ~~**3-way benchmark expansion**~~ -- DONE: 19 → 49 repos benchmarked across 30+ languages
 6. ~~**FK constraint fix**~~ -- DONE: save files before symbols in `ast_service.py`
 
-## v0.2.7 -- Search Quality & Evaluation
+## v0.2.7 -- Search Quality, Evaluation & Adaptive Indexing (Released 2026-03-28)
 
-1. **Embedding-based semantic search** -- NDCG target: 0.40+ (currently 0.248); hybrid vector + BM25 ranking
-2. **Ground truth expansion** -- add YAML files for 15+ more benchmark repos (currently 5)
-3. **Go-specific search improvements** -- Go MRR 0.200 lags Python 0.725; index package docs, use module paths
-4. **Persistent index across instances** -- cache survives CodeIntelService reconstruction; warm start for all repos
-5. **ast-grep integration** -- optional structural pattern searches alongside tree-sitter parsing
+1. ~~**Embedding-based semantic search**~~ -- DONE: hybrid vector + BM25 with RRF; two-stage retrieval
+2. ~~**Persistent index across instances**~~ -- DONE: SQLite-backed IndexStore with incremental updates
+3. ~~**Progressive hydration**~~ -- DONE: adaptive tier-based indexing (small/medium/large/huge); skeleton init <2s for any repo; background hydration thread; on-demand gap filling
+4. ~~**3-way benchmark (20 repos)**~~ -- DONE: grep vs ast-grep vs code-intel across 12 languages; code-intel 4.7/5 quality
+5. ~~**New MCP tools**~~ -- DONE: `hydration_status` tool; `indexing_depth` param on bootstrap; `mode` param on semantic_search
+6. **Ground truth expansion** -- add YAML files for 15+ more benchmark repos (currently 5)
+7. **Go-specific search improvements** -- Go MRR 0.200 lags Python 0.725; index package docs, use module paths
+8. **ast-grep integration** -- optional structural pattern searches alongside tree-sitter parsing
 
 ## v0.2.x -- Code Intel Infrastructure
 

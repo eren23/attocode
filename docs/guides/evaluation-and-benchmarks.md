@@ -89,6 +89,25 @@ python scripts/benchmark_3way.py --repos fastapi,redis,metabase
 python scripts/benchmark_3way.py --skip-code-intel
 ```
 
+### Latest Results (v0.2.11, 20 repos)
+
+| Metric | grep | ast-grep | code-intel |
+|--------|------|----------|------------|
+| **Avg Quality** | 4.0/5 | 2.8/5 | **4.7/5** |
+| **Avg Bootstrap** | 91ms | 538ms | 1.7s* |
+| **Perfect Scores (5/5)** | 48/120 | 36/120 | **101/120** |
+| **Zero Scores (0/5)** | 0 | 24 | 0 |
+
+\* Bootstrap time after progressive hydration. Pre-hydration large repo times were 7-25s.
+
+**Key findings:**
+- Code-intel delivers the highest quality (4.7/5) with structured, concise output
+- grep is fast (91ms) and surprisingly competitive (4.0/5) for simple lookups
+- ast-grep adds limited value — slower than grep with lower quality (2.8/5)
+- Progressive hydration brings all repos under 4s bootstrap (cockroach: 24.5s → 1.2s)
+
+Charts and per-repo analysis: `eval/3WAY_BENCHMARK_REPORT.md`
+
 ## Configured Repos (49)
 
 The 3-way benchmark covers 49 repositories across 30+ languages:

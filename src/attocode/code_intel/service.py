@@ -63,7 +63,7 @@ class CodeIntelService:
     # Lazy initializers
     # ------------------------------------------------------------------
 
-    def _get_ast_service(self):
+    def _get_ast_service(self, *, indexing_depth: str = "auto"):
         if self._ast_service is None:
             with self._init_lock:
                 if self._ast_service is None:
@@ -71,16 +71,24 @@ class CodeIntelService:
 
                     svc = ASTService.get_instance(self._project_dir)
                     if not svc.initialized:
-                        logger.info("Initializing ASTService for %s...", self._project_dir)
-                        svc.initialize()
-                        logger.info(
-                            "ASTService ready: %d files indexed",
-                            len(svc._ast_cache),
-                        )
+                        logger.info("Initializing ASTService (skeleton)...")
+                        svc.initialize_skeleton(indexing_depth=indexing_depth)
+                        # Start background hydration for non-small repos
+                        if (svc._hydration_state
+                                and svc._hydration_state.phase != "ready"):
+                            svc.start_hydration()
                     self._ast_service = svc
+                    # Share the ASTService's context manager to avoid
+                    # double file discovery on large repos
+                    if self._context_mgr is None and svc._context_mgr._files:
+                        self._context_mgr = svc._context_mgr
         return self._ast_service
 
     def _get_context_mgr(self):
+        if self._context_mgr is None:
+            # Trigger AST service init first — it does file discovery
+            # and we reuse its context manager
+            self._get_ast_service()
         if self._context_mgr is None:
             with self._init_lock:
                 if self._context_mgr is None:
@@ -205,6 +213,28 @@ class CodeIntelService:
             "degradation_reason": ", ".join(degradation_reasons),
             "active_backend": "local",
         }
+
+    def hydration_status(self) -> dict:
+        """Return current progressive hydration state."""
+        result: dict = {"phase": "unknown", "tier": "unknown"}
+        try:
+            ast_svc = self._get_ast_service()
+            state = ast_svc._hydration_state
+            if state:
+                result = state.to_dict()
+        except Exception:
+            pass
+
+        # Add semantic search coverage
+        try:
+            sem = self._get_semantic_search()
+            progress = sem.get_index_progress()
+            result["embedding_coverage"] = round(progress.coverage, 3)
+            result["embedding_status"] = progress.status
+        except Exception:
+            result["embedding_coverage"] = 0.0
+
+        return result
 
     # ------------------------------------------------------------------
     # Tool operations — same signatures as server.py tool functions
@@ -1369,6 +1399,7 @@ class CodeIntelService:
 
     def symbols(self, path: str) -> str:
         svc = self._get_ast_service()
+        svc.ensure_file_parsed(path)
         locs = svc.get_file_symbols(path)
         if not locs:
             return f"No symbols found in {path}"
@@ -1392,6 +1423,7 @@ class CodeIntelService:
 
     def dependencies(self, path: str) -> str:
         svc = self._get_ast_service()
+        svc.ensure_file_parsed(path)
         deps = svc.get_dependencies(path)
         dependents = svc.get_dependents(path)
         lines = [f"Dependencies for {path}:"]
@@ -1422,6 +1454,9 @@ class CodeIntelService:
 
     def cross_references(self, symbol_name: str) -> str:
         svc = self._get_ast_service()
+        # On-demand: ensure references are indexed for files containing this symbol
+        for loc in svc.find_symbol(symbol_name):
+            svc.ensure_references_indexed(loc.file_path)
         definitions = svc.find_symbol(symbol_name)
         references = svc.get_callers(symbol_name)
         lines = [f"Cross-references for '{symbol_name}':"]
@@ -2134,8 +2169,25 @@ class CodeIntelService:
         report = scanner.scan(mode=mode, path=path)
         return scanner.format_report(report)
 
-    def semantic_search(self, query: str, top_k: int = 10, file_filter: str = "") -> str:
+    def semantic_search(self, query: str, top_k: int = 10,
+                        file_filter: str = "", mode: str = "auto") -> str:
         mgr = self._get_semantic_search()
+
+        if mode == "keyword":
+            results = mgr._keyword_search(query, top_k, file_filter)
+            return mgr.format_results(results)
+
+        # Auto-start background embedding if hydration is far enough
+        ast_svc = self._ast_service  # don't trigger init, just check if available
+        if ast_svc is not None:
+            state = ast_svc._hydration_state
+            if state and state.parse_coverage >= 0.8 and not mgr.is_index_ready():
+                if mgr._bg_indexer is None:
+                    try:
+                        mgr.start_background_indexing()
+                    except Exception:
+                        pass
+
         results = mgr.search(query, top_k=top_k, file_filter=file_filter)
         return mgr.format_results(results)
 

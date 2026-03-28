@@ -7,6 +7,47 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.11] - 2026-03-28
+
+### Added
+
+#### Progressive Hydration: Adaptive Indexing for Large Repos
+- Tier-based initialization strategy (small/medium/large/huge) based on source file count — repos with >1K files get fast skeleton init instead of full sync parsing
+- `initialize_skeleton()` in ASTService — parses only the top-N most important files (500/300/200 by tier), returns in <2s for any repo size
+- Background hydration thread progressively parses remaining files after bootstrap returns
+- On-demand gap filling: `ensure_file_parsed()` and `ensure_references_indexed()` parse individual files when tools request data not yet in the skeleton index
+- `HydrationState` dataclass tracks parse coverage, reference coverage, and phase (skeleton → hydrating → ready)
+- Dependency graph building skipped for repos with >5K source files during bootstrap (deferred to background hydration)
+- Context manager sharing between ASTService and CodeIntelService eliminates duplicate file discovery
+
+#### New MCP Tool: `hydration_status`
+- Reports current tier, phase, parse coverage, reference coverage, embedding coverage, and elapsed time
+- Lets agents decide whether to wait for full indexing or proceed with partial results
+
+#### New MCP Tool Parameters
+- `bootstrap(indexing_depth="auto"|"eager"|"lazy"|"minimal")` — override auto tier detection; "eager" forces full sync parse, "minimal" skips parsing entirely
+- `semantic_search(mode="auto"|"keyword"|"vector")` — "keyword" forces fast BM25 search, "vector" blocks until embeddings ready
+
+#### 3-Way Benchmark: 20 Repos (grep vs ast-grep vs code-intel)
+- Benchmark report with per-repo PNG charts across 12 programming languages
+- Results: code-intel 4.7/5 quality at 91ms-4s bootstrap (post-hydration), grep 4.0/5 at 91ms, ast-grep 2.8/5 at 538ms
+- Chart generation script (`scripts/gen_3way_report.py`) producing 24 per-repo + 4 summary charts
+
+### Changed
+- `_get_ast_service()` now uses `initialize_skeleton()` instead of `initialize()` — background hydration starts automatically for non-small repos
+- `_get_context_mgr()` reuses ASTService's context manager to avoid double file discovery
+- `symbols()`, `cross_references()`, `dependencies()` now call `ensure_file_parsed()`/`ensure_references_indexed()` before querying the index
+- `semantic_search()` auto-starts background embedding when parse coverage reaches 80%
+- `discover_files()` skips `build_dependency_graph()` for repos with >5K source files — uses heuristic importance only
+- GUIDELINES.md tool count updated from 27 to 28 tools
+
+### Performance
+- **cockroach** (50K files): bootstrap 24.5s → 1.2s (20x faster)
+- **spark** (8K files): bootstrap 8.1s → 1.6s (5x faster)
+- **spring-boot** (5K files): bootstrap 6.9s → 1.2s (6x faster)
+- **deno** (5K files): bootstrap 7.8s → 3.1s (2.5x faster)
+- Quality preserved: avg 4.6/5 → 4.7/5 (slight improvement due to importance-sorted skeleton)
+
 ## [0.2.10] - 2026-03-28
 
 ### Fixed

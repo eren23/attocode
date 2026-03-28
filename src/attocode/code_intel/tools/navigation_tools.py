@@ -24,6 +24,7 @@ from attocode.code_intel._shared import (
     _get_ast_service,
     _get_context_mgr,
     _get_project_dir,
+    _get_service,
     mcp,
 )
 
@@ -248,7 +249,11 @@ def project_summary(max_tokens: int = 4000) -> str:
 
 
 @mcp.tool()
-def bootstrap(task_hint: str = "", max_tokens: int = 8000) -> str:
+def bootstrap(
+    task_hint: str = "",
+    max_tokens: int = 8000,
+    indexing_depth: str = "auto",
+) -> str:
     """All-in-one codebase orientation -- the best first tool call.
 
     Detects codebase size and returns an optimized bundle:
@@ -266,9 +271,15 @@ def bootstrap(task_hint: str = "", max_tokens: int = 8000) -> str:
         task_hint: Optional description of what you're trying to do.
             When provided, includes semantic search results for relevant code.
         max_tokens: Token budget for the entire output (default 8000).
+        indexing_depth: Indexing strategy. "auto" picks based on repo size.
+            "eager" forces full sync indexing. "lazy" does minimal skeleton.
+            "minimal" skips parsing entirely.
     """
     from attocode.code_intel._shared import _get_explorer
     from attocode.code_intel.tools.search_tools import _get_semantic_search
+
+    svc = _get_service()
+    svc._get_ast_service(indexing_depth=indexing_depth)  # ensure right init
 
     ctx = _get_context_mgr()
     files = ctx._files
@@ -389,6 +400,28 @@ def bootstrap(task_hint: str = "", max_tokens: int = 8000) -> str:
     sections.append(guidance)
 
     return "\n\n".join(sections)
+
+
+@mcp.tool()
+def hydration_status() -> str:
+    """Check progressive indexing status.
+
+    Returns the current hydration tier, phase, parse coverage,
+    reference coverage, and embedding status. Use this to decide
+    whether to wait for full indexing or proceed with partial results.
+    """
+    svc = _get_service()
+    status = svc.hydration_status()
+    lines = [
+        f"Tier: {status.get('tier', 'unknown')}",
+        f"Phase: {status.get('phase', 'unknown')}",
+        f"Parse coverage: {status.get('parse_coverage', 0):.0%} "
+        f"({status.get('parsed_files', 0)}/{status.get('total_files', 0)} files)",
+        f"Reference coverage: {status.get('reference_coverage', 0):.0%}",
+        f"Embedding coverage: {status.get('embedding_coverage', 0):.0%}",
+        f"Elapsed: {status.get('elapsed_ms', 0):.0f}ms",
+    ]
+    return "\n".join(lines)
 
 
 @mcp.tool()

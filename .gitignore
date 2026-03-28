@@ -36,6 +36,10 @@ tests/unit/tui/__snapshots__/
 .attocode/exports/
 .attocode/index/
 tests/fixtures/sample_project/
+docs/superpowers/
+eval/charts/
+eval/*.md
+eval/*.log
 
 # Legacy TS runtime artifacts
 legacy/.attocode/traces/
