@@ -1503,9 +1503,72 @@ class SwarmOrchestrator:
         """Run budget projection."""
         self._run_budget_projection()
 
+    def _validate_task_result(self, result: TaskResult) -> tuple[bool, str]:
+        """Pre-done quality gate: verify a task result before marking it complete.
+
+        Returns (passed, reason).  When *passed* is False the task should be
+        demoted to ``needs_review`` instead of ``done``.
+        """
+        orch_cfg = getattr(self._config, "orchestration", None)
+        gate = (orch_cfg.quality_gate if orch_cfg else "basic") or "basic"
+
+        if gate == "none":
+            return True, ""
+
+        task = self._tasks.get(result.task_id)
+        task_kind = task.task_kind if task else "implement"
+        reasons: list[str] = []
+
+        # --- basic checks ---------------------------------------------------
+        if task_kind in ("implement", "test") and not result.files_modified:
+            reasons.append(f"{task_kind} task produced no file modifications")
+
+        if result.tokens_used <= 0:
+            reasons.append("zero tokens used — agent may not have executed")
+
+        # --- strict checks ---------------------------------------------------
+        if gate == "strict" and task:
+            for target in task.target_files:
+                fpath = Path(self._root_dir) / target
+                if not fpath.exists():
+                    reasons.append(f"target file missing: {target}")
+
+        if reasons:
+            return False, "; ".join(reasons)
+        return True, ""
+
     async def pipeline_update_dag(self, result: TaskResult, success: bool) -> int:
         """Update DAG state and handle failure/retry. Returns 1 if completed."""
         if success:
+            # --- Quality gate -------------------------------------------------
+            qg_passed, qg_reason = self._validate_task_result(result)
+            if not qg_passed:
+                node = self._aot_graph.get_node(result.task_id)
+                old_status = node.status if node else "running"
+                if node:
+                    node.status = "needs_review"
+                self._transition_log.append({
+                    "timestamp": utc_now_iso(),
+                    "task_id": result.task_id,
+                    "from_state": old_status,
+                    "to_state": "needs_review",
+                    "reason": f"quality gate: {qg_reason}",
+                    "assigned_agent": f"agent-{result.task_id}",
+                })
+                logger.warning(
+                    "Quality gate demoted %s to needs_review: %s",
+                    result.task_id, qg_reason,
+                )
+                self._emit("warning", task_id=result.task_id,
+                            agent_id=f"agent-{result.task_id}",
+                            message=f"Task {result.task_id} needs review: {qg_reason}",
+                            data={"quality_gate_reason": qg_reason,
+                                  "files_modified": result.files_modified,
+                                  "tokens_used": result.tokens_used})
+                if self._causal_analyzer and result.cost_usd > 0:
+                    self._causal_analyzer.record_task_cost(result.task_id, result.cost_usd)
+                return 1  # count as completed for progress (dependents can proceed)
+
             old_status = self._aot_graph.get_node(result.task_id).status if self._aot_graph.get_node(result.task_id) else "running"
             self._aot_graph.mark_complete(result.task_id)
             self._transition_log.append({
@@ -1724,6 +1787,36 @@ class SwarmOrchestrator:
                                       "duration_s": verification.duration_s})
 
         if result.success:
+            # --- Quality gate -------------------------------------------------
+            qg_passed, qg_reason = self._validate_task_result(result)
+            if not qg_passed:
+                node = self._aot_graph.get_node(result.task_id)
+                old_status = node.status if node else "running"
+                if node:
+                    node.status = "needs_review"
+                self._transition_log.append({
+                    "timestamp": utc_now_iso(),
+                    "task_id": result.task_id,
+                    "from_state": old_status,
+                    "to_state": "needs_review",
+                    "reason": f"quality gate: {qg_reason}",
+                    "assigned_agent": f"agent-{result.task_id}",
+                })
+                logger.warning(
+                    "Quality gate demoted %s to needs_review: %s",
+                    result.task_id, qg_reason,
+                )
+                self._emit("warning", task_id=result.task_id,
+                            agent_id=f"agent-{result.task_id}",
+                            message=f"Task {result.task_id} needs review: {qg_reason}",
+                            data={"quality_gate_reason": qg_reason,
+                                  "files_modified": result.files_modified,
+                                  "tokens_used": result.tokens_used})
+                if self._causal_analyzer and result.cost_usd > 0:
+                    self._causal_analyzer.record_task_cost(result.task_id, result.cost_usd)
+                self._run_budget_projection()
+                return 1  # count as completed for progress (dependents can proceed)
+
             old_status = self._aot_graph.get_node(result.task_id).status if self._aot_graph.get_node(result.task_id) else "running"
             self._aot_graph.mark_complete(result.task_id)
             self._transition_log.append({
@@ -1943,6 +2036,9 @@ class SwarmOrchestrator:
             if status == "done":
                 node.status = "done"
                 restored += 1
+            elif status == "needs_review":
+                node.status = "needs_review"
+                restored += 1
             else:
                 # Reset failed/skipped/running to pending for retry
                 node.status = "pending"
@@ -2091,7 +2187,7 @@ class SwarmOrchestrator:
                     self._emit("control.applied", task_id=task_id, message="Applied control action: skip", data={"action": action, "task_id": task_id, "skipped": skipped})
             elif action == "retry":
                 node = self._aot_graph.get_node(task_id)
-                if node and node.status in ("failed", "skipped"):
+                if node and node.status in ("failed", "skipped", "needs_review"):
                     node.status = "pending"
                     self._task_attempts.pop(task_id, None)
                     self._emit("retry", task_id=task_id,
@@ -2367,7 +2463,7 @@ class SwarmOrchestrator:
         try:
             summary = self._aot_graph.summary()
             total_tasks = sum(summary.values())
-            completed = summary.get("done", 0) + summary.get("failed", 0) + summary.get("skipped", 0)
+            completed = summary.get("done", 0) + summary.get("needs_review", 0) + summary.get("failed", 0) + summary.get("skipped", 0)
             projection = self._budget_projector.project(
                 used_cost=self._budget.used_cost_usd,
                 max_cost=self._budget.max_cost_usd,

@@ -76,15 +76,18 @@ class TestAdaptiveConcurrency:
         ac = AdaptiveConcurrency(initial=4, floor=1, ceiling=8)
         assert ac.current == 4
 
-    def test_on_success_increases(self) -> None:
+    def test_on_success_requires_hysteresis(self) -> None:
         ac = AdaptiveConcurrency(initial=2, floor=1, ceiling=8)
         ac._last_increase_time = 0  # bypass cooldown
-        ac.on_success()
+        ac.on_success()  # first success — not enough
+        assert ac.current == 2
+        ac.on_success()  # second consecutive — triggers increase
         assert ac.current == 3
 
     def test_on_success_respects_ceiling(self) -> None:
         ac = AdaptiveConcurrency(initial=8, floor=1, ceiling=8)
         ac._last_increase_time = 0
+        ac.on_success()
         ac.on_success()
         assert ac.current == 8
 
@@ -118,7 +121,51 @@ class TestAdaptiveConcurrency:
         ac = AdaptiveConcurrency(initial=4, floor=1, ceiling=8)
         ac._last_increase_time = 0
         ac.on_success()
+        ac.on_success()  # hysteresis: need 2 consecutive
         ac.on_rate_limit()
         stats = ac.stats
         assert stats.increases == 1
         assert stats.decreases == 1
+
+    def test_hysteresis_resets_on_failure(self) -> None:
+        ac = AdaptiveConcurrency(initial=3, floor=1, ceiling=8)
+        ac._last_increase_time = 0
+        ac.on_success()  # consecutive=1
+        ac.on_timeout()  # resets consecutive to 0, current=2
+        assert ac.current == 2
+        ac.on_success()  # consecutive=1 again (not enough)
+        assert ac.current == 2
+        ac.on_success()  # consecutive=2, now triggers
+        assert ac.current == 3
+
+    def test_hysteresis_resets_on_rate_limit(self) -> None:
+        ac = AdaptiveConcurrency(initial=4, floor=1, ceiling=8)
+        ac._last_increase_time = 0
+        ac.on_success()  # consecutive=1
+        ac.on_rate_limit()  # resets consecutive, halves to 2
+        assert ac.current == 2
+        ac.on_success()  # consecutive=1
+        assert ac.current == 2
+
+    def test_adjustment_log(self) -> None:
+        ac = AdaptiveConcurrency(initial=4, floor=1, ceiling=8)
+        ac._last_increase_time = 0
+        ac.on_success()
+        ac.on_success()  # increase: 4 -> 5
+        ac.on_rate_limit()  # halve: 5 -> 2
+        ac.on_timeout()  # decrease: 2 -> 1
+        log = ac.get_adjustment_log()
+        assert len(log) == 3
+        assert log[0][1] == "success"
+        assert log[0][2:] == (4, 5)
+        assert log[1][1] == "rate_limit"
+        assert log[1][2:] == (5, 2)
+        assert log[2][1] == "timeout"
+        assert log[2][2:] == (2, 1)
+
+    def test_adjustment_log_returns_copy(self) -> None:
+        ac = AdaptiveConcurrency(initial=4, floor=1, ceiling=8)
+        ac.on_timeout()
+        log = ac.get_adjustment_log()
+        log.clear()
+        assert len(ac.get_adjustment_log()) == 1

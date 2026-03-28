@@ -7,12 +7,16 @@ Validates the task graph before execution begins, checking:
 4. Overlap detection (two tasks targeting same function without dep edge)
 5. Orphan detection (tasks disconnected from DAG)
 6. Granularity check (complexity estimation from file sizes/symbol counts)
+7. Title bundling (detect "poison tasks" with 3+ bundled items in title)
+8. Scope breadth (>10 target files = scope_too_broad)
+9. Category mixing (title/description spans 4+ responsibility categories)
 """
 
 from __future__ import annotations
 
 import logging
 import os
+import re
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any
 
@@ -29,7 +33,7 @@ class ValidationIssue:
     """A single validation issue found in the decomposition."""
 
     severity: str  # "error" | "warning" | "info"
-    category: str  # "file_existence" | "symbol" | "dependency" | "overlap" | "orphan" | "granularity"
+    category: str  # "file_existence" | "symbol" | "dependency" | "overlap" | "orphan" | "granularity" | "title_bundling" | "scope_too_broad" | "category_mixing"
     task_id: str
     message: str
     suggestion: str = ""
@@ -108,6 +112,9 @@ class DecomposeValidator:
         self._check_overlap(tasks, result)
         self._check_orphans(tasks, result)
         self._check_granularity(tasks, result)
+        self._check_title_bundling(tasks, result)
+        self._check_scope_breadth(tasks, result)
+        self._check_category_mixing(tasks, result)
 
         # Compute score from issues
         error_penalty = result.error_count * 0.15
@@ -293,3 +300,93 @@ class DecomposeValidator:
                     message=f"Target files total ~{total_lines} lines (may be too complex for one task)",
                     suggestion="Consider splitting by function or subsystem",
                 ))
+
+    # --- Poison-task detection rules ---
+
+    # Pattern that splits on "+", "&", commas, or " and " to detect bundled items
+    _BUNDLING_SPLIT_RE = re.compile(r"\s*(?:\+|&|,|\band\b)\s*", re.IGNORECASE)
+
+    # Category keyword groups for mixing detection
+    _CATEGORY_KEYWORDS: dict[str, set[str]] = {
+        "implement": {"implement", "build", "create"},
+        "test": {"test", "verify", "validate"},
+        "audit": {"audit", "review", "analyze"},
+        "deploy": {"deploy", "release", "ship"},
+        "document": {"document", "readme", "guide"},
+        "example": {"example", "demo", "sample"},
+    }
+
+    def _check_title_bundling(
+        self,
+        tasks: list[TaskSpec],
+        result: ValidationResult,
+    ) -> None:
+        """Flag tasks whose titles bundle 3+ separate responsibilities.
+
+        Detects titles like "Examples + Size Audit + Verification" by splitting
+        on ``+``, ``&``, commas, and the word "and".
+        """
+        for task in tasks:
+            parts = self._BUNDLING_SPLIT_RE.split(task.title)
+            # Filter out empty strings that can result from leading/trailing separators
+            parts = [p.strip() for p in parts if p.strip()]
+            if len(parts) >= 3:
+                result.issues.append(ValidationIssue(
+                    severity="warning",
+                    category="title_bundling",
+                    task_id=task.task_id,
+                    message=(
+                        f"Title bundles {len(parts)} items: {parts!r}. "
+                        f"This is a 'poison task' — too many responsibilities in one task"
+                    ),
+                    suggestion="Split into separate single-responsibility tasks",
+                ))
+
+    def _check_scope_breadth(
+        self,
+        tasks: list[TaskSpec],
+        result: ValidationResult,
+    ) -> None:
+        """Flag tasks with >10 target files as scope_too_broad."""
+        for task in tasks:
+            n = len(task.target_files)
+            if n > 10:
+                result.issues.append(ValidationIssue(
+                    severity="warning",
+                    category="scope_too_broad",
+                    task_id=task.task_id,
+                    message=f"Task targets {n} files — scope is too broad for reliable execution",
+                    suggestion="Decompose into focused sub-tasks touching fewer files each",
+                ))
+
+    def _check_category_mixing(
+        self,
+        tasks: list[TaskSpec],
+        result: ValidationResult,
+    ) -> None:
+        """Flag tasks whose title/description spans 4+ distinct responsibility categories.
+
+        Categories: implement/build/create, test/verify/validate, audit/review/analyze,
+        deploy/release/ship, document/readme/guide, example/demo/sample.
+        """
+        for task in tasks:
+            text = f"{task.title} {task.description}".lower()
+            # Tokenize on word boundaries for accurate matching
+            words = set(re.findall(r"[a-z]+", text))
+            matched_categories: list[str] = []
+            for cat_name, keywords in self._CATEGORY_KEYWORDS.items():
+                if words & keywords:
+                    matched_categories.append(cat_name)
+            if len(matched_categories) >= 4:
+                result.issues.append(ValidationIssue(
+                    severity="warning",
+                    category="category_mixing",
+                    task_id=task.task_id,
+                    message=(
+                        f"Task mixes {len(matched_categories)} responsibility categories "
+                        f"({', '.join(sorted(matched_categories))}). "
+                        f"This is a 'poison task' — too many concerns in one task"
+                    ),
+                    suggestion="Split into tasks with a single category of responsibility each",
+                ))
+

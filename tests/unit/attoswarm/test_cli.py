@@ -1,12 +1,18 @@
 from __future__ import annotations
 
 import json
+import subprocess
 import time
 from pathlib import Path
 
 from click.testing import CliRunner
 
-from attoswarm.cli import _print_run_summary, main
+from attoswarm.cli import (
+    _detect_modified_files,
+    _print_run_summary,
+    _snapshot_file_state,
+    main,
+)
 
 
 def _write_config(path: Path) -> None:
@@ -609,3 +615,117 @@ def test_print_run_summary_labels_planning_failure(tmp_path: Path, capsys) -> No
     out = capsys.readouterr().out
 
     assert "Planning failed: 0/0 completed" in out
+
+
+# ── File tracking: _snapshot_file_state / _detect_modified_files ─────
+
+
+def _init_git_repo(path: Path) -> None:
+    """Initialise a minimal git repo with one committed file."""
+    subprocess.run(["git", "init"], cwd=path, capture_output=True, check=True)
+    subprocess.run(
+        ["git", "config", "user.email", "test@test.com"],
+        cwd=path, capture_output=True, check=True,
+    )
+    subprocess.run(
+        ["git", "config", "user.name", "Test"],
+        cwd=path, capture_output=True, check=True,
+    )
+    (path / "initial.txt").write_text("init", encoding="utf-8")
+    subprocess.run(["git", "add", "."], cwd=path, capture_output=True, check=True)
+    subprocess.run(
+        ["git", "commit", "-m", "init"],
+        cwd=path, capture_output=True, check=True,
+    )
+
+
+# ── _snapshot_file_state ─────────────────────────────────────────────
+
+
+def test_snapshot_file_state_returns_modified_and_untracked(tmp_path: Path) -> None:
+    _init_git_repo(tmp_path)
+
+    # Create one modified (tracked) file and one untracked file.
+    (tmp_path / "initial.txt").write_text("changed", encoding="utf-8")
+    (tmp_path / "new_file.py").write_text("x = 1", encoding="utf-8")
+
+    result = _snapshot_file_state(str(tmp_path))
+
+    assert isinstance(result, set)
+    assert "initial.txt" in result
+    assert "new_file.py" in result
+
+
+def test_snapshot_file_state_returns_empty_for_non_git_dir(tmp_path: Path) -> None:
+    # tmp_path is not a git repo.
+    result = _snapshot_file_state(str(tmp_path))
+    assert result == set()
+
+
+def test_snapshot_file_state_returns_empty_on_error(tmp_path: Path, monkeypatch) -> None:
+    """If subprocess raises, the function catches the error and returns empty set."""
+    import subprocess as _sp
+
+    original_run = _sp.run
+
+    def _boom(*args, **kwargs):
+        raise OSError("simulated failure")
+
+    monkeypatch.setattr("subprocess.run", _boom)
+    result = _snapshot_file_state(str(tmp_path))
+    assert result == set()
+
+
+# ── _detect_modified_files ───────────────────────────────────────────
+
+
+def test_detect_modified_files_without_before_returns_all(tmp_path: Path) -> None:
+    _init_git_repo(tmp_path)
+    (tmp_path / "a.py").write_text("a", encoding="utf-8")
+    (tmp_path / "b.py").write_text("b", encoding="utf-8")
+
+    result = _detect_modified_files(str(tmp_path))
+
+    assert isinstance(result, list)
+    assert "a.py" in result
+    assert "b.py" in result
+
+
+def test_detect_modified_files_with_before_returns_only_new(tmp_path: Path) -> None:
+    _init_git_repo(tmp_path)
+
+    # Pre-existing dirty file.
+    (tmp_path / "old.py").write_text("old", encoding="utf-8")
+    before = _snapshot_file_state(str(tmp_path))
+    assert "old.py" in before
+
+    # Add a new file after the snapshot.
+    (tmp_path / "new.py").write_text("new", encoding="utf-8")
+
+    result = _detect_modified_files(str(tmp_path), before=before)
+
+    assert "new.py" in result
+    assert "old.py" not in result
+
+
+def test_detect_modified_files_with_before_no_new_files(tmp_path: Path) -> None:
+    _init_git_repo(tmp_path)
+
+    (tmp_path / "existing.py").write_text("x", encoding="utf-8")
+    before = _snapshot_file_state(str(tmp_path))
+
+    # No new changes after the snapshot.
+    result = _detect_modified_files(str(tmp_path), before=before)
+
+    assert result == []
+
+
+def test_detect_modified_files_returns_sorted_list(tmp_path: Path) -> None:
+    _init_git_repo(tmp_path)
+    # Create files in reverse alphabetical order.
+    for name in ["z.py", "m.py", "a.py"]:
+        (tmp_path / name).write_text(name, encoding="utf-8")
+
+    result = _detect_modified_files(str(tmp_path))
+
+    assert result == sorted(result)

@@ -23,7 +23,7 @@ from attoswarm.config.schema import RoleConfig, SwarmYamlConfig
 from attoswarm.coordinator.loop import HybridCoordinator
 from attoswarm.protocol.io import read_json
 from attoswarm.protocol.models import LauncherInfo, LineageSpec
-from attoswarm.run_summary import collect_modified_files
+from attoswarm.run_summary import collect_modified_files, collect_timeout_stats
 from attoswarm.tui.app import AttoswarmApp
 
 logger = logging.getLogger(__name__)
@@ -304,6 +304,40 @@ def build_agent_prompt(task: dict) -> str:
     return "\n".join(parts)
 
 
+def _snapshot_file_state(working_dir: str) -> set[str]:
+    """Capture the current set of modified + untracked files (for before/after diffing)."""
+    import subprocess as _sp
+
+    try:
+        diff = _sp.run(
+            ["git", "diff", "--name-only", "HEAD"],
+            cwd=working_dir, capture_output=True, text=True, timeout=10,
+        )
+        untracked = _sp.run(
+            ["git", "ls-files", "--others", "--exclude-standard"],
+            cwd=working_dir, capture_output=True, text=True, timeout=10,
+        )
+        files = set(diff.stdout.strip().splitlines()) | set(untracked.stdout.strip().splitlines())
+        return {f for f in files if f.strip()}
+    except Exception:
+        return set()
+
+
+def _detect_modified_files(working_dir: str, before: set[str] | None = None) -> list[str]:
+    """Detect files modified in working_dir since *before* snapshot.
+
+    If *before* is provided, returns only NEW modifications (files in the
+    current state that were not in the before snapshot).  This handles shared
+    workspace mode where multiple agents write concurrently.
+
+    Falls back to returning all modified/untracked files if no snapshot.
+    """
+    after = _snapshot_file_state(working_dir)
+    if before is not None:
+        return sorted(after - before)
+    return sorted(after)
+
+
 def _make_subprocess_spawn_fn(
     cfg: SwarmYamlConfig,
     process_registry: Any = None,
@@ -367,6 +401,9 @@ def _make_subprocess_spawn_fn(
         elif is_claude and stdin_text:
             cmd.extend(["--verbose", "--output-format", "stream-json"])
         task_id = task["task_id"]
+
+        # Snapshot file state before spawn so we can diff after
+        pre_spawn_files = _snapshot_file_state(wd)
 
         t0 = _time.monotonic()
         try:
@@ -471,6 +508,9 @@ def _make_subprocess_spawn_fn(
             stdout_text = (stdout_bytes or b"").decode("utf-8", errors="replace")
             stderr_text = (stderr_bytes or b"").decode("utf-8", errors="replace")
 
+            # Detect files modified by this subprocess (diff against pre-spawn snapshot)
+            modified_files = _detect_modified_files(wd, before=pre_spawn_files)
+
             if proc.returncode == 0:
                 return _TaskResult(
                     task_id=task_id,
@@ -479,6 +519,7 @@ def _make_subprocess_spawn_fn(
                     tokens_used=final_tokens,
                     cost_usd=final_cost,
                     duration_s=elapsed,
+                    files_modified=modified_files,
                 )
             else:
                 return _TaskResult(
@@ -489,6 +530,7 @@ def _make_subprocess_spawn_fn(
                     tokens_used=final_tokens,
                     cost_usd=final_cost,
                     duration_s=elapsed,
+                    files_modified=modified_files,
                 )
         except TimeoutError:
             return _TaskResult(
@@ -785,6 +827,20 @@ def _print_run_summary(orch: Any) -> None:
         files_modified = collect_modified_files(run_dir, getattr(orch, "get_state", lambda: {})())
     if not printed_change_summary and files_modified:
         click.echo(f"  Files: {len(files_modified)} modified")
+
+    # Timeout / near-timeout statistics
+    if run_dir:
+        tstats = collect_timeout_stats(run_dir)
+        timeout_parts: list[str] = []
+        if tstats["timed_out"]:
+            timeout_parts.append(f"{tstats['timed_out']} timed out")
+        if tstats["near_timeout"]:
+            timeout_parts.append(f"{tstats['near_timeout']} near-timeout")
+        if tstats["zero_token"]:
+            timeout_parts.append(f"{tstats['zero_token']} zero-token")
+        if timeout_parts:
+            click.echo(f"  Warnings: {', '.join(timeout_parts)}")
+
     click.echo(f"{'=' * 50}")
 
 
