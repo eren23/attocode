@@ -11,8 +11,10 @@ from attoswarm.cli import (
     _detect_modified_files,
     _print_run_summary,
     _snapshot_file_state,
+    _tui_refresh_interval_s,
     main,
 )
+from attoswarm.config.schema import SwarmYamlConfig
 
 
 def _write_config(path: Path) -> None:
@@ -103,6 +105,13 @@ def test_doctor_fails_when_binary_missing(tmp_path: Path, monkeypatch) -> None: 
     result = runner.invoke(main, ["doctor", str(cfg)])
     assert result.exit_code == 1
     assert "[FAIL]" in result.output
+
+
+def test_tui_refresh_interval_uses_fastest_poll_setting() -> None:
+    cfg = SwarmYamlConfig()
+    cfg.run.poll_interval_ms = 250
+    cfg.ui.poll_ms = 500
+    assert _tui_refresh_interval_s(cfg) == 0.25
 
 
 # ── C3: --no-git-safety forwarding in start_command ──────────────────

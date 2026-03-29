@@ -43,6 +43,58 @@ class ResearchCommandGroup(click.Group):
         return super().resolve_command(ctx, args)
 
 
+def _tui_refresh_interval_s(cfg: SwarmYamlConfig) -> float:
+    """Resolve the live refresh cadence for the Textual monitor."""
+    candidates = [
+        int(getattr(getattr(cfg, "ui", None), "poll_ms", 0) or 0),
+        int(getattr(getattr(cfg, "run", None), "poll_interval_ms", 0) or 0),
+    ]
+    ms_values = [value for value in candidates if value > 0]
+    poll_ms = min(ms_values) if ms_values else 250
+    return max(0.05, poll_ms / 1000.0)
+
+
+def _load_tui_config(run_dir: Path) -> SwarmYamlConfig:
+    """Best-effort config resolution for a standalone `attoswarm tui` attach."""
+    cfg_path = run_dir / "swarm.yaml"
+    if not cfg_path.exists():
+        for candidate in [
+            run_dir.parent.parent / ".attocode" / "swarm.hybrid.yaml",
+            Path.cwd() / ".attocode" / "swarm.hybrid.yaml",
+        ]:
+            if candidate.exists():
+                cfg_path = candidate
+                break
+    cfg = load_swarm_yaml(cfg_path) if cfg_path.exists() else SwarmYamlConfig()
+    cfg.run.run_dir = str(run_dir)
+    return cfg
+
+
+def _make_tui_app(
+    run_dir: str,
+    *,
+    coordinator_pid: int | None = None,
+    research_mode: bool = False,
+    refresh_interval_s: float = 0.25,
+) -> AttoswarmApp:
+    """Construct `AttoswarmApp`, tolerating narrow monkeypatched fakes in tests."""
+    try:
+        return AttoswarmApp(
+            run_dir,
+            coordinator_pid=coordinator_pid,
+            research_mode=research_mode,
+            refresh_interval_s=refresh_interval_s,
+        )
+    except TypeError:
+        if research_mode:
+            return AttoswarmApp(
+                run_dir,
+                coordinator_pid=coordinator_pid,
+                research_mode=research_mode,
+            )
+        return AttoswarmApp(run_dir, coordinator_pid=coordinator_pid)
+
+
 def _make_trace_collector(cfg: SwarmYamlConfig) -> Any:
     """Create a TraceCollector for the run if tracing is enabled. Returns None on failure."""
     try:
@@ -355,9 +407,9 @@ def _make_subprocess_spawn_fn(
     are registered/unregistered for graceful shutdown.
 
     If *event_callback* is provided, it is called with each parsed
-    ``AgentActivityEvent`` from Claude stream-json output.
+    ``AgentActivityEvent`` from any structured backend stream.
     """
-    from attoswarm.adapters.stream_parser import AgentActivityEvent, parse_stream_json_line
+    from attoswarm.adapters.stream_parser import AgentActivityEvent, parse_backend_stream_line
     from attoswarm.coordinator.subagent_manager import TaskResult as _TaskResult
 
     # Pre-build role_hint -> RoleConfig lookup
@@ -425,7 +477,7 @@ def _make_subprocess_spawn_fn(
             final_tokens = 0
             final_cost = 0.0
 
-            # Stream stdout — use stream-json parser for claude, regex for others
+            # Stream stdout — prefer structured per-backend parsers, then regex fallback.
             async def _read_stdout() -> bytes:
                 nonlocal final_tokens, final_cost
                 if proc.stdout is None:
@@ -437,7 +489,7 @@ def _make_subprocess_spawn_fn(
                     if not chunk:
                         # Process any remaining partial line
                         if remainder.strip():
-                            _process_line(remainder, task_id, is_claude, activity_events)
+                            _process_line(remainder, task_id, activity_events)
                         break
                     buf.extend(chunk)
                     text = remainder + chunk.decode("utf-8", errors="replace")
@@ -445,7 +497,7 @@ def _make_subprocess_spawn_fn(
                     # Last element may be incomplete — save as remainder
                     remainder = lines[-1]
                     for line in lines[:-1]:
-                        _process_line(line, task_id, is_claude, activity_events)
+                        _process_line(line, task_id, activity_events)
                 # Extract final tokens/cost from result events
                 for evt in activity_events:
                     if evt.event_kind == "result":
@@ -456,29 +508,26 @@ def _make_subprocess_spawn_fn(
             def _process_line(
                 line: str,
                 tid: str,
-                use_stream_json: bool,
                 events: list[AgentActivityEvent],
             ) -> None:
-                if use_stream_json:
-                    evt = parse_stream_json_line(line, tid)
-                    if evt:
-                        events.append(evt)
-                        # Backward-compat: write activity sidecar
-                        if evt.event_kind == "tool_call" and evt.tool_name:
-                            _write_activity(cfg.run.run_dir, tid, f"{evt.tool_name} {evt.tool_input_summary[:40]}")
-                        elif evt.event_kind == "text" and evt.text_preview:
-                            _write_activity(cfg.run.run_dir, tid, evt.text_preview[:60])
-                        # Invoke event_callback for real-time observability
-                        if event_callback is not None:
-                            try:
-                                event_callback(evt)
-                            except Exception:
-                                pass
-                else:
-                    # Legacy regex path for non-Claude backends
-                    label = _parse_activity_label(line)
-                    if label:
-                        _write_activity(cfg.run.run_dir, tid, label)
+                evt = parse_backend_stream_line(backend, line, tid)
+                if evt is not None:
+                    events.append(evt)
+                    if evt.event_kind == "tool_call" and evt.tool_name:
+                        _write_activity(cfg.run.run_dir, tid, f"{evt.tool_name} {evt.tool_input_summary[:40]}")
+                    elif evt.event_kind in {"text", "error"} and evt.text_preview:
+                        _write_activity(cfg.run.run_dir, tid, evt.text_preview[:60])
+                    if event_callback is not None:
+                        try:
+                            event_callback(evt)
+                        except Exception:
+                            pass
+                    return
+
+                # Legacy regex path for unstructured backends
+                label = _parse_activity_label(line)
+                if label:
+                    _write_activity(cfg.run.run_dir, tid, label)
 
             async def _read_stderr() -> bytes:
                 if proc.stderr is None:
@@ -846,7 +895,12 @@ def _print_run_summary(orch: Any) -> None:
 
 def _run_monitor_app(run_dir: str, proc: Any) -> int:
     """Run the dashboard against a coordinator subprocess."""
-    app = AttoswarmApp(run_dir, coordinator_pid=getattr(proc, "pid", None))
+    cfg = _load_tui_config(Path(run_dir))
+    app = _make_tui_app(
+        run_dir,
+        coordinator_pid=getattr(proc, "pid", None),
+        refresh_interval_s=_tui_refresh_interval_s(cfg),
+    )
     app.run()
 
     exit_intent = getattr(app, "exit_intent", "detach")
@@ -1096,7 +1150,10 @@ def run_command(
         ).run())
 
     if observe:
-        AttoswarmApp(cfg.run.run_dir).run()
+        _make_tui_app(
+            cfg.run.run_dir,
+            refresh_interval_s=_tui_refresh_interval_s(cfg),
+        ).run()
     raise SystemExit(code)
 
 
@@ -1326,7 +1383,11 @@ def continue_command(
 @click.argument("run_dir", type=click.Path(exists=True, file_okay=False, path_type=Path))
 def tui_command(run_dir: Path) -> None:
     """Open TUI dashboard for an existing run directory."""
-    AttoswarmApp(str(run_dir)).run()
+    cfg = _load_tui_config(run_dir)
+    _make_tui_app(
+        str(run_dir),
+        refresh_interval_s=_tui_refresh_interval_s(cfg),
+    ).run()
 
 
 @main.command("resume")
@@ -2260,7 +2321,7 @@ def _run_research_with_monitor(**kwargs: Any) -> None:
 
     from attoswarm.tui.app import AttoswarmApp
 
-    app = AttoswarmApp(str(run_dir), coordinator_pid=proc.pid, research_mode=True)
+    app = _make_tui_app(str(run_dir), coordinator_pid=proc.pid, research_mode=True)
     app.run()
 
     if proc.poll() is None:

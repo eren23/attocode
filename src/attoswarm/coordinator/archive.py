@@ -81,6 +81,8 @@ def archive_previous_run(layout: dict[str, Any]) -> None:
                 layout["state"],
                 layout["manifest"],
                 layout["events"],
+                layout.get("live_state"),
+                layout.get("live_events"),
             )
         ) or (control_path.exists() and control_path.stat().st_size > 0) or any(
             d.is_dir() and any(d.iterdir())
@@ -115,10 +117,13 @@ def _do_archive_moves(layout: dict[str, Any], history_dir: Path) -> None:
 
     if layout["events"].exists() and layout["events"].stat().st_size > 0:
         _safe_move(layout["events"], history_dir / "swarm.events.jsonl")
+    if layout.get("live_events") and layout["live_events"].exists() and layout["live_events"].stat().st_size > 0:
+        _safe_move(layout["live_events"], history_dir / "swarm.live.jsonl")
 
     for key, dest_name in (
         ("state", "swarm.state.json"),
         ("manifest", "swarm.manifest.json"),
+        ("live_state", "swarm.live.state.json"),
     ):
         src = layout[key]
         if src.exists():
@@ -169,6 +174,8 @@ def ensure_clean_slate(layout: dict[str, Any]) -> int:
     for path in (
         layout["state"],
         layout["manifest"],
+        layout.get("live_state"),
+        layout.get("live_events"),
         root / "git_safety.json",
         root / "changes.json",
         root / "coordinator.log",
@@ -198,7 +205,7 @@ def ensure_clean_slate(layout: dict[str, Any]) -> int:
             cleaned += 1
 
     # Ensure fresh empty JSONL files
-    for path in (root / "control.jsonl", layout["events"]):
+    for path in (root / "control.jsonl", layout["events"], layout["live_events"]):
         path.write_text("", encoding="utf-8")
 
     return cleaned

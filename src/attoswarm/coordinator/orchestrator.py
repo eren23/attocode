@@ -32,10 +32,11 @@ from attoswarm.coordinator.causal_analyzer import CausalChainAnalyzer
 from attoswarm.coordinator.decompose_validator import DecomposeValidator
 from attoswarm.coordinator.event_bus import EventBus, SwarmEvent
 from attoswarm.coordinator.health_monitor import HealthMonitor
+from attoswarm.coordinator.live_monitor import LiveMonitor
 from attoswarm.coordinator.poison_detector import PoisonDetector
 from attoswarm.coordinator.preflight import PreflightValidator
 from attoswarm.coordinator.result_pipeline import ResultPipeline
-from attoswarm.coordinator.subagent_manager import SubagentManager, TaskResult
+from attoswarm.coordinator.subagent_manager import AgentStatus, SubagentManager, TaskResult
 from attoswarm.coordinator.trace_context import TraceContext, current_span, start_span
 from attoswarm.protocol.io import read_json, write_json_atomic, write_json_fast
 from attoswarm.protocol.models import (
@@ -201,6 +202,7 @@ class SwarmOrchestrator:
         self._control_cursor: int = 0  # line offset into control.jsonl
         self._control_lock: asyncio.Lock | None = None  # initialized in run()
         self._cached_test_command: str | None = None
+        self._live_monitor: LiveMonitor | None = None
 
     def _load_resume_metadata(self) -> dict[str, Any]:
         manifest = read_json(self._run_dir / "swarm.manifest.json", default={})
@@ -336,10 +338,35 @@ class SwarmOrchestrator:
         elif kind == "text":
             status.llm_turns += 1
             status.activity = getattr(event, "text_preview", "")[:60]
+            self._emit_live_event(
+                "agent.activity",
+                task_id=task_id,
+                agent_id=agent_id,
+                message=status.activity,
+                payload={"kind": kind, "text_preview": getattr(event, "text_preview", "")[:200]},
+            )
         elif kind == "result":
             status.tokens_used = getattr(event, "tokens_used", 0)
+            self._emit_live_event(
+                "agent.result",
+                task_id=task_id,
+                agent_id=agent_id,
+                message="result",
+                payload={
+                    "kind": kind,
+                    "tokens_used": getattr(event, "tokens_used", 0),
+                    "cost_usd": getattr(event, "cost_usd", 0.0),
+                },
+            )
         elif kind == "error":
             status.activity = f"error: {getattr(event, 'text_preview', '')[:40]}"
+            self._emit_live_event(
+                "agent.activity",
+                task_id=task_id,
+                agent_id=agent_id,
+                message=status.activity,
+                payload={"kind": kind, "text_preview": getattr(event, "text_preview", "")[:200]},
+            )
 
         # Write trace entry for tool calls
         if kind == "tool_call":
@@ -347,6 +374,46 @@ class SwarmOrchestrator:
                 "tool": getattr(event, "tool_name", ""),
                 "input_summary": getattr(event, "tool_input_summary", "")[:200],
             })
+
+    def _on_agent_status_change(self, status: AgentStatus) -> None:
+        """Mirror subagent lifecycle transitions into the live monitor."""
+        self._emit_live_event(
+            "agent.status",
+            task_id=status.task_id,
+            agent_id=status.agent_id,
+            message=status.status,
+            payload={
+                "status": status.status,
+                "model": status.model,
+                "tokens_used": status.tokens_used,
+            },
+        )
+
+    def _emit_live_event(
+        self,
+        event_type: str,
+        *,
+        task_id: str = "",
+        agent_id: str = "",
+        message: str = "",
+        payload: dict[str, Any] | None = None,
+        force_snapshot: bool = False,
+        timestamp: float | None = None,
+    ) -> None:
+        if self._live_monitor is None:
+            return
+        try:
+            self._live_monitor.emit(
+                event_type=event_type,
+                task_id=task_id,
+                agent_id=agent_id,
+                message=message,
+                payload=payload,
+                force_snapshot=force_snapshot,
+                timestamp=timestamp,
+            )
+        except Exception as exc:
+            logger.debug("Live monitor emit failed: %s", exc)
 
     # ------------------------------------------------------------------
     # Public API
@@ -389,6 +456,11 @@ class SwarmOrchestrator:
         """
         self._start_time = time.time()
         self._setup_directories()
+        self._live_monitor = LiveMonitor(
+            events_path=self._layout["live_events"],
+            state_path=self._layout["live_state"],
+            snapshot_builder=self._build_live_state,
+        )
         resumed_existing_plan = False
 
         # PID lockfile — detect concurrent orchestrators
@@ -464,6 +536,7 @@ class SwarmOrchestrator:
         self._subagent_mgr._ast_service = self._ast_service
         self._subagent_mgr._trace_dir = str(self._layout["agents"])
         self._subagent_mgr._health_monitor = self._health_monitor
+        self._subagent_mgr.on_status_change(self._on_agent_status_change)
 
         # Wire preflight validator (after file ledger is ready)
         if self._preflight_enabled:
@@ -1004,6 +1077,81 @@ class SwarmOrchestrator:
 
         return completed
 
+    def _build_live_dag_nodes(self) -> list[dict[str, Any]]:
+        agent_for_task: dict[str, str] = {}
+        for agent in self._subagent_mgr.get_all_agents():
+            if agent.task_id:
+                agent_for_task[agent.task_id] = agent.agent_id
+
+        nodes: list[dict[str, Any]] = []
+        for tid, task in self._tasks.items():
+            node = self._aot_graph.get_node(tid)
+            nodes.append({
+                "task_id": tid,
+                "title": task.title,
+                "status": node.status if node else task.status,
+                "description": task.description[:200] if task.description else "",
+                "task_kind": task.task_kind,
+                "role_hint": task.role_hint or "",
+                "assigned_agent": agent_for_task.get(tid, ""),
+                "target_files": task.target_files[:5],
+                "result_summary": task.result_summary[:200] if task.result_summary else "",
+                "tokens_used": task.tokens_used,
+                "cost_usd": task.cost_usd,
+                "attempt_count": self._task_attempts.get(tid, 0),
+            })
+        return nodes
+
+    def _build_live_active_agents(self) -> list[dict[str, Any]]:
+        active_agents: list[dict[str, Any]] = []
+        for agent in self._subagent_mgr.get_all_agents():
+            task = self._tasks.get(agent.task_id)
+            active_agents.append({
+                "agent_id": agent.agent_id,
+                "task_id": agent.task_id,
+                "status": agent.status,
+                "tokens_used": agent.tokens_used,
+                "started_at_epoch": agent.started_at,
+                "model": agent.model or self._config.run.default_model or "",
+                "task_title": task.title if task else "",
+                "activity": agent.activity,
+                "backend": agent.model or self._config.run.default_model or "",
+                "cwd": self._root_dir,
+                "tool_call_count": agent.tool_call_count,
+                "current_tool": agent.current_tool,
+                "files_touched": agent.files_touched[:10],
+                "llm_turns": agent.llm_turns,
+            })
+        return active_agents
+
+    def _build_live_state(self) -> dict[str, Any]:
+        dag_edges: list[list[str]] = []
+        for tid, task in self._tasks.items():
+            for dep in task.deps:
+                dag_edges.append([dep, tid])
+        return {
+            "schema_version": "1.0",
+            "run_id": self._run_id,
+            "goal": self._goal,
+            "phase": self._phase,
+            "updated_at": utc_now_iso(),
+            "started_at_epoch": self._start_time,
+            "elapsed_s": time.time() - self._start_time if self._start_time else 0.0,
+            "state_seq": self._state_seq,
+            "budget": self._budget.as_dict(),
+            "dag": {
+                "nodes": self._build_live_dag_nodes(),
+                "edges": dag_edges,
+            },
+            "dag_summary": self._aot_graph.summary(),
+            "active_agents": self._build_live_active_agents(),
+            "git_branch": (
+                self._git_safety.state.swarm_branch
+                if self._git_safety and hasattr(self._git_safety, "state")
+                else ""
+            ),
+        }
+
     def get_state(self) -> dict[str, Any]:
         """Return a state snapshot for TUI consumption."""
         return {
@@ -1198,10 +1346,11 @@ class SwarmOrchestrator:
             write_json_fast(self._layout["state"], state)
         except Exception as exc:
             logger.warning("Failed to persist state: %s", exc)
+        self._emit_live_event("state.snapshot", force_snapshot=True)
 
     def _setup_directories(self) -> None:
         for key, path in self._layout.items():
-            if key in ("manifest", "state", "events"):
+            if key in ("manifest", "state", "events", "live_state", "live_events"):
                 path.parent.mkdir(parents=True, exist_ok=True)
             else:
                 path.mkdir(parents=True, exist_ok=True)
@@ -2570,3 +2719,11 @@ class SwarmOrchestrator:
             trace_id=trace_id,
             span_id=span_id,
         ))
+        self._emit_live_event(
+            event_type,
+            task_id=task_id,
+            agent_id=agent_id,
+            message=message,
+            payload=data,
+            force_snapshot=event_type in {"complete", "fail", "retry", "skip", "spawn"},
+        )

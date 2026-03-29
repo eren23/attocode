@@ -28,15 +28,18 @@ class StateStore:
         self.run_dir = Path(run_dir)
         self.state_path = self.run_dir / "swarm.state.json"
         self.events_path = self.run_dir / "swarm.events.jsonl"
+        self.live_state_path = self.run_dir / "swarm.live.state.json"
+        self.live_events_path = self.run_dir / "swarm.live.jsonl"
         self._task_cache: dict[str, tuple[float, dict[str, Any]]] = {}
         self._cache_ttl = 5.0
 
-        # State-level cache: (mtime, state_seq, data)
-        self._state_cache: tuple[float, int, dict[str, Any]] | None = None
+        # State-level cache: (path, mtime, state_seq, data)
+        self._state_cache: tuple[str, float, int, dict[str, Any]] | None = None
 
         # Incremental JSONL event reading
         self._events_last_size: int = 0
         self._events_cache: list[dict[str, Any]] = []
+        self._events_source_path: Path | None = None
 
         # Cross-run staleness detection
         self._last_run_id: str | None = None
@@ -55,17 +58,28 @@ class StateStore:
             ):
                 delattr(self, attr)
 
+    def _preferred_state_path(self) -> Path:
+        return self.live_state_path if self.live_state_path.exists() else self.state_path
+
+    def _preferred_events_path(self) -> Path:
+        return self.live_events_path if self.live_events_path.exists() else self.events_path
+
     def read_state(self) -> dict[str, Any]:
         """Read state with mtime + state_seq change detection."""
+        state_path = self._preferred_state_path()
         try:
-            mtime = self.state_path.stat().st_mtime
+            mtime = state_path.stat().st_mtime
         except OSError:
             return {}
         if self._state_cache is not None:
-            cached_mtime, cached_seq, cached_data = self._state_cache
-            if mtime == cached_mtime:
+            if len(self._state_cache) == 4:
+                cached_path, cached_mtime, cached_seq, cached_data = self._state_cache
+            else:
+                cached_mtime, cached_seq, cached_data = self._state_cache  # backward-compat for tests
+                cached_path = str(state_path)
+            if str(state_path) == cached_path and mtime == cached_mtime:
                 return cached_data
-        data = read_json(self.state_path, default={})
+        data = read_json(state_path, default={})
         seq = data.get("state_seq", 0) if isinstance(data, dict) else 0
 
         # Cross-run staleness: if run_id changed, invalidate all caches
@@ -80,7 +94,7 @@ class StateStore:
             elif run_id:
                 self._last_run_id = run_id
 
-        self._state_cache = (mtime, seq, data)
+        self._state_cache = (str(state_path), mtime, seq, data)
         return data
 
     def has_new_events(self) -> bool:
@@ -89,8 +103,13 @@ class StateStore:
         Caches the stat'd size so that a subsequent ``read_events`` call in the
         same refresh cycle avoids a redundant stat.
         """
+        events_path = self._preferred_events_path()
+        if self._events_source_path is not None and self._events_source_path != events_path:
+            self._events_cache.clear()
+            self._events_last_size = 0
+        self._events_source_path = events_path
         try:
-            size = self.events_path.stat().st_size
+            size = events_path.stat().st_size
         except OSError:
             return False
         self._events_last_stat: int = size
@@ -100,13 +119,19 @@ class StateStore:
 
     def read_events(self, limit: int = 200) -> list[dict[str, Any]]:
         """Incremental JSONL read — only parses new bytes since last call."""
-        if not self.events_path.exists():
+        events_path = self._preferred_events_path()
+        if self._events_source_path is not None and self._events_source_path != events_path:
+            self._events_cache.clear()
+            self._events_last_size = 0
+        self._events_source_path = events_path
+
+        if not events_path.exists():
             return []
         # Re-use size from has_new_events() if available (same refresh cycle)
         size = getattr(self, "_events_last_stat", None)
         if size is None:
             try:
-                size = self.events_path.stat().st_size
+                size = events_path.stat().st_size
             except OSError:
                 return self._events_cache[-limit:]
         else:
@@ -115,7 +140,7 @@ class StateStore:
         if size == self._events_last_size:
             return self._events_cache[-limit:]  # No new data
 
-        with self.events_path.open("rb") as f:
+        with events_path.open("rb") as f:
             if self._events_last_size > 0 and size > self._events_last_size:
                 # Read only new bytes
                 f.seek(self._events_last_size)
@@ -186,7 +211,11 @@ class StateStore:
         """
         activity: dict[str, str] = {}
         for ev in raw_events:
-            payload = ev.get("payload", {}) if isinstance(ev.get("payload"), dict) else {}
+            payload = {}
+            if isinstance(ev.get("payload"), dict):
+                payload = ev.get("payload", {})
+            elif isinstance(ev.get("data"), dict):
+                payload = ev.get("data", {})
             agent_id = str(
                 ev.get("agent_id", "")
                 or payload.get("agent_id", "")
@@ -207,6 +236,18 @@ class StateStore:
             label = self._ACTIVITY_LABELS.get(etype)
             if label:
                 activity[agent_id] = label
+            elif etype == "agent.activity":
+                label = str(
+                    ev.get("message", "")
+                    or payload.get("text_preview", "")
+                    or payload.get("status", "")
+                )[:60]
+                if label:
+                    activity[agent_id] = label
+            elif etype == "agent.status":
+                label = str(payload.get("status", ""))[:60]
+                if label:
+                    activity[agent_id] = label
             else:
                 # Fallback to event message — don't use raw etype as it
                 # overwrites previously-set meaningful labels
@@ -262,7 +303,8 @@ class StateStore:
                 "tokens_used": int(row.get("tokens_used", 0)),
                 "elapsed": elapsed,
                 "task_title": str(row.get("task_title", "")) or title_map.get(task_id, ""),
-                "activity": (activity or {}).get(agent_id, ""),
+                "activity": (activity or {}).get(agent_id, str(row.get("activity", ""))),
+                "current_tool": str(row.get("current_tool", "")),
                 "cwd": str(row.get("cwd", "")),
                 "exit_code": row.get("exit_code"),
                 "restart_count": int(row.get("restart_count", 0)),
@@ -434,7 +476,11 @@ class StateStore:
         """Transform raw JSONL events into EventTimeline-compatible format."""
         out: list[dict[str, Any]] = []
         for ev in raw_events:
-            payload = ev.get("payload", {}) if isinstance(ev.get("payload"), dict) else {}
+            payload = {}
+            if isinstance(ev.get("payload"), dict):
+                payload = ev.get("payload", {})
+            elif isinstance(ev.get("data"), dict):
+                payload = ev.get("data", {})
 
             # Message — check direct field first (SwarmEvent), then nested payload (HybridCoordinator)
             msg = (
@@ -478,6 +524,8 @@ class StateStore:
                 "claim": "claim",
                 "complete": "complete",
                 "fail": "fail",
+                "agent.activity": "activity",
+                "agent.status": "status",
             }
             timeline_type = type_map.get(etype, etype.split(".")[-1] if "." in etype else "info")
 

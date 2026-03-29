@@ -314,4 +314,6 @@ def default_run_layout(run_dir: Path) -> dict[str, Path]:
         "manifest": run_dir / "swarm.manifest.json",
         "state": run_dir / "swarm.state.json",
         "events": run_dir / "swarm.events.jsonl",
+        "live_state": run_dir / "swarm.live.state.json",
+        "live_events": run_dir / "swarm.live.jsonl",
     }
