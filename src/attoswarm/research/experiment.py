@@ -139,6 +139,7 @@ class ResearchState:
     invalid_count: int = 0
     total_cost_usd: float = 0.0
     total_tokens: int = 0
+    started_at_epoch: float = 0.0
     wall_seconds: float = 0.0
     active_experiments: int = 0
     status: str = "running"  # running|completed|budget_exceeded|error
@@ -168,6 +169,7 @@ class ResearchState:
             "invalid_count": self.invalid_count,
             "total_cost_usd": round(self.total_cost_usd, 6),
             "total_tokens": self.total_tokens,
+            "started_at_epoch": round(self.started_at_epoch, 3),
             "wall_seconds": round(self.wall_seconds, 1),
             "active_experiments": self.active_experiments,
             "status": self.status,

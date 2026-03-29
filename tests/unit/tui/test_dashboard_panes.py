@@ -2,12 +2,10 @@
 
 from __future__ import annotations
 
-import pytest
-
-from attocode.tui.widgets.dashboard.session_browser import SessionInfo
+from attocode.tui.live_refresh import DEFAULT_LIVE_REFRESH_S
+from attocode.tui.screens.dashboard import _TABS, DashboardScreen
 from attocode.tui.widgets.dashboard.live_dashboard import LiveTraceAccumulator
-from attocode.tui.screens.dashboard import DashboardScreen, _TABS
-
+from attocode.tui.widgets.dashboard.session_browser import SessionInfo
 
 # ---------------------------------------------------------------------------
 # SessionInfo dataclass
@@ -87,6 +85,14 @@ class TestDashboardScreenInit:
     def test_custom_trace_dir(self) -> None:
         screen = DashboardScreen(trace_dir="/tmp/my-traces")
         assert str(screen._trace_dir) == "/tmp/my-traces"
+
+    def test_default_refresh_interval(self) -> None:
+        screen = DashboardScreen()
+        assert screen._refresh_interval_s == DEFAULT_LIVE_REFRESH_S
+
+    def test_custom_refresh_interval_is_clamped(self) -> None:
+        screen = DashboardScreen(refresh_interval_s=0.01)
+        assert screen._refresh_interval_s == 0.05
 
 
 class TestDashboardTabCycling:

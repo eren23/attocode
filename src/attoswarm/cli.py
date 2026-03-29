@@ -18,6 +18,10 @@ from typing import Any
 
 import click
 
+from attocode.tui.live_refresh import (
+    DEFAULT_LIVE_REFRESH_S,
+    clamp_live_refresh_interval,
+)
 from attoswarm.config.loader import load_swarm_yaml, save_swarm_yaml
 from attoswarm.config.schema import RoleConfig, SwarmYamlConfig
 from attoswarm.coordinator.loop import HybridCoordinator
@@ -50,8 +54,8 @@ def _tui_refresh_interval_s(cfg: SwarmYamlConfig) -> float:
         int(getattr(getattr(cfg, "run", None), "poll_interval_ms", 0) or 0),
     ]
     ms_values = [value for value in candidates if value > 0]
-    poll_ms = min(ms_values) if ms_values else 250
-    return max(0.05, poll_ms / 1000.0)
+    poll_ms = min(ms_values) if ms_values else int(DEFAULT_LIVE_REFRESH_S * 1000)
+    return clamp_live_refresh_interval(poll_ms / 1000.0)
 
 
 def _load_tui_config(run_dir: Path) -> SwarmYamlConfig:
@@ -75,7 +79,7 @@ def _make_tui_app(
     *,
     coordinator_pid: int | None = None,
     research_mode: bool = False,
-    refresh_interval_s: float = 0.25,
+    refresh_interval_s: float = DEFAULT_LIVE_REFRESH_S,
 ) -> AttoswarmApp:
     """Construct `AttoswarmApp`, tolerating narrow monkeypatched fakes in tests."""
     try:
@@ -2319,9 +2323,19 @@ def _run_research_with_monitor(**kwargs: Any) -> None:
     atexit.register(log_fh.close)
     proc = subprocess.Popen(cmd, stdout=log_fh, stderr=log_fh)
 
-    from attoswarm.tui.app import AttoswarmApp
+    refresh_interval_s = DEFAULT_LIVE_REFRESH_S
+    if kwargs.get("config_path"):
+        try:
+            refresh_interval_s = _tui_refresh_interval_s(load_swarm_yaml(Path(kwargs["config_path"])))
+        except Exception:
+            refresh_interval_s = DEFAULT_LIVE_REFRESH_S
 
-    app = _make_tui_app(str(run_dir), coordinator_pid=proc.pid, research_mode=True)
+    app = _make_tui_app(
+        str(run_dir),
+        coordinator_pid=proc.pid,
+        research_mode=True,
+        refresh_interval_s=refresh_interval_s,
+    )
     app.run()
 
     if proc.poll() is None:

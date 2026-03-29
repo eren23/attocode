@@ -5,8 +5,10 @@ import subprocess
 import time
 from pathlib import Path
 
+import pytest
 from click.testing import CliRunner
 
+import attoswarm.cli as cli_mod
 from attoswarm.cli import (
     _detect_modified_files,
     _print_run_summary,
@@ -112,6 +114,68 @@ def test_tui_refresh_interval_uses_fastest_poll_setting() -> None:
     cfg.run.poll_interval_ms = 250
     cfg.ui.poll_ms = 500
     assert _tui_refresh_interval_s(cfg) == 0.25
+
+
+def test_research_monitor_uses_configured_refresh_interval(tmp_path: Path, monkeypatch) -> None:  # type: ignore[no-untyped-def]
+    cfg_path = tmp_path / "swarm.yaml"
+    _write_config(cfg_path)
+
+    captured: dict[str, object] = {}
+
+    class FakePopen:
+        pid = 9999
+
+        def __init__(self, cmd, **kwargs):
+            self.returncode = 0
+
+        def poll(self):
+            return 0
+
+        def wait(self, timeout=None):
+            return 0
+
+        def terminate(self):
+            self.returncode = 0
+
+        def kill(self):
+            self.returncode = 1
+
+    class FakeApp:
+        def __init__(self, run_dir, coordinator_pid=None, research_mode=False, refresh_interval_s=0.0):
+            captured["run_dir"] = run_dir
+            captured["coordinator_pid"] = coordinator_pid
+            captured["research_mode"] = research_mode
+            captured["refresh_interval_s"] = refresh_interval_s
+
+        def run(self):
+            return None
+
+    monkeypatch.setattr("subprocess.Popen", FakePopen)
+    monkeypatch.setattr("attoswarm.cli.AttoswarmApp", FakeApp)
+
+    with pytest.raises(SystemExit) as exc:
+        cli_mod._run_research_with_monitor(
+            goal="test research",
+            eval_command="echo ok",
+            target_files=(),
+            max_experiments=1,
+            max_parallel=1,
+            experiment_timeout=30.0,
+            metric_direction="maximize",
+            metric_name="score",
+            max_cost=1.0,
+            baseline_repeats=1,
+            promotion_repeats=1,
+            resume="",
+            config_path=cfg_path,
+            db=None,
+            working_dir=tmp_path,
+            experiment_mode="auto",
+        )
+
+    assert exc.value.code == 0
+    assert captured["research_mode"] is True
+    assert captured["refresh_interval_s"] == 0.25
 
 
 # ── C3: --no-git-safety forwarding in start_command ──────────────────

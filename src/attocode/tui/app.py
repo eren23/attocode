@@ -14,10 +14,11 @@ from textual.css.query import NoMatches
 from textual.widgets import Footer, Static
 
 from attocode.tui.bridges.approval_bridge import ApprovalBridge, BudgetBridge
-from attocode.tui.theme import ThemeWatcher
 from attocode.tui.dialogs.approval import ApprovalDialog, ApprovalResult
 from attocode.tui.dialogs.budget import BudgetDialog
+from attocode.tui.live_refresh import DEFAULT_LIVE_REFRESH_S
 from attocode.tui.screens.dashboard import DashboardScreen
+from attocode.tui.theme import ThemeWatcher
 from attocode.tui.widgets.agent_internals_panel import AgentInternalsPanel
 from attocode.tui.widgets.agents_panel import AgentsPanel
 from attocode.tui.widgets.dashboard.live_dashboard import LiveTraceAccumulator
@@ -922,6 +923,7 @@ class AttocodeApp(App):
                 agent=self._agent,
                 trace_dir=trace_dir,
                 accumulator=self._live_accumulator,
+                refresh_interval_s=DEFAULT_LIVE_REFRESH_S,
             )
         )
 

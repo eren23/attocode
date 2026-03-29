@@ -14,6 +14,10 @@ from textual.containers import Vertical
 from textual.screen import Screen
 from textual.widgets import ContentSwitcher, Footer, Static
 
+from attocode.tui.live_refresh import (
+    DEFAULT_LIVE_REFRESH_S,
+    clamp_live_refresh_interval,
+)
 from attocode.tui.widgets.dashboard.compare_pane import ComparePane
 from attocode.tui.widgets.dashboard.live_dashboard import (
     LiveDashboardPane,
@@ -81,6 +85,7 @@ class DashboardScreen(Screen):
         agent: Any = None,
         trace_dir: str | Path = "",
         accumulator: LiveTraceAccumulator | None = None,
+        refresh_interval_s: float = DEFAULT_LIVE_REFRESH_S,
         **kwargs,
     ) -> None:
         super().__init__(**kwargs)
@@ -90,6 +95,7 @@ class DashboardScreen(Screen):
         self._active_tab_index: int = 0
         self._in_detail: bool = False
         self._refresh_timer = None
+        self._refresh_interval_s = clamp_live_refresh_interval(refresh_interval_s)
 
     def compose(self) -> ComposeResult:
         with Vertical(id="dashboard-container"):
@@ -118,7 +124,7 @@ class DashboardScreen(Screen):
 
     def on_mount(self) -> None:
         """Start the refresh timer for the live pane."""
-        self._refresh_timer = self.set_interval(2.0, self._auto_refresh)
+        self._refresh_timer = self.set_interval(self._refresh_interval_s, self._auto_refresh)
 
     def on_unmount(self) -> None:
         """Stop refresh timer."""

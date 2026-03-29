@@ -10,7 +10,7 @@ from typing import Any
 
 import pytest
 
-from attoswarm.tui.stores import StateStore, _to_epoch
+from attoswarm.tui.stores import ResearchStateStore, StateStore, _to_epoch
 
 
 @pytest.fixture()
@@ -801,3 +801,34 @@ class TestTaskCache:
         (tmp_run_dir / "tasks" / "task-e1.json").write_text(json.dumps({"title": "v2"}))
         second = store._read_task_cached("e1")
         assert second["title"] == "v2"  # cache expired, re-read
+
+
+class TestResearchStateStore:
+    def test_read_state_caches_latest_snapshot(self, tmp_run_dir: Path) -> None:
+        store = ResearchStateStore(str(tmp_run_dir))
+        state = {"state": {"run_id": "r1", "started_at_epoch": 1000.0}}
+        (tmp_run_dir / "research.state.json").write_text(json.dumps(state))
+
+        first = store.read_state()
+        second = store.read_state()
+
+        assert first == state
+        assert second is None
+        assert store.last_state == state
+
+    def test_read_events_tails_incrementally(self, tmp_run_dir: Path) -> None:
+        store = ResearchStateStore(str(tmp_run_dir))
+        events_path = tmp_run_dir / "research.events.jsonl"
+        events_path.write_text(json.dumps({"type": "baseline_complete"}) + "\n")
+
+        first = store.read_events(limit=10)
+        assert [event["type"] for event in first] == ["baseline_complete"]
+
+        with events_path.open("a", encoding="utf-8") as handle:
+            handle.write(json.dumps({"type": "experiment_accepted"}) + "\n")
+
+        second = store.read_events(limit=10)
+        assert [event["type"] for event in second] == [
+            "baseline_complete",
+            "experiment_accepted",
+        ]

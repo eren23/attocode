@@ -1276,9 +1276,13 @@ class ResearchStateStore:
     """Reads research.state.json written by ResearchOrchestrator."""
 
     def __init__(self, run_dir: str) -> None:
+        self.run_dir = Path(run_dir)
         self._state_path = Path(run_dir) / "research.state.json"
+        self._events_path = self.run_dir / "research.events.jsonl"
         self._mtime: float = 0.0
         self._cached: dict[str, Any] | None = None
+        self._events_last_size: int = 0
+        self._events_cache: list[dict[str, Any]] = []
 
     def read_state(self) -> dict[str, Any] | None:
         """Returns parsed state dict if file changed since last read, else None."""
@@ -1294,6 +1298,40 @@ class ResearchStateStore:
             return data
         except (json.JSONDecodeError, OSError):
             return None
+
+    def read_events(self, limit: int = 10) -> list[dict[str, Any]]:
+        """Incrementally tail recent research events."""
+        if not self._events_path.exists():
+            return self._events_cache[-limit:]
+        try:
+            size = self._events_path.stat().st_size
+        except OSError:
+            return self._events_cache[-limit:]
+
+        if size == self._events_last_size:
+            return self._events_cache[-limit:]
+
+        with self._events_path.open("rb") as f:
+            if self._events_last_size > 0 and size > self._events_last_size:
+                f.seek(self._events_last_size)
+            else:
+                self._events_cache.clear()
+                self._events_last_size = 0
+            last_good_pos = f.tell()
+            for line in f:
+                try:
+                    item = json.loads(line)
+                except json.JSONDecodeError:
+                    if not line.endswith(b"\n"):
+                        break
+                    last_good_pos = f.tell()
+                    continue
+                if isinstance(item, dict):
+                    self._events_cache.append(item)
+                last_good_pos = f.tell()
+            self._events_last_size = last_good_pos
+
+        return self._events_cache[-limit:]
 
     @property
     def last_state(self) -> dict[str, Any] | None:

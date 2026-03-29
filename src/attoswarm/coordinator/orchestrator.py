@@ -51,7 +51,7 @@ from attoswarm.protocol.models import (
 if TYPE_CHECKING:
     from collections.abc import Callable
 
-    from attoswarm.config.schema import SwarmYamlConfig
+    from attoswarm.config.schema import RoleConfig, SwarmYamlConfig
 
 logger = logging.getLogger(__name__)
 
@@ -1102,6 +1102,13 @@ class SwarmOrchestrator:
             })
         return nodes
 
+    def _resolve_role_config(self, role_hint: str | None) -> RoleConfig | None:
+        if role_hint:
+            for role in self._config.roles:
+                if role.role_id == role_hint:
+                    return role
+        return self._config.roles[0] if self._config.roles else None
+
     def _build_live_active_agents(self) -> list[dict[str, Any]]:
         active_agents: list[dict[str, Any]] = []
         for agent in self._subagent_mgr.get_all_agents():
@@ -1115,7 +1122,7 @@ class SwarmOrchestrator:
                 "model": agent.model or self._config.run.default_model or "",
                 "task_title": task.title if task else "",
                 "activity": agent.activity,
-                "backend": agent.model or self._config.run.default_model or "",
+                "backend": agent.backend,
                 "cwd": self._root_dir,
                 "tool_call_count": agent.tool_call_count,
                 "current_tool": agent.current_tool,
@@ -1297,7 +1304,7 @@ class SwarmOrchestrator:
                 "model": a.model or self._config.run.default_model or "",
                 "task_title": task.title if task else "",
                 "activity": a.activity,
-                "backend": a.model or self._config.run.default_model or "",
+                "backend": a.backend,
                 "cwd": self._root_dir,
                 "exit_code": getattr(a, 'exit_code', None),
                 "restart_count": getattr(a, 'restart_count', 0),
@@ -1486,6 +1493,7 @@ class SwarmOrchestrator:
     def _task_to_dict(self, task_id: str) -> dict[str, Any]:
         """Convert a TaskSpec to a dict for SubagentManager."""
         task = self._tasks[task_id]
+        role_cfg = self._resolve_role_config(task.role_hint)
         d: dict[str, Any] = {
             "task_id": task.task_id,
             "title": task.title,
@@ -1497,6 +1505,8 @@ class SwarmOrchestrator:
             "role_hint": task.role_hint,
             "task_kind": task.task_kind,
             "timeout_seconds": task.timeout_seconds,
+            "backend": role_cfg.backend if role_cfg else "",
+            "model": role_cfg.model if role_cfg else "",
         }
         # Health-aware model selection
         if not d.get("model") and self._health_monitor:
