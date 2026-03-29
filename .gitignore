@@ -42,7 +42,7 @@ docs/superpowers/
 eval/charts/
 eval/*.md
 eval/*.log
-
+eval/*.json
 # Legacy TS runtime artifacts
 legacy/.attocode/traces/
 legacy/.attocode/sessions/

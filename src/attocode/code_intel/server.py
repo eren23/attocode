@@ -646,6 +646,7 @@ def main() -> None:
     remote_url = ""
     remote_token = ""
     remote_repo_id = ""
+    local_only = os.environ.get("ATTOCODE_LOCAL_ONLY") == "1"
     for i, arg in enumerate(args):
         if arg == "--project" and i + 1 < len(args):
             project_dir = args[i + 1]
@@ -675,13 +676,18 @@ def main() -> None:
             remote_repo_id = args[i + 1]
         elif arg.startswith("--remote-repo="):
             remote_repo_id = arg.split("=", 1)[1]
+        elif arg == "--local-only":
+            local_only = True
 
     project_dir = os.path.abspath(project_dir)
     os.environ["ATTOCODE_PROJECT_DIR"] = project_dir
+    if local_only:
+        os.environ["ATTOCODE_LOCAL_ONLY"] = "1"
 
     # Load remote config from .attocode/config.toml if not explicitly provided
     global _remote_client
-    if not remote_url:
+    _remote_client = None
+    if not remote_url and not local_only:
         from attocode.code_intel.config import load_remote_config
         rc = load_remote_config(project_dir)
         if rc.is_configured:

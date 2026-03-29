@@ -59,12 +59,20 @@ def _find_command() -> str:
     return f"{sys.executable} -m attocode.code_intel.server"
 
 
-def _build_server_entry(project_dir: str) -> dict:
-    """Build the MCP server config dict for JSON-based configs."""
+def _build_server_entry(
+    project_dir: str | None,
+    *,
+    local_only: bool = False,
+) -> dict:
+    """Build the MCP server config dict for JSON/TOML-based configs."""
     cmd = _find_command()
     parts = cmd.split()
     command = parts[0]
-    args = parts[1:] + ["--project", os.path.abspath(project_dir)]
+    args = parts[1:]
+    if local_only:
+        args.append("--local-only")
+    if project_dir is not None:
+        args += ["--project", os.path.abspath(project_dir)]
     return {
         "command": command,
         "args": args,
@@ -250,7 +258,11 @@ def install_codex(project_dir: str = ".", scope: str = "local") -> bool:
         with contextlib.suppress(tomllib.TOMLDecodeError, OSError):
             existing = tomllib.loads(config_path.read_text(encoding="utf-8"))
 
-    entry = _build_server_entry(project_dir)
+    local_only = scope == "user" and project_dir == "."
+    entry = _build_server_entry(
+        None if local_only else project_dir,
+        local_only=local_only,
+    )
     servers = existing.setdefault("mcp_servers", {})
     servers["attocode-code-intel"] = {
         "command": entry["command"],

@@ -128,6 +128,7 @@ def _print_help() -> None:
         "  --port <num>        Server port number (default: 8080)\n"
         "  --no-watch          Disable filesystem watcher (watcher is on by default)\n"
         "  --watch-debounce N  File-change debounce in milliseconds (default: 500)\n"
+        "  --local-only        Disable remote auto-load from .attocode/config.toml\n"
         "\n"
         "Notify options:\n"
         "  --file <path>       File that changed (repeatable)\n"
@@ -233,6 +234,7 @@ def _cmd_serve(args: list[str], *, debug: bool = False) -> None:
     port = 8080
     no_watch = False
     watch_debounce = 500
+    local_only = False
     i = 0
     while i < len(args):
         arg = args[i]
@@ -263,11 +265,16 @@ def _cmd_serve(args: list[str], *, debug: bool = False) -> None:
         elif arg.startswith("--watch-debounce="):
             watch_debounce = int(arg.split("=", 1)[1])
             i += 1
+        elif arg == "--local-only":
+            local_only = True
+            i += 1
         else:
             i += 1
 
     abs_dir = os.path.abspath(project_dir)
     os.environ["ATTOCODE_PROJECT_DIR"] = abs_dir
+    if local_only:
+        os.environ["ATTOCODE_LOCAL_ONLY"] = "1"
 
     if debug:
         import logging
@@ -2462,20 +2469,48 @@ def _cmd_verify(args: list[str]) -> None:
 
     config = CodeIntelConfig.from_env()
 
-    if not config.database_url:
-        # Pure local mode — verify local index files exist
+    def _run_local_verify() -> None:
+        # Pure local mode — verify against the real DB-backed local index layout.
         from pathlib import Path
+
+        from attocode.code_intel.service import CodeIntelService
+        from attocode.integrations.context.ast_service import ASTService
 
         print("Running local integrity checks...", file=sys.stderr)
 
+        os.environ.setdefault("ATTOCODE_PROJECT_DIR", project_dir)
+
         cache_dir = Path(project_dir) / ".attocode" / "cache"
-        index_file = Path(project_dir) / ".attocode" / "index.json"
+        index_dir = Path(project_dir) / ".attocode" / "index"
+        symbols_db = index_dir / "symbols.db"
+        vectors_dir = Path(project_dir) / ".attocode" / "vectors"
 
         issues: list[str] = []
+        health: dict[str, object] = {}
+        hydration: dict[str, object] = {}
+
+        CodeIntelService._reset_instances()
+        ASTService.clear_instances()
+        try:
+            svc = CodeIntelService.get_instance(project_dir)
+            health = svc._health_snapshot()
+            hydration = svc.hydration_status()
+        except Exception as exc:
+            issues.append(f"Health check failed ({type(exc).__name__}: {exc})")
+
         if not cache_dir.exists():
             issues.append("Cache directory missing (.attocode/cache)")
-        if not index_file.exists():
-            issues.append("Index file missing (.attocode/index.json)")
+        if not index_dir.exists():
+            issues.append("Index directory missing (.attocode/index)")
+        if index_dir.exists() and not symbols_db.exists():
+            issues.append("Index database missing (.attocode/index/symbols.db)")
+
+        discovery_count = int(health.get("discovery_count", 0) or 0)
+        indexed_files = int(health.get("ast_indexed_files", 0) or 0)
+        if health and discovery_count == 0:
+            issues.append("No files discovered by CodeIntelService")
+        if health and indexed_files == 0:
+            issues.append("No files indexed by ASTService")
 
         if issues:
             print(f"\nFound {len(issues)} issue(s):")
@@ -2485,8 +2520,21 @@ def _cmd_verify(args: list[str]) -> None:
         else:
             cache_files = list(cache_dir.iterdir()) if cache_dir.exists() else []
             print(f"\nLocal index OK:")
+            print(f"  Health status: {health.get('health_status', 'unknown')}")
+            print(f"  Discovery count: {discovery_count}")
+            print(f"  Indexed files: {indexed_files}")
             print(f"  Cache files: {len(cache_files)}")
-            print(f"  Index file:  {index_file}")
+            print(f"  Index DB: {symbols_db}")
+            print(f"  Vectors dir: {vectors_dir} ({'present' if vectors_dir.exists() else 'missing'})")
+            if hydration:
+                print(
+                    "  Hydration: "
+                    f"{hydration.get('tier', 'unknown')} / {hydration.get('phase', 'unknown')}"
+                )
+        return
+
+    if not config.database_url:
+        _run_local_verify()
         return
 
     # Service mode: run integrity checks against the database
@@ -2576,7 +2624,16 @@ def _cmd_verify(args: list[str]) -> None:
 
             return
 
-    asyncio.run(_run_verify())
+    try:
+        asyncio.run(_run_verify())
+    except RuntimeError as exc:
+        if "Database not initialized" not in str(exc):
+            raise
+        print(
+            "Database engine is not initialized; falling back to local integrity checks.",
+            file=sys.stderr,
+        )
+        _run_local_verify()
 
 
 def _cmd_reindex(args: list[str]) -> None:
