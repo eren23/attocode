@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import logging
 import uuid
-from typing import TYPE_CHECKING, Annotated, AsyncGenerator
+from typing import TYPE_CHECKING, Annotated
 
 from fastapi import HTTPException, Query
 
@@ -12,6 +12,8 @@ from attocode.code_intel.config import CodeIntelConfig
 from attocode.code_intel.service import CodeIntelService
 
 if TYPE_CHECKING:
+    from collections.abc import AsyncGenerator
+
     from sqlalchemy.ext.asyncio import AsyncSession
 
     from attocode.code_intel.api.auth.context import AuthContext
@@ -52,6 +54,27 @@ def get_config() -> CodeIntelConfig:
     if _config is None:
         return CodeIntelConfig.from_env()
     return _config
+
+
+def ensure_branch_supported(branch: str, *, allow_service_mode: bool = False) -> None:
+    """Reject unsupported branch scoping.
+
+    Local/CLI mode uses the working tree directly, so non-empty branch values
+    are not supported. Text v1 routes also reject branch overlays unless the
+    caller explicitly opts into service-mode handling.
+    """
+    if not branch:
+        return
+
+    config = get_config()
+    if config.is_service_mode and allow_service_mode:
+        return
+
+    detail = (
+        "Branch scoping is only supported on branch-aware service-mode endpoints; "
+        "this endpoint uses the working tree and does not accept a non-empty branch."
+    )
+    raise HTTPException(status_code=422, detail=detail)
 
 
 def get_service(project_id: str = "") -> CodeIntelService:

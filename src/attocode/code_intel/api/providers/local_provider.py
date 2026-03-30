@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
+from attocode.code_intel.api.deps import ensure_branch_supported
 from attocode.code_intel.api.models import (
     CodeChunkItem,
     CommunityItem,
@@ -51,6 +52,7 @@ class LocalAnalysisProvider:
         self._svc = svc
 
     async def symbols(self, path: str, branch: str) -> SymbolListResponse:
+        ensure_branch_supported(branch)
         data = self._svc.symbols_data(path)
         return SymbolListResponse(
             path=path,
@@ -58,6 +60,7 @@ class LocalAnalysisProvider:
         )
 
     async def search_symbols(self, name: str, branch: str, directory: str = "") -> SymbolSearchResponse:
+        ensure_branch_supported(branch)
         data = self._svc.search_symbols_data(name)
         items = [SymbolItem(**s) for s in data]
         if directory:
@@ -68,6 +71,7 @@ class LocalAnalysisProvider:
         )
 
     async def cross_references(self, symbol: str, branch: str) -> CrossRefResponse:
+        ensure_branch_supported(branch)
         data = self._svc.cross_references_data(symbol)
         return CrossRefResponse(
             symbol=data["symbol"],
@@ -77,6 +81,7 @@ class LocalAnalysisProvider:
         )
 
     async def impact_analysis(self, files: list[str], branch: str) -> ImpactAnalysisResponse:
+        ensure_branch_supported(branch)
         data = self._svc.impact_analysis_data(files)
         from attocode.code_intel.api.models import ImpactLayer
 
@@ -90,6 +95,7 @@ class LocalAnalysisProvider:
     async def dependency_graph(
         self, start_file: str, depth: int, branch: str, directory: str = "",
     ) -> DependencyGraphResponse:
+        ensure_branch_supported(branch)
         data = self._svc.dependency_graph_data(start_file, depth=depth)
         # dependency_graph_data returns {start_file, depth, forward, reverse}
         # Convert to nodes/edges format for DependencyGraphResponse
@@ -129,10 +135,12 @@ class LocalAnalysisProvider:
         return DependencyGraphResponse(nodes=nodes, edges=edges)
 
     async def dependencies(self, path: str, branch: str) -> DependencyResponse:
+        ensure_branch_supported(branch)
         data = self._svc.dependencies_data(path)
         return DependencyResponse(**data)
 
     async def file_analysis(self, path: str, branch: str) -> FileAnalysisResponse:
+        ensure_branch_supported(branch)
         data = self._svc.file_analysis_data(path)
         return FileAnalysisResponse(
             path=data["path"],
@@ -144,6 +152,7 @@ class LocalAnalysisProvider:
         )
 
     async def hotspots(self, branch: str, top_n: int) -> HotspotsResponse:
+        ensure_branch_supported(branch)
         data = self._svc.hotspots_data(top_n=top_n)
         return HotspotsResponse(
             file_hotspots=[FileMetricsItem(**f) for f in data["file_hotspots"]],
@@ -154,6 +163,7 @@ class LocalAnalysisProvider:
     async def conventions(
         self, branch: str, sample_size: int, path: str,
     ) -> ConventionsResponse:
+        ensure_branch_supported(branch)
         data = self._svc.conventions_data(sample_size=sample_size, path=path)
         return ConventionsResponse(
             sample_size=data["sample_size"],
@@ -176,6 +186,7 @@ class LocalSearchProvider:
     async def semantic_search(
         self, query: str, top_k: int, file_filter: str, branch: str,
     ) -> SearchResultsResponse:
+        ensure_branch_supported(branch)
         data = self._svc.semantic_search_data(
             query=query, top_k=top_k, file_filter=file_filter,
         )
@@ -188,6 +199,7 @@ class LocalSearchProvider:
     async def security_scan(
         self, mode: str, path: str, branch: str,
     ) -> SecurityScanResponse:
+        ensure_branch_supported(branch)
         data = self._svc.security_scan_data(mode=mode, path=path)
         return SecurityScanResponse(
             mode=data["mode"],
@@ -209,6 +221,7 @@ class LocalGraphProvider:
     async def graph_query(
         self, file: str, edge_type: str, direction: str, depth: int, branch: str,
     ) -> GraphQueryResponse:
+        ensure_branch_supported(branch)
         data = self._svc.graph_query_data(
             file=file, edge_type=edge_type, direction=direction, depth=depth,
         )
@@ -223,6 +236,7 @@ class LocalGraphProvider:
     async def find_related(
         self, file: str, top_k: int, branch: str,
     ) -> FindRelatedResponse:
+        ensure_branch_supported(branch)
         data = self._svc.find_related_data(file=file, top_k=top_k)
         return FindRelatedResponse(
             file=data["file"],
@@ -232,6 +246,7 @@ class LocalGraphProvider:
     async def community_detection(
         self, branch: str, min_community_size: int, max_communities: int,
     ) -> CommunityResponse:
+        ensure_branch_supported(branch)
         import os
         from collections import Counter
 
@@ -323,6 +338,7 @@ class LocalLSPProvider:
     async def definition(
         self, file: str, line: int, col: int, branch: str,
     ) -> LSPDefinitionResponse:
+        ensure_branch_supported(branch)
         data = await self._svc.lsp_definition_data(file=file, line=line, col=col)
         loc = data.get("location")
         return LSPDefinitionResponse(
@@ -334,6 +350,7 @@ class LocalLSPProvider:
         self, file: str, line: int, col: int,
         include_declaration: bool, branch: str,
     ) -> LSPReferencesResponse:
+        ensure_branch_supported(branch)
         data = await self._svc.lsp_references_data(
             file=file, line=line, col=col,
             include_declaration=include_declaration,
@@ -347,12 +364,14 @@ class LocalLSPProvider:
     async def hover(
         self, file: str, line: int, col: int, branch: str,
     ) -> LSPHoverResponse:
+        ensure_branch_supported(branch)
         data = await self._svc.lsp_hover_data(file=file, line=line, col=col)
         return LSPHoverResponse(**data)
 
     async def diagnostics(
         self, file: str, branch: str,
     ) -> LSPDiagnosticsResponse:
+        ensure_branch_supported(branch)
         data = self._svc.lsp_diagnostics_data(file=file)
         return LSPDiagnosticsResponse(
             file=data["file"],

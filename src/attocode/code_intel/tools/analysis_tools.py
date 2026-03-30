@@ -7,19 +7,12 @@ community_detection, repo_map_ranked, bug_scan.
 
 from __future__ import annotations
 
-import os
-from collections import Counter, deque
-
-from attocode.code_intel.helpers import (
-    _compute_file_metrics,
-    _compute_function_hotspots,
-    _get_churn_scores,
-)
 from attocode.code_intel._shared import (
-    _get_ast_service,
     _get_code_analyzer,
     _get_context_mgr,
     _get_project_dir,
+    _get_remote_service,
+    _get_service,
     mcp,
 )
 
@@ -34,40 +27,7 @@ def file_analysis(path: str) -> str:
     Args:
         path: File path (relative to project root or absolute).
     """
-    analyzer = _get_code_analyzer()
-    project_dir = _get_project_dir()
-
-    # Resolve to absolute path if relative
-    if not os.path.isabs(path):
-        path = os.path.join(project_dir, path)
-
-    result = analyzer.analyze_file(path)
-
-    lines = [f"Analysis of {result.path}:"]
-    lines.append(f"  Language: {result.language}")
-    lines.append(f"  Lines: {result.line_count}")
-
-    if result.imports:
-        lines.append(f"\n  Imports ({len(result.imports)}):")
-        for imp in result.imports:
-            lines.append(f"    {imp}")
-
-    if result.exports:
-        lines.append(f"\n  Exports ({len(result.exports)}):")
-        for exp in result.exports:
-            lines.append(f"    {exp}")
-
-    if result.chunks:
-        lines.append(f"\n  Code chunks ({len(result.chunks)}):")
-        for chunk in result.chunks:
-            sig = f" — {chunk.signature}" if chunk.signature else ""
-            parent = f" (in {chunk.parent})" if chunk.parent else ""
-            lines.append(
-                f"    {chunk.kind} {chunk.name}{parent}{sig}  "
-                f"L{chunk.start_line}-{chunk.end_line}"
-            )
-
-    return "\n".join(lines)
+    return _get_service().file_analysis(path)
 
 
 @mcp.tool()
@@ -81,17 +41,7 @@ def impact_analysis(changed_files: list[str]) -> str:
     Args:
         changed_files: List of file paths that were changed.
     """
-    svc = _get_ast_service()
-    impacted = svc.get_impact(changed_files)
-
-    if not impacted:
-        return f"No other files are impacted by changes to {', '.join(changed_files)}"
-
-    lines = [f"Impact analysis for {', '.join(changed_files)}:"]
-    lines.append(f"\n  {len(impacted)} files affected:")
-    for f in sorted(impacted):
-        lines.append(f"    {f}")
-    return "\n".join(lines)
+    return _get_service().impact_analysis(changed_files)
 
 
 @mcp.tool()
@@ -106,52 +56,7 @@ def dependency_graph(start_file: str, depth: int = 2) -> str:
         start_file: File path to start from.
         depth: How many hops to traverse (default 2).
     """
-    svc = _get_ast_service()
-    rel = svc._to_rel(start_file)
-
-    lines = [f"Dependency graph for {rel} (depth={depth}):"]
-
-    # Forward BFS
-    lines.append("\n  Imports (forward):")
-    visited_fwd: set[str] = set()
-    queue_fwd: deque[tuple[str, int]] = deque([(rel, 0)])
-    while queue_fwd:
-        current, d = queue_fwd.popleft()
-        if current in visited_fwd or d > depth:
-            continue
-        visited_fwd.add(current)
-        indent = "    " + "  " * d
-        if d > 0:
-            lines.append(f"{indent}{current}")
-        deps = svc.get_dependencies(current)
-        for dep in sorted(deps):
-            if dep not in visited_fwd:
-                queue_fwd.append((dep, d + 1))
-
-    if len(visited_fwd) <= 1:
-        lines.append("    (none)")
-
-    # Reverse BFS
-    lines.append("\n  Imported by (reverse):")
-    visited_rev: set[str] = set()
-    queue_rev: deque[tuple[str, int]] = deque([(rel, 0)])
-    while queue_rev:
-        current, d = queue_rev.popleft()
-        if current in visited_rev or d > depth:
-            continue
-        visited_rev.add(current)
-        indent = "    " + "  " * d
-        if d > 0:
-            lines.append(f"{indent}{current}")
-        dependents = svc.get_dependents(current)
-        for dep in sorted(dependents):
-            if dep not in visited_rev:
-                queue_rev.append((dep, d + 1))
-
-    if len(visited_rev) <= 1:
-        lines.append("    (none)")
-
-    return "\n".join(lines)
+    return _get_service().dependency_graph(start_file, depth=depth)
 
 
 @mcp.tool()
@@ -165,63 +70,7 @@ def hotspots(top_n: int = 15) -> str:
     Args:
         top_n: Number of top hotspots to show (default 15).
     """
-    ctx = _get_context_mgr()
-    files = ctx._files
-
-    if not files:
-        return "No files discovered in this project."
-
-    svc = _get_ast_service()
-    index = svc._index
-    ast_cache = svc._ast_cache
-    project_dir = _get_project_dir()
-    churn_scores = _get_churn_scores(project_dir, files)
-
-    all_metrics = _compute_file_metrics(files, index, ast_cache, churn_scores)
-    if not all_metrics:
-        return "No analyzable files found."
-
-    # Sort by composite score
-    all_metrics.sort(key=lambda m: m.composite, reverse=True)
-
-    lines = [f"Top {min(top_n, len(all_metrics))} hotspots by complexity/coupling:\n"]
-    for i, m in enumerate(all_metrics[:top_n], 1):
-        tags = f"  [{', '.join(m.categories)}]" if m.categories else ""
-        lines.append(
-            f"  {i:2d}. {m.path}\n"
-            f"      {m.line_count} lines, {m.symbol_count} symbols, "
-            f"pub={m.public_symbols}, "
-            f"fan-in={m.fan_in}, fan-out={m.fan_out}, "
-            f"density={m.density}%, score={m.composite}{tags}"
-        )
-
-    # Function-level hotspots
-    fn_hotspots = _compute_function_hotspots(ast_cache, top_n=10)
-    if fn_hotspots:
-        lines.append("\nLongest functions:")
-        for i, fm in enumerate(fn_hotspots, 1):
-            pub_mark = "" if fm.is_public else " (private)"
-            ret_mark = "" if fm.has_return_type else " [no return type]"
-            lines.append(
-                f"  {i:2d}. {fm.name} — {fm.line_count} lines, "
-                f"{fm.param_count} params{pub_mark}{ret_mark}\n"
-                f"      {fm.file_path}"
-            )
-
-    # Orphan detection
-    orphans = [
-        m for m in all_metrics
-        if m.fan_in == 0 and m.fan_out == 0 and m.line_count >= 20
-        and not any(fi.is_test for fi in files if fi.relative_path == m.path)
-    ]
-    if orphans:
-        lines.append(f"\nOrphan files (no imports/importers, {len(orphans)} found):")
-        for m in orphans[:10]:
-            lines.append(f"  {m.path} ({m.line_count} lines, {m.symbol_count} symbols)")
-        if len(orphans) > 10:
-            lines.append(f"  ... and {len(orphans) - 10} more")
-
-    return "\n".join(lines)
+    return _get_service().hotspots(top_n=top_n)
 
 
 @mcp.tool()
@@ -234,32 +83,7 @@ def cross_references(symbol_name: str) -> str:
     Args:
         symbol_name: Name of the symbol to look up.
     """
-    svc = _get_ast_service()
-    definitions = svc.find_symbol(symbol_name)
-    references = svc.get_callers(symbol_name)
-
-    lines = [f"Cross-references for '{symbol_name}':"]
-
-    lines.append(f"\n  Definitions ({len(definitions)}):")
-    if definitions:
-        for loc in definitions:
-            lines.append(
-                f"    {loc.kind} {loc.qualified_name}  "
-                f"in {loc.file_path}:{loc.start_line}"
-            )
-    else:
-        lines.append("    (none found)")
-
-    lines.append(f"\n  References ({len(references)}):")
-    if references:
-        for ref in references[:50]:  # Cap at 50 to avoid huge output
-            lines.append(f"    [{ref.ref_kind}] {ref.file_path}:{ref.line}")
-        if len(references) > 50:
-            lines.append(f"    ... and {len(references) - 50} more")
-    else:
-        lines.append("    (none found)")
-
-    return "\n".join(lines)
+    return _get_service().cross_references(symbol_name)
 
 
 @mcp.tool()
@@ -272,27 +96,7 @@ def dependencies(path: str) -> str:
     Args:
         path: File path (relative to project root or absolute).
     """
-    svc = _get_ast_service()
-    deps = svc.get_dependencies(path)
-    dependents = svc.get_dependents(path)
-
-    lines = [f"Dependencies for {path}:"]
-
-    lines.append(f"\n  Imports from ({len(deps)} files):")
-    if deps:
-        for d in sorted(deps):
-            lines.append(f"    {d}")
-    else:
-        lines.append("    (none)")
-
-    lines.append(f"\n  Imported by ({len(dependents)} files):")
-    if dependents:
-        for d in sorted(dependents):
-            lines.append(f"    {d}")
-    else:
-        lines.append("    (none)")
-
-    return "\n".join(lines)
+    return _get_service().dependencies(path)
 
 
 @mcp.tool()
@@ -313,48 +117,12 @@ def graph_query(
         direction: "outbound" follows imports, "inbound" follows importers.
         depth: Maximum BFS hops (default 2, max 5).
     """
-    valid_edge_types = {"IMPORTS", "IMPORTED_BY"}
-    valid_directions = {"outbound", "inbound"}
-    if edge_type not in valid_edge_types:
-        opts = ", ".join(sorted(valid_edge_types))
-        return f"Error: invalid edge_type '{edge_type}'. Must be one of: {opts}"
-    if direction not in valid_directions:
-        opts = ", ".join(sorted(valid_directions))
-        return f"Error: invalid direction '{direction}'. Must be one of: {opts}"
-
-    svc = _get_ast_service()
-    rel = svc._to_rel(file)
-    depth = min(depth, 5)
-
-    use_dependents = edge_type == "IMPORTED_BY" or direction == "inbound"
-
-    visited: set[str] = set()
-    queue: deque[tuple[str, int]] = deque([(rel, 0)])
-    result_by_depth: dict[int, list[str]] = {}
-
-    while queue:
-        current, d = queue.popleft()
-        if current in visited or d > depth:
-            continue
-        visited.add(current)
-        if d > 0:
-            result_by_depth.setdefault(d, []).append(current)
-        neighbors = svc.get_dependents(current) if use_dependents else svc.get_dependencies(current)
-        for n in sorted(neighbors):
-            if n not in visited:
-                queue.append((n, d + 1))
-
-    label = "importers" if use_dependents else "imports"
-    lines = [f"Graph query: {rel} ({label}, depth={depth})"]
-    if not result_by_depth:
-        lines.append("  (no results)")
-    else:
-        for d in sorted(result_by_depth):
-            lines.append(f"\n  Hop {d}:")
-            for f_path in result_by_depth[d]:
-                lines.append(f"    {'>' * d} {f_path}")
-    lines.append(f"\nTotal: {len(visited) - 1} files reachable")
-    return "\n".join(lines)
+    return _get_service().graph_query(
+        file=file,
+        edge_type=edge_type,
+        direction=direction,
+        depth=depth,
+    )
 
 
 @mcp.tool()
@@ -383,6 +151,10 @@ def graph_dsl(query: str) -> str:
     Args:
         query: Graph DSL query string.
     """
+    remote = _get_remote_service()
+    if remote is not None:
+        return remote.graph_dsl(query)
+
     from attocode.code_intel.graph_query_parser import (
         GraphQueryExecutor,
         GraphQueryParser,
@@ -433,56 +205,7 @@ def find_related(file: str, top_k: int = 10) -> str:
         file: File path (relative to project root or absolute).
         top_k: Number of results to return (default 10).
     """
-    svc = _get_ast_service()
-    rel = svc._to_rel(file)
-    idx = svc._index
-
-    # Check file exists in index
-    if rel not in idx.file_symbols and rel not in idx.file_dependencies:
-        return f"Error: file '{rel}' not found in the project index."
-
-    # Collect 2-hop neighbors in both directions
-    neighbors: Counter[str] = Counter()
-
-    direct_deps = idx.get_dependencies(rel)
-    direct_importers = idx.get_dependents(rel)
-    all_direct = direct_deps | direct_importers
-
-    for n in all_direct:
-        neighbors[n] += 3  # Direct connection = high weight
-
-    for n in all_direct:
-        for nn in idx.get_dependencies(n):
-            if nn != rel:
-                neighbors[nn] += 1
-        for nn in idx.get_dependents(n):
-            if nn != rel:
-                neighbors[nn] += 1
-
-    # Co-importer overlap (Jaccard-style boost) — scoped to 2-hop neighbors only
-    my_deps = idx.get_dependencies(rel)
-    if my_deps:
-        candidate_files = set(neighbors.keys())
-        for other_file in candidate_files:
-            other_deps_set = idx.file_dependencies.get(other_file, set())
-            if not other_deps_set:
-                continue
-            overlap = len(my_deps & other_deps_set)
-            if overlap > 0:
-                union = len(my_deps | other_deps_set)
-                jaccard = overlap / union if union else 0
-                neighbors[other_file] += round(jaccard * 5)
-
-    top = neighbors.most_common(top_k)
-    lines = [f"Files related to {rel}:"]
-    if not top:
-        lines.append("  (no related files found)")
-    else:
-        for path, score in top:
-            rel_type = "direct" if path in all_direct else "transitive"
-            lines.append(f"  [{score:>3}] {path}  ({rel_type})")
-
-    return "\n".join(lines)
+    return _get_service().find_related(file=file, top_k=top_k)
 
 
 def _louvain_communities(
@@ -519,151 +242,10 @@ def community_detection(
         min_community_size: Minimum files per community to report (default 3).
         max_communities: Maximum number of communities to return (default 20).
     """
-    svc = _get_ast_service()
-    idx = svc._index
-
-    # Build undirected adjacency with weights
-    all_files: set[str] = set()
-    all_files.update(idx.file_dependencies.keys())
-    all_files.update(idx.file_dependents.keys())
-    all_files.update(f for deps in idx.file_dependencies.values() for f in deps)
-
-    adj: dict[str, set[str]] = {f: set() for f in all_files}
-    weights: dict[tuple[str, str], float] = {}
-    for src, deps in idx.file_dependencies.items():
-        for tgt in deps:
-            adj.setdefault(src, set()).add(tgt)
-            adj.setdefault(tgt, set()).add(src)
-            # Bidirectional imports get weight 2, unidirectional weight 1
-            key = (min(src, tgt), max(src, tgt))
-            is_bidirectional = tgt in idx.file_dependencies and src in idx.file_dependencies.get(tgt, set())
-            weights[key] = 2.0 if is_bidirectional else 1.0
-
-    # Try Louvain, fall back to BFS connected components
-    try:
-        communities, modularity_score = _louvain_communities(all_files, adj, weights)
-        method = "louvain"
-    except ImportError:
-        communities, modularity_score = _bfs_connected_components(all_files, adj)
-        method = "connected-components"
-
-    # Sort by size descending, filter by min size
-    communities.sort(key=len, reverse=True)
-    communities = [c for c in communities if len(c) >= min_community_size][:max_communities]
-
-    # Detect trivial results: single community or near-zero modularity
-    is_trivial = len(communities) <= 1 or modularity_score < 0.05
-
-    if is_trivial:
-        # Fallback: directory-based module analysis for sparse graphs
-        ast_cache = svc._ast_cache
-
-        # Group all indexed files by top-level directory
-        dir_groups: dict[str, list[str]] = {}
-        for rel_path in ast_cache:
-            parts = rel_path.split("/")
-            top_dir = parts[0] if len(parts) > 1 else "(root)"
-            dir_groups.setdefault(top_dir, []).append(rel_path)
-
-        lines = [
-            f"Architecture module analysis ({method}+directory-fallback): "
-            f"{len(dir_groups)} directory modules, "
-            f"{len(ast_cache)} total files "
-            f"(modularity={modularity_score:.3f})",
-            "  Note: Graph too sparse for meaningful community detection; "
-            "using directory-based module analysis",
-        ]
-
-        # Build directory modules sorted by file count descending
-        for i, (dir_name, file_list) in enumerate(
-            sorted(dir_groups.items(), key=lambda x: len(x[1]), reverse=True), 1,
-        ):
-            total_symbols = 0
-            file_symbol_counts: list[tuple[str, int]] = []
-            for f in file_list:
-                file_ast = ast_cache.get(f)
-                sc = file_ast.symbol_count if file_ast else 0
-                total_symbols += sc
-                file_symbol_counts.append((f, sc))
-
-            file_symbol_counts.sort(key=lambda x: x[1], reverse=True)
-
-            lines.append(
-                f"\n  Module {i}: directory '{dir_name}' "
-                f"— {len(file_list)} files, {total_symbols} symbols"
-            )
-            for path, count in file_symbol_counts[:3]:
-                lines.append(f"    key file: {path} ({count} symbols)")
-            sample = sorted(file_list)[:5]
-            for f in sample:
-                lines.append(f"    - {f}")
-            if len(file_list) > 5:
-                lines.append(f"    ... and {len(file_list) - 5} more")
-
-        # Hub files: top 5 by total edge count
-        edge_counts: Counter[str] = Counter()
-        for node, neighbors in adj.items():
-            edge_counts[node] = len(neighbors)
-        for f in ast_cache:
-            if f not in edge_counts:
-                edge_counts[f] = 0
-
-        if edge_counts:
-            lines.append("\n  Hub Files (most cross-references):")
-            for path, degree in edge_counts.most_common(5):
-                file_ast = ast_cache.get(path)
-                sym_count = file_ast.symbol_count if file_ast else 0
-                lines.append(
-                    f"    hub: {path} "
-                    f"({degree} cross-references, {sym_count} symbols)"
-                )
-
-        return "\n".join(lines)
-
-    lines = [
-        f"Community detection ({method}): {len(communities)} communities "
-        f"(min size {min_community_size}, modularity={modularity_score:.3f})"
-    ]
-    for i, community in enumerate(communities, 1):
-        # Find common directory prefix as "theme"
-        dirs = [os.path.dirname(f) for f in community if os.path.dirname(f)]
-        if dirs:
-            theme_counter: Counter[str] = Counter(dirs)
-            common_theme = theme_counter.most_common(1)[0][0]
-        else:
-            common_theme = "(root)"
-
-        # Internal vs external degree
-        internal_edges = 0
-        external_edges = 0
-        for f in community:
-            for neighbor in adj.get(f, set()):
-                if neighbor in community:
-                    internal_edges += 1
-                else:
-                    external_edges += 1
-        internal_edges //= 2  # Each edge counted twice
-
-        lines.append(f"\n  Community {i} ({len(community)} files) — theme: {common_theme}")
-        lines.append(f"    Internal edges: {internal_edges}, External edges: {external_edges}")
-
-        # Hub: highest internal degree (within community)
-        def _internal_degree(f: str, _community: set[str] = community) -> int:
-            return sum(1 for n in adj.get(f, set()) if n in _community)
-
-        hub = max(community, key=_internal_degree)
-        hub_deg = _internal_degree(hub)
-        lines.append(f"    Hub: {hub} (internal degree {hub_deg})")
-
-        # Show sample files
-        sample = sorted(community)[:5]
-        for f in sample:
-            i_deg = _internal_degree(f)
-            lines.append(f"    - {f} (internal degree {i_deg})")
-        if len(community) > 5:
-            lines.append(f"    ... and {len(community) - 5} more")
-
-    return "\n".join(lines)
+    return _get_service().community_detection(
+        min_community_size=min_community_size,
+        max_communities=max_communities,
+    )
 
 
 @mcp.tool()
@@ -683,6 +265,14 @@ def repo_map_ranked(
         token_budget: Maximum tokens for the output (default 1024).
         exclude_tests: Whether to exclude test files from ranking.
     """
+    remote = _get_remote_service()
+    if remote is not None:
+        return remote.repo_map_ranked(
+            task_context=task_context,
+            token_budget=token_budget,
+            exclude_tests=exclude_tests,
+        )
+
     from attocode.code_intel.repo_ranker import format_repo_map, rank_repo_files
 
     ctx_mgr = _get_context_mgr()
@@ -691,8 +281,6 @@ def repo_map_ranked(
     adjacency: dict[str, list[str]] = {}
     symbols_by_file: dict[str, list[str]] = {}
     dep_graph = ctx_mgr._dep_graph
-    project_dir = _get_project_dir()
-
     for fi in ctx_mgr._files:
         rel = fi.relative_path
         if dep_graph is not None:
@@ -736,6 +324,10 @@ def bug_scan(base_branch: str = "main", min_confidence: float = 0.5) -> str:
         base_branch: Base branch to diff against (default "main").
         min_confidence: Minimum confidence threshold for reported findings (0.0-1.0).
     """
+    remote = _get_remote_service()
+    if remote is not None:
+        return remote.bug_scan(base_branch=base_branch, min_confidence=min_confidence)
+
     import subprocess
 
     from attocode.code_intel.bug_finder import scan_diff

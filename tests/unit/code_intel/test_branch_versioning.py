@@ -12,10 +12,12 @@ from attocode.code_intel.storage.branch_overlay import BranchOverlay
 
 def _make_overlay(version: int | None = 0) -> BranchOverlay:
     """Create a BranchOverlay with a mock session returning *version* from get_version."""
-    session = AsyncMock()
+    session = MagicMock()
     mock_result = MagicMock()
     mock_result.scalar_one_or_none.return_value = version
     session.execute = AsyncMock(return_value=mock_result)
+    session.flush = AsyncMock()
+    session.add = MagicMock()
     return BranchOverlay(session)
 
 

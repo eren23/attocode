@@ -7,6 +7,7 @@ from fastapi import APIRouter, Depends
 from attocode.code_intel.api.auth import verify_auth
 from attocode.code_intel.api.deps import (
     BranchParam,
+    ensure_branch_supported,
     get_graph_provider,
     get_service_or_404,
 )
@@ -14,6 +15,7 @@ from attocode.code_intel.api.models import (
     CommunityResponse,
     FindRelatedRequest,
     FindRelatedResponse,
+    GraphDSLRequest,
     GraphQueryRequest,
     GraphQueryResponse,
     RelevantContextRequest,
@@ -49,6 +51,7 @@ async def graph_query_v1(
     branch: BranchParam = "",
 ) -> TextResult:
     """BFS traversal over dependency edges."""
+    ensure_branch_supported(branch)
     svc = await get_service_or_404(project_id)
     return TextResult(result=svc.graph_query(
         file=req.file, edge_type=req.edge_type, direction=req.direction, depth=req.depth,
@@ -62,6 +65,7 @@ async def find_related_v1(
     branch: BranchParam = "",
 ) -> TextResult:
     """Find structurally related files."""
+    ensure_branch_supported(branch)
     svc = await get_service_or_404(project_id)
     return TextResult(result=svc.find_related(file=req.file, top_k=req.top_k))
 
@@ -74,6 +78,7 @@ async def community_detection_v1(
     max_communities: int = 20,
 ) -> TextResult:
     """Detect file communities."""
+    ensure_branch_supported(branch)
     svc = await get_service_or_404(project_id)
     return TextResult(result=svc.community_detection(
         min_community_size=min_community_size, max_communities=max_communities,
@@ -87,11 +92,26 @@ async def relevant_context_v1(
     branch: BranchParam = "",
 ) -> TextResult:
     """Get subgraph capsule for files with neighbors."""
+    ensure_branch_supported(branch)
     svc = await get_service_or_404(project_id)
     return TextResult(result=svc.relevant_context(
         files=req.files, depth=req.depth, max_tokens=req.max_tokens,
         include_symbols=req.include_symbols,
     ))
+
+
+@router_v1.post("/dsl", response_model=TextResult)
+async def graph_dsl_v1(
+    project_id: str,
+    req: GraphDSLRequest,
+    branch: BranchParam = "",
+) -> TextResult:
+    """Query the dependency graph using the graph DSL."""
+    from attocode.code_intel.tools.analysis_tools import graph_dsl
+
+    ensure_branch_supported(branch)
+    await get_service_or_404(project_id)
+    return TextResult(result=graph_dsl(req.query))
 
 
 # ===================================================================

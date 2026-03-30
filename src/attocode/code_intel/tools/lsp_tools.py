@@ -6,11 +6,12 @@ lsp_enrich.
 
 from __future__ import annotations
 
-import contextlib
 import os
 
 from attocode.code_intel._shared import (
     _get_project_dir,
+    _get_remote_service,
+    _get_service,
     mcp,
 )
 
@@ -53,26 +54,7 @@ async def lsp_definition(file: str, line: int, col: int = 0) -> str:
         line: Line number (0-indexed).
         col: Column number (0-indexed, default 0).
     """
-    lsp = _get_lsp_manager()
-    project_dir = _get_project_dir()
-
-    if not os.path.isabs(file):
-        file = os.path.join(project_dir, file)
-
-    try:
-        loc = await lsp.get_definition(file, line, col)
-    except Exception as e:
-        return f"LSP not available: {e}"
-
-    if loc is None:
-        return f"No definition found at {file}:{line}:{col}"
-
-    uri = loc.uri
-    if uri.startswith("file://"):
-        uri = uri[7:]
-    with contextlib.suppress(ValueError):
-        uri = os.path.relpath(uri, project_dir)
-    return f"Definition: {uri}:{loc.range.start.line + 1}:{loc.range.start.character + 1}"
+    return await _get_service().lsp_definition(file=file, line=line, col=col)
 
 
 @mcp.tool()
@@ -87,31 +69,12 @@ async def lsp_references(
         col: Column number (0-indexed, default 0).
         include_declaration: Whether to include the declaration itself.
     """
-    lsp = _get_lsp_manager()
-    project_dir = _get_project_dir()
-
-    if not os.path.isabs(file):
-        file = os.path.join(project_dir, file)
-
-    try:
-        locs = await lsp.get_references(file, line, col, include_declaration=include_declaration)
-    except Exception as e:
-        return f"LSP not available: {e}"
-
-    if not locs:
-        return f"No references found at {file}:{line}:{col}"
-
-    lines = [f"References ({len(locs)}):"]
-    for loc in locs[:50]:
-        uri = loc.uri
-        if uri.startswith("file://"):
-            uri = uri[7:]
-        with contextlib.suppress(ValueError):
-            uri = os.path.relpath(uri, project_dir)
-        lines.append(f"  {uri}:{loc.range.start.line + 1}:{loc.range.start.character + 1}")
-    if len(locs) > 50:
-        lines.append(f"  ... and {len(locs) - 50} more")
-    return "\n".join(lines)
+    return await _get_service().lsp_references(
+        file=file,
+        line=line,
+        col=col,
+        include_declaration=include_declaration,
+    )
 
 
 @mcp.tool()
@@ -123,20 +86,7 @@ async def lsp_hover(file: str, line: int, col: int = 0) -> str:
         line: Line number (0-indexed).
         col: Column number (0-indexed, default 0).
     """
-    lsp = _get_lsp_manager()
-    project_dir = _get_project_dir()
-
-    if not os.path.isabs(file):
-        file = os.path.join(project_dir, file)
-
-    try:
-        info = await lsp.get_hover(file, line, col)
-    except Exception as e:
-        return f"LSP not available: {e}"
-
-    if info is None:
-        return f"No hover information at {file}:{line}:{col}"
-    return f"Hover at {file}:{line}:{col}:\n{info}"
+    return await _get_service().lsp_hover(file=file, line=line, col=col)
 
 
 @mcp.tool()
@@ -146,32 +96,7 @@ def lsp_diagnostics(file: str) -> str:
     Args:
         file: File path to check for diagnostics.
     """
-    lsp = _get_lsp_manager()
-    project_dir = _get_project_dir()
-
-    if not os.path.isabs(file):
-        file = os.path.join(project_dir, file)
-
-    try:
-        diags = lsp.get_diagnostics(file)
-    except Exception as e:
-        return f"LSP not available: {e}"
-
-    if not diags:
-        return f"No diagnostics for {file}"
-
-    lines = [f"Diagnostics ({len(diags)}):"]
-    for d in diags[:30]:
-        source = f" [{d.source}]" if d.source else ""
-        code = f" ({d.code})" if d.code else ""
-        lines.append(
-            f"  [{d.severity}]{source}{code} "
-            f"L{d.range.start.line + 1}:{d.range.start.character + 1}: "
-            f"{d.message}"
-        )
-    if len(diags) > 30:
-        lines.append(f"  ... and {len(diags) - 30} more")
-    return "\n".join(lines)
+    return _get_service().lsp_diagnostics(file=file)
 
 
 @mcp.tool()
@@ -191,6 +116,10 @@ async def lsp_enrich(files: list[str]) -> str:
     Args:
         files: List of file paths to enrich (relative or absolute).
     """
+    remote = _get_remote_service()
+    if remote is not None:
+        return await remote.lsp_enrich(files)
+
     from attocode.code_intel._shared import _get_ast_service
 
     lsp = _get_lsp_manager()
@@ -225,7 +154,7 @@ async def lsp_enrich(files: list[str]) -> str:
                 break  # stop on first error per file (LSP probably down)
 
     lines = [
-        f"LSP enrichment complete.",
+        "LSP enrichment complete.",
         f"  Files processed: {len(files)}",
         f"  Symbols enriched: {enriched}",
     ]

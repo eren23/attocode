@@ -6,7 +6,7 @@ Tools: readiness_report.
 from __future__ import annotations
 
 from attocode.code_intel._shared import (
-    _get_project_dir,
+    _get_service,
     mcp,
 )
 
@@ -36,33 +36,9 @@ def readiness_report(
         tracer_bullets: Whether to run tracer bullet analysis (default True).
         min_severity: Minimum severity to include: "pass", "info", "warning", "critical".
     """
-    from attocode.code_intel.readiness import ReadinessEngine, ReadinessSeverity
-
-    project_dir = _get_project_dir()
-    engine = ReadinessEngine(project_dir=project_dir)
-
-    report = engine.run(
+    return _get_service().readiness_report(
         phases=phases,
         scope=scope,
         tracer_bullets=tracer_bullets,
+        min_severity=min_severity,
     )
-
-    # Filter findings by min_severity
-    severity_order = [
-        ReadinessSeverity.PASS,
-        ReadinessSeverity.INFO,
-        ReadinessSeverity.WARNING,
-        ReadinessSeverity.CRITICAL,
-    ]
-    try:
-        min_idx = severity_order.index(ReadinessSeverity(min_severity))
-    except (ValueError, KeyError):
-        min_idx = 0
-
-    for pr in report.phase_results:
-        pr.findings = [
-            f for f in pr.findings
-            if severity_order.index(f.severity) >= min_idx
-        ]
-
-    return engine.format_report(report)

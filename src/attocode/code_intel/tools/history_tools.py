@@ -14,10 +14,11 @@ import os
 import subprocess
 import threading
 from collections import defaultdict
-from datetime import datetime, timezone
 
 from attocode.code_intel._shared import (
     _get_project_dir,
+    _get_remote_service,
+    _get_service,
     mcp,
 )
 
@@ -151,6 +152,10 @@ def code_evolution(
         since: Optional date filter (e.g. "2024-01-01", "3 months ago").
         max_results: Maximum number of commits to return (default 20).
     """
+    remote = _get_remote_service()
+    if remote is not None:
+        return remote.code_evolution(path=path, symbol=symbol, since=since, max_results=max_results)
+
     project_dir = _get_project_dir()
 
     # Resolve path relative to project
@@ -255,6 +260,10 @@ def recent_changes(
         path: Optional path prefix to filter (e.g. "src/api/").
         top_n: Number of top files to show (default 20).
     """
+    remote = _get_remote_service()
+    if remote is not None:
+        return remote.recent_changes(days=days, path=path, top_n=top_n)
+
     project_dir = _get_project_dir()
 
     git_args = [
@@ -421,37 +430,12 @@ def change_coupling(
         min_coupling: Minimum coupling score to include (0.0-1.0, default 0.3).
         top_k: Maximum number of results (default 20).
     """
-    analyzer = _get_temporal_analyzer()
-
-    # Normalize path
-    project_dir = _get_project_dir()
-    if os.path.isabs(file):
-        try:
-            file = os.path.relpath(file, project_dir)
-        except ValueError:
-            pass
-
-    results = analyzer.get_change_coupling(
-        file, days=days, min_coupling=min_coupling, top_k=top_k,
+    return _get_service().change_coupling(
+        file=file,
+        days=days,
+        min_coupling=min_coupling,
+        top_k=top_k,
     )
-
-    if not results:
-        return f"No temporal coupling found for '{file}' in the last {days} days."
-
-    lines = [
-        f"Change coupling for {file} (last {days} days)",
-        f"({len(results)} coupled files, min_coupling={min_coupling})\n",
-        f"  {'#':>3}  {'Score':>6}  {'Co-chg':>6}  {'Indiv':>5}  File",
-        f"  {'':->3}  {'':->6}  {'':->6}  {'':->5}  {'':->40}",
-    ]
-
-    for i, entry in enumerate(results, 1):
-        lines.append(
-            f"  {i:>3}  {entry.coupling_score:>6.3f}  "
-            f"{entry.co_changes:>6}  {entry.individual_changes:>5}  {entry.path}"
-        )
-
-    return "\n".join(lines)
 
 
 @mcp.tool()
@@ -469,27 +453,7 @@ def churn_hotspots(
         days: Time window in days (default 90).
         top_n: Number of top files to return (default 20).
     """
-    analyzer = _get_temporal_analyzer()
-    results = analyzer.get_churn_hotspots(days=days, top_n=top_n)
-
-    if not results:
-        return f"No file changes found in the last {days} days."
-
-    lines = [
-        f"Churn hotspots (last {days} days)",
-        f"({len(results)} files shown)\n",
-        f"  {'#':>3}  {'Score':>6}  {'Commits':>7}  {'Added':>6}  {'Removed':>7}  {'Authors':>7}  File",
-        f"  {'':->3}  {'':->6}  {'':->7}  {'':->6}  {'':->7}  {'':->7}  {'':->40}",
-    ]
-
-    for i, entry in enumerate(results, 1):
-        lines.append(
-            f"  {i:>3}  {entry.churn_score:>6.4f}  {entry.commits:>7}  "
-            f"+{entry.lines_added:>5}  -{entry.lines_removed:>6}  "
-            f"{len(entry.authors):>7}  {entry.path}"
-        )
-
-    return "\n".join(lines)
+    return _get_service().churn_hotspots(days=days, top_n=top_n)
 
 
 @mcp.tool()
@@ -511,60 +475,4 @@ def merge_risk(
         files: List of file paths being modified.
         days: Time window for temporal coupling (default 90).
     """
-    from attocode.code_intel._shared import _get_ast_service
-
-    analyzer = _get_temporal_analyzer()
-    project_dir = _get_project_dir()
-
-    # Normalize paths
-    normalized = []
-    for f in files:
-        if os.path.isabs(f):
-            try:
-                f = os.path.relpath(f, project_dir)
-            except ValueError:
-                pass
-        normalized.append(f)
-
-    # Get dependency graph from ASTService
-    dep_forward: dict[str, set[str]] | None = None
-    dep_reverse: dict[str, set[str]] | None = None
-    try:
-        ast_svc = _get_ast_service()
-        dep_forward = ast_svc.index.file_dependencies
-        dep_reverse = ast_svc.index.file_dependents
-    except Exception:
-        logger.debug("Could not load dependency graph for merge_risk")
-
-    results = analyzer.get_merge_risk(
-        normalized,
-        days=days,
-        dep_graph_forward=dep_forward,
-        dep_graph_reverse=dep_reverse,
-    )
-
-    if not results:
-        return f"No additional files predicted to need changes alongside {', '.join(normalized)}."
-
-    # Determine overall risk level
-    max_conf = max(e.confidence for e in results)
-    if max_conf >= 0.7:
-        risk_level = "HIGH"
-    elif max_conf >= 0.4:
-        risk_level = "MEDIUM"
-    else:
-        risk_level = "LOW"
-
-    lines = [
-        f"Merge risk analysis for {', '.join(normalized)}",
-        f"Overall risk: {risk_level} ({len(results)} predicted changes)\n",
-        f"  {'#':>3}  {'Conf':>5}  {'Source':>10}  File",
-        f"  {'':->3}  {'':->5}  {'':->10}  {'':->40}",
-    ]
-
-    for i, entry in enumerate(results, 1):
-        lines.append(
-            f"  {i:>3}  {entry.confidence:>5.3f}  {entry.reason:>10}  {entry.path}"
-        )
-
-    return "\n".join(lines)
+    return _get_service().merge_risk(files=files, days=days)

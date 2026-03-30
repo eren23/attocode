@@ -1,7 +1,7 @@
 """Unified code intelligence service.
 
 Used by both the MCP server (server.py) and HTTP API (api/app.py) as a
-single source of truth for all 38 tool operations.
+single source of truth for the shared code-intelligence surface.
 """
 
 from __future__ import annotations
@@ -260,12 +260,41 @@ class CodeIntelService:
         report = engine.run(phases=phases, scope=scope, tracer_bullets=tracer_bullets)
         return report.to_dict()
 
-    def readiness_report(self, **kwargs) -> str:
+    def readiness_report(
+        self,
+        *,
+        phases: list[int] | None = None,
+        scope: str = "",
+        tracer_bullets: bool = True,
+        min_severity: str = "info",
+    ) -> str:
         """Return formatted text readiness report."""
-        from attocode.code_intel.readiness import ReadinessEngine
+        from attocode.code_intel.readiness import ReadinessEngine, ReadinessSeverity
 
         engine = ReadinessEngine(project_dir=self._project_dir)
-        report = engine.run(**kwargs)
+        report = engine.run(
+            phases=phases,
+            scope=scope,
+            tracer_bullets=tracer_bullets,
+        )
+
+        severity_order = [
+            ReadinessSeverity.PASS,
+            ReadinessSeverity.INFO,
+            ReadinessSeverity.WARNING,
+            ReadinessSeverity.CRITICAL,
+        ]
+        try:
+            min_idx = severity_order.index(ReadinessSeverity(min_severity))
+        except (ValueError, KeyError):
+            min_idx = 0
+
+        for phase_result in report.phase_results:
+            phase_result.findings = [
+                finding
+                for finding in phase_result.findings
+                if severity_order.index(finding.severity) >= min_idx
+            ]
         return engine.format_report(report)
 
     def _get_temporal_analyzer(self):
@@ -346,6 +375,16 @@ class CodeIntelService:
                 for e in results
             ],
         }
+
+    def code_evolution(self, path: str, symbol: str = "", since: str = "", max_results: int = 20) -> str:
+        from attocode.code_intel.tools.history_tools import code_evolution as _code_evolution
+
+        return _code_evolution(path=path, symbol=symbol, since=since, max_results=max_results)
+
+    def recent_changes(self, days: int = 7, path: str = "", top_n: int = 20) -> str:
+        from attocode.code_intel.tools.history_tools import recent_changes as _recent_changes
+
+        return _recent_changes(days=days, path=path, top_n=top_n)
 
     def repo_map(self, *, include_symbols: bool = True, max_tokens: int = 6000) -> str:
         ctx = self._get_context_mgr()
@@ -476,7 +515,11 @@ class CodeIntelService:
 
     def hotspots_data(self, top_n: int = 15) -> dict:
         """Return structured hotspot data."""
-        from attocode.code_intel.helpers import _compute_file_metrics, _compute_function_hotspots, _get_churn_scores
+        from attocode.code_intel.helpers import (
+            _compute_file_metrics,
+            _compute_function_hotspots,
+            _get_churn_scores,
+        )
 
         ctx = self._get_context_mgr()
         files = ctx._files
@@ -1831,7 +1874,7 @@ class CodeIntelService:
             token_est += section_tokens
         return "\n\n".join(output_parts)
 
-    def bootstrap(self, task_hint: str = "", max_tokens: int = 8000) -> str:
+    def bootstrap(self, task_hint: str = "", max_tokens: int = 8000, indexing_depth: str = "auto") -> str:
         from attocode.code_intel.helpers import _analyze_conventions, _format_conventions
 
         ctx = self._get_context_mgr()
@@ -1904,8 +1947,12 @@ class CodeIntelService:
                     if len(search_text) > search_chars:
                         search_text = search_text[:search_chars] + "\n  ..."
                     sections.append(f"## Relevant Code for: {task_hint}\n{search_text}")
-            except Exception:
-                pass
+            except Exception as exc:
+                logger.warning("bootstrap semantic-search step failed", exc_info=True)
+                sections.append(
+                    "## Relevant Code\n"
+                    f"Skipped due to search backend error: {type(exc).__name__}: {exc}"
+                )
 
         if size_tier == "small":
             guidance = (
@@ -1933,7 +1980,11 @@ class CodeIntelService:
         return "\n\n".join(sections)
 
     def hotspots(self, top_n: int = 15) -> str:
-        from attocode.code_intel.helpers import _compute_file_metrics, _compute_function_hotspots, _get_churn_scores
+        from attocode.code_intel.helpers import (
+            _compute_file_metrics,
+            _compute_function_hotspots,
+            _get_churn_scores,
+        )
 
         ctx = self._get_context_mgr()
         files = ctx._files
@@ -2170,7 +2221,7 @@ class CodeIntelService:
         return scanner.format_report(report)
 
     def semantic_search(self, query: str, top_k: int = 10,
-                        file_filter: str = "", mode: str = "auto") -> str:
+                        file_filter: str = "", branch: str = "", mode: str = "auto") -> str:
         mgr = self._get_semantic_search()
 
         if mode == "keyword":
@@ -2181,15 +2232,41 @@ class CodeIntelService:
         ast_svc = self._ast_service  # don't trigger init, just check if available
         if ast_svc is not None:
             state = ast_svc._hydration_state
-            if state and state.parse_coverage >= 0.8 and not mgr.is_index_ready():
-                if mgr._bg_indexer is None:
-                    try:
-                        mgr.start_background_indexing()
-                    except Exception:
-                        pass
+            if (
+                state and state.parse_coverage >= 0.8 and not mgr.is_index_ready()
+                and mgr._bg_indexer is None
+            ):
+                try:
+                    mgr.start_background_indexing()
+                except Exception:
+                    pass
 
         results = mgr.search(query, top_k=top_k, file_filter=file_filter)
         return mgr.format_results(results)
+
+    def semantic_search_status(self) -> str:
+        progress = self.indexing_status()
+        lines = [
+            "Semantic search status:",
+            f"  Provider: {progress.get('provider', '')}",
+            f"  Available: {progress.get('available', False)}",
+            f"  Status: {progress.get('status', 'idle')}",
+            (
+                "  Coverage: "
+                f"{float(progress.get('coverage', 0.0)):.0%} "
+                f"({progress.get('indexed_files', 0)}/{progress.get('total_files', 0)} files)"
+            ),
+            f"  Failed: {progress.get('failed_files', 0)}",
+            f"  Vector search active: {progress.get('vector_search_active', False)}",
+            f"  Health: {progress.get('health_status', 'unknown')}",
+        ]
+        if progress.get("degraded_reason"):
+            lines.append(f"  Degradation reason: {progress['degraded_reason']}")
+        if progress.get("last_error"):
+            lines.append(f"  Last error: {progress['last_error']}")
+        if progress.get("elapsed_seconds", 0):
+            lines.append(f"  Elapsed: {float(progress['elapsed_seconds']):.1f}s")
+        return "\n".join(lines)
 
     def start_indexing(self) -> dict:
         """Start background embedding indexing."""
@@ -2205,6 +2282,8 @@ class CodeIntelService:
             "coverage": progress.coverage,
             "elapsed_seconds": progress.elapsed_seconds,
             "vector_search_active": mgr.is_index_ready(),
+            "last_error": getattr(progress, "last_error", ""),
+            "degraded_reason": getattr(progress, "degraded_reason", ""),
         }
         result.update(self._health_snapshot())
         return result
@@ -2223,6 +2302,8 @@ class CodeIntelService:
             "coverage": progress.coverage,
             "elapsed_seconds": progress.elapsed_seconds,
             "vector_search_active": mgr.is_index_ready(),
+            "last_error": getattr(progress, "last_error", ""),
+            "degraded_reason": getattr(progress, "degraded_reason", ""),
         }
         result.update(self._health_snapshot())
         return result
@@ -2287,6 +2368,149 @@ class CodeIntelService:
                 f"| {r['scope'] or '(global)'} |"
             )
         return "\n".join(lines)
+
+    def dead_code(
+        self,
+        scope: str = "",
+        entry_points: list[str] | None = None,
+        level: str = "symbol",
+        min_confidence: float = 0.5,
+        top_n: int = 30,
+    ) -> str:
+        from attocode.code_intel.tools.dead_code_tools import dead_code as _dead_code
+
+        return _dead_code(
+            scope=scope,
+            entry_points=entry_points,
+            level=level,
+            min_confidence=min_confidence,
+            top_n=top_n,
+        )
+
+    def distill(
+        self,
+        files: list[str] | None = None,
+        depth: int = 1,
+        level: str = "signatures",
+        max_tokens: int = 4000,
+    ) -> str:
+        from attocode.code_intel.tools.distill_tools import distill as _distill
+
+        return _distill(files=files, depth=depth, level=level, max_tokens=max_tokens)
+
+    def change_coupling(self, file: str, *, days: int = 90, min_coupling: float = 0.3, top_k: int = 20) -> str:
+        data = self.change_coupling_data(file=file, days=days, min_coupling=min_coupling, top_k=top_k)
+        related = data.get("related", [])
+        if not related:
+            return f"No coupled files found for {file}."
+        lines = [f"Files frequently changing with {file} ({len(related)} results):"]
+        for item in related:
+            lines.append(
+                f"  {item['path']}  coupling={item['coupling']:.2f} "
+                f"co_changes={item['co_changes']}"
+            )
+        return "\n".join(lines)
+
+    def churn_hotspots(self, *, days: int = 90, top_n: int = 20) -> str:
+        data = self.churn_hotspots_data(days=days, top_n=top_n)
+        files = data.get("files", [])
+        if not files:
+            return "No churn hotspots found."
+        lines = [f"Top churn hotspots over the last {days} day(s):"]
+        for item in files:
+            lines.append(
+                f"  {item['path']}  commits={item['commit_count']} "
+                f"lines_changed={item['line_churn']}"
+            )
+        return "\n".join(lines)
+
+    def merge_risk(self, files: list[str], *, days: int = 90) -> str:
+        data = self.merge_risk_data(files=files, days=days)
+        preds = data.get("predictions", [])
+        if not preds:
+            return f"No additional merge-risk files predicted for {', '.join(files)}."
+        lines = [f"Predicted merge-risk files for {', '.join(files)}:"]
+        for item in preds:
+            source = item.get("source") or item.get("reason", "unknown")
+            lines.append(
+                f"  {item['path']}  confidence={item['confidence']:.2f} "
+                f"source={source}"
+            )
+        return "\n".join(lines)
+
+    def repo_map_ranked(self, task_context: str = "", token_budget: int = 1024, exclude_tests: bool = True) -> str:
+        from attocode.code_intel.tools.analysis_tools import repo_map_ranked as _repo_map_ranked
+
+        return _repo_map_ranked(
+            task_context=task_context,
+            token_budget=token_budget,
+            exclude_tests=exclude_tests,
+        )
+
+    def bug_scan(self, base_branch: str = "main", min_confidence: float = 0.5) -> str:
+        from attocode.code_intel.tools.analysis_tools import bug_scan as _bug_scan
+
+        return _bug_scan(base_branch=base_branch, min_confidence=min_confidence)
+
+    def fast_search(
+        self,
+        pattern: str,
+        path: str = "",
+        max_results: int = 50,
+        case_insensitive: bool = False,
+        selectivity_threshold: float = 0.10,
+        explain: bool = False,
+    ) -> str:
+        from attocode.code_intel.tools.search_tools import fast_search as _fast_search
+
+        return _fast_search(
+            pattern=pattern,
+            path=path,
+            max_results=max_results,
+            case_insensitive=case_insensitive,
+            selectivity_threshold=selectivity_threshold,
+            explain=explain,
+        )
+
+    async def lsp_enrich(self, files: list[str]) -> str:
+        from attocode.code_intel.tools.lsp_tools import lsp_enrich as _lsp_enrich
+
+        return await _lsp_enrich(files)
+
+    def record_adr(
+        self,
+        title: str,
+        context: str,
+        decision: str,
+        consequences: str = "",
+        related_files: list[str] | None = None,
+        tags: list[str] | None = None,
+    ) -> str:
+        from attocode.code_intel.tools.adr_tools import record_adr as _record_adr
+
+        return _record_adr(
+            title=title,
+            context=context,
+            decision=decision,
+            consequences=consequences,
+            related_files=related_files,
+            tags=tags,
+        )
+
+    def list_adrs(self, status: str = "", tag: str = "", search: str = "") -> str:
+        from attocode.code_intel.tools.adr_tools import list_adrs as _list_adrs
+
+        return _list_adrs(status=status, tag=tag, search=search)
+
+    def get_adr(self, number: int) -> str:
+        from attocode.code_intel.tools.adr_tools import get_adr as _get_adr
+
+        return _get_adr(number)
+
+    def update_adr_status(self, number: int, status: str, superseded_by: int | None = None) -> str:
+        from attocode.code_intel.tools.adr_tools import update_adr_status as _update_adr_status
+
+        return _update_adr_status(number=number, status=status, superseded_by=superseded_by)
 
     def notify_file_changed(self, files: list[str]) -> str:
         if not files:

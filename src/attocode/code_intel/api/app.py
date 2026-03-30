@@ -76,6 +76,7 @@ def create_app(config: CodeIntelConfig | None = None) -> FastAPI:
     from attocode.code_intel.api import deps
     from attocode.code_intel.api.middleware import MetricsMiddleware, RequestLoggingMiddleware
     from attocode.code_intel.api.routes import (
+        adr,
         analysis,
         files,
         graph,
@@ -131,6 +132,7 @@ def create_app(config: CodeIntelConfig | None = None) -> FastAPI:
     # Core routes — each module has router_v1 (text) + router_v2 (JSON)
     app.include_router(health.router)
     app.include_router(projects.router)
+    app.include_router(adr.router_v1)
     app.include_router(analysis.router_v1)
     app.include_router(analysis.router_v2)
     app.include_router(search.router_v1)
@@ -143,7 +145,8 @@ def create_app(config: CodeIntelConfig | None = None) -> FastAPI:
     app.include_router(learning.router_v2)
     app.include_router(notify.router)
     app.include_router(files.router)
-    app.include_router(history.router)
+    app.include_router(history.router_v1)
+    app.include_router(history.router_v2)
     app.include_router(graph_viz.router)
 
     # Service mode routes

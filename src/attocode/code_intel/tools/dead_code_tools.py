@@ -15,12 +15,14 @@ from __future__ import annotations
 
 import os
 import time
+from typing import TYPE_CHECKING
 
 try:
     from attocode.code_intel._shared import (
         _get_ast_service,
         _get_context_mgr,
         _get_project_dir,
+        _get_remote_service,
         mcp,
     )
 except (ImportError, AttributeError):
@@ -29,16 +31,16 @@ except (ImportError, AttributeError):
     _get_ast_service = None  # type: ignore[assignment]
     _get_context_mgr = None  # type: ignore[assignment]
     _get_project_dir = None  # type: ignore[assignment]
+    _get_remote_service = None  # type: ignore[assignment]
 
     class _StubMCP:
         """Stub so @mcp.tool() doesn't crash during deferred import."""
         def tool(self):
             return lambda f: f
     mcp = _StubMCP()  # type: ignore[assignment]
-from attocode.integrations.context.cross_references import (
-    CrossRefIndex,
-    SymbolLocation,
-)
+
+if TYPE_CHECKING:
+    from attocode.integrations.context.cross_references import CrossRefIndex, SymbolLocation
 
 
 # ---------------------------------------------------------------------------
@@ -79,9 +81,7 @@ def _is_entry_point_file(rel_path: str) -> bool:
         return True
     if any(basename.startswith(p) for p in _ENTRY_POINT_FILE_PREFIXES):
         return True
-    if any(basename.endswith(s) for s in _ENTRY_POINT_FILE_SUFFIXES):
-        return True
-    return False
+    return any(basename.endswith(s) for s in _ENTRY_POINT_FILE_SUFFIXES)
 
 
 def _is_entry_point_symbol(
@@ -147,10 +147,7 @@ def _compute_confidence(
     is_private = name.startswith("_") and not name.startswith("__")
 
     # Base score
-    if is_private:
-        confidence = 0.8
-    else:
-        confidence = 0.7
+    confidence = 0.8 if is_private else 0.7
 
     # Penalty: symbol defined in __init__.py (likely a re-export)
     if os.path.basename(loc.file_path) == "__init__.py":
@@ -477,6 +474,17 @@ def dead_code(
                         items at or above this score. Default 0.5.
         top_n: Maximum number of results to return. Default 30.
     """
+    if _get_remote_service is not None:
+        remote = _get_remote_service()
+        if remote is not None:
+            return remote.dead_code(
+                scope=scope,
+                entry_points=entry_points,
+                level=level,
+                min_confidence=min_confidence,
+                top_n=top_n,
+            )
+
     valid_levels = {"symbol", "file", "module"}
     if level not in valid_levels:
         opts = ", ".join(sorted(valid_levels))

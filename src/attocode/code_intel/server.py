@@ -67,6 +67,8 @@ from pathlib import Path
 # ---------------------------------------------------------------------------
 from attocode.code_intel._shared import (  # noqa: F401
     mcp,
+    clear_remote_service,
+    configure_remote_service,
     _get_project_dir,
     _get_ast_service,
     _get_context_mgr,
@@ -85,10 +87,8 @@ logger = logging.getLogger(__name__)
 _SINGLETON_VARS = frozenset({
     "_ast_service", "_context_mgr", "_code_analyzer",
     "_semantic_search", "_memory_store", "_explorer",
+    "_service", "_remote_service",
 })
-
-_remote_client: "RemoteClient | None" = None  # Set when --remote is used
-
 
 def __getattr__(name: str):
     if name in _SINGLETON_VARS:
@@ -685,8 +685,7 @@ def main() -> None:
         os.environ["ATTOCODE_LOCAL_ONLY"] = "1"
 
     # Load remote config from .attocode/config.toml if not explicitly provided
-    global _remote_client
-    _remote_client = None
+    clear_remote_service()
     if not remote_url and not local_only:
         from attocode.code_intel.config import load_remote_config
         rc = load_remote_config(project_dir)
@@ -696,8 +695,7 @@ def main() -> None:
             remote_repo_id = rc.repo_id
 
     if remote_url:
-        from attocode.code_intel.api.providers.remote_provider import RemoteClient
-        _remote_client = RemoteClient(remote_url, remote_token, remote_repo_id)
+        configure_remote_service(remote_url, remote_token, remote_repo_id)
         logger.info("Remote mode: proxying through %s (repo: %s)", remote_url, remote_repo_id)
 
     # Start file watcher and notification queue poller in background

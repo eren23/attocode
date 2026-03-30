@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Generic, TypeVar
+from typing import TypeVar
 
 from pydantic import BaseModel, Field
 
@@ -77,6 +77,7 @@ class RelevantContextRequest(BaseModel):
 class BootstrapRequest(BaseModel):
     task_hint: str = ""
     max_tokens: int = 8000
+    indexing_depth: str = "auto"
 
 
 class ExploreRequest(BaseModel):
@@ -90,6 +91,43 @@ class SecurityScanRequest(BaseModel):
     path: str = ""
 
 
+class RepoMapRankedRequest(BaseModel):
+    task_context: str = ""
+    token_budget: int = 1024
+    exclude_tests: bool = True
+
+
+class GraphDSLRequest(BaseModel):
+    query: str
+
+
+class DeadCodeRequest(BaseModel):
+    scope: str = ""
+    entry_points: list[str] | None = None
+    level: str = "symbol"
+    min_confidence: float = 0.5
+    top_n: int = 30
+
+
+class DistillRequest(BaseModel):
+    files: list[str] | None = None
+    depth: int = 1
+    level: str = "signatures"
+    max_tokens: int = 4000
+
+
+class ReadinessReportRequest(BaseModel):
+    phases: list[int] | None = None
+    scope: str = ""
+    tracer_bullets: bool = True
+    min_severity: str = "info"
+
+
+class BugScanRequest(BaseModel):
+    base_branch: str = "main"
+    min_confidence: float = 0.5
+
+
 # ------------------------------------------------------------------
 # Search
 # ------------------------------------------------------------------
@@ -99,6 +137,15 @@ class SemanticSearchRequest(BaseModel):
     query: str
     top_k: int = 10
     file_filter: str = ""
+
+
+class FastSearchRequest(BaseModel):
+    pattern: str
+    path: str = ""
+    max_results: int = 50
+    case_insensitive: bool = False
+    selectivity_threshold: float = 0.10
+    explain: bool = False
 
 
 # ------------------------------------------------------------------
@@ -118,6 +165,20 @@ class LearningFeedbackRequest(BaseModel):
     helpful: bool
 
 
+class RecordADRRequest(BaseModel):
+    title: str
+    context: str
+    decision: str
+    consequences: str = ""
+    related_files: list[str] | None = None
+    tags: list[str] | None = None
+
+
+class UpdateADRStatusRequest(BaseModel):
+    status: str
+    superseded_by: int | None = None
+
+
 # ------------------------------------------------------------------
 # LSP
 # ------------------------------------------------------------------
@@ -134,6 +195,22 @@ class LSPReferencesRequest(BaseModel):
     line: int
     col: int = 0
     include_declaration: bool = True
+
+
+class LSPEnrichRequest(BaseModel):
+    files: list[str]
+
+
+class ChangeCouplingRequest(BaseModel):
+    file: str
+    days: int = 90
+    min_coupling: float = 0.3
+    top_k: int = 20
+
+
+class MergeRiskRequest(BaseModel):
+    files: list[str]
+    days: int = 90
 
 
 # ------------------------------------------------------------------
@@ -159,7 +236,7 @@ class TextResult(BaseModel):
 # ------------------------------------------------------------------
 
 
-class PaginatedResponse(BaseModel, Generic[T]):
+class PaginatedResponse[T](BaseModel):
     items: list[T]
     total: int
     limit: int

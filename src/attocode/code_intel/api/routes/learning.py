@@ -5,7 +5,7 @@ from __future__ import annotations
 from fastapi import APIRouter, Depends, Query
 
 from attocode.code_intel.api.auth import verify_auth
-from attocode.code_intel.api.deps import BranchParam, get_service_or_404
+from attocode.code_intel.api.deps import BranchParam, ensure_branch_supported, get_service_or_404
 from attocode.code_intel.api.models import (
     LearningFeedbackRequest,
     LearningItem,
@@ -48,6 +48,7 @@ async def recall(
     max_results: int = 10,
 ) -> TextResult:
     """Recall relevant learnings."""
+    ensure_branch_supported(branch)
     svc = await get_service_or_404(project_id)
     return TextResult(result=svc.recall(query=query, scope=scope, max_results=max_results))
 
@@ -68,6 +69,7 @@ async def list_learnings(
     scope: str = "",
 ) -> TextResult:
     """List all learnings."""
+    ensure_branch_supported(branch)
     svc = await get_service_or_404(project_id)
     return TextResult(result=svc.list_learnings(status=status, type=type, scope=scope))
 

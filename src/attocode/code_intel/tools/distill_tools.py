@@ -13,9 +13,9 @@ from collections import deque
 from attocode.code_intel._shared import (
     _get_ast_service,
     _get_context_mgr,
+    _get_remote_service,
     mcp,
 )
-
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -174,10 +174,7 @@ def _build_structure(
     sections: list[str] = []
 
     # File tree
-    if rel_paths:
-        tree_files = sorted(rel_paths)
-    else:
-        tree_files = sorted(fi.relative_path for fi in files)
+    tree_files = sorted(rel_paths) if rel_paths else sorted(fi.relative_path for fi in files)
 
     tree_lines = ["# File tree"]
     for path in tree_files:
@@ -281,6 +278,15 @@ def distill(
         level: Distillation level — "full", "signatures", or "structure".
         max_tokens: Token budget for the output (default 4000).
     """
+    remote = _get_remote_service()
+    if remote is not None:
+        return remote.distill(
+            files=files,
+            depth=depth,
+            level=level,
+            max_tokens=max_tokens,
+        )
+
     # Level: full — delegate to existing repo_map
     if level == "full":
         from attocode.code_intel.tools.navigation_tools import repo_map as _repo_map

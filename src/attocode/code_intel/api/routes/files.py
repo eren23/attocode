@@ -9,7 +9,7 @@ import os
 from fastapi import APIRouter, Depends, HTTPException
 
 from attocode.code_intel.api.auth import verify_auth
-from attocode.code_intel.api.deps import BranchParam, get_service_or_404
+from attocode.code_intel.api.deps import BranchParam, ensure_branch_supported, get_service_or_404
 from attocode.code_intel.api.models import (
     FileContentResponse,
     FileTreeResponse,
@@ -47,6 +47,7 @@ async def get_file_content(
     branch: BranchParam = "",
 ) -> FileContentResponse:
     """Read file content with metadata."""
+    ensure_branch_supported(branch)
     svc = await get_service_or_404(project_id)
     abs_path = _resolve_path(svc.project_dir, path)
 
@@ -71,9 +72,9 @@ async def get_file_content(
     try:
         with open(abs_path, encoding="utf-8", errors="replace") as f:
             content = f.read()
-    except OSError:
+    except OSError as exc:
         logger.exception("Error reading %s", abs_path)
-        raise HTTPException(status_code=500, detail="Error reading file")
+        raise HTTPException(status_code=500, detail="Error reading file") from exc
 
     line_count = content.count("\n") + (1 if content and not content.endswith("\n") else 0)
 
@@ -93,6 +94,7 @@ async def get_file_tree(
     branch: BranchParam = "",
 ) -> FileTreeResponse:
     """List directory entries."""
+    ensure_branch_supported(branch)
     svc = await get_service_or_404(project_id)
     abs_path = _resolve_path(svc.project_dir, path) if path else svc.project_dir
 
@@ -118,9 +120,9 @@ async def get_file_tree(
                     size_bytes=size,
                     language=_detect_language(entry.name),
                 ))
-    except OSError:
+    except OSError as exc:
         logger.exception("Error reading directory %s", abs_path)
-        raise HTTPException(status_code=500, detail="Error reading directory")
+        raise HTTPException(status_code=500, detail="Error reading directory") from exc
 
     return FileTreeResponse(path=path or ".", entries=entries)
 
@@ -131,4 +133,5 @@ async def get_root_tree(
     branch: BranchParam = "",
 ) -> FileTreeResponse:
     """List root directory entries."""
+    ensure_branch_supported(branch)
     return await get_file_tree(project_id, path="", branch=branch)
