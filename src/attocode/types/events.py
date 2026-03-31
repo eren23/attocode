@@ -36,6 +36,7 @@ class EventType(StrEnum):
     COMPLETE = "complete"
     ERROR = "error"
     SHUTDOWN = "shutdown"
+    STATUS = "status"  # General status update (e.g. "Indexing codebase...")
 
     # --- Execution core ---
     ITERATION = "iteration"

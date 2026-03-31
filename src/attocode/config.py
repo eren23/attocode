@@ -28,6 +28,7 @@ PROVIDER_MODEL_DEFAULTS: dict[str, str] = {
     "openrouter": "anthropic/claude-sonnet-4",
     "openai": "gpt-5.4-mini",
     "zai": "glm-5",
+    "minimax": "MiniMax-M2.7",
 }
 
 PROVIDER_ENV_VARS: dict[str, str] = {
@@ -35,6 +36,7 @@ PROVIDER_ENV_VARS: dict[str, str] = {
     "openrouter": "OPENROUTER_API_KEY",
     "openai": "OPENAI_API_KEY",
     "zai": "ZAI_API_KEY",
+    "minimax": "MINIMAX_API_KEY",
 }
 
 PROVIDER_MODEL_OPTIONS: dict[str, list[str]] = {
@@ -57,6 +59,15 @@ PROVIDER_MODEL_OPTIONS: dict[str, list[str]] = {
     ],
     "zai": [
         "glm-5",
+    ],
+    "minimax": [
+        "MiniMax-M2.7",
+        "MiniMax-M2.7-highspeed",
+        "MiniMax-M2.5",
+        "MiniMax-M2.5-highspeed",
+        "MiniMax-M2.1",
+        "MiniMax-M2.1-highspeed",
+        "MiniMax-M2",
     ],
 }
 
@@ -125,6 +136,31 @@ class AttoConfig:
 
     # Rules
     rules: list[str] = field(default_factory=list)
+
+    def freeze(self) -> FrozenAttoConfig:
+        """Snapshot current config. Returns an immutable copy for use within a single turn."""
+        import copy
+        return FrozenAttoConfig(copy.copy(self))
+
+
+class FrozenAttoConfig:
+    """Immutable wrapper around AttoConfig for turn-level consistency.
+
+    Delegates attribute reads to the wrapped config but prevents mutation.
+    """
+    __slots__ = ("_wrapped",)
+
+    def __init__(self, config: AttoConfig) -> None:
+        object.__setattr__(self, "_wrapped", config)
+
+    def __getattr__(self, name: str) -> Any:
+        return getattr(self._wrapped, name)
+
+    def __setattr__(self, name: str, value: Any) -> None:
+        raise AttributeError(f"FrozenAttoConfig is immutable; cannot set '{name}'")
+
+    def __repr__(self) -> str:
+        return f"FrozenAttoConfig({self._wrapped!r})"
 
 
 def find_project_root(start: Path | None = None) -> Path | None:

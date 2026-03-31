@@ -565,7 +565,11 @@ def _run_tui(config: Any) -> None:
         except Exception:
             pass
 
-        if event.type == EventType.TOOL_START:
+        if event.type == EventType.STATUS:
+            msg = (event.metadata or {}).get("message", "")
+            if msg:
+                _post_event(StatusUpdate(msg, mode="info"))
+        elif event.type == EventType.TOOL_START:
             tool_id = ((event.metadata or {}).get("tool_id") or event.tool or "unknown")
             _post_event(ToolStarted(
                 tool_id=tool_id,

@@ -14,13 +14,23 @@ Features:
 
 from __future__ import annotations
 
+import logging
 import time
 from dataclasses import dataclass, field
 from enum import StrEnum
+from pathlib import Path
 from typing import Any
 
 from attocode.integrations.utilities.token_estimate import count_tokens
 from attocode.types.messages import Message, Role
+
+logger = logging.getLogger(__name__)
+
+# ---------------------------------------------------------------------------
+# Post-compaction file restoration constants
+# ---------------------------------------------------------------------------
+POST_COMPACT_MAX_FILES = 5
+POST_COMPACT_TOKEN_BUDGET = 50_000
 
 
 class CompactionStatus(StrEnum):
@@ -296,6 +306,77 @@ class AutoCompactionManager:
 
         self._stats.record(len(messages), len(result), 0)
         return result
+
+    async def restore_critical_files(
+        self,
+        compacted_messages: list[Message | Any],
+        codebase_context: Any = None,
+    ) -> list[Message | Any]:
+        """Re-inject the most important files after compaction.
+
+        Uses PageRank-boosted importance scores from *codebase_context*
+        (a :class:`CodebaseContextManager`) if available.  Files are
+        appended as ``Role.USER`` messages so the LLM retains awareness
+        of key code after the context has been compressed.
+
+        Args:
+            compacted_messages: Message list produced by :meth:`compact`
+                or :meth:`emergency_compact`.
+            codebase_context: A :class:`CodebaseContextManager` instance
+                (or ``None`` to skip restoration).
+
+        Returns:
+            The *compacted_messages* list, possibly extended with
+            restored file content messages.
+        """
+        if not codebase_context:
+            return compacted_messages
+
+        try:
+            top_files = codebase_context.get_top_files_by_importance(
+                max_files=POST_COMPACT_MAX_FILES,
+                max_tokens=POST_COMPACT_TOKEN_BUDGET,
+            )
+        except (AttributeError, TypeError, Exception):
+            logger.debug("restore_critical_files: codebase_context lacks get_top_files_by_importance")
+            return compacted_messages
+
+        if not top_files:
+            return compacted_messages
+
+        # Resolve relative paths against the codebase root
+        root_dir = getattr(codebase_context, "root_dir", None)
+
+        tokens_used = 0
+        for file_path, score in top_files:
+            try:
+                # The file_path may be relative (from get_top_files_by_importance)
+                resolved = Path(file_path)
+                if not resolved.is_absolute() and root_dir:
+                    resolved = Path(root_dir) / file_path
+                content = resolved.read_text(encoding="utf-8", errors="replace")
+                est_tokens = count_tokens(content)
+                if tokens_used + est_tokens > POST_COMPACT_TOKEN_BUDGET:
+                    # Trim content to stay within budget
+                    remaining = POST_COMPACT_TOKEN_BUDGET - tokens_used
+                    if remaining <= 0:
+                        break
+                    # Rough trim: ~4 chars per token
+                    content = content[: remaining * 4]
+                    est_tokens = remaining
+                tokens_used += est_tokens
+                restore_msg = Message(
+                    role=Role.USER,
+                    content=(
+                        f"[Post-compaction context restore: {file_path} "
+                        f"(importance: {score:.2f})]\n{content}"
+                    ),
+                )
+                compacted_messages.append(restore_msg)
+            except (OSError, UnicodeDecodeError):
+                continue
+
+        return compacted_messages
 
     def create_handoff_summary_prompt(self) -> str:
         """Create a prompt for generating a fresh context handoff summary.

@@ -3021,10 +3021,10 @@ def _config_set_provider(agent: Any, name: str) -> CommandResult:
     from attocode.config import PROVIDER_MODEL_DEFAULTS, save_global_config
 
     if not name:
-        return CommandResult(output="Usage: /config provider <anthropic|openrouter|openai|zai>")
+        return CommandResult(output="Usage: /config provider <anthropic|openrouter|openai|zai|minimax>")
 
     name = name.lower()
-    valid = ("anthropic", "openrouter", "openai", "zai")
+    valid = ("anthropic", "openrouter", "openai", "zai", "minimax")
     if name not in valid:
         return CommandResult(output=f"Unknown provider '{name}'. Valid: {', '.join(valid)}")
 

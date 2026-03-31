@@ -27,6 +27,7 @@ class ToolSpec:
     description: str
     parameters: dict[str, Any]
     danger_level: DangerLevel = DangerLevel.SAFE
+    concurrent_safe: bool = True
 
     def to_definition(self) -> ToolDefinition:
         """Convert to ToolDefinition for LLM consumption."""

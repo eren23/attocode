@@ -205,14 +205,22 @@ class SubagentSpawner:
         task_description: str = "",
         budget_fraction: float = 0.15,
         timeout: float | None = None,
+        fork_parent_messages: list[Any] | None = None,
     ) -> SpawnResult:
         """Spawn a subagent with budget allocation and timeout management.
 
         Args:
-            run_fn: Async callable that runs the subagent. Receives (budget, agent_id).
+            run_fn: Async callable that runs the subagent.
+                Without fork: receives ``(budget, agent_id)``.
+                With fork: receives ``(budget, agent_id, forked_messages)``.
             task_description: Description of the subagent's task.
             budget_fraction: Fraction of remaining parent budget to allocate.
             timeout: Override for hard timeout in seconds.
+            fork_parent_messages: When provided, the parent's message list is
+                used to build forked messages via ``build_forked_messages``.
+                The forked messages are passed as a third argument to *run_fn*
+                so the caller can initialise the child with the parent's
+                prompt-cache-friendly prefix.
 
         Returns:
             SpawnResult with the subagent's output and metrics.
@@ -233,10 +241,24 @@ class SubagentSpawner:
             self._emit(EventType.SUBAGENT_SPAWN, agent_id=agent_id, task=task_description)
 
         try:
-            # Create the task
-            task = asyncio.create_task(
-                run_fn(sub_budget.to_execution_budget(), agent_id),
-            )
+            # Build forked messages when fork mode is requested
+            forked_messages: list[Any] | None = None
+            if fork_parent_messages is not None:
+                from attocode.agent.message_builder import build_forked_messages
+
+                forked_messages = build_forked_messages(
+                    fork_parent_messages, task_description,
+                )
+
+            # Create the task — pass forked messages as 3rd arg when in fork mode
+            if forked_messages is not None:
+                task = asyncio.create_task(
+                    run_fn(sub_budget.to_execution_budget(), agent_id, forked_messages),
+                )
+            else:
+                task = asyncio.create_task(
+                    run_fn(sub_budget.to_execution_budget(), agent_id),
+                )
             self._active_agents[agent_id] = task
 
             # Set up wrapup warning timer

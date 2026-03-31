@@ -9,7 +9,20 @@ Supports:
 - Claude Desktop: via platform-specific `claude_desktop_config.json`
 - Cline: via VS Code globalStorage `cline_mcp_settings.json`
 - Zed: via `.zed/settings.json` or `~/.config/zed/settings.json`
-- IntelliJ / OpenCode: manual instructions
+- OpenCode: via `~/.config/opencode/config.json`
+- Gemini CLI: via `.gemini/settings.json` or `~/.gemini/settings.json`
+- Roo Code: via `.roo/mcp.json`
+- Amazon Q: via `~/.aws/amazonq/mcp.json`
+- GitHub Copilot CLI: via `~/.copilot/mcp-config.json`
+- Junie: via `.junie/mcp/mcp.json` or `~/.junie/mcp/mcp.json`
+- Kiro: via `.kiro/settings/mcp.json`
+- Trae: via `.trae/mcp.json`
+- Firebase Studio: via `.idx/mcp.json`
+- Amp: via `.amp/settings.json` or `~/.config/amp/settings.json`
+- Continue.dev: via `.continue/mcp.json`
+- Hermes Agent: via `~/.hermes/config.yaml`
+- Goose: via `~/.config/goose/config.yaml`
+- IntelliJ: manual instructions
 """
 
 from __future__ import annotations
@@ -33,10 +46,14 @@ import tomli_w
 AUTO_INSTALL_TARGETS: tuple[str, ...] = (
     "claude", "cursor", "windsurf", "vscode", "codex",
     "claude-desktop", "cline", "zed",
+    # New targets:
+    "opencode", "gemini-cli", "roo-code", "amazon-q",
+    "copilot-cli", "junie", "kiro", "trae", "firebase",
+    "amp", "continue", "hermes", "goose",
 )
 
 #: Targets that only support manual setup instructions.
-MANUAL_TARGETS: tuple[str, ...] = ("intellij", "opencode")
+MANUAL_TARGETS: tuple[str, ...] = ("intellij",)
 
 #: All recognised target names.
 ALL_TARGETS: tuple[str, ...] = AUTO_INSTALL_TARGETS + MANUAL_TARGETS
@@ -136,10 +153,10 @@ def install_json_config(
     target: str,
     project_dir: str = ".",
 ) -> bool:
-    """Install into Cursor, Windsurf, or VS Code via .mcp.json file.
+    """Install into a target that uses a project-scoped ``mcp.json`` file.
 
     Args:
-        target: "cursor", "windsurf", or "vscode".
+        target: One of the supported project-scoped JSON targets.
         project_dir: Path to the project to index.
 
     Returns:
@@ -149,6 +166,11 @@ def install_json_config(
         "cursor": ".cursor",
         "windsurf": ".windsurf",
         "vscode": ".vscode",
+        "roo-code": ".roo",
+        "trae": ".trae",
+        "kiro": os.path.join(".kiro", "settings"),
+        "firebase": ".idx",
+        "continue": ".continue",
     }
 
     config_dir = config_dirs.get(target)
@@ -200,11 +222,16 @@ def uninstall_claude(scope: str = "local") -> bool:
 
 
 def uninstall_json_config(target: str, project_dir: str = ".") -> bool:
-    """Uninstall from Cursor, Windsurf, or VS Code."""
+    """Uninstall from a project-scoped ``mcp.json`` target."""
     config_dirs = {
         "cursor": ".cursor",
         "windsurf": ".windsurf",
         "vscode": ".vscode",
+        "roo-code": ".roo",
+        "trae": ".trae",
+        "kiro": os.path.join(".kiro", "settings"),
+        "firebase": ".idx",
+        "continue": ".continue",
     }
 
     config_dir = config_dirs.get(target)
@@ -595,7 +622,521 @@ def uninstall_zed(project_dir: str = ".", scope: str = "local") -> bool:
 
 
 # ---------------------------------------------------------------------------
-# Manual instruction targets (IntelliJ, OpenCode)
+# OpenCode — ~/.config/opencode/config.json
+# ---------------------------------------------------------------------------
+
+
+def install_opencode(project_dir: str = ".") -> bool:
+    """Install into OpenCode via ``~/.config/opencode/config.json``."""
+    config_path = Path(
+        os.environ.get("XDG_CONFIG_HOME", Path.home() / ".config")
+    ) / "opencode" / "config.json"
+    config_path.parent.mkdir(parents=True, exist_ok=True)
+
+    existing: dict = {}
+    if config_path.exists():
+        import contextlib
+        with contextlib.suppress(json.JSONDecodeError, OSError):
+            existing = json.loads(config_path.read_text(encoding="utf-8"))
+
+    servers = existing.setdefault("mcpServers", {})
+    servers["attocode-code-intel"] = _build_server_entry(project_dir)
+
+    config_path.write_text(
+        json.dumps(existing, indent=2) + "\n",
+        encoding="utf-8",
+    )
+    print(f"Installed attocode-code-intel into {config_path}")
+    return True
+
+
+def uninstall_opencode() -> bool:
+    """Uninstall from OpenCode."""
+    config_path = Path(
+        os.environ.get("XDG_CONFIG_HOME", Path.home() / ".config")
+    ) / "opencode" / "config.json"
+
+    if not config_path.exists():
+        print(f"No config found at {config_path}")
+        return True
+
+    try:
+        existing = json.loads(config_path.read_text(encoding="utf-8"))
+    except (json.JSONDecodeError, OSError):
+        return True
+
+    servers = existing.get("mcpServers", {})
+    if "attocode-code-intel" in servers:
+        del servers["attocode-code-intel"]
+        config_path.write_text(
+            json.dumps(existing, indent=2) + "\n",
+            encoding="utf-8",
+        )
+        print(f"Removed attocode-code-intel from {config_path}")
+
+    return True
+
+
+# ---------------------------------------------------------------------------
+# Gemini CLI — .gemini/settings.json (project) or ~/.gemini/settings.json
+# ---------------------------------------------------------------------------
+
+
+def install_gemini(project_dir: str = ".", scope: str = "local") -> bool:
+    """Install into Gemini CLI via ``settings.json``.
+
+    Args:
+        project_dir: Path to the project to index.
+        scope: "local" (project) or "user" (global).
+    """
+    if scope == "user":
+        config_path = Path.home() / ".gemini" / "settings.json"
+    else:
+        config_path = Path(project_dir) / ".gemini" / "settings.json"
+
+    config_path.parent.mkdir(parents=True, exist_ok=True)
+
+    existing: dict = {}
+    if config_path.exists():
+        import contextlib
+        with contextlib.suppress(json.JSONDecodeError, OSError):
+            existing = json.loads(config_path.read_text(encoding="utf-8"))
+
+    servers = existing.setdefault("mcpServers", {})
+    servers["attocode-code-intel"] = _build_server_entry(project_dir)
+
+    config_path.write_text(
+        json.dumps(existing, indent=2) + "\n",
+        encoding="utf-8",
+    )
+    print(f"Installed attocode-code-intel into {config_path}")
+    return True
+
+
+def uninstall_gemini(project_dir: str = ".", scope: str = "local") -> bool:
+    """Uninstall from Gemini CLI."""
+    if scope == "user":
+        config_path = Path.home() / ".gemini" / "settings.json"
+    else:
+        config_path = Path(project_dir) / ".gemini" / "settings.json"
+
+    if not config_path.exists():
+        print(f"No config found at {config_path}")
+        return True
+
+    try:
+        existing = json.loads(config_path.read_text(encoding="utf-8"))
+    except (json.JSONDecodeError, OSError):
+        return True
+
+    servers = existing.get("mcpServers", {})
+    if "attocode-code-intel" in servers:
+        del servers["attocode-code-intel"]
+        config_path.write_text(
+            json.dumps(existing, indent=2) + "\n",
+            encoding="utf-8",
+        )
+        print(f"Removed attocode-code-intel from {config_path}")
+
+    return True
+
+
+# ---------------------------------------------------------------------------
+# Amazon Q Developer — ~/.aws/amazonq/mcp.json
+# ---------------------------------------------------------------------------
+
+
+def install_amazonq(project_dir: str = ".") -> bool:
+    """Install into Amazon Q Developer via ``~/.aws/amazonq/mcp.json``."""
+    config_path = Path.home() / ".aws" / "amazonq" / "mcp.json"
+    config_path.parent.mkdir(parents=True, exist_ok=True)
+
+    existing: dict = {}
+    if config_path.exists():
+        import contextlib
+        with contextlib.suppress(json.JSONDecodeError, OSError):
+            existing = json.loads(config_path.read_text(encoding="utf-8"))
+
+    servers = existing.setdefault("mcpServers", {})
+    servers["attocode-code-intel"] = _build_server_entry(project_dir)
+
+    config_path.write_text(
+        json.dumps(existing, indent=2) + "\n",
+        encoding="utf-8",
+    )
+    print(f"Installed attocode-code-intel into {config_path}")
+    return True
+
+
+def uninstall_amazonq() -> bool:
+    """Uninstall from Amazon Q Developer."""
+    config_path = Path.home() / ".aws" / "amazonq" / "mcp.json"
+
+    if not config_path.exists():
+        print(f"No config found at {config_path}")
+        return True
+
+    try:
+        existing = json.loads(config_path.read_text(encoding="utf-8"))
+    except (json.JSONDecodeError, OSError):
+        return True
+
+    servers = existing.get("mcpServers", {})
+    if "attocode-code-intel" in servers:
+        del servers["attocode-code-intel"]
+        config_path.write_text(
+            json.dumps(existing, indent=2) + "\n",
+            encoding="utf-8",
+        )
+        print(f"Removed attocode-code-intel from {config_path}")
+
+    return True
+
+
+# ---------------------------------------------------------------------------
+# GitHub Copilot CLI — ~/.copilot/mcp-config.json
+# ---------------------------------------------------------------------------
+
+
+def install_copilot_cli(project_dir: str = ".") -> bool:
+    """Install into GitHub Copilot CLI via ``~/.copilot/mcp-config.json``."""
+    config_path = Path.home() / ".copilot" / "mcp-config.json"
+    config_path.parent.mkdir(parents=True, exist_ok=True)
+
+    existing: dict = {}
+    if config_path.exists():
+        import contextlib
+        with contextlib.suppress(json.JSONDecodeError, OSError):
+            existing = json.loads(config_path.read_text(encoding="utf-8"))
+
+    servers = existing.setdefault("mcpServers", {})
+    servers["attocode-code-intel"] = _build_server_entry(project_dir)
+
+    config_path.write_text(
+        json.dumps(existing, indent=2) + "\n",
+        encoding="utf-8",
+    )
+    print(f"Installed attocode-code-intel into {config_path}")
+    return True
+
+
+def uninstall_copilot_cli() -> bool:
+    """Uninstall from GitHub Copilot CLI."""
+    config_path = Path.home() / ".copilot" / "mcp-config.json"
+
+    if not config_path.exists():
+        print(f"No config found at {config_path}")
+        return True
+
+    try:
+        existing = json.loads(config_path.read_text(encoding="utf-8"))
+    except (json.JSONDecodeError, OSError):
+        return True
+
+    servers = existing.get("mcpServers", {})
+    if "attocode-code-intel" in servers:
+        del servers["attocode-code-intel"]
+        config_path.write_text(
+            json.dumps(existing, indent=2) + "\n",
+            encoding="utf-8",
+        )
+        print(f"Removed attocode-code-intel from {config_path}")
+
+    return True
+
+
+# ---------------------------------------------------------------------------
+# Junie (JetBrains) — .junie/mcp/mcp.json or ~/.junie/mcp/mcp.json
+# ---------------------------------------------------------------------------
+
+
+def install_junie(project_dir: str = ".", scope: str = "local") -> bool:
+    """Install into Junie via ``mcp.json``.
+
+    Args:
+        project_dir: Path to the project to index.
+        scope: "local" (project) or "user" (global).
+    """
+    if scope == "user":
+        config_path = Path.home() / ".junie" / "mcp" / "mcp.json"
+    else:
+        config_path = Path(project_dir) / ".junie" / "mcp" / "mcp.json"
+
+    config_path.parent.mkdir(parents=True, exist_ok=True)
+
+    existing: dict = {}
+    if config_path.exists():
+        import contextlib
+        with contextlib.suppress(json.JSONDecodeError, OSError):
+            existing = json.loads(config_path.read_text(encoding="utf-8"))
+
+    servers = existing.setdefault("mcpServers", {})
+    servers["attocode-code-intel"] = _build_server_entry(project_dir)
+
+    config_path.write_text(
+        json.dumps(existing, indent=2) + "\n",
+        encoding="utf-8",
+    )
+    print(f"Installed attocode-code-intel into {config_path}")
+    return True
+
+
+def uninstall_junie(project_dir: str = ".", scope: str = "local") -> bool:
+    """Uninstall from Junie."""
+    if scope == "user":
+        config_path = Path.home() / ".junie" / "mcp" / "mcp.json"
+    else:
+        config_path = Path(project_dir) / ".junie" / "mcp" / "mcp.json"
+
+    if not config_path.exists():
+        print(f"No config found at {config_path}")
+        return True
+
+    try:
+        existing = json.loads(config_path.read_text(encoding="utf-8"))
+    except (json.JSONDecodeError, OSError):
+        return True
+
+    servers = existing.get("mcpServers", {})
+    if "attocode-code-intel" in servers:
+        del servers["attocode-code-intel"]
+        config_path.write_text(
+            json.dumps(existing, indent=2) + "\n",
+            encoding="utf-8",
+        )
+        print(f"Removed attocode-code-intel from {config_path}")
+
+    return True
+
+
+# ---------------------------------------------------------------------------
+# Amp (Sourcegraph) — .amp/settings.json or ~/.config/amp/settings.json
+# Key is nested under "amp" → "mcpServers"
+# ---------------------------------------------------------------------------
+
+
+def install_amp(project_dir: str = ".", scope: str = "local") -> bool:
+    """Install into Amp (Sourcegraph) via ``settings.json``.
+
+    Amp uses a nested ``amp.mcpServers`` key, not a top-level ``mcpServers``.
+
+    Args:
+        project_dir: Path to the project to index.
+        scope: "local" (project) or "user" (global).
+    """
+    if scope == "user":
+        config_path = Path(
+            os.environ.get("XDG_CONFIG_HOME", Path.home() / ".config")
+        ) / "amp" / "settings.json"
+    else:
+        config_path = Path(project_dir) / ".amp" / "settings.json"
+
+    config_path.parent.mkdir(parents=True, exist_ok=True)
+
+    existing: dict = {}
+    if config_path.exists():
+        import contextlib
+        with contextlib.suppress(json.JSONDecodeError, OSError):
+            existing = json.loads(config_path.read_text(encoding="utf-8"))
+
+    amp_section = existing.setdefault("amp", {})
+    servers = amp_section.setdefault("mcpServers", {})
+    servers["attocode-code-intel"] = _build_server_entry(project_dir)
+
+    config_path.write_text(
+        json.dumps(existing, indent=2) + "\n",
+        encoding="utf-8",
+    )
+    print(f"Installed attocode-code-intel into {config_path}")
+    return True
+
+
+def uninstall_amp(project_dir: str = ".", scope: str = "local") -> bool:
+    """Uninstall from Amp."""
+    if scope == "user":
+        config_path = Path(
+            os.environ.get("XDG_CONFIG_HOME", Path.home() / ".config")
+        ) / "amp" / "settings.json"
+    else:
+        config_path = Path(project_dir) / ".amp" / "settings.json"
+
+    if not config_path.exists():
+        print(f"No config found at {config_path}")
+        return True
+
+    try:
+        existing = json.loads(config_path.read_text(encoding="utf-8"))
+    except (json.JSONDecodeError, OSError):
+        return True
+
+    servers = existing.get("amp", {}).get("mcpServers", {})
+    if "attocode-code-intel" in servers:
+        del servers["attocode-code-intel"]
+        config_path.write_text(
+            json.dumps(existing, indent=2) + "\n",
+            encoding="utf-8",
+        )
+        print(f"Removed attocode-code-intel from {config_path}")
+
+    return True
+
+
+# ---------------------------------------------------------------------------
+# Hermes Agent (NousResearch) — ~/.hermes/config.yaml, key "mcp_servers"
+# ---------------------------------------------------------------------------
+
+
+def install_hermes(project_dir: str = ".") -> bool:
+    """Install into Hermes Agent via ``~/.hermes/config.yaml``."""
+    import yaml
+
+    config_path = Path.home() / ".hermes" / "config.yaml"
+    config_path.parent.mkdir(parents=True, exist_ok=True)
+
+    existing: dict = {}
+    if config_path.exists():
+        import contextlib
+        with contextlib.suppress(yaml.YAMLError, OSError):
+            raw = yaml.safe_load(config_path.read_text(encoding="utf-8"))
+            if isinstance(raw, dict):
+                existing = raw
+
+    servers = existing.setdefault("mcp_servers", {})
+    entry = _build_server_entry(project_dir)
+    servers["attocode-code-intel"] = {
+        "command": entry["command"],
+        "args": entry["args"],
+    }
+
+    config_path.write_text(
+        yaml.safe_dump(existing, default_flow_style=False, sort_keys=False),
+        encoding="utf-8",
+    )
+    print(f"Installed attocode-code-intel into {config_path}")
+    return True
+
+
+def uninstall_hermes() -> bool:
+    """Uninstall from Hermes Agent."""
+    import yaml
+
+    config_path = Path.home() / ".hermes" / "config.yaml"
+
+    if not config_path.exists():
+        print(f"No config found at {config_path}")
+        return True
+
+    try:
+        raw = yaml.safe_load(config_path.read_text(encoding="utf-8"))
+        if not isinstance(raw, dict):
+            return True
+    except (yaml.YAMLError, OSError):
+        return True
+
+    servers = raw.get("mcp_servers", {})
+    if "attocode-code-intel" in servers:
+        del servers["attocode-code-intel"]
+        config_path.write_text(
+            yaml.safe_dump(raw, default_flow_style=False, sort_keys=False),
+            encoding="utf-8",
+        )
+        print(f"Removed attocode-code-intel from {config_path}")
+
+    return True
+
+
+# ---------------------------------------------------------------------------
+# Goose (Block) — ~/.config/goose/config.yaml, key "extensions"
+# Uses different schema: cmd, envs, type, name, timeout
+# ---------------------------------------------------------------------------
+
+
+def _build_goose_extension_entry(project_dir: str) -> dict:
+    """Build a Goose extension entry (different schema from standard MCP)."""
+    entry = _build_server_entry(project_dir)
+    cmd_str = entry["command"]
+    if entry["args"]:
+        cmd_str += " " + " ".join(entry["args"])
+    return {
+        "name": "attocode-code-intel",
+        "type": "stdio",
+        "cmd": cmd_str,
+        "envs": {},
+        "timeout": 300,
+    }
+
+
+def install_goose(project_dir: str = ".") -> bool:
+    """Install into Goose (Block) via ``~/.config/goose/config.yaml``."""
+    import yaml
+
+    config_path = Path(
+        os.environ.get("XDG_CONFIG_HOME", Path.home() / ".config")
+    ) / "goose" / "config.yaml"
+    config_path.parent.mkdir(parents=True, exist_ok=True)
+
+    existing: dict = {}
+    if config_path.exists():
+        import contextlib
+        with contextlib.suppress(yaml.YAMLError, OSError):
+            raw = yaml.safe_load(config_path.read_text(encoding="utf-8"))
+            if isinstance(raw, dict):
+                existing = raw
+
+    extensions = existing.setdefault("extensions", [])
+
+    # Remove existing entry if present
+    extensions[:] = [
+        ext for ext in extensions
+        if not (isinstance(ext, dict) and ext.get("name") == "attocode-code-intel")
+    ]
+    extensions.append(_build_goose_extension_entry(project_dir))
+
+    config_path.write_text(
+        yaml.safe_dump(existing, default_flow_style=False, sort_keys=False),
+        encoding="utf-8",
+    )
+    print(f"Installed attocode-code-intel into {config_path}")
+    return True
+
+
+def uninstall_goose() -> bool:
+    """Uninstall from Goose."""
+    import yaml
+
+    config_path = Path(
+        os.environ.get("XDG_CONFIG_HOME", Path.home() / ".config")
+    ) / "goose" / "config.yaml"
+
+    if not config_path.exists():
+        print(f"No config found at {config_path}")
+        return True
+
+    try:
+        raw = yaml.safe_load(config_path.read_text(encoding="utf-8"))
+        if not isinstance(raw, dict):
+            return True
+    except (yaml.YAMLError, OSError):
+        return True
+
+    extensions = raw.get("extensions", [])
+    filtered = [
+        ext for ext in extensions
+        if not (isinstance(ext, dict) and ext.get("name") == "attocode-code-intel")
+    ]
+    if len(filtered) < len(extensions):
+        raw["extensions"] = filtered
+        config_path.write_text(
+            yaml.safe_dump(raw, default_flow_style=False, sort_keys=False),
+            encoding="utf-8",
+        )
+        print(f"Removed attocode-code-intel from {config_path}")
+
+    return True
+
+
+# ---------------------------------------------------------------------------
+# Manual instruction targets (IntelliJ only)
 # ---------------------------------------------------------------------------
 
 _MANUAL_INSTRUCTIONS: dict[str, str] = {
@@ -609,18 +1150,6 @@ _MANUAL_INSTRUCTIONS: dict[str, str] = {
         "  4. Set command to: {command}\n"
         "  5. Set arguments to: {args}\n"
         "  6. Click OK and restart the AI Assistant\n"
-    ),
-    "opencode": (
-        "OpenCode MCP configuration varies by version.\n"
-        "\n"
-        "To set up attocode-code-intel in OpenCode:\n"
-        "  1. Open your OpenCode config file (usually ~/.config/opencode/config.json)\n"
-        "  2. Add the following to the 'mcpServers' section:\n"
-        '     "attocode-code-intel": {{\n'
-        '       "command": "{command}",\n'
-        '       "args": {args_json}\n'
-        "     }}\n"
-        "  3. Restart OpenCode\n"
     ),
 }
 
@@ -651,17 +1180,22 @@ def print_manual_instructions(target: str, project_dir: str = ".") -> bool:
 # ---------------------------------------------------------------------------
 
 
+#: Targets handled by the generic ``install_json_config()`` function.
+_JSON_CONFIG_TARGETS = ("cursor", "windsurf", "vscode", "roo-code", "trae", "kiro", "firebase", "continue")
+
+
 def install(target: str, project_dir: str = ".", scope: str = "local") -> bool:
     """Install into the given target.
 
     Args:
         target: One of :data:`ALL_TARGETS`.
         project_dir: Path to the project to index.
-        scope: For Claude/Codex/Zed: "local" or "user". Ignored for others.
+        scope: For Claude/Codex/Zed/Gemini/Junie/Amp: "local" or "user".
+               Ignored for others.
     """
     if target == "claude":
         return install_claude(project_dir, scope=scope)
-    elif target in ("cursor", "windsurf", "vscode"):
+    elif target in _JSON_CONFIG_TARGETS:
         return install_json_config(target, project_dir)
     elif target == "codex":
         return install_codex(project_dir, scope=scope)
@@ -671,6 +1205,22 @@ def install(target: str, project_dir: str = ".", scope: str = "local") -> bool:
         return install_cline(project_dir)
     elif target == "zed":
         return install_zed(project_dir, scope=scope)
+    elif target == "opencode":
+        return install_opencode(project_dir)
+    elif target == "gemini-cli":
+        return install_gemini(project_dir, scope=scope)
+    elif target == "amazon-q":
+        return install_amazonq(project_dir)
+    elif target == "copilot-cli":
+        return install_copilot_cli(project_dir)
+    elif target == "junie":
+        return install_junie(project_dir, scope=scope)
+    elif target == "amp":
+        return install_amp(project_dir, scope=scope)
+    elif target == "hermes":
+        return install_hermes(project_dir)
+    elif target == "goose":
+        return install_goose(project_dir)
     elif target in MANUAL_TARGETS:
         return print_manual_instructions(target, project_dir)
     else:
@@ -685,7 +1235,7 @@ def uninstall(target: str, project_dir: str = ".", scope: str = "local") -> bool
     """Uninstall from the given target."""
     if target == "claude":
         return uninstall_claude(scope=scope)
-    elif target in ("cursor", "windsurf", "vscode"):
+    elif target in _JSON_CONFIG_TARGETS:
         return uninstall_json_config(target, project_dir)
     elif target == "codex":
         return uninstall_codex(project_dir, scope=scope)
@@ -695,6 +1245,22 @@ def uninstall(target: str, project_dir: str = ".", scope: str = "local") -> bool
         return uninstall_cline()
     elif target == "zed":
         return uninstall_zed(project_dir, scope=scope)
+    elif target == "opencode":
+        return uninstall_opencode()
+    elif target == "gemini-cli":
+        return uninstall_gemini(project_dir, scope=scope)
+    elif target == "amazon-q":
+        return uninstall_amazonq()
+    elif target == "copilot-cli":
+        return uninstall_copilot_cli()
+    elif target == "junie":
+        return uninstall_junie(project_dir, scope=scope)
+    elif target == "amp":
+        return uninstall_amp(project_dir, scope=scope)
+    elif target == "hermes":
+        return uninstall_hermes()
+    elif target == "goose":
+        return uninstall_goose()
     elif target in MANUAL_TARGETS:
         print(f"Nothing to uninstall — {target} uses manual configuration.")
         return True

@@ -70,6 +70,52 @@ class TestHealthMonitor:
         # EWMA with alpha=0.3: 0.3*20 + 0.7*10 = 13.0
         assert abs(health.ewma_latency_s - 13.0) < 0.1
 
+    def test_circuit_breaker_not_tripped_initially(self) -> None:
+        monitor = HealthMonitor()
+        assert not monitor.check_circuit_breaker("model-x")
+
+    def test_circuit_breaker_trips_after_threshold(self) -> None:
+        monitor = HealthMonitor()
+        monitor.record_outcome("m", "failure")
+        monitor.record_outcome("m", "failure")
+        assert not monitor.check_circuit_breaker("m")
+        monitor.record_outcome("m", "failure")  # 3rd failure
+        assert monitor.check_circuit_breaker("m")
+
+    def test_circuit_breaker_counts_timeouts(self) -> None:
+        monitor = HealthMonitor()
+        monitor.record_outcome("m", "timeout")
+        monitor.record_outcome("m", "failure")
+        monitor.record_outcome("m", "timeout")
+        assert monitor.check_circuit_breaker("m")
+
+    def test_circuit_breaker_ignores_successes(self) -> None:
+        monitor = HealthMonitor()
+        for _ in range(5):
+            monitor.record_outcome("m", "success")
+        assert not monitor.check_circuit_breaker("m")
+
+    def test_circuit_breaker_ignores_rate_limits(self) -> None:
+        monitor = HealthMonitor()
+        for _ in range(5):
+            monitor.record_outcome("m", "rate_limit")
+        assert not monitor.check_circuit_breaker("m")
+
+    def test_to_dict_includes_circuit_breaker(self) -> None:
+        monitor = HealthMonitor()
+        for _ in range(3):
+            monitor.record_outcome("m", "failure")
+        d = monitor.to_dict()
+        assert d["m"]["circuit_breaker_open"] is True
+        assert d["m"]["recent_failures_in_window"] >= 3
+
+    def test_to_dict_circuit_breaker_closed(self) -> None:
+        monitor = HealthMonitor()
+        monitor.record_outcome("m", "success")
+        d = monitor.to_dict()
+        assert d["m"]["circuit_breaker_open"] is False
+        assert d["m"]["recent_failures_in_window"] == 0
+
 
 class TestAdaptiveConcurrency:
     def test_initial_current(self) -> None:

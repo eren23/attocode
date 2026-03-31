@@ -303,6 +303,31 @@ class FileChangeSummary:
     lines_removed: int = 0
 
 
+@dataclass(slots=True)
+class PermissionRequest:
+    """Request from a worker agent to the coordinator for dangerous tool approval."""
+
+    request_id: str
+    agent_id: str
+    task_id: str
+    tool_name: str
+    tool_args_summary: str  # Abbreviated args (not full content, for security)
+    danger_level: str  # "low", "medium", "high", "critical"
+    timestamp: str = field(default_factory=utc_now_iso)
+    status: str = "pending"  # "pending" | "approved" | "rejected"
+
+
+@dataclass(slots=True)
+class PermissionResponse:
+    """Response from coordinator to a worker agent regarding a permission request."""
+
+    request_id: str
+    decision: str  # "approved" | "rejected"
+    reason: str = ""
+    modified_args: dict[str, Any] | None = None
+    timestamp: str = field(default_factory=utc_now_iso)
+
+
 def default_run_layout(run_dir: Path) -> dict[str, Path]:
     return {
         "root": run_dir,

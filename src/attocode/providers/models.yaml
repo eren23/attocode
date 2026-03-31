@@ -143,3 +143,73 @@ models:
     provider: zai
     max_context_tokens: 128000
     max_output_tokens: 4096
+
+  MiniMax-M2.7:
+    provider: minimax
+    max_context_tokens: 204800
+    max_output_tokens: 16000
+    pricing:
+      input_per_million: 0.3
+      output_per_million: 1.2
+      cache_read_per_million: 0.03
+      cache_write_per_million: 0.375
+
+  MiniMax-M2.7-highspeed:
+    provider: minimax
+    max_context_tokens: 204800
+    max_output_tokens: 16000
+    pricing:
+      input_per_million: 0.3
+      output_per_million: 2.4
+      cache_read_per_million: 0.03
+      cache_write_per_million: 0.375
+
+  MiniMax-M2.5:
+    provider: minimax
+    max_context_tokens: 204800
+    max_output_tokens: 16000
+    pricing:
+      input_per_million: 0.3
+      output_per_million: 1.2
+      cache_read_per_million: 0.03
+      cache_write_per_million: 0.375
+
+  MiniMax-M2.5-highspeed:
+    provider: minimax
+    max_context_tokens: 204800
+    max_output_tokens: 16000
+    pricing:
+      input_per_million: 0.3
+      output_per_million: 2.4
+      cache_read_per_million: 0.03
+      cache_write_per_million: 0.375
+
+  MiniMax-M2.1:
+    provider: minimax
+    max_context_tokens: 204800
+    max_output_tokens: 16000
+    pricing:
+      input_per_million: 0.3
+      output_per_million: 1.2
+      cache_read_per_million: 0.03
+      cache_write_per_million: 0.375
+
+  MiniMax-M2.1-highspeed:
+    provider: minimax
+    max_context_tokens: 204800
+    max_output_tokens: 16000
+    pricing:
+      input_per_million: 0.3
+      output_per_million: 2.4
+      cache_read_per_million: 0.03
+      cache_write_per_million: 0.375
+
+  MiniMax-M2:
+    provider: minimax
+    max_context_tokens: 204800
+    max_output_tokens: 16000
+    pricing:
+      input_per_million: 0.3
+      output_per_million: 1.2
+      cache_read_per_million: 0.03
+      cache_write_per_million: 0.375

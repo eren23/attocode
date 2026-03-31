@@ -22,11 +22,16 @@ from __future__ import annotations
 import asyncio
 import time
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Protocol, runtime_checkable
 
 from attocode.core.completion import analyze_completion
 from attocode.core.response_handler import call_llm, call_llm_streaming
-from attocode.core.tool_executor import build_tool_result_messages, execute_tool_calls
+from attocode.core.tool_executor import (
+    build_tool_result_messages,
+    execute_tool_calls,
+    execute_tool_calls_concurrent,
+)
+from attocode.integrations.context.compaction import microcompact
 from attocode.errors import BudgetExhaustedError, CancellationError
 from attocode.types.agent import AgentCompletionStatus, AgentResult, CompletionReason
 from attocode.types.events import EventType
@@ -104,6 +109,61 @@ class WrapupState:
         """Called each iteration during wrapup."""
         if self.wrapup_requested:
             self.wrapup_iterations_remaining -= 1
+
+
+# ---------------------------------------------------------------------------
+# Narrow dependency protocol for testability
+# ---------------------------------------------------------------------------
+
+
+@runtime_checkable
+class LoopDeps(Protocol):
+    """Narrow dependency interface for the main agent loop.
+
+    Enables testing by injecting mock implementations for LLM calls,
+    tool execution, budget checking, compaction, and event recording.
+    All return types use ``Any`` to avoid importing heavy types into
+    the protocol — the protocol is structural (duck typing).
+    """
+
+    async def call_llm(self, ctx: AgentContext) -> Any:
+        """Call the LLM and return a ChatResponse."""
+        ...
+
+    async def execute_tools(self, ctx: AgentContext, tool_calls: list) -> list:
+        """Execute a batch of tool calls and return results."""
+        ...
+
+    def check_budget(self, ctx: AgentContext) -> Any:
+        """Pre-flight budget check. Returns BudgetPreflightResult or similar."""
+        ...
+
+    async def compact(self, ctx: AgentContext) -> Any:
+        """Run context compaction. Returns CompactionResult or similar."""
+        ...
+
+    def record_event(self, ctx: AgentContext, event_type: str, **kwargs: Any) -> None:
+        """Record an agent event."""
+        ...
+
+
+class DefaultLoopDeps:
+    """Default implementation that delegates to existing subsystem functions."""
+
+    async def call_llm(self, ctx: AgentContext) -> Any:
+        return await call_llm(ctx)
+
+    async def execute_tools(self, ctx: AgentContext, tool_calls: list) -> list:
+        return await execute_tool_calls_concurrent(ctx, tool_calls)
+
+    def check_budget(self, ctx: AgentContext) -> Any:
+        return check_iteration_budget(ctx)
+
+    async def compact(self, ctx: AgentContext) -> Any:
+        return await handle_auto_compaction(ctx)
+
+    def record_event(self, ctx: AgentContext, event_type: str, **kwargs: Any) -> None:
+        ctx.emit_simple(event_type, **kwargs)
 
 
 # ---------------------------------------------------------------------------
@@ -911,6 +971,7 @@ async def run_execution_loop(
     ctx: AgentContext,
     *,
     max_retries_per_call: int = 3,
+    deps: LoopDeps | None = None,
 ) -> LoopResult:
     """Run the main ReAct execution loop.
 
@@ -947,10 +1008,14 @@ async def run_execution_loop(
     Args:
         ctx: Agent context with all dependencies and state.
         max_retries_per_call: Max LLM call retries on retryable errors.
+        deps: Optional narrow dependency interface for testing. When *None*
+            (the default), a :class:`DefaultLoopDeps` instance is created
+            that delegates to the real subsystem functions.
 
     Returns:
         LoopResult with the final response and completion reason.
     """
+    deps = deps or DefaultLoopDeps()
     start_time = time.monotonic()
     last_response = ""
     baseline_set = False
@@ -964,6 +1029,16 @@ async def run_execution_loop(
     try:
         while True:
             ctx.iteration += 1
+
+            # Snapshot config at turn entry so mid-turn mutations cannot
+            # cause inconsistencies.  Callers inside the loop body should
+            # read from ``turn_config`` instead of ``ctx.config`` where
+            # feasible.  Gradual migration to turn_config is planned.
+            turn_config = (  # noqa: F841 — used by future per-turn readers
+                ctx.config.freeze()
+                if hasattr(ctx.config, "freeze")
+                else ctx.config
+            )
 
             ctx.emit_simple(
                 EventType.ITERATION,
@@ -1046,7 +1121,13 @@ async def run_execution_loop(
                     metadata={"truncations": truncation_count},
                 )
 
-            # 2.5. Fresh context check (before compaction)
+            # 2.5. Microcompact — per-turn tool result decay (before full compaction)
+            try:
+                microcompact(ctx.messages, ctx.iteration)
+            except Exception:
+                pass  # microcompact is best-effort; never block the loop
+
+            # 2.6. Fresh context check (before compaction)
             _fresh_result = await handle_fresh_context_refresh(ctx)
 
             # 3. Auto-compaction check (skip if fresh context already triggered)
@@ -1203,7 +1284,7 @@ async def run_execution_loop(
 
                 tool_results: list[ToolResult] = []
                 if calls_to_execute:
-                    tool_results = await execute_tool_calls(ctx, calls_to_execute)
+                    tool_results = await execute_tool_calls_concurrent(ctx, calls_to_execute)
                 tool_results.extend(blocked_results)
 
                 # Record in economics (loop detection + phase tracking)

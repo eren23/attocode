@@ -10,7 +10,7 @@ from attocode.errors import ConfigurationError
 if TYPE_CHECKING:
     from attocode.config import AttoConfig
 
-KNOWN_PROVIDERS = {"anthropic", "openrouter", "openai", "zai"}
+KNOWN_PROVIDERS = {"anthropic", "openrouter", "openai", "zai", "minimax"}
 
 # Providers whose API keys must start with "sk-"
 SK_PREFIX_PROVIDERS = {"anthropic", "openrouter", "openai"}

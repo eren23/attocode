@@ -100,9 +100,9 @@ sequenceDiagram
 | Directory | Purpose | Key Files |
 |-----------|---------|-----------|
 | `agent/` | Agent core orchestration | agent.py, builder.py, context.py |
-| `core/` | Execution engine | loop.py, subagent_spawner.py |
+| `core/` | Execution engine, LoopDeps protocol | loop.py, loop_deps.py, subagent_spawner.py |
 | `tools/` | Tool implementations | 12 tool modules |
-| `providers/` | LLM adapters | base.py, adapters/ |
+| `providers/` | LLM adapters, ProcessBackend/AgentExecutor | base.py, adapters/, backend.py |
 | `integrations/` | Feature modules | 12 subdirectories |
 | `tui/` | Terminal UI | app.py, 52+ widgets |
 | `tracing/` | Execution traces | JSONL event recording |

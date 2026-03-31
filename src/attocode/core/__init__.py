@@ -11,6 +11,8 @@ from attocode.core.dual_model import DualModelConfig, DualModelWorkflow
 from attocode.core.loop import (
     BudgetPreflightResult,
     CompactionResult,
+    DefaultLoopDeps,
+    LoopDeps,
     LoopResult,
     apply_context_overflow_guard,
     check_iteration_budget,
@@ -56,6 +58,8 @@ __all__ = [
     # Loop
     "BudgetPreflightResult",
     "CompactionResult",
+    "DefaultLoopDeps",
+    "LoopDeps",
     "LoopResult",
     "apply_context_overflow_guard",
     "check_iteration_budget",

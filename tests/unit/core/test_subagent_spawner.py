@@ -9,6 +9,7 @@ from unittest.mock import MagicMock
 
 import pytest
 
+from attocode.agent.message_builder import FORK_TAG
 from attocode.core.subagent_spawner import (
     ClosureReport,
     SpawnResult,
@@ -18,6 +19,7 @@ from attocode.core.subagent_spawner import (
     parse_closure_report,
 )
 from attocode.types.budget import BudgetEnforcementMode, ExecutionBudget
+from attocode.types.messages import Message, Role
 
 
 # ---------------------------------------------------------------------------
@@ -393,3 +395,87 @@ class TestSubagentSpawner:
         )
         result = await spawner.spawn(run_fn)
         assert result.tokens_used == 42_000
+
+
+# ---------------------------------------------------------------------------
+# Fork mode spawning
+# ---------------------------------------------------------------------------
+class TestSubagentSpawnerForkMode:
+    """Tests for spawn() with fork_parent_messages."""
+
+    @staticmethod
+    def _parent_messages() -> list[Message]:
+        return [
+            Message(role=Role.SYSTEM, content="You are helpful."),
+            Message(role=Role.USER, content="Do something"),
+        ]
+
+    @pytest.mark.asyncio
+    async def test_fork_passes_forked_messages_to_run_fn(self) -> None:
+        received_msgs: list[Any] = []
+
+        async def run_fn(
+            budget: ExecutionBudget, agent_id: str, forked_messages: list[Any],
+        ) -> _FakeRunResult:
+            received_msgs.extend(forked_messages)
+            return _FakeRunResult()
+
+        spawner = SubagentSpawner(
+            parent_budget=ExecutionBudget(max_tokens=500_000),
+        )
+        result = await spawner.spawn(
+            run_fn,
+            task_description="child task",
+            fork_parent_messages=self._parent_messages(),
+        )
+        assert result.success
+        # Should receive 3 forked messages: system, fork context, directive
+        assert len(received_msgs) == 3
+        # System message byte-identical
+        assert received_msgs[0].content == "You are helpful."
+        # Fork tag present
+        assert FORK_TAG in received_msgs[1].content
+        # Directive contains task
+        assert "child task" in received_msgs[2].content
+
+    @pytest.mark.asyncio
+    async def test_fork_none_uses_standard_signature(self) -> None:
+        """When fork_parent_messages is None, run_fn gets 2 args (backward compat)."""
+        async def run_fn(budget: ExecutionBudget, agent_id: str) -> _FakeRunResult:
+            return _FakeRunResult()
+
+        spawner = SubagentSpawner(
+            parent_budget=ExecutionBudget(max_tokens=500_000),
+        )
+        result = await spawner.spawn(
+            run_fn,
+            task_description="normal task",
+            fork_parent_messages=None,
+        )
+        assert result.success
+
+    @pytest.mark.asyncio
+    async def test_fork_recursive_prevention(self) -> None:
+        """Spawning a fork from already-forked messages raises ValueError."""
+        forked_parent = [
+            Message(role=Role.SYSTEM, content="system"),
+            Message(role=Role.USER, content=f"{FORK_TAG}\nplaceholder"),
+            Message(role=Role.USER, content="You are a fork subagent."),
+        ]
+
+        async def run_fn(
+            budget: ExecutionBudget, agent_id: str, msgs: list[Any],
+        ) -> _FakeRunResult:
+            return _FakeRunResult()
+
+        spawner = SubagentSpawner(
+            parent_budget=ExecutionBudget(max_tokens=500_000),
+        )
+        result = await spawner.spawn(
+            run_fn,
+            task_description="sub-sub task",
+            fork_parent_messages=forked_parent,
+        )
+        # build_forked_messages raises ValueError which spawn catches as an exception
+        assert not result.success
+        assert "Recursive forking" in (result.error or "")
