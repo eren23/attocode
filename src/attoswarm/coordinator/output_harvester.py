@@ -2,13 +2,16 @@
 
 from __future__ import annotations
 
+import logging
 import subprocess
 import time
 from typing import TYPE_CHECKING, Any
 
+log = logging.getLogger(__name__)
+
 from attoswarm.protocol.io import read_json, write_json_atomic
 from attoswarm.protocol.locks import locked_file
-from attoswarm.protocol.models import AgentOutbox
+from attoswarm.protocol.models import AgentOutbox, PermissionRequest
 
 if TYPE_CHECKING:
     from attoswarm.coordinator.loop import HybridCoordinator
@@ -80,9 +83,36 @@ async def harvest_outputs(coordinator: HybridCoordinator) -> None:
                     await handle_task_failed(
                         coordinator, agent_id, task_id, reason="worker_reported_failure"
                     )
+                elif ev.type == "permission_request":
+                    try:
+                        req = PermissionRequest(**ev.payload)
+                        response = coordinator._evaluate_permission(req)
+                        coordinator._send_permission_response(agent_id, response)
+                        coordinator._append_event("permission.evaluated", {
+                            "request_id": req.request_id,
+                            "agent_id": agent_id,
+                            "tool": req.tool_name,
+                            "decision": response.decision,
+                        })
+                    except Exception as exc:
+                        log.warning("Failed to process permission request: %s", exc)
                 else:
                     if task_id:
                         coordinator.running_task_last_progress[task_id] = time.monotonic()
+                        # Track diminishing returns
+                        usage = ev.token_usage or {}
+                        token_delta = usage.get("output", usage.get("total", 0))
+                        tool_count = 1 if ev.type == "tool_done" else 0
+                        files = len(ev.payload.get("files_modified", []))
+                        coordinator.diminishing_tracker.record_turn(
+                            task_id, token_delta, tool_count, files,
+                        )
+                        if coordinator.diminishing_tracker.is_diminishing(task_id):
+                            coordinator._transition_task(
+                                task_id, "failed", "diminishing_tracker",
+                                "diminishing returns detected",
+                            )
+                            coordinator.diminishing_tracker.clear_task(task_id)
                 next_seq += 1
             raw["events"] = raw_events
             raw["next_seq"] = next_seq
@@ -120,6 +150,7 @@ async def handle_completion_claim(
     coordinator.running_task_by_agent.pop(agent_id, None)
     coordinator.running_task_last_progress.pop(task_id, None)
     coordinator.running_task_started_at.pop(task_id, None)
+    coordinator.diminishing_tracker.clear_task(task_id)
     coordinator._append_event(
         "agent.task.exit",
         {"agent_id": agent_id, "task_id": task_id, "result": "task_done"},
@@ -128,6 +159,11 @@ async def handle_completion_claim(
         "agent.task.classified",
         {"agent_id": agent_id, "task_id": task_id, "classification": "success"},
     )
+    # Feed success to health monitor for the model behind this agent
+    role = coordinator.role_by_agent.get(agent_id)
+    if role:
+        coordinator.health_monitor.record_outcome(role.model, "success")
+
     task = coordinator._find_task(task_id)
     if task is None:
         return

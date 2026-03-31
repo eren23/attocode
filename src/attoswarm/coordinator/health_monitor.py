@@ -3,12 +3,17 @@
 Tracks per-model success/failure/timeout/rate-limit statistics with
 EWMA latency smoothing.  Provides health-weighted model selection
 and throttling recommendations.
+
+Includes a circuit breaker that trips when a model accumulates too many
+failures within a sliding time window, preventing dispatch to unhealthy
+models.
 """
 
 from __future__ import annotations
 
 import logging
 import time
+from collections import defaultdict
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -68,11 +73,20 @@ class HealthMonitor:
         best = monitor.get_best_model(["claude-3", "gpt-4"])
         if monitor.should_throttle("claude-3"):
             await asyncio.sleep(backoff)
+        if monitor.check_circuit_breaker("claude-3"):
+            # Model is tripped — do not dispatch
+            ...
     """
+
+    # Circuit breaker configuration — override via subclass or config injection
+    CIRCUIT_BREAKER_WINDOW: float = 60.0   # seconds
+    CIRCUIT_BREAKER_THRESHOLD: int = 3     # failures in window to trip
 
     def __init__(self, health_threshold: float = 0.5) -> None:
         self._models: dict[str, ModelHealth] = {}
         self._threshold = health_threshold
+        # Circuit breaker: per-model failure timestamps (monotonic)
+        self._failure_timestamps: dict[str, list[float]] = defaultdict(list)
 
     def record_outcome(
         self,
@@ -133,6 +147,16 @@ class HealthMonitor:
             health.failures += 1
             health.health_score = max(0.0, health.health_score - 0.1)
 
+        # Circuit breaker: record failure/timeout timestamps
+        if result in ("failure", "timeout"):
+            now_mono = time.monotonic()
+            self._failure_timestamps[model].append(now_mono)
+            # Trim old timestamps (keep last window only)
+            cutoff = now_mono - self.CIRCUIT_BREAKER_WINDOW
+            self._failure_timestamps[model] = [
+                t for t in self._failure_timestamps[model] if t > cutoff
+            ]
+
     def _apply_recovery(self, health: ModelHealth) -> None:
         """Allow health score to recover over time (natural healing)."""
         elapsed = time.time() - health.last_update
@@ -182,6 +206,15 @@ class HealthMonitor:
         self._apply_recovery(health)
         return health.health_score < self._threshold
 
+    def check_circuit_breaker(self, model: str) -> bool:
+        """Check if circuit breaker is open (too many recent failures).
+
+        Returns True if the model should NOT be dispatched to.
+        """
+        cutoff = time.monotonic() - self.CIRCUIT_BREAKER_WINDOW
+        recent = [t for t in self._failure_timestamps.get(model, []) if t > cutoff]
+        return len(recent) >= self.CIRCUIT_BREAKER_THRESHOLD
+
     def all_health(self) -> dict[str, ModelHealth]:
         """Return health data for all tracked models."""
         for health in self._models.values():
@@ -189,7 +222,14 @@ class HealthMonitor:
         return dict(self._models)
 
     def to_dict(self) -> dict[str, Any]:
-        return {
-            model: health.to_dict()
-            for model, health in self.all_health().items()
-        }
+        result: dict[str, Any] = {}
+        for model, health in self.all_health().items():
+            entry = health.to_dict()
+            entry["circuit_breaker_open"] = self.check_circuit_breaker(model)
+            cutoff = time.monotonic() - self.CIRCUIT_BREAKER_WINDOW
+            recent_failures = [
+                t for t in self._failure_timestamps.get(model, []) if t > cutoff
+            ]
+            entry["recent_failures_in_window"] = len(recent_failures)
+            result[model] = entry
+        return result

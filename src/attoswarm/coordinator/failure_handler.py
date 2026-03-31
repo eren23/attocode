@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import asyncio
+import random
 import time
 from typing import TYPE_CHECKING
 
@@ -21,6 +23,7 @@ async def handle_task_failed(
     coordinator.running_task_by_agent.pop(agent_id, None)
     coordinator.running_task_last_progress.pop(task_id, None)
     coordinator.running_task_started_at.pop(task_id, None)
+    coordinator.diminishing_tracker.clear_task(task_id)
 
     # Capture partial progress from agent outbox before it's lost
     partial_output = capture_partial_output(coordinator, agent_id)
@@ -39,6 +42,12 @@ async def handle_task_failed(
             "partial_output": partial_output[:500] if partial_output else "",
         },
     )
+    # Feed failure to health monitor for the model behind this agent
+    role = coordinator.role_by_agent.get(agent_id)
+    if role:
+        outcome = "timeout" if "timeout" in reason.lower() else "failure"
+        coordinator.health_monitor.record_outcome(role.model, outcome)
+
     task = coordinator._find_task(task_id)
     if task is None:
         return
@@ -49,8 +58,38 @@ async def handle_task_failed(
                 coordinator.config.watchdog.task_max_duration_seconds * 1.5
             )
             coordinator._task_timeout_overrides[task_id] = task.timeout_override
-        coordinator._transition_task(task_id, "ready", "coordinator", reason)
-        coordinator._persist_task(task, status="ready", last_error=reason)
+
+        # Exponential backoff with jitter before retrying
+        attempt = coordinator.task_attempts.get(task_id, 0)
+        base_delay = min(2.0 ** attempt, 60.0)  # 1s, 2s, 4s, 8s... capped at 60s
+        jitter = random.uniform(0, base_delay * 0.3)
+        delay = base_delay + jitter
+
+        coordinator._append_event("retry_scheduled", {
+            "task_id": task_id,
+            "attempt": attempt + 1,
+            "delay_s": round(delay, 2),
+            "reason": reason,
+        })
+
+        # Schedule delayed retry as a background task so we don't block the
+        # coordinator loop.  The task stays in its current state until the
+        # delay elapses, then transitions to "ready".
+        async def _delayed_retry(
+            _coordinator: HybridCoordinator,
+            _task_id: str,
+            _task: object,
+            _reason: str,
+            _delay: float,
+        ) -> None:
+            await asyncio.sleep(_delay)
+            _coordinator._transition_task(_task_id, "ready", "coordinator", _reason)
+            _coordinator._persist_task(_task, status="ready", last_error=_reason)  # type: ignore[arg-type]
+
+        asyncio.create_task(
+            _delayed_retry(coordinator, task_id, task, reason, delay),
+            name=f"retry-backoff-{task_id}",
+        )
     else:
         coordinator._transition_task(task_id, "failed", "coordinator", reason)
         coordinator._persist_task(task, status="failed", last_error=reason)

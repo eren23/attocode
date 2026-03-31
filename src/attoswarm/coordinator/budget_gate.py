@@ -7,7 +7,7 @@ to a worker.  When budget is tight, prioritizes critical-path tasks.
 from __future__ import annotations
 
 import logging
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
@@ -146,3 +146,79 @@ class BudgetGate:
         off_cp = [tid for tid in ready_task_ids if tid not in critical_path]
 
         return on_cp + off_cp
+
+
+@dataclass(slots=True)
+class TaskProgressWindow:
+    """Sliding window of per-turn progress metrics for a single task."""
+
+    turn_deltas: list[int] = field(default_factory=list)
+    tool_calls_per_turn: list[int] = field(default_factory=list)
+    files_touched_per_turn: list[int] = field(default_factory=list)
+
+
+class DiminishingReturnsTracker:
+    """Detects tasks that produce decreasing value per LLM turn.
+
+    A task is considered "diminishing" when the last N turns each produced
+    fewer than ``delta_threshold`` output tokens and zero tool calls.
+    This indicates the agent is stuck in a loop of producing low-value text.
+    """
+
+    def __init__(
+        self,
+        *,
+        min_turns: int = 3,
+        delta_threshold: int = 500,
+        max_window: int = 20,
+    ) -> None:
+        self._windows: dict[str, TaskProgressWindow] = {}
+        self._min_turns = min_turns
+        self._delta_threshold = delta_threshold
+        self._max_window = max_window
+
+    def record_turn(
+        self,
+        task_id: str,
+        tokens_delta: int,
+        tool_calls: int,
+        files_touched: int,
+    ) -> None:
+        """Record metrics from a single agent turn."""
+        if task_id not in self._windows:
+            self._windows[task_id] = TaskProgressWindow()
+        window = self._windows[task_id]
+        window.turn_deltas.append(tokens_delta)
+        window.tool_calls_per_turn.append(tool_calls)
+        window.files_touched_per_turn.append(files_touched)
+        # Trim to max window size
+        if len(window.turn_deltas) > self._max_window:
+            window.turn_deltas = window.turn_deltas[-self._max_window :]
+            window.tool_calls_per_turn = window.tool_calls_per_turn[-self._max_window :]
+            window.files_touched_per_turn = window.files_touched_per_turn[-self._max_window :]
+
+    def is_diminishing(self, task_id: str) -> bool:
+        """Check if a task shows diminishing returns."""
+        window = self._windows.get(task_id)
+        if not window or len(window.turn_deltas) < self._min_turns:
+            return False
+        recent_deltas = window.turn_deltas[-self._min_turns :]
+        recent_tools = window.tool_calls_per_turn[-self._min_turns :]
+        return all(d < self._delta_threshold for d in recent_deltas) and all(
+            t == 0 for t in recent_tools
+        )
+
+    def clear_task(self, task_id: str) -> None:
+        """Remove tracking for a completed/failed task."""
+        self._windows.pop(task_id, None)
+
+    def to_dict(self) -> dict[str, Any]:
+        """Serialize for state persistence."""
+        return {
+            task_id: {
+                "turn_deltas": w.turn_deltas,
+                "tool_calls": w.tool_calls_per_turn,
+                "files_touched": w.files_touched_per_turn,
+            }
+            for task_id, w in self._windows.items()
+        }

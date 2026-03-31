@@ -1139,6 +1139,72 @@ class CodebaseContextManager:
 
         return "\n".join(parts)
 
+    # --- Post-compaction file restoration ---
+
+    def get_top_files_by_importance(
+        self,
+        *,
+        max_files: int = 5,
+        max_tokens: int = 50_000,
+        exclude_patterns: list[str] | None = None,
+    ) -> list[tuple[str, float]]:
+        """Return top-N files by importance score that fit within token budget.
+
+        Uses existing PageRank-boosted importance scores to identify the most
+        important files in the current project context. Used by post-compaction
+        restoration to re-inject critical context.
+
+        Files are drawn from the discovered file list (``self._files``), which
+        is sorted by importance descending after ``discover_files()`` applies
+        heuristic scoring plus PageRank hub boosts.
+
+        Args:
+            max_files: Maximum number of files to return.
+            max_tokens: Maximum total estimated tokens across all returned files.
+            exclude_patterns: Glob patterns to exclude (e.g.,
+                ``["*.test.*", "node_modules/*"]``).
+
+        Returns:
+            List of ``(relative_path, importance_score)`` tuples, sorted by
+            score descending.
+        """
+        self._ensure_fresh()
+
+        if not self._files:
+            return []
+
+        # Apply exclusion patterns
+        candidates = self._files
+        if exclude_patterns:
+            import fnmatch
+
+            def _excluded(rel_path: str) -> bool:
+                return any(
+                    fnmatch.fnmatch(rel_path, pat) for pat in exclude_patterns  # type: ignore[arg-type]
+                )
+
+            candidates = [f for f in candidates if not _excluded(f.relative_path)]
+
+        # Select files within token budget
+        # Files are already sorted by importance (descending) from discover_files()
+        result: list[tuple[str, float]] = []
+        remaining_tokens = max_tokens
+
+        for file_info in candidates:
+            if len(result) >= max_files:
+                break
+
+            # Estimate tokens from file size (size in bytes / CHARS_PER_TOKEN)
+            est_tokens = max(1, int(file_info.size / 3.5))
+
+            if est_tokens > remaining_tokens:
+                continue  # Skip files that don't fit, try smaller ones
+
+            result.append((file_info.relative_path, file_info.importance))
+            remaining_tokens -= est_tokens
+
+        return result
+
     # --- Recursive context retrieval ---
 
     def get_recursive_context(

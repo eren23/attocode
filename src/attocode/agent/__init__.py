@@ -8,17 +8,28 @@ from attocode.agent.feature_initializer import (
     get_feature_summary,
     initialize_features,
 )
-from attocode.agent.message_builder import build_initial_messages, build_system_prompt
+from attocode.agent.message_builder import (
+    FORK_PLACEHOLDER_RESULT,
+    FORK_TAG,
+    build_context_attachment,
+    build_forked_messages,
+    build_initial_messages,
+    build_system_prompt,
+)
 from attocode.agent.session_api import SessionAPI, SessionSnapshot, SessionSummary
 
 __all__ = [
     "AgentBuilder",
     "AgentContext",
+    "FORK_PLACEHOLDER_RESULT",
+    "FORK_TAG",
     "FeatureConfig",
     "ProductionAgent",
     "SessionAPI",
     "SessionSnapshot",
     "SessionSummary",
+    "build_context_attachment",
+    "build_forked_messages",
     "build_initial_messages",
     "build_system_prompt",
     "get_feature_summary",

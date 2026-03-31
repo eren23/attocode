@@ -436,6 +436,24 @@ The learning store is capped at 500 learnings (configurable). When the limit is 
 1. First: Delete REJECTED and ARCHIVED learnings (oldest first)
 2. Then: Delete VALIDATED learnings (lowest confidence first, then oldest)
 
+## Permission Mailbox (Swarm)
+
+In swarm mode, worker agents can request permission for dangerous operations. The coordinator evaluates requests using a three-tier policy:
+
+1. **Auto-approve**: Read-only tools (grep, read_file, ast_query, etc.)
+2. **Auto-deny**: Destructive tools (delete_file, drop_table, rm_rf)
+3. **Role-based**: Workers with `write_access=True` can use write tools; others are rejected
+
+Permission requests/responses flow through the agent inbox/outbox protocol.
+
+## Circuit Breaker & Exponential Backoff
+
+### Circuit Breaker
+The `HealthMonitor` tracks per-model failure rates. When a model accumulates 3+ failures within 60 seconds, the circuit breaker trips and prevents new dispatches to that model until it recovers naturally (5% health per 60s idle).
+
+### Exponential Backoff
+Failed tasks retry with exponential backoff: `delay = min(2^attempt, 60s) + random_jitter`. Retries are non-blocking — scheduled via `asyncio.create_task()` so the coordinator loop continues.
+
 ## Related Pages
 
 - [CLI Reference](cli-reference.md) — All flags and slash commands

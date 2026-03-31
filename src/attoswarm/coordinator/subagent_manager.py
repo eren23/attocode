@@ -247,6 +247,20 @@ class SubagentManager:
         task_model = str(task.get("model", ""))
 
         async with self._concurrency:
+            # Circuit breaker: skip dispatch if the model is tripped
+            if self._health_monitor and task_model and self._health_monitor.check_circuit_breaker(task_model):
+                logger.warning(
+                    "Circuit breaker open for model %s — skipping task %s",
+                    task_model,
+                    task_id,
+                )
+                self._emit_status(agent_id, task_id, "error", backend=task_backend, model=task_model)
+                return TaskResult(
+                    task_id=task_id,
+                    success=False,
+                    error=f"Circuit breaker open for model {task_model}",
+                )
+
             start = time.time()
 
             # 1. Claim files

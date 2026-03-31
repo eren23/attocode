@@ -88,6 +88,7 @@ class SetupWizard(ModalScreen[SetupResult]):
         Binding("2", "pick_2", "2", show=False),
         Binding("3", "pick_3", "3", show=False),
         Binding("4", "pick_4", "4", show=False),
+        Binding("5", "pick_5", "5", show=False),
         Binding("escape", "back_or_cancel", "Back/Cancel", show=False),
     ]
 
@@ -165,9 +166,12 @@ class SetupWizard(ModalScreen[SetupResult]):
         body.append("  [4] ", style="bold cyan")
         body.append("Z.AI")
         body.append("  (GLM-5)\n", style="dim")
+        body.append("  [5] ", style="bold cyan")
+        body.append("MiniMax")
+        body.append("  (M2.7 / M2.5 / M2.1)\n", style="dim")
         content.update(body)
 
-        shortcuts.update("[1/2/3/4] Select provider  [ESC] Cancel")
+        shortcuts.update("[1/2/3/4/5] Select provider  [ESC] Cancel")
 
     def _render_apikey_step(
         self, title: Static, content: Static, shortcuts: Static, key_input: Input
@@ -305,6 +309,14 @@ class SetupWizard(ModalScreen[SetupResult]):
     def action_pick_4(self) -> None:
         if self._step == 1:
             self._select_provider("zai")
+        elif self._step == 3:
+            self._select_model_index(3)
+
+    def action_pick_5(self) -> None:
+        if self._step == 1:
+            self._select_provider("minimax")
+        elif self._step == 3:
+            self._select_model_index(4)
 
     def action_back_or_cancel(self) -> None:
         """ESC: go back one step, or cancel on step 1."""

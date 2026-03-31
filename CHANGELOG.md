@@ -16,6 +16,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Added YAML targets: Hermes Agent (`~/.hermes/config.yaml`, `mcp_servers` key) and Goose (`~/.config/goose/config.yaml`, `extensions` key)
 - Gemini CLI, Junie, and Amp support `--global` for user-level installation
 
+## [0.2.13] - 2026-03-31
+
+### Added
+- **Microcompact**: Per-turn tool result decay with configurable `ToolDecayProfile` for 11 built-in tools. Low-priority results (glob, web_fetch) expire faster than high-priority ones (edit, write).
+- **Fork Subagent Prompt Cache**: Subagents can inherit parent's system message byte-for-byte via `build_forked_messages()`, enabling LLM prompt cache hits (est. 60-80% input cost savings).
+- **Attachment-Based Context Injection**: Dynamic content (tool listings, MCP instructions, skills) moved from system prompt into separate attachment messages for cache stability.
+- **LoopDeps Protocol**: Narrow dependency interface (`LoopDeps`) for the main agent loop, enabling isolated testing via `DefaultLoopDeps`.
+- **Immutable Config Snapshot**: `AttoConfig.freeze()` returns `FrozenAttoConfig` — prevents mid-turn config mutations.
+- **Tool Concurrency Control**: `concurrent_safe` flag on `ToolSpec` partitions tools into parallel-safe (reads) and exclusive (bash, write, edit). Bash failures abort sibling exclusive tools.
+- **Permission Mailbox**: Swarm workers can request permission for dangerous operations via `PermissionRequest`/`PermissionResponse` protocol. Coordinator auto-approves reads, auto-denies destructive ops, checks role capabilities.
+- **Diminishing Returns Detection**: `DiminishingReturnsTracker` auto-fails swarm tasks producing <500 tokens/turn with zero tool calls for 3+ consecutive turns.
+- **Exponential Backoff**: Task retries use exponential backoff with jitter (2^attempt seconds, capped at 60s).
+- **Circuit Breaker**: `HealthMonitor.check_circuit_breaker()` prevents dispatch to models with 3+ failures in 60s window.
+- **Backend/Executor Split**: `ProcessBackend` protocol separates low-level process management from agent lifecycle (`AgentExecutor`). New `get_executor()`/`get_backend()` in adapter registry.
+- **Content Replacement State**: `ContentReplacementState` tracks evicted tool results for selective re-injection, prioritizing code-intel results.
+- **Lazy Imports**: PEP 562 lazy loading in `code_intel/__init__.py` and `integrations/context/__init__.py` — tree-sitter and AST modules loaded on demand.
+- **Side Query Enrichment**: `enrich_task_context_async()` fires parallel code-intel queries (impact, symbols, dependencies) concurrently with task dispatch. Non-blocking with configurable timeout.
+- **Post-Compact PageRank Restoration**: `get_top_files_by_importance()` re-injects top-5 files by PageRank importance after context compaction.
+
+### Changed
+- Main agent loop now uses `execute_tool_calls_concurrent()` (concurrency-aware) instead of `execute_tool_calls()`.
+- Compaction pipeline runs `microcompact()` every turn before threshold-based compaction check.
+
 ## [0.2.12] - 2026-03-31
 
 ### Added

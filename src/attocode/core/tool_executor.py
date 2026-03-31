@@ -628,6 +628,22 @@ async def execute_single_tool(
         return ToolResult(call_id=tc.id, error=error_msg), False
 
 
+def _partition_by_concurrency(
+    tool_calls: list[ToolCall],
+    registry: Any,  # ToolRegistry
+) -> tuple[list[ToolCall], list[ToolCall]]:
+    """Partition tool calls into concurrent-safe and exclusive groups."""
+    safe: list[ToolCall] = []
+    exclusive: list[ToolCall] = []
+    for tc in tool_calls:
+        tool = registry.get(tc.name) if registry else None
+        if tool and not tool.spec.concurrent_safe:
+            exclusive.append(tc)
+        else:
+            safe.append(tc)
+    return safe, exclusive
+
+
 async def execute_tool_calls(
     ctx: AgentContext,
     tool_calls: list[ToolCall],
@@ -672,6 +688,57 @@ async def execute_tool_calls(
         *[_run_with_semaphore(tc) for tc in tool_calls],
     )
     return list(results)
+
+
+async def execute_tool_calls_concurrent(
+    ctx: AgentContext,
+    tool_calls: list[ToolCall],
+    *,
+    timeout: float | None = None,
+    max_result_chars: int = MAX_RESULT_CHARS,
+) -> list[ToolResult]:
+    """Execute tool calls with concurrency-aware partitioning.
+
+    Concurrent-safe tools (reads, grep, glob) run in parallel.
+    Exclusive tools (bash, write_file, edit_file) run sequentially.
+    If an exclusive bash tool fails, remaining exclusive tools are aborted.
+
+    Results are returned in the original tool_calls order.
+    """
+    if not tool_calls:
+        return []
+
+    safe, exclusive = _partition_by_concurrency(tool_calls, ctx.registry)
+
+    # Track results by tool call ID for re-ordering
+    results_by_id: dict[str, ToolResult] = {}
+
+    # Run safe tools concurrently
+    if safe:
+        safe_results = await asyncio.gather(
+            *[execute_single_tool(ctx, tc, timeout=timeout, max_result_chars=max_result_chars)
+              for tc in safe],
+        )
+        for tc, (result, _) in zip(safe, safe_results):
+            results_by_id[tc.id] = result
+
+    # Run exclusive tools sequentially with abort-on-bash-failure
+    for i, tc in enumerate(exclusive):
+        result, _ = await execute_single_tool(
+            ctx, tc, timeout=timeout, max_result_chars=max_result_chars,
+        )
+        results_by_id[tc.id] = result
+        # Abort remaining exclusive tools if bash failed
+        if tc.name == "bash" and result.is_error:
+            for remaining_tc in exclusive[i + 1:]:
+                results_by_id[remaining_tc.id] = ToolResult(
+                    call_id=remaining_tc.id,
+                    error="[Aborted: sibling bash command failed]",
+                )
+            break
+
+    # Return in original order
+    return [results_by_id[tc.id] for tc in tool_calls]
 
 
 async def execute_tool_calls_batched(

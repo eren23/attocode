@@ -17,9 +17,11 @@ from attocode_core.ast_index.indexer import CodeIndex
 from attoswarm.adapters.base import AgentProcessSpec
 from attoswarm.adapters.registry import get_adapter
 from attoswarm.coordinator.budget import BudgetCounter
+from attoswarm.coordinator.budget_gate import DiminishingReturnsTracker
 from attoswarm.coordinator.failure_handler import (
     cascade_skip_blocked as _cascade_skip_blocked_impl,
 )
+from attoswarm.coordinator.health_monitor import HealthMonitor
 from attoswarm.coordinator.failure_handler import (
     enforce_task_duration_limits as _enforce_task_duration_limits_impl,
 )
@@ -73,6 +75,8 @@ from attoswarm.protocol.models import (
     LauncherInfo,
     LineageSpec,
     MergePolicy,
+    PermissionRequest,
+    PermissionResponse,
     RoleSpec,
     SwarmManifest,
     TaskSpec,
@@ -95,6 +99,17 @@ _STRIP_ENV_VARS = {
     "CLAUDE_CODE_PACKAGE_DIR",
 }
 
+
+# Read-only tools that are always safe to auto-approve
+_AUTO_APPROVE_TOOLS: frozenset[str] = frozenset({
+    "read_file", "list_files", "glob_files", "grep", "search",
+    "ast_query", "semantic_search", "symbols", "repo_map",
+})
+
+# Tools that should never be approved in swarm context
+_AUTO_DENY_TOOLS: frozenset[str] = frozenset({
+    "delete_file", "drop_table", "rm_rf",
+})
 
 SKIP_REVIEW_KINDS: frozenset[str] = frozenset({"judge", "critic", "merge", "analysis", "design"})
 
@@ -148,6 +163,8 @@ class HybridCoordinator:
             chars_per_token=config.budget.chars_per_token_fallback,
         )
         self.merge_queue = MergeQueue()
+        self.health_monitor = HealthMonitor()
+        self.diminishing_tracker = DiminishingReturnsTracker()
         self.crash_count = 0
         self.reassigned_tasks = 0
         self.state_seq = 0
@@ -155,6 +172,7 @@ class HybridCoordinator:
 
         self.errors: list[dict[str, Any]] = []
         self.transition_log: list[dict[str, Any]] = []
+        self.pending_permissions: list[PermissionRequest] = []
 
         self._lineage.refresh(self.run_id, self.resume)
 
@@ -574,14 +592,79 @@ class HybridCoordinator:
     async def _dispatch_ready_tasks(self) -> None:
         await _dispatch_ready_tasks_impl(self)
 
-    def _build_task_prompt(self, task: TaskSpec) -> str:
-        return _build_task_prompt_impl(self, task)
+    def _build_task_prompt(
+        self, task: TaskSpec, *, enrichment: dict[str, str] | None = None,
+    ) -> str:
+        return _build_task_prompt_impl(self, task, enrichment=enrichment)
 
-    async def _send_task_assignment(self, agent_id: str, task: TaskSpec) -> None:
-        await _send_task_assignment_impl(self, agent_id, task)
+    async def _send_task_assignment(
+        self, agent_id: str, task: TaskSpec, *, enrichment: dict[str, str] | None = None,
+    ) -> None:
+        await _send_task_assignment_impl(self, agent_id, task, enrichment=enrichment)
 
     async def _process_review_queue(self) -> None:
         await _process_review_queue_impl(self)
+
+    # ------------------------------------------------------------------
+    # Permission synchronization
+    # ------------------------------------------------------------------
+
+    def _evaluate_permission(self, req: PermissionRequest) -> PermissionResponse:
+        """Evaluate a permission request from a worker agent."""
+        # Auto-approve read-only tools
+        if req.tool_name in _AUTO_APPROVE_TOOLS:
+            return PermissionResponse(
+                request_id=req.request_id,
+                decision="approved",
+                reason="auto-approved: read-only tool",
+            )
+
+        # Auto-deny dangerous tools
+        if req.tool_name in _AUTO_DENY_TOOLS:
+            return PermissionResponse(
+                request_id=req.request_id,
+                decision="rejected",
+                reason="auto-denied: tool not permitted in swarm context",
+            )
+
+        # Check role capabilities
+        role = self.role_by_agent.get(req.agent_id)
+        if role and role.write_access:
+            # Workers with write access can use write tools
+            return PermissionResponse(
+                request_id=req.request_id,
+                decision="approved",
+                reason="auto-approved: role has write access",
+            )
+
+        # Default: reject non-write-access agents using write tools
+        return PermissionResponse(
+            request_id=req.request_id,
+            decision="rejected",
+            reason=f"role lacks write_access for tool '{req.tool_name}'",
+        )
+
+    def _send_permission_response(self, agent_id: str, response: PermissionResponse) -> None:
+        """Send a permission response to a worker agent's inbox."""
+        inbox_path = self.layout["agents"] / f"agent-{agent_id}.inbox.json"
+        try:
+            inbox = read_json(inbox_path, {"messages": []})
+            msg = {
+                "seq": len(inbox.get("messages", [])) + 1,
+                "message_id": response.request_id,
+                "timestamp": response.timestamp,
+                "kind": "permission_response",
+                "task_id": None,
+                "payload": {
+                    "request_id": response.request_id,
+                    "decision": response.decision,
+                    "reason": response.reason,
+                },
+            }
+            inbox.setdefault("messages", []).append(msg)
+            write_json_atomic(inbox_path, inbox)
+        except Exception as exc:
+            log.warning("Failed to send permission response to %s: %s", agent_id, exc)
 
     async def _restart_agent(self, agent_id: str) -> None:
         adapter = self.adapters[agent_id]

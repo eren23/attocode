@@ -437,6 +437,28 @@ Key parameters and their defaults:
 | `failure_max_records` | 50 | Maximum tracked failures |
 | `failure_repeat_threshold` | 3 | Warn on N+ repeats |
 
+## Microcompact: Per-Turn Tool Decay
+
+Rather than waiting for context pressure to trigger full compaction, microcompact runs every turn and selectively clears stale tool results based on tool-specific decay profiles.
+
+### Tool Decay Profiles
+
+Each tool type has a configured `ToolDecayProfile`:
+
+| Tool | Max Age (turns) | Preview (chars) | Priority |
+|------|----------------|-----------------|----------|
+| edit_file / write_file | 8 | 300 | 7 (high) |
+| semantic_search / ast_query | 6 | 200 | 5 |
+| read_file | 5 | 200 | 3 |
+| bash / grep | 3 | 100-150 | 2 |
+| glob_files / web_fetch | 2-4 | 100 | 1 (low) |
+
+Low-priority results are cleared first. Cleared results retain a preview string for context continuity.
+
+### Post-Compaction File Restoration
+
+After full compaction, the system re-injects up to 5 files selected by PageRank importance score, within a 50,000 token budget. This ensures the most architecturally significant files remain in context.
+
 ## Related Pages
 
 - [Budget System](BUDGET.md) — Token budget and economics

@@ -214,6 +214,7 @@ def create_bash_tool(
                 "required": ["command"],
             },
             danger_level=DangerLevel.DANGEROUS,
+            concurrent_safe=False,
         ),
         execute=_execute,
         tags=["bash", "exec"],

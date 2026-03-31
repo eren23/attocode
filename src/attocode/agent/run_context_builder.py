@@ -9,6 +9,7 @@ pre-seeds the repo map -- everything that used to live inline inside
 
 from __future__ import annotations
 
+import asyncio
 import logging
 import uuid
 from pathlib import Path
@@ -335,7 +336,7 @@ async def build_run_context(
     _cbc_mgr = agent._codebase_context or getattr(ctx, "codebase_context", None)
     if _cbc_mgr and agent._run_count == 0:
         try:
-            repo_map = _cbc_mgr.get_preseed_map(max_tokens=6000)
+            repo_map = await asyncio.to_thread(_cbc_mgr.get_preseed_map, max_tokens=6000)
             parts = [
                 "## Relevant Code (Pre-Analyzed AST Data)",
                 "This section contains the repository structure with exported "

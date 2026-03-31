@@ -41,6 +41,8 @@ class ProviderRegistry:
             available.append("openai")
         if os.environ.get("ZAI_API_KEY"):
             available.append("zai")
+        if os.environ.get("MINIMAX_API_KEY"):
+            available.append("minimax")
         return available
 
 
@@ -90,5 +92,8 @@ def create_provider(
     if name == "zai":
         from attocode.providers.zai import ZAIProvider
         return ZAIProvider(**provider_kwargs)
+    if name == "minimax":
+        from attocode.providers.minimax import MinimaxProvider
+        return MinimaxProvider(**provider_kwargs)
 
     raise ConfigurationError(f"Unknown provider: {name}")

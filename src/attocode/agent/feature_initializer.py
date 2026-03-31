@@ -7,6 +7,7 @@ recitation, failure tracking, and other optional integrations.
 
 from __future__ import annotations
 
+import asyncio
 import logging
 import os
 from dataclasses import dataclass
@@ -548,7 +549,7 @@ async def initialize_features(
             from attocode.integrations.context.semantic_search import SemanticSearchManager
             from attocode.tools.semantic_search import create_semantic_search_tool
 
-            sem_mgr = SemanticSearchManager(root_dir=working_dir)
+            sem_mgr = await asyncio.to_thread(SemanticSearchManager, root_dir=working_dir)
             ctx._semantic_search = sem_mgr
             sem_tool = create_semantic_search_tool(sem_mgr)
             ctx.registry.register(sem_tool)
