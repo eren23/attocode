@@ -352,6 +352,8 @@ attocode code-intel install opencode         # OpenCode (prints manual steps)
 
 All targets support `--project <path>` to specify the project directory (defaults to `.`). Claude Code, Codex, and Zed support `--global` for user-level installation.
 
+For Codex, `install codex --global` now writes a repo-agnostic entry by default: it omits `--project` and starts the MCP server in `--local-only` mode so the active workspace is indexed locally instead of auto-loading any repo-level remote config. Use `--project <path>` with `--global` if you intentionally want to pin a single repository.
+
 > **Note:** IntelliJ and OpenCode do not support file-based MCP configuration. Running `install intellij` or `install opencode` prints step-by-step manual setup instructions instead.
 
 ### Available Tools

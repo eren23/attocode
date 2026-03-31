@@ -1305,3 +1305,32 @@ def test_event_log_written_during_campaign(tmp_path: Path) -> None:
     event_types = [e["type"] for e in events]
     assert "baseline_complete" in event_types
     assert "campaign_complete" in event_types
+
+
+def test_research_state_file_includes_started_at_epoch(tmp_path: Path) -> None:
+    import json as _json
+
+    repo = tmp_path / "repo"
+    _init_repo(repo, {"f.txt": "hello\n"})
+
+    class StaticEval:
+        async def evaluate(self, working_dir: str) -> EvalResult:
+            return EvalResult(metric_value=42.0)
+
+    orch = ResearchOrchestrator(
+        ResearchConfig(
+            working_dir=str(repo),
+            run_dir=str(tmp_path / "runs"),
+            eval_command="",
+            total_max_experiments=1,
+            target_files=["f.txt"],
+        ),
+        "test started-at",
+        evaluator=StaticEval(),
+    )
+
+    asyncio.run(orch.run())
+
+    state_path = tmp_path / "runs" / "research.state.json"
+    payload = _json.loads(state_path.read_text())
+    assert payload["state"]["started_at_epoch"] > 0

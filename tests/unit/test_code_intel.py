@@ -1028,7 +1028,7 @@ class TestInstaller:
         monkeypatch.setattr("shutil.which", lambda x: None)
         monkeypatch.setattr("pathlib.Path.home", lambda: tmp_path)
 
-        result = install_codex(project_dir="/some/project", scope="user")
+        result = install_codex(project_dir=".", scope="user")
         assert result is True
 
         config_path = tmp_path / ".codex" / "config.toml"
@@ -1036,6 +1036,24 @@ class TestInstaller:
 
         data = tomllib.loads(config_path.read_text())
         assert "attocode-code-intel" in data["mcp_servers"]
+        server = data["mcp_servers"]["attocode-code-intel"]
+        assert "--project" not in server["args"]
+        assert "--local-only" in server["args"]
+
+    def test_install_codex_user_with_explicit_project(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+        from attocode.code_intel.installer import install_codex
+
+        monkeypatch.setattr("shutil.which", lambda x: None)
+        monkeypatch.setattr("pathlib.Path.home", lambda: tmp_path)
+
+        result = install_codex(project_dir="/some/project", scope="user")
+        assert result is True
+
+        data = tomllib.loads((tmp_path / ".codex" / "config.toml").read_text())
+        server = data["mcp_servers"]["attocode-code-intel"]
+        assert "--project" in server["args"]
+        assert "/some/project" in server["args"]
+        assert "--local-only" not in server["args"]
 
     def test_install_codex_merges_existing(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
         import tomli_w
@@ -1408,6 +1426,104 @@ class TestCLIDispatch:
         for target_name in ["Claude Code", "Cursor", "Windsurf", "VS Code", "Codex",
                             "Claude Desktop", "Cline", "Zed"]:
             assert target_name in captured.out, f"Missing '{target_name}' in status output"
+
+
+class TestVerifyCLI:
+    def test_verify_local_index_layout(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]):
+        from attocode.code_intel.cli import dispatch_code_intel
+
+        class _FakeService:
+            def _health_snapshot(self) -> dict[str, object]:
+                return {
+                    "health_status": "healthy",
+                    "discovery_count": 12,
+                    "ast_indexed_files": 9,
+                }
+
+            def hydration_status(self) -> dict[str, object]:
+                return {"tier": "small", "phase": "ready"}
+
+        (tmp_path / ".attocode" / "cache").mkdir(parents=True)
+        (tmp_path / ".attocode" / "cache" / "a.cache").write_text("x")
+        (tmp_path / ".attocode" / "index").mkdir(parents=True)
+        (tmp_path / ".attocode" / "index" / "symbols.db").write_text("")
+
+        monkeypatch.delenv("DATABASE_URL", raising=False)
+        monkeypatch.setattr("attocode.code_intel.service.CodeIntelService._reset_instances", classmethod(lambda cls: None))
+        monkeypatch.setattr("attocode.integrations.context.ast_service.ASTService.clear_instances", classmethod(lambda cls: None))
+        monkeypatch.setattr("attocode.code_intel.service.CodeIntelService.get_instance", classmethod(lambda cls, _project_dir: _FakeService()))
+
+        dispatch_code_intel(["verify", "--project", str(tmp_path)])
+        captured = capsys.readouterr()
+        assert "Local index OK" in captured.out
+        assert "symbols.db" in captured.out
+        assert "Discovery count: 12" in captured.out
+        assert "Hydration: small / ready" in captured.out
+
+    def test_verify_reports_missing_index_dir(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]):
+        from attocode.code_intel.cli import dispatch_code_intel
+
+        class _FakeService:
+            def _health_snapshot(self) -> dict[str, object]:
+                return {
+                    "health_status": "degraded",
+                    "discovery_count": 0,
+                    "ast_indexed_files": 0,
+                }
+
+            def hydration_status(self) -> dict[str, object]:
+                return {"tier": "small", "phase": "ready"}
+
+        (tmp_path / ".attocode" / "cache").mkdir(parents=True)
+
+        monkeypatch.delenv("DATABASE_URL", raising=False)
+        monkeypatch.setattr("attocode.code_intel.service.CodeIntelService._reset_instances", classmethod(lambda cls: None))
+        monkeypatch.setattr("attocode.integrations.context.ast_service.ASTService.clear_instances", classmethod(lambda cls: None))
+        monkeypatch.setattr("attocode.code_intel.service.CodeIntelService.get_instance", classmethod(lambda cls, _project_dir: _FakeService()))
+
+        dispatch_code_intel(["verify", "--project", str(tmp_path)])
+        captured = capsys.readouterr()
+        assert "Found" in captured.out
+        assert "Index directory missing (.attocode/index)" in captured.out
+        assert "No files indexed by ASTService" in captured.out
+
+    def test_verify_falls_back_to_local_when_db_uninitialized(
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+        capsys: pytest.CaptureFixture[str],
+    ):
+        from attocode.code_intel.cli import dispatch_code_intel
+
+        class _FakeService:
+            def _health_snapshot(self) -> dict[str, object]:
+                return {
+                    "health_status": "healthy",
+                    "discovery_count": 4,
+                    "ast_indexed_files": 4,
+                }
+
+            def hydration_status(self) -> dict[str, object]:
+                return {"tier": "small", "phase": "ready"}
+
+        (tmp_path / ".attocode" / "cache").mkdir(parents=True)
+        (tmp_path / ".attocode" / "index").mkdir(parents=True)
+        (tmp_path / ".attocode" / "index" / "symbols.db").write_text("")
+
+        def _fake_asyncio_run(coro):
+            coro.close()
+            raise RuntimeError("Database not initialized. Call init_engine() first.")
+
+        monkeypatch.setenv("DATABASE_URL", "postgres://example/test")
+        monkeypatch.setattr("asyncio.run", _fake_asyncio_run)
+        monkeypatch.setattr("attocode.code_intel.service.CodeIntelService._reset_instances", classmethod(lambda cls: None))
+        monkeypatch.setattr("attocode.integrations.context.ast_service.ASTService.clear_instances", classmethod(lambda cls: None))
+        monkeypatch.setattr("attocode.code_intel.service.CodeIntelService.get_instance", classmethod(lambda cls, _project_dir: _FakeService()))
+
+        dispatch_code_intel(["verify", "--project", str(tmp_path)])
+        captured = capsys.readouterr()
+        assert "falling back to local integrity checks" in captured.err
+        assert "Local index OK" in captured.out
 
     def test_dispatch_unknown(self):
         from attocode.code_intel.cli import dispatch_code_intel

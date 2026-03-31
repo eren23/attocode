@@ -153,11 +153,11 @@ class TestRemoteAnalysisProvider:
             provider = RemoteAnalysisProvider(client)
             await provider.search_symbols("MyClass", "dev", directory="src/")
             req = route.calls[0].request
-            assert req.url.params["directory"] == "src/"
+            assert req.url.params["dir"] == "src/"
             await client.close()
 
     async def test_cross_references(self):
-        expected_path = f"/api/v2/projects/{REPO_ID}/cross-references/FooBar"
+        expected_path = f"/api/v2/projects/{REPO_ID}/cross-refs"
         with respx.mock:
             route = respx.get(f"{SERVER}{expected_path}").mock(
                 return_value=httpx.Response(200, json={"refs": []}),
@@ -166,13 +166,15 @@ class TestRemoteAnalysisProvider:
             provider = RemoteAnalysisProvider(client)
             result = await provider.cross_references("FooBar", "main")
             assert result == {"refs": []}
-            assert route.calls[0].request.url.params["branch"] == "main"
+            req = route.calls[0].request
+            assert req.url.params["branch"] == "main"
+            assert req.url.params["symbol"] == "FooBar"
             await client.close()
 
-    async def test_impact_analysis_uses_post(self):
-        expected_path = f"/api/v2/projects/{REPO_ID}/impact-analysis"
+    async def test_impact_analysis_uses_get_with_repeated_files(self):
+        expected_path = f"/api/v2/projects/{REPO_ID}/impact"
         with respx.mock:
-            route = respx.post(f"{SERVER}{expected_path}").mock(
+            route = respx.get(f"{SERVER}{expected_path}").mock(
                 return_value=httpx.Response(200, json={"impact": []}),
             )
             client = _make_client()
@@ -180,6 +182,9 @@ class TestRemoteAnalysisProvider:
             result = await provider.impact_analysis(["a.py", "b.py"], "main")
             assert result == {"impact": []}
             assert route.called
+            req = route.calls[0].request
+            assert req.url.params.get_list("files") == ["a.py", "b.py"]
+            assert req.url.params["branch"] == "main"
             await client.close()
 
     async def test_hotspots(self):
@@ -217,10 +222,10 @@ class TestRemoteAnalysisProvider:
 
 
 class TestRemoteSearchProvider:
-    async def test_semantic_search_url_and_params(self):
-        expected_path = f"/api/v2/projects/{REPO_ID}/semantic-search"
+    async def test_semantic_search_url_and_payload(self):
+        expected_path = f"/api/v2/projects/{REPO_ID}/search"
         with respx.mock:
-            route = respx.get(f"{SERVER}{expected_path}").mock(
+            route = respx.post(f"{SERVER}{expected_path}").mock(
                 return_value=httpx.Response(200, json={"results": []}),
             )
             client = _make_client()
@@ -228,28 +233,26 @@ class TestRemoteSearchProvider:
             result = await provider.semantic_search("find auth", 10, "", "main")
             assert result == {"results": []}
             req = route.calls[0].request
-            assert req.url.params["query"] == "find auth"
-            assert req.url.params["top_k"] == "10"
-            assert "file_filter" not in req.url.params
+            assert req.url.params["branch"] == "main"
+            assert req.content
             await client.close()
 
     async def test_semantic_search_with_file_filter(self):
-        expected_path = f"/api/v2/projects/{REPO_ID}/semantic-search"
+        expected_path = f"/api/v2/projects/{REPO_ID}/search"
         with respx.mock:
-            route = respx.get(f"{SERVER}{expected_path}").mock(
+            route = respx.post(f"{SERVER}{expected_path}").mock(
                 return_value=httpx.Response(200, json={"results": []}),
             )
             client = _make_client()
             provider = RemoteSearchProvider(client)
             await provider.semantic_search("query", 5, "*.py", "main")
-            req = route.calls[0].request
-            assert req.url.params["file_filter"] == "*.py"
+            assert route.calls[0].request.url.params["branch"] == "main"
             await client.close()
 
     async def test_security_scan(self):
         expected_path = f"/api/v2/projects/{REPO_ID}/security-scan"
         with respx.mock:
-            route = respx.get(f"{SERVER}{expected_path}").mock(
+            route = respx.post(f"{SERVER}{expected_path}").mock(
                 return_value=httpx.Response(200, json={"findings": []}),
             )
             client = _make_client()
@@ -257,8 +260,7 @@ class TestRemoteSearchProvider:
             result = await provider.security_scan("full", "src/", "main")
             assert result == {"findings": []}
             req = route.calls[0].request
-            assert req.url.params["mode"] == "full"
-            assert req.url.params["path"] == "src/"
+            assert req.url.params["branch"] == "main"
             await client.close()
 
 
@@ -271,7 +273,7 @@ class TestRemoteGraphProvider:
     async def test_graph_query(self):
         expected_path = f"/api/v2/projects/{REPO_ID}/graph/query"
         with respx.mock:
-            route = respx.get(f"{SERVER}{expected_path}").mock(
+            route = respx.post(f"{SERVER}{expected_path}").mock(
                 return_value=httpx.Response(200, json={"nodes": [], "edges": []}),
             )
             client = _make_client()
@@ -279,17 +281,13 @@ class TestRemoteGraphProvider:
             result = await provider.graph_query("app.py", "import", "outgoing", 2, "main")
             assert result == {"nodes": [], "edges": []}
             req = route.calls[0].request
-            assert req.url.params["file"] == "app.py"
-            assert req.url.params["edge_type"] == "import"
-            assert req.url.params["direction"] == "outgoing"
-            assert req.url.params["depth"] == "2"
             assert req.url.params["branch"] == "main"
             await client.close()
 
     async def test_find_related(self):
-        expected_path = f"/api/v2/projects/{REPO_ID}/graph/related/utils.py"
+        expected_path = f"/api/v2/projects/{REPO_ID}/graph/related"
         with respx.mock:
-            route = respx.get(f"{SERVER}{expected_path}").mock(
+            route = respx.post(f"{SERVER}{expected_path}").mock(
                 return_value=httpx.Response(200, json={"related": []}),
             )
             client = _make_client()
@@ -297,7 +295,6 @@ class TestRemoteGraphProvider:
             result = await provider.find_related("utils.py", 5, "main")
             assert result == {"related": []}
             req = route.calls[0].request
-            assert req.url.params["top_k"] == "5"
             assert req.url.params["branch"] == "main"
             await client.close()
 

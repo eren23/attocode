@@ -4,6 +4,8 @@ __pycache__/
 .venv/
 *.egg-info/
 *.db
+*.db-shm
+*.db-wal
 *.jsonl
 .mypy_cache/
 .pytest_cache/
@@ -31,7 +33,7 @@ node_modules/
 .attocode/dev-state.json
 .attocode/config.toml
 .attocode/vectors
-attocode/attocode_py/.attocode/cache
+attocode/attocode_py/.attocode/
 tests/unit/tui/__snapshots__/
 .attocode/exports/
 .attocode/index/
@@ -40,7 +42,7 @@ docs/superpowers/
 eval/charts/
 eval/*.md
 eval/*.log
-
+eval/*.json
 # Legacy TS runtime artifacts
 legacy/.attocode/traces/
 legacy/.attocode/sessions/

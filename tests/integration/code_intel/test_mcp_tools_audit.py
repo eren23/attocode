@@ -1,4 +1,4 @@
-"""Comprehensive audit of all 43 MCP code-intel tools.
+"""Comprehensive audit of the MCP code-intel tools.
 
 Imports each tool function directly and calls it with mocked singletons.
 Catches AttributeError / TypeError / KeyError crashes that indicate
@@ -47,7 +47,7 @@ from attocode.integrations.context.codebase_ast import (
 
 
 def _build_audit_env(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
-    """Build realistic mock singletons covering all 43 MCP tools."""
+    """Build realistic mock singletons covering the MCP tool surface."""
     import attocode.code_intel.server as srv
 
     project_dir = str(tmp_path)

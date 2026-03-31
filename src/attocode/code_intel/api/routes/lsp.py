@@ -7,12 +7,14 @@ from fastapi import APIRouter, Depends, Query
 from attocode.code_intel.api.auth import verify_auth
 from attocode.code_intel.api.deps import (
     BranchParam,
+    ensure_branch_supported,
     get_lsp_provider,
     get_service_or_404,
 )
 from attocode.code_intel.api.models import (
     LSPDefinitionResponse,
     LSPDiagnosticsResponse,
+    LSPEnrichRequest,
     LSPHoverResponse,
     LSPPositionRequest,
     LSPReferencesRequest,
@@ -49,6 +51,7 @@ async def lsp_definition_v1(
     branch: BranchParam = "",
 ) -> TextResult:
     """Go-to-definition via LSP."""
+    ensure_branch_supported(branch)
     svc = await get_service_or_404(project_id)
     return TextResult(result=await svc.lsp_definition(file=req.file, line=req.line, col=req.col))
 
@@ -60,6 +63,7 @@ async def lsp_references_v1(
     branch: BranchParam = "",
 ) -> TextResult:
     """Find references via LSP."""
+    ensure_branch_supported(branch)
     svc = await get_service_or_404(project_id)
     return TextResult(result=await svc.lsp_references(
         file=req.file, line=req.line, col=req.col,
@@ -74,6 +78,7 @@ async def lsp_hover_v1(
     branch: BranchParam = "",
 ) -> TextResult:
     """Hover info via LSP."""
+    ensure_branch_supported(branch)
     svc = await get_service_or_404(project_id)
     return TextResult(result=await svc.lsp_hover(file=req.file, line=req.line, col=req.col))
 
@@ -85,8 +90,21 @@ async def lsp_diagnostics_v1(
     branch: BranchParam = "",
 ) -> TextResult:
     """Diagnostics from LSP."""
+    ensure_branch_supported(branch)
     svc = await get_service_or_404(project_id)
     return TextResult(result=svc.lsp_diagnostics(file=file))
+
+
+@router_v1.post("/enrich", response_model=TextResult)
+async def lsp_enrich_v1(
+    project_id: str,
+    req: LSPEnrichRequest,
+    branch: BranchParam = "",
+) -> TextResult:
+    """Enrich cross-references using LSP data."""
+    ensure_branch_supported(branch)
+    svc = await get_service_or_404(project_id)
+    return TextResult(result=await svc.lsp_enrich(req.files))
 
 
 # ===================================================================

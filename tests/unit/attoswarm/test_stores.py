@@ -10,7 +10,7 @@ from typing import Any
 
 import pytest
 
-from attoswarm.tui.stores import StateStore, _to_epoch
+from attoswarm.tui.stores import ResearchStateStore, StateStore, _to_epoch
 
 
 @pytest.fixture()
@@ -85,6 +85,11 @@ class TestReadState:
         time.sleep(0.05)
         state_path.write_text(json.dumps({"v": 2}))
         assert store.read_state() == {"v": 2}
+
+    def test_prefers_live_state_when_present(self, store: StateStore, tmp_run_dir: Path) -> None:
+        (tmp_run_dir / "swarm.state.json").write_text(json.dumps({"phase": "cold"}))
+        (tmp_run_dir / "swarm.live.state.json").write_text(json.dumps({"phase": "hot", "state_seq": 7}))
+        assert store.read_state()["phase"] == "hot"
 
 
 # ── has_new_events ────────────────────────────────────────────────────
@@ -170,6 +175,12 @@ class TestReadEvents:
         store.read_events(limit=100)
         assert len(store._events_cache) == 10  # capped
 
+    def test_prefers_live_events_when_present(self, store: StateStore, tmp_run_dir: Path) -> None:
+        (tmp_run_dir / "swarm.events.jsonl").write_text(json.dumps({"type": "cold"}) + "\n")
+        (tmp_run_dir / "swarm.live.jsonl").write_text(json.dumps({"type": "hot"}) + "\n")
+        result = store.read_events(limit=10)
+        assert result[0]["type"] == "hot"
+
 
 # ── read_agent_box ────────────────────────────────────────────────────
 
@@ -225,6 +236,25 @@ class TestBuildAgentActivity:
 
     def test_empty_events(self, store: StateStore) -> None:
         assert store.build_agent_activity([]) == {}
+
+    def test_agent_activity_event_type(self, store: StateStore) -> None:
+        events = [
+            {"type": "agent.activity", "agent_id": "w1", "message": "Reading app.py"},
+        ]
+        result = store.build_agent_activity(events)
+        assert result["w1"] == "Reading app.py"
+
+
+class TestBuildAgentList:
+    def test_falls_back_to_row_activity(self, store: StateStore) -> None:
+        state = {
+            "active_agents": [
+                {"agent_id": "w1", "task_id": "t1", "status": "running", "activity": "Editing app.py"},
+            ],
+            "dag": {"nodes": []},
+        }
+        agents = store.build_agent_list(state, activity={}, enrich_trace=False)
+        assert agents[0]["activity"] == "Editing app.py"
 
 
 # ── build_task_detail ─────────────────────────────────────────────────
@@ -771,3 +801,34 @@ class TestTaskCache:
         (tmp_run_dir / "tasks" / "task-e1.json").write_text(json.dumps({"title": "v2"}))
         second = store._read_task_cached("e1")
         assert second["title"] == "v2"  # cache expired, re-read
+
+
+class TestResearchStateStore:
+    def test_read_state_caches_latest_snapshot(self, tmp_run_dir: Path) -> None:
+        store = ResearchStateStore(str(tmp_run_dir))
+        state = {"state": {"run_id": "r1", "started_at_epoch": 1000.0}}
+        (tmp_run_dir / "research.state.json").write_text(json.dumps(state))
+
+        first = store.read_state()
+        second = store.read_state()
+
+        assert first == state
+        assert second is None
+        assert store.last_state == state
+
+    def test_read_events_tails_incrementally(self, tmp_run_dir: Path) -> None:
+        store = ResearchStateStore(str(tmp_run_dir))
+        events_path = tmp_run_dir / "research.events.jsonl"
+        events_path.write_text(json.dumps({"type": "baseline_complete"}) + "\n")
+
+        first = store.read_events(limit=10)
+        assert [event["type"] for event in first] == ["baseline_complete"]
+
+        with events_path.open("a", encoding="utf-8") as handle:
+            handle.write(json.dumps({"type": "experiment_accepted"}) + "\n")
+
+        second = store.read_events(limit=10)
+        assert [event["type"] for event in second] == [
+            "baseline_complete",
+            "experiment_accepted",
+        ]

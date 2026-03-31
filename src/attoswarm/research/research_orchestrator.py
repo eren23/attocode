@@ -80,6 +80,7 @@ class ResearchOrchestrator:
             goal=goal,
             metric_name=config.metric_name,
             metric_direction=config.metric_direction,
+            started_at_epoch=time.time(),
         )
         self._experiments: list[Experiment] = []
         self._findings: list[FindingRecord] = []
@@ -102,6 +103,9 @@ class ResearchOrchestrator:
                 self._finding_experiment_ids = {finding.experiment_id for finding in self._findings}
         else:
             self._db.create_run(self._run_id, self._goal, config=asdict(self._config))
+
+        if self._state.started_at_epoch <= 0:
+            self._state.started_at_epoch = time.time() - float(self._state.wall_seconds or 0.0)
 
         loop_start = time.time() - self._state.wall_seconds
 

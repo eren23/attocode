@@ -29,6 +29,10 @@ from textual.widgets import (
     TabPane,
 )
 
+from attocode.tui.live_refresh import (
+    DEFAULT_LIVE_REFRESH_S,
+    clamp_live_refresh_interval,
+)
 from attoswarm.protocol.io import read_json, write_json_atomic
 from attoswarm.protocol.models import utc_now_iso
 from attoswarm.run_summary import collect_modified_files
@@ -44,8 +48,8 @@ from attoswarm.tui.screens import (
 from attoswarm.tui.stores import ResearchStateStore, StateStore
 from attoswarm.tui.widgets import (
     AgentCard,
-    AgentTraceStream,
     AgentsDataTable,
+    AgentTraceStream,
     BudgetProjectionWidget,
     ConflictPanel,
     DecisionsPane,
@@ -60,7 +64,6 @@ from attoswarm.tui.widgets import (
 
 if TYPE_CHECKING:
     from textual import events
-    from textual.widgets import Input, TextArea
 
     from attoswarm.tui.widgets import DependencyTree
 
@@ -70,7 +73,11 @@ _CSS_PATH = Path(__file__).resolve().parent / "styles" / "swarm.tcss"
 class ResearchOverview(Static):
     """Research campaign overview widget."""
 
-    def update_research(self, data: dict[str, Any]) -> None:
+    def update_research(
+        self,
+        data: dict[str, Any],
+        events: list[dict[str, Any]] | None = None,
+    ) -> None:
         if not data:
             self.update("Waiting for research data...")
             return
@@ -104,8 +111,16 @@ class ResearchOverview(Static):
             f"[bold]Cost:[/bold] ${state.get('total_cost_usd', 0):.4f} "
             f"| Tokens: {state.get('total_tokens', 0):,}"
         )
+        wall_seconds = float(state.get("wall_seconds", 0) or 0.0)
+        started_at_epoch = state.get("started_at_epoch", 0)
+        if (
+            isinstance(started_at_epoch, (int, float))
+            and started_at_epoch > 0
+            and status not in {"completed", "error", "budget_exceeded"}
+        ):
+            wall_seconds = max(wall_seconds, time.time() - float(started_at_epoch))
         lines.append(
-            f"[bold]Wall time:[/bold] {state.get('wall_seconds', 0):.0f}s "
+            f"[bold]Wall time:[/bold] {wall_seconds:.0f}s "
             f"| Active: {state.get('active_experiments', 0)}"
         )
         lines.append("")
@@ -169,18 +184,13 @@ class ResearchOverview(Static):
                 )
 
         # Recent events from event log
-        try:
-            events_path = Path(self.app._store.run_dir) / "research.events.jsonl"
-            if events_path.exists():
-                event_lines = events_path.read_text().strip().splitlines()[-10:]
-                lines.append("")
-                lines.append("[bold underline]Recent Events[/bold underline]")
-                for el in event_lines:
-                    ev = json.loads(el)
-                    ts = time.strftime("%H:%M:%S", time.localtime(ev.get("ts", 0)))
-                    lines.append(f"  {ts} {ev.get('type', '?')}: {ev.get('message', '')[:60]}")
-        except Exception:
-            pass
+        recent_events = events or []
+        if recent_events:
+            lines.append("")
+            lines.append("[bold underline]Recent Events[/bold underline]")
+            for ev in recent_events[-10:]:
+                ts = time.strftime("%H:%M:%S", time.localtime(ev.get("ts", 0)))
+                lines.append(f"  {ts} {ev.get('type', '?')}: {ev.get('message', '')[:60]}")
 
         self.update("\n".join(lines))
 
@@ -297,6 +307,7 @@ class AttoswarmApp(App[None]):
         run_dir: str,
         coordinator_pid: int | None = None,
         research_mode: bool = False,
+        refresh_interval_s: float = DEFAULT_LIVE_REFRESH_S,
     ) -> None:
         super().__init__()
         self._store = StateStore(run_dir)
@@ -313,11 +324,12 @@ class AttoswarmApp(App[None]):
         self._focused_agent_task: str | None = None
         self._completion_shown: bool = False
         self._approval_shown: bool = False
-        self._last_summary_key: tuple[str, int, int, int, int, int, int, int] | None = None
+        self._last_summary_key: tuple[Any, ...] | None = None
         self._last_refreshed_tab: str = ""
         self._tab_cache: dict[str, dict[str, Any]] = {}  # Per-tab cached data
         self._coordinator_pid: int | None = coordinator_pid
         self._exit_intent = "detach"
+        self._refresh_interval_s = clamp_live_refresh_interval(refresh_interval_s)
         # Track whether coordinator has written fresh state.
         # When launched with a coordinator_pid, the first state read may be
         # stale from a previous run.  We record the initial state_seq on
@@ -375,17 +387,16 @@ class AttoswarmApp(App[None]):
                     yield MessagesLog(id="messages-log-widget")
 
                 # Tab 6: Decisions & Analysis
-                with TabPane("Decisions", id="tab-decisions"):
-                    with Vertical(id="decisions-outer"):
-                        yield DecisionsPane(id="decisions-pane")
-                        yield BudgetProjectionWidget(id="budget-projection")
-                        yield FailureChainWidget(id="failure-chain")
-                        yield ConflictPanel(id="conflict-panel")
+                with TabPane("Decisions", id="tab-decisions"), Vertical(id="decisions-outer"):
+                    yield DecisionsPane(id="decisions-pane")
+                    yield BudgetProjectionWidget(id="budget-projection")
+                    yield FailureChainWidget(id="failure-chain")
+                    yield ConflictPanel(id="conflict-panel")
 
         yield Footer()
 
     def on_mount(self) -> None:
-        self.set_interval(2.0, self._refresh)
+        self.set_interval(self._refresh_interval_s, self._refresh)
         self._refresh()
         self._apply_responsive_classes()
 
@@ -431,7 +442,8 @@ class AttoswarmApp(App[None]):
                 data = self._research_store.read_state()
                 if data is None:
                     data = self._research_store.last_state
-                self.call_from_thread(self._apply_research_refresh, data)
+                events = self._research_store.read_events(limit=10)
+                self.call_from_thread(self._apply_research_refresh, data, events)
                 return
 
             state = self._store.read_state()
@@ -446,7 +458,7 @@ class AttoswarmApp(App[None]):
 
             tab_changed = active_tab != self._last_refreshed_tab
             if seq == self._last_seq and not has_new_events and not tab_changed:
-                self._refreshing = False
+                self.call_from_thread(self._apply_idle_refresh)
                 return
 
             # Read events (I/O)
@@ -467,11 +479,13 @@ class AttoswarmApp(App[None]):
             agents = self._store.build_agent_list(state, activity=activity, enrich_trace=False)
             all_tab_data["tab-overview"] = {"activity": activity, "agents": agents, "tasks": tasks}
             all_tab_data["tab-tasks"] = {"tasks": tasks}
-            all_tab_data["tab-agents"] = {"activity": activity, "sidecars": {}}
+            all_tab_data["tab-agents"] = {"agents": agents}
 
             # Only fetch expensive tab-specific data for the active tab
             if active_tab == "tab-agents":
-                all_tab_data["tab-agents"]["sidecars"] = self._store.read_activity_sidecars()
+                all_tab_data["tab-agents"] = {
+                    "agents": self._store.build_agent_list(state, activity=activity, enrich_trace=True),
+                }
             if active_tab == "tab-messages" or "tab-messages" not in self._tab_cache:
                 all_tab_data["tab-messages"] = {"messages": self._store.read_all_messages()}
             if active_tab == "tab-decisions" or "tab-decisions" not in self._tab_cache:
@@ -553,6 +567,26 @@ class AttoswarmApp(App[None]):
 
         self._refreshing = False
 
+    def _apply_idle_refresh(self) -> None:
+        """Refresh timers and visible live state even when no files changed."""
+        state = self._last_state or self._store.read_state()
+        if not state:
+            self._refreshing = False
+            return
+        self._refresh_summary(state)
+        try:
+            actual_tab = self.query_one("#swarm-tabs", TabbedContent).active
+        except Exception:
+            actual_tab = self._last_refreshed_tab or "tab-overview"
+        if actual_tab == "tab-overview":
+            tasks = self._store.build_task_list(state)
+            agents = self._store.build_agent_list(state, enrich_trace=False)
+            self._refresh_overview(state, agents, tasks, [])
+        elif actual_tab == "tab-agents":
+            agents = self._store.build_agent_list(state, enrich_trace=False)
+            self._refresh_agents_table_with_data(agents)
+        self._refreshing = False
+
     def _apply_tab_data(self, tab_id: str, tab_data: dict[str, Any]) -> None:
         """Apply pre-built data to the specified tab's widgets."""
         if not tab_data:
@@ -563,7 +597,7 @@ class AttoswarmApp(App[None]):
         elif tab_id == "tab-tasks":
             self._refresh_tasks_with_data(tab_data.get("tasks", []))
         elif tab_id == "tab-agents":
-            self._refresh_agents_with_data(state, tab_data.get("activity", {}), tab_data.get("sidecars", {}))
+            self._refresh_agents_table_with_data(tab_data.get("agents", []))
         elif tab_id == "tab-events":
             self._refresh_events()
         elif tab_id == "tab-messages":
@@ -576,11 +610,15 @@ class AttoswarmApp(App[None]):
                 tab_data.get("conflicts", []),
             )
 
-    def _apply_research_refresh(self, data: dict[str, Any] | None) -> None:
+    def _apply_research_refresh(
+        self,
+        data: dict[str, Any] | None,
+        events: list[dict[str, Any]] | None,
+    ) -> None:
         """Main thread: update research overview widget."""
         try:
             widget = self.query_one("#research-overview", ResearchOverview)
-            widget.update_research(data or {})
+            widget.update_research(data or {}, events or [])
         except Exception:
             pass
         self._refreshing = False
@@ -589,6 +627,15 @@ class AttoswarmApp(App[None]):
         dag_summary = state.get("dag_summary", {})
         elapsed_s = state.get("elapsed_s", 0)
         budget = state.get("budget", {})
+
+        started_at_epoch = state.get("started_at_epoch", 0)
+        phase = state.get("phase", "unknown")
+        if (
+            isinstance(started_at_epoch, (int, float))
+            and started_at_epoch > 0
+            and phase not in ("completed", "shutdown", "planning_failed")
+        ):
+            elapsed_s = max(float(elapsed_s or 0.0), time.time() - float(started_at_epoch))
 
         if isinstance(elapsed_s, (int, float)) and elapsed_s > 0:
             mins = int(elapsed_s) // 60
@@ -610,9 +657,16 @@ class AttoswarmApp(App[None]):
 
         # Fingerprint check — skip widget updates if nothing changed
         cost_cents = int(float(budget.get("cost_used_usd", 0.0)) * 100)
-        elapsed_mins = int(elapsed_s) // 60 if isinstance(elapsed_s, (int, float)) else 0
+        elapsed_seconds = int(elapsed_s) if isinstance(elapsed_s, (int, float)) else 0
         phase = state.get("phase", "unknown")
-        summary_key = (phase, running, done, total_tasks, failed, pending, cost_cents, elapsed_mins)
+        activity_fingerprint = tuple(
+            (str(a.get("task_id", "")), str(a.get("activity", "")), str(a.get("status", "")))
+            for a in active_agents_list[:5]
+        )
+        summary_key = (
+            phase, running, done, total_tasks, failed, pending, cost_cents, elapsed_seconds,
+            active_agents, activity_fingerprint,
+        )
         if summary_key == self._last_summary_key:
             return
         self._last_summary_key = summary_key
@@ -649,12 +703,14 @@ class AttoswarmApp(App[None]):
             try:
                 _os.kill(self._coordinator_pid, 0)
             except ProcessLookupError:
-                if not self._completion_shown:
-                    if phase not in ("completed", "shutdown", "planning_failed"):
-                        self.notify(
-                            "Coordinator process exited unexpectedly — check coordinator.log",
-                            severity="error",
-                        )
+                if (
+                    not self._completion_shown
+                    and phase not in ("completed", "shutdown", "planning_failed")
+                ):
+                    self.notify(
+                        "Coordinator process exited unexpectedly — check coordinator.log",
+                        severity="error",
+                    )
 
         # Approval banner
         if phase == "awaiting_approval" and not self._approval_shown:
@@ -748,20 +804,11 @@ class AttoswarmApp(App[None]):
     def _refresh_agents(
         self, state: dict[str, Any], activity: dict[str, str]
     ) -> None:
-        sidecars = self._store.read_activity_sidecars()
-        self._refresh_agents_with_data(state, activity, sidecars)
+        agents = self._store.build_agent_list(state, activity=activity, enrich_trace=True)
+        self._refresh_agents_table_with_data(agents)
 
-    def _refresh_agents_with_data(
-        self, state: dict[str, Any], activity: dict[str, str], sidecars: dict[str, str],
-    ) -> None:
+    def _refresh_agents_table_with_data(self, agents: list[dict[str, Any]]) -> None:
         """Update agents tab with pre-built data (no I/O)."""
-        if sidecars:
-            for agent in state.get("active_agents", []):
-                task_id = str(agent.get("task_id", ""))
-                agent_id = str(agent.get("agent_id", ""))
-                if task_id in sidecars and agent_id:
-                    activity[agent_id] = sidecars[task_id]
-        agents = self._store.build_agent_list(state, activity=activity)
         try:
             self.query_one("#agents-dt", AgentsDataTable).update_agents(agents)
         except Exception:

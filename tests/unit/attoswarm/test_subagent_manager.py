@@ -7,16 +7,13 @@ Covers:
 
 from __future__ import annotations
 
-import asyncio
 import logging
-import time
 from typing import Any
-from unittest.mock import AsyncMock, patch
+from unittest.mock import patch
 
 import pytest
 
 from attoswarm.coordinator.subagent_manager import SubagentManager, TaskResult
-
 
 # ── TaskResult dataclass ──────────────────────────────────────────────
 
@@ -91,8 +88,6 @@ class TestExecuteOneTimeout:
         # Patch time.time so that (end - start) = 9.5s with a 10s timeout (95%)
         call_count = 0
         base_time = 1000.0
-
-        original_time = time.time
 
         def fake_time() -> float:
             nonlocal call_count
@@ -195,3 +190,20 @@ class TestExecuteOneZeroTokenWarning:
         assert not any("tokens_used=0" in msg for msg in warning_msgs), (
             f"Did not expect a tokens_used=0 warning, got: {warning_msgs}"
         )
+
+
+class TestAgentStatusMetadata:
+    @pytest.mark.asyncio
+    async def test_backend_is_preserved_across_status_transitions(self) -> None:
+        async def spawn_ok(task: dict[str, Any]) -> TaskResult:
+            return TaskResult(task_id=task["task_id"], success=True, result_summary="ok")
+
+        mgr = _make_manager(spawn_fn=spawn_ok)
+        await mgr._execute_one(
+            _make_task(task_id="t-backend", backend="codex", model="gpt-5.3-codex"),
+            timeout=10.0,
+        )
+
+        status = mgr.get_all_agents()[0]
+        assert status.backend == "codex"
+        assert status.model == "gpt-5.3-codex"

@@ -7,6 +7,38 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.12] - 2026-03-31
+
+### Added
+
+#### Remote Code-Intel Parity and Transport Support
+- Remote MCP mode now routes through a shared remote HTTP-backed service instead of leaking into local-only singleton paths
+- Added missing text HTTP endpoints for code-intel parity, including dead code detection, distillation, readiness reporting, fast search, history analysis, LSP enrichment, and ADR management
+- Added a live remote-MCP-to-ASGI integration test to verify that MCP calls proxy correctly through the HTTP app
+
+#### Local-Only Code-Intel Setup and Verification
+- Added `--local-only` support to code-intel server startup and Codex installer generation, preventing remote auto-load when users want a pure local setup
+- Expanded `attocode code-intel verify` to validate the local DB-backed index layout, health snapshot, and hydration state, with local fallback when the service database is unavailable
+
+#### Live Telemetry and Refresh Improvements
+- Added `LiveMonitor` for lightweight live event persistence and state snapshots in attoswarm
+- Added configurable TUI live refresh handling via `src/attocode/tui/live_refresh.py`
+- Improved event parsing, event logging, and recent research event visibility across the TUI and swarm workflows
+
+#### Evaluation Assets
+- Added the published 20-repo benchmark catalog and generated chart set for code-intel evaluation reporting
+
+### Changed
+- Branch semantics in local code-intel HTTP routes are now explicit: non-empty `branch` values are rejected instead of being silently ignored on working-tree endpoints
+- Semantic search and bootstrap now surface degradation details and backend errors more clearly instead of quietly returning partial or empty results
+- Remote provider routes, tool wiring, and HTTP docs were updated to match the current code-intel API surface rather than stale endpoint names and tool counts
+- TUI data retrieval now prioritizes live state and events when available, improving responsiveness during active runs
+
+### Fixed
+- Fixed remote-provider endpoint mismatches and completed transport coverage for newly added code-intel capabilities
+- Fixed code-intel hardening gaps with direct endpoint tests, explicit branch rejection tests, and broader remote/provider coverage
+- Fixed the branch-versioning test helper to model `AsyncSession.add()` correctly, removing the unawaited `AsyncMock` warning from the code-intel suite
+
 ## [0.2.11] - 2026-03-28
 
 ### Added

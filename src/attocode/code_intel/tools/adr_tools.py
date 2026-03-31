@@ -18,6 +18,7 @@ from dataclasses import dataclass, field
 
 from attocode.code_intel._shared import (
     _get_project_dir,
+    _get_remote_service,
     mcp,
 )
 
@@ -346,6 +347,17 @@ def record_adr(
         related_files: List of file paths affected by this decision (optional).
         tags: List of tags for categorization, e.g. ["database", "performance"] (optional).
     """
+    remote = _get_remote_service()
+    if remote is not None:
+        return remote.record_adr(
+            title=title,
+            context=context,
+            decision=decision,
+            consequences=consequences,
+            related_files=related_files,
+            tags=tags,
+        )
+
     store = _get_adr_store()
     try:
         adr_number = store.add(
@@ -377,6 +389,10 @@ def list_adrs(status: str = "", tag: str = "", search: str = "") -> str:
         tag: Filter by tag (e.g. "database").
         search: Free text search across title, context, and decision.
     """
+    remote = _get_remote_service()
+    if remote is not None:
+        return remote.list_adrs(status=status, tag=tag, search=search)
+
     store = _get_adr_store()
     results = store.list_all(status=status, tag=tag, search=search)
 
@@ -415,6 +431,10 @@ def get_adr(number: int) -> str:
     Args:
         number: The ADR number (auto-assigned when recorded).
     """
+    remote = _get_remote_service()
+    if remote is not None:
+        return remote.get_adr(number)
+
     store = _get_adr_store()
     adr = store.get(number)
 
@@ -465,6 +485,14 @@ def update_adr_status(
         status: New status: proposed, accepted, deprecated, superseded.
         superseded_by: The ADR number that supersedes this one (required when status is 'superseded').
     """
+    remote = _get_remote_service()
+    if remote is not None:
+        return remote.update_adr_status(
+            number=number,
+            status=status,
+            superseded_by=superseded_by,
+        )
+
     store = _get_adr_store()
     try:
         store.update_status(number, status, superseded_by=superseded_by)

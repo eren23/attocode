@@ -47,6 +47,7 @@ _semantic_search = None  # Backward compat: tests may set this directly
 _memory_store = None  # Backward compat: tests may set this directly
 _explorer = None
 _service = None
+_remote_service = None
 
 
 def _check_server_override(name: str):
@@ -126,15 +127,54 @@ def _get_code_analyzer():
 def _get_service():
     """Lazily initialize and return the CodeIntelService singleton."""
     global _service
-    override = _check_server_override("_service")
-    if override is not None:
-        return override
+    srv = sys.modules.get("attocode.code_intel.server")
+    if srv is not None and "_service" in srv.__dict__:
+        override = srv.__dict__["_service"]
+        if override is None:
+            _service = None
+        else:
+            return override
+    if _remote_service is not None:
+        return _remote_service
+    if _service is not None:
+        from attocode.code_intel import service as code_intel_service_module
+
+        if _service.project_dir not in code_intel_service_module._instances:
+            _service = None
     if _service is None:
         from attocode.code_intel.service import CodeIntelService
 
         project_dir = _get_project_dir()
         _service = CodeIntelService.get_instance(project_dir)
     return _service
+
+
+def _get_remote_service():
+    """Return the configured remote text service, if any."""
+    srv = sys.modules.get("attocode.code_intel.server")
+    if srv is not None and "_remote_service" in srv.__dict__:
+        return srv.__dict__["_remote_service"]
+    return _remote_service
+
+
+def configure_remote_service(remote_url: str, remote_token: str, remote_repo_id: str) -> None:
+    """Configure the shared service getter to proxy through a remote HTTP service."""
+    global _remote_service, _service
+    from attocode.code_intel.api.providers.remote_provider import RemoteTextService
+
+    _service = None
+    _remote_service = RemoteTextService(remote_url, remote_token, remote_repo_id)
+
+
+def clear_remote_service() -> None:
+    """Reset remote service wiring."""
+    global _remote_service
+    if _remote_service is not None:
+        try:
+            _remote_service.close()
+        except Exception:
+            pass
+    _remote_service = None
 
 
 def _get_explorer():

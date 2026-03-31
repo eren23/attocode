@@ -10,10 +10,12 @@ from pydantic import BaseModel
 from attocode.code_intel.api.auth import verify_auth
 from attocode.code_intel.api.deps import (
     BranchParam,
+    ensure_branch_supported,
     get_search_provider,
     get_service_or_404,
 )
 from attocode.code_intel.api.models import (
+    FastSearchRequest,
     SearchResultsResponse,
     SecurityScanRequest,
     SecurityScanResponse,
@@ -50,6 +52,9 @@ class IndexStatusResponse(BaseModel):
     coverage: float = 0.0
     elapsed_seconds: float = 0.0
     vector_search_active: bool = False
+    health_status: str = "unknown"
+    degraded_reason: str = ""
+    last_error: str = ""
 
 
 # ===================================================================
@@ -64,6 +69,7 @@ async def semantic_search_v1(
     branch: BranchParam = "",
 ) -> TextResult:
     """Semantic search (vector + keyword RRF)."""
+    ensure_branch_supported(branch)
     svc = await get_service_or_404(project_id)
     return TextResult(result=svc.semantic_search(
         query=req.query, top_k=req.top_k, file_filter=req.file_filter,
@@ -76,6 +82,7 @@ async def start_indexing(
     branch: BranchParam = "",
 ) -> IndexStatusResponse:
     """Start background embedding indexing."""
+    ensure_branch_supported(branch)
     svc = await get_service_or_404(project_id)
     result = svc.start_indexing()
     return IndexStatusResponse(**result)
@@ -87,9 +94,40 @@ async def index_status(
     branch: BranchParam = "",
 ) -> IndexStatusResponse:
     """Get current embedding index status."""
+    ensure_branch_supported(branch)
     svc = await get_service_or_404(project_id)
     result = svc.indexing_status()
     return IndexStatusResponse(**result)
+
+
+@router_v1.get("/semantic-search-status", response_model=TextResult)
+async def semantic_search_status_v1(
+    project_id: str,
+    branch: BranchParam = "",
+) -> TextResult:
+    """Human-readable semantic-search health."""
+    ensure_branch_supported(branch)
+    svc = await get_service_or_404(project_id)
+    return TextResult(result=svc.semantic_search_status())
+
+
+@router_v1.post("/fast-search", response_model=TextResult)
+async def fast_search_v1(
+    project_id: str,
+    req: FastSearchRequest,
+    branch: BranchParam = "",
+) -> TextResult:
+    """Regex search with trigram acceleration when available."""
+    ensure_branch_supported(branch)
+    svc = await get_service_or_404(project_id)
+    return TextResult(result=svc.fast_search(
+        pattern=req.pattern,
+        path=req.path,
+        max_results=req.max_results,
+        case_insensitive=req.case_insensitive,
+        selectivity_threshold=req.selectivity_threshold,
+        explain=req.explain,
+    ))
 
 
 # ===================================================================

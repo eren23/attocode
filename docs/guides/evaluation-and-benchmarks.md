@@ -82,11 +82,20 @@ python scripts/benchmark_3way.py
 # All 49 repos
 python scripts/benchmark_3way.py --repos all
 
+# Canonical published 20-repo slice
+python scripts/benchmark_3way.py --slice published_20
+
+# Canonical 20 repos plus Linux (clone if missing)
+python scripts/benchmark_3way.py --slice published_20_plus_linux --clone-missing
+
 # Specific repos
 python scripts/benchmark_3way.py --repos fastapi,redis,metabase
 
 # Skip code-intel (quick grep vs ast-grep only)
 python scripts/benchmark_3way.py --skip-code-intel
+
+# Resume a long run from the structured sidecar results file
+python scripts/benchmark_3way.py --slice published_20 --resume
 ```
 
 ### Latest Results (v0.2.11, 20 repos)

@@ -1,6 +1,6 @@
 # Code Intelligence MCP Server — Agent Guidelines
 
-> **28 tools** for deep codebase understanding. This guide helps AI agents use them
+> A broad tool suite for deep codebase understanding. This guide helps AI agents use it
 > efficiently, minimizing token usage while maximizing insight.
 >
 > These tools are available via MCP (stdio/SSE) **and** as a REST API over HTTP.

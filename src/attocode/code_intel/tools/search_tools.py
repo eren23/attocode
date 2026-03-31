@@ -11,6 +11,8 @@ from attocode.code_intel._shared import (
     _get_ast_service,
     _get_context_mgr,
     _get_project_dir,
+    _get_remote_service,
+    _get_service,
     mcp,
 )
 
@@ -103,21 +105,13 @@ def semantic_search(
         mode: Search mode. "auto" uses vector if available. "keyword" forces
             keyword search. "vector" waits for embeddings then uses vector.
     """
-    mgr = _get_semantic_search()
-    if mode == "keyword":
-        results = mgr._keyword_search(query, top_k, file_filter)
-    elif mode == "vector":
-        if not mgr.is_index_ready():
-            mgr.start_background_indexing()
-            import time
-            for _ in range(600):
-                if mgr.is_index_ready():
-                    break
-                time.sleep(0.1)
-        results = mgr.search(query, top_k=top_k, file_filter=file_filter)
-    else:
-        results = mgr.search(query, top_k=top_k, file_filter=file_filter)
-    return mgr.format_results(results)
+    return _get_service().semantic_search(
+        query=query,
+        top_k=top_k,
+        file_filter=file_filter,
+        branch=branch,
+        mode=mode,
+    )
 
 
 @mcp.tool()
@@ -127,6 +121,10 @@ def semantic_search_status() -> str:
     Returns: provider name, coverage percentage, files indexed/total,
     indexing status, and whether vector search is active.
     """
+    remote = _get_remote_service()
+    if remote is not None:
+        return remote.semantic_search_status()
+
     mgr = _get_semantic_search()
     progress = mgr.get_index_progress()
     discovered_files = 0
@@ -173,6 +171,10 @@ def semantic_search_status() -> str:
     ]
     if degradation_reasons:
         lines.append(f"  Degradation reason: {', '.join(degradation_reasons)}")
+    if getattr(progress, "degraded_reason", ""):
+        lines.append(f"  Backend degradation: {progress.degraded_reason}")
+    if getattr(progress, "last_error", ""):
+        lines.append(f"  Last error: {progress.last_error}")
     if progress.elapsed_seconds > 0:
         lines.append(f"  Elapsed: {progress.elapsed_seconds:.1f}s")
     return "\n".join(lines)
@@ -193,9 +195,7 @@ def security_scan(
         mode: Scan mode -- 'quick' (secrets), 'full' (all), 'secrets', 'patterns', 'dependencies'.
         path: Subdirectory to scan (relative to project root, empty for all).
     """
-    scanner = _get_security_scanner()
-    report = scanner.scan(mode=mode, path=path)
-    return scanner.format_report(report)
+    return _get_service().security_scan(mode=mode, path=path)
 
 
 @mcp.tool()
@@ -225,6 +225,17 @@ def fast_search(
             matching files exceeds this value (0.0-1.0, default 0.10).
         explain: When True, append a search diagnostics section to the output.
     """
+    remote = _get_remote_service()
+    if remote is not None:
+        return remote.fast_search(
+            pattern=pattern,
+            path=path,
+            max_results=max_results,
+            case_insensitive=case_insensitive,
+            selectivity_threshold=selectivity_threshold,
+            explain=explain,
+        )
+
     import os
     import re
     from pathlib import Path

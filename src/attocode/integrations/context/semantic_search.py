@@ -74,6 +74,8 @@ class IndexProgress:
     coverage: float = 0.0  # indexed / total
     started_at: float = 0.0
     elapsed_seconds: float = 0.0
+    last_error: str = ""
+    degraded_reason: str = ""
 
 
 @dataclass(slots=True)
@@ -135,6 +137,12 @@ class SemanticSearchManager:
         )
         self._provider = create_embedding_provider()
         self._keyword_fallback = isinstance(self._provider, NullEmbeddingProvider)
+        if self._keyword_fallback:
+            self._index_progress.degraded_reason = "embedding_provider_unavailable"
+            if not self._index_progress.last_error:
+                self._index_progress.last_error = (
+                    "Embedding provider unavailable; semantic search is running in keyword-only mode."
+                )
 
         if not self._keyword_fallback:
             from attocode.integrations.context.vector_store import VectorStore
@@ -347,10 +355,14 @@ class SemanticSearchManager:
         try:
             query_vectors = self._provider.embed([query])
             if not query_vectors or not query_vectors[0]:
+                self._index_progress.degraded_reason = "query_embedding_failed"
+                self._index_progress.last_error = "Query embedding returned no vector."
                 return self._keyword_search(query, top_k, file_filter)
             query_vec = query_vectors[0]
-        except Exception:
+        except Exception as exc:
             logger.warning("Query embedding failed, falling back to keyword", exc_info=True)
+            self._index_progress.degraded_reason = "query_embedding_failed"
+            self._index_progress.last_error = f"Query embedding failed: {type(exc).__name__}: {exc}"
             return self._keyword_search(query, top_k, file_filter)
 
         # Build set of files that exist on disk to filter out stale branch data.
@@ -1140,6 +1152,10 @@ class SemanticSearchManager:
         self._ensure_provider()
         if self._keyword_fallback or not self._store:
             self._index_progress.status = "error"
+            self._index_progress.degraded_reason = "embedding_provider_unavailable"
+            self._index_progress.last_error = (
+                "Background indexing unavailable because no embedding provider is configured."
+            )
             return self._index_progress
 
         with self._reindex_lock:
@@ -1152,10 +1168,14 @@ class SemanticSearchManager:
             def _worker() -> None:
                 try:
                     self._run_background_indexing(stop_event)
-                except Exception:
+                except Exception as exc:
                     logger.error("Background indexer crashed", exc_info=True)
                     with self._reindex_lock:
                         self._index_progress.status = "error"
+                        self._index_progress.degraded_reason = "background_indexer_crashed"
+                        self._index_progress.last_error = (
+                            f"Background indexer crashed: {type(exc).__name__}: {exc}"
+                        )
                 finally:
                     with self._reindex_lock:
                         self._bg_indexer = None
@@ -1189,7 +1209,7 @@ class SemanticSearchManager:
             from attocode.integrations.context.ts_parser import supported_languages
             _ts_langs = set(supported_languages())
         except ImportError:
-            pass
+            self._index_progress.degraded_reason = "tree_sitter_languages_unavailable"
         _supported = {"python", "javascript", "typescript"} | _ts_langs
 
         indexable = [f for f in ctx._files if f.language in _supported]
@@ -1225,6 +1245,9 @@ class SemanticSearchManager:
                     chunks = self._chunk_single_file(f.relative_path, f.path)
                     if not chunks:
                         self._index_progress.failed_files += 1
+                        self._index_progress.last_error = (
+                            f"No indexable chunks generated for {f.relative_path}"
+                        )
                         continue
 
                     texts = self._get_embedding_texts(chunks)
@@ -1255,10 +1278,18 @@ class SemanticSearchManager:
                     else:
                         with self._reindex_lock:
                             self._index_progress.failed_files += 1
-                except Exception:
+                            self._index_progress.last_error = (
+                                f"No vectors generated for {f.relative_path}"
+                            )
+                            self._index_progress.degraded_reason = "partial_index_failure"
+                except Exception as exc:
                     logger.debug("bg_index_failed: %s", f.relative_path, exc_info=True)
                     with self._reindex_lock:
                         self._index_progress.failed_files += 1
+                        self._index_progress.last_error = (
+                            f"Failed to index {f.relative_path}: {type(exc).__name__}: {exc}"
+                        )
+                        self._index_progress.degraded_reason = "partial_index_failure"
 
             # Update coverage
             with self._reindex_lock:
@@ -1274,6 +1305,8 @@ class SemanticSearchManager:
             total = self._index_progress.total_files or 1
             self._index_progress.coverage = round(self._index_progress.indexed_files / total, 3)
             self._index_progress.elapsed_seconds = round(time.time() - self._index_progress.started_at, 1)
+            if self._index_progress.failed_files > 0 and not self._index_progress.degraded_reason:
+                self._index_progress.degraded_reason = "partial_index_failure"
         self._indexed = True
         logger.info(
             "Background indexing complete: %d/%d files (%.0f%% coverage)",

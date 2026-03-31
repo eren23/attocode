@@ -135,3 +135,150 @@ def parse_stream_json_line(line: str, task_id: str) -> AgentActivityEvent | None
 
     # Unknown event type — silently skip
     return None
+
+
+def parse_codex_json_line(line: str, task_id: str) -> AgentActivityEvent | None:
+    """Parse a single Codex ``exec --json`` JSONL line."""
+    line = line.strip()
+    if not line:
+        return None
+
+    try:
+        data = json.loads(line)
+    except (json.JSONDecodeError, ValueError):
+        return None
+
+    if not isinstance(data, dict):
+        return None
+
+    event_type = data.get("type", "")
+    now = time.time()
+
+    if event_type == "item.completed":
+        item = data.get("item", {})
+        if not isinstance(item, dict):
+            return None
+        item_type = item.get("type", "")
+        if item_type == "agent_message":
+            text = str(item.get("text", "")).strip()
+            if text:
+                return AgentActivityEvent(
+                    timestamp=now,
+                    task_id=task_id,
+                    event_kind="text",
+                    text_preview=text[:200],
+                )
+        if item_type in {"tool_call", "tool_use", "function_call"}:
+            tool_name = str(item.get("name", item.get("tool_name", "")))
+            tool_input = item.get("arguments", item.get("input", {}))
+            return AgentActivityEvent(
+                timestamp=now,
+                task_id=task_id,
+                event_kind="tool_call",
+                tool_name=tool_name,
+                tool_input_summary=_summarize_input(tool_input),
+            )
+        return None
+
+    if event_type == "turn.completed":
+        usage = data.get("usage", {}) or {}
+        if not isinstance(usage, dict):
+            usage = {}
+        input_tokens = usage.get("input_tokens", 0) or 0
+        output_tokens = usage.get("output_tokens", 0) or 0
+        return AgentActivityEvent(
+            timestamp=now,
+            task_id=task_id,
+            event_kind="result",
+            tokens_used=input_tokens + output_tokens,
+            cost_usd=float(data.get("cost_usd", 0.0) or 0.0),
+        )
+
+    if event_type == "error":
+        msg = str(data.get("message", data.get("error", "")))[:200]
+        return AgentActivityEvent(
+            timestamp=now,
+            task_id=task_id,
+            event_kind="error",
+            text_preview=msg,
+        )
+
+    return None
+
+
+def parse_opencode_json_line(line: str, task_id: str) -> AgentActivityEvent | None:
+    """Parse a single OpenCode structured JSONL line."""
+    line = line.strip()
+    if not line:
+        return None
+
+    try:
+        data = json.loads(line)
+    except (json.JSONDecodeError, ValueError):
+        return None
+
+    if not isinstance(data, dict):
+        return None
+
+    event_type = data.get("type", "")
+    now = time.time()
+
+    if event_type == "text":
+        part = data.get("part", {})
+        text = part.get("text", "") if isinstance(part, dict) else ""
+        if text:
+            return AgentActivityEvent(
+                timestamp=now,
+                task_id=task_id,
+                event_kind="text",
+                text_preview=str(text)[:200],
+            )
+        return None
+
+    if event_type == "step_start":
+        part = data.get("part", {})
+        tool_name = ""
+        tool_input = {}
+        if isinstance(part, dict):
+            tool_name = str(part.get("tool_name", part.get("name", "")))
+            tool_input = part.get("input", {})
+        if tool_name:
+            return AgentActivityEvent(
+                timestamp=now,
+                task_id=task_id,
+                event_kind="tool_call",
+                tool_name=tool_name,
+                tool_input_summary=_summarize_input(tool_input),
+            )
+        return None
+
+    if event_type == "step_finish":
+        part = data.get("part", {})
+        tokens_used = 0
+        cost_usd = 0.0
+        if isinstance(part, dict):
+            tokens = part.get("tokens", {})
+            if isinstance(tokens, dict):
+                tokens_used = int(tokens.get("input", 0) or 0) + int(tokens.get("output", 0) or 0)
+            cost_usd = float(part.get("cost", 0.0) or 0.0)
+        return AgentActivityEvent(
+            timestamp=now,
+            task_id=task_id,
+            event_kind="result",
+            tokens_used=tokens_used,
+            cost_usd=cost_usd,
+        )
+
+    return None
+
+
+def parse_backend_stream_line(backend: str, line: str, task_id: str) -> AgentActivityEvent | None:
+    """Parse structured backend output into a common activity event shape."""
+    backend_key = backend.strip().lower()
+    if backend_key == "claude":
+        return parse_stream_json_line(line, task_id)
+    if backend_key == "codex":
+        return parse_codex_json_line(line, task_id)
+    if backend_key == "opencode":
+        return parse_opencode_json_line(line, task_id)
+    return None

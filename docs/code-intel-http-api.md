@@ -1,6 +1,6 @@
 # Code Intelligence HTTP API
 
-The HTTP API exposes all 38 code intelligence tools as REST endpoints, backed by the same analysis engine as the MCP server. It supports multi-project management, bearer token auth, and interactive API docs.
+The HTTP API exposes the shared code-intelligence surface as REST endpoints, backed by the same analysis engine as the MCP server. It supports multi-project management, bearer token auth, and interactive API docs.
 
 ## Quick Start
 

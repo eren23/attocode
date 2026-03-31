@@ -8,6 +8,7 @@ import pytest
 
 from attoswarm.cli import _unwrap_codex_jsonl
 from attoswarm.adapters.codex import CodexAdapter
+from attoswarm.adapters.stream_parser import parse_backend_stream_line
 
 
 # ── _unwrap_codex_jsonl ──────────────────────────────────────────────
@@ -150,3 +151,25 @@ def test_unknown_json_falls_through(adapter: CodexAdapter):
     result = adapter._parse_stdout_line(line)
     # Base class handles unknown JSON via generic protocol
     assert result["type"] == "log"
+
+
+def test_parse_backend_stream_line_codex_agent_message():
+    line = json.dumps({
+        "type": "item.completed",
+        "item": {"id": "item_0", "type": "agent_message", "text": "thinking about repo"},
+    })
+    event = parse_backend_stream_line("codex", line, "t1")
+    assert event is not None
+    assert event.event_kind == "text"
+    assert event.text_preview == "thinking about repo"
+
+
+def test_parse_backend_stream_line_codex_turn_completed():
+    line = json.dumps({
+        "type": "turn.completed",
+        "usage": {"input_tokens": 12, "output_tokens": 8},
+    })
+    event = parse_backend_stream_line("codex", line, "t1")
+    assert event is not None
+    assert event.event_kind == "result"
+    assert event.tokens_used == 20

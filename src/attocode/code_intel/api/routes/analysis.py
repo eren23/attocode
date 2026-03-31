@@ -9,21 +9,27 @@ from fastapi import APIRouter, Depends, Query
 from attocode.code_intel.api.auth import verify_auth
 from attocode.code_intel.api.deps import (
     BranchParam,
+    ensure_branch_supported,
     get_analysis_provider,
     get_service_or_404,
 )
 from attocode.code_intel.api.models import (
     BootstrapRequest,
+    BugScanRequest,
     ConventionsResponse,
     CrossRefResponse,
+    DeadCodeRequest,
     DependencyGraphRequest,
     DependencyGraphResponse,
     DependencyResponse,
+    DistillRequest,
     ExploreRequest,
     FileAnalysisResponse,
     HotspotsResponse,
     ImpactAnalysisResponse,
     NotifyFilesRequest,
+    ReadinessReportRequest,
+    RepoMapRankedRequest,
     SecurityScanRequest,
     SymbolListResponse,
     SymbolSearchResponse,
@@ -60,6 +66,7 @@ async def repo_map(
     max_tokens: int = 6000,
 ) -> TextResult:
     """Get token-budgeted repository map."""
+    ensure_branch_supported(branch)
     svc = await get_service_or_404(project_id)
     return TextResult(result=svc.repo_map(include_symbols=include_symbols, max_tokens=max_tokens))
 
@@ -71,6 +78,7 @@ async def project_summary(
     max_tokens: int = 4000,
 ) -> TextResult:
     """Get high-level project overview."""
+    ensure_branch_supported(branch)
     svc = await get_service_or_404(project_id)
     return TextResult(result=svc.project_summary(max_tokens=max_tokens))
 
@@ -82,8 +90,13 @@ async def bootstrap(
     branch: BranchParam = "",
 ) -> TextResult:
     """All-in-one codebase orientation."""
+    ensure_branch_supported(branch)
     svc = await get_service_or_404(project_id)
-    return TextResult(result=svc.bootstrap(task_hint=req.task_hint, max_tokens=req.max_tokens))
+    return TextResult(result=svc.bootstrap(
+        task_hint=req.task_hint,
+        max_tokens=req.max_tokens,
+        indexing_depth=req.indexing_depth,
+    ))
 
 
 @router_v1.get("/symbols", response_model=TextResult)
@@ -93,6 +106,7 @@ async def symbols_v1(
     branch: BranchParam = "",
 ) -> TextResult:
     """List symbols in a file."""
+    ensure_branch_supported(branch)
     svc = await get_service_or_404(project_id)
     return TextResult(result=svc.symbols(path))
 
@@ -104,6 +118,7 @@ async def search_symbols_v1(
     branch: BranchParam = "",
 ) -> TextResult:
     """Fuzzy symbol search across project."""
+    ensure_branch_supported(branch)
     svc = await get_service_or_404(project_id)
     return TextResult(result=svc.search_symbols(name))
 
@@ -115,6 +130,7 @@ async def dependencies_v1(
     branch: BranchParam = "",
 ) -> TextResult:
     """File dependencies (forward/reverse)."""
+    ensure_branch_supported(branch)
     svc = await get_service_or_404(project_id)
     return TextResult(result=svc.dependencies(path))
 
@@ -126,6 +142,7 @@ async def impact_analysis_v1(
     branch: BranchParam = "",
 ) -> TextResult:
     """Transitive impact analysis."""
+    ensure_branch_supported(branch)
     svc = await get_service_or_404(project_id)
     return TextResult(result=svc.impact_analysis(files))
 
@@ -137,6 +154,7 @@ async def cross_references_v1(
     branch: BranchParam = "",
 ) -> TextResult:
     """Symbol cross-references."""
+    ensure_branch_supported(branch)
     svc = await get_service_or_404(project_id)
     return TextResult(result=svc.cross_references(symbol))
 
@@ -148,6 +166,7 @@ async def file_analysis_v1(
     branch: BranchParam = "",
 ) -> TextResult:
     """Detailed single-file analysis."""
+    ensure_branch_supported(branch)
     svc = await get_service_or_404(project_id)
     return TextResult(result=svc.file_analysis(path))
 
@@ -159,6 +178,7 @@ async def dependency_graph_v1(
     branch: BranchParam = "",
 ) -> TextResult:
     """Dependency graph from a starting file."""
+    ensure_branch_supported(branch)
     svc = await get_service_or_404(project_id)
     return TextResult(result=svc.dependency_graph(req.start_file, depth=req.depth))
 
@@ -170,6 +190,7 @@ async def hotspots_v1(
     top_n: int = 15,
 ) -> TextResult:
     """Risk/complexity analysis."""
+    ensure_branch_supported(branch)
     svc = await get_service_or_404(project_id)
     return TextResult(result=svc.hotspots(top_n=top_n))
 
@@ -182,6 +203,7 @@ async def conventions_v1(
     path: str = "",
 ) -> TextResult:
     """Coding conventions."""
+    ensure_branch_supported(branch)
     svc = await get_service_or_404(project_id)
     return TextResult(result=svc.conventions(sample_size=sample_size, path=path))
 
@@ -193,6 +215,7 @@ async def explore(
     branch: BranchParam = "",
 ) -> TextResult:
     """Hierarchical drill-down navigation."""
+    ensure_branch_supported(branch)
     svc = await get_service_or_404(project_id)
     return TextResult(result=svc.explore_codebase(
         path=req.path, max_items=req.max_items, importance_threshold=req.importance_threshold,
@@ -206,8 +229,92 @@ async def security_scan_v1(
     branch: BranchParam = "",
 ) -> TextResult:
     """Security analysis."""
+    ensure_branch_supported(branch)
     svc = await get_service_or_404(project_id)
     return TextResult(result=svc.security_scan(mode=req.mode, path=req.path))
+
+
+@router_v1.post("/repo-map-ranked", response_model=TextResult)
+async def repo_map_ranked_v1(
+    project_id: str,
+    req: RepoMapRankedRequest,
+    branch: BranchParam = "",
+) -> TextResult:
+    """Task-aware repository ranking."""
+    ensure_branch_supported(branch)
+    svc = await get_service_or_404(project_id)
+    return TextResult(result=svc.repo_map_ranked(
+        task_context=req.task_context,
+        token_budget=req.token_budget,
+        exclude_tests=req.exclude_tests,
+    ))
+
+
+@router_v1.post("/dead-code", response_model=TextResult)
+async def dead_code_v1(
+    project_id: str,
+    req: DeadCodeRequest,
+    branch: BranchParam = "",
+) -> TextResult:
+    """Dead-code detection."""
+    ensure_branch_supported(branch)
+    svc = await get_service_or_404(project_id)
+    return TextResult(result=svc.dead_code(
+        scope=req.scope,
+        entry_points=req.entry_points,
+        level=req.level,
+        min_confidence=req.min_confidence,
+        top_n=req.top_n,
+    ))
+
+
+@router_v1.post("/distill", response_model=TextResult)
+async def distill_v1(
+    project_id: str,
+    req: DistillRequest,
+    branch: BranchParam = "",
+) -> TextResult:
+    """Compressed codebase context."""
+    ensure_branch_supported(branch)
+    svc = await get_service_or_404(project_id)
+    return TextResult(result=svc.distill(
+        files=req.files,
+        depth=req.depth,
+        level=req.level,
+        max_tokens=req.max_tokens,
+    ))
+
+
+@router_v1.post("/readiness-report", response_model=TextResult)
+async def readiness_report_v1(
+    project_id: str,
+    req: ReadinessReportRequest,
+    branch: BranchParam = "",
+) -> TextResult:
+    """Readiness audit report."""
+    ensure_branch_supported(branch)
+    svc = await get_service_or_404(project_id)
+    return TextResult(result=svc.readiness_report(
+        phases=req.phases,
+        scope=req.scope,
+        tracer_bullets=req.tracer_bullets,
+        min_severity=req.min_severity,
+    ))
+
+
+@router_v1.post("/bug-scan", response_model=TextResult)
+async def bug_scan_v1(
+    project_id: str,
+    req: BugScanRequest,
+    branch: BranchParam = "",
+) -> TextResult:
+    """Scan the current diff for likely bugs."""
+    ensure_branch_supported(branch)
+    svc = await get_service_or_404(project_id)
+    return TextResult(result=svc.bug_scan(
+        base_branch=req.base_branch,
+        min_confidence=req.min_confidence,
+    ))
 
 
 @router_v1.post("/notify", response_model=TextResult)
@@ -237,12 +344,12 @@ async def symbols_v2(
 async def search_symbols_v2(
     project_id: str,
     name: str = Query(...),
-    dir: str = Query("", description="Directory prefix filter"),
+    directory: str = Query("", alias="dir", description="Directory prefix filter"),
     branch: BranchParam = "",
 ) -> SymbolSearchResponse:
     """Fuzzy symbol search (structured)."""
     provider = await get_analysis_provider(project_id)
-    return await provider.search_symbols(name, branch, directory=dir)
+    return await provider.search_symbols(name, branch, directory=directory)
 
 
 @router_v2.get("/dependencies", response_model=DependencyResponse)
