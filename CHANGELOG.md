@@ -35,9 +35,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Side Query Enrichment**: `enrich_task_context_async()` fires parallel code-intel queries (impact, symbols, dependencies) concurrently with task dispatch. Non-blocking with configurable timeout.
 - **Post-Compact PageRank Restoration**: `get_top_files_by_importance()` re-injects top-5 files by PageRank importance after context compaction.
 
+- **MiniMax Provider**: Full OpenAI-compatible provider for MiniMax M2.7/M2.5/M2.1/M2 models. Includes think-tag stripping (streaming + non-streaming), temperature clamping (MiniMax rejects 0.0), image stripping, and `stream_options` removal.
+- **Preseed Map Caching**: Repo map cached to `.attocode/cache/preseed_map.json` keyed by git HEAD + dirty file list. Cache hit ~10ms vs ~6s rebuild. Auto-invalidates on any file edit, not just commits.
+- **Bootstrap Status Indicators**: TUI shows "Initializing features...", "Loading skills and tools...", "Indexing codebase..." during first-message startup.
+
 ### Changed
 - Main agent loop now uses `execute_tool_calls_concurrent()` (concurrency-aware) instead of `execute_tool_calls()`.
 - Compaction pipeline runs `microcompact()` every turn before threshold-based compaction check.
+- **TUI no longer freezes on first message**: Feature initialization (8s) and preseed map building (6s) now run in thread pool via `asyncio.to_thread()`, keeping the Textual event loop responsive.
+- **Feature init skipped on 2nd+ messages**: Feature initialization, skill loading, and tool registration only run on first message. Subsequent messages reuse cached managers — near-instant startup.
+- **Preseed map uses user message**: Repo map injected as `<system-context>` user message instead of fake tool_call/tool_result pair. Fixes MiniMax 400 error ("tool call result does not follow tool call").
 
 ## [0.2.12] - 2026-03-31
 
