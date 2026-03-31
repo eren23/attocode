@@ -21,6 +21,7 @@ from enum import StrEnum
 from pathlib import Path
 from typing import Any
 
+from attocode.integrations.context.compaction import adjust_slice_for_tool_pairs
 from attocode.integrations.utilities.token_estimate import count_tokens
 from attocode.types.messages import Message, Role
 
@@ -268,11 +269,12 @@ class AutoCompactionManager:
                 content=f"Additional context:\n\n{context_text}\n\nPlease continue.",
             ))
 
-        # Preserve recent messages
+        # Preserve recent messages, adjusting boundary to keep tool pairs intact
         keep = preserve_recent or self.min_messages_to_keep
         if keep > 0 and non_system:
-            recent = non_system[-keep:]
-            # Ensure alternating roles
+            raw_start = max(0, len(non_system) - keep)
+            adj_start = adjust_slice_for_tool_pairs(non_system, raw_start)
+            recent = non_system[adj_start:]
             result.extend(recent)
 
         messages_after = len(result)
@@ -293,9 +295,14 @@ class AutoCompactionManager:
         system_msgs = [m for m in messages if hasattr(m, "role") and m.role == Role.SYSTEM]
         non_system = [m for m in messages if not (hasattr(m, "role") and m.role == Role.SYSTEM)]
 
-        # Keep only the last few messages
+        # Keep only the last few messages, adjusting to keep tool pairs intact
         keep = max(self.min_messages_to_keep, 6)
-        recent = non_system[-keep:] if len(non_system) > keep else non_system
+        if len(non_system) > keep:
+            raw_start = len(non_system) - keep
+            adj_start = adjust_slice_for_tool_pairs(non_system, raw_start)
+            recent = non_system[adj_start:]
+        else:
+            recent = non_system
 
         result = list(system_msgs)
         result.append(Message(

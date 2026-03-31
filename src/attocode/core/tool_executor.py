@@ -478,6 +478,12 @@ async def execute_single_tool(
         )
         return ToolResult(call_id=tc.id, error=denial), False
 
+    # Yield to the event loop so Textual can finish its screen transition
+    # after the approval dialog is dismissed.  Without this, Textual's
+    # rendering cycle can monopolize the event loop and prevent the tool
+    # execution coroutine from being scheduled.
+    await asyncio.sleep(0)
+
     ctx.emit_simple(
         EventType.TOOL_START,
         tool=tc.name,
@@ -487,22 +493,22 @@ async def execute_single_tool(
     )
     start = time.monotonic()
 
-    # Record tool call in economics if available
-    if ctx.economics is not None:
-        loop_detection, phase_nudge = ctx.economics.record_tool_call(
-            tc.name, tc.arguments, ctx.iteration,
-        )
-        if loop_detection.is_loop:
-            ctx.emit_simple(
-                EventType.BUDGET_WARNING,
-                iteration=ctx.iteration,
-                metadata={"doom_loop": True, "tool": tc.name, "count": loop_detection.count},
+    # Economics recording + phase nudge injection moved to loop.py
+    # (after tool results are added) to avoid interleaving user messages
+    # between assistant tool_calls and tool results — MiniMax rejects that.
+    try:
+        if ctx.economics is not None:
+            loop_detection = ctx.economics.loop_detector.peek(
+                tc.name, tc.arguments or {},
             )
-        if phase_nudge:
-            ctx.add_message(Message(
-                role=Role.USER,
-                content=f"[System: {phase_nudge}]",
-            ))
+            if loop_detection.is_loop:
+                ctx.emit_simple(
+                    EventType.BUDGET_WARNING,
+                    iteration=ctx.iteration,
+                    metadata={"doom_loop": True, "tool": tc.name, "count": loop_detection.count},
+                )
+    except Exception:
+        pass  # Economics peek is best-effort; never block tool execution
 
     effective_timeout = timeout or DEFAULT_TOOL_TIMEOUT
     was_truncated = False

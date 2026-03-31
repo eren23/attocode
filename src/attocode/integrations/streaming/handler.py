@@ -265,7 +265,9 @@ async def adapt_openrouter_stream(
         except (json.JSONDecodeError, KeyError, IndexError, TypeError):
             pass
 
-    # Stream ended without [DONE] — flush any remaining tool calls
+    # Stream ended without [DONE] — flush any pending tool calls and
+    # yield DONE so the caller doesn't hang waiting for a sentinel that
+    # never arrives.  MiniMax sometimes closes the connection without it.
     for chunk in _flush_tool_calls():
         yield chunk
     yield StreamChunk(type=StreamChunkType.DONE)
