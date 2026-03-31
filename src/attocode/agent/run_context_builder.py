@@ -246,7 +246,8 @@ async def build_run_context(
     # --- Feature initialization -----------------------------------------
     try:
         from attocode.agent.feature_initializer import initialize_features
-        await initialize_features(
+        await asyncio.to_thread(
+            initialize_features,
             ctx,
             project_root=agent._project_root,
             working_dir=agent._working_dir,

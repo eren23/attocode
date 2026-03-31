@@ -7,7 +7,6 @@ recitation, failure tracking, and other optional integrations.
 
 from __future__ import annotations
 
-import asyncio
 import logging
 import os
 from dataclasses import dataclass
@@ -79,7 +78,7 @@ class FeatureConfig:
     skill_search_dirs: list[str] | None = None  # Extra dirs to search
 
 
-async def initialize_features(
+def initialize_features(
     ctx: AgentContext,
     *,
     config: FeatureConfig | None = None,
@@ -272,6 +271,9 @@ async def initialize_features(
             logger.warning("feature_init_failed", extra={"feature": "task_manager"}, exc_info=True)
             results["task_manager"] = False
 
+    # --- Yield to event loop (keep TUI responsive during init) ---
+    # (yield point removed — function is now sync, runs in thread)
+
     # 15. Codebase context
     if cfg.enable_codebase_context and working_dir and not getattr(ctx, "codebase_context", None):
         try:
@@ -356,6 +358,9 @@ async def initialize_features(
         except Exception:
             logger.debug("feature_init_failed", extra={"feature": "hierarchical_explorer"}, exc_info=True)
             results["hierarchical_explorer"] = False
+
+    # --- Yield to event loop (keep TUI responsive) ---
+    # (yield point removed — function is now sync, runs in thread)
 
     # 18. Cancellation manager
     if cfg.enable_cancellation and not getattr(ctx, "cancellation_manager", None):
@@ -543,13 +548,16 @@ async def initialize_features(
             logger.debug("feature_init_failed", extra={"feature": "security_scanner"}, exc_info=True)
             results["security_scanner"] = False
 
+    # --- Yield to event loop (keep TUI responsive) ---
+    # (yield point removed — function is now sync, runs in thread)
+
     # 31. Semantic search (optional — degrades gracefully if no embedding provider)
     if working_dir and hasattr(ctx, "registry") and ctx.registry is not None:
         try:
             from attocode.integrations.context.semantic_search import SemanticSearchManager
             from attocode.tools.semantic_search import create_semantic_search_tool
 
-            sem_mgr = await asyncio.to_thread(SemanticSearchManager, root_dir=working_dir)
+            sem_mgr = SemanticSearchManager(root_dir=working_dir)
             ctx._semantic_search = sem_mgr
             sem_tool = create_semantic_search_tool(sem_mgr)
             ctx.registry.register(sem_tool)
