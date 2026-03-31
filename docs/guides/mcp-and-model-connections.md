@@ -43,17 +43,30 @@ attocode-code-intel --project .
 | Codex | `.codex/config.toml` | `~/.codex/config.toml` | `attocode code-intel install codex [--global]` |
 | Zed | `.zed/settings.json` | `~/.config/zed/settings.json` | `attocode code-intel install zed [--global]` |
 | Cline | None | VS Code globalStorage | `attocode code-intel install cline` |
+| OpenCode | None | `~/.config/opencode/config.json` | `attocode code-intel install opencode` |
+| Gemini CLI | `.gemini/settings.json` | `~/.gemini/settings.json` | `attocode code-intel install gemini-cli [--global]` |
+| Roo Code | `.roo/mcp.json` | None | `attocode code-intel install roo-code` |
+| Amazon Q Developer | None | `~/.aws/amazonq/mcp.json` | `attocode code-intel install amazon-q` |
+| GitHub Copilot CLI | None | `~/.copilot/mcp-config.json` | `attocode code-intel install copilot-cli` |
+| Junie (JetBrains) | `.junie/mcp/mcp.json` | `~/.junie/mcp/mcp.json` | `attocode code-intel install junie [--global]` |
+| Kiro | `.kiro/settings/mcp.json` | None | `attocode code-intel install kiro` |
+| Trae | `.trae/mcp.json` | None | `attocode code-intel install trae` |
+| Firebase Studio | `.idx/mcp.json` | None | `attocode code-intel install firebase` |
+| Amp (Sourcegraph) | `.amp/settings.json` | `~/.config/amp/settings.json` | `attocode code-intel install amp [--global]` |
+| Continue.dev | `.continue/mcp.json` | None | `attocode code-intel install continue` |
+| Hermes Agent | None | `~/.hermes/config.yaml` | `attocode code-intel install hermes` |
+| Goose | None | `~/.config/goose/config.yaml` | `attocode code-intel install goose` |
 | IntelliJ | Manual | Manual | `attocode code-intel install intellij` |
-| OpenCode | Manual | Manual | `attocode code-intel install opencode` |
 
 Important differences:
 
-- Cursor, Windsurf, and VS Code are project-local only.
-- Claude Code, Codex, and Zed support a user-level install path.
-- Claude Desktop and Cline are effectively user-level because their configs
-  live in app-specific global locations.
-- `install intellij` and `install opencode` print manual instructions instead
-  of modifying files.
+- Cursor, Windsurf, VS Code, Roo Code, Trae, Kiro, Firebase, and Continue.dev
+  are project-local only.
+- Claude Code, Codex, Zed, Gemini CLI, Junie, and Amp support a user-level
+  install path via `--global`.
+- Claude Desktop, Cline, OpenCode, Amazon Q, Copilot CLI, Hermes, and Goose
+  are effectively user-level because their configs live in global locations.
+- `install intellij` prints manual setup instructions instead of modifying files.
 
 ## Attocode Install Modes
 

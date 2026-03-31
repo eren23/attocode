@@ -331,8 +331,20 @@ attocode code-intel install claude-desktop   # Claude Desktop
 attocode code-intel install cline            # Cline (VS Code extension)
 attocode code-intel install zed              # Zed (project-level)
 attocode code-intel install zed --global     # Zed (user-level)
+attocode code-intel install opencode         # OpenCode
+attocode code-intel install gemini-cli       # Gemini CLI
+attocode code-intel install roo-code         # Roo Code
+attocode code-intel install amazon-q         # Amazon Q Developer
+attocode code-intel install copilot-cli      # GitHub Copilot CLI
+attocode code-intel install junie            # Junie (JetBrains)
+attocode code-intel install kiro             # Kiro
+attocode code-intel install trae             # Trae
+attocode code-intel install firebase         # Firebase Studio
+attocode code-intel install amp              # Amp (Sourcegraph)
+attocode code-intel install continue         # Continue.dev
+attocode code-intel install hermes           # Hermes Agent (NousResearch)
+attocode code-intel install goose            # Goose (Block)
 attocode code-intel install intellij         # IntelliJ (prints manual steps)
-attocode code-intel install opencode         # OpenCode (prints manual steps)
 ```
 
 ### Installation Targets
@@ -347,14 +359,26 @@ attocode code-intel install opencode         # OpenCode (prints manual steps)
 | Claude Desktop | `install claude-desktop` | `~/Library/.../claude_desktop_config.json` | JSON |
 | Cline | `install cline` | VS Code globalStorage `cline_mcp_settings.json` | JSON |
 | Zed | `install zed` | `.zed/settings.json` | JSON (`context_servers`) |
+| OpenCode | `install opencode` | `~/.config/opencode/config.json` | JSON |
+| Gemini CLI | `install gemini-cli` | `.gemini/settings.json` | JSON |
+| Roo Code | `install roo-code` | `.roo/mcp.json` | JSON |
+| Amazon Q | `install amazon-q` | `~/.aws/amazonq/mcp.json` | JSON |
+| Copilot CLI | `install copilot-cli` | `~/.copilot/mcp-config.json` | JSON |
+| Junie | `install junie` | `.junie/mcp/mcp.json` | JSON |
+| Kiro | `install kiro` | `.kiro/settings/mcp.json` | JSON |
+| Trae | `install trae` | `.trae/mcp.json` | JSON |
+| Firebase Studio | `install firebase` | `.idx/mcp.json` | JSON |
+| Amp | `install amp` | `.amp/settings.json` | JSON (nested `amp.mcpServers`) |
+| Continue.dev | `install continue` | `.continue/mcp.json` | JSON |
+| Hermes Agent | `install hermes` | `~/.hermes/config.yaml` | YAML (`mcp_servers`) |
+| Goose | `install goose` | `~/.config/goose/config.yaml` | YAML (`extensions`) |
 | IntelliJ | `install intellij` | N/A (manual setup) | --- |
-| OpenCode | `install opencode` | N/A (manual setup) | --- |
 
-All targets support `--project <path>` to specify the project directory (defaults to `.`). Claude Code, Codex, and Zed support `--global` for user-level installation.
+All targets support `--project <path>` to specify the project directory (defaults to `.`). Claude Code, Codex, Zed, Gemini CLI, Junie, and Amp support `--global` for user-level installation.
 
 For Codex, `install codex --global` now writes a repo-agnostic entry by default: it omits `--project` and starts the MCP server in `--local-only` mode so the active workspace is indexed locally instead of auto-loading any repo-level remote config. Use `--project <path>` with `--global` if you intentionally want to pin a single repository.
 
-> **Note:** IntelliJ and OpenCode do not support file-based MCP configuration. Running `install intellij` or `install opencode` prints step-by-step manual setup instructions instead.
+> **Note:** IntelliJ does not support file-based MCP configuration. Running `install intellij` prints step-by-step manual setup instructions instead.
 
 ### Available Tools
 

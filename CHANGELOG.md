@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+#### Code-Intel Installer: 13 New Auto-Install Targets
+- Expanded `attocode code-intel install` from 10 to 22 supported targets
+- Moved OpenCode from manual instructions to full auto-install (`~/.config/opencode/config.json`)
+- Added project-scoped JSON targets: Roo Code (`.roo/mcp.json`), Trae (`.trae/mcp.json`), Kiro (`.kiro/settings/mcp.json`), Firebase Studio (`.idx/mcp.json`), Continue.dev (`.continue/mcp.json`)
+- Added global JSON targets: Gemini CLI (`~/.gemini/settings.json`), Amazon Q Developer (`~/.aws/amazonq/mcp.json`), GitHub Copilot CLI (`~/.copilot/mcp-config.json`), Junie (`~/.junie/mcp/mcp.json`)
+- Added Amp/Sourcegraph with nested `amp.mcpServers` key (`.amp/settings.json`)
+- Added YAML targets: Hermes Agent (`~/.hermes/config.yaml`, `mcp_servers` key) and Goose (`~/.config/goose/config.yaml`, `extensions` key)
+- Gemini CLI, Junie, and Amp support `--global` for user-level installation
+
 ## [0.2.12] - 2026-03-31
 
 ### Added

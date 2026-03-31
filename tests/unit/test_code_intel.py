@@ -1296,7 +1296,472 @@ class TestInstaller:
         assert "other-server" in data["context_servers"]
         assert "attocode-code-intel" in data["context_servers"]
 
-    # -- IntelliJ / OpenCode (manual instructions) --
+    # -- New targets (opencode, gemini, amazon-q, copilot-cli, junie, amp, hermes, goose, roo-code, etc.) --
+
+    def test_install_opencode(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+        from attocode.code_intel.installer import install_opencode
+
+        monkeypatch.setattr("shutil.which", lambda x: None)
+        config_dir = tmp_path / ".config" / "opencode"
+        monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path / ".config"))
+
+        result = install_opencode(project_dir=str(tmp_path))
+        assert result is True
+
+        config_path = config_dir / "config.json"
+        assert config_path.exists()
+        data = json.loads(config_path.read_text())
+        assert "attocode-code-intel" in data["mcpServers"]
+
+    def test_uninstall_opencode(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+        from attocode.code_intel.installer import install_opencode, uninstall_opencode
+
+        monkeypatch.setattr("shutil.which", lambda x: None)
+        monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path / ".config"))
+
+        install_opencode(project_dir=str(tmp_path))
+        result = uninstall_opencode()
+        assert result is True
+
+        config_path = tmp_path / ".config" / "opencode" / "config.json"
+        data = json.loads(config_path.read_text())
+        assert "attocode-code-intel" not in data.get("mcpServers", {})
+
+    def test_install_gemini_local(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+        from attocode.code_intel.installer import install_gemini
+
+        monkeypatch.setattr("shutil.which", lambda x: None)
+
+        result = install_gemini(project_dir=str(tmp_path), scope="local")
+        assert result is True
+
+        config_path = tmp_path / ".gemini" / "settings.json"
+        assert config_path.exists()
+        data = json.loads(config_path.read_text())
+        assert "attocode-code-intel" in data["mcpServers"]
+
+    def test_install_gemini_user(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+        from attocode.code_intel.installer import install_gemini
+
+        monkeypatch.setattr("shutil.which", lambda x: None)
+        monkeypatch.setattr("pathlib.Path.home", lambda: tmp_path)
+
+        result = install_gemini(scope="user")
+        assert result is True
+
+        config_path = tmp_path / ".gemini" / "settings.json"
+        assert config_path.exists()
+        data = json.loads(config_path.read_text())
+        assert "attocode-code-intel" in data["mcpServers"]
+
+    def test_install_amazonq(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+        from attocode.code_intel.installer import install_amazonq
+
+        monkeypatch.setattr("shutil.which", lambda x: None)
+        monkeypatch.setattr("pathlib.Path.home", lambda: tmp_path)
+
+        result = install_amazonq(project_dir=str(tmp_path))
+        assert result is True
+
+        config_path = tmp_path / ".aws" / "amazonq" / "mcp.json"
+        assert config_path.exists()
+        data = json.loads(config_path.read_text())
+        assert "attocode-code-intel" in data["mcpServers"]
+
+    def test_uninstall_amazonq(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+        from attocode.code_intel.installer import install_amazonq, uninstall_amazonq
+
+        monkeypatch.setattr("shutil.which", lambda x: None)
+        monkeypatch.setattr("pathlib.Path.home", lambda: tmp_path)
+
+        install_amazonq(project_dir=str(tmp_path))
+        result = uninstall_amazonq()
+        assert result is True
+
+        config_path = tmp_path / ".aws" / "amazonq" / "mcp.json"
+        data = json.loads(config_path.read_text())
+        assert "attocode-code-intel" not in data.get("mcpServers", {})
+
+    def test_install_copilot_cli(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+        from attocode.code_intel.installer import install_copilot_cli
+
+        monkeypatch.setattr("shutil.which", lambda x: None)
+        monkeypatch.setattr("pathlib.Path.home", lambda: tmp_path)
+
+        result = install_copilot_cli(project_dir=str(tmp_path))
+        assert result is True
+
+        config_path = tmp_path / ".copilot" / "mcp-config.json"
+        assert config_path.exists()
+        data = json.loads(config_path.read_text())
+        assert "attocode-code-intel" in data["mcpServers"]
+
+    def test_install_junie_local(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+        from attocode.code_intel.installer import install_junie
+
+        monkeypatch.setattr("shutil.which", lambda x: None)
+
+        result = install_junie(project_dir=str(tmp_path), scope="local")
+        assert result is True
+
+        config_path = tmp_path / ".junie" / "mcp" / "mcp.json"
+        assert config_path.exists()
+        data = json.loads(config_path.read_text())
+        assert "attocode-code-intel" in data["mcpServers"]
+
+    def test_install_amp_local(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+        from attocode.code_intel.installer import install_amp
+
+        monkeypatch.setattr("shutil.which", lambda x: None)
+
+        result = install_amp(project_dir=str(tmp_path), scope="local")
+        assert result is True
+
+        config_path = tmp_path / ".amp" / "settings.json"
+        assert config_path.exists()
+        data = json.loads(config_path.read_text())
+        assert "attocode-code-intel" in data["amp"]["mcpServers"]
+
+    def test_uninstall_amp(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+        from attocode.code_intel.installer import install_amp, uninstall_amp
+
+        monkeypatch.setattr("shutil.which", lambda x: None)
+
+        install_amp(project_dir=str(tmp_path), scope="local")
+        result = uninstall_amp(project_dir=str(tmp_path), scope="local")
+        assert result is True
+
+        config_path = tmp_path / ".amp" / "settings.json"
+        data = json.loads(config_path.read_text())
+        assert "attocode-code-intel" not in data.get("amp", {}).get("mcpServers", {})
+
+    def test_install_hermes(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+        from attocode.code_intel.installer import install_hermes
+
+        monkeypatch.setattr("shutil.which", lambda x: None)
+        monkeypatch.setattr("pathlib.Path.home", lambda: tmp_path)
+
+        result = install_hermes(project_dir=str(tmp_path))
+        assert result is True
+
+        import yaml
+        config_path = tmp_path / ".hermes" / "config.yaml"
+        assert config_path.exists()
+        data = yaml.safe_load(config_path.read_text())
+        assert "attocode-code-intel" in data["mcp_servers"]
+
+    def test_uninstall_hermes(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+        from attocode.code_intel.installer import install_hermes, uninstall_hermes
+
+        monkeypatch.setattr("shutil.which", lambda x: None)
+        monkeypatch.setattr("pathlib.Path.home", lambda: tmp_path)
+
+        install_hermes(project_dir=str(tmp_path))
+        result = uninstall_hermes()
+        assert result is True
+
+        import yaml
+        config_path = tmp_path / ".hermes" / "config.yaml"
+        data = yaml.safe_load(config_path.read_text())
+        assert "attocode-code-intel" not in data.get("mcp_servers", {})
+
+    def test_install_goose(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+        from attocode.code_intel.installer import install_goose
+
+        monkeypatch.setattr("shutil.which", lambda x: None)
+        monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path / ".config"))
+
+        result = install_goose(project_dir=str(tmp_path))
+        assert result is True
+
+        import yaml
+        config_path = tmp_path / ".config" / "goose" / "config.yaml"
+        assert config_path.exists()
+        data = yaml.safe_load(config_path.read_text())
+        exts = data["extensions"]
+        names = [e["name"] for e in exts]
+        assert "attocode-code-intel" in names
+        entry = next(e for e in exts if e["name"] == "attocode-code-intel")
+        assert entry["type"] == "stdio"
+
+    def test_uninstall_goose(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+        from attocode.code_intel.installer import install_goose, uninstall_goose
+
+        monkeypatch.setattr("shutil.which", lambda x: None)
+        monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path / ".config"))
+
+        install_goose(project_dir=str(tmp_path))
+        result = uninstall_goose()
+        assert result is True
+
+        import yaml
+        config_path = tmp_path / ".config" / "goose" / "config.yaml"
+        data = yaml.safe_load(config_path.read_text())
+        names = [e["name"] for e in data.get("extensions", [])]
+        assert "attocode-code-intel" not in names
+
+    def test_install_json_roo_code(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+        from attocode.code_intel.installer import install_json_config
+
+        monkeypatch.setattr("shutil.which", lambda x: None)
+
+        result = install_json_config("roo-code", project_dir=str(tmp_path))
+        assert result is True
+
+        config_path = tmp_path / ".roo" / "mcp.json"
+        assert config_path.exists()
+        data = json.loads(config_path.read_text())
+        assert "attocode-code-intel" in data["mcpServers"]
+
+    def test_install_json_trae(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+        from attocode.code_intel.installer import install_json_config
+
+        monkeypatch.setattr("shutil.which", lambda x: None)
+
+        result = install_json_config("trae", project_dir=str(tmp_path))
+        assert result is True
+
+        config_path = tmp_path / ".trae" / "mcp.json"
+        assert config_path.exists()
+        data = json.loads(config_path.read_text())
+        assert "attocode-code-intel" in data["mcpServers"]
+
+    def test_install_json_kiro(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+        from attocode.code_intel.installer import install_json_config
+
+        monkeypatch.setattr("shutil.which", lambda x: None)
+
+        result = install_json_config("kiro", project_dir=str(tmp_path))
+        assert result is True
+
+        config_path = tmp_path / ".kiro" / "settings" / "mcp.json"
+        assert config_path.exists()
+        data = json.loads(config_path.read_text())
+        assert "attocode-code-intel" in data["mcpServers"]
+
+    def test_install_json_firebase(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+        from attocode.code_intel.installer import install_json_config
+
+        monkeypatch.setattr("shutil.which", lambda x: None)
+
+        result = install_json_config("firebase", project_dir=str(tmp_path))
+        assert result is True
+
+        config_path = tmp_path / ".idx" / "mcp.json"
+        assert config_path.exists()
+        data = json.loads(config_path.read_text())
+        assert "attocode-code-intel" in data["mcpServers"]
+
+    def test_install_json_continue(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+        from attocode.code_intel.installer import install_json_config
+
+        monkeypatch.setattr("shutil.which", lambda x: None)
+
+        result = install_json_config("continue", project_dir=str(tmp_path))
+        assert result is True
+
+        config_path = tmp_path / ".continue" / "mcp.json"
+        assert config_path.exists()
+        data = json.loads(config_path.read_text())
+        assert "attocode-code-intel" in data["mcpServers"]
+
+    def test_install_dispatch_opencode(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+        """install('opencode') should auto-install, not print manual instructions."""
+        from attocode.code_intel.installer import install
+
+        monkeypatch.setattr("shutil.which", lambda x: None)
+        monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path / ".config"))
+
+        result = install("opencode", project_dir=str(tmp_path))
+        assert result is True
+
+        config_path = tmp_path / ".config" / "opencode" / "config.json"
+        assert config_path.exists()
+
+    # -- Missing uninstall tests for new JSON targets --
+
+    def test_uninstall_json_roo_code(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+        from attocode.code_intel.installer import install_json_config, uninstall_json_config
+
+        monkeypatch.setattr("shutil.which", lambda x: None)
+        install_json_config("roo-code", project_dir=str(tmp_path))
+        result = uninstall_json_config("roo-code", project_dir=str(tmp_path))
+        assert result is True
+        data = json.loads((tmp_path / ".roo" / "mcp.json").read_text())
+        assert "attocode-code-intel" not in data.get("mcpServers", {})
+
+    def test_uninstall_json_trae(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+        from attocode.code_intel.installer import install_json_config, uninstall_json_config
+
+        monkeypatch.setattr("shutil.which", lambda x: None)
+        install_json_config("trae", project_dir=str(tmp_path))
+        result = uninstall_json_config("trae", project_dir=str(tmp_path))
+        assert result is True
+        data = json.loads((tmp_path / ".trae" / "mcp.json").read_text())
+        assert "attocode-code-intel" not in data.get("mcpServers", {})
+
+    def test_uninstall_json_kiro(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+        from attocode.code_intel.installer import install_json_config, uninstall_json_config
+
+        monkeypatch.setattr("shutil.which", lambda x: None)
+        install_json_config("kiro", project_dir=str(tmp_path))
+        result = uninstall_json_config("kiro", project_dir=str(tmp_path))
+        assert result is True
+        data = json.loads((tmp_path / ".kiro" / "settings" / "mcp.json").read_text())
+        assert "attocode-code-intel" not in data.get("mcpServers", {})
+
+    def test_uninstall_json_firebase(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+        from attocode.code_intel.installer import install_json_config, uninstall_json_config
+
+        monkeypatch.setattr("shutil.which", lambda x: None)
+        install_json_config("firebase", project_dir=str(tmp_path))
+        result = uninstall_json_config("firebase", project_dir=str(tmp_path))
+        assert result is True
+        data = json.loads((tmp_path / ".idx" / "mcp.json").read_text())
+        assert "attocode-code-intel" not in data.get("mcpServers", {})
+
+    def test_uninstall_json_continue(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+        from attocode.code_intel.installer import install_json_config, uninstall_json_config
+
+        monkeypatch.setattr("shutil.which", lambda x: None)
+        install_json_config("continue", project_dir=str(tmp_path))
+        result = uninstall_json_config("continue", project_dir=str(tmp_path))
+        assert result is True
+        data = json.loads((tmp_path / ".continue" / "mcp.json").read_text())
+        assert "attocode-code-intel" not in data.get("mcpServers", {})
+
+    def test_uninstall_gemini(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+        from attocode.code_intel.installer import install_gemini, uninstall_gemini
+
+        monkeypatch.setattr("shutil.which", lambda x: None)
+        install_gemini(project_dir=str(tmp_path), scope="local")
+        result = uninstall_gemini(project_dir=str(tmp_path), scope="local")
+        assert result is True
+        data = json.loads((tmp_path / ".gemini" / "settings.json").read_text())
+        assert "attocode-code-intel" not in data.get("mcpServers", {})
+
+    def test_uninstall_copilot_cli(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+        from attocode.code_intel.installer import install_copilot_cli, uninstall_copilot_cli
+
+        monkeypatch.setattr("shutil.which", lambda x: None)
+        monkeypatch.setattr("pathlib.Path.home", lambda: tmp_path)
+        install_copilot_cli(project_dir=str(tmp_path))
+        result = uninstall_copilot_cli()
+        assert result is True
+        data = json.loads((tmp_path / ".copilot" / "mcp-config.json").read_text())
+        assert "attocode-code-intel" not in data.get("mcpServers", {})
+
+    def test_uninstall_junie(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+        from attocode.code_intel.installer import install_junie, uninstall_junie
+
+        monkeypatch.setattr("shutil.which", lambda x: None)
+        install_junie(project_dir=str(tmp_path), scope="local")
+        result = uninstall_junie(project_dir=str(tmp_path), scope="local")
+        assert result is True
+        data = json.loads((tmp_path / ".junie" / "mcp" / "mcp.json").read_text())
+        assert "attocode-code-intel" not in data.get("mcpServers", {})
+
+    # -- Scope tests for junie and amp --
+
+    def test_install_junie_user(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+        from attocode.code_intel.installer import install_junie
+
+        monkeypatch.setattr("shutil.which", lambda x: None)
+        monkeypatch.setattr("pathlib.Path.home", lambda: tmp_path)
+
+        result = install_junie(scope="user")
+        assert result is True
+
+        config_path = tmp_path / ".junie" / "mcp" / "mcp.json"
+        assert config_path.exists()
+        data = json.loads(config_path.read_text())
+        assert "attocode-code-intel" in data["mcpServers"]
+
+    def test_install_amp_user(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+        from attocode.code_intel.installer import install_amp
+
+        monkeypatch.setattr("shutil.which", lambda x: None)
+        monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path / ".config"))
+
+        result = install_amp(scope="user")
+        assert result is True
+
+        config_path = tmp_path / ".config" / "amp" / "settings.json"
+        assert config_path.exists()
+        data = json.loads(config_path.read_text())
+        assert "attocode-code-intel" in data["amp"]["mcpServers"]
+
+    # -- Merge-existing-config tests for new targets --
+
+    def test_install_json_roo_code_merges_existing(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+        from attocode.code_intel.installer import install_json_config
+
+        monkeypatch.setattr("shutil.which", lambda x: None)
+        roo_dir = tmp_path / ".roo"
+        roo_dir.mkdir()
+        existing = {"mcpServers": {"other-server": {"command": "other"}}, "customKey": True}
+        (roo_dir / "mcp.json").write_text(json.dumps(existing))
+
+        install_json_config("roo-code", project_dir=str(tmp_path))
+
+        data = json.loads((roo_dir / "mcp.json").read_text())
+        assert data["customKey"] is True
+        assert "other-server" in data["mcpServers"]
+        assert "attocode-code-intel" in data["mcpServers"]
+
+    def test_install_hermes_merges_existing(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+        import yaml
+        from attocode.code_intel.installer import install_hermes
+
+        monkeypatch.setattr("shutil.which", lambda x: None)
+        monkeypatch.setattr("pathlib.Path.home", lambda: tmp_path)
+        hermes_dir = tmp_path / ".hermes"
+        hermes_dir.mkdir()
+        existing = {"mcp_servers": {"other": {"command": "x"}}, "persona": "helpful"}
+        (hermes_dir / "config.yaml").write_text(yaml.safe_dump(existing))
+
+        install_hermes(project_dir=str(tmp_path))
+
+        data = yaml.safe_load((hermes_dir / "config.yaml").read_text())
+        assert data["persona"] == "helpful"
+        assert "other" in data["mcp_servers"]
+        assert "attocode-code-intel" in data["mcp_servers"]
+
+    def test_install_goose_merges_existing(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+        import yaml
+        from attocode.code_intel.installer import install_goose
+
+        monkeypatch.setattr("shutil.which", lambda x: None)
+        monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path / ".config"))
+        goose_dir = tmp_path / ".config" / "goose"
+        goose_dir.mkdir(parents=True)
+        existing = {"extensions": [{"name": "other-ext", "type": "stdio", "cmd": "x"}]}
+        (goose_dir / "config.yaml").write_text(yaml.safe_dump(existing))
+
+        install_goose(project_dir=str(tmp_path))
+
+        data = yaml.safe_load((goose_dir / "config.yaml").read_text())
+        names = [e["name"] for e in data["extensions"]]
+        assert "other-ext" in names
+        assert "attocode-code-intel" in names
+
+    def test_install_amp_merges_existing(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+        from attocode.code_intel.installer import install_amp
+
+        monkeypatch.setattr("shutil.which", lambda x: None)
+        amp_dir = tmp_path / ".amp"
+        amp_dir.mkdir()
+        existing = {"amp": {"mcpServers": {"other": {"command": "x"}}, "theme": "dark"}}
+        (amp_dir / "settings.json").write_text(json.dumps(existing))
+
+        install_amp(project_dir=str(tmp_path), scope="local")
+
+        data = json.loads((amp_dir / "settings.json").read_text())
+        assert data["amp"]["theme"] == "dark"
+        assert "other" in data["amp"]["mcpServers"]
+        assert "attocode-code-intel" in data["amp"]["mcpServers"]
+
+    # -- IntelliJ (manual instructions) --
 
     def test_print_manual_instructions_intellij(self, capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch):
         from attocode.code_intel.installer import print_manual_instructions
@@ -1310,17 +1775,12 @@ class TestInstaller:
         assert "IntelliJ" in captured.out
         assert "MCP Servers" in captured.out
 
-    def test_print_manual_instructions_opencode(self, capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch):
+    def test_print_manual_instructions_opencode_removed(self):
+        """opencode is no longer a manual target — it should return False."""
         from attocode.code_intel.installer import print_manual_instructions
 
-        monkeypatch.setattr("shutil.which", lambda x: None)
-
         result = print_manual_instructions("opencode")
-        assert result is True
-
-        captured = capsys.readouterr()
-        assert "OpenCode" in captured.out
-        assert "mcpServers" in captured.out
+        assert result is False
 
     def test_install_dispatch_intellij(self, capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch):
         """install('intellij') should print instructions, not fail."""
