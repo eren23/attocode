@@ -5,7 +5,9 @@ All notable changes to the Attocode Python agent will be documented in this file
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [0.2.14] - 2026-04-01
+
+### Added
 
 #### Code-Intel Installer: 13 New Auto-Install Targets
 - Expanded `attocode code-intel install` from 10 to 22 supported targets
@@ -15,6 +17,57 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Added Amp/Sourcegraph with nested `amp.mcpServers` key (`.amp/settings.json`)
 - Added YAML targets: Hermes Agent (`~/.hermes/config.yaml`, `mcp_servers` key) and Goose (`~/.config/goose/config.yaml`, `extensions` key)
 - Gemini CLI, Junie, and Amp support `--global` for user-level installation
+
+#### LSP: Completions, Call Hierarchy, and Workspace Symbols
+- Added LSP completion suggestions at cursor position (`lsp_completions`) — shows available types, methods, and properties with type info and documentation
+- Added LSP incoming call hierarchy (`lsp_incoming_calls`) — finds all callers of the symbol at a given position
+- Added LSP outgoing call hierarchy (`lsp_outgoing_calls`) — finds all callees of the symbol at a given position
+- Added LSP workspace symbol search (`lsp_workspace_symbol`) — searches symbols by name across the entire workspace via indexed workspace/symbol request
+- New MCP tools: `lsp_completions`, `lsp_incoming_calls`, `lsp_outgoing_calls`, `lsp_workspace_symbol`
+- New REST API endpoints (v1 text + v2 structured): `/lsp/completions`, `/lsp/workspace_symbol`, `/lsp/incoming_calls`, `/lsp/outgoing_calls`
+- TypeScript call hierarchy parser in `integrations/lsp/hierarchy.py` — BFS traversal over call graph edges
+- `lsp_completions_data()`, `lsp_workspace_symbol_data()`, `lsp_incoming_calls_data()`, `lsp_outgoing_calls_data()` service methods
+- `CALL_HIERARCHY` feature flag gates call hierarchy tools
+
+#### Progressive AST Hydration and Skeleton Indexing
+- **Skeleton-first indexing**: AST service now indexes a lightweight skeleton (file tree + import adjacency) immediately on startup, enabling `dependency_graph`, `relevant_context`, and other graph tools to work before full parsing completes
+- **Progressive hydration**: Full AST parsing (`indexing_depth="eager"`) runs in background thread pool, upgrading symbol coverage incrementally
+- `hydration_status()` MCP tool and REST endpoint — returns current hydration tier, phase, parse coverage, reference coverage, and embedding status
+- `ASTService.start_hydration()` background thread for auto-hydration after skeleton index
+- `bootstrap` tool improved to query hydration status and include semantic search results for task context
+- `hydration_snapshot` field on `IndexingStatus` — point-in-time snapshot of hydration state
+- `AutoCompaction` — automatic context compaction with configurable memory threshold
+
+#### Feature Flag System
+- Feature flag registry in `integrations/feature_flags/` — environment-variable-driven flags wired into `AgentContext`
+- `_init_feature_flags()` called first in `initialize_features()` so other features can query flags on init
+- `feature(name)` function to check flag state from anywhere in the codebase
+- `CALL_HIERARCHY` flag gates call hierarchy tool registration
+
+#### Tool Execution Enhancements
+- **Pattern Rule Engine**: `PatternRuleEngine` in `integrations/safety/pattern_rules.py` — loads CC-style permission rules from `.attocode/rules`, pattern matching over tool names and arguments
+- **Tool Deferral**: `ToolDeferral` in `integrations/tool_deferral/` — defers tool calls to a later turn based on cost thresholds and context pressure
+- **Lifecycle Integration**: `LifecycleManager` in `integrations/lifecycle/` — manages agent session lifecycle, shutdown hooks, and graceful teardown
+- **Path Security**: `PathSecurityValidator` in `integrations/path_security/` — validates file paths against project boundaries and security policies
+
+#### Installer and Integration Improvements
+- **GSD MCP Integration**: Added `install_gsd()` and `uninstall_gsd()` for `.gsd/mcp.json` (project) and `~/.gsd/mcp.json` (global/user)
+- **Dynamic Project Directory Resolution**: `_get_project_dir()` now walks up from CWD looking for `.git/` or `.attocode/` markers when `ATTOCODE_PROJECT_DIR` is not set
+- **Remote Config in Server CLI**: `--serve` command now loads `~/.attocode/config.toml` remote settings when not in `--local-only` mode
+- **OpenCode Installer**: Fixed to use correct `mcp` top-level key and `type: local` / `command` as single array format
+- **Amazon Q, Copilot CLI, Hermes, Goose**: `--project` omitted when installing at user/global scope so the server dynamically uses the host's working directory
+- **`_find_command()`**: Added `uv run` check — prefers `uv run attocode-code-intel` when `uv` is available and `pyproject.toml` declares the script
+- **`--local-only` default**: `_build_server_entry()` now defaults to `local_only=True`, preventing spurious remote connection attempts in stdio MCP hosts
+
+#### API and Service Improvements
+- `RemoteTextService.hydration_status()` — mirrors the MCP `hydration_status` endpoint for remote mode
+- `bootstrap` tool now accepts `task_hint` parameter for relevance-scored semantic search results
+- MiniMax provider: `openai_compat` streaming support for OpenAI-compatible endpoints; `OpenAICompatProvider` base class for shared streaming handling
+- Auto-compaction triggered on memory threshold in `AutoCompaction`
+
+#### Other
+- `_notify_file_changed()` tool for notifying the server about externally modified files — updates AST index and invalidates stale semantic search embeddings
+- OpenAI-compatible provider in `providers/openai_compat.py`
 
 ## [0.2.13] - 2026-03-31
 

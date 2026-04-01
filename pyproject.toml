@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "attocode"
-version = "0.2.13"
+version = "0.2.14"
 description = "Production AI coding agent"
 readme = "README.md"
 requires-python = ">=3.12"
@@ -201,7 +201,7 @@ exclude_lines = [
 ]
 
 [tool.bumpversion]
-current_version = "0.2.13"
+current_version = "0.2.14"
 commit = false
 tag = false
 

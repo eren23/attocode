@@ -410,6 +410,49 @@ def microcompact(
     return cleared
 
 
+def adjust_slice_for_tool_pairs(
+    messages: list[Message | Any],
+    slice_start: int,
+) -> int:
+    """Walk backwards from *slice_start* to include the full tool-call group.
+
+    If ``messages[slice_start]`` is a ``Role.TOOL`` message, the corresponding
+    ``assistant`` message (with matching ``tool_calls``) must also be included
+    so the pair is not orphaned.  This walks backwards until a non-TOOL message
+    is found and includes it if it is an ``assistant`` message with tool_calls.
+
+    Returns the adjusted (possibly earlier) slice start index.
+    """
+    if slice_start >= len(messages):
+        return slice_start
+
+    # If the message at slice_start is not a TOOL message, no adjustment needed
+    if not (hasattr(messages[slice_start], "role") and messages[slice_start].role == Role.TOOL):
+        return slice_start
+
+    idx = slice_start
+    # Walk backwards past consecutive TOOL messages
+    while idx > 0 and hasattr(messages[idx], "role") and messages[idx].role == Role.TOOL:
+        idx -= 1
+
+    # If we landed on an assistant message with tool_calls, include it
+    if idx >= 0:
+        msg = messages[idx]
+        if (
+            hasattr(msg, "role")
+            and msg.role == Role.ASSISTANT
+            and getattr(msg, "tool_calls", None)
+        ):
+            return idx
+
+    # The TOOL messages at slice_start didn't have a matching assistant in range;
+    # skip past them to avoid sending orphans
+    skip = slice_start
+    while skip < len(messages) and hasattr(messages[skip], "role") and messages[skip].role == Role.TOOL:
+        skip += 1
+    return skip
+
+
 def emergency_truncation(
     messages: list[Message | Any],
     *,
@@ -440,8 +483,10 @@ def emergency_truncation(
         else:
             break
 
-    # Keep recent messages
-    recent = messages[-preserve_recent:]
+    # Keep recent messages, adjusting boundary to keep tool pairs intact
+    raw_start = max(0, len(messages) - preserve_recent)
+    adj_start = adjust_slice_for_tool_pairs(messages, raw_start)
+    recent = messages[adj_start:]
 
     result = list(system_msgs)
 

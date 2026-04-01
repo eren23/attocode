@@ -14,7 +14,7 @@ import os
 import subprocess
 import threading
 from pathlib import Path
-from unittest.mock import MagicMock, PropertyMock, patch
+from unittest.mock import AsyncMock, MagicMock, PropertyMock, patch
 
 import pytest
 
@@ -48,10 +48,18 @@ from attocode.integrations.context.codebase_ast import (
 
 def _build_audit_env(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
     """Build realistic mock singletons covering the MCP tool surface."""
+    import attocode.code_intel._shared as ci_shared
     import attocode.code_intel.server as srv
+    from attocode.code_intel.service import CodeIntelService
+    from attocode.integrations.context.ast_service import ASTService
 
     project_dir = str(tmp_path)
     monkeypatch.setenv("ATTOCODE_PROJECT_DIR", project_dir)
+
+    CodeIntelService._reset_instances()
+    ASTService.clear_instances()
+    ci_shared._service = None
+    ci_shared._ast_service = None
 
     # Reset all singletons
     srv._ast_service = None
@@ -390,7 +398,7 @@ class TestAnalysisTools:
 
 
 class TestNavigationTools:
-    """navigation_tools.py: 8 tools."""
+    """navigation_tools.py: navigation + hydration + reindex."""
 
     @pytest.fixture(autouse=True)
     def _setup(self, tmp_path, monkeypatch):
@@ -430,6 +438,12 @@ class TestNavigationTools:
         from attocode.code_intel.tools.navigation_tools import bootstrap
         result = bootstrap(task_hint="testing", max_tokens=4000)
         assert isinstance(result, str)
+
+    def test_hydration_status(self):
+        from attocode.code_intel.tools.navigation_tools import hydration_status
+        result = hydration_status()
+        assert isinstance(result, str)
+        assert "Tier:" in result
 
     def test_conventions(self):
         from attocode.code_intel.tools.navigation_tools import conventions
@@ -644,13 +658,20 @@ class TestLearningTools:
 
 
 class TestLSPTools:
-    """lsp_tools.py: 5 tools (3 async, 1 sync, 1 async)."""
+    """lsp_tools.py: LSP tools (manager mock + CodeIntelService async stubs)."""
 
     @pytest.fixture(autouse=True)
     def _setup(self, tmp_path, monkeypatch):
         self.srv, self.ctx, self.svc, self.project_dir = _build_audit_env(tmp_path, monkeypatch)
 
         import attocode.code_intel.tools.lsp_tools as lt
+        from attocode.code_intel.service import CodeIntelService
+
+        cis = CodeIntelService.get_instance(self.project_dir)
+        cis.lsp_completions = AsyncMock(return_value="stub:lsp_completions")
+        cis.lsp_workspace_symbol = AsyncMock(return_value="stub:lsp_workspace_symbol")
+        cis.lsp_incoming_calls = AsyncMock(return_value="stub:lsp_incoming_calls")
+        cis.lsp_outgoing_calls = AsyncMock(return_value="stub:lsp_outgoing_calls")
 
         # Build LSP mock
         lsp_mock = MagicMock()
@@ -671,8 +692,12 @@ class TestLSPTools:
         lsp_mock.get_diagnostics.return_value = []
         lsp_mock.on_result_callback = None
 
+        # lsp_definition / references / hover use CodeIntelService._get_lsp_manager();
+        # lsp_enrich uses lsp_tools._get_lsp_manager() — set both to the same mock.
+        cis._lsp_manager = lsp_mock
         lt._lsp_manager = lsp_mock
         yield
+        cis._lsp_manager = None
         lt._lsp_manager = None
         self.srv._ast_service = None
         self.srv._context_mgr = None
@@ -705,6 +730,34 @@ class TestLSPTools:
         from attocode.code_intel.tools.lsp_tools import lsp_enrich
         result = await lsp_enrich(files=["src/main.py"])
         assert isinstance(result, str)
+
+    @pytest.mark.asyncio
+    async def test_lsp_completions(self):
+        from attocode.code_intel.tools.lsp_tools import lsp_completions
+        result = await lsp_completions(file="src/main.py", line=0, col=0, limit=10)
+        assert isinstance(result, str)
+        assert "stub:lsp_completions" in result
+
+    @pytest.mark.asyncio
+    async def test_lsp_workspace_symbol(self):
+        from attocode.code_intel.tools.lsp_tools import lsp_workspace_symbol
+        result = await lsp_workspace_symbol(query="main", limit=5)
+        assert isinstance(result, str)
+        assert "stub:lsp_workspace_symbol" in result
+
+    @pytest.mark.asyncio
+    async def test_lsp_incoming_calls(self):
+        from attocode.code_intel.tools.lsp_tools import lsp_incoming_calls
+        result = await lsp_incoming_calls(file="src/main.py", line=4, col=0)
+        assert isinstance(result, str)
+        assert "stub:lsp_incoming_calls" in result
+
+    @pytest.mark.asyncio
+    async def test_lsp_outgoing_calls(self):
+        from attocode.code_intel.tools.lsp_tools import lsp_outgoing_calls
+        result = await lsp_outgoing_calls(file="src/main.py", line=4, col=0)
+        assert isinstance(result, str)
+        assert "stub:lsp_outgoing_calls" in result
 
 
 # =========================================================================

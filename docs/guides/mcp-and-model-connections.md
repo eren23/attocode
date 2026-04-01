@@ -56,13 +56,14 @@ attocode-code-intel --project .
 | Continue.dev | `.continue/mcp.json` | None | `attocode code-intel install continue` |
 | Hermes Agent | None | `~/.hermes/config.yaml` | `attocode code-intel install hermes` |
 | Goose | None | `~/.config/goose/config.yaml` | `attocode code-intel install goose` |
+| GSD | `.gsd/mcp.json` | `~/.gsd/mcp.json` | `attocode code-intel install gsd [--global]` |
 | IntelliJ | Manual | Manual | `attocode code-intel install intellij` |
 
 Important differences:
 
 - Cursor, Windsurf, VS Code, Roo Code, Trae, Kiro, Firebase, and Continue.dev
   are project-local only.
-- Claude Code, Codex, Zed, Gemini CLI, Junie, and Amp support a user-level
+- Claude Code, Codex, Zed, Gemini CLI, Junie, Amp, and GSD support a user-level
   install path via `--global`.
 - Claude Desktop, Cline, OpenCode, Amazon Q, Copilot CLI, Hermes, and Goose
   are effectively user-level because their configs live in global locations.

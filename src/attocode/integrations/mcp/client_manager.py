@@ -12,7 +12,8 @@ from dataclasses import dataclass
 from enum import StrEnum
 from typing import TYPE_CHECKING, Any
 
-from attocode.integrations.mcp.client import MCPCallResult, MCPClient, MCPTool
+from attocode.integrations.mcp.client import MCPCallResult, MCPTool
+from attocode.integrations.mcp.transports import MCPTransport
 
 if TYPE_CHECKING:
     from attocode.integrations.mcp.config import MCPServerConfig
@@ -34,9 +35,41 @@ class ServerEntry:
     """Internal bookkeeping for a managed MCP server."""
 
     config: MCPServerConfig
-    client: MCPClient | None = None
+    client: _TransportAsClient | None = None
     state: ConnectionState = ConnectionState.PENDING
     error: str | None = None
+
+
+class _TransportAsClient:
+    """Wraps an MCPTransport as an MCPClient-compatible object.
+
+    The MCPClientManager and MCPClient expect a `.tools` property and
+    `.is_connected` attribute.  This wrapper adapts any MCPTransport to
+    that interface so the existing client_manager code works unchanged.
+    """
+
+    def __init__(self, transport: MCPTransport, server_name: str) -> None:
+        self._transport = transport
+        self._server_name = server_name
+        self._tools: list[MCPTool] = transport.tools
+
+    @property
+    def tools(self) -> list[MCPTool]:
+        return self._transport.tools
+
+    @property
+    def is_connected(self) -> bool:
+        return self._transport.is_connected
+
+    @property
+    def server_name(self) -> str:
+        return self._server_name
+
+    async def disconnect(self) -> None:
+        await self._transport.disconnect()
+
+    async def call_tool(self, name: str, arguments: dict[str, Any]) -> MCPCallResult:
+        return await self._transport.call_tool(name, arguments)
 
 
 class MCPClientManager:
@@ -236,17 +269,20 @@ class MCPClientManager:
     # ------------------------------------------------------------------
 
     async def _connect(self, entry: ServerEntry) -> bool:
-        """Low-level connect helper.  Returns True on success."""
+        """Low-level connect helper using transport factory. Returns True on success."""
+        from .transports import create_transport
+
         entry.state = ConnectionState.CONNECTING
-        client = MCPClient(
-            server_command=entry.config.command,
-            server_args=entry.config.args,
-            server_name=entry.config.name,
-            env=entry.config.env or None,
-        )
+
         try:
-            await client.connect()
-            entry.client = client
+            transport_config = entry.config.get_transport_config()
+            transport = create_transport(
+                transport_config,
+                server_name=entry.config.name,
+            )
+            await transport.connect()
+            # Wrap the transport as an MCPClient-compatible object
+            entry.client = _TransportAsClient(transport, entry.config.name)
             entry.state = ConnectionState.CONNECTED
             return True
         except Exception as exc:  # noqa: BLE001

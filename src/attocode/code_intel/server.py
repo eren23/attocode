@@ -70,6 +70,7 @@ from attocode.code_intel._shared import (  # noqa: F401
     clear_remote_service,
     configure_remote_service,
     _get_project_dir,
+    _walk_up,
     _get_ast_service,
     _get_context_mgr,
     _get_code_analyzer,
@@ -639,7 +640,17 @@ def main() -> None:
         return
 
     # No subcommand -- start MCP server
-    project_dir = "."
+    # Walk up from CWD to find project root (marker = .git or .attocode)
+    _cwd = os.path.abspath(".")
+    _project_root = _cwd
+    for _candidate in [_cwd] + list(_walk_up(_cwd)):
+        if os.path.isdir(os.path.join(_candidate, ".git")) or os.path.isdir(
+            os.path.join(_candidate, ".attocode")
+        ):
+            _project_root = _candidate
+            break
+    project_dir = _project_root
+
     transport = "stdio"
     host = "127.0.0.1"
     port = 8080

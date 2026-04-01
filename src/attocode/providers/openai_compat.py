@@ -3,10 +3,13 @@
 from __future__ import annotations
 
 import json
+import logging
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
     import httpx
+
+logger = logging.getLogger(__name__)
 
 from attocode.types.messages import (
     Message,
@@ -109,6 +112,104 @@ def format_openai_messages(
             })
         else:
             result.append({"role": str(msg.role), "content": content})
+    return result
+
+
+def sanitize_tool_messages(
+    messages: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    """Ensure tool results immediately follow their assistant tool_calls.
+
+    Strict OpenAI-compatible APIs (e.g. MiniMax) require:
+    1. Every ``role="tool"`` message references a ``tool_call_id`` from a
+       preceding ``assistant`` message's ``tool_calls`` array.
+    2. Tool result messages appear **immediately** after the assistant message
+       (no interleaved user/system messages).
+
+    This function:
+    - Drops orphaned tool results (no matching tool_call).
+    - Relocates interleaved non-tool messages so tool results sit right after
+      the assistant.
+    """
+    # Pass 1: collect all valid tool_call IDs and group tool results
+    # with their assistant message.
+    known_tc_ids: set[str] = set()
+    for msg in messages:
+        if msg.get("role") == "assistant":
+            for tc in msg.get("tool_calls") or []:
+                tc_id = tc.get("id")
+                if tc_id:
+                    known_tc_ids.add(tc_id)
+
+    # Pass 2: build result with correct ordering.
+    # When we see an assistant message with tool_calls, collect its
+    # tool results and any interleaved messages, then emit in order:
+    # assistant → tool results → interleaved messages.
+    result: list[dict[str, Any]] = []
+    i = 0
+    while i < len(messages):
+        msg = messages[i]
+        role = msg.get("role")
+
+        if role == "assistant" and msg.get("tool_calls"):
+            # Collect the IDs this assistant expects
+            expected_ids = {
+                tc.get("id") for tc in msg["tool_calls"] if tc.get("id")
+            }
+            result.append(msg)
+            i += 1
+
+            # Scan ahead: gather tool results and interleaved messages
+            tool_results: list[dict[str, Any]] = []
+            deferred: list[dict[str, Any]] = []
+            while i < len(messages):
+                nxt = messages[i]
+                nxt_role = nxt.get("role")
+                if nxt_role == "tool":
+                    tc_id = nxt.get("tool_call_id", "")
+                    if tc_id in expected_ids:
+                        tool_results.append(nxt)
+                        expected_ids.discard(tc_id)
+                        i += 1
+                        continue
+                    elif tc_id in known_tc_ids:
+                        # Belongs to a different assistant — stop scanning
+                        break
+                    else:
+                        # Orphan — drop it
+                        logger.warning(
+                            "Dropping orphaned tool result (tool_call_id=%s)",
+                            tc_id,
+                        )
+                        i += 1
+                        continue
+                elif nxt_role == "assistant":
+                    # Next turn — stop
+                    break
+                else:
+                    # Interleaved user/system message — defer until after results
+                    deferred.append(nxt)
+                    i += 1
+                    if not expected_ids:
+                        break  # All results collected
+
+            result.extend(tool_results)
+            result.extend(deferred)
+
+        elif role == "tool":
+            tc_id = msg.get("tool_call_id", "")
+            if tc_id and tc_id in known_tc_ids:
+                result.append(msg)
+            else:
+                logger.warning(
+                    "Dropping orphaned tool result (tool_call_id=%s)",
+                    tc_id,
+                )
+            i += 1
+        else:
+            result.append(msg)
+            i += 1
+
     return result
 
 

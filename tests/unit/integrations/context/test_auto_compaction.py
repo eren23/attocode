@@ -6,7 +6,7 @@ from attocode.integrations.context.auto_compaction import (
     AutoCompactionManager,
     CompactionStatus,
 )
-from attocode.types.messages import Message, Role
+from attocode.types.messages import Message, Role, ToolCall
 
 
 def _make_messages(count: int, content_size: int = 100) -> list[Message]:
@@ -66,6 +66,64 @@ class TestAutoCompactionCompact:
         msgs = _make_messages(50)
         result = mgr.compact(msgs, "Summary")
         assert len(result) < len(msgs)
+
+
+class TestCompactToolPairPreservation:
+    def test_compact_does_not_orphan_tool_results(self) -> None:
+        """compact() should include the assistant message when recent slice starts at a TOOL msg."""
+        mgr = AutoCompactionManager(min_messages_to_keep=2)
+        msgs = [
+            Message(role=Role.SYSTEM, content="system"),
+            Message(role=Role.USER, content="old msg 1"),
+            Message(role=Role.ASSISTANT, content="old msg 2"),
+            Message(role=Role.USER, content="old msg 3"),
+            Message(role=Role.ASSISTANT, content="", tool_calls=[
+                ToolCall(id="tc-1", name="read", arguments={}),
+            ]),
+            Message(role=Role.TOOL, content="file contents", tool_call_id="tc-1"),
+            Message(role=Role.USER, content="thanks"),
+        ]
+        result = mgr.compact(msgs, "Summary of work")
+        tool_msgs = [m for m in result if m.role == Role.TOOL]
+        for tm in tool_msgs:
+            idx = result.index(tm)
+            found = False
+            for j in range(idx - 1, -1, -1):
+                if result[j].role == Role.ASSISTANT and result[j].tool_calls:
+                    tc_ids = {tc.id for tc in result[j].tool_calls}
+                    if tm.tool_call_id in tc_ids:
+                        found = True
+                        break
+            assert found, f"Orphaned tool result: tool_call_id={tm.tool_call_id}"
+
+    def test_emergency_compact_does_not_orphan_tool_results(self) -> None:
+        """emergency_compact() should include assistant message with tool results."""
+        mgr = AutoCompactionManager(min_messages_to_keep=4)
+        msgs = [
+            Message(role=Role.SYSTEM, content="system"),
+        ] + [
+            Message(role=Role.USER, content=f"old {i}")
+            for i in range(20)
+        ] + [
+            Message(role=Role.ASSISTANT, content="", tool_calls=[
+                ToolCall(id="tc-e", name="bash", arguments={}),
+            ]),
+            Message(role=Role.TOOL, content="output", tool_call_id="tc-e"),
+            Message(role=Role.USER, content="ok"),
+            Message(role=Role.ASSISTANT, content="done"),
+        ]
+        result = mgr.emergency_compact(msgs)
+        tool_msgs = [m for m in result if m.role == Role.TOOL]
+        for tm in tool_msgs:
+            idx = result.index(tm)
+            found = False
+            for j in range(idx - 1, -1, -1):
+                if result[j].role == Role.ASSISTANT and result[j].tool_calls:
+                    tc_ids = {tc.id for tc in result[j].tool_calls}
+                    if tm.tool_call_id in tc_ids:
+                        found = True
+                        break
+            assert found, f"Orphaned tool result: tool_call_id={tm.tool_call_id}"
 
 
 class TestSummaryPrompt:

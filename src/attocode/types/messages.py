@@ -23,6 +23,12 @@ class DangerLevel(StrEnum):
     MODERATE = "moderate"
     DANGEROUS = "dangerous"
 
+    # Aliases for backward compatibility / alternative naming
+    LOW = "low"
+    MEDIUM = "medium"
+    HIGH = "high"
+    CRITICAL = "critical"
+
 
 class StopReason(StrEnum):
     """Why the LLM stopped generating."""

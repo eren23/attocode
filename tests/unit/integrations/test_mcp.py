@@ -14,7 +14,11 @@ from attocode.integrations.mcp.client_manager import (
     MCPClientManager,
     ServerEntry,
 )
-from attocode.integrations.mcp.config import MCPServerConfig, load_mcp_configs
+from attocode.integrations.mcp.config import (
+    MCPServerConfig,
+    _parse_servers_dict,
+    load_mcp_configs,
+)
 from attocode.integrations.mcp.tool_search import (
     MCPToolMatch,
     MCPToolSearchIndex,
@@ -51,6 +55,56 @@ class TestMCPServerConfig:
         assert cfg.env == {"KEY": "val"}
         assert cfg.enabled is False
         assert cfg.lazy_load is True
+
+    def test_get_transport_config_stdio(self) -> None:
+        cfg = MCPServerConfig(name="s", command="node", args=["x.js"])
+        assert cfg.get_transport_config() == {
+            "type": "stdio",
+            "command": "node",
+            "args": ["x.js"],
+            "env": {},
+        }
+
+    def test_get_transport_config_http_url(self) -> None:
+        cfg = MCPServerConfig(name="h", url="http://127.0.0.1:9/mcp")
+        tc = cfg.get_transport_config()
+        assert tc["type"] == "http"
+        assert tc["url"] == "http://127.0.0.1:9/mcp"
+
+    def test_get_transport_config_sse_url_heuristic(self) -> None:
+        cfg = MCPServerConfig(name="e", url="http://host/events")
+        tc = cfg.get_transport_config()
+        assert tc["type"] == "sse"
+        assert "events" in tc["url"]
+
+
+class TestParseServersDict:
+    def test_url_based_entry(self) -> None:
+        cfgs = _parse_servers_dict({
+            "remote": {
+                "url": "http://127.0.0.1:8080/mcp",
+                "headers": {"Authorization": "Bearer x"},
+                "timeout": 30,
+            },
+        })
+        assert len(cfgs) == 1
+        assert cfgs[0].name == "remote"
+        assert cfgs[0].url == "http://127.0.0.1:8080/mcp"
+        assert cfgs[0].headers == {"Authorization": "Bearer x"}
+        assert cfgs[0].timeout == 30.0
+
+    def test_transport_flag_without_explicit_type_field(self) -> None:
+        cfgs = _parse_servers_dict({
+            "h2": {"transport": "http", "url": "http://localhost/x"},
+        })
+        assert len(cfgs) == 1
+        assert cfgs[0].url == "http://localhost/x"
+
+    def test_stdio_legacy_args_string_coerced(self) -> None:
+        cfgs = _parse_servers_dict({
+            "s": {"command": "sh", "args": "-c echo"},
+        })
+        assert cfgs[0].args == ["-c echo"]
 
 
 class TestLoadMCPConfigs:

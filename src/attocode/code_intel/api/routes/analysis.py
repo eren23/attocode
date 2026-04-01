@@ -99,6 +99,17 @@ async def bootstrap(
     ))
 
 
+@router_v1.get("/hydration")
+async def hydration_status(
+    project_id: str,
+    branch: BranchParam = "",
+) -> dict:
+    """Progressive AST / embedding hydration state (MCP ``hydration_status`` parity)."""
+    ensure_branch_supported(branch)
+    svc = await get_service_or_404(project_id)
+    return svc.hydration_status()
+
+
 @router_v1.get("/symbols", response_model=TextResult)
 async def symbols_v1(
     project_id: str,

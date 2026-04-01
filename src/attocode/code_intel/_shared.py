@@ -64,15 +64,43 @@ def _check_server_override(name: str):
     return None
 
 
+def _walk_up(start: str, max_depth: int = 20) -> list[str]:
+    """Walk upward from start, yielding parent directories up to max_depth.
+
+    Yields each ancestor directory starting from dirname(start) (the immediate
+    parent), then climbing upward until filesystem root.
+    """
+    path = os.path.dirname(start)
+    for _ in range(max_depth):
+        yield path
+        parent = os.path.dirname(path)
+        if parent == path:
+            break  # Reached filesystem root
+        path = parent
+
+
 def _get_project_dir() -> str:
-    """Get the project directory from env var or raise."""
+    """Get the project directory from env var, CLI arg, or auto-discovery.
+
+    Resolution order:
+    1. ATTOCODE_PROJECT_DIR env var (set by --project CLI arg)
+    2. Walk up from CWD looking for .git/ or .attocode/ marker
+    3. Fall back to CWD
+    """
     project_dir = os.environ.get("ATTOCODE_PROJECT_DIR", "")
-    if not project_dir:
-        raise RuntimeError(
-            "ATTOCODE_PROJECT_DIR not set. "
-            "Pass --project <path> or set the environment variable."
-        )
-    return os.path.abspath(project_dir)
+    if project_dir:
+        return os.path.abspath(project_dir)
+
+    cwd = os.getcwd()
+    markers = (".git", ".attocode")
+    for dir_path in [cwd] + list(_walk_up(cwd)):
+        for marker in markers:
+            if os.path.isdir(os.path.join(dir_path, marker)):
+                logger.debug("Auto-discovered project root: %s (marker: %s)", dir_path, marker)
+                return dir_path
+
+    logger.debug("No project marker found, falling back to CWD: %s", cwd)
+    return cwd
 
 
 def _get_ast_service():
@@ -87,10 +115,15 @@ def _get_ast_service():
         project_dir = _get_project_dir()
         _ast_service = ASTService.get_instance(project_dir)
         if not _ast_service.initialized:
-            logger.info("Initializing ASTService for %s...", project_dir)
-            _ast_service.initialize()
+            logger.info("Initializing ASTService (skeleton) for %s...", project_dir)
+            _ast_service.initialize_skeleton(indexing_depth="auto")
+            if (
+                _ast_service._hydration_state
+                and _ast_service._hydration_state.phase != "ready"
+            ):
+                _ast_service.start_hydration()
             logger.info(
-                "ASTService ready: %d files indexed",
+                "ASTService ready: %d files indexed (skeleton/hydration)",
                 len(_ast_service._ast_cache),
             )
     return _ast_service

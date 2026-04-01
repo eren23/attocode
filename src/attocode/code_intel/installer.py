@@ -22,6 +22,7 @@ Supports:
 - Continue.dev: via `.continue/mcp.json`
 - Hermes Agent: via `~/.hermes/config.yaml`
 - Goose: via `~/.config/goose/config.yaml`
+- GSD: via `.gsd/mcp.json` or `~/.gsd/mcp.json`
 - IntelliJ: manual instructions
 """
 
@@ -49,7 +50,7 @@ AUTO_INSTALL_TARGETS: tuple[str, ...] = (
     # New targets:
     "opencode", "gemini-cli", "roo-code", "amazon-q",
     "copilot-cli", "junie", "kiro", "trae", "firebase",
-    "amp", "continue", "hermes", "goose",
+    "amp", "continue", "hermes", "goose", "gsd",
 )
 
 #: Targets that only support manual setup instructions.
@@ -62,38 +63,86 @@ ALL_TARGETS: tuple[str, ...] = AUTO_INSTALL_TARGETS + MANUAL_TARGETS
 ALL_TARGETS_STR: str = ", ".join(ALL_TARGETS)
 
 
-def _find_command() -> str:
+def _find_command(project_dir: str | None = None) -> str:
     """Determine the right command to invoke the MCP server.
 
-    Checks for the installed entry point first, then falls back to
-    `python -m attocode.code_intel.server`.
+    Resolution order:
+    1. ``uv run attocode-code-intel`` when ``uv`` is available and the target
+       project's ``pyproject.toml`` declares the script — MCP hosts often spawn
+       subprocesses with a minimal PATH, so this is preferred for dev clones.
+    2. ``attocode-code-intel`` on PATH (pipx / global install).
+    3. ``python -m attocode.code_intel.server`` using the current interpreter.
     """
-    # Check if attocode-code-intel entry point is on PATH
+    base = Path(project_dir or ".").resolve()
+    pyproject = base / "pyproject.toml"
+    if shutil.which("uv") and pyproject.is_file():
+        try:
+            text = pyproject.read_text(encoding="utf-8")
+        except OSError:
+            text = ""
+        if "attocode-code-intel" in text:
+            return "uv run attocode-code-intel"
+
     if shutil.which("attocode-code-intel"):
         return "attocode-code-intel"
 
-    # Fall back to module invocation
     return f"{sys.executable} -m attocode.code_intel.server"
 
 
 def _build_server_entry(
     project_dir: str | None,
     *,
-    local_only: bool = False,
+    local_only: bool = True,
+    vscode_cursor_stdio: bool = False,
 ) -> dict:
-    """Build the MCP server config dict for JSON/TOML-based configs."""
-    cmd = _find_command()
+    """Build the MCP server config dict for JSON/TOML-based configs.
+
+    By default, ``--local-only`` is included so the stdio MCP process does not
+    auto-load ``.attocode/config.toml`` remote settings (which often point at
+    ``http://127.0.0.1:8080`` and break tools with connection refused when no
+    HTTP server is running). Pass ``local_only=False`` only if you intentionally
+    proxy MCP tools through a reachable remote code-intel API.
+
+    When ``vscode_cursor_stdio`` is True (Cursor, VS Code family, etc.), the
+    entry matches `Cursor MCP stdio requirements`_:
+
+    - ``"type": "stdio"`` (required for correct routing in Cursor)
+    - ``--project`` set to ``${workspaceFolder}`` so the subprocess always
+      indexes the folder that contains ``.cursor/mcp.json``, even when the
+      MCP host's cwd differs from the workspace root
+    - On macOS, ``PATH`` is prefixed with Homebrew locations so ``uv`` is
+      found when the host spawns the server with a minimal environment
+
+    .. _Cursor MCP stdio requirements: https://cursor.com/docs/mcp
+    """
+    resolve_dir = project_dir if project_dir is not None else "."
+    cmd = _find_command(resolve_dir)
     parts = cmd.split()
     command = parts[0]
     args = parts[1:]
     if local_only:
         args.append("--local-only")
     if project_dir is not None:
-        args += ["--project", os.path.abspath(project_dir)]
-    return {
+        if vscode_cursor_stdio:
+            args += ["--project", "${workspaceFolder}"]
+        else:
+            args += ["--project", os.path.abspath(project_dir)]
+
+    entry: dict = {
         "command": command,
         "args": args,
     }
+    if vscode_cursor_stdio:
+        entry["type"] = "stdio"
+        if platform.system() == "Darwin":
+            entry["env"] = {
+                "PATH": "/opt/homebrew/bin:/usr/local/bin:${env:PATH}",
+            }
+        elif platform.system() != "Windows":
+            entry["env"] = {
+                "PATH": "/usr/local/bin:/usr/bin:${env:PATH}",
+            }
+    return entry
 
 
 def install_claude(project_dir: str = ".", scope: str = "local") -> bool:
@@ -110,10 +159,11 @@ def install_claude(project_dir: str = ".", scope: str = "local") -> bool:
         print("Error: `claude` CLI not found. Install Claude Code first.", file=sys.stderr)
         return False
 
-    cmd = _find_command()
+    cmd = _find_command(project_dir)
     parts = cmd.split()
     command = parts[0]
     server_args = parts[1:]
+    server_args.append("--local-only")
 
     # For local installs (or explicit --project), bake in the absolute path.
     # For global installs without explicit --project, omit it so the server
@@ -189,7 +239,10 @@ def install_json_config(
             existing = json.loads(config_path.read_text(encoding="utf-8"))
 
     servers = existing.setdefault("mcpServers", {})
-    servers["attocode-code-intel"] = _build_server_entry(project_dir)
+    servers["attocode-code-intel"] = _build_server_entry(
+        project_dir,
+        vscode_cursor_stdio=True,
+    )
 
     config_path.write_text(
         json.dumps(existing, indent=2) + "\n",
@@ -285,11 +338,8 @@ def install_codex(project_dir: str = ".", scope: str = "local") -> bool:
         with contextlib.suppress(tomllib.TOMLDecodeError, OSError):
             existing = tomllib.loads(config_path.read_text(encoding="utf-8"))
 
-    local_only = scope == "user" and project_dir == "."
-    entry = _build_server_entry(
-        None if local_only else project_dir,
-        local_only=local_only,
-    )
+    omit_project = scope == "user" and project_dir == "."
+    entry = _build_server_entry(None if omit_project else project_dir)
     servers = existing.setdefault("mcp_servers", {})
     servers["attocode-code-intel"] = {
         "command": entry["command"],
@@ -420,8 +470,11 @@ def install_claude_desktop(project_dir: str = ".") -> bool:
         with contextlib.suppress(json.JSONDecodeError, OSError):
             existing = json.loads(config_path.read_text(encoding="utf-8"))
 
+    # Omit --project when no explicit project was given, so the server
+    # dynamically uses whatever directory the host runs it from.
+    effective_dir = None if project_dir == "." else project_dir
     servers = existing.setdefault("mcpServers", {})
-    servers["attocode-code-intel"] = _build_server_entry(project_dir)
+    servers["attocode-code-intel"] = _build_server_entry(effective_dir)
 
     config_path.write_text(
         json.dumps(existing, indent=2) + "\n",
@@ -490,8 +543,11 @@ def install_cline(project_dir: str = ".") -> bool:
         with contextlib.suppress(json.JSONDecodeError, OSError):
             existing = json.loads(config_path.read_text(encoding="utf-8"))
 
+    # Omit --project when no explicit project was given, so the server
+    # dynamically uses whatever directory the host runs it from.
+    effective_dir = None if project_dir == "." else project_dir
     servers = existing.setdefault("mcpServers", {})
-    servers["attocode-code-intel"] = _build_server_entry(project_dir)
+    servers["attocode-code-intel"] = _build_server_entry(effective_dir)
 
     config_path.write_text(
         json.dumps(existing, indent=2) + "\n",
@@ -543,10 +599,14 @@ def _build_zed_server_entry(project_dir: str) -> dict:
 
     Zed uses a nested ``{"command": {"path": ..., "args": [...]}}`` schema.
     """
-    cmd = _find_command()
+    cmd = _find_command(project_dir)
     parts = cmd.split()
     command = parts[0]
-    args = parts[1:] + ["--project", os.path.abspath(project_dir)]
+    args = parts[1:] + [
+        "--local-only",
+        "--project",
+        os.path.abspath(project_dir),
+    ]
     return {
         "command": {
             "path": command,
@@ -626,8 +686,12 @@ def uninstall_zed(project_dir: str = ".", scope: str = "local") -> bool:
 # ---------------------------------------------------------------------------
 
 
-def install_opencode(project_dir: str = ".") -> bool:
-    """Install into OpenCode via ``~/.config/opencode/config.json``."""
+def install_opencode(project_dir: str = ".", scope: str = "local") -> bool:
+    """Install into OpenCode via ``~/.config/opencode/config.json``.
+
+    OpenCode uses ``"mcp"`` as the top-level key (not ``"mcpServers"``),
+    entries require ``"type": "local"`` and ``"command"`` as a single array.
+    """
     config_path = Path(
         os.environ.get("XDG_CONFIG_HOME", Path.home() / ".config")
     ) / "opencode" / "config.json"
@@ -639,8 +703,17 @@ def install_opencode(project_dir: str = ".") -> bool:
         with contextlib.suppress(json.JSONDecodeError, OSError):
             existing = json.loads(config_path.read_text(encoding="utf-8"))
 
-    servers = existing.setdefault("mcpServers", {})
-    servers["attocode-code-intel"] = _build_server_entry(project_dir)
+    # Omit --project when no explicit project was given, so the server
+    # dynamically uses whatever directory the host runs it from.
+    effective_dir = None if project_dir == "." else project_dir
+    entry = _build_server_entry(effective_dir)
+
+    # OpenCode format: "mcp" key, "type": "local", "command" as single array.
+    servers = existing.setdefault("mcp", {})
+    servers["attocode-code-intel"] = {
+        "type": "local",
+        "command": [entry["command"]] + entry["args"],
+    }
 
     config_path.write_text(
         json.dumps(existing, indent=2) + "\n",
@@ -665,7 +738,7 @@ def uninstall_opencode() -> bool:
     except (json.JSONDecodeError, OSError):
         return True
 
-    servers = existing.get("mcpServers", {})
+    servers = existing.get("mcp", {})
     if "attocode-code-intel" in servers:
         del servers["attocode-code-intel"]
         config_path.write_text(
@@ -757,8 +830,11 @@ def install_amazonq(project_dir: str = ".") -> bool:
         with contextlib.suppress(json.JSONDecodeError, OSError):
             existing = json.loads(config_path.read_text(encoding="utf-8"))
 
+    # Omit --project when no explicit project was given, so the server
+    # dynamically uses whatever directory the host runs it from.
+    effective_dir = None if project_dir == "." else project_dir
     servers = existing.setdefault("mcpServers", {})
-    servers["attocode-code-intel"] = _build_server_entry(project_dir)
+    servers["attocode-code-intel"] = _build_server_entry(effective_dir)
 
     config_path.write_text(
         json.dumps(existing, indent=2) + "\n",
@@ -809,8 +885,11 @@ def install_copilot_cli(project_dir: str = ".") -> bool:
         with contextlib.suppress(json.JSONDecodeError, OSError):
             existing = json.loads(config_path.read_text(encoding="utf-8"))
 
+    # Omit --project when no explicit project was given, so the server
+    # dynamically uses whatever directory the host runs it from.
+    effective_dir = None if project_dir == "." else project_dir
     servers = existing.setdefault("mcpServers", {})
-    servers["attocode-code-intel"] = _build_server_entry(project_dir)
+    servers["attocode-code-intel"] = _build_server_entry(effective_dir)
 
     config_path.write_text(
         json.dumps(existing, indent=2) + "\n",
@@ -1001,8 +1080,11 @@ def install_hermes(project_dir: str = ".") -> bool:
             if isinstance(raw, dict):
                 existing = raw
 
+    # Omit --project when no explicit project was given, so the server
+    # dynamically uses whatever directory the host runs it from.
+    effective_dir = None if project_dir == "." else project_dir
     servers = existing.setdefault("mcp_servers", {})
-    entry = _build_server_entry(project_dir)
+    entry = _build_server_entry(effective_dir)
     servers["attocode-code-intel"] = {
         "command": entry["command"],
         "args": entry["args"],
@@ -1051,7 +1133,7 @@ def uninstall_hermes() -> bool:
 # ---------------------------------------------------------------------------
 
 
-def _build_goose_extension_entry(project_dir: str) -> dict:
+def _build_goose_extension_entry(project_dir: str | None) -> dict:
     """Build a Goose extension entry (different schema from standard MCP)."""
     entry = _build_server_entry(project_dir)
     cmd_str = entry["command"]
@@ -1090,7 +1172,10 @@ def install_goose(project_dir: str = ".") -> bool:
         ext for ext in extensions
         if not (isinstance(ext, dict) and ext.get("name") == "attocode-code-intel")
     ]
-    extensions.append(_build_goose_extension_entry(project_dir))
+    # Omit --project when no explicit project was given, so the server
+    # dynamically uses whatever directory the host runs it from.
+    effective_dir = None if project_dir == "." else project_dir
+    extensions.append(_build_goose_extension_entry(effective_dir))
 
     config_path.write_text(
         yaml.safe_dump(existing, default_flow_style=False, sort_keys=False),
@@ -1128,6 +1213,72 @@ def uninstall_goose() -> bool:
         raw["extensions"] = filtered
         config_path.write_text(
             yaml.safe_dump(raw, default_flow_style=False, sort_keys=False),
+            encoding="utf-8",
+        )
+        print(f"Removed attocode-code-intel from {config_path}")
+
+    return True
+
+
+# ---------------------------------------------------------------------------
+# GSD — .gsd/mcp.json (project) or ~/.gsd/mcp.json (global)
+# ---------------------------------------------------------------------------
+
+
+def install_gsd(project_dir: str = ".", scope: str = "local") -> bool:
+    """Install into GSD via ``mcp.json``.
+
+    Args:
+        project_dir: Path to the project to index.
+        scope: "local" (project) or "user" (global ~/.gsd/).
+    """
+    if scope == "user":
+        config_path = Path.home() / ".gsd" / "mcp.json"
+    else:
+        config_path = Path(project_dir) / ".gsd" / "mcp.json"
+    config_path.parent.mkdir(parents=True, exist_ok=True)
+
+    existing: dict = {}
+    if config_path.exists():
+        import contextlib
+        with contextlib.suppress(json.JSONDecodeError, OSError):
+            existing = json.loads(config_path.read_text(encoding="utf-8"))
+
+    effective_dir = None if project_dir == "." and scope == "user" else project_dir
+    entry = _build_server_entry(effective_dir)
+
+    servers = existing.setdefault("servers", {})
+    servers["attocode-code-intel"] = entry
+
+    config_path.write_text(
+        json.dumps(existing, indent=2) + "\n",
+        encoding="utf-8",
+    )
+    print(f"Installed attocode-code-intel into {config_path}")
+    return True
+
+
+def uninstall_gsd(project_dir: str = ".", scope: str = "local") -> bool:
+    """Uninstall from GSD."""
+    if scope == "user":
+        config_path = Path.home() / ".gsd" / "mcp.json"
+    else:
+        config_path = Path(project_dir) / ".gsd" / "mcp.json"
+
+    if not config_path.exists():
+        print(f"No config found at {config_path}")
+        return True
+
+    try:
+        existing = json.loads(config_path.read_text(encoding="utf-8"))
+    except (json.JSONDecodeError, OSError):
+        return True
+
+    servers = existing.get("servers", {})
+    if "attocode-code-intel" in servers:
+        del servers["attocode-code-intel"]
+        config_path.write_text(
+            json.dumps(existing, indent=2) + "\n",
             encoding="utf-8",
         )
         print(f"Removed attocode-code-intel from {config_path}")
@@ -1190,7 +1341,7 @@ def install(target: str, project_dir: str = ".", scope: str = "local") -> bool:
     Args:
         target: One of :data:`ALL_TARGETS`.
         project_dir: Path to the project to index.
-        scope: For Claude/Codex/Zed/Gemini/Junie/Amp: "local" or "user".
+        scope: For Claude/Codex/Zed/Gemini/Junie/Amp/OpenCode: "local" or "user".
                Ignored for others.
     """
     if target == "claude":
@@ -1206,7 +1357,7 @@ def install(target: str, project_dir: str = ".", scope: str = "local") -> bool:
     elif target == "zed":
         return install_zed(project_dir, scope=scope)
     elif target == "opencode":
-        return install_opencode(project_dir)
+        return install_opencode(project_dir, scope=scope)
     elif target == "gemini-cli":
         return install_gemini(project_dir, scope=scope)
     elif target == "amazon-q":
@@ -1221,6 +1372,8 @@ def install(target: str, project_dir: str = ".", scope: str = "local") -> bool:
         return install_hermes(project_dir)
     elif target == "goose":
         return install_goose(project_dir)
+    elif target == "gsd":
+        return install_gsd(project_dir, scope=scope)
     elif target in MANUAL_TARGETS:
         return print_manual_instructions(target, project_dir)
     else:
@@ -1261,6 +1414,8 @@ def uninstall(target: str, project_dir: str = ".", scope: str = "local") -> bool
         return uninstall_hermes()
     elif target == "goose":
         return uninstall_goose()
+    elif target == "gsd":
+        return uninstall_gsd(project_dir, scope=scope)
     elif target in MANUAL_TARGETS:
         print(f"Nothing to uninstall — {target} uses manual configuration.")
         return True

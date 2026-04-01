@@ -21,7 +21,7 @@ import httpx
 
 from attocode.errors import ProviderError
 from attocode.providers.openai import OpenAIProvider
-from attocode.providers.openai_compat import describe_request_error
+from attocode.providers.openai_compat import describe_request_error, sanitize_tool_messages
 
 if TYPE_CHECKING:
     from collections.abc import AsyncIterator
@@ -52,6 +52,11 @@ class MinimaxProvider(OpenAIProvider):
     Supports streaming, tool use (M2.1+), and extended thinking.
     Vision is not supported — images are stripped with a warning.
     """
+
+    # Streaming read timeout — how long to wait between chunks before
+    # considering the connection stalled.  MiniMax can think for a while
+    # but 120s between chunks means the connection is dead.
+    _STREAM_READ_TIMEOUT = 120.0
 
     def __init__(
         self,
@@ -121,9 +126,16 @@ class MinimaxProvider(OpenAIProvider):
                 result.append(Message(
                     role=msg.role,
                     content="[image removed — not supported by MiniMax]",
+                    tool_calls=getattr(msg, "tool_calls", None),
+                    tool_call_id=getattr(msg, "tool_call_id", None),
                 ))
             elif len(non_image) == 1:
-                result.append(Message(role=msg.role, content=getattr(non_image[0], "text", str(non_image[0]))))
+                result.append(Message(
+                    role=msg.role,
+                    content=getattr(non_image[0], "text", str(non_image[0])),
+                    tool_calls=getattr(msg, "tool_calls", None),
+                    tool_call_id=getattr(msg, "tool_call_id", None),
+                ))
             else:
                 result.append(MessageWithStructuredContent(role=msg.role, content=non_image))
         return result
@@ -169,9 +181,13 @@ class MinimaxProvider(OpenAIProvider):
     ) -> dict[str, Any]:
         """Build the request body with MiniMax-specific adjustments."""
         model = (options and options.model) or self._model
+        formatted = self._format_messages(messages)
+        # MiniMax strictly requires tool results to follow their tool calls.
+        # Compaction / truncation can orphan results — strip them here.
+        formatted = sanitize_tool_messages(formatted)
         body: dict[str, Any] = {
             "model": model,
-            "messages": self._format_messages(messages),
+            "messages": formatted,
         }
         if options and options.max_tokens:
             body["max_tokens"] = options.max_tokens
@@ -222,6 +238,27 @@ class MinimaxProvider(OpenAIProvider):
                 provider="minimax", retryable=True,
             ) from e
 
+    def _stream_client(self) -> httpx.AsyncClient:
+        """Return an httpx client with a shorter read timeout for streaming.
+
+        MiniMax can take a while to start responding, but once streaming
+        begins, silence > 120s between chunks means the connection is dead.
+        """
+        if not hasattr(self, "_streaming_client") or self._streaming_client.is_closed:
+            self._streaming_client = httpx.AsyncClient(
+                timeout=httpx.Timeout(
+                    connect=30.0,
+                    read=self._STREAM_READ_TIMEOUT,
+                    write=30.0,
+                    pool=30.0,
+                ),
+                headers={
+                    "Authorization": f"Bearer {self._api_key}",
+                    "Content-Type": "application/json",
+                },
+            )
+        return self._streaming_client
+
     async def chat_stream(
         self,
         messages: list[Message | MessageWithStructuredContent],
@@ -231,7 +268,7 @@ class MinimaxProvider(OpenAIProvider):
         from attocode.types.messages import StreamChunk as SC, StreamChunkType
 
         messages = self._maybe_strip_images(messages)
-        client = self._ensure_client()
+        client = self._stream_client()
         body = self._build_body(messages, options, stream=True)
 
         # Stateful think-tag filter for streaming chunks

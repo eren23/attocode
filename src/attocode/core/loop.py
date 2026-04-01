@@ -31,7 +31,7 @@ from attocode.core.tool_executor import (
     execute_tool_calls,
     execute_tool_calls_concurrent,
 )
-from attocode.integrations.context.compaction import microcompact
+from attocode.integrations.context.compaction import adjust_slice_for_tool_pairs, microcompact
 from attocode.errors import BudgetExhaustedError, CancellationError
 from attocode.types.agent import AgentCompletionStatus, AgentResult, CompletionReason
 from attocode.types.events import EventType
@@ -546,7 +546,12 @@ async def handle_fresh_context_refresh(ctx: AgentContext) -> CompactionResult:
         ]
 
         keep_recent = min(ctx.compaction_manager.min_messages_to_keep, len(non_system))
-        recent = non_system[-keep_recent:] if keep_recent > 0 else []
+        if keep_recent > 0 and non_system:
+            raw_start = max(0, len(non_system) - keep_recent)
+            adj_start = adjust_slice_for_tool_pairs(non_system, raw_start)
+            recent = non_system[adj_start:]
+        else:
+            recent = []
 
         new_messages: list[Message | Any] = list(system_msgs)
         new_messages.append(Message(
@@ -1284,8 +1289,32 @@ async def run_execution_loop(
 
                 tool_results: list[ToolResult] = []
                 if calls_to_execute:
-                    tool_results = await execute_tool_calls_concurrent(ctx, calls_to_execute)
+                    try:
+                        tool_results = await execute_tool_calls_concurrent(ctx, calls_to_execute)
+                    except Exception as _tool_exec_err:
+                        # Ensure unhandled exceptions don't silently kill the agent
+                        ctx.emit_simple(
+                            EventType.TOOL_ERROR,
+                            error=f"Tool execution failed: {_tool_exec_err}",
+                            iteration=ctx.iteration,
+                        )
+                        for tc in calls_to_execute:
+                            tool_results.append(ToolResult(
+                                call_id=tc.id,
+                                error=f"Execution error: {type(_tool_exec_err).__name__}: {_tool_exec_err}",
+                            ))
                 tool_results.extend(blocked_results)
+
+                # Build and add tool result messages IMMEDIATELY after
+                # execution — before any system message injections.
+                # MiniMax (and strict OpenAI-compat APIs) require tool
+                # results to follow the assistant tool_call with nothing
+                # in between.
+                tool_messages = build_tool_result_messages(
+                    response.tool_calls,
+                    tool_results,
+                )
+                ctx.add_messages(tool_messages)
 
                 # Record in economics (loop detection + phase tracking)
                 if ctx.economics is not None:
@@ -1393,13 +1422,6 @@ async def run_execution_loop(
                                     lsp_diagnostics_parts.append(diag_msg)
                             except Exception:
                                 pass
-
-                # Build and add tool result messages
-                tool_messages = build_tool_result_messages(
-                    response.tool_calls,
-                    tool_results,
-                )
-                ctx.add_messages(tool_messages)
 
                 # Inject LSP diagnostics as system feedback
                 if lsp_diagnostics_parts:

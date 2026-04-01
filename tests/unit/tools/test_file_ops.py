@@ -18,6 +18,11 @@ from attocode.tools.file_ops import (
 
 class TestReadFile:
     @pytest.mark.asyncio
+    async def test_read_rejects_unc_path(self) -> None:
+        result = await read_file({"path": r"\\fileserver\share\secret.txt"})
+        assert "UNC" in result or "not allowed" in result.lower()
+
+    @pytest.mark.asyncio
     async def test_read_existing_file(self, tmp_workdir: Path) -> None:
         f = tmp_workdir / "test.txt"
         f.write_text("line1\nline2\nline3\n")
@@ -72,6 +77,11 @@ class TestReadFile:
 
 
 class TestWriteFile:
+    @pytest.mark.asyncio
+    async def test_write_rejects_unc_path(self) -> None:
+        result = await write_file({"path": "//evil.host/share/x", "content": "x"})
+        assert "UNC" in result or "not allowed" in result.lower()
+
     @pytest.mark.asyncio
     async def test_write_new_file(self, tmp_workdir: Path) -> None:
         f = tmp_workdir / "new.txt"

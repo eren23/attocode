@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import threading
 import tomllib
 from typing import TYPE_CHECKING
 from unittest.mock import MagicMock
@@ -23,6 +24,41 @@ if TYPE_CHECKING:
     from pathlib import Path
 
 # ---------------------------------------------------------------------------
+# Helper: create a CodeIntelService with injected mock sub-services
+# ---------------------------------------------------------------------------
+
+
+def _make_service_with_mocks(
+    project_dir: str,
+    *,
+    ast_service=None,
+    context_mgr=None,
+    code_analyzer=None,
+    explorer=None,
+):
+    """Create a CodeIntelService with pre-set internal singletons.
+
+    This bypasses lazy initialization so tools that call ``_get_service()``
+    see the prepared mocks instead of trying to create real services.
+    """
+    from attocode.code_intel.service import CodeIntelService
+
+    svc = CodeIntelService.__new__(CodeIntelService)
+    svc._project_dir = project_dir
+    svc._config = None
+    svc._init_lock = threading.Lock()
+    svc._ast_service = ast_service
+    svc._context_mgr = context_mgr
+    svc._code_analyzer = code_analyzer
+    svc._lsp_manager = None
+    svc._explorer = explorer
+    svc._security_scanner = None
+    svc._semantic_search = None
+    svc._memory_store = None
+    return svc
+
+
+# ---------------------------------------------------------------------------
 # Server tool handlers
 # ---------------------------------------------------------------------------
 
@@ -34,6 +70,7 @@ class TestServerTools:
     def _setup_env(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
         """Set up project dir and reset singletons."""
         monkeypatch.setenv("ATTOCODE_PROJECT_DIR", str(tmp_path))
+        self.tmp_path = tmp_path
 
         import attocode.code_intel.server as srv
 
@@ -42,11 +79,13 @@ class TestServerTools:
         srv._code_analyzer = None
         srv._semantic_search = None
         srv._memory_store = None
+        srv._service = None
         yield
         srv._ast_service = None
         srv._context_mgr = None
         srv._code_analyzer = None
         srv._semantic_search = None
+        srv._service = None
         if srv._memory_store is not None:
             srv._memory_store.close()
             srv._memory_store = None
@@ -113,7 +152,8 @@ class TestServerTools:
         import attocode.code_intel.server as srv
         from attocode.code_intel.server import symbols
 
-        srv._ast_service = self._make_mock_ast_service()
+        mock_ast = self._make_mock_ast_service()
+        srv._service = _make_service_with_mocks(str(self.tmp_path), ast_service=mock_ast)
 
         result = symbols("a.py")
         assert "foo" in result
@@ -124,9 +164,9 @@ class TestServerTools:
         import attocode.code_intel.server as srv
         from attocode.code_intel.server import symbols
 
-        svc = self._make_mock_ast_service()
-        svc.get_file_symbols.return_value = []
-        srv._ast_service = svc
+        mock_ast = self._make_mock_ast_service()
+        mock_ast.get_file_symbols.return_value = []
+        srv._service = _make_service_with_mocks(str(self.tmp_path), ast_service=mock_ast)
 
         result = symbols("empty.py")
         assert "No symbols found" in result
@@ -135,21 +175,22 @@ class TestServerTools:
         import attocode.code_intel.server as srv
         from attocode.code_intel.server import search_symbols
 
-        svc = self._make_mock_ast_service()
-        srv._ast_service = svc
+        mock_ast = self._make_mock_ast_service()
+        srv._service = _make_service_with_mocks(str(self.tmp_path), ast_service=mock_ast)
 
         result = search_symbols("MyClass", limit=5, kind="class")
         assert "MyClass" in result
         assert "class" in result
         assert "b.py" in result
         assert "[98%]" in result
-        svc.search_symbol.assert_called_once_with("MyClass", limit=5, kind_filter="class")
+        mock_ast.search_symbol.assert_called_once_with("MyClass", limit=5, kind_filter="class")
 
     def test_dependencies_tool(self):
         import attocode.code_intel.server as srv
         from attocode.code_intel.server import dependencies
 
-        srv._ast_service = self._make_mock_ast_service()
+        mock_ast = self._make_mock_ast_service()
+        srv._service = _make_service_with_mocks(str(self.tmp_path), ast_service=mock_ast)
 
         result = dependencies("a.py")
         assert "dep1.py" in result
@@ -162,7 +203,8 @@ class TestServerTools:
         import attocode.code_intel.server as srv
         from attocode.code_intel.server import impact_analysis
 
-        srv._ast_service = self._make_mock_ast_service()
+        mock_ast = self._make_mock_ast_service()
+        srv._service = _make_service_with_mocks(str(self.tmp_path), ast_service=mock_ast)
 
         result = impact_analysis(["a.py"])
         assert "affected1.py" in result
@@ -173,9 +215,9 @@ class TestServerTools:
         import attocode.code_intel.server as srv
         from attocode.code_intel.server import impact_analysis
 
-        svc = self._make_mock_ast_service()
-        svc.get_impact.return_value = set()
-        srv._ast_service = svc
+        mock_ast = self._make_mock_ast_service()
+        mock_ast.get_impact.return_value = set()
+        srv._service = _make_service_with_mocks(str(self.tmp_path), ast_service=mock_ast)
 
         result = impact_analysis(["isolated.py"])
         assert "No other files are impacted" in result
@@ -184,7 +226,8 @@ class TestServerTools:
         import attocode.code_intel.server as srv
         from attocode.code_intel.server import cross_references
 
-        srv._ast_service = self._make_mock_ast_service()
+        mock_ast = self._make_mock_ast_service()
+        srv._service = _make_service_with_mocks(str(self.tmp_path), ast_service=mock_ast)
 
         result = cross_references("MyClass")
         assert "Definitions" in result
@@ -197,7 +240,8 @@ class TestServerTools:
         import attocode.code_intel.server as srv
         from attocode.code_intel.server import dependency_graph
 
-        srv._ast_service = self._make_mock_ast_service()
+        mock_ast = self._make_mock_ast_service()
+        srv._service = _make_service_with_mocks(str(self.tmp_path), ast_service=mock_ast)
 
         result = dependency_graph("a.py", depth=1)
         assert "Imports (forward)" in result
@@ -226,7 +270,7 @@ class TestServerTools:
             exports=["greet"],
             line_count=10,
         )
-        srv._code_analyzer = analyzer
+        srv._service = _make_service_with_mocks(str(tmp_path), code_analyzer=analyzer)
 
         result = file_analysis(str(tmp_path / "test.py"))
         assert "python" in result
@@ -247,7 +291,7 @@ class TestServerTools:
             total_lines=100,
             languages={"python": 2},
         )
-        srv._context_mgr = ctx
+        srv._service = _make_service_with_mocks(str(self.tmp_path), context_mgr=ctx)
 
         result = repo_map(include_symbols=False, max_tokens=4000)
         assert "main.py" in result
@@ -583,6 +627,11 @@ def _build_mock_env(tmp_path, monkeypatch):
     srv._context_mgr = ctx_mock
     srv._ast_service = svc_mock
 
+    # Also set srv._service so tools that call _get_service() see the mocks
+    srv._service = _make_service_with_mocks(
+        str(tmp_path), ast_service=svc_mock, context_mgr=ctx_mock,
+    )
+
     # Create a pyproject.toml so _detect_project_name works
     (tmp_path / "pyproject.toml").write_text('[project]\nname = "my-cool-project"\n')
 
@@ -600,6 +649,7 @@ class TestSynthesisTools:
         self.srv._ast_service = None
         self.srv._context_mgr = None
         self.srv._code_analyzer = None
+        self.srv._service = None
 
     # -- project_summary --
 
@@ -882,8 +932,56 @@ class TestInstaller:
 
         entry = _build_server_entry("/tmp/project")
         assert entry["command"] is not None
+        assert "--local-only" in entry["args"]
         assert "--project" in entry["args"]
         assert "/tmp/project" in entry["args"]
+
+    def test_build_server_entry_local_only_false_omits_flag(
+        self, monkeypatch: pytest.MonkeyPatch,
+    ):
+        from attocode.code_intel.installer import _build_server_entry
+
+        monkeypatch.setattr("shutil.which", lambda x: None)
+
+        entry = _build_server_entry("/tmp/project", local_only=False)
+        assert "--local-only" not in entry["args"]
+        assert "--project" in entry["args"]
+
+    def test_find_command_uv_when_pyproject_has_entry(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+    ):
+        from attocode.code_intel.installer import _find_command
+
+        (tmp_path / "pyproject.toml").write_text(
+            "[project.scripts]\nattocode-code-intel = \"attocode.code_intel.server:main\"\n",
+            encoding="utf-8",
+        )
+        monkeypatch.setattr(
+            "shutil.which",
+            lambda name: "/fake/bin/uv" if name == "uv" else None,
+        )
+        assert _find_command(str(tmp_path)) == "uv run attocode-code-intel"
+
+    def test_find_command_prefers_uv_over_path_binary_when_pyproject_declares_script(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+    ):
+        """MCP hosts often lack the same PATH as an interactive shell."""
+        from attocode.code_intel.installer import _find_command
+
+        (tmp_path / "pyproject.toml").write_text(
+            "[project.scripts]\nattocode-code-intel = \"attocode.code_intel.server:main\"\n",
+            encoding="utf-8",
+        )
+
+        def _which(name: str) -> str | None:
+            if name == "uv":
+                return "/fake/bin/uv"
+            if name == "attocode-code-intel":
+                return "/fake/bin/attocode-code-intel"
+            return None
+
+        monkeypatch.setattr("shutil.which", _which)
+        assert _find_command(str(tmp_path)) == "uv run attocode-code-intel"
 
     def test_install_json_cursor(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
         from attocode.code_intel.installer import install_json_config
@@ -899,6 +997,7 @@ class TestInstaller:
         data = json.loads(config_path.read_text())
         assert "attocode-code-intel" in data["mcpServers"]
         server = data["mcpServers"]["attocode-code-intel"]
+        assert "--local-only" in server["args"]
         assert "--project" in server["args"]
 
     def test_install_json_windsurf(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
@@ -979,6 +1078,7 @@ class TestInstaller:
         assert result is True
         assert len(captured_cmds) == 1
         assert "--project" not in captured_cmds[0]
+        assert "--local-only" in captured_cmds[0]
 
     def test_install_claude_global_with_explicit_project(self, monkeypatch: pytest.MonkeyPatch):
         """Global install with explicit --project should include --project."""
@@ -1005,6 +1105,7 @@ class TestInstaller:
         assert len(captured_cmds) == 1
         assert "--project" in captured_cmds[0]
         assert "/some/path" in captured_cmds[0]
+        assert "--local-only" in captured_cmds[0]
 
     def test_install_codex_local(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
         from attocode.code_intel.installer import install_codex
@@ -1020,6 +1121,7 @@ class TestInstaller:
         data = tomllib.loads(config_path.read_text())
         assert "attocode-code-intel" in data["mcp_servers"]
         server = data["mcp_servers"]["attocode-code-intel"]
+        assert "--local-only" in server["args"]
         assert "--project" in server["args"]
 
     def test_install_codex_user(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
@@ -1053,7 +1155,7 @@ class TestInstaller:
         server = data["mcp_servers"]["attocode-code-intel"]
         assert "--project" in server["args"]
         assert "/some/project" in server["args"]
-        assert "--local-only" not in server["args"]
+        assert "--local-only" in server["args"]
 
     def test_install_codex_merges_existing(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
         import tomli_w
@@ -1110,6 +1212,7 @@ class TestInstaller:
         assert result is True
         assert len(captured_cmds) == 1
         assert "--project" in captured_cmds[0]
+        assert "--local-only" in captured_cmds[0]
 
     # -- VS Code --
 
@@ -1127,6 +1230,7 @@ class TestInstaller:
         data = json.loads(config_path.read_text())
         assert "attocode-code-intel" in data["mcpServers"]
         server = data["mcpServers"]["attocode-code-intel"]
+        assert "--local-only" in server["args"]
         assert "--project" in server["args"]
 
     def test_uninstall_json_vscode(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
@@ -1247,6 +1351,7 @@ class TestInstaller:
         assert "command" in entry
         assert "path" in entry["command"]
         assert "args" in entry["command"]
+        assert "--local-only" in entry["command"]["args"]
 
     def test_install_zed_user(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
         from attocode.code_intel.installer import install_zed
@@ -1311,7 +1416,7 @@ class TestInstaller:
         config_path = config_dir / "config.json"
         assert config_path.exists()
         data = json.loads(config_path.read_text())
-        assert "attocode-code-intel" in data["mcpServers"]
+        assert "attocode-code-intel" in data["mcp"]
 
     def test_uninstall_opencode(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
         from attocode.code_intel.installer import install_opencode, uninstall_opencode
@@ -1325,7 +1430,7 @@ class TestInstaller:
 
         config_path = tmp_path / ".config" / "opencode" / "config.json"
         data = json.loads(config_path.read_text())
-        assert "attocode-code-intel" not in data.get("mcpServers", {})
+        assert "attocode-code-intel" not in data.get("mcp", {})
 
     def test_install_gemini_local(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
         from attocode.code_intel.installer import install_gemini
@@ -1564,6 +1669,48 @@ class TestInstaller:
         assert config_path.exists()
         data = json.loads(config_path.read_text())
         assert "attocode-code-intel" in data["mcpServers"]
+
+    def test_install_gsd(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+        from attocode.code_intel.installer import install
+
+        monkeypatch.setattr("shutil.which", lambda x: None)
+
+        result = install("gsd", project_dir=str(tmp_path))
+        assert result is True
+
+        config_path = tmp_path / ".gsd" / "mcp.json"
+        assert config_path.exists()
+        data = json.loads(config_path.read_text())
+        assert "attocode-code-intel" in data["servers"]
+        gsd_entry = data["servers"]["attocode-code-intel"]
+        assert "--local-only" in gsd_entry["args"]
+        assert "--project" in gsd_entry["args"]
+
+    def test_install_gsd_global(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+        from attocode.code_intel.installer import install
+
+        monkeypatch.setattr("shutil.which", lambda x: None)
+        monkeypatch.setattr("pathlib.Path.home", lambda: tmp_path)
+
+        result = install("gsd", project_dir=str(tmp_path / "proj"), scope="user")
+        assert result is True
+
+        config_path = tmp_path / ".gsd" / "mcp.json"
+        assert config_path.exists()
+        data = json.loads(config_path.read_text())
+        assert "attocode-code-intel" in data["servers"]
+        gsd_entry = data["servers"]["attocode-code-intel"]
+        assert "--local-only" in gsd_entry["args"]
+
+    def test_uninstall_gsd(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+        from attocode.code_intel.installer import install, uninstall
+
+        monkeypatch.setattr("shutil.which", lambda x: None)
+        install("gsd", project_dir=str(tmp_path))
+        result = uninstall("gsd", project_dir=str(tmp_path))
+        assert result is True
+        data = json.loads((tmp_path / ".gsd" / "mcp.json").read_text())
+        assert "attocode-code-intel" not in data.get("servers", {})
 
     def test_install_dispatch_opencode(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
         """install('opencode') should auto-install, not print manual instructions."""
@@ -1883,7 +2030,7 @@ class TestCLIDispatch:
 
         dispatch_code_intel(["status"])
         captured = capsys.readouterr()
-        for target_name in ["Claude Code", "Cursor", "Windsurf", "VS Code", "Codex",
+        for target_name in ["Claude Code", "Cursor", "Windsurf", "VS Code", "GSD", "Codex",
                             "Claude Desktop", "Cline", "Zed"]:
             assert target_name in captured.out, f"Missing '{target_name}' in status output"
 
@@ -2179,6 +2326,7 @@ class TestBootstrapTool:
     @pytest.fixture(autouse=True)
     def _setup_env(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
         monkeypatch.setenv("ATTOCODE_PROJECT_DIR", str(tmp_path))
+        self.tmp_path = tmp_path
 
         import attocode.code_intel.server as srv
 
@@ -2187,12 +2335,14 @@ class TestBootstrapTool:
         srv._code_analyzer = None
         srv._explorer = None
         srv._semantic_search = None
+        srv._service = None
         yield
         srv._ast_service = None
         srv._context_mgr = None
         srv._code_analyzer = None
         srv._explorer = None
         srv._semantic_search = None
+        srv._service = None
 
     def _make_mock_context(self, file_count: int):
         """Create mock context manager with given file count."""
@@ -2212,7 +2362,7 @@ class TestBootstrapTool:
         ctx._files = files
         return ctx
 
-    def _make_mock_services(self, file_count: int):
+    def _make_mock_services(self, file_count: int, explorer=None):
         """Set up mocked server singletons for bootstrap tests."""
         import attocode.code_intel.server as srv
 
@@ -2240,6 +2390,14 @@ class TestBootstrapTool:
         svc._index.file_symbols = {}
         srv._ast_service = svc
 
+        # Also set srv._service so tools that call _get_service() see the mocks
+        srv._service = _make_service_with_mocks(
+            str(self.tmp_path),
+            ast_service=svc,
+            context_mgr=ctx,
+            explorer=explorer,
+        )
+
         return ctx, svc
 
     def test_bootstrap_small_codebase(self):
@@ -2254,12 +2412,12 @@ class TestBootstrapTool:
     def test_bootstrap_detects_large_codebase(self):
         import attocode.code_intel.server as srv
 
-        self._make_mock_services(3000)
-
         # Mock explorer for large codebase path
         explorer = MagicMock()
         explorer.explore.return_value = MagicMock()
         explorer.format_result.return_value = "src/ (3000 files)"
+
+        self._make_mock_services(3000, explorer=explorer)
         srv._explorer = explorer
 
         result = srv.bootstrap(max_tokens=4000)
@@ -2272,12 +2430,16 @@ class TestBootstrapTool:
 
         ctx = MagicMock()
         ctx._files = []
-        srv._context_mgr = ctx
 
         svc = MagicMock()
         svc.initialized = True
         svc._ast_cache = {}
+
+        srv._context_mgr = ctx
         srv._ast_service = svc
+        srv._service = _make_service_with_mocks(
+            str(self.tmp_path), ast_service=svc, context_mgr=ctx,
+        )
 
         result = srv.bootstrap()
         assert "No files" in result
@@ -2294,14 +2456,17 @@ class TestRelevantContextTool:
     @pytest.fixture(autouse=True)
     def _setup_env(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
         monkeypatch.setenv("ATTOCODE_PROJECT_DIR", str(tmp_path))
+        self.tmp_path = tmp_path
 
         import attocode.code_intel.server as srv
 
         srv._ast_service = None
         srv._context_mgr = None
+        srv._service = None
         yield
         srv._ast_service = None
         srv._context_mgr = None
+        srv._service = None
 
     def test_relevant_context_basic(self):
         import attocode.code_intel.server as srv
@@ -2322,7 +2487,6 @@ class TestRelevantContextTool:
             "dep2.py": file_ast,
             "user1.py": file_ast,
         }
-        srv._ast_service = svc
 
         # Mock context manager
         fi = MagicMock()
@@ -2351,7 +2515,12 @@ class TestRelevantContextTool:
 
         ctx = MagicMock()
         ctx._files = [fi, fi2, fi3, fi4]
+
+        srv._ast_service = svc
         srv._context_mgr = ctx
+        srv._service = _make_service_with_mocks(
+            str(self.tmp_path), ast_service=svc, context_mgr=ctx,
+        )
 
         result = srv.relevant_context(["target.py"])
         assert "target.py" in result
@@ -2365,11 +2534,15 @@ class TestRelevantContextTool:
 
         svc = MagicMock()
         svc._to_rel.return_value = ""
-        srv._ast_service = svc
 
         ctx = MagicMock()
         ctx._files = []
+
+        srv._ast_service = svc
         srv._context_mgr = ctx
+        srv._service = _make_service_with_mocks(
+            str(self.tmp_path), ast_service=svc, context_mgr=ctx,
+        )
 
         result = srv.relevant_context([])
         assert "No valid files" in result
@@ -2383,11 +2556,15 @@ class TestRelevantContextTool:
         svc.get_dependencies.return_value = set()
         svc.get_dependents.return_value = set()
         svc._ast_cache = {}
-        srv._ast_service = svc
 
         ctx = MagicMock()
         ctx._files = []
+
+        srv._ast_service = svc
         srv._context_mgr = ctx
+        srv._service = _make_service_with_mocks(
+            str(self.tmp_path), ast_service=svc, context_mgr=ctx,
+        )
 
         # depth > 2 should be capped to 2
         result = srv.relevant_context(["a.py"], depth=5)
@@ -2405,14 +2582,17 @@ class TestScopedConventions:
     @pytest.fixture(autouse=True)
     def _setup_env(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
         monkeypatch.setenv("ATTOCODE_PROJECT_DIR", str(tmp_path))
+        self.tmp_path = tmp_path
 
         import attocode.code_intel.server as srv
 
         srv._ast_service = None
         srv._context_mgr = None
+        srv._service = None
         yield
         srv._ast_service = None
         srv._context_mgr = None
+        srv._service = None
 
     def _make_file_ast(self, funcs: list[str], typed: int = 0, docstrings: int = 0):
         """Create a FileAST-like mock for convention tests."""
@@ -2455,7 +2635,6 @@ class TestScopedConventions:
             "src/tools/grep.py": tools_ast,
             "src/tools/glob.py": tools_ast,
         }
-        srv._ast_service = svc
 
         fi_list = []
         for path in svc._ast_cache:
@@ -2466,7 +2645,12 @@ class TestScopedConventions:
 
         ctx = MagicMock()
         ctx._files = fi_list
+
+        srv._ast_service = svc
         srv._context_mgr = ctx
+        srv._service = _make_service_with_mocks(
+            str(self.tmp_path), ast_service=svc, context_mgr=ctx,
+        )
 
         # Test scoped to src/core
         result = srv.conventions(path="src/core")
@@ -2478,14 +2662,18 @@ class TestScopedConventions:
 
         svc = MagicMock()
         svc._ast_cache = {"src/main.py": object()}
-        srv._ast_service = svc
 
         ctx = MagicMock()
         fi = MagicMock()
         fi.relative_path = "src/main.py"
         fi.importance = 0.6
         ctx._files = [fi]
+
+        srv._ast_service = svc
         srv._context_mgr = ctx
+        srv._service = _make_service_with_mocks(
+            str(self.tmp_path), ast_service=svc, context_mgr=ctx,
+        )
 
         result = srv.conventions(path="nonexistent")
         assert "No parsed files found" in result

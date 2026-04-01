@@ -287,6 +287,10 @@ class RemoteTextService:
     def indexing_status(self) -> dict[str, Any]:
         return self._get_json(f"/api/v1/projects/{self._repo_id}/index/status")
 
+    def hydration_status(self) -> dict[str, Any]:
+        """Mirror :meth:`CodeIntelService.hydration_status` for MCP remote mode."""
+        return self._get_json(f"/api/v1/projects/{self._repo_id}/hydration")
+
     def semantic_search_status(self) -> str:
         payload = self.indexing_status()
         lines = [
