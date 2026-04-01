@@ -23,14 +23,8 @@ class PolicyDecision(StrEnum):
     DENY = "deny"
 
 
-class DangerLevel(StrEnum):
-    """Danger level of an operation."""
-
-    SAFE = "safe"
-    LOW = "low"
-    MEDIUM = "medium"
-    HIGH = "high"
-    CRITICAL = "critical"
+# Import shared danger levels (avoids duplicate enum definitions)
+from attocode.types.messages import DangerLevel
 
 
 @dataclass(slots=True)

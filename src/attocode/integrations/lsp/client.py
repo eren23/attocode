@@ -168,6 +168,8 @@ class _LSPClient:
         self._buffer = b""
         self._initialized = False
         self._reader_task: asyncio.Task[None] | None = None
+        self._is_stopping = False  # Suppress spurious errors during shutdown
+        self._trace_enabled = False  # Protocol tracing (set via feature flag)
 
     @property
     def language_id(self) -> str:
@@ -176,6 +178,10 @@ class _LSPClient:
     @property
     def is_initialized(self) -> bool:
         return self._initialized
+
+    def enable_protocol_trace(self, enabled: bool = True) -> None:
+        """Enable verbose LSP protocol tracing (logs sent/received messages)."""
+        self._trace_enabled = enabled
 
     async def start(self) -> None:
         """Start the language server and initialize it."""
@@ -211,36 +217,118 @@ class _LSPClient:
         self._initialized = True
 
     async def stop(self) -> None:
-        """Stop the language server."""
-        if not self._process or not self._initialized:
+        """Full LSP server shutdown lifecycle.
+
+        Sequence (CC pattern):
+        1. Send shutdown request (clean stop request to server)
+        2. Send exit notification (server should terminate gracefully)
+        3. Close stdin
+        4. Wait for process to exit (with timeout)
+        5. Kill if still alive
+        6. Cancel pending requests
+
+        The _is_stopping flag prevents spurious errors from pending requests
+        during the shutdown sequence.
+        """
+        if not self._process or self._is_stopping:
             return
 
+        self._is_stopping = True
+
         try:
-            await self._request("shutdown", None)
-            self._notify("exit", None)
-        except Exception:
-            pass
-
-        if self._reader_task:
-            self._reader_task.cancel()
+            # Step 1: Send shutdown request
             try:
-                await self._reader_task
-            except asyncio.CancelledError:
+                await self._request("shutdown", None)
+                logger.debug("LSP %s: shutdown request sent", self._config.language_id)
+            except TimeoutError:
+                logger.warning("LSP %s: shutdown request timed out", self._config.language_id)
+            except Exception as exc:
+                logger.debug(
+                    "LSP %s: shutdown request error (non-fatal): %s",
+                    self._config.language_id, exc,
+                )
+
+            # Step 2: Send exit notification
+            try:
+                self._notify("exit", None)
+                logger.debug("LSP %s: exit notification sent", self._config.language_id)
+            except Exception as exc:
+                logger.debug(
+                    "LSP %s: exit notification error (non-fatal): %s",
+                    self._config.language_id, exc,
+                )
+
+            # Brief pause to let server clean up
+            await asyncio.sleep(0.1)
+
+            # Step 3: Close stdin
+            try:
+                if self._process.stdin:
+                    self._process.stdin.close()
+            except Exception:
                 pass
+
+            # Step 4: Wait for graceful exit
+            try:
+                retcode = await asyncio.wait_for(
+                    self._process.wait(),
+                    timeout=self._timeout,
+                )
+                logger.debug(
+                    "LSP %s: exited gracefully with code %s",
+                    self._config.language_id, retcode,
+                )
+                # Reader loop should drain EOF naturally, but cancel if still alive
+                try:
+                    await asyncio.wait_for(self._reader_task, timeout=1.0)
+                except TimeoutError:
+                    if self._reader_task and not self._reader_task.done():
+                        self._reader_task.cancel()
+                        try:
+                            await self._reader_task
+                        except asyncio.CancelledError:
+                            pass
+            except TimeoutError:
+                logger.warning("LSP %s: did not exit gracefully, killing", self._config.language_id)
+
+                # Step 5: Kill if still alive, then cancel the reader
+                killed = False
+                try:
+                    self._process.kill()
+                    killed = True
+                except Exception as exc:
+                    logger.warning("LSP %s: kill failed: %s", self._config.language_id, exc)
+
+                if killed:
+                    # Give reader loop a moment to notice EOF, then cancel it
+                    try:
+                        await asyncio.wait_for(self._reader_task, timeout=1.0)
+                    except TimeoutError:
+                        if self._reader_task and not self._reader_task.done():
+                            self._reader_task.cancel()
+                            try:
+                                await asyncio.wait_for(self._reader_task, timeout=2.0)
+                            except (TimeoutError, asyncio.CancelledError):
+                                pass
+                    except asyncio.CancelledError:
+                        pass
+                    try:
+                        await asyncio.wait_for(self._process.wait(), timeout=1.0)
+                        logger.info("LSP %s: killed", self._config.language_id)
+                    except TimeoutError:
+                        logger.warning("LSP %s: process still alive after kill + cancel", self._config.language_id)
+
+        finally:
+            self._process = None
+            self._initialized = False
             self._reader_task = None
+            self._is_stopping = False
 
-        if self._process.returncode is None:
-            self._process.kill()
-            await self._process.wait()
-
-        self._process = None
-        self._initialized = False
-
-        # Cancel pending requests
-        for future in self._pending.values():
-            if not future.done():
-                future.cancel()
-        self._pending.clear()
+            # Step 6: Cancel pending requests
+            for future in self._pending.values():
+                if not future.done():
+                    future.cancel()
+            self._pending.clear()
 
     async def get_definition(
         self, uri: str, line: int, character: int
@@ -359,6 +447,62 @@ class _LSPClient:
             if isinstance(loc, dict) and "uri" in loc and "range" in loc
         ]
 
+    async def prepare_call_hierarchy(
+        self, uri: str, line: int, character: int
+    ) -> list[dict[str, Any]] | None:
+        """Step 1 of call hierarchy: prepare the symbol at position.
+
+        Returns raw call hierarchy items from the server, or None if
+        the server doesn't support callHierarchy.
+        """
+        if not self._initialized:
+            return None
+
+        try:
+            result = await self._request("textDocument/prepareCallHierarchy", {
+                "textDocument": {"uri": uri},
+                "position": {"line": line, "character": character},
+            })
+        except Exception:
+            return None
+
+        if not result:
+            return None
+        items: list[dict[str, Any]] = result if isinstance(result, list) else [result]
+        return [item for item in items if isinstance(item, dict)]
+
+    async def incoming_calls(
+        self, item: dict[str, Any]
+    ) -> list[dict[str, Any]]:
+        """Step 2a: get incoming calls — who calls this symbol."""
+        if not self._initialized:
+            return []
+
+        try:
+            result = await self._request("callHierarchy/incomingCalls", {
+                "item": item,
+            })
+        except Exception:
+            return []
+
+        return result if isinstance(result, list) else []
+
+    async def outgoing_calls(
+        self, item: dict[str, Any]
+    ) -> list[dict[str, Any]]:
+        """Step 2b: get outgoing calls — what this symbol calls."""
+        if not self._initialized:
+            return []
+
+        try:
+            result = await self._request("callHierarchy/outgoingCalls", {
+                "item": item,
+            })
+        except Exception:
+            return []
+
+        return result if isinstance(result, list) else []
+
     def notify_document_open(self, uri: str, text: str) -> None:
         """Notify server about file open."""
         if not self._initialized:
@@ -420,7 +564,11 @@ class _LSPClient:
         asyncio.ensure_future(self._send_message(message))
 
     async def _send_message(self, message: dict[str, Any]) -> None:
-        """Send a message with Content-Length header framing."""
+        """Send a message with Content-Length header framing.
+
+        When _trace_enabled is True, logs the sent message at DEBUG level
+        (method name and params, no full content).
+        """
         if not self._process or not self._process.stdin:
             return
         content = json.dumps(message).encode()
@@ -428,20 +576,60 @@ class _LSPClient:
         self._process.stdin.write(header + content)
         await self._process.stdin.drain()
 
+        if self._trace_enabled:
+            method = message.get("method", "?")
+            params = message.get("params", {})
+            # Truncate params for logging
+            params_str = json.dumps(params, default=str)
+            if len(params_str) > 200:
+                params_str = params_str[:197] + "..."
+            logger.debug("LSP OUT: %s %s", method, params_str)
+
     async def _read_loop(self) -> None:
-        """Background loop reading LSP responses."""
-        if self._process is None or self._process.stdout is None:
+        """Background loop reading LSP responses.
+
+        Also captures stderr for server diagnostics when tracing is enabled.
+        """
+        if self._process is None:
             return
 
+        # Start stderr reader if tracing is enabled
+        stderr_task: asyncio.Task[None] | None = None
+        if self._process.stderr:
+            async def _read_stderr() -> None:
+                try:
+                    stderr_lines: list[str] = []
+                    while True:
+                        line = await self._process.stderr.readline()
+                        if not line:
+                            break
+                        decoded = line.decode(errors="replace").strip()
+                        if decoded:
+                            stderr_lines.append(decoded)
+                            if self._trace_enabled and stderr_lines:
+                                logger.debug("LSP STDERR: %s", decoded)
+                except Exception:
+                    pass
+
+            stderr_task = asyncio.create_task(_read_stderr())
+
         try:
-            while True:
-                data = await self._process.stdout.read(8192)
-                if not data:
-                    break
-                self._buffer += data
-                self._process_buffer()
+            if self._process.stdout:
+                while True:
+                    data = await self._process.stdout.read(8192)
+                    if not data:
+                        break
+                    self._buffer += data
+                    self._process_buffer()
         except asyncio.CancelledError:
             pass
+        finally:
+            if stderr_task:
+                stderr_task.cancel()
+                try:
+                    await stderr_task
+                except asyncio.CancelledError:
+                    pass
 
     def _process_buffer(self) -> None:
         """Parse complete messages from the buffer."""
@@ -473,7 +661,28 @@ class _LSPClient:
                 pass
 
     def _handle_message(self, message: dict[str, Any]) -> None:
-        """Handle an incoming JSON-RPC message."""
+        """Handle an incoming JSON-RPC message.
+
+        When _trace_enabled is True, logs received messages at DEBUG level.
+        """
+        if self._trace_enabled:
+            method = message.get("method", "?")
+            result = message.get("result")
+            error = message.get("error")
+            msg_id = message.get("id")
+            if method == "?":
+                # Response — log result/error summary
+                if error:
+                    logger.debug("LSP IN [resp]: id=%s error=%s", msg_id, error)
+                else:
+                    result_str = json.dumps(result, default=str)
+                    if len(result_str) > 200:
+                        result_str = result_str[:197] + "..."
+                    logger.debug("LSP IN [resp]: id=%s result=%s", msg_id, result_str)
+            else:
+                # Notification
+                logger.debug("LSP IN [notif]: %s", method)
+
         msg_id = message.get("id")
         if msg_id is not None and msg_id in self._pending:
             future = self._pending.pop(msg_id)
@@ -506,6 +715,10 @@ class _LSPClient:
                     code=d.get("code"),
                 ))
             self._on_diagnostics(uri, diagnostics)
+
+
+# Alias for external use
+LSPClient = _LSPClient
 
 
 def _parse_range(r: dict[str, Any]) -> LSPRange:
@@ -606,6 +819,15 @@ class LSPManager:
             self._timeout,
             on_diags,
         )
+
+        # Wire protocol tracing from feature flag
+        try:
+            from attocode.integrations.feature_flags import feature
+            if feature("LSP_PROTOCOL_TRACE"):
+                client.enable_protocol_trace(True)
+        except Exception:
+            pass
+
         await client.start()
         self._clients[language_id] = client
         self._emit("lsp.started", {

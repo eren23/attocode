@@ -17,6 +17,15 @@ def _resolve_path(path: str, working_dir: str | None = None) -> Path:
 
 
 async def read_file(args: dict[str, Any], working_dir: str | None = None) -> str:
+    # Security: block UNC paths
+    path_arg = args.get("path", "")
+    try:
+        from attocode.integrations.path_security import is_unc_path
+        if is_unc_path(path_arg):
+            return "Error: UNC/network paths are not allowed for security reasons."
+    except Exception:
+        pass  # Security check is best-effort
+
     path = _resolve_path(args["path"], working_dir)
     if not path.exists():
         return f"Error: File not found: {path}"
@@ -42,6 +51,15 @@ async def read_file(args: dict[str, Any], working_dir: str | None = None) -> str
 
 
 async def write_file(args: dict[str, Any], working_dir: str | None = None) -> str:
+    # Security: block UNC paths
+    path_arg = args.get("path", "")
+    try:
+        from attocode.integrations.path_security import is_unc_path
+        if is_unc_path(path_arg):
+            return "Error: UNC/network paths are not allowed for security reasons."
+    except Exception:
+        pass  # Security check is best-effort
+
     path = _resolve_path(args["path"], working_dir)
     content = args["content"]
     try:

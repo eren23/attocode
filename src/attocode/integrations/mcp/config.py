@@ -20,14 +20,52 @@ from typing import Any
 
 @dataclass(slots=True)
 class MCPServerConfig:
-    """Configuration for a single MCP server."""
+    """Configuration for a single MCP server.
+
+    Supports three transport types:
+    - stdio: command + args (existing)
+    - sse: url + optional headers
+    - http: url + optional headers (StreamableHTTP)
+
+    When transport is 'stdio', command/args/env are used.
+    When transport is 'sse' or 'http', url/headers/timeout are used.
+    """
 
     name: str
-    command: str
+    # Stdio transport
+    command: str = ""
     args: list[str] = field(default_factory=list)
     env: dict[str, str] = field(default_factory=dict)
+    # HTTP transports
+    url: str = ""
+    headers: dict[str, str] = field(default_factory=dict)
+    # Common
     enabled: bool = True
     lazy_load: bool = False
+    timeout: float = 60.0
+    poll_interval: float = 0.5
+
+    def get_transport_config(self) -> dict[str, Any]:
+        """Return a config dict for create_transport()."""
+        if self.url:
+            if self._is_sse:
+                return {"type": "sse", "url": self.url, "headers": self.headers}
+            return {"type": "http", "url": self.url, "headers": self.headers}
+        return {"type": "stdio", "command": self.command, "args": self.args, "env": self.env}
+
+    @property
+    def _is_sse(self) -> bool:
+        """Heuristic: SSE if url ends with /events or contains sse=true."""
+        return "/events" in self.url or "sse=true" in self.url
+
+    def __post_init__(self) -> None:
+        # Support legacy format where 'command' is the URL
+        if not self.command and not self.url:
+            self.command = ""
+
+        # Backward compat: if args is a string (from old JSON), convert
+        if isinstance(self.args, str):
+            self.args = [self.args]
 
 
 def _parse_servers_dict(
@@ -38,16 +76,44 @@ def _parse_servers_dict(
     for name, entry in servers.items():
         if not isinstance(entry, dict):
             continue
-        configs.append(
-            MCPServerConfig(
-                name=name,
-                command=entry.get("command", ""),
-                args=entry.get("args", []),
-                env=entry.get("env", {}),
-                enabled=entry.get("enabled", True),
-                lazy_load=entry.get("lazy_load", False),
+
+        # Support both legacy (command-based) and modern (url-based) formats
+        command = entry.get("command", "")
+        url = entry.get("url", "")
+        transport = entry.get("transport", "")
+
+        # If url is explicitly set or transport is http/sse, use URL config
+        if url or transport in ("sse", "http", "streamablehttp"):
+            if not url and transport in ("sse", "http", "streamablehttp"):
+                raise ValueError(
+                    f"MCP server '{name}': transport '{transport}' requires a non-empty url"
+                )
+            configs.append(
+                MCPServerConfig(
+                    name=name,
+                    url=url,
+                    headers=entry.get("headers", {}),
+                    enabled=entry.get("enabled", True),
+                    lazy_load=entry.get("lazy_load", False),
+                    timeout=float(entry.get("timeout", 60.0)),
+                    poll_interval=float(entry.get("poll_interval", 0.5)),
+                )
             )
-        )
+        else:
+            # Legacy stdio config
+            args = entry.get("args", [])
+            if isinstance(args, str):
+                args = [args]
+            configs.append(
+                MCPServerConfig(
+                    name=name,
+                    command=command,
+                    args=args,
+                    env=entry.get("env", {}),
+                    enabled=entry.get("enabled", True),
+                    lazy_load=entry.get("lazy_load", False),
+                )
+            )
     return configs
 
 

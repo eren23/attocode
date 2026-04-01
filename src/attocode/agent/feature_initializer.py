@@ -78,6 +78,29 @@ class FeatureConfig:
     skill_search_dirs: list[str] | None = None  # Extra dirs to search
 
 
+def _init_feature_flags() -> dict[str, bool]:
+    """Initialize the feature flag registry.
+
+    Loads flags from environment variables and wires the registry
+    into the AgentContext so integrations can query flags without
+    importing the module directly.
+    """
+    flag_results: dict[str, bool] = {}
+    try:
+        from attocode.integrations.feature_flags import registry
+
+        # Log enabled flags for observability
+        enabled = registry.list_enabled()
+        if enabled:
+            import logging
+            logger = logging.getLogger(__name__)
+            logger.debug("Feature flags enabled: %s", ", ".join(enabled))
+        flag_results["feature_flags"] = True
+    except Exception:
+        flag_results["feature_flags"] = False
+    return flag_results
+
+
 def initialize_features(
     ctx: AgentContext,
     *,
@@ -92,6 +115,10 @@ def initialize_features(
     """
     cfg = config or FeatureConfig()
     results: dict[str, bool] = {}
+
+    # 0. Feature flags (must be first — other features query flags)
+    flag_init = _init_feature_flags()
+    results.update(flag_init)
 
     # 1. Economics
     if cfg.enable_economics and ctx.economics is None:
@@ -247,6 +274,30 @@ def initialize_features(
             ctx._safety_policy_engine = policy_engine
             ctx._execution_policy = exec_policy
             results["safety"] = True
+
+            # Also try to load the pattern-based rule engine (CC-style)
+            try:
+                from attocode.integrations.safety.pattern_rules import PatternRuleEngine
+                pattern_engine = PatternRuleEngine()
+                # Load project rules if .attocode/rules exists
+                resource_root = project_root or working_dir
+                if resource_root:
+                    import os
+                    rule_file = os.path.join(resource_root, ".attocode", "rules")
+                    if os.path.isfile(rule_file):
+                        count = pattern_engine.load_from_file(rule_file)
+                        if count > 0:
+                            import logging
+                            _safety_logger = logging.getLogger(__name__)
+                            _safety_logger.info(
+                                "Loaded %d pattern permission rules from %s",
+                                count, rule_file,
+                            )
+                ctx._pattern_rule_engine = pattern_engine
+                results["pattern_rules"] = True
+            except Exception:
+                results["pattern_rules"] = False
+
         except Exception:
             logger.warning("feature_init_failed", extra={"feature": "safety"}, exc_info=True)
             results["safety"] = False
@@ -331,6 +382,17 @@ def initialize_features(
             for tool in create_lsp_tools(lsp):
                 ctx.registry.register(tool)
             results["lsp_tools"] = True
+
+            # Call hierarchy tools (gated by feature flag)
+            try:
+                from attocode.integrations.feature_flags import feature
+                from attocode.tools.lsp import create_call_hierarchy_tools
+                if feature("CALL_HIERARCHY"):
+                    for tool in create_call_hierarchy_tools(lsp):
+                        ctx.registry.register(tool)
+                    results["call_hierarchy_tools"] = True
+            except Exception:
+                results["call_hierarchy_tools"] = False
         except Exception:
             logger.debug("feature_init_failed", extra={"feature": "lsp_tools"}, exc_info=True)
             results["lsp_tools"] = False

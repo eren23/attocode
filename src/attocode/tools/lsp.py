@@ -232,3 +232,127 @@ def create_lsp_tools(lsp_manager: Any) -> list[Tool]:
             tags=["lsp", "diagnostics"],
         ),
     ]
+
+
+async def _execute_lsp_call_hierarchy(lsp_manager: Any, args: dict[str, Any]) -> str:
+    """Get call hierarchy for a symbol at position.
+
+    Two-step: first prepareCallHierarchy, then fetch calls.
+    Shows both incoming (who calls this) and outgoing (what this calls).
+    """
+    file_path: str = args["file"]
+    line: int = args["line"]
+    col: int = args.get("col", 0)
+    direction: str = args.get("direction", "both")  # incoming, outgoing, or both
+
+    try:
+        uri = lsp_manager._to_uri(file_path)  # type: ignore[attr-defined]
+
+        # Step 1: prepare
+        prepared = await lsp_manager._get_client_for_file(file_path)
+        if not prepared:
+            return "No LSP server available for this file"
+
+        # Call prepare on the client
+        client = prepared
+        raw_items = await client.prepare_call_hierarchy(uri, line, col)
+        if not raw_items:
+            return f"No callable symbol found at {file_path}:{line}:{col}"
+
+        item = raw_items[0]
+        symbol_name = item.get("name", "?")
+        symbol_uri = item.get("uri", uri)
+
+        parts = [f"Call hierarchy for '{symbol_name}' at {file_path}:{line}:{col}", ""]
+
+        # Step 2: fetch incoming and/or outgoing
+        if direction in ("incoming", "both"):
+            incoming = await client.incoming_calls(item)
+            if incoming:
+                parts.append(f"Called by ({len(incoming)} locations):")
+                for call in incoming[:20]:
+                    from_loc = call.get("from", {})
+                    from_uri = from_loc.get("uri", symbol_uri)
+                    if from_uri.startswith("file://"):
+                        from_uri = from_uri[7:]
+                    from_range = from_loc.get("range", {})
+                    from_start = from_range.get("start", {})
+                    line_num = from_start.get("line", 0) + 1
+                    from_name = from_loc.get("name", "?")
+                    parts.append(f"  ← {from_name} at {from_uri}:{line_num}")
+                if len(incoming) > 20:
+                    parts.append(f"  ... and {len(incoming) - 20} more")
+            else:
+                parts.append("Called by: (none)")
+
+        if direction in ("outgoing", "both"):
+            outgoing = await client.outgoing_calls(item)
+            if outgoing:
+                parts.append(f"Calls ({len(outgoing)} locations):")
+                for call in outgoing[:20]:
+                    to_loc = call.get("to", {})
+                    to_uri = to_loc.get("uri", symbol_uri)
+                    if to_uri.startswith("file://"):
+                        to_uri = to_uri[7:]
+                    to_range = to_loc.get("range", {})
+                    to_start = to_range.get("start", {})
+                    line_num = to_start.get("line", 0) + 1
+                    to_name = to_loc.get("name", "?")
+                    parts.append(f"  → {to_name} at {to_uri}:{line_num}")
+                if len(outgoing) > 20:
+                    parts.append(f"  ... and {len(outgoing) - 20} more")
+            else:
+                parts.append("Calls: (none)")
+
+        return "\n".join(parts)
+
+    except Exception as e:
+        return f"Call hierarchy error: {e}"
+
+
+def create_call_hierarchy_tools(lsp_manager: Any) -> list[Tool]:
+    """Create call hierarchy tools bound to an LSPManager."""
+
+    async def _call_hierarchy(args: dict[str, Any]) -> Any:
+        return await _execute_lsp_call_hierarchy(lsp_manager, args)
+
+    return [
+        Tool(
+            spec=ToolSpec(
+                name="lsp_call_hierarchy",
+                description=(
+                    "Explore the call hierarchy for a symbol: what calls it "
+                    "(incoming) and what it calls (outgoing). Requires a language "
+                    "server with callHierarchy support (TypeScript, Python, Rust, Go)."
+                ),
+                parameters={
+                    "type": "object",
+                    "properties": {
+                        "file": {
+                            "type": "string",
+                            "description": "File path (absolute or relative to project root).",
+                        },
+                        "line": {
+                            "type": "integer",
+                            "description": "Line number (0-indexed).",
+                        },
+                        "col": {
+                            "type": "integer",
+                            "default": 0,
+                            "description": "Column number (0-indexed, default 0).",
+                        },
+                        "direction": {
+                            "type": "string",
+                            "enum": ["incoming", "outgoing", "both"],
+                            "default": "both",
+                            "description": "Which direction of the call graph to show.",
+                        },
+                    },
+                    "required": ["file", "line"],
+                },
+                danger_level=DangerLevel.SAFE,
+            ),
+            execute=_call_hierarchy,
+            tags=["lsp", "navigation", "call-hierarchy"],
+        ),
+    ]
