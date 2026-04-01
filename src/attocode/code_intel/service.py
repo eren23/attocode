@@ -219,9 +219,7 @@ class CodeIntelService:
         result: dict = {"phase": "unknown", "tier": "unknown"}
         try:
             ast_svc = self._get_ast_service()
-            state = ast_svc._hydration_state
-            if state:
-                result = state.to_dict()
+            result = ast_svc.hydration_snapshot()
         except Exception:
             pass
 

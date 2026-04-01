@@ -58,6 +58,38 @@ class TestHydrationStatus:
         assert "parse_coverage" in status
 
 
+class TestHydrationSnapshot:
+    """``hydration_snapshot()`` when ``initialize()`` ran without ``_hydration_state``."""
+
+    def setup_method(self):
+        ASTService.clear_instances()
+
+    def test_synthesizes_metrics_after_full_initialize_only(self, tmp_path: Path):
+        src = tmp_path / "src"
+        src.mkdir()
+        (src / "one.py").write_text("def foo():\n    return 1\n", encoding="utf-8")
+        ast_svc = ASTService(str(tmp_path))
+        ast_svc.initialize()
+        assert ast_svc._hydration_state is None
+        snap = ast_svc.hydration_snapshot()
+        assert snap["tier"] == "small"
+        assert snap["phase"] == "ready"
+        assert snap["parsed_files"] >= 1
+        assert snap["total_files"] >= 1
+
+    def test_hydration_status_uses_snapshot_when_state_cleared(self, tmp_path: Path):
+        from attocode.code_intel.service import CodeIntelService
+
+        _create_python_files(tmp_path, 8)
+        svc = CodeIntelService(str(tmp_path))
+        ast_svc = svc._get_ast_service()
+        ast_svc._hydration_state = None
+        status = svc.hydration_status()
+        assert status["parsed_files"] == len(ast_svc._ast_cache)
+        assert status["tier"] != "unknown"
+        assert status["phase"] != "unknown"
+
+
 class TestOnDemandGapFilling:
     def setup_method(self):
         ASTService.clear_instances()

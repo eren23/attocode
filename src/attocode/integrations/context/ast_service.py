@@ -112,6 +112,75 @@ class ASTService:
     def initialized(self) -> bool:
         return self._initialized
 
+    def _supported_source_languages(self) -> set[str]:
+        _ts_langs: set[str] = set()
+        try:
+            from attocode.integrations.context.ts_parser import supported_languages
+
+            _ts_langs = set(supported_languages())
+        except ImportError:
+            pass
+        return {"python", "javascript", "typescript", "shell"} | _ts_langs
+
+    def _count_parseable_source_files(self) -> int:
+        files = self._context_mgr._files or []
+        supported = self._supported_source_languages()
+        n = 0
+        for fi in files:
+            lang = fi.language
+            if lang == "shell":
+                lang = "bash"
+            if lang in supported:
+                n += 1
+        return n
+
+    def hydration_snapshot(self) -> dict:
+        """Return hydration fields for UIs.
+
+        When ``_hydration_state`` is set (skeleton / background hydration), returns
+        its ``to_dict()``. Otherwise, if ``initialize()`` ran without ever setting
+        state, synthesize approximate metrics from the AST cache so MCP
+        ``hydration_status`` is not stuck at unknown/0.
+        """
+        if self._hydration_state is not None:
+            return self._hydration_state.to_dict()
+
+        base: dict = {
+            "tier": "unknown",
+            "phase": "unknown",
+            "total_files": 0,
+            "parsed_files": 0,
+            "parse_coverage": 0.0,
+            "reference_indexed_files": 0,
+            "reference_coverage": 0.0,
+            "dep_graph_files": 0,
+            "embedding_coverage": 0.0,
+            "elapsed_ms": 0.0,
+        }
+        if not self._initialized:
+            return base
+
+        parseable_total = self._count_parseable_source_files()
+        parsed = len(self._ast_cache)
+        ref_n = len(self._reference_indexed_files)
+        total = parseable_total if parseable_total > 0 else max(parsed, 1)
+        tier = classify_tier(parseable_total if parseable_total > 0 else parsed)
+        if parseable_total and parsed >= parseable_total:
+            phase = "ready"
+        elif parsed:
+            phase = "hydrating"
+        else:
+            phase = "skeleton"
+
+        st = HydrationState(
+            tier=tier,
+            total_files=total,
+            parsed_files=parsed,
+            reference_indexed_files=ref_n,
+            phase=phase,
+        )
+        return st.to_dict()
+
     def _ensure_initialized(self) -> None:
         """Auto-initialize if not yet done.  Called by all query methods."""
         if not self._initialized:

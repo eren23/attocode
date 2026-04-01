@@ -115,10 +115,15 @@ def _get_ast_service():
         project_dir = _get_project_dir()
         _ast_service = ASTService.get_instance(project_dir)
         if not _ast_service.initialized:
-            logger.info("Initializing ASTService for %s...", project_dir)
-            _ast_service.initialize()
+            logger.info("Initializing ASTService (skeleton) for %s...", project_dir)
+            _ast_service.initialize_skeleton(indexing_depth="auto")
+            if (
+                _ast_service._hydration_state
+                and _ast_service._hydration_state.phase != "ready"
+            ):
+                _ast_service.start_hydration()
             logger.info(
-                "ASTService ready: %d files indexed",
+                "ASTService ready: %d files indexed (skeleton/hydration)",
                 len(_ast_service._ast_cache),
             )
     return _ast_service
