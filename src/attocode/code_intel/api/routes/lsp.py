@@ -12,13 +12,17 @@ from attocode.code_intel.api.deps import (
     get_service_or_404,
 )
 from attocode.code_intel.api.models import (
+    LSPCompletionsResponse,
     LSPDefinitionResponse,
     LSPDiagnosticsResponse,
     LSPEnrichRequest,
     LSPHoverResponse,
+    LSPIncomingCallsResponse,
+    LSPOutgoingCallsResponse,
     LSPPositionRequest,
     LSPReferencesRequest,
     LSPReferencesResponse,
+    LSPWorkspaceSymbolResponse,
     TextResult,
 )
 
@@ -107,6 +111,62 @@ async def lsp_enrich_v1(
     return TextResult(result=await svc.lsp_enrich(req.files))
 
 
+@router_v1.post("/completions", response_model=TextResult)
+async def lsp_completions_v1(
+    project_id: str,
+    req: LSPPositionRequest,
+    branch: BranchParam = "",
+    limit: int = Query(20, ge=1, le=100),
+) -> TextResult:
+    """Get LSP completion suggestions at position."""
+    ensure_branch_supported(branch)
+    svc = await get_service_or_404(project_id)
+    return TextResult(result=await svc.lsp_completions(
+        file=req.file, line=req.line, col=req.col, limit=limit,
+    ))
+
+
+@router_v1.post("/workspace_symbol", response_model=TextResult)
+async def lsp_workspace_symbol_v1(
+    project_id: str,
+    query: str = Query(...),
+    branch: BranchParam = "",
+    limit: int = Query(30, ge=1, le=100),
+) -> TextResult:
+    """Search workspace symbols by name across all language servers."""
+    ensure_branch_supported(branch)
+    svc = await get_service_or_404(project_id)
+    return TextResult(result=await svc.lsp_workspace_symbol(query=query, limit=limit))
+
+
+@router_v1.post("/incoming_calls", response_model=TextResult)
+async def lsp_incoming_calls_v1(
+    project_id: str,
+    req: LSPPositionRequest,
+    branch: BranchParam = "",
+) -> TextResult:
+    """Find what calls the symbol at position."""
+    ensure_branch_supported(branch)
+    svc = await get_service_or_404(project_id)
+    return TextResult(result=await svc.lsp_incoming_calls(
+        file=req.file, line=req.line, col=req.col,
+    ))
+
+
+@router_v1.post("/outgoing_calls", response_model=TextResult)
+async def lsp_outgoing_calls_v1(
+    project_id: str,
+    req: LSPPositionRequest,
+    branch: BranchParam = "",
+) -> TextResult:
+    """Find what the symbol at position calls."""
+    ensure_branch_supported(branch)
+    svc = await get_service_or_404(project_id)
+    return TextResult(result=await svc.lsp_outgoing_calls(
+        file=req.file, line=req.line, col=req.col,
+    ))
+
+
 # ===================================================================
 # v2 endpoints
 # ===================================================================
@@ -157,6 +217,59 @@ async def lsp_diagnostics_v2(
     """Diagnostics from LSP (structured)."""
     provider = await get_lsp_provider(project_id)
     return await provider.diagnostics(file=file, branch=branch)
+
+
+@router_v2.post("/completions", response_model=LSPCompletionsResponse)
+async def lsp_completions_v2(
+    project_id: str,
+    req: LSPPositionRequest,
+    branch: BranchParam = "",
+    limit: int = Query(20, ge=1, le=100),
+) -> LSPCompletionsResponse:
+    """Get LSP completion suggestions at position (structured)."""
+    provider = await get_lsp_provider(project_id)
+    return await provider.completions(
+        file=req.file, line=req.line, col=req.col,
+        branch=branch, limit=limit,
+    )
+
+
+@router_v2.post("/workspace_symbol", response_model=LSPWorkspaceSymbolResponse)
+async def lsp_workspace_symbol_v2(
+    project_id: str,
+    query: str = Query(...),
+    branch: BranchParam = "",
+    limit: int = Query(30, ge=1, le=100),
+) -> LSPWorkspaceSymbolResponse:
+    """Search workspace symbols by name (structured)."""
+    provider = await get_lsp_provider(project_id)
+    return await provider.workspace_symbol(query=query, branch=branch, limit=limit)
+
+
+@router_v2.post("/incoming_calls", response_model=LSPIncomingCallsResponse)
+async def lsp_incoming_calls_v2(
+    project_id: str,
+    req: LSPPositionRequest,
+    branch: BranchParam = "",
+) -> LSPIncomingCallsResponse:
+    """Find callers of symbol at position (structured)."""
+    provider = await get_lsp_provider(project_id)
+    return await provider.incoming_calls(
+        file=req.file, line=req.line, col=req.col, branch=branch,
+    )
+
+
+@router_v2.post("/outgoing_calls", response_model=LSPOutgoingCallsResponse)
+async def lsp_outgoing_calls_v2(
+    project_id: str,
+    req: LSPPositionRequest,
+    branch: BranchParam = "",
+) -> LSPOutgoingCallsResponse:
+    """Find callees of symbol at position (structured)."""
+    provider = await get_lsp_provider(project_id)
+    return await provider.outgoing_calls(
+        file=req.file, line=req.line, col=req.col, branch=branch,
+    )
 
 
 # Backward-compatible alias

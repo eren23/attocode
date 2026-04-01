@@ -520,6 +520,80 @@ class LSPDiagnosticsResponse(BaseModel):
 
 
 # ------------------------------------------------------------------
+# LSP completions, call hierarchy, workspace symbol
+# ------------------------------------------------------------------
+
+
+class LSPCompletionItem(BaseModel):
+    label: str
+    kind: str = "text"
+    detail: str | None = None
+    documentation: str | None = None
+    insert_text: str | None = None
+
+
+class LSPCompletionsResponse(BaseModel):
+    file: str
+    line: int = 0
+    col: int = 0
+    completions: list[LSPCompletionItem]
+    total: int
+    error: str | None = None
+
+
+class LSPIncomingCallItem(BaseModel):
+    name: str
+    container: str | None = None
+    file: str
+    line: int = 0
+    col: int = 0
+
+
+class LSPOutgoingCallItem(BaseModel):
+    name: str
+    container: str | None = None
+    file: str
+    line: int = 0
+    col: int = 0
+
+
+class LSPIncomingCallsResponse(BaseModel):
+    symbol: str
+    file: str
+    line: int = 0
+    col: int = 0
+    callers: list[LSPIncomingCallItem]
+    total: int
+    error: str | None = None
+
+
+class LSPOutgoingCallsResponse(BaseModel):
+    symbol: str
+    file: str
+    line: int = 0
+    col: int = 0
+    callees: list[LSPOutgoingCallItem]
+    total: int
+    error: str | None = None
+
+
+class LSPWorkspaceSymbolItem(BaseModel):
+    name: str
+    kind: str = "text"
+    file: str
+    line: int = 0
+    container: str | None = None
+    detail: str | None = None
+
+
+class LSPWorkspaceSymbolResponse(BaseModel):
+    query: str
+    symbols: list[LSPWorkspaceSymbolItem]
+    total: int
+    error: str | None = None
+
+
+# ------------------------------------------------------------------
 # File content API
 # ------------------------------------------------------------------
 

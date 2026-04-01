@@ -22,12 +22,20 @@ from attocode.code_intel.api.models import (
     GraphQueryResponse,
     HotspotsResponse,
     ImpactAnalysisResponse,
+    LSPCompletionsResponse,
+    LSPCompletionItem,
     LSPDefinitionResponse,
     LSPDiagnosticItem,
     LSPDiagnosticsResponse,
     LSPHoverResponse,
+    LSPIncomingCallItem,
+    LSPIncomingCallsResponse,
     LSPLocation,
+    LSPOutgoingCallItem,
+    LSPOutgoingCallsResponse,
     LSPReferencesResponse,
+    LSPWorkspaceSymbolItem,
+    LSPWorkspaceSymbolResponse,
     ReferenceItem,
     RelatedFileItem,
     SearchResultItem,
@@ -376,6 +384,62 @@ class LocalLSPProvider:
         return LSPDiagnosticsResponse(
             file=data["file"],
             diagnostics=[LSPDiagnosticItem(**d) for d in data["diagnostics"]],
+            total=data["total"],
+            error=data.get("error"),
+        )
+
+    async def completions(
+        self, file: str, line: int, col: int, branch: str, limit: int = 20,
+    ) -> LSPCompletionsResponse:
+        ensure_branch_supported(branch)
+        data = await self._svc.lsp_completions_data(file, line, col, limit)
+        return LSPCompletionsResponse(
+            file=data["file"],
+            line=data["line"],
+            col=data["col"],
+            completions=[LSPCompletionItem(**c) for c in data["completions"]],
+            total=data["total"],
+            error=data.get("error"),
+        )
+
+    async def workspace_symbol(
+        self, query: str, branch: str, limit: int = 30,
+    ) -> LSPWorkspaceSymbolResponse:
+        ensure_branch_supported(branch)
+        data = await self._svc.lsp_workspace_symbol_data(query, limit)
+        return LSPWorkspaceSymbolResponse(
+            query=data["query"],
+            symbols=[LSPWorkspaceSymbolItem(**s) for s in data["symbols"]],
+            total=data["total"],
+            error=data.get("error"),
+        )
+
+    async def incoming_calls(
+        self, file: str, line: int, col: int, branch: str,
+    ) -> LSPIncomingCallsResponse:
+        ensure_branch_supported(branch)
+        data = await self._svc.lsp_incoming_calls_data(file, line, col)
+        return LSPIncomingCallsResponse(
+            symbol=data["symbol"],
+            file=data["file"],
+            line=data["line"],
+            col=data["col"],
+            callers=[LSPIncomingCallItem(**c) for c in data["callers"]],
+            total=data["total"],
+            error=data.get("error"),
+        )
+
+    async def outgoing_calls(
+        self, file: str, line: int, col: int, branch: str,
+    ) -> LSPOutgoingCallsResponse:
+        ensure_branch_supported(branch)
+        data = await self._svc.lsp_outgoing_calls_data(file, line, col)
+        return LSPOutgoingCallsResponse(
+            symbol=data["symbol"],
+            file=data["file"],
+            line=data["line"],
+            col=data["col"],
+            callees=[LSPOutgoingCallItem(**c) for c in data["callees"]],
             total=data["total"],
             error=data.get("error"),
         )

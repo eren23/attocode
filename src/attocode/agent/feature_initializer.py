@@ -378,21 +378,31 @@ def initialize_features(
     lsp = getattr(ctx, "_lsp_manager", None)
     if lsp and hasattr(ctx, "registry") and ctx.registry is not None:
         try:
-            from attocode.tools.lsp import create_lsp_tools
+            from attocode.tools.lsp import (
+                create_lsp_tools,
+                create_call_hierarchy_tools,
+                create_all_lsp_tools,
+            )
+
+            # Base tools: definition, references, hover, diagnostics
             for tool in create_lsp_tools(lsp):
                 ctx.registry.register(tool)
-            results["lsp_tools"] = True
+
+            # Completions, incoming/outgoing calls, workspace symbol
+            for tool in create_all_lsp_tools(lsp):
+                ctx.registry.register(tool)
 
             # Call hierarchy tools (gated by feature flag)
             try:
                 from attocode.integrations.feature_flags import feature
-                from attocode.tools.lsp import create_call_hierarchy_tools
                 if feature("CALL_HIERARCHY"):
                     for tool in create_call_hierarchy_tools(lsp):
                         ctx.registry.register(tool)
                     results["call_hierarchy_tools"] = True
             except Exception:
                 results["call_hierarchy_tools"] = False
+
+            results["lsp_tools"] = True
         except Exception:
             logger.debug("feature_init_failed", extra={"feature": "lsp_tools"}, exc_info=True)
             results["lsp_tools"] = False

@@ -163,3 +163,72 @@ async def lsp_enrich(files: list[str]) -> str:
         for err in errors[:5]:
             lines.append(f"    {err}")
     return "\n".join(lines)
+
+
+@mcp.tool()
+async def lsp_completions(
+    file: str, line: int, col: int = 0, limit: int = 20,
+) -> str:
+    """Get completion suggestions at a cursor position.
+
+    Shows available types, methods, and properties with type info
+    and documentation. Useful when you want to see what APIs are
+    available at a given position.
+
+    Args:
+        file: File path (relative to project root or absolute).
+        line: Line number (0-indexed).
+        col: Column number (0-indexed, default 0).
+        limit: Maximum completions to return (default 20, max 100).
+    """
+    return await _get_service().lsp_completions(
+        file=file, line=line, col=col, limit=limit,
+    )
+
+
+@mcp.tool()
+async def lsp_workspace_symbol(query: str, limit: int = 30) -> str:
+    """Search for symbols by name across the entire workspace.
+
+    Uses the LSP's indexed workspace/symbol request — faster and more
+    accurate than grep for finding definitions.  Returns classes,
+    functions, methods, constants, and other symbols whose names
+    contain the query string.
+
+    Args:
+        query: Symbol name to search for (partial match, case-insensitive).
+        limit: Maximum results to return (default 30, max 100).
+    """
+    return await _get_service().lsp_workspace_symbol(query=query, limit=limit)
+
+
+@mcp.tool()
+async def lsp_incoming_calls(file: str, line: int, col: int = 0) -> str:
+    """Find what calls the symbol at the given position.
+
+    Shows the full list of callers with their file locations.
+    Use this when you need to understand all the places that
+    invoke a function, method, or class.
+
+    Args:
+        file: File path (relative to project root or absolute).
+        line: Line number (0-indexed).
+        col: Column number (0-indexed, default 0).
+    """
+    return await _get_service().lsp_incoming_calls(file=file, line=line, col=col)
+
+
+@mcp.tool()
+async def lsp_outgoing_calls(file: str, line: int, col: int = 0) -> str:
+    """Find what the symbol at the given position calls.
+
+    Shows the full list of callees with their file locations.
+    Use this when you need to understand what a function does
+    by tracing its dependencies.
+
+    Args:
+        file: File path (relative to project root or absolute).
+        line: Line number (0-indexed).
+        col: Column number (0-indexed, default 0).
+    """
+    return await _get_service().lsp_outgoing_calls(file=file, line=line, col=col)

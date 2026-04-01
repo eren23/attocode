@@ -1344,6 +1344,187 @@ class CodeIntelService:
             "error": None,
         }
 
+    async def lsp_completions_data(
+        self, file: str, line: int, col: int = 0, limit: int = 20,
+    ) -> dict:
+        """Return structured LSP completion suggestions at position."""
+        await self._ensure_lsp_started()
+        lsp = self._get_lsp_manager()
+        if not lsp.has_clients():
+            return {
+                "file": file, "line": line, "col": col,
+                "completions": [], "total": 0,
+                "error": "No language server running. Install pyright or typescript-language-server.",
+            }
+        if not os.path.isabs(file):
+            file = os.path.join(self._project_dir, file)
+        try:
+            items = await lsp.get_completions(file, line, col)
+        except Exception as e:
+            return {"file": file, "line": line, "col": col, "completions": [], "total": 0,
+                    "error": f"LSP error: {e}"}
+        return {
+            "file": file, "line": line, "col": col,
+            "completions": [
+                {
+                    "label": c.label,
+                    "kind": c.kind,
+                    "detail": c.detail,
+                    "documentation": c.documentation,
+                    "insert_text": c.insert_text,
+                }
+                for c in items[:limit]
+            ],
+            "total": len(items),
+            "error": None,
+        }
+
+    async def lsp_workspace_symbol_data(
+        self, query: str, limit: int = 30,
+    ) -> dict:
+        """Return structured LSP workspace symbol search results."""
+        await self._ensure_lsp_started()
+        lsp = self._get_lsp_manager()
+        if not lsp.has_clients():
+            return {
+                "query": query, "symbols": [], "total": 0,
+                "error": "No language server running. Install pyright or typescript-language-server.",
+            }
+        try:
+            symbols = await lsp.search_symbols(query, max_results=limit)
+        except Exception as e:
+            return {"query": query, "symbols": [], "total": 0, "error": f"LSP error: {e}"}
+        return {
+            "query": query,
+            "symbols": [
+                {
+                    "name": s.name,
+                    "kind": s.kind,
+                    "file": s.uri[7:] if s.uri.startswith("file://") else s.uri,
+                    "line": s.range.start.line + 1,
+                    "container": s.container_name,
+                    "detail": s.detail,
+                }
+                for s in symbols
+            ],
+            "total": len(symbols),
+            "error": None,
+        }
+
+    async def lsp_incoming_calls_data(
+        self, file: str, line: int, col: int = 0,
+    ) -> dict:
+        """Return structured LSP incoming call hierarchy."""
+        await self._ensure_lsp_started()
+        lsp = self._get_lsp_manager()
+        if not lsp.has_clients():
+            return {
+                "symbol": "", "file": file, "line": line, "col": col,
+                "callers": [], "total": 0,
+                "error": "No language server running. Install pyright or typescript-language-server.",
+            }
+        if not os.path.isabs(file):
+            file = os.path.join(self._project_dir, file)
+        try:
+            client = lsp._get_client_for_file(file)  # type: ignore[attr-defined]
+            if not client:
+                return {
+                    "symbol": "", "file": file, "line": line, "col": col,
+                    "callers": [], "total": 0,
+                    "error": f"No LSP server for {file}",
+                }
+            uri = lsp._to_uri(file)  # type: ignore[attr-defined]
+            prepared = await client.prepare_call_hierarchy(uri, line, col)
+            if not prepared:
+                return {
+                    "symbol": "", "file": file, "line": line, "col": col,
+                    "callers": [], "total": 0,
+                    "error": "No callable symbol at this position",
+                }
+            incoming = await client.incoming_calls(prepared[0])
+        except Exception as e:
+            return {"symbol": "", "file": file, "line": line, "col": col,
+                    "callers": [], "total": 0, "error": f"LSP error: {e}"}
+        symbol_name = prepared[0].get("name", "?")
+        callers = []
+        for call in incoming:
+            from_loc = call.get("from", {})
+            from_uri = from_loc.get("uri", "")
+            if from_uri.startswith("file://"):
+                from_uri = from_uri[7:]
+            from_range = from_loc.get("range", {})
+            from_start = from_range.get("start", {})
+            callers.append({
+                "name": from_loc.get("name", "?"),
+                "container": from_loc.get("containerName"),
+                "file": from_uri,
+                "line": from_start.get("line", 0) + 1,
+                "col": from_start.get("character", 0) + 1,
+            })
+        return {
+            "symbol": symbol_name,
+            "file": file, "line": line, "col": col,
+            "callers": callers, "total": len(callers),
+            "error": None,
+        }
+
+    async def lsp_outgoing_calls_data(
+        self, file: str, line: int, col: int = 0,
+    ) -> dict:
+        """Return structured LSP outgoing call hierarchy."""
+        await self._ensure_lsp_started()
+        lsp = self._get_lsp_manager()
+        if not lsp.has_clients():
+            return {
+                "symbol": "", "file": file, "line": line, "col": col,
+                "callees": [], "total": 0,
+                "error": "No language server running. Install pyright or typescript-language-server.",
+            }
+        if not os.path.isabs(file):
+            file = os.path.join(self._project_dir, file)
+        try:
+            client = lsp._get_client_for_file(file)  # type: ignore[attr-defined]
+            if not client:
+                return {
+                    "symbol": "", "file": file, "line": line, "col": col,
+                    "callees": [], "total": 0,
+                    "error": f"No LSP server for {file}",
+                }
+            uri = lsp._to_uri(file)  # type: ignore[attr-defined]
+            prepared = await client.prepare_call_hierarchy(uri, line, col)
+            if not prepared:
+                return {
+                    "symbol": "", "file": file, "line": line, "col": col,
+                    "callees": [], "total": 0,
+                    "error": "No callable symbol at this position",
+                }
+            outgoing = await client.outgoing_calls(prepared[0])
+        except Exception as e:
+            return {"symbol": "", "file": file, "line": line, "col": col,
+                    "callees": [], "total": 0, "error": f"LSP error: {e}"}
+        symbol_name = prepared[0].get("name", "?")
+        callees = []
+        for call in outgoing:
+            to_loc = call.get("to", {})
+            to_uri = to_loc.get("uri", "")
+            if to_uri.startswith("file://"):
+                to_uri = to_uri[7:]
+            to_range = to_loc.get("range", {})
+            to_start = to_range.get("start", {})
+            callees.append({
+                "name": to_loc.get("name", "?"),
+                "container": to_loc.get("containerName"),
+                "file": to_uri,
+                "line": to_start.get("line", 0) + 1,
+                "col": to_start.get("character", 0) + 1,
+            })
+        return {
+            "symbol": symbol_name,
+            "file": file, "line": line, "col": col,
+            "callees": callees, "total": len(callees),
+            "error": None,
+        }
+
     def repo_stats_data(self) -> dict:
         """Return aggregate repository statistics."""
         ctx = self._get_context_mgr()
@@ -2206,6 +2387,64 @@ class CodeIntelService:
             )
         if len(diags) > 30:
             lines.append(f"  ... and {len(diags) - 30} more")
+        return "\n".join(lines)
+
+    async def lsp_completions(self, file: str, line: int, col: int = 0, limit: int = 20) -> str:
+        """Get completion suggestions at position."""
+        result = await self.lsp_completions_data(file, line, col, limit)
+        if result["error"]:
+            return f"LSP completions error: {result['error']}"
+        items = result["completions"]
+        if not items:
+            return f"No completions at {file}:{line}:{col}"
+        lines = [f"Completions at {file}:{line}:{col} ({result['total']} available, showing top {len(items)}):"]
+        for c in items:
+            detail = f" — {c['detail']}" if c["detail"] else ""
+            docs = f"\n  {c['documentation'][:80]}" if c["documentation"] else ""
+            lines.append(f"  [{c['kind']}] {c['label']}{detail}{docs}")
+        return "\n".join(lines)
+
+    async def lsp_workspace_symbol(self, query: str, limit: int = 30) -> str:
+        """Search workspace symbols by name across all language servers."""
+        result = await self.lsp_workspace_symbol_data(query, limit)
+        if result["error"]:
+            return f"Workspace symbol search error: {result['error']}"
+        symbols = result["symbols"]
+        if not symbols:
+            return f"No symbols matching '{query}'"
+        lines = [f"Symbols matching '{query}' ({result['total']}):"]
+        for s in symbols:
+            container = f" ({s['container']})" if s["container"] else ""
+            detail = f" — {s['detail']}" if s["detail"] else ""
+            lines.append(f"  [{s['kind']}] {s['name']}{detail}{container} at {s['file']}:{s['line']}")
+        return "\n".join(lines)
+
+    async def lsp_incoming_calls(self, file: str, line: int, col: int = 0) -> str:
+        """Find what calls the symbol at position."""
+        result = await self.lsp_incoming_calls_data(file, line, col)
+        if result["error"]:
+            return f"Incoming calls error: {result['error']}"
+        callers = result["callers"]
+        if not callers:
+            return f"No callers found for {result['symbol']} at {file}:{line}:{col}"
+        lines = [f"Called by ({result['total']} locations):"]
+        for c in callers:
+            container = f"{c['container']}." if c["container"] else ""
+            lines.append(f"  ← {container}{c['name']} at {c['file']}:{c['line']}:{c['col']}")
+        return "\n".join(lines)
+
+    async def lsp_outgoing_calls(self, file: str, line: int, col: int = 0) -> str:
+        """Find what the symbol at position calls."""
+        result = await self.lsp_outgoing_calls_data(file, line, col)
+        if result["error"]:
+            return f"Outgoing calls error: {result['error']}"
+        callees = result["callees"]
+        if not callees:
+            return f"{result['symbol']} calls nothing at {file}:{line}:{col}"
+        lines = [f"Calls ({result['total']} locations):"]
+        for c in callees:
+            container = f"{c['container']}." if c["container"] else ""
+            lines.append(f"  → {container}{c['name']} at {c['file']}:{c['line']}:{c['col']}")
         return "\n".join(lines)
 
     def explore_codebase(

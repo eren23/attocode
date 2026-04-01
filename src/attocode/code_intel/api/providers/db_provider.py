@@ -1046,3 +1046,35 @@ class DbLSPProvider:
             "diagnostics": [],
             "message": "Diagnostics require a running language server (not available for remote repos)",
         }
+
+    async def completions(self, file: str, line: int, col: int, branch: str, limit: int = 20) -> dict:
+        """Completions require a real language server."""
+        return {
+            "file": file, "line": line, "col": col,
+            "completions": [], "total": 0,
+            "error": "Completions require a running language server (not available for remote repos)",
+        }
+
+    async def workspace_symbol(self, query: str, branch: str, limit: int = 30) -> dict:
+        """Workspace symbol search requires a real language server."""
+        return {
+            "query": query,
+            "symbols": [], "total": 0,
+            "error": "Workspace symbol search requires a running language server (not available for remote repos)",
+        }
+
+    async def incoming_calls(self, file: str, line: int, col: int, branch: str) -> dict:
+        """Incoming call hierarchy requires a real language server."""
+        return {
+            "symbol": "", "file": file, "line": line, "col": col,
+            "callers": [], "total": 0,
+            "error": "Call hierarchy requires a running language server (not available for remote repos)",
+        }
+
+    async def outgoing_calls(self, file: str, line: int, col: int, branch: str) -> dict:
+        """Outgoing call hierarchy requires a real language server."""
+        return {
+            "symbol": "", "file": file, "line": line, "col": col,
+            "callees": [], "total": 0,
+            "error": "Call hierarchy requires a running language server (not available for remote repos)",
+        }

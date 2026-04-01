@@ -71,6 +71,18 @@ class LSPCompletion:
 
 
 @dataclass
+class WSSymbol:
+    """A symbol found via workspace/symbol."""
+
+    name: str
+    kind: str  # "class", "function", "method", "variable", etc.
+    uri: str
+    range: LSPRange
+    container_name: str | None = None
+    detail: str | None = None
+
+
+@dataclass
 class LanguageServerConfig:
     """Configuration for a language server."""
 
@@ -446,6 +458,55 @@ class _LSPClient:
             for loc in result
             if isinstance(loc, dict) and "uri" in loc and "range" in loc
         ]
+
+    # LSP kind numbers: 1=text, 2=method, 3=function, 4=class, 5=interface,
+    #                   6=enum, 7=keyword, 9=variable, 11=constant, 12=struct,
+    #                   14=property, 23=namespace, 24=package, 25=typeParameter
+    _SYMBOL_KIND_MAP: dict[int, str] = {
+        1: "text", 2: "method", 3: "function", 4: "class", 5: "interface",
+        6: "enum", 7: "keyword", 9: "variable", 11: "constant", 12: "struct",
+        14: "property", 23: "namespace", 24: "package", 25: "typeParameter",
+    }
+
+    async def search_symbols(
+        self, query: str, max_results: int = 50
+    ) -> list[WSSymbol]:
+        """Search workspace symbols by name using workspace/symbol.
+
+        Uses the LSP's indexed symbol search — much faster and more
+        accurate than grep for finding function/class/constant definitions.
+
+        Args:
+            query: Search query (partial name match).
+            max_results: Cap on results to avoid large responses.
+
+        Returns:
+            List of matching WSSymbol objects.
+        """
+        if not self._initialized:
+            return []
+
+        result = await self._request("workspace/symbol", {
+            "query": query,
+        })
+        if not result or not isinstance(result, list):
+            return []
+
+        symbols: list[WSSymbol] = []
+        for item in result[:max_results]:
+            if not isinstance(item, dict):
+                continue
+            symbols.append(WSSymbol(
+                name=str(item.get("name", "")),
+                kind=self._SYMBOL_KIND_MAP.get(
+                    item.get("kind", 1), str(item.get("kind", 1))
+                ),
+                uri=str(item.get("location", {}).get("uri", "")),
+                range=_parse_range(item.get("location", {}).get("range", {})),
+                container_name=item.get("containerName"),
+                detail=item.get("detail"),
+            ))
+        return symbols
 
     async def prepare_call_hierarchy(
         self, uri: str, line: int, character: int
@@ -899,6 +960,37 @@ class LSPManager:
             except Exception:
                 pass  # don't let callback errors break LSP flow
         return results
+
+    async def search_symbols(
+        self, query: str, max_results: int = 50
+    ) -> list[WSSymbol]:
+        """Search workspace symbols across all running language servers.
+
+        Queries each active LSP client and aggregates results.
+        Falls back to the first available client if no file is specified.
+
+        Args:
+            query: Search string (partial name match, case-insensitive).
+            max_results: Maximum results per server.
+
+        Returns:
+            Combined list of matching WSSymbol objects, sorted by name.
+        """
+        all_symbols: list[WSSymbol] = []
+
+        for lang_id, client in self._clients.items():
+            if not client.is_initialized:
+                continue
+            try:
+                symbols = await client.search_symbols(query, max_results)
+                all_symbols.extend(symbols)
+            except Exception:
+                # One server failed — keep going
+                pass
+
+        # Sort by name for consistent output
+        all_symbols.sort(key=lambda s: s.name)
+        return all_symbols[:max_results]
 
     def get_diagnostics(self, file: str) -> list[LSPDiagnostic]:
         """Get cached diagnostics for a file."""
